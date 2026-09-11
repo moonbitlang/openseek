@@ -44,10 +44,10 @@ and invalid UTF-8 errors remain distinct; a failed file does not prevent later
 files from being read. Any file/argument error gives a nonzero exit; a
 successfully truncated read exits zero.
 
-The default body budget is 12000 UTF-16 units per file (including gutters).
-`--max-output-chars N` adjusts it for all files, capped at 50000. A separate
-40000-byte UTF-8 budget covers the whole batch including headings and footers,
-so Unicode and multiple files cannot trip mbtx's 48000-byte stop limit.
+The default body budget is 12000 UTF-8 bytes per file (including gutters).
+`--max-output-bytes N` adjusts it for all files, capped at 50000. The whole
+batch, headings and footers included, is bounded to 40000 bytes, so multiple
+files cannot trip mbtx's 48000-byte stop limit.
 `truncated=true` marks incomplete bodies; `skipped_files=N` marks files not
 attempted when the batch budget runs out. Request smaller ranges/batches to
 continue. The workflow uses the normal compiled mbtx execution path.

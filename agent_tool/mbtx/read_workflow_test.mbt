@@ -100,14 +100,14 @@ async test "read workflow caps Unicode gutters and the whole foreground batch su
     )
     let tiny = run_in(ws, {
       "filename": filename,
-      "args": ["--max-output-chars", "5", "emoji"],
+      "args": ["--max-output-bytes", "5", "emoji"],
     })
     assert_false(tiny.is_error, msg=tiny.content)
     assert_true(tiny.content.contains("1 |A\n<system>"), msg=tiny.content)
     assert_true(tiny.content.contains("truncated=true"))
     let gutter = run_in(ws, {
       "filename": filename,
-      "args": ["--max-output-chars", "1", "emoji"],
+      "args": ["--max-output-bytes", "1", "emoji"],
     })
     assert_false(gutter.is_error, msg=gutter.content)
     assert_true(
@@ -121,7 +121,7 @@ async test "read workflow caps Unicode gutters and the whole foreground batch su
         @mbtx.definition(workspace_root=ws, bg_runtime=runtime, job_dir=ws),
         {
           "filename": filename,
-          "args": ["--max-output-chars", "50000", "large", "large", "emoji"],
+          "args": ["--max-output-bytes", "50000", "large", "large", "emoji"],
         },
       )
       assert_false(out.is_error, msg=out.content)
@@ -145,7 +145,7 @@ async test "read workflow errors explain invalid selectors and arguments" {
         ["x:-1"],
         ["x:5:4"],
         ["x:2147483648"],
-        ["--max-output-chars", "0"],
+        ["--max-output-bytes", "0"],
         ["--literal"],
         ["--unknown"],
         [""],
