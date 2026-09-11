@@ -170,10 +170,25 @@ async test "cache: a build stopped mid-way retires its generation" {
     assert_false(ok.is_error, msg=ok.content)
     assert_true(ok.content.contains("1"))
     assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/gen-1/_build"))
-    assert_false(@fs.exists("\{spill}/mbtx-cache/snippet/gen-0"))
     // Once retired, the cache serves the next call as usual, in place.
     let again = dispatch(definition, { "source": "fn main { println(2) }" })
     assert_true(again.content.contains("2"), msg=again.content)
+    assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/gen-1/_build"))
+    // The retired generation is swept best-effort by each later call, and
+    // the sweep is allowed to lose to a compiler the stop orphaned — that is
+    // the whole reason the next build went elsewhere. On a loaded machine the
+    // orphan can outlive the first call or two, so the sweep is observed by
+    // calling again for a while, not asserted at one instant.
+    let mut swept = false
+    for _ in 0..<20 {
+      if !@fs.exists("\{spill}/mbtx-cache/snippet/gen-0") {
+        swept = true
+        break
+      }
+      @async.sleep(250)
+      dispatch(definition, { "source": "fn main { println(2) }" }) |> ignore
+    }
+    assert_true(swept, msg="the retired generation was never swept")
     assert_eq(
       @fs.readdir("\{spill}/mbtx-cache/snippet").filter(name => {
         name.has_prefix("gen-")
