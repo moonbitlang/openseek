@@ -846,7 +846,6 @@ test('transcript overview previews failed turns and jumps among mounted messages
 });
 
 test('tool-call tabs keep focus-driven scrolling inside the transcript', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
   const app = new DesktopBrowserHarness(page);
   const events = [
     {
@@ -931,7 +930,6 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
 });
 
 test('runtime notices keep the compact result-row presentation', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = [
     {
@@ -966,7 +964,6 @@ test('runtime notices keep the compact result-row presentation', async ({ page }
 });
 
 test('a model step shows its thought, then its prose, then its tool rows', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = [
     {
@@ -2169,7 +2166,6 @@ test('composer follow-up menu supports keyboard choice and a queue default', asy
 });
 
 test('pending job waits show descriptions from earlier tool rows', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture waiting for CI' } } },

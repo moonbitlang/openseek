@@ -1,11 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-// Reasoning is available in the full transcript; minimal mode hides it.
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
-});
-
 test('read workflow shows selectors and highlights each MoonBit file in a mixed batch', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const output = [

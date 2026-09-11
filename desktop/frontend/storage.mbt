@@ -18,9 +18,8 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           theme=load_setting(ThemeStorageKey),
           font=load_setting(AppFontStorageKey),
           font_size=load_setting(AppFontSizeStorageKey),
-          // New profiles start in minimal mode; an explicit opt-out survives.
-          minimal_transcript=load_setting(MinimalTranscriptStorageKey) !=
-            "false",
+          minimal_transcript=load_setting(MinimalTranscriptStorageKey) ==
+            "true",
           fps_overlay_enabled=load_setting(FpsOverlayStorageKey) == "true",
           model=load_setting(ModelStorageKey),
           conversation_models=load_setting(ConversationModelsStorageKey),
