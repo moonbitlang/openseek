@@ -17,7 +17,6 @@ priv struct TrialResult {
   exit_code : Int
   steps : Int
   tool_errors : Int
-  moon_cmd_uses : Int
   moon_run_e_mentions : Int
   moon_run_c_mentions : Int
   moon_check_uses : Int
@@ -207,9 +206,6 @@ async fn evaluate_trial(
     exit_code,
     steps: log_summary.steps,
     tool_errors: log_summary.tool_errors,
-    moon_cmd_uses: @metrics.count_lines_containing_all(log_text, [
-      "command=moon ",
-    ]),
     moon_run_e_mentions: @metrics.count_lines_containing_all(log_text, [
       "moon run", " -e",
     ]),
@@ -486,7 +482,6 @@ test "markdown report summarizes threshold" {
         exit_code: 0,
         steps: 3,
         tool_errors: 0,
-        moon_cmd_uses: 1,
         moon_run_e_mentions: 1,
         moon_run_c_mentions: 0,
         moon_check_uses: 1,
