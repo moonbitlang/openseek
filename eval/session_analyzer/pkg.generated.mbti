@@ -17,12 +17,9 @@ pub struct EvalResult {
   session_id : String
   success : Bool
   reason : String
-  warnings : String
   steps : Int
   tool_results : Int
   tool_errors : Int
-  shell_uses : Int
-  shell_failures : Int
   runtime_notices : Int
   finished : Bool
   finish_message : String

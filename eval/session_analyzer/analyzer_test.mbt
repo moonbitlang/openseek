@@ -5,17 +5,13 @@ fn sample_session() -> @agent_session.Session {
   .append(
     Assistant(
       AssistantMessage("I will run moon check", tool_calls=[
-        ToolCall(
-          id="call_1",
-          name="shell",
-          arguments="{\"cmd\":\"moon check\"}",
-        ),
+        ToolCall(id="call_1", name="mbtx", arguments="{\"cmd\":\"moon check\"}"),
       ]),
     ),
   )
   .append(
     Tool(
-      ToolResult(tool_call_id="call_1", tool_name="shell", content="exit=0\nok"),
+      ToolResult(tool_call_id="call_1", tool_name="mbtx", content="exit=0\nok"),
     ),
   )
   .append(
@@ -129,12 +125,12 @@ test "a context-yield terminal is not task success" {
     .append(
       Assistant(
         AssistantMessage("working", tool_calls=[
-          ToolCall(id="call_1", name="shell", arguments="{}"),
+          ToolCall(id="call_1", name="mbtx", arguments="{}"),
         ]),
       ),
     )
     .append(
-      Tool(ToolResult(tool_call_id="call_1", tool_name="shell", content="ok")),
+      Tool(ToolResult(tool_call_id="call_1", tool_name="mbtx", content="ok")),
     )
     .append(
       Summary(
@@ -165,8 +161,6 @@ test "session analyzer counts typed events" {
   assert_eq(result.steps, 2)
   assert_eq(result.tool_results, 1)
   assert_eq(result.tool_errors, 0)
-  assert_eq(result.shell_uses, 1)
-  assert_eq(result.shell_failures, 0)
   assert_eq(result.runtime_notices, 1)
 }
 
@@ -292,40 +286,6 @@ test "checkpoint replay assistants do not add model steps" {
   // The original completion result remains searchable; the checkpoint's
   // Assistant copy must not index the same provider output a second time.
   assert_eq(transcript.split("first answer").length(), 3)
-}
-
-///|
-test "shell failures count is_error shell results, not output text" {
-  let session = @agent_session.Session(SessionId("t"), system_prompt="")
-    .append(
-      Tool(ToolResult(tool_call_id="ok", tool_name="shell", content="ok")),
-    )
-    .append(
-      Tool(
-        ToolResult(
-          tool_call_id="bad",
-          tool_name="shell",
-          // The failure is the recorded flag, not anything in the output text.
-          content="boom",
-          is_error=true,
-        ),
-      ),
-    )
-    .append(
-      // A non-shell error counts toward tool_errors but not shell_failures.
-      Tool(
-        ToolResult(
-          tool_call_id="edit",
-          tool_name="edit",
-          content="nope",
-          is_error=true,
-        ),
-      ),
-    )
-  let result = @session_analyzer.analyze_session(session)
-  assert_eq(result.shell_uses, 2)
-  assert_eq(result.shell_failures, 1)
-  assert_eq(result.tool_errors, 2)
 }
 
 ///|

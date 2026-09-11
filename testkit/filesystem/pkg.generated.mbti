@@ -23,7 +23,6 @@ pub fn FileSystem::from_pairs(Array[(String, String)]) -> Self raise
 pub fn FileSystem::get(Self, String) -> String? raise
 pub async fn FileSystem::mismatch_on_disk(Self, String) -> String
 pub fn FileSystem::paths(Self) -> Array[String] raise
-pub fn FileSystem::to_json(Self) -> Json
 pub fn FileSystem::validate(Self) -> Unit raise
 pub async fn FileSystem::write_to(Self, String) -> Unit
 

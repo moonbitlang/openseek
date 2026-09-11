@@ -756,7 +756,6 @@ fn suite_report_row(
       Metric(name="Successes", value="\{report.successes}/\{report.runs}"),
       Metric(name="Avg Steps", value=average_steps(report)),
       Metric(name="Avg Tool Errors", value=average_tool_errors(report)),
-      Metric(name="Avg Shell Failures", value=average_shell_failures(report)),
       Metric(name="Finished", value=finished_summary(report)),
       Metric(name="Validation", value=validation_summary(report)),
     ],
@@ -807,11 +806,6 @@ fn average_steps(report : EvalReport) -> String {
 ///|
 fn average_tool_errors(report : EvalReport) -> String {
   average_result_metric(report, result => result.tool_errors)
-}
-
-///|
-fn average_shell_failures(report : EvalReport) -> String {
-  average_result_metric(report, result => result.shell_failures)
 }
 
 ///|

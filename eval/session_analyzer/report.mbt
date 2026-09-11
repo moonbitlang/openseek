@@ -9,8 +9,7 @@ fn EvalResult::as_report(self : EvalResult) -> @report.Report {
       Metric(name="terminal", value=empty_dash(self.terminal_status)),
     ],
     metric_columns=[
-      "Steps", "Tool Results", "Tool Errors", "Shell Uses", "Shell Failures", "Runtime Notices",
-      "Finished",
+      "Steps", "Tool Results", "Tool Errors", "Runtime Notices", "Finished",
     ],
     rows=[
       ReportRow(
@@ -18,13 +17,10 @@ fn EvalResult::as_report(self : EvalResult) -> @report.Report {
         name=empty_dash(self.session_id),
         success=self.success,
         reason=self.reason,
-        warnings=self.warnings,
         metrics=[
           Metric(name="Steps", value=self.steps.to_string()),
           Metric(name="Tool Results", value=self.tool_results.to_string()),
           Metric(name="Tool Errors", value=self.tool_errors.to_string()),
-          Metric(name="Shell Uses", value=self.shell_uses.to_string()),
-          Metric(name="Shell Failures", value=self.shell_failures.to_string()),
           Metric(name="Runtime Notices", value=self.runtime_notices.to_string()),
           Metric(name="Finished", value=self.finished.to_string()),
         ],

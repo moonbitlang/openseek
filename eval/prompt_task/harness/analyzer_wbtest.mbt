@@ -17,7 +17,7 @@ fn sample_events() -> String {
         AssistantMessage("I will run moon check", tool_calls=[
           ToolCall(
             id="call_1",
-            name="moon_cmd",
+            name="mbtx",
             arguments="{\"command\":\"moon check\"}",
           ),
         ]),
@@ -27,7 +27,7 @@ fn sample_events() -> String {
       Tool(
         ToolResult(
           tool_call_id="call_1",
-          tool_name="moon_cmd",
+          tool_name="mbtx",
           content="moon check passed",
         ),
       ),
@@ -90,7 +90,6 @@ test "session summary counts typed events" {
   assert_eq(result.steps, 2)
   assert_eq(result.tool_results, 1)
   assert_eq(result.tool_errors, 0)
-  assert_eq(result.shell_uses, 0)
   assert_eq(result.runtime_notices, 0)
   assert_eq(result.moon_check_uses, 3)
 }
@@ -295,8 +294,6 @@ test "markdown report includes prompt label and parser metrics" {
         steps: 1,
         tool_results: 1,
         tool_errors: 0,
-        shell_uses: 0,
-        shell_failures: 0,
         runtime_notices: 0,
         finished: true,
         finish_message: "done",

@@ -4,7 +4,8 @@
 
 ///|
 /// Snapshot every job, newest last. Exported for cross-package tests: the
-/// shell tool's background-job tests observe runtime state through this seam.
+/// mbtx and job_output background-job tests observe runtime state through
+/// this seam.
 pub fn BgJobRuntime::list(self : BgJobRuntime) -> Array[BgJobSnapshot] {
   [
     for _, job in self.jobs => job.to_snapshot()

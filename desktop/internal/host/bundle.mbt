@@ -125,7 +125,7 @@ async fn PackagedTools::resolve_from_resource_dir(
 ///|
 /// Put the packaged tools first in this process's PATH. Desktop child
 /// processes inherit this environment: OpenSeek's engine passes it to agent
-/// shell tools, while Codex app-server passes it to its own tool processes.
+/// mbtx snippets, while Codex app-server passes it to its own tool processes.
 /// Keep an already-leading entry unchanged so embedding launchers cannot
 /// duplicate it.
 pub fn PackagedTools::apply_to_process_env(self : PackagedTools) -> Unit {

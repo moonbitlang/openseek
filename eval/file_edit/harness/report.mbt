@@ -26,7 +26,6 @@ fn TrialResult::to_json(self : TrialResult) -> Json {
     "exit_code": self.exit_code,
     "steps": self.steps,
     "tool_errors": self.tool_errors,
-    "shell_uses": self.shell_uses,
     "moon_cmd_uses": self.moon_cmd_uses,
     "moon_run_e_mentions": self.moon_run_e_mentions,
     "moon_run_c_mentions": self.moon_run_c_mentions,
@@ -77,9 +76,8 @@ fn EvalReport::as_report(self : EvalReport) -> @report.Report {
       Metric(name="output", value=self.out_dir),
     ],
     metric_columns=[
-      "Steps", "Tool Errors", "Shell Uses", "Moon Cmd", "Run -e", "Run -c", "Check",
-      "Test", "Info", "Fmt", "Edit Successes", "Write Successes", "Exit Code", "Validation",
-      "Marker",
+      "Steps", "Tool Errors", "Moon Cmd", "Run -e", "Run -c", "Check", "Test", "Info",
+      "Fmt", "Edit Successes", "Write Successes", "Exit Code", "Validation", "Marker",
     ],
     rows=[
       for result in self.results => {
@@ -92,7 +90,6 @@ fn EvalReport::as_report(self : EvalReport) -> @report.Report {
           metrics=[
             Metric(name="Steps", value=result.steps.to_string()),
             Metric(name="Tool Errors", value=result.tool_errors.to_string()),
-            Metric(name="Shell Uses", value=result.shell_uses.to_string()),
             Metric(name="Moon Cmd", value=result.moon_cmd_uses.to_string()),
             Metric(name="Run -e", value=result.moon_run_e_mentions.to_string()),
             Metric(name="Run -c", value=result.moon_run_c_mentions.to_string()),

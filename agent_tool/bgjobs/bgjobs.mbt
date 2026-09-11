@@ -33,8 +33,8 @@ let default_hard_timeout_ms : Int = 1_800_000
 /// exposes no process-group kill, so a command that daemonizes its own children
 /// can leave descendants running after the job is reported terminal.
 ///
-/// One `BgJobRuntime` is created per session and shared by the `shell`
-/// (`run_in_background`), `shell_output`, and `shell_stop` tools. the constructor captures
+/// One `BgJobRuntime` is created per session and shared by the `mbtx`,
+/// `job_output`, `job_wait`, and `job_stop` tools. The constructor captures
 /// the session group in a spawn closure, so the runtime is not generic and can be
 /// an optional tool argument.
 struct BgJobRuntime {
@@ -287,7 +287,7 @@ pub async fn BgJobRuntime::start(
 ///|
 /// Register an already-running `ShellExecution` as a background job and return
 /// its id. Used by detach-on-timeout: a foreground command that outlived its
-/// timeout is `background()`-ed and adopted here, so `shell_output`/`shell_stop`
+/// timeout is `background()`-ed and adopted here, so `job_output`/`job_stop`
 /// and the completion notice see it like any explicit background job.
 pub fn BgJobRuntime::adopt(
   self : BgJobRuntime,
@@ -346,7 +346,7 @@ fn BgJobRuntime::register(
   // Watch for the job ending on its own and fire `on_job_exit` once: a natural
   // exit, or the output-limit watchdog killing a flooding job — both must be
   // surfaced (a watchdog kill silently eating an unwatched job would look like
-  // it just never finished). A requested stop (shell_stop, session teardown) is
+  // it just never finished). A requested stop (job_stop, session teardown) is
   // already user-visible and fires nothing. The job entry is set above before
   // the watcher runs (the watcher first awaits the exit, ≥ one tick later), so
   // `snapshot(id)` always resolves.
@@ -489,7 +489,7 @@ pub async fn BgJobRuntime::read_output(
 
 ///|
 /// The last `n` characters of one job's output — a bounded window onto recent
-/// output — or `None` for an unknown id. Used by `shell_output` so a poll cannot
+/// output — or `None` for an unknown id. Used by `job_output` so a poll cannot
 /// flood the conversation with a large job's full log.
 pub async fn BgJobRuntime::read_output_tail(
   self : BgJobRuntime,
@@ -499,23 +499,6 @@ pub async fn BgJobRuntime::read_output_tail(
   match self.jobs.get(id) {
     Some(job) => Some(job.exec.read_tail(n))
     None => None
-  }
-}
-
-///|
-/// Await the job reaching a terminal status, up to `timeout_ms`. Returns `true`
-/// once terminal, `false` on deadline or an unknown id. Retained for bounded
-/// runtime callers; agent turns use `wait_any`, which also waits for completion
-/// publication, while `job_output` only reads available output.
-pub async fn BgJobRuntime::wait_exit(
-  self : BgJobRuntime,
-  id : String,
-  timeout_ms : Int,
-) -> Bool {
-  match self.jobs.get(id) {
-    Some(job) =>
-      @async.with_timeout_opt(timeout_ms, () => job.exec.wait()) is Some(_)
-    None => false
   }
 }
 
