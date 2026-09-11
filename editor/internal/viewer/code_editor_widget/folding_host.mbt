@@ -268,17 +268,14 @@ fn CodeEditorWidget::folding_on_editor_mouse_down(
   }
   let mut icon_clicked = false
   match e.target {
-    MouseTargetMargin(type_=GutterLineDecorations, element~, detail~, ..) => {
+    MouseTargetMargin(type_=GutterLineDecorations, element~, ..) => {
       guard element is Some(element) else { return }
-      guard element.to_html_element() is Some(html_element) else { return }
-      let offset_left_in_gutter = html_element.get_offset_left()
-      let gutter_offset_x = detail.offset_x - offset_left_in_gutter
-
-      // TODO@joao TODO@alex TODO@martin this is such that we don't collide
-      // with dirty diff
-      if gutter_offset_x < 4.0 {
-        // the whitespace between the border and the real folding icon border
-        // is 4px
+      // Other contributions, including feedback, share the decoration lane.
+      // Only the folding icon owns the fold gesture.
+      guard element_class_list_contains(element, "codicon-folding-expanded") ||
+        element_class_list_contains(element, "codicon-folding-collapsed") ||
+        element_class_list_contains(element, "codicon-folding-manual-expanded") ||
+        element_class_list_contains(element, "codicon-folding-manual-collapsed") else {
         return
       }
       icon_clicked = true

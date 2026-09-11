@@ -258,12 +258,9 @@ pub fn MarkdownCommentDom::pin_to_content_viewport(
 }
 
 ///|
-/// Pins the gutter chevron to the rendered line-decorations lane — the
-/// configured `lineDecorationsWidth` plus the folding-control reserve. The
-/// lane is right-aligned inside the margin ViewZone node, so this width keeps
-/// the chevron centered on the same column as the code-folding icons. The
-/// stylesheet default matches the default 10px + 16px reserve; the caller
-/// reapplies the live width whenever runtime options change that reserve.
+/// Bounds the gutter chevron by the available line-decorations lane. CSS caps
+/// its width at 16px and aligns it to the right, sharing the code-folding
+/// column without expanding into the feedback reservation.
 pub fn MarkdownCommentDom::set_margin_fold_lane_width(
   self : MarkdownCommentDom,
   width_px : Int,
