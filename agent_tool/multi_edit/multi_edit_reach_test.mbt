@@ -45,14 +45,23 @@ async test "multi_edit tells a fix that lets the build reach further from breaka
         "reported 12 error(s) (11 newly introduced > revert_when_errors_above=10)",
       ),
     )
+    // `b` imports `a`, so moon had skipped it while `a` was broken: a reach
+    // through a dependent of the fixed package — plausible, not certifiable,
+    // so the report names the sites to vet and the value that admits it.
     assert_true(
       reverted.content.contains(
-        "comparability: all 1 pre-batch error(s) are gone and none of the post-batch errors are in the files this batch edited",
+        "comparability: all 1 pre-batch error(s) are gone",
       ),
     )
     assert_true(
       reverted.content.contains(
-        "re-issue it UNCHANGED with revert_when_errors_above=11",
+        "12 are in packages that depend on a package this batch FIXED",
+      ),
+    )
+    assert_true(reverted.content.contains("b/b.mbt:3:"))
+    assert_true(
+      reverted.content.contains(
+        "If so: Re-issue the batch UNCHANGED with revert_when_errors_above=11",
       ),
     )
     assert_false(reverted.content.contains("more precise old_strings"))

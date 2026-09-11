@@ -8,6 +8,8 @@ import {
 // Values
 pub async fn append_summary(String, String) -> String
 
+pub async fn check_cwd(String) -> String?
+
 pub async fn content_parse_errors(String, String) -> ParseGate?
 
 pub async fn count_errors(String) -> CheckErrors?
@@ -15,6 +17,8 @@ pub async fn count_errors(String) -> CheckErrors?
 pub fn format_parse_gate_errors(String, String, Array[ParseGateError]) -> Array[String]
 
 pub fn gate_paths(String, String) -> Array[String]
+
+pub async fn package_graph(String) -> PackageGraph?
 
 // Errors
 
@@ -31,12 +35,22 @@ pub fn CheckErrors::to_repr(Self) -> @debug.Repr
 pub(all) struct ErrorSite {
   path : String?
   loc : String
+  code : Int?
   message : String
 } derive(Eq, @debug.Debug)
 pub fn ErrorSite::equal(Self, Self) -> Bool
+pub fn ErrorSite::identity(Self) -> String
 pub fn ErrorSite::line(Self) -> String
 pub fn ErrorSite::not_equal(Self, Self) -> Bool
 pub fn ErrorSite::to_repr(Self) -> @debug.Repr
+
+pub(all) struct PackageGraph {
+  dirs : Array[String?]
+  edges : Array[(Int, Int)]
+} derive(@debug.Debug)
+pub fn PackageGraph::depends_on(Self, Int, Array[Int]) -> Bool
+pub fn PackageGraph::package_of(Self, String) -> Int?
+pub fn PackageGraph::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ParseGate {
   errors : Array[ParseGateError]

@@ -63,18 +63,31 @@ const RevertErrorDisplayLimit : Int = 10
 /// said. `path` is as moon reported it (relative to the checked module, or
 /// absolute — moon has emitted both), and `None` when the diagnostic carried
 /// no path at all, so a caller never mistakes "unknown file" for a known one;
-/// `loc` is the `line:col-line:col` span, or empty for a module-level error.
+/// `loc` is the `line:col-line:col` span, or empty for a module-level error;
+/// `code` is moon's numeric `error_code` when the diagnostic carried one.
 pub(all) struct ErrorSite {
   path : String?
   loc : String
+  code : Int?
   message : String
 } derive(Debug, Eq)
 
 ///|
+/// The site's identity for comparing two check runs: `path:loc#code` when
+/// moon supplied an error code, so a reworded message (a moon release, or a
+/// message that embeds a count) does not turn a still-present error into a
+/// "new" one; the rendered line otherwise.
+pub fn ErrorSite::identity(self : ErrorSite) -> String {
+  match self.code {
+    Some(code) => "\{self.path.unwrap_or("")}:\{self.loc}#\{code}"
+    None => self.line()
+  }
+}
+
+///|
 /// Render the site as `path:loc: message`, the same shape the human
 /// `moon check` output uses, so a report points the model straight at the
-/// offending line. This string also serves as the site's identity when two
-/// check runs are compared.
+/// offending line.
 pub fn ErrorSite::line(self : ErrorSite) -> String {
   let where_ = match (self.path, self.loc) {
     (Some(path), "") => path
@@ -93,6 +106,12 @@ pub fn ErrorSite::line(self : ErrorSite) -> String {
 /// kept so a caller can compare two runs by identity and location, not just by
 /// count. `truncated` means moon check produced more output than the capture
 /// budget, so `error_count`, `warning_count` and `errors` are lower bounds.
+///
+/// Not representable here: whether the BUILD stopped early. moon skips the
+/// dependents of a failing package, so a run's error list covers only the
+/// packages moon compiled, and moon does not say which those were. A caller
+/// that compares two runs must reason about that from the package graph (see
+/// `package_graph`); `truncated` is only about this process's capture budget.
 pub(all) struct CheckErrors {
   error_count : Int
   warning_count : Int
@@ -157,6 +176,7 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
       {
         "level": String("error"),
         "path"? : path_json,
+        "error_code"? : code_json,
         "loc"? : Some(String(loc))
         | (_ with loc = ""),
         "message"? : Some(String(message))
@@ -168,7 +188,11 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
           Some(String(path)) => Some(path)
           _ => None
         }
-        errors.push({ path, loc, message, })
+        let code = match code_json {
+          Some(Number(code, ..)) => Some(code.to_int())
+          _ => None
+        }
+        errors.push({ path, loc, code, message, })
       }
       { "level": String("warning"), .. } => warning_count += 1
       _ => ()
@@ -259,6 +283,7 @@ test "tally counts errors and warnings from output-json lines" {
     {
       path: Some("argparse/arg.mbt"),
       loc: "3:1-3:9",
+      code: Some(1),
       message: "Type mismatch: expected Int, got String",
     },
   ])
@@ -310,12 +335,32 @@ test "tally keeps a diagnostic without a path as an unlocated site" {
   let text =
     #|{"$message_type":"diagnostic","level":"error","loc":"2:1-2:2","message":"nowhere"}
   let tally = tally_diagnostics(text, truncated=false)
-  assert_eq(tally.errors, [{ path: None, loc: "2:1-2:2", message: "nowhere", }])
+  assert_eq(tally.errors, [
+    { path: None, loc: "2:1-2:2", code: None, message: "nowhere", },
+  ])
   assert_eq(tally.first_errors(), ["2:1-2:2: nowhere"])
 }
 
 ///|
 pub extend CheckErrors with Debug::{to_repr}
+
+///|
+test "identity prefers path:loc#code and falls back to the rendered line" {
+  let coded : ErrorSite = {
+    path: Some("a.mbt"),
+    loc: "1:1-1:2",
+    code: Some(4014),
+    message: "Expr Type Mismatch",
+  }
+  assert_eq(coded.identity(), "a.mbt:1:1-1:2#4014")
+  // A reworded message keeps the identity.
+  assert_eq(
+    { ..coded, message: "Type mismatch (new wording)", }.identity(),
+    coded.identity(),
+  )
+  let uncoded : ErrorSite = { ..coded, code: None, }
+  assert_eq(uncoded.identity(), "a.mbt:1:1-1:2: Expr Type Mismatch")
+}
 
 ///|
 pub extend ErrorSite with Debug::{to_repr}
