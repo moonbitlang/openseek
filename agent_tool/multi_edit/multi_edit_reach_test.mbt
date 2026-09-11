@@ -7,6 +7,11 @@
 /// must carry the evidence (old error gone, new ones elsewhere) and the exact
 /// `revert_when_errors_above` that admits the unchanged batch; that re-issue
 /// must then be kept. `run_multi_edit` comes from multi_edit_test.mbt.
+///
+/// The edited file is a symlink (`a/a.mbt -> a/source.txt`) under /tmp, the
+/// strictest path shape: moon diagnoses it under the canonical directory
+/// (/private/tmp on macOS) but by its link name, so the guard must recognise
+/// errors in it by neither the written spelling nor the realpath alone.
 async test "multi_edit tells a fix that lets the build reach further from breakage" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-reach-", dir => {
     let a_original = "///|\npub fn base() -> Int {\n  \"one\"\n}\n"
@@ -18,12 +23,13 @@ async test "multi_edit tells a fix that lets the build reach further from breaka
     @vfs.FileSystem::from_pairs([
       ("moon.mod", "name = \"tmp/reach\"\n"),
       ("a/moon.pkg", "warnings = \"+unnecessary_annotation\"\n"),
-      ("a/a.mbt", a_original),
+      ("a/source.txt", a_original),
       (
         "b/moon.pkg", "import {\n  \"tmp/reach/a\",\n}\n\nwarnings = \"+unnecessary_annotation\"\n",
       ),
       ("b/b.mbt", b_body),
     ]).write_to(dir)
+    @fs.symlink(target="\{dir}/a/source.txt", "\{dir}/a/a.mbt")
     let fix : Json = {
       "file": "\{dir}/a/a.mbt",
       "old_string": "  \"one\"",

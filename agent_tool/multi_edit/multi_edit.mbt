@@ -752,19 +752,29 @@ priv struct Comparability {
 } derive(Debug, Eq)
 
 ///|
-/// The batch's write targets with symlinks and aliases resolved, so they
-/// compare against moon's diagnostic paths, which moon reports canonically
-/// (on macOS an edit under `/tmp/…` is diagnosed under `/private/tmp/…`). A
-/// path realpath cannot resolve keeps its own spelling.
+/// Every spelling under which moon might diagnose a batch's write targets:
+/// the path as written, its directory canonicalized with the file's own name
+/// kept, and its full realpath. moon reports the canonical directory (on
+/// macOS an edit under `/tmp/…` is diagnosed under `/private/tmp/…`) but the
+/// file under the name it compiled — an edited `alias.mbt -> source.txt` is
+/// diagnosed as `…/alias.mbt`, so the written name must survive alongside the
+/// resolved one. A path realpath cannot resolve contributes what it can.
 async fn canonical_paths(writes : Array[PreparedWrite]) -> Array[String] {
   let paths : Array[String] = []
   for write in writes {
-    paths.push(
-      @fs.realpath(write.path) catch {
+    paths.push(write.path)
+    if write.path.rev_split_once("/") is Some((dir, name)) && dir != "" {
+      let canonical_dir = @fs.realpath(dir) catch {
         error if @async.is_being_cancelled() => raise error
-        _ => write.path
-      },
-    )
+        _ => dir.to_owned()
+      }
+      paths.push("\{canonical_dir}/\{name}")
+    }
+    let resolved = @fs.realpath(write.path) catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => continue
+    }
+    paths.push(resolved)
   }
   paths
 }
