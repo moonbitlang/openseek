@@ -105,7 +105,14 @@ jobs:
       - name: Test Windows background job paths and retained reads
         env:
           CL: /bigobj
-        run: moon test desktop/internal/engine/jobs_wbtest.mbt --target native
+        run: |
+          # The test executable lives outside the packaged app, so Windows
+          # cannot find its linked Proton/CEF DLLs beside the executable.
+          $runtimeDirs = Get-ChildItem desktop/dist/seekmoon -Recurse -Filter *.dll |
+            Select-Object -ExpandProperty DirectoryName -Unique
+          if (-not $runtimeDirs) { throw 'Packaged app contains no runtime DLLs' }
+          $env:PATH = ($runtimeDirs -join ';') + ';' + $env:PATH
+          moon test desktop/internal/engine/jobs_wbtest.mbt --target native
 
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
