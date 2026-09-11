@@ -14,14 +14,14 @@ Durable logs survive engine shutdown. Processes keep their current session-owned
 
 | Area | Current behavior | Consequence |
 | --- | --- | --- |
-| `agent_tool/shell_exec/sink.mbt:100` | Memory-first sink creates a spill file only after the inline cap; seeds it with prior output. | A quiet or short job has no file to tail. The sink default is 12,000 characters, but `mbtx` passes 48,000. |
-| `agent/tool_definition.mbt:69` | Creates `openseek-jobs-*` in a temporary directory; removes the directory after the session task group ends. Creation failure silently selects memory-only mode. | Logs cannot serve as durable user artifacts. Snippet scratch space and output retention currently share ownership. |
-| `agent_tool/shell_exec/sink.mbt:100` | Swallows write failures and still advances `file_bytes`; read failures fall back to the head. | A log can be incomplete while reads look successful. This needs correction before advertising a reliable output file. |
+| `agent_tool/shell_exec/sink.mbt:121` | Memory-first sink creates a spill file only after the inline cap; seeds it with prior output. | A quiet or short job has no file to tail. The sink default is 12,000 characters, but `mbtx` passes 48,000. |
+| `agent/tool_definition.mbt:69–90` | Creates `openseek-jobs-*` in a temporary directory; removes the directory after the session task group ends. Creation failure silently selects memory-only mode. | Logs cannot serve as durable user artifacts. Snippet scratch space and output retention currently share ownership. |
+| `agent_tool/shell_exec/sink.mbt:128` | Swallows write failures and still advances `file_bytes`; read failures fall back to the head. | A log can be incomplete while reads look successful. This needs correction before advertising a reliable output file. |
 | `agent_tool/bgjobs/bgjobs.mbt:230` | Detachable foreground executions use `fg-N.out`; adoption assigns a separate `bg-N` ID. Both counters restart with the runtime. | Never derive a log path from a displayed job ID, and never use that ID alone for historical identity. |
 | `agent_tool/bgjobs/bgjobs.mbt:125` | Snapshots expose status, output size and watchdog flags, but not log path, cwd, timestamps or launch correlation. | There is no complete UI-facing job record. |
 | `agent_tool/bgjobs/bgjobs.mbt:320` | Completion callback covers natural exits and watchdog kills, and intentionally omits requested stops. | The existing model notification hook is insufficient as a universal lifecycle event hook. |
 | `protocol/event.mbt`, `protocol/command.mbt` | Completion is prose in `BackgroundNotice`; no structured job events, list command or controller stop command. | A UI would otherwise have to parse tool text or ask the model to poll. |
-| `desktop/frontend/transcript/component/job_wait.mbt:37` | Extracts descriptions from tool briefs and renders waiting labels. | Helpful presentation, but not authoritative job tracking. |
+| `desktop/frontend/transcript/component/job_wait.mbt` | Extracts descriptions from tool briefs and renders waiting labels. | Helpful presentation, but not authoritative job tracking. |
 | `cmd/openseek/serve.mbt:621` | Builds tools once, outside individual turns. | A job can remain alive after a turn finishes; job state must not be attached only to the active turn. |
 | `desktop/internal/workflow/tail.mbt` | Already follows files using byte offsets and bounded reads. | Useful design precedent. Its newline-only delivery and silent read errors are unsuitable for a user log viewer without changes. |
 | `desktop/internal/host/fs_ops.mbt:39` | Can read absolute host paths, but reads the whole file subject to the editor size cap. | Paths are supported; efficient incremental log reads are the missing API. |
@@ -154,3 +154,5 @@ The user authorized the complete implementation through stacked PRs and independ
 Run `openseek review --base <predecessor>` on each implementation slice; fix actionable findings and re-review changed slices. At the end run it against the original stack base, inspecting the complete feature and cross-layer contracts. Review reports and test evidence belong in the PR descriptions. A plan review is design feedback, not evidence that implementation works.
 
 Completion means all five PRs exist, implemented behavior passes the specified gates, independent review findings are resolved or explicitly accounted for, and a final aggregate review has run. Retention/owner verification/byte-cursor behavior are part of the implementation, not deferred placeholders. Optional nested subprocess instrumentation and push subscriptions remain out of scope.
+
+Plan review completed with `openseek review --base 08739cc19a6ebefa273fea4210613d98216bb51c`: no blocking/design findings, three citation-precision comments fixed. Reviewer reported `moon check --target all` and `moon test` passing (wasm 99, JS 1907, native 1784 tests). References in the findings table describe the original base revision.
