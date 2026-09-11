@@ -310,7 +310,7 @@ async fn execute(
         error if @async.is_being_cancelled() => raise error
         error => {
           let hint = if is_bundled_filename(filename) {
-            " Bundled workflows: @builtin/read.mbtx, @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx, @builtin/ci-watch.mbtx (GitHub CI status). Read-only agent workflows (subrun=true): @builtin/change-review.mbtx, @builtin/repo-map.mbtx. Ordinary filenames select workspace files."
+            " Bundled workflows: @builtin/read.mbtx, @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx, @builtin/ci-watch.mbtx (GitHub CI status). Agent workflows (subrun=true): @builtin/review.mbtx (independent worktree audit; criteria in args), @builtin/change-review.mbtx, @builtin/repo-map.mbtx. Ordinary filenames select workspace files."
           } else {
             " filename alone must name an existing readable script. To save a new workspace script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd."
           }
@@ -1726,9 +1726,10 @@ fn description(
     #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).
     #|@builtin/ci-watch.mbtx monitors GitHub PR checks with gh (no subrun needed);
     #|use args=["PR", "--repo", "OWNER/REPO", "--once"] for one snapshot.
-    #|For read-only agent workflows, use subrun=true with
-    #|@builtin/change-review.mbtx (working-tree review from three perspectives)
-    #|or @builtin/repo-map.mbtx (architecture, validation, extension points).
+    #|For agent workflows, use subrun=true with @builtin/review.mbtx (independent
+    #|worktree audit against the criteria in args), @builtin/change-review.mbtx
+    #|(working-tree review from three perspectives) or @builtin/repo-map.mbtx
+    #|(architecture, validation, extension points).
     #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
     #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.
@@ -1853,16 +1854,12 @@ fn description(
       #|reserved and the engine is not on the spawn allowlist: a workflow written
       #|without it runs with no handoff and its subagents are refused.
       #|
-      #|For an independent worktree review, use `wf.agent_call`, NOT `wf.agent`
-      #|(which sends a scout's `query` field). Pass your actual audit criteria explicitly:
-      #|`wf.agent_call(kind="review", input={"goal": "Check the CSV parser's CRLF and escaped-quote handling"}, label="CSV review", max_steps=100)`.
-      #|The reviewer reads the current worktree and returns a full structured report
-      #|with `findings`, `summary`, and `stats`; print the report with `.stringify()`
-      #|and address its findings. A missing report raises an error, not a clean verdict.
-      #|No standing goal or baseline is filled in automatically. Optionally include
-      #|`sha` and `dirty` in input only when you know the baseline commit and whether
-      #|the worktree was already dirty when it was recorded. Hosted children default
-      #|to a 10-minute deadline; `--review-deadline` controls only the automatic gate.
+      #|For an independent worktree review, run the bundled script with your audit
+      #|criteria in args: `{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling"],"subrun":true}`.
+      #|It prints the reviewer's full report (`findings`, `summary`, `stats`) and a
+      #|`findings=N blockers=M` line; a blocker means the claim does not hold yet.
+      #|Nothing is audited implicitly: state the standing goal or claim yourself
+      #|(add `--sha COMMIT` when you know the baseline it was recorded at).
     )
   } else {
     ""
