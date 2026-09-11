@@ -12,6 +12,32 @@ test "safe conversion keeps raw HTML inert and removes unsafe link schemes" {
 }
 
 ///|
+test "image-only paragraphs are marked during conversion" {
+  let rendered = render_markdown(
+    (
+      #|![plain](image.png)
+      #|
+      #|![mixed](image.png) caption
+      #|
+      #|[![linked](image.png)](https://docs.example.test/)
+      #|
+      #|[![linked mixed](image.png)](https://docs.example.test/) caption
+      #|
+    ),
+  )
+  assert_eq(
+    rendered.html,
+    (
+      #|<p data-markdown-image-only="true"><img src="image.png" alt="plain" ></p>
+      #|<p><img src="image.png" alt="mixed" > caption</p>
+      #|<p data-markdown-image-only="true"><a href="https://docs.example.test/"><img src="image.png" alt="linked" ></a></p>
+      #|<p><a href="https://docs.example.test/"><img src="image.png" alt="linked mixed" ></a> caption</p>
+      #|
+    ),
+  )
+}
+
+///|
 test "conversion failure becomes one escaped plaintext paragraph" {
   let rendered = markdown_conversion_result(
     "<unsafe> & plain",

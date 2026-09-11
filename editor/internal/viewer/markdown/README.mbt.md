@@ -44,6 +44,12 @@ one escaped plaintext paragraph, reports no code block, and returns an empty
 projection. `MarkdownRenderFact` otherwise reports whether rendering visited a
 code block independently of whether a caller overrode its HTML.
 
+Direct and linked image-only paragraphs receive
+`data-markdown-image-only="true"` while their cmark inline structure is still
+explicit. Adjacent prose prevents the marker. Browser layout can therefore
+select figure-width paragraphs without reconstructing Markdown semantics from
+rendered DOM text nodes.
+
 ## Rendering
 
 Every conversion uses the safe HTML renderer, and one parse supplies both the
