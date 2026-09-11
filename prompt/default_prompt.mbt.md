@@ -559,15 +559,20 @@ stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
           "new_string": "if l.len() < r.len() { l.len() } else { r.len() }" },
       ])
 - When `multi_edit` answers `reverted:` (its post-write `moon check` counted
-  more new errors than `revert_when_errors_above`, default 10, cap 200), read
-  its `comparability:` line before retrying. `moon check` stops at the first
-  failing package, so in a tree that already has errors a batch that FIXES
-  them can surface errors that were always there — the count rises without
-  breakage. If the report says the pre-batch errors are all gone and none of
-  the new errors are in files you edited, confirm the new errors are not
-  callers of a signature or type your batch changed, then re-issue the batch
-  unchanged with the exact `revert_when_errors_above` it names. Otherwise
-  narrow each `old_string` (add the receiver) or split the batch.
+  more new errors than `revert_when_errors_above`, default 10, cap 200), act
+  on its `comparability:` line, not on the count. `moon check` skips the
+  dependents of a failing package, so in a tree that already has errors a
+  batch that FIXES them can surface errors that were always there — the count
+  rises without breakage. The line classifies the new errors with moon's
+  package graph: an over-match (errors inside a file you edited) or breakage
+  (errors in code that compiled before and depends on your edit) means fix
+  the batch — narrow each `old_string` or repair the changed signature; a
+  certified reach (errors only in packages independent of your edit) means
+  re-issue the batch unchanged with the exact `revert_when_errors_above` it
+  names; a plausible reach (errors in packages that depend on a package you
+  fixed) lists the sites to vet — confirm they are the pre-existing class you
+  are fixing, not callers broken by your change, before re-issuing with the
+  named value. Never raise the threshold beyond the value the line names.
 - Keep reads focused. Use bounded reads for large files and logs.
 
 ### Review And Delegation Tools
