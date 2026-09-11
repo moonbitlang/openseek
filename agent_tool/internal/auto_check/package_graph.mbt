@@ -130,10 +130,39 @@ fn resolve_package_graph(
           dir = "\{dir}/\{part}"
         }
       }
-      dir
+      normalize_dir(dir)
     })
   })
   { dirs, edges: raw.edges, }
+}
+
+///|
+/// Collapse `.` and `..` segments lexically (`/m/src/../a` → `/m/a`), so a
+/// directory assembled from a `source = "src/.."` setting compares equal to
+/// the canonical paths moon puts in diagnostics. Leading `..` above the root
+/// is kept as written; a leading `/` is preserved.
+fn normalize_dir(path : String) -> String {
+  let absolute = path.has_prefix("/")
+  let parts : Array[String] = []
+  for segment in path.split("/") {
+    match segment {
+      "" | "." => continue
+      ".." =>
+        match parts {
+          [.., last] if last != ".." => ignore(parts.pop())
+          _ => if absolute { () } else { parts.push("..") }
+        }
+      segment => parts.push(segment.to_owned())
+    }
+  }
+  let joined = parts.join("/")
+  if absolute {
+    "/\{joined}"
+  } else if joined == "" {
+    "."
+  } else {
+    joined
+  }
 }
 
 ///|
@@ -294,6 +323,22 @@ test "resolve_package_graph inserts a module's source subdirectory" {
     Some("/m/src"),
   ])
   assert_eq(resolve_package_graph(root_only, Map([])).dirs, [Some("/m")])
+  // A setting moon resolves back to the root must compare equal to the
+  // canonical paths in diagnostics.
+  assert_eq(
+    resolve_package_graph(raw, { "/private/tmp/reach": "src/.." }).dirs[0],
+    Some("/private/tmp/reach/a"),
+  )
+}
+
+///|
+test "normalize_dir collapses dot segments lexically" {
+  assert_eq(normalize_dir("/m/src/../a"), "/m/a")
+  assert_eq(normalize_dir("/m/./a//b/"), "/m/a/b")
+  assert_eq(normalize_dir("/m/a/../.."), "/")
+  assert_eq(normalize_dir("/../m"), "/m")
+  assert_eq(normalize_dir("a/../../b"), "../b")
+  assert_eq(normalize_dir("a/.."), ".")
 }
 
 ///|
