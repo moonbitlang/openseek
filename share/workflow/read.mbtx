@@ -77,16 +77,16 @@ fn request(selector : String, literal : Bool) -> Request raise ReadError {
 }
 
 ///|
-/// Bound both UTF-16 units (the read body budget) and UTF-8 transport bytes,
-/// always ending at a Unicode scalar boundary.
-fn prefix(text : StringView, units : Int, bytes : Int) -> String {
+/// The longest prefix of `text` that encodes to at most `bytes` UTF-8 bytes,
+/// always ending at a Unicode scalar boundary, and its encoded length. Bytes
+/// are the one unit that matters: mbtx stops a program whose output passes
+/// its byte cap, so that is what every budget here counts.
+fn prefix(text : StringView, bytes : Int) -> (String, Int) {
   let out = StringBuilder()
-  let mut remaining_units = units
-  let mut remaining_bytes = bytes
+  let mut used = 0
   for char in text {
     let code = char.to_int()
-    let char_units = if code > 0xffff { 2 } else { 1 }
-    let char_bytes = if code < 0x80 {
+    let width = if code < 0x80 {
       1
     } else if code < 0x800 {
       2
@@ -95,23 +95,19 @@ fn prefix(text : StringView, units : Int, bytes : Int) -> String {
     } else {
       4
     }
-    if char_units > remaining_units || char_bytes > remaining_bytes {
+    if used + width > bytes {
       break
     }
     out.write_char(char)
-    remaining_units -= char_units
-    remaining_bytes -= char_bytes
+    used += width
   }
-  out.to_string()
+  (out.to_string(), used)
 }
 
 ///|
-fn render(
-  content : String,
-  input : Request,
-  units : Int,
-  bytes : Int,
-) -> String {
+/// Render `content` with a body of at most `bytes` UTF-8 bytes, gutters
+/// included; the caller reserves room for the footer.
+fn render(content : String, input : Request, bytes : Int) -> String {
   if content.is_empty() {
     return "<system>start_line=\{input.start} shown_lines=0 total_lines=0 truncated=false note=empty file</system>\n"
   }
@@ -121,29 +117,23 @@ fn render(
   let end = input.end.unwrap_or(total).min(total)
   let width = (if start < end { end } else { input.start }).to_string().length()
   let body = StringBuilder()
-  let mut remaining_units = units
-  // A fixed reserve covers the longest possible status footer (Int bounds).
-  let mut remaining_bytes = bytes - 256
+  let mut remaining = bytes
   let mut shown = 0
   let mut truncated = false
   for index in start..<end {
+    // Gutter and separator are ASCII, so their length is their byte count.
     let gutter = "\{(index + 1).to_string().pad_start(width, ' ')} |"
     let separator = if shown == 0 { "" } else { "\n" }
     let overhead = gutter.length() + separator.length()
-    if remaining_units < overhead || remaining_bytes < overhead {
+    if remaining < overhead {
       truncated = true
       break
     }
     let line = lines[index]
-    let text = prefix(
-      line,
-      remaining_units - overhead,
-      remaining_bytes - overhead,
-    )
+    let (text, used) = prefix(line, remaining - overhead)
     body <+ "\{separator}\{gutter}\{text}"
     shown += 1
-    remaining_units -= overhead + text.length()
-    remaining_bytes -= overhead + @utf8.encode(text).length()
+    remaining -= overhead + used
     if text.length() < line.length() {
       truncated = true
       break
@@ -158,14 +148,14 @@ fn render(
 }
 
 ///|
-async fn read(input : Request, units : Int, bytes : Int) -> (String, Bool) {
+async fn read(input : Request, bytes : Int) -> (String, Bool) {
   try {
     if @fs.kind(input.path, follow_symlink=true) is Directory {
       raise ReadError(
         "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files",
       )
     }
-    (render(@fs.read_file(input.path).text(), input, units, bytes), false)
+    (render(@fs.read_file(input.path).text(), input, bytes), false)
   } catch {
     error if @async.is_being_cancelled() => raise error
     error => {
@@ -176,7 +166,7 @@ async fn read(input : Request, units : Int, bytes : Int) -> (String, Bool) {
       // Errors may contain arbitrary paths; escape newlines so file framing
       // stays unambiguous, and bound them just like successful bodies.
       // JSON escaping can expand each source byte to six ASCII bytes.
-      let message = prefix(message, (bytes - 128) / 6, (bytes - 128) / 6)
+      let (message, _) = prefix(message, (bytes - 128) / 6)
       ("error reading file: \{message.to_json().stringify()}\n", true)
     }
   }
@@ -186,7 +176,7 @@ async fn read(input : Request, units : Int, bytes : Int) -> (String, Bool) {
 async fn main {
   let args = @env.args()[1:]
   let requests : Array[Request] = []
-  let mut units = 12_000
+  let mut per_file = 12_000
   let mut options = true
   let mut index = 0
   try {
@@ -194,12 +184,12 @@ async fn main {
       let arg = args[index]
       if options && arg == "--help" {
         println(
-          "Usage: mbtx(filename=\"@builtin/read.mbtx\", args=[\"path\", \"path:start\", \"path:start:end\"])\nRanges are inclusive and 1-based. --max-output-chars N sets each file's UTF-16 body budget (default 12000, maximum 50000). The batch is bounded to 40000 UTF-8 bytes; use smaller batches/ranges when truncated. --literal PATH reads a path without interpreting colon suffixes. -- ends option parsing. Relative paths use cwd (default workspace).",
+          "Usage: mbtx(filename=\"@builtin/read.mbtx\", args=[\"path\", \"path:start\", \"path:start:end\"])\nRanges are inclusive and 1-based. --max-output-bytes N sets each file's UTF-8 body budget (default 12000, maximum 50000). The batch is bounded to 40000 UTF-8 bytes; use smaller batches/ranges when truncated. --literal PATH reads a path without interpreting colon suffixes. -- ends option parsing. Relative paths use cwd (default workspace).",
         )
         return
       } else if options && arg == "--" {
         options = false
-      } else if options && (arg == "--max-output-chars" || arg == "--literal") {
+      } else if options && (arg == "--max-output-bytes" || arg == "--literal") {
         index += 1
         guard args.get(index) is Some(value) else {
           raise ReadError("\{arg} requires a value")
@@ -207,7 +197,7 @@ async fn main {
         if arg == "--literal" {
           requests.push(request(value, true))
         } else {
-          units = positive_int(value).min(50_000)
+          per_file = positive_int(value).min(50_000)
         }
       } else {
         guard !options || !arg.has_prefix("--") else {
@@ -240,7 +230,11 @@ async fn main {
       )
       break
     }
-    let (body, error) = read(input, units, remaining - header_bytes)
+    // A fixed reserve covers the longest possible status footer (Int bounds).
+    let (body, error) = read(
+      input,
+      per_file.min(remaining - header_bytes - 256),
+    )
     failed = failed || error
     println("\{header}\{body.trim_end(chars="\n")}")
     remaining -= header_bytes + @utf8.encode(body).length()
