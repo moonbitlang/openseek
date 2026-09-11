@@ -239,7 +239,10 @@ async fn job_history_page(
         }
       Some(_) => {
         errors.push("Cannot inspect runtime \{name}: not a directory")
-        continue
+        guard live.iter().any(entry => entry.1.generation == name) else {
+          continue
+        }
+        None
       }
       None => None
     }

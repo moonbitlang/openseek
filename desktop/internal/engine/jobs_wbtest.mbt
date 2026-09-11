@@ -163,6 +163,21 @@ async test "history decodes only its requested page and preserves runtime job or
   let broken = job_history_page(broken_root, Map([]), 0, [])
   assert_eq(broken.errors.length(), 1)
   assert_true(broken.errors[0].contains("stray-file"))
+  // Damaged or missing storage must not hide an authoritative live execution.
+  let displaced = { ..job_record_fixture(), generation: "stray-file", }
+  let missing = { ..job_record_fixture(), generation: "missing-generation", }
+  let active = job_history_page(
+    broken_root,
+    Map([("stray-file/bg-1", displaced), ("missing-generation/bg-1", missing)]),
+    0,
+    [],
+  )
+  assert_eq(active.jobs.length(), 2)
+  assert_true(
+    active.jobs.any(view => view.job == displaced && view.controllable),
+  )
+  assert_true(active.jobs.any(view => view.job == missing && view.controllable))
+  assert_false(active.errors.is_empty())
 }
 
 ///|
