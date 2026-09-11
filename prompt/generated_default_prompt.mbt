@@ -65,11 +65,6 @@ fn default_prompt() -> String {
     #|│       └── tutorial
     #|│           └── for-go-programmers
     #|└── workflow
-    #|    └── _build
-    #|        └── wasm
-    #|            └── debug
-    #|                └── build
-    #|                    └── single
     #|```
     #|
     #|Read references outside the workspace on demand: locate the relevant page under
