@@ -46,6 +46,15 @@ Do not resolve package files from the process working directory. Host features
 append canonical paths to `@proton.resource_dir()`. Installed lookup must fail
 closed rather than silently use a system copy.
 
+## macOS debugger attachment
+
+Development packages use `macos/SeekMoonDev.entitlements`, which includes
+`com.apple.security.get-task-allow` so LLDB can attach after launch with
+`xcrun lldb -p <PID>`. Release packages (`--release`) use
+`macos/SeekMoon.entitlements` without this permission. Rebuild and relaunch
+SeekMoonDev to apply entitlement changes; they do not change an already
+running process. macOS must also authorize the debugger as a developer tool.
+
 ## Process environment
 
 The intended `PATH` precedence is:

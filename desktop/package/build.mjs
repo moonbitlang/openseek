@@ -396,7 +396,12 @@ class Build {
     if (options.sign) args.push("--sign");
     if (options.notarize) args.push("--notarize");
     const env = {};
-    if (this.command === "macos") env.PROTON_MACOS_ENTITLEMENTS = join(this.desktop, "package/macos/SeekMoon.entitlements");
+    if (this.command === "macos") {
+      // LLDB may attach to a running development app. Keep get-task-allow
+      // out of the shipped app by selecting its entitlements separately.
+      env.PROTON_MACOS_ENTITLEMENTS = join(this.desktop, "package/macos",
+        options.release ? "SeekMoon.entitlements" : "SeekMoonDev.entitlements");
+    }
     if (options.sign) env.PROTON_MACOS_SIGNING_IDENTITY = options.sign;
     if (options.notarize) env.PROTON_NOTARY_PROFILE = options.notarize;
     if (this.command === "macos") env.MACOSX_DEPLOYMENT_TARGET = "12.0";
