@@ -73,7 +73,7 @@ export class BackgroundJobsHarness extends DesktopBrowserHarness {
       const view = this.jobs.find(v => v.job.generation === p.target.generation && v.job.id === p.target.job_id);
       const bytes = readFileSync(view.output_path);
       let start = p.offset ?? Math.max(0, bytes.length - p.limit);
-      if (p.offset == null) while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start++;
+      if (p.offset == null && start > 0) while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start++;
       let end = Math.min(start + p.limit, bytes.length);
       while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end--;
       return { text: bytes.subarray(start, end).toString(), start_offset: start, next_offset: end,

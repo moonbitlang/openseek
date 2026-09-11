@@ -220,6 +220,16 @@ async fn job_history_page(
     if !@wire.valid_job_component(name) {
       continue
     }
+    let kind = @fs.kind("\{directory}/\{name}") catch {
+      error => {
+        errors.push("Cannot inspect runtime \{name}: \{error}")
+        continue
+      }
+    }
+    guard kind is Directory else {
+      errors.push("Cannot inspect runtime \{name}: not a directory")
+      continue
+    }
     let stamp = Some(@fs.mtime("\{directory}/\{name}/owner.lock")) catch {
       @os_error.OSError(_) as error if error.is_ENOENT() => None
       error => {
