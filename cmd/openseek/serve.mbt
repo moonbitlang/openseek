@@ -6,6 +6,8 @@ priv enum ServeCommand {
   Steer(@agent_runtime.SteerInput)
   Compact
   Cancel
+  JobsSnapshot(request_id~ : String)
+  JobStop(request_id~ : String, generation~ : String, job_id~ : String)
   Goal(GoalAction)
   /// The answer to an `approval_requested` event: which question, and whether
   /// it is granted. Both labelled, because a bare positional pair reads as
@@ -178,6 +180,9 @@ fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
           },
         ),
       )
+    JobsSnapshot(request_id~) => Ok(JobsSnapshot(request_id~))
+    JobStop(request_id~, generation~, job_id~) =>
+      Ok(JobStop(request_id~, generation~, job_id~))
     Compact => Ok(Compact)
     Cancel => Ok(Cancel)
     GoalSet(text~, auto~) =>
@@ -1066,6 +1071,37 @@ async fn run_serve(
                 runtime.queue_steer(Notice(text))
               }
           }
+        Wire(JobsSnapshot(request_id~)) => {
+          let jobs = match tools.background_job_runtime() {
+            Some(runtime) => runtime.records()
+            None => []
+          }
+          @emit.emit(JobsSnapshot(request_id~, jobs~))
+        }
+        Wire(JobStop(request_id~, generation~, job_id~)) => {
+          let _ = group.spawn(no_wait=true) <| () => {
+            let outcome : @protocol.JobStopOutcome = match
+              tools.background_job_runtime() {
+              None => NotFound
+              Some(jobs) =>
+                if jobs.generation() != generation {
+                  WrongRuntime
+                } else if jobs.snapshot(job_id) is None {
+                  NotFound
+                } else if jobs
+                  .records()
+                  .any(job => job.id == job_id && job.state.is_terminal()) {
+                  AlreadyTerminal
+                } else {
+                  ignore(jobs.stop(job_id))
+                  Stopped
+                }
+            }
+            @emit.emit(
+              JobStopResult(request_id~, generation~, job_id~, outcome~),
+            )
+          }
+        }
         Wire(Cancel) => {
           // A user interrupt stops the autonomous loop, not just one turn —
           // including any auto intent still queued behind pending work.

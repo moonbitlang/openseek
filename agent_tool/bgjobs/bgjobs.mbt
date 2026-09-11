@@ -78,6 +78,9 @@ struct BgJobRuntime {
   // `stop`/teardown) — e.g. to push a completion notice into the agent loop.
   on_job_exit : ((BgJobSnapshot) -> Unit)?
   jobs : Map[String, BgJob]
+  generation : String
+  publish_lock : @async.Mutex
+  on_job_event : ((@protocol.JobEventKind, @protocol.JobRecord) -> Unit)?
   settled : @async.CondVar
   mut next_index : Int
   // Separate counter for the spill files of detachable foreground executions
@@ -92,6 +95,11 @@ struct BgJobRuntime {
 /// `BgJobSnapshot`.
 priv struct BgJob {
   id : String
+  mut revision : Int
+  backgrounded_at_ms : Int64
+  mut requested_stop : Bool
+  mut persistence_error : String?
+  mut cleanup_error : String?
   command : String
   description : String?
   exec : @shell_exec.ShellExecution
@@ -164,6 +172,7 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
   hard_output_cap? : Int = @shell_exec.default_hard_cap,
   hard_timeout_ms? : Int = default_hard_timeout_ms,
   on_job_exit? : (BgJobSnapshot) -> Unit,
+  on_job_event? : (@protocol.JobEventKind, @protocol.JobRecord) -> Unit,
 ) -> BgJobRuntime {
   let group = scope.group()
   {
@@ -214,6 +223,12 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
     hard_timeout_ms,
     on_job_exit,
     jobs: Map([]),
+    generation: match spill_dir {
+      Some(dir) => artifact_basename(dir)
+      None => "memory-\{@env.now()}"
+    },
+    publish_lock: Mutex(),
+    on_job_event,
     settled: Cond(),
     next_index: 1,
     fg_index: 1,
@@ -329,7 +344,7 @@ pub async fn BgJobRuntime::adopt(
 
 ///|
 /// Add a job to the registry under `id` and start its exit watcher.
-fn BgJobRuntime::register(
+async fn BgJobRuntime::register(
   self : BgJobRuntime,
   id : String,
   exec : @shell_exec.ShellExecution,
@@ -343,6 +358,11 @@ fn BgJobRuntime::register(
 ) -> Unit {
   self.jobs[id] = {
     id,
+    revision: 1,
+    backgrounded_at_ms: @env.now().reinterpret_as_int64(),
+    requested_stop: false,
+    persistence_error: None,
+    cleanup_error: None,
     command,
     description,
     exec,
@@ -355,36 +375,12 @@ fn BgJobRuntime::register(
     denial_scanned: false,
     denial_feedback: None,
   }
-  // Watch for the job ending on its own and fire `on_job_exit` once: a natural
-  // exit, or the output-limit watchdog killing a flooding job — both must be
-  // surfaced (a watchdog kill silently eating an unwatched job would look like
-  // it just never finished). A requested stop (job_stop, session teardown) is
-  // already user-visible and fires nothing. The job entry is set above before
-  // the watcher runs (the watcher first awaits the exit, ≥ one tick later), so
-  // `snapshot(id)` always resolves.
+  // Persist and announce before starting the watcher: even a process that
+  // exited during adoption has one Started followed by one terminal event.
+  @async.protect_from_cancel(() => self.publish(id, Started))
   (self.spawn_watcher)(() => {
     exec.wait()
-    // Publish even if launcher cleanup fails. Keep the job pending until the
-    // notice is queued, then wake waiters; a terminal snapshot alone is too
-    // early for the loop's finish decision.
-    defer (if self.jobs.get(id) is Some(job) {
-      if self.on_job_exit is Some(callback) &&
-        self.snapshot(id) is Some(snapshot) &&
-        (
-          snapshot.status is Exited(_) ||
-          snapshot.killed_by_output_limit ||
-          snapshot.killed_by_time_limit ||
-          snapshot.output_error is Some(_)
-        ) {
-        callback(snapshot)
-      }
-      job.completion_published = true
-      self.settled.broadcast()
-    })
-    if self.jobs.get(id) is Some(job) && job.on_terminal is Some(cleanup) {
-      job.on_terminal = None
-      cleanup()
-    }
+    self.finish_job(id)
   })
   // Wall-clock reaper: every registered job has a bounded lifetime measured
   // from its process start, so a detached job's foreground wait counts
@@ -533,7 +529,13 @@ pub async fn BgJobRuntime::read_output_tail(
 /// already-terminal known job returns `true`; an unknown id returns `false`.
 pub async fn BgJobRuntime::stop(self : BgJobRuntime, id : String) -> Bool {
   guard self.jobs.get(id) is Some(job) else { return false }
-  let _ = job.exec.stop()
+  if bg_status(job.exec.status()) is Running && !job.requested_stop {
+    job.requested_stop = true
+    job.exec.request_stop()
+    self.publish(id, Updated)
+  }
+  job.exec.wait()
+  self.wait_any([id])
   true
 }
 

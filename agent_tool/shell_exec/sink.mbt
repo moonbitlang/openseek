@@ -28,6 +28,7 @@ priv struct ShellOutputSink {
   lock : @async.Mutex
   mut file_created : Bool
   mut failure : String?
+  mut last_output_at_ms : Int64?
   head : StringBuilder
   mut head_chars : Int
   // Total decoded characters of full output (across memory + file), ≤ hard_cap.
@@ -65,6 +66,7 @@ fn ShellOutputSink::ShellOutputSink(
     lock: Mutex(),
     file_created: false,
     failure: None,
+    last_output_at_ms: None,
     head: StringBuilder(),
     head_chars: 0,
     total_chars: 0,
@@ -175,6 +177,7 @@ async fn ShellOutputSink::append_locked(
   }
   self.total_chars += text.char_length()
   self.seq += 1
+  self.last_output_at_ms = Some(@env.now().reinterpret_as_int64())
 }
 
 ///|

@@ -101,6 +101,7 @@ pub async fn[X] build_tools(
     scope,
     spill_dir~,
     persistent_logs=job_log_dir is Some(_),
+    on_job_event=(kind, job) => @emit.emit(JobChanged(kind~, job~)),
     on_job_exit=snapshot => {
       runtime.queue_steer(Notice(background_notice_text(snapshot)))
       if on_background_wake is Some(wake) {
@@ -108,6 +109,25 @@ pub async fn[X] build_tools(
       }
     },
   )
+  let owner = if job_log_dir is Some(_) {
+    let file = @fs.open(
+      "\{spill_dir}/owner.lock",
+      mode=ReadWrite,
+      create_mode=CreateNew,
+      permission=0o600,
+    )
+    errdefer file.close()
+    file.lock(Exclusive)
+    Some(file)
+  } else {
+    None
+  }
+  scope
+  .group()
+  .add_defer(() => {
+    defer (if owner is Some(file) { file.close() })
+    @async.protect_from_cancel(() => bg_runtime.finalize())
+  })
   Tools(
     [
       @edit.definition(workspace_root~, file_state~),

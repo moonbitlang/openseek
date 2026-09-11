@@ -17,6 +17,8 @@ fn all_commands() -> Array[@openseek_protocol.Command] {
     Prompt(text="do it exactly once", submission_id=Some("page-1-submission-2")),
     Steer(kind=Prompt, text="also fix docs"),
     Steer(kind=Command, text="<user_shell_command>"),
+    JobsSnapshot(request_id="jobs-1"),
+    JobStop(request_id="stop-1", generation="runtime-1", job_id="bg-1"),
     Compact,
     Cancel,
     GoalSet(text="ship it", auto=false),

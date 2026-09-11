@@ -26,6 +26,22 @@ fn or_null(value : String?) -> Json {
 /// own fields as one line; `parse` reads them from the top level.
 pub fn Event::to_json(self : Event) -> Json {
   match self {
+    JobChanged(kind~, job~) =>
+      { "event": "job_changed", "kind": kind.to_json(), "job": job.to_json() }
+    JobsSnapshot(request_id~, jobs~) =>
+      {
+        "event": "jobs_snapshot",
+        "request_id": request_id,
+        "jobs": jobs.to_json(),
+      }
+    JobStopResult(request_id~, generation~, job_id~, outcome~) =>
+      {
+        "event": "job_stop_result",
+        "request_id": request_id,
+        "generation": generation,
+        "job_id": job_id,
+        "outcome": outcome.to_json(),
+      }
     AgentSetupFailed(error~) =>
       { "event": "agent_setup_failed", "error": error }
     AgentStep(step~) => { "event": "agent_step", "step": step }

@@ -231,7 +231,12 @@ fn ends_with_turn(command : @wire.Command) -> Bool {
   // rather than being delivered into a turn that never asked.
   match command {
     Cancel | Steer(..) | ApprovalDecision(..) => true
-    Prompt(..) | Compact | GoalSet(..) | GoalClear => false
+    Prompt(..)
+    | Compact
+    | GoalSet(..)
+    | GoalClear
+    | JobsSnapshot(..)
+    | JobStop(..) => false
   }
 }
 
