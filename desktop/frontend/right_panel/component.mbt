@@ -10,9 +10,10 @@ struct Input {
   menu_open : Bool
   expanded : Bool
   reveal_label : String?
+  // Session-scoped jobs, including retained history and the selected log.
+  jobs : @jobs.State
   // The workflows the active conversation's snippets announced, for the
   // Workflows tab. Live-only state projected from the root's conversation.
-  jobs : @jobs.State
   workflows : Array[@workflow.Run]
 } derive(Eq)
 
