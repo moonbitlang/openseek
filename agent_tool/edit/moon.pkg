@@ -10,12 +10,12 @@ import {
   "bobzhang/openseek/internal/workspace_path",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/core/json",
 }
 
 import {
   "bobzhang/openseek/agent_tool/multi_edit",
   "bobzhang/openseek/testkit/filesystem" @vfs,
-  "moonbitlang/core/json",
 } for "test"
 
 warnings = "+unnecessary_annotation"

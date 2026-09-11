@@ -1,7 +1,6 @@
 import {
   "bobzhang/openseek/agent_session/store",
   "bobzhang/openseek/testkit/filesystem" @vfs,
-  "moonbitlang/core/debug",
 } for "wbtest"
 
 import {
@@ -12,6 +11,7 @@ import {
   "moonbitlang/async/socket",
   "moonbitlang/async/fs",
   "moonbitlang/core/argparse",
+  "moonbitlang/core/debug",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
   "moonbitlang/core/json",

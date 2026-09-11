@@ -2,3 +2,7 @@ import {
   "moonbitlang/editor/base/common" @base_common,
   "moonbitlang/core/list",
 }
+
+import {
+  "moonbitlang/core/debug",
+} for "test"

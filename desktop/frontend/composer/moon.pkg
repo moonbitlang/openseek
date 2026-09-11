@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/json",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",

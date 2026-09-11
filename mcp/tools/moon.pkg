@@ -5,6 +5,7 @@ import {
   "bobzhang/openseek/mcp/stdio",
   "bobzhang/openseek/mcp/streamhttp",
   "bobzhang/openseek/mcp/config",
+  "bobzhang/openseek_protocol",
   "bobzhang/openseek_protocol/emit",
   "moonbitlang/async",
 }
@@ -12,6 +13,7 @@ import {
 import {
   "bobzhang/openseek/jsonrpc",
   "bobzhang/openseek/mcp",
+  "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/mcp/config",
   "moonbitlang/async",

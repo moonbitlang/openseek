@@ -2,6 +2,7 @@ import {
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/editor/base/common" @base_common,
   "moonbit-community/rabbita/dom" @rdom,
+  "moonbit-community/rabbita/js",
 }
 
 supported_targets = "js"

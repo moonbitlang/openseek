@@ -4,9 +4,11 @@ import {
   "bobzhang/openseek/agent_tool/internal/error" @tool_error,
   "bobzhang/openseek/agent_tool/internal/sandbox",
   "bobzhang/openseek/agent_tool/job_output/internal/decode",
+  "moonbitlang/core/json",
 }
 
 import {
+  "bobzhang/openseek/agent_runtime",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",

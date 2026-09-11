@@ -36,6 +36,7 @@ import {
   "moonbitlang/editor/internal/viewer/contrib/quick_diff/browser" @quick_diff_browser,
   "moonbitlang/editor/viewer/common/languages",
   "moonbitlang/editor/viewer/common/markers",
+  "moonbitlang/editor/internal/viewer/ui/scrollbar",
   "moonbitlang/editor/viewer/common/view_layout",
   "moonbitlang/editor/viewer/common/view_model",
   "moonbitlang/editor/viewer/common" @viewer_common,

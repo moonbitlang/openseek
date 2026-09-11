@@ -3,3 +3,7 @@ import {
   "moonbitlang/editor/viewer/common/diff",
   "moonbitlang/editor/viewer/common/quick_diff_api",
 }
+
+import {
+  "moonbitlang/editor/viewer/common/model",
+} for "wbtest"
