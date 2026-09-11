@@ -16,12 +16,9 @@
 }
 
 .margin-view-overlays .agent-feedback-glyph.line-hover {
-  margin-left: 12px;
-  /* Keep the lane element itself inside the gutter band: the upstream
-     20px-wide element would spill its click target past the gutter edge
-     into the text (the comments glyph's width recipe). The visible plus is
-     the ::before, drawn back over the lane. */
-  width: 4px !important;
+  /* The feedback reservation owns the first 18px of the decoration lane.
+     Keep the visible icon and its pointer target in the same box. */
+  width: 18px !important;
 }
 
 .margin-view-overlays .agent-feedback-glyph.line-hover::before {
@@ -30,8 +27,8 @@
   font-size: 14px;
   position: absolute;
   height: 100%;
-  width: 18px;
-  left: -8px;
+  width: 100%;
+  left: 0;
   z-index: 10;
   color: var(--vscode-editorGutter-commentGlyphForeground, var(--vscode-foreground));
   background-color: var(--vscode-editorGutter-commentRangeForeground);

@@ -18,7 +18,10 @@
   align-items: center;
   justify-content: center;
   font-size: 140%;
-  margin-left: 2px;
+  /* Keep the 16px folding target close to feedback, with 8px before code. */
+  left: auto !important;
+  right: 8px;
+  width: 16px !important;
 }
 
 .margin-view-overlays:hover .codicon,
@@ -53,8 +56,6 @@
 .cldr.codicon.codicon-folding-manual-expanded,
 .cldr.codicon.codicon-folding-manual-collapsed {
   color: var(--vscode-editorGutter-foldingControlForeground) !important;
-  /* The Viewer currently has one shared line-decoration lane. Keep a fold
-     control above the hover-only agent-feedback affordance when both occupy
-     the same line; feedback remains clickable on every non-folding line. */
+  /* Keep the dedicated fold target above full-lane gutter decorations. */
   z-index: 11;
 }

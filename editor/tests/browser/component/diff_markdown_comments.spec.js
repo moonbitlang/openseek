@@ -91,11 +91,13 @@ async function expectDecorationsLane(pane, expectedWidth) {
     if (!margin || !lineNumber || !toggle) return null;
     const marginRect = margin.getBoundingClientRect();
     const lineNumberRect = lineNumber.getBoundingClientRect();
+    const toggleRect = toggle.getBoundingClientRect();
     return {
       lane: marginRect.right - lineNumberRect.right,
-      toggle: Number.parseFloat(getComputedStyle(toggle).width),
+      toggle: toggleRect.width,
+      toggleRightInset: marginRect.right - toggleRect.right,
     };
-  })).toEqual({ lane: expectedWidth, toggle: expectedWidth });
+  })).toEqual({ lane: expectedWidth, toggle: 16, toggleRightInset: 8 });
 }
 
 test('keeps normal editor gutter room for comment and feedback controls', async ({ page }) => {

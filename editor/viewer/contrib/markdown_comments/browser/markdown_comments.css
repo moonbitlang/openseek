@@ -181,10 +181,8 @@
 }
 
 /* The margin ViewZone node spans the entire gutter for the zone's height.
- * The chevron mirrors the code-folding `.cldr` geometry: the icon box is the
- * line-decorations lane (right edge of the gutter, shifted the same 2px as
- * `folding.css` `margin-left`), flex-centered at 140% like the code icons,
- * so both fold controls share one column. */
+ * The chevron shares the code-folding column, leaving 8px before content
+ * regardless of the feedback reservation. */
 .moonbit-viewer-markdown-comment-margin {
   pointer-events: none;
 }
@@ -192,14 +190,12 @@
 .moonbit-viewer-markdown-comment-margin-toggle.codicon {
   position: absolute;
   top: 4px;
-  right: -2px;
+  right: 8px;
   /* The later `.margin-view-overlays` sibling otherwise paints above the
    * zones container and intercepts the click. */
   z-index: 1;
-  /* Default `lineDecorationsWidth` (10px) plus the 16px folding-control
-   * reserve; the contribution inlines the effective lane width at mount and
-   * resynchronizes it after runtime option changes. */
-  width: 26px;
+  width: 16px;
+  max-width: 16px;
   height: var(--editor-line-height, 18px);
   display: flex;
   align-items: center;

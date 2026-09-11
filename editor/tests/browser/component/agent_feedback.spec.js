@@ -32,6 +32,52 @@ const boxOf = async (locator) => {
   return box;
 };
 
+test('agent feedback: add and fold controls have separate hit targets', async ({ page }) => {
+  await gotoBrowserScenario(page, 'agent-feedback');
+  const header = page.locator('.view-line', { hasText: 'quiet_area' });
+  const body = page.locator('.view-line', { hasText: 'untouched' }).first();
+  const glyph = page.locator('.cldr.agent-feedback-glyph.line-hover');
+  const input = page.locator('.agent-feedback-input-widget textarea');
+  await expect(header).toBeVisible();
+
+  for (const collapsed of [false, true]) {
+    await header.hover();
+    const row = glyph.locator('..');
+    const fold = row.locator('[class*="codicon-folding-"]');
+    await expect(fold).toHaveCount(1);
+    if (collapsed) {
+      await fold.click();
+      await expect(body).toHaveCount(0);
+      await expect(input).not.toBeVisible();
+      await header.hover();
+    }
+
+    const addBox = await boxOf(glyph);
+    const foldBox = await boxOf(fold);
+    expect(foldBox.x - (addBox.x + addBox.width)).toBe(2);
+    const marginBox = await boxOf(page.locator('.monaco-editor .margin'));
+    expect(marginBox.x + marginBox.width - (foldBox.x + foldBox.width)).toBe(8);
+    // Hit both edges of the visible plus, not only a tiny carrier's center.
+    for (const offset of [2, addBox.width - 2]) {
+      await header.hover();
+      await glyph.click({ position: { x: offset, y: addBox.height / 2 } });
+      await expect(input).toBeFocused();
+      await expect(body).toHaveCount(collapsed ? 0 : 1);
+      await page.locator('.agent-feedback-input-action-cancel').click();
+      await expect(input).not.toBeVisible();
+      // Restore the viewport after the composer returns focus to the editor.
+      await page.mouse.move(300, 100);
+      await page.mouse.wheel(0, -1000);
+      await expect(header).toBeVisible();
+    }
+  }
+
+  await header.hover();
+  await glyph.locator('..').locator('[class*="codicon-folding-"]').click();
+  await expect(body).toHaveCount(1);
+  await expect(input).not.toBeVisible();
+});
+
 test('agent feedback: bubbles, glyph add flow, reply, remove, scroll', async ({ page }, testInfo) => {
   const reporter = await installMoonBitReporter(page);
   await gotoBrowserScenario(page, 'agent-feedback');
