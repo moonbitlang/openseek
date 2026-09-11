@@ -113,6 +113,18 @@ async test "read workflow caps Unicode gutters and the whole foreground batch su
     assert_true(
       gutter.content.contains("shown_lines=0 total_lines=1 truncated=true"),
     )
+    // A small content budget bounds the body, never the reason a file could
+    // not be read: that comes out of the batch's remaining room.
+    let missing = run_in(ws, {
+      "filename": filename,
+      "args": ["--max-output-bytes", "5", "absent.txt"],
+    })
+    assert_true(missing.is_error)
+    assert_true(
+      missing.content.contains("error reading file:"),
+      msg=missing.content,
+    )
+    assert_true(missing.content.contains("absent.txt"), msg=missing.content)
     // This uses the retained foreground runner, which would STOP at 48000 bytes.
     @async.with_task_group() <| group => {
       let scope = @agent_runtime.AgentTaskScope(group)
