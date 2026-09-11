@@ -3,6 +3,8 @@ import {
   "bobzhang/openseek/agent_tool/internal/sandbox",
   "bobzhang/openseek/agent_tool/shell_exec",
   "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "bobzhang/openseek_protocol" @protocol,
   "moonbitlang/async/process",
   "moonbitlang/core/env",
 }

@@ -65,10 +65,18 @@ async fn execute(
   // job — so a result bigger than one window (a workflow's several reports)
   // is reachable in full; the default stays the tail, which is what a poll on
   // a running job wants.
-  let raw_output = match page {
-    Some(offset) =>
-      page_of(bg_runtime.read_output(job_id).unwrap_or(""), offset~, window~)
-    None => bg_runtime.read_output_tail(job_id, window).unwrap_or("")
+  let raw_output = try {
+    match page {
+      Some(offset) =>
+        page_of(bg_runtime.read_output(job_id).unwrap_or(""), offset~, window~)
+      None => bg_runtime.read_output_tail(job_id, window).unwrap_or("")
+    }
+  } catch {
+    error =>
+      return @agent_tool.respond(
+        "failed to read job \{job_id} output: \{error}",
+        is_error=true,
+      )
   }
   // Re-snapshot *after* the awaited read: the job may have appended more output
   // or exited while the read yielded, so size/status/binary/truncation in the
@@ -113,9 +121,16 @@ async fn execute(
       None
     }
   } else {
-    bg_runtime.terminal_denial_feedback(job_id)
+    bg_runtime.terminal_denial_feedback(job_id) catch {
+      error =>
+        return @agent_tool.respond(
+          "failed to read job \{job_id} output for terminal diagnostics: \{error}",
+          is_error=true,
+        )
+    }
   }
   let is_error = exit_error ||
+    snapshot.output_error is Some(_) ||
     snapshot.had_invalid_utf8 ||
     sandbox_denied is Some(_)
   // Truncated whenever what we show is less than what the job produced — this
@@ -142,7 +157,12 @@ async fn execute(
     Some(offset) => " window_offset=\{offset}"
     None => ""
   }
-  let footer = "<system>job=\{job_id} \{status_label}\{truncation}\{paging}\{binary}</system>"
+  let file_hint = match snapshot.output_file {
+    Some(path) =>
+      " output_file=\{path.to_json().stringify()} output_persistent=\{snapshot.output_persistent}"
+    None => ""
+  }
+  let footer = "<system>job=\{job_id} \{status_label}\{truncation}\{paging}\{binary}\{file_hint}</system>"
   // Assemble: output, then the source-write denial guidance (like the foreground
   // path), then the `<system>` footer LAST so it stays the trailing metadata line.
   let content = StringBuilder()
@@ -155,6 +175,9 @@ async fn execute(
   if sandbox_denied is Some(guidance) {
     content.write_string(guidance)
     content.write_string("\n")
+  }
+  if snapshot.output_error is Some(error) {
+    content.write_string("Output capture failed: \{error}\n")
   }
   content.write_string(footer)
   let content = content.to_string()

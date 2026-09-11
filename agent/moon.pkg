@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/async/os_error",
   "bobzhang/openseek/agent_session",
   "moonbitlang/core/int",
   "bobzhang/openseek/agent_session/compact",

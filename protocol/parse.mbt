@@ -47,6 +47,37 @@ pub fn parse(line : Json) -> Event? {
   guard line is Object(fields) else { return None }
   guard text(fields, "event") is Some(name) else { return None }
   match name {
+    "job_changed" => {
+      let kind : JobEventKind = match fields.get("kind") {
+        Some(value) => @json.from_json(value) catch { _ => return None }
+        None => return None
+      }
+      let job : JobRecord = match fields.get("job") {
+        Some(value) => @json.from_json(value) catch { _ => return None }
+        None => return None
+      }
+      Some(JobChanged(kind~, job~))
+    }
+    "jobs_snapshot" => {
+      guard text(fields, "request_id") is Some(request_id) else { return None }
+      let jobs : Array[JobRecord] = match fields.get("jobs") {
+        Some(value) => @json.from_json(value) catch { _ => return None }
+        None => return None
+      }
+      Some(JobsSnapshot(request_id~, jobs~))
+    }
+    "job_stop_result" => {
+      guard text(fields, "request_id") is Some(request_id) &&
+        text(fields, "generation") is Some(generation) &&
+        text(fields, "job_id") is Some(job_id) else {
+        return None
+      }
+      let outcome : JobStopOutcome = match fields.get("outcome") {
+        Some(value) => @json.from_json(value) catch { _ => return None }
+        None => return None
+      }
+      Some(JobStopResult(request_id~, generation~, job_id~, outcome~))
+    }
     "agent_setup_failed" =>
       text(fields, "error").map(error => AgentSetupFailed(error~))
     "agent_step" => int(fields, "step").map(step => AgentStep(step~))

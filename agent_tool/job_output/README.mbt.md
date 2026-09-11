@@ -55,3 +55,8 @@ Two invariants drove the implementation:
    job is terminal, the *full* retained output is scanned once and that
    classification is cached. This catches a denial line earlier than the final
    displayed tail, with the same guidance appended and the footer still last.
+
+The system footer includes the actual `output_file` path and
+`output_persistent` when file retention is configured. External readers can
+tail this file without polling the model. Read failures are tool errors, and
+capture failures explicitly identify incomplete logs.

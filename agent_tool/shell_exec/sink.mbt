@@ -25,6 +25,12 @@ pub let default_hard_cap : Int = 20_000_000
 /// large output, such as tests and runtimes without a spill directory.
 priv struct ShellOutputSink {
   // The first `inline_cap` characters, for inline rendering without a file read.
+  lock : @async.Mutex
+  // The path exists even if seeding fails; retain it for inspecting partial
+  // output. This does not assert that any bytes have committed successfully.
+  mut file_created : Bool
+  mut failure : String?
+  mut last_output_at_ms : Int64?
   head : StringBuilder
   mut head_chars : Int
   // Total decoded characters of full output (across memory + file), ≤ hard_cap.
@@ -42,7 +48,8 @@ priv struct ShellOutputSink {
   // Full-output spill file, opened lazily once output exceeds `inline_cap` and a
   // spill path is configured. None → memory-only (small output, or no path).
   mut file : @fs.File?
-  // Bytes written to the file so far (== full output byte length once spilled).
+  // Bytes covered by successful writes. A failed write may leave additional
+  // partial bytes on disk; failure stays explicit and this cursor does not move.
   mut file_bytes : Int64
   // Where to spill; None → never spill (memory-only, head kept, rest dropped).
   spill_path : String?
@@ -59,6 +66,10 @@ fn ShellOutputSink::ShellOutputSink(
   spill_path? : String,
 ) -> ShellOutputSink {
   {
+    lock: Mutex(),
+    file_created: false,
+    failure: None,
+    last_output_at_ms: None,
     head: StringBuilder(),
     head_chars: 0,
     total_chars: 0,
@@ -81,6 +92,8 @@ async fn ShellOutputSink::append_chunk(
   self : ShellOutputSink,
   chunk : Bytes,
 ) -> Unit {
+  self.lock.acquire()
+  defer self.lock.release()
   let buffer = Buffer()
   buffer.write_bytes(self.pending)
   buffer.write_bytes(chunk)
@@ -89,7 +102,7 @@ async fn ShellOutputSink::append_chunk(
   if invalid {
     self.had_invalid = true
   }
-  self.append_text(text)
+  self.append_locked(text)
 }
 
 ///|
@@ -101,6 +114,19 @@ async fn ShellOutputSink::append_text(
   self : ShellOutputSink,
   text : String,
 ) -> Unit {
+  self.lock.acquire()
+  defer self.lock.release()
+  self.append_locked(text)
+}
+
+///|
+async fn ShellOutputSink::append_locked(
+  self : ShellOutputSink,
+  text : String,
+) -> Unit {
+  if self.failure is Some(error) {
+    fail(error)
+  }
   guard text != "" else { return }
   guard !self.truncated else { return }
   let room_hard = self.hard_cap - self.total_chars
@@ -116,17 +142,27 @@ async fn ShellOutputSink::append_text(
   }
   // Full output → spill file. Open lazily the first time total output would pass
   // the inline cap, seeding the file with everything buffered so far (the head,
-  // which holds all output while total ≤ inline_cap). A file-open/write failure
-  // degrades to memory-only (the head) rather than losing the run.
+  // which holds all output while total ≤ inline_cap). A failed write is
+  // surfaced to the execution monitor, which stops the tracked process.
   if self.spill_path is Some(path) {
     if self.file is None &&
       self.total_chars + text.char_length() > self.inline_cap {
-      self.open_spill(path)
+      self.open_spill(path) catch {
+        error => {
+          let message = "failed to create output log: \{error}"
+          self.failure = Some(message)
+          fail(message)
+        }
+      }
     }
     if self.file is Some(file) {
       let bytes = @utf8.encode(text)
       file.write_at(bytes, position=self.file_bytes) catch {
-        _ => ()
+        error => {
+          let message = "failed to write output log: \{error}"
+          self.failure = Some(message)
+          fail(message)
+        }
       }
       self.file_bytes += bytes.length().to_int64()
     }
@@ -144,6 +180,7 @@ async fn ShellOutputSink::append_text(
   }
   self.total_chars += text.char_length()
   self.seq += 1
+  self.last_output_at_ms = Some(@env.now().reinterpret_as_int64())
 }
 
 ///|
@@ -155,16 +192,11 @@ async fn ShellOutputSink::open_spill(
   // ReadWrite so the same descriptor serves both the streaming writes and later
   // `read_all` reads (a create/write-only handle cannot be read). CreateOrTruncate
   // gives a fresh file (the path is unique per job id).
-  let file = @fs.open(path, mode=ReadWrite, create_mode=CreateOrTruncate) catch {
-    _ => return
-  }
+  let file = @fs.open(path, mode=ReadWrite, create_mode=CreateOrTruncate)
+  self.file_created = true
+  errdefer file.close()
   let seed = @utf8.encode(self.head.to_string())
-  file.write_at(seed, position=0) catch {
-    _ => {
-      file.close()
-      return
-    }
-  }
+  file.write_at(seed, position=0)
   self.file = Some(file)
   self.file_bytes = seed.length().to_int64()
 }
@@ -173,17 +205,19 @@ async fn ShellOutputSink::open_spill(
 /// Flush any incomplete trailing UTF-8 bytes at end of stream (decoded lossily),
 /// so a multi-byte character that never completed is surfaced rather than lost.
 async fn ShellOutputSink::finish(self : ShellOutputSink) -> Unit {
+  self.lock.acquire()
+  defer self.lock.release()
   guard self.pending.length() > 0 else { return }
   // A non-empty pending buffer at end of stream is an incomplete (or invalid)
   // sequence — strict decoding would have rejected it, so mark it binary.
   self.had_invalid = true
   let text = @utf8.decode_lossy(self.pending)
   self.pending = b""
-  self.append_text(text)
+  self.append_locked(text)
 }
 
 ///|
-/// Release the spill file descriptor. Reads after this fall back to the head.
+/// Release the write descriptor. Later reads reopen the retained file.
 fn ShellOutputSink::close(self : ShellOutputSink) -> Unit {
   if self.file is Some(file) {
     file.close()
@@ -196,8 +230,9 @@ fn ShellOutputSink::close(self : ShellOutputSink) -> Unit {
 /// the foreground (never adopted as a background job), so its temp file does not
 /// leak. Full output is no longer readable after this (the head remains).
 async fn ShellOutputSink::discard(self : ShellOutputSink) -> Unit {
-  guard self.file is Some(_) else { return }
+  guard self.file_created else { return }
   self.close()
+  self.file_created = false
   if self.spill_path is Some(path) {
     @fs.remove(path) catch {
       _ => ()
@@ -247,7 +282,7 @@ fn ShellOutputSink::over_inline_cap(self : ShellOutputSink) -> Bool {
 ///|
 /// The spill file's path, if output spilled to disk; `None` for memory-only.
 fn ShellOutputSink::spill_path(self : ShellOutputSink) -> String? {
-  if self.file is Some(_) {
+  if self.file_created {
     self.spill_path
   } else {
     None
@@ -257,41 +292,70 @@ fn ShellOutputSink::spill_path(self : ShellOutputSink) -> String? {
 ///|
 /// The full retained output. Reads the spill file when output spilled; otherwise
 /// returns the in-memory head (which is the full output for a small command). On
-/// a read error it degrades to the head rather than raising.
+/// a read error it raises rather than disguising a stale head as full output.
 async fn ShellOutputSink::read_all(self : ShellOutputSink) -> String {
-  match self.file {
-    Some(file) => {
-      let bytes = file.read_exactly_at(self.file_bytes.to_int(), position=0) catch {
-        _ => return self.head.to_string()
-      }
-      @utf8.decode_lossy(bytes)
+  let (path, committed, head) = {
+    self.lock.acquire()
+    defer self.lock.release()
+    let path = if self.file_bytes == 0L && self.failure is Some(_) {
+      None
+    } else {
+      self.spill_path()
     }
-    None => self.head.to_string()
+    (path, self.file_bytes, self.head.to_string())
+  }
+  match path {
+    Some(path) => {
+      // Only appenders advance the committed cursor. A separate reader can
+      // read this immutable prefix without backpressuring the pipe writer.
+      let file = @fs.open(path, mode=ReadOnly)
+      defer file.close()
+      @utf8.decode_lossy(file.read_exactly_at(committed.to_int(), position=0))
+    }
+    None => head
   }
 }
 
 ///|
 /// The last `n` characters of full output — a window onto the *recent* output of
 /// a (possibly still-running) job, read from the tail of the spill file so a
-/// poller sees progress rather than the unchanging prefix. Degrades to the head
-/// on a read error or a memory-only sink.
+/// poller sees progress rather than the unchanging prefix. Read errors raise.
 async fn ShellOutputSink::read_tail(self : ShellOutputSink, n : Int) -> String {
   guard n > 0 else { return "" }
-  match self.file {
-    Some(file) => {
-      // Read a byte window sized for `n` UTF-8 chars (≤ 4 bytes each) from the
-      // file tail, decode lossily (a partial lead byte at the window start
-      // becomes a replacement char, dropped when we keep the last `n`), then keep
-      // the last `n` characters.
-      let want = n.to_int64() * 4 + 4
-      let start = (self.file_bytes - want).max(0)
-      let len = (self.file_bytes - start).to_int()
-      let bytes = file.read_exactly_at(len, position=start) catch {
-        _ => return self.head.to_string()
+  self.lock.acquire()
+  defer self.lock.release()
+  if self.spill_path() is Some(path) {
+    let file = @fs.open(path, mode=ReadOnly)
+    defer file.close()
+    let want = n.to_int64() * 4 + 4
+    let start = (self.file_bytes - want).max(0)
+    let bytes = file.read_exactly_at(
+      (self.file_bytes - start).to_int(),
+      position=start,
+    )
+    last_chars(@utf8.decode_lossy(bytes), n)
+  } else {
+    last_chars(self.head.to_string(), n)
+  }
+}
+
+///|
+/// Serialize adoption with output writes. No configured path explicitly means
+/// a memory-only embedding; a configured path must be materialized successfully.
+async fn ShellOutputSink::materialize(self : ShellOutputSink) -> Unit {
+  self.lock.acquire()
+  defer self.lock.release()
+  if self.failure is Some(error) {
+    fail(error)
+  }
+  if !self.file_created && self.spill_path is Some(path) {
+    self.open_spill(path) catch {
+      error => {
+        let message = "failed to create output log: \{error}"
+        self.failure = Some(message)
+        fail(message)
       }
-      last_chars(@utf8.decode_lossy(bytes), n)
     }
-    None => last_chars(self.head.to_string(), n)
   }
 }
 

@@ -66,17 +66,25 @@ struct BgJobRuntime {
   spawn_watcher : (async () -> Unit) -> Unit
   // Directory for per-job spill files (full output beyond the inline preview).
   // None → memory-only jobs (no full-output file).
-  spill_dir : String?
+  mut spill_dir : String?
+  prepare_output_dir : (async () -> String)?
+  prepare_lock : @async.Mutex
+  mut output_prepared : Bool
+  persistent_logs : Bool
   // Wall-clock lifetime cap for any registered job, measured from process
   // start (an adopted job keeps its original deadline). Bounded lifetime,
   // not machine protection: the kill reaches the direct child only, so a
   // spinning grandchild can be orphaned — true process-group kill is
   // upstream work in moonbitlang/async. Tests shrink it to fire cheaply.
   hard_timeout_ms : Int
-  // Called once, with the terminal snapshot, when a job exits on its own (not on
-  // `stop`/teardown) — e.g. to push a completion notice into the agent loop.
+  // Called once for natural exits, watchdog kills, or capture failures. Normal
+  // stop/teardown is already user-visible; a capture failure is still reported
+  // even if it races a requested stop.
   on_job_exit : ((BgJobSnapshot) -> Unit)?
   jobs : Map[String, BgJob]
+  generation : String
+  publish_lock : @async.Mutex
+  on_job_event : ((@protocol.JobEventKind, @protocol.JobRecord) -> Unit)?
   settled : @async.CondVar
   mut next_index : Int
   // Separate counter for the spill files of detachable foreground executions
@@ -91,6 +99,12 @@ struct BgJobRuntime {
 /// `BgJobSnapshot`.
 priv struct BgJob {
   id : String
+  mut revision : Int
+  mut announced : Bool
+  backgrounded_at_ms : Int64
+  mut requested_stop : Bool
+  mut persistence_error : String?
+  mut cleanup_error : String?
   command : String
   description : String?
   exec : @shell_exec.ShellExecution
@@ -128,6 +142,9 @@ pub struct BgJobSnapshot {
   description : String?
   status : BgJobStatus
   priv output : String
+  output_file : String?
+  output_persistent : Bool
+  output_error : String?
   output_truncated : Bool
   priv over_inline_cap : Bool
   size : Int
@@ -156,9 +173,12 @@ pub struct BgJobSnapshot {
 pub fn[X] BgJobRuntime::BgJobRuntime(
   scope : @agent_runtime.AgentTaskScope[X],
   spill_dir? : String,
+  persistent_logs? : Bool = false,
+  prepare_output_dir? : async () -> String,
   hard_output_cap? : Int = @shell_exec.default_hard_cap,
   hard_timeout_ms? : Int = default_hard_timeout_ms,
   on_job_exit? : (BgJobSnapshot) -> Unit,
+  on_job_event? : (@protocol.JobEventKind, @protocol.JobRecord) -> Unit,
 ) -> BgJobRuntime {
   let group = scope.group()
   {
@@ -205,9 +225,19 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
       group.spawn_bg(task, no_wait=true, allow_failure=true)
     },
     spill_dir,
+    prepare_output_dir,
+    prepare_lock: Mutex(),
+    output_prepared: prepare_output_dir is None,
+    persistent_logs,
     hard_timeout_ms,
     on_job_exit,
     jobs: Map([]),
+    generation: match spill_dir {
+      Some(dir) => artifact_basename(dir)
+      None => "memory-\{@env.now()}"
+    },
+    publish_lock: Mutex(),
+    on_job_event,
     settled: Cond(),
     next_index: 1,
     fg_index: 1,
@@ -235,6 +265,7 @@ pub async fn BgJobRuntime::spawn_foreground_retained(
   max_output_chars : Int,
   stdin? : &@process.ProcessInput,
 ) -> @shell_exec.ShellExecution {
+  self.prepare_output()
   let spill_path = self.spill_dir.map(dir => {
     let index = self.fg_index
     self.fg_index += 1
@@ -265,11 +296,15 @@ pub async fn BgJobRuntime::start(
 ) -> String {
   // Reserve one id and use it for both the spill file and the registry entry, so
   // the job id and its `<id>.out` file never diverge.
+  self.prepare_output()
   let id = self.next_id()
   let spill_path = self.spill_dir.map(dir => "\{dir}/\{id}.out")
   let exec = (self.spawn_exec)(
     program, args, cwd, max_output_chars, spill_path, stdin,
   )
+  errdefer exec.request_stop()
+  exec.materialize_output()
+  let _ = exec.background()
   self.register(
     id,
     exec,
@@ -289,7 +324,7 @@ pub async fn BgJobRuntime::start(
 /// its id. Used by detach-on-timeout: a foreground command that outlived its
 /// timeout is `background()`-ed and adopted here, so `job_output`/`job_stop`
 /// and the completion notice see it like any explicit background job.
-pub fn BgJobRuntime::adopt(
+pub async fn BgJobRuntime::adopt(
   self : BgJobRuntime,
   exec : @shell_exec.ShellExecution,
   command~ : String,
@@ -300,7 +335,11 @@ pub fn BgJobRuntime::adopt(
   moonrun_policy_active? : Bool = false,
   on_terminal? : async () -> Unit,
 ) -> String {
+  errdefer exec.request_stop()
+  self.prepare_output()
   let id = self.next_id()
+  exec.materialize_output()
+  let _ = exec.background()
   self.register(
     id,
     exec,
@@ -317,7 +356,7 @@ pub fn BgJobRuntime::adopt(
 
 ///|
 /// Add a job to the registry under `id` and start its exit watcher.
-fn BgJobRuntime::register(
+async fn BgJobRuntime::register(
   self : BgJobRuntime,
   id : String,
   exec : @shell_exec.ShellExecution,
@@ -331,6 +370,12 @@ fn BgJobRuntime::register(
 ) -> Unit {
   self.jobs[id] = {
     id,
+    revision: 1,
+    announced: false,
+    backgrounded_at_ms: @env.now().reinterpret_as_int64(),
+    requested_stop: false,
+    persistence_error: None,
+    cleanup_error: None,
     command,
     description,
     exec,
@@ -343,35 +388,12 @@ fn BgJobRuntime::register(
     denial_scanned: false,
     denial_feedback: None,
   }
-  // Watch for the job ending on its own and fire `on_job_exit` once: a natural
-  // exit, or the output-limit watchdog killing a flooding job — both must be
-  // surfaced (a watchdog kill silently eating an unwatched job would look like
-  // it just never finished). A requested stop (job_stop, session teardown) is
-  // already user-visible and fires nothing. The job entry is set above before
-  // the watcher runs (the watcher first awaits the exit, ≥ one tick later), so
-  // `snapshot(id)` always resolves.
+  // Persist and announce before starting the watcher: even a process that
+  // exited during adoption has one Started followed by one terminal event.
+  @async.protect_from_cancel(() => self.publish(id, Started))
   (self.spawn_watcher)(() => {
     exec.wait()
-    // Publish even if launcher cleanup fails. Keep the job pending until the
-    // notice is queued, then wake waiters; a terminal snapshot alone is too
-    // early for the loop's finish decision.
-    defer (if self.jobs.get(id) is Some(job) {
-      if self.on_job_exit is Some(callback) &&
-        self.snapshot(id) is Some(snapshot) &&
-        (
-          snapshot.status is Exited(_) ||
-          snapshot.killed_by_output_limit ||
-          snapshot.killed_by_time_limit
-        ) {
-        callback(snapshot)
-      }
-      job.completion_published = true
-      self.settled.broadcast()
-    })
-    if self.jobs.get(id) is Some(job) && job.on_terminal is Some(cleanup) {
-      job.on_terminal = None
-      cleanup()
-    }
+    self.finish_job(id)
   })
   // Wall-clock reaper: every registered job has a bounded lifetime measured
   // from its process start, so a detached job's foreground wait counts
@@ -399,13 +421,16 @@ fn bg_status(status : @shell_exec.ExecStatus) -> BgJobStatus {
 }
 
 ///|
-fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
+fn BgJob::to_snapshot(self : BgJob, persistent_logs : Bool) -> BgJobSnapshot {
   {
     id: self.id,
     command: self.command,
     description: self.description,
     status: bg_status(self.exec.status()),
     output: self.exec.head(),
+    output_file: self.exec.spill_path(),
+    output_persistent: persistent_logs,
+    output_error: self.exec.output_error(),
     output_truncated: self.exec.output_truncated(),
     over_inline_cap: self.exec.over_inline_cap(),
     size: self.exec.size(),
@@ -471,7 +496,7 @@ pub fn BgJobRuntime::snapshot(
   self : BgJobRuntime,
   id : String,
 ) -> BgJobSnapshot? {
-  self.jobs.get(id).map(job => job.to_snapshot())
+  self.jobs.get(id).map(job => job.to_snapshot(self.persistent_logs))
 }
 
 ///|
@@ -480,7 +505,7 @@ pub fn BgJobRuntime::snapshot(
 /// runtime state through it.
 pub fn BgJobRuntime::list(self : BgJobRuntime) -> Array[BgJobSnapshot] {
   [
-    for _, job in self.jobs => job.to_snapshot()
+    for _, job in self.jobs => job.to_snapshot(self.persistent_logs)
   ]
 }
 
@@ -517,7 +542,13 @@ pub async fn BgJobRuntime::read_output_tail(
 /// already-terminal known job returns `true`; an unknown id returns `false`.
 pub async fn BgJobRuntime::stop(self : BgJobRuntime, id : String) -> Bool {
   guard self.jobs.get(id) is Some(job) else { return false }
-  let _ = job.exec.stop()
+  if bg_status(job.exec.status()) is Running && !job.requested_stop {
+    job.requested_stop = true
+    job.exec.request_stop()
+    self.publish(id, Updated)
+  }
+  job.exec.wait()
+  self.wait_any([id])
   true
 }
 
@@ -600,8 +631,13 @@ async test "stop terminates a running job" {
 ///|
 #cfg(not(platform="windows"))
 async test "a large-output job spills; snapshot previews, read_output is full" {
+  let directory = @fs.tmpdir(prefix="bg-job-test-")
+  defer @fs.rmdir(directory, recursive=true)
   @async.with_task_group(group => {
-    let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group), spill_dir="/tmp")
+    let rt = BgJobRuntime::BgJobRuntime(
+      AgentTaskScope(group),
+      spill_dir=directory,
+    )
     let id = rt.start(
       program="sh",
       args=["-c", "seq 1 5000"],
@@ -720,8 +756,13 @@ async test "snapshot, read_output, and stop handle unknown ids" {
 ///|
 #cfg(not(platform="windows"))
 async test "start allocates one id per job (id matches its spill file)" {
+  let directory = @fs.tmpdir(prefix="bg-job-test-")
+  defer @fs.rmdir(directory, recursive=true)
   @async.with_task_group(group => {
-    let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group), spill_dir="/tmp")
+    let rt = BgJobRuntime::BgJobRuntime(
+      AgentTaskScope(group),
+      spill_dir=directory,
+    )
     // The first started job is bg-1 (not bg-2): start must not reserve an id for
     // the spill path and then allocate a second one for the registry entry.
     let a = rt.start(program="sh", args=["-c", "printf a"], command="a")
@@ -835,3 +876,25 @@ async test "a requested stop is not blamed on the reaper" {
 
 ///|
 pub extend BgJobStatus with Eq::{equal, not_equal}
+
+///|
+/// Reserve durable storage lazily at the first execution, after the turn's
+/// first durable append. A failed serve setup therefore leaves no fake session.
+async fn BgJobRuntime::prepare_output(self : BgJobRuntime) -> Unit {
+  if self.output_prepared {
+    return
+  }
+  self.prepare_lock.acquire()
+  defer self.prepare_lock.release()
+  if self.output_prepared {
+    return
+  }
+  if self.prepare_output_dir is Some(prepare) {
+    let directory = prepare()
+    guard artifact_basename(directory) == self.generation else {
+      fail("job artifact preparation changed runtime identity")
+    }
+    self.spill_dir = Some(directory)
+  }
+  self.output_prepared = true
+}

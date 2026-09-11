@@ -3,12 +3,15 @@ package "bobzhang/openseek_protocol"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
 }
 
 // Values
 pub fn parse(Json) -> Event?
 
 pub fn split_child_session_id(String) -> (String, Int)?
+
+pub fn valid_job_component(String) -> Bool
 
 // Errors
 
@@ -18,6 +21,8 @@ pub(all) enum Command {
   Steer(kind~ : SteerKind, text~ : String)
   Compact
   Cancel
+  JobsSnapshot(request_id~ : String)
+  JobStop(request_id~ : String, generation~ : String, job_id~ : String)
   GoalSet(text~ : String, auto~ : Bool)
   GoalClear
   ApprovalDecision(id~ : String, allow~ : Bool)
@@ -49,6 +54,9 @@ pub(all) enum Event {
   SteerApplied(kind~ : String, content~ : String)
   SteerDropped(content~ : String)
   BackgroundNotice(content~ : String)
+  JobChanged(kind~ : JobEventKind, job~ : JobRecord)
+  JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
+  JobStopResult(request_id~ : String, generation~ : String, job_id~ : String, outcome~ : JobStopOutcome)
   GoalUpdated(goal~ : String?)
   GoalBlocked(reason~ : String)
   GoalUnblocked
@@ -90,6 +98,80 @@ pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 pub fn Event::to_json(Self) -> Json
 pub fn Event::to_repr(Self) -> @debug.Repr
+
+pub(all) enum JobEventKind {
+  Started
+  Updated
+  Finished
+  Failed
+} derive(Eq, @debug.Debug)
+pub fn JobEventKind::equal(Self, Self) -> Bool
+pub fn JobEventKind::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobEventKind::not_equal(Self, Self) -> Bool
+pub fn JobEventKind::to_json(Self) -> Json
+pub fn JobEventKind::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobEventKind
+pub impl @json.FromJson for JobEventKind
+
+pub(all) struct JobRecord {
+  generation : String
+  id : String
+  revision : Int
+  command : String
+  description : String?
+  cwd : String?
+  state : JobState
+  started_at_ms : Int64
+  backgrounded_at_ms : Int64
+  finished_at_ms : Int64?
+  last_output_at_ms : Int64?
+  output_file : String?
+  output_persistent : Bool
+  output_bytes : Int64
+  output_chars : Int
+  output_truncated : Bool
+  invalid_utf8 : Bool
+  output_error : String?
+  persistence_error : String?
+  cleanup_error : String?
+} derive(Eq, @debug.Debug)
+pub fn JobRecord::equal(Self, Self) -> Bool
+pub fn JobRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobRecord::not_equal(Self, Self) -> Bool
+pub fn JobRecord::to_json(Self) -> Json
+pub fn JobRecord::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobRecord
+pub impl @json.FromJson for JobRecord
+
+pub(all) enum JobState {
+  Running
+  Stopping
+  Exited(Int)
+  Stopped(String)
+  Interrupted
+} derive(Eq, @debug.Debug)
+pub fn JobState::equal(Self, Self) -> Bool
+pub fn JobState::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobState::is_terminal(Self) -> Bool
+pub fn JobState::not_equal(Self, Self) -> Bool
+pub fn JobState::to_json(Self) -> Json
+pub fn JobState::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobState
+pub impl @json.FromJson for JobState
+
+pub(all) enum JobStopOutcome {
+  Stopped
+  AlreadyTerminal
+  NotFound
+  WrongRuntime
+} derive(Eq, @debug.Debug)
+pub fn JobStopOutcome::equal(Self, Self) -> Bool
+pub fn JobStopOutcome::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobStopOutcome::not_equal(Self, Self) -> Bool
+pub fn JobStopOutcome::to_json(Self) -> Json
+pub fn JobStopOutcome::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobStopOutcome
+pub impl @json.FromJson for JobStopOutcome
 
 pub(all) enum SteerKind {
   Prompt

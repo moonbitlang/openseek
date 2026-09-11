@@ -85,6 +85,16 @@ pub(all) enum Event {
   SteerDropped(content~ : String)
   BackgroundNotice(content~ : String)
 
+  // Background execution events are session-scoped and may arrive between turns.
+  JobChanged(kind~ : JobEventKind, job~ : JobRecord)
+  JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
+  JobStopResult(
+    request_id~ : String,
+    generation~ : String,
+    job_id~ : String,
+    outcome~ : JobStopOutcome
+  )
+
   // ── goal ───────────────────────────────────────────────────────────────
   GoalUpdated(goal~ : String?)
   GoalBlocked(reason~ : String)

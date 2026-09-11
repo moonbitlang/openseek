@@ -838,3 +838,14 @@ pub extend SessionListing with Debug::{to_repr}
 
 ///|
 pub extend SessionStore with Debug::{to_repr}
+
+///|
+/// Return the prospective job directory without creating a session. The
+/// runtime creates it on first execution, after the first durable append.
+/// Logs move with archives and are removed with explicit session deletion.
+pub fn SessionStore::job_logs_dir(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  "\{self.session_dir(id)}/jobs"
+}
