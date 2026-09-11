@@ -198,7 +198,11 @@ pub async fn run_child(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend WorkerInput with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend WorkerInput with Eq::{equal, not_equal}
