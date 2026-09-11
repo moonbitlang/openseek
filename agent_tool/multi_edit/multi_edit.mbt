@@ -882,11 +882,11 @@ async fn edited_targets(writes : Array[PreparedWrite]) -> Array[EditedTarget] {
       canonical = "\{canonical_dir}/\{name}"
       spellings.push(canonical)
     }
-    let resolved = @fs.realpath(write.path) catch {
+    let resolved : String? = Some(@fs.realpath(write.path)) catch {
       error if @async.is_being_cancelled() => raise error
-      _ => ""
+      _ => None
     }
-    if resolved != "" {
+    if resolved is Some(resolved) {
       spellings.push(resolved)
     }
     let attributable : Array[String] = []
