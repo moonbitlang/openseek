@@ -1182,7 +1182,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             },
           ),
         ],
-        desc="Show reasoning, tool parameters, and tool output in every conversation. Off by default: tool activity is summarized and folded once a reply completes.",
+        desc="Show reasoning, tool parameters, and tool output in every conversation. Turn it off to summarize tool activity and fold it once a reply completes.",
       ),
       @settings.row(
         "Theme",

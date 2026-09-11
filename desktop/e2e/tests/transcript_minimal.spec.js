@@ -1,6 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+// Minimal mode is opt-in. Seed the preference only when the profile has none,
+// so the persistence test can still observe an explicit choice surviving reloads.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    if (localStorage.getItem('openseek.minimal_transcript') === null) {
+      localStorage.setItem('openseek.minimal_transcript', 'true');
+    }
+  });
+});
+
 // Exercise the production transport and renderer with recorded events. Fixtures
 // deliberately contain parameters, output, and reasoning that must never enter
 // the minimal subtree, even after every disclosure has been opened.
@@ -34,8 +44,8 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
     ];
   }
 
-  // Minimal mode is the default for a fresh profile; the Settings switch
-  // named "Transcript details" turns the full transcript back on.
+  // The Settings switch named "Transcript details" turns the full transcript
+  // back on.
   async enableMinimal() {
     await this.openSession();
     await expect(this.page.locator('#stream .minimal-tools, #stream .minimal-process').first()).toBeVisible();

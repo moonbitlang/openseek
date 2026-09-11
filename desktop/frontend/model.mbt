@@ -2628,7 +2628,7 @@ fn initial_model() -> Model {
     app_font: SystemMono,
     app_font_size: AppFontSize(14),
     fps_overlay_enabled: false,
-    minimal_transcript: true,
+    minimal_transcript: false,
     narrow,
     sidebar_open: !narrow,
     right_panel_open: false,
