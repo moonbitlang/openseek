@@ -582,6 +582,16 @@ fn default_prompt() -> String {
     #|          "old_string": "if l.length() < r.length() { l.length() } else { r.length() }",
     #|          "new_string": "if l.len() < r.len() { l.len() } else { r.len() }" },
     #|      ])
+    #|- When `multi_edit` answers `reverted:` (its post-write `moon check` counted
+    #|  more new errors than `revert_when_errors_above`, default 10, cap 200), read
+    #|  its `comparability:` line before retrying. `moon check` stops at the first
+    #|  failing package, so in a tree that already has errors a batch that FIXES
+    #|  them can surface errors that were always there — the count rises without
+    #|  breakage. If the report says the pre-batch errors are all gone and none of
+    #|  the new errors are in files you edited, confirm the new errors are not
+    #|  callers of a signature or type your batch changed, then re-issue the batch
+    #|  unchanged with the exact `revert_when_errors_above` it names. Otherwise
+    #|  narrow each `old_string` (add the receiver) or split the batch.
     #|- Keep reads focused. Use bounded reads for large files and logs.
     #|
     #|### Review And Delegation Tools
