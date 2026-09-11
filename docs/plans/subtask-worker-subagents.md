@@ -57,7 +57,7 @@ reaches the profile). Ship first, alone.
    - workspace_root must equal the selected worktree's toplevel. Main and
      linked worktrees are both supported integration targets.
 2. Enumerate `git worktree list --porcelain` → every worktree root.
-3. Reserve FIRST: worker slot (semaphore 4) + SubrunBudget slot; every later
+3. Reserve FIRST: worker slot (semaphore 4); every later
    failure path rolls back provisioned state explicitly (postcondition
    inspection: branch? dir? admin entry? registry entry?) before the error
    result.
@@ -204,8 +204,8 @@ subrun tools); substantial worker system prompt (.mbt.md + dev_build; "do
 not run git commit/worktree — the harness commits; permission errors on
 those are expected"); report v1 {status, summary, verification}; child
 session persistence; viz gate + tests; TUI unchanged; about-text fix;
-budget (SubrunBudget shared backstop + 4-slot semaphore, 45 min, 300
-steps since 2026-08-04); prompt guidance incl. warning-sweep recipe (partitions =
+budget (4-slot semaphore, 45 min, 300 steps since 2026-08-04; the per-turn
+SubrunBudget backstop was removed in #1464); prompt guidance incl. warning-sweep recipe (partitions =
 allowed_paths; integrate one at a time re-checking after each); dogfood
 eval with negative controls (seeded out-of-scope worker must yield a
 scope-violation error; final verdict from the checker).
