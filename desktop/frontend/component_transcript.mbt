@@ -145,7 +145,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         project_query="",
         root=placement.bind(value => value.checkout_root()),
         items=@transcript_component.VisibleRow::history(
-          self.codex.transcript_items(minimal=self.minimal_transcript),
+          self.codex.transcript_items(),
         ),
         streaming_response=None,
         streaming_identity="idle",

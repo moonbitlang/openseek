@@ -4499,7 +4499,7 @@ fn update_msg(
     }
     MinimalTranscriptChanged(enabled) =>
       (
-        Msg::save_minimal_transcript(enabled),
+        save_minimal_transcript(enabled),
         { ..model, minimal_transcript: enabled, },
       )
     FpsOverlayChanged(enabled) =>

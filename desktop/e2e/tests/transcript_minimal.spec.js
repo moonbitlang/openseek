@@ -34,11 +34,20 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
     ];
   }
 
+  // Minimal mode is the default for a fresh profile; the Settings switch
+  // named "Transcript details" turns the full transcript back on.
   async enableMinimal() {
     await this.openSession();
-    const toggle = this.page.locator('.topbar').getByRole('button', { name: 'Transcript details', exact: true });
-    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(toggle.locator('svg')).toHaveCount(1);
+    await expect(this.page.locator('#stream .minimal-tools, #stream .minimal-process').first()).toBeVisible();
+  }
+
+  transcriptDetails() {
+    return this.page.getByRole('switch', { name: 'Transcript details', exact: true });
+  }
+
+  async openSettings() {
+    await this.page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(this.page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   }
 
   append(kind, payload) {
@@ -264,31 +273,30 @@ test('minimal transcript preference persists and full mode restores details', as
   await page.reload();
   await app.openSession();
   await expect(page.locator('.minimal-tools')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByText('Minimal transcript', { exact: true })).toHaveCount(0);
-  await app.openSession();
-  const toggle = page.locator('.topbar').getByRole('button', { name: 'Transcript details', exact: true });
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-  await expect(toggle).toHaveAttribute('title', 'Show transcript details');
-  await expect(toggle).not.toHaveClass(/active/);
+  await app.openSettings();
+  const toggle = app.transcriptDetails();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(toggle).toHaveText('Off');
   await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(toggle).toHaveClass(/active/);
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(toggle).toHaveText('On');
+  await app.openSession();
   await expect(page.locator('.minimal-tools')).toHaveCount(0);
   await expect(page.locator('#stream')).toContainText('REASONING_SENTINEL');
   await expect(page.locator('#stream details.tool-call').first()).toBeVisible();
   await page.reload();
   await app.openSession();
   await expect(page.locator('.minimal-tools')).toHaveCount(0);
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(toggle).toHaveAttribute('title', 'Hide transcript details');
+  await app.openSettings();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.focus();
   await page.keyboard.press('Space');
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await app.openSession();
   await expect(page.locator('.minimal-tools')).toHaveCount(1);
   await page.reload();
-  await app.openSession();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await app.openSettings();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -331,15 +339,15 @@ test('minimal transcript also collapses Codex final replies and recognizes subag
   await process.locator('.minimal-tools > summary').click();
   await expect(process.locator('.minimal-call-caption')).toHaveText(['shell', 'Create subagent']);
   await expect(stream).not.toContainText(/HIDDEN_CODEX_REASONING|HIDDEN_CODEX_OUTPUT|HIDDEN_CODEX_COMMAND/);
-  const toggle = page.locator('.codex-topbar').getByRole('button', { name: 'Transcript details', exact: true });
-  await expect(toggle).toBeEnabled();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  // One preference serves both conversation sources.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const toggle = page.getByRole('switch', { name: 'Transcript details', exact: true });
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(process).toHaveCount(0);
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await app.openSession();
-  await expect(page.locator('.topbar').getByRole('button', { name: 'Transcript details', exact: true }))
-    .toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#stream .minimal-process, #stream .minimal-tools')).toHaveCount(0);
+  await expect(page.locator('#stream details.tool-call').first()).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -401,7 +409,9 @@ test('minimal edit previews share detailed-mode unified lines and preserve call 
 
   // The same recorded snippets render identically in detailed mode, whose
   // Original JSON tabs remain available. Expand parents before tool rows.
-  await page.getByRole('button', { name: 'Transcript details', exact: true }).click();
+  await app.openSettings();
+  await app.transcriptDetails().click();
+  await app.openSession();
   await expect(stream.locator('details.tool-call')).toHaveCount(2);
   for (const disclosure of await stream.locator('details.activity, details.activity-step-group').all()) {
     if (await disclosure.getAttribute('open') === null) await disclosure.locator(':scope > summary').click();
@@ -501,7 +511,9 @@ test('minimal job waits name their targets while pending and disappear after suc
   await expect(stream).not.toContainText('Wait for job bg-3 to complete');
 
   // Full transcript still exposes all three wait calls for inspection.
-  await page.getByRole('button', { name: 'Transcript details', exact: true }).click();
+  await app.openSettings();
+  await app.transcriptDetails().click();
+  await app.openSession();
   await expect(stream.locator('details.tool-call')).toHaveCount(4);
   expect(app.pageErrors).toEqual([]);
 });

@@ -2524,10 +2524,7 @@ fn CodexItem::text(self : CodexItem) -> String {
 /// Convert one app-server semantic item into the display model consumed by
 /// OpenSeek's transcript renderer. This is the only place that knows both
 /// vocabularies; the shared view never switches on Codex JSON item names.
-fn CodexItem::transcript_item(
-  self : CodexItem,
-  minimal? : Bool = false,
-) -> @transcript.TranscriptItem {
+fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
   // Every app-server item is one response-shaped item: prose, a thought, or
   // one tool call, each with the other two parts empty. Codex commits them
   // separately, so they are never folded into one numbered step.
@@ -2557,7 +2554,7 @@ fn CodexItem::transcript_item(
         Done(
           content=output,
           is_error=self.tool_failed(),
-          brief=self.tool_brief(minimal~),
+          brief=self.tool_brief(),
         )
       } else if output.is_empty() {
         Pending(output=None)
@@ -2682,14 +2679,9 @@ fn CodexItem::tool_output(self : CodexItem) -> String {
 }
 
 ///|
-/// A brief labels one operation. Minimal mode groups these by activity while
-/// keeping each brief readable, without exposing the operation's raw output.
-fn CodexItem::tool_brief(self : CodexItem, minimal? : Bool = false) -> String? {
-  // A command line is an argument, not a description. Full mode retains its
-  // historical caption; minimal mode falls back to the tool name instead.
-  if minimal && self.kind == "commandExecution" {
-    return None
-  }
+/// The activity summary owns the count (for example "Ran 2 commands"); this
+/// brief labels the individual expandable row underneath it.
+fn CodexItem::tool_brief(self : CodexItem) -> String? {
   guard self.value is Object(fields) else { return Some(self.kind) }
   Some(
     match self.kind {
@@ -2717,7 +2709,6 @@ fn CodexItem::tool_brief(self : CodexItem, minimal? : Bool = false) -> String? {
 /// danger messages, so Codex does not need a parallel banner/message layout.
 pub fn State::transcript_items(
   self : State,
-  minimal? : Bool = false,
 ) -> Array[@transcript.TranscriptItem] {
   let items : Array[@transcript.TranscriptItem] = []
   if !self.notice.is_empty() {
@@ -2740,7 +2731,7 @@ pub fn State::transcript_items(
       // app-server owns the turn boundary. A commentary message cannot become
       // the final answer just because it happens to be last in a stopped turn.
       let mut final_id : String? = None
-      if minimal && turn.status == "completed" && turn.error is None {
+      if turn.status == "completed" && turn.error is None {
         for item in turn.items {
           if item.kind == "agentMessage" &&
             !item.text().is_blank() &&
@@ -2753,7 +2744,7 @@ pub fn State::transcript_items(
         }
       }
       for item in turn.items {
-        let transcript_item = item.transcript_item(minimal~)
+        let transcript_item = item.transcript_item()
         let transcript_item = if final_id == Some(item.id) &&
           transcript_item.kind
           is @transcript.Assistant(reasoning~, prose~, calls~, replay~, ..) {
@@ -2796,8 +2787,7 @@ pub fn State::transcript_items(
           ts: None,
           sequence: None,
         })
-      } else if minimal &&
-        (turn.status == "interrupted" || turn.status == "failed") {
+      } else if turn.status == "interrupted" || turn.status == "failed" {
         items.push({
           kind: @transcript.Failure(
             if turn.status == "interrupted" {
@@ -2809,7 +2799,7 @@ pub fn State::transcript_items(
           ts: None,
           sequence: None,
         })
-      } else if minimal && turn.status == "completed" && final_id is None {
+      } else if turn.status == "completed" && final_id is None {
         // Preserve a successful empty turn as a boundary without inventing an
         // answer or folding its process into a later completed turn.
         items.push({ kind: @transcript.TurnEnd, ts: None, sequence: None, })

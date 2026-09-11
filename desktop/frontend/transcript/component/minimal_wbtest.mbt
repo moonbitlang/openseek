@@ -148,3 +148,20 @@ test "job coordination does not add categories to a work summary" {
     "Read files · Execute mbtx scripts",
   )
 }
+
+///|
+test "a minimal shell caption never repeats the command line brief" {
+  // Codex briefs a command execution with the command itself; that is an
+  // argument, so the caption falls back to the tool name instead.
+  let call : @transcript.ToolCall = {
+    call_id: "cmd",
+    name: "shell",
+    arguments: None,
+    outcome: Done(
+      content="output",
+      is_error=false,
+      brief=Some("private command"),
+    ),
+  }
+  assert_eq(MinimalCall::from_tool(call).caption, "shell")
+}

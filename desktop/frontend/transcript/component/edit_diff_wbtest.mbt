@@ -61,6 +61,8 @@ test "a payload with no readable change decodes to nothing" {
     }
     assert_true(EditDiff::from_fields(fields, path_key="path") is None)
   }
-  assert_true(edit_card("not json") is None)
-  assert_true(multi_edit_card("{\"edits\":[]}") is None)
+  assert_true(EditChanges::from_arguments("edit", "not json") is None)
+  assert_true(
+    EditChanges::from_arguments("multi_edit", "{\"edits\":[]}") is None,
+  )
 }

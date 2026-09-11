@@ -125,7 +125,7 @@ test "Codex omits reasoning without visible summary text" {
 }
 
 ///|
-test "minimal Codex folds only the final answer of a successful turn" {
+test "Codex marks only the final answer of a successful turn finished" {
   let state = @codex.State::from_thread_snapshot({
     "thread": {
       "id": "t",
@@ -158,19 +158,14 @@ test "minimal Codex folds only the final answer of a successful turn" {
       ],
     },
   })
-  let items = state.transcript_items(minimal=true)
+  let items = state.transcript_items()
   assert_true(items[0].kind is @transcript.Assistant(finished=false, ..))
   assert_true(items[1].kind is @transcript.Assistant(finished=true, ..))
   assert_true(items[2].kind is @transcript.Assistant(finished=false, ..))
-  // Full mode keeps its existing projection and presentation.
-  assert_true(
-    state.transcript_items()[1].kind
-    is @transcript.Assistant(finished=false, ..),
-  )
 }
 
 ///|
-test "minimal Codex preserves interrupted failed and answerless boundaries" {
+test "Codex preserves interrupted failed and answerless boundaries" {
   let state = @codex.State::from_thread_snapshot({
     "thread": {
       "id": "t",
@@ -208,7 +203,7 @@ test "minimal Codex preserves interrupted failed and answerless boundaries" {
       ],
     },
   })
-  let items = state.transcript_items(minimal=true)
+  let items = state.transcript_items()
   assert_eq(items.length(), 6)
   assert_true(items[0].kind is @transcript.Assistant(finished=false, ..))
   assert_true(items[1].kind is @transcript.Failure("Stopped"))
@@ -253,50 +248,11 @@ test "Codex tool categories use explicit operation metadata" {
     },
   })
   let names : Array[String] = []
-  for item in state.transcript_items(minimal=true) {
+  for item in state.transcript_items() {
     if item.kind is @transcript.Assistant(calls=[call], ..) {
       names.push(call.name)
     }
   }
   // An MCP tool named read is not necessarily a filesystem read.
   assert_eq(names, ["spawn_agent", "wait_agent", "mcp__example__read"])
-}
-
-///|
-test "minimal Codex never promotes raw command arguments into a brief" {
-  let state = @codex.State::from_thread_snapshot({
-    "thread": {
-      "id": "t",
-      "turns": [
-        {
-          "id": "work",
-          "status": "inProgress",
-          "items": [
-            {
-              "id": "cmd",
-              "type": "commandExecution",
-              "command": "private command",
-              "status": "completed",
-            },
-          ],
-        },
-      ],
-    },
-  })
-  assert_true(
-    state.transcript_items(minimal=true)[0].kind
-    is @transcript.Assistant(
-      calls=[{ outcome: @transcript.Done(brief=None, ..), .. }],
-      ..
-    ),
-  )
-  assert_true(
-    state.transcript_items()[0].kind
-    is @transcript.Assistant(
-      calls=[
-        { outcome: @transcript.Done(brief=Some("private command"), ..), .. },
-      ],
-      ..
-    ),
-  )
 }
