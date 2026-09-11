@@ -12,13 +12,22 @@ pub fn read_workflow_output(content : String) -> @rhtml.Html? {
   while index < lines.length() {
     let line = lines[index]
     if file_heading(line) is Some(path) {
+      // The numbered body is parsed once, here, and handed to the renderer
+      // as gutters and source; the status line that ends the body is what
+      // makes the section a complete file result.
+      let numbered : Array[(String, String)] = []
       let mut end = index + 1
-      while end < lines.length() && numbered_line(lines[end]) is Some(_) {
-        end += 1
+      while end < lines.length() {
+        match numbered_line(lines[end]) {
+          Some(pair) => {
+            numbered.push(pair)
+            end += 1
+          }
+          None => break
+        }
       }
       if end < lines.length() &&
-        moonbit_output_for_path(path, lines[index + 1:end + 1].join("\n"))
-        is Some(rendered) {
+        moonbit_section(path, numbered, lines[end]) is Some(rendered) {
         children.push(@rhtml.span("\{line}\n"))
         children.push(rendered)
         if end + 1 < lines.length() {
@@ -56,34 +65,27 @@ fn file_heading(line : String) -> String? {
 }
 
 ///|
-/// Render a numbered result when `path` has a MoonBit source extension.
-fn moonbit_output_for_path(path : StringView, content : String) -> @rhtml.Html? {
-  // Keep rendering bounded even for malformed recorded output.
-  guard is_moonbit_source(path) && content.length() <= 40_000 else {
-    return None
-  }
-  let lines = content.split("\n").map(line => line.to_owned()).collect()
-  guard lines.last() is Some(status) &&
+/// Render one file section — its parsed numbered lines and the status line
+/// that closes it — when `path` has a MoonBit source extension.
+fn moonbit_section(
+  path : StringView,
+  numbered : Array[(String, String)],
+  status : String,
+) -> @rhtml.Html? {
+  guard is_moonbit_source(path) &&
+    !numbered.is_empty() &&
     status.has_prefix("<system>") &&
     status.has_suffix("</system>") else {
     return None
   }
-  let gutters : Array[String] = []
-  let source_lines : Array[String] = []
-  for line in lines[0:lines.length() - 1] {
-    guard numbered_line(line) is Some((gutter, source)) else { return None }
-    gutters.push(gutter)
-    source_lines.push(source)
-  }
-  if source_lines.is_empty() {
-    return None
-  }
-  let highlighted = @syntax_html.moonbit_source_lines(source_lines.join("\n"))
-  guard highlighted.length() == source_lines.length() else { return None }
+  let highlighted = @syntax_html.moonbit_source_lines(
+    numbered.map(pair => pair.1).join("\n"),
+  )
+  guard highlighted.length() == numbered.length() else { return None }
   let children = [
-    for index, gutter in gutters => {
+    for index, pair in numbered => {
       @rhtml.span(class="read-moonbit-line", [
-        @rhtml.span(class="read-moonbit-gutter", gutter),
+        @rhtml.span(class="read-moonbit-gutter", pair.0),
         @rhtml.code(class="language-moonbit read-moonbit-code", [
           highlighted[index],
         ]),
