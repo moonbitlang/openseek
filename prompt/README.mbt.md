@@ -16,10 +16,8 @@ but do not track directory-only changes under `share/`.
 
 ## Prompt Sources
 
-- `default_prompt.mbt.md`: the default built-in prompt used by the supported
-  DeepSeek, Kimi, and GLM model names.
-- `base_prompt.mbt.md`: the older built-in prompt, retained for comparison and
-  prompt experiments but not selected by default.
+- `default_prompt.mbt.md`: the built-in prompt used by every supported
+  DeepSeek, Kimi, and GLM model name.
 
 ## API Shape
 
