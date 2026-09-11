@@ -32,7 +32,7 @@ pub fn device_url(
   app_version~ : String,
 ) -> String {
   let origin = match server_url.strip_suffix("/") {
-    Some(origin) => origin.to_owned()
+    Some(origin) => origin
     None => server_url
   }
   if app_version == "development" {

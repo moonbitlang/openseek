@@ -448,7 +448,7 @@ async test "capture is re-entrant: resumed work stacks on the same branch" {
     }
     assert_true(commit1 != commit2)
     match @agent_subtask.git_require(["rev-parse", "\{commit2}^"], cwd=repo) {
-      Ok(parent) => assert_eq(parent.trim().to_owned(), commit1)
+      Ok(parent) => assert_eq(parent.trim(), commit1)
       Err(reason) => fail(reason)
     }
     // Integration lands BOTH captures' work.

@@ -538,7 +538,7 @@ fn probe_output_result(
     }
   }
   if spec.stdout_json {
-    let trimmed = stdout.trim().to_owned()
+    let trimmed = stdout.trim()
     let _ = @json.parse(trimmed) catch {
       error =>
         return ProbeResult(

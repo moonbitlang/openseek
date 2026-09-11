@@ -68,7 +68,7 @@ pub fn SourcePath::normalize_root_relative_path(
 
   let segments = []
   for segment_view in slash_path.split("/") {
-    let segment = segment_view.to_owned()
+    let segment = segment_view
     if segment == ".." {
       return SourcePathError(InvalidPath)
     }

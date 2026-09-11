@@ -271,7 +271,7 @@ fn parse_moon_check_diagnostics_impl(
   let prefix = "\{normalize_host_path(root)}/"
   let grouped : Map[String, Array[@language.Diagnostic]] = Map([])
   for line in raw.split("\n") {
-    let trimmed = line.trim(char_set="\r\n ").to_owned()
+    let trimmed = line.trim(char_set="\r\n ")
     if trimmed == "" {
       continue
     }

@@ -20,7 +20,7 @@ pub fn page_query_param(name : String) -> String? {
   }
   for pair in query.split("&") {
     guard pair.split_once("=") is Some((key, encoded)) else { continue }
-    if key.to_owned() == name {
+    if key == name {
       let value = @uri.decode_component(encoded)
       return if value.is_empty() { None } else { Some(value) }
     }

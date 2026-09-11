@@ -9,7 +9,7 @@ fn render_tokens(source : String) -> String {
     state = tokenizer.initial_state(), line_start = 0 {
     let (tokens, next_state) = tokenizer.tokenize_line(line, state)
     for token in tokens {
-      let text = line[token.start:token.end].to_owned()
+      let text = line[token.start:token.end]
       rendered.push(
         "\{line_start + token.start}-\{line_start + token.end} \{token.tag} \{text}",
       )

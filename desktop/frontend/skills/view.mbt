@@ -286,7 +286,7 @@ fn detail_action(
 /// keeps everything, otherwise any listed field must contain it
 /// (case-insensitive).
 fn matches(query : String, fields : Array[String]) -> Bool {
-  let query = query.trim().to_owned().to_lower()
+  let query = query.trim().to_lower()
   query.is_empty() || fields.any(field => field.to_lower().contains(query))
 }
 

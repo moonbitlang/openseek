@@ -186,7 +186,7 @@ fn count_occurrences(haystack : String, needle : String) -> Int {
     return 0
   }
   for index in 0..<=(haystack.length() - needle_len) {
-    if haystack[index:index + needle_len].to_owned() == needle {
+    if haystack[index:index + needle_len] == needle {
       count += 1
     }
   }

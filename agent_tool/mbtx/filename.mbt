@@ -15,7 +15,7 @@ fn resolve_filename(
         "unknown script namespace in \{filename}. Only @builtin/ is supported. Use ./\{filename} for a literal workspace path",
       )
     }
-    let name = name_view.to_owned()
+    let name = name_view
     guard !name.is_empty() &&
       !name.contains("\\") &&
       name

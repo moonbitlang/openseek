@@ -40,7 +40,7 @@ async test "the worker profile confines writes to the worker tree" {
     let worker_root = @fs.realpath("\{repo}/.worktrees/w1")
     let sibling = @fs.realpath("\{repo}/.worktrees/w2")
     let admin_raw = git_setup(["rev-parse", "--absolute-git-dir"], worker_root)
-    let worker_admin_dir = @fs.realpath(admin_raw.trim().to_owned())
+    let worker_admin_dir = @fs.realpath(admin_raw.trim())
     let common = @fs.realpath("\{origin}/.git")
     let deny_roots = [common, origin, sibling]
     async fn probe(cmd : String) -> @sandbox.SandboxedCommand? {
@@ -110,7 +110,7 @@ async test "the worker profile confines writes to the worker tree" {
     let (commit_exit, _) = merged_output_text(against_store)
     assert_true(commit_exit != 0)
     let log = git_setup(["log", "--oneline"], worker_root)
-    assert_eq(log.trim().to_owned().split("\n").count(), 1)
+    assert_eq(log.trim().split("\n").count(), 1)
   })
 }
 

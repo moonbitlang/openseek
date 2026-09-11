@@ -1326,7 +1326,7 @@ fn call_brief_display(brief : String?, is_error : Bool) -> String? {
 /// Whether a tool call's (pretty-printed) arguments carry nothing worth folding
 /// away — empty text or an empty object.
 fn is_blank_args(args : String) -> Bool {
-  let trimmed = args.trim().to_owned()
+  let trimmed = args.trim()
   trimmed.is_empty() || trimmed == "{}"
 }
 

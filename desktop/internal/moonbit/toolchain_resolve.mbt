@@ -104,10 +104,7 @@ async fn external_toolchain(
       // selected or re-exported.
       guard bin_dir.to_absolute() is Some(bin_dir) else {
         @xlog.debug() <?
-          {
-            "event": "desktop_moonbit_path_entry_relative",
-            "entry": entry.to_owned(),
-          }
+          { "event": "desktop_moonbit_path_entry_relative", "entry": entry }
         continue
       }
       if toolchain_at(bin_dir) is Some(toolchain) {

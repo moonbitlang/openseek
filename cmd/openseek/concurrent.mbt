@@ -127,7 +127,7 @@ async fn resolve_run_dirs(dir : String, n : Int) -> (Array[String], String?) {
     let abs = @fs.realpath(dir)
     (
       @path.Path(abs).dirname().to_string(),
-      @path.Path(abs).basename().to_owned(),
+      @path.Path(abs).basename(),
       Some(abs),
     )
   } else {
@@ -139,7 +139,7 @@ async fn resolve_run_dirs(dir : String, n : Int) -> (Array[String], String?) {
     if @fs.kind(parent_raw) != Directory {
       fail("parent path for --dir is not a directory: \{parent_raw}")
     }
-    (@fs.realpath(parent_raw), @path.Path(dir).basename().to_owned(), None)
+    (@fs.realpath(parent_raw), @path.Path(dir).basename(), None)
   }
   if base.is_empty() {
     fail("cannot derive a run-directory name from --dir: \{dir}")

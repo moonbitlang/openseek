@@ -50,7 +50,7 @@ pub async fn apply_login_shell_env(executable : String) -> Unit {
   // csh/tcsh reject the separate `-l` flag; every other shell in practice
   // (bash, zsh, fish, dash) takes interactive+login+command this way.
   let shell_name = match shell.rev_after("/") {
-    Some(name) => name.to_owned()
+    Some(name) => name
     None => shell
   }
   let args : Array[String] = if shell_name is ("csh" | "tcsh") {
@@ -120,8 +120,8 @@ pub fn path_prepend_command(
   }
   let shell = shell_command.to_lower()
   let shell_name = match shell.rev_after("/") {
-    Some(name) => name.to_owned()
-    None => shell.rev_after("\\").map(name => name.to_owned()).unwrap_or(shell)
+    Some(name) => name
+    None => shell.rev_after("\\").unwrap_or(shell)
   }
   if shell_name is ("pwsh" | "pwsh.exe" | "powershell" | "powershell.exe") {
     let separator = if windows { ";" } else { ":" }

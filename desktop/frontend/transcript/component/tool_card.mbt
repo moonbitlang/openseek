@@ -76,7 +76,7 @@ fn chip_text(key : String, value : Json) -> String? {
     Object(_) | Array(_) => return None
   }
   let text = if text.length() > MAX_CHIP_CHARS {
-    text.clamped_view(end=MAX_CHIP_CHARS).to_owned() + "…"
+    text.clamped_view(end=MAX_CHIP_CHARS) + "…"
   } else {
     text
   }

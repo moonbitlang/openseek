@@ -132,7 +132,7 @@ fn is_moonbit_leading_continuation_line(line : String) -> Bool {
             is_moonbit_outline_identifier_continue(line[end].to_int()) {
         end += 1
       }
-      let word = line[index:end].to_owned()
+      let word = line[index:end]
       return word == "else" ||
         word == "catch" ||
         word == "noraise" ||
@@ -173,7 +173,7 @@ fn moonbit_line_ends_with_continuation_word(
         is_moonbit_outline_identifier_continue(line[end].to_int()) {
     end += 1
   }
-  let word = line[last_code_index:end].to_owned()
+  let word = line[last_code_index:end]
   word == "is" ||
   word == "as" ||
   word == "with" ||
@@ -375,7 +375,7 @@ fn moonbit_source_folds(snapshot : @model.TextSnapshot) -> MoonbitSourceFolds {
               is_moonbit_outline_identifier_continue(line[index].to_int()) {
           index += 1
         }
-        let word = line[start:index].to_owned()
+        let word = line[start:index]
         if brace_depth == 0 && declaration_start_line == 0 {
           if word == "extern" {
             // An `extern "abi"` prefix may be split from its `fn`; the

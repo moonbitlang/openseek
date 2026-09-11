@@ -322,7 +322,7 @@ fn expand_text_search_view_globs(value : String) -> Array[String] {
       }
       continue
     }
-    let without_forward_slash = entry.trim_end(chars="/").to_owned()
+    let without_forward_slash = entry.trim_end(chars="/")
     let pattern = without_forward_slash.trim_end(chars="\\").to_owned()
     if pattern.is_empty() {
       continue
@@ -1064,7 +1064,7 @@ async fn run_text_search(
           let length = chunk
             .length()
             .min(MaxTextSearchStderrBytes - retained_bytes)
-          retained.write_bytes(chunk[:length].to_owned())
+          retained.write_bytes(chunk[:length])
           retained_bytes += length
         }
       }

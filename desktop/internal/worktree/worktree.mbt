@@ -571,7 +571,7 @@ const ArchiveDirtyPathPreviewLimit = 8
 /// NUL field as its source; only the current path is useful in the archive
 /// warning.
 fn archive_dirty_path_preview(status : String) -> (Array[String], Int) {
-  let fields = status.split("\u{0}").map(field => field.to_owned()).collect()
+  let fields = status.split("\u{0}").collect()
   let paths : Array[String] = []
   let mut count = 0
   let mut index = 0
@@ -581,8 +581,8 @@ fn archive_dirty_path_preview(status : String) -> (Array[String], Int) {
       index += 1
       continue
     }
-    let index_status = record.view(end_offset=1).to_owned()
-    let worktree_status = record.view(start_offset=1, end_offset=2).to_owned()
+    let index_status = record.view(end_offset=1)
+    let worktree_status = record.view(start_offset=1, end_offset=2)
     let path = record.view(start_offset=3).to_owned()
     count += 1
     if paths.length() < ArchiveDirtyPathPreviewLimit {
@@ -1020,7 +1020,7 @@ async fn worktree_checked_out_on(
   let suffix = "/\{WorktreesDirName}/\{name}"
   let mut at_target = false
   for line in output.split("\n") {
-    let line = line.trim().to_owned()
+    let line = line.trim()
     if line.has_prefix("worktree ") {
       at_target = line.has_suffix(suffix)
     } else if at_target && line == "branch refs/heads/\{branch}" {
@@ -1040,7 +1040,7 @@ async fn worktree_lock_reason(dir : @pathx.Absolute, name : String) -> String? {
   let suffix = "/\{WorktreesDirName}/\{name}"
   let mut at_target = false
   for line in output.split("\n") {
-    let line = line.trim().to_owned()
+    let line = line.trim()
     if line.has_prefix("worktree ") {
       at_target = line.has_suffix(suffix)
     } else if at_target && line == "locked" {

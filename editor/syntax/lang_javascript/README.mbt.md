@@ -23,7 +23,7 @@ fn annotate(
   for line in lines; state = tokenizer.initial_state() {
     let (tokens, next_state) = tokenizer.tokenize_line(line, state)
     for token in tokens {
-      rendered.push("\{line[token.start:token.end].to_owned()}|\{token.tag}")
+      rendered.push("\{line[token.start:token.end]}|\{token.tag}")
     }
     continue next_state
   }

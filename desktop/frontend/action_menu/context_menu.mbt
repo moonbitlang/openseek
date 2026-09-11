@@ -145,7 +145,7 @@ fn element_context(element : @dom.Element) -> ContextTarget {
     "http:" | "https:" => WebLink(anchor_href(anchor))
     "mailto:" => {
       let href = anchor.get_attribute("href").unwrap_or(anchor_href(anchor))
-      let raw = href[7:].split("?").next().unwrap_or(href[7:]).to_owned()
+      let raw = href[7:].split("?").next().unwrap_or(href[7:])
       let address = @uri.decode_component(raw)
       EmailLink(url=anchor_href(anchor), address~)
     }
