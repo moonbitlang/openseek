@@ -105,7 +105,7 @@ async fn FileTail::poll(self : FileTail) -> Array[String] {
     if pending[index] != b'\n' {
       continue
     }
-    let text = @utf8.decode_lossy(pending[line_start:index].to_owned())
+    let text = @utf8.decode_lossy(pending[line_start:index])
       .trim(chars="\r\n \t")
       .to_owned()
     if !text.is_empty() {

@@ -536,7 +536,7 @@ fn truncate_output(content : String, line_prefix_width? : Int = 0) -> String {
       content, tail, line_prefix_width,
     )
     [
-      head.to_owned(),
+      head,
       "⋯ \{content.length() - head.length() - tail.length()} UTF-16 code units skipped ⋯",
       retained_tail,
     ].join("\n")

@@ -271,7 +271,7 @@ fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
 /// An element body, verbatim, ending in exactly one newline; an empty body
 /// contributes no lines (its tags close ranks).
 fn write_body(parts : StringBuilder, body : String) -> Unit {
-  let body = body.trim_end(chars="\n").to_owned()
+  let body = body.trim_end(chars="\n")
   if !body.is_empty() {
     parts <+ "\{body}\n"
   }

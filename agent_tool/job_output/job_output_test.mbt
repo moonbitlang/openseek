@@ -324,7 +324,7 @@ async test "offset pages through retained output from the start" {
     // The next page starts exactly where the first ended.
     let next = run_job_output(bg, { "job_id": id, "offset": 12000 })
     let full = bg.read_output(id).unwrap_or("")
-    let expected = full.view(start_offset=12000, end_offset=12040).to_owned()
+    let expected = full.view(start_offset=12000, end_offset=12040)
     assert_true(next.content.has_prefix(expected))
     assert_true(next.content.contains("window_offset=12000"))
     // Past the end: nothing but the footer. Negative: refused.

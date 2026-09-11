@@ -101,7 +101,7 @@ fn content_digest(content : Bytes) -> String {
 fn parse_frontmatter(text : String, fallback_name : String) -> (String, String) {
   let mut name = fallback_name
   let mut description = ""
-  let lines = text.split("\n").map(line => line.to_owned()).collect()
+  let lines = text.split("\n").collect()
   guard lines is [first, .. rest] && first.trim() == "---" else {
     return (name, description)
   }
@@ -110,7 +110,7 @@ fn parse_frontmatter(text : String, fallback_name : String) -> (String, String) 
       break
     }
     if line.split_once(":") is Some((key_text, value_text)) {
-      let key = key_text.to_owned().trim().to_owned()
+      let key = key_text.trim()
       let value = value_text.to_owned().trim().to_owned()
       match key {
         "name" => if !value.is_empty() { name = value }

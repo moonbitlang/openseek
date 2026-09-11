@@ -195,7 +195,7 @@ pub fn subrun_child_sessions(
   for raw in brief.split(" ") {
     // A brief carrying several children joins them with punctuation, so a
     // token can arrive as `sr-3,` or `sr-3)`.
-    let token = raw.trim(chars=",()").to_owned()
+    let token = raw.trim(chars=",()")
     guard token.has_prefix("sr-") else { continue }
     let digits = token.view(start_offset=3)
     guard !digits.is_empty() &&
@@ -569,7 +569,7 @@ fn SessionTerminalProjection::append_to(
         message => "aborted: \{message}"
       }
     @desktop_protocol.Interrupted(message) =>
-      match message.trim().to_owned() {
+      match message.trim() {
         "" => "cancelled"
         message => "cancelled: \{message}"
       }
@@ -588,7 +588,7 @@ fn SessionTerminalProjection::append_to(
 /// marked when more follow.
 fn goal_brief(label : String, text : String) -> String {
   if text.split_once("\n") is Some((first, _)) {
-    "\{label}: \{first.to_owned()} …"
+    "\{label}: \{first} …"
   } else {
     "\{label}: \{text}"
   }

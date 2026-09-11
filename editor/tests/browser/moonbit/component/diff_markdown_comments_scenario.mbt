@@ -129,7 +129,7 @@ impl @language.MarkdownCommentProvider for DiffMarkdownCommentProvider with fn p
   let blocks : Array[@language.MarkdownCommentBlock] = []
   let mut line_number = 1
   while line_number <= snapshot.line_count() {
-    let line = snapshot.get_line_content(line_number).trim().to_owned()
+    let line = snapshot.get_line_content(line_number).trim()
     if !line.has_prefix("///") {
       line_number += 1
       continue

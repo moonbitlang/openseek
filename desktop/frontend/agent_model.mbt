@@ -23,7 +23,7 @@ fn AgentChoice::wire(self : AgentChoice) -> String {
 
 ///|
 fn AgentChoice::parse(value : String) -> AgentChoice? {
-  match value.trim().to_owned() {
+  match value.trim() {
     "openseek" => Some(OpenSeekAgent)
     "codex" => Some(CodexAgent)
     _ => None

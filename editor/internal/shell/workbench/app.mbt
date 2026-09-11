@@ -1392,7 +1392,7 @@ fn source_message(model : WorkbenchModel) -> String {
 ///|
 fn display_name_from_uri(uri : String) -> String {
   let path = match uri.find("://") {
-    Some(index) => uri[index + 3:].to_owned()
+    Some(index) => uri[index + 3:]
     None => uri
   }
   let segments = path.split("/")

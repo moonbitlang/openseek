@@ -203,7 +203,7 @@ async fn verify_ci(root : String, temp : String, exe : String) -> Unit {
       let row = @json.parse(line)
       assert_true(
         row is { "url": Null | String(_), "workflow": Null | String(_), .. },
-        msg=line.to_owned(),
+        msg=line,
       )
       if row is { "result": String("FAIL"), .. } {
         assert_true(
@@ -220,7 +220,7 @@ async fn verify_ci(root : String, temp : String, exe : String) -> Unit {
             ],
             ..
           },
-          msg=line.to_owned(),
+          msg=line,
         )
       }
     }

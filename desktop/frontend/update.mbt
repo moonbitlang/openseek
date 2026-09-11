@@ -1210,7 +1210,7 @@ fn apply_engine_event(
     // the sole durable source. The complete reasoning payload replaces any
     // accumulated fragments and seals their transient presentation.
     ReasoningMessage(content) => {
-      let normalized = content.trim().to_owned()
+      let normalized = content.trim()
       if normalized.is_empty() {
         // Remote delivery strips the complete payload because the durable
         // session event carries it. A remote client may have joined midway

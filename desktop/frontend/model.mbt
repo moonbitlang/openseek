@@ -106,7 +106,7 @@ fn OpenSeekReasoning::protocol(
 
 ///|
 fn OpenSeekReasoning::parse(value : String) -> OpenSeekReasoning? {
-  match value.trim().to_owned() {
+  match value.trim() {
     "no" => Some(ReasoningOff)
     "high" => Some(ReasoningHigh)
     "max" => Some(ReasoningMax)
@@ -476,7 +476,7 @@ fn ApiProvider::wire(self : ApiProvider) -> String {
 /// (or a corrupted store) degrades to the BYOK default instead of wedging
 /// the app.
 fn ApiProvider::parse(value : String) -> ApiProvider {
-  match value.trim().to_owned() {
+  match value.trim() {
     "openseek" | "openseek-staging" | "deepseek" => Deepseek
     "glm" => Glm
     "openrouter" => OpenRouter

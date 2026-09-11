@@ -1511,7 +1511,7 @@ fn do_hit_test(ctx : HitTestContext, request : HitTestRequest) -> HitTestResult 
 /// word-boundary check over space-separated class names.
 fn class_name_has_word(class_name : String, word : String) -> Bool {
   for candidate in class_name.split(" ") {
-    if candidate.to_owned() == word {
+    if candidate == word {
       return true
     }
   }

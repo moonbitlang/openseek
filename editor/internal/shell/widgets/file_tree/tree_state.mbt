@@ -194,12 +194,12 @@ fn TreeNode::ancestor_uris(
   guard target_raw.strip_prefix("\{root_raw}/") is Some(relative_view) else {
     return None
   }
-  let relative = relative_view.to_owned()
+  let relative = relative_view
   let ancestors : Array[@base_common.Uri] = []
   let mut prefix = root_raw
   let segments = []
   for segment_view in relative.split("/") {
-    let segment = segment_view.to_owned()
+    let segment = segment_view
     if segment != "" {
       segments.push(segment)
     }

@@ -348,7 +348,7 @@ pub async fn exclude_from_git(dir : @pathx.Absolute, entry : String) -> Unit {
     _ => None
   }).unwrap_or("")
   for line in existing.split("\n") {
-    let line = line.trim().to_owned()
+    let line = line.trim()
     if line == entry || line == "\{entry}/" {
       return
     }

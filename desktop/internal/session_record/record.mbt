@@ -348,7 +348,7 @@ fn Tail::consume(
         "the session record holds a line that is not UTF-8 at byte \{line.length() - rest.length()}: \{@debug.Repr(if rest.length() > 4 { rest[:4] } else { rest })}",
       )
   }
-  let text = text.trim(chars="\r\n \t").to_owned()
+  let text = text.trim(chars="\r\n \t")
   if text.is_empty() {
     return None
   }

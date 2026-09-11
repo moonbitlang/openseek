@@ -213,7 +213,6 @@ async fn fake_registry(
           // The real registry's download host hands the archive to its
           // object store through a redirect; mirror that, including one
           // entry that loops forever.
-          let entry = entry.to_owned()
           let location = if entry == LoopEntry {
             path
           } else {

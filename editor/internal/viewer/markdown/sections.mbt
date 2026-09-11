@@ -205,15 +205,15 @@ fn markdown_heading_text_from_source(
   let range = anchor.source_range
   let start = range.start.max(0).min(source.length())
   let end = range.end_exclusive.max(start).min(source.length())
-  let raw = source[start:end].to_owned()
+  let raw = source[start:end]
   let first_line = match raw.split_once("\n") {
-    Some((first, _)) => first.to_owned()
+    Some((first, _)) => first
     None => raw
   }
-  let trimmed = for trimmed = first_line.trim(chars=" \t\r").to_owned(); trimmed.has_prefix(
+  let trimmed = for trimmed = first_line.trim(chars=" \t\r"); trimmed.has_prefix(
                      "#",
                    ); {
-    continue trimmed[1:].to_owned()
+    continue trimmed[1:]
   } nobreak {
     trimmed
   }
@@ -226,7 +226,7 @@ fn markdown_heading_text_from_source(
   let trimmed = if hashes > 0 {
     let before = trimmed.length() - hashes
     if before == 0 || trimmed[before - 1] == ' ' || trimmed[before - 1] == '\t' {
-      trimmed[0:before].to_owned()
+      trimmed[0:before]
     } else {
       trimmed
     }

@@ -2131,7 +2131,7 @@ async fn ServeEngine::retire(
       let cause = engine.pending_failure.unwrap_or(
         "engine exited during compaction",
       )
-      let diagnostics = stderr_task.wait().trim().to_owned()
+      let diagnostics = stderr_task.wait().trim()
       let reason = if diagnostics.is_empty() {
         cause
       } else {

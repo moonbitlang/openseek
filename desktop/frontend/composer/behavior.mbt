@@ -60,7 +60,7 @@ pub fn Trigger::draft_without_token(self : Trigger) -> String {
 /// Whether a result row survives this trigger's query. A blank query keeps
 /// every row; otherwise any supplied field may contain it, case-insensitively.
 pub fn Trigger::matches(self : Trigger, fields : Array[String]) -> Bool {
-  let query = self.query.trim().to_owned().to_lower()
+  let query = self.query.trim().to_lower()
   if query.is_empty() {
     return true
   }

@@ -268,7 +268,7 @@ fn should_prune_profile_scan_path(root : String, path : String) -> Bool {
   guard @workspace_path.is_under_workspace_root(root, path) && path != root else {
     return false
   }
-  let relative = path[root.length() + 1:].to_owned()
+  let relative = path[root.length() + 1:]
   relative
   .replace_all(old="\\", new="/")
   .split("/")

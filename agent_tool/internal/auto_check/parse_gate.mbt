@@ -202,7 +202,7 @@ fn decide_parse_gate(
     if !raw.contains("\"level\"") {
       continue
     }
-    let json = @json.parse(raw.to_owned()) catch { _ => continue }
+    let json = @json.parse(raw) catch { _ => continue }
     match json {
       {
         "level": String("error"),

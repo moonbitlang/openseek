@@ -70,7 +70,7 @@ priv struct EmptyProjectControl {
 
 ///|
 fn ProjectChoice::matches(self : ProjectChoice, query : String) -> Bool {
-  let query = query.trim().to_owned().to_lower()
+  let query = query.trim().to_lower()
   query.is_empty() ||
   self.label.to_lower().contains(query) ||
   self.root.path.to_lower().contains(query)

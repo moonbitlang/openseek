@@ -87,7 +87,6 @@ async fn provision_locked(
   match git_require(["ls-tree", "-r", "-z", base_oid], cwd=origin) {
     Ok(listing) =>
       for record in listing.split("\u{0}") {
-        let record = record.to_owned()
         guard record.contains(" 160000 ") || record.has_prefix("160000 ") else {
           continue
         }
@@ -161,7 +160,7 @@ async fn provision_locked(
   let worker_root = canonical(worker_root_spelled)
   let admin = match
     git_require(["rev-parse", "--absolute-git-dir"], cwd=worker_root) {
-    Ok(output) => canonical(output.trim().to_owned())
+    Ok(output) => canonical(output.trim())
     Err(reason) => {
       let _ = rollback_provision(geometry, entry)
       return Err(reason)

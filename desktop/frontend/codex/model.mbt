@@ -2395,7 +2395,7 @@ fn CodexPendingRequest::response(
     "item/tool/requestUserInput" => {
       let answers : Map[String, Json] = Map([])
       for question in self.questions() {
-        let text = self.answers.get(question.id).unwrap_or("").trim().to_owned()
+        let text = self.answers.get(question.id).unwrap_or("").trim()
         if text.is_empty() {
           return None
         }

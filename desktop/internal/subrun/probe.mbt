@@ -131,9 +131,7 @@ async fn SubrunProbeState::poll(self : SubrunProbeState) -> Bool {
 /// reader would see moved. The header line and any item this build does not
 /// know about are simply not progress.
 fn SubrunProbeState::consume(self : SubrunProbeState, line : BytesView) -> Bool {
-  let text = @utf8.decode_lossy(line.to_owned())
-    .trim(chars="\r\n \t")
-    .to_owned()
+  let text = @utf8.decode_lossy(line).trim(chars="\r\n \t").to_owned()
   if text.is_empty() {
     return false
   }

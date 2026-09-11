@@ -195,7 +195,7 @@ fn parse_session_file(
   text : String,
 ) -> ParsedSessionFile raise {
   let (first, rest) = match text.split_once("\n") {
-    Some((first, rest)) => (first.to_owned(), rest.to_owned())
+    Some((first, rest)) => (first, rest)
     None => (text, "")
   }
   let header_json = @json.parse(first) catch {
@@ -221,7 +221,7 @@ fn parse_session_file(
     )
   }
   let ends_with_newline = text.has_suffix("\n")
-  let segments = rest.split("\n").map(line => line.to_owned()).collect()
+  let segments = rest.split("\n").collect()
   let decoded : Array[@agent_session.SessionEvent] = []
   for index, line in segments {
     if line.is_blank() {

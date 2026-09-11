@@ -82,7 +82,6 @@ fn safe_archive_path(path : String) -> Bool {
     return false
   }
   for segment in path.split("/") {
-    let segment = segment.to_owned()
     if segment.is_empty() || segment == "." || segment == ".." {
       return false
     }

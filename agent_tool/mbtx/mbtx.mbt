@@ -1199,7 +1199,7 @@ fn parse_artifacts_path(output : String) -> String? {
   for line in output.split("\n") {
     let line = line.trim()
     guard line.has_prefix("{\"artifacts_path\"") else { continue }
-    let parsed = @json.parse(line.to_owned()) catch { _ => continue }
+    let parsed = @json.parse(line) catch { _ => continue }
     if parsed is { "artifacts_path": [String(path), ..], .. } {
       found = Some(path)
     }

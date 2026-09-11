@@ -264,7 +264,7 @@ fn apply_text_patch(
   value : String?,
 ) -> Unit {
   guard value is Some(value) else { return }
-  let value = value.trim().to_owned()
+  let value = value.trim()
   if value.is_empty() {
     fields.remove(key)
   } else {

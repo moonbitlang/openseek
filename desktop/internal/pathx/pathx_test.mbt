@@ -204,8 +204,8 @@ test "other host path operations keep POSIX spellings" {
   let root = absolute_fixture("/a")
   assert_true(root.join(Relative("b/../c")) is Absolute("/a/c"))
   assert_eq(@pathx.Path("a/b.txt").dirname().0, "a")
-  assert_eq(@pathx.Path("a/b.txt").basename().to_owned(), "b.txt")
-  assert_eq(@pathx.Path("a/b.txt").extname().to_owned(), ".txt")
+  assert_eq(@pathx.Path("a/b.txt").basename(), "b.txt")
+  assert_eq(@pathx.Path("a/b.txt").extname(), ".txt")
 }
 
 ///|
@@ -215,8 +215,8 @@ test "other host path operations keep Windows spellings" {
   let root = absolute_fixture("C:\\a")
   assert_true(root.join(Relative("b/../c")) is Absolute("C:\\a\\c"))
   assert_eq(@pathx.Path("a\\b.txt").dirname().0, "a")
-  assert_eq(@pathx.Path("a\\b.txt").basename().to_owned(), "b.txt")
-  assert_eq(@pathx.Path("a\\b.txt").extname().to_owned(), ".txt")
+  assert_eq(@pathx.Path("a\\b.txt").basename(), "b.txt")
+  assert_eq(@pathx.Path("a\\b.txt").extname(), ".txt")
 }
 
 ///|

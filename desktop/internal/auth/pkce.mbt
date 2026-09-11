@@ -36,7 +36,7 @@ fn start_url(
   name~ : String,
 ) -> String {
   let origin = match server_url.strip_suffix("/") {
-    Some(origin) => origin.to_owned()
+    Some(origin) => origin
     None => server_url
   }
   "\{origin}/v1/auth/desktop/start" +
@@ -65,7 +65,7 @@ priv enum Callback {
 /// matching `state`, and either `code` or `error`.
 fn parse_callback(target : String, oauth_state~ : String) -> Callback {
   let (path, query) = match target.split_once("?") {
-    Some((path, query)) => (path.to_owned(), query)
+    Some((path, query)) => (path, query)
     None => (target, "".view())
   }
   guard path == "/cb" else { return Stray }
@@ -74,8 +74,8 @@ fn parse_callback(target : String, oauth_state~ : String) -> Callback {
   let mut state : String? = None
   for pair in query.split("&") {
     let (key, value) = match pair.split_once("=") {
-      Some((key, value)) => (key.to_owned(), @uri.decode(value))
-      None => (pair.to_owned(), "")
+      Some((key, value)) => (key, @uri.decode(value))
+      None => (pair, "")
     }
     match key {
       "code" => code = Some(value)

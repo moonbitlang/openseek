@@ -132,7 +132,7 @@ fn normalized_source_lines(source : String) -> Array[String] {
   while index < chars.length() {
     match chars[index] {
       '\r' => {
-        lines.push(String::from_array(chars[line_start:index].to_owned()))
+        lines.push(String::from_array(chars[line_start:index]))
         index += 1
         if index < chars.length() && chars[index] == '\n' {
           index += 1
@@ -140,14 +140,14 @@ fn normalized_source_lines(source : String) -> Array[String] {
         line_start = index
       }
       '\n' => {
-        lines.push(String::from_array(chars[line_start:index].to_owned()))
+        lines.push(String::from_array(chars[line_start:index]))
         index += 1
         line_start = index
       }
       _ => index += 1
     }
   }
-  lines.push(String::from_array(chars[line_start:chars.length()].to_owned()))
+  lines.push(String::from_array(chars[line_start:chars.length()]))
   lines
 }
 

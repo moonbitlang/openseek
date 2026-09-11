@@ -56,7 +56,7 @@ fn collect_job_description(
     let args = @json.parse(arguments) catch { _ => return }
     guard args is { "job_id": String(id), .. } &&
       brief.strip_prefix("job \{id} (") is Some(rest) &&
-      rest.to_owned().split_once("): ") is Some((_, description)) &&
+      rest.split_once("): ") is Some((_, description)) &&
       !description.is_blank() else {
       return
     }
