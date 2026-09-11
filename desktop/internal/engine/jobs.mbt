@@ -392,7 +392,7 @@ pub async fn read_job(
       // unreadable. Only the exact owning engine may supply this fallback.
       guard manager.jobs_engine(scope) is Some(engine) &&
         engine.session_root is Some(root) &&
-        directory == "\{root}/sessions/\{scope.session}/jobs" else {
+        directory == jobs_store_path(root, scope.session) else {
         raise metadata_error
       }
       guard @uuid.mint() is Some(request_id) else {
