@@ -148,14 +148,17 @@ fn render(content : String, input : Request, bytes : Int) -> String {
 }
 
 ///|
-async fn read(input : Request, bytes : Int) -> (String, Bool) {
+/// `body` bounds the rendered content (the per-file budget, or less when the
+/// batch is nearly spent); `bytes` is what the batch still has for this file,
+/// so a small content budget never erases the reason a file could not be read.
+async fn read(input : Request, body~ : Int, bytes~ : Int) -> (String, Bool) {
   try {
     if @fs.kind(input.path, follow_symlink=true) is Directory {
       raise ReadError(
         "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files",
       )
     }
-    (render(@fs.read_file(input.path).text(), input, bytes), false)
+    (render(@fs.read_file(input.path).text(), input, body), false)
   } catch {
     error if @async.is_being_cancelled() => raise error
     error => {
@@ -233,7 +236,8 @@ async fn main {
     // A fixed reserve covers the longest possible status footer (Int bounds).
     let (body, error) = read(
       input,
-      per_file.min(remaining - header_bytes - 256),
+      body=per_file.min(remaining - header_bytes - 256),
+      bytes=remaining - header_bytes,
     )
     failed = failed || error
     println("\{header}\{body.trim_end(chars="\n")}")
