@@ -738,8 +738,8 @@ fn keep_response(
 /// identities, locations and moon's package graph can, to a point:
 ///
 /// - a new error INSIDE an edited file is an over-match;
-/// - a new error in another file of an edited package, or in a package that
-///   depends on an edited package which had NO pre-batch errors, is breakage:
+/// - a new error in another file of an edited package that had NO pre-batch
+///   errors, or in a package that depends on such a package, is breakage:
 ///   that code compiled cleanly before, so only the batch can have changed it;
 /// - a new error in a package independent of everything edited cannot be
 ///   caused by the batch — certified reach;
@@ -759,8 +759,10 @@ priv struct Comparability {
   // New errors in code that compiled cleanly before and depends on (or shares
   // a package with) something this batch edited — caused by the batch.
   new_breaking : Array[String]
-  // New errors in packages that depend on a package this batch fixed — moon
-  // skipped them before, so they are either surfacing or broken by the fix.
+  // New errors in packages that depend on a package this batch fixed,
+  // including that package's own other files: its tests and siblings were
+  // not necessarily compiled while it was broken. Either surfacing or broken
+  // by the fix.
   new_in_dependents : Array[String]
   // New errors in packages independent of everything edited — cannot be
   // caused by the batch.
@@ -938,9 +940,19 @@ fn comparability(
   let mut unmapped_edits = 0
   if graph is Some(graph) {
     for target in edited {
-      match graph.package_of(target.canonical) {
-        Some(pkg) => if !edited_pkgs.contains(pkg) { edited_pkgs.push(pkg) }
-        None => unmapped_edits += 1
+      // Every spelling can name a package: a symlink's own directory AND its
+      // target's — an edited `a/alias.mbt -> z/z.mbt` changes package `z`
+      // too, so `z`'s dependents must count as depending on the edit.
+      let mut mapped = false
+      for spelling in target.spellings {
+        guard graph.package_of(spelling) is Some(pkg) else { continue }
+        mapped = true
+        if !edited_pkgs.contains(pkg) {
+          edited_pkgs.push(pkg)
+        }
+      }
+      if !mapped {
+        unmapped_edits += 1
       }
     }
   }
@@ -982,9 +994,16 @@ fn comparability(
       continue
     }
     if edited_pkgs.contains(pkg) {
-      // Another file of an edited package: it was compiled with the edited
-      // file before, so a new error here is the batch's doing.
-      new_breaking.push(line)
+      // Another file of an edited package. If the package compiled cleanly
+      // before, that file was compiled with the edit's file and a new error
+      // here is the batch's doing. If the package was broken before, its
+      // blackbox tests (a separate compilation unit that depends on it) and
+      // possibly its siblings were skipped, so the error may be surfacing.
+      if fixed_pkgs.contains(pkg) {
+        new_in_dependents.push(line)
+      } else {
+        new_breaking.push(line)
+      }
     } else if graph.depends_on(pkg, fixed_pkgs) {
       new_in_dependents.push(line)
     } else if graph.depends_on(pkg, edited_pkgs) {
@@ -1699,6 +1718,52 @@ test "comparability calls a break in code that compiled before the batch breakag
     ),
   )
   assert_false(advice.contains("UNCHANGED"))
+}
+
+///|
+/// An edited symlink whose target lives in another package changes that
+/// package too: `a/alias.mbt -> z/z.mbt` makes `w` (imports `z`) a dependent
+/// of the edit, so a new error there is breakage when `z` was clean before.
+test "comparability attributes through an edited symlink's target package" {
+  let before = check_result([site("x/x.mbt", "1:1-1:2", "old")])
+  let after = check_result([site("w/w.mbt", "2:1-2:2", "caller broke")])
+  let link : EditedTarget = {
+    spellings: ["/r/x/alias.mbt", "/r/z/z.mbt"],
+    canonical: "/r/x/alias.mbt",
+  }
+  let evidence = comparability(
+    Some(before),
+    after,
+    [link],
+    cwd=Some("/r"),
+    graph=Some(sample_graph()),
+  )
+  assert_eq(evidence.new_breaking, ["w/w.mbt:2:1-2:2: caller broke"])
+  assert_eq(evidence.verdict(), Breakage)
+}
+
+///|
+/// A fixed package's own test file: its blackbox tests could not compile
+/// while the package was broken, so their errors surfacing is a plausible
+/// reach, not proven breakage.
+test "comparability keeps a fixed package's other files on the plausible path" {
+  let before = check_result([site("x/x.mbt", "1:1-1:2", "old")])
+  let after = check_result(
+    [
+      for index in 0..<12 => {
+        site("x/x_test.mbt", "\{index + 1}:1-1:2", "surfaced")
+      }
+    ],
+  )
+  let evidence = classify(Some(before), after, ["/r/x/x.mbt"])
+  assert_eq(evidence.new_breaking, [])
+  assert_eq(evidence.new_in_dependents.length(), 12)
+  assert_eq(evidence.verdict(), PlausibleReach)
+  assert_true(
+    comparability_advice(evidence, introduced=11).contains(
+      "If so: Re-issue the batch UNCHANGED with revert_when_errors_above=11",
+    ),
+  )
 }
 
 ///|
