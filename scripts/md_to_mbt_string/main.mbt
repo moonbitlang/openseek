@@ -56,7 +56,11 @@ async fn expand_resource_layout(markdown : String, root : String) -> String {
   async fn visit(directory : String, prefix : String) -> Unit {
     let directories : Array[String] = []
     for name in @fs.readdir(directory) {
+      // A `_build` tree is what `moon run` leaves beside a script it was
+      // pointed at (cram runs the bundled workflows that way); it is not part
+      // of the resources and must not describe them to the model.
       if !name.has_prefix(".") &&
+        name != "_build" &&
         @fs.kind("\{directory}/\{name}", follow_symlink=false) is Directory {
         directories.push(name)
       }
