@@ -1092,6 +1092,10 @@ async fn build_snippet(
   let build_log = "\{build_dir}/build.log"
   @fs.write_file(build_log, "", create_mode=CreateOrTruncate)
   errdefer mark_aborted()
+  // The default process cancellation sends SIGTERM to this one PID on
+  // POSIX, then SIGKILL if it has not exited after 5s. It waits only for that
+  // PID: once moon exits, the cancellation handler is stopped too, even if
+  // a compiler descendant is still running. This is not a process-tree wait.
   let result = @async.with_timeout_opt(build_timeout_ms, () => {
     let exit_code = @process.run(
       prog,

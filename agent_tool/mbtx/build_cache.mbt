@@ -71,9 +71,11 @@ fn cache_key(script_path : String?) -> String {
 /// cache is the session's and so is the definition, and a retirement that
 /// cannot fail is the whole point — a metadata file that failed to write, or
 /// read back malformed, would have the next call reuse the directory it was
-/// meant to fence off. Older generations are swept here, best-effort: by the
-/// time a later call arrives the orphan is long gone, and a sweep that still
-/// loses the race only leaves garbage the session reclaims.
+/// meant to fence off. Older generations are swept here, best-effort: a
+/// compiler from a cancelled build may still be running when the next call
+/// arrives. It can recreate the old output directory even after a successful
+/// sweep. Safety comes from building in a new generation, not from proving
+/// the old directory absent; later calls and session teardown retry cleanup.
 async fn open_generation(key_dir : String, generation : Int) -> String {
   let name = "gen-\{generation}"
   let dir = "\{key_dir}/\{name}"
