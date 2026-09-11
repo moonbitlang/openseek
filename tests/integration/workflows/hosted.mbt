@@ -9,6 +9,9 @@ async fn hosted_child(
     fail("Missing child request")
   }
   let request = @json.parse(line)
+  if name == "review" {
+    return review_child(request, mode, calls)
+  }
   let steps = if name == "repo-map" { 12 } else { 16 }
   assert_true(request is { "kind": String("explore"), .. })
   assert_true(
@@ -62,6 +65,131 @@ async fn hosted_child(
     },
   }
   println(report.stringify())
+}
+
+///|
+/// The review child: one `review` request carrying the joined criteria (and
+/// the baseline only when the script was given one), answered with a report
+/// in the review contract's shape.
+async fn review_child(request : Json, mode : String, calls : String) -> Unit {
+  guard request is { "kind": "review", "max_steps": 100, "input": input, .. } else {
+    fail("unexpected review request: \{request.stringify()}")
+  }
+  guard input is { "goal": "Check CSV CRLF handling", .. } else {
+    fail("Missing goal: \{input.stringify()}")
+  }
+  if mode == "baseline" {
+    assert_true(
+      input is { "sha": "abc", "dirty": true, .. },
+      msg=input.stringify(),
+    )
+  } else {
+    assert_false(input is { "sha": _, .. }, msg=input.stringify())
+  }
+  append(calls, request.stringify())
+  let finding : (String, String) -> Json = (severity, title) => {
+    "file": "cmd/main/main.mbt",
+    "line": 1,
+    "severity": severity,
+    "category": "correctness",
+    "title": title,
+    "detail": "offline fixture finding",
+    "suggestion": null,
+  }
+  let findings : Array[Json] = if mode == "blockers" {
+    [finding("blocker", "claim does not hold"), finding("high", "also this")]
+  } else {
+    []
+  }
+  let report : Json = {
+    "subrun_report": {
+      "schema_version": 1,
+      "scope": { "base": "abc", "head": "WORKTREE", "files": [] },
+      "findings": findings,
+      "summary": "offline fixture report",
+      "stats": {
+        "files_reviewed": 0,
+        "findings": findings.length(),
+        "build": "skipped",
+        "tests": "skipped",
+      },
+    },
+  }
+  println(report.stringify())
+}
+
+///|
+async fn verify_review(root : String, temp : String, exe : String) -> Unit {
+  let repo = temp + "/review-repository"
+  @fs.mkdir(repo)
+  let artifact = compile(root, temp, "review")
+  for
+    mode in [
+      "success", "baseline", "blockers", "missing", "no-criteria", "dirty-without-sha",
+      "help",
+    ] {
+    let calls = temp + "/review-" + mode + ".jsonl"
+    let env = clean_env()
+    if mode != "missing" {
+      let handoff : Json = {
+        "v": 1,
+        "exe": exe,
+        "child_args": ["hosted-child", "review", mode, calls, "{child}"],
+        "child_id": "test-{n}",
+        "ids": [1, 1],
+        "cwd": repo,
+        "deadline_ms": 10000,
+      }
+      env["WORKFLOW_HOST"] = handoff.stringify()
+    }
+    let args = match mode {
+      "baseline" =>
+        ["--sha", "abc", "--dirty", "--", "Check", "CSV", "CRLF", "handling"]
+      "no-criteria" => []
+      "dirty-without-sha" => ["--dirty", "Check CSV CRLF handling"]
+      "help" => ["--help"]
+      _ => ["Check CSV CRLF handling"]
+    }
+    let result = @shell.Cmd(
+      "moonrun",
+      [artifact, "--", ..args],
+      cwd=repo,
+      env~,
+      inherit_env=false,
+    ).output(timeout_ms=60000)
+    let output = result.stdout() + result.stderr()
+    let launched = read_calls(calls)
+    let succeeds = match mode {
+      "success" | "baseline" | "blockers" | "help" => true
+      _ => false
+    }
+    assert_eq(result.exit_code() == 0, succeeds, msg=output)
+    let reviewed = match mode {
+      "success" | "baseline" | "blockers" => 1
+      _ => 0
+    }
+    assert_eq(launched.length(), reviewed, msg=output)
+    let expected = match mode {
+      "success" | "baseline" => "findings=0 blockers=0"
+      "blockers" => "findings=2 blockers=1"
+      "missing" => "subrun=true"
+      "no-criteria" => "no criteria given"
+      "dirty-without-sha" => "--dirty needs --sha"
+      _ => "usage:"
+    }
+    assert_true(output.contains(expected), msg=output)
+    assert_eq(
+      output.contains("offline fixture report"),
+      reviewed == 1,
+      msg=output,
+    )
+    assert_eq(
+      output.contains("does not hold yet"),
+      mode == "blockers",
+      msg=output,
+    )
+    println("review: \{mode} passed")
+  }
 }
 
 ///|

@@ -14,6 +14,7 @@ async fn main {
           let exe = @fs.realpath(exe)
           @vfs.with_tmpdir(temp => {
             verify_hosted(root, temp, exe)
+            verify_review(root, temp, exe)
             verify_ci(root, temp, exe)
           })
         }

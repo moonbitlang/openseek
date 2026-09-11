@@ -398,51 +398,25 @@ child ids from a block that is not its own.
 
 ### Independent review
 
-The model delegates an independent worktree audit through the same hosted
-workflow as scouts. Set `subrun: true` on the `mbtx` tool call and supply this
-program as `source`:
+The bundled `@builtin/review.mbtx` script runs one `review` child through the
+same hosted workflow as scouts. Set `subrun: true` and put the audit criteria
+in `args`:
 
-```mbt nocheck
-///|
-import {
-  "moonbitlang/async",
-  "moonbitlang/workflow",
-  "moonbitlang/workflow/hosted",
-}
-
-///|
-async fn main {
-  guard @hosted.context() is Some(ctx) else {
-    println("Hosted delegation is unavailable in this session")
-    return
-  }
-  let report = ctx.run(wf => {
-    wf.agent_call(
-      kind="review",
-      input={
-        "goal": "Check the CSV parser's CRLF and escaped-quote handling.",
-      },
-      label="CSV review",
-      max_steps=100,
-    )
-  })
-  println(report.stringify())
-}
+```json
+{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling."],"subrun":true}
 ```
 
-Use `agent_call`, not `agent`: review requires `input.goal`, whereas `agent`
-builds the scout input `{query, hints?}`. Criteria are explicit; this path
-does not automatically read the standing goal or its baseline. If known,
-include `sha` and `dirty` alongside `goal` to describe the baseline commit
-and whether the worktree was dirty when it was recorded.
-
-The child runs `agent_review.run_goal_audit` and validates its submission
-before returning the full report JSON. The workflow does not reduce it to a
-digest or mark blocker findings as a tool error: the caller reads the findings.
-Failure to obtain a report raises instead of returning a clean verdict.
-Hosted child limits apply (32 launches per snippet, 10-minute default child
-deadline, and the explicit step ceiling); there is no shared per-turn review
-budget. `--review-deadline` applies only to the automatic goal-met gate.
-Without a durable session, hosted delegation is unavailable. The standalone
-`openseek review --base REF` remains available and calls the review engine
-directly, without hosted workflow.
+The child runs `agent_review.run_goal_audit` against the current worktree and
+validates its submission; the script prints the full report JSON followed by a
+`findings=N blockers=M` line. It never reduces the report to a digest or turns
+blocker findings into a tool error: the caller reads the findings. A missing
+report raises. Criteria are explicit — the script does not read the standing
+goal or its baseline; pass `--sha COMMIT` (and `--dirty` if the worktree was
+already dirty then) when the baseline is known. Hosted child limits apply
+(one child, 10-minute default deadline, 100-step ceiling); there is no shared
+per-turn review budget, and `--review-deadline` applies only to the automatic
+goal-met gate. A hand-written workflow reaches the same child with
+`wf.agent_call(kind="review", input={"goal": ...})` — `agent_call`, not the
+scout-shaped `agent`. Without a durable session, hosted delegation is
+unavailable; the standalone `openseek review --base REF` still calls the review
+engine directly, without a workflow.

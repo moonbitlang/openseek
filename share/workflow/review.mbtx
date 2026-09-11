@@ -1,0 +1,90 @@
+///|
+import {
+  "moonbitlang/async@0.21.1",
+  "moonbitlang/core/env",
+  "moonbitlang/workflow@0.7.0",
+  "moonbitlang/workflow@0.7.0/hosted",
+}
+
+///|
+/// Run with mbtx(description="Review the worktree", filename="@builtin/review.mbtx", args=["What to audit against"], subrun=true).
+/// One review child audits the current worktree against the criteria in
+/// args and prints its full structured report; no retries or automatic edits.
+const Usage : String =
+  #|usage: @builtin/review.mbtx [--sha COMMIT [--dirty]] [--] CRITERIA...
+  #|
+  #|The remaining arguments, joined with spaces, are the criteria the reviewer
+  #|audits the current worktree against: a standing goal, a claim to verify,
+  #|or a component to scrutinize. --sha names the baseline commit the criteria
+  #|were recorded at (--dirty: the worktree was already dirty then); omit both
+  #|when unknown. Requires the hosted handoff: call mbtx with subrun=true.
+
+///|
+async fn main {
+  let mut sha : String? = None
+  let mut dirty = false
+  let criteria : Array[String] = []
+  for args = @env.args()[1:] {
+    match args {
+      [] => break
+      ["--help" | "-h", ..] => {
+        println(Usage)
+        return
+      }
+      ["--sha", commit, .. rest] => {
+        sha = Some(commit)
+        continue rest
+      }
+      ["--dirty", .. rest] => {
+        dirty = true
+        continue rest
+      }
+      ["--", .. rest] => {
+        criteria.append(rest.to_owned())
+        break
+      }
+      [word, .. rest] => {
+        criteria.push(word)
+        continue rest
+      }
+    }
+  }
+  let goal = criteria.join(" ")
+  guard !goal.is_blank() else { fail("no criteria given\n\{Usage}") }
+  guard sha is Some(_) || !dirty else { fail("--dirty needs --sha\n\{Usage}") }
+  guard @hosted.context() is Some(ctx) else {
+    fail(
+      "This workflow needs OpenSeek: call mbtx with filename=@builtin/review.mbtx and subrun=true",
+    )
+  }
+  // The same input a `subrun review` child reads from the goal-met gate.
+  let input : Json = match sha {
+    Some(sha) => { "goal": goal, "sha": sha, "dirty": dirty }
+    None => { "goal": goal }
+  }
+  ctx.run(wf => {
+    let report = wf.agent_call(
+      kind="review",
+      input~,
+      label="review",
+      max_steps=100,
+    )
+    println(report.stringify())
+    let mut findings = 0
+    let mut blockers = 0
+    if report is { "findings": Array(items), .. } {
+      findings = items.length()
+      for item in items {
+        if item is { "severity": "blocker", .. } {
+          blockers += 1
+        }
+      }
+    }
+    println(
+      "findings=\{findings} blockers=\{blockers} tokens=\{wf.tokens_spent()}",
+    )
+    if blockers > 0 {
+      println("A blocker finding means the claim does not hold yet.")
+    }
+  })
+}

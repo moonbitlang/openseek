@@ -58,8 +58,10 @@ Range parsing proceeds from the right, preserving Windows drive letters and
 other colons. Paths with spaces are single args without shell quoting.
 `args=["--help"]` prints usage. Relative file paths use cwd (default workspace).
 
-## Read-only agent workflows
+## Agent workflows
 
+- `review.mbtx` audits the current worktree against the criteria given in
+  `args` (see below).
 - `change-review.mbtx` examines staged, unstaged, and untracked source changes
   from correctness, compatibility, and regression-test perspectives. Its scope
   is the working tree against HEAD, not committed branch history.
@@ -69,6 +71,10 @@ other colons. Paths with spaces are single args without shell quoting.
 Run these with the hosted child-agent handoff:
 
 ```json
+{"description":"Audit the parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling."],"subrun":true}
+```
+
+```json
 {"description":"Review working-tree changes","filename":"@builtin/change-review.mbtx","subrun":true}
 ```
 
@@ -76,8 +82,16 @@ Run these with the hosted child-agent handoff:
 {"description":"Map repository architecture","filename":"@builtin/repo-map.mbtx","subrun":true,"cwd":"/path/to/repository"}
 ```
 
-Both use `moonbitlang/workflow`'s `fan_out` and `attempt` with read-only
-`explore` children. Change review runs three scouts, allowing 16 steps each.
+`review.mbtx` launches one `review` child (100-step ceiling) with the
+arguments joined as its criteria, prints the full report JSON, then a
+`findings=N blockers=M` line; blocker findings never turn into a failing
+exit, the caller reads them. `--sha COMMIT` (with `--dirty` when the worktree
+was already dirty at that commit) names the baseline the criteria were
+recorded at; `--help` prints usage. Nothing is audited implicitly: the script
+does not read a standing goal.
+
+The other two use `moonbitlang/workflow`'s `fan_out` and `attempt` with
+read-only `explore` children. Change review runs three scouts, allowing 16 steps each.
 Repo-map runs two scouts, allowing 12 steps each, and displays the root
 `justfile` recipes directly in MoonBit without asking a model to summarize
 commands. Recipes are marked as not executed; a missing `justfile` is reported
@@ -125,8 +139,9 @@ The pinned imports make these scripts independent of the inspected project's
 library dependencies. Compile them with `moon run --build-only --target wasm
 share/workflow/repo-map.mbtx`; execute them through OpenSeek with `subrun=true`.
 
-Maintainers: `just test-workflows` exercises both scripts with an offline child
-contract fixture, including partial failure and missing/insufficient handoff.
+Maintainers: `just test-workflows` exercises all three scripts with an offline
+child contract fixture, including partial failure and missing/insufficient
+handoff.
 
 ## GitHub CI monitor
 
