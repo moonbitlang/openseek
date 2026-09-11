@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+// Tool rows and their status icons belong to the full transcript; minimal
+// mode summarizes them instead.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
+});
+
 test('Codex partial output and result-only calls retain pending status until completion', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [{
