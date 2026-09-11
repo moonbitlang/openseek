@@ -27,7 +27,9 @@ priv enum MbtxProgram {
 /// A recorded `mbtx` call, decoded for display.
 priv struct MbtxCall {
   program : MbtxProgram
-  args : Array[String]?
+  // The `args` array as written, already validated as strings, for the card
+  // to print verbatim.
+  args : Json?
   /// The call's other scalar arguments, as `key: value` chip text.
   chips : Array[String]
 }
@@ -61,15 +63,8 @@ fn decode_mbtx_call(arguments : String) -> MbtxCall? {
     dramatized=["source", "filename", "args"],
   )
   let args = match fields.get("args") {
-    Some(Array(values)) if values.all(value => value is String(_)) =>
-      Some(
-        values.filter_map(value => {
-          match value {
-            String(text) => Some(text)
-            _ => None
-          }
-        }),
-      )
+    Some(Array(values) as args) if values.all(value => value is String(_)) =>
+      Some(args)
     _ => None
   }
   Some({ program, args, chips, })
@@ -112,10 +107,7 @@ fn mbtx_card(arguments : String) -> (String, @html.Html)? {
   }
   let args = match call.args {
     Some(args) =>
-      @html.pre(
-        class="tool-card-original-json",
-        args.to_json().stringify(indent=2),
-      )
+      @html.pre(class="tool-card-original-json", args.stringify(indent=2))
     None => @html.nothing
   }
   Some(
