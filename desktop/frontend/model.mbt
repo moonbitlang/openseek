@@ -1490,6 +1490,7 @@ priv struct Model {
   // Terminal tabs and their connection snapshots affect both the component
   // view and root layout. The root owns the opaque state once so neither side
   // reports a second visibility copy back to the other.
+  jobs : @jobs.State
   terminal : @terminal.State
   // The archive-discard confirmation, staged when the host refused an
   // archive because the conversation's worktree holds uncommitted changes;
@@ -2067,6 +2068,8 @@ priv enum Msg {
   ExplorerRequested(@fileeditor.ExplorerMode)
   // Open the Workflows tab in the right panel.
   WorkflowsRequested
+  JobsRequested
+  Jobs(@jobs.Msg)
   // The browser toolbar, acting on whatever Browser tab is active — the
   // messages carry no id so a stale click cannot outlive a tab switch.
   BrowserAddressEdited(String)
@@ -2400,6 +2403,7 @@ priv enum DeviceMsg {
   // stamp): idle events (the compaction lifecycle, background notices) route
   // by it, because a conversation compacted before its first prompt of this
   // app-lifetime has no run id to match.
+  JobsChanged(String)
   Engine(String?, @transcript.EngineEvent, session~ : String?)
   // The exact local start request returned its run result. `accepted` is the
   // prompt's ownership receipt and can recover a Started notification lost on
@@ -2626,6 +2630,7 @@ fn initial_model() -> Model {
     right_panel_open: false,
     right_panel_menu_open: false,
     right_panel_expanded: false,
+    jobs: @jobs.State::empty(),
     terminal: @terminal.State::empty(),
     active_session: "",
     loading_conversation: None,

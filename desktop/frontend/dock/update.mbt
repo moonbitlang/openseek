@@ -137,3 +137,8 @@ pub fn sync(state : State, owner : @interop.ConversationKey) -> State {
   }
   { owner: Some(owner), tabs, active, remembered, }
 }
+
+///|
+pub fn open_jobs(state : State) -> State {
+  open_tab(state, Jobs)
+}

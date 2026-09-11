@@ -835,7 +835,7 @@ fn reveal_local_directory(
 ) -> (@cmd.Cmd, Model) {
   let dock = match model.dock.active {
     Some(File(_)) | Some(FilePicker) => model.dock
-    None | Some(Browser(_)) | Some(GitDiff(_)) | Some(Workflows) =>
+    None | Some(Browser(_)) | Some(GitDiff(_)) | Some(Workflows) | Some(Jobs) =>
       @dock.open_picker(model.dock)
   }
   let model = {
@@ -1475,7 +1475,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
   }
   let file_body_visible = match model.dock.active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
-    None | Some(Browser(_)) | Some(Workflows) => false
+    None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) => false
   }
   {
     // Keep the real identity even while placement is unresolved or missing.
@@ -1902,6 +1902,22 @@ fn update(
     terminal_emit, terminal_input,
   )
   let model = { ..model, terminal, }
+  let owner = model.jobs_owner()
+  let active = model.file_panel_visible() &&
+    model.dock.active is Some(Jobs) &&
+    owner is Some(owner) &&
+    model.devices.any(dev => {
+      dev.channel == owner.channel &&
+      dev.bridge is Connected &&
+      dev.reconnect_failures == 0
+    })
+  let (jobs_cmd, jobs) = @jobs.reconcile(
+    dispatch.map(msg => Jobs(msg)),
+    model.jobs,
+    owner,
+    active,
+  )
+  let model = { ..model, jobs, }
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
@@ -1911,6 +1927,7 @@ fn update(
       panel_visibility_cmd,
       panel_cmd,
       terminal_cmd,
+      jobs_cmd,
       browser_cmd,
       sync_dock_visibility(
         model.dock.active != previous.dock.active ||
@@ -4994,7 +5011,7 @@ fn update_msg(
               }
               // Neither tab owns a document: closing one while active hands
               // focus to a neighbouring file or diff, and otherwise nothing.
-              FilePicker | Workflows =>
+              FilePicker | Workflows | Jobs =>
                 if was_active && next_file is Some(path) {
                   let (cmd, panel) = @fileeditor.activate(
                     femit,
@@ -5058,6 +5075,24 @@ fn update_msg(
     ExplorerRequested(mode) => open_explorer(dispatch, model, mode)
     // The Workflows tab: opened like the explorer inventories, keeping the
     // right panel on screen with its launcher menu closed.
+    Jobs(msg) => {
+      let (cmd, jobs) = @jobs.update(
+        dispatch.map(msg => Jobs(msg)),
+        msg,
+        model.jobs,
+      )
+      (cmd, { ..model, jobs, })
+    }
+    JobsRequested =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          dock: @dock.open_jobs(model.dock),
+          right_panel_open: true,
+          right_panel_menu_open: false,
+        },
+      )
     WorkflowsRequested =>
       (
         @cmd.none,
@@ -7600,6 +7635,19 @@ fn update_device_msg(
       })
       (@cmd.none, { ..model, conversations: settled, })
     }
+    JobsChanged(session) =>
+      if model.jobs.owner is Some(owner) &&
+        owner.channel == channel &&
+        owner.scope.session == session {
+        let (cmd, jobs) = @jobs.update(
+          dispatch.map(msg => Jobs(msg)),
+          Poll,
+          model.jobs,
+        )
+        (cmd, { ..model, jobs, })
+      } else {
+        (@cmd.none, model)
+      }
     Engine(run_id, event, session~) => {
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared
