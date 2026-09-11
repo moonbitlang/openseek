@@ -66,6 +66,10 @@ test "display buffer stays bounded and advances the absolute byte cursor" {
 ///|
 test "tail command safely quotes host filesystem paths" {
   assert_eq(
+    tail_command("//server/share/job.out"),
+    "Get-Content -LiteralPath '//server/share/job.out' -Tail 100 -Wait",
+  )
+  assert_eq(
     tail_command("/tmp/a'b/log.out"),
     "tail -n 100 -f -- '/tmp/a'\\''b/log.out'",
   )

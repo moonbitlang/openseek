@@ -25,7 +25,9 @@ fn status_class(state : @wire.JobState) -> String {
 
 ///|
 fn tail_command(path : String) -> String {
-  if (path.length() >= 2 && path[1] == ':') || path.has_prefix("\\\\") {
+  if (path.length() >= 2 && path[1] == ':') ||
+    path.has_prefix("\\\\") ||
+    path.has_prefix("//") {
     "Get-Content -LiteralPath '" +
     path.replace_all(old="'", new="''") +
     "' -Tail 100 -Wait"
