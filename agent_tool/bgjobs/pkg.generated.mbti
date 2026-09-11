@@ -14,8 +14,8 @@ import {
 
 // Types and methods
 type BgJobRuntime
-pub fn[X] BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope[X], spill_dir? : String, hard_output_cap? : Int, hard_timeout_ms? : Int, on_job_exit? : (BgJobSnapshot) -> Unit) -> Self
-pub fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, description? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit) -> String
+pub fn[X] BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope[X], spill_dir? : String, persistent_logs? : Bool, hard_output_cap? : Int, hard_timeout_ms? : Int, on_job_exit? : (BgJobSnapshot) -> Unit) -> Self
+pub async fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, description? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit) -> String
 pub fn BgJobRuntime::list(Self) -> Array[BgJobSnapshot]
 pub fn BgJobRuntime::pending(Self) -> Array[BgJobSnapshot]
 pub async fn BgJobRuntime::read_output(Self, String) -> String?
@@ -32,6 +32,9 @@ pub struct BgJobSnapshot {
   command : String
   description : String?
   status : BgJobStatus
+  output_file : String?
+  output_persistent : Bool
+  output_error : String?
   output_truncated : Bool
   size : Int
   had_invalid_utf8 : Bool

@@ -150,12 +150,23 @@ async fn ShellExecution::monitor(
   reader : @process.ReadFromProcess,
   process : @process.Process,
 ) -> Unit {
+  defer self.sink.close()
+  errdefer self.set_terminal(Killed)
   let reader_done : @async.Queue[Unit] = Queue(kind=Unbounded)
   @async.with_task_group(reads => {
     reads.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       defer ignore(reader_done.try_put(()) catch { _ => false })
+      errdefer self.request_stop()
       for ;; {
-        match (reader.read_some(max_len=1024) catch { _ => None }) {
+        match
+          (reader.read_some(max_len=1024) catch {
+            error if @async.is_being_cancelled() => raise error
+            error => {
+              let message = "failed to read process output: \{error}"
+              self.sink.failure = Some(message)
+              fail(message)
+            }
+          }) {
           None => break
           Some(bytes) => {
             self.sink.append_chunk(bytes)
@@ -213,8 +224,20 @@ async fn ShellExecution::monitor(
     // Surface leftover half-decoded bytes, then publish the terminal status — in
     // that order, so a poller can never observe a terminal execution missing the
     // job's final output.
-    self.sink.finish()
-    self.set_terminal(terminal)
+    self.sink.finish() catch {
+      error => {
+        let message = "failed to finish output log: \{error}"
+        self.sink.failure = Some(message)
+        fail(message)
+      }
+    }
+    self.set_terminal(
+      if self.sink.failure is Some(_) {
+        Killed
+      } else {
+        terminal
+      },
+    )
   })
 }
 
@@ -560,3 +583,19 @@ pub extend ExecStatus with Debug::{to_repr}
 
 ///|
 pub extend ExecStatus with Eq::{equal, not_equal}
+
+///|
+/// Ensure a configured output file exists before announcing background adoption.
+/// Existing spill files are reused, including terminal executions adopted in a race.
+pub async fn ShellExecution::materialize_output(self : ShellExecution) -> Unit {
+  self.sink.materialize()
+  if self.status.is_terminal() {
+    self.sink.close()
+  }
+}
+
+///|
+/// A capture/write failure, distinct from a program's exit status.
+pub fn ShellExecution::output_error(self : ShellExecution) -> String? {
+  self.sink.failure
+}

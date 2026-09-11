@@ -67,6 +67,7 @@ struct BgJobRuntime {
   // Directory for per-job spill files (full output beyond the inline preview).
   // None → memory-only jobs (no full-output file).
   spill_dir : String?
+  persistent_logs : Bool
   // Wall-clock lifetime cap for any registered job, measured from process
   // start (an adopted job keeps its original deadline). Bounded lifetime,
   // not machine protection: the kill reaches the direct child only, so a
@@ -128,6 +129,9 @@ pub struct BgJobSnapshot {
   description : String?
   status : BgJobStatus
   priv output : String
+  output_file : String?
+  output_persistent : Bool
+  output_error : String?
   output_truncated : Bool
   priv over_inline_cap : Bool
   size : Int
@@ -156,6 +160,7 @@ pub struct BgJobSnapshot {
 pub fn[X] BgJobRuntime::BgJobRuntime(
   scope : @agent_runtime.AgentTaskScope[X],
   spill_dir? : String,
+  persistent_logs? : Bool = false,
   hard_output_cap? : Int = @shell_exec.default_hard_cap,
   hard_timeout_ms? : Int = default_hard_timeout_ms,
   on_job_exit? : (BgJobSnapshot) -> Unit,
@@ -205,6 +210,7 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
       group.spawn_bg(task, no_wait=true, allow_failure=true)
     },
     spill_dir,
+    persistent_logs,
     hard_timeout_ms,
     on_job_exit,
     jobs: Map([]),
@@ -270,6 +276,9 @@ pub async fn BgJobRuntime::start(
   let exec = (self.spawn_exec)(
     program, args, cwd, max_output_chars, spill_path, stdin,
   )
+  errdefer exec.request_stop()
+  exec.materialize_output()
+  let _ = exec.background()
   self.register(
     id,
     exec,
@@ -289,7 +298,7 @@ pub async fn BgJobRuntime::start(
 /// its id. Used by detach-on-timeout: a foreground command that outlived its
 /// timeout is `background()`-ed and adopted here, so `job_output`/`job_stop`
 /// and the completion notice see it like any explicit background job.
-pub fn BgJobRuntime::adopt(
+pub async fn BgJobRuntime::adopt(
   self : BgJobRuntime,
   exec : @shell_exec.ShellExecution,
   command~ : String,
@@ -301,6 +310,9 @@ pub fn BgJobRuntime::adopt(
   on_terminal? : async () -> Unit,
 ) -> String {
   let id = self.next_id()
+  errdefer exec.request_stop()
+  exec.materialize_output()
+  let _ = exec.background()
   self.register(
     id,
     exec,
@@ -361,7 +373,8 @@ fn BgJobRuntime::register(
         (
           snapshot.status is Exited(_) ||
           snapshot.killed_by_output_limit ||
-          snapshot.killed_by_time_limit
+          snapshot.killed_by_time_limit ||
+          snapshot.output_error is Some(_)
         ) {
         callback(snapshot)
       }
@@ -399,13 +412,16 @@ fn bg_status(status : @shell_exec.ExecStatus) -> BgJobStatus {
 }
 
 ///|
-fn BgJob::to_snapshot(self : BgJob) -> BgJobSnapshot {
+fn BgJob::to_snapshot(self : BgJob, persistent_logs : Bool) -> BgJobSnapshot {
   {
     id: self.id,
     command: self.command,
     description: self.description,
     status: bg_status(self.exec.status()),
     output: self.exec.head(),
+    output_file: self.exec.spill_path(),
+    output_persistent: persistent_logs,
+    output_error: self.exec.output_error(),
     output_truncated: self.exec.output_truncated(),
     over_inline_cap: self.exec.over_inline_cap(),
     size: self.exec.size(),
@@ -471,7 +487,7 @@ pub fn BgJobRuntime::snapshot(
   self : BgJobRuntime,
   id : String,
 ) -> BgJobSnapshot? {
-  self.jobs.get(id).map(job => job.to_snapshot())
+  self.jobs.get(id).map(job => job.to_snapshot(self.persistent_logs))
 }
 
 ///|
@@ -480,7 +496,7 @@ pub fn BgJobRuntime::snapshot(
 /// runtime state through it.
 pub fn BgJobRuntime::list(self : BgJobRuntime) -> Array[BgJobSnapshot] {
   [
-    for _, job in self.jobs => job.to_snapshot()
+    for _, job in self.jobs => job.to_snapshot(self.persistent_logs)
   ]
 }
 

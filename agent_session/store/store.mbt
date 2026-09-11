@@ -838,3 +838,20 @@ pub extend SessionListing with Debug::{to_repr}
 
 ///|
 pub extend SessionStore with Debug::{to_repr}
+
+///|
+/// Prepare the durable job artifact directory inside a session record. Logs
+/// move with the session when archived and are removed with explicit deletion.
+pub async fn SessionStore::job_logs_dir(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String {
+  let path = "\{self.session_dir(id)}/jobs"
+  @fs.mkdir(path, permission=0o700, recursive=true) catch {
+    @os_error.OSError(_) as error if error.is_EEXIST() => {
+      guard @fs.kind(path) is Directory else { raise error }
+    }
+    error => raise error
+  }
+  @fs.realpath(path)
+}

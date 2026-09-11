@@ -6,7 +6,9 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
     Exited(0) => "exit=0"
     Exited(code) => "exit=\{code}"
     Stopped =>
-      if snapshot.killed_by_output_limit {
+      if snapshot.output_error is Some(error) {
+        "output capture failed: \{error}"
+      } else if snapshot.killed_by_output_limit {
         "killed: flooded past the output cap"
       } else if snapshot.killed_by_time_limit {
         "killed: outlived the wall-clock cap"
@@ -54,6 +56,7 @@ pub async fn[X] build_tools(
   runtime : @agent_runtime.AgentRuntime,
   scope : @agent_runtime.AgentTaskScope[X],
   on_background_wake? : () -> Unit,
+  job_log_dir? : String,
   extra_tools? : Array[@agent_tool.AgentToolDefinition] = [],
   mbtx_subrun? : @host.SubrunInjection,
 ) -> @agent_tool.Tools {
@@ -63,41 +66,48 @@ pub async fn[X] build_tools(
   // `remove` reads to tell an agent-created file (safe to delete) from a
   // pre-existing one.
   let file_state = @agent_tool.FileStateMap()
-  // One session temp dir, shared by the job runtime (which spills large job
-  // output to disk) and mbtx (whose detached snippets outlive the call
-  // that started them, so their directories cannot be reclaimed there).
-  let spill_dir : String? = Some(@fs.tmpdir(prefix="openseek-jobs-")) catch {
-    _ => None
-  }
-  // Remove the session temp dir when the owning scope ends, so `/tmp` cannot
-  // accumulate spill files and snippet directories across turns or sessions.
-  // A GROUP defer, not a plain one: `build_tools` returns immediately while
-  // the dir must live as long as the session, and the group runs its defers
-  // only after every child task has terminated — so a background job still
-  // spilling output cannot have the directory pulled out from under it.
-  // `protect_from_cancel` because a group cancelled from outside cancels the
-  // async operations in its defers too.
-  if spill_dir is Some(dir) {
-    scope
-    .group()
-    .add_defer(() => {
-      @async.protect_from_cancel(() => {
-        @fs.rmdir(dir, recursive=true) catch {
-          _ => ()
-        }
-      })
+  // Scratch files follow the scope. Adopted job logs use separate storage so
+  // removing compiler/snippet scratch space cannot remove a user's log.
+  let scratch = @fs.tmpdir(prefix="openseek-jobs-")
+  scope
+  .group()
+  .add_defer(() => {
+    @async.protect_from_cancel(() => {
+      @fs.rmdir(scratch, recursive=true) catch {
+        _ => ()
+      }
     })
+  })
+  let spill_dir = match job_log_dir {
+    Some(root) => {
+      // tmpdir already reserved this unique runtime name. mkdir below is
+      // exclusive too: an unexpected collision fails rather than overwrites.
+      let normalized = scratch.replace_all(old="\\", new="/")
+      let parts = normalized.split("/").to_array()
+      guard parts.last() is Some(generation) else {
+        fail("missing runtime directory name")
+      }
+      let dir = "\{root}/\{generation}"
+      @fs.mkdir(dir, permission=0o700)
+      @fs.realpath(dir)
+    }
+    None => scratch
   }
   // When a background job exits on its own, push a completion notice into the
   // loop's lossless steer queue (surfaced to the model at the next step, or
   // persisted while idle) and poke the controller so an idle engine wakes to
   // drain it instead of leaving it until the next prompt.
-  let bg_runtime = @bgjobs.BgJobRuntime(scope, spill_dir?, on_job_exit=snapshot => {
-    runtime.queue_steer(Notice(background_notice_text(snapshot)))
-    if on_background_wake is Some(wake) {
-      wake()
-    }
-  })
+  let bg_runtime = @bgjobs.BgJobRuntime(
+    scope,
+    spill_dir~,
+    persistent_logs=job_log_dir is Some(_),
+    on_job_exit=snapshot => {
+      runtime.queue_steer(Notice(background_notice_text(snapshot)))
+      if on_background_wake is Some(wake) {
+        wake()
+      }
+    },
+  )
   Tools(
     [
       @edit.definition(workspace_root~, file_state~),
@@ -120,7 +130,7 @@ pub async fn[X] build_tools(
         workspace_root~,
         file_state~,
         bg_runtime~,
-        job_dir?=spill_dir,
+        job_dir=scratch,
         approval?=runtime.approval_channel(),
         subrun?=mbtx_subrun,
       ),

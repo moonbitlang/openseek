@@ -69,3 +69,16 @@ counter for change detection, and the error-semantics flags
 `job_output` report a background job with exactly the foreground path's error
 behavior. The sink's own sequence number stays private and is not copied into
 the snapshot.
+
+
+Background adoption now materializes a configured output file before returning
+its ID, including for an empty or small output. Foreground output stays in
+memory until its existing cap or adoption. `BgJobSnapshot.output_file` is the
+actual path (an adopted execution can keep its `fg-N.out` filename),
+`output_persistent` describes its lifetime, and `output_error` reports capture
+failures separately from the program outcome. File I/O errors are surfaced;
+they no longer silently return the initial output head.
+
+Standard durable `run`/`serve` sessions retain job logs below their session's
+`jobs/<runtime-generation>` directory. Compiler/snippet scratch files still
+follow the engine scope. No-session engines label their logs temporary.

@@ -3,7 +3,9 @@
 /// Including the latter closes the exit/notice gap in a turn's finish check.
 pub fn BgJobRuntime::pending(self : BgJobRuntime) -> Array[BgJobSnapshot] {
   [
-    for _, job in self.jobs if !job.completion_published => job.to_snapshot()
+    for _, job in self.jobs if !job.completion_published => {
+      job.to_snapshot(self.persistent_logs)
+    }
   ]
 }
 

@@ -680,9 +680,14 @@ async fn run_serve(
     } else {
       None
     }
+    let job_log_dir = match store {
+      Some(store) => Some(store.job_logs_dir(initial_session.id()))
+      None => None
+    }
     let tools = @agent.build_tools(
       runtime,
       scope,
+      job_log_dir?,
       on_background_wake=() => {
         ignore(steps.try_put(BackgroundNotice) catch { _ => false })
       },
