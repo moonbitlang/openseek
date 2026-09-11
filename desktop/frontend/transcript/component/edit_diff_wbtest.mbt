@@ -40,7 +40,7 @@ test "an edit decodes to its anchors and the change it describes" {
   guard EditDiff::from_fields(fields, path_key="path") is Some(edit) else {
     fail("expected a readable edit")
   }
-  assert_eq(edit.chips, ["path: lib/parser.mbt", "start_line: 12"])
+  assert_eq(edit.anchors, ["path: lib/parser.mbt", "start_line: 12"])
   assert_eq(edit.diff, "- args.length()\n+ args.len()")
 }
 

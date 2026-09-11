@@ -248,11 +248,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
             Call(
               MinimalCall::from_tool(
                 call,
-                wait_label?=pending_job_wait_label(
-                  call,
-                  descriptions~,
-                  minimal=true,
-                ),
+                wait_label?=pending_job_wait_label(call, descriptions~),
               ),
             ),
           )
@@ -461,7 +457,7 @@ fn MinimalContent::render(
                   @html.div(
                     class="minimal-edit-changes",
                     attrs=@html.Attrs::build().aria_label("Requested changes"),
-                    changes.render(minimal=true),
+                    changes.render(),
                   )
                 } else {
                   @html.nothing
