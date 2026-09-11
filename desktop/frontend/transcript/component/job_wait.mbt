@@ -4,6 +4,7 @@
 fn pending_job_wait_label(
   call : @transcript.ToolCall,
   descriptions? : Map[String, String] = Map([]),
+  minimal? : Bool = false,
 ) -> String? {
   guard call.name == "job_wait" &&
     call.outcome is Pending(..) &&
@@ -20,6 +21,24 @@ fn pending_job_wait_label(
     if !ids.contains(id) {
       ids.push(id)
     }
+  }
+  if minimal {
+    // Waiting can end when any target finishes (or user input arrives). This
+    // names the current wait, never claims that every selected job is done.
+    let targets = ids.map(id => {
+      if descriptions.get(id) is Some(description) {
+        "\"\{description}\""
+      } else {
+        id
+      }
+    })
+    return Some(
+      if targets.length() == 1 {
+        "Wait for job \{targets[0]} to complete"
+      } else {
+        "Wait for any of these jobs to complete: \{targets.join(", ")}"
+      },
+    )
   }
   let targets = ids.map(id => {
     match descriptions.get(id) {

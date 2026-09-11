@@ -44,6 +44,8 @@ pub(all) enum EngineEvent {
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   SubrunOpened(id~ : String, kind~ : String, label~ : String)
   SubrunClosed(id~ : String, status~ : String, steps~ : Int, tokens~ : Int)
+  WorkflowOpened(id~ : String, journal~ : String, events~ : String, first_child~ : Int, child_count~ : Int)
+  WorkflowClosed(id~ : String)
   AgentFinished(String)
   ContextYield(String)
   AgentAborted(String)
@@ -80,6 +82,7 @@ pub(all) enum ItemKind {
   User(String)
   Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool)
   Answer(String)
+  TurnEnd
   Failure(String)
   Notice(label~ : String, brief~ : String?, is_error~ : Bool, body~ : String?)
   Summary(String)

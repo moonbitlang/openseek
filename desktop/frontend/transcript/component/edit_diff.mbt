@@ -11,15 +11,16 @@
 // The diff is *derived*, not recorded: it is these two strings compared, not
 // what the tool wrote to the file. Whether the edit applied at all is the
 // paired result — a rejected call still renders, because the change it asked
-// for is what a reader is trying to see. The recorded payload stays a click
-// away in the shared Original JSON tab.
+// for is what a reader is trying to see. Detailed mode keeps the recorded
+// payload in its Original JSON tab. Minimal mode shares this diff but shows
+// only file/line anchors, with no raw payload.
 
 ///|
 /// One edit's rendering: the chips that anchor it and the diff it describes.
 priv struct EditDiff {
   chips : Array[String]
   diff : String
-}
+} derive(Eq)
 
 ///|
 /// How many edits of a `multi_edit` batch to render. A batch is built by a
@@ -33,67 +34,101 @@ const MAX_RENDERED_EDITS = 50
 /// the chips that anchor it. `None` when the payload is not a readable edit —
 /// it then keeps the generic JSON rendering, which clamps before parsing.
 fn edit_card(arguments : String) -> @html.Html? {
-  guard card_fields(arguments) is Some(fields) else { return None }
-  guard decode_edit(fields, path_key="path") is Some(edit) else { return None }
-  Some(
-    @html.div(class="edit-args", [chip_row(edit.chips), diff_block(edit.diff)]),
-  )
+  EditChanges::from_arguments("edit", arguments).map(changes => {
+    changes.render(original_available=true)
+  })
 }
 
 ///|
-/// The card body for a `multi_edit` call: one anchored diff per edit in the
-/// batch, under the chips for the call's own arguments. `None` when the
-/// payload carries no readable edit at all; a batch whose entries are only
-/// partly readable renders the ones that are, and the rest stay in the
-/// original — dropping the whole card would hide the edits that did decode.
 fn multi_edit_card(arguments : String) -> @html.Html? {
+  EditChanges::from_arguments("multi_edit", arguments).map(changes => {
+    changes.render(original_available=true)
+  })
+}
+
+///|
+/// Both transcript modes share bounded decoding and the same single-column
+/// diff. Keep derived data, not raw arguments or editor instances, in the
+/// minimal projection so structural equality still skips unchanged views.
+priv struct EditChanges {
+  chips : Array[String]
+  edits : Array[EditDiff]
+  omitted : Int
+} derive(Eq)
+
+///|
+fn EditChanges::from_arguments(
+  name : String,
+  arguments : String,
+  minimal? : Bool = false,
+) -> EditChanges? {
+  guard name == "edit" || name == "multi_edit" else { return None }
   guard card_fields(arguments) is Some(fields) else { return None }
+  if name == "edit" {
+    guard EditDiff::from_fields(fields, path_key="path", minimal~) is Some(edit) else {
+      return None
+    }
+    return Some({ chips: [], edits: [edit], omitted: 0, })
+  }
   guard fields.get("edits") is Some(Array(entries)) else { return None }
-  let rendered : Array[@html.Html] = []
-  let mut shown = 0
+  let edits : Array[EditDiff] = []
   for entry in entries {
-    if shown == MAX_RENDERED_EDITS {
+    if edits.length() == MAX_RENDERED_EDITS {
       break
     }
-    guard entry is Object(entry_fields) &&
-      decode_edit(entry_fields, path_key="file") is Some(edit) else {
-      continue
+    if entry is Object(entry_fields) &&
+      EditDiff::from_fields(entry_fields, path_key="file", minimal~)
+      is Some(edit) {
+      edits.push(edit)
     }
-    shown += 1
-    rendered.push(
-      @html.div(class="edit-entry", [
-        chip_row(edit.chips),
-        diff_block(edit.diff),
-      ]),
-    )
   }
-  if rendered.is_empty() {
-    return None
-  }
-  let body : Array[@html.Html] = [
-    chip_row(
+  guard !edits.is_empty() else { return None }
+  Some({
+    chips: if minimal {
+      []
+    } else {
       scalar_chips(
         fields,
         known=[
           "edits_file", "revert_when_errors_above", "revert_on_parse_errors",
         ],
         dramatized=["edits"],
-      ),
-    ),
-    ..rendered,
-  ]
-  // A batch longer than the card renders says so, rather than reading as the
-  // whole batch. `entries` counts what the model sent, including entries this
-  // card could not read, which is what the reader is being told about.
-  if entries.length() > shown {
+      )
+    },
+    edits,
+    omitted: entries.length() - edits.length(),
+  })
+}
+
+///|
+fn EditChanges::render(
+  self : EditChanges,
+  original_available~ : Bool,
+) -> @html.Html {
+  let body : Array[@html.Html] = [chip_row(self.chips)]
+  for edit in self.edits {
+    body.push(
+      @html.div(class="edit-entry", [
+        chip_row(edit.chips),
+        diff_block(edit.diff),
+      ]),
+    )
+  }
+  // Invalid entries and entries beyond the display cap are both accounted for.
+  // Minimal mode has no Original JSON tab to send the reader to.
+  if self.omitted > 0 {
     body.push(
       @html.div(
         class="edit-omitted",
-        "⋯ \{entries.length() - shown} more edits, in the original ⋯",
+        if original_available {
+          "⋯ \{self.omitted} more edits, in the original ⋯"
+        } else {
+          "⋯ \{self.omitted} edits not shown · enable transcript details to inspect the original ⋯"
+        },
       ),
     )
   }
-  Some(@html.div(class="edit-args", body))
+  @html.div(class="edit-args", body)
 }
 
 ///|
@@ -102,20 +137,36 @@ fn multi_edit_card(arguments : String) -> @html.Html? {
 /// two strings. `None` when it is not an edit this card can show: no string
 /// pair, or a pair with no difference (which the tools reject anyway, and
 /// which would render as an empty change).
-fn decode_edit(fields : Map[String, Json], path_key~ : String) -> EditDiff? {
+fn EditDiff::from_fields(
+  fields : Map[String, Json],
+  path_key~ : String,
+  minimal? : Bool = false,
+) -> EditDiff? {
   guard fields.get("old_string") is Some(String(old)) &&
     fields.get("new_string") is Some(String(new)) &&
     old != new else {
     return None
   }
-  let chips = scalar_chips(
-    fields,
-    // The order the tools' schemas list them in: what file, then where in it.
-    known=[
-      path_key, "start_line", "end_line", "replace_all_preview", "revert_on_parse_errors",
-    ],
-    dramatized=["old_string", "new_string"],
-  )
+  let chips = if minimal {
+    // Only anchors accompany the diff; other scalar arguments remain exclusive
+    // to detailed mode. Never disclose a whole payload through metadata chips.
+    let anchors : Array[String] = []
+    for key in [path_key, "start_line", "end_line"] {
+      if fields.get(key) is Some(value) && chip_text(key, value) is Some(text) {
+        anchors.push(text)
+      }
+    }
+    anchors
+  } else {
+    scalar_chips(
+      fields,
+      // The order the tools' schemas list them in: what file, then where in it.
+      known=[
+        path_key, "start_line", "end_line", "replace_all_preview", "revert_on_parse_errors",
+      ],
+      dramatized=["old_string", "new_string"],
+    )
+  }
   Some({ chips, diff: @edit_diff.generate(old, new), })
 }
 

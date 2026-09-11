@@ -37,7 +37,7 @@ test "an edit decodes to its anchors and the change it describes" {
   guard card_fields(arguments) is Some(fields) else {
     fail("expected an object payload")
   }
-  guard decode_edit(fields, path_key="path") is Some(edit) else {
+  guard EditDiff::from_fields(fields, path_key="path") is Some(edit) else {
     fail("expected a readable edit")
   }
   assert_eq(edit.chips, ["path: lib/parser.mbt", "start_line: 12"])
@@ -59,7 +59,7 @@ test "a payload with no readable change decodes to nothing" {
     guard card_fields(arguments) is Some(fields) else {
       fail("expected an object payload")
     }
-    assert_true(decode_edit(fields, path_key="path") is None)
+    assert_true(EditDiff::from_fields(fields, path_key="path") is None)
   }
   assert_true(edit_card("not json") is None)
   assert_true(multi_edit_card("{\"edits\":[]}") is None)
