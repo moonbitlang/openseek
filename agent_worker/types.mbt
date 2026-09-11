@@ -126,12 +126,18 @@ pub fn WorkerReport::parse_validated(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend WorkerReport with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend WorkerReport with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend WorkerReport with Eq::{equal, not_equal}
 
 ///|
