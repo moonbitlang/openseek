@@ -19,11 +19,6 @@ type ChildSession
 pub fn ChildSession::ChildSession(root~ : String, parent~ : String, first_free? : Int) -> Self
 pub fn ChildSession::injection(Self, exe~ : String, workspace_root~ : String, model? : String, api_url? : String, criteria? : () -> @host.AuditCriteria?) -> @host.SubrunInjection
 
-type SubrunBudget
-pub fn SubrunBudget::SubrunBudget(max_calls_per_turn? : Int) -> Self
-pub fn SubrunBudget::reserve(Self, Int) -> Int?
-pub fn SubrunBudget::reset_turn(Self) -> Unit
-
 type SubrunResult[T] derive(@debug.Debug)
 pub fn[T] SubrunResult::completion_tokens(Self[T]) -> Int
 pub fn[T] SubrunResult::cost_usd(Self[T]) -> Double?
