@@ -31,7 +31,7 @@ moon run --target native eval/file_edit/cmd/main -- \
 
 Use `--prompt-label` plus a prompt file or addendum file to compare prompt
 variants with the same cheap Flash runner. The report records the prompt label
-and log-derived metrics such as `moon_cmd` use, `moon run -e` mentions,
+and log-derived metrics such as `moon run -e` mentions,
 `moon run -c` mentions, `moon check`, `moon test`, `moon info`, `moon fmt`,
 tool errors, and step counts.
 

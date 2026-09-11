@@ -1,5 +1,11 @@
 # The shell execution model
 
+> Status (2026-09-11): the execution model is kept (`agent_tool/shell_exec`,
+> `bgjobs`, `job_output`, `job_stop`, `job_wait`). The model-facing `shell`,
+> `shell_output`, and `shell_stop` tools this document describes as shipped
+> were removed in 43b5ea224; commands now run as `mbtx` snippets over the same
+> execution objects.
+
 A single, layered model for running shell commands — foreground and background —
 in the OpenSeek agent. This document is the architecture north star; the code is
 organized to match it, foundation-first.
