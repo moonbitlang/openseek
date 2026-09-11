@@ -1,5 +1,5 @@
 ///|
-/// The dock strip sits above the file breadcrumb and its permanent body hosts.
+/// One region header groups the dock viewer and independent navigator.
 /// Child order is structural because Rabbita diffs by index; the viewer and
 /// browser placeholders must not be re-keyed when the active tab changes.
 fn panel_view(
@@ -46,15 +46,6 @@ fn panel_view(
           title: "Subagents this conversation delegated to",
           missing: false,
         }
-      FilePicker => {
-        let (label, title) = match input.file_panel.explorer_mode {
-          ExplorerChanges =>
-            ("Review Changes", "Review changed files and diffs")
-          ExplorerSearch => ("Search", "Search across files")
-          ExplorerFiles => ("Open File", "Open a workspace file")
-        }
-        { tab, label, title, missing: false, }
-      }
     }
   })
   let launcher : @dock.LauncherActions = {
@@ -74,11 +65,6 @@ fn panel_view(
   let mode = match input.dock.active {
     None => "mode-launcher"
     Some(Browser(_)) => "mode-browser"
-    Some(FilePicker) if input.file_panel.explorer_mode is ExplorerChanges =>
-      "mode-picker mode-review"
-    Some(FilePicker) if input.file_panel.explorer_mode is ExplorerSearch =>
-      "mode-picker mode-search-picker"
-    Some(FilePicker) => "mode-picker"
     Some(File(_)) => "mode-file"
     Some(GitDiff(_)) => "mode-history"
     Some(Workflows) => "mode-workflows"
@@ -103,18 +89,20 @@ fn panel_view(
     attrs=@html.Attrs::build().tabindex(-1),
     [
       @fileeditor.resize_handle_view(),
+      @dock.panel_header(
+        expanded=input.expanded,
+        toggle_expanded=actions.toggle_expanded,
+        toggle_panel=actions.toggle_panel,
+      ),
       @dock.tabs_bar(
         actions.dock,
         input.dock,
         chips,
         launcher,
         menu_open=input.menu_open,
-        expanded=input.expanded,
         toggle_menu=actions.toggle_menu,
         close_all_tabs=actions.close_all_tabs,
         close_all_tabs_disabled=input.dock.tabs.is_empty(),
-        toggle_expanded=actions.toggle_expanded,
-        toggle_panel=actions.toggle_panel,
       ),
       @fileeditor.breadcrumb_view(
         actions.file_editor,

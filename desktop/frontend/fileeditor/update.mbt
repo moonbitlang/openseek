@@ -71,9 +71,8 @@ fn Doc::diff_content(self : Doc) -> (String, String)? {
 }
 
 ///|
-/// Diff inputs only enter the comparison while this tab's cached copy of the
-/// panel preference is full-diff mode. Keeping the copy on its review state also
-/// preserves it through generation-fenced source/baseline refreshes.
+/// This document owns its Content/Diff selection independently of other tabs.
+/// Review state retains it through generation-fenced source/baseline refreshes.
 fn Doc::visible_diff(self : Doc) -> (String, String)? {
   guard self.review is Some({ view_mode: ReviewDiff, .. }) else { return None }
   self.diff_content()
@@ -383,7 +382,7 @@ fn show_activated_tab(
 /// breadcrumb row, which needs a viewer remeasure). A plain re-open of an
 /// already-loaded document shows what the table has, exactly like a
 /// tab-strip click; everything else reads the file — so a jump's
-/// `range`/`annotation` ride the reply to be revealed on arrival. A positioned
+/// `range`/`annotation` ride the reply to be revealed on arrival.
 /// Every explicit navigation is echoed through `file_link_generation` so only
 /// the newest one can apply its position to the Viewer. A transcript link
 /// supplies the generation captured before its host lookup; direct file,
@@ -402,14 +401,20 @@ pub fn open_document(
 ) -> (@cmd.Cmd, State) {
   guard ctx.placement_ready() else { return (@cmd.none, state) }
   let state = { ..state.invalidate_review_hunk_surface(), highlighted: None, }
-  // Opening the path from Files, Quick Open, navigation, or a mention leaves
-  // review mode. If the same Viewer model stays attached, the show below
-  // clears its resource-keyed quick-diff baseline without replacing content.
+  // Files and Search select Content on this document. Retain a known
+  // comparison so its Diff control remains an explicit return path.
+  // TODO(diff-search): Preserve a file's selected Diff view when opening a
+  // workspace search result. First route match highlights and range reveal to
+  // the comparison's modified side, including Token/Tree fragment coordinates
+  // and hidden context. Until then, Content is the surface that can show the
+  // requested match; changing this flag alone would navigate a hidden viewer.
   let state = match state.docs.get(path) {
-    Some({ review: Some(_), .. }) => {
+    Some({ review: Some(review), .. } as doc) => {
       let docs = state.docs.copy()
-      let doc = docs[path]
-      docs[path] = { ..doc, review: None, }
+      docs[path] = {
+        ..doc,
+        review: Some({ ..review, view_mode: ReviewSource, }),
+      }
       { ..state, docs, }
     }
     _ => state
@@ -434,7 +439,9 @@ pub fn open_document(
   } else {
     state
   }
-  let clear_review = if ctx.active_file is Some(active) && active == path {
+  let clear_review = if ctx.active_file is Some(active) &&
+    active == path &&
+    !(state.docs.get(path) is Some({ review: Some(_), .. })) {
     // Always clear the displayed resource, even when this path has no cached
     // `Doc`: a reviewed tab can be closed while another dock kind is active,
     // leaving its hidden Viewer model alive until the next file opens. Do not
@@ -459,24 +466,35 @@ pub fn open_document(
     | TabReadFailed(_)
     | TabUnavailable(_)
     | TabDeleted)) {
-    let show = show_tab(
+    let (show, doc, review_generation) = show_activated_tab(
       dispatch,
       ctx,
       state.editor_search_highlights(path),
       path,
       doc,
+      state.review_generation,
     )
+    let docs = state.docs.copy()
+    docs[path] = doc
     // Gaining the first active tab reveals the breadcrumb row, and the
     // narrow drill-down closing the tree reveals a viewer that was last
     // measured while hidden — both need a remeasure alongside the show.
-    let cmd = if !had_active || (state.tree_open && ctx.narrow) {
+    let cmd = if !had_active ||
+      (state.tree_open && ctx.narrow) ||
+      doc.review is Some(_) {
       @cmd.batch([clear_review, show, request_viewer_remeasure()])
     } else {
       @cmd.batch([clear_review, show])
     }
     return (
       cmd,
-      { ..state, error: None, tree_open: state.tree_open && !ctx.narrow, },
+      {
+        ..state,
+        docs,
+        review_generation,
+        error: None,
+        tree_open: state.tree_open && !ctx.narrow,
+      },
     )
   }
   let docs = state.docs.copy()
@@ -497,6 +515,19 @@ pub fn open_document(
   let read_generation = Some(
     file_link_generation.unwrap_or(state.file_link_generation),
   )
+  // A positioned Content open keeps its review, so it needs a paired-read
+  // token too. A late read from the previous navigation must not move it back.
+  let (review_generation, working_generation) = match docs.get(path) {
+    Some({ review: Some(review), .. } as doc) => {
+      let generation = state.review_generation + 1
+      docs[path] = {
+        ..doc,
+        review: Some({ ..review, working_generation: generation, }),
+      }
+      (generation, Some(generation))
+    }
+    _ => (state.review_generation, None)
+  }
   let read = read_file(
     dispatch,
     ctx.owner,
@@ -504,6 +535,7 @@ pub fn open_document(
     path,
     name,
     file_link_generation?=read_generation,
+    review_generation?=working_generation,
     range~,
     annotation?,
     root=ctx.root(),
@@ -511,14 +543,22 @@ pub fn open_document(
   // Gaining the first active tab reveals the breadcrumb row, and the narrow
   // drill-down closing the tree reveals a hidden-measured viewer — either
   // way the viewer must remeasure before the reply's document lands.
-  let cmd = if !had_active || (state.tree_open && ctx.narrow) {
+  let cmd = if !had_active ||
+    (state.tree_open && ctx.narrow) ||
+    working_generation is Some(_) {
     @cmd.batch([clear_review, read, request_viewer_remeasure()])
   } else {
     @cmd.batch([clear_review, read])
   }
   (
     cmd,
-    { ..state, docs, error: None, tree_open: state.tree_open && !ctx.narrow, },
+    {
+      ..state,
+      docs,
+      review_generation,
+      error: None,
+      tree_open: state.tree_open && !ctx.narrow,
+    },
   )
 }
 
@@ -557,8 +597,9 @@ pub fn open_changed_document(
   // models, and briefly paint an empty comparison. Exact row identity matters:
   // Git can legitimately expose two different reviews for the same path.
   if state.docs.get(path) is Some(doc) &&
-    doc.review is Some({ selected, .. }) &&
-    selected == change {
+    doc.review is Some(review) &&
+    review.selected == change {
+    let doc = { ..doc, review: Some({ ..review, view_mode: ReviewDiff, }), }
     let (show, next_doc, review_generation) = show_activated_tab(
       dispatch,
       ctx,
@@ -614,7 +655,7 @@ pub fn open_changed_document(
       generation,
       working_generation: generation,
       baseline,
-      view_mode: state.review_view_mode,
+      view_mode: ReviewDiff,
       selected: change,
     }),
     // A cached document can already be behind the filesystem when the row is
@@ -1100,11 +1141,10 @@ pub fn activate(
 
 ///|
 /// Drop `path`'s document after its dock tab closed. `next`, when the closed
-/// tab owned the screen, is the file the dock promoted (`None` when the
-/// strip emptied — the viewer falls back to the placeholder, and the tree is
-/// forced open so the panel is never a dead pane). The closed document's
-/// parked scroll is forgotten after the neighbor's show re-parks the
-/// outgoing document.
+/// tab owned the screen, is the file the dock promoted. `None` can also mean
+/// a non-file successor, so only the root dock handler decides navigator
+/// visibility. Forget the closed document's scroll after the neighbor's show
+/// re-parks the outgoing document.
 pub fn close_document(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -1126,15 +1166,6 @@ pub fn close_document(
   // promoting its neighbor must not address the missing checkout. Recovery's
   // sync pass restores whichever surviving tab the dock made active.
   if !ctx.placement_ready() {
-    let state = {
-      ..state,
-      docs,
-      tree_open: if was_active && next is None {
-        true
-      } else {
-        state.tree_open
-      },
-    }
     let cmd = if was_active && next is None {
       @cmd.batch([
         clear_document(),
@@ -1144,7 +1175,7 @@ pub fn close_document(
     } else {
       forget_view_state(path)
     }
-    return (cmd, state)
+    return (cmd, { ..state, docs, })
   }
   guard was_active else { return (forget_view_state(path), { ..state, docs, }) }
   match next {
@@ -1166,9 +1197,8 @@ pub fn close_document(
       } else {
         (forget_view_state(path), { ..state, docs, })
       }
-    // The last tab: fall back to the placeholder and force the tree open so
-    // the panel is never a dead pane. Losing the active tab also hides the
-    // breadcrumb row, so the viewer must remeasure.
+    // No file inherits the viewer. Clear its old content and remeasure after
+    // the breadcrumb hides, without changing the promoted dock destination.
     None =>
       (
         @cmd.batch([
@@ -1176,7 +1206,7 @@ pub fn close_document(
           forget_view_state(path),
           request_viewer_remeasure(),
         ]),
-        { ..state, docs, tree_open: true, },
+        { ..state, docs, },
       )
   }
 }
@@ -2014,7 +2044,6 @@ pub fn sync(
         tree_open: state.tree_open,
         explorer_mode: state.explorer_mode,
         search: state.search.reset_checkout(),
-        review_view_mode: state.review_view_mode,
         review_diff_layout: state.review_diff_layout,
         review_diff_mode: state.review_diff_mode,
         review_diff_ignore_comments: state.review_diff_ignore_comments,
@@ -2293,9 +2322,8 @@ pub fn sync(
 }
 
 ///|
-/// Select one review surface while keeping every parked changed-file tab
-/// aligned with the panel preference. Algorithm buttons use this same
-/// transition when they open a diff directly from File view.
+/// Content/Diff belongs to this file. A toolbar action must not rewrite the
+/// views of parked tabs, and retaining the comparison keeps both paths open.
 fn select_review_view_mode(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -2304,23 +2332,13 @@ fn select_review_view_mode(
 ) -> (@cmd.Cmd, State) {
   guard ctx.active_file is Some(path) &&
     state.docs.get(path) is Some(doc) &&
-    doc.review is Some(_) &&
+    doc.review is Some(review) &&
     doc.diff_content() is Some(_) else {
     return (@cmd.none, state)
   }
   let docs = state.docs.copy()
-  // Reopening an older tab must not resurrect a stale per-document surface.
-  for review_path, review_doc in state.docs {
-    match review_doc.review {
-      Some(parked) =>
-        docs[review_path] = {
-          ..review_doc,
-          review: Some({ ..parked, view_mode, }),
-        }
-      None => ()
-    }
-  }
-  let next_doc = docs.get(path).unwrap()
+  let next_doc = { ..doc, review: Some({ ..review, view_mode, }), }
+  docs[path] = next_doc
   let show = show_pending_review(
     dispatch,
     ctx,
@@ -2335,10 +2353,7 @@ fn select_review_view_mode(
     ReviewSource => @cmd.batch([show, request_viewer_remeasure()])
     ReviewDiff => show
   }
-  (
-    command,
-    { ..state, docs, review_view_mode: view_mode, }.invalidate_review_hunk_surface(),
-  )
+  (command, { ..state, docs, }.invalidate_review_hunk_surface())
 }
 
 ///|
@@ -2457,7 +2472,11 @@ pub fn update(
         (@cmd.none, state)
       }
     ToggleReviewDiff => {
-      let view_mode = match state.review_view_mode {
+      guard ctx.active_file is Some(path) &&
+        state.docs.get(path) is Some({ review: Some(review), .. }) else {
+        return (@cmd.none, state)
+      }
+      let view_mode = match review.view_mode {
         ReviewSource => ReviewDiff
         ReviewDiff => ReviewSource
       }
@@ -2684,7 +2703,14 @@ pub fn update(
         search_highlights,
       )
       match mode {
-        ExplorerFiles => (search_highlight_cmd, selected)
+        ExplorerFiles =>
+          (
+            @cmd.batch([
+              search_highlight_cmd,
+              focus_explorer_tab_after_render(ExplorerFilesTabId),
+            ]),
+            selected,
+          )
         ExplorerSearch =>
           (
             @cmd.batch([
@@ -2715,7 +2741,12 @@ pub fn update(
             (@cmd.none, selected)
           }
           (
-            @cmd.batch([search_highlight_cmd, changes_cmd, history_cmd]),
+            @cmd.batch([
+              search_highlight_cmd,
+              changes_cmd,
+              history_cmd,
+              focus_explorer_tab_after_render(ExplorerChangesTabId),
+            ]),
             selected,
           )
         }
@@ -3977,7 +4008,7 @@ pub fn update(
       }
       if state.owner != Some(owner) || state.request_epoch != epoch {
         (@cmd.none, state)
-      } else if file_link_generation is Some(_) {
+      } else if file_link_generation is Some(_) && review_generation is None {
         // A stale positioned failure may finish only the loading document. A
         // current failure is authoritative even if an older success filled
         // the cache first, so it replaces that snapshot with a retryable tab.
@@ -4011,12 +4042,13 @@ pub fn update(
           _ => (@cmd.none, { ..state, error: Some(message), })
         }
       } else if review_generation is Some(generation) {
-        // Review reads are generation-fenced just like successful replies.
-        // Preserve a current working-side failure without guessing that every
-        // host error means deletion; a superseded read remains invisible.
+        // Positioned Content reads retain review state and carry both tokens.
+        // Apply the same fences as FileLoaded before recording a tab failure;
+        // Search does not display generic inventory errors.
         guard state.docs.get(path) is Some(doc) &&
           doc.review is Some({ working_generation: current, .. }) &&
-          current == generation else {
+          current == generation &&
+          (!stale_file_link || doc.state is TabLoading) else {
           return (@cmd.none, state)
         }
         let docs = state.docs.copy()
@@ -4474,7 +4506,7 @@ test "open_document seeds a loading entry and re-open keeps cached content" {
 }
 
 ///|
-test "changed-file review fences paired replies and ordinary opens leave review" {
+test "changed-file review fences paired replies and Content opens retain comparison" {
   let emit = test_emit()
   let path = @pathx.Relative("a.mbt")
   let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
@@ -4633,9 +4665,8 @@ test "changed-file review fences paired replies and ordinary opens leave review"
       selected: different_row,
     }),
   }
-  // A symbol/annotation jump starts a fresh ordinary read instead of taking
-  // the cached fast path. It still leaves review synchronously; the paired
-  // command clears the displayed baseline before that read can fail.
+  // A ranged Content open keeps the comparison, but fences out the earlier
+  // working-side read so it cannot overwrite the newly requested source.
   let (_, ranged_ordinary) = open_document(
     emit,
     { ..reviewed, docs, },
@@ -4647,7 +4678,21 @@ test "changed-file review fences paired replies and ordinary opens leave review"
   )
   assert_true(
     ranged_ordinary.docs.get(path)
-    is Some({ state: TabLoaded(..), review: None, .. }),
+    is Some(
+      {
+        state: TabLoaded(..),
+        review: Some(
+          {
+            generation: 2,
+            working_generation: 3,
+            view_mode: ReviewSource,
+            baseline: ReviewContent("old two"),
+            ..
+          }
+        ),
+        ..
+      }
+    ),
   )
   let (_, ordinary) = open_document(
     emit,
@@ -4658,7 +4703,22 @@ test "changed-file review fences paired replies and ordinary opens leave review"
     range=None,
     had_active=true,
   )
-  assert_true(ordinary.docs.get(path) is Some({ review: None, .. }))
+  assert_true(
+    ordinary.docs.get(path)
+    is Some(
+      {
+        review: Some(
+          {
+            generation: 2,
+            view_mode: ReviewSource,
+            baseline: ReviewContent("old two"),
+            ..
+          }
+        ),
+        ..
+      }
+    ),
+  )
   let (_, review_after_ordinary) = update(
     emit,
     FileLoaded(
@@ -4672,10 +4732,10 @@ test "changed-file review fences paired replies and ordinary opens leave review"
       range=None,
       annotation=None,
     ),
-    ordinary,
+    ranged_ordinary,
     ctx,
   )
-  assert_true(review_after_ordinary == ordinary)
+  assert_true(review_after_ordinary == ranged_ordinary)
 }
 
 ///|
@@ -4774,8 +4834,8 @@ test "changed-file review preserves a stale cached working document until reload
     is Some({ generation: 1, baseline: ReviewContent("HEAD source"), .. }),
   )
   assert_false(working_side_ready_for_review(baseline_doc))
-  // Canceling the tagged review read through an ordinary open retains the
-  // staleness marker, so `show_tab` schedules its own untagged refresh.
+  // Opening Content retains both the baseline and the staleness marker. Its
+  // fresh tagged read must settle before the cached working side can be used.
   let (_, ordinary) = open_document(
     emit,
     baseline_first,
@@ -4787,7 +4847,22 @@ test "changed-file review preserves a stale cached working document until reload
   )
   assert_true(
     ordinary.docs.get(path)
-    is Some({ state: TabLoaded(..), review: None, stale: true, .. }),
+    is Some(
+      {
+        state: TabLoaded(..),
+        review: Some(
+          {
+            generation: 1,
+            working_generation: 2,
+            view_mode: ReviewSource,
+            baseline: ReviewContent("HEAD source"),
+            ..
+          }
+        ),
+        stale: true,
+        ..
+      }
+    ),
   )
 }
 
@@ -5089,7 +5164,7 @@ test "activate without a document entry is a no-op" {
 }
 
 ///|
-test "close_document drops the entry and forces the tree open on the last one" {
+test "close_document drops the entry without changing navigator visibility" {
   let emit = test_emit()
   let docs : Map[@pathx.Relative, Doc] = Map([])
   docs[Relative("a.mbt")] = loaded_doc("a.mbt")
@@ -5108,18 +5183,20 @@ test "close_document drops the entry and forces the tree open on the last one" {
   assert_false(one.docs.contains(Relative("a.mbt")))
   assert_true(one.docs.contains(Relative("b.mbt")))
   assert_false(one.tree_open)
-  // Closing the last document: the viewer falls back to the placeholder and
-  // the tree is forced open so the panel is never a dead pane.
-  let (_, last) = close_document(
-    emit,
-    one,
-    test_ctx(),
-    Relative("b.mbt"),
-    next=None,
-    was_active=true,
-  )
-  assert_true(last.docs.is_empty())
-  assert_true(last.tree_open)
+  // No next file does not imply an empty dock: Browser or Workflows may be
+  // active. This remains true while checkout access is unavailable.
+  for placement in [test_ctx().placement, None] {
+    let (_, last) = close_document(
+      emit,
+      one,
+      { ..test_ctx(), placement, },
+      Relative("b.mbt"),
+      next=None,
+      was_active=true,
+    )
+    assert_true(last.docs.is_empty())
+    assert_false(last.tree_open)
+  }
 }
 
 ///|

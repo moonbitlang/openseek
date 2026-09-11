@@ -135,70 +135,17 @@ test "open_browser appends and re-activates without duplicating" {
 }
 
 ///|
-test "open_picker keeps at most one picker tab" {
-  let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_picker
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
-    |> @dock.open_picker
-  assert_true(
-    state.tabs ==
-    [file_tab("a.mbt"), @dock.DockTab::FilePicker, file_tab("b.mbt")],
-  )
-  assert_true(state.active == Some(@dock.DockTab::FilePicker))
-}
-
-///|
-test "resolve_pick replaces the picker in place with a fresh file" {
-  let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_picker
-  let state = @dock.resolve_pick(state, @pathx.Relative("b.mbt"))
-  assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
-  assert_true(state.active == Some(file_tab("b.mbt")))
-}
-
-///|
-test "resolve_pick activates an already-open file and closes the picker" {
-  let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
-    |> @dock.open_picker
-  let state = @dock.resolve_pick(state, @pathx.Relative("a.mbt"))
-  assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
-  assert_true(state.active == Some(file_tab("a.mbt")))
-}
-
-///|
-test "resolve_pick without a picker is a plain open" {
-  let state = @dock.State::empty() |> @dock.open_file(@pathx.Relative("a.mbt"))
-  let state = @dock.resolve_pick(state, @pathx.Relative("b.mbt"))
-  assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
-  assert_true(state.active == Some(file_tab("b.mbt")))
-}
-
-///|
-test "closing the picker activates a neighbor like any tab" {
-  let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_picker
-  let state = @dock.update(TabClosed(@dock.DockTab::FilePicker), state)
-  assert_true(state.tabs == [file_tab("a.mbt")])
-  assert_true(state.active == Some(file_tab("a.mbt")))
-}
-
-///|
-test "park and restore keeps browser and picker tabs" {
+test "park and restore keeps browser and workflow tabs" {
   let state = @dock.sync(@dock.State::empty(), owner("s1"))
     |> @dock.open_browser(3)
-    |> @dock.open_picker
+    |> @dock.open_workflows
   let state = @dock.sync(state, owner("s2"))
   assert_true(state.tabs.is_empty())
   let state = @dock.sync(state, owner("s1"))
   assert_true(
-    state.tabs == [@dock.DockTab::Browser(id=3), @dock.DockTab::FilePicker],
+    state.tabs == [@dock.DockTab::Browser(id=3), @dock.DockTab::Workflows],
   )
-  assert_true(state.active == Some(@dock.DockTab::FilePicker))
+  assert_true(state.active == Some(@dock.DockTab::Workflows))
 }
 
 ///|

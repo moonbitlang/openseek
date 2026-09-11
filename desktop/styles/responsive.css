@@ -109,21 +109,26 @@
     transform: translateX(0);
     transition-delay: 0s;
   }
-  .content.panel-open .editor-tabsbar {
+  .content.panel-open .workspace-panel-header {
     padding-inline-start: var(--sidebar-toggle-reserved-width);
   }
-  /* Drill-down: exactly one of tree/viewer shows. Opening a file
-     closes the tree (the fileeditor's narrow Ctx flag); the
-     breadcrumb's toggle brings the tree back. */
-  .editor.tree-open .viewer-stack {
-    display: none;
+  /* Navigator drill-down uses the content area on narrow windows. Once a
+     resource opens, its tab strip returns and the navigator keeps a reopen
+     control on its own edge. Browser/launcher/workflow tabs follow this too. */
+  .content > .editor {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-rows: var(--topbar-height) 44px auto minmax(0, 1fr);
   }
-  .editor .file-tree-pane,
-  .editor.tree-right .file-tree-pane {
-    flex: 1 1 auto;
-    border-top: 0;
-    border-left: 0;
+  .editor .file-tree-pane {
+    grid-column: 2;
+    grid-row: 2 / 5;
+    border: 0;
   }
+  .editor .explorer-header { min-height: 44px; padding: 0; }
+  .editor:not(.tree-open) .explorer-header { padding: 0; }
+  .editor.tree-open .file-tree-pane { grid-column: 1 / -1; }
+  .editor.tree-open :is(.editor-tabsbar, .viewer-breadcrumb, .viewer-stack,
+    .browser-chrome, .workflow-panel, .dock-launcher) { display: none; }
   .editor-resize-handle,
   .sidebar-resize-handle,
   .tree-resize-handle {

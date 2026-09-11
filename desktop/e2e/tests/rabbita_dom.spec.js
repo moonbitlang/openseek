@@ -81,7 +81,8 @@ test('Review loads changed files and preserves its interactive diff workflow', a
     request.params?.path === 'src/main.mbt' &&
     request.params?.revision === app.gitBaseline))
     .toBeTruthy();
-  const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
+  const fileView = page.getByRole('group', { name: 'File view' });
+  const reviewToolbar = page.getByRole('toolbar', { name: 'Comparison algorithm' });
   await expect(reviewToolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -89,29 +90,29 @@ test('Review loads changed files and preserves its interactive diff workflow', a
 
   // Line diff keeps semantic-only filters inert. Token and Tree make those
   // user controls available.
-  const ignoreComments = page.getByRole('button', { name: 'Ignore comments' });
-  const ignoreTests = page.getByRole('button', { name: 'Ignore tests' });
+  const ignoreComments = page.getByRole('checkbox', { name: 'Ignore comments' });
+  const ignoreTests = page.getByRole('checkbox', { name: 'Ignore tests' });
   await expect(ignoreComments).toBeDisabled();
   await expect(ignoreTests).toBeDisabled();
 
-  await reviewToolbar.getByRole('button', { name: 'File view' }).click();
-  await expect(reviewToolbar.getByRole('button', { name: 'File view' })).toHaveAttribute(
+  await fileView.getByRole('button', { name: 'Content view' }).click();
+  await expect(fileView.getByRole('button', { name: 'Content view' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await reviewToolbar.getByRole('button', { name: 'Line diff' }).click();
+  await fileView.getByRole('button', { name: 'Diff view' }).click();
 
   await reviewToolbar.getByRole('button', { name: 'Token diff' }).click();
   await expect(reviewToolbar.getByRole('button', { name: 'Token diff' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'true');
-  await expect(ignoreTests).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toBeChecked();
+  await expect(ignoreTests).toBeChecked();
   await ignoreComments.click();
   await ignoreTests.click();
-  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'false');
-  await expect(ignoreTests).toHaveAttribute('aria-pressed', 'false');
+  await expect(ignoreComments).not.toBeChecked();
+  await expect(ignoreTests).not.toBeChecked();
 
   await reviewToolbar.getByRole('button', { name: 'Tree diff' }).click();
   await expect(reviewToolbar.getByRole('button', { name: 'Tree diff' })).toHaveAttribute(
@@ -306,7 +307,7 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   // Semantic review is a MultiDiff surface. Its counter is global across the
   // section-local editors, while file completion still projects into each
   // section's current hunk.
-  const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
+  const reviewToolbar = page.getByRole('toolbar', { name: 'Comparison algorithm' });
   await reviewToolbar.getByRole('button', { name: 'Token diff' }).click();
   await expect(reviewToolbar.getByRole('button', { name: 'Token diff' }))
     .toHaveAttribute('aria-pressed', 'true');
@@ -368,23 +369,23 @@ test('Review routes Markdown source and keeps non-MoonBit comparisons on Line di
   await app.openReview();
 
   await page.getByRole('button', { name: /View diff: docs\/Guide\.MD/ }).click();
-  const toolbar = page.getByRole('toolbar', { name: 'Review mode' });
-  await expect(toolbar.getByRole('button')).toHaveText(['File', 'Line']);
-  await expect(toolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+  const toolbar = page.getByRole('group', { name: 'File view' });
+  await expect(toolbar.getByRole('button')).toHaveText(['Content', 'Diff']);
+  await expect(toolbar.getByRole('button', { name: 'Diff view' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(page.getByRole('button', { name: 'Ignore comments' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Ignore tests' })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Ignore comments' })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Ignore tests' })).toHaveCount(0);
 
-  await toolbar.getByRole('button', { name: 'File view' }).click();
+  await toolbar.getByRole('button', { name: 'Content view' }).click();
   await expect(
     page.getByLabel('Readonly Markdown viewer')
       .getByText('Working tree documentation.', { exact: true }),
   ).toBeVisible();
 
-  await toolbar.getByRole('button', { name: 'Line diff' }).click();
-  await expect(toolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+  await toolbar.getByRole('button', { name: 'Diff view' }).click();
+  await expect(toolbar.getByRole('button', { name: 'Diff view' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -461,12 +462,12 @@ test('ordinary MBTI files render as UML and reviews keep source surfaces', async
   await page.getByRole('button', { name: /View diff: api\/pkg\.generated\.mbti/ }).click();
   await expect(page.getByRole('group', { name: 'MBTI view' })).toHaveCount(0);
   await expect(diagram).toBeHidden();
-  const review = page.getByRole('toolbar', { name: 'Review mode' });
-  await expect(review.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+  const review = page.getByRole('group', { name: 'File view' });
+  await expect(review.getByRole('button', { name: 'Diff view' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await review.getByRole('button', { name: 'File view' }).click();
+  await review.getByRole('button', { name: 'Content view' }).click();
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText('Point');
   await expect(diagram).toBeHidden();
@@ -607,8 +608,8 @@ test('Git history expands commits and opens an immutable historical diff', async
     'true',
   );
   await expect(algorithms.getByRole('button')).toHaveText(['Line', 'Token', 'Tree']);
-  await expect(page.getByRole('button', { name: 'Ignore comments' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Ignore tests' })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: 'Ignore comments' })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: 'Ignore tests' })).toBeDisabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -711,7 +712,7 @@ test('tab strip closes every tab type into the New Tab launcher', async ({ page 
   await fileTabs.filter({ hasText: 'main.mbt' }).click();
   await expect(fileTabs.filter({ hasText: 'main.mbt' })).toHaveClass(/active/);
   await app.openReview();
-  await expect(fileTabs).toHaveCount(3);
+  await expect(fileTabs).toHaveCount(2);
   const closeAll = page.getByRole('button', { name: 'Close all tabs' });
   await expect(closeAll).toBeEnabled();
   await closeAll.click();
@@ -2207,7 +2208,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     await app.openSession();
     await app.openReview();
     await page.locator('#review-changes-body').getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
-    const toolbar = page.getByRole('toolbar', { name: 'Review mode' });
+    const toolbar = page.getByRole('toolbar', { name: 'Comparison algorithm' });
     await toolbar.getByRole('button', { name: `${mode} diff` }).click();
     const position = page.locator('.review-hunk-position');
     await expect(position).toHaveText('1 of 2');
@@ -2246,7 +2247,7 @@ for (const mode of ['Token', 'Tree']) {
     await app.openSession();
     await app.openReview();
     await page.locator('#review-changes-body').getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
-    await page.getByRole('toolbar', { name: 'Review mode' }).getByRole('button', { name: `${mode} diff` }).click();
+    await page.getByRole('toolbar', { name: 'Comparison algorithm' }).getByRole('button', { name: `${mode} diff` }).click();
     const sections = page.locator('.semantic-diff-entry');
     const headers = sections.locator('.semantic-entry-header-content');
     await expect(sections).toHaveCount(2);

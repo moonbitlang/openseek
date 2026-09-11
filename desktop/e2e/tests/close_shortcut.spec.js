@@ -85,7 +85,7 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   await toggle.click();
   await expect(toggle).toHaveAccessibleName('Show sidebar');
   await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
-  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
+  await page.getByRole('button', { name: 'Collapse right panel', exact: true }).click();
   await toggle.click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
@@ -112,14 +112,14 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Launcher tabs receive focus and Close never closes the window', async ({ page }) => {
+test('Navigator launchers receive focus without creating tabs', async ({ page }) => {
   const app = await installDesktop(page);
   app.gitChanges = [];
   const tabs = page.locator('.editor-tab');
   for (const name of ['Review', 'Files', 'Search']) {
     await page.getByRole('button', { name: 'Show panel', exact: true }).click();
     await page.getByRole('button', { name: new RegExp(`^${name} `) }).click();
-    await expect(tabs).toHaveCount(1);
+    await expect(tabs).toHaveCount(0);
     if (name === 'Review') {
       await expect(page.getByText('No changed files.', { exact: true })).toBeVisible();
     }
@@ -134,11 +134,59 @@ test('Launcher tabs receive focus and Close never closes the window', async ({ p
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const width of [1440, 390]) {
+  for (const destination of ['File', 'Browser', 'Workflows']) {
+    test(`closing the focused navigator preserves ${destination} at ${width}px`, async ({ page }) => {
+      const app = await installDesktop(page);
+      await page.setViewportSize({ width, height: 900 });
+      await app.openReview();
+      await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+      if (destination !== 'File') {
+        await page.getByTitle('New tab', { exact: true }).click();
+        await page.getByRole('button', { name: destination === 'Browser' ? /^Browse / : /^Workflows / }).click();
+      }
+      const tabs = page.locator('.editor-tab');
+      const initialTabs = await tabs.allTextContents();
+      const active = page.locator('.editor-tab.active');
+      const initialActive = await active.textContent();
+      const navigator = page.getByRole('tablist', { name: 'Explorer views' });
+      for (const inventory of ['Files', 'Changes', 'Search']) {
+        if (!(await navigator.isVisible())) {
+          await page.getByRole('button', { name: 'Show workspace navigator' }).click();
+        }
+        const tab = navigator.getByRole('tab', { name: new RegExp(`^${inventory}`) });
+        await tab.click();
+        // Exercise both the navigator header and controls inside its body.
+        if (inventory === 'Changes') {
+          await page.getByRole('button', { name: /View diff: src\/lib\.mbt/ }).focus();
+        } else if (inventory === 'Search') {
+          await page.locator('#workspace-search-input').fill('answer');
+        } else {
+          await tab.focus();
+        }
+        await closeFocused(page);
+        await expect(tabs).toHaveText(initialTabs);
+        await expect(active).toHaveText(initialActive);
+        await expect(navigator).toBeHidden();
+        await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
+        await expect(page.locator(destination === 'File'
+          ? '#diff-editor-host' : destination === 'Browser' ? '.browser-chrome' : '.workflow-panel')).toBeVisible();
+      }
+      // Once focus returns to the resource, the next Close owns that tab.
+      await closeFocused(page);
+      await expect(tabs).toHaveCount(initialTabs.length - 1);
+      expect(app.requests.filter(request => request.method === 'app.close_window')).toEqual([]);
+      expect(app.pageErrors).toEqual([]);
+    });
+  }
+}
+
 test('Selecting a dock tab moves focus out of the composer', async ({ page }) => {
   const app = await installDesktop(page);
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.getByRole('button', { name: /^Review / }).click();
-  const review = page.locator('.editor-tab', { hasText: 'Review Changes' });
+  await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+  const review = page.locator('.editor-tab', { hasText: 'main.mbt' });
   await page.getByTitle('New tab', { exact: true }).click();
   await page.getByRole('button', { name: /^Browse / }).click();
   await page.locator('#task').click();
@@ -220,3 +268,25 @@ test('Close respects dialogs and closes successive dock tabs without closing the
     .toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const destination of ['Browser', 'Workflows']) {
+  test(`closing a file keeps its promoted ${destination} visible on narrow layouts`, async ({ page }) => {
+    const app = await installDesktop(page);
+    await page.setViewportSize({ width: 390, height: 850 });
+    await app.openReview();
+    await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.getByTitle('New tab', { exact: true }).click();
+    await page.getByRole('button', { name: destination === 'Browser' ? /^Browse/ : /^Workflows / }).click();
+    const tabs = page.locator('.editor-tab');
+    const file = tabs.filter({ hasText: 'main.mbt' });
+    await file.click();
+    await expect(file).toHaveClass(/active/);
+    await file.locator('.tab-close').click();
+    await expect(tabs).toHaveCount(1);
+    await expect(tabs).toHaveClass(/active/);
+    await expect(page.locator(destination === 'Browser' ? '.browser-chrome' : '.workflow-panel')).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'Explorer views' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Show workspace navigator' })).toBeVisible();
+    expect(app.pageErrors).toEqual([]);
+  });
+}

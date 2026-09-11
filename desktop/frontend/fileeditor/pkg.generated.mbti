@@ -414,7 +414,6 @@ pub(all) struct State {
   tree_open : Bool
   explorer_mode : ExplorerMode
   search : @grep_search.State
-  review_view_mode : ReviewViewMode
   review_diff_layout : ReviewDiffLayout
   review_diff_mode : ReviewDiffMode
   review_diff_ignore_comments : Bool
