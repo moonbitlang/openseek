@@ -167,8 +167,11 @@ A denied write surfaces inside the program as a bare OS error (e.g.
 own reads like a filesystem fault. When a sandboxed run's output shows such a
 denial on a protected source path, the tool result appends an explanation: the
 sandbox denied the write by design, the snippet should not try to work around
-it, and source changes belong to the `edit` tool. The run is reported as an
-error even if the snippet caught the failure and exited 0, matching `shell`.
+it, and source changes belong to the `edit` tool. Only a run that did not exit
+0 is classified this way: output is data, and a program that prints a file or
+a log containing the refusal wording — as the bundled read workflow does when
+the file happens to contain it — is not being refused. A snippet that caught a
+denial and exited 0 keeps the raw error in its output without the guidance.
 
 The extra kernel profile is **best-effort** and may be unavailable inside a
 nested sandbox; it is defense in depth, not the cross-platform policy. A denied

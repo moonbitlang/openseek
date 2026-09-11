@@ -128,9 +128,6 @@ fn source_write_denied_in_text(
   output_text
   .split("\n")
   .any(line => {
-    if is_file_content_line(line) {
-      return false
-    }
     // Both halves must hold on the SAME line. Checking them across the whole
     // output would match any log that mentions a source file and, separately,
     // hits an unrelated permission error.

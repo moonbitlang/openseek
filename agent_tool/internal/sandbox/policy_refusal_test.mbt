@@ -36,22 +36,6 @@ test "a policy refusal is recognized by the runtime's own wording" {
 }
 
 ///|
-test "numbered file content is not a sandbox refusal but a subsequent diagnostic is" {
-  let file = "=== \"policy.mbt\" ===\n 1 |Sandbox policy blocked file write: x\n 2 |OSError(\"@process.spawn(): Permission denied\")\n"
-  assert_false(@sandbox.output_reports_policy_refusal(file))
-  assert_true(
-    @sandbox.output_reports_policy_refusal(
-      file + "Sandbox policy blocked file write: x\n",
-    ),
-  )
-  assert_true(
-    @sandbox.output_reports_policy_refusal(
-      file + "OSError(\"@process.spawn(): Permission denied\")\n",
-    ),
-  )
-}
-
-///|
 /// The guidance has to cover both rules, because a refused spawn carries no path
 /// and reading it as a blocked write once sent the model to debug one.
 test "policy guidance names both rules that produce a refusal" {

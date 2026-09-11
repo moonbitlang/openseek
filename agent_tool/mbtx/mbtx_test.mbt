@@ -1338,6 +1338,26 @@ async test "refuses native FFI (extern can bind libc system)" {
 }
 
 ///|
+/// The refusal scan is a substring match on output, and output is data. A
+/// program that exited 0 is never classified by it — a file or a log it prints
+/// may legitimately contain the policy's own wording — while the same words
+/// from a program that did not exit 0 are still explained.
+async test "the refusal scan applies only to a run that did not exit 0" {
+  @vfs.with_tmpdir(ws => {
+    let quoted = "fn main { println(\"Sandbox policy blocked file write: example\") }"
+    let fine = run_in(ws, { "source": quoted })
+    assert_false(fine.is_error, msg=fine.content)
+    assert_true(fine.content.contains("Sandbox policy blocked file write"))
+    assert_false(fine.content.contains("mbtx sandbox:"))
+    let dying = run_in(ws, {
+      "source": "fn main { println(\"Sandbox policy blocked file write: example\"); abort(\"boom\") }",
+    })
+    assert_true(dying.is_error)
+    assert_true(dying.content.contains("mbtx sandbox:"))
+  })
+}
+
+///|
 /// A compute-only backend has no moonrun policy. Text resembling its refusal
 /// marker is ordinary program output even in a runtime-less definition.
 async test "a runtime-less non-wasm run does not invent a policy refusal" {
@@ -1735,9 +1755,10 @@ async test "a hosted snippet may NOT write the rest of the session store" {
   @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
     @vfs.with_tmpdir(prefix="mbtx-store-", store => {
       // Only the run's directory was granted. Writing beside another session's
-      // transcript in the store root is refused by the policy — and mbtx
-      // reports a refusal as an error, with its own advice, which is the
-      // contract this test also pins: a snippet that overreaches is TOLD so.
+      // transcript in the store root is refused by the policy. The snippet
+      // catches that refusal and exits 0, so mbtx reports a SUCCESSFUL run
+      // whose output carries the policy's own wording — a handled refusal is
+      // the program's report, not a tool error (see `refusal_guidance`).
       let out = run_hosted(
         ws,
         store,
@@ -1754,9 +1775,10 @@ async test "a hosted snippet may NOT write the rest of the session store" {
           #|}
         ),
       )
-      assert_true(out.is_error)
+      assert_false(out.is_error, msg=out.content)
       assert_true(out.content.contains("store refused"))
       assert_true(out.content.contains("Sandbox policy blocked"))
+      assert_false(out.content.contains("mbtx sandbox:"))
       assert_false(out.content.contains("STORE WRITABLE"))
       assert_false(@fs.exists("\{store}/other-session.jsonl"))
     })
