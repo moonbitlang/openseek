@@ -51,7 +51,7 @@ fn EditChanges::from_arguments(
   guard name == "edit" || name == "multi_edit" else { return None }
   guard card_fields(arguments) is Some(fields) else { return None }
   if name == "edit" {
-    guard EditDiff::from_fields(fields, path_key="path") is Some(edit) else {
+    guard decode_edit(fields, path_key="path") is Some(edit) else {
       return None
     }
     return Some({ edits: [edit], omitted: 0, })
@@ -63,7 +63,7 @@ fn EditChanges::from_arguments(
       break
     }
     if entry is Object(entry_fields) &&
-      EditDiff::from_fields(entry_fields, path_key="file") is Some(edit) {
+      decode_edit(entry_fields, path_key="file") is Some(edit) {
       edits.push(edit)
     }
   }
@@ -104,10 +104,7 @@ fn EditChanges::render(self : EditChanges) -> @html.Html {
 /// two strings. `None` when it is not an edit this card can show: no string
 /// pair, or a pair with no difference (which the tools reject anyway, and
 /// which would render as an empty change).
-fn EditDiff::from_fields(
-  fields : Map[String, Json],
-  path_key~ : String,
-) -> EditDiff? {
+fn decode_edit(fields : Map[String, Json], path_key~ : String) -> EditDiff? {
   guard fields.get("old_string") is Some(String(old)) &&
     fields.get("new_string") is Some(String(new)) &&
     old != new else {

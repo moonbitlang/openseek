@@ -1164,25 +1164,25 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         desc="Default for messages sent while a task is running. Change it for one message beside the send button.",
       ),
       @settings.row(
-        "Transcript details",
+        "Minimal mode",
         [
           @html.button(
             class="button secondary",
             attrs=@html.Attrs::build()
               .role("switch")
-              .aria_label("Transcript details")
-              .aria_checked((!model.minimal_transcript).to_string()),
+              .aria_label("Minimal mode")
+              .aria_checked(model.minimal_transcript.to_string()),
             on_click=dispatch(
               MinimalTranscriptChanged(!model.minimal_transcript),
             ),
             if model.minimal_transcript {
-              "Off"
-            } else {
               "On"
+            } else {
+              "Off"
             },
           ),
         ],
-        desc="Show reasoning, tool parameters, and tool output in every conversation. Turn it off to summarize tool activity and fold it once a reply completes.",
+        desc="Summarize tool activity and fold it once a reply completes, hiding reasoning, tool parameters, and tool output. Off by default.",
       ),
       @settings.row(
         "Theme",
