@@ -105,13 +105,21 @@ async test "a wired channel is handed over intact" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ApprovalAsk with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ApprovalAsk with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ApprovalOutcome with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ApprovalOutcome with Eq::{equal, not_equal}
