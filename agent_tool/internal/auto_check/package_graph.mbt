@@ -47,16 +47,34 @@ pub async fn package_graph(cwd : String) -> PackageGraph? {
   guard result is Some(output) && !output.output_limit_reached else {
     return None
   }
-  decode_package_graph(output.text)
+  guard decode_package_graph(output.text) is Some(raw) else { return None }
+  // moon reports each local package's `rel` relative to its module's SOURCE
+  // root (`source = "src"` in moon.mod), but `source.path` is the module
+  // root; read every module's setting once.
+  let source_dirs : Map[String, String] = Map([])
+  for node in raw.nodes {
+    guard node is Some((root, _)) else { continue }
+    if !source_dirs.contains(root) {
+      source_dirs[root] = module_source_dir(root)
+    }
+  }
+  Some(resolve_package_graph(raw, source_dirs))
+}
+
+///|
+/// The graph as moon reports it, before package directories are resolved:
+/// each local node's `(module root, rel)`, `None` for a registry package.
+priv struct RawPackageGraph {
+  nodes : Array[(String, String)?]
+  edges : Array[(Int, Int)]
 }
 
 ///|
 /// Decode moon's `tree --package --json` document. The shape (version 2):
 /// `nodes[i] = { module, rel, source: { kind, path? } }` and
-/// `edges[j] = { from, to, kinds }`, indices into `nodes`. A local node's
-/// directory is `source.path` joined with `rel` (empty `rel` = the module
-/// root). Anything malformed yields `None` rather than a partial graph.
-fn decode_package_graph(text : String) -> PackageGraph? {
+/// `edges[j] = { from, to, kinds }`, indices into `nodes`. Anything malformed
+/// yields `None` rather than a partial graph.
+fn decode_package_graph(text : String) -> RawPackageGraph? {
   let json = @json.parse(text) catch { _ => return None }
   guard json
     is {
@@ -67,15 +85,15 @@ fn decode_package_graph(text : String) -> PackageGraph? {
     } else {
     return None
   }
-  let dirs : Array[String?] = []
+  let raw_nodes : Array[(String, String)?] = []
   for node in nodes {
     match node {
       {
         "rel": String(rel),
         "source": { "kind": String("local"), "path": String(root), .. },
         ..
-      } => dirs.push(Some(if rel == "" { root } else { "\{root}/\{rel}" }))
-      { "source": { "kind": String(_), .. }, .. } => dirs.push(None)
+      } => raw_nodes.push(Some((root, rel)))
+      { "source": { "kind": String(_), .. }, .. } => raw_nodes.push(None)
       _ => return None
     }
   }
@@ -85,12 +103,98 @@ fn decode_package_graph(text : String) -> PackageGraph? {
       return None
     }
     let (from, to) = (from.to_int(), to.to_int())
-    if from < 0 || from >= dirs.length() || to < 0 || to >= dirs.length() {
+    if from < 0 ||
+      from >= raw_nodes.length() ||
+      to < 0 ||
+      to >= raw_nodes.length() {
       return None
     }
     pairs.push((from, to))
   }
-  Some({ dirs, edges: pairs, })
+  Some({ nodes: raw_nodes, edges: pairs, })
+}
+
+///|
+/// Turn raw nodes into package directories: module root, then the module's
+/// source subdirectory (if any), then `rel` (empty = the source root itself).
+fn resolve_package_graph(
+  raw : RawPackageGraph,
+  source_dirs : Map[String, String],
+) -> PackageGraph {
+  let dirs = raw.nodes.map(node => {
+    node.map(node => {
+      let (root, rel) = node
+      let mut dir = root
+      for part in [source_dirs.get(root).unwrap_or(""), rel] {
+        if part != "" {
+          dir = "\{dir}/\{part}"
+        }
+      }
+      dir
+    })
+  })
+  { dirs, edges: raw.edges, }
+}
+
+///|
+/// A module's configured source subdirectory, read from its `moon.mod`
+/// (`source = "src"`) or legacy `moon.mod.json` (`"source": "src"`); `""`
+/// when unset or unreadable, meaning packages live under the module root.
+async fn module_source_dir(root : String) -> String {
+  let modern = @fs.read_file("\{root}/moon.mod").text() catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => {
+      let legacy = @fs.read_file("\{root}/moon.mod.json").text() catch {
+        error if @async.is_being_cancelled() => raise error
+        _ => return ""
+      }
+      return parse_module_source(legacy, json=true)
+    }
+  }
+  parse_module_source(modern, json=false)
+}
+
+///|
+/// Extract the `source` setting from a manifest's text. The modern manifest
+/// is line-oriented (`source = "src"`); the legacy one is JSON. A leading
+/// `./` and trailing `/` are dropped so the value joins cleanly.
+fn parse_module_source(text : String, json~ : Bool) -> String {
+  let raw = if json {
+    match (@json.parse(text) catch { _ => return "" }) {
+      { "source": String(source), .. } => source
+      _ => return ""
+    }
+  } else {
+    let mut found = ""
+    for line in text.split("\n") {
+      let line = line.trim()
+      guard line.has_prefix("source") else { continue }
+      let rest = line[6:].trim()
+      guard rest.has_prefix("=") else { continue }
+      let value = rest[1:].trim()
+      guard value.has_prefix("\"") && value.length() >= 2 else { continue }
+      match value[1:].find("\"") {
+        Some(end) => {
+          found = value[1:1 + end].to_owned()
+          break
+        }
+        None => continue
+      }
+    }
+    found
+  }
+  let mut source = raw[:]
+  if source.has_prefix("./") {
+    source = source[2:]
+  }
+  while source.has_suffix("/") {
+    source = source[:source.length() - 1]
+  }
+  if source == "." {
+    ""
+  } else {
+    source.to_owned()
+  }
 }
 
 ///|
@@ -154,10 +258,16 @@ fn sample_graph_json() -> String {
 }
 
 ///|
-test "decode_package_graph keeps directories, registry placeholders, and edges" {
-  guard decode_package_graph(sample_graph_json()) is Some(graph) else {
-    fail("expected a graph")
+fn sample_graph() -> PackageGraph {
+  guard decode_package_graph(sample_graph_json()) is Some(raw) else {
+    abort("sample graph must decode")
   }
+  resolve_package_graph(raw, Map([]))
+}
+
+///|
+test "decode_package_graph keeps directories, registry placeholders, and edges" {
+  let graph = sample_graph()
   assert_eq(graph.dirs, [
     Some("/private/tmp/reach/a"),
     Some("/private/tmp/reach/b"),
@@ -166,6 +276,48 @@ test "decode_package_graph keeps directories, registry placeholders, and edges" 
     None,
   ])
   assert_eq(graph.edges, [(1, 0), (2, 3), (2, 4)])
+}
+
+///|
+test "resolve_package_graph inserts a module's source subdirectory" {
+  guard decode_package_graph(sample_graph_json()) is Some(raw) else {
+    fail("expected a graph")
+  }
+  // moon reports `rel` relative to the source root but `source.path` as the
+  // module root, so a `source = "src"` module lives one level down.
+  let graph = resolve_package_graph(raw, { "/private/tmp/reach": "src" })
+  assert_eq(graph.dirs[0], Some("/private/tmp/reach/src/a"))
+  assert_eq(graph.dirs[4], None)
+  // A package at the source root itself.
+  let root_only : RawPackageGraph = { nodes: [Some(("/m", ""))], edges: [], }
+  assert_eq(resolve_package_graph(root_only, { "/m": "src" }).dirs, [
+    Some("/m/src"),
+  ])
+  assert_eq(resolve_package_graph(root_only, Map([])).dirs, [Some("/m")])
+}
+
+///|
+test "parse_module_source reads modern and legacy manifests" {
+  assert_eq(
+    parse_module_source("name = \"a/b\"\nsource = \"src\"\n", json=false),
+    "src",
+  )
+  assert_eq(
+    parse_module_source("name = \"a/b\"\nsource=\"./lib/\"\n", json=false),
+    "lib",
+  )
+  assert_eq(parse_module_source("name = \"a/b\"\n", json=false), "")
+  // A `source` inside another key's value is not the setting.
+  assert_eq(
+    parse_module_source("description = \"source = \\\"x\\\"\"\n", json=false),
+    "",
+  )
+  assert_eq(
+    parse_module_source("{\"name\":\"a/b\",\"source\":\"src\"}", json=true),
+    "src",
+  )
+  assert_eq(parse_module_source("{\"name\":\"a/b\"}", json=true), "")
+  assert_eq(parse_module_source("not json", json=true), "")
 }
 
 ///|
@@ -181,9 +333,7 @@ test "decode_package_graph refuses a failed status or a malformed edge" {
 
 ///|
 test "package_of picks the longest containing package directory" {
-  guard decode_package_graph(sample_graph_json()) is Some(graph) else {
-    fail("expected a graph")
-  }
+  let graph = sample_graph()
   assert_eq(graph.package_of("/private/tmp/reach/a/a.mbt"), Some(0))
   assert_eq(graph.package_of("/private/tmp/reach/b/moon.pkg"), Some(1))
   // The directory itself, and a same-prefix sibling that is not inside it.
@@ -194,9 +344,7 @@ test "package_of picks the longest containing package directory" {
 
 ///|
 test "depends_on follows imports transitively and counts a package as its own dependent" {
-  guard decode_package_graph(sample_graph_json()) is Some(graph) else {
-    fail("expected a graph")
-  }
+  let graph = sample_graph()
   assert_true(graph.depends_on(1, [0])) // b imports a
   assert_false(graph.depends_on(0, [1])) // a does not import b
   assert_false(graph.depends_on(2, [0])) // c is independent of a
