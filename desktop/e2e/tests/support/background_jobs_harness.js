@@ -95,6 +95,9 @@ export class BackgroundJobsHarness extends DesktopBrowserHarness {
     await this.page.locator('.jobs-panel').waitFor();
   }
   async cleanup() {
+    // Stop browser polling before removing files used by the transport fixture.
+    // The page fixture normally closes after afterEach, leaving a small race.
+    if (!this.page.isClosed()) await this.page.close();
     if (this.child.exitCode === null && this.child.signalCode === null) {
       const exited = once(this.child, 'exit'); this.child.kill(); await exited;
     }
