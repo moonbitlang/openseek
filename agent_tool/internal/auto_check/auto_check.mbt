@@ -60,11 +60,12 @@ const RevertErrorDisplayLimit : Int = 10
 
 ///|
 /// One `level == "error"` diagnostic: where moon check placed it and what it
-/// said. `path` is as moon reported it (relative to the checked module unless
-/// moon chose otherwise); `loc` is the `line:col-line:col` span, or empty for
-/// a module-level error.
+/// said. `path` is as moon reported it (relative to the checked module, or
+/// absolute — moon has emitted both), and `None` when the diagnostic carried
+/// no path at all, so a caller never mistakes "unknown file" for a known one;
+/// `loc` is the `line:col-line:col` span, or empty for a module-level error.
 pub(all) struct ErrorSite {
-  path : String
+  path : String?
   loc : String
   message : String
 } derive(Debug, Eq)
@@ -75,10 +76,10 @@ pub(all) struct ErrorSite {
 /// offending line. This string also serves as the site's identity when two
 /// check runs are compared.
 pub fn ErrorSite::line(self : ErrorSite) -> String {
-  let where_ = if self.loc == "" {
-    self.path
-  } else {
-    "\{self.path}:\{self.loc}"
+  let where_ = match (self.path, self.loc) {
+    (Some(path), "") => path
+    (Some(path), loc) => "\{path}:\{loc}"
+    (None, loc) => loc
   }
   if self.message == "" {
     where_
@@ -155,8 +156,7 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
     match json {
       {
         "level": String("error"),
-        "path"? : Some(String(path))
-        | (_ with path = ""),
+        "path"? : path_json,
         "loc"? : Some(String(loc))
         | (_ with loc = ""),
         "message"? : Some(String(message))
@@ -164,6 +164,10 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
         ..
       } => {
         error_count += 1
+        let path = match path_json {
+          Some(String(path)) => Some(path)
+          _ => None
+        }
         errors.push({ path, loc, message, })
       }
       { "level": String("warning"), .. } => warning_count += 1
@@ -253,7 +257,7 @@ test "tally counts errors and warnings from output-json lines" {
   assert_eq(tally.truncated, false)
   assert_eq(tally.errors, [
     {
-      path: "argparse/arg.mbt",
+      path: Some("argparse/arg.mbt"),
       loc: "3:1-3:9",
       message: "Type mismatch: expected Int, got String",
     },
@@ -299,6 +303,15 @@ test "tally renders a diagnostic without a location using just the path" {
     #|{"$message_type":"diagnostic","level":"error","path":"a.mbt","message":"module-level boom"}
   let tally = tally_diagnostics(text, truncated=false)
   assert_eq(tally.first_errors(), ["a.mbt: module-level boom"])
+}
+
+///|
+test "tally keeps a diagnostic without a path as an unlocated site" {
+  let text =
+    #|{"$message_type":"diagnostic","level":"error","loc":"2:1-2:2","message":"nowhere"}
+  let tally = tally_diagnostics(text, truncated=false)
+  assert_eq(tally.errors, [{ path: None, loc: "2:1-2:2", message: "nowhere", }])
+  assert_eq(tally.first_errors(), ["2:1-2:2: nowhere"])
 }
 
 ///|

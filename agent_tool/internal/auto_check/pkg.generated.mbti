@@ -29,7 +29,7 @@ pub fn CheckErrors::first_errors(Self) -> Array[String]
 pub fn CheckErrors::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ErrorSite {
-  path : String
+  path : String?
   loc : String
   message : String
 } derive(Eq, @debug.Debug)
