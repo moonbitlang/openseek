@@ -59,15 +59,59 @@ const MoonCheckJsonMaxOutputChars : Int = 400000
 const RevertErrorDisplayLimit : Int = 10
 
 ///|
-/// A tally of `moon check` diagnostics by severity, with a few formatted error
-/// lines for display. `truncated` means moon check produced more output than
-/// the capture budget, so `error_count` and `warning_count` are lower bounds.
+/// One `level == "error"` diagnostic: where moon check placed it and what it
+/// said. `path` is as moon reported it (relative to the checked module unless
+/// moon chose otherwise); `loc` is the `line:col-line:col` span, or empty for
+/// a module-level error.
+pub(all) struct ErrorSite {
+  path : String
+  loc : String
+  message : String
+} derive(Debug, Eq)
+
+///|
+/// Render the site as `path:loc: message`, the same shape the human
+/// `moon check` output uses, so a report points the model straight at the
+/// offending line. This string also serves as the site's identity when two
+/// check runs are compared.
+pub fn ErrorSite::line(self : ErrorSite) -> String {
+  let where_ = if self.loc == "" {
+    self.path
+  } else {
+    "\{self.path}:\{self.loc}"
+  }
+  if self.message == "" {
+    where_
+  } else {
+    "\{where_}: \{self.message}"
+  }
+}
+
+///|
+/// A tally of `moon check` diagnostics by severity, with every error site
+/// kept so a caller can compare two runs by identity and location, not just by
+/// count. `truncated` means moon check produced more output than the capture
+/// budget, so `error_count`, `warning_count` and `errors` are lower bounds.
 pub(all) struct CheckErrors {
   error_count : Int
   warning_count : Int
-  first_errors : Array[String]
+  errors : Array[ErrorSite]
   truncated : Bool
 } derive(Debug)
+
+///|
+/// The first few error lines for display: enough to show the shape of an
+/// over-match without dumping a broken build.
+pub fn CheckErrors::first_errors(self : CheckErrors) -> Array[String] {
+  let shown = if self.errors.length() < RevertErrorDisplayLimit {
+    self.errors.length()
+  } else {
+    RevertErrorDisplayLimit
+  }
+  [
+    for site in self.errors[:shown] => site.line()
+  ]
+}
 
 ///|
 /// Run `moon check --output-json` from the MoonBit module containing `path` and
@@ -100,7 +144,7 @@ pub async fn count_errors(path : String) -> CheckErrors? {
 fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
   let mut error_count = 0
   let mut warning_count = 0
-  let first_errors : Array[String] = []
+  let errors : Array[ErrorSite] = []
   for raw in text.split("\n") {
     // Cheap pre-filter: only diagnostic lines carry a `level` field, so a
     // blank line or a human summary never reaches the JSON parser.
@@ -120,32 +164,13 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
         ..
       } => {
         error_count += 1
-        if first_errors.length() < RevertErrorDisplayLimit {
-          first_errors.push(format_diagnostic_line(path, loc, message))
-        }
+        errors.push({ path, loc, message, })
       }
       { "level": String("warning"), .. } => warning_count += 1
       _ => ()
     }
   }
-  { error_count, warning_count, first_errors, truncated, }
-}
-
-///|
-/// Render one diagnostic object as `path:loc: message`, the same shape the
-/// human `moon check` output uses, so a reverted batch points the model
-/// straight at the offending sites.
-fn format_diagnostic_line(
-  path : String,
-  loc : String,
-  message : String,
-) -> String {
-  let where_ = if loc == "" { path } else { "\{path}:\{loc}" }
-  if message == "" {
-    where_
-  } else {
-    "\{where_}: \{message}"
-  }
+  { error_count, warning_count, errors, truncated, }
 }
 
 ///|
@@ -226,11 +251,16 @@ test "tally counts errors and warnings from output-json lines" {
   assert_eq(tally.error_count, 1)
   assert_eq(tally.warning_count, 2)
   assert_eq(tally.truncated, false)
-  assert_eq(tally.first_errors.length(), 1)
-  assert_eq(
-    tally.first_errors[0],
+  assert_eq(tally.errors, [
+    {
+      path: "argparse/arg.mbt",
+      loc: "3:1-3:9",
+      message: "Type mismatch: expected Int, got String",
+    },
+  ])
+  assert_eq(tally.first_errors(), [
     "argparse/arg.mbt:3:1-3:9: Type mismatch: expected Int, got String",
-  )
+  ])
 }
 
 ///|
@@ -243,8 +273,7 @@ test "tally ignores blank lines and non-diagnostic summary lines" {
   let tally = tally_diagnostics(text, truncated=false)
   assert_eq(tally.error_count, 1)
   assert_eq(tally.warning_count, 0)
-  assert_eq(tally.first_errors.length(), 1)
-  assert_eq(tally.first_errors[0], "a.mbt:1:1-1:2: boom")
+  assert_eq(tally.first_errors(), ["a.mbt:1:1-1:2: boom"])
 }
 
 ///|
@@ -257,8 +286,10 @@ test "tally caps surfaced errors at the display limit but keeps the full count" 
   }
   let tally = tally_diagnostics(lines.join("\n"), truncated=true)
   assert_eq(tally.error_count, 25)
-  assert_eq(tally.first_errors.length(), RevertErrorDisplayLimit)
-  assert_eq(tally.first_errors[0], "f0.mbt:1:1-1:2: e0")
+  // Every site is kept for identity comparison; only the display is capped.
+  assert_eq(tally.errors.length(), 25)
+  assert_eq(tally.first_errors().length(), RevertErrorDisplayLimit)
+  assert_eq(tally.first_errors()[0], "f0.mbt:1:1-1:2: e0")
   assert_eq(tally.truncated, true)
 }
 
@@ -267,9 +298,14 @@ test "tally renders a diagnostic without a location using just the path" {
   let text =
     #|{"$message_type":"diagnostic","level":"error","path":"a.mbt","message":"module-level boom"}
   let tally = tally_diagnostics(text, truncated=false)
-  assert_eq(tally.first_errors.length(), 1)
-  assert_eq(tally.first_errors[0], "a.mbt: module-level boom")
+  assert_eq(tally.first_errors(), ["a.mbt: module-level boom"])
 }
 
 ///|
 pub extend CheckErrors with Debug::{to_repr}
+
+///|
+pub extend ErrorSite with Debug::{to_repr}
+
+///|
+pub extend ErrorSite with Eq::{equal, not_equal}

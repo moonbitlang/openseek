@@ -22,10 +22,21 @@ pub fn gate_paths(String, String) -> Array[String]
 pub(all) struct CheckErrors {
   error_count : Int
   warning_count : Int
-  first_errors : Array[String]
+  errors : Array[ErrorSite]
   truncated : Bool
 } derive(@debug.Debug)
+pub fn CheckErrors::first_errors(Self) -> Array[String]
 pub fn CheckErrors::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ErrorSite {
+  path : String
+  loc : String
+  message : String
+} derive(Eq, @debug.Debug)
+pub fn ErrorSite::equal(Self, Self) -> Bool
+pub fn ErrorSite::line(Self) -> String
+pub fn ErrorSite::not_equal(Self, Self) -> Bool
+pub fn ErrorSite::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ParseGate {
   errors : Array[ParseGateError]
