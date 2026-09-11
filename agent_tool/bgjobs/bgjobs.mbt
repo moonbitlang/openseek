@@ -616,8 +616,13 @@ async test "stop terminates a running job" {
 ///|
 #cfg(not(platform="windows"))
 async test "a large-output job spills; snapshot previews, read_output is full" {
+  let directory = @fs.tmpdir(prefix="bg-job-test-")
+  defer @fs.rmdir(directory, recursive=true)
   @async.with_task_group(group => {
-    let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group), spill_dir="/tmp")
+    let rt = BgJobRuntime::BgJobRuntime(
+      AgentTaskScope(group),
+      spill_dir=directory,
+    )
     let id = rt.start(
       program="sh",
       args=["-c", "seq 1 5000"],
@@ -736,8 +741,13 @@ async test "snapshot, read_output, and stop handle unknown ids" {
 ///|
 #cfg(not(platform="windows"))
 async test "start allocates one id per job (id matches its spill file)" {
+  let directory = @fs.tmpdir(prefix="bg-job-test-")
+  defer @fs.rmdir(directory, recursive=true)
   @async.with_task_group(group => {
-    let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group), spill_dir="/tmp")
+    let rt = BgJobRuntime::BgJobRuntime(
+      AgentTaskScope(group),
+      spill_dir=directory,
+    )
     // The first started job is bg-1 (not bg-2): start must not reserve an id for
     // the spill path and then allocate a second one for the registry entry.
     let a = rt.start(program="sh", args=["-c", "printf a"], command="a")
