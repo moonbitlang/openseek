@@ -1250,6 +1250,113 @@ pub fn InstalledSkillsReply::not_equal(Self, Self) -> Bool
 pub fn InstalledSkillsReply::to_json(Self) -> Json
 pub fn InstalledSkillsReply::to_repr(Self) -> @debug.Repr
 
+pub(all) struct JobReadPayload {
+  target : JobTarget
+  offset : Int64?
+  limit : Int
+} derive(Eq, @debug.Debug)
+pub fn JobReadPayload::equal(Self, Self) -> Bool
+pub fn JobReadPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobReadPayload::not_equal(Self, Self) -> Bool
+pub fn JobReadPayload::to_json(Self) -> Json
+pub fn JobReadPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobReadPayload
+pub impl @json.FromJson for JobReadPayload
+
+pub(all) struct JobReadReply {
+  text : String
+  start_offset : Int64
+  next_offset : Int64
+  size : Int64
+  more : Bool
+  output_path : String
+} derive(Eq, @debug.Debug)
+pub fn JobReadReply::equal(Self, Self) -> Bool
+pub fn JobReadReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobReadReply::not_equal(Self, Self) -> Bool
+pub fn JobReadReply::to_json(Self) -> Json
+pub fn JobReadReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobReadReply
+pub impl @json.FromJson for JobReadReply
+
+pub(all) struct JobStopReply {
+  outcome : @openseek_protocol.JobStopOutcome
+} derive(Eq, @debug.Debug)
+pub fn JobStopReply::equal(Self, Self) -> Bool
+pub fn JobStopReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobStopReply::not_equal(Self, Self) -> Bool
+pub fn JobStopReply::to_json(Self) -> Json
+pub fn JobStopReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobStopReply
+pub impl @json.FromJson for JobStopReply
+
+pub(all) struct JobTarget {
+  scope : JobsScope
+  generation : String
+  job_id : String
+} derive(Eq, @debug.Debug)
+pub fn JobTarget::equal(Self, Self) -> Bool
+pub fn JobTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobTarget::not_equal(Self, Self) -> Bool
+pub fn JobTarget::to_json(Self) -> Json
+pub fn JobTarget::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobTarget
+pub impl @json.FromJson for JobTarget
+
+pub(all) struct JobView {
+  job : @openseek_protocol.JobRecord
+  output_path : String?
+  controllable : Bool
+  error : String?
+} derive(Eq, @debug.Debug)
+pub fn JobView::equal(Self, Self) -> Bool
+pub fn JobView::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobView::not_equal(Self, Self) -> Bool
+pub fn JobView::to_json(Self) -> Json
+pub fn JobView::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobView
+pub impl @json.FromJson for JobView
+
+pub(all) struct JobsListPayload {
+  scope : JobsScope
+  offset : Int
+  selected : JobTarget?
+} derive(Eq, @debug.Debug)
+pub fn JobsListPayload::equal(Self, Self) -> Bool
+pub fn JobsListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobsListPayload::not_equal(Self, Self) -> Bool
+pub fn JobsListPayload::to_json(Self) -> Json
+pub fn JobsListPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobsListPayload
+pub impl @json.FromJson for JobsListPayload
+
+pub(all) struct JobsListReply {
+  jobs : Array[JobView]
+  next_offset : Int?
+  errors : Array[String]
+  selected : JobView?
+} derive(Eq, @debug.Debug)
+pub fn JobsListReply::equal(Self, Self) -> Bool
+pub fn JobsListReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobsListReply::not_equal(Self, Self) -> Bool
+pub fn JobsListReply::to_json(Self) -> Json
+pub fn JobsListReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobsListReply
+pub impl @json.FromJson for JobsListReply
+
+pub(all) struct JobsScope {
+  session : String
+  workspace : String?
+  archived : Bool
+} derive(Eq, @debug.Debug)
+pub fn JobsScope::equal(Self, Self) -> Bool
+pub fn JobsScope::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn JobsScope::not_equal(Self, Self) -> Bool
+pub fn JobsScope::to_json(Self) -> Json
+pub fn JobsScope::to_repr(Self) -> @debug.Repr
+pub impl ToJson for JobsScope
+pub impl @json.FromJson for JobsScope
+
 pub(all) struct KnownRunPayload {
   session : String
   run_id : String?
