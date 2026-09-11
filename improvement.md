@@ -7,46 +7,9 @@ bottom of the matching section.
 
 ## TUI
 
-- [x] **Collapse the triple redraw per message.** `refresh_ui` calls
-  `set_status`, `set_activity`, and `set_queued_inputs`, each of which queues
-  its own full-frame redraw — three repaints per message-loop iteration.
-  During delta bursts this triples render work. Add a single
-  "set view state + one redraw" command on `Ui`. *(Done: `Ui::set_live_view`
-  replaces the three setters; one command, one redraw per loop turn.)*
-- [x] **Keep reasoning visible after the turn.** Thinking-mode reasoning only
-  ever exists as the transient `Thinking …` tail and is discarded once
-  content starts. Surface it as a dimmed/collapsible transcript item so a
-  user can review *why* the model did something. *(Done: the engine emits
-  `reasoning_message` after streaming; the TUI commits a `✻` thought aside
-  above the answer. Resume does not replay thoughts — sessions do not store
-  reasoning for no-tool turns; see the auto-compaction/session items.)*
-- [x] **Measure the activity label instead of reserving 13 columns.**
-  `ActivityPreviewReservedColumns` hardcodes indent + widest label + slack;
-  computing it from the actual label keeps the preview honest if labels
-  change. *(Done: `streaming_activity_line` measures the label's display
-  width; only the renderer indent + slack remain a constant.)*
-- [x] **`--continue` resumes the most recent session.** *(Done:
-  `SessionStore::latest` picks the most recently active session by event-log
-  mtime; `openseek-tui --continue` resumes it, errors when combined with
-  `--session`, and starts fresh on an empty store.)*
-- [ ] **Session switching inside the TUI.** A way to list and switch sessions
-  without restarting. Generated ids (`tui-YYYYMMDD-HHMMSS-mmm`) are only
-  discoverable via the startup banner or `openseek --session-list` today.
-- [x] **Steering a running task.** `Steer` while running is rejected ("press
-  Tab to queue") because the engine cannot accept mid-turn input. Needs an
-  engine-side protocol (e.g. a control channel on stdin) before the TUI can
-  offer it. *(Done: Enter while running steers — the text rides the serve
-  protocol's lossless channel, lands at the turn's next step boundary, wins
-  over model-initiated completion, and is echoed into the transcript at the
-  position the model actually saw it.)*
-- [x] **Persistent engine per session.** The TUI spawns a fresh engine per
-  prompt, so `moon_check --watch` restarts (and re-warms) every turn and its
-  watcher state is lost between prompts. A long-lived engine process per
-  session — with prompts delivered over a channel — would keep watchers warm
-  and is also the prerequisite for steering. *(Done: one `--serve` engine per
-  TUI session — JSONL commands on stdin, shared runtime and tool registry
-  across turns, Ctrl-C cancel → kill escalation, respawn on death from the
-  durable session.)*
+The TUI now lives in its own repository,
+[`moonbitlang/openseek_tui`](https://github.com/moonbitlang/openseek_tui); its
+checklist moved with it.
 
 ## Engine / agent
 
@@ -178,7 +141,7 @@ shows where steps and tokens went to waste):
   `$HOME/.openseek/skills`, override `--global-skills-dir` /
   `OPENSEEK_GLOBAL_SKILLS_DIR`, workspace shadows global by name — are
   listed name/description/path in a `## Skills` prompt section; bodies load
-  through the existing `read` tool. Effectiveness A/B (2026-06-11, 5 flash
+  through the `@builtin/read.mbtx` workflow. Effectiveness A/B (2026-06-11, 5 flash
   trials per arm, marketplace `anthropics/skills` brand-guidelines skill,
   "branded landing page" task): skill arm read the skill unprompted 5/5 and
   shipped the exact brand palette 5/5 (7–36 hex occurrences); no-skill

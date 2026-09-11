@@ -57,7 +57,7 @@ requested stop (`job_stop`, session teardown) fires nothing: it is already
 user-visible. The `agent` package wires `on_job_exit` to queue a
 `SteerInput::Notice` (lossless) and poke the serve loop, which is what makes
 job completion *push* into the conversation instead of requiring the model to
-poll — see the `shell` tool description and the system prompts, which teach
+poll — see the `mbtx` tool description and the system prompts, which teach
 exactly that workflow.
 
 ## Snapshots

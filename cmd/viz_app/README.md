@@ -2,7 +2,7 @@
 
 The browser half of the OpenSeek session visualizer: a
 [rabbita](https://github.com/moonbit-community/rabbita) (Elm-architecture)
-single-page app, compiled to JavaScript and served by `cmd/viz_server` at
+single-page app, compiled to JavaScript and served by the `inspect` server at
 `GET /viz_app.js`. `web/index.html` is the shell that loads the bundle and
 provides the `#app` mount point. See `viz/README.mbt.md` for the whole-picture
 tour of the three viz pieces and the full run recipe.
@@ -26,7 +26,7 @@ explicitly:
 moon build cmd/viz_app --target js
 ```
 
-`cmd/viz_server` auto-locates the output under
+The `inspect` server auto-locates the output under
 `_build/js/{release,debug}/build/cmd/viz_app/viz_app.js` (or takes an explicit
 `--bundle` path); if the bundle is missing it serves a 404 telling you to run
 the command above.
@@ -58,7 +58,7 @@ The same `Model` is fed from three places:
    `/api/sessions/<key>` envelope). Fetch results carry the session id they
    were issued for, so a slow response for a session the user already left is
    discarded instead of clobbering the pane.
-2. **Standalone export** — `cmd/viz_server --export` bakes API responses into
+2. **Standalone export** — `inspect --export` bakes API responses into
    `window.__OPENSEEK_DATA__`; `fetch_text` consults that embedded map first,
    so an exported page answers its own requests with no server behind it.
 3. **Drag and drop** — a session `.jsonl` dropped anywhere in the window is

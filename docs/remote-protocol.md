@@ -149,8 +149,8 @@ not secrets — the barrier is ownership:
   sign-in flow at an ad-hoc server regardless of the settings' selection.
 
 The relay's server implementation and HTTP surface (OAuth routes, the devices
-API, and schema) live in the openseek-api repository; its
-`docs/relay-auth-design.md` specifies that account layer. This repository keeps
+API, and schema) live in the openseek-api repository, which also documents
+that account layer. This repository keeps
 only the desktop-side connection code in `desktop/internal/remote` and the four
 control-frame definitions in `desktop/tunnel`.
 

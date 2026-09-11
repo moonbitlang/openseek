@@ -3,14 +3,15 @@
 One function, `failure_message`, that takes MoonBit's rendering of a raised
 `fail(...)` and gives back just the message the code meant to say.
 
-Nine packages depend on it — `edit`, `goal`, `multi_edit`, `plan`,
-`remove`, `mbtx`, `shell`, `write`, and `goal/internal/decode` — because
+Ten packages depend on it — `edit`, `goal`, `job_output`, `multi_edit`,
+`plan`, `remove`, `mbtx`, `write`, `goal/internal/decode`, and
+`job_output/internal/decode` — because
 argument validation lives in internal decode packages that signal problems with
 `fail("arguments.path")`. The string a tool would otherwise hand back to the
 model looks like this:
 
 ```text
-Failure(agent_tool/read/internal/decode/decode.mbt:41:7-41:29@decode FAILED: arguments.path)
+Failure(agent_tool/mbtx/internal/decode/decode.mbt:41:7-41:29@decode FAILED: arguments.path)
 ```
 
 That leaks a source location into a message whose whole job is to tell the model
@@ -28,7 +29,7 @@ There is no error case — this is a formatting normalizer, not a parser.
 test "the wrapper comes off, and unwrapped text is left alone" {
   inspect(
     @error.failure_message(
-      "Failure(agent_tool/read/internal/decode/decode.mbt:41:7-41:29@decode FAILED: arguments.path)",
+      "Failure(agent_tool/mbtx/internal/decode/decode.mbt:41:7-41:29@decode FAILED: arguments.path)",
     ),
     content="arguments.path",
   )

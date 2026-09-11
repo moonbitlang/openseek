@@ -94,9 +94,8 @@ A trial passes only when:
 - expected files match exactly,
 - protected files remain unchanged,
 - case-specific validation passes,
-- the agent did not use the shell tool,
 - the final log contains the requested `file-edit-eval:<case>` marker.
 
-The report records successes, prompt labels, steps, tool errors, shell uses,
+The report records successes, prompt labels, steps, tool errors,
 MoonBit command/probe metrics, edit/write successes, log paths, and final
 failure reasons.
