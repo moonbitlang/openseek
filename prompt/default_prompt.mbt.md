@@ -133,11 +133,16 @@ program (MoonBit script is imports + vanilla MoonBit code):
 - Import every package it uses separately, core packages included and by
   their real path: `moonbitlang/core/encoding/base64`, not
   `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
-- Keep `async fn main` for async IO.
-- Helpers that run an async command/IO are `async fn` too;
-  a plain `fn` cannot call them. (so async is contagious)
-- There is no `await`: async calls are written normally, and async functions
-  and tests are marked `async`.
+- In `.mbtx` script mode only, `"moonbitlang/async/shell" *` imports all
+  public symbols for direct use:
+  `Cmd(...)`, `Pipeline(...)`, `glob(...)`. It replaces the package alias;
+  do not use `@shell` with this import. Omit `*` to use `@shell.Cmd(...)`
+  instead. Prefer `*` for shell in short scripts; keep other packages
+  qualified to avoid ambiguous names. End the import block before the
+  code on a new line. Star imports are not allowed in `moon.pkg`; ordinary
+  packages use explicit imports and qualified names for clearer code.
+- Use `async fn main` for async IO and mark helpers that call it `async fn`
+  too. Async calls need neither `await` nor `raise`.
 - Use `println` (no `print`).
 
 A minimal script can inspect paths without spawning a process:
@@ -147,19 +152,15 @@ A minimal script can inspect paths without spawning a process:
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/async/shell",
+  "moonbitlang/async/shell" *,
   "moonbitlang/core/env",
 }
 
 ///|
 async fn main {
-  // `@shell.glob` expands `*`, `?`, character sets, and `**` without shell
-  // parsing; it is `async`, and its sorted matches are ordinary `Array[String]`
-  // values. A pattern that matches nothing returns an empty array. Spread them
-  // into a command's arguments — `@shell.Cmd("rg", ["-c", "TODO", ..files])`;
-  // a bare `@shell.glob(...)` in an argument array is an `Array[String]` where
-  // a `String` is wanted and does not compile.
-  for path in @shell.glob("*.mbt") {
+  // Async glob supports *, ?, character sets, and **; returns sorted paths
+  // (empty if no match). Spread its array into arguments: Cmd("rg", [..files]).
+  for path in glob("*.mbt") {
     println(path)
   }
   for name in @fs.readdir(".") {
@@ -175,7 +176,7 @@ async fn main {
 }
 ```
 
-Use `@shell.Cmd` to run an external program and capture its output. Only
+Use `Cmd` to run an external program and capture its output. Only
 these programs can be started:
 
 - `moon` — check, test, build, bench, run, fmt, info, add, remove, update,
@@ -207,7 +208,7 @@ where the binaries do not exist:
 | Command     | Alternatives     |
 |-------------|------------------|
 | ls          | @fs.readdir(dir) |
-| find        | @shell.glob(pattern), spread into args as `[..files]` |
+| find        | glob(pattern), spread into args as `[..files]` |
 | cat         | @fs.read_file(p).text() |
 | head/tail   | slice the split text; wc -l → count it |
 | grep        | rg, or .split("\n").filter(...) on captured output |
@@ -240,12 +241,12 @@ The plain command shape captures both streams and reads them back through
 ///|
 import {
   "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/async/shell" *,
 }
 
 ///|
 async fn main {
-  let out = @shell.Cmd("rg", [
+  let out = Cmd("rg", [
     "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
   ]).output()
   println(out.stdout())
@@ -264,12 +265,7 @@ directory, and that directory is the one place a snippet may write (`/tmp`
 itself is refused) — and read only the needed excerpt; `.status()` returns just the exit code when the output does not
 matter. You can use `moon ide doc @moonbitlang/async/shell` for the full API.
 
-When a probe captures a command's output, do not bind it to the name `test`:
-`test` is the MoonBit keyword that opens a test block. A binding like
-`let test = @shell.Cmd("moon", ["test"]).output()` is a parse error
-(`unexpected token `test``); write
-`let test_out = @shell.Cmd("moon", ["test"]).output()` or `let result = ...`
-instead, and keep `test` for `test { ... }` blocks.
+Name captured output `out` or `test_out`; `test` is a keyword, not a variable name.
 
 When a probe prints only a bounded excerpt of captured output, do not slice
 with a fixed end: `println(out.stdout()[:8000])` panics when the output is
@@ -283,14 +279,14 @@ rather than collecting it and parsing it afterward:
 ///|
 import {
   "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/async/shell" *,
   "moonbitlang/core/json",
 }
 
 ///|
 async fn main {
   let mut errors = 0
-  let exit_code = @shell.Cmd(
+  let exit_code = Cmd(
     "moon",
     ["check", "--output-json", "--diagnostic-limit", "5"],
     env={ "NO_COLOR": "1" },
@@ -318,11 +314,11 @@ does not compile. Its callback is async too. Completed lines are not
 retained. Stderr is inherited, so `mbtx` still
 includes Moon's summary in its merged output.
 
-`@shell.Cmd(program, arguments)` passes its argument vector literally: `|`,
+`Cmd(program, arguments)` passes its argument vector literally: `|`,
 `>`, `&&`, `$()`, and `*` receive no shell interpretation. Run dependent
 commands as ordinary MoonBit statements and branch on their exit codes.
 
-`mbtx` is both the command runner (via `@shell.Cmd`) and the scripting surface
+`mbtx` is both the command runner (via `Cmd`) and the scripting surface
 for reading and transforming files, parsing JSON, computing, and running quick
 language or API probes. Its tool description owns the enforced process and
 isolation contract; the examples above own the working syntax. When probing,
@@ -395,12 +391,12 @@ separator is needed: the arguments after the coordinate are moongrep's own.
 ///|
 import {
   "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/async/shell" *,
 }
 
 ///|
 async fn main {
-  let out = @shell.Cmd("moonx", [
+  let out = Cmd("moonx", [
     "moonbit-community/moongrep", "scan",
     "--pattern",
     "match $(value:exp) { Some($(some:id)) => $(some_body:exp); None => $(none_body:exp) }",
@@ -429,7 +425,7 @@ the scan root, often `./`-prefixed), `rule_id`, `description`, `range`
 with zero findings writes nothing and still exits 0. When parsing records
 with `@json.parse`, integer fields such as `range.start.line` pattern-match
 as `Number(value)` (a `Double`; call `.to_int()` on it), not `Int`. A
-whole-repo scan can match many nodes — `@shell.Cmd(...).output()` cannot
+whole-repo scan can match many nodes — `Cmd(...).output()` cannot
 capture unbounded output, so a large scan hits the shell's output-limit
 error — stream with `.each_line()` (one record per callback line, as in the
 `moon check` example above) to count or aggregate findings, and redirect
@@ -509,7 +505,7 @@ stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
     matter in MoonBit, and an append cannot mismatch an anchor. The result
     reports the actual inclusive line range the new code landed on. Insert
     mid-file only when grouping related code.
-  - `mbtx` with `@shell.Cmd` for all Moon commands, including
+  - `mbtx` with `Cmd` for all Moon commands, including
     `moon check` for compiler feedback; pass `cwd="dir"` on the `Cmd` when a
     command is package- or directory-scoped. If a run reports that source file
     writes are blocked, retry compiler feedback fixes with line-anchored `edit`
@@ -699,16 +695,16 @@ stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
     ```mbtx
     import {
       "moonbitlang/async",
-      "moonbitlang/async/shell",
+      "moonbitlang/async/shell" *,
     }
 
     async fn main {
-      @shell.Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
+      Cmd("gh", ["pr", "view", "--json", "number"]).output().check()
       for pass in 0..<12; previous = None {
         ignore(
-          @shell.Cmd("gh", ["pr", "checks", "--watch"]).output(),
+          Cmd("gh", ["pr", "checks", "--watch"]).output(),
         )
-        let snapshot = @shell.Cmd("gh", ["pr", "checks"]).output()
+        let snapshot = Cmd("gh", ["pr", "checks"]).output()
         let stdout = snapshot.stdout()
         let count = [..stdout.split("\n")]
           .filter(line => !line.is_blank())
@@ -771,8 +767,9 @@ stderr warning while exit stays 0 — treat skipped blocks as a blind spot.
   package directory. For module `name = "user/toml"` and package `lib/moon.pkg`,
   import `"user/toml/lib"` and call it as `@lib.parse(...)`; import
   `"user/toml/src"` and call `@src.name(...)` for a `src` package.
-- Configure imports in `moon.pkg`, not in `.mbt` files. Use `@alias.name` in
-  code to call imported package APIs.
+- Configure imports in `moon.pkg`, not in `.mbt` files (`.mbtx` has its own
+  import header). Use `@alias.name` in package code. `*` imports are only
+  supported in `.mbtx` scripts, not in `moon.pkg`.
 - Do not import `moonbitlang/core` as a package. Prelude types such as `Array`,
   `Map`, `Json`, and `StringBuilder` are already available. Import specific
   core subpackages only when needed, for example
@@ -1187,7 +1184,7 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
   `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
   put in the workspace).
 - Example stdin probe (no pipes — feed stdin directly):
-  `@shell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
+  `Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
   "--stdin"], stdin=Text("a.b = 1\n"))`.
 - Implement stdin mode with `@stdio.stdin.read_all().text()`, not
   `/dev/stdin` or C FFI.
