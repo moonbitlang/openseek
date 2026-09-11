@@ -68,23 +68,33 @@ async fn hosted_child(
 }
 
 ///|
-/// The review child: one `review` request carrying the joined criteria (and
-/// the baseline only when the script was given one), answered with a report
-/// in the review contract's shape.
+/// The review child: one `review` request carrying the criteria the script
+/// resolved (its arguments, the engine's standing goal, or both) and a
+/// baseline only when one was given, answered with a report in the review
+/// contract's shape.
 async fn review_child(request : Json, mode : String, calls : String) -> Unit {
   guard request is { "kind": "review", "max_steps": 100, "input": input, .. } else {
     fail("unexpected review request: \{request.stringify()}")
   }
-  guard input is { "goal": "Check CSV CRLF handling", .. } else {
-    fail("Missing goal: \{input.stringify()}")
+  let (goal, baseline) : (String, (String, Bool)?) = match mode {
+    "baseline" => ("Check CSV CRLF handling", Some(("abc", true)))
+    "standing" => ("Standing goal", Some(("def", false)))
+    "focus" => ("Standing goal\n\nAudit focus:\nCheck CSV CRLF handling", None)
+    "override" => ("Standing goal", Some(("abc", true)))
+    _ => ("Check CSV CRLF handling", None)
   }
-  if mode == "baseline" {
-    assert_true(
-      input is { "sha": "abc", "dirty": true, .. },
-      msg=input.stringify(),
-    )
-  } else {
-    assert_false(input is { "sha": _, .. }, msg=input.stringify())
+  guard input is { "goal": String(actual), .. } && actual == goal else {
+    fail("unexpected criteria: \{input.stringify()}")
+  }
+  match baseline {
+    Some((sha, dirty)) =>
+      assert_true(
+        input is { "sha": String(actual_sha), "dirty": actual_dirty, .. } &&
+        actual_sha == sha &&
+        actual_dirty == dirty.to_json(),
+        msg=input.stringify(),
+      )
+    None => assert_false(input is { "sha": _, .. }, msg=input.stringify())
   }
   append(calls, request.stringify())
   let finding : (String, String) -> Json = (severity, title) => {
@@ -125,8 +135,8 @@ async fn verify_review(root : String, temp : String, exe : String) -> Unit {
   let artifact = compile(root, temp, "review")
   for
     mode in [
-      "success", "baseline", "blockers", "missing", "no-criteria", "dirty-without-sha",
-      "help",
+      "success", "baseline", "blockers", "standing", "focus", "override", "missing",
+      "no-criteria", "dirty-without-sha", "help",
     ] {
     let calls = temp + "/review-" + mode + ".jsonl"
     let env = clean_env()
@@ -142,10 +152,21 @@ async fn verify_review(root : String, temp : String, exe : String) -> Unit {
       }
       env["WORKFLOW_HOST"] = handoff.stringify()
     }
+    // The engine's standing goal, as the host hands it over.
+    match mode {
+      "standing" | "override" => {
+        env["OPENSEEK_GOAL"] = "Standing goal"
+        env["OPENSEEK_GOAL_SHA"] = "def"
+        env["OPENSEEK_GOAL_DIRTY"] = "false"
+      }
+      "focus" => env["OPENSEEK_GOAL"] = "Standing goal"
+      _ => ()
+    }
     let args = match mode {
       "baseline" =>
         ["--sha", "abc", "--dirty", "--", "Check", "CSV", "CRLF", "handling"]
-      "no-criteria" => []
+      "override" => ["--sha", "abc", "--dirty"]
+      "standing" | "no-criteria" => []
       "dirty-without-sha" => ["--dirty", "Check CSV CRLF handling"]
       "help" => ["--help"]
       _ => ["Check CSV CRLF handling"]
@@ -160,22 +181,24 @@ async fn verify_review(root : String, temp : String, exe : String) -> Unit {
     let output = result.stdout() + result.stderr()
     let launched = read_calls(calls)
     let succeeds = match mode {
-      "success" | "baseline" | "blockers" | "help" => true
+      "success" | "baseline" | "standing" | "focus" | "override" | "help" =>
+        true
       _ => false
     }
     assert_eq(result.exit_code() == 0, succeeds, msg=output)
     let reviewed = match mode {
-      "success" | "baseline" | "blockers" => 1
+      "success" | "baseline" | "blockers" | "standing" | "focus" | "override" =>
+        1
       _ => 0
     }
     assert_eq(launched.length(), reviewed, msg=output)
     let expected = match mode {
-      "success" | "baseline" => "findings=0 blockers=0"
-      "blockers" => "findings=2 blockers=1"
+      "blockers" => "does not hold yet"
       "missing" => "subrun=true"
       "no-criteria" => "no criteria given"
       "dirty-without-sha" => "--dirty needs --sha"
-      _ => "usage:"
+      "help" => "usage:"
+      _ => "findings=0 blockers=0"
     }
     assert_true(output.contains(expected), msg=output)
     assert_eq(
@@ -183,8 +206,9 @@ async fn verify_review(root : String, temp : String, exe : String) -> Unit {
       reviewed == 1,
       msg=output,
     )
+    // The report is printed BEFORE the blocker exit, so the caller reads it.
     assert_eq(
-      output.contains("does not hold yet"),
+      output.contains("findings=2 blockers=1"),
       mode == "blockers",
       msg=output,
     )

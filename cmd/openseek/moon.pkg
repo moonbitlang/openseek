@@ -3,6 +3,7 @@ import {
   "bobzhang/openseek/agent",
   "bobzhang/openseek/agent_explore",
   "bobzhang/openseek/agent_subrun",
+  "bobzhang/openseek/agent_subrun/host",
   "bobzhang/openseek/agent_review",
   "bobzhang/openseek/agent_worker",
   "bobzhang/openseek/agent_pattern_repair",

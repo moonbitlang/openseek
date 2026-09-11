@@ -1854,12 +1854,13 @@ fn description(
       #|reserved and the engine is not on the spawn allowlist: a workflow written
       #|without it runs with no handoff and its subagents are refused.
       #|
-      #|For an independent worktree review, run the bundled script with your audit
-      #|criteria in args: `{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling"],"subrun":true}`.
-      #|It prints the reviewer's full report (`findings`, `summary`, `stats`) and a
-      #|`findings=N blockers=M` line; a blocker means the claim does not hold yet.
-      #|Nothing is audited implicitly: state the standing goal or claim yourself
-      #|(add `--sha COMMIT` when you know the baseline it was recorded at).
+      #|For an independent worktree review, run the bundled script:
+      #|`{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling"],"subrun":true}`.
+      #|With empty args it audits the standing goal and its recorded baseline, which
+      #|the engine supplies; args narrow that goal as an audit focus, or are the whole
+      #|criteria when no goal stands. It prints the reviewer's full report (`findings`,
+      #|`summary`, `stats`) and a `findings=N blockers=M` line, and FAILS on a blocker
+      #|finding: the claim does not hold yet.
     )
   } else {
     ""

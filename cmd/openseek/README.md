@@ -54,9 +54,10 @@ resumes that session under `--session-root` (default `.openseek`). Relative
 session roots are resolved under `--dir`.
 `--review-deadline` bounds one automatic `--review-gate` audit to that many
 milliseconds; the default is 900000 (15 minutes). Model-initiated reviews run
-the bundled `@builtin/review.mbtx` workflow through `mbtx` with explicit audit
-criteria in `args`; its child has the hosted default deadline of 600000
-(10 minutes), independent of this flag. See the
+the bundled `@builtin/review.mbtx` workflow through `mbtx`, auditing the live
+standing goal (handed over by the engine) and/or the criteria in `args`; its
+child has the hosted default deadline of 600000 (10 minutes), independent of
+this flag. See the
 [hosted review notes](../../agent_tool/mbtx/README.mbt.md#independent-review).
 Hosted delegation requires a durable session; `--no-session` cannot delegate.
 The standalone `openseek review --base REF` command still runs the review

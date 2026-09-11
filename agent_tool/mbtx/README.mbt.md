@@ -399,23 +399,29 @@ child ids from a block that is not its own.
 ### Independent review
 
 The bundled `@builtin/review.mbtx` script runs one `review` child through the
-same hosted workflow as scouts. Set `subrun: true` and put the audit criteria
-in `args`:
+same hosted workflow as scouts. Set `subrun: true`; `args` are optional:
 
 ```json
 {"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling."],"subrun":true}
 ```
 
+With empty `args` the child audits the standing goal and the baseline it
+recorded. The engine hands both to the snippet's environment at reservation
+time (`OPENSEEK_GOAL`, `OPENSEEK_GOAL_SHA`, `OPENSEEK_GOAL_DIRTY`; see
+`@host.AuditCriteria`), read from the live session rather than a turn-start
+snapshot, so the audited party never restates its own criteria. Given `args`,
+they narrow that goal as an audit focus, or are the whole criteria when no
+goal stands. `--sha COMMIT` (and `--dirty` if the worktree was already dirty
+then) overrides the engine's baseline.
+
 The child runs `agent_review.run_goal_audit` against the current worktree and
 validates its submission; the script prints the full report JSON followed by a
-`findings=N blockers=M` line. It never reduces the report to a digest or turns
-blocker findings into a tool error: the caller reads the findings. A missing
-report raises. Criteria are explicit — the script does not read the standing
-goal or its baseline; pass `--sha COMMIT` (and `--dirty` if the worktree was
-already dirty then) when the baseline is known. Hosted child limits apply
-(one child, 10-minute default deadline, 100-step ceiling); there is no shared
-per-turn review budget, and `--review-deadline` applies only to the automatic
-goal-met gate. A hand-written workflow reaches the same child with
+`findings=N blockers=M` line, then fails when any finding is a blocker, so the
+tool result is an error the model cannot read past while the report stays in
+it. A missing report raises. Hosted child limits apply (one child, 10-minute
+default deadline, 100-step ceiling); there is no shared per-turn review
+budget, and `--review-deadline` applies only to the automatic goal-met gate. A
+hand-written workflow reaches the same child with
 `wf.agent_call(kind="review", input={"goal": ...})` — `agent_call`, not the
 scout-shaped `agent`. Without a durable session, hosted delegation is
 unavailable; the standalone `openseek review --base REF` still calls the review

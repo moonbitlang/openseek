@@ -8,16 +8,21 @@ import {
 
 ///|
 /// Run with mbtx(description="Review the worktree", filename="@builtin/review.mbtx", args=["What to audit against"], subrun=true).
-/// One review child audits the current worktree against the criteria in
-/// args and prints its full structured report; no retries or automatic edits.
+/// One review child audits the current worktree against the standing goal
+/// the engine supplies and/or the criteria in args, prints its full
+/// structured report, and fails on a blocker finding; no retries or
+/// automatic edits.
 const Usage : String =
-  #|usage: @builtin/review.mbtx [--sha COMMIT [--dirty]] [--] CRITERIA...
+  #|usage: @builtin/review.mbtx [--sha COMMIT [--dirty]] [--] [CRITERIA...]
   #|
-  #|The remaining arguments, joined with spaces, are the criteria the reviewer
-  #|audits the current worktree against: a standing goal, a claim to verify,
-  #|or a component to scrutinize. --sha names the baseline commit the criteria
-  #|were recorded at (--dirty: the worktree was already dirty then); omit both
-  #|when unknown. Requires the hosted handoff: call mbtx with subrun=true.
+  #|With no arguments the reviewer audits the standing goal and the baseline
+  #|it recorded, which the engine supplies in OPENSEEK_GOAL (and
+  #|OPENSEEK_GOAL_SHA/OPENSEEK_GOAL_DIRTY). The remaining arguments, joined
+  #|with spaces, narrow that goal as an audit focus, or are the whole criteria
+  #|when no goal stands. --sha names the baseline commit the criteria were
+  #|recorded at (--dirty: the worktree was already dirty then) and overrides
+  #|the engine's. A blocker finding fails the call: the claim does not hold
+  #|yet. Requires the hosted handoff: call mbtx with subrun=true.
 
 ///|
 async fn main {
@@ -49,9 +54,23 @@ async fn main {
       }
     }
   }
-  let goal = criteria.join(" ")
-  guard !goal.is_blank() else { fail("no criteria given\n\{Usage}") }
   guard sha is Some(_) || !dirty else { fail("--dirty needs --sha\n\{Usage}") }
+  let focus = criteria.join(" ")
+  let standing = @env.get_env_var("OPENSEEK_GOAL")
+  let goal = match (standing, focus.is_blank()) {
+    (Some(text), true) => text
+    (Some(text), false) => "\{text}\n\nAudit focus:\n\{focus}"
+    (None, false) => focus
+    (None, true) => fail("no criteria given and no standing goal\n\{Usage}")
+  }
+  // An explicit baseline wins; the engine's accompanies only the standing
+  // goal it was recorded for.
+  let (sha, dirty) = match (sha, standing, @env.get_env_var("OPENSEEK_GOAL_SHA")) {
+    (Some(sha), _, _) => (Some(sha), dirty)
+    (None, Some(_), Some(sha)) =>
+      (Some(sha), @env.get_env_var("OPENSEEK_GOAL_DIRTY") == Some("true"))
+    _ => (None, false)
+  }
   guard @hosted.context() is Some(ctx) else {
     fail(
       "This workflow needs OpenSeek: call mbtx with filename=@builtin/review.mbtx and subrun=true",
@@ -83,8 +102,10 @@ async fn main {
     println(
       "findings=\{findings} blockers=\{blockers} tokens=\{wf.tokens_spent()}",
     )
+    // The report is already printed; a failing exit makes the tool result an
+    // error the model cannot read past.
     if blockers > 0 {
-      println("A blocker finding means the claim does not hold yet.")
+      fail("\{blockers} blocker finding(s): the claim does not hold yet")
     }
   })
 }

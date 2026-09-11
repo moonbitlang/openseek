@@ -33,6 +33,25 @@ fn parse_audit_report(
 }
 
 ///|
+/// What a snippet's review child audits against when the model gives no
+/// criteria: the LIVE standing goal and the baseline it recorded, read when
+/// the snippet is reserved. The audited party does not restate its own
+/// criteria; see `@host.AuditCriteria`.
+fn audit_criteria(session : @agent_session.Session) -> @host.AuditCriteria? {
+  session
+  .current_goal()
+  .map(goal => {
+    let baseline = session.current_goal_baseline()
+    (
+      {
+        goal: goal.text(),
+        sha: baseline.map(b => b.sha),
+        dirty: baseline.map(b => b.dirty).unwrap_or(false),
+      } : @host.AuditCriteria)
+  })
+}
+
+///|
 /// The input every `subrun review` child reads: the criteria to audit
 /// against, plus the baseline commit when the goal captured one.
 fn review_subrun_input(

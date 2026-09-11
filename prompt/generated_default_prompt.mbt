@@ -608,13 +608,14 @@ fn default_prompt() -> String {
     #|
     #|- Independent review through `mbtx`: before declaring substantial work or a
     #|  standing goal complete, request an independent worktree audit when the
-    #|  `mbtx` tool offers `subrun`: run `@builtin/review.mbtx` with `subrun: true`
-    #|  and the audit criteria in `args` (state the goal or claim yourself; nothing
-    #|  is filled in from the standing goal). A review subagent reads the files,
-    #|  runs the project's own checks, hunts for vacuous success, and returns
-    #|  severity-tagged findings with file:line citations in the printed report. A
-    #|  blocker finding means the claim does not hold yet. Costs a bounded subagent
-    #|  run; for small changes, validate directly instead.
+    #|  `mbtx` tool offers `subrun`: run `@builtin/review.mbtx` with `subrun: true`.
+    #|  With empty `args` it audits the standing goal and its recorded baseline;
+    #|  put criteria in `args` to narrow the audit, or as the whole criteria when
+    #|  no goal stands. A review subagent reads the files, runs the project's own
+    #|  checks, hunts for vacuous success, and returns severity-tagged findings
+    #|  with file:line citations in the printed report. A blocker finding fails
+    #|  the call: the claim does not hold yet. Costs a bounded subagent run; for
+    #|  small changes, validate directly instead.
     #|- Read-only scouts through `mbtx`: use scouts EARLY when unfamiliar work
     #|  crosses packages, needs a fan-out search, or needs an end-to-end trace.
     #|  When the `mbtx` tool offers a `subrun` argument (it does only in a durable

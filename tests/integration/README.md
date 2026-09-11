@@ -34,7 +34,9 @@ in a temporary directory, keeping the bundled resource tree clean.
 The hosted tests cover success, partial failure, missing handoff, insufficient
 capacity, empty answers, bounded context, nested-package discovery, and citation
 validation (including escaping symlinks and invalid line numbers); the review
-script's criteria and baseline forwarding, blocker counting, and usage errors. The CI tests
+script's criteria resolution (arguments, the engine's standing goal, or both),
+baseline forwarding and override, the failing exit on blockers, and usage
+errors. The CI tests
 cover stable completion, PR-head replacement, failure/cancellation states,
 registration gaps, errors, timeouts, and diagnostic argument lists.
 
