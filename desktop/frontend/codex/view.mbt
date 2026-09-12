@@ -150,8 +150,9 @@ pub fn State::project_draft(
   self : State,
   context : SidebarContext,
   root : String,
+  include_selected? : Bool = false,
 ) -> @conversation.Input? {
-  guard !context.selected &&
+  guard (include_selected || !context.selected) &&
     context.project_registered(root) &&
     self.active_draft() is Some(draft) &&
     CodexProject(draft.grouping_root()) == CodexProject(root) else {

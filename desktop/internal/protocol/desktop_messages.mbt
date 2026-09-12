@@ -1132,7 +1132,34 @@ pub(all) struct SessionChangedPayload {
 ///|
 pub(all) struct WorkspacesChangedPayload {
   workspaces : Array[String]
-} derive(Debug, Eq, FromJson, ToJson)
+  chat_root : String?
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for WorkspacesChangedPayload with fn to_json(self) {
+  let fields : Map[String, Json] = { "workspaces": self.workspaces.to_json() }
+  if self.chat_root is Some(root) {
+    fields["chat_root"] = root.to_json()
+  }
+  fields.to_json()
+}
+
+///|
+pub impl FromJson for WorkspacesChangedPayload with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected a workspace snapshot"))
+  }
+  let object = JsonObject::of(fields, path)
+  guard fields.get("workspaces") is Some(listed) else {
+    raise JsonDecodeError(
+      (path.add_key("workspaces"), "expected a workspace list"),
+    )
+  }
+  {
+    workspaces: @json.from_json(listed),
+    chat_root: object.optional_string("chat_root"),
+  }
+}
 
 ///|
 /// One workspace's worktree list changed; sidebars re-join their name chips

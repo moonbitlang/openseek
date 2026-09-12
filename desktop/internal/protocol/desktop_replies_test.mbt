@@ -699,7 +699,10 @@ test "text search payload rejects missing and invalid required fields" {
 
 ///|
 test "workspace replies keep success compatible and carry refusals" {
-  let success : @protocol.WorkspacesReply = Workspaces(["/home/u/proj"])
+  let success : @protocol.WorkspacesReply = Workspaces(
+    ["/home/u/proj"],
+    chat_root=None,
+  )
   @debug.assert_eq(success.to_json(), { "workspaces": ["/home/u/proj"] })
   let decoded : @protocol.WorkspacesReply = @json.from_json(success.to_json())
   @debug.assert_eq(decoded, success)
@@ -1495,4 +1498,48 @@ test "file stats keep missing, present, and failed distinct on the wire" {
     _ => return
   }
   fail("an empty signature must not decode: \{Repr(legacy)}")
+}
+
+///|
+test "workspace snapshots preserve managed chat roots and reject malformed metadata" {
+  let root = "/app-data/workspaces"
+  let reply : @protocol.WorkspacesReply = Workspaces(
+    [root + "/one"],
+    chat_root=Some(root),
+  )
+  let decoded : @protocol.WorkspacesReply = @json.from_json(reply.to_json())
+  assert_eq(decoded, reply)
+  let changed : @protocol.WorkspacesChangedPayload = {
+    workspaces: [root + "/one"],
+    chat_root: Some(root),
+  }
+  let decoded_change : @protocol.WorkspacesChangedPayload = @json.from_json(
+    changed.to_json(),
+  )
+  assert_eq(decoded_change, changed)
+  for
+    wire in (
+      [{ "workspaces": [], "chat_root": 42 }, { "workspaces": null }, {}] :
+      Array[Json]) {
+    assert_true(
+      refused(() => {
+        let _ : @protocol.WorkspacesReply = @json.from_json(wire)
+      }),
+    )
+    assert_true(
+      refused(() => {
+        let _ : @protocol.WorkspacesChangedPayload = @json.from_json(wire)
+      }),
+    )
+  }
+  let absent : @protocol.WorkspacesChangedPayload = @json.from_json({
+    "workspaces": [],
+  })
+  let nullable : @protocol.WorkspacesChangedPayload = @json.from_json({
+    "workspaces": [],
+    "chat_root": null,
+  })
+  assert_eq(absent.chat_root, None)
+  assert_eq(nullable.chat_root, None)
+  @debug.assert_eq(absent.to_json(), { "workspaces": [] })
 }

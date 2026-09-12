@@ -198,6 +198,7 @@ fn Model::push_group_component_inputs(
   workspace : @common.Uri,
   listed~ : (String) -> Bool,
   archived~ : (String) -> Bool,
+  standalone? : Bool = false,
 ) -> Unit {
   let composing = self.composing_new_chat()
   // Every row in this group shares the group's store placement; it becomes
@@ -217,10 +218,10 @@ fn Model::push_group_component_inputs(
     // The new-chat page belongs to the highlighted project until it becomes
     // real work. Do not manufacture a selected child row merely because its
     // client-local session id already exists.
-    if composing && on_screen {
+    if composing && on_screen && !standalone {
       continue
     }
-    if !worth_keeping {
+    if !worth_keeping && !standalone {
       continue
     }
     // A fresh worktree conversation knows its binding locally; once the
@@ -239,8 +240,15 @@ fn Model::push_group_component_inputs(
           self,
           dev.channel,
           conv.session_id,
-          conversation_title(conv),
-          nested=true,
+          if standalone &&
+            !conv.has_begun() &&
+            conv.task.is_empty() &&
+            conv.pending_prompt is None {
+            "New chat"
+          } else {
+            conversation_title(conv)
+          },
+          nested=!standalone,
           worktree?,
           root~,
         ),
@@ -287,7 +295,7 @@ fn Model::push_group_component_inputs(
           dev.channel,
           child.id,
           child_label,
-          nested=true,
+          nested=!standalone,
           subrun=true,
           root~,
         ),
@@ -310,7 +318,7 @@ fn Model::push_group_component_inputs(
           // parent in another store), so it remains independently archivable;
           // once beside its archived parent, family restore picks it up.
           archivable=true,
-          nested=true,
+          nested=!standalone,
           worktree?=worktree_name_for(dev, workspace, tree.item.id),
           root~,
           children~,
@@ -409,16 +417,27 @@ fn Model::sidebar_component_sections(
     None
   }
   let projects : Array[@section.Entry] = []
+  let chat_rows : Array[(RowStamp, @conversation.Input)] = []
+  let mut chats_activation : String? = None
   for path in dev.projects {
+    let standalone = dev.is_chat_workspace(path)
     let stamped : Array[(RowStamp, @conversation.Input)] = []
-    self.push_group_component_inputs(stamped, dev, path, listed~, archived~)
+    self.push_group_component_inputs(
+      stamped,
+      dev,
+      path,
+      listed~,
+      archived~,
+      standalone~,
+    )
     let mut codex_activation : String? = None
     if codex_context is Some(context) &&
       @resource.path_for(path, dev.channel) is Some(root) {
       // The selected Codex draft is the project's new-chat page, not a child
       // conversation yet. `project_draft` returns only an off-screen draft
       // that needs a recovery row.
-      if self.codex.project_draft(context, root) is Some(draft) {
+      if self.codex.project_draft(context, root, include_selected=standalone)
+        is Some(draft) {
         stamped.push((ComposingNow, draft))
       }
       for row in self.codex.project_conversations(context, root) {
@@ -430,10 +449,22 @@ fn Model::sidebar_component_sections(
       }
       codex_activation = self.codex.project_activation(context, root)
     }
-    let conversations = ordered_by_recency(stamped)
     let openseek_activation = activation(
       dev.active_project is Some(project) && project == path,
     )
+    if standalone {
+      for (stamp, row) in stamped {
+        chat_rows.push((stamp, { ..row, nested: false, }))
+      }
+      if openseek_activation is Some(_) {
+        chats_activation = openseek_activation
+      }
+      if codex_activation is Some(_) {
+        chats_activation = codex_activation
+      }
+      continue
+    }
+    let conversations = ordered_by_recency(stamped)
     projects.push(
       @section.Project({
         id: @project.Id(source="openseek.projects", channel~, root=path.path),
@@ -466,20 +497,41 @@ fn Model::sidebar_component_sections(
       )
     }
   }
-  let openseek_section_activation = activation(dev.active_project is Some(_))
+  let openseek_section_activation = activation(
+    dev.active_project is Some(project) && !dev.is_chat_workspace(project),
+  )
   sections.push({
     id: @section.Id(source="openseek.projects", channel~),
     label: "Projects",
     initially_collapsed: false,
     activation: if openseek_section_activation is Some(_) {
       openseek_section_activation
-    } else if codex_context is Some(context) && context.selected {
+    } else if codex_context is Some(context) &&
+      context.selected &&
+      chats_activation is None {
       self.codex.active_id()
     } else {
       None
     },
     action: Some({ title: "Add a project", disabled: false, }),
     entries: projects,
+  })
+  sections.push({
+    id: @section.Id(source="openseek.chats", channel~),
+    label: "Chats",
+    initially_collapsed: false,
+    activation: chats_activation,
+    action: Some({
+      title: if self.chat_creation_pending() {
+        "Creating chat…"
+      } else {
+        "New chat"
+      },
+      disabled: self.chat_creation_pending() ||
+      self.pending_project_adoption is Some(_) ||
+      dev.bridge != Connected,
+    }),
+    entries: ordered_by_recency(chat_rows).map(row => @section.Conversation(row)),
   })
   // Archived conversations fold behind a collapsed section at the end of the
   // list. Their records live in the store's `archived` twin, so they come

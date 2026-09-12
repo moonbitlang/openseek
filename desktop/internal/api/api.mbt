@@ -559,13 +559,18 @@ pub fn endpoints(
       })
     }),
     @endpoint.Endpoint::remote(@commands.workspace_list, async fn(_) {
-      @engine.list_workspaces()
+      let chat_root = @host.chat_workspace_root()
+      match @engine.list_workspaces() {
+        Workspaces(paths, ..) => Workspaces(paths, chat_root~)
+        WorkspaceError(message) => WorkspaceError(message)
+      }
     }),
     @endpoint.Endpoint::remote(@commands.workspace_add, async fn(payload) {
       // A refusal travels inside the reply: the local bridge would flatten
       // a raised error to "op ext:openseek/workspace.add failed".
+      let chat_root = @host.chat_workspace_root()
       @engine.attach_workspace(payload.path, workspaces => {
-        state.hub.publish(WorkspaceChanged({ workspaces, }))
+        state.hub.publish(WorkspaceChanged({ workspaces, chat_root, }))
       }) catch {
         error if @async.is_being_cancelled() => raise error
         @engine.EngineError(message) => WorkspaceError(message)
@@ -574,8 +579,9 @@ pub fn endpoints(
       }
     }),
     @endpoint.Endpoint::remote(@commands.workspace_remove, async fn(payload) {
+      let chat_root = @host.chat_workspace_root()
       @engine.detach_workspace(state.manager, payload.path, workspaces => {
-        state.hub.publish(WorkspaceChanged({ workspaces, }))
+        state.hub.publish(WorkspaceChanged({ workspaces, chat_root, }))
       }) catch {
         error if @async.is_being_cancelled() => raise error
         @engine.EngineError(message) => WorkspaceError(message)
@@ -619,9 +625,10 @@ pub fn endpoints(
           // workspace registry. Choosing Worktree on first Send is the user's
           // explicit request to attach that main checkout and create beneath
           // it, so perform both operations in this host command.
+          let chat_root = @host.chat_workspace_root()
           ignore(
             @engine.attach_workspace(workspace, workspaces => {
-              state.hub.publish(WorkspaceChanged({ workspaces, }))
+              state.hub.publish(WorkspaceChanged({ workspaces, chat_root, }))
             }),
           )
           @worktree.WorktreeOwner::codex(thread_id)

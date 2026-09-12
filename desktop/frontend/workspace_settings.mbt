@@ -628,7 +628,11 @@ test "a straggler reply for a detached workspace is rejected" {
   assert_true(seen.default_worktree_mode(Local, workspace))
   // Detach prunes the row — and with it the generation it was applied
   // under, so the numeric fence alone resets to -1.
-  let (_, detached) = update_dev(dispatch, ProjectsChanged([]), seen)
+  let (_, detached) = update_dev(
+    dispatch,
+    ProjectsChanged([], chat_root=None),
+    seen,
+  )
   assert_true(detached.dev().workspace_settings.is_empty())
   // A reply issued before the detach answers afterwards: registry
   // membership, not the reset fence, keeps it from resurrecting a row
@@ -720,7 +724,11 @@ test "detaching a workspace closes its settings page" {
     }),
     screen: WorkspaceSettings(channel=Local, workspace=gone),
   }
-  let (_, adopted) = update_dev(dispatch, ProjectsChanged([kept]), model)
+  let (_, adopted) = update_dev(
+    dispatch,
+    ProjectsChanged([kept], chat_root=None),
+    model,
+  )
   assert_true(adopted.screen is Chat)
   // A snapshot that retains the workspace leaves the settings page alone.
   let staying = {
@@ -732,7 +740,10 @@ test "detaching a workspace closes its settings page" {
   }
   let (_, retained) = update_dev(
     dispatch,
-    ProjectsChanged([@interop.ChannelId::Local.test_project(), kept]),
+    ProjectsChanged(
+      [@interop.ChannelId::Local.test_project(), kept],
+      chat_root=None,
+    ),
     staying,
   )
   assert_true(

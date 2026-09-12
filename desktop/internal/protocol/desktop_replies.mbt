@@ -724,14 +724,20 @@ pub impl ToJson for SessionExportReply with fn to_json(self) {
 /// refusal rides in the reply body as `{error:"..."}` because the local
 /// bridge summarizes raised handler errors down to "op <name> failed".
 pub(all) enum WorkspacesReply {
-  Workspaces(Array[String])
+  Workspaces(Array[String], chat_root~ : String?)
   WorkspaceError(String)
 } derive(Debug, Eq)
 
 ///|
 pub impl ToJson for WorkspacesReply with fn to_json(self) {
   match self {
-    Workspaces(workspaces) => { "workspaces": workspaces }
+    Workspaces(workspaces, chat_root~) => {
+      let fields : Map[String, Json] = { "workspaces": workspaces.to_json() }
+      if chat_root is Some(root) {
+        fields["chat_root"] = root.to_json()
+      }
+      fields.to_json()
+    }
     WorkspaceError(message) => { "error": message }
   }
 }
@@ -751,7 +757,10 @@ pub impl FromJson for WorkspacesReply with fn from_json(json, path) {
       guard fields.get("workspaces") is Some(listed) else {
         raise JsonDecodeError((path, "expected a workspaces list"))
       }
-      Workspaces(@json.from_json(listed))
+      Workspaces(
+        @json.from_json(listed),
+        chat_root=JsonObject::of(fields, path).optional_string("chat_root"),
+      )
     }
   }
 }

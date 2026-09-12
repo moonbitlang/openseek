@@ -24,15 +24,27 @@ fn fetch_projects(
       }
       // Translate the existing wire name at the protocol boundary; frontend
       // state consistently calls this registered directory list projects.
-      guard reply is Workspaces(listed) else { return }
+      guard reply is Workspaces(listed, chat_root~) else { return }
       let projects : Array[@common.Uri] = []
       for path in listed {
         guard @resource.of_path(channel, path) is Some(resource) else { return }
         projects.push(resource)
       }
+      let chat_root = match chat_root {
+        Some(path) => {
+          guard @resource.of_path(channel, path) is Some(root) else { return }
+          Some(root)
+        }
+        None => None
+      }
       scheduler.add(
         dispatch(
-          ProjectsLoaded(projects, connection_generation~, request_generation~),
+          ProjectsLoaded(
+            projects,
+            connection_generation~,
+            request_generation~,
+            chat_root~,
+          ),
         ),
       )
     })
@@ -114,7 +126,7 @@ async fn project_action_into(
     // ordering information and must not touch the fenced list state — but
     // for an add it is the one reply causally tied to our own commit, so
     // it alone may resolve which row a pending add-and-focus is about.
-    Workspaces(listed) =>
+    Workspaces(listed, ..) =>
       if report_added {
         let committed : Array[@common.Uri] = []
         for path in listed {
@@ -267,6 +279,7 @@ test "detaching the active workspace opens the newest remaining conversation" {
       [kept_workspace],
       connection_generation=0,
       request_generation=0,
+      chat_root=None,
     ),
     model,
   )
@@ -286,6 +299,7 @@ test "detaching the active workspace opens the newest remaining conversation" {
       [kept_workspace],
       connection_generation=0,
       request_generation=0,
+      chat_root=None,
     ),
     model,
   )
@@ -304,6 +318,7 @@ test "detaching the active workspace opens the newest remaining conversation" {
       [kept_workspace],
       connection_generation=0,
       request_generation=0,
+      chat_root=None,
     ),
     attached,
   )
@@ -352,7 +367,11 @@ test "detaching the active workspace preserves a fallback worktree" {
         },
       ],
     })
-  let (_, next) = update_dev(dispatch, ProjectsChanged([kept_project]), model)
+  let (_, next) = update_dev(
+    dispatch,
+    ProjectsChanged([kept_project], chat_root=None),
+    model,
+  )
   assert_eq(next.active_session, fallback.session_id)
   assert_eq(next.active().workspace, Worktree(project=kept_project, name="wt"))
   assert_eq(next.dev().active_project, Some(kept_project))
@@ -381,7 +400,11 @@ test "detaching the last workspace leaves the app on onboarding" {
         },
       ],
     })
-  let (_, detached) = update_dev(dispatch, ProjectsChanged([]), model)
+  let (_, detached) = update_dev(
+    dispatch,
+    ProjectsChanged([], chat_root=None),
+    model,
+  )
   inspect(detached.active_session, content="")
   inspect(detached.dev().sessions.length(), content="0")
   assert_true(detached.dev().active_project is None)
@@ -415,7 +438,11 @@ test "detaching the last workspace leaves the app on onboarding" {
   // Attaching one again is what ends onboarding: the registry snapshot asks
   // for a fresh session, and that rotation lands in the new project.
   let project = @interop.ChannelId::Local.test_resource("/attached")
-  let (_, attached) = update_dev(dispatch, ProjectsChanged([project]), rotated)
+  let (_, attached) = update_dev(
+    dispatch,
+    ProjectsChanged([project], chat_root=None),
+    rotated,
+  )
   assert_true(attached.active_conversation() is None)
   let (_, opened) = update(
     dispatch,
@@ -437,7 +464,12 @@ test "an older workspace reply cannot replace a newer same-connection reply" {
   })
   let (_, newest) = update_dev(
     dispatch,
-    ProjectsLoaded([current], connection_generation=0, request_generation=2),
+    ProjectsLoaded(
+      [current],
+      connection_generation=0,
+      request_generation=2,
+      chat_root=None,
+    ),
     model,
   )
   inspect(newest.dev().projects.length(), content="1")
@@ -445,7 +477,12 @@ test "an older workspace reply cannot replace a newer same-connection reply" {
   inspect(newest.dev().sessions_request_generation, content="1")
   let (_, stale) = update_dev(
     dispatch,
-    ProjectsLoaded([old], connection_generation=0, request_generation=1),
+    ProjectsLoaded(
+      [old],
+      connection_generation=0,
+      request_generation=1,
+      chat_root=None,
+    ),
     newest,
   )
   inspect(stale.dev().projects.length(), content="1")
@@ -463,14 +500,23 @@ test "a workspace commit broadcast supersedes list replies and refreshes session
     projects: [current],
     projects_request_generation: 2,
   })
-  let (_, changed) = update_dev(dispatch, ProjectsChanged([new_]), model)
+  let (_, changed) = update_dev(
+    dispatch,
+    ProjectsChanged([new_], chat_root=None),
+    model,
+  )
   inspect(changed.dev().projects_request_generation, content="3")
   inspect(changed.dev().projects.length(), content="1")
   assert_eq(changed.dev().projects[0], new_)
   inspect(changed.dev().sessions_request_generation, content="1")
   let (_, stale) = update_dev(
     dispatch,
-    ProjectsLoaded([current], connection_generation=0, request_generation=2),
+    ProjectsLoaded(
+      [current],
+      connection_generation=0,
+      request_generation=2,
+      chat_root=None,
+    ),
     changed,
   )
   assert_eq(stale.dev().projects[0], new_)
@@ -480,9 +526,12 @@ test "a workspace commit broadcast supersedes list replies and refreshes session
 test "workspace commit decoder carries the canonical registry list" {
   guard notification_msg(
       @interop.ChannelId::Local,
-      @protocol.Notification::WorkspaceChanged({ workspaces: ["/one", "/two"], }),
+      @protocol.Notification::WorkspaceChanged({
+        workspaces: ["/one", "/two"],
+        chat_root: None,
+      }),
     )
-    is Some(FromDevice(_, ProjectsChanged(paths))) else {
+    is Some(FromDevice(_, ProjectsChanged(paths, chat_root=None))) else {
     fail("expected a workspace change")
   }
   inspect(paths.length(), content="2")
@@ -799,7 +848,11 @@ test "a confirmed add keeps the raw host path for reply correlation" {
     ProjectAddCommitted(added="/C:/project", paths=[picked]),
     confirmed,
   )
-  let (_, focused) = update_dev(dispatch, ProjectsChanged([picked]), resolved)
+  let (_, focused) = update_dev(
+    dispatch,
+    ProjectsChanged([picked], chat_root=None),
+    resolved,
+  )
   assert_eq(focused.dev().active_project, Some(picked))
 }
 
@@ -818,14 +871,18 @@ test "a confirmed add focuses the new project when its commit lands" {
   assert_true(resolved.dev().active_project is None)
   // The commit broadcast brings the row: focus lands, the way the row's
   // own ＋ activates it.
-  let (_, focused) = update_dev(dispatch, ProjectsChanged([picked]), resolved)
+  let (_, focused) = update_dev(
+    dispatch,
+    ProjectsChanged([picked], chat_root=None),
+    resolved,
+  )
   assert_eq(focused.dev().active_project, Some(picked))
   // The adoption is consumed: a later broadcast adding someone else's
   // project must not move the focus again.
   let other = @interop.ChannelId::Local.test_resource("/elsewhere")
   let (_, later) = update_dev(
     dispatch,
-    ProjectsChanged([picked, other]),
+    ProjectsChanged([picked, other], chat_root=None),
     focused,
   )
   assert_eq(later.dev().active_project, Some(picked))
@@ -838,7 +895,11 @@ test "a commit broadcast that beats the add reply still focuses" {
   let confirmed = confirmed_add(dispatch, picked)
   // The broadcast arrives first: the row exists, but nothing has said it
   // is ours, so the pending stays and focus waits.
-  let (_, arrived) = update_dev(dispatch, ProjectsChanged([picked]), confirmed)
+  let (_, arrived) = update_dev(
+    dispatch,
+    ProjectsChanged([picked], chat_root=None),
+    confirmed,
+  )
   assert_true(arrived.dev().active_project is None)
   let (_, focused) = update_dev(
     dispatch,
@@ -863,7 +924,7 @@ test "a confirmed add adopts the registry's canonical spelling" {
   )
   let (_, focused) = update_dev(
     dispatch,
-    ProjectsChanged([canonical]),
+    ProjectsChanged([canonical], chat_root=None),
     resolved,
   )
   assert_eq(focused.dev().active_project, Some(canonical))
@@ -877,7 +938,11 @@ test "another client's commit cannot steal a pending focus" {
   let confirmed = confirmed_add(dispatch, picked)
   // Someone else's commit broadcasts before our reply: it must neither
   // focus nor consume the pending.
-  let (_, theirs) = update_dev(dispatch, ProjectsChanged([other]), confirmed)
+  let (_, theirs) = update_dev(
+    dispatch,
+    ProjectsChanged([other], chat_root=None),
+    confirmed,
+  )
   assert_true(theirs.dev().active_project is None)
   // Our reply then lists both rows; the picked one is provably ours, and
   // its broadcast finishes the focus.
@@ -889,7 +954,7 @@ test "another client's commit cannot steal a pending focus" {
   assert_true(resolved.dev().active_project is None)
   let (_, focused) = update_dev(
     dispatch,
-    ProjectsChanged([other, picked]),
+    ProjectsChanged([other, picked], chat_root=None),
     resolved,
   )
   assert_eq(focused.dev().active_project, Some(picked))
@@ -909,7 +974,11 @@ test "an unattributable add reply stands the focus down" {
     ProjectAddCommitted(added=picked.path, paths=[one, two]),
     confirmed,
   )
-  let (_, after) = update_dev(dispatch, ProjectsChanged([one, two]), stood_down)
+  let (_, after) = update_dev(
+    dispatch,
+    ProjectsChanged([one, two], chat_root=None),
+    stood_down,
+  )
   assert_true(after.dev().active_project is None)
 }
 
@@ -927,11 +996,20 @@ test "a stale list read cannot eat a resolved focus" {
   // the still-current generation: the pending must survive it.
   let (_, raced) = update_dev(
     dispatch,
-    ProjectsLoaded([], connection_generation=0, request_generation=0),
+    ProjectsLoaded(
+      [],
+      connection_generation=0,
+      request_generation=0,
+      chat_root=None,
+    ),
     resolved,
   )
   assert_true(raced.dev().active_project is None)
-  let (_, focused) = update_dev(dispatch, ProjectsChanged([picked]), raced)
+  let (_, focused) = update_dev(
+    dispatch,
+    ProjectsChanged([picked], chat_root=None),
+    raced,
+  )
   assert_eq(focused.dev().active_project, Some(picked))
 }
 
@@ -972,7 +1050,11 @@ test "a superseded confirm's reply cannot resolve the newer pending" {
     ProjectAddCommitted(added=first.path, paths=[first]),
     confirmed_second,
   )
-  let (_, first_row) = update_dev(dispatch, ProjectsChanged([first]), ignored)
+  let (_, first_row) = update_dev(
+    dispatch,
+    ProjectsChanged([first], chat_root=None),
+    ignored,
+  )
   assert_true(first_row.dev().active_project is None)
   // The second's own reply resolves it, and its broadcast focuses it.
   let (_, resolved) = update_dev(
@@ -982,7 +1064,7 @@ test "a superseded confirm's reply cannot resolve the newer pending" {
   )
   let (_, focused) = update_dev(
     dispatch,
-    ProjectsChanged([first, second]),
+    ProjectsChanged([first, second], chat_root=None),
     resolved,
   )
   assert_eq(focused.dev().active_project, Some(second))
@@ -996,7 +1078,11 @@ test "a failed add leaves later project commits unfocused" {
   let (_, failed) = update_dev(dispatch, ProjectFailed("refused"), confirmed)
   // The refusal settled the pending focus; even the picked directory
   // arriving later (added by another client) must not steal the selection.
-  let (_, after) = update_dev(dispatch, ProjectsChanged([picked]), failed)
+  let (_, after) = update_dev(
+    dispatch,
+    ProjectsChanged([picked], chat_root=None),
+    failed,
+  )
   assert_true(after.dev().active_project is None)
 }
 
@@ -1041,7 +1127,11 @@ test "a resolved add wins over the detach fallback in one snapshot" {
   // One snapshot detaches the active conversation's project and carries
   // the added row: the explicit add wins over fallback selection, and the
   // dead conversation leaves with its store.
-  let (_, focused) = update_dev(dispatch, ProjectsChanged([picked]), resolved)
+  let (_, focused) = update_dev(
+    dispatch,
+    ProjectsChanged([picked], chat_root=None),
+    resolved,
+  )
   assert_eq(focused.dev().active_project, Some(picked))
   inspect(focused.active_session, content="")
   assert_true(focused.conversations.is_empty())
@@ -1082,4 +1172,87 @@ test "confirm waits for an in-flight navigation" {
   )
   assert_true(held.project_picker is Some(_))
   assert_true(held.pending_project_adoption is None)
+}
+
+///|
+/// Classification comes from the host's managed root, never a display name.
+fn DeviceState::is_chat_workspace(
+  self : DeviceState,
+  path : @common.Uri,
+) -> Bool {
+  guard self.chat_root is Some(root) &&
+    @resource.belongs_to(root, self.channel) &&
+    @resource.belongs_to(path, self.channel) else {
+    return false
+  }
+  path.path.has_prefix(root.path + "/")
+}
+
+///|
+fn Model::chat_creation_pending(self : Model) -> Bool {
+  guard self.chat_creation is Some((channel, _, connection)) &&
+    self.device_state(channel) is Some(dev) else {
+    return false
+  }
+  dev.connection_generation == connection && dev.bridge is Connected
+}
+
+///|
+fn adopt_picked_directory(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  path : String,
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  guard @resource.of_path(channel, path) is Some(picked) else {
+    return model.notify_error(
+      dispatch, "The selected folder returned an invalid path.",
+    )
+  }
+  guard model.device_state(channel) is Some(dev) else {
+    return (@cmd.none, model)
+  }
+  (
+    add_project(dispatch, channel, path),
+    {
+      ..model,
+      pending_project_adoption: Some({
+        channel,
+        requested: path,
+        picked,
+        known: dev.projects.copy(),
+        resolved: None,
+      }),
+    },
+  )
+}
+
+///|
+fn create_chat_workspace(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  generation~ : Int,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let result : Result[String, String] = try {
+        match
+          @interop.bridge_request(
+            channel,
+            @commands.fs_create_unnamed_workspace,
+            @protocol.EmptyPayload::NoPayload,
+          ) {
+          Listing(path~, ..) => Ok(path)
+          BrowseError(message) => Err(message)
+          Drives(_) =>
+            Err("the host returned a drive list instead of a workspace")
+        }
+      } catch {
+        error => Err(@interop.bridge_error_text(error))
+      }
+      scheduler.add(
+        dispatch(ChatWorkspaceCreated(channel~, generation~, result~)),
+      )
+    })
+  })
 }

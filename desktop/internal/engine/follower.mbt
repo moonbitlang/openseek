@@ -1065,7 +1065,7 @@ async test "workspace detach drains an orphaned pending follower before commit" 
         emitted.any(event => event is SessionCommit({ sequence: 1, .. }))
     })
     assert_true(drained_before_commit)
-    assert_true(detached is Workspaces([]))
+    assert_true(detached is Workspaces([], chat_root=None))
     assert_true(manager.followers.get(session) is None)
     group.return_immediately(())
   })

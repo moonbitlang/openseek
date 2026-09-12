@@ -13,6 +13,7 @@ export class DesktopBrowserHarness {
     this.textSearchLimitHit = false;
     this.directoryEntries = {};
     this.workspaces = ['/workspace'];
+    this.chatRoot = '/Users/test/Library/Application Support/SeekMoon/workspaces';
     // Per-workspace settings the Workspace Settings page reads and patches,
     // mirroring the host's `.openseek/settings.json` store. Keyed by
     // workspace path so a second project can never inherit another's
@@ -538,7 +539,7 @@ export class DesktopBrowserHarness {
       case 'agent.runs':
         return { runs: [], settled: [], approvals: [] };
       case 'workspace.list':
-        return { workspaces: [...this.workspaces] };
+        return { workspaces: [...this.workspaces], chat_root: this.chatRoot };
       case 'workspace.add': {
         const path = request.params?.path;
         if (path && !this.workspaces.includes(path)) {
