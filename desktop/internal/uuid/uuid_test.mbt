@@ -1,7 +1,7 @@
 ///|
 test "mint returns distinct RFC 9562 version 4 UUIDs" {
-  guard @uuid.mint() is Some(first) else { fail("OS entropy unavailable") }
-  guard @uuid.mint() is Some(second) else { fail("OS entropy unavailable") }
+  let first = @uuid.mint()
+  let second = @uuid.mint()
   assert_not_eq(first, second)
   assert_eq(first.length(), 36)
   assert_eq(first[8], '-')

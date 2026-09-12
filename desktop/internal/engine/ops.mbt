@@ -127,8 +127,8 @@ pub async fn start_run(
 /// engine protocol syntax; UUID formatting and entropy ownership belong to the
 /// shared package.
 fn mint_run_id() -> String raise EngineError {
-  guard @uuid.mint() is Some(id) else {
-    raise EngineError("cannot mint a run id: OS entropy unavailable")
+  let id = @uuid.mint() catch {
+    error => raise EngineError("cannot mint a run id: \{error}")
   }
   "r\{id}"
 }

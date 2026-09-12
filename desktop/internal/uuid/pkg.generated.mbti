@@ -2,7 +2,7 @@
 package "openseek_desktop/internal/uuid"
 
 // Values
-pub fn mint() -> String?
+pub fn mint() -> String raise
 
 // Errors
 

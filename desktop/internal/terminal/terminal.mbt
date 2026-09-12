@@ -177,9 +177,7 @@ pub async fn open_terminal(
 ) -> String {
   guard !state.closed else { raise TerminalError("terminal service is closed") }
   let argv = session_argv(command?)
-  guard @uuid.mint() is Some(id) else {
-    raise TerminalError("could not create a terminal id")
-  }
+  let id = @uuid.mint()
   let reply : @async.Queue[Result[Unit, String]] = Queue(kind=Blocking(1))
   state.requests.put({
     id,
