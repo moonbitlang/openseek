@@ -774,6 +774,9 @@ fn session_event_msg(
 ///|
 fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
   guard !payload.session.is_empty() else { return None }
+  if payload.event.event is @wire.JobChanged(..) {
+    return Some(JobsChanged(payload.session))
+  }
   guard @transcript.decode_engine_event(payload.event) is Some(event) else {
     return None
   }

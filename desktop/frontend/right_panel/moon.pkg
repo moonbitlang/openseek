@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/frontend/jobs",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",

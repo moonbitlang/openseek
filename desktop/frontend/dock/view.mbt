@@ -76,6 +76,21 @@ fn icon_review() -> @html.Html {
 }
 
 ///|
+/// A command prompt and output lines for background job logs.
+fn icon_jobs() -> @html.Html {
+  @svg.svg(
+    width=16,
+    height=16,
+    view_box="0 0 16 16",
+    attrs=@svg.Attrs::build()
+      .fill("none")
+      .stroke("currentColor")
+      .stroke_linecap("round"),
+    [@svg.path(d="M2 4l3 3-3 3M7 10h6M7 4h6M7 7h6")],
+  )
+}
+
+///|
 /// One node fanning out to three: the launcher's Workflows row.
 fn icon_workflows() -> @html.Html {
   @svg.svg(
@@ -117,6 +132,7 @@ pub(all) struct LauncherActions {
   files : @cmd.Cmd
   review : @cmd.Cmd
   workflows : @cmd.Cmd
+  jobs : @cmd.Cmd
 }
 
 ///|
@@ -161,6 +177,16 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
       @html.span(
         class="dock-launcher-hint",
         "Subagents this conversation delegated to",
+      ),
+    ]),
+  )
+  rows.push(
+    @html.button(class="dock-launcher-row", on_click=actions.jobs, [
+      @icons.icon(icon_jobs),
+      @html.span(class="dock-launcher-name", "Jobs"),
+      @html.span(
+        class="dock-launcher-hint",
+        "Follow background commands and their logs",
       ),
     ]),
   )

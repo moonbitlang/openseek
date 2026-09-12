@@ -39,6 +39,13 @@ fn panel_view(
         }
         { tab, label, title, missing: false, }
       }
+      Jobs =>
+        {
+          tab,
+          label: "Jobs",
+          title: "Background jobs and retained output",
+          missing: false,
+        }
       Workflows =>
         {
           tab,
@@ -67,6 +74,7 @@ fn panel_view(
     search: @cmd.batch([actions.search, actions.close_menu]),
     files: @cmd.batch([actions.files, actions.close_menu]),
     review: @cmd.batch([actions.review, actions.close_menu]),
+    jobs: @cmd.batch([actions.jobs, actions.close_menu]),
     workflows: @cmd.batch([actions.workflows, actions.close_menu]),
   }
   // Every body remains mounted and CSS selects the active kind. This preserves
@@ -81,6 +89,7 @@ fn panel_view(
     Some(FilePicker) => "mode-picker"
     Some(File(_)) => "mode-file"
     Some(GitDiff(_)) => "mode-history"
+    Some(Jobs) => "mode-jobs"
     Some(Workflows) => "mode-workflows"
   }
   let active_page : @preview.PageState = match
@@ -141,6 +150,7 @@ fn panel_view(
           ([] : Array[@html.Html]),
         ),
       ]),
+      @jobs.panel(input.jobs, actions.job_events),
       @workflow.panel(input.workflows, { open_child: actions.open_child, }),
       @dock.launcher_pane(launcher),
     ],

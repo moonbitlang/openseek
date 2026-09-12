@@ -486,7 +486,7 @@ export class DesktopBrowserHarness {
     // browser layout, DOM events, and focus behavior running unchanged.
     await this.page.routeWebSocket('**/v1/devices/device-a/ws', socket => {
       this.socket = socket;
-      socket.onMessage(message => {
+      socket.onMessage(async message => {
         const request = JSON.parse(message.toString());
         this.requests.push(request);
         if (request.id === undefined) {
@@ -497,7 +497,7 @@ export class DesktopBrowserHarness {
           ? {
               jsonrpc: '2.0',
               id: request.id,
-              result: this.replyFor(request),
+              result: await this.replyFor(request),
             }
           : {
               jsonrpc: '2.0',
