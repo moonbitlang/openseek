@@ -38,6 +38,8 @@ pub(all) enum Msg {
   NewFolderNameChanged(String)
   CancelCreateFolder
   CreateFolder
+  CreateUnnamedWorkspace
+  UnnamedWorkspaceFinished(channel~ : @interop.ChannelId, generation~ : Int, result~ : Result[String, String])
   Confirm
   Close
 } derive(Eq)
