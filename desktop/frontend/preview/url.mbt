@@ -32,9 +32,9 @@ fn authority_of(url : String) -> String? {
 /// and port. An IPv6 literal keeps its brackets (`[::1]`).
 pub fn host_of(url : String) -> String? {
   guard authority_of(url) is Some(authority) else { return None }
-  let host_port = match authority.split("@").collect() {
-    [.., after] => after.to_owned()
-    [] => authority
+  let host_port = match authority.rev_split_once("@") {
+    Some((_, after)) => after.to_owned()
+    None => authority
   }
   if host_port.has_prefix("[") {
     // An IPv6 literal's colons are not a port separator.
