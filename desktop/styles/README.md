@@ -41,7 +41,7 @@ for all readable app text, including Jobs, Codex conversations, and dock UI:
 
 | Role | Token | Default |
 | --- | --- | --- |
-| Body text and task names | `--font-size-md` | 14px |
+| Body text, chat prose, composer input, and task names | `--font-size-md` | 14px |
 | Controls and code | `--font-size-sm` | 13px |
 | Timestamps, status, and other metadata | `--font-size-xs` | 12px |
 | Panel headings | `--font-size-lg` | 17px |
@@ -52,7 +52,10 @@ unitless line heights so text grows without clipping. Icon glyphs use the
 icon scale and do not acquire text-sizing rules merely to size an SVG.
 
 Ordinary text inherits `--font-family-sans` and `--font-weight-regular` from
-the app. Code blocks, commands, logs, and paths displayed as code use
+the app (400), with antialiased font smoothing on macOS. Markdown emphasis
+uses 600 rather than the browser's default bold weight. Chat prose and
+composer input use normal letter spacing for mixed Chinese and Latin text.
+Code blocks, commands, logs, and paths displayed as code use
 `--font-family-mono`, which follows the `Monospace font` setting. Avoid
 independent font stacks or misspelled fallback tokens that bypass that
 setting. Task names may use weight 500 and headings 600 to express hierarchy.

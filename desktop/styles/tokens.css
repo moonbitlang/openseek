@@ -45,7 +45,7 @@
   --font-size-sm: calc(var(--font-size-base) - 1px);
   --font-size-md: var(--font-size-base);
   --font-size-lg: calc(var(--font-size-base) + 3px);
-  --font-weight-regular: 450;
+  --font-weight-regular: 400;
   --line-height-tight: 1;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.6;
