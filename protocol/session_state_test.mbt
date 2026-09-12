@@ -29,17 +29,38 @@ test "typed state survives JSON without parsing presentation text" {
     )
     assert_eq(decoded, terminal)
   }
-  let origins : Array[@openseek_protocol.InputOrigin] = [
-    Human,
-    Command,
-    AutoContinue,
-    Delegated,
+  let origins : Array[(@openseek_protocol.InputOrigin, Json)] = [
+    (Human, "human"),
+    (Command, "command"),
+    (AutoContinue, "auto_continue"),
+    (Delegated, "delegated"),
   ]
-  for origin in origins {
-    let decoded : @openseek_protocol.InputOrigin = @json.from_json(
-      ToJson::to_json(origin),
-    )
+  for (origin, json) in origins {
+    assert_eq(ToJson::to_json(origin), json)
+    let decoded : @openseek_protocol.InputOrigin = @json.from_json(json)
     assert_eq(decoded, origin)
+  }
+}
+
+///|
+test "input origin rejects unknown values and invalid JSON shapes" {
+  let malformed : Array[Json] = [
+    "unknown",
+    "Human",
+    "",
+    null,
+    0,
+    {},
+    ["unknown"],
+  ]
+  for value in malformed {
+    let rejected = try {
+      let _ : @openseek_protocol.InputOrigin = @json.from_json(value)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
   }
 }
 

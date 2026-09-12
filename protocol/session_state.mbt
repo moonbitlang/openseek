@@ -9,33 +9,12 @@ pub(all) enum InputOrigin {
   Command
   AutoContinue
   Delegated
-} derive(Eq, Debug)
-
-///|
-pub impl ToJson for InputOrigin with fn to_json(self : InputOrigin) -> Json {
-  Json(
-    match self {
-      Human => "human"
-      Command => "command"
-      AutoContinue => "auto_continue"
-      Delegated => "delegated"
-    },
-  )
-}
-
-///|
-pub impl FromJson for InputOrigin with fn from_json(
-  json : Json,
-  path : @json.JsonPath,
-) -> InputOrigin {
-  match json {
-    String("human") => Human
-    String("command") => Command
-    String("auto_continue") => AutoContinue
-    String("delegated") => Delegated
-    _ => state_decode_error(path, "invalid input origin")
-  }
-}
+} derive (
+  Eq,
+  Debug,
+  ToJson(rename_cases="snake_case"),
+  FromJson(rename_cases="snake_case"),
+)
 
 ///|
 /// Advisory workspace anchor captured when the goal command arrives.
