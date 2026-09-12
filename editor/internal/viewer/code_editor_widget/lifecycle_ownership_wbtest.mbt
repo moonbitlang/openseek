@@ -315,20 +315,20 @@ async test "navigation handles stay optional and borrowed after bundle disposal"
   let model = @model.TextModel(
     target, "definition.mbt", "moonbit", 1, "definition-rev", "let definition = 1",
   )
-  let open_calls = Ref(0)
-  let resolve_calls = Ref(0)
-  let release_calls = Ref(0)
+  let mut open_calls = 0
+  let mut resolve_calls = 0
+  let mut release_calls = 0
   let opener = @navigation_api.LocationOpenerHandle(open=request => {
-    open_calls.val += 1
+    open_calls += 1
     request.location.uri.to_string() == target.to_string()
   })
   let resolver = @navigation_api.TextModelResolverHandle(resolve=(
     resource,
     _token,
   ) => {
-    resolve_calls.val += 1
+    resolve_calls += 1
     if resource.to_string() == target.to_string() {
-      Some(TextModelReference(model, release=() => release_calls.val += 1))
+      Some(TextModelReference(model, release=() => release_calls += 1))
     } else {
       None
     }
@@ -353,9 +353,9 @@ async test "navigation handles stay optional and borrowed after bundle disposal"
   }
   assert_true(reference.model().same(model))
   reference.dispose()
-  assert_eq(open_calls.val, 1)
-  assert_eq(resolve_calls.val, 1)
-  assert_eq(release_calls.val, 1)
+  assert_eq(open_calls, 1)
+  assert_eq(resolve_calls, 1)
+  assert_eq(release_calls, 1)
   assert_false(model.is_disposed())
   model.dispose()
 
@@ -378,25 +378,25 @@ test "omitted services are owned and CodeEditorWidget disposal is idempotent" {
   seed_lifecycle_marker(owned_markers, model)
   viewer.set_model(Some(model))
   let marker_deliveries = Ref(0)
-  let feedback_deliveries = Ref(0)
+  let mut feedback_deliveries = 0
   let marker_subscription = owned_markers.on_did_change_markers(_ => {
     marker_deliveries.val += 1
   })
   let feedback_subscription = owned_feedback_handle.on_did_change_feedback(_ => {
-    feedback_deliveries.val += 1
+    feedback_deliveries += 1
   })
   let mut dispose_events = 0
-  let contribution_alive_in_event = Ref(false)
-  let lifetime_store_alive_in_event = Ref(false)
-  let model_detached_in_event = Ref(false)
+  let mut contribution_alive_in_event = false
+  let mut lifetime_store_alive_in_event = false
+  let mut model_detached_in_event = false
   viewer.on_did_dispose(() => {
     dispose_events += 1
-    contribution_alive_in_event.val = viewer.contributions.lookup(
+    contribution_alive_in_event = viewer.contributions.lookup(
         "editor.contrib.contentHover",
       )
       is Some(_)
-    lifetime_store_alive_in_event.val = !viewer.lifetime_disposables.is_empty()
-    model_detached_in_event.val = viewer.get_model() is None
+    lifetime_store_alive_in_event = !viewer.lifetime_disposables.is_empty()
+    model_detached_in_event = viewer.get_model() is None
   })
   |> ignore
   viewer.dispose()
@@ -405,9 +405,9 @@ test "omitted services are owned and CodeEditorWidget disposal is idempotent" {
   assert_true(viewer.disposed)
   assert_true(services.disposed)
   assert_eq(dispose_events, 1)
-  assert_true(contribution_alive_in_event.val)
-  assert_true(lifetime_store_alive_in_event.val)
-  assert_true(model_detached_in_event.val)
+  assert_true(contribution_alive_in_event)
+  assert_true(lifetime_store_alive_in_event)
+  assert_true(model_detached_in_event)
   assert_eq(viewer.lifetime_disposables.length(), 0)
   // A never-attached CodeEditorWidget remains semantically headless through disposal:
   // it has no browser frame, focus, host, or placeholder capability to tear
@@ -427,7 +427,7 @@ test "omitted services are owned and CodeEditorWidget disposal is idempotent" {
   )
   |> ignore
   assert_eq(marker_deliveries.val, 0)
-  assert_eq(feedback_deliveries.val, 0)
+  assert_eq(feedback_deliveries, 0)
   let later_model = test_model("later")
   let owned_marker_handle = owned_marker_decorations.marker_decorations_handle()
   let late_lease = owned_marker_handle.acquire_model(later_model)

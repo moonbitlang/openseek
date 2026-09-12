@@ -17,7 +17,7 @@ pub fn CodeEditorWidget::set_hidden_areas(
 ) -> Unit {
   guard self.get_view_model() is Some(view_model) else { return }
   guard self.get_model() is Some(model) else { return }
-  let previous_view_selection : Ref[@core.Selection?] = Ref(None)
+  let mut previous_view_selection : @core.Selection? = None
   let mapping_changed = view_model.set_hidden_areas(
     ranges,
     source~,
@@ -28,7 +28,7 @@ pub fn CodeEditorWidget::set_hidden_areas(
       // events, layout flush, recovery Scroll, and root bookkeeping.
       let event_batch = self.begin_view_event_batch()
       defer end_view_event_batch(event_batch)
-      previous_view_selection.val = Some(view_model.cursor.get_view_selection())
+      previous_view_selection = Some(view_model.cursor.get_view_selection())
       let changed = mutation()
       if changed {
         self.on_line_mapping_changed(
@@ -47,7 +47,7 @@ pub fn CodeEditorWidget::set_hidden_areas(
       self.emit_view_event(ViewLineMappingChanged)
       self.emit_view_event(ViewDecorationsChanged)
       reproject_cursor()
-      match previous_view_selection.val {
+      match previous_view_selection {
         Some(previous) =>
           self.emit_view_cursor_reprojection(view_model, previous)
         None => ()

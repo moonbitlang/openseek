@@ -427,15 +427,15 @@ test "validation option rotates the headless decoration provider" {
 ///|
 test "view-zone callback is skipped without a real model view" {
   let viewer = CodeEditorWidget::CodeEditorWidget()
-  let called = Ref(false)
-  viewer.change_view_zones(_ => called.val = true)
+  let mut called = false
+  viewer.change_view_zones(_ => called = true)
   assert_false(viewer.configuration.measure_requested)
-  assert_false(called.val)
+  assert_false(called)
   viewer.dispose()
   with_test_viewer("alpha", headless => {
     let measure_requested_before = headless.configuration.measure_requested
-    headless.change_view_zones(_ => called.val = true)
-    assert_false(called.val)
+    headless.change_view_zones(_ => called = true)
+    assert_false(called)
     assert_eq(
       headless.configuration.measure_requested,
       measure_requested_before,

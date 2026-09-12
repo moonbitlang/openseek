@@ -214,11 +214,9 @@ fn render_markdown_document_presentation(
   article : @rdom.Element,
   on_size_changed : () -> Unit,
 ) -> (@browser_markdown.RenderedMarkdown, @diagram_viewport.DiagramViewports) {
-  let diagram_viewports_slot : Ref[@diagram_viewport.DiagramViewports?] = Ref(
-    None,
-  )
+  let mut diagram_viewports_slot : @diagram_viewport.DiagramViewports? = None
   let on_rendered_size_changed = () => {
-    match diagram_viewports_slot.val {
+    match diagram_viewports_slot {
       Some(diagram_viewports) => diagram_viewports.refresh()
       None => ()
     }
@@ -230,7 +228,7 @@ fn render_markdown_document_presentation(
   let diagram_viewports = @diagram_viewport.DiagramViewports(
     article, on_size_changed,
   )
-  diagram_viewports_slot.val = Some(diagram_viewports)
+  diagram_viewports_slot = Some(diagram_viewports)
   (rendered, diagram_viewports)
 }
 

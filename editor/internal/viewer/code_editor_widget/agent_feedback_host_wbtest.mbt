@@ -385,13 +385,13 @@ test "feedback disposal drains entries tears down model state and silences servi
   viewer.update_agent_feedback_hover_glyph(3)
   viewer.highlight_agent_feedback_range(comment)
   widgets.reply_drafts.set(comment.id, "retained reference draft")
-  let input_service_deliveries = Ref(0)
-  let widget_service_deliveries = Ref(0)
+  let mut input_service_deliveries = 0
+  let mut widget_service_deliveries = 0
   input_entry.listeners.push(
-    handle.on_did_change_feedback(_ => input_service_deliveries.val += 1),
+    handle.on_did_change_feedback(_ => input_service_deliveries += 1),
   )
   widget_entry.listeners.push(
-    handle.on_did_change_feedback(_ => widget_service_deliveries.val += 1),
+    handle.on_did_change_feedback(_ => widget_service_deliveries += 1),
   )
   assert_eq(input_entry.listeners.length(), 10)
   assert_eq(widget_entry.listeners.length(), 6)
@@ -424,8 +424,8 @@ test "feedback disposal drains entries tears down model state and silences servi
 
   service.set_feedback_enabled(resource, false)
   handle.add_feedback(resource, Range(2, 1, 2, 5), "after dispose") |> ignore
-  assert_eq(input_service_deliveries.val, 0)
-  assert_eq(widget_service_deliveries.val, 0)
+  assert_eq(input_service_deliveries, 0)
+  assert_eq(widget_service_deliveries, 0)
   assert_eq(input_entry.listeners.length(), 0)
   assert_eq(widget_entry.listeners.length(), 0)
   assert_eq(input.hover_decoration_ids.length(), 0)

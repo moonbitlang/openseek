@@ -398,9 +398,9 @@ fn watch_workspace(
 
 ///|
 test "a cross-host file read settles through its generation-fenced failure" {
-  let seen : Ref[Msg?] = Ref(None)
+  let mut seen : Msg? = None
   let dispatch = @cmd.Emit(message => {
-    seen.val = Some(message)
+    seen = Some(message)
     @cmd.none
   })
   guard @resource.of_path(@interop.ChannelId::Local, "/work") is Some(workspace) else {
@@ -419,7 +419,7 @@ test "a cross-host file read settles through its generation-fenced failure" {
     ),
   )
   assert_true(
-    seen.val
+    seen
     is Some(
       FileFailed(
         owner={ channel: @interop.ChannelId::Remote("other"), .. },

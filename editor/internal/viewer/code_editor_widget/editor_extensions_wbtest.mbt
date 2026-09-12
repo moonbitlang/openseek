@@ -128,12 +128,12 @@ test "peek preview descriptors cannot recursively create references markdown or 
 
 ///|
 test "duplicate contribution ids are first-wins before later side effects" {
-  let first_constructed = Ref(0)
-  let first_initialized = Ref(0)
-  let first_disposed = Ref(0)
-  let second_constructed = Ref(0)
-  let second_initialized = Ref(0)
-  let second_disposed = Ref(0)
+  let mut first_constructed = 0
+  let mut first_initialized = 0
+  let mut first_disposed = 0
+  let mut second_constructed = 0
+  let mut second_initialized = 0
+  let mut second_disposed = 0
   let registry : EditorContributionRegistry = {
     contributions: [],
     commands: Map([]),
@@ -144,17 +144,17 @@ test "duplicate contribution ids are first-wins before later side effects" {
     QuickDiff,
     Eager,
     viewer => {
-      first_constructed.val += 1
+      first_constructed += 1
       let state = QuickDiffContributionState(
         viewer.create_decorations_collection(),
       )
       state.listeners.push(
-        @base_common.Disposable::from(() => first_disposed.val += 1),
+        @base_common.Disposable::from(() => first_disposed += 1),
       )
       QuickDiff(state)
     },
     _viewer => {
-      first_initialized.val += 1
+      first_initialized += 1
       []
     },
   )
@@ -163,17 +163,17 @@ test "duplicate contribution ids are first-wins before later side effects" {
     QuickDiff,
     Eager,
     viewer => {
-      second_constructed.val += 1
+      second_constructed += 1
       let state = QuickDiffContributionState(
         viewer.create_decorations_collection(),
       )
       state.listeners.push(
-        @base_common.Disposable::from(() => second_disposed.val += 1),
+        @base_common.Disposable::from(() => second_disposed += 1),
       )
       QuickDiff(state)
     },
     _viewer => {
-      second_initialized.val += 1
+      second_initialized += 1
       []
     },
   )
@@ -189,21 +189,21 @@ test "duplicate contribution ids are first-wins before later side effects" {
     viewer,
     CodeEditorContributionDescriptors::standalone(),
   )
-  assert_eq(first_constructed.val, 1)
-  assert_eq(first_initialized.val, 1)
-  assert_eq(second_constructed.val, 0)
-  assert_eq(second_initialized.val, 0)
+  assert_eq(first_constructed, 1)
+  assert_eq(first_initialized, 1)
+  assert_eq(second_constructed, 0)
+  assert_eq(second_initialized, 0)
   guard viewer.contributions.instances.get("test.duplicate") is Some(entry) else {
     fail("first duplicate row was not installed")
   }
   entry.dispose(viewer)
   entry.dispose(viewer)
-  assert_eq(first_disposed.val, 1)
-  assert_eq(second_disposed.val, 0)
+  assert_eq(first_disposed, 1)
+  assert_eq(second_disposed, 0)
   viewer.dispose()
   viewer.dispose()
-  assert_eq(first_disposed.val, 1)
-  assert_eq(second_disposed.val, 0)
+  assert_eq(first_disposed, 1)
+  assert_eq(second_disposed, 0)
   assert_false(viewer.contributions.instances.contains("test.duplicate"))
 }
 
@@ -242,21 +242,21 @@ test "viewer disposes all nine real rows once in order while the map stays insta
     references_contribution_id,
   ]
   let order : Array[String] = []
-  let map_stayed_installed = Ref(true)
-  let typed_row_stayed_available = Ref(true)
-  let wrapper_stayed_live = Ref(true)
+  let mut map_stayed_installed = true
+  let mut typed_row_stayed_available = true
+  let mut wrapper_stayed_live = true
   let track = label => {
     @base_common.Disposable::from(() => {
       order.push(label)
       if viewer.contributions.lifecycle != ContributionsLive {
-        wrapper_stayed_live.val = false
+        wrapper_stayed_live = false
       }
       if viewer.contributions.instances.length() != expected_ids.length() {
-        map_stayed_installed.val = false
+        map_stayed_installed = false
       }
       for id in expected_ids {
         if !viewer.contributions.instances.contains(id) {
-          map_stayed_installed.val = false
+          map_stayed_installed = false
         }
       }
       let available = match label {
@@ -272,7 +272,7 @@ test "viewer disposes all nine real rows once in order while the map stays insta
         _ => false
       }
       if !available {
-        typed_row_stayed_available.val = false
+        typed_row_stayed_available = false
       }
     })
   }
@@ -305,9 +305,9 @@ test "viewer disposes all nine real rows once in order while the map stays insta
     "input", "widget", "folding", "markdown", "hover", "quickDiff", "contextMenu",
     "definition", "references",
   ])
-  assert_true(map_stayed_installed.val)
-  assert_true(typed_row_stayed_available.val)
-  assert_true(wrapper_stayed_live.val)
+  assert_true(map_stayed_installed)
+  assert_true(typed_row_stayed_available)
+  assert_true(wrapper_stayed_live)
   assert_true(viewer.contributions.lifecycle == ContributionsDisposed)
   assert_eq(viewer.contributions.instances.length(), 0)
 }
@@ -573,9 +573,9 @@ test "model removal and reattach preserve central contribution identities" {
   let context_menu = viewer.context_menu_contribution().unwrap()
   let definition = viewer.definition_contribution().unwrap()
   let references = viewer.references_contribution().unwrap()
-  let markdown_listener_disposed = Ref(false)
+  let mut markdown_listener_disposed = false
   markdown.listeners.push(
-    @base_common.Disposable::from(() => markdown_listener_disposed.val = true),
+    @base_common.Disposable::from(() => markdown_listener_disposed = true),
   )
   let markdown_listener_count = markdown.listeners.length()
   let model = test_model("alpha\nbeta")
@@ -597,7 +597,7 @@ test "model removal and reattach preserve central contribution identities" {
     physical_equal(markdown, viewer.markdown_comment_contribution().unwrap()),
   )
   assert_eq(markdown.listeners.length(), markdown_listener_count)
-  assert_false(markdown_listener_disposed.val)
+  assert_false(markdown_listener_disposed)
   assert_true(physical_equal(hover, viewer.content_hover_controller().unwrap()))
   assert_true(
     physical_equal(quick_diff, viewer.quick_diff_contribution().unwrap()),
@@ -612,7 +612,7 @@ test "model removal and reattach preserve central contribution identities" {
     physical_equal(references, viewer.references_contribution().unwrap()),
   )
   viewer.dispose()
-  assert_true(markdown_listener_disposed.val)
+  assert_true(markdown_listener_disposed)
   model.dispose()
 }
 

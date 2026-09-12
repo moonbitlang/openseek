@@ -82,10 +82,10 @@ test "initialization reentry does not initialize a replacement model" {
     language_id="initialization-order-reentry-replacement",
   )
   defer replacement.dispose()
-  let replaced = Ref(false)
+  let mut replaced = false
   let subscription = debug_on_did_build_view_model(viewer, _ => {
-    if !replaced.val && first_calls.val > 0 {
-      replaced.val = true
+    if !replaced && first_calls.val > 0 {
+      replaced = true
       viewer.set_model(Some(replacement))
     }
   })
@@ -94,7 +94,7 @@ test "initialization reentry does not initialize a replacement model" {
   viewer.test_set_viewport(width=200.0, height=90.0)
 
   viewer.handle_initialized()
-  assert_true(replaced.val)
+  assert_true(replaced)
   assert_true(viewer.get_model().unwrap().same(replacement))
   assert_eq(replacement_calls.val, 0)
 

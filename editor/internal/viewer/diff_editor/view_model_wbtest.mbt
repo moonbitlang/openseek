@@ -764,14 +764,14 @@ test "one model will-dispose atomically clears the pair and both pane slots" {
   let modified = diff_view_model_test_model(
     "will-dispose-modified", "old right",
   )
-  let original_slot : Ref[@model.TextModel?] = Ref(None)
-  let modified_slot : Ref[@model.TextModel?] = Ref(None)
+  let mut original_slot : @model.TextModel? = None
+  let mut modified_slot : @model.TextModel? = None
   let pane_commit = new_diff_editor_model_pair_commit_barrier()
-  let model_changes = Ref(0)
-  let update_count = Ref(0)
-  let every_update_saw_synchronized_slots = Ref(true)
+  let mut model_changes = 0
+  let mut update_count = 0
+  let mut every_update_saw_synchronized_slots = true
   let model_subscription = view_model.on_did_change_model(() => {
-    model_changes.val += 1
+    model_changes += 1
     let generation_before = pane_commit.committed_generation
     commit_diff_editor_model_pair_transaction(pane_commit, () => {
       commit_diff_editor_model_pair(
@@ -784,14 +784,14 @@ test "one model will-dispose atomically clears the pair and both pane slots" {
             pane_commit.committed_generation != generation_before {
             abort("original setter escaped the pair commit barrier")
           }
-          original_slot.val = model
+          original_slot = model
         },
         model => {
           if !pane_commit.is_committing ||
             pane_commit.committed_generation != generation_before {
             abort("modified setter observed an early committed generation")
           }
-          modified_slot.val = model
+          modified_slot = model
         },
       )
     })
@@ -800,9 +800,9 @@ test "one model will-dispose atomically clears the pair and both pane slots" {
     if pane_commit.is_committing {
       abort("outer diff update escaped before both pane setters committed")
     }
-    update_count.val += 1
+    update_count += 1
     let synchronized = match
-      (view_model.get_model(), original_slot.val, modified_slot.val) {
+      (view_model.get_model(), original_slot, modified_slot) {
       (None, None, None) => true
       (Some(current), Some(slot_original), Some(slot_modified)) =>
         current.original.same(slot_original) &&
@@ -810,12 +810,12 @@ test "one model will-dispose atomically clears the pair and both pane slots" {
       _ => false
     }
     if !synchronized {
-      every_update_saw_synchronized_slots.val = false
+      every_update_saw_synchronized_slots = false
     }
   })
 
   view_model.set_model(Some({ original, modified, })) |> ignore
-  guard (original_slot.val, modified_slot.val)
+  guard (original_slot, modified_slot)
     is (Some(installed_original), Some(installed_modified)) else {
     fail("both pane slots must receive the installed pair")
   }
@@ -834,14 +834,14 @@ test "one model will-dispose atomically clears the pair and both pane slots" {
   assert_true(view_model.get_model() is None)
   assert_true(view_model.get_state() == NoModel)
   assert_true(view_model.get_diff() is None)
-  assert_true(original_slot.val is None)
-  assert_true(modified_slot.val is None)
+  assert_true(original_slot is None)
+  assert_true(modified_slot is None)
   assert_true(timer.active_delays().is_empty())
-  assert_eq(model_changes.val, 2)
+  assert_eq(model_changes, 2)
   assert_false(pane_commit.is_committing)
   assert_eq(pane_commit.committed_generation, 2)
-  assert_eq(update_count.val, 4)
-  assert_true(every_update_saw_synchronized_slots.val)
+  assert_eq(update_count, 4)
+  assert_true(every_update_saw_synchronized_slots)
   assert_true(original.is_disposed())
   assert_false(modified.is_disposed())
 
@@ -897,13 +897,13 @@ test "replacement owns the only detached-pair return and old disposal is inert" 
   let first_modified = diff_view_model_test_model("replace-count-modified", "b")
   let next_original = diff_view_model_test_model("replace-next-original", "c")
   let next_modified = diff_view_model_test_model("replace-next-modified", "d")
-  let first_original_disposes = Ref(0)
-  let first_modified_disposes = Ref(0)
+  let mut first_original_disposes = 0
+  let mut first_modified_disposes = 0
   let original_dispose_subscription = first_original.on_will_dispose(() => {
-    first_original_disposes.val += 1
+    first_original_disposes += 1
   })
   let modified_dispose_subscription = first_modified.on_will_dispose(() => {
-    first_modified_disposes.val += 1
+    first_modified_disposes += 1
   })
 
   view_model.set_model(
@@ -924,8 +924,8 @@ test "replacement owns the only detached-pair return and old disposal is inert" 
   assert_true(timer.active_delays() == [0])
   returned.original.dispose()
   returned.modified.dispose()
-  assert_eq(first_original_disposes.val, 1)
-  assert_eq(first_modified_disposes.val, 1)
+  assert_eq(first_original_disposes, 1)
+  assert_eq(first_modified_disposes, 1)
 
   // Disposal of a pair whose subscriptions were retired cannot clear the new
   // pair, and even an explicitly invoked stale callback cannot compute it.

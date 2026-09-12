@@ -119,15 +119,15 @@ pub fn code_editor_references_preview_factory(
         Range(start.line_number, start.column, start.line_number, start.column),
       )
       preview.handle_initialized()
-      let owner_slot : Ref[CodeReferencesPeekPreviewOwner?] = Ref(None)
+      let mut owner_slot : CodeReferencesPeekPreviewOwner? = None
       let resize_observer = @base_browser.observe_element_resize(host, () => {
-        match owner_slot.val {
+        match owner_slot {
           Some(owner) if !owner.disposed => preview.layout()
           _ => ()
         }
       })
       let layout_frame = @base_browser.schedule_at_next_animation_frame(() => {
-        match owner_slot.val {
+        match owner_slot {
           Some(owner) if !owner.disposed => preview.layout()
           _ => ()
         }
@@ -139,7 +139,7 @@ pub fn code_editor_references_preview_factory(
         layout_frame,
         disposed: false,
       }
-      owner_slot.val = Some(owner)
+      owner_slot = Some(owner)
       Some(
         ReferencesPeekPreview(
           contains_focus=() => owner.contains_focus(),

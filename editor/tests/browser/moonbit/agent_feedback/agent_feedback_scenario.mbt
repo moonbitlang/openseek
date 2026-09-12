@@ -36,25 +36,24 @@ pub fn run_agent_feedback_test() -> Unit {
       let replies = Ref(0)
       let submitted = Ref(0)
       let items = Ref(0)
-      let last_text : Ref[String] = Ref("")
-      let previous_items : Ref[
-        Array[(String, @agent_feedback_api.AgentFeedbackState, Int)],
-      ] = Ref([])
-      let track_interactions = Ref(false)
+      let mut last_text : String = ""
+      let mut previous_items : Array[
+        (String, @agent_feedback_api.AgentFeedbackState, Int),
+      ] = []
+      let mut track_interactions = false
       let write_log = () => {
         event_log.set_attribute("data-added", added.val.to_string())
         event_log.set_attribute("data-replies", replies.val.to_string())
         event_log.set_attribute("data-submitted", submitted.val.to_string())
         event_log.set_attribute("data-items", items.val.to_string())
-        event_log.set_attribute("data-last-text", last_text.val)
+        event_log.set_attribute("data-last-text", last_text)
       }
       feedback_handle.on_did_change_feedback(event => {
-        if track_interactions.val {
+        if track_interactions {
           for item in event.feedback_items {
-            match
-              previous_items.val.search_by(snapshot => snapshot.0 == item.id) {
+            match previous_items.search_by(snapshot => snapshot.0 == item.id) {
               Some(index) => {
-                let (_, previous_state, previous_reply_count) = previous_items.val[index]
+                let (_, previous_state, previous_reply_count) = previous_items[index]
                 if item.replies.length() > previous_reply_count {
                   replies.val += item.replies.length() - previous_reply_count
                 }
@@ -67,11 +66,11 @@ pub fn run_agent_feedback_test() -> Unit {
           }
         }
         items.val = event.feedback_items.length()
-        last_text.val = match event.feedback_items.last() {
+        last_text = match event.feedback_items.last() {
           Some(item) => item.text
-          None => last_text.val
+          None => last_text
         }
-        previous_items.val = event.feedback_items.map(item => {
+        previous_items = event.feedback_items.map(item => {
           (item.id, item.state, item.replies.length())
         })
         write_log()
@@ -86,7 +85,7 @@ pub fn run_agent_feedback_test() -> Unit {
         seed_item("seed-2", uri, 5, "Second seeded note"),
         seed_item("seed-far", uri, 30, "Far seeded note"),
       ])
-      track_interactions.val = true
+      track_interactions = true
       let viewer = @viewer.Viewer::create(
         host,
         services~,

@@ -181,12 +181,12 @@ test "matrix viewport suppresses endpoint decorations and scopes font flags" {
 ///|
 /// Query-flag forwarding (`inlineDecorations.ts:78-80`).
 test "matrix minimap and margin query flags reach source context" {
-  let seen_minimap = Ref(false)
-  let seen_margin = Ref(false)
+  let mut seen_minimap = false
+  let mut seen_margin = false
   let context : ReferenceInlineModelContext = {
     get_model_decorations: fn(_view_range, minimap, margin) {
-      seen_minimap.val = minimap
-      seen_margin.val = margin
+      seen_minimap = minimap
+      seen_margin = margin
       []
     },
   }
@@ -195,11 +195,11 @@ test "matrix minimap and margin query flags reach source context" {
     TestTextModel::create("abc"),
   )
   ignore(computer.computer.get_decorations(Range(1, 1, 1, 4), true, false))
-  assert_true(seen_minimap.val)
-  assert_false(seen_margin.val)
+  assert_true(seen_minimap)
+  assert_false(seen_margin)
   ignore(computer.computer.get_decorations(Range(1, 1, 1, 4), false, true))
-  assert_false(seen_minimap.val)
-  assert_true(seen_margin.val)
+  assert_false(seen_minimap)
+  assert_true(seen_margin)
 }
 
 ///|

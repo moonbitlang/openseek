@@ -89,13 +89,13 @@ test "push packets without a pending id fall through" {
 ///|
 test "cancelling an in-flight request resumes once and consumes its late response" {
   let id = next_request_id("definition-cancel")
-  let observed_provider_code = Ref("")
+  let mut observed_provider_code = ""
   let unexpected_packet = Ref(false)
   let subscription_disposals = Ref(0)
   pending_requests[id] = {
     resolve: packet => {
       match packet {
-        RemoteError(error) => observed_provider_code.val = error.provider_code
+        RemoteError(error) => observed_provider_code = error.provider_code
         _ => unexpected_packet.val = true
       }
     },
@@ -106,7 +106,7 @@ test "cancelling an in-flight request resumes once and consumes its late respons
   }
 
   cancel_pending_request(id)
-  assert_eq(observed_provider_code.val, "Cancelled")
+  assert_eq(observed_provider_code, "Cancelled")
   assert_false(unexpected_packet.val)
   assert_eq(subscription_disposals.val, 1)
   assert_false(pending_requests.contains(id))

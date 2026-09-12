@@ -285,7 +285,7 @@ fn setup_pointer_lifecycle_fixture(
   let moves = Ref(0)
   let stops = Ref(0)
   let starts = Ref(0)
-  let active_pointer : Ref[(Int, Int)?] = Ref(None)
+  let mut active_pointer : (Int, Int)? = None
   let start = (pointer_id : Int, buttons : Int) => {
     starts.val += 1
     target.set_attribute("data-starts", starts.val.to_string())
@@ -306,7 +306,7 @@ fn setup_pointer_lifecycle_fixture(
   target.add_event_listener("pointerdown", event => {
     let pointer_id = pointer_event_pointer_id(event)
     let buttons = pointer_event_buttons(event)
-    active_pointer.val = Some((pointer_id, buttons))
+    active_pointer = Some((pointer_id, buttons))
     target.set_attribute("data-pointer-id", pointer_id.to_string())
     start(pointer_id, buttons)
     target.set_attribute(
@@ -318,7 +318,7 @@ fn setup_pointer_lifecycle_fixture(
   restart.set_attribute("id", "pointer-restart")
   restart.set_inner_html("Restart monitor")
   restart.add_event_listener("click", _ => {
-    match active_pointer.val {
+    match active_pointer {
       Some((pointer_id, buttons)) => start(pointer_id, buttons)
       None => ()
     }

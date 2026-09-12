@@ -517,10 +517,10 @@ test "Limit by indent" {
     expected_ranges : Array[(Int, Int)],
     message : String,
   ) => {
-    let reported : Ref[Int?] = { val: None, }
+    let mut reported : Int? = None
     let indent_ranges = compute_ranges(model, true, folding_ranges_limit={
       limit: () => max_entries,
-      update: (_computed, limited) => reported.val = limited,
+      update: (_computed, limited) => reported = limited,
     })
     guard indent_ranges.length() <= max_entries else { fail("max \{message}") }
     let actual : Array[(Int, Int)] = []
@@ -540,7 +540,7 @@ test "Limit by indent" {
     } else {
       Some(max_entries)
     }
-    if reported.val != expected_reported {
+    if reported != expected_reported {
       fail("limited \{message}")
     }
   }

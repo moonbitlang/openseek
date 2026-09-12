@@ -198,14 +198,14 @@ impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
   // Whether the exchange task already ran to completion: TaskGroup::spawn's
   // start timing is undefined, so registration below must not resurrect a
   // ticket whose task finished before `spawn` returned.
-  let done : Ref[Bool] = { val: false, }
+  let mut done : Bool = false
   let task = (self.spawn)(() => {
     // All defers sit at the task-body scope (a defer inside an `if` block
     // would fire at that block's end — i.e. immediately), so they run when the
     // task exits: feeding the gate however this exchange ends means a failed
     // lifecycle notification cannot wedge every later request.
     defer {
-      done.val = true
+      done = true
     }
     defer self.pending_posts.remove(ticket)
     defer feed_gate(completion)
@@ -222,7 +222,7 @@ impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
   // Register only if the task has not already finished (spawn's start timing is
   // undefined): inserting a completed task would strand its ticket and consume
   // the exchange cap forever.
-  if !done.val {
+  if !done {
     self.pending_posts[ticket] = task
   }
 }

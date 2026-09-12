@@ -52,23 +52,23 @@ pub fn run_view_zones_test() -> Unit {
     view_zones_source(),
   )
   let viewer = @viewer.Viewer::create(host)
-  let public_mouse_events = Ref(0)
-  let public_mouse_target_id = Ref("")
-  let public_mouse_target_kind = Ref("other")
+  let mut public_mouse_events = 0
+  let mut public_mouse_target_id = ""
+  let mut public_mouse_target_kind = "other"
   viewer.on_mouse_down(event => {
-    public_mouse_events.val += 1
+    public_mouse_events += 1
     match event.target {
       MouseTargetViewZone(type_~, detail~, ..) => {
-        public_mouse_target_id.val = detail.view_zone_id
-        public_mouse_target_kind.val = match type_ {
+        public_mouse_target_id = detail.view_zone_id
+        public_mouse_target_kind = match type_ {
           ContentViewZone => "content"
           GutterViewZone => "gutter"
           _ => "other"
         }
       }
       _ => {
-        public_mouse_target_id.val = ""
-        public_mouse_target_kind.val = "other"
+        public_mouse_target_id = ""
+        public_mouse_target_kind = "other"
       }
     }
   })
@@ -97,7 +97,7 @@ pub fn run_view_zones_test() -> Unit {
   primary_margin.set_attribute("data-caller-owned", "margin")
   primary_margin.set_inner_html("preserved margin content")
 
-  let primary_last_top = Ref(-2000000.0)
+  let mut primary_last_top = -2000000.0
   let primary = @viewer.view_zone(
     1,
     primary_node,
@@ -105,7 +105,7 @@ pub fn run_view_zones_test() -> Unit {
     height_in_px=32.0,
     min_width_in_px=700.0,
     margin_dom_node=primary_margin,
-    on_dom_node_top=top => primary_last_top.val = top,
+    on_dom_node_top=top => primary_last_top = top,
   )
 
   let secondary_node = document.create_element("div")
@@ -141,22 +141,22 @@ pub fn run_view_zones_test() -> Unit {
   let offscreen_node = document.create_element("div")
   offscreen_node.set_attribute("class", "vz-offscreen")
   offscreen_node.set_inner_html("offscreen view zone")
-  let offscreen_last_top = Ref(-2000000.0)
+  let mut offscreen_last_top = -2000000.0
   let offscreen_zone = @viewer.view_zone(
     40,
     offscreen_node,
     height_in_px=28.0,
-    on_dom_node_top=top => offscreen_last_top.val = top,
+    on_dom_node_top=top => offscreen_last_top = top,
   )
 
-  let primary_id = Ref("")
-  let suppress_id = Ref("")
-  let omitted_id = Ref("")
+  let mut primary_id = ""
+  let mut suppress_id = ""
+  let mut omitted_id = ""
   viewer.change_view_zones(accessor => {
-    primary_id.val = accessor.add_zone(primary)
+    primary_id = accessor.add_zone(primary)
     accessor.add_zone(secondary) |> ignore
-    suppress_id.val = accessor.add_zone(suppress_zone)
-    omitted_id.val = accessor.add_zone(omitted_zone)
+    suppress_id = accessor.add_zone(suppress_zone)
+    omitted_id = accessor.add_zone(omitted_zone)
     accessor.add_zone(offscreen_zone) |> ignore
   })
 
@@ -174,14 +174,14 @@ pub fn run_view_zones_test() -> Unit {
     () => {
       let layout = viewer.get_layout_info()
       Json({
-        "primaryId": primary_id.val.to_json(),
-        "suppressId": suppress_id.val.to_json(),
-        "omittedId": omitted_id.val.to_json(),
-        "mouseEvents": public_mouse_events.val.to_json(),
-        "mouseTargetId": public_mouse_target_id.val.to_json(),
-        "mouseTargetKind": public_mouse_target_kind.val.to_json(),
-        "primaryLastTop": Json::number(primary_last_top.val),
-        "offscreenLastTop": Json::number(offscreen_last_top.val),
+        "primaryId": primary_id.to_json(),
+        "suppressId": suppress_id.to_json(),
+        "omittedId": omitted_id.to_json(),
+        "mouseEvents": public_mouse_events.to_json(),
+        "mouseTargetId": public_mouse_target_id.to_json(),
+        "mouseTargetKind": public_mouse_target_kind.to_json(),
+        "primaryLastTop": Json::number(primary_last_top),
+        "offscreenLastTop": Json::number(offscreen_last_top),
         "scrollTop": Json::number(viewer.get_scroll_top()),
         "scrollWidth": Json::number(viewer.get_scroll_width()),
         "contentWidth": Json::number(viewer.get_content_width()),

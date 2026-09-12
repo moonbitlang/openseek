@@ -30,10 +30,10 @@ pub fn run_initial_size_test() -> Unit {
     host,
     options=ViewerOptions(soft_wrap=false, font_size=12.0, line_height=18.0),
   )
-  let rendered_notifications = Ref(0)
+  let mut rendered_notifications = 0
   let rendered_subscription = @viewer_testing.on_did_render_model(
     viewer.get_id(),
-    _ => rendered_notifications.val += 1,
+    _ => rendered_notifications += 1,
   )
   let initial_layout = viewer.get_layout_info()
   ctx.metric_number("initialLayoutWidth", initial_layout.width)
@@ -74,7 +74,7 @@ pub fn run_initial_size_test() -> Unit {
   viewer.handle_initialized()
   initial_size_next_frame(() => {
     ctx.assert_true(
-      rendered_notifications.val > 0,
+      rendered_notifications > 0,
       "the first mounted flush did not render the attached model",
     )
     rendered_subscription.dispose()

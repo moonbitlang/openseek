@@ -354,14 +354,12 @@ async test "dispose marks the controller stale before resource callbacks can reo
   assert_true(controller.toggle_locations(anchor, Definitions, [location]))
   tasks.run_all()
   assert_true(controller.phase() is PeekShown(_, _))
-  let reopen_result = Ref(true)
+  let mut reopen_result = true
   previews.on_dispose.val = Some(() => {
-    reopen_result.val = controller.toggle_locations(anchor, Definitions, [
-      location,
-    ])
+    reopen_result = controller.toggle_locations(anchor, Definitions, [location])
   })
   controller.dispose()
-  assert_false(reopen_result.val)
+  assert_false(reopen_result)
   assert_eq(controller.phase(), PeekClosed)
   assert_eq(host.mount_count.val, 1)
   assert_eq(host.mount_dispose_count.val, 1)
@@ -379,8 +377,8 @@ async test "resolver leases transfer on preview replacement and release on close
   defer source.dispose()
   defer target_a.dispose()
   defer target_b.dispose()
-  let release_a = Ref(0)
-  let release_b = Ref(0)
+  let mut release_a = 0
+  let mut release_b = 0
   let resolver_calls : Array[String] = []
   let resolver = @navigation_api.TextModelResolverHandle(resolve=(
     resource,
@@ -388,9 +386,9 @@ async test "resolver leases transfer on preview replacement and release on close
   ) => {
     resolver_calls.push(resource.to_string())
     if resource.to_string() == target_a.uri.to_string() {
-      Some(TextModelReference(target_a, release=() => release_a.val += 1))
+      Some(TextModelReference(target_a, release=() => release_a += 1))
     } else if resource.to_string() == target_b.uri.to_string() {
-      Some(TextModelReference(target_b, release=() => release_b.val += 1))
+      Some(TextModelReference(target_b, release=() => release_b += 1))
     } else {
       None
     }
@@ -424,24 +422,24 @@ async test "resolver leases transfer on preview replacement and release on close
   assert_eq(resolver_calls[0], target_a.uri.to_string())
   assert_eq(resolver_calls[1], target_a.uri.to_string())
   assert_eq(previews.resources, [target_a.uri.to_string()])
-  assert_eq(release_a.val, 0)
+  assert_eq(release_a, 0)
 
   controller.move_selection(1)
-  assert_eq(release_a.val, 0)
+  assert_eq(release_a, 0)
   assert_eq(previews.dispose_count.val, 0)
   assert_eq(tasks.tasks.length(), 2)
   tasks.run_all()
-  assert_eq(release_a.val, 1)
+  assert_eq(release_a, 1)
   assert_eq(previews.dispose_count.val, 1)
   assert_eq(resolver_calls.length(), 4)
   assert_eq(resolver_calls[2], target_b.uri.to_string())
   assert_eq(resolver_calls[3], target_b.uri.to_string())
   assert_eq(previews.resources[1], target_b.uri.to_string())
-  assert_eq(release_b.val, 0)
+  assert_eq(release_b, 0)
 
   controller.close(restore_focus=false)
-  assert_eq(release_a.val, 2)
-  assert_eq(release_b.val, 2)
+  assert_eq(release_a, 2)
+  assert_eq(release_b, 2)
   assert_eq(previews.dispose_count.val, 2)
   assert_false(target_a.is_disposed())
   assert_false(target_b.is_disposed())
@@ -459,14 +457,14 @@ async test "stale and invalid resolver results are released without preview inst
   defer source.dispose()
   defer requested.dispose()
   defer wrong.dispose()
-  let releases = Ref(0)
-  let saw_cancelled = Ref(false)
+  let mut releases = 0
+  let mut saw_cancelled = false
   let resolver = @navigation_api.TextModelResolverHandle(resolve=(
     _resource,
     token,
   ) => {
-    saw_cancelled.val = token.is_cancellation_requested()
-    Some(TextModelReference(wrong, release=() => releases.val += 1))
+    saw_cancelled = token.is_cancellation_requested()
+    Some(TextModelReference(wrong, release=() => releases += 1))
   })
   let surface_generation = Ref(5)
   let host = references_controller_test_host(source, surface_generation)
@@ -491,8 +489,8 @@ async test "stale and invalid resolver results are released without preview inst
   )
   controller.close(restore_focus=false)
   tasks.run_all()
-  assert_true(saw_cancelled.val)
-  assert_eq(releases.val, 2)
+  assert_true(saw_cancelled)
+  assert_eq(releases, 2)
   assert_eq(previews.resources.length(), 0)
   assert_eq(controller.phase(), PeekClosed)
 
@@ -504,7 +502,7 @@ async test "stale and invalid resolver results are released without preview inst
     ),
   )
   tasks.run_all()
-  assert_eq(releases.val, 4)
+  assert_eq(releases, 4)
   assert_eq(previews.resources.length(), 0)
   assert_true(controller.phase() is PeekUnavailable(_, _))
   browser.flush_animation_frames()

@@ -1059,12 +1059,12 @@ async test "workspace detach drains an orphaned pending follower before commit" 
     write_session_record(root, session, [session_user_event(1, "tail")])
     // The drain has to finish before the workspace's removal is committed:
     // once the store is gone, nothing could read what the writer left.
-    let drained_before_commit : Ref[Bool] = Ref(false)
+    let mut drained_before_commit : Bool = false
     let detached = detach_workspace(manager, workspace.to_string(), fn(_) {
-      drained_before_commit.val = follower.retired &&
+      drained_before_commit = follower.retired &&
         emitted.any(event => event is SessionCommit({ sequence: 1, .. }))
     })
-    assert_true(drained_before_commit.val)
+    assert_true(drained_before_commit)
     assert_true(detached is Workspaces([]))
     assert_true(manager.followers.get(session) is None)
     group.return_immediately(())

@@ -53,11 +53,11 @@ test "BIA adapter selects once and the global wrapper is asynchronous cancellabl
   local_cancel()
   idle_target_run_timeout(target, 0)
 
-  let global_called = Ref(false)
+  let mut global_called = false
   let global_handle = schedule_tokenization_idle(_deadline => {
-    global_called.val = true
+    global_called = true
   })
-  assert_false(global_called.val)
+  assert_false(global_called)
   global_handle.dispose()
   global_handle.dispose()
 }
@@ -114,12 +114,12 @@ test "BIA fallback schedules zero-timeout and freezes a plus-15ms deadline" {
   let adapter = create_tokenization_idle_adapter_js(target)
   let remaining : Array[Double] = []
   let did_timeout = Ref(false)
-  let frozen = Ref(false)
+  let mut frozen = false
   let cancel = run_tokenization_idle_adapter_js(
     adapter,
     deadline => {
       did_timeout.val = browser_idle_deadline_did_timeout_js(deadline)
-      frozen.val = browser_idle_deadline_is_frozen_js(deadline)
+      frozen = browser_idle_deadline_is_frozen_js(deadline)
       remaining.push(browser_idle_deadline_time_remaining_js(deadline))
       idle_target_set_now(target, 114.0)
       remaining.push(browser_idle_deadline_time_remaining_js(deadline))
@@ -136,7 +136,7 @@ test "BIA fallback schedules zero-timeout and freezes a plus-15ms deadline" {
   assert_true(remaining.is_empty())
   idle_target_run_timeout(target, 0)
   assert_true(did_timeout.val)
-  assert_true(frozen.val)
+  assert_true(frozen)
   assert_eq(remaining.length(), 4)
   assert_eq(remaining[0], 15.0)
   assert_eq(remaining[1], 1.0)

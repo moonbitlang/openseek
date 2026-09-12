@@ -131,7 +131,7 @@ test "public hidden-area event follows cursor layout and recovery scroll" {
       order.push("scroll")
     })
     defer scroll_subscription.dispose()
-    let committed_before_public = Ref(false)
+    let mut committed_before_public = false
     let mut public_cursor_events = 0
     viewer.on_did_change_cursor_position(_ => public_cursor_events += 1)
     |> ignore
@@ -139,7 +139,7 @@ test "public hidden-area event follows cursor layout and recovery scroll" {
     |> ignore
     viewer.on_did_change_hidden_areas(() => {
       order.push("hidden")
-      committed_before_public.val = view_model.cursor.model_state().position ==
+      committed_before_public = view_model.cursor.model_state().position ==
         Position(4, 2) &&
         view_model.cursor.view_state().position == Position(2, 2) &&
         view_model.line_count() == 6 &&
@@ -151,7 +151,7 @@ test "public hidden-area event follows cursor layout and recovery scroll" {
 
     viewer.set_hidden_areas([Range(2, 1, 3, 1)])
     assert_true(order == ["scroll", "scroll", "hidden"])
-    assert_true(committed_before_public.val)
+    assert_true(committed_before_public)
     // Mapping-only cursor reprojection is committed before the hidden event,
     // but does not fabricate a public model-coordinate cursor transition.
     assert_eq(public_cursor_events, 0)

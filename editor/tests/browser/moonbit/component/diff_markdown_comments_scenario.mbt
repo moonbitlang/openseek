@@ -206,7 +206,7 @@ pub fn run_diff_markdown_comments_test() -> Unit {
     ),
   )
   let content_height_event_count = Ref(0)
-  let auto_height_enabled = Ref(false)
+  let mut auto_height_enabled = false
   let apply_content_height = content_height => {
     if content_height <= 0.0 {
       return
@@ -220,7 +220,7 @@ pub fn run_diff_markdown_comments_test() -> Unit {
   }
   diff_editor.on_did_change_content_height(content_height => {
     content_height_event_count.val += 1
-    if auto_height_enabled.val {
+    if auto_height_enabled {
       apply_content_height(content_height)
     }
   })
@@ -308,7 +308,7 @@ pub fn run_diff_markdown_comments_test() -> Unit {
       )
     },
     () => {
-      auto_height_enabled.val = true
+      auto_height_enabled = true
       apply_content_height(diff_editor.get_content_height())
     },
     () => content_height_event_count.val,

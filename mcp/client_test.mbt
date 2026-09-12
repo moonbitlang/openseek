@@ -229,12 +229,12 @@ async test "list_tools returns tools with pass-through schemas" {
 ///|
 async test "list_tools follows nextCursor pagination" {
   @async.with_task_group(group => {
-    let calls : Ref[Int] = { val: 0, }
+    let mut calls : Int = 0
     let reply = fn(request : Json) -> Json? {
       match method_of(request) {
         "tools/list" => {
-          calls.val += 1
-          if calls.val == 1 {
+          calls += 1
+          if calls == 1 {
             Some(
               success(request, {
                 "tools": [{ "name": "a" }],

@@ -292,8 +292,8 @@ async test "tools/list waits for the initialized notification to complete" {
       is Some(server) else {
       return
     }
-    let initialized_done : Ref[Bool] = { val: false, }
-    let list_saw_initialized : Ref[Bool] = { val: false, }
+    let mut initialized_done : Bool = false
+    let mut list_saw_initialized : Bool = false
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
@@ -307,11 +307,11 @@ async test "tools/list waits for the initialized notification to complete" {
               // A slow lifecycle handler: without the transport's gate, the
               // detached tools/list POST overtakes this notification.
               @async.sleep(150)
-              initialized_done.val = true
+              initialized_done = true
               conn.send_response(202, "Accepted")
             }
             { "method": "tools/list", "id": id, .. } => {
-              list_saw_initialized.val = initialized_done.val
+              list_saw_initialized = initialized_done
               let reply : Json = {
                 "jsonrpc": "2.0",
                 "id": id,
@@ -334,7 +334,7 @@ async test "tools/list waits for the initialized notification to complete" {
     )
     let tools = conn.client().list_tools()
     assert_eq(tools[0].name, "ordered")
-    assert_true(list_saw_initialized.val)
+    assert_true(list_saw_initialized)
     conn.shutdown()
   }
 }

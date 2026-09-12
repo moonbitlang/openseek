@@ -87,26 +87,26 @@ test "AttachedViews preserves identity and emits committed and absent states" {
 test "AttachedViewHandler debounces unstable state and stable state cancels then refreshes" {
   let delayed : Array[ScheduledCallback] = []
   let scheduler = deterministic_scheduler(delayed)
-  let refresh_count = Ref(0)
-  let handler = AttachedViewHandler(() => refresh_count.val += 1, () => {
+  let mut refresh_count = 0
+  let handler = AttachedViewHandler(() => refresh_count += 1, () => {
     Some(scheduler)
   })
   handler.handle_state_change(AttachedViewState([LineRange(1, 3)], false))
   assert_eq(delayed.length(), 1)
-  assert_eq(refresh_count.val, 0)
+  assert_eq(refresh_count, 0)
   handler.handle_state_change(AttachedViewState([LineRange(2, 4)], false))
   assert_eq(delayed.length(), 2)
   run_scheduled(delayed[0])
-  assert_eq(refresh_count.val, 0)
+  assert_eq(refresh_count, 0)
   run_scheduled(delayed[1])
-  assert_eq(refresh_count.val, 1)
+  assert_eq(refresh_count, 1)
   handler.handle_state_change(AttachedViewState([LineRange(5, 7)], false))
   assert_eq(delayed.length(), 3)
   handler.handle_state_change(AttachedViewState([LineRange(5, 7)], true))
-  assert_eq(refresh_count.val, 2)
+  assert_eq(refresh_count, 2)
   run_scheduled(delayed[2])
-  assert_eq(refresh_count.val, 2)
+  assert_eq(refresh_count, 2)
   // Equal requested/computed ranges suppress a repeated stable refresh.
   handler.handle_state_change(AttachedViewState([LineRange(5, 7)], true))
-  assert_eq(refresh_count.val, 2)
+  assert_eq(refresh_count, 2)
 }

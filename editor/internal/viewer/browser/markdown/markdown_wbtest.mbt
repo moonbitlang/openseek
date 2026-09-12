@@ -899,7 +899,7 @@ test "Mermaid load and syntax failures keep fallback and retry cleanly" {
   install_markdown_test_dom()
   let load_mermaid_loader = markdown_test_mermaid_loader("reject", "resolve")
   let load_target = markdown_test_target()
-  let load_size_changes = Ref(0)
+  let mut load_size_changes = 0
   let load_failure = render_markdown_with_mermaid_loader(
     (
       #|```mermaid
@@ -910,7 +910,7 @@ test "Mermaid load and syntax failures keep fallback and retry cleanly" {
     load_mermaid_loader,
     options=MarkdownRenderOptions(
       code_block_renderer=markdown_test_render_code_block,
-      on_size_changed=() => load_size_changes.val += 1,
+      on_size_changed=() => load_size_changes += 1,
       mermaid_theme=Light,
     ),
     target=load_target,
@@ -920,7 +920,7 @@ test "Mermaid load and syntax failures keep fallback and retry cleanly" {
   assert_eq(markdown_test_mermaid_render_count(), 0)
   assert_eq(markdown_test_count(load_target, "svg"), 0)
   assert_eq(markdown_test_count_tokenized_fallbacks(load_target), 1)
-  assert_eq(load_size_changes.val, 0)
+  assert_eq(load_size_changes, 0)
 
   // A rejected module promise is evicted, so the same loader identity can
   // succeed when a later theme rerender retries it.
@@ -931,12 +931,12 @@ test "Mermaid load and syntax failures keep fallback and retry cleanly" {
   assert_eq(markdown_test_mermaid_render_count(), 1)
   assert_eq(markdown_test_mermaid_render_theme(0), "dark")
   assert_eq(markdown_test_count(load_target, "svg"), 1)
-  assert_eq(load_size_changes.val, 1)
+  assert_eq(load_size_changes, 1)
   load_failure.dispose.dispose()
 
   let syntax_mermaid_loader = markdown_test_mermaid_loader("resolve", "reject")
   let syntax_target = markdown_test_target()
-  let syntax_size_changes = Ref(0)
+  let mut syntax_size_changes = 0
   let syntax_failure = render_markdown_with_mermaid_loader(
     (
       #|```mermaid
@@ -946,7 +946,7 @@ test "Mermaid load and syntax failures keep fallback and retry cleanly" {
     syntax_mermaid_loader,
     options=MarkdownRenderOptions(
       code_block_renderer=markdown_test_render_code_block,
-      on_size_changed=() => syntax_size_changes.val += 1,
+      on_size_changed=() => syntax_size_changes += 1,
       mermaid_theme=Light,
     ),
     target=syntax_target,
@@ -956,7 +956,7 @@ test "Mermaid load and syntax failures keep fallback and retry cleanly" {
   assert_eq(markdown_test_mermaid_render_count(), 1)
   assert_eq(markdown_test_count(syntax_target, "svg"), 0)
   assert_eq(markdown_test_count_tokenized_fallbacks(syntax_target), 1)
-  assert_eq(syntax_size_changes.val, 0)
+  assert_eq(syntax_size_changes, 0)
 
   // A render rejection does not poison either the module cache or render
   // queue; the next request uses the cached module and succeeds.
@@ -968,7 +968,7 @@ test "Mermaid load and syntax failures keep fallback and retry cleanly" {
   assert_eq(markdown_test_mermaid_render_count(), 2)
   assert_eq(markdown_test_mermaid_render_theme(1), "dark")
   assert_eq(markdown_test_count(syntax_target, "svg"), 1)
-  assert_eq(syntax_size_changes.val, 1)
+  assert_eq(syntax_size_changes, 1)
   syntax_failure.dispose.dispose()
 }
 
@@ -977,7 +977,7 @@ test "target reuse and dispose reject late Mermaid render commits" {
   install_markdown_test_dom()
   let mermaid_loader = markdown_test_mermaid_loader("resolve", "defer")
   let target = markdown_test_target()
-  let first_size_changes = Ref(0)
+  let mut first_size_changes = 0
   let first = render_markdown_with_mermaid_loader(
     (
       #|```mermaid
@@ -988,7 +988,7 @@ test "target reuse and dispose reject late Mermaid render commits" {
     mermaid_loader,
     options=MarkdownRenderOptions(
       code_block_renderer=markdown_test_render_code_block,
-      on_size_changed=() => first_size_changes.val += 1,
+      on_size_changed=() => first_size_changes += 1,
       mermaid_theme=Light,
     ),
     target~,
@@ -997,7 +997,7 @@ test "target reuse and dispose reject late Mermaid render commits" {
   assert_eq(markdown_test_mermaid_pending_render_count(), 1)
   let first_wrapper = markdown_test_mermaid_wrapper_at(target, 0)
 
-  let second_size_changes = Ref(0)
+  let mut second_size_changes = 0
   let second = render_markdown_with_mermaid_loader(
     (
       #|```mermaid
@@ -1008,7 +1008,7 @@ test "target reuse and dispose reject late Mermaid render commits" {
     mermaid_loader,
     options=MarkdownRenderOptions(
       code_block_renderer=markdown_test_render_code_block,
-      on_size_changed=() => second_size_changes.val += 1,
+      on_size_changed=() => second_size_changes += 1,
       mermaid_theme=Dark,
     ),
     target~,
@@ -1022,7 +1022,7 @@ test "target reuse and dispose reject late Mermaid render commits" {
   assert_eq(markdown_test_mermaid_pending_render_count(), 1)
   markdown_test_resolve_next_mermaid_render()
   markdown_test_flush_mermaid_microtasks()
-  assert_eq(first_size_changes.val, 0)
+  assert_eq(first_size_changes, 0)
   assert_eq(markdown_test_count(target, "svg"), 0)
   assert_eq(markdown_test_mermaid_pending_render_count(), 1)
 
@@ -1030,7 +1030,7 @@ test "target reuse and dispose reject late Mermaid render commits" {
   // drained.
   markdown_test_resolve_next_mermaid_render()
   markdown_test_flush_mermaid_microtasks()
-  assert_eq(second_size_changes.val, 1)
+  assert_eq(second_size_changes, 1)
   assert_eq(markdown_test_count(target, "svg"), 1)
   assert_eq(markdown_test_mermaid_bind_count(), 1)
   assert_eq(markdown_test_mermaid_render_count(), 2)
@@ -1038,7 +1038,7 @@ test "target reuse and dispose reject late Mermaid render commits" {
     markdown_test_mermaid_render_id(0) == markdown_test_mermaid_render_id(1),
   )
 
-  let third_size_changes = Ref(0)
+  let mut third_size_changes = 0
   let third = render_markdown_with_mermaid_loader(
     (
       #|```mermaid
@@ -1049,7 +1049,7 @@ test "target reuse and dispose reject late Mermaid render commits" {
     mermaid_loader,
     options=MarkdownRenderOptions(
       code_block_renderer=markdown_test_render_code_block,
-      on_size_changed=() => third_size_changes.val += 1,
+      on_size_changed=() => third_size_changes += 1,
       mermaid_theme=Light,
     ),
     target~,
@@ -1060,7 +1060,7 @@ test "target reuse and dispose reject late Mermaid render commits" {
   third.dispose.dispose()
   markdown_test_resolve_next_mermaid_render()
   markdown_test_flush_mermaid_microtasks()
-  assert_eq(third_size_changes.val, 0)
+  assert_eq(third_size_changes, 0)
   assert_eq(markdown_test_count(target, "svg"), 0)
   assert_eq(markdown_test_count_tokenized_fallbacks(target), 1)
   assert_eq(markdown_test_mermaid_bind_count(), 1)

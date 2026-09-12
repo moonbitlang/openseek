@@ -145,19 +145,19 @@ test "registry replacement makes stale dispose inert and active dispose notifies
   let registry = @syntax.TokenizationRegistry()
   let changed_languages : Array[Array[String]] = []
   let color_flags : Array[Bool] = []
-  let support_visible_when_registered = Ref(false)
+  let mut support_visible_when_registered = false
   registry.on_did_change(event => {
     changed_languages.push(event.changed_languages)
     color_flags.push(event.changed_color_map)
     if changed_languages.length() == 1 {
-      support_visible_when_registered.val = registry.get("toy") is Some(_)
+      support_visible_when_registered = registry.get("toy") is Some(_)
     }
   })
   |> ignore
 
   let stale = registry.register("toy", BlockCommentToy::{ })
   let active = registry.register("toy", BlockCommentToy::{ })
-  assert_true(support_visible_when_registered.val)
+  assert_true(support_visible_when_registered)
   assert_eq(changed_languages.length(), 2)
   assert_false(color_flags[0])
   assert_false(color_flags[1])

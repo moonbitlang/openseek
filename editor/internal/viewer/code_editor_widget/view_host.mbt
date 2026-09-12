@@ -199,26 +199,26 @@ pub fn CodeEditorWidget::after_next_render(
     return @base_common.Disposable::from(() => ())
   }
   let target_generation = self.render_generation + 1
-  let registration : Ref[@base_common.Disposable?] = Ref(None)
+  let mut registration : @base_common.Disposable? = None
   let listener = self.did_render.event(generation => {
     if generation < target_generation {
       return
     }
-    match registration.val {
+    match registration {
       Some(disposable) => {
-        registration.val = None
+        registration = None
         disposable.dispose()
       }
       None => return
     }
     callback()
   })
-  registration.val = Some(listener)
+  registration = Some(listener)
   self.schedule_render()
   @base_common.Disposable::from(() => {
-    match registration.val {
+    match registration {
       Some(disposable) => {
-        registration.val = None
+        registration = None
         disposable.dispose()
       }
       None => ()

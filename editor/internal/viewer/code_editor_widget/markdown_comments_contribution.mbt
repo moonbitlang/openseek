@@ -406,15 +406,13 @@ fn render_markdown_comment_presentations(
   @base_common.Disposable?,
   @diagram_viewport.DiagramViewports,
 ) {
-  let diagram_viewports_slot : Ref[@diagram_viewport.DiagramViewports?] = Ref(
-    None,
-  )
+  let mut diagram_viewports_slot : @diagram_viewport.DiagramViewports? = None
   // Renderer notifications include asynchronous Mermaid commits, so reconcile
   // before measuring. Diagram viewport and fold interactions only change
   // geometry; keep their pointer-driven path on the already-coalesced size
   // observer instead of rescanning the rendered Markdown tree per event.
   let on_rendered_size_changed = () => {
-    match diagram_viewports_slot.val {
+    match diagram_viewports_slot {
       Some(diagram_viewports) => diagram_viewports.refresh()
       None => ()
     }
@@ -452,7 +450,7 @@ fn render_markdown_comment_presentations(
     rendered_markdown.element,
     on_interaction_size_changed,
   )
-  diagram_viewports_slot.val = Some(diagram_viewports)
+  diagram_viewports_slot = Some(diagram_viewports)
   (
     rendered_markdown, preview_rendered_markdown, fold_lifetime, diagram_viewports,
   )

@@ -95,16 +95,16 @@ test "initial and reentrant current queues select descending priority" {
 test "current-or-next outside a drain waits for the next native frame" {
   let driver = TestAnimationFrameDriver()
   let coordinator = driver.coordinator()
-  let observed_frame = Ref(0)
+  let mut observed_frame = 0
   coordinator.run_at_this_or_schedule_at_next_animation_frame(
-    () => observed_frame.val = driver.frame,
+    () => observed_frame = driver.frame,
     0,
   )
   |> ignore
-  assert_eq(observed_frame.val, 0)
+  assert_eq(observed_frame, 0)
   assert_eq(driver.request_count, 1)
   driver.run_next()
-  assert_eq(observed_frame.val, 1)
+  assert_eq(observed_frame, 1)
 }
 
 ///|

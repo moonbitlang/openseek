@@ -94,20 +94,20 @@ test "passive reads never invoke support; stable attached ranges store exact ran
 ///|
 test "too-large and missing support stay passive defaults and schedule nothing" {
   let harness = backend_harness(["one"], too_large=true)
-  let resolves = Ref(0)
+  let mut resolves = 0
   let attached_views = AttachedViews()
   let backend = TokenizerSyntaxTokenBackend::new_with_support_resolver(
     harness.model_state,
     attached_views,
     _ => {
-      resolves.val += 1
+      resolves += 1
       Some(logging_support([], Ref(0)))
     },
   )
-  assert_eq(resolves.val, 0)
+  assert_eq(resolves, 0)
   let view = attached_views.attach_view()
   view.set_visible_lines([{ start_line_number: 1, end_line_number: 1, }], true)
-  assert_eq(resolves.val, 0)
+  assert_eq(resolves, 0)
   assert_eq(backend.get_line_tokens(1).get_count(), 1)
 }
 
@@ -169,13 +169,13 @@ test "disposing guard drops token events from reset and visible refresh" {
     attached_views,
     _ => Some(logging_support([], Ref(0))),
   )
-  let token_events = Ref(0)
-  backend.on_did_change_tokens(_ => token_events.val += 1) |> ignore
+  let mut token_events = 0
+  backend.on_did_change_tokens(_ => token_events += 1) |> ignore
   harness.disposing.val = true
   backend.reset_tokenization()
   let view = attached_views.attach_view()
   view.set_visible_lines([{ start_line_number: 1, end_line_number: 1, }], true)
-  assert_eq(token_events.val, 0)
+  assert_eq(token_events, 0)
 }
 
 ///|

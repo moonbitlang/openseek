@@ -45,7 +45,7 @@ test "issue #46314: ViewModel is out of sync with Model!" {
   first.set_position(Position(1, 5))
 
   let mut cursor_events = 0
-  let projections_were_current = Ref(true)
+  let mut projections_were_current = true
   let subscription = first.on_did_change_cursor_position(_ => {
     cursor_events += 1
     // The callback itself owns a fresh two-line visible demand. A temporary
@@ -57,7 +57,7 @@ test "issue #46314: ViewModel is out of sync with Model!" {
       true,
     )
     model.on_before_detached(demand_view)
-    projections_were_current.val = projections_were_current.val &&
+    projections_were_current = projections_were_current &&
       first.test_view_model().line_count() == model.get_line_count() &&
       second.test_view_model().line_count() == model.get_line_count() &&
       first.test_view_model().get_line_content(1) == model.get_line_content(1) &&
@@ -73,7 +73,7 @@ test "issue #46314: ViewModel is out of sync with Model!" {
     ),
   )
   assert_eq(cursor_events, 1)
-  assert_true(projections_were_current.val)
+  assert_true(projections_were_current)
   assert_eq(first.test_view_model().line_count(), 3)
   assert_eq(second.test_view_model().line_count(), 3)
   assert_eq(first.test_view_model().get_line_content(3), "third")

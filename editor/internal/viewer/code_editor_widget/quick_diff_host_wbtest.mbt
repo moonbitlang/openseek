@@ -228,17 +228,17 @@ test "quick diff: disposal window is live and later service events are silent" {
   )
   viewer.set_model(Some(model))
   assert_true(state.collection.length() > 0)
-  let original_change_deliveries = Ref(0)
+  let mut original_change_deliveries = 0
   state.listeners.push(
     quick_diff
     .quick_diff_handle()
-    .on_did_change_original(_ => original_change_deliveries.val += 1),
+    .on_did_change_original(_ => original_change_deliveries += 1),
   )
-  let callback_seen = Ref(false)
-  let contribution_live_in_callback = Ref(false)
+  let mut callback_seen = false
+  let mut contribution_live_in_callback = false
   viewer.on_did_dispose(() => {
-    callback_seen.val = true
-    contribution_live_in_callback.val = viewer.contributions.lookup(
+    callback_seen = true
+    contribution_live_in_callback = viewer.contributions.lookup(
         "quickDiff.decorator",
       )
       is Some(_)
@@ -249,12 +249,12 @@ test "quick diff: disposal window is live and later service events are silent" {
   })
   |> ignore
   viewer.dispose()
-  assert_true(callback_seen.val)
-  assert_true(contribution_live_in_callback.val)
-  assert_eq(original_change_deliveries.val, 1)
+  assert_true(callback_seen)
+  assert_true(contribution_live_in_callback)
+  assert_eq(original_change_deliveries, 1)
   assert_eq(state.collection.length(), 0)
   quick_diff.set_original_content(resource, Some("after dispose"))
-  assert_eq(original_change_deliveries.val, 1)
+  assert_eq(original_change_deliveries, 1)
   assert_eq(state.collection.length(), 0)
   model.dispose()
   backings.dispose()

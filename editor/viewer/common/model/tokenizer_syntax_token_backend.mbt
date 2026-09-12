@@ -88,16 +88,16 @@ fn TokenizerSyntaxTokenBackend::handle_attached_view_state_change(
       let handler = if existing is Some(index) {
         self.attached_view_states[index].handler
       } else {
-        let holder : Ref[AttachedViewHandler?] = Ref(None)
+        let mut holder : AttachedViewHandler? = None
         let handler = AttachedViewHandler(
           () => {
-            if holder.val is Some(current) {
+            if holder is Some(current) {
               self.refresh_ranges(current.line_ranges())
             }
           },
           () => self.model_state.scheduler.val,
         )
-        holder.val = Some(handler)
+        holder = Some(handler)
         self.attached_view_states.push({ view: change.view, handler, })
         handler
       }

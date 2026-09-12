@@ -341,17 +341,17 @@ fn resolve_allowed_markdown_uri(
   has_base_uri : Bool,
   kind : MarkdownUriKind,
 ) -> String {
-  let allowed = Ref("")
+  let mut allowed = ""
   with_resolved_markdown_uri(raw, base_uri, has_base_uri, (href, protocol) => {
     let accepted = protocol == "http:" ||
       protocol == "https:" ||
       (kind == LinkUri && protocol == "mailto:")
     if accepted {
-      allowed.val = href
+      allowed = href
     }
   })
   |> ignore
-  allowed.val
+  allowed
 }
 
 ///|

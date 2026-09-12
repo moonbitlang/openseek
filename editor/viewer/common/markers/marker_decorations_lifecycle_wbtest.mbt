@@ -162,10 +162,10 @@ test "reentrant marker updates drain after the active decoration delta" {
   let service = MarkerDecorationsService(markers.marker_service_handle())
   let model = lifecycle_model(uri, "nested-update.mbt", "alpha")
   let lease = service.acquire_model(model)
-  let reentered = Ref(false)
+  let mut reentered = false
   let model_subscription = model.on_did_change_decorations(_ => {
-    if !reentered.val {
-      reentered.val = true
+    if !reentered {
+      reentered = true
       markers.change_one("host", uri, [lifecycle_marker("nested")])
       // MicrotaskEmitter deliberately drops an event re-fired during its own
       // flush. Invoke the same service ingress directly to exercise the
@@ -173,14 +173,14 @@ test "reentrant marker updates drain after the active decoration delta" {
       service.handle_marker_change([uri])
     }
   })
-  let outward_events = Ref(0)
+  let mut outward_events = 0
   let outward_subscription = service.on_did_change_marker_decorations(_ => {
-    outward_events.val += 1
+    outward_events += 1
   })
 
   markers.change_one("host", uri, [lifecycle_marker("outer")])
-  assert_true(reentered.val)
-  assert_eq(outward_events.val, 2)
+  assert_true(reentered)
+  assert_eq(outward_events, 2)
   assert_eq(marker_model_decorations(model).length(), 1)
   let live = service.get_live_markers_for_model(model)
   assert_eq(live.length(), 1)

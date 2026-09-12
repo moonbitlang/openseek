@@ -78,19 +78,17 @@ async test "native hover requires exact disk state and runs ordinary moon ide ho
       Ref(root),
       moon_command="unused",
     )
-    let seen : Ref[Array[String]] = Ref([])
+    let mut seen : Array[String] = []
     let hover = provider.provide_hover_with_runner(model, Position(1, 8), (
       _root,
       args,
     ) => {
-      seen.val = args
+      seen = args
       Some((0, hover_test_output()))
     })
     assert_true(hover is Some(_))
-    assert_eq(seen.val, [
-      "ide", "hover", "--loc", "main.mbt:1:8", "--output-json",
-    ])
-    assert_false(seen.val.contains("--no-check"))
+    assert_eq(seen, ["ide", "hover", "--loc", "main.mbt:1:8", "--output-json"])
+    assert_false(seen.contains("--no-check"))
   }
 }
 
@@ -611,12 +609,12 @@ async test "moon check schedule restores running after collector failure" {
   }
   @async.with_task_group() <| group => {
     let task = group.spawn(() => run(), allow_failure=true)
-    let caught = Ref(false)
+    let mut caught = false
     task.wait() catch {
-      CheckCollectorFailure => caught.val = true
+      CheckCollectorFailure => caught = true
       _ => ()
     }
-    assert_true(caught.val)
+    assert_true(caught)
     assert_false(diagnostics.running.val)
   }
 }
@@ -643,11 +641,11 @@ async test "moon check schedule restores running after cancellation" {
     let task = group.spawn(() => run(), allow_failure=true)
     started.get()
     task.cancel()
-    let cancelled = Ref(false)
+    let mut cancelled = false
     task.wait() catch {
-      error => cancelled.val = @async.is_cancellation_error(error)
+      error => cancelled = @async.is_cancellation_error(error)
     }
-    assert_true(cancelled.val)
+    assert_true(cancelled)
     assert_false(diagnostics.running.val)
   }
 }

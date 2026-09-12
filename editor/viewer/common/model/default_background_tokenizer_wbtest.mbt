@@ -27,8 +27,8 @@ fn worker_scheduler_harness() -> WorkerSchedulerHarness {
   let idle : Array[WorkerIdleTask] = []
   let zero : Array[WorkerZeroTask] = []
   let now_values : Array[Double] = []
-  let now_index = Ref(0)
-  let fallback_now = Ref(0.0)
+  let mut now_index = 0
+  let fallback_now = 0.0
   let before_next_now : Ref[(() -> Unit)?] = Ref(None)
   let trace : Array[String] = []
   let scheduler = TokenizationScheduler(
@@ -59,12 +59,12 @@ fn worker_scheduler_harness() -> WorkerSchedulerHarness {
         }
         None => ()
       }
-      let value = if now_index.val < now_values.length() {
-        let result = now_values[now_index.val]
-        now_index.val += 1
+      let value = if now_index < now_values.length() {
+        let result = now_values[now_index]
+        now_index += 1
         result
       } else {
-        fallback_now.val
+        fallback_now
       }
       trace.push("now")
       value
@@ -192,14 +192,14 @@ test "deadline is read immediately and end time is now plus remaining" {
     let scheduling = worker_scheduler_harness()
     scheduling.now_values.append([10.0, 10.0, 10.0, 12.0, boundary])
     let harness = default_worker_harness(2, 1, scheduling)
-    let deadline_live = Ref(true)
-    let deadline_reads = Ref(0)
-    scheduling.before_next_now.val = Some(() => deadline_live.val = false)
+    let mut deadline_live = true
+    let mut deadline_reads = 0
+    scheduling.before_next_now.val = Some(() => deadline_live = false)
     let deadline = TokenizationIdleDeadline(() => {
-      if !deadline_live.val {
+      if !deadline_live {
         abort("deadline read after leaving its live interval")
       }
-      deadline_reads.val += 1
+      deadline_reads += 1
       scheduling.trace.push("remaining")
       5.0
     })
@@ -207,8 +207,8 @@ test "deadline is read immediately and end time is now plus remaining" {
       deadline,
       harness.worker.generation.val,
     )
-    assert_eq(deadline_reads.val, 1)
-    assert_false(deadline_live.val)
+    assert_eq(deadline_reads, 1)
+    assert_false(deadline_live)
     assert_eq(scheduling.trace[0], "remaining")
     assert_eq(harness.lexer_calls.length(), 1)
     if boundary < 15.0 {

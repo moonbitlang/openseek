@@ -29,10 +29,10 @@ test "hidden-area outgoing fires after mapping cursor layout and recovery" {
   let order : Array[String] = []
   let scroll_subscription = layout.on_did_scroll(_change => order.push("scroll"))
   defer scroll_subscription.dispose()
-  let state_was_committed = Ref(false)
+  let mut state_was_committed = false
   let outgoing_subscription = view_model.on_hidden_areas_changed(event => {
     order.push("outgoing")
-    state_was_committed.val = event.kind == HiddenAreasChanged &&
+    state_was_committed = event.kind == HiddenAreasChanged &&
       view_model.line_count() == 6 &&
       layout.line_count() == 6 &&
       view_model.cursor.model_state().position == Position(4, 2) &&
@@ -50,7 +50,7 @@ test "hidden-area outgoing fires after mapping cursor layout and recovery" {
     }),
   )
   assert_true(order == ["mapping", "cursor", "scroll", "scroll", "outgoing"])
-  assert_true(state_was_committed.val)
+  assert_true(state_was_committed)
 }
 
 ///|

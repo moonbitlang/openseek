@@ -372,7 +372,7 @@ pub fn run_markdown_document_test() -> Unit {
   |> ignore
   viewer.handle_initialized()
   secondary_viewer.handle_initialized()
-  let code_viewer : Ref[@viewer.Viewer?] = Ref(None)
+  let mut code_viewer : @viewer.Viewer? = None
   install_markdown_document_controls(
     () => markdown_model.get_value(),
     () => markdown_model.set_value(markdown_document_diagram_source()),
@@ -392,13 +392,13 @@ pub fn run_markdown_document_test() -> Unit {
       )
       code.set_model(Some(code_model))
       code.handle_initialized()
-      code_viewer.val = Some(code)
+      code_viewer = Some(code)
     },
     () => {
-      match code_viewer.val {
+      match code_viewer {
         Some(code) => {
           code.dispose()
-          code_viewer.val = None
+          code_viewer = None
         }
         None => ()
       }
@@ -439,13 +439,13 @@ pub fn run_markdown_document_test() -> Unit {
     width => {
       host.set_attribute("style", "height:220px;width:\{width}px;")
       viewer.layout()
-      match code_viewer.val {
+      match code_viewer {
         Some(code) => code.layout()
         None => ()
       }
     },
     () => {
-      match code_viewer.val {
+      match code_viewer {
         Some(code) => code.dispose()
         None => ()
       }

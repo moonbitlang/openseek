@@ -47,11 +47,11 @@ test "view models react first to model changes" {
   let second = ViewModel(model)
   let observed : Array[String] = []
   let mut is_first = true
-  let callbacks_valid = Ref(true)
+  let mut callbacks_valid = true
   let _subscription = model.on_did_change_content(event => {
     // Both registered ViewModels complete loop one before any public model
     // listener runs, including the hostile nested mutation below.
-    callbacks_valid.val = callbacks_valid.val &&
+    callbacks_valid = callbacks_valid &&
       first.line_count() == model.get_line_count() &&
       second.line_count() == model.get_line_count() &&
       reference_range_is_valid(first, model) &&
@@ -66,7 +66,7 @@ test "view models react first to model changes" {
   })
   model.set_value("Hello\nworld!")
   assert_true(observed == ["public:2:2", "public:3:1"])
-  assert_true(callbacks_valid.val)
+  assert_true(callbacks_valid)
   assert_eq(first.line_count(), 1)
   assert_eq(second.line_count(), 1)
   assert_true(reference_range_is_valid(first, model))
@@ -119,9 +119,9 @@ test "model-token callback converts wrapped and hidden ranges before outgoing de
     ),
     "/model-token-order.mbt",
   )
-  let original : Ref[@model.ModelTokensChangedEvent?] = Ref(None)
+  let mut original : @model.ModelTokensChangedEvent? = None
   let _model_subscription = model.on_did_change_tokens(event => {
-    original.val = Some(event)
+    original = Some(event)
   })
   let delivery_order : Array[String] = []
   let converted : Array[Array[ViewTokensChangedRange]] = []
@@ -135,13 +135,13 @@ test "model-token callback converts wrapped and hidden ranges before outgoing de
   )
   assert_true(view_model.set_hidden_areas([Range(2, 1, 2, 1)]))
   let outgoing_events : Array[@model.ModelTokensChangedEvent] = []
-  let outgoing_identity = Ref(false)
+  let mut outgoing_identity = false
   let _outgoing_subscription = view_model.on_model_tokens_changed(outgoing => {
     delivery_order.push("outgoing")
-    match original.val {
+    match original {
       Some(source_event) =>
-        outgoing_identity.val = physical_equal(outgoing.event, source_event)
-      None => outgoing_identity.val = false
+        outgoing_identity = physical_equal(outgoing.event, source_event)
+      None => outgoing_identity = false
     }
     outgoing_events.push(outgoing.event)
   })
@@ -157,8 +157,8 @@ test "model-token callback converts wrapped and hidden ranges before outgoing de
   assert_eq(converted[0][0].from_line_number, 1)
   assert_eq(converted[0][0].to_line_number, 4)
   assert_eq(outgoing_events.length(), 1)
-  assert_true(outgoing_identity.val)
-  assert_true(physical_equal(outgoing_events[0], original.val.unwrap()))
+  assert_true(outgoing_identity)
+  assert_true(physical_equal(outgoing_events[0], original.unwrap()))
   view_model.dispose()
   registration.dispose()
   model.dispose()
@@ -170,17 +170,17 @@ test "headless token callback defaults to no-op and disposal removes delivery" {
     "one\ntwo", "/model-token-headless.mbt",
   )
   let view_model = ViewModel(model)
-  let delivered = Ref(0)
-  let _subscription = view_model.on_model_tokens_changed(_ => delivered.val += 1)
+  let mut delivered = 0
+  let _subscription = view_model.on_model_tokens_changed(_ => delivered += 1)
   // No browser callback was supplied: the private default sink completes as a
   // no-op, then the typed outgoing listener still observes the source event.
   let registration = @syntax.tokenization_registry.register(
     "view-model-impl-reference",
     @plain_tokenizer.PlainTokenizer(),
   )
-  assert_eq(delivered.val, 1)
+  assert_eq(delivered, 1)
   view_model.dispose()
   registration.dispose()
-  assert_eq(delivered.val, 1)
+  assert_eq(delivered, 1)
   model.dispose()
 }

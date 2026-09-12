@@ -682,20 +682,20 @@ async test "file scan keeps lexicographic DFS and skips ignored directories" {
 ///|
 async test "file scan uses one ordered coordinator" {
   let root = @pathx.Path("/virtual-sequential").resolve()
-  let active = Ref(0)
-  let maximum = Ref(0)
+  let mut active = 0
+  let mut maximum = 0
   let snapshot = scan_directory_tree(root, async fn(dir) {
-    active.val += 1
-    maximum.val = maximum.val.max(active.val)
+    active += 1
+    maximum = maximum.max(active)
     @async.pause()
-    active.val -= 1
+    active -= 1
     if dir.to_string() == root.to_string() {
       [test_scan_entry("a", true), test_scan_entry("b", true)]
     } else {
       [test_scan_entry("one.mbt", false)]
     }
   })
-  assert_eq(maximum.val, 1)
+  assert_eq(maximum, 1)
   assert_eq(snapshot.files, ["a/one.mbt", "b/one.mbt"])
 }
 
@@ -885,10 +885,10 @@ async test "one connection serializes discovery across cache sessions" {
 ///|
 async test "a failed cache population is not installed and can retry" {
   @async.with_task_group(group => {
-    let attempts = Ref(0)
+    let mut attempts = 0
     let service = FileSearchService::new_with_scan(_ => {
-      attempts.val += 1
-      if attempts.val == 1 {
+      attempts += 1
+      if attempts == 1 {
         raise HostError("injected discovery failure")
       }
       { files: ["recovered.mbt"], }
@@ -904,7 +904,7 @@ async test "a failed cache population is not installed and can retry" {
     let recovered = service.search(root, "cache-a", "recover", 512, 2)
     assert_false(recovered.from_cache)
     assert_eq(recovered.files, ["recovered.mbt"])
-    assert_eq(attempts.val, 2)
+    assert_eq(attempts, 2)
     group.return_immediately(())
   })
 }

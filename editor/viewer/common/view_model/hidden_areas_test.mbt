@@ -50,14 +50,14 @@ test "hidden-area mapping phase precedes layout flush and recovery scroll" {
 
   // The unchanged contribution returns before the owner is asked to open an
   // event batch, matching the source's VI-008 → VI-010 control flow.
-  let batch_calls = Ref(0)
+  let mut batch_calls = 0
   assert_false(
     view_model.set_hidden_areas([Range(2, 1, 3, 1)], with_event_batch=mutation => {
-      batch_calls.val += 1
+      batch_calls += 1
       mutation()
     }),
   )
-  assert_eq(batch_calls.val, 0)
+  assert_eq(batch_calls, 0)
 }
 
 ///|

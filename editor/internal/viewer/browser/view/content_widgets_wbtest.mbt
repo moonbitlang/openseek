@@ -466,14 +466,14 @@ test "configuration visits every retained widget and gates layout cache reads" {
   let document = @rdom.document()
   let content_left = Ref(12.0)
   let content_width = Ref(240.0)
-  let layout_reads = Ref(0)
+  let mut layout_reads = 0
   let widgets = ContentWidgets::ContentWidgets(
     document,
     document.create_element("section"),
   )
   widgets.install_live_view_context(
     () => {
-      layout_reads.val += 1
+      layout_reads += 1
       (content_left.val, content_width.val)
     },
     position => Some(position),
@@ -494,7 +494,7 @@ test "configuration visits every retained widget and gates layout cache reads" {
   widgets.set_widget_position(first.content_widget_handle())
   widgets.add_widget(second.content_widget_handle())
   widgets.set_widget_position(second.content_widget_handle())
-  assert_eq(layout_reads.val, 2)
+  assert_eq(layout_reads, 2)
   let first_state = widgets.widgets["first"]
   let second_state = widgets.widgets["second"]
   assert_eq(first_state.content_left, 12.0)
@@ -509,7 +509,7 @@ test "configuration visits every retained widget and gates layout cache reads" {
   content_left.val = 30.0
   content_width.val = 500.0
   widgets.on_configuration_changed(false)
-  assert_eq(layout_reads.val, 2)
+  assert_eq(layout_reads, 2)
   assert_eq(first_state.content_left, 12.0)
   assert_eq(first_state.content_width, 240.0)
   assert_eq(first_state.max_width, 240.0)
@@ -532,14 +532,14 @@ test "configuration visits every retained widget and gates layout cache reads" {
     viewport_width: 500.0,
     viewport_height: 200.0,
   })
-  assert_eq(layout_reads.val, 2)
+  assert_eq(layout_reads, 2)
   assert_eq(first_state.max_width, 240.0)
   assert_eq(second_state.max_width, 240.0)
 
   // `layoutInfo` true visits every retained widget in key order; each reads
   // the live context and refreshes contentLeft/contentWidth/maxWidth.
   widgets.on_configuration_changed(true)
-  assert_eq(layout_reads.val, 4)
+  assert_eq(layout_reads, 4)
   assert_eq(first_state.content_left, 30.0)
   assert_eq(first_state.content_width, 500.0)
   assert_eq(first_state.max_width, 500.0)
@@ -665,7 +665,7 @@ test "onBefore distinguishes null and empty preference and includes viewport end
 test "mapping reprojection retains model anchors and visits widgets in key order" {
   install_content_widgets_test_browser()
   let document = @rdom.document()
-  let projection_delta = Ref(10)
+  let mut projection_delta = 10
   let projected_model_positions : Array[@base_common.Position] = []
   let widgets = ContentWidgets::ContentWidgets(
     document,
@@ -675,8 +675,8 @@ test "mapping reprojection retains model anchors and visits widgets in key order
     projected_model_positions.push(position)
     Some(
       Position(
-        position.line_number + projection_delta.val,
-        position.column + projection_delta.val,
+        position.line_number + projection_delta,
+        position.column + projection_delta,
       ),
     )
   })
@@ -697,7 +697,7 @@ test "mapping reprojection retains model anchors and visits widgets in key order
   widgets.add_widget(second.content_widget_handle())
   widgets.set_widget_position(second.content_widget_handle())
   projected_model_positions.clear()
-  projection_delta.val = 20
+  projection_delta = 20
 
   widgets.update_anchors_view_positions()
   assert_eq(projected_model_positions.length(), 3)
@@ -1335,17 +1335,11 @@ test "focused off-viewport widgets park without hiding and hidden writes are gat
   })
   widgets.add_widget(widget.content_widget_handle())
   widgets.set_widget_position(widget.content_widget_handle())
-  let measurable = Ref(true)
+  let mut measurable = true
   let ctx : ContentWidgetsRenderContext = {
     vertical_offset_for_line: _ => 50.0,
     line_height_for_line: _ => 20.0,
-    visible_range_for_position: _ => {
-      if measurable.val {
-        Some(10.0)
-      } else {
-        None
-      }
-    },
+    visible_range_for_position: _ => if measurable { Some(10.0) } else { None },
     typical_fullwidth_character_width: 16.0,
     scroll_top: 0.0,
     scroll_left: 0.0,
@@ -1359,7 +1353,7 @@ test "focused off-viewport widgets park without hiding and hidden writes are gat
     "inherit",
   )
   content_widgets_test_set_active_element(document, focus_child)
-  measurable.val = false
+  measurable = false
   widgets.prepare_render_widgets(ctx)
   content_widgets_test_clear_events()
   widgets.render_widgets(0.0, 0.0)
@@ -1382,11 +1376,11 @@ test "focused off-viewport widgets park without hiding and hidden writes are gat
   assert_true(content_widgets_test_events() == ["after:focus:null:null"])
 
   // Re-enter, then leave without focus: this branch hides instead of parks.
-  measurable.val = true
+  measurable = true
   widgets.prepare_render_widgets(ctx)
   widgets.render_widgets(0.0, 0.0)
   content_widgets_test_clear_active_element(document)
-  measurable.val = false
+  measurable = false
   widgets.prepare_render_widgets(ctx)
   widgets.render_widgets(0.0, 0.0)
   assert_eq(
@@ -1501,12 +1495,12 @@ test "empty single and mixed preferences preserve source order" {
     Some(position)
   })
   widgets.add_widget(widget.content_widget_handle())
-  let query_count = Ref(0)
+  let mut query_count = 0
   let ctx : ContentWidgetsRenderContext = {
     vertical_offset_for_line: _ => 50.0,
     line_height_for_line: _ => 20.0,
     visible_range_for_position: _ => {
-      query_count.val += 1
+      query_count += 1
       Some(30.0)
     },
     typical_fullwidth_character_width: 16.0,
@@ -1525,7 +1519,7 @@ test "empty single and mixed preferences preserve source order" {
   widgets.set_widget_position(widget.content_widget_handle())
   widgets.prepare_render_widgets(ctx)
   assert_true(widgets.widgets["preference-matrix"].render_data is None)
-  assert_eq(query_count.val, 0)
+  assert_eq(query_count, 0)
 
   widget.position = Some({
     position: Some(Position(1, 2)),
@@ -1894,15 +1888,15 @@ test "iOS owner visual viewport precedes inner and document client areas" {
     true, 700.0, 0.0, 0.0, 650.0, 600.0,
   )
   let node = owner.create_element("div")
-  let visual_width = Ref(-1.0)
-  let visual_height = Ref(-1.0)
+  let mut visual_width = -1.0
+  let mut visual_height = -1.0
   content_widgets_test_with_ios_visual_viewport(owner, 321.0, 123.0, () => {
     let (width, height) = body_client_area(node)
-    visual_width.val = width
-    visual_height.val = height
+    visual_width = width
+    visual_height = height
   })
-  assert_eq(visual_width.val, 321.0)
-  assert_eq(visual_height.val, 123.0)
+  assert_eq(visual_width, 321.0)
+  assert_eq(visual_height, 123.0)
   let (restored_width, restored_height) = body_client_area(node)
   assert_eq(restored_width, 700.0)
   assert_eq(restored_height, 700.0)

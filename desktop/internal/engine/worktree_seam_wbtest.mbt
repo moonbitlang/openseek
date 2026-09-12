@@ -682,7 +682,7 @@ async test "permanent archived deletion drops placement but keeps files and bran
   )
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
-  let worktree_changed = Ref(false)
+  let mut worktree_changed = false
   let committed_infos : Array[WorktreeInfo] = []
   delete_archived_session_commit(
     manager,
@@ -690,7 +690,7 @@ async test "permanent archived deletion drops placement but keeps files and bran
     workspace.resource_path(),
     (_, _) => (),
     on_worktree_changed=(_, infos) => {
-      worktree_changed.val = true
+      worktree_changed = true
       committed_infos.clear()
       for info in infos {
         committed_infos.push(info)
@@ -700,7 +700,7 @@ async test "permanent archived deletion drops placement but keeps files and bran
   let entries = @worktree.list(workspace.to_string()).worktrees
   assert_eq(entries.length(), 1)
   assert_eq(entries[0].session, Some("other"))
-  assert_true(worktree_changed.val)
+  assert_true(worktree_changed)
   assert_eq(committed_infos.length(), 1)
   assert_eq(committed_infos[0].session, Some("other"))
   assert_true(@fsx.exists(workspace.join("project-note.txt").to_path()))

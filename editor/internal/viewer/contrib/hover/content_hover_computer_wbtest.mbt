@@ -253,18 +253,18 @@ async test "async-each skips participants without an async callback" {
   let computer : ContentHoverComputer = {
     participants: [HoverParticipantHandle(10, _ctx => [])],
   }
-  let runner_called = Ref(false)
+  let mut runner_called = false
   let emitted = Ref(0)
   computer.compute_async_each(
     computer_test_model(),
     async_test_anchor(),
     run_tasks=tasks => {
-      runner_called.val = true
+      runner_called = true
       assert_true(tasks.is_empty())
     },
     emit=_parts => emitted.val += 1,
   )
-  assert_true(runner_called.val)
+  assert_true(runner_called)
   assert_eq(emitted.val, 0)
 }
 
