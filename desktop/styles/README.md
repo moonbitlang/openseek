@@ -34,6 +34,39 @@ Component styles consume semantic names such as `--color-text-muted` and
 `--color-focus-ring`. They do not introduce aliases for a single call site or
 encode component names into global tokens.
 
+### Typography and appearance settings
+
+`Font size` sets `--font-size-base` (14px by default). Use the existing scale
+for all readable app text, including Jobs, Codex conversations, and dock UI:
+
+| Role | Token | Default |
+| --- | --- | --- |
+| Body text and task names | `--font-size-md` | 14px |
+| Controls and code | `--font-size-sm` | 13px |
+| Timestamps, status, and other metadata | `--font-size-xs` | 12px |
+| Panel headings | `--font-size-lg` | 17px |
+
+Do not hardcode text sizes in pixels. Markdown may size headings relative to
+its surrounding text; larger page headings may derive from the base. Use
+unitless line heights so text grows without clipping. Icon glyphs use the
+icon scale and do not acquire text-sizing rules merely to size an SVG.
+
+Ordinary text inherits `--font-family-sans` and `--font-weight-regular` from
+the app. Code blocks, commands, logs, and paths displayed as code use
+`--font-family-mono`, which follows the `Monospace font` setting. Avoid
+independent font stacks or misspelled fallback tokens that bypass that
+setting. Task names may use weight 500 and headings 600 to express hierarchy.
+
+The code editor and terminal also need their measured options updated:
+`AppFont::apply` and `AppFontSize::apply` do that alongside the root settings.
+New terminals read `--font-size-sm` through CSSOM, so its registered `<length>`
+type must keep resolving to pixels. The Viewer theme's standalone defaults
+are overridden for every embedded app code surface in `tokens.css`.
+
+Verify changed typography at the minimum and maximum font settings, after
+reload, and with a different monospace font. Include narrow panels and both
+light and dark themes; let content wrap or reduce columns as text grows.
+
 ## Form-field focus ownership
 
 Every form field has exactly one element that draws its focus border:

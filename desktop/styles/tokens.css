@@ -24,6 +24,14 @@
   initial-value: #eef2fe;
 }
 
+/* xterm reads this size through CSSOM when a terminal opens. Register the
+   length so it receives pixels instead of an unevaluated calc() expression. */
+@property --font-size-sm {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 13px;
+}
+
 :root {
   color-scheme: light dark;
 
@@ -218,7 +226,9 @@
    dense editor surface uses the adjacent smaller step. The measured code view
    also receives that concrete size through ViewerOptions so glyph widths and
    wrapping remain correct. */
-.editor-shell {
+.editor-shell,
+.moonbit-source,
+.composer-approval-body {
   --editor-font-family: var(--font-family-mono);
   --editor-font-size: var(--font-size-sm);
   --editor-line-height: var(--line-height-relaxed);

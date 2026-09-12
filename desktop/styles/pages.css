@@ -384,7 +384,7 @@ h2 {
 }
 
 .skills-header h1 {
-  font-size: 26px;
+  font-size: calc(var(--font-size-base) + 12px);
   letter-spacing: -0.02em;
 }
 

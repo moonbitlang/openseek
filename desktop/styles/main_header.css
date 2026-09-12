@@ -52,7 +52,6 @@ main {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 15px;
   line-height: var(--line-height-tight);
   cursor: pointer;
 }

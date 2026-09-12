@@ -68,7 +68,6 @@
   border-radius: var(--radius-pill);
   background: var(--color-bg-surface);
   color: var(--color-text-secondary);
-  font-size: 15px;
   line-height: var(--line-height-tight);
   cursor: pointer;
   box-shadow: var(--shadow-overlay);
