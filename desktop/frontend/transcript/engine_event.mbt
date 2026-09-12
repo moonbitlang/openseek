@@ -101,6 +101,7 @@ pub fn decode_engine_event(
   stream : @desktop_protocol.AgentStreamEvent,
 ) -> EngineEvent? {
   match stream.event {
+    JobChanged(..) | JobsSnapshot(..) | JobStopResult(..) => None
     AgentStep(step~) => Some(AgentStep(Some(step)))
     StreamRetry(attempt~, max_attempts~, reason~) =>
       Some(StreamRetry(attempt~, max_attempts~, reason~))

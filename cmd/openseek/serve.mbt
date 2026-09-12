@@ -6,6 +6,8 @@ priv enum ServeCommand {
   Steer(@agent_runtime.SteerInput)
   Compact
   Cancel
+  JobsSnapshot(request_id~ : String)
+  JobStop(request_id~ : String, generation~ : String, job_id~ : String)
   Goal(GoalAction)
   /// The answer to an `approval_requested` event: which question, and whether
   /// it is granted. Both labelled, because a bare positional pair reads as
@@ -137,6 +139,7 @@ priv enum ServeStep {
 
 ///|
 /// Decode one JSONL command line from the controller.
+/// `jobs_snapshot` and `job_stop` are correlated controls handled outside turns.
 ///
 /// `prompt` starts a turn, `steer` supplies typed step-boundary input, `compact`
 /// summarizes the current conversation once no work is active, and `cancel`
@@ -178,6 +181,9 @@ fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
           },
         ),
       )
+    JobsSnapshot(request_id~) => Ok(JobsSnapshot(request_id~))
+    JobStop(request_id~, generation~, job_id~) =>
+      Ok(JobStop(request_id~, generation~, job_id~))
     Compact => Ok(Compact)
     Cancel => Ok(Cancel)
     GoalSet(text~, auto~) =>
@@ -193,6 +199,19 @@ fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
 
 ///|
 test "serve commands decode and reject with actionable errors" {
+  assert_true(
+    decode_serve_command({ "command": "jobs_snapshot", "request_id": "list-1" })
+    is Ok(JobsSnapshot(request_id="list-1")),
+  )
+  assert_true(
+    decode_serve_command({
+      "command": "job_stop",
+      "request_id": "stop-1",
+      "generation": "runtime-1",
+      "job_id": "bg-1",
+    })
+    is Ok(JobStop(request_id="stop-1", generation="runtime-1", job_id="bg-1")),
+  )
   assert_true(
     decode_serve_command({ "command": "prompt", "text": "hi" })
     is Ok(Prompt("hi", submission_id=None)),
@@ -680,9 +699,14 @@ async fn run_serve(
     } else {
       None
     }
+    let job_log_dir = match store {
+      Some(store) => Some(store.job_logs_dir(initial_session.id()))
+      None => None
+    }
     let tools = @agent.build_tools(
       runtime,
       scope,
+      job_log_dir?,
       on_background_wake=() => {
         ignore(steps.try_put(BackgroundNotice) catch { _ => false })
       },
@@ -1061,6 +1085,37 @@ async fn run_serve(
                 runtime.queue_steer(Notice(text))
               }
           }
+        Wire(JobsSnapshot(request_id~)) => {
+          let jobs = match tools.background_job_runtime() {
+            Some(runtime) => runtime.records()
+            None => []
+          }
+          @emit.emit(JobsSnapshot(request_id~, jobs~))
+        }
+        Wire(JobStop(request_id~, generation~, job_id~)) => {
+          let _ = group.spawn(no_wait=true) <| () => {
+            let outcome : @protocol.JobStopOutcome = match
+              tools.background_job_runtime() {
+              None => NotFound
+              Some(jobs) =>
+                if jobs.generation() != generation {
+                  WrongRuntime
+                } else if jobs.snapshot(job_id) is None {
+                  NotFound
+                } else if jobs
+                  .records()
+                  .any(job => job.id == job_id && job.state.is_terminal()) {
+                  AlreadyTerminal
+                } else {
+                  ignore(jobs.stop(job_id))
+                  Stopped
+                }
+            }
+            @emit.emit(
+              JobStopResult(request_id~, generation~, job_id~, outcome~),
+            )
+          }
+        }
         Wire(Cancel) => {
           // A user interrupt stops the autonomous loop, not just one turn —
           // including any auto intent still queued behind pending work.

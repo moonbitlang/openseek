@@ -215,6 +215,7 @@ async fn run_task_command(matches : @argparse.Matches) -> Unit {
           matches,
           session,
           append_item=(session, item) => store.append(session, item),
+          job_log_dir=store.job_logs_dir(id),
           api_key~,
           model~,
           task~,
@@ -286,6 +287,7 @@ async fn run_task_turn(
   workspace_root~ : String,
   review_deadline_ms~ : Int?,
   child_session? : @agent_subrun.ChildSession,
+  job_log_dir? : String,
 ) -> Unit {
   @async.with_task_group() <| group => {
     // `run` reads no commands, so there is nobody to ask: `--approval ask` is
@@ -318,7 +320,13 @@ async fn run_task_turn(
         audit_criteria(latest_session.val)
       })
     })
-    let tools = @agent.build_tools(runtime, scope, extra_tools~, mbtx_subrun?)
+    let tools = @agent.build_tools(
+      runtime,
+      scope,
+      extra_tools~,
+      mbtx_subrun?,
+      job_log_dir?,
+    )
     let on_goal_met = if review_gate_enabled(matches) {
       Some(
         build_goal_met_gate(

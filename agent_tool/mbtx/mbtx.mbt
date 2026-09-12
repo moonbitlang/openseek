@@ -856,7 +856,6 @@ async fn execute(
     })
     let saw_binary = exec.had_invalid_utf8()
     if finished is None {
-      let _ = exec.background()
       // A session- or lab-owned outer directory keeps only durable `tmp`
       // results. A standalone runtime has no later owner, so it reclaims the
       // whole fallback directory once the process is terminal.
@@ -900,6 +899,17 @@ async fn execute(
       } else {
         "mbtx: still running after \{duration_label(auto_background_after_ms)}, so it moved to the background as job \{id} (nothing was lost). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\")."
       }
+      let handoff = match exec.spill_path() {
+        Some(path) => "\{handoff}\nOutput file: \{path}"
+        None => "\{handoff}\nOutput retention: memory only."
+      }
+      let handoff = if exec.spill_path() is Some(_) &&
+        runtime.snapshot(id) is Some(snapshot) &&
+        !snapshot.output_persistent {
+        "\{handoff}\nThis output file is temporary and lasts until engine shutdown."
+      } else {
+        handoff
+      }
       // Explicitly requested compiler warnings must not vanish because the
       // program outlived the grace: they exist only in the build phase's
       // capture, so this response is their one ride to the model.
@@ -907,6 +917,9 @@ async fn execute(
         with_build_notes(build_notes, handoff),
         brief="mbtx → bg \{id}",
       )
+    }
+    if exec.output_error() is Some(error) {
+      return @agent_tool.respond("mbtx: \{error}", is_error=true)
     }
     let raw = exec.head()
     let exit_code = exec.exit_code().unwrap_or(-1)

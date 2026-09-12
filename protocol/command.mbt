@@ -36,6 +36,8 @@ pub(all) enum Command {
   Steer(kind~ : SteerKind, text~ : String)
   Compact
   Cancel
+  JobsSnapshot(request_id~ : String)
+  JobStop(request_id~ : String, generation~ : String, job_id~ : String)
   /// `auto` arms autonomous continuation toward the goal. No in-repo client
   /// sends it — the TUI's `/goal` always sets a manual goal — but `serve` is a
   /// protocol, not a private channel, and an external controller drives this.
@@ -75,6 +77,15 @@ pub fn Command::to_json(self : Command) -> Json {
           Command => "command"
         },
         "text": text,
+      }
+    JobsSnapshot(request_id~) =>
+      { "command": "jobs_snapshot", "request_id": request_id }
+    JobStop(request_id~, generation~, job_id~) =>
+      {
+        "command": "job_stop",
+        "request_id": request_id,
+        "generation": generation,
+        "job_id": job_id,
       }
     Compact => { "command": "compact" }
     Cancel => { "command": "cancel" }
@@ -150,6 +161,20 @@ pub fn Command::parse(line : Json) -> Result[Command, String] {
       Ok(Prompt(text~, submission_id=None))
     { "command": "steer", .. } => parse_steer(line)
     { "command": "prompt", .. } => Err("expected a string \"text\" field")
+    { "command": "jobs_snapshot", "request_id": String(request_id), .. } if !request_id.is_empty() =>
+      Ok(JobsSnapshot(request_id~))
+    {
+      "command": "job_stop",
+      "request_id": String(request_id),
+      "generation": String(generation),
+      "job_id": String(job_id),
+      ..
+    } if !request_id.is_empty() &&
+      valid_job_component(generation) &&
+      valid_job_component(job_id) =>
+      Ok(JobStop(request_id~, generation~, job_id~))
+    { "command": "jobs_snapshot" | "job_stop", .. } =>
+      Err("invalid background job command")
     { "command": "compact", .. } => Ok(Compact)
     { "command": "cancel", .. } => Ok(Cancel)
     // A blank goal decodes: `{"action":"set","text":"  "}` is a well-formed

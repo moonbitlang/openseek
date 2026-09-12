@@ -905,3 +905,13 @@ async test "store compacts by appending a durable summary" {
   assert_eq(summary.content(), "first two events")
   assert_eq(loaded.chat_messages().length(), 2)
 }
+
+///|
+async test "job directory lookup does not create a new session" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let id : @agent_session.SessionId = SessionId("not-started")
+  assert_eq(store.job_logs_dir(id), "\{store.root()}/sessions/not-started/jobs")
+  assert_false(store.exists(id))
+  assert_eq(store.list().length(), 0)
+}

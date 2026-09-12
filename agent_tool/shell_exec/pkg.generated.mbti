@@ -22,13 +22,19 @@ pub enum ExecStatus {
 
 type ShellExecution
 pub fn ShellExecution::background(Self) -> Bool
+pub fn ShellExecution::cwd(Self) -> String?
 pub async fn ShellExecution::discard(Self) -> Unit
 pub fn ShellExecution::exit_code(Self) -> Int?
+pub fn ShellExecution::finished_at_ms(Self) -> Int64?
 pub fn ShellExecution::had_invalid_utf8(Self) -> Bool
 pub fn ShellExecution::head(Self) -> String
 pub fn ShellExecution::kill_for_time_limit(Self) -> Unit
 pub fn ShellExecution::killed_by_output_limit(Self) -> Bool
 pub fn ShellExecution::killed_by_time_limit(Self) -> Bool
+pub fn ShellExecution::last_output_at_ms(Self) -> Int64?
+pub async fn ShellExecution::materialize_output(Self) -> Unit
+pub fn ShellExecution::output_bytes(Self) -> Int64
+pub fn ShellExecution::output_error(Self) -> String?
 pub fn ShellExecution::output_truncated(Self) -> Bool
 pub fn ShellExecution::over_inline_cap(Self) -> Bool
 pub async fn ShellExecution::read_all(Self) -> String

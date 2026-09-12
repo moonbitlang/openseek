@@ -62,10 +62,12 @@ struct ShellExecution {
   // above), so a consumer can tell a watchdog kill from a requested stop and
   // surface it rather than letting the job die silently.
   mut killed_by_output_limit : Bool
-  // Monotonic start stamp, so a wall-clock reaper measures a job's lifetime
+  // Epoch start stamp, so a wall-clock reaper measures a job's lifetime
   // from process start — a detached (adopted) job keeps its original
   // deadline, not one restarted at adoption.
   started_at_ms : Int64
+  cwd : String?
+  mut finished_at_ms : Int64?
   // Set when the child was cancelled by the wall-clock reaper, so consumers
   // can tell a lifetime kill from a requested stop.
   mut killed_by_time_limit : Bool
@@ -131,6 +133,11 @@ pub async fn[X] ShellExecution::start(
     kill_at_hard_cap,
     killed_by_output_limit: false,
     started_at_ms: @env.now().reinterpret_as_int64(),
+    cwd: match cwd {
+      Some(_) => cwd
+      None => @env.current_dir()
+    },
+    finished_at_ms: None,
     killed_by_time_limit: false,
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
@@ -150,12 +157,23 @@ async fn ShellExecution::monitor(
   reader : @process.ReadFromProcess,
   process : @process.Process,
 ) -> Unit {
+  defer self.sink.close()
+  errdefer self.set_terminal(Killed)
   let reader_done : @async.Queue[Unit] = Queue(kind=Unbounded)
   @async.with_task_group(reads => {
     reads.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       defer ignore(reader_done.try_put(()) catch { _ => false })
+      errdefer self.request_stop()
       for ;; {
-        match (reader.read_some(max_len=1024) catch { _ => None }) {
+        match
+          (reader.read_some(max_len=1024) catch {
+            error if @async.is_being_cancelled() => raise error
+            error => {
+              let message = "failed to read process output: \{error}"
+              self.sink.failure = Some(message)
+              fail(message)
+            }
+          }) {
           None => break
           Some(bytes) => {
             self.sink.append_chunk(bytes)
@@ -213,8 +231,20 @@ async fn ShellExecution::monitor(
     // Surface leftover half-decoded bytes, then publish the terminal status — in
     // that order, so a poller can never observe a terminal execution missing the
     // job's final output.
-    self.sink.finish()
-    self.set_terminal(terminal)
+    self.sink.finish() catch {
+      error => {
+        let message = "failed to finish output log: \{error}"
+        self.sink.failure = Some(message)
+        fail(message)
+      }
+    }
+    self.set_terminal(
+      if self.sink.failure is Some(_) {
+        Killed
+      } else {
+        terminal
+      },
+    )
   })
 }
 
@@ -227,6 +257,7 @@ fn ShellExecution::set_terminal(
 ) -> Unit {
   guard !self.status.is_terminal() else { return }
   self.status = status
+  self.finished_at_ms = Some(@env.now().reinterpret_as_int64())
 }
 
 ///|
@@ -355,7 +386,7 @@ pub fn ShellExecution::killed_by_output_limit(self : ShellExecution) -> Bool {
 }
 
 ///|
-/// Monotonic timestamp (ms) when the child was spawned.
+/// Epoch timestamp (ms) when the child was spawned.
 pub fn ShellExecution::started_at_ms(self : ShellExecution) -> Int64 {
   self.started_at_ms
 }
@@ -564,3 +595,47 @@ pub extend ExecStatus with Debug::{to_repr}
 #doc(hidden)
 #deprecated
 pub extend ExecStatus with Eq::{equal, not_equal}
+
+///|
+/// Ensure a configured output file exists before announcing background adoption.
+/// Existing spill files are reused, including terminal executions adopted in a race.
+pub async fn ShellExecution::materialize_output(self : ShellExecution) -> Unit {
+  self.sink.materialize()
+  if self.status.is_terminal() {
+    self.sink.close()
+  }
+}
+
+///|
+/// A capture/write failure, distinct from a program's exit status.
+pub fn ShellExecution::output_error(self : ShellExecution) -> String? {
+  self.sink.failure
+}
+
+///|
+/// The effective working directory, when available.
+pub fn ShellExecution::cwd(self : ShellExecution) -> String? {
+  self.cwd
+}
+
+///|
+/// Epoch milliseconds when the direct execution became terminal.
+pub fn ShellExecution::finished_at_ms(self : ShellExecution) -> Int64? {
+  self.finished_at_ms
+}
+
+///|
+/// Epoch milliseconds of the last captured output, if any.
+pub fn ShellExecution::last_output_at_ms(self : ShellExecution) -> Int64? {
+  self.sink.last_output_at_ms
+}
+
+///|
+/// The number of committed UTF-8 output bytes.
+pub fn ShellExecution::output_bytes(self : ShellExecution) -> Int64 {
+  if self.sink.file_created {
+    self.sink.file_bytes
+  } else {
+    @utf8.encode(self.head()).length().to_int64()
+  }
+}

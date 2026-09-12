@@ -26,8 +26,8 @@ fn offset(arguments : Json) -> Int? raise {
   match arguments {
     { "offset": Number(value, ..), .. } => {
       let offset = value.to_int()
-      if offset < 0 {
-        fail("job_output offset must be zero or a positive number")
+      if offset < 0 || offset.to_double() != value {
+        fail("job_output offset must be a nonnegative integer")
       } else {
         Some(offset)
       }

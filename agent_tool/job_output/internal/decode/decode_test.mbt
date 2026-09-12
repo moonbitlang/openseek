@@ -42,12 +42,22 @@ test "decode names the argument to repair in malformed arguments" {
   )
   assert_eq(
     decode_error({ "job_id": "bg-3", "offset": -1 }),
-    Some("job_output offset must be zero or a positive number"),
+    Some("job_output offset must be a nonnegative integer"),
   )
   assert_eq(
     decode_error({ "job_id": "bg-3", "offset": "0" }),
     Some("job_output offset must be a number"),
   )
+}
+
+///|
+test "decode rejects fractional and overflowing character offsets" {
+  for value in [1.5, -0.5, 2147483648.0] {
+    assert_eq(
+      decode_error({ "job_id": "bg-3", "offset": Json::number(value) }),
+      Some("job_output offset must be a nonnegative integer"),
+    )
+  }
 }
 
 ///|

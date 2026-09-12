@@ -51,10 +51,11 @@ memory-only jobs (bounded preview, rest dropped).
 ## Push-completion
 
 The per-job watcher awaits the execution and calls `on_job_exit` exactly once
-when the job ends *on its own* — a natural exit, the output watchdog, or the
-wall-clock reaper. A
-requested stop (`job_stop`, session teardown) fires nothing: it is already
-user-visible. The `agent` package wires `on_job_exit` to queue a
+for a natural exit, the output watchdog, the wall-clock reaper, or an output
+capture failure. A normal requested stop (`job_stop`, session teardown) fires
+nothing: it is already user-visible. Capture failures still produce a notice
+when they race a requested stop, so losing output is never hidden by that stop.
+The `agent` package wires `on_job_exit` to queue a
 `SteerInput::Notice` (lossless) and poke the serve loop, which is what makes
 job completion *push* into the conversation instead of requiring the model to
 poll — see the `mbtx` tool description and the system prompts, which teach
@@ -69,3 +70,16 @@ counter for change detection, and the error-semantics flags
 `job_output` report a background job with exactly the foreground path's error
 behavior. The sink's own sequence number stays private and is not copied into
 the snapshot.
+
+
+Background adoption now materializes a configured output file before returning
+its ID, including for an empty or small output. Foreground output stays in
+memory until its existing cap or adoption. `BgJobSnapshot.output_file` is the
+actual path (an adopted execution can keep its `fg-N.out` filename),
+`output_persistent` describes its lifetime, and `output_error` reports capture
+failures separately from the program outcome. File I/O errors are surfaced;
+they no longer silently return the initial output head.
+
+Standard durable `run`/`serve` sessions retain job logs below their session's
+`jobs/<runtime-generation>` directory. Compiler/snippet scratch files still
+follow the engine scope. No-session engines label their logs temporary.
