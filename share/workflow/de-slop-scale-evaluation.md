@@ -244,3 +244,132 @@ the latter require additional behavior/performance evidence or API work. No
 claim is made that the repositories contain only the shipped simplifications.
 Raw diffs, review reports, test logs, publication receipts and issue dispositions
 are retained under `.moonagent/de-slop-batches/` and `/tmp/deslop-batch-*.log`.
+
+
+## Follow-up: multi-worktree delivery and semantic counterexamples
+
+On 2026-09-12, rebased onto OpenSeek `717534f4f` and ran the delivery
+recipe in one hosted caller with two clean branches: `desktop/internal/uri`
+and `mcp/streamhttp`. No candidate, patch, gate result or PR body was supplied.
+These are two previously unshipped scopes, not a new random sample or another
+whole-repository census. The runtime and report failures below matter more than
+the number of scout calls.
+
+The first run exposed an actual workspace bug: `mbtx.cwd` moved the script,
+but hosted child reservations still used the parent's original workspace.
+The host stopped the run before edits, added a regression that failed with
+`snippet=selected / child=parent`, and fixed the reservation to carry the
+validated absolute script directory. Relative, absolute and omitted cwd,
+subsequent invocation isolation, session ownership and ordinal allocation are
+covered. The standalone fix passes 112 host/mbtx tests plus `just check/test/build`;
+the workflow branch passes 113 related tests. The additive optional `reserve`
+argument is the only intended interface change. On retry, observed child
+process directories match their respective worktrees.
+
+The retry uncovered three workflow problems:
+
+- A complete URI challenge had ten citations and hit the old hard limit of
+  eight, requiring another scout pair. Prefer eight references, accept up to
+  sixteen, validate every location and report shape/length/count errors
+  separately. Four new offline cases cover ten, sixteen, seventeen, and an
+  invalid tenth reference. The complete suite now has 59 de-slop modes.
+- The MCP scout declared `.to_owned()` unavoidable after checking only
+  `StringBuilder::write_string(String)`. That does not rule out the same
+  builder's view writer. Discovery/challenge now inspect alternative consumer
+  methods before making this KEEP claim; the explicit `trim(chars=" ")`
+  policy must survive any consumer change.
+- URI discovery and both challenge attempts accepted replacing
+  `write_bytes(@utf8.encode(ch.to_string()))` with `write_char_utf8(ch)`.
+  A challenger explicitly found the surrogate discrepancy, then waived it
+  using best-effort documentation and unproved caller reachability. The caller
+  applied the edit. The host reproduced the discrepancy and stopped publication.
+
+The exact URI input is `String::from_array([(0xD800).unsafe_to_char()])`:
+
+| Decoder | Native | JS |
+| --- | --- | --- |
+| Original literal writer | Aborts, exit 134: invalid surrogate pair | One U+FFFD |
+| Proposed direct writer | Returns three U+FFFD, exit 0 | Three U+FFFD |
+
+The lossy tail does not restore equivalence. Tests covering ordinary Unicode
+literals do not cover this counterexample. Both the scout criteria and delivery
+recipe now require rejection/defer when output, errors or termination differ;
+an ACCEPT label or broad documentation cannot waive concrete contrary evidence.
+The caller was resumed with this evidence to revert its URI edit and finish the
+existing MCP batch. The independent array-walk idea remains unvalidated/deferred.
+This is a **host-corrected campaign, not autonomous multi-PR success**.
+
+Two initial short control callers exhausted their 12-step budget while children
+were still reading, despite outer CLI exit zero. Neither counts as a submitted
+review. Retries use a larger caller budget and `job_wait`; the recipe explicitly
+requires actual workflow completion and structured reports. These are harness
+and model-guidance changes, not a guarantee that models always submit.
+
+Exact prompts, immutable workflow snapshots, both interrupted runs, resumed
+session, child cwd observations, counterexample program/logs, control reports
+and delivery receipts are retained under `.moonagent/de-slop-next/`.
+
+
+The revised consumer control completed both reports and correctly selected
+`StringBuilder::write_view`, preserving the explicit spaces-only trim. Its
+backend qualification is retained: the non-JS builder removes the intermediate
+copy, while JS's concat implementation still materializes the view internally.
+This control is read-only and is not counted as another delivered cleanup.
+
+The revised URI control completed with a nine-citation discovery and ten-citation
+challenge, all nineteen locations checked. Both now reject the native termination
+change; the challenger also corrects the provisional replacement-character count
+to three. The external JS decoder was still uninspected, which the report states
+as a limitation. The existing audit-status heading correctly allows completion
+when the native counterexample already settles rejection; the `unresolved` field
+does not itself block the workflow. The separate host probe establishes the JS
+result. This is a focused negative control, not a test of fresh broad discovery.
+
+The runtime review found no blocker. Its coverage feedback prompted a precise
+handoff-test name and a comment separating the dependency-owned spawn; the live
+child-directory observation is separate evidence. It also suggested falling
+back when canonicalization fails. That suggestion is rejected: the existing
+recoverable tool error is safer than passing a relative path that could resolve
+twice. The default dot-root arm is inspected but not directly exercised by the
+new regression. These limits are not claims of added executing coverage.
+
+
+The runtime fix is delivered separately as [OpenSeek #1493](https://github.com/moonbitlang/openseek/pull/1493).
+Its six-file diff is also included here because the workflow needs the corrected
+worktree selection. CI at `e5219dc08`: one pass, one pending (single observation).
+Final workflow gates pass `just check/test/build`, 3,089 native and 3,204 JS tests,
+38 cram cases and the CLI/workflow integration suites. The only public interface
+change is the runtime reservation override described above.
+
+
+The MCP final reviewer correctly distinguished source equivalence from missing
+executed non-empty extras coverage. The hosted caller added POST/DELETE
+Authorization assertions but copied the fixture's legacy `String`/empty-string
+absence representation. The host stopped it before publication, changed only
+those new observations to `String?`/`None`/`Some`, and used a mixed-case forged
+session header to exercise the stated filtering policy. Existing unrelated
+fixture fields were preserved. Delivery guidance now explicitly applies repo
+conventions to new fixtures as well as production edits. The host completes
+final validation/publication; this second correction is another reason the
+campaign does not establish unattended delivery.
+
+Final-diff reviews were also expensive relative to these small changes. The
+recipe now requests up to eight focused source/search calls, a clear stop once
+the stated invariants are established, and a concrete missing-evidence report
+instead of repository-wide coverage searches. This is a reading target, not a
+hard guarantee or permission to skip a relevant source.
+
+
+The corrected two-file MCP batch is delivered as [OpenSeek #1494](https://github.com/moonbitlang/openseek/pull/1494).
+Focused tests pass 5/5; `moon info/fmt` leaves interfaces unchanged; final
+`just check/test/build` passes with 3,086 native and 3,204 JS tests, 38 cram cases
+and the CLI/workflow suites. Final review submitted after eleven source/search
+calls (the eight-call target was exceeded), with no introduced defect and one
+explicitly hypothetical scheduling nit. The caller rejected that suggestion:
+both mock observations are assigned in one loop with no suspension point.
+CI at `8616131ab`: one pending (single observation). The branch, tested head,
+main base and exact two changed files were verified from the published PR.
+
+The two controls establish a corrected consumer lookup and rejection of the
+known URI counterexample. They do not establish recall across the whole repo,
+reliable compliance with reading budgets, or autonomous safe publication.

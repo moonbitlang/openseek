@@ -439,6 +439,30 @@ async fn de_slop_child(
   } else {
     [{ "file": file, "line": line }]
   }
+  if mode
+    is ("many-citations"
+    | "citation-limit"
+    | "too-many-citations"
+    | "extra-invalid-citation") {
+    citations.clear()
+    let count = if mode == "citation-limit" {
+      16
+    } else if mode == "too-many-citations" {
+      17
+    } else {
+      10
+    }
+    for index in 0..<count {
+      citations.push({
+        "file": "sample space/evidence-\{index}.mbt",
+        "line": if mode == "extra-invalid-citation" && index == 9 {
+          2
+        } else {
+          1
+        },
+      })
+    }
+  }
   if mode == "external-only" {
     citations.clear()
   }
@@ -474,6 +498,12 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
   @shell.Cmd("git", ["init", "--quiet"], cwd=repo).output().check()
   let source = "fn present(xs : Array[Int]) -> Bool { xs.iter().any(x => x > 0) }\n"
   write(repo + "/sample space/source.mbt", source)
+  for index in 0..<16 {
+    write(
+      repo + "/sample space/evidence-\{index}.mbt",
+      "fn evidence_\{index}() -> Int { \{index} }\n",
+    )
+  }
   @fs.symlink(target=temp + "/outside.md", repo + "/escape.mbt")
   for
     mode in [
@@ -484,7 +514,8 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       "symlink-scope", "missing-status", "validation-pending", "external-reference",
       "external-only", "no-report", "delivery", "delivery-no-changes", "delivery-incomplete",
       "delivery-mutated", "focus", "empty-focus", "oversized-focus", "wide-focus",
-      "explicit-round",
+      "explicit-round", "many-citations", "citation-limit", "too-many-citations",
+      "extra-invalid-citation",
     ] {
     let calls = temp + "/de-slop-" + mode + ".jsonl"
     let env = clean_env()
@@ -539,7 +570,9 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       | "validation-pending"
       | "delivery"
       | "delivery-no-changes"
-      | "focus")
+      | "focus"
+      | "many-citations"
+      | "citation-limit")
     assert_eq(result.exit_code() == 0, succeeds, msg="\{mode}: \{output}")
     let launched = read_calls(calls)
     let expected = match mode {
@@ -564,6 +597,8 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       | "missing-file"
       | "escape-citation"
       | "external-only"
+      | "too-many-citations"
+      | "extra-invalid-citation"
       | "traversal" => 1
       _ => 2
     }
@@ -576,6 +611,29 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       assert_true(
         output.contains("A successful audit is not a passing test result"),
       )
+    }
+    if mode is ("many-citations" | "citation-limit") {
+      assert_eq(
+        occurrences(output, "Reference location checked"),
+        if mode == "many-citations" {
+          20
+        } else {
+          32
+        },
+        msg=output,
+      )
+    }
+    if mode == "too-many-citations" {
+      assert_true(output.contains("17 citations; expected 1–16"), msg=output)
+    }
+    if mode == "extra-invalid-citation" {
+      assert_true(
+        output.contains("citation line exceeds file length"),
+        msg=output,
+      )
+    }
+    if mode == "oversized" {
+      assert_true(output.contains("8001 answer characters"), msg=output)
     }
     if mode == "no-changes" {
       assert_true(output.contains("no supported changes"), msg=output)

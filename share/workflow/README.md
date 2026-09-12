@@ -14,7 +14,7 @@ this resource root's absolute path.
 
 Call `mbtx(description="Check the workspace", filename="@builtin/check.mbtx")` (or another bundled name) and omit `source`. No file
 creation is needed. `cwd` selects the module to check or test, defaulting to
-the workspace. The commands use project/toolchain target defaults, stream
+the workspace; hosted scouts and reviewers also run in that selected worktree. The commands use project/toolchain target defaults, stream
 output, and fail when the underlying command fails. Follow repository-specific
 validation commands when they differ from these defaults.
 
@@ -73,7 +73,8 @@ other colons. Paths with spaces are single args without shell quoting.
   criteria and apply/validate loop](de-slop.md). With `--deliver`, the calling
   agent follows [the small-PR recipe](de-slop-deliver.md) through edits, tests,
   final-diff review and publication in the same task, returning only the
-  verified PR link to the user. Audit reports stay in local artifacts; tests
+  verified PR links to the user. Repository-scale delivery continues its batch
+  queue instead of stopping after the first PR. Audit reports stay in local artifacts; tests
   and CI status go in the PR body. The audit script is an intermediate stage.
 
 Run these with the hosted child-agent handoff:

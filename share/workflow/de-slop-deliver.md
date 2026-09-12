@@ -31,6 +31,10 @@ failing required checks as successful delivery. No summary after a published PR.
    current tip in a clean `codex/` branch/worktree; if the user requested their
    existing changes as the baseline, preserve those instead. Never stash,
    reset, stage, commit or publish unrelated work merely to make delivery easy.
+   For multiple worktrees, bind every audit, edit, gate and final review to its
+   recorded directory and base. Pass that worktree as `mbtx.cwd`; verify the
+   child actually inspected it before accepting its report. Identical filenames
+   or an initially identical commit do not make sibling checkouts interchangeable.
 2. Reuse a completed discovery/challenge ledger before launching more scouts.
    Record its source/workflow revision and resolve its surviving proposals into
    a batch queue. At a newer upstream, compare each proposal's source **and the
@@ -46,7 +50,10 @@ failing required checks as successful delivery. No summary after a published PR.
    "hashset/hashset.mbt"]`. For repeated exploration, advance `--round N` on a
    recorded stable inventory; preserve the round with `--shard` retries. Use
    `subrun=true`, wait for actual job completion and inspect its ledger; outer
-   CLI exit zero is not evidence it succeeded. Before one targeted retry of a
+   CLI exit zero is not evidence it succeeded. Use `job_wait` while a child
+   runs, budget the caller for the full delivery rather than just launching,
+   and inspect the final workflow state/report; a max-steps termination with
+   an active or unsubmitted child is incomplete. Before one targeted retry of a
    recoverable format/submission failure, inspect the saved error. Retain both
    attempts; a second failure is a blocker, not grounds to restart the sweep.
    **Phase barrier:** do not edit until challenge succeeds and evidence is
@@ -84,8 +91,12 @@ one batch's tests do not establish another batch's correctness.
 
 4. Independently read the selected sites, callers, current library declarations
    and tests. Treat ACCEPT, KEEP and REJECT as claims. A correct rejection with a false compiler/allocation explanation is still workflow feedback; preserve the actual counterexample instead of treating the label alone as success. Resolve contradictory
-   reports before editing; do not vote on them. Verify constants at their
-   declarations, defaults by semantic equality (not character order), receiver
+   reports before editing; do not vote on them. A concrete counterexample
+   in output, errors or termination blocks behavior-preserving delivery, even
+   if the challenger labels it ACCEPT. Broad best-effort documentation or an
+   unproved claim of unreachable input cannot waive it. Keep the original
+   behavior or defer that candidate; never add a test that blesses the change.
+   Verify constants at their declarations, defaults by semantic equality (not character order), receiver
    types, backend behavior and trait dispatch. Keep non-default trim character
    sets and documented protocol choices. Never erase a type conversion merely
    because its source spells `map(x => x)`.
@@ -94,8 +105,12 @@ one batch's tests do not establish another batch's correctness.
    one-liners, migrate public/wire types incidentally, weaken tests, update
    snapshots to accept a regression, or edit the workflow itself in this PR.
    Add tests only for a concrete uncovered risk; syntax-only tests add no value.
+   Apply repository conventions to new test fixtures too. Existing fixtures are
+   not authority to introduce forbidden patterns: represent new absence
+   observations as optional values, not empty-string sentinels.
 6. Run focused tests after the edit, plus all repository-required gates. Bound
-   each command's execution and retain its exit/result; a command starting or
+   each command's execution and retain its argv, cwd, exit and output, including
+   info/fmt receipts; a command starting or
    compiling is not a pass. For OpenSeek run `just check`, `just test`, and
    `just build`; follow the additional editor/browser gates when applicable.
    Run `moon info && moon fmt`, inspect `.mbti` changes, and rerun affected gates
@@ -110,7 +125,12 @@ one batch's tests do not establish another batch's correctness.
    `review.mbtx` with the recorded base SHA and a focused behavior-preservation
    criterion and the recorded gate results. Explicitly ask for source/diff
    inspection without rerunning build, test or benchmark commands: the caller
-   already owns validation. If review identifies a concrete uncovered risk,
+   already owns validation. For a small batch, request at most eight focused
+   source/search calls before submission; stop once the stated invariants are
+   established, or return the concrete remaining gap. Batch reads and avoid
+   repository-wide coverage searches for unchanged code. This is a reading
+   target, not permission to skip evidence. If review identifies a concrete
+   uncovered risk,
    verify that its proposed inputs actually reach the claimed branch, then have
    the caller run the smallest additional check once. Resolve blockers
    and material inspection gaps before publication.

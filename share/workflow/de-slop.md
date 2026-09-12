@@ -142,7 +142,10 @@ has already requested the cleanup.
 2. Run the workflow. Verify the workflow job itself completed successfully and
    inspect its report ledger; the outer CLI can exit zero after a failed job.
    Check ACCEPT proposals against their code, callers, and
-   current library APIs. A citation is not proof. Keep REJECT cases and leave
+   current library APIs. A citation is not proof. Before rejecting a temporary
+   copy because the current call takes an owned value, look for a view-taking
+   or direct-encoding operation on the same consumer; preserve its argument
+   policies and confirm the actual backend behavior. Keep REJECT cases and leave
    DEFER cases outside this behavior-preserving batch. Missing evidence calls
    for a targeted read, not speculative editing. Compare all shard reports
    before editing: dependency reads can overlap, and an ACCEPT can conflict
@@ -279,3 +282,8 @@ PR deliveries, progressive reading coverage, negative controls and remaining
 failures, including the corrected reviewer instruction conflict. Its follow-up
 records three further batches from the existing backlog and the delivery/review
 changes prompted by low yield.
+
+Reports should prefer eight citations, with a hard limit of sixteen. Every
+repository location is validated, including extra citations; none are silently
+truncated. Invalid shape, answer length and citation count have separate errors
+so the caller can correct a bounded submission without guessing.
