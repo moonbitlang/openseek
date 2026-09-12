@@ -501,25 +501,10 @@ fn Model::sidebar_component_sections(
     dev.active_project is Some(project) && !dev.is_chat_workspace(project),
   )
   sections.push({
-    id: @section.Id(source="openseek.projects", channel~),
-    label: "Projects",
-    initially_collapsed: false,
-    activation: if openseek_section_activation is Some(_) {
-      openseek_section_activation
-    } else if codex_context is Some(context) &&
-      context.selected &&
-      chats_activation is None {
-      self.codex.active_id()
-    } else {
-      None
-    },
-    action: Some({ title: "Add a project", disabled: false, }),
-    entries: projects,
-  })
-  sections.push({
     id: @section.Id(source="openseek.chats", channel~),
     label: "Chats",
     initially_collapsed: false,
+    preview_limit: Some(3),
     activation: chats_activation,
     action: Some({
       title: if self.chat_creation_pending() {
@@ -532,6 +517,23 @@ fn Model::sidebar_component_sections(
       dev.bridge != Connected,
     }),
     entries: ordered_by_recency(chat_rows).map(row => @section.Conversation(row)),
+  })
+  sections.push({
+    id: @section.Id(source="openseek.projects", channel~),
+    label: "Projects",
+    initially_collapsed: false,
+    preview_limit: None,
+    activation: if openseek_section_activation is Some(_) {
+      openseek_section_activation
+    } else if codex_context is Some(context) &&
+      context.selected &&
+      chats_activation is None {
+      self.codex.active_id()
+    } else {
+      None
+    },
+    action: Some({ title: "Add a project", disabled: false, }),
+    entries: projects,
   })
   // Archived conversations fold behind a collapsed section at the end of the
   // list. Their records live in the store's `archived` twin, so they come
@@ -600,6 +602,7 @@ fn Model::sidebar_component_sections(
       "Archived chats (\{archived_entries.length()})"
     },
     initially_collapsed: true,
+    preview_limit: None,
     // Opening an archived transcript never force-reveals the section; its
     // fold stays purely user-controlled, as before.
     activation: None,

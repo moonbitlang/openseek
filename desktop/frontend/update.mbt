@@ -13477,8 +13477,11 @@ test "Codex threads share the Projects section's project rows" {
   let sections = model.sidebar_component_sections(model.dev())
   // Projects, Chats, and Archived share the sidebar across both agents.
   assert_eq(sections.length(), 3)
-  inspect(sections[0].label, content="Projects")
-  guard sections[0].entries[0] is @section.Project(project) else {
+  assert_eq(sections[0].label, "Chats")
+  assert_true(!sections[0].initially_collapsed)
+  assert_eq(sections[0].preview_limit, Some(3))
+  inspect(sections[1].label, content="Projects")
+  guard sections[1].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")
   }
   // The fixture's unsent OpenSeek chat is represented by its project rather
@@ -13489,7 +13492,7 @@ test "Codex threads share the Projects section's project rows" {
   assert_true(project.conversations[1].id.source() is @conversation.CodexLive)
   assert_true(project.conversations[1].nested)
   // With the Codex page on screen, its active task claims the activation.
-  assert_eq(sections[0].activation, Some("codex-thread-1"))
+  assert_eq(sections[1].activation, Some("codex-thread-1"))
 }
 
 ///|
