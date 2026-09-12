@@ -175,9 +175,9 @@ test "model change fires before outgoing owner decorations are swept" {
     },
   ])
   assert_eq(ids.length(), 1)
-  let decorations_seen_in_event = Ref(-1)
+  let mut decorations_seen_in_event = -1
   let subscription = viewer.on_did_change_model(_ => {
-    decorations_seen_in_event.val = model
+    decorations_seen_in_event = model
       .get_decorations_in_range(
         model.get_full_model_range(),
         owner_id=viewer.editor_id,
@@ -186,7 +186,7 @@ test "model change fires before outgoing owner decorations are swept" {
   })
 
   viewer.set_model(None)
-  assert_eq(decorations_seen_in_event.val, 1)
+  assert_eq(decorations_seen_in_event, 1)
   assert_eq(
     model
     .get_decorations_in_range(

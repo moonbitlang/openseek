@@ -26,12 +26,12 @@ test "conversion failure becomes one escaped plaintext paragraph" {
 
 ///|
 test "code override receives MoonBit DTO, fence language, and active language" {
-  let observed_code = Ref("")
-  let observed_fence = Ref("")
-  let observed_info = Ref("")
-  let observed_remainder = Ref("")
-  let observed_source_line = Ref(0)
-  let observed_active = Ref("")
+  let mut observed_code = ""
+  let mut observed_fence = ""
+  let mut observed_info = ""
+  let mut observed_remainder = ""
+  let mut observed_source_line = 0
+  let mut observed_active = ""
   let rendered = render_markdown(
     (
       #|```mbt extra
@@ -40,21 +40,21 @@ test "code override receives MoonBit DTO, fence language, and active language" {
     ),
     language_id="moonbit",
     code_block_renderer=fn(block, active_language_id) {
-      observed_code.val = block.code
-      observed_fence.val = block.language_id.unwrap_or("")
-      observed_info.val = block.full_info_string.unwrap_or("")
-      observed_remainder.val = block.info_remainder.unwrap_or("")
-      observed_source_line.val = block.code_lines[0].source_line_number
-      observed_active.val = active_language_id.unwrap_or("")
+      observed_code = block.code
+      observed_fence = block.language_id.unwrap_or("")
+      observed_info = block.full_info_string.unwrap_or("")
+      observed_remainder = block.info_remainder.unwrap_or("")
+      observed_source_line = block.code_lines[0].source_line_number
+      observed_active = active_language_id.unwrap_or("")
       "<pre data-rendered=\"yes\">override</pre>"
     },
   )
-  assert_eq(observed_code.val, "let answer = 42\n")
-  assert_eq(observed_fence.val, "mbt")
-  assert_eq(observed_info.val, "mbt extra")
-  assert_eq(observed_remainder.val, "extra")
-  assert_eq(observed_source_line.val, 2)
-  assert_eq(observed_active.val, "moonbit")
+  assert_eq(observed_code, "let answer = 42\n")
+  assert_eq(observed_fence, "mbt")
+  assert_eq(observed_info, "mbt extra")
+  assert_eq(observed_remainder, "extra")
+  assert_eq(observed_source_line, 2)
+  assert_eq(observed_active, "moonbit")
   assert_eq(rendered.html, "<pre data-rendered=\"yes\">override</pre>")
   assert_true(rendered.has_code_block)
   assert_eq(rendered.projection.code_blocks.length(), 1)

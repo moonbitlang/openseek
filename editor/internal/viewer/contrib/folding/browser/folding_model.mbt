@@ -137,32 +137,31 @@ pub fn FoldingModel::toggle_collapse_state(
   let processed : Map[String, Bool] = Map([])
   self.decoration_access.change_decorations(accessor => {
     // index from [0 ... this.regions.length]
-    let k : Ref[Int] = { val: 0, }
+    let mut k : Int = 0
     // end of the range where decorations need to be updated
-    let dirty_region_end_line : Ref[Int] = { val: -1, }
+    let mut dirty_region_end_line : Int = -1
     // the end of the last hidden lines
     let last_hidden_line : Ref[Int] = { val: -1, }
     let update_decorations_until = (index : Int) => {
-      while k.val < index {
-        let end_line_number = self.regions.get_end_line_number(k.val)
-        let is_collapsed = self.regions.is_collapsed(k.val)
-        if end_line_number <= dirty_region_end_line.val {
-          let is_manual = self.regions.get_source(k.val) != Provider
+      while k < index {
+        let end_line_number = self.regions.get_end_line_number(k)
+        let is_collapsed = self.regions.is_collapsed(k)
+        if end_line_number <= dirty_region_end_line {
+          let is_manual = self.regions.get_source(k) != Provider
           (accessor.change_decoration_options)(
-            self.editor_decoration_ids[k.val],
+            self.editor_decoration_ids[k],
             self.decoration_access.get_decoration_option(
               is_collapsed,
               end_line_number <= last_hidden_line.val,
               is_manual,
-              self.regions.get_type(k.val) ==
-              Some(OUTLINE_BODY_FOLDING_RANGE_TYPE),
+              self.regions.get_type(k) == Some(OUTLINE_BODY_FOLDING_RANGE_TYPE),
             ),
           )
         }
         if is_collapsed && end_line_number > last_hidden_line.val {
           last_hidden_line.val = end_line_number
         }
-        k.val += 1
+        k += 1
       }
     }
     for region in toggled_regions {
@@ -176,7 +175,7 @@ pub fn FoldingModel::toggle_collapse_state(
           update_decorations_until(index)
           let new_collapse_state = !self.regions.is_collapsed(index)
           self.regions.set_collapsed(index, new_collapse_state)
-          dirty_region_end_line.val = dirty_region_end_line.val.max(
+          dirty_region_end_line = dirty_region_end_line.max(
             self.regions.get_end_line_number(index),
           )
         }

@@ -91,17 +91,17 @@ test "cancel happens only once" {
   let source = @language.CancellationTokenSource()
   let token = source.token()
   assert_false(token.is_cancellation_requested())
-  let cancel_count = Ref(0)
-  let observed_cancelled = Ref(false)
+  let mut cancel_count = 0
+  let mut observed_cancelled = false
   token.on_cancellation_requested(() => {
-    observed_cancelled.val = token.is_cancellation_requested()
-    cancel_count.val += 1
+    observed_cancelled = token.is_cancellation_requested()
+    cancel_count += 1
   })
   |> ignore
   source.cancel()
   source.cancel()
-  assert_eq(cancel_count.val, 1)
-  assert_true(observed_cancelled.val)
+  assert_eq(cancel_count, 1)
+  assert_true(observed_cancelled)
 }
 
 ///|

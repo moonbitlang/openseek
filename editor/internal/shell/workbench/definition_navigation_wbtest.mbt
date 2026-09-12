@@ -157,7 +157,7 @@ async test "remote definition provider preserves ordered locations and cancellat
   assert_eq(locations[1].range, Range(9, 1, 9, 5))
 
   let cancelled = @language.CancellationTokenSource()
-  let late_response_consumed = Ref(false)
+  let mut late_response_consumed = false
   let cancelled_request_id = Ref("")
   protocol_send.val = Some(packet => {
     match packet {
@@ -176,7 +176,7 @@ async test "remote definition provider preserves ordered locations and cancellat
   assert_true(cancelled_locations.is_empty())
   // The local cancellation has resumed the provider. A later server response
   // is consumed through the retained request-id tombstone.
-  late_response_consumed.val = resolve_pending_response(
+  late_response_consumed = resolve_pending_response(
     DefinitionResult({
       id: cancelled_request_id.val,
       uri: source_uri,
@@ -184,18 +184,18 @@ async test "remote definition provider preserves ordered locations and cancellat
       locations: [{ uri: first_uri, range: Range(1, 1, 1, 2), }],
     }),
   )
-  assert_true(late_response_consumed.val)
+  assert_true(late_response_consumed)
   assert_false(unexpected_packet.val)
   freshness.invalidate()
   markers.dispose()
 
   let preview_uri = definition_navigation_test_uri("definition-preview")
-  let preview_open_count = Ref(0)
-  let preview_close_count = Ref(0)
+  let mut preview_open_count = 0
+  let mut preview_close_count = 0
   protocol_send.val = Some(packet => {
     match packet {
       OpenDocument(request) => {
-        preview_open_count.val += 1
+        preview_open_count += 1
         resolve_pending_response(
           DocumentLoaded({
             id: request.id,
@@ -210,7 +210,7 @@ async test "remote definition provider preserves ordered locations and cancellat
         )
         |> ignore
       }
-      CloseDocument(_) => preview_close_count.val += 1
+      CloseDocument(_) => preview_close_count += 1
       _ => unexpected_packet.val = true
     }
   })
@@ -222,22 +222,21 @@ async test "remote definition provider preserves ordered locations and cancellat
     is Some(second_preview) else {
     fail("cached preview resolution returned no model")
   }
-  assert_eq(preview_open_count.val, 1)
+  assert_eq(preview_open_count, 1)
   assert_true(first_preview.model().same(second_preview.model()))
   let preview_model = first_preview.model()
   first_preview.dispose()
   assert_false(preview_model.is_disposed())
-  assert_eq(preview_close_count.val, 0)
+  assert_eq(preview_close_count, 0)
   second_preview.dispose()
   assert_true(preview_model.is_disposed())
-  assert_eq(preview_close_count.val, 1)
+  assert_eq(preview_close_count, 1)
   assert_false(preview_resources.contains(preview_uri.to_string()))
 
-  let opened_uri = Ref("")
+  let mut opened_uri = ""
   workbench_dispatch.val = Some(msg => {
     match msg {
-      OpenDefinitionLocation(location) =>
-        opened_uri.val = location.uri.to_string()
+      OpenDefinitionLocation(location) => opened_uri = location.uri.to_string()
       _ => unexpected_packet.val = true
     }
   })
@@ -248,21 +247,21 @@ async test "remote definition provider preserves ordered locations and cancellat
     mode: Current,
   }
   assert_true(opener.open(open_request))
-  assert_eq(opened_uri.val, first_uri.to_string())
+  assert_eq(opened_uri, first_uri.to_string())
   assert_false(opener.open({ ..open_request, mode: Side, }))
   assert_false(unexpected_packet.val)
 
   let shutdown_uri = definition_navigation_test_uri("definition-shutdown")
-  let shutdown_open_count = Ref(0)
-  let shutdown_close_count = Ref(0)
-  let shutdown_saw_real_in_flight = Ref(false)
+  let mut shutdown_open_count = 0
+  let mut shutdown_close_count = 0
+  let mut shutdown_saw_real_in_flight = false
   protocol_send.val = Some(packet => {
     match packet {
       OpenDocument(request) => {
-        shutdown_open_count.val += 1
+        shutdown_open_count += 1
         match preview_resources.get(request.uri.to_string()) {
           Some(state) =>
-            shutdown_saw_real_in_flight.val = state.in_flight == 1 &&
+            shutdown_saw_real_in_flight = state.in_flight == 1 &&
               state.lifecycle == PreviewResourceOpen
           None => ()
         }
@@ -283,7 +282,7 @@ async test "remote definition provider preserves ordered locations and cancellat
         )
         |> ignore
       }
-      CloseDocument(_) => shutdown_close_count.val += 1
+      CloseDocument(_) => shutdown_close_count += 1
       _ => unexpected_packet.val = true
     }
   })
@@ -291,10 +290,10 @@ async test "remote definition provider preserves ordered locations and cancellat
     shutdown_uri,
     @language.CancellationToken::none(),
   )
-  assert_true(shutdown_saw_real_in_flight.val)
+  assert_true(shutdown_saw_real_in_flight)
   assert_true(shutdown_result is None)
-  assert_eq(shutdown_open_count.val, 1)
-  assert_eq(shutdown_close_count.val, 1)
+  assert_eq(shutdown_open_count, 1)
+  assert_eq(shutdown_close_count, 1)
   assert_false(preview_resources.contains(shutdown_uri.to_string()))
 
   let rejected_after_shutdown = resolve_preview_model(
@@ -302,7 +301,7 @@ async test "remote definition provider preserves ordered locations and cancellat
     @language.CancellationToken::none(),
   )
   assert_true(rejected_after_shutdown is None)
-  assert_eq(shutdown_open_count.val, 1)
+  assert_eq(shutdown_open_count, 1)
   preview_resources_shutdown.val = previous_preview_shutdown
 
   protocol_send.val = previous_send

@@ -300,18 +300,18 @@ fn mount_diagram_viewport(
   fill_container : Bool,
 ) -> DiagramViewportMountResult {
   guard direct_svg_child(wrapper) is Some(svg) else { return Skipped }
-  let result : Ref[DiagramViewportMountResult] = Ref(Skipped)
+  let mut result : DiagramViewportMountResult = Skipped
   let found = with_diagram_viewport_environment(wrapper, fallback_target, (
     owner_document,
     owner_window,
   ) => {
-    result.val = mount_diagram_viewport_in_environment(
+    result = mount_diagram_viewport_in_environment(
       wrapper, svg, owner_document, owner_window, on_size_changed, schedule_frame,
       fill_container,
     )
   })
   if found {
-    result.val
+    result
   } else {
     Skipped
   }
@@ -443,15 +443,15 @@ fn mount_diagram_viewport_in_environment(
     controller.dispose()
     return Failed
   }
-  let frame_pending = Ref(true)
+  let mut frame_pending = true
   let cancel_frame = schedule_frame(() => {
-    frame_pending.val = false
+    frame_pending = false
     controller.pending_frame = None
     if controller.active {
       controller.layout() |> ignore
     }
   })
-  if frame_pending.val {
+  if frame_pending {
     controller.pending_frame = Some(cancel_frame)
   } else {
     cancel_frame()
@@ -1108,7 +1108,7 @@ fn MarkdownDiagramViewport::acquire_body_cursor(
   if self.body_cursor_lease is Some(_) {
     return false
   }
-  let acquired = Ref(false)
+  let mut acquired = false
   with_document_body(self.owner_document, body => {
     let coordinator = body_cursor_coordinator_for(self.owner_document)
     if coordinator.active {
@@ -1123,10 +1123,10 @@ fn MarkdownDiagramViewport::acquire_body_cursor(
     }
     @base_browser.set_style_property(body, "cursor", "ns-resize")
     self.body_cursor_lease = Some(lease)
-    acquired.val = true
+    acquired = true
   })
   |> ignore
-  acquired.val
+  acquired
 }
 
 ///|

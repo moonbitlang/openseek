@@ -19,19 +19,19 @@ pub fn schedule_timeout(
   callback : () -> Unit,
   delay_ms : Int,
 ) -> @base_common.Disposable {
-  let active = Ref(true)
+  let mut active = true
   let handle = set_timeout_js(
     () => {
-      if active.val {
-        active.val = false
+      if active {
+        active = false
         callback()
       }
     },
     delay_ms,
   )
   @base_common.Disposable::from(() => {
-    if active.val {
-      active.val = false
+    if active {
+      active = false
       clear_timeout_js(handle)
     }
   })

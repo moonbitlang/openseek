@@ -257,8 +257,8 @@ async test "peer notifications reach the installed handler" {
   @async.with_task_group(group => {
     let transport = new_transport()
     let client = Client::Client(transport)
-    let seen : Ref[String] = { val: "", }
-    client.set_notification_handler((method_, _params) => seen.val = method_)
+    let mut seen : String = ""
+    client.set_notification_handler((method_, _params) => seen = method_)
     spawn_client(group, client)
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
       let request = transport.outbound.get()
@@ -270,7 +270,7 @@ async test "peer notifications reach the installed handler" {
       transport.inbound.put(reply_for(request))
     })
     client.request(method_="ping", params=Json::empty_object()) |> ignore
-    assert_eq(seen.val, "notifications/message")
+    assert_eq(seen, "notifications/message")
   })
 }
 

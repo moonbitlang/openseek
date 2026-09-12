@@ -128,37 +128,37 @@ test "model listener ownership includes token-part listeners through disposal" {
 ///|
 test "TextModel disposal marks disposed between token part and registered resources" {
   let trace : Array[String] = []
-  let is_disposing = Ref(false)
-  let tokenization_disposed = Ref(false)
-  let is_disposed = Ref(false)
+  let mut is_disposing = false
+  let mut tokenization_disposed = false
+  let mut is_disposed = false
 
   run_text_model_dispose_sequence(
     set_disposing=value => {
       trace.push(
-        "disposing=\{value}:\{is_disposing.val}:\{tokenization_disposed.val}:\{is_disposed.val}",
+        "disposing=\{value}:\{is_disposing}:\{tokenization_disposed}:\{is_disposed}",
       )
-      is_disposing.val = value
+      is_disposing = value
     },
     fire_will_dispose=() => {
       trace.push(
-        "willDispose:\{is_disposing.val}:\{tokenization_disposed.val}:\{is_disposed.val}",
+        "willDispose:\{is_disposing}:\{tokenization_disposed}:\{is_disposed}",
       )
     },
     dispose_tokenization=() => {
       trace.push(
-        "tokenization.dispose:\{is_disposing.val}:\{tokenization_disposed.val}:\{is_disposed.val}",
+        "tokenization.dispose:\{is_disposing}:\{tokenization_disposed}:\{is_disposed}",
       )
-      tokenization_disposed.val = true
+      tokenization_disposed = true
     },
     set_disposed=() => {
       trace.push(
-        "isDisposed=true:\{is_disposing.val}:\{tokenization_disposed.val}:\{is_disposed.val}",
+        "isDisposed=true:\{is_disposing}:\{tokenization_disposed}:\{is_disposed}",
       )
-      is_disposed.val = true
+      is_disposed = true
     },
     dispose_registered_resources=() => {
       trace.push(
-        "super.dispose:\{is_disposing.val}:\{tokenization_disposed.val}:\{is_disposed.val}",
+        "super.dispose:\{is_disposing}:\{tokenization_disposed}:\{is_disposed}",
       )
     },
   )
@@ -167,7 +167,7 @@ test "TextModel disposal marks disposed between token part and registered resour
     trace.join(","),
     "disposing=true:false:false:false,willDispose:true:false:false,tokenization.dispose:true:false:false,isDisposed=true:true:true:false,super.dispose:true:true:true,disposing=false:true:true:true",
   )
-  assert_false(is_disposing.val)
+  assert_false(is_disposing)
 }
 
 ///|
@@ -177,8 +177,8 @@ priv suberror ModelProductionTokenizationError {
 
 ///|
 test "TextModel reports a failing tokenizer and remains live for later reset" {
-  let attempts = Ref(0)
-  let tokenizer_calls = Ref(0)
+  let mut attempts = 0
+  let mut tokenizer_calls = 0
   let (model, reported) = tokenization_model_with_resolver(
     "one\ntwo",
     "text-model-production-error-reporter",
@@ -186,14 +186,14 @@ test "TextModel reports a failing tokenizer and remains live for later reset" {
       Some(
         InternalTokenizationSupportAdapter(
           initial_state=() => {
-            attempts.val += 1
-            if attempts.val == 1 {
+            attempts += 1
+            if attempts == 1 {
               raise ModelProductionTokenizationError::InitialStateFailure
             }
             TokenizerState()
           },
           tokenize_encoded=(_text, _has_eol, _state) => {
-            tokenizer_calls.val += 1
+            tokenizer_calls += 1
             {
               tokens: [0, tag_to_metadata(Plain)],
               end_state: @syntax.TokenizerState().push_mode(b'l'),
@@ -206,7 +206,7 @@ test "TextModel reports a failing tokenizer and remains live for later reset" {
   assert_eq(reported.length(), 1)
   assert_true(reported[0].contains("InitialStateFailure"))
   assert_eq(model.get_value(), "one\ntwo")
-  assert_eq(tokenizer_calls.val, 0)
+  assert_eq(tokenizer_calls, 0)
 
   // A later production flush reacquires support after the reported failure;
   // an attached visible range can then tokenize normally.
@@ -215,8 +215,8 @@ test "TextModel reports a failing tokenizer and remains live for later reset" {
   view.set_visible_lines([{ start_line_number: 1, end_line_number: 2, }], true)
   // One successful reset probes support and then seeds the state store, so
   // the initial-state callback runs twice after the first reported failure.
-  assert_eq(attempts.val, 3)
-  assert_eq(tokenizer_calls.val, 2)
+  assert_eq(attempts, 3)
+  assert_eq(tokenizer_calls, 2)
   assert_eq(model.get_value(), "still\nlive")
   model.on_before_detached(view)
   model.dispose()

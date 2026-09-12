@@ -145,8 +145,8 @@ pub fn run_render_invalidation_test() -> Unit {
     },
   ])
   |> ignore
-  let spacing_ids : Ref[Array[String]] = Ref([])
-  let token_registration : Ref[@base_common.Disposable?] = Ref(None)
+  let mut spacing_ids : Array[String] = []
+  let mut token_registration : @base_common.Disposable? = None
   guard viewer.get_dom_node() is Some(root) else {
     ctx.fail("viewer did not expose its root DOM node")
     ctx.finish()
@@ -184,10 +184,10 @@ pub fn run_render_invalidation_test() -> Unit {
       )
     },
     () => {
-      if spacing_ids.val.length() > 0 {
-        viewer.remove_decorations(spacing_ids.val)
+      if spacing_ids.length() > 0 {
+        viewer.remove_decorations(spacing_ids)
       }
-      spacing_ids.val = viewer.delta_decorations([], [
+      spacing_ids = viewer.delta_decorations([], [
         {
           range: Range(1, 1, 1, 7),
           options: ModelDecorationOptions(
@@ -200,16 +200,16 @@ pub fn run_render_invalidation_test() -> Unit {
       ])
     },
     () => {
-      viewer.remove_decorations(spacing_ids.val)
-      spacing_ids.val = []
+      viewer.remove_decorations(spacing_ids)
+      spacing_ids = []
     },
     () => render_invalidation_position_json(viewer),
     () => viewer.focus(),
     () => {
-      if token_registration.val is Some(registration) {
+      if token_registration is Some(registration) {
         registration.dispose()
       }
-      token_registration.val = Some(
+      token_registration = Some(
         languages.set_tokens_provider("plaintext", RenderInvalidationTokenizer::{
         }),
       )

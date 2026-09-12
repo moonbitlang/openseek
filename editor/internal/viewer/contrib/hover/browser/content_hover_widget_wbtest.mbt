@@ -73,23 +73,23 @@ test "a tall hover near the page bottom flips above" {
 
 ///|
 test "hover render lifetimes dispose on replacement hide and teardown" {
-  let first_count = Ref(0)
-  let second_count = Ref(0)
-  let third_count = Ref(0)
+  let mut first_count = 0
+  let mut second_count = 0
+  let mut third_count = 0
   let lifetimes : Array[@base_common.Disposable] = []
-  lifetimes.push(@base_common.Disposable::from(() => first_count.val += 1))
-  lifetimes.push(@base_common.Disposable::from(() => second_count.val += 1))
+  lifetimes.push(@base_common.Disposable::from(() => first_count += 1))
+  lifetimes.push(@base_common.Disposable::from(() => second_count += 1))
 
   // `_setRenderedHover` begins a replacement with the same clear operation.
   dispose_hover_render_disposables(lifetimes)
-  assert_eq(first_count.val, 1)
-  assert_eq(second_count.val, 1)
+  assert_eq(first_count, 1)
+  assert_eq(second_count, 1)
 
-  lifetimes.push(@base_common.Disposable::from(() => third_count.val += 1))
+  lifetimes.push(@base_common.Disposable::from(() => third_count += 1))
   // `hide` and retained-widget `dispose` both converge on this operation.
   dispose_hover_render_disposables(lifetimes)
   dispose_hover_render_disposables(lifetimes)
-  assert_eq(third_count.val, 1)
+  assert_eq(third_count, 1)
 }
 
 ///|

@@ -177,10 +177,10 @@ test "LinesLayout mixed bulk commit resolves conflicts, stably sorts, and resets
   assert_eq(layout.prefix_sum_valid_index, 22)
 
   let inserted_peers : Array[String] = []
-  let inserted_primary_before = Ref("")
-  let inserted_ordinal_before = Ref("")
-  let inserted_ordinal_after = Ref("")
-  let inserted_primary_after = Ref("")
+  let mut inserted_primary_before = ""
+  let mut inserted_ordinal_before = ""
+  let mut inserted_ordinal_after = ""
+  let mut inserted_primary_after = ""
   assert_true(
     layout.change_whitespace(accessor => {
       for i in 0..<20 {
@@ -188,10 +188,10 @@ test "LinesLayout mixed bulk commit resolves conflicts, stably sorts, and resets
           accessor.insert_whitespace(4, 2, (1000 + i).to_double(), 0.0),
         )
       }
-      inserted_primary_before.val = accessor.insert_whitespace(3, 99, 60.0, 0.0)
-      inserted_ordinal_before.val = accessor.insert_whitespace(4, 0, 61.0, 0.0)
-      inserted_ordinal_after.val = accessor.insert_whitespace(4, 3, 62.0, 0.0)
-      inserted_primary_after.val = accessor.insert_whitespace(7, -9, 63.0, 0.0)
+      inserted_primary_before = accessor.insert_whitespace(3, 99, 60.0, 0.0)
+      inserted_ordinal_before = accessor.insert_whitespace(4, 0, 61.0, 0.0)
+      inserted_ordinal_after = accessor.insert_whitespace(4, 3, 62.0, 0.0)
+      inserted_primary_after = accessor.insert_whitespace(7, -9, 63.0, 0.0)
 
       // Zero operations: peer[0]. One operation: peer[1]. More than one:
       // peer[2] (last change wins), peer[3]/peer[4] (remove wins).
@@ -225,10 +225,7 @@ test "LinesLayout mixed bulk commit resolves conflicts, stably sorts, and resets
   // cache before the first post-commit accumulated-height query.
   assert_eq(layout.prefix_sum_valid_index, -1)
   let expected_ids : Array[String] = [
-    old_primary_before,
-    inserted_primary_before.val,
-    inserted_ordinal_before.val,
-    old_ordinal_before,
+    old_primary_before, inserted_primary_before, inserted_ordinal_before, old_ordinal_before,
   ]
   let expected_after_line_numbers : Array[Int] = [2, 3, 4, 4]
   let expected_ordinals : Array[Int] = [9, 99, 0, 1]
@@ -265,7 +262,7 @@ test "LinesLayout mixed bulk commit resolves conflicts, stably sorts, and resets
       )
     }
   }
-  expected_ids.push(inserted_ordinal_after.val)
+  expected_ids.push(inserted_ordinal_after)
   expected_after_line_numbers.push(4)
   expected_ordinals.push(3)
   expected_heights.push(62)
@@ -273,7 +270,7 @@ test "LinesLayout mixed bulk commit resolves conflicts, stably sorts, and resets
   expected_after_line_numbers.push(6)
   expected_ordinals.push(0)
   expected_heights.push(152)
-  expected_ids.push(inserted_primary_after.val)
+  expected_ids.push(inserted_primary_after)
   expected_after_line_numbers.push(7)
   expected_ordinals.push(-9)
   expected_heights.push(63)

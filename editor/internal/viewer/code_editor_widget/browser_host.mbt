@@ -123,14 +123,14 @@ async fn run_async_tasks_concurrently(tasks : Array[async () -> Unit]) -> Unit {
     return
   }
   @js.suspend((resolve : (Unit) -> Unit, _reject : (Error) -> Unit) => {
-    let remaining = Ref(tasks.length())
+    let mut remaining = tasks.length()
     for task in tasks {
       @js.async_run(() => {
         task() catch {
           _ => ()
         }
-        remaining.val -= 1
-        if remaining.val == 0 {
+        remaining -= 1
+        if remaining == 0 {
           resolve(())
         }
       })

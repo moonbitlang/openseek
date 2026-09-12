@@ -53,15 +53,15 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
   model : @model.TextModel,
   attach_generation : Int,
 ) -> MarkdownViewerWidgetDefinitionBridge {
-  let bridge_slot : Ref[MarkdownViewerWidgetDefinitionBridge?] = Ref(None)
+  let mut bridge_slot : MarkdownViewerWidgetDefinitionBridge? = None
   let anchor_is_current = anchor => {
-    bridge_slot.val.map_or(false, bridge => bridge.anchor_is_current(anchor))
+    bridge_slot.map_or(false, bridge => bridge.anchor_is_current(anchor))
   }
   let navigation_action = @goto_symbol.SymbolNavigationAction(
     viewer.services.languages(),
     {
       prepare_navigation: () => {
-        if bridge_slot.val is Some(bridge) {
+        if bridge_slot is Some(bridge) {
           bridge.prepare_navigation()
         }
       },
@@ -69,18 +69,18 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
       // `open_location` is async, so its body stays a match rather than moving
       // into a non-async `map_or` closure.
       open_location: (_anchor, location, mode, _source) => {
-        match bridge_slot.val {
+        match bridge_slot {
           Some(bridge) => bridge.open_location(location, mode)
           None => false
         }
       },
       open_in_peek: (anchor, mode, locations) => {
-        bridge_slot.val.map_or(false, bridge => {
+        bridge_slot.map_or(false, bridge => {
           bridge.open_in_peek(anchor, mode, locations)
         })
       },
       show_message: (_anchor, message) => {
-        if bridge_slot.val is Some(bridge) {
+        if bridge_slot is Some(bridge) {
           bridge.show_message(message)
         }
       },
@@ -99,10 +99,10 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
         {
           is_anchor_current: anchor_is_current,
           mount: (root, anchor) => {
-            bridge_slot.val.bind(bridge => bridge.mount_peek(root, anchor))
+            bridge_slot.bind(bridge => bridge.mount_peek(root, anchor))
           },
           reveal_anchor: anchor => {
-            if bridge_slot.val is Some(bridge) {
+            if bridge_slot is Some(bridge) {
               bridge.reveal_anchor(anchor)
             }
           },
@@ -110,13 +110,13 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
           // `open_location` is async, so its body stays a match rather than
           // moving into a non-async `map_or` closure.
           open_location: (location, mode, _source) => {
-            match bridge_slot.val {
+            match bridge_slot {
               Some(bridge) => bridge.open_location(location, mode)
               None => false
             }
           },
           show_message: (_anchor, message) => {
-            if bridge_slot.val is Some(bridge) {
+            if bridge_slot is Some(bridge) {
               bridge.show_message(message)
             }
           },
@@ -147,7 +147,7 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
     active: false,
     disposed: false,
   }
-  bridge_slot.val = Some(bridge)
+  bridge_slot = Some(bridge)
   bridge
 }
 

@@ -88,19 +88,19 @@ async test "the seam sees the canonical argv it may transform" {
   let ok =
     #|read line
     #|printf '{"subrun_report": {"ok": true}}\n'
-  let seen : Ref[@spawn.LaunchSpec?] = { val: None, }
+  let mut seen : @spawn.LaunchSpec? = None
   let runner = @agent_workflow.subrun_runner(
     exe="/usr/local/bin/openseek",
     model="deepseek-reasoner",
     api_url="http://localhost:9",
     map_launch=(canonical, _) => {
-      seen.val = Some(canonical)
+      seen = Some(canonical)
       { ..canonical, command: "sh", args: ["-c", ok], }
     },
   )
   let wf = @workflow.Workflow(runner~)
   let _ = wf.agent(prompt="q", kind="explore", max_steps=42)
-  guard seen.val is Some(spec) else {
+  guard seen is Some(spec) else {
     fail("the seam never saw the canonical launch spec")
   }
   assert_eq(spec.command, "/usr/local/bin/openseek")

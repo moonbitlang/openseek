@@ -159,9 +159,9 @@ test "model-token outgoing typed listener receives every event in FIFO order" {
 test "empty model-token outgoing event remains observable" {
   let dispatcher = CursorEventDispatcher::CursorEventDispatcher()
   let mut delivered = 0
-  let observed_range_count = Ref(-1)
+  let mut observed_range_count = -1
   dispatcher.on_model_tokens_changed(event => {
-    observed_range_count.val = event.event.ranges.length()
+    observed_range_count = event.event.ranges.length()
     delivered += 1
   })
   |> ignore
@@ -172,7 +172,7 @@ test "empty model-token outgoing event remains observable" {
     }),
   )
   assert_eq(delivered, 1)
-  assert_eq(observed_range_count.val, 0)
+  assert_eq(observed_range_count, 0)
 }
 
 ///|
@@ -482,15 +482,15 @@ test "disposing a view model retires cursor outgoing subscriptions" {
 test "ViewModel exposes and retires ViewZones outgoing subscriptions" {
   let view_model = cursor_reference_view_model()
   let mut delivered = 0
-  let kind_was_view_zones = Ref(false)
+  let mut kind_was_view_zones = false
   view_model.on_view_zones_changed(event => {
-    kind_was_view_zones.val = event.kind == ViewZonesChanged
+    kind_was_view_zones = event.kind == ViewZonesChanged
     delivered += 1
   })
   |> ignore
   view_model.emit_view_zones_changed()
   assert_eq(delivered, 1)
-  assert_true(kind_was_view_zones.val)
+  assert_true(kind_was_view_zones)
   view_model.dispose()
   view_model.emit_view_zones_changed()
   assert_eq(delivered, 1)

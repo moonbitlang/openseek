@@ -445,16 +445,16 @@ test "cache hit, one pending retry, callback ordering, and conditional event" {
 
 ///|
 test "evicting an all-trusted cache is silent" {
-  let scheduled = Ref(0)
+  let mut scheduled = 0
   let measurements = new_font_measurements_for_test(
     (_bare, _requests) => (),
     () => 1.0,
-    (_callback, _delay) => scheduled.val += 1,
+    (_callback, _delay) => scheduled += 1,
   )
   let trusted = trusted_font("Trusted")
   measurements.write_to_cache(trusted.get_id(), trusted)
   // Trusted plus no pending retry is the missing false arm of the timer gate.
-  assert_eq(scheduled.val, 0)
+  assert_eq(scheduled, 0)
   let events = Ref(0)
   let listener = measurements.on_did_change(() => events.val += 1)
   measurements.evict_untrusted_readings()

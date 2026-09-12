@@ -303,7 +303,7 @@ async fn run_task_turn(
     let exe = self_executable()
     // Mirror the latest appended session so a review a snippet delegates
     // audits against the LIVE standing goal, not the turn-start snapshot.
-    let latest_session : Ref[@agent_session.Session] = { val: session, }
+    let mut latest_session : @agent_session.Session = session
     let extra_tools = build_extra_tools(
       matches,
       scope,
@@ -317,7 +317,7 @@ async fn run_task_turn(
     // cannot collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
       spec.injection(exe~, workspace_root~, model="\{model}", api_url?, criteria=() => {
-        audit_criteria(latest_session.val)
+        audit_criteria(latest_session)
       })
     })
     let tools = @agent.build_tools(
@@ -351,7 +351,7 @@ async fn run_task_turn(
         task~,
         append_item=(current, item) => {
           let next = append_item(current, item)
-          latest_session.val = next
+          latest_session = next
           next
         },
         max_steps?,

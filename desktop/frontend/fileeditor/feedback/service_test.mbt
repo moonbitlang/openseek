@@ -2,18 +2,18 @@
 test "Desktop feedback backing connects host controls to the Viewer handle" {
   let service = @feedback.DesktopFeedbackService()
   let resource = @common.Uri::parse("file:///workspace/main.mbt")
-  let added : Ref[String?] = Ref(None)
-  let changes = Ref(0)
-  service.on_did_add_feedback(event => added.val = Some(event.feedback.id))
+  let mut added : String? = None
+  let mut changes = 0
+  service.on_did_add_feedback(event => added = Some(event.feedback.id))
   |> ignore
   let handle = service.agent_feedback_handle()
-  handle.on_did_change_feedback(_event => changes.val += 1) |> ignore
+  handle.on_did_change_feedback(_event => changes += 1) |> ignore
   service.set_feedback_enabled(resource, true)
   assert_true(handle.is_feedback_enabled(resource))
   let item = handle.add_feedback(resource, Range(2, 1, 2, 5), "rename this")
-  assert_eq(added.val, Some(item.id))
+  assert_eq(added, Some(item.id))
   assert_eq(handle.get_feedback(resource).length(), 1)
-  assert_true(changes.val >= 2)
+  assert_true(changes >= 2)
   service.clear_feedback(resource)
   assert_true(handle.get_feedback(resource).is_empty())
 }
@@ -22,9 +22,9 @@ test "Desktop feedback backing connects host controls to the Viewer handle" {
 test "Desktop feedback backing implements every stateful handle mutation" {
   let service = @feedback.DesktopFeedbackService()
   let resource = @common.Uri::parse("file:///workspace/lib.mbt")
-  let submitted_ids : Ref[Array[String]] = Ref([])
+  let mut submitted_ids : Array[String] = []
   service.on_did_submit_feedback(event => {
-    submitted_ids.val = event.items.map(item => item.id)
+    submitted_ids = event.items.map(item => item.id)
   })
   |> ignore
   let handle = service.agent_feedback_handle()
@@ -42,7 +42,7 @@ test "Desktop feedback backing implements every stateful handle mutation" {
   assert_eq(stored.map(item => item.text), Some("reworded"))
   assert_eq(stored.map(item => item.replies), Some(["done"]))
   assert_eq(stored.map(item => item.state), Some(Submitted))
-  assert_eq(submitted_ids.val, [item.id])
+  assert_eq(submitted_ids, [item.id])
   let navigation_id = "agentFeedback:" + item.id
   handle.set_navigation_anchor(resource, Some(navigation_id))
   let bearing = handle.get_navigation_bearing(resource, [navigation_id])

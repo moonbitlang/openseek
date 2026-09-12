@@ -173,35 +173,33 @@ test "View disposes ViewParts before its lifetime store exactly once" {
   let vertical_slider = scrollable.slider(true)
   assert_eq(vertical_slider.get_attribute("class"), Some("slider active"))
 
-  let base_dispose_count = Ref(0)
-  let scrollbar_was_already_disposed = Ref(false)
+  let mut base_dispose_count = 0
+  let mut scrollbar_was_already_disposed = false
   view.add_disposable(
     @base_common.Disposable::from(() => {
-      base_dispose_count.val += 1
-      scrollbar_was_already_disposed.val = vertical_slider.get_attribute(
-          "class",
-        ) ==
+      base_dispose_count += 1
+      scrollbar_was_already_disposed = vertical_slider.get_attribute("class") ==
         Some("slider")
     }),
   )
   view.dispose()
   assert_true(view.disposed)
   assert_eq(vertical_slider.get_attribute("class"), Some("slider"))
-  assert_true(scrollbar_was_already_disposed.val)
-  assert_eq(base_dispose_count.val, 1)
+  assert_true(scrollbar_was_already_disposed)
+  assert_eq(base_dispose_count, 1)
   assert_eq(view_lifecycle_test_clear_count(), 1)
   assert_true(view.lifetime_disposables.is_empty())
 
   // Repeated disposal neither re-runs a ViewPart nor drains the base store a
   // second time. Late registration is released immediately.
   view.dispose()
-  assert_eq(base_dispose_count.val, 1)
+  assert_eq(base_dispose_count, 1)
   assert_eq(view_lifecycle_test_clear_count(), 1)
-  let late_dispose_count = Ref(0)
+  let mut late_dispose_count = 0
   view.add_disposable(
-    @base_common.Disposable::from(() => late_dispose_count.val += 1),
+    @base_common.Disposable::from(() => late_dispose_count += 1),
   )
-  assert_eq(late_dispose_count.val, 1)
+  assert_eq(late_dispose_count, 1)
   assert_true(view.lifetime_disposables.is_empty())
   restore_view_lifecycle_test_browser()
 }

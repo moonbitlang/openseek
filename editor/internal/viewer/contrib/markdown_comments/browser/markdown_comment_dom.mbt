@@ -289,43 +289,43 @@ pub fn MarkdownCommentDom::observe_size(
   on_height_changed : (Int) -> Unit,
 ) -> MarkdownCommentSizeObserver {
   let disposed = Ref(false)
-  let frame_scheduled = Ref(false)
-  let force_hidden_measure = Ref(false)
-  let pending_frame : Ref[@base_common.Disposable?] = Ref(None)
-  let last_height = Ref(0)
+  let mut frame_scheduled = false
+  let mut force_hidden_measure = false
+  let mut pending_frame : @base_common.Disposable? = None
+  let mut last_height = 0
   let measure = () => {
-    frame_scheduled.val = false
-    pending_frame.val = None
+    frame_scheduled = false
+    pending_frame = None
     if disposed.val || !@base_browser.element_is_connected(self.content) {
       return
     }
-    let allow_hidden = force_hidden_measure.val || last_height.val == 0
-    force_hidden_measure.val = false
+    let allow_hidden = force_hidden_measure || last_height == 0
+    force_hidden_measure = false
     let height = markdown_comment_measured_height(
       self.outer,
       self.content,
       allow_hidden,
     )
-    if height <= 0 || height == last_height.val {
+    if height <= 0 || height == last_height {
       return
     }
-    last_height.val = height
+    last_height = height
     on_height_changed(height)
   }
   let schedule_measure = (force_hidden : Bool) => {
     if disposed.val {
       return
     }
-    force_hidden_measure.val = force_hidden_measure.val || force_hidden
-    if frame_scheduled.val {
+    force_hidden_measure = force_hidden_measure || force_hidden
+    if frame_scheduled {
       return
     }
-    frame_scheduled.val = true
+    frame_scheduled = true
     let registration = @base_browser.schedule_at_next_animation_frame(measure)
     // Native requestAnimationFrame is asynchronous, but retaining this branch
     // makes the owner correct under a synchronous test/browser shim too.
-    if frame_scheduled.val {
-      pending_frame.val = Some(registration)
+    if frame_scheduled {
+      pending_frame = Some(registration)
     } else {
       registration.dispose()
     }
@@ -338,11 +338,11 @@ pub fn MarkdownCommentDom::observe_size(
     if observer is Some(observer) {
       observer.dispose()
     }
-    if pending_frame.val is Some(registration) {
+    if pending_frame is Some(registration) {
       registration.dispose()
     }
-    pending_frame.val = None
-    frame_scheduled.val = false
+    pending_frame = None
+    frame_scheduled = false
   })
   { request_measure_: () => schedule_measure(true), lifetime, }
 }
@@ -380,18 +380,16 @@ pub fn MarkdownCommentDom::observe_viewport_width(
   let disposed = Ref(false)
   let lifetime = match markdown_comment_content_viewport(self.outer) {
     Some(viewport) => {
-      let last_width = Ref(
-        @base_browser.element_client_width(viewport).to_int(),
-      )
+      let mut last_width = @base_browser.element_client_width(viewport).to_int()
       let observer = @base_browser.observe_element_resize(viewport, () => {
         if disposed.val {
           return
         }
         let width = @base_browser.element_client_width(viewport).to_int()
-        if width == last_width.val {
+        if width == last_width {
           return
         }
-        last_width.val = width
+        last_width = width
         if width > 0 {
           on_width_changed()
         }

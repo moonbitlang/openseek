@@ -31,16 +31,16 @@ test "MarkdownViewerWidget detaches the returned old model before set_model retu
     first.dispose()
     second.dispose()
   }
-  let detached_after_cleanup = Ref(false)
+  let mut detached_after_cleanup = false
   let detach_count = Ref(0)
   let detach_listener = viewer.on_did_detach_for_diagnostics(() => {
     detach_count.val += 1
-    detached_after_cleanup.val = viewer.current is None
+    detached_after_cleanup = viewer.current is None
   })
   defer detach_listener.dispose()
-  let content_deliveries = Ref(0)
+  let mut content_deliveries = 0
   let content_listener = viewer.on_did_change_model_content(_ => {
-    content_deliveries.val += 1
+    content_deliveries += 1
   })
   defer content_listener.dispose()
   assert_true(
@@ -54,14 +54,14 @@ test "MarkdownViewerWidget detaches the returned old model before set_model retu
   assert_true(returned.model.same(first))
   assert_true(returned.resource_kind == MoonBitMarkdown)
   assert_eq(detach_count.val, 1)
-  assert_true(detached_after_cleanup.val)
+  assert_true(detached_after_cleanup)
   guard viewer.current is Some(current) else { fail("expected replacement") }
   assert_true(current.model.model.same(second))
   assert_true(current.model.resource_kind == OrdinaryMarkdown)
   first.set_value("detached change")
-  assert_eq(content_deliveries.val, 0)
+  assert_eq(content_deliveries, 0)
   second.set_value("# replacement changed")
-  assert_eq(content_deliveries.val, 1)
+  assert_eq(content_deliveries, 1)
 }
 
 ///|

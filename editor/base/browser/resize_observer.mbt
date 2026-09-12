@@ -11,14 +11,14 @@ pub fn observe_element_resize(
   target : @rdom.Element,
   notify : () -> Unit,
 ) -> @base_common.Disposable? {
-  let native : Ref[NativeResizeObserver?] = Ref(None)
+  let mut native : NativeResizeObserver? = None
   let observed = try_observe_element_resize(target, notify, observer => {
-    native.val = Some(observer)
+    native = Some(observer)
   })
   if !observed {
     return None
   }
-  guard native.val is Some(observer) else { return None }
+  guard native is Some(observer) else { return None }
   Some(
     @base_common.Disposable::from(() => {
       native_resize_observer_disconnect(observer)

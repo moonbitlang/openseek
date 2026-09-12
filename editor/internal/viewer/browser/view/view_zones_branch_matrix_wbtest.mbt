@@ -741,9 +741,9 @@ test "ViewZones layoutZone rereads geometry and width but retains ordinal and no
   defer fixture.dispose()
   let original_node = @rdom.document().create_element("div")
   let original_margin = @rdom.document().create_element("div")
-  let original_callback_count = Ref(0)
-  let replacement_callback_count = Ref(0)
-  let replacement_callback_height = Ref(-1.0)
+  let mut original_callback_count = 0
+  let mut replacement_callback_count = 0
+  let mut replacement_callback_height = -1.0
   let zone = @editor_browser.ViewZone(
     1,
     original_node,
@@ -754,7 +754,7 @@ test "ViewZones layoutZone rereads geometry and width but retains ordinal and no
     height_in_px=5.5,
     min_width_in_px=42.9,
     margin_dom_node=original_margin,
-    on_computed_height=_ => original_callback_count.val += 1,
+    on_computed_height=_ => original_callback_count += 1,
   )
   let id = fixture.add_zone(zone)
   let initial = fixture.whitespace(id)
@@ -762,7 +762,7 @@ test "ViewZones layoutZone rereads geometry and width but retains ordinal and no
   assert_eq(initial.height, 5)
   assert_eq(initial.ordinal, 17)
   assert_eq(initial.min_width, 42)
-  assert_eq(original_callback_count.val, 1)
+  assert_eq(original_callback_count, 1)
   assert_true(
     view_lifecycle_test_has_parent(
       original_node,
@@ -789,8 +789,8 @@ test "ViewZones layoutZone rereads geometry and width but retains ordinal and no
   zone.dom_node = replacement_node
   zone.margin_dom_node = Some(replacement_margin)
   zone.on_computed_height = Some(height => {
-    replacement_callback_count.val += 1
-    replacement_callback_height.val = height
+    replacement_callback_count += 1
+    replacement_callback_height = height
   })
   fixture.view.change_view_zones(accessor => accessor.layout_zone(id))
 
@@ -799,9 +799,9 @@ test "ViewZones layoutZone rereads geometry and width but retains ordinal and no
   assert_eq(updated.height, 40)
   assert_eq(updated.ordinal, 17)
   assert_eq(updated.min_width, 999)
-  assert_eq(original_callback_count.val, 1)
-  assert_eq(replacement_callback_count.val, 1)
-  assert_eq(replacement_callback_height.val, 40.0)
+  assert_eq(original_callback_count, 1)
+  assert_eq(replacement_callback_count, 1)
+  assert_eq(replacement_callback_height, 40.0)
   assert_true(
     view_lifecycle_test_has_parent(
       original_node,
@@ -1066,7 +1066,7 @@ test "ViewZones recompute freezes keys but reads future delegates live" {
     10,
   )
   defer fixture.dispose()
-  let first_id = Ref("")
+  let mut first_id = ""
   let future_id = Ref("")
   let added_id = Ref("")
   let first_callbacks : Array[Double] = []
@@ -1101,7 +1101,7 @@ test "ViewZones recompute freezes keys but reads future delegates live" {
         future_zone.height_in_lines = Some(3.0)
         fixture.view.change_view_zones(accessor => {
           added_id.val = accessor.add_zone(added_zone)
-          accessor.remove_zone(first_id.val)
+          accessor.remove_zone(first_id)
         })
         // The new key was absent from Object.keys' frozen snapshot. Mutating
         // it after add distinguishes "skipped now" (20) from recomputed (80).
@@ -1109,7 +1109,7 @@ test "ViewZones recompute freezes keys but reads future delegates live" {
       }
     },
   )
-  first_id.val = fixture.add_zone(first_zone)
+  first_id = fixture.add_zone(first_zone)
   future_id.val = fixture.add_zone(future_zone)
   assert_eq(first_callbacks.length(), 1)
   assert_eq(first_callbacks[0], 10.0)
@@ -1118,7 +1118,7 @@ test "ViewZones recompute freezes keys but reads future delegates live" {
 
   fixture.configuration.val = (20, 320.0, 40.0)
   assert_true(fixture.view.view_zones.on_configuration_changed(true))
-  assert_false(fixture.has_whitespace(first_id.val))
+  assert_false(fixture.has_whitespace(first_id))
   assert_true(fixture.has_whitespace(future_id.val))
   assert_true(fixture.has_whitespace(added_id.val))
   assert_eq(fixture.whitespace(future_id.val).height, 60)
@@ -1149,32 +1149,32 @@ test "ViewZones render freezes keys, writes after callback, and reads live value
   defer fixture.dispose()
   fixture.view_model.view_layout.set_viewport_size(width=300.0, height=200.0)
   |> ignore
-  let current_id = Ref("")
+  let mut current_id = ""
   let future_id = Ref("")
   let added_id = Ref("")
   let current_node = @rdom.document().create_element("div")
   let future_node = @rdom.document().create_element("div")
   let added_node = @rdom.document().create_element("div")
-  let callback_display = Ref("unset")
-  let callback_top = Ref("unset")
-  let callback_height = Ref("unset")
-  let old_future_top_callbacks = Ref(0)
-  let live_future_top_callbacks = Ref(0)
-  let added_top_callbacks = Ref(0)
+  let mut callback_display = "unset"
+  let mut callback_top = "unset"
+  let mut callback_height = "unset"
+  let mut old_future_top_callbacks = 0
+  let mut live_future_top_callbacks = 0
+  let mut added_top_callbacks = 0
   let did_reenter = Ref(false)
   let future_zone = @editor_browser.ViewZone(
     0,
     future_node,
     ordinal=1,
     height_in_px=11.0,
-    on_dom_node_top=_ => old_future_top_callbacks.val += 1,
+    on_dom_node_top=_ => old_future_top_callbacks += 1,
   )
   let added_zone = @editor_browser.ViewZone(
     0,
     added_node,
     ordinal=2,
     height_in_px=12.0,
-    on_dom_node_top=_ => added_top_callbacks.val += 1,
+    on_dom_node_top=_ => added_top_callbacks += 1,
   )
   let current_zone = @editor_browser.ViewZone(
     0,
@@ -1184,22 +1184,20 @@ test "ViewZones render freezes keys, writes after callback, and reads live value
     on_dom_node_top=_ => {
       if !did_reenter.val {
         did_reenter.val = true
-        callback_display.val = view_zones_branch_style(current_node, "display")
-        callback_top.val = view_zones_branch_style(current_node, "top")
-        callback_height.val = view_zones_branch_style(current_node, "height")
+        callback_display = view_zones_branch_style(current_node, "display")
+        callback_top = view_zones_branch_style(current_node, "top")
+        callback_height = view_zones_branch_style(current_node, "height")
         // The future key's registered record is fetched after this callback,
         // so the replacement delegate callback is used immediately.
-        future_zone.on_dom_node_top = Some(_ => {
-          live_future_top_callbacks.val += 1
-        })
+        future_zone.on_dom_node_top = Some(_ => live_future_top_callbacks += 1)
         fixture.view.change_view_zones(accessor => {
           added_id.val = accessor.add_zone(added_zone)
-          accessor.remove_zone(current_id.val)
+          accessor.remove_zone(current_id)
         })
       }
     },
   )
-  current_id.val = fixture.add_zone(current_zone)
+  current_id = fixture.add_zone(current_zone)
   future_id.val = fixture.add_zone(future_zone)
   let visible = fixture.view_model.view_layout.get_whitespace_viewport_data()
   assert_eq(visible.length(), 2)
@@ -1207,9 +1205,9 @@ test "ViewZones render freezes keys, writes after callback, and reads live value
 
   // onDomNodeTop runs before top/height/display writes. Removing the current
   // key detaches it, but the already-captured record still receives writes.
-  assert_eq(callback_display.val, "none")
-  assert_eq(callback_top.val, "")
-  assert_eq(callback_height.val, "")
+  assert_eq(callback_display, "none")
+  assert_eq(callback_top, "")
+  assert_eq(callback_height, "")
   assert_eq(view_zones_branch_style(current_node, "top"), "0px")
   assert_eq(view_zones_branch_style(current_node, "height"), "10px")
   assert_eq(view_zones_branch_style(current_node, "display"), "block")
@@ -1219,13 +1217,13 @@ test "ViewZones render freezes keys, writes after callback, and reads live value
       fixture.view.view_zones.dom_node(),
     ),
   )
-  assert_false(fixture.has_whitespace(current_id.val))
+  assert_false(fixture.has_whitespace(current_id))
 
-  assert_eq(old_future_top_callbacks.val, 0)
-  assert_eq(live_future_top_callbacks.val, 1)
+  assert_eq(old_future_top_callbacks, 0)
+  assert_eq(live_future_top_callbacks, 1)
   assert_true(fixture.has_whitespace(future_id.val))
   // The key added during the callback was absent from the frozen key list.
-  assert_eq(added_top_callbacks.val, 0)
+  assert_eq(added_top_callbacks, 0)
   assert_true(fixture.has_whitespace(added_id.val))
   assert_eq(view_zones_branch_style(added_node, "display"), "none")
   assert_eq(view_zones_branch_style(added_node, "top"), "")

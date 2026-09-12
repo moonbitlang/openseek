@@ -103,13 +103,10 @@ pub fn run_viewer_api_test() -> Unit {
           placeholder="Loading component fixture...",
         ),
       )
-      let scroll_event_count = Ref(0)
+      let mut scroll_event_count = 0
       viewer.on_did_scroll_change(event => {
-        scroll_event_count.val += 1
-        host.set_attribute(
-          "data-scroll-events",
-          scroll_event_count.val.to_string(),
-        )
+        scroll_event_count += 1
+        host.set_attribute("data-scroll-events", scroll_event_count.to_string())
         host.set_attribute("data-scroll-top", event.scroll_top.to_string())
       })
       |> ignore

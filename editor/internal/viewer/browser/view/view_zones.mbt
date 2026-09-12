@@ -303,8 +303,8 @@ fn ViewZones::change_view_zones(
   guard !self.disposed && self.context is Some(context) else { return false }
   let changed = Ref(false)
   let had_layout_change = context.view_model.change_whitespace(whitespace_accessor => {
-    let valid = Ref(true)
-    let assert_valid = () => if !valid.val { abort("Invalid change accessor") }
+    let mut valid = true
+    let assert_valid = () => if !valid { abort("Invalid change accessor") }
     let accessor = @editor_browser.ViewZoneChangeAccessor::from_callbacks(
       zone => {
         assert_valid()
@@ -328,7 +328,7 @@ fn ViewZones::change_view_zones(
       },
     )
     defer {
-      valid.val = false
+      valid = false
     }
     update(accessor) catch {
       _ => self.report_callback_error("changeViewZones")

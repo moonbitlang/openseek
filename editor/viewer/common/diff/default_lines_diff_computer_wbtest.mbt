@@ -47,10 +47,10 @@ test "Line provider satisfies the public provider contract" {
   )
   assert_eq(result.changes.length(), 1)
 
-  let notifications = Ref(0)
-  let subscription = provider.on_did_change(() => notifications.val += 1)
+  let mut notifications = 0
+  let subscription = provider.on_did_change(() => notifications += 1)
   subscription.dispose()
-  assert_eq(notifications.val, 0)
+  assert_eq(notifications, 0)
 }
 
 ///|

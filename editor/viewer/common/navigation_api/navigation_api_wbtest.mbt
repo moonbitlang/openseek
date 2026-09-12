@@ -55,11 +55,11 @@ async test "TextModelResolverHandle forwards resource and cancellation token" {
   let target = try! @base_common.Uri::parse("memory://workspace/target.mbt")
   let model = navigation_test_model(target)
   let release_count = Ref(0)
-  let observed_resource = Ref("")
-  let observed_token : Ref[@language.CancellationToken?] = Ref(None)
+  let mut observed_resource = ""
+  let mut observed_token : @language.CancellationToken? = None
   let resolver = TextModelResolverHandle(resolve=(resource, token) => {
-    observed_resource.val = resource.to_string()
-    observed_token.val = Some(token)
+    observed_resource = resource.to_string()
+    observed_token = Some(token)
     Some(TextModelReference(model, release=() => release_count.val += 1))
   })
   let source = @language.CancellationTokenSource()
@@ -67,8 +67,8 @@ async test "TextModelResolverHandle forwards resource and cancellation token" {
   guard resolver.resolve(target, token) is Some(reference) else {
     fail("resolver did not return its model lease")
   }
-  assert_eq(observed_resource.val, target.to_string())
-  guard observed_token.val is Some(forwarded_token) else {
+  assert_eq(observed_resource, target.to_string())
+  guard observed_token is Some(forwarded_token) else {
     fail("resolver did not observe the caller token")
   }
   assert_true(physical_equal(forwarded_token, token))
@@ -82,17 +82,17 @@ async test "TextModelResolverHandle forwards resource and cancellation token" {
 ///|
 async test "TextModelResolverHandle preserves unavailable and cancelled failures" {
   let target = try! @base_common.Uri::parse("memory://workspace/missing.mbt")
-  let calls = Ref(0)
-  let saw_cancelled = Ref(false)
+  let mut calls = 0
+  let mut saw_cancelled = false
   let resolver = TextModelResolverHandle(resolve=(_resource, token) => {
-    calls.val += 1
-    saw_cancelled.val = token.is_cancellation_requested()
+    calls += 1
+    saw_cancelled = token.is_cancellation_requested()
     None
   })
   let source = @language.CancellationTokenSource()
   source.cancel()
   assert_true(resolver.resolve(target, source.token()) is None)
-  assert_eq(calls.val, 1)
-  assert_true(saw_cancelled.val)
+  assert_eq(calls, 1)
+  assert_true(saw_cancelled)
   source.dispose()
 }

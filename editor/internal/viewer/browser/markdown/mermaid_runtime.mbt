@@ -158,16 +158,16 @@ fn MermaidRenderRequest::commit(
   result : MermaidRenderResult,
 ) -> Unit {
   guard self.is_current() else { return }
-  let committed = Ref(false)
+  let mut committed = false
   with_mermaid_render_svg(result, svg => {
     if self.is_current() {
       self.diagram.wrapper.set_inner_html(svg)
       self.diagram.wrapper.set_attribute("data-mermaid-state", "rendered")
-      committed.val = true
+      committed = true
     }
   })
   |> ignore
-  guard committed.val else { return }
+  guard committed else { return }
   try_bind_mermaid_result(result, self.diagram.wrapper)
   if self.is_current() {
     match self.lifetime.on_size_changed {

@@ -232,10 +232,10 @@ pub fn MouseHandler::MouseHandler(
   // PointerEvent.detail is always zero, so it cannot drive double/triple
   // click semantics. Capture only its id and reuse it in the following
   // mousedown, exactly like MouseHandler's EditorPointerEventFactory seam.
-  let capture_pointer_id = Ref(0)
+  let mut capture_pointer_id = 0
   handler.listeners.push(
     mouse_events.on_pointer_down(view_helper.view_dom_node, (_event, pointer_id) => {
-      capture_pointer_id.val = pointer_id
+      capture_pointer_id = pointer_id
     }),
   )
   // The `pointerup` listener registered by `GlobalEditorPointerMoveMonitor`
@@ -252,7 +252,7 @@ pub fn MouseHandler::MouseHandler(
   )
   handler.listeners.push(
     mouse_events.on_mouse_down(view_helper.view_dom_node, e => {
-      handler.on_mouse_down(e, capture_pointer_id.val)
+      handler.on_mouse_down(e, capture_pointer_id)
     }),
   )
   handler.install_touch_scroll_gesture()

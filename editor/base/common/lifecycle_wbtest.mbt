@@ -1,26 +1,26 @@
 ///|
 test "disposable is idempotent" {
-  let count = Ref(0)
-  let disposable = Disposable::from(() => count.val += 1)
+  let mut count = 0
+  let disposable = Disposable::from(() => count += 1)
   disposable.dispose()
   disposable.dispose()
-  assert_eq(count.val, 1)
+  assert_eq(count, 1)
 }
 
 ///|
 test "emitter listener disposable removes only that listener" {
   let emitter : Emitter[String] = Emitter()
-  let first = Ref("")
-  let second = Ref("")
-  let first_subscription = emitter.event(value => first.val += value)
-  let second_subscription = emitter.event(value => second.val += value)
+  let mut first = ""
+  let mut second = ""
+  let first_subscription = emitter.event(value => first += value)
+  let second_subscription = emitter.event(value => second += value)
   emitter.fire("a")
   first_subscription.dispose()
   emitter.fire("b")
   second_subscription.dispose()
   emitter.fire("c")
-  assert_eq(first.val, "a")
-  assert_eq(second.val, "ab")
+  assert_eq(first, "a")
+  assert_eq(second, "ab")
 }
 
 ///|
@@ -69,12 +69,12 @@ test "microtask emitter default schedule flushes inline" {
 ///|
 test "emitter dispose stops active and later listeners" {
   let emitter : Emitter[String] = Emitter()
-  let seen = Ref("")
-  emitter.event(value => seen.val += value).dispose()
-  emitter.event(value => seen.val += value) |> ignore
+  let mut seen = ""
+  emitter.event(value => seen += value).dispose()
+  emitter.event(value => seen += value) |> ignore
   emitter.fire("a")
   emitter.dispose()
-  emitter.event(value => seen.val += value) |> ignore
+  emitter.event(value => seen += value) |> ignore
   emitter.fire("b")
-  assert_eq(seen.val, "a")
+  assert_eq(seen, "a")
 }

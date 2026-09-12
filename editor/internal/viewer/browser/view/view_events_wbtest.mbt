@@ -78,12 +78,12 @@ test "consumed payloads retain independent flags and array identity" {
 test "dispatcher gives every handler a whole batch before reentrant FIFO batch" {
   let deliveries : Array[String] = []
   let holder : Ref[ViewEventDispatcher?] = { val: None, }
-  let did_reenter = Ref(false)
+  let mut did_reenter = false
   let dispatcher = ViewEventDispatcher::ViewEventDispatcher(events => {
     let batch = view_event_test_batch_name(events)
     deliveries.push("h1:\{batch}")
-    if !did_reenter.val {
-      did_reenter.val = true
+    if !did_reenter {
+      did_reenter = true
       match holder.val {
         Some(dispatcher) =>
           emit_dispatcher_test_batch(dispatcher, [
@@ -834,15 +834,15 @@ test "ContentWidgets handlers refresh layout and reproject every mapping event" 
   install_view_lifecycle_test_browser()
   let view = View::View()
   let widgets = view.content_widgets
-  let layout_reads = Ref(0)
-  let projections = Ref(0)
+  let mut layout_reads = 0
+  let mut projections = 0
   widgets.install_live_view_context(
     () => {
-      layout_reads.val += 1
+      layout_reads += 1
       (14.0, 420.0)
     },
     position => {
-      projections.val += 1
+      projections += 1
       Some(position)
     },
   )
@@ -851,8 +851,8 @@ test "ContentWidgets handlers refresh layout and reproject every mapping event" 
   }
   widgets.add_widget(widget.content_widget_handle())
   widgets.set_widget_position(widget.content_widget_handle())
-  assert_eq(layout_reads.val, 1)
-  assert_eq(projections.val, 1)
+  assert_eq(layout_reads, 1)
+  assert_eq(projections, 1)
 
   // Outer Configuration always invalidates. Only its exact LayoutInfo bit is
   // forwarded to the retained widgets' cache-refresh branch.
@@ -864,7 +864,7 @@ test "ContentWidgets handlers refresh layout and reproject every mapping event" 
       ),
     ),
   )
-  assert_eq(layout_reads.val, 1)
+  assert_eq(layout_reads, 1)
   assert_true(
     content_widgets_on_view_event(
       widgets,
@@ -873,11 +873,11 @@ test "ContentWidgets handlers refresh layout and reproject every mapping event" 
       ),
     ),
   )
-  assert_eq(layout_reads.val, 2)
+  assert_eq(layout_reads, 2)
 
-  projections.val = 0
+  projections = 0
   assert_true(content_widgets_on_view_event(widgets, ViewLineMappingChanged))
-  assert_eq(projections.val, 1)
+  assert_eq(projections, 1)
   view.dispose()
   restore_view_lifecycle_test_browser()
 }
@@ -1354,9 +1354,9 @@ test "View renders text before prepare and completes all prepares before writes"
   view.view_lines.should_render = true
   view.view_zones.force_should_render()
   view.view_cursors.should_render = true
-  let cursor_prepare_seen = Ref(false)
-  let text_was_complete = Ref(false)
-  let ordinary_write_was_pending = Ref(false)
+  let mut cursor_prepare_seen = false
+  let mut text_was_complete = false
+  let mut ordinary_write_was_pending = false
   let view_context : ViewContext = {
     measure_line_selection: (_line, _start, _end) => [],
     measure_line_decorations: (_line, _start, _end) => [],
@@ -1364,12 +1364,12 @@ test "View renders text before prepare and completes all prepares before writes"
       // Cursor prepare follows ViewZones prepare in the ordinary-part
       // order. Text completion is already visible, but no ordinary render
       // may have written its DOM yet.
-      text_was_complete.val = !view.view_lines.should_render
-      ordinary_write_was_pending.val = view_event_test_style_top(
+      text_was_complete = !view.view_lines.should_render
+      ordinary_write_was_pending = view_event_test_style_top(
           view.view_zones.margin_dom_node(),
         ) ==
         ""
-      cursor_prepare_seen.val = true
+      cursor_prepare_seen = true
       0.0
     },
     model_position_to_view_position: position => position,
@@ -1393,9 +1393,9 @@ test "View renders text before prepare and completes all prepares before writes"
     show_deprecated: true,
   }
   view.render(view_context, input)
-  assert_true(cursor_prepare_seen.val)
-  assert_true(text_was_complete.val)
-  assert_true(ordinary_write_was_pending.val)
+  assert_true(cursor_prepare_seen)
+  assert_true(text_was_complete)
+  assert_true(ordinary_write_was_pending)
   assert_true(
     view_event_test_style_top(view.view_zones.margin_dom_node()) != "",
   )
