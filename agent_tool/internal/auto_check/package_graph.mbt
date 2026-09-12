@@ -275,6 +275,8 @@ pub fn PackageGraph::depends_on(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend PackageGraph with Debug::{to_repr}
 
 ///|

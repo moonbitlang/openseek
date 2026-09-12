@@ -39,4 +39,6 @@ fn offset(arguments : Json) -> Int? raise {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend JobOutputInput with Debug::{to_repr}

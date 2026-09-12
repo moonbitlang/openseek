@@ -26,7 +26,6 @@ pub enum AgentControl {
   Abort(String)
   WaitJobs(Array[String])
 } derive(@debug.Debug)
-pub fn AgentControl::to_repr(Self) -> @debug.Repr
 
 pub struct AgentToolCall {
   name : String
@@ -45,15 +44,11 @@ pub struct AgentToolDefinition {
 pub fn AgentToolDefinition::AgentToolDefinition(name~ : String, description~ : String, schema~ : JsonSchema, execute~ : ToolExecutor, control? : Bool, concurrent_safe? : Bool) -> Self
 pub fn AgentToolDefinition::is_concurrent_safe(Self) -> Bool
 pub fn AgentToolDefinition::is_control(Self) -> Bool
-pub fn AgentToolDefinition::to_repr(Self) -> @debug.Repr
 
 pub enum FileState {
   Created
   Modified
 } derive(Eq, @debug.Debug)
-pub fn FileState::equal(Self, Self) -> Bool
-pub fn FileState::not_equal(Self, Self) -> Bool
-pub fn FileState::to_repr(Self) -> @debug.Repr
 
 type FileStateMap
 pub fn FileStateMap::FileStateMap() -> Self
@@ -65,14 +60,12 @@ pub fn FileStateMap::record_edited(Self, String, String, String) -> Unit
 pub fn FileStateMap::record_modified(Self, String, String) -> Unit
 
 pub(all) struct JsonSchema(Json) derive(@debug.Debug)
-pub fn JsonSchema::to_repr(Self) -> @debug.Repr
 
 pub enum ToolAction {
   Respond(ToolOutput)
   Control(AgentControl)
 } derive(@debug.Debug)
 pub fn ToolAction::finish(String) -> Self
-pub fn ToolAction::to_repr(Self) -> @debug.Repr
 pub fn ToolAction::wait_jobs(Array[String]) -> Self
 
 pub(all) enum ToolExecutor {
@@ -85,7 +78,6 @@ pub struct ToolOutput {
   is_error : Bool
   brief : String?
 } derive(@debug.Debug)
-pub fn ToolOutput::to_repr(Self) -> @debug.Repr
 
 type Tools
 pub fn Tools::Tools(Array[AgentToolDefinition], background_jobs? : @bgjobs.BgJobRuntime) -> Self raise

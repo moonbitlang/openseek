@@ -9,15 +9,23 @@ struct PatternRepairReport {
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend PatternRepairReport with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend PatternRepairReport with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend PatternRepairReport with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend PatternRepairReport with FromJson::{from_json}
 
 ///|

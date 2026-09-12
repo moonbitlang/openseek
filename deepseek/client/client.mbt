@@ -391,4 +391,6 @@ async fn Client::chat_stream_attempt(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Client with Debug::{to_repr}

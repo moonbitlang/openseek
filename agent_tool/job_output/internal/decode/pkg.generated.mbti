@@ -15,7 +15,6 @@ pub struct JobOutputInput {
   job_id : String
   offset : Int?
 } derive(@debug.Debug)
-pub fn JobOutputInput::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

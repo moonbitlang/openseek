@@ -320,7 +320,7 @@ async fn dispatch_kind(
         append_item?,
         scratch_dir~,
       )
-      report.map(report => report.to_json())
+      report.map(report => Json(report))
     }
     "review" => {
       guard input is { "goal": String(goal), .. } && !goal.is_blank() else {
@@ -356,7 +356,7 @@ async fn dispatch_kind(
         append_item?,
         scratch_dir~,
       )
-      report.map(report => report.to_json())
+      report.map(report => Json(report))
     }
     "worker" => {
       // Input first, key second: a malformed input line reports its exact
@@ -387,7 +387,7 @@ async fn dispatch_kind(
           session_id?,
           append_item?,
         ) {
-        Ok(report) => report.map(report => report.to_json())
+        Ok(report) => report.map(report => Json(report))
         Err(reason) => {
           @emit.emit(CommandError(error="subrun worker: \{reason}"))
           None
@@ -425,7 +425,7 @@ async fn dispatch_kind(
         retry_backoff_ms?,
         workspace_root~,
       )
-      report.map(report => report.to_json())
+      report.map(report => Json(report))
     }
     "echo" => {
       // Modelless probe: two canned events plus the input echoed back —

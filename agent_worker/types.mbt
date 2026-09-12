@@ -141,4 +141,6 @@ pub extend WorkerReport with FromJson::{from_json}
 pub extend WorkerReport with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend WorkerReport with ToJson::{to_json}

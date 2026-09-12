@@ -214,16 +214,26 @@ pub impl FromJson for Session with fn from_json(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Session with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Session with ToJson::{to_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionId with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionItem with FromJson::{from_json}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend TurnTerminal with FromJson::{from_json}

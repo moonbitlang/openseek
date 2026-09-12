@@ -834,4 +834,6 @@ async test "a requested stop is not blamed on the reaper" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend BgJobStatus with Eq::{equal, not_equal}

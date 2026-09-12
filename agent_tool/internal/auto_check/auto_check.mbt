@@ -342,6 +342,8 @@ test "tally keeps a diagnostic without a path as an unlocated site" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend CheckErrors with Debug::{to_repr}
 
 ///|
@@ -363,7 +365,11 @@ test "identity prefers path:loc#code and falls back to the rendered line" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ErrorSite with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ErrorSite with Eq::{equal, not_equal}

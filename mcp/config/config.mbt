@@ -126,7 +126,11 @@ fn decode_string_map(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend McpServer with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend McpServer with Eq::{equal, not_equal}

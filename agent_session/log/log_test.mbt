@@ -164,7 +164,7 @@ test "parse lifts the header record from the first line" {
     id: "demo",
     system_prompt: "You are a helpful agent.",
   }
-  let text = "\{header.to_json().stringify()}\n\{events_jsonl(sample_session())}"
+  let text = "\{Json(header).stringify()}\n\{events_jsonl(sample_session())}"
   let parsed = @log.parse_events(text)
   debug_inspect(
     parsed.header,
@@ -176,7 +176,7 @@ test "parse lifts the header record from the first line" {
   assert_eq(parsed.errors.length(), 0)
   // A header record is only recognized on the first content line; later
   // header-shaped lines are ordinary bad lines.
-  let trailing = "\{events_jsonl(sample_session())}\{header.to_json().stringify()}\n"
+  let trailing = "\{events_jsonl(sample_session())}\{Json(header).stringify()}\n"
   let reparsed = @log.parse_events(trailing)
   debug_inspect(reparsed.header, content="None")
   assert_eq(reparsed.events.length(), 5)

@@ -66,7 +66,11 @@ pub fn ToolCall::ToolCall(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ToolCall with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ToolDefinition with Debug::{to_repr}

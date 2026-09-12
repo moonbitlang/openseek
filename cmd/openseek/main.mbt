@@ -436,7 +436,7 @@ async fn sessions_list(matches : @argparse.Matches) -> Unit {
 async fn sessions_show(matches : @argparse.Matches) -> Unit {
   let workspace_root = prepare_workspace_root(matches, log_created=false)
   let store = @store.SessionStore(session_root(matches, workspace_root~))
-  println(store.load(sessions_target_id(matches)).to_json().stringify())
+  println(ToJson::to_json(store.load(sessions_target_id(matches))).stringify())
 }
 
 ///|

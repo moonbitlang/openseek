@@ -259,7 +259,11 @@ test "distinct path spellings are distinct keys (a safe under-approximation)" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend FileState with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend FileState with Eq::{equal, not_equal}
