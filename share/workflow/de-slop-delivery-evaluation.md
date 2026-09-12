@@ -108,5 +108,36 @@ not turn the first model attempt into an autonomous success.
 three added lines and five removed lines. The PR was read back to verify its
 head SHA, base, open/non-draft state and changed-file list against the tested
 commit. At the initial verification, the seven build/test/E2E jobs were pending;
-GitGuardian had passed. The PR has not been merged. A third-party review status
+GitGuardian had passed. The PR was unmerged at that verification. A third-party review status
 marked success while explicitly skipping review, so it is not review evidence.
+
+## PR-only continuation
+
+The next iteration makes the end-to-end calling task's final response only a
+verified PR link. Test details and CI state belong in the PR body; discovery
+and rejected candidates stay in local artifacts. There is no user handoff
+between the audit, edit, validation, review and publication phases.
+
+A first core attempt exposed a missing input: passing just a filename lost the
+specific candidate supplied by the user, and the scouts explored unrelated
+changes. That run was stopped and its own partial edit preserved then restored.
+`--focus TEXT` now carries one hypothesis to both scouts, with explicit-path,
+nonblank and length checks. All **48 de-slop fixture modes** pass, including
+candidate forwarding to both phases and invalid focus arguments.
+
+The tool vocabulary now admits `moon bundle` (required by core's contribution
+guide) and the named `just check`, `test`, `build`, `editor-test`, and
+`editor-test-browser` recipes. These execute the actual repository gates;
+individual MoonBit commands are not substituted for integration steps. The
+normal argument-prefix policy is retained. Tests cover the admitted vocabulary,
+its rendered tool description, actual `moon bundle --help` execution and
+continued refusal of unlisted command forms.
+
+The fresh core run used `deepseek-v4-flash` and an isolated branch based on
+`e6fdab5ba198349b80049cc0766ac863f25058c0`. With `--focus`, both scouts reviewed
+only the `symmetric_difference` first-phase delegation to `difference`. The
+calling agent observed successful audit completion before editing. Existing
+hashset tests passed 77/77 on all four targets before and after, and in release
+mode afterward. Full post-edit tests passed 7609 (wasm), 7636 (wasm-gc), 7569
+(JS), and 7524 (native); all-target deny-warning checks and `moon bundle --all`
+also passed. No tests or public interfaces changed.
