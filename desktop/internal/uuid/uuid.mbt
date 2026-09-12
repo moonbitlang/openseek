@@ -5,23 +5,8 @@
 /// reports that failure.
 pub fn mint() -> String? {
   guard @env.rand(16) is Some(bytes) else { return None }
-  let text = StringBuilder()
-  for index, byte in bytes {
-    if index == 4 || index == 6 || index == 8 || index == 10 {
-      text.write_char('-')
-    }
-    let raw = byte.to_int()
-    let value = if index == 6 {
-      (raw & 0x0f) | 0x40
-    } else if index == 8 {
-      (raw & 0x3f) | 0x80
-    } else {
-      raw
-    }
-    if value < 0x10 {
-      text.write_char('0')
-    }
-    text.write_string(value.to_string(radix=16))
-  }
-  Some(text.to_string())
+  // env.rand(16) supplies exactly 16 bytes; from_bytes only rejects other
+  // lengths. Entropy unavailability is handled above, before this invariant.
+  let id = try! @x_uuid.from_bytes(bytes)
+  Some(id.as_version(V4).to_string())
 }
