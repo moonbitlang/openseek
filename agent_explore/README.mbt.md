@@ -9,7 +9,7 @@ and runs the kind in-process on `@agent_kind.execute_kind`). Who launches it:
 - a parent agent's `mbtx` snippet running a `moonbitlang/workflow` workflow
   with `subrun: true` — `wf.agent(prompt=..., kind="explore")` is one scout,
   and the library sends the child `{"query": prompt, "hints"?: ...}` (the
-  `agent_workflow` adapter spawns and reaps it);
+  `moonbitlang/workflow/hosted` runner spawns and reaps it);
 - a standalone workflow script, or anything else that speaks the subrun
   child contract with the same input line.
 

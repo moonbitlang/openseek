@@ -8,7 +8,7 @@
 // `subrun worker` plus an `integrate` child mode) needs exactly these, and
 // `lifecycle_test.mbt` exercises them end to end.
 //
-// `git_require`: test seam — agent_workflow's worker tests drive real git
+// `git_require`: test seam — this package's lifecycle tests drive real git
 // through it to set up and inspect repositories.
 
 ///|

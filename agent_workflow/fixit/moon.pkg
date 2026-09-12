@@ -1,9 +1,0 @@
-import {
-  "bobzhang/openseek/agent_workflow",
-  "moonbitlang/workflow",
-  "moonbitlang/async",
-}
-
-supported_targets = "+wasm+native"
-
-pkgtype(kind: "executable")

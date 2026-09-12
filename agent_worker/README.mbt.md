@@ -8,8 +8,10 @@ confined toolset (WriteScope'd file tools sharing one FileStateMap, the
 worker-sandboxed shell, worker-rooted `mbtx`, and the `submit_result`
 capture tool), and runs the slice to a bounded `WorkerReport`. The parent
 side — worktree provisioning, launch, scope validation, commit, and
-integration — is the worker controller's job — `agent_workflow`'s worker runner
-(design history: `docs/plans/subtask-worker-subagents.md`).
+integration — requires a host-side worker controller. The former workflow
+adapter was removed because it had no product caller. The worktree lifecycle
+primitives remain in `agent_subtask`, but the bundled hosted workflows do not
+provision worker slices (design history: `docs/plans/subtask-worker-subagents.md`).
 
 The report is advisory by design: the controller validates the worker's
 actual changed paths and diffs at the git level; `status`/`summary`/
