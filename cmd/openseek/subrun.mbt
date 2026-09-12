@@ -31,16 +31,15 @@ async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
   with_jsonl_stdout(() => {
     let workspace_root = prepare_workspace_root(matches, log_created=false)
     let (model, thinking, api_url) = agent_settings(matches)
-    let kind = match matches {
-      { values: { "kind": [kind, ..], .. }, .. } => "\{kind}"
-      _ => fail("missing parsed argument: kind")
+    guard matches is { values: { "kind": [kind, ..], .. }, .. } else {
+      fail("missing parsed argument: kind")
     }
     // One input line; the pipe stays open afterwards as the cancel channel.
     guard @stdio.stdin.read_until("\n") is Some(line) else {
       // EOF before input: the parent gave up before we started.
       return
     }
-    let parsed = @json.parse(line.trim(chars="\r\n")) catch {
+    let parsed = @json.parse(line.trim()) catch {
       _ => {
         @emit.emit(CommandError(error="subrun input is not JSON"))
         return
@@ -435,13 +434,6 @@ async fn self_executable() -> String {
   let argv0 = match @env.args() {
     [first, ..] => first
     _ => "openseek"
-  }
-  // Under `moon run` on the tcc debug path argv0 is the generated .c
-  // SOURCE, not an executable: spawning it would fail every subrun launch.
-  // Fall back to PATH resolution — the same case the terminal UI handles for
-  // its engine spawn.
-  if argv0.has_suffix(".c") {
-    return "openseek"
   }
   if argv0.contains("/") || argv0.contains("\\") {
     @fs.realpath(argv0) catch {
