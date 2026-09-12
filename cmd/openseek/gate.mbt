@@ -85,12 +85,21 @@ fn build_goal_met_gate(
   child_session? : @agent_subrun.ChildSession,
 ) -> async (String, @agent_session.GoalBaseline?) -> String? {
   (goal, baseline) => {
-    let args = subrun_args(
+    // The `subrun review` child argv, shaped like every sub-run spawn: the
+    // command and its kind, the inherited model and step ceiling, plus
+    // `--api-url` only when one is configured (absent, the child falls back
+    // to its own default endpoint).
+    let args = [
+      "subrun",
       "review",
-      model~,
-      max_steps=@agent_review.default_audit_max_steps,
-      api_url~,
-    )
+      "--model",
+      "\{model}",
+      "--max-steps",
+      "\{@agent_review.default_audit_max_steps}",
+      ..if api_url is Some(url) {
+        ["--api-url", url]
+      },
+    ]
     let input = review_subrun_input(goal, baseline)
     let result = @agent_subrun.run_subrun(
       command=self_exe,
