@@ -141,3 +141,20 @@ hashset tests passed 77/77 on all four targets before and after, and in release
 mode afterward. Full post-edit tests passed 7609 (wasm), 7636 (wasm-gc), 7569
 (JS), and 7524 (native); all-target deny-warning checks and `moon bundle --all`
 also passed. No tests or public interfaces changed.
+
+The calling agent independently reviewed the final diff (zero blockers), then
+committed, pushed and created [core PR #4233](https://github.com/moonbitlang/core/pull/4233)
+at `103722069386e7d86dee885ed52aba9c22c70634`. Readback verified `main` as the
+base, the tested head SHA, and exactly `hashset/hashset.mbt` (+1/−2). The outer
+host prepared the isolated worktree and observed the run; it did not perform
+this run's edits, tests, review, commit, push or PR creation.
+
+The run also exposed two avoidable delays: the reviewer repeated full tests,
+and the caller started an eight-minute bounded CI polling loop after publishing.
+The recipe now explicitly gives the reviewer existing validation results and
+asks for source/diff inspection; CI is a single snapshot, with pending status
+recorded in the PR body and no delay before returning its link. Those prompt
+refinements were made after the running phases had already started; the
+publication was verified, but they are not retroactively counted as obeyed by
+that run. Source/gate results and the PR receipt are the delivery evidence;
+model prompts alone do not guarantee compliance on future runs.

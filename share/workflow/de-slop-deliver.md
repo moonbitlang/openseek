@@ -84,7 +84,11 @@ required gate do not establish that gate passed.
    test-only override rather than changing snapshots to match the launcher.
 7. Review the **actual final diff**, not the original proposal. Use the bundled
    `review.mbtx` with the recorded base SHA and a focused behavior-preservation
-   criterion; resolve blockers and material inspection gaps before publication.
+   criterion and the recorded gate results. Explicitly ask for source/diff
+   inspection without rerunning build, test or benchmark commands: the caller
+   already owns validation. If review identifies a concrete uncovered risk,
+   have the caller run the smallest additional check once. Resolve blockers
+   and material inspection gaps before publication.
    Read the findings and limits even if the script exits zero. Recheck every
    changed file, public interface and executed test command yourself. Do not
    expand the scope with unrelated follow-up suggestions from this review.
@@ -104,8 +108,11 @@ required gate do not establish that gate passed.
    auto-merge.
 9. Read the PR back: verify its repository/base, changed-file list and remote
    head SHA match the tested commit. If the head changed, previous validation
-   no longer establishes the published revision. Inspect CI with `gh pr checks`
-   or `@builtin/ci-watch.mbtx --once`; pending means pending, not green. Address
+   no longer establishes the published revision. Take **one** CI snapshot with
+   `gh pr checks` or `@builtin/ci-watch.mbtx --once`. Do not write a polling loop
+   or wait for CI to settle unless the user explicitly requested that. Pending
+   CI does not delay returning the verified PR link. Pending means pending,
+   not green. Address
    failures introduced by the patch. Put the exact simplification, tests and
    observed CI state in the PR body; the final response contains only its link.
    A published draft with an unresolved blocker is partial delivery, not a
