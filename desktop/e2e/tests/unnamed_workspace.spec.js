@@ -24,6 +24,8 @@ test('Chats creates directly without a picker and restores titled chats outside 
   await app.goto();
   const create = chatsHeader(page).getByRole('button', { name: 'New chat', exact: true });
   await expect(create).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Chats', exact: true })).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.section-disclosure').first()).toHaveText('Chats');
   app.rpcDelays.set('fs.create_unnamed_workspace', 300);
   await create.click();
   await expect(chatsHeader(page).getByRole('button', { name: 'Creating chat…' })).toBeDisabled();
@@ -47,6 +49,8 @@ test('Chats creates directly without a picker and restores titled chats outside 
   app.liveSessions = [{ id: start.params.session, title, updated_at_ms: 1 }];
   app.sessionGroups = sessions => ({ groups: [{ workspace, name: 'Unnamed workspace', session_root: `${workspace}/.openseek`, sessions, error: '' }] });
   await page.reload();
+  const chats = page.getByRole('button', { name: 'Chats', exact: true });
+  if (await chats.getAttribute('aria-expanded') === 'false') await chats.click();
   await expectInChats(page.locator('.conversation-row').filter({ hasText: title }));
   await expect(page.locator('.workspace-row')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('chats-sidebar.png') });
@@ -78,5 +82,27 @@ test('a user project named Unnamed workspace remains in Projects', async ({ page
   await app.goto();
   await expect(page.getByRole('button', { name: 'Unnamed workspace', exact: true })).toBeVisible();
   await expect(chatsHeader(page)).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Chats shows the latest three conversations and reveals older chats with Show more', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.workspaces = ['/workspace', `${root}/history`];
+  app.liveSessions = Array.from({ length: 5 }, (_, index) => ({ id: `chat-${index}`, title: `Chat number ${index}`, updated_at_ms: 100 - index }));
+  app.sessionGroups = sessions => ({ groups: [{
+    workspace: `${root}/history`, name: 'Unnamed workspace', session_root: `${root}/history/.openseek`, error: '',
+    sessions,
+  }] });
+  await app.install();
+  await app.goto();
+  await expect(page.locator('.section-disclosure').first()).toHaveText('Chats');
+  await expect(page.getByRole('button', { name: 'Chats', exact: true })).toHaveAttribute('aria-expanded', 'true');
+  const rows = page.locator('.conversation-row').filter({ hasText: /Chat number/ });
+  await expect(rows).toHaveCount(3);
+  await expect(rows).toHaveText(['Chat number 0', 'Chat number 1', 'Chat number 2']);
+  await page.screenshot({ path: test.info().outputPath('chats-three-preview.png') });
+  await page.getByTitle('Show more in Chats', { exact: true }).click();
+  await expect(rows).toHaveCount(5);
+  await expect(page.getByTitle('Show more in Chats', { exact: true })).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

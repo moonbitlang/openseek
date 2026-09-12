@@ -71,6 +71,7 @@ pub(all) struct Input {
   id : Id
   label : String
   initially_collapsed : Bool
+  preview_limit : Int?
   // The active conversation's session id while this section holds the
   // focused chat; `None` otherwise. Same contract as
   // `@project.Input.activation`.
@@ -95,6 +96,7 @@ pub(all) struct Actions {
 ///|
 priv enum Msg {
   Toggle
+  ShowMore
 }
 
 ///|
@@ -109,6 +111,7 @@ priv enum Fold {
 ///|
 priv struct State {
   fold : Fold
+  expanded : Bool
 } derive(Eq)
 
 ///|
@@ -213,6 +216,7 @@ pub fn component(
     init=(_, input) => {
       (
         {
+          expanded: false,
           fold: if input.initially_collapsed {
             Folded(during=input.activation)
           } else {
@@ -227,9 +231,11 @@ pub fn component(
         // Toggle the fold the user sees: a stored fold currently overridden
         // by an activation reveal must fold on click, not silently flip to
         // open.
+        ShowMore => ({ ..state, expanded: true, }, @cmd.none)
         Toggle =>
           (
             {
+              ..state,
               fold: if state.folded(input) {
                 Open
               } else {
@@ -288,10 +294,38 @@ pub fn component(
       (input.id.key(), @html.div(class~, heading)),
     ]
     if !collapsed {
-      for group in entry_rows {
+      let mut hidden = false
+      for index = 0; index < entry_rows.length(); index = index + 1 {
+        let group = entry_rows[index]
+        let active = match input.entries[index] {
+          Conversation(row) => row.active
+          Project(row) => row.activation is Some(_)
+          Placeholder(_) => false
+        }
+        if !state.expanded &&
+          input.preview_limit is Some(limit) &&
+          index >= limit &&
+          !active {
+          hidden = true
+          continue
+        }
         for row in group {
           rows.push(row)
         }
+      }
+      if hidden {
+        rows.push(
+          (
+            "\{input.id.key()}:more",
+            @html.button(
+              class="project-show-more",
+              type_="button",
+              title="Show more in \{input.label}",
+              on_click=emit(ShowMore),
+              "Show more",
+            ),
+          ),
+        )
       }
     }
     rows
