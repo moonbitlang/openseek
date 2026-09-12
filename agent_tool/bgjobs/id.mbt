@@ -37,31 +37,17 @@ fn mint_job_id(
     Some(last) => if now > last { now } else { last + 1 }
     None => now
   }
-  guard stamp <= max_stamp else {
-    raise JobIdError(
-      "Cannot allocate background job ID: UUID timestamp exhausted",
-    )
-  }
-  let text = StringBuilder()
-  for index in 0..<16 {
-    if index == 4 || index == 6 || index == 8 || index == 10 {
-      text.write_char('-')
-    }
-    let value = if index < 6 {
-      ((stamp >> ((5 - index) * 8)) & 0xffUL).to_int()
-    } else if index == 6 {
-      (bytes[0].to_int() & 0x0f) | 0x70
-    } else if index == 8 {
-      (bytes[2].to_int() & 0x3f) | 0x80
+  let payload = Bytes::makei(16, index => {
+    if index < 6 {
+      (stamp >> ((5 - index) * 8)).to_byte()
     } else {
-      bytes[index - 6].to_int()
+      bytes[index - 6]
     }
-    if value < 0x10 {
-      text.write_char('0')
-    }
-    text.write_string(value.to_string(radix=16))
-  }
-  (text.to_string(), stamp)
+  })
+  // x/uuid owns the UUID representation, version/variant bits and formatting.
+  // Its Version enum names V1–V5; Unknown(7) selects the RFC 9562 v7 bits.
+  let id = @uuid.from_bytes(payload).as_version(Unknown(7)).to_string()
+  (id, stamp)
 }
 
 ///|
