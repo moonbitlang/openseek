@@ -443,6 +443,15 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.agent_compact, async fn(payload) {
       @engine.compact_run(state.manager, payload)
     }),
+    @endpoint.Endpoint::remote(@commands.jobs_list, payload => {
+      @engine.list_jobs(state.manager, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.jobs_read, payload => {
+      @engine.read_job(state.manager, payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.jobs_stop, payload => {
+      @engine.stop_job(state.manager, payload)
+    }),
     @endpoint.Endpoint::remote(@commands.agent_goal, async fn(payload) {
       @engine.goal_run(state.manager, payload)
     }),
