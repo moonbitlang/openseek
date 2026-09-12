@@ -1657,8 +1657,10 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
 /// `moonbitlang/async/shell` tutorial and worked examples; those teach one
 /// role's workflow rather than describing what the tool enforces.
 ///
-/// The spawn list is prose about `spawnable_commands`, kept by hand so the
-/// groupings survive; adding an entry there means editing this text too.
+/// The spawn list is RENDERED from `spawnable_commands` by
+/// `spawn_list_markdown`, not restated here: a command admitted to that table
+/// appears in this description by construction, and the system prompt points
+/// at this description rather than carrying a third copy.
 ///
 /// `background` selects the execution-time contract the caller actually wired:
 /// automatic handoff with a job runtime, or a longer cancelling timeout without
@@ -1757,28 +1759,15 @@ fn description(
     #|with the same sandbox and isolated imports as inline source.
     #|Diagnostics cite `source:LINE:COL` or the supplied filename and line/column.
     #|`target` defaults to wasm, the sandboxed backend.
-    #|
-    #|## Which programs a snippet may start
-    #|
-    #|These, and nothing else:
-    #|
-    #|- `moon` — check, test, build, bench, run, fmt, info, add, remove, update,
-    #|  install, tree, search, clean, new, ide, doc, explain, coverage, cram,
-    #|  package, version, plus `publish --dry-run`. (Not plain `publish`, `login` or `register`.)
-    #|- `proton_cli` — `--version`, `--help`, new, dev, build, package, doctor,
-    #|  cef, and updater. Set `Cmd.cwd` for the project directory; the global
-    #|  `-C`/`--cwd` options before the subcommand are refused.
-    #|- `git` — status, log, diff, show, blame, describe, rev-parse, rev-list,
-    #|  show-ref, for-each-ref, cat-file, check-ignore, merge-base, range-diff,
-    #|  ls-files, ls-tree, ls-remote, shortlog, grep, branch, tag, remote, reflog,
-    #|  add, commit, checkout, switch, restore, reset, revert, rm, init, fetch,
-    #|  push, rebase; plus `submodule update|status`, `worktree list|add|prune`,
-    #|  `stash list|show`. Not `config`. A global option BEFORE the subcommand
-    #|  (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.
-    #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
-    #|- `codex` — review (read-only review of the current branch/diff; not
-    #|  `exec`, `install`, or a bare `codex`).
-    #|- `rg` and `diff`.
+  // Rendered from `spawnable_commands`, the table that also builds the
+  // moonrun policy: the list the model reads and the list moonrun enforces
+  // cannot disagree, because there is only one.
+  let spawn_section =
+    $|## Which programs a snippet may start
+    $|
+    $|These, and nothing else:
+    $|
+    $|\{spawn_list_markdown()}
   let base_tail =
     #|## Isolation and limits
     #|
@@ -1805,6 +1794,8 @@ fn description(
   // would try to evaluate.
   let base =
     $|\{base_head}
+    $|
+    $|\{spawn_section}
     $|
     $|\{refusal_advice}
     $|

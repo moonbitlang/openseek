@@ -17,10 +17,11 @@
 /// A prefix matches whole argument tokens from the front, so `moon` with
 /// `["test"]` allows `moon test --filter x` but not `moon build`.
 ///
-/// The mbtx tool description and the default system prompt
-/// (`prompt/default_prompt.mbt.md`, "Only these programs can be started")
-/// both carry this list in prose. Admitting a command here without adding it
-/// to both costs a turn steps: the model never learns it may use it.
+/// This table is the only place the vocabulary is written. The prose the
+/// model reads is rendered from it by `spawn_list_markdown` into the mbtx
+/// tool description, and the system prompt points at that description rather
+/// than restating it — so admitting a command is this edit and nothing else.
+/// Add the caveats a prefix cannot express to `spawn_notes` below.
 let spawnable_commands : Array[(String, Array[String])] = [
   // The MoonBit toolchain, which is most of what a turn runs. Listed per
   // subcommand rather than as a bare `moon` so the set is reviewable, and so
@@ -217,6 +218,149 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // perimeter.
   ("moonx", []),
 ]
+
+///|
+/// The caveats about the spawn allowlist that no `args_prefix` can express:
+/// which forms are deliberately absent, and which options are refused for
+/// sitting before the subcommand where no prefix reaches them. Keyed by
+/// program; a program named here renders its note after its verbs, and one
+/// absent renders its verbs alone.
+///
+/// Only the caveats live here. The verbs do NOT: `spawn_list_markdown`
+/// derives those from `spawnable_commands` itself, so admitting a command is
+/// one edit to one table and the prose that teaches it cannot fall behind.
+let spawn_notes : Map[String, String] = {
+  "moon": "(Not plain `publish`, `login` or `register`.)",
+  "proton_cli": "Set `Cmd.cwd` for the project directory; the global `-C`/`--cwd` options before the subcommand are refused.",
+  "git": "Not `config`. A global option BEFORE the subcommand (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.",
+  "codex": "(A read-only review of the current branch/diff; not `exec`, `install`, or a bare `codex`.)",
+  "diff": "Structured comparison of two files.",
+  "rg": "Searches a whole tree faster than a snippet can walk it.",
+  "moonx": "Runs other MoonBit binaries in wasm/sandbox mode.",
+}
+
+///|
+/// Render `spawnable_commands` as the Markdown bullet list the model reads in
+/// the `mbtx` tool description.
+///
+/// This function is why that description no longer restates the allowlist by
+/// hand. The three renderings used to be maintained separately — the table
+/// here, the tool description, and the system prompt — and a command admitted
+/// to the table without both prose edits was a command the model never
+/// learned it could use. Two entries had already drifted that way when this
+/// was written: `moon --version`/`--help` (added to the table after a live
+/// run burned three attempts on the refusal) and `moonx` (present in the
+/// prompt, absent from the tool description).
+///
+/// One bullet per program, in first-appearance order. Single-token prefixes
+/// render as a bare verb list; longer ones group under their first token
+/// (`worktree list|add|prune`) after `plus`, since a multi-token prefix is a
+/// narrower grant than the verb alone and reads as one; a program admitted
+/// with an empty prefix renders as taking any arguments.
+fn spawn_list_markdown() -> String {
+  let order : Array[String] = []
+  let by_program : Map[String, Array[Array[String]]] = Map([])
+  for entry in spawnable_commands {
+    let (program, args_prefix) = entry
+    match by_program.get(program) {
+      Some(prefixes) => prefixes.push(args_prefix)
+      None => {
+        order.push(program)
+        by_program[program] = [args_prefix]
+      }
+    }
+  }
+  let lines = StringBuilder()
+  for index, program in order {
+    guard by_program.get(program) is Some(prefixes) else { continue }
+    let singles : Array[String] = []
+    // Multi-token prefixes, grouped under their shared first token in the
+    // order the table lists them: `submodule update` and `submodule status`
+    // become one `submodule update|status` entry rather than two bullets
+    // repeating the verb.
+    let heads : Array[String] = []
+    let tails : Map[String, Array[String]] = Map([])
+    let mut any_arguments = false
+    for args_prefix in prefixes {
+      match args_prefix {
+        [] => any_arguments = true
+        // A bare verb reads as prose; a bare `--flag` does not, so flags are
+        // set as code the way the surrounding text sets every other literal.
+        [single] =>
+          singles.push(
+            if single.has_prefix("-") {
+              "`\{single}`"
+            } else {
+              single
+            },
+          )
+        [head, .. rest] =>
+          match tails.get(head) {
+            Some(seen) => seen.push(rest.join(" "))
+            None => {
+              heads.push(head)
+              tails[head] = [rest.join(" ")]
+            }
+          }
+      }
+    }
+    let parts : Array[String] = []
+    if any_arguments {
+      parts.push("any arguments")
+    }
+    if singles.length() > 0 {
+      parts.push(singles.join(", "))
+    }
+    let grouped : Array[String] = []
+    for head in heads {
+      guard tails.get(head) is Some(rest) else { continue }
+      grouped.push("`\{head} \{rest.join("|")}`")
+    }
+    if grouped.length() > 0 {
+      parts.push("plus \{grouped.join(", ")}")
+    }
+    let note = match spawn_notes.get(program) {
+      Some(text) => " " + text
+      None => ""
+    }
+    if index > 0 {
+      lines.write_string("\n")
+    }
+    lines.write_string(
+      wrap_bullet("- `\{program}` — \{parts.join(", ")}.\{note}"),
+    )
+  }
+  lines.to_string()
+}
+
+///|
+/// Greedy-wrap one rendered bullet to the width the surrounding prose uses,
+/// continuing lines with the two-space indent that keeps them inside the
+/// bullet. Wrapping is cosmetic — the model reads either form — but an
+/// unwrapped generated bullet beside hand-wrapped prose reads as a defect.
+fn wrap_bullet(bullet : String) -> String {
+  let width = 78
+  let wrapped = StringBuilder()
+  let mut column = 0
+  for index, word in bullet.split(" ").collect() {
+    let word = word.to_owned()
+    if index == 0 {
+      wrapped.write_string(word)
+      column = word.length()
+      continue
+    }
+    // `column + 1 + word.length()` is where this word would end on the
+    // current line; past the width it starts the next one instead.
+    if column + 1 + word.length() > width {
+      wrapped.write_string("\n  \{word}")
+      column = 2 + word.length()
+    } else {
+      wrapped.write_string(" \{word}")
+      column = column + 1 + word.length()
+    }
+  }
+  wrapped.to_string()
+}
 
 ///|
 /// Build the `moonrun --policy` document for one snippet run.

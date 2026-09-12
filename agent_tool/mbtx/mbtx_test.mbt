@@ -1015,10 +1015,35 @@ test "a definition without a job runtime describes its hard timeout" {
 }
 
 ///|
-/// The command policy and its model-facing description are maintained
-/// separately, so pin the Proton entry at the public definition boundary too.
+/// Collapse every run of whitespace to one space, so a `contains` check reads
+/// the description's WORDS and not the column its generated bullets happen to
+/// wrap at. Without this, admitting one more command reflows a bullet and
+/// fails an assertion about text that is still there.
+fn flatten_whitespace(text : String) -> String {
+  let flattened = StringBuilder()
+  let mut in_space = false
+  for char in text {
+    if char is (' ' | '\n' | '\t' | '\r') {
+      if !in_space {
+        flattened.write_char(' ')
+        in_space = true
+      }
+    } else {
+      flattened.write_char(char)
+      in_space = false
+    }
+  }
+  flattened.to_string()
+}
+
+///|
+/// The Proton entry is rendered from the command policy rather than written
+/// beside it, so this pins that the render reaches the public definition
+/// boundary carrying both the verbs and the caveat no prefix can express.
 test "the description advertises the Proton CLI command surface" {
-  let description = @mbtx.definition(workspace_root=".").description
+  let description = flatten_whitespace(
+    @mbtx.definition(workspace_root=".").description,
+  )
   assert_true(description.contains("`proton_cli`"))
   assert_true(description.contains("doctor"))
   assert_true(description.contains("cef"))
