@@ -479,7 +479,7 @@
 .user-bubble {
   min-width: 0;
   max-width: 85%;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-subtle);
@@ -566,6 +566,7 @@
   color: var(--color-text-primary);
   font-size: var(--font-size-md);
   line-height: var(--line-height-relaxed);
+  letter-spacing: normal;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -611,6 +612,9 @@
    so the pre-wrap used for plain text would double every newline */
 .msg-content.markdown {
   white-space: normal;
+}
+.msg-content.markdown :is(strong, b) {
+  font-weight: 600;
 }
 .msg-content.markdown > :first-child {
   margin-top: 0;

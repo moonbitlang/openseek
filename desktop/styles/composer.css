@@ -593,7 +593,9 @@
   background: transparent;
   padding: 6px 6px 2px;
   resize: none;
+  font-size: var(--font-size-md);
   line-height: var(--line-height-relaxed);
+  letter-spacing: normal;
 }
 
 .composer-toolbar {
