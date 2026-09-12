@@ -213,7 +213,7 @@ fn to_lower_js(s : String) -> String {
     let lowered = to_lower_code_unit(code)
     if lowered != code {
       if chunk_start < i {
-        sb.write_string(s[chunk_start:i].to_owned())
+        sb.write_view(s[chunk_start:i])
       }
       if lowered.to_char() is Some(ch) {
         sb.write_char(ch)
@@ -224,7 +224,7 @@ fn to_lower_js(s : String) -> String {
     chunk_start
   }
   if chunk_start < len {
-    sb.write_string(s[chunk_start:].to_owned())
+    sb.write_view(s[chunk_start:])
   }
   sb.to_string()
 }
