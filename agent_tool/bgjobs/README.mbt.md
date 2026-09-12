@@ -15,7 +15,7 @@ turn of the session. The registry carries no shell tool family.
 
 ```mermaid
 flowchart LR
-  rib["mbtx (auto-adopt)"] -->|"start()"| job["BgJob (id bg-N)"]
+  rib["mbtx (auto-adopt)"] -->|"start()"| job["BgJob (UUIDv7 id)"]
   timeout["foreground timeout"] -->|"background() + adopt()"| job
   job -->|"snapshot()/read_output_tail()"| out["job_output"]
   job -->|"stop()"| stop["job_stop"]
@@ -83,3 +83,10 @@ they no longer silently return the initial output head.
 Standard durable `run`/`serve` sessions retain job logs below their session's
 `jobs/<runtime-generation>` directory. Compiler/snippet scratch files still
 follow the engine scope. No-session engines label their logs temporary.
+
+Job IDs are opaque, full UUIDv7 strings, unique across runtime restarts. Tools
+must use the exact returned ID, never a shortened UI label. The runtime advances
+a logical millisecond on same-tick allocation or clock rollback, keeping IDs
+ordered within one runtime; 74 secure random bits separate independent runtimes.
+Entropy failure prevents registration. Retained history still includes legacy
+`bg-N` IDs, scoped by generation; the live registry never aliases them to a new job.

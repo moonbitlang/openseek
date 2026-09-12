@@ -8,6 +8,8 @@ or external model credentials are needed.
 
 import json
 import os
+import re
+import uuid
 from pathlib import Path
 import subprocess
 import sys
@@ -29,6 +31,7 @@ async fn main {
         session_id = "job-control-session"
         store_root = Path(directory) / "store"
         retained_path = None
+        job_id = None
         active_snapshot_seen = threading.Event()
         requests = []
         errors = []
@@ -42,6 +45,7 @@ async fn main {
                 pass
 
             def do_POST(self):
+                nonlocal job_id
                 try:
                     if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
                         chunks = []
@@ -87,11 +91,15 @@ async fn main {
                         if job_controls:
                             assert active_snapshot_seen.wait(15), "controller snapshot blocked behind the active model request"
                         assert "moved to the background" in messages, messages
+                        match = re.search(r"moved to the background as job ([0-9a-f-]{36})", messages)
+                        assert match, messages
+                        job_id = match[1]
+                        assert uuid.UUID(job_id).version == 7, job_id
                         self.respond({"content": "Waiting for the test result."})
                         return
                     elif step == 3:
                         assert "Background jobs still need a decision" in messages, messages
-                        name, args = "job_wait", {"job_ids": ["bg-1"]}
+                        name, args = "job_wait", {"job_ids": [job_id]}
                     elif step == 4 and serve:
                         assert "user_input" in messages, messages
                         assert "[goal cleared]" in messages, messages
@@ -99,8 +107,8 @@ async fn main {
                         name, args = "finish", {"answer": "checked the background result"}
                     elif step == 4:
                         assert "job_completed" in messages, messages
-                        assert "background job bg-1 finished" in messages, messages
-                        name, args = "job_output", {"job_id": "bg-1"}
+                        assert f"background job {job_id} finished" in messages, messages
+                        name, args = "job_output", {"job_id": job_id}
                     elif step == 5:
                         assert "BACKGROUND-RESULT" in messages, messages
                         name, args = "finish", {"answer": "checked the background result"}
@@ -192,7 +200,7 @@ async fn main {
                                     active_snapshot_seen.set()
                                 elif event["request_id"] == "stale-stop":
                                     assert event["outcome"] == "wrong_runtime", event
-                                    send({"command": "job_stop", "request_id": "valid-stop", "generation": retained_path.parent.name, "job_id": "bg-1"})
+                                    send({"command": "job_stop", "request_id": "valid-stop", "generation": retained_path.parent.name, "job_id": job_id})
                                 elif event["request_id"] == "valid-stop":
                                     assert event["outcome"] == "stopped", event
                                     send({"command": "jobs_snapshot", "request_id": "final-snapshot"})
@@ -221,7 +229,7 @@ async fn main {
                 assert retained_path.read_text() == "PERSISTED-PREFIX 你好🙂\n"
                 changes = [event for event in events if event.get("event") == "job_changed"]
                 assert [event["kind"] for event in changes] == ["started", "updated", "finished"], changes
-                saved = json.loads((retained_path.parent / "bg-1.json").read_text())
+                saved = json.loads((retained_path.parent / f"{job_id}.json").read_text())
                 assert saved["state"] == {"kind": "stopped", "reason": "user"}, saved
                 restarted = subprocess.run(command, input=json.dumps({"command": "jobs_snapshot", "request_id": "restart"}) + "\n",
                                            env=env, capture_output=True, text=True, timeout=30)
@@ -229,7 +237,7 @@ async fn main {
                 snapshots = [json.loads(line) for line in restarted.stdout.splitlines() if line.startswith("{") and json.loads(line).get("event") == "jobs_snapshot"]
                 assert snapshots and snapshots[0]["jobs"] == [], snapshots
                 assert retained_path.read_text() == "PERSISTED-PREFIX 你好🙂\n"
-                assert json.loads((retained_path.parent / "bg-1.json").read_text()) == saved
+                assert json.loads((retained_path.parent / f"{job_id}.json").read_text()) == saved
                 assert len(list(retained_path.parent.parent.iterdir())) == 1, "idle restart created unnecessary artifact directories"
                 print("PASS: durable serve jobs materialize before announcement, reject stale controls, stop while idle, and survive restart")
             if read_workflow:
@@ -239,6 +247,7 @@ async fn main {
             print("PASS: real CLI advertises the read workflow, omits read, and returns ranged batch output" if read_workflow else
                   "PASS: serve goal clear wakes job_wait while the job is still running" if serve else
                   "PASS: real CLI preserves background work through wait, notice, read, and finish")
+            return job_id
         finally:
             server.shutdown()
             server.server_close()
@@ -247,7 +256,8 @@ async fn main {
 
 if __name__ == "__main__":
     executable = str(Path(sys.argv[1]).resolve())
-    run_case(executable)
-    run_case(executable, serve=True)
-    run_case(executable, serve=True, job_controls=True)
+    ids = [run_case(executable), run_case(executable, serve=True),
+           run_case(executable, serve=True, job_controls=True)]
+    assert None not in ids and len(set(ids)) == len(ids), ids
+    print("PASS: independent CLI processes allocate distinct full UUID job IDs")
     run_case(executable, read_workflow=True)

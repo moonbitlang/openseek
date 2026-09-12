@@ -6,7 +6,7 @@ five-second foreground grace period and moves to the background automatically.
 
 Reads return the currently available output and status without waiting for the
 job to finish. If the result is needed and there is no other work, call
-`job_wait({"job_ids":["bg-3"]})` alone first, then read with `job_output`.
+`job_wait({"job_ids":["0194e3c1-2345-7abc-8def-0123456789ab"]})` alone first, then read with `job_output`.
 Completion notices still use the runtime's existing publication path.
 
 `wait_ms` has been removed. Calls that still supply it receive an actionable
@@ -60,3 +60,6 @@ The system footer includes the actual `output_file` path and
 `output_persistent` when file retention is configured. External readers can
 tail this file without polling the model. Read failures are tool errors, and
 capture failures explicitly identify incomplete logs.
+
+Use the full opaque job ID returned by `mbtx`; the Jobs panel’s short label is
+for display only. “Copy job ID” copies the full UUID.

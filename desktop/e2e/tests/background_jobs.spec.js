@@ -14,6 +14,10 @@ async function mount(page) {
 test('real background output follows, pauses, resumes, copies its file and stops', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await mount(page);
+  await expect(page.locator('.jobs-id').first()).toHaveText('bg-…456789ab');
+  await expect(page.locator('.jobs-id').first()).toHaveAttribute('title', app.liveId);
+  await page.getByRole('button', { name: 'Copy job ID', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(app.liveId);
   const output = page.getByRole('region', { name: 'Job output' });
   app.write('stdout without newline'); app.write('\nstderr captured\n', true);
   await expect(output).toContainText('stdout without newline');
@@ -46,7 +50,7 @@ test('real background output follows, pauses, resumes, copies its file and stops
   expect(app.child.signalCode).not.toBeNull();
   expect(readFileSync(app.livePath, 'utf8')).toContain('stderr captured');
   const stop = app.requests.find(r => r.method === 'jobs.stop');
-  expect(stop.params).toMatchObject({ scope: { session: 'session-1', workspace: '/workspace' }, generation: 'runtime-new', job_id: 'bg-1' });
+  expect(stop.params).toMatchObject({ scope: { session: 'session-1', workspace: '/workspace' }, generation: 'runtime-new', job_id: app.liveId });
   expect(app.requests.filter(r => r.method === 'jobs.read').every(r => r.params.limit <= 65536)).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
@@ -173,16 +177,41 @@ test('pause resume and reload serialize reads and preserve manual paused refresh
   } finally { release(); }
 });
 
-test('a controllable job without a log still exposes Stop', async ({ page }) => {
+test('a controllable job without a log still exposes Stop and its full ID', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   app = new BackgroundJobsHarness(page);
   app.jobs[0].output_path = null;
   app.jobs[0].job.output_file = null;
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
   await expect(page.getByRole('button', { name: 'Copy path', exact: true })).toHaveCount(0);
   await expect(page.locator('.jobs-output-note')).toHaveText('No retained log file for this job.');
+  await page.getByRole('button', { name: 'Copy job ID', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(app.liveId);
   await expect(page.getByRole('region', { name: 'Job output' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Stop job', exact: true }).click();
   await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
   expect(app.child.signalCode).not.toBeNull();
+  expect(app.pageErrors).toEqual([]);
+});
+
+
+test('UUID suffix collisions expand labels while selection and copying retain full IDs', async ({ page, context }, testInfo) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  app = new BackgroundJobsHarness(page);
+  const otherId = '0194e3c1-2346-7abc-8def-abcd456789ab';
+  const other = app.view('runtime-new', otherId, app.oldPath, { kind: 'exited', code: 0 });
+  other.job.description = 'Same short suffix';
+  app.jobs.push(other);
+  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
+  await expect(page.locator('.jobs-id')).toHaveText(['bg-…0123456789ab', 'bg-1', 'bg-…abcd456789ab']);
+  await page.getByRole('button', { name: /Same short suffix/ }).click();
+  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('old failed job output');
+  await page.getByRole('button', { name: 'Copy job ID', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(otherId);
+  expect(app.requests.some(r => r.method === 'jobs.read' && r.params.target.job_id === otherId)).toBe(true);
+  await page.setViewportSize({ width: 1000, height: 850 });
+  await expect.poll(() => page.locator('.jobs-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Copy job ID', exact: true })).toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath('jobs-uuid-narrow.png'), fullPage: true });
   expect(app.pageErrors).toEqual([]);
 });

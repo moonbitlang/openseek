@@ -1,6 +1,6 @@
 # job_wait
 
-`job_wait({"job_ids":["bg-1","bg-2"]})` waits for any selected job to
+`job_wait({"job_ids":["0194e3c1-2345-7abc-8def-0123456789ab","0194e3c1-2346-7abc-8def-fedcba987654"]})` waits for any selected job to
 finish, or for user steering/command context. It has no timeout and does not
 read logs. Read results with `job_output` after waiting. Call it alone in a tool
 batch; unknown/blank ids and an empty selection are errors. Repeated ids are
@@ -14,3 +14,6 @@ stop the job. This control is not eligible for context-ceiling salvage.
 Plain-text completion with pending jobs prompts a decision. Explicit `finish`
 still completes the work; it is not held hostage by a long-lived background
 process. See [turn_finish.md](../../docs/turn_finish.md).
+
+Use the full opaque job ID returned by `mbtx`; the Jobs panel’s short label is
+for display only. “Copy job ID” copies the full UUID.

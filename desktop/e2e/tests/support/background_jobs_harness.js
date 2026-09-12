@@ -16,7 +16,8 @@ export class BackgroundJobsHarness extends DesktopBrowserHarness {
     this.oldPath = join(this.directory, 'old.out');
     writeFileSync(this.livePath, '');
     writeFileSync(this.oldPath, 'old failed job output\n');
-    this.jobs = [this.view('runtime-new', 'bg-1', this.livePath, { kind: 'running' }),
+    this.liveId = '0194e3c1-2345-7abc-8def-0123456789ab';
+    this.jobs = [this.view('runtime-new', this.liveId, this.livePath, { kind: 'running' }),
       this.view('runtime-old', 'bg-1', this.oldPath, { kind: 'exited', code: 7 })];
     this.child = spawn(process.execPath, ['-e', `
       process.stdout.write('ready 你好🙂\\n');
