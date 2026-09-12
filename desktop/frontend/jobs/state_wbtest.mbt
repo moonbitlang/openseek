@@ -177,6 +177,7 @@ fn reading_fixture() -> State {
     selected: Some(("runtime", "bg-1")),
     reading: true,
     read_serial: 1,
+    reading_state: Some(Running),
     read_budget: 3,
     cursor: Some(0L),
   }
@@ -280,4 +281,182 @@ test "reload queues behind an old read and can refresh a paused view" {
   assert_eq(result.text, "next")
   assert_false(result.follow)
   assert_false(result.reading)
+}
+
+///|
+test "terminal jobs drain remaining pages while paused then stop reading" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let view = fixture_job("bg-1", Exited(0))
+  let state = {
+    ..reading_fixture(),
+    jobs: [{ ..view, job: { ..view.job, output_bytes: 8L, }, }],
+    reading_state: Some(Exited(0)),
+    follow: false,
+  }
+  let (_, next) = update(emit, Read(0, 1, Ok(page_fixture(0L, true))), state)
+  assert_true(next.reading)
+  assert_false(next.follow)
+  let (_, finished) = update(
+    emit,
+    Read(0, next.read_serial, Ok(page_fixture(4L, false))),
+    next,
+  )
+  assert_eq(finished.text, "nextnext")
+  assert_false(finished.reading)
+  assert_true(output_complete(finished, view.job))
+  let (_, polled) = update(emit, Poll, finished)
+  assert_false(polled.reading)
+  assert_true(polled.listing)
+  let (_, reload) = update(emit, Reload, polled)
+  assert_true(reload.reading)
+  assert_true(reload.cursor is None)
+  // A later metadata refresh can expose bytes beyond a previously reached EOF.
+  let (_, grown) = update(emit, Poll, {
+    ..finished,
+    jobs: [{ ..view, job: { ..view.job, output_bytes: 12L, }, }],
+  })
+  assert_true(grown.reading)
+}
+
+///|
+test "an empty terminal log is read once and read failures require reload" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let state = {
+    ..reading_fixture(),
+    jobs: [fixture_job("bg-1", Interrupted)],
+    reading: false,
+    cursor: None,
+    follow: false,
+  }
+  let (_, started) = update(emit, Poll, state)
+  assert_true(started.reading)
+  let (_, failed) = update(
+    emit,
+    Read(0, started.read_serial, Err("unreadable")),
+    started,
+  )
+  let (_, polled) = update(emit, Poll, failed)
+  assert_false(polled.reading)
+  let (_, reload) = update(emit, Reload, polled)
+  let empty = {
+    ..page_fixture(0L, false),
+    text: "",
+    next_offset: 0L,
+    size: 0L,
+  }
+  let (_, finished) = update(
+    emit,
+    Read(0, reload.read_serial, Ok(empty)),
+    reload,
+  )
+  let (_, polled) = update(emit, Poll, finished)
+  assert_false(polled.reading)
+  assert_eq(polled.cursor, Some(0L))
+}
+
+///|
+test "stopping and terminal jobs reject repeat stop even if controllable" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let states : Array[@wire.JobState] = [
+    Stopping,
+    Exited(0),
+    Stopped("user"),
+    Interrupted,
+  ]
+  for status in states {
+    let view = { ..fixture_job("bg-1", status), controllable: true, }
+    let (_, next) = update(emit, Stop, { ..reading_fixture(), jobs: [view], })
+    assert_false(next.stopping)
+  }
+}
+
+///|
+test "initial selection prefers an active job and preserves selected history" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let reply : @protocol.JobsListReply = {
+    jobs: [fixture_job("done", Exited(0)), fixture_job("live", Running)],
+    selected: None,
+    next_offset: None,
+    errors: [],
+  }
+  let (_, initial) = update(emit, Listed(0, 0, Ok(reply)), State::empty())
+  assert_eq(initial.selected, Some(("runtime", "live")))
+  let (_, history) = update(emit, Select("runtime", "done"), initial)
+  let (_, refreshed) = update(emit, Listed(0, 0, Ok(reply)), history)
+  assert_eq(refreshed.selected, Some(("runtime", "done")))
+  let (_, history_only) = update(
+    emit,
+    Listed(0, 0, Ok({ ..reply, jobs: [reply.jobs[0]], })),
+    State::empty(),
+  )
+  assert_true(history_only.selected is None)
+}
+
+///|
+test "historical tail commands do not wait for more output" {
+  assert_eq(
+    tail_command("/tmp/a'b.out", follow=false),
+    "tail -n 100 -- '/tmp/a'\\''b.out'",
+  )
+  assert_eq(
+    tail_command("C:\\a'b.out", follow=false),
+    "Get-Content -LiteralPath 'C:\\a''b.out' -Tail 100",
+  )
+  assert_eq(
+    job_timing(fixture_job("old", Interrupted).job),
+    "End time unavailable",
+  )
+}
+
+///|
+test "interruption requires a fresh EOF even when persisted bytes trail the cursor" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let live = fixture_job("bg-1", Running)
+  let state = {
+    ..reading_fixture(),
+    jobs: [{ ..live, job: { ..live.job, output_bytes: 5L, }, }],
+    cursor: Some(10L),
+    eof_state: Some(Running),
+  }
+  let interrupted = {
+    ..live,
+    job: { ..live.job, state: Interrupted, output_bytes: 5L, },
+  }
+  let reply : @protocol.JobsListReply = {
+    jobs: [interrupted],
+    selected: None,
+    next_offset: None,
+    errors: [],
+  }
+  let (_, ended) = update(emit, Listed(0, 0, Ok(reply)), state)
+  assert_false(output_complete(ended, interrupted.job))
+  // A pre-interruption read can arrive late with an old EOF; it cannot finish draining.
+  let stale_eof = {
+    ..page_fixture(10L, false),
+    text: "",
+    next_offset: 10L,
+    size: 10L,
+  }
+  let (_, stale) = update(emit, Read(0, 1, Ok(stale_eof)), ended)
+  assert_false(output_complete(stale, interrupted.job))
+  let (_, polled) = update(emit, Poll, { ..stale, follow: false, })
+  assert_true(polled.reading)
+  let final_page = {
+    ..page_fixture(10L, false),
+    text: "last error",
+    next_offset: 20L,
+    size: 20L,
+  }
+  let (_, drained) = update(
+    emit,
+    Read(0, polled.read_serial, Ok(final_page)),
+    polled,
+  )
+  assert_eq(drained.text, "last error")
+  assert_true(output_complete(drained, interrupted.job))
+  let (_, polled) = update(emit, Poll, drained)
+  assert_false(polled.reading)
+  let (_, selected) = update(emit, Select("runtime", "bg-1"), drained)
+  assert_true(selected.reading)
+  assert_true(selected.eof_state is None)
 }

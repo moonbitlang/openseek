@@ -31,11 +31,12 @@ export class BackgroundJobsHarness extends DesktopBrowserHarness {
     const append = chunk => appendFileSync(this.livePath, chunk);
     this.child.stdout.on('data', append);
     this.child.stderr.on('data', append);
-    this.child.on('exit', () => {
-      this.jobs[0].job.state = { kind: 'stopped', reason: 'user' };
-      this.jobs[0].job.finished_at_ms = Date.now();
-      this.jobs[0].job.revision += 1;
-      this.jobs[0].controllable = false;
+    const live = this.jobs[0];
+    this.child.on('close', (code, signal) => {
+      live.job.state = signal ? { kind: 'stopped', reason: 'user' } : { kind: 'exited', code };
+      live.job.finished_at_ms = Date.now();
+      live.job.revision += 1;
+      live.controllable = false;
     });
   }
   view(generation, id, path, state) {
@@ -84,7 +85,7 @@ export class BackgroundJobsHarness extends DesktopBrowserHarness {
     if (request.method === 'jobs.stop') {
       if (p.generation !== 'runtime-new') return { outcome: 'wrong_runtime' };
       if (this.child.exitCode === null && this.child.signalCode === null) {
-        const exited = once(this.child, 'exit'); this.child.kill(); await exited;
+        const exited = once(this.child, 'close'); this.child.kill(); await exited;
       }
       return { outcome: 'stopped' };
     }
@@ -101,7 +102,7 @@ export class BackgroundJobsHarness extends DesktopBrowserHarness {
     // The page fixture normally closes after afterEach, leaving a small race.
     if (!this.page.isClosed()) await this.page.close();
     if (this.child.exitCode === null && this.child.signalCode === null) {
-      const exited = once(this.child, 'exit'); this.child.kill(); await exited;
+      const exited = once(this.child, 'close'); this.child.kill(); await exited;
     }
     rmSync(this.directory, { recursive: true, force: true });
   }
