@@ -100,7 +100,7 @@ html.is-resizing-terminal * {
   border: 0;
   background: none;
   color: var(--color-text-muted);
-  font: 500 10px/1 var(--font-family-sans);
+  font: 500 var(--icon-xs)/1 var(--font-family-sans);
   cursor: pointer;
 }
 .terminal-tab-close:hover {
@@ -112,7 +112,7 @@ html.is-resizing-terminal * {
   border-radius: var(--radius-sm);
   background: none;
   color: var(--color-text-muted);
-  font: 500 14px/1 var(--font-family-sans);
+  font: 500 var(--icon-md)/1 var(--font-family-sans);
   cursor: pointer;
 }
 .terminal-new:hover {
