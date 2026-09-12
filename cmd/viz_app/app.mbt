@@ -2033,7 +2033,7 @@ fn header_info(parsed : @session_log.ParsedLog) -> (String, Bool) {
 ///|
 test "parse_load lifts the system prompt from the header line" {
   let text =
-    #|{"found":true,"events":"{\"version\":1,\"id\":\"demo\",\"system_prompt\":\"SYS\"}\n{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\n","events_bytes":77}
+    #|{"found":true,"events":"{\"version\":2,\"id\":\"demo\",\"system_prompt\":\"SYS\"}\n{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"origin\":\"human\",\"content\":\"hi\"}}}\n","events_bytes":77}
   guard parse_load(text)
     is Loaded(parsed, system_prompt, header_present, log_bytes) else {
     fail("expected Loaded")
@@ -2071,7 +2071,7 @@ fn parsed_log(session : @agent_session.Session) -> @session_log.ParsedLog {
 ///|
 test "session metadata counts steps and total runtime" {
   let text =
-    #|{"found":true,"events":"{\"sequence\":1,\"ts\":100000,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\n{\"sequence\":2,\"ts\":101500,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"\",\"tool_calls\":[]}}}\n{\"sequence\":3,\"ts\":170300,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"done\"}}}\n","events_bytes":307}
+    #|{"found":true,"events":"{\"sequence\":1,\"ts\":100000,\"item\":{\"kind\":\"user\",\"payload\":{\"origin\":\"human\",\"content\":\"hi\"}}}\n{\"sequence\":2,\"ts\":101500,\"item\":{\"kind\":\"assistant\",\"payload\":{\"content\":\"\",\"tool_calls\":[]}}}\n{\"sequence\":3,\"ts\":170300,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"done\"}}}\n","events_bytes":307}
   guard parse_load(text) is Loaded(parsed, _, _, log_bytes) else {
     fail("expected Loaded")
   }
@@ -2117,7 +2117,7 @@ test "session metadata counts durable assistant responses" {
       ),
     )
     .append(Runtime(RuntimeNotice("[review] goal-met audit: clean")))
-    .append(Runtime(RuntimeNotice(@agent_session.GoalClearedNotice)))
+    .append(Goal(GoalCleared))
     .append(Terminal(Finished("done"))),
   )
   inspect(agent_step_count(parsed), content="1")
@@ -2176,8 +2176,8 @@ test "log size formats larger byte counts" {
 ///|
 test "apply_dropped_file switches to local-file mode with the header lifted" {
   let text =
-    #|{"version":1,"id":"demo","system_prompt":"SYS"}
-    #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hi"}}}
+    #|{"version":2,"id":"demo","system_prompt":"SYS"}
+    #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"origin":"human","content":"hi"}}}
     #|
   let selected = { ..init_model(), selected: Some("0|remote"), loading: true, }
   let model = apply_dropped_file(selected, "run.jsonl", 123L, text)
@@ -2194,7 +2194,7 @@ test "apply_dropped_file switches to local-file mode with the header lifted" {
 ///|
 test "apply_dropped_file tolerates a header-less event log" {
   let text =
-    #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hi"}}}
+    #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"origin":"human","content":"hi"}}}
     #|
   let model = apply_dropped_file(init_model(), "bare.jsonl", 75L, text)
   inspect(model.system_prompt, content="")
@@ -2207,7 +2207,7 @@ test "apply_dropped_file tolerates a header-less event log" {
 test "dropped display id prefers the header identity over the file name" {
   let with_header = @viz.parse_events(
     (
-      #|{"version":1,"id":"cli-123","system_prompt":"SYS"}
+      #|{"version":2,"id":"cli-123","system_prompt":"SYS"}
       #|
     ),
   )
@@ -2244,7 +2244,7 @@ test "a late session list does not clobber the dropped-file status" {
     "run.jsonl",
     10L,
     (
-      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hi"}}}
+      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"origin":"human","content":"hi"}}}
       #|
     ),
   )

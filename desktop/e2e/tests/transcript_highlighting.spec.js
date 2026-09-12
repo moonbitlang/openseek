@@ -16,7 +16,7 @@ test('read workflow shows selectors and highlights each MoonBit file in a mixed 
     '',
   ].join('\n');
   app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture file reads' } } },
+    { sequence: 1, item: { kind: 'user', payload: { origin: 'human', content: 'Show the browser fixture file reads' } } },
     { sequence: 2, item: { kind: 'assistant', payload: {
       content: '', tool_calls: [{ id: 'read-workflow', name: 'mbtx', arguments: JSON.stringify({
         filename: '@builtin/read.mbtx', args: ['src/main.mbt:120:120', 'README.md', 'lib.mbti'],
@@ -54,7 +54,7 @@ for (const language of ['', 'mbt']) {
     const app = new DesktopBrowserHarness(page);
     app.sessionEvents = [{
       sequence: 1,
-      item: { kind: 'user', payload: { content: 'Show the browser fixture code' } },
+      item: { kind: 'user', payload: { origin: 'human', content: 'Show the browser fixture code' } },
     }];
     await app.install();
     await app.goto();
@@ -94,7 +94,7 @@ test('saved reasoning and answers default unlabelled code to MoonBit', async ({ 
     '```javascript\nconst explicit = 1;\n```',
   ].join('\n\n');
   app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture code' } } },
+    { sequence: 1, item: { kind: 'user', payload: { origin: 'human', content: 'Show the browser fixture code' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content, reasoning_content: content } } },
   ];
   await app.install();

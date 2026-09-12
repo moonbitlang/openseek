@@ -104,10 +104,13 @@ priv enum PendingWork {
   // runtime queue and lands after the goal.
   // marker, arrival-context snapshot, whether THIS command carried auto
   // (promotion fires only on the auto entry's own durable append), the
-  // command serial, and the baseline notice captured at command receipt —
-  // appended immediately before the marker at drain, preserving the
-  // adjacency contract Session::current_goal_baseline pairs by.
-  PendingGoal(String, Array[@agent_runtime.SteerInput], Bool, Int, String?)
+  // command serial. The goal change carries its own captured baseline.
+  PendingGoal(
+    @agent_session.GoalChange,
+    Array[@agent_runtime.SteerInput],
+    Bool,
+    Int
+  )
   // Context that arrived AFTER a queued goal: fenced into the ordered
   // queue so it cannot overtake the goal via the runtime steer queue (an
   // earlier pending prompt would otherwise drain it first).
@@ -345,7 +348,7 @@ fn has_pending_prompt(pending : Array[PendingWork]) -> Bool {
 
 ///|
 fn has_pending_goal(pending : Array[PendingWork]) -> Bool {
-  pending.any(work => work is PendingGoal(_, _, _, _, _))
+  pending.any(work => work is PendingGoal(_, _, _, _))
 }
 
 ///|
@@ -353,7 +356,9 @@ test "pending prompt helpers ignore queued compactions and goals" {
   let pending : Array[PendingWork] = []
   assert_false(has_pending_prompt(pending))
   pending.push(PendingCompact)
-  pending.push(PendingGoal("[goal]\nship it", [], false, 1, None))
+  pending.push(
+    PendingGoal(GoalSet("ship it", baseline=Unavailable), [], false, 1),
+  )
   assert_false(has_pending_prompt(pending))
   pending.push(PendingPrompt("next", submission_id=None))
   assert_true(has_pending_prompt(pending))
@@ -362,13 +367,13 @@ test "pending prompt helpers ignore queued compactions and goals" {
   assert_false(has_pending_prompt(pending))
   assert_eq(pending.length(), 2)
   assert_true(pending[0] is PendingCompact)
-  assert_true(pending[1] is PendingGoal(_, _, _, _, _))
+  assert_true(pending[1] is PendingGoal(_, _, _, _))
 }
 
 ///|
 test "auto arms only for the exact persisted goal" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="p").append(
-    Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nship the feature")),
+    Goal(GoalSet("ship the feature", baseline=Unavailable)),
   )
   let standing = session.current_goal()
   assert_true(goal_auto_armed(standing, Some("ship the feature")))
@@ -382,7 +387,7 @@ test "auto arms only for the exact persisted goal" {
 test "promotion requires a marker newer than the command baseline" {
   // The goal marker is event 1.
   let session = @agent_session.Session(SessionId("s1"), system_prompt="p").append(
-    Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nship the feature")),
+    Goal(GoalSet("ship the feature", baseline=Unavailable)),
   )
   let standing = session.current_goal()
   // A set command that arrived when last_sequence was 0 promotes: the
@@ -398,19 +403,13 @@ test "promotion requires a marker newer than the command baseline" {
 
 ///|
 test "a context-yield turn chains: finished derivation and standing goal" {
-  // The whole PR-B contract in one place: a turn that ended at the context
-  // ceiling is durably Terminal(Finished(...)), so serve derives
-  // finished=true from the last event exactly as for a real completion —
-  // and the goal marker, covered by the checkpoint summary or not, still
-  // stands in the raw log. Auto-continue therefore chains one turn per
-  // context window with no yield-specific code.
+  // Both completed and yielded turns permit continuation. Compaction
+  // preserves the standing goal in the raw log.
   let session = @agent_session.Session(
       SessionId("yield-chains"),
       system_prompt="system",
     )
-    .append(
-      Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nbig objective")),
-    )
+    .append(Goal(GoalSet("big objective", baseline=Unavailable)))
     .append(Terminal(Finished("turn one answer")))
     .append(User(UserMessage("continue")))
     .append(
@@ -418,15 +417,9 @@ test "a context-yield turn chains: finished derivation and standing goal" {
         SessionSummary(content="checkpoint", from_sequence=1, to_sequence=3),
       ),
     )
-    .append(
-      Terminal(
-        Finished(
-          "\{@agent_session.ContextYieldAnswerPrefix} continue in a new turn",
-        ),
-      ),
-    )
+    .append(Terminal(ContextYield("[context ceiling] continue in a new turn")))
   let finished = session.events().peek() is Some(event) &&
-    event.item() is Terminal(Finished(_))
+    event.item() is Terminal(Finished(_) | ContextYield(_))
   assert_true(finished)
   guard session.current_goal() is Some(goal) else {
     fail("the goal must survive the checkpoint")
@@ -451,11 +444,9 @@ test "an unblocked goal resumes auto-continuation at the boundary" {
   // reads as standing-and-not-blocked, so continuation resumes with no serve
   // change — the whole point of the [goal unblocked] marker.
   let base = @agent_session.Session(SessionId("resume"), system_prompt="system")
-    .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nobjective")))
+    .append(Goal(GoalSet("objective", baseline=Unavailable)))
     .append(User(UserMessage("work")))
-    .append(
-      Runtime(RuntimeNotice("\{@agent_session.GoalBlockedPrefix}\nstuck")),
-    )
+    .append(Goal(GoalBlocked("stuck")))
     .append(Terminal(Finished("turn answer")))
   let goal_standing = fn(session : @agent_session.Session) -> Bool {
     session.current_goal() is Some(goal) && !goal.blocked()
@@ -473,9 +464,7 @@ test "an unblocked goal resumes auto-continuation at the boundary" {
     ),
   )
   // After the unblock marker lands, the same boundary resumes.
-  let resumed = base.append(
-    Runtime(RuntimeNotice(@agent_session.GoalUnblockedNotice)),
-  )
+  let resumed = base.append(Goal(GoalUnblocked))
   assert_true(goal_standing(resumed))
   assert_true(
     should_auto_continue(
@@ -810,7 +799,10 @@ async fn run_serve(
     }
 
     async fn append_command_context(text : String, kind : String) -> Unit {
-      if append_idle_item(User(UserMessage(text)), "command context") {
+      if append_idle_item(
+          User(UserMessage(text, origin=Command)),
+          "command context",
+        ) {
         @emit.emit(SteerApplied(kind~, content=text))
       }
     }
@@ -819,14 +811,14 @@ async fn run_serve(
     // after the append succeeded — never at queue time, when the marker could
     // still be lost with a dying turn — so the TUI can only learn a goal that
     // was actually persisted.
-    fn report_goal_update(content : String) -> Unit {
-      match @agent_session.goal_marker(content) {
-        Some(GoalSet(text)) => @emit.emit(GoalUpdated(goal=Some(text)))
-        Some(GoalCleared) => @emit.emit(GoalUpdated(goal=None))
+    fn report_goal_update(change : @agent_session.GoalChange) -> Unit {
+      match change {
+        GoalSet(text, ..) => @emit.emit(GoalUpdated(goal=Some(text)))
+        GoalCleared => @emit.emit(GoalUpdated(goal=None))
         // Block/unblock markers change auto-continuation policy but not the
         // goal itself; they are reported by the loop's own goal_blocked /
         // goal_unblocked events, not as goal_updated.
-        Some(GoalBlocked(_)) | Some(GoalUnblocked) | None => ()
+        GoalBlocked(_) | GoalUnblocked => ()
       }
     }
 
@@ -835,20 +827,8 @@ async fn run_serve(
     // queue time — so a controller can only learn a goal that was actually
     // persisted; callers gate their promotion tails on the returned Bool for
     // the same reason.
-    // Persist the captured baseline notice, if any, IMMEDIATELY before its
-    // goal marker: Session::current_goal_baseline pairs strictly by
-    // adjacency, and this loop is the single appender on the idle/drain
-    // paths. A failed baseline append is absorbed — the goal still sets;
-    // only the future review gate loses its anchor.
-    async fn append_goal_baseline(baseline : String?) -> Unit {
-      if baseline is Some(notice) {
-        append_idle_item(Runtime(RuntimeNotice(notice)), "goal baseline")
-        |> ignore
-      }
-    }
-
-    async fn append_goal_marker(marker : String) -> Bool {
-      if append_idle_item(Runtime(RuntimeNotice(marker)), "goal update") {
+    async fn append_goal_change(marker : @agent_session.GoalChange) -> Bool {
+      if append_idle_item(Goal(marker), "goal update") {
         report_goal_update(marker)
         true
       } else {
@@ -878,28 +858,10 @@ async fn run_serve(
       match input {
         Prompt(text) => @emit.emit(SteerDropped(content=text))
         Command(text) => append_command_context(text, "command")
-        Notice(text) =>
-          if @agent_session.parse_goal_baseline(text) is Some(_) {
-            // The steer-path baseline landing at idle (its turn ended
-            // first): persist it exactly where it sits in the drain order —
-            // its goal marker is the very next input — without dressing it
-            // as a background notice.
-            append_idle_item(Runtime(RuntimeNotice(text)), "goal baseline")
-            |> ignore
-          } else {
-            match @agent_session.goal_marker(text) {
-              // A goal marker deferred behind a live turn lands here when the
-              // turn ends before its next step boundary. Its notice leg is
-              // transport: persist and report it as a goal update, so no
-              // controller ever sees it dressed as a background notice.
-              Some(_) =>
-                if append_goal_marker(text) {
-                  // Drained at idle: the finished turn never saw this marker,
-                  // so its first turn belongs to the controller.
-                  maybe_promote_goal_auto(true)
-                }
-              None => append_background_notice(text)
-            }
+        Notice(text) => append_background_notice(text)
+        Goal(change) =>
+          if append_goal_change(change) {
+            maybe_promote_goal_auto(true)
           }
       }
     }
@@ -928,6 +890,7 @@ async fn run_serve(
     fn start_turn(
       task_text : String,
       submission_id : String?,
+      input_origin : @agent_session.InputOrigin,
     ) -> @async.Task[Unit] {
       group.spawn() <| () => {
         let _ = @agent.run_turn_in_scope(
@@ -937,6 +900,7 @@ async fn run_serve(
           model~,
           session~,
           task=task_text,
+          input_origin~,
           submission_id?,
           on_goal_met?,
           append_item=(current, item) => {
@@ -972,7 +936,7 @@ async fn run_serve(
         // The auto-continue policy keys off a cleanly finished turn; the live
         // `session` var already holds every append this turn made.
         let finished = session.events().peek() is Some(event) &&
-          event.item() is Terminal(Finished(_))
+          event.item() is Terminal(Finished(_) | ContextYield(_))
         ignore(steps.try_put(TurnDone(finished~)) catch { _ => false })
       }
     }
@@ -1000,7 +964,9 @@ async fn run_serve(
       while active_work is None && pending.length() > 0 {
         match pending.remove(0) {
           PendingPrompt(text, submission_id~) =>
-            active_work = Some(ActiveTurn(start_turn(text, submission_id)))
+            active_work = Some(
+              ActiveTurn(start_turn(text, submission_id, Human)),
+            )
           PendingCompact =>
             active_work = Some(ActiveCompact(start_compaction(session)))
           // Instant work: append the goal at its ordered position and keep
@@ -1009,18 +975,17 @@ async fn run_serve(
           // and durable order must match arrival order.
           // Fenced context: apply at its ordered position and keep draining.
           PendingContext(input) => apply_idle_context_input(input)
-          PendingGoal(marker, context, is_auto, serial, baseline) => {
+          PendingGoal(marker, context, is_auto, serial) => {
             for input in context {
               apply_idle_context_input(input)
             }
-            append_goal_baseline(baseline)
             // Promotion tied to THIS entry's durable append: with two
             // same-text goals queued, an earlier append must not arm an
             // auto command whose own marker is not durable yet.
-            if append_goal_marker(marker) &&
+            if append_goal_change(marker) &&
               is_auto &&
               serial == goal_command_serial &&
-              @agent_session.goal_marker(marker) is Some(GoalSet(text)) {
+              marker is GoalSet(text, ..) {
               arm_goal_auto(text, true)
             }
           }
@@ -1040,7 +1005,9 @@ async fn run_serve(
             // One turn at a time: extra prompts wait their wire-order turn.
             Some(_) => pending.push(PendingPrompt(text, submission_id~))
             None =>
-              active_work = Some(ActiveTurn(start_turn(text, submission_id)))
+              active_work = Some(
+                ActiveTurn(start_turn(text, submission_id, Human)),
+              )
           }
         Wire(Steer(input)) =>
           match input {
@@ -1078,11 +1045,11 @@ async fn run_serve(
               }
             // A notice is engine-internal and never actually arrives over the
             // wire; queue it losslessly for completeness.
-            Notice(text) =>
+            Notice(_) | Goal(_) =>
               if has_pending_goal(pending) {
-                pending.push(PendingContext(Notice(text)))
+                pending.push(PendingContext(input))
               } else {
-                runtime.queue_steer(Notice(text))
+                runtime.queue_steer(input)
               }
           }
         Wire(JobsSnapshot(request_id~)) => {
@@ -1157,19 +1124,11 @@ async fn run_serve(
           }
           goal_auto_target = None
           goal_turns_remaining = 0
-          let marker = match action {
-            SetGoal(text, ..) => "\{@agent_session.GoalPrefix}\n\{text}"
-            ClearGoal => @agent_session.GoalClearedNotice
-          }
-          // Captured at COMMAND RECEIPT (bounded; see baseline.mbt) so every
-          // path records the worktree as it stood when the user set the
-          // goal, not when the marker eventually lands. For a QUEUED goal
-          // behind a long turn this anchor may predate that turn's commits
-          // — a known divergence: the gate treats the baseline as advisory
-          // context for a current-worktree audit, never exact attribution.
-          let baseline : String? = match action {
-            SetGoal(_, ..) => Some(capture_goal_baseline(workspace_root))
-            ClearGoal => None
+          // Capture at command receipt; every delivery path carries the same anchor.
+          let marker : @agent_session.GoalChange = match action {
+            SetGoal(text, ..) =>
+              GoalSet(text, baseline=capture_goal_baseline(workspace_root))
+            ClearGoal => GoalCleared
           }
           if pending.length() > 0 || active_work is Some(ActiveCompact(_)) {
             // ANY queued work ahead in wire order — a pipelined prompt as
@@ -1194,9 +1153,7 @@ async fn run_serve(
               take_context_before_goal()
             }
             pending.push(
-              PendingGoal(
-                marker, context, is_auto, goal_command_serial, baseline,
-              ),
+              PendingGoal(marker, context, is_auto, goal_command_serial),
             )
           } else if active_work is Some(ActiveTurn(_)) {
             // A live turn: the lossless steer queue makes the marker
@@ -1204,18 +1161,9 @@ async fn run_serve(
             // durable append); if the turn ends first, the TurnDone drain
             // persists it before any queued prompt starts, so the next turn
             // still sees it.
-            // Two consecutive synchronous queue_steer calls: nothing can
-            // interleave between them, so the loop applies (or the idle
-            // drain persists) baseline and marker adjacently.
-            if baseline is Some(notice) {
-              runtime.queue_steer(Notice(notice))
-            }
-            runtime.queue_steer(Notice(marker), wake=true)
-          } else {
-            append_goal_baseline(baseline)
-            if append_goal_marker(marker) {
-              maybe_promote_goal_auto(false)
-            }
+            runtime.queue_steer(Goal(marker))
+          } else if append_goal_change(marker) {
+            maybe_promote_goal_auto(false)
           }
         }
         // A background job finished. If a turn is active, its next step boundary
@@ -1245,7 +1193,9 @@ async fn run_serve(
             ) {
             goal_turns_remaining -= 1
             @emit.emit(GoalContinue(remaining=goal_turns_remaining))
-            active_work = Some(ActiveTurn(start_turn(GoalContinuePrompt, None)))
+            active_work = Some(
+              ActiveTurn(start_turn(GoalContinuePrompt, None, AutoContinue)),
+            )
           } else if armed &&
             finished &&
             !shutting_down &&

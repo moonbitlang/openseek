@@ -20,13 +20,18 @@ The root value is an immutable `Session`:
 Each event has a one-based monotonic sequence number, a unix-millisecond
 timestamp, and one `SessionItem` payload:
 
-- `User`: user-authored prompt or steering text.
+- `User`: model input with explicit human, command, auto-continue, or delegated origin.
 - `Assistant`: model output, including native DeepSeek tool calls and optional
   reasoning content.
 - `Tool`: local tool result for one assistant tool call.
+- `Goal`: a typed set, clear, block, or unblock operation; a set carries its baseline.
 - `Runtime`: runtime notice injected into model context, such as a plan reminder.
 - `Summary`: durable compaction record for a covered event range.
-- `Terminal`: how a turn ended: finished, aborted, interrupted, or failed.
+- `Terminal`: how a turn ended: finished, context yield, aborted, interrupted, or failed.
+
+The shared state types and codecs live in `openseek_protocol`, so CLI and
+desktop consumers agree on their meaning. Session format version 2 requires
+explicit input origin and goal baseline state; version 1 logs are not decoded.
 
 Appending never mutates the receiver. It returns a new session that shares the
 old log structure.
@@ -88,12 +93,14 @@ classDiagram
     User(UserMessage)
     Assistant(AssistantMessage)
     Tool(ToolResult)
+    Goal(GoalChange)
     Runtime(RuntimeNotice)
     Summary(SessionSummary)
     Terminal(TurnTerminal)
   }
 
   class UserMessage {
+    -InputOrigin origin
     -String content
     +content() String
   }
@@ -126,6 +133,7 @@ classDiagram
   class TurnTerminal {
     <<tagged union>>
     Finished(String)
+    ContextYield(String)
     Aborted(String)
     Interrupted(String)
     Failed(String)
@@ -160,7 +168,7 @@ test "append leaves the original session unchanged" {
       #|      {
       #|        sequence: 1,
       #|        ts: 0,
-      #|        item: User({ content: "hello", submission_id: None }),
+      #|        item: User({ origin: Human, content: "hello", submission_id: None }),
       #|      },
       #|    ]>,
       #|  last_sequence: 1,
@@ -185,7 +193,7 @@ test "append_event returns the durable event" {
       #|{
       #|  sequence: 1,
       #|  ts: 0,
-      #|  item: User({ content: "hello", submission_id: None }),
+      #|  item: User({ origin: Human, content: "hello", submission_id: None }),
       #|}
     ),
   )
@@ -199,15 +207,15 @@ messages sent to the model. Projection is where session-specific repair and
 compaction rules are applied:
 
 - The first message is always the stored system prompt.
-- `User` and `Runtime` events become user messages.
+- `User`, `Goal`, and `Runtime` events become user messages. Goal baselines are
+  audit metadata and stay out of model input.
 - `Assistant` events preserve visible content, reasoning content, and native
   tool calls.
 - `Tool` events are emitted only when they answer a pending assistant tool call.
 - `Terminal(Finished(...))` becomes a final assistant message when non-empty,
-  unless it is a context-yield notice (carrying `ContextYieldAnswerPrefix`) or
-  repeats the immediately preceding Assistant message — either is dropped from
-  the model-facing projection. Failed, aborted, and interrupted terminals
-  become assistant-status messages.
+  unless it repeats the immediately preceding Assistant message.
+  `Terminal(ContextYield(...))` stays out of model input. Failed, aborted, and
+  interrupted terminals become assistant-status messages.
 - A dangling assistant tool call is closed with a synthetic tool error before
   the next non-tool event, keeping the protocol-valid replay shape.
 
@@ -336,7 +344,7 @@ test "summary replaces covered events in model projection only" {
       #|      {
       #|        sequence: 1,
       #|        ts: 0,
-      #|        item: User({ content: "old user", submission_id: None }),
+      #|        item: User({ origin: Human, content: "old user", submission_id: None }),
       #|      },
       #|      {
       #|        sequence: 2,
@@ -404,7 +412,7 @@ The store layout is:
 ```
 
 `openseek_session-<session-id>.jsonl` holds the whole session: a header record
-(`{"version":1,"id":...,"system_prompt":...}`) on the first line, then one
+(`{"version":2,"id":...,"system_prompt":...}`) on the first line, then one
 append-only event per line. Loading replays the event lines into a `Session`.
 
 ```mermaid
@@ -412,7 +420,7 @@ flowchart TB
   dir["root/sessions/session-id/"]
   file["openseek_session-session-id.jsonl"]
   lock["session.lock"]
-  header["line 1: SessionFileHeader JSON<br/>version = 1<br/>id<br/>system_prompt"]
+  header["line 1: SessionFileHeader JSON<br/>version = 2<br/>id<br/>system_prompt"]
   events["line 2..n: SessionEvent JSONL<br/>sequence<br/>ts<br/>tagged SessionItem"]
 
   dir --> file
@@ -508,7 +516,7 @@ test "session JSON round-trips events" {
       #|      {
       #|        sequence: 1,
       #|        ts: 0,
-      #|        item: User({ content: "hello", submission_id: None }),
+      #|        item: User({ origin: Human, content: "hello", submission_id: None }),
       #|      },
       #|      { sequence: 2, ts: 0, item: Terminal(Finished("done")) },
       #|    ]>,

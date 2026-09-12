@@ -13,6 +13,7 @@ import {
 }
 
 import {
+  "bobzhang/openseek_protocol",
   "bobzhang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/async",
 } for "wbtest"

@@ -87,7 +87,7 @@ test "only durable assistant responses count as steps" {
       ),
     )
     .append(Runtime(RuntimeNotice("[review] goal-met audit: clean")))
-    .append(Runtime(RuntimeNotice(@agent_session.GoalClearedNotice)))
+    .append(Goal(GoalCleared))
     .append(Terminal(Finished("done")))
   let result = @session_analyzer.analyze_session(session)
   assert_eq(result.steps, 1)
@@ -137,13 +137,7 @@ test "a context-yield terminal is not task success" {
         SessionSummary(content="checkpoint", from_sequence=1, to_sequence=3),
       ),
     )
-    .append(
-      Terminal(
-        Finished(
-          "\{@agent_session.ContextYieldAnswerPrefix} continue in a new turn",
-        ),
-      ),
-    )
+    .append(Terminal(ContextYield("[context ceiling] continue in a new turn")))
   let result = @session_analyzer.analyze_session(session)
   assert_false(result.finished)
   assert_false(result.success)
@@ -327,4 +321,19 @@ async test "eval result renders and writes report files" {
     assert_true(@fs.exists(dir + "/report.html"))
     assert_true(@fs.exists(dir + "/report.json"))
   })
+}
+
+///|
+test "success is determined by terminal type independently of its text" {
+  let session = @agent_session.Session(SessionId("literal"), system_prompt="")
+  assert_true(
+    @session_analyzer.analyze_session(
+      session.append(Terminal(Finished("[context ceiling] literal"))),
+    ).success,
+  )
+  assert_false(
+    @session_analyzer.analyze_session(
+      session.append(Terminal(ContextYield("checkpointed"))),
+    ).success,
+  )
 }

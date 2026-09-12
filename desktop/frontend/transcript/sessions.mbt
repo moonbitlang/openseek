@@ -285,8 +285,8 @@ pub fn session_from_reply(
     // The standing goal replays from the same durable markers the cards
     // above come from, so a resumed conversation shows exactly the goal the
     // engine holds — see `goal.mbt`.
-    if event.item is @desktop_protocol.RuntimeNotice(notice) &&
-      goal_marker(notice.content) is Some(marker) {
+    if event.item is @desktop_protocol.Goal(change) {
+      let marker = goal_marker(change)
       goal = apply_goal_marker(goal, marker)
       goal_markers.push((event.sequence, marker))
     }
@@ -426,77 +426,69 @@ pub fn apply_session_item(
         break
       }
     }
+    @desktop_protocol.Goal(change) =>
+      match goal_marker(change) {
+        GoalSet(text) =>
+          items.push({
+            kind: Notice(
+              label="goal",
+              brief=Some(goal_brief("Goal set", text)),
+              is_error=false,
+              body=goal_body(text),
+            ),
+            ts,
+            sequence,
+          })
+        GoalCleared =>
+          items.push({
+            kind: Notice(
+              label="goal",
+              brief=Some("Goal cleared"),
+              is_error=false,
+              body=None,
+            ),
+            ts,
+            sequence,
+          })
+        GoalBlocked(reason) =>
+          items.push({
+            kind: Notice(
+              label="goal",
+              brief=Some(goal_brief("Goal blocked", reason)),
+              is_error=true,
+              body=goal_body(reason),
+            ),
+            ts,
+            sequence,
+          })
+        GoalUnblocked =>
+          items.push({
+            kind: Notice(
+              label="goal",
+              brief=Some("Goal resumed"),
+              is_error=false,
+              body=None,
+            ),
+            ts,
+            sequence,
+          })
+      }
     @desktop_protocol.RuntimeNotice(payload) =>
-      if !payload.content.is_blank() {
-        match goal_marker(payload.content) {
-          // The set/clear/block/unblock markers are the durable goal
-          // confirmations this view shows (the TUI renders the same news off
-          // `goal_updated` instead). Single-line cards fold to a plain
-          // label; a multi-line goal expands to its full text.
-          Some(GoalSet(text)) =>
-            items.push({
-              kind: Notice(
-                label="goal",
-                brief=Some(goal_brief("Goal set", text)),
-                is_error=false,
-                body=goal_body(text),
-              ),
-              ts,
-              sequence,
-            })
-          Some(GoalCleared) =>
-            items.push({
-              kind: Notice(
-                label="goal",
-                brief=Some("Goal cleared"),
-                is_error=false,
-                body=None,
-              ),
-              ts,
-              sequence,
-            })
-          Some(GoalBlocked(reason)) =>
-            items.push({
-              kind: Notice(
-                label="goal",
-                brief=Some(goal_brief("Goal blocked", reason)),
-                is_error=true,
-                body=goal_body(reason),
-              ),
-              ts,
-              sequence,
-            })
-          Some(GoalUnblocked) =>
-            items.push({
-              kind: Notice(
-                label="goal",
-                brief=Some("Goal resumed"),
-                is_error=false,
-                body=None,
-              ),
-              ts,
-              sequence,
-            })
-          // What is left is either model-directed text — never a display
-          // card — or a runtime notice the engine injected between turns
-          // (a background-job completion, or a legacy `moon_check` block).
-          None =>
-            if !is_model_directed_notice(payload.content) {
-              items.push({
-                // Runtime notices keep the compact completed-result row used
-                // by the old projection, but the generic label no longer
-                // claims every background event came from `moon_check`.
-                kind: Notice(
-                  label="runtime notice",
-                  brief=None,
-                  is_error=false,
-                  body=Some(payload.content),
-                ),
-                ts,
-                sequence,
-              })
-            }
-        }
+      if !payload.content.is_blank() &&
+        !is_model_directed_notice(payload.content) {
+        items.push({
+          // Runtime notices keep the compact completed-result row used
+          // by the old projection, but the generic label no longer
+          // claims every background event came from `moon_check`.
+          kind: Notice(
+            label="runtime notice",
+            brief=None,
+            is_error=false,
+            body=Some(payload.content),
+          ),
+          ts,
+          sequence,
+        })
       }
     @desktop_protocol.Summary(payload) => {
       let content = payload.content.trim().to_owned()
@@ -518,7 +510,7 @@ pub fn apply_session_item(
 
 ///|
 /// One typed terminal item projected into its optional final/error bubble.
-priv struct SessionTerminalProjection(@desktop_protocol.SessionTerminal)
+priv struct SessionTerminalProjection(@desktop_protocol.TurnTerminal)
 
 ///|
 fn SessionTerminalProjection::append_to(
@@ -531,7 +523,7 @@ fn SessionTerminalProjection::append_to(
     // A current no-tool final is already the last provider response. Mark
     // that response finished instead of duplicating its prose; it keeps its
     // own stamp and sequence, so the settled bubble stays the same keyed node.
-    @desktop_protocol.Finished(message) => {
+    @protocol.Finished(message) | @protocol.ContextYield(message) => {
       let message = message.trim().to_owned()
       if !message.is_empty() &&
         items is [.., last] &&
@@ -563,17 +555,17 @@ fn SessionTerminalProjection::append_to(
       }
       return false
     }
-    @desktop_protocol.Aborted(message) =>
+    @protocol.Aborted(message) =>
       match message.trim().to_owned() {
         "" => "aborted"
         message => "aborted: \{message}"
       }
-    @desktop_protocol.Interrupted(message) =>
+    @protocol.Interrupted(message) =>
       match message.trim() {
         "" => "cancelled"
         message => "cancelled: \{message}"
       }
-    @desktop_protocol.Failed(message) =>
+    @protocol.Failed(message) =>
       match message.trim().to_owned() {
         "" => "failed"
         message => message
@@ -847,7 +839,7 @@ fn session_reply(
   events_json : String,
 ) -> @desktop_protocol.LoadSessionReply raise {
   let prefix =
-    #|{"session":{"version":1,"id":"desktop-x","system_prompt":"system","events":[
+    #|{"session":{"version":2,"id":"desktop-x","system_prompt":"system","events":[
   let suffix =
     #|]}}
   @json.from_json(@json.parse(prefix + events_json + suffix))
@@ -856,7 +848,7 @@ fn session_reply(
 ///|
 test "session load derives an old host's missing watermark from event sequences" {
   let events =
-    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}},
+    #|{"sequence":1,"item":{"kind":"user","payload":{"origin":"human","content":"question"}}},
     #|{"sequence":4,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
   let reply = session_reply(events)
   let view = session_from_reply(reply)
@@ -867,7 +859,7 @@ test "session load derives an old host's missing watermark from event sequences"
 ///|
 test "projected rows carry their event's stamp, tool rows the call's own" {
   let events =
-    #|{"sequence":1,"ts":1781144351123,"item":{"kind":"user","payload":{"content":"question"}}},
+    #|{"sequence":1,"ts":1781144351123,"item":{"kind":"user","payload":{"origin":"human","content":"question"}}},
     #|{"sequence":2,"ts":1781144352000,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[{"id":"c1","name":"read","arguments":"{}"}]}}},
     #|{"sequence":3,"ts":1781144399000,"item":{"kind":"tool_result","payload":{"tool_call_id":"c1","tool_name":"read","content":"out","is_error":false}}}
   let items = session_from_reply(session_reply(events)).items
@@ -888,7 +880,7 @@ test "projected rows carry their event's stamp, tool rows the call's own" {
 ///|
 test "rows from a store written without stamps stay undated" {
   let events =
-    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}}
+    #|{"sequence":1,"item":{"kind":"user","payload":{"origin":"human","content":"question"}}}
   let items = session_from_reply(session_reply(events)).items
   assert_true(items[0].ts is None)
   // The stamp is optional in old stores; the sequence never is.
@@ -898,7 +890,7 @@ test "rows from a store written without stamps stay undated" {
 ///|
 test "an explicit session watermark remains authoritative" {
   let event =
-    #|{"sequence":9,"item":{"kind":"user","payload":{"content":"question"}}}
+    #|{"sequence":9,"item":{"kind":"user","payload":{"origin":"human","content":"question"}}}
   let reply = session_reply(event)
   let view = session_from_reply({ ..reply, watermark: Some(7), })
   inspect(view.watermark, content="7")
@@ -907,7 +899,7 @@ test "an explicit session watermark remains authoritative" {
 ///|
 test "session load keeps unknown items without hiding known transcript" {
   let events =
-    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}},
+    #|{"sequence":1,"item":{"kind":"user","payload":{"origin":"human","content":"question"}}},
     #|{"sequence":2,"item":{"kind":"future_item","payload":{"value":42},"future_field":true}},
     #|{"sequence":3,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
   let reply = session_reply(events)
@@ -921,7 +913,7 @@ test "session load keeps unknown items without hiding known transcript" {
 ///|
 test "a terminal payload this build cannot read projects no row" {
   let events =
-    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}},
+    #|{"sequence":1,"item":{"kind":"user","payload":{"origin":"human","content":"question"}}},
     #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"future_terminal","message":"later"}}}
   let view = session_from_reply(session_reply(events))
   inspect(view.items.length(), content="1")
@@ -933,7 +925,7 @@ test "a terminal payload this build cannot read projects no row" {
 ///|
 test "transcript mapping replays a finished conversation" {
   let events =
-    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"  question  "}}},
+    #|{"sequence":1,"item":{"kind":"user","payload":{"origin":"human","content":"  question  "}}},
     #|{"sequence":2,"item":{"kind":"tool_result","payload":{"tool_call_id":"c1","tool_name":"shell","content":"output","is_error":true,"brief":"ran ls → exit 1"}}},
     #|{"sequence":3,"ts":1000,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[],"reasoning_content":"thought"}}},
     #|{"sequence":4,"ts":2000,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
@@ -962,7 +954,7 @@ test "transcript mapping replays a finished conversation" {
 ///|
 test "a finished turn marks only its last assistant message as final" {
   let events =
-    #|{"sequence":1,"item":{"kind":"user","payload":{"content":"question"}}},
+    #|{"sequence":1,"item":{"kind":"user","payload":{"origin":"human","content":"question"}}},
     #|{"sequence":2,"ts":1000,"item":{"kind":"assistant","payload":{"content":"I will inspect it.","tool_calls":[{"id":"c1","name":"read","arguments":"{}"}]}}},
     #|{"sequence":3,"item":{"kind":"tool_result","payload":{"tool_call_id":"c1","tool_name":"read","content":"result","is_error":false}}},
     #|{"sequence":4,"ts":2000,"item":{"kind":"assistant","payload":{"content":"Done.","tool_calls":[]}}},
@@ -1085,9 +1077,9 @@ test "transcript mapping keeps summaries and background notices" {
 test "transcript mapping renders goal markers as cards and reduces the standing goal" {
   let events =
     #|{"sequence":1,"item":{"kind":"runtime_notice","payload":{"content":"[goal baseline] sha=abc dirty=false"}}},
-    #|{"sequence":2,"item":{"kind":"runtime_notice","payload":{"content":"[goal]\nship the feature"}}},
+    #|{"sequence":2,"item":{"kind":"goal","payload":{"kind":"set","text":"ship the feature","baseline":{"kind":"unavailable"}}}},
     #|{"sequence":3,"item":{"kind":"runtime_notice","payload":{"content":"[goal reminder]\nThe standing goal for this session:"}}},
-    #|{"sequence":4,"item":{"kind":"runtime_notice","payload":{"content":"[goal blocked]\nneeds a decision"}}}
+    #|{"sequence":4,"item":{"kind":"goal","payload":{"kind":"blocked","reason":"needs a decision"}}}
   let view = session_from_reply(session_reply(events))
   inspect(view.items.length(), content="2")
   guard view.items[0].kind
@@ -1137,8 +1129,8 @@ test "transcript mapping drops the plan reminder instead of carding it" {
 ///|
 test "a cleared goal leaves cards but no standing goal" {
   let events =
-    #|{"sequence":1,"item":{"kind":"runtime_notice","payload":{"content":"[goal]\nline one\nline two"}}},
-    #|{"sequence":2,"item":{"kind":"runtime_notice","payload":{"content":"[goal cleared]"}}}
+    #|{"sequence":1,"item":{"kind":"goal","payload":{"kind":"set","text":"line one\nline two","baseline":{"kind":"unavailable"}}}},
+    #|{"sequence":2,"item":{"kind":"goal","payload":{"kind":"cleared"}}}
   let view = session_from_reply(session_reply(events))
   inspect(view.items.length(), content="2")
   guard view.items[0].kind is Notice(label="goal", brief=Some(set_brief), ..) else {

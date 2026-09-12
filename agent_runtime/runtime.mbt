@@ -11,6 +11,7 @@ pub(all) enum SteerInput {
   Prompt(String)
   Command(String)
   Notice(String)
+  Goal(@protocol.GoalChange)
 }
 
 ///|
@@ -144,18 +145,20 @@ pub fn[X] AgentTaskScope::group(
 /// an unbounded queue, so event-bus overflow cannot discard it. The text is
 /// stored exactly as supplied inside its variant; this method does not trim,
 /// deduplicate, or drop blank strings. The agent loop may apply its own
-/// filtering when it drains. `wake=true` marks a user-originated notice (for
-/// example a goal change) as actionable during job_wait without changing its
-/// persisted Notice representation. Ordinary notices do not wake waiting.
+/// filtering when it drains. Goals wake job_wait directly. `wake=true` can
+/// make a notice actionable too; ordinary background notices do not wake it.
 pub fn AgentRuntime::queue_steer(
   self : AgentRuntime,
   input : SteerInput,
   wake? : Bool = false,
 ) -> Unit {
   ignore(self.steers.try_put(input) catch { _ => false })
-  if input is (Prompt(text) | Command(text) | Notice(text)) &&
-    !text.is_blank() &&
-    (wake || !(input is Notice(_))) {
+  let actionable = match input {
+    Goal(_) => true
+    Prompt(text) | Command(text) => !text.is_blank()
+    Notice(text) => wake && !text.is_blank()
+  }
+  if actionable {
     self.user_input_pending = true
     self.user_input_changed.broadcast()
   }
@@ -235,4 +238,23 @@ async test "task scope exposes structured task group" {
     let scope = AgentTaskScope(group)
     scope.group().spawn_bg(no_wait=true) <| () => { () }
   }
+}
+
+///|
+test "goal steering wakes waits and preserves one atomic change" {
+  let runtime = AgentRuntime()
+  runtime.queue_steer(Notice("[goal]\nordinary background text"))
+  assert_false(runtime.user_input_pending)
+  let baseline : @protocol.GoalBaseline = { sha: "abc123", dirty: false, }
+  runtime.queue_steer(Goal(GoalSet("ship it", baseline=Captured(baseline))))
+  assert_true(runtime.user_input_pending)
+  let inputs = runtime.drain_steers()
+  assert_eq(inputs.length(), 2)
+  assert_true(
+    inputs[1]
+    is Goal(
+      GoalSet("ship it", baseline=Captured({ sha: "abc123", dirty: false, }))
+    ),
+  )
+  assert_false(runtime.user_input_pending)
 }

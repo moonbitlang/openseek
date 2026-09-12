@@ -3,13 +3,13 @@
 fn baselined_goal_session(id : String) -> @agent_session.Session {
   @agent_session.Session(SessionId(id), system_prompt="system")
   .append(
-    Runtime(
-      RuntimeNotice(
-        @agent_session.goal_baseline_notice(sha="abc123", dirty=false),
+    Goal(
+      GoalSet(
+        "ship the gate",
+        baseline=Captured({ sha: "abc123", dirty: false, }),
       ),
     ),
   )
-  .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nship the gate")))
   .append(Terminal(Finished("earlier answer")))
 }
 
@@ -239,7 +239,7 @@ async test "a replacement goal cancels the pending review before launch" {
             // the next boundary applies it before the owed review would
             // launch, and the superseded audit is cancelled.
             runtime.queue_steer(
-              Notice("\{@agent_session.GoalPrefix}\na brand new objective"),
+              Goal(GoalSet("a brand new objective", baseline=Unavailable)),
             )
             @agent_tool.respond("queued")
           }),
@@ -416,7 +416,7 @@ async test "an in-flight audit completes before a queued replacement applies" {
       on_goal_met=(_goal, _baseline) => {
         // The user replaces the goal while the reviewer is mid-flight.
         runtime.queue_steer(
-          Notice("\{@agent_session.GoalPrefix}\na brand new objective"),
+          Goal(GoalSet("a brand new objective", baseline=Unavailable)),
         )
         Some("[review] audit of the met claim")
       },

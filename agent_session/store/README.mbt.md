@@ -20,7 +20,7 @@ Each session lives under:
 ```
 
 `openseek_session-<session-id>.jsonl` is the whole durable session: its first
-line is a header record (`{"version":1,"id":...,"system_prompt":...}`) and
+line is a header record (`{"version":2,"id":...,"system_prompt":...}`) and
 every following line is one typed `SessionEvent`. Events are append-only.
 Loading replays the event lines into an immutable `agent_session.Session`.
 The file name carries the session id so files collected out of their
@@ -109,7 +109,7 @@ async test "create and load a complete session" {
         #|      {
         #|        sequence: 1,
         #|        ts: 0,
-        #|        item: User({ content: "hello", submission_id: None }),
+        #|        item: User({ origin: Human, content: "hello", submission_id: None }),
         #|      },
         #|      { sequence: 2, ts: 0, item: Terminal(Finished("done")) },
         #|    ]>,

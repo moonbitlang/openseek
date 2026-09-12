@@ -1,6 +1,6 @@
 ///|
 /// The version of the session-file header record this package understands.
-let session_file_version : Int = 1
+let session_file_version : Int = @protocol.SessionFormatVersion
 
 ///|
 /// The header record on the first line of a session file: the session identity
@@ -15,7 +15,7 @@ pub(all) struct SessionFileHeader {
 ///|
 /// Encode a header record as the JSON stored on a session file's first line.
 ///
-/// The shape is `{ "version": 1, "id": <id>, "system_prompt": <text> }`.
+/// The shape is `{ "version": 2, "id": <id>, "system_prompt": <text> }`.
 pub impl ToJson for SessionFileHeader with fn to_json(
   header : SessionFileHeader,
 ) -> Json {
@@ -42,7 +42,7 @@ pub enum HeaderParse {
 ///
 /// Header and event records are structurally disjoint (events carry
 /// `sequence`/`item`, never `version`), so this is also how a reader tells
-/// the two apart. Any object carrying a numeric `version` other than 1 is a
+/// the two apart. Any object carrying a numeric `version` other than 2 is a
 /// header from a format this build does not read — `UnsupportedVersion` —
 /// even though its remaining fields cannot be interpreted.
 pub fn classify_header(json : Json) -> HeaderParse {

@@ -439,7 +439,7 @@ async test "readiness precedes the first forwarded hub notification" {
       event: {
         sequence: 1,
         ts: None,
-        item: User({ content: "test", submission_id: None, }),
+        item: User({ origin: Human, content: "test", submission_id: None, }),
       },
       session_root: "/sessions/global",
     }),
@@ -611,7 +611,7 @@ test "remote delivery retains streaming runtime and error events" {
         event: {
           sequence: 1,
           ts: None,
-          item: User({ content: "test", submission_id: None, }),
+          item: User({ origin: Human, content: "test", submission_id: None, }),
         },
         session_root: "/sessions/global",
       }),

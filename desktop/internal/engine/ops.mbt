@@ -902,7 +902,7 @@ fn commit_terminal_sh() -> String {
     $|record="$session_root/sessions/$session/openseek_session-$session.jsonl"
     $|mkdir -p "$session_root/sessions/$session"
     $|if [ ! -f "$record" ]; then
-    $|  printf '{"version":1,"id":"%s","system_prompt":""}\{newline}' "$session" > "$record"
+    $|  printf '{"version":2,"id":"%s","system_prompt":""}\{newline}' "$session" > "$record"
     $|fi
     $|printf '{"sequence":%s,"item":{"kind":"terminal","payload":{"kind":"finished","message":"ok"}}}\{newline}' "$(grep -c '' "$record")" >> "$record"
     $|

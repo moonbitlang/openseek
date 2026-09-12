@@ -208,7 +208,7 @@ fn parse_session_file(
     Header(header) => header
     UnsupportedVersion(version) =>
       fail(
-        "session file for \{requested_id.value()} uses unsupported session file version \{version}; this build reads version 1",
+        "session file for \{requested_id.value()} uses unsupported session file version \{version}; this build reads version 2",
       )
     NotHeader =>
       fail(

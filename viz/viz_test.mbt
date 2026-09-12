@@ -178,7 +178,7 @@ test "parse round-trips every event kind" {
 
 ///|
 test "parse tolerates a truncated final line" {
-  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi"
+  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"origin\":\"human\",\"content\":\"hi\"}}}\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi"
   let parsed = @viz.parse_events(text)
   inspect(parsed.events.length(), content="1")
   inspect(parsed.errors.length(), content="0")
@@ -187,7 +187,7 @@ test "parse tolerates a truncated final line" {
 
 ///|
 test "parse records a bad interior line without aborting" {
-  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\nnot json at all\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"done\"}}}\n"
+  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"origin\":\"human\",\"content\":\"hi\"}}}\nnot json at all\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"done\"}}}\n"
   let parsed = @viz.parse_events(text)
   inspect(parsed.events.length(), content="2")
   inspect(parsed.errors.length(), content="1")

@@ -53,7 +53,7 @@ fn goal_probe_tools() -> @agent_tool.Tools raise {
 
 ///|
 fn goal_set_marker(text : String) -> @agent_session.SessionItem {
-  Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\n\{text}"))
+  Goal(GoalSet("\{text}", baseline=Unavailable))
 }
 
 ///|
@@ -187,7 +187,7 @@ async test "a goal steered in mid-turn is announced once, not reminded" {
     }
     let runtime = @agent_runtime.AgentRuntime()
     runtime.queue_steer(
-      Notice("\{@agent_session.GoalPrefix}\nGOAL-MARKER steered"),
+      Goal(GoalSet("GOAL-MARKER steered", baseline=Unavailable)),
     )
     let session = @agent_session.Session(
       SessionId("goal-steered"),
@@ -231,7 +231,7 @@ async test "a cleared goal produces no reminders" {
       )
       .append(goal_set_marker("GOAL-MARKER stale"))
       .append(Terminal(Finished("earlier answer")))
-      .append(Runtime(RuntimeNotice(@agent_session.GoalClearedNotice)))
+      .append(Goal(GoalCleared))
     let _ = @agent.run_turn_in_scope(
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),

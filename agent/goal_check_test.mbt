@@ -75,11 +75,7 @@ fn final_answer_payload(content : String) -> String {
 /// the finish check are both armed.
 fn answered_goal_session(id : String) -> @agent_session.Session {
   @agent_session.Session(SessionId(id), system_prompt="system")
-  .append(
-    Runtime(
-      RuntimeNotice("\{@agent_session.GoalPrefix}\nGOAL-MARKER big objective"),
-    ),
-  )
+  .append(Goal(GoalSet("GOAL-MARKER big objective", baseline=Unavailable)))
   .append(Terminal(Finished("earlier answer")))
 }
 
@@ -327,7 +323,7 @@ async test "no goal or a cleared goal never triggers the check" {
       return
     }
     let cleared = answered_goal_session("goal-check-cleared").append(
-      Runtime(RuntimeNotice(@agent_session.GoalClearedNotice)),
+      Goal(GoalCleared),
     )
     let result = @agent.run_turn_in_scope(
       runtime=AgentRuntime(),

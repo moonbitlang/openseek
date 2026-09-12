@@ -1,4 +1,5 @@
 import {
+  "bobzhang/openseek_protocol" @protocol,
   "moonbitlang/async",
   "moonbitlang/async/aqueue",
 }

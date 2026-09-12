@@ -206,18 +206,8 @@ async fn run_one_attempt(
       workspace_root=run_dir,
       approval?,
     )
-    let (status, detail) = terminal_summary(completed)
-    {
-      index,
-      dir: run_dir,
-      session: id.value(),
-      status,
-      detail,
-      // A context-ceiling yield is durably Finished (replay/chaining) but is
-      // not task success for a one-shot fleet run.
-      ok: status == "finished" &&
-      !detail.has_prefix(@agent_session.ContextYieldAnswerPrefix),
-    }
+    let (status, detail, ok) = terminal_summary(completed)
+    { index, dir: run_dir, session: id.value(), status, detail, ok, }
   } catch {
     error =>
       {
@@ -236,15 +226,16 @@ async fn run_one_attempt(
 ///|
 /// The terminal status and message of a finished run, read from its last
 /// `Terminal` event. `("(no terminal)", "")` when the run recorded none.
-fn terminal_summary(session : @agent_session.Session) -> (String, String) {
+fn terminal_summary(session : @agent_session.Session) -> (String, String, Bool) {
   session
   .events()
-  .fold(init=("(no terminal)", ""), (out, event) => {
+  .fold(init=("(no terminal)", "", false), (out, event) => {
     match event.item() {
-      Terminal(Finished(answer)) => ("finished", answer)
-      Terminal(Aborted(reason)) => ("aborted", reason)
-      Terminal(Interrupted(reason)) => ("interrupted", reason)
-      Terminal(Failed(message)) => ("failed", message)
+      Terminal(Finished(answer)) => ("finished", answer, true)
+      Terminal(ContextYield(answer)) => ("context_yield", answer, false)
+      Terminal(Aborted(reason)) => ("aborted", reason, false)
+      Terminal(Interrupted(reason)) => ("interrupted", reason, false)
+      Terminal(Failed(message)) => ("failed", message, false)
       _ => out
     }
   })
@@ -515,11 +506,13 @@ test "terminal_summary reads the last terminal" {
   let finished = @agent_session.Session(SessionId("t"), system_prompt="")
     .append(User(UserMessage("hi")))
     .append(Terminal(Finished("done")))
-  let (status, detail) = terminal_summary(finished)
+  let (status, detail, ok) = terminal_summary(finished)
+  assert_true(ok)
   assert_eq(status, "finished")
   assert_eq(detail, "done")
   let none = @agent_session.Session(SessionId("e"), system_prompt="")
-  let (no_status, _) = terminal_summary(none)
+  let (no_status, _, ok) = terminal_summary(none)
+  assert_false(ok)
   assert_eq(no_status, "(no terminal)")
 }
 

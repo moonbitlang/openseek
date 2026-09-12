@@ -42,14 +42,9 @@ priv struct TerminalOutcome {
 ///|
 fn terminal_outcome(terminal : @agent_session.TurnTerminal) -> TerminalOutcome {
   match terminal {
-    Finished(message) =>
-      // A context-ceiling yield is durably Finished (replay/chaining) but NOT
-      // task success: the work was checkpointed mid-flight.
-      if message.has_prefix(@agent_session.ContextYieldAnswerPrefix) {
-        { status: "context_yield", message, success: false, }
-      } else {
-        { status: "finished", message, success: true, }
-      }
+    Finished(message) => { status: "finished", message, success: true, }
+    ContextYield(message) =>
+      { status: "context_yield", message, success: false, }
     Aborted(message) => { status: "aborted", message, success: false, }
     Interrupted(message) => { status: "interrupted", message, success: false, }
     Failed(message) => { status: "failed", message, success: false, }
@@ -124,7 +119,7 @@ fn summarize_session(session : @agent_session.Session) -> SessionMetrics {
           tool_errors += 1
         }
       }
-      Runtime(_) => runtime_notices += 1
+      Goal(_) | Runtime(_) => runtime_notices += 1
       Terminal(event_terminal) => {
         let outcome = terminal_outcome(event_terminal)
         if outcome.success {
@@ -165,10 +160,12 @@ fn append_item_text(
       write_line(out, result.tool_name())
       write_line(out, result.content())
     }
+    Goal(change) => write_line(out, change.model_content())
     Runtime(notice) => write_line(out, notice.content())
     Terminal(terminal) =>
       match terminal {
         Finished(message)
+        | ContextYield(message)
         | Aborted(message)
         | Interrupted(message)
         | Failed(message) => write_line(out, message)

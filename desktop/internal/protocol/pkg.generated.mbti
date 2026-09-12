@@ -2120,9 +2120,10 @@ pub(all) enum SessionItem {
   User(SessionUserMessage)
   Assistant(SessionAssistantMessage)
   ToolResult(SessionToolResult)
+  Goal(@openseek_protocol.GoalChange)
   RuntimeNotice(SessionRuntimeNotice)
   Summary(SessionSummary)
-  Terminal(SessionTerminal)
+  Terminal(@openseek_protocol.TurnTerminal)
   UnknownTerminal(Json)
   Unknown(Json)
 } derive(Eq, @debug.Debug)
@@ -2191,20 +2192,6 @@ pub fn SessionSummary::not_equal(Self, Self) -> Bool
 pub fn SessionSummary::to_json(Self) -> Json
 pub fn SessionSummary::to_repr(Self) -> @debug.Repr
 
-pub(all) enum SessionTerminal {
-  Finished(String)
-  Aborted(String)
-  Interrupted(String)
-  Failed(String)
-} derive(Eq, @debug.Debug)
-pub fn SessionTerminal::equal(Self, Self) -> Bool
-pub fn SessionTerminal::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn SessionTerminal::not_equal(Self, Self) -> Bool
-pub fn SessionTerminal::to_json(Self) -> Json
-pub fn SessionTerminal::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SessionTerminal
-pub impl @json.FromJson for SessionTerminal
-
 pub(all) struct SessionToolCall {
   id : String
   name : String
@@ -2232,6 +2219,7 @@ pub impl ToJson for SessionToolResult
 pub impl @json.FromJson for SessionToolResult
 
 pub(all) struct SessionUserMessage {
+  origin : @openseek_protocol.InputOrigin
   content : String
   submission_id : String?
 } derive(Eq, @debug.Debug)
@@ -2812,5 +2800,10 @@ pub fn WorktreesReply::to_json(Self) -> Json
 pub fn WorktreesReply::to_repr(Self) -> @debug.Repr
 
 // Type aliases
+pub using @openseek_protocol {type GoalChange}
+
+pub using @openseek_protocol {type InputOrigin}
+
+pub using @openseek_protocol {type TurnTerminal}
 
 // Traits

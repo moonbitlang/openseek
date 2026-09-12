@@ -1,5 +1,6 @@
 import {
   "bobzhang/openseek/agent_session",
+  "bobzhang/openseek_protocol",
   "bobzhang/openseek/agent_session/log" @session_log,
   "bobzhang/openseek/viz",
   "moonbit-community/rabbita",

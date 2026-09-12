@@ -10,7 +10,7 @@ export class VizBrowserHarness {
     this.childEvents = new Map();
     this.events = [
       JSON.stringify({
-        version: 1,
+        version: 2,
         id: 'viz-1',
         system_prompt: 'You are a browser fixture.',
       }),
@@ -19,7 +19,7 @@ export class VizBrowserHarness {
         ts: 1_000,
         item: {
           kind: 'user',
-          payload: { content: 'Inspect the session viewer' },
+          payload: { origin: 'human', content: 'Inspect the session viewer' },
         },
       }),
       JSON.stringify({
@@ -133,7 +133,7 @@ export class VizBrowserHarness {
     // on the harness makes custom edge cases readable without inventing a
     // second parser or a test-only model representation.
     return [
-      JSON.stringify({ version: 1, id, system_prompt: systemPrompt }),
+      JSON.stringify({ version: 2, id, system_prompt: systemPrompt }),
       // The durable wire always carries `ts`; zero is its legacy spelling for
       // an unstamped event. Make omission in a test case mean that exact wire
       // value instead of producing an invalid JSONL line.

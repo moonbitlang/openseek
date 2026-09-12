@@ -102,7 +102,7 @@ test('a subrun link opens the child session', async ({ page }) => {
   viewer.events = viewer.eventLog([
     {
       sequence: 1,
-      item: { kind: 'user', payload: { content: 'Delegate the investigation' } },
+      item: { kind: 'user', payload: { origin: 'human', content: 'Delegate the investigation' } },
     },
     {
       sequence: 2,
@@ -144,7 +144,7 @@ test('a subrun link opens the child session', async ({ page }) => {
   viewer.childEvents.set(childId, viewer.eventLog([
     {
       sequence: 1,
-      item: { kind: 'user', payload: { content: 'Child investigation' } },
+      item: { kind: 'user', payload: { origin: 'delegated', content: 'Child investigation' } },
     },
     {
       sequence: 2,
@@ -264,7 +264,7 @@ test('keyboard shortcut unfolds the nearest card', async ({ page }) => {
   viewer.events = viewer.eventLog([
     {
       sequence: 1,
-      item: { kind: 'user', payload: { content: 'Unfold the command' } },
+      item: { kind: 'user', payload: { origin: 'human', content: 'Unfold the command' } },
     },
     {
       sequence: 2,
@@ -335,14 +335,14 @@ test('the raised user card marks only the prompts a person typed', async ({ page
     + 'that by calling the goal tool with status "met".';
   const viewer = new VizBrowserHarness(page);
   viewer.events = viewer.eventLog([
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Ship the viewer change' } } },
+    { sequence: 1, item: { kind: 'user', payload: { origin: 'human', content: 'Ship the viewer change' } } },
     {
       sequence: 2,
       item: { kind: 'assistant', payload: { content: 'On it.', tool_calls: [] } },
     },
-    { sequence: 3, item: { kind: 'user', payload: { content: 'Also update the docs' } } },
+    { sequence: 3, item: { kind: 'user', payload: { origin: 'human', content: 'Also update the docs' } } },
     { sequence: 4, item: { kind: 'terminal', payload: { kind: 'finished', message: 'Done.' } } },
-    { sequence: 5, item: { kind: 'user', payload: { content: continuePrompt } } },
+    { sequence: 5, item: { kind: 'user', payload: { origin: 'auto_continue', content: continuePrompt } } },
     {
       sequence: 6,
       item: { kind: 'terminal', payload: { kind: 'finished', message: 'Done again.' } },
@@ -392,7 +392,7 @@ test('the prompt rail previews typed prompts and jumps to them', async ({ page }
     {
       sequence: 1,
       ts: 1788316865000,
-      item: { kind: 'user', payload: { content: 'Ship the viewer change' } },
+      item: { kind: 'user', payload: { origin: 'human', content: 'Ship the viewer change' } },
     },
     {
       sequence: 2,
@@ -405,7 +405,7 @@ test('the prompt rail previews typed prompts and jumps to them', async ({ page }
         payload: { content: `Progress update ${index + 1}` },
       },
     })),
-    { sequence: 33, item: { kind: 'user', payload: { content: 'Also update the docs' } } },
+    { sequence: 33, item: { kind: 'user', payload: { origin: 'human', content: 'Also update the docs' } } },
     {
       sequence: 34,
       item: {
@@ -456,7 +456,7 @@ test("a subagent transcript's task is not captioned as the user's", async ({ pag
   const viewer = new VizBrowserHarness(page);
   viewer.sessionId = 'viz-1-sr-1';
   viewer.events = viewer.eventLog([
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Question: which version?' } } },
+    { sequence: 1, item: { kind: 'user', payload: { origin: 'human', content: 'Question: which version?' } } },
     {
       sequence: 2,
       item: { kind: 'assistant', payload: { content: 'Looking it up.', tool_calls: [] } },

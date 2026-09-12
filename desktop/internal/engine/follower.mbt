@@ -588,17 +588,17 @@ test "session_max_sequence is the snapshot's watermark" {
       {
         sequence: 5,
         ts: None,
-        item: User({ content: "five", submission_id: None, }),
+        item: User({ origin: Human, content: "five", submission_id: None, }),
       },
       {
         sequence: 9,
         ts: None,
-        item: User({ content: "nine", submission_id: None, }),
+        item: User({ origin: Human, content: "nine", submission_id: None, }),
       },
       {
         sequence: 7,
         ts: None,
-        item: User({ content: "seven", submission_id: None, }),
+        item: User({ origin: Human, content: "seven", submission_id: None, }),
       },
     ]),
   }
@@ -610,7 +610,7 @@ test "session_max_sequence is the snapshot's watermark" {
 /// One durable event line, as the store writes them.
 #cfg(not(platform="windows"))
 fn session_user_event(sequence : Int, content : String) -> String {
-  "{\"sequence\":\{sequence},\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"\{content}\"}}}"
+  "{\"sequence\":\{sequence},\"item\":{\"kind\":\"user\",\"payload\":{\"origin\":\"human\",\"content\":\"\{content}\"}}}"
 }
 
 ///|
@@ -625,7 +625,7 @@ async fn write_session_record(
   let path = @session_record.record_path(root, session)
   @fsx.ensure_dir(path.dirname())
   let text = StringBuilder()
-  text <+ "{\"version\":1,\"id\":\"\{session}\",\"system_prompt\":\"\"}\n"
+  text <+ "{\"version\":2,\"id\":\"\{session}\",\"system_prompt\":\"\"}\n"
   for event in events {
     text.write_string(event)
     text <+ "\n"

@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub const SessionFormatVersion : Int = 2
+
 pub fn parse(Json) -> Event?
 
 pub fn split_child_session_id(String) -> (String, Int)?
@@ -99,6 +101,37 @@ pub fn Event::not_equal(Self, Self) -> Bool
 pub fn Event::to_json(Self) -> Json
 pub fn Event::to_repr(Self) -> @debug.Repr
 
+pub(all) struct GoalBaseline {
+  sha : String
+  dirty : Bool
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+
+pub(all) enum GoalBaselineState {
+  Captured(GoalBaseline)
+  Unavailable
+} derive(Eq, @debug.Debug)
+pub impl ToJson for GoalBaselineState
+pub impl @json.FromJson for GoalBaselineState
+
+pub(all) enum GoalChange {
+  GoalSet(String, baseline~ : GoalBaselineState)
+  GoalCleared
+  GoalBlocked(String)
+  GoalUnblocked
+} derive(Eq, @debug.Debug)
+pub fn GoalChange::model_content(Self) -> String
+pub impl ToJson for GoalChange
+pub impl @json.FromJson for GoalChange
+
+pub(all) enum InputOrigin {
+  Human
+  Command
+  AutoContinue
+  Delegated
+} derive(Eq, @debug.Debug)
+pub impl ToJson for InputOrigin
+pub impl @json.FromJson for InputOrigin
+
 pub(all) enum JobEventKind {
   Started
   Updated
@@ -180,6 +213,16 @@ pub(all) enum SteerKind {
 pub fn SteerKind::equal(Self, Self) -> Bool
 pub fn SteerKind::not_equal(Self, Self) -> Bool
 pub fn SteerKind::to_repr(Self) -> @debug.Repr
+
+pub(all) enum TurnTerminal {
+  Finished(String)
+  ContextYield(String)
+  Aborted(String)
+  Interrupted(String)
+  Failed(String)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for TurnTerminal
+pub impl @json.FromJson for TurnTerminal
 
 pub(all) struct Usage {
   prompt_tokens : Int

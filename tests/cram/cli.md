@@ -249,8 +249,8 @@ $ sh <<'EOF'
 > tmp=$(mktemp -d)
 > mkdir -p "$tmp/sessions/demo"
 > cat > "$tmp/sessions/demo/openseek_session-demo.jsonl" <<'JSONL'
-> {"version":1,"id":"demo","system_prompt":"system"}
-> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
+> {"version":2,"id":"demo","system_prompt":"system"}
+> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"origin":"human","content":"hello"}}}
 > {"sequence":2,"ts":0,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}
 > JSONL
 > printf 'hello and answer' > "$tmp/summary.txt"
@@ -261,9 +261,9 @@ $ sh <<'EOF'
 > rm -rf "$tmp"
 > EOF
 demo
-{"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
+{"version":2,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"origin":"human","content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}}]}
 compacted session demo events 1..2; last_sequence=3
-{"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}},{"sequence":3,"item":{"kind":"summary","payload":{"content":"hello and answer","from_sequence":1,"to_sequence":2}}}]}
+{"version":2,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"origin":"human","content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}},{"sequence":3,"item":{"kind":"summary","payload":{"content":"hello and answer","from_sequence":1,"to_sequence":2}}}]}
 ```
 
 ## `openseek run` Records A Session By Default

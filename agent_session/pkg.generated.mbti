@@ -3,35 +3,20 @@ package "bobzhang/openseek/agent_session"
 
 import {
   "bobzhang/openseek/deepseek",
+  "bobzhang/openseek_protocol",
   "moonbitlang/core/debug",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
 }
 
 // Values
-pub const ContextYieldAnswerPrefix : String = "[context ceiling]"
-
-pub const GoalBlockedPrefix : String = "[goal blocked]"
-
 pub const GoalCheckPrefix : String = "[goal check]"
-
-pub const GoalClearedNotice : String = "[goal cleared]"
 
 pub const GoalContinuePrompt : String = "Continue working toward the standing goal. When it is fully met, record\nthat by calling the goal tool with status \"met\"."
 
-pub const GoalPrefix : String = "[goal]"
-
 pub const GoalReminderPrefix : String = "[goal reminder]"
 
-pub const GoalUnblockedNotice : String = "[goal unblocked]"
-
 pub const PlanReminderPrefix : String = "[plan reminder]"
-
-pub fn goal_baseline_notice(sha~ : String, dirty~ : Bool) -> String
-
-pub fn goal_marker(String) -> GoalMarker?
-
-pub fn parse_goal_baseline(String) -> GoalBaseline?
 
 // Errors
 
@@ -42,18 +27,6 @@ pub fn AssistantMessage::content(Self) -> String
 pub fn AssistantMessage::is_replay(Self) -> Bool
 pub fn AssistantMessage::reasoning_content(Self) -> String?
 pub fn AssistantMessage::tool_calls(Self) -> Array[@deepseek.ToolCall]
-
-pub(all) struct GoalBaseline {
-  sha : String
-  dirty : Bool
-} derive(Eq, @debug.Debug)
-
-pub enum GoalMarker {
-  GoalSet(String)
-  GoalCleared
-  GoalBlocked(String)
-  GoalUnblocked
-} derive(@debug.Debug)
 
 type RuntimeNotice derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn RuntimeNotice::RuntimeNotice(String) -> Self
@@ -66,7 +39,7 @@ pub fn Session::append_event(Self, SessionItem, unix_ms? : Int64) -> (Self, Sess
 pub fn Session::chat_messages(Self) -> Array[@deepseek.ChatMessage]
 pub fn Session::compact(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int, unix_ms? : Int64) -> Self raise
 pub fn Session::current_goal(Self) -> StandingGoal?
-pub fn Session::current_goal_baseline(Self) -> GoalBaseline?
+pub fn Session::current_goal_baseline(Self) -> @openseek_protocol.GoalBaseline?
 pub fn Session::events(Self) -> @vector.Vector[SessionEvent]
 pub fn Session::id(Self) -> SessionId
 pub fn Session::last_sequence(Self) -> Int
@@ -91,9 +64,10 @@ pub(all) enum SessionItem {
   User(UserMessage)
   Assistant(AssistantMessage)
   Tool(ToolResult)
+  Goal(@openseek_protocol.GoalChange)
   Runtime(RuntimeNotice)
   Summary(SessionSummary)
-  Terminal(TurnTerminal)
+  Terminal(@openseek_protocol.TurnTerminal)
 } derive(Eq, @debug.Debug)
 pub impl @json.FromJson for SessionItem
 
@@ -105,6 +79,7 @@ pub fn SessionSummary::to_sequence(Self) -> Int
 
 type StandingGoal derive(@debug.Debug)
 pub fn StandingGoal::answered_since_set(Self) -> Bool
+pub fn StandingGoal::baseline(Self) -> @openseek_protocol.GoalBaselineState
 pub fn StandingGoal::blocked(Self) -> Bool
 pub fn StandingGoal::set_sequence(Self) -> Int
 pub fn StandingGoal::text(Self) -> String
@@ -117,19 +92,21 @@ pub fn ToolResult::is_error(Self) -> Bool
 pub fn ToolResult::tool_call_id(Self) -> String
 pub fn ToolResult::tool_name(Self) -> String
 
-pub(all) enum TurnTerminal {
-  Finished(String)
-  Aborted(String)
-  Interrupted(String)
-  Failed(String)
-} derive(Eq, @debug.Debug)
-pub impl @json.FromJson for TurnTerminal
-
 type UserMessage derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn UserMessage::UserMessage(String, submission_id? : String) -> Self
+pub fn UserMessage::UserMessage(String, origin? : @openseek_protocol.InputOrigin, submission_id? : String) -> Self
 pub fn UserMessage::content(Self) -> String
+pub fn UserMessage::origin(Self) -> @openseek_protocol.InputOrigin
 pub fn UserMessage::submission_id(Self) -> String?
 
 // Type aliases
+pub using @openseek_protocol {type GoalBaseline}
+
+pub using @openseek_protocol {type GoalBaselineState}
+
+pub using @openseek_protocol {type GoalChange}
+
+pub using @openseek_protocol {type InputOrigin}
+
+pub using @openseek_protocol {type TurnTerminal}
 
 // Traits

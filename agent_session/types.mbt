@@ -1,21 +1,4 @@
 ///|
-/// The answer prefix every context-yield terminal carries. A turn that ends
-/// at the model's context ceiling is persisted as `Terminal(Finished(...))`
-/// — a distinct terminal kind would break old readers (the decoder is
-/// strict) and continuation machinery chains finished turns — so this
-/// prefix is how durable-log consumers distinguish a ceiling yield from
-/// task success. Lives here, next to the session model, because it is a
-/// raw-log contract: analyzers, fleet classification, and replay tooling
-/// all match on it.
-///
-/// Known, accepted limitation: a real answer that happens to START with
-/// this text (e.g. a task asking the model to echo it) classifies as a
-/// yield. The collision fails toward NOT-success — never false success —
-/// and the durable format has no terminal-metadata side channel, so a
-/// spoof-proof sentinel is not worth the format change.
-pub const ContextYieldAnswerPrefix : String = "[context ceiling]"
-
-///|
 /// Stable identifier for one OpenSeek conversation.
 ///
 /// `SessionId` is stored in every `Session` and is also used by
@@ -102,10 +85,10 @@ pub fn SessionId::generated(
 /// echoed from the serve `prompt` command so a delivery can be reconciled by
 /// exact id rather than by matching text (two clients can submit identical
 /// text into one session). None for untagged input: steers, TUI and one-shot
-/// prompts, and every record written before the field existed. Encoding
-/// omits it when absent, so untagged lines are byte for byte what this store
-/// has always written.
+/// prompts. Encoding omits the submission tag when absent; `origin` is
+/// always explicit and independent of the message content.
 struct UserMessage {
+  origin : InputOrigin
   content : String
   submission_id : String?
 } derive(Eq, Debug, ToJson, FromJson)
@@ -134,9 +117,10 @@ fn SessionToolCall::to_deepseek(self : SessionToolCall) -> @deepseek.ToolCall {
 /// messages are preserved because they may be meaningful to a caller or test.
 pub fn UserMessage::UserMessage(
   content : String,
+  origin? : InputOrigin = Human,
   submission_id? : String,
 ) -> UserMessage {
-  { content, submission_id, }
+  { content, submission_id, origin, }
 }
 
 ///|
@@ -356,33 +340,18 @@ pub fn SessionSummary::to_sequence(self : SessionSummary) -> Int {
 }
 
 ///|
-/// How an agent turn ended.
-///
-/// `Finished` carries the final assistant answer. `Aborted` carries the
-/// agent's own abort reason. `Interrupted` carries an external cancellation
-/// reason. `Failed` carries the failure message. In a complete turn, the last
-/// event is exactly one `Terminal`; if a session ends without one, replay is
-/// seeing a turn that was cut off mid-flight.
-pub(all) enum TurnTerminal {
-  /// The agent completed normally and produced a final assistant answer.
-  /// Non-blank text projects as an assistant message for later turns.
-  Finished(String)
-  /// The agent intentionally stopped before normal completion, usually because
-  /// a control tool requested abort. The reason projects as an assistant status
-  /// message.
-  Aborted(String)
-  /// The turn was externally cancelled, for example by task cancellation or
-  /// user interruption. The reason projects as an assistant status message.
-  Interrupted(String)
-  /// The turn ended because an unexpected error escaped the agent loop. The
-  /// failure message projects as an assistant status message.
-  Failed(String)
-} derive(Eq, Debug)
+pub using @protocol {
+  type TurnTerminal,
+  type GoalChange,
+  type GoalBaseline,
+  type GoalBaselineState,
+  type InputOrigin,
+}
 
 ///|
 /// Payload vocabulary for one `SessionEvent`.
 ///
-/// `User` and `Runtime` project as user-role model messages. `Assistant`
+/// `User`, `Goal`, and `Runtime` project as user-role model messages. `Assistant`
 /// projects as an assistant message and may open pending tool calls. `Tool`
 /// answers a pending assistant tool call. `Summary` is append-only compaction
 /// metadata that can replace older events during projection. `Terminal`
@@ -403,6 +372,8 @@ pub(all) enum SessionItem {
   /// Runtime-injected context, such as a plan reminder. JSON tag:
   /// `runtime_notice`. Projection sends it as a user-role message even though it
   /// did not originate from the user's prompt.
+  /// Durable goal transition, including the set operation's baseline.
+  Goal(GoalChange)
   Runtime(RuntimeNotice)
   /// Append-only compaction metadata for an inclusive event sequence range.
   /// JSON tag: `summary`. Projection skips covered earlier events when a later
@@ -785,16 +756,6 @@ pub extend ToolResult with ToJson::{to_json}
 ///|
 #doc(hidden)
 #deprecated
-pub extend TurnTerminal with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend TurnTerminal with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
 pub extend UserMessage with Debug::{to_repr}
 
 ///|
@@ -811,3 +772,9 @@ pub extend UserMessage with Eq::{equal, not_equal}
 #doc(hidden)
 #deprecated
 pub extend UserMessage with ToJson::{to_json}
+
+///|
+/// Who supplied this model input.
+pub fn UserMessage::origin(self : UserMessage) -> InputOrigin {
+  self.origin
+}
