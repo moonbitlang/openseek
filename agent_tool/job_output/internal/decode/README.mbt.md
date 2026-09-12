@@ -15,15 +15,20 @@ are separate operations; this decoder never selects a wait duration.
 ```mbt check
 ///|
 test "decode an immediate tail read" {
-  let input = @decode.decode({ "job_id": "bg-3" })
-  assert_eq(input.job_id, "bg-3")
+  let input = @decode.decode({
+    "job_id": "0194e3c1-2345-7abc-8def-0123456789ab",
+  })
+  assert_eq(input.job_id, "0194e3c1-2345-7abc-8def-0123456789ab")
   assert_eq(input.offset, None)
 }
 
 ///|
 test "decode an earlier output window" {
   assert_eq(
-    @decode.decode({ "job_id": "bg-3", "offset": 12000 }).offset,
+    @decode.decode({
+      "job_id": "0194e3c1-2345-7abc-8def-0123456789ab",
+      "offset": 12000,
+    }).offset,
     Some(12000),
   )
 }

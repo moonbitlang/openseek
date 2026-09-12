@@ -18,7 +18,7 @@ Output first, one `<system>` footer line last (the read workflow convention):
 
 ```text
 <recent output…>
-<system>job=bg-3 running truncated=true total_chars=48210 shown_chars=12000</system>
+<system>job=0194e3c1-2345-7abc-8def-0123456789ab running truncated=true total_chars=48210 shown_chars=12000</system>
 ```
 
 - The body is a **bounded tail window** (most recent output), never the full
