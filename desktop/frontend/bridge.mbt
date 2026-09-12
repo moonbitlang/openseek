@@ -218,7 +218,16 @@ fn device_msg(
         }
         paths.push(resource)
       }
-      Some(ProjectsChanged(paths))
+      let chat_root = match payload.chat_root {
+        Some(path) => {
+          guard @resource.of_path(channel, path) is Some(root) else {
+            return None
+          }
+          Some(root)
+        }
+        None => None
+      }
+      Some(ProjectsChanged(paths, chat_root~))
     }
     WorkspaceSettingsChanged(payload) =>
       workspace_settings_changed_msg(channel, payload)

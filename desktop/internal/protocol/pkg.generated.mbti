@@ -2701,15 +2701,18 @@ pub fn WorkspaceSymbolsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspacesChangedPayload {
   workspaces : Array[String]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  chat_root : String?
+} derive(Eq, @debug.Debug)
 pub fn WorkspacesChangedPayload::equal(Self, Self) -> Bool
 pub fn WorkspacesChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspacesChangedPayload::not_equal(Self, Self) -> Bool
 pub fn WorkspacesChangedPayload::to_json(Self) -> Json
 pub fn WorkspacesChangedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorkspacesChangedPayload
+pub impl @json.FromJson for WorkspacesChangedPayload
 
 pub(all) enum WorkspacesReply {
-  Workspaces(Array[String])
+  Workspaces(Array[String], chat_root~ : String?)
   WorkspaceError(String)
 } derive(Eq, @debug.Debug)
 pub fn WorkspacesReply::equal(Self, Self) -> Bool

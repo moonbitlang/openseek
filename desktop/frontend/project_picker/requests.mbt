@@ -143,35 +143,3 @@ fn String::picker_child_path(self : String, name : String) -> String {
     self + "/" + name
   }
 }
-
-///|
-/// The host chooses the stable directory. The existing Picked outcome then
-/// registers and focuses it exactly like a user-selected folder.
-fn create_unnamed_workspace(
-  emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  generation~ : Int,
-) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
-      let result : Result[String, String] = try {
-        match
-          @interop.bridge_request(
-            channel,
-            @commands.fs_create_unnamed_workspace,
-            @protocol.EmptyPayload::NoPayload,
-          ) {
-          Listing(path~, ..) => Ok(path)
-          BrowseError(message) => Err(message)
-          Drives(_) =>
-            Err("the host returned a drive list instead of a workspace")
-        }
-      } catch {
-        error => Err(@interop.bridge_error_text(error))
-      }
-      scheduler.add(
-        emit(UnnamedWorkspaceFinished(channel~, generation~, result~)),
-      )
-    })
-  })
-}

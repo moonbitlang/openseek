@@ -3878,7 +3878,11 @@ fn update_msg(
       // running in the background and stays one sidebar click away. It lands
       // in the active workspace — the one the on-screen conversation uses —
       // and starts with whichever agent the model chip was last picked from.
-      if model.default_agent is CodexAgent {
+      if model.focused_device() is Some(dev) &&
+        dev.active_project is Some(project) &&
+        dev.is_chat_workspace(project) {
+        update(dispatch, CreateChat(model.focused), model)
+      } else if model.default_agent is CodexAgent {
         new_codex_chat(
           dispatch,
           model,
@@ -4081,6 +4085,46 @@ fn update_msg(
         },
       )
     }
+    CreateChat(channel) => {
+      guard !model.chat_creation_pending() &&
+        model.pending_project_adoption is None else {
+        return (@cmd.none, model)
+      }
+      guard model.device_state(channel) is Some(dev) && dev.bridge is Connected else {
+        return (@cmd.none, model)
+      }
+      let generation = model.chat_creation_sequence + 1
+      let (focus_cmd, model) = focus_channel(dispatch, model, channel)
+      (
+        @cmd.batch([
+          focus_cmd,
+          create_chat_workspace(dispatch, channel, generation~),
+        ]),
+        {
+          ..model,
+          project_picker: None,
+          chat_creation: Some((channel, generation, dev.connection_generation)),
+          chat_creation_sequence: generation,
+        },
+      )
+    }
+    ChatWorkspaceCreated(channel~, generation~, result~) => {
+      guard model.chat_creation is Some((owner, expected, connection)) &&
+        owner == channel &&
+        expected == generation else {
+        return (@cmd.none, model)
+      }
+      let model = { ..model, chat_creation: None, }
+      guard model.device_state(channel) is Some(dev) &&
+        dev.connection_generation == connection else {
+        return (@cmd.none, model)
+      }
+      match result {
+        Ok(path) => adopt_picked_directory(dispatch, channel, path, model)
+        Err(message) =>
+          model.notify_error(dispatch, "Cannot create chat: \{message}")
+      }
+    }
     PickProject(channel) => {
       // Focus moves for the surrounding UI, while the picker itself keeps
       // `channel` as its owner through every later navigation and confirm.
@@ -4133,29 +4177,10 @@ fn update_msg(
             // navigates (and validates) first. The pending adoption later
             // focuses the project the add committed.
             Some(@project_picker.Outcome::Picked(channel, path)) => {
-              guard @resource.of_path(channel, path) is Some(picked) else {
-                let (toast, model) = model.notify_error(
-                  dispatch, "The selected folder returned an invalid path.",
-                )
-                return (@cmd.batch([cmd, toast]), model)
-              }
-              let known = match model.device_state(channel) {
-                Some(dev) => dev.projects.copy()
-                None => []
-              }
-              (
-                @cmd.batch([cmd, add_project(dispatch, channel, path)]),
-                {
-                  ..model,
-                  pending_project_adoption: Some({
-                    channel,
-                    requested: path,
-                    picked,
-                    known,
-                    resolved: None,
-                  }),
-                },
+              let (add_cmd, next) = adopt_picked_directory(
+                dispatch, channel, path, model,
               )
+              (@cmd.batch([cmd, add_cmd]), next)
             }
           }
         }
@@ -6186,7 +6211,12 @@ fn update_device_msg(
       }
       (@cmd.batch(commands), next)
     }
-    ProjectsLoaded(paths, connection_generation~, request_generation~) => {
+    ProjectsLoaded(
+      paths,
+      connection_generation~,
+      request_generation~,
+      chat_root~
+    ) => {
       guard connection_generation == dev.connection_generation &&
         request_generation == dev.projects_request_generation else {
         return (@cmd.none, model)
@@ -6195,14 +6225,20 @@ fn update_device_msg(
       // keep open. `adopt_projects` drops conversations from detached
       // stores; their durable records remain on disk and return through the
       // next session list after the workspace is attached again.
-      adopt_projects(dispatch, channel, model, paths)
+      adopt_projects(
+        dispatch,
+        channel,
+        model.replace_device({ ..dev, chat_root, }),
+        paths,
+      )
     }
-    ProjectsChanged(paths) => {
+    ProjectsChanged(paths, chat_root~) => {
       // The post-commit broadcast is newer than every list request issued so
       // far. Advance the token before applying it, so an older list reply can
       // never roll any client back after this canonical mutation order.
       let next = model.replace_device({
         ..dev,
+        chat_root,
         projects_request_generation: dev.projects_request_generation + 1,
       })
       adopt_projects(dispatch, channel, next, paths)
@@ -13439,8 +13475,8 @@ test "Codex threads share the Projects section's project rows" {
     ],
   })
   let sections = model.sidebar_component_sections(model.dev())
-  // The Projects section and the Archived section — no Codex section.
-  assert_eq(sections.length(), 2)
+  // Projects, Chats, and Archived share the sidebar across both agents.
+  assert_eq(sections.length(), 3)
   inspect(sections[0].label, content="Projects")
   guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")

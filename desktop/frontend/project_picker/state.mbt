@@ -93,12 +93,6 @@ pub(all) enum Msg {
   NewFolderNameChanged(String)
   CancelCreateFolder
   CreateFolder
-  CreateUnnamedWorkspace
-  UnnamedWorkspaceFinished(
-    channel~ : @interop.ChannelId,
-    generation~ : Int,
-    result~ : Result[String, String]
-  )
   // Register the picker's current directory and close it.
   Confirm
   Close
@@ -355,35 +349,6 @@ pub fn State::handle(
         }
         _ => (@cmd.none, Some(self), None)
       }
-    CreateUnnamedWorkspace => {
-      guard !self.loading else { return (@cmd.none, Some(self), None) }
-      let generation = fresh_request_generation()
-      (
-        create_unnamed_workspace(emit, self.channel, generation~),
-        Some({
-          ..self,
-          loading: true,
-          new_folder: None,
-          path_draft: None,
-          generation,
-        }),
-        None,
-      )
-    }
-    UnnamedWorkspaceFinished(channel~, generation~, result~) => {
-      guard channel == self.channel && generation == self.generation else {
-        return (@cmd.none, Some(self), None)
-      }
-      match result {
-        Ok(path) => (@cmd.none, None, Some(Picked(channel, path)))
-        Err(message) =>
-          (
-            @cmd.none,
-            Some({ ..self, loading: false, }),
-            Some(Failed("Cannot create unnamed workspace: \{message}")),
-          )
-      }
-    }
     Confirm =>
       // Register the directory the host last listed — always something it
       // confirmed exists — never raw pasted text; a paste navigates (and

@@ -152,25 +152,6 @@ pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {
             @icons.icon(@icons.icon_close),
           ),
         ]),
-        @html.div(class="picker-unnamed-workspace", [
-          @html.div([
-            @html.div(
-              class="picker-unnamed-title",
-              "Start without choosing a folder",
-            ),
-            @html.div(
-              class="picker-subtitle",
-              "Files are saved on this device and kept after you close the app.",
-            ),
-          ]),
-          @html.button(
-            class="button",
-            type_="button",
-            disabled=picker.loading,
-            on_click=emit(CreateUnnamedWorkspace),
-            "Create unnamed workspace",
-          ),
-        ]),
         @html.div(class="picker-location-bar", [
           match picker.path_draft {
             Some(value) => path_editor(emit, picker, value, suggestion_active)

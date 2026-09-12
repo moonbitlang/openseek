@@ -117,7 +117,9 @@ fn Model::transcript_projects(
 ) -> Array[@transcript_component.ProjectChoice] {
   guard self.focused_device() is Some(dev) else { return [] }
   [
-    for root in dev.projects => { root, label: @resource.label(root), }
+    for root in dev.projects if !dev.is_chat_workspace(root) => {
+      { root, label: @resource.label(root), }
+    }
   ]
 }
 
@@ -129,7 +131,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       let placement = self.codex.active_placement(self.focused)
       let project_label = placement
         .bind(value => value.project_root())
-        .map(project => @resource.label(project))
+        .bind(project => self.project_display_label(project))
       @transcript_component.Input(
         dark_mode=self.theme.is_dark(self.system_dark),
         source=@transcript_component.Codex,
@@ -177,7 +179,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             focused=self.focused,
             active_session=self.active_session,
             scroll=self.remembered_scroll(),
-            project_label=@resource.label(conversation.project()),
+            project_label?=self.project_display_label(conversation.project()),
             current_project=Some(conversation.project()),
             projects~,
             can_choose_project~,
@@ -195,5 +197,14 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
           )
         }
       }
+  }
+}
+
+///|
+fn Model::project_display_label(self : Model, project : @common.Uri) -> String? {
+  if self.focused_device() is Some(dev) && dev.is_chat_workspace(project) {
+    None
+  } else {
+    Some(@resource.label(project))
   }
 }

@@ -1256,6 +1256,7 @@ priv struct DeviceState {
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
   projects : Array[@common.Uri]
+  chat_root : @common.Uri?
   // Each project's worktree registry rows, refreshed with the project list
   // and replaced wholesale by `worktree.changed`. The sidebar's name
   // chips read them.
@@ -1291,6 +1292,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     archived: [],
     archive_overrides: [],
     projects: [],
+    chat_root: None,
     worktrees: [],
     workspace_settings: [],
     active_project: None,
@@ -1537,6 +1539,8 @@ priv struct Model {
   project_picker : @project_picker.State?
   // A confirmed add waiting for its registry snapshot; None otherwise.
   pending_project_adoption : ProjectAdoption?
+  chat_creation : (@interop.ChannelId, Int, Int)?
+  chat_creation_sequence : Int
   screen : Screen
   // Codex app-server has an independent durable thread/turn/item model. Keep
   // its page state beside the screen selector instead of folding it into an
@@ -1937,6 +1941,12 @@ priv enum Msg {
   // Open the in-app folder picker against one device's host (browsing starts
   // at that host's home directory), selecting its channel first if needed.
   PickProject(@interop.ChannelId)
+  CreateChat(@interop.ChannelId)
+  ChatWorkspaceCreated(
+    channel~ : @interop.ChannelId,
+    generation~ : Int,
+    result~ : Result[String, String]
+  )
   // The Cmd/Ctrl+O chord: open the folder picker for the focused device. A
   // no-op while the picker is already open, so a repeat chord cannot yank
   // the listing back to the home directory mid-navigation.
@@ -2248,12 +2258,13 @@ priv enum DeviceMsg {
   // generation rejects an older reply from the current connection.
   ProjectsLoaded(
     Array[@common.Uri],
+    chat_root~ : @common.Uri?,
     connection_generation~ : Int,
     request_generation~ : Int
   )
   // The host's canonical post-commit registry broadcast. Every client adopts
   // the same list in durable write order and invalidates older list replies.
-  ProjectsChanged(Array[@common.Uri])
+  ProjectsChanged(Array[@common.Uri], chat_root~ : @common.Uri?)
   // Our own `workspace.add`'s reply: the canonical list right after the
   // commit, produced under the registry lock. `added` echoes the request's
   // directory, pairing the reply with the confirm that sent it — a reply
@@ -2641,6 +2652,8 @@ fn initial_model() -> Model {
     conversations: [],
     project_picker: None,
     pending_project_adoption: None,
+    chat_creation: None,
+    chat_creation_sequence: 0,
     archive_confirm: None,
     archived_delete_confirm: None,
     conversation_rename: None,
@@ -3390,7 +3403,8 @@ fn Model::can_choose_new_chat_project(self : Model) -> Bool {
     self.focused_device() is Some(dev) else {
     return false
   }
-  dev.projects.contains(conv.project())
+  dev.projects.contains(conv.project()) &&
+  !dev.is_chat_workspace(conv.project())
 }
 
 ///|

@@ -731,23 +731,6 @@ button.row-twisty:hover {
   outline: 1px solid var(--color-focus-ring);
   outline-offset: 1px;
 }
-.picker-unnamed-workspace {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
-}
-.picker-unnamed-title {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-}
-.picker-unnamed-workspace .button {
-  flex: none;
-}
 .picker-location-bar {
   display: flex;
   align-items: center;
