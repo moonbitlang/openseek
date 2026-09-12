@@ -158,3 +158,17 @@ refinements were made after the running phases had already started; the
 publication was verified, but they are not retroactively counted as obeyed by
 that run. Source/gate results and the PR receipt are the delivery evidence;
 model prompts alone do not guarantee compliance on future runs.
+
+### Observed termination failure
+
+Following the run through publication exposed a stronger failure: after its
+first CI monitor finished (514.6 seconds), the agent launched a **second**
+bounded monitor instead of returning the PR link. The host interrupted the
+experiment at that point and preserved the published PR. Publication had taken
+805.7 seconds from startup; final diff review alone took 368.9 seconds.
+The publication path passed, but the final-response/termination contract did
+**not** pass. The host subsequently recorded the observed CI snapshot in the
+existing PR body; this was not an autonomous completion of that final stage.
+The later one-shot-CI/no-repeated-gates recipe changes were added after this
+run started and still require a fresh behavioral test. This sample also starts
+from a known candidate; it does not measure whole-repository discovery recall.
