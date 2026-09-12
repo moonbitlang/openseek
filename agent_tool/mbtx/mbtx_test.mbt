@@ -2142,3 +2142,46 @@ async test "CI monitor bundled entry forwards arguments before querying GitHub" 
     assert_true(out.content.contains("Expected seconds"), msg=out.content)
   })
 }
+
+///|
+// Exercise mbtx's handoff; the hosted library owns the subsequent child spawn.
+async test "the handoff reserves the worktree selected by cwd" {
+  @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+    @vfs.with_tmpdir(prefix="mbtx-store-", store => {
+      let other = ws + "/other worktree"
+      @fs.mkdir(other)
+      @fs.write_file(ws + "/marker", "parent", create_mode=CreateOrTruncate)
+      @fs.write_file(
+        other + "/marker",
+        "selected",
+        create_mode=CreateOrTruncate,
+      )
+      let source =
+        #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env", "moonbitlang/core/json" }
+        #|async fn main {
+        #|  guard @env.get_env_var("WORKFLOW_HOST") is Some(raw) else { fail("missing handoff") }
+        #|  guard @json.parse(raw) is { "cwd": String(child_cwd), .. } else { fail("missing child cwd") }
+        #|  println("snippet=" + @fs.read_file("marker").text())
+        #|  println("child=" + @fs.read_file(child_cwd + "/marker").text())
+        #|}
+      for cwd in ["other worktree", other] {
+        let (out, issued) = run_hosted_with(ws, store, {
+          "source": source,
+          "cwd": cwd,
+          "subrun": true,
+        })
+        assert_false(out.is_error, msg=out.content)
+        assert_eq(issued, @host.block_size)
+        assert_true(out.content.contains("snippet=selected"), msg=out.content)
+        assert_true(out.content.contains("child=selected"), msg=out.content)
+      }
+      let (out, _) = run_hosted_with(ws, store, {
+        "source": source,
+        "subrun": true,
+      })
+      assert_false(out.is_error, msg=out.content)
+      assert_true(out.content.contains("snippet=parent"), msg=out.content)
+      assert_true(out.content.contains("child=parent"), msg=out.content)
+    })
+  })
+}

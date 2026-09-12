@@ -115,3 +115,22 @@ test "the standing goal rides the guest environment beside the handoff" {
   assert_eq(env.get("OPENSEEK_GOAL_DIRTY"), Some("false"))
   assert_true(env.get("WORKFLOW_HOST") is Some(_))
 }
+
+///|
+test "a reservation's cwd does not change later reservations or session ownership" {
+  let injection = injection(Ref(0))
+  let selected = injection.reserve(cwd="/other worktree")
+  let next = injection.reserve()
+  let selected_env = selected.env()
+  let next_env = next.env()
+  guard selected_env.get("WORKFLOW_HOST") is Some(raw) else {
+    fail("missing selected handoff")
+  }
+  assert_true(@json.parse(raw) is { "cwd": "/other worktree", .. })
+  guard next_env.get("WORKFLOW_HOST") is Some(raw) else {
+    fail("missing default handoff")
+  }
+  assert_true(@json.parse(raw) is { "cwd": "/ws", .. })
+  assert_eq(selected.dir(), "/store/run7-wf-1")
+  assert_eq(next.dir(), "/store/run7-wf-33")
+}
