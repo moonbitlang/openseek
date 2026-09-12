@@ -322,57 +322,72 @@ html.is-resizing .sidebar-resize-handle {
   visibility: visible;
 }
 
-/* Section headings disclose their hierarchy. A section-owned creation action
-   is a labeled row beneath its heading, not another ambiguous plus in chrome. */
+/* Section disclosure and creation are sibling buttons so adding a project
+   never toggles the list. Keep the compact action available when folded. */
 .section-heading {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 0;
+  gap: 8px;
+  min-height: 32px;
+  margin-bottom: 2px;
   border-radius: var(--radius-sm);
+  font-size: var(--font-size-md);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
 }
 .section-heading:not(:first-child) {
-  margin-top: 14px;
+  margin-top: 18px;
 }
-.section-heading > .sidebar-label {
-  flex: 1 1 auto;
-}
-/* Every peer conversation section uses the same heading disclosure. */
-.section-heading.collapsible {
-  cursor: pointer;
-  user-select: none;
-}
-.section-heading.collapsible > .sidebar-label::after {
-  content: " ▾";
-}
-.section-heading.collapsible.collapsed > .sidebar-label::after {
-  content: " ▸";
-}
-.section-primary-action {
+.section-disclosure {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 34px;
-  margin: 0 0 4px;
-  padding: 0 8px;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-sm);
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: inherit;
   font: inherit;
-  font-size: var(--font-size-sm);
   text-align: left;
   cursor: pointer;
 }
+.section-chevron {
+  --icon-size: var(--icon-sm);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.section-heading.collapsed .section-chevron {
+  transform: rotate(-90deg);
+}
+.section-primary-action {
+  --icon-size: var(--icon-md);
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
 .section-primary-action:hover:not(:disabled) {
-  border-color: var(--color-accent-border);
-  background: var(--color-accent-soft);
+  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
+.section-disclosure:hover {
+  color: var(--color-text-primary);
+}
+.section-disclosure:focus-visible,
 .section-primary-action:focus-visible {
   outline: 2px solid var(--color-focus-ring);
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
 .section-primary-action:disabled {
   cursor: default;
@@ -382,6 +397,11 @@ html.is-resizing .sidebar-resize-handle {
 /* An attached workspace: a folder row whose main disclosure button folds its
    conversations. The hover controls remain separate siblings, so opening the
    action menu or starting a chat cannot also toggle the project. */
+.conversation-row + .workspace-row,
+.project-show-more + .workspace-row {
+  margin-top: 12px;
+}
+
 .workspace-row {
   display: flex;
   align-items: center;
@@ -415,7 +435,7 @@ html.is-resizing .sidebar-resize-handle {
   white-space: nowrap;
 }
 .workspace-disclosure > .sidebar-icon {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 .workspace-disclosure:focus-visible,
 .project-show-more:focus-visible {
@@ -501,7 +521,7 @@ button.composer-worktree:hover {
 .project-show-more {
   width: 100%;
   min-height: 28px;
-  padding: 0 8px 0 36px;
+  padding: 0 8px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;

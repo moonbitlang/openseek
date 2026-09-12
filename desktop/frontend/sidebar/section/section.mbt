@@ -257,29 +257,36 @@ pub fn component(
       class += " active"
     }
     let heading : Array[@html.Html] = [
-      @html.span(class="sidebar-label", input.label),
-    ]
-    let rows : Array[(String, @html.Html)] = [
-      (input.id.key(), @html.div(class~, on_click=emit(Toggle), heading)),
+      @html.button(
+        class="section-disclosure",
+        type_="button",
+        on_click=emit(Toggle),
+        attrs=@html.Attrs::build().aria_expanded((!collapsed).to_string()),
+        [
+          @html.span(class="sidebar-label", input.label),
+          @html.span(
+            class="section-chevron",
+            @icons.icon(@icons.icon_chevron_down),
+          ),
+        ],
+      ),
     ]
     if input.action is Some(action) {
-      rows.push(
-        (
-          "\{input.id.key()}:action",
-          @html.button(
-            class="section-primary-action",
-            type_="button",
-            title=action.title,
-            disabled=action.disabled,
-            on_click=(actions.primary)(input.id),
-            [
-              @html.span(class="sidebar-icon", @icons.icon(@icons.icon_add)),
-              @html.span(class="sidebar-label", action.title),
-            ],
-          ),
+      heading.push(
+        @html.button(
+          class="section-primary-action",
+          type_="button",
+          title=action.title,
+          disabled=action.disabled,
+          attrs=@html.Attrs::build().aria_label(action.title),
+          on_click=(actions.primary)(input.id),
+          @icons.icon(@icons.icon_add),
         ),
       )
     }
+    let rows : Array[(String, @html.Html)] = [
+      (input.id.key(), @html.div(class~, heading)),
+    ]
     if !collapsed {
       for group in entry_rows {
         for row in group {
