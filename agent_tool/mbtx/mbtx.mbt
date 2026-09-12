@@ -1747,7 +1747,12 @@ fn description(
     #|For agent workflows, use subrun=true with @builtin/review.mbtx (independent
     #|worktree audit against the criteria in args), @builtin/change-review.mbtx
     #|(working-tree review from three perspectives) or @builtin/repo-map.mbtx
-    #|(architecture, validation, extension points).
+    #|(architecture, validation, extension points). @builtin/de-slop.mbtx with
+    #|args=["."] and subrun=true scans the whole repository in bounded shards;
+    #|args=["PACKAGE"] runs a focused discovery/challenge pair. The caller
+    #|applies supported simplifications and runs project checks. Add --deliver
+    #|for the caller's one-small-PR loop in workflow/de-slop-deliver.md; continue
+    #|through final-diff review and publication when the user requested a PR.
     #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
     #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.
