@@ -183,6 +183,12 @@ test "host_of strips scheme, userinfo, and port" {
   assert_true(@preview.host_of("http://127.0.0.1") == Some("127.0.0.1"))
   assert_true(@preview.host_of("ftp://x/") is None)
   assert_true(@preview.host_of("not a url") is None)
+  assert_eq(
+    @preview.host_of("https://first@second@EXAMPLE.com:443/path"),
+    Some("example.com"),
+  )
+  assert_eq(@preview.host_of("https://user@"), Some(""))
+  assert_eq(@preview.host_of("https://user@Ä.EXAMPLE"), Some("Ä.example"))
 }
 
 ///|
