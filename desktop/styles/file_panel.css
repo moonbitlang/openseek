@@ -2880,6 +2880,13 @@ button.git-history-file.selected {
 .jobs-list { display: flex; flex-direction: column; gap: 18px; max-height: min(360px, 42vh); flex-shrink: 0; overflow: auto; padding: 2px; scrollbar-width: thin; }
 .jobs-group { flex-shrink: 0; min-width: 0; }
 .jobs-group-title { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
+.jobs-history-toggle { width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; text-align: left; font-family: inherit; }
+.jobs-history-toggle::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); margin: 0 3px; }
+.jobs-history-toggle[aria-expanded="true"]::before { transform: translateY(-2px) rotate(45deg); }
+.jobs-history-toggle[aria-expanded="false"] { margin-bottom: 0; }
+.jobs-history-toggle:hover { color: var(--color-text-primary); }
+.jobs-history-toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.jobs-more { margin-top: 8px; }
 .jobs-group-title::after { content: ""; height: 1px; flex: 1; background: var(--color-border); }
 .jobs-group-count { min-width: 20px; padding: 1px 6px; border-radius: 5px; background: var(--color-bg-surface); border: 1px solid var(--color-border); font-size: 10px; text-align: center; font-variant-numeric: tabular-nums; }
 .jobs-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px,100%),1fr)); gap: 8px; }

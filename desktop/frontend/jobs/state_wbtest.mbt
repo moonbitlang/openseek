@@ -389,7 +389,7 @@ test "initial selection prefers an active job and preserves selected history" {
     Listed(0, 0, Ok({ ..reply, jobs: [reply.jobs[0]], })),
     State::empty(),
   )
-  assert_eq(history_only.selected, Some(("runtime", "done")))
+  assert_true(history_only.selected is None)
 }
 
 ///|

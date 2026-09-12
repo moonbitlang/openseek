@@ -149,7 +149,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
       let group = state.jobs.filter(view => {
         view.job.state.is_terminal() == terminal
       })
-      if group.is_empty() {
+      if group.is_empty() && (!terminal || state.next_offset is None) {
         continue
       }
       let title = if terminal { "History" } else { "In progress" }
@@ -164,7 +164,11 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
           on_click=emit(Select(job.generation, job.id)),
           [
             @html.div(class="jobs-row-head", [
-              @html.span(class="jobs-id", title=job.id, short_job_id(job.id, state.jobs)),
+              @html.span(
+                class="jobs-id",
+                title=job.id,
+                short_job_id(job.id, state.jobs),
+              ),
               @html.span(
                 class="jobs-status jobs-status-\{status_class(job.state)}",
                 status_label(job.state),
@@ -181,27 +185,44 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
           ],
         )
       })
+      let label = [
+        @html.span(title),
+        @html.span(class="jobs-group-count", group.length().to_string()),
+      ]
+      let content : Array[@html.Html] = [@html.div(class="jobs-cards", cards)]
+      if terminal && state.next_offset is Some(_) {
+        content.push(
+          @html.button(
+            class="jobs-action jobs-more",
+            disabled=state.listing,
+            on_click=emit(More),
+            "Load older jobs",
+          ),
+        )
+      }
       rows.push(
         @html.div(
           class="jobs-group",
           attrs=@html.Attrs::build().role("group").aria_label(title),
-          [
-            @html.h4(class="jobs-group-title", [
-              @html.span(title),
-              @html.span(class="jobs-group-count", group.length().to_string()),
-            ]),
-            @html.div(class="jobs-cards", cards),
-          ],
-        ),
-      )
-    }
-    if state.next_offset is Some(_) {
-      rows.push(
-        @html.button(
-          class="jobs-action jobs-more",
-          disabled=state.listing,
-          on_click=emit(More),
-          "Load older jobs",
+          if terminal {
+            [
+              @html.button(
+                class="jobs-group-title jobs-history-toggle",
+                attrs=@html.Attrs::build()
+                  .aria_expanded(state.history_expanded.to_string())
+                  .aria_controls("jobs-history-content"),
+                on_click=emit(ToggleHistory),
+                label,
+              ),
+              @html.div(
+                id="jobs-history-content",
+                hidden=!state.history_expanded,
+                content,
+              ),
+            ]
+          } else {
+            [@html.h4(class="jobs-group-title", label), ..content]
+          },
         ),
       )
     }

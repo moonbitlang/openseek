@@ -10,6 +10,7 @@ pub(all) struct State {
   active : Bool
   epoch : Int
   jobs : Array[@protocol.JobView]
+  history_expanded : Bool
   selected : (String, String)?
   listing : Bool
   next_offset : Int?
@@ -39,6 +40,7 @@ pub fn State::empty() -> State {
     active: false,
     epoch: 0,
     jobs: [],
+    history_expanded: false,
     selected: None,
     listing: false,
     next_offset: None,
@@ -68,6 +70,7 @@ pub(all) enum Msg {
   More
   Select(String, String)
   ToggleFollow
+  ToggleHistory
   Pause
   Reload
   Stop
@@ -232,6 +235,8 @@ pub fn update(
       }
       (@cmd.batch([list, read]), state)
     }
+    ToggleHistory =>
+      (@cmd.none, { ..state, history_expanded: !state.history_expanded, })
     More =>
       match state.next_offset {
         Some(offset) => request_list(emit, state, offset)
@@ -270,14 +275,11 @@ pub fn update(
           }
           let selected = match state.selected {
             Some(_) => state.selected
-            None => {
-              let first = match
-                jobs.iter().find_first(view => !view.job.state.is_terminal()) {
-                Some(view) => Some(view)
-                None => jobs.get(0)
-              }
-              first.map(view => (view.job.generation, view.job.id))
-            }
+            None =>
+              jobs
+              .iter()
+              .find_first(view => !view.job.state.is_terminal())
+              .map(view => (view.job.generation, view.job.id))
           }
           let next_offset = if offset == 0 &&
             reply.next_offset is Some(_) &&

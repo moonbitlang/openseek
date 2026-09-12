@@ -11,6 +11,11 @@ async function mount(page) {
   await expect(page.getByRole('region', { name: 'Job output' })).toContainText('ready 你好🙂');
 }
 
+async function expandHistory(page) {
+  const toggle = page.locator('.jobs-history-toggle');
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+}
+
 test('real background output follows, pauses, resumes, copies its file and stops', async ({ page, context }, testInfo) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await mount(page);
@@ -61,6 +66,7 @@ test('historical selection rejects late reads, reports errors and fits a narrow 
   app.write('must stay with the live job\n');
   await expect.poll(() => app.requests.filter(r => r.method === 'jobs.read').length).toBeGreaterThan(1);
   app.rpcDelays.delete('jobs.read');
+  await expandHistory(page);
   await page.getByRole('button', { name: /Earlier failing test run/ }).click();
   const output = page.getByRole('region', { name: 'Job output' });
   await expect(output).toContainText('old failed job output');
@@ -88,6 +94,8 @@ test('page reconnect recovers retained job identity and history', async ({ page 
   await expect(page.getByRole('region', { name: 'Job output' })).toContainText('persist across reconnect');
   await page.reload(); await app.openSession(); await app.openJobs();
   await expect(page.getByRole('region', { name: 'Job output' })).toContainText('persist across reconnect');
+  await expect(page.getByRole('button', { name: /Earlier failing test run/ })).toHaveCount(0);
+  await expandHistory(page);
   await expect(page.getByRole('button', { name: /Earlier failing test run/ })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
@@ -124,7 +132,9 @@ test('selected job beyond the first history page keeps receiving terminal state'
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
   const selected = app.jobs.find(v => v.job.generation === 'runtime-old');
   selected.job.state = { kind: 'running' };
+  await expandHistory(page);
   await page.getByRole('button', { name: 'Load older jobs', exact: true }).click();
+  await expandHistory(page);
   await page.getByRole('button', { name: /Earlier failing test run/ }).click();
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   selected.job.state = { kind: 'stopped', reason: 'user' };
@@ -205,6 +215,7 @@ test('UUID suffix collisions expand labels while selection and copying retain fu
   app.jobs.push(other);
   await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
   await expect(page.locator('.jobs-id')).toHaveText(['bg-…0123456789ab', 'bg-1', 'bg-…abcd456789ab']);
+  await expandHistory(page);
   await page.getByRole('button', { name: /Same short suffix/ }).click();
   await expect(page.getByRole('region', { name: 'Job output' })).toContainText('old failed job output');
   await page.getByRole('button', { name: 'Copy job ID', exact: true }).click();
@@ -242,6 +253,8 @@ test('groups lifecycle states and defaults to an active job even after newer his
   await expect(active.locator('.jobs-row')).toHaveCount(2);
   await expect(history.locator('.jobs-row')).toHaveCount(5);
   expect(await page.locator('.jobs-group').evaluateAll(groups => groups.map(el => el.getAttribute('aria-label')))).toEqual(['In progress', 'History']);
+  await expect(page.locator('.jobs-history-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await expandHistory(page);
   for (const [id, , label] of fixtures) {
     await page.getByRole('button', { name: new RegExp(`Lifecycle ${id}`) }).click();
     await expect(page.locator('.jobs-detail-title')).toContainText(label);
@@ -328,5 +341,52 @@ test('interrupted jobs drain final diagnostics despite stale persisted byte coun
   const lists = app.requests.filter(r => r.method === 'jobs.list').length;
   await expect.poll(() => app.requests.filter(r => r.method === 'jobs.list').length).toBeGreaterThan(lists + 1);
   expect(app.requests.filter(r => r.method === 'jobs.read')).toHaveLength(reads);
+  expect(app.pageErrors).toEqual([]);
+});
+
+
+test('history stays folded by default while active jobs remain visible across refreshes', async ({ page }, testInfo) => {
+  await mount(page);
+  const toggle = page.locator('.jobs-history-toggle');
+  const active = page.getByRole('group', { name: 'In progress', exact: true });
+  const oldJob = page.getByRole('button', { name: /Earlier failing test run/ });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(active.getByRole('button', { name: /Watch build output/ })).toBeVisible();
+  await expect(oldJob).toHaveCount(0);
+  await page.locator('.jobs-panel').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.focus(); await page.keyboard.press('Enter');
+  await expect(oldJob).toBeVisible();
+  const lists = app.requests.filter(r => r.method === 'jobs.list').length;
+  await expect.poll(() => app.requests.filter(r => r.method === 'jobs.list').length).toBeGreaterThan(lists);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await oldJob.click();
+  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('old failed job output');
+  await toggle.click();
+  await expect(oldJob).toHaveCount(0);
+  await expect(active.getByRole('button', { name: /Watch build output/ })).toBeVisible();
+  await active.getByRole('button', { name: /Watch build output/ }).click();
+  await page.screenshot({ path: testInfo.outputPath('jobs-history-folded.png'), fullPage: true });
+  // A completing selection remains readable without opening its History group.
+  await page.getByRole('button', { name: 'Stop job', exact: true }).click();
+  await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('history-only sessions wait for explicit selection before loading a log', async ({ page }) => {
+  app = new BackgroundJobsHarness(page);
+  const live = app.jobs.shift();
+  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
+  await expect(page.locator('.jobs-history-toggle')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.jobs-detail')).toHaveCount(0);
+  expect(app.requests.filter(r => r.method === 'jobs.read')).toHaveLength(0);
+  await expandHistory(page);
+  await page.getByRole('button', { name: /Earlier failing test run/ }).click();
+  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('old failed job output');
+  app.jobs.unshift(live);
+  await expect(page.getByRole('group', { name: 'In progress', exact: true })).toBeVisible();
+  await expect(page.locator('.jobs-detail-title')).toContainText('Failed');
+  await expect(page.locator('.jobs-history-toggle')).toHaveAttribute('aria-expanded', 'true');
   expect(app.pageErrors).toEqual([]);
 });
