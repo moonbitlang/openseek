@@ -37,6 +37,7 @@ async test "sandbox denies a source write and the command reports it" {
     guard @sandbox.SandboxedCommand::create_if_available(
         dir,
         Shell("printf x > \{dir}/new.mbt"),
+        profile_path="\{dir}/denied.sb",
       )
       is Some(command) else {
       return
@@ -58,6 +59,7 @@ async test "a writable subtree is re-allowed; the rest stays denied" {
     guard @sandbox.SandboxedCommand::create_if_available(
         dir,
         Shell("printf x > \{dir}/lab/draft.mbt"),
+        profile_path="\{dir}/allowed.sb",
         writable_subtree="\{dir}/lab",
       )
       is Some(allowed) else {
@@ -69,6 +71,7 @@ async test "a writable subtree is re-allowed; the rest stays denied" {
     guard @sandbox.SandboxedCommand::create_if_available(
         dir,
         Shell("printf x > \{dir}/new.mbt"),
+        profile_path="\{dir}/denied.sb",
         writable_subtree="\{dir}/lab",
       )
       is Some(denied) else {
@@ -86,14 +89,16 @@ async test "exec command produces the argv shape without a shell" {
     guard @sandbox.SandboxedCommand::create_if_available(
         dir,
         Exec("moon", ["check", "--target", "native"]),
+        profile_path="\{dir}/profile.sb",
       )
       is Some(command) else {
       return
     }
     assert_eq(command.program(), "/usr/bin/sandbox-exec")
     let args = command.args()
-    // [-p, <profile>, moon, check, --target, native]
-    assert_eq(args[0], "-p")
+    // [-f, <profile path>, moon, check, --target, native]
+    assert_eq(args[0], "-f")
+    assert_eq(args[1], @fs.realpath("\{dir}/profile.sb"))
     assert_eq(args[2], "moon")
     assert_eq(args[3], "check")
     assert_eq(args.length(), 6)
@@ -123,6 +128,7 @@ async fn create_raises(root : String, writable_subtree~ : String) -> Bool {
       @sandbox.SandboxedCommand::create_if_available(
         root,
         Shell(":"),
+        profile_path="\{root}/profile.sb",
         writable_subtree~,
       ),
     )
@@ -145,7 +151,11 @@ async test "profile subjects flow into denial reporting" {
       "pub fn x() -> Int { 1 }\n",
       create_mode=CreateOrTruncate,
     )
-    guard @sandbox.SandboxedCommand::create_if_available(dir, Shell(":"))
+    guard @sandbox.SandboxedCommand::create_if_available(
+        dir,
+        Shell(":"),
+        profile_path="\{dir}/profile.sb",
+      )
       is Some(command) else {
       return
     }

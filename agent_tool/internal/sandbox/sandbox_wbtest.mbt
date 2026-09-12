@@ -95,3 +95,55 @@ async test "sandbox profile cache invalidates when source tree changes" {
     assert_true(second.contains("(literal \"\{root}/assets\")"))
   })
 }
+
+///|
+async test "oversized source profile launches reads and still denies writes" {
+  guard sandbox_exec_available() else { return }
+  @vfs.with_tmpdir(prefix="sandbox-large-profile-", dir => {
+    let root = @fs.realpath(dir)
+    let source = "\{root}/keep.mbt"
+    @fs.write_file(source, "readable", create_mode=CreateOrTruncate)
+    let data = source_write_readonly_profile_data(root)
+    // Exercise a repository-sized profile without creating thousands of source
+    // directories. Comments preserve its rules while exceeding macOS ARG_MAX.
+    let profile = data.profile +
+      "; padding for large repository\n".repeat(70_000)
+    source_write_profile_cache[root] = {
+      profile,
+      watched_dirs: [],
+      denial_subjects: data.denial_subjects,
+    }
+    defer source_write_profile_cache.remove(root)
+    let profile_path = "\{root}/profile.sb"
+    guard SandboxedCommand::create_if_available(
+        root,
+        Exec("/bin/cat", [source]),
+        profile_path~,
+      )
+      is Some(read) else {
+      fail("sandbox became unavailable")
+    }
+    assert_true(@fs.read_file(profile_path).text().length() > 2_000_000)
+    let (exit_code, output) = @process.collect_output_merged(
+      read.program(),
+      read.args(),
+    )
+    assert_eq(exit_code, 0, msg=output.text())
+    assert_eq(output.text(), "readable")
+    guard SandboxedCommand::create_if_available(
+        root,
+        Shell("printf changed > \{shell_quote(source)}"),
+        profile_path~,
+      )
+      is Some(write) else {
+      fail("sandbox became unavailable")
+    }
+    let (exit_code, output) = @process.collect_output_merged(
+      write.program(),
+      write.args(),
+    )
+    assert_true(exit_code != 0)
+    assert_true(write.output_reports_denial(output.text()))
+    assert_eq(@fs.read_file(source).text(), "readable")
+  })
+}

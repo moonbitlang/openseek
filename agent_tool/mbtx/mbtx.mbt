@@ -708,6 +708,9 @@ async fn execute(
         @sandbox.SandboxedCommand::create_if_available(
           workspace_root,
           Exec(program, command_argv),
+          // Per-call storage outlives both compilation and any background run.
+          // Never put the repository-sized SBPL profile in the spawn argv.
+          profile_path="\{build_dir}/source-write.sb",
           writable_subtree~,
         )
       // The main agent runs with no kernel profile at all. Forbidding source

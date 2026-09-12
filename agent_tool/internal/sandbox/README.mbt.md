@@ -22,10 +22,13 @@ Prepare, run, classify:
 ```mbt check
 ///|
 async test "prepare, run, and classify a shell command" {
+  let dir = @fs.tmpdir(prefix="sandbox-example-")
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   let shell_text = "echo sandbox-ready"
   let prepared = @sandbox.SandboxedCommand::create_if_available(
     ".",
     Shell(shell_text),
+    profile_path="\{dir}/profile.sb",
   )
   let (program, args) = match prepared {
     Some(command) => (command.program(), command.args())
@@ -52,7 +55,10 @@ constructor, because the kernel matches profile rules against real paths.
 
 The profile is built from the tree as it exists at preparation; renaming the
 root or subtree afterwards makes the rules stale. Prepare close to where the
-command runs.
+command runs. The caller supplies `profile_path` in a temporary directory and
+keeps it until the command exits. The profile travels through `sandbox-exec -f`,
+so repository size does not consume the OS command-line argument limit. `mbtx`
+keeps this file in its per-call build directory, including background runs.
 
 ## Commands
 

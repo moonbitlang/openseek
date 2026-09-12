@@ -21,7 +21,7 @@ struct SandboxedCommand {
   /// by either the platform-shell invocation or the requested `Exec`
   /// program/argv. For example, `Shell("moon check")` prepares approximately
   /// `program = "/usr/bin/sandbox-exec"` with
-  /// `args = ["-p", "<profile>", "sh", "-c", "moon check"]` on macOS.
+  /// `args = ["-f", "<profile path>", "sh", "-c", "moon check"]` on macOS.
   args : Array[String]
   /// The paths a denial from this profile may name — protected directories and
   /// basenames — which is how one is told apart from a permission error this
@@ -54,9 +54,16 @@ struct SandboxedCommand {
 /// throwaway build directory — via a last-match-wins allow rule. It is resolved
 /// too; when resolution fails the unresolved path is used, which can only
 /// under-allow, never over-allow.
+///
+/// `profile_path` is a caller-owned file in an existing temporary directory.
+/// The generated profile is written there and passed with `sandbox-exec -f`:
+/// source-containing directories can make it larger than the OS argv limit.
+/// Keep the file unchanged until the command exits, then remove it with the
+/// owning directory. A write failure raises rather than disabling protection.
 pub async fn SandboxedCommand::create_if_available(
   workspace_root : String,
   command : Command,
+  profile_path~ : String,
   writable_subtree? : String,
 ) -> SandboxedCommand? {
   // Inputs are validated BEFORE the availability probe, so a caller bug is
@@ -87,10 +94,16 @@ pub async fn SandboxedCommand::create_if_available(
     real_root,
     writable_lab?=subtree,
   )
-  let args = match command {
-    Shell(cmd) => sandbox_exec_args(data.profile, cmd)
-    Exec(program, args) => ["-p", data.profile, program, ..args]
-  }
+  @fs.write_file(profile_path, data.profile, create_mode=CreateOrTruncate)
+  let profile_path = @fs.realpath(profile_path)
+  let args = [
+    "-f",
+    profile_path,
+    ..match command {
+      Shell(cmd) => [@platform_shell.program, ..@platform_shell.args(cmd)]
+      Exec(program, args) => [program, ..args]
+    },
+  ]
   Some({
     program: SandboxExecPath,
     args,

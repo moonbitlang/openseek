@@ -521,6 +521,7 @@ async fn sandbox_enforcement_available() -> Bool {
   let available = @sandbox.SandboxedCommand::create_if_available(
       dir,
       Shell(":"),
+      profile_path="\{dir}/profile.sb",
     )
     is Some(_)
   @fs.rmdir(dir, recursive=true) catch {
@@ -853,6 +854,28 @@ async test "read_only denies source writes with no scratch lab wired" {
     })
     assert_true(output.content.contains("workspace=false"))
     assert_true(@fs.read_file("\{ws}/keep.mbt").text().contains("fn main {  }"))
+  })
+}
+
+///|
+async test "read-only snippets can print and read workspace source" {
+  @vfs.with_tmpdir(prefix="mbtx-review-read-", ws => {
+    @fs.write_file(
+      "\{ws}/keep.mbt",
+      "source contents",
+      create_mode=CreateOrTruncate,
+    )
+    let output = dispatch(@mbtx.definition(workspace_root=ws, read_only=true), {
+      "source": (
+        #|import { "moonbitlang/async", "moonbitlang/async/fs" }
+        #|async fn main {
+        #|  println(1)
+        #|  println(@fs.read_file("keep.mbt").text())
+        #|}
+      ),
+    })
+    assert_false(output.is_error, msg=output.content)
+    assert_eq(output.content, "1\nsource contents\n")
   })
 }
 
