@@ -807,6 +807,12 @@ export class DesktopBrowserHarness {
         return { entries: this.directoryEntries[request.params?.path] || [] };
       case 'fs.read_file':
         return this.readWorkingFile(request.params || {});
+      case 'fs.create_unnamed_workspace':
+        return {
+          path: '/Users/test/Library/Application Support/SeekMoon/workspaces/Unnamed workspace',
+          parent: '/Users/test/Library/Application Support/SeekMoon/workspaces',
+          entries: [],
+        };
       case 'fs.browse':
         return {
           path: '/Users/test',

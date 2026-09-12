@@ -131,6 +131,8 @@ pub let fs_clear_file_search_cache : Command[@protocol.ClearFileSearchCachePaylo
 
 pub let fs_create_directory : Command[@protocol.CreateDirectoryPayload, @protocol.BrowseDirectoryReply]
 
+pub let fs_create_unnamed_workspace : Command[@protocol.EmptyPayload, @protocol.BrowseDirectoryReply]
+
 pub let fs_read_directory : Command[@protocol.ReadDirPayload, @protocol.ReadDirReply]
 
 pub let fs_read_file : Command[@protocol.ReadFilePayload, @protocol.ReadFileReply]
