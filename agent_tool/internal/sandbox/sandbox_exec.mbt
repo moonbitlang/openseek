@@ -8,6 +8,38 @@ const SandboxExecPath : String = "/usr/bin/sandbox-exec"
 let sandbox_exec_available_cache : Ref[Bool?] = { val: None, }
 
 ///|
+/// No availability probe or profile contents: this transport contract is
+/// testable on every platform, including the Linux CI targets.
+fn sandbox_exec_file_args(
+  profile_path : String,
+  command : Command,
+) -> Array[String] {
+  [
+    "-f",
+    profile_path,
+    ..match command {
+      Shell(cmd) => [@platform_shell.program, ..@platform_shell.args(cmd)]
+      Exec(program, args) => [program, ..args]
+    },
+  ]
+}
+
+///|
+/// Resolve the opened file before writing the final rule, so symlinked temp
+/// roots and existing profile files name the same path the kernel protects.
+/// The last deny wins over every writable-lab allow in the supplied profile.
+async fn write_profile_file(profile : String, path : String) -> String {
+  let file = @fs.open(path, mode=WriteOnly, create_mode=CreateOrTruncate)
+  defer file.close()
+  let real_path = @fs.realpath(path)
+  file.write(profile)
+  file.write(
+    "\n(deny file-write* (literal \"\{sbpl_string_escape(real_path)}\"))\n",
+  )
+  real_path
+}
+
+///|
 /// Build the argument vector passed to `SandboxExecPath` to interpret `cmd`
 /// under an inline SBPL `profile`.
 ///
@@ -61,6 +93,7 @@ async fn probe_sandbox_exec_available() -> Bool {
     error if @async.is_being_cancelled() => raise error
     _ => probe_dir
   }
+  defer cleanup_sandbox_probe(probe_dir)
   let blocked_path = @path.Path(probe_dir)
     .join(Path("blocked"))
     .normalize()
@@ -69,24 +102,28 @@ async fn probe_sandbox_exec_available() -> Bool {
     $|(version 1)
     $|(allow default)
     $|(deny file-write* (literal "\{sbpl_string_escape(blocked_path)}"))
+  let profile_path = write_profile_file(
+    probe_profile,
+    "\{probe_dir}/profile.sb",
+  ) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => return false
+  }
   let noop_exit = run_probe_exit(
     SandboxExecPath,
-    sandbox_exec_args(probe_profile, PlatformNoopCommand),
+    sandbox_exec_file_args(profile_path, Shell(PlatformNoopCommand)),
   )
   if noop_exit != Some(0) {
-    cleanup_sandbox_probe(probe_dir, blocked_path)
     return false
   }
   let write_exit = run_probe_exit(
     SandboxExecPath,
-    sandbox_exec_args(
-      probe_profile,
-      "printf probe > \{shell_quote(blocked_path)}",
+    sandbox_exec_file_args(
+      profile_path,
+      Shell("printf probe > \{shell_quote(blocked_path)}"),
     ),
   )
-  let denied = write_exit != Some(0) && !@fs.exists(blocked_path)
-  cleanup_sandbox_probe(probe_dir, blocked_path)
-  denied
+  write_exit != Some(0) && !@fs.exists(blocked_path)
 }
 
 ///|
@@ -118,10 +155,6 @@ fn shell_quote(text : String) -> String {
 }
 
 ///|
-async fn cleanup_sandbox_probe(
-  probe_dir : String,
-  blocked_path : String,
-) -> Unit {
-  ignore(@fs.remove(blocked_path) catch { _ => () })
-  ignore(@fs.rmdir(probe_dir) catch { _ => () })
+async fn cleanup_sandbox_probe(probe_dir : String) -> Unit {
+  ignore(@fs.rmdir(probe_dir, recursive=true) catch { _ => () })
 }

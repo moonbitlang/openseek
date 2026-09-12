@@ -164,3 +164,70 @@ async test "profile subjects flow into denial reporting" {
     assert_true(command.output_reports_denial(canned))
   })
 }
+
+///|
+async test "a writable lab cannot overwrite or remove its sandbox profile" {
+  @vfs.with_tmpdir(prefix="sandbox-profile-protection-", dir => {
+    let workspace = "\{dir}/workspace"
+    let lab = "\{dir}/lab"
+    @fs.mkdir(workspace)
+    @fs.mkdir(lab)
+    let profile_path = "\{lab}/profile.sb"
+    for
+      operation in [
+        "printf corrupted > '\{profile_path}'",
+        "rm '\{profile_path}'",
+      ] {
+      guard @sandbox.SandboxedCommand::create_if_available(
+          workspace,
+          Shell(operation),
+          profile_path~,
+          writable_subtree=lab,
+        )
+        is Some(command) else {
+        return
+      }
+      let before = @fs.read_file(profile_path).text()
+      let (exit_code, _) = merged_output_text(command)
+      assert_true(exit_code != 0)
+      assert_eq(@fs.read_file(profile_path).text(), before)
+    }
+    guard @sandbox.SandboxedCommand::create_if_available(
+        workspace,
+        Shell("printf scratch > '\{lab}/scratch.mbt'"),
+        profile_path~,
+        writable_subtree=lab,
+      )
+      is Some(command) else {
+      return
+    }
+    let (exit_code, _) = merged_output_text(command)
+    assert_eq(exit_code, 0)
+    assert_eq(@fs.read_file("\{lab}/scratch.mbt").text(), "scratch")
+  })
+}
+
+///|
+async test "source directory cannot be moved outside the protected workspace" {
+  @vfs.with_tmpdir(prefix="sandbox-directory-rename-", dir => {
+    let workspace = "\{dir}/workspace"
+    @fs.mkdir("\{workspace}/src", recursive=true)
+    @fs.write_file(
+      "\{workspace}/src/main.mbt",
+      "source",
+      create_mode=CreateOrTruncate,
+    )
+    guard @sandbox.SandboxedCommand::create_if_available(
+        workspace,
+        Shell("mv '\{workspace}/src' '\{dir}/escaped'"),
+        profile_path="\{dir}/profile.sb",
+      )
+      is Some(command) else {
+      return
+    }
+    let (exit_code, _) = merged_output_text(command)
+    assert_true(exit_code != 0)
+    assert_eq(@fs.read_file("\{workspace}/src/main.mbt").text(), "source")
+    assert_false(@fs.exists("\{dir}/escaped"))
+  })
+}

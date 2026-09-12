@@ -117,6 +117,8 @@ async fn source_write_readonly_profile_base(
     $|(deny file-write* (regex "\{sbpl_string_escape(source_regex)}"))
     $|(allow file-write* (regex "\{sbpl_string_escape(build_carveout_regex)}"))
     $|
+  // The suffix regex protects files, not renames/removal of a containing
+  // directory. These literal rules cover those directory operations.
   for dir in scan.literal_paths {
     profile <+
       $|(deny file-write* (literal "\{sbpl_string_escape(dir)}"))
@@ -269,10 +271,17 @@ fn should_prune_profile_scan_path(root : String, path : String) -> Bool {
     return false
   }
   let relative = path[root.length() + 1:]
-  relative
-  .replace_all(old="\\", new="/")
-  .split("/")
-  .any(part => part is (".git" | ".hg" | ".svn" | ".jj" | "node_modules"))
+  let parts = relative.replace_all(old="\\", new="/").split("/").to_array()
+  for i, part in parts {
+    if part is (".git" | ".hg" | ".svn" | ".jj" | "node_modules" | ".worktrees") {
+      return true
+    }
+    // Do not prune an ordinary source directory named `worktrees`.
+    if part == "worktrees" && i > 0 && parts[i - 1] == ".claude" {
+      return true
+    }
+  }
+  false
 }
 
 ///|

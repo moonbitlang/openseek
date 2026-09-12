@@ -147,3 +147,71 @@ async test "oversized source profile launches reads and still denies writes" {
     assert_eq(@fs.read_file(source).text(), "readable")
   })
 }
+
+///|
+async test "macOS CI requires an enforcing sandbox instead of skipping" {
+  if @env.get_env_var("OPENSEEK_REQUIRE_SANDBOX_TESTS") == Some("1") {
+    assert_true(
+      sandbox_exec_available(),
+      msg="macOS sandbox CI must enforce the profile",
+    )
+  }
+}
+
+///|
+async test "file profile transport keeps oversized contents out of argv on every platform" {
+  @vfs.with_tmpdir(prefix="sandbox-transport-", dir => {
+    let profile = "(version 1)\n(allow default)\n" +
+      "; padding\n".repeat(220_000)
+    let path = write_profile_file(profile, "\{dir}/profile with spaces.sb")
+    let saved = @fs.read_file(path).text()
+    assert_true(saved.has_prefix(profile))
+    assert_true(
+      saved.has_suffix(
+        "(deny file-write* (literal \"\{sbpl_string_escape(path)}\"))\n",
+      ),
+    )
+    assert_eq(
+      sandbox_exec_file_args(path, Exec("moon", ["check", "space in arg"])),
+      ["-f", path, "moon", "check", "space in arg"],
+    )
+    let command = "printf 'space in command'"
+    assert_eq(
+      sandbox_exec_file_args(path, Shell(command)),
+      ["-f", path, @platform_shell.program, ..@platform_shell.args(command)],
+    )
+  })
+}
+
+///|
+async test "source scan prunes nested agent worktrees but scans an active worktree" {
+  @vfs.with_tmpdir(prefix="sandbox-worktree-scan-", dir => {
+    let root = @fs.realpath(dir)
+    @vfs.FileSystem({
+      "src/main.mbt": "source",
+      "worktrees/pkg/main.mbt": "ordinary source directory",
+      ".claude/skills/helper.mbt": "keep non-worktree source",
+      ".worktrees/w1/pkg/main.mbt": "nested checkout",
+      ".claude/worktrees/w2/pkg/main.mbt": "nested checkout",
+    }).write_to(root)
+    let scan = protected_source_tree_profile_scan(root)
+    assert_eq(scan.literal_paths.length(), 5)
+    assert_eq(scan.watched_dirs.length(), 6)
+    for
+      relative in [
+        "src", "worktrees", "worktrees/pkg", ".claude", ".claude/skills",
+      ] {
+      assert_true(
+        scan.literal_paths.contains("\{root}/\{relative}"),
+        msg=relative,
+      )
+    }
+    // A review running IN one of these worktrees still protects its source.
+    for relative in [".worktrees/w1", ".claude/worktrees/w2"] {
+      let active = "\{root}/\{relative}"
+      let scan = protected_source_tree_profile_scan(active)
+      assert_eq(scan.literal_paths, ["\{active}/pkg"])
+      assert_eq(scan.watched_dirs.length(), 2)
+    }
+  })
+}

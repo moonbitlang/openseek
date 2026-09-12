@@ -58,8 +58,10 @@ struct SandboxedCommand {
 /// `profile_path` is a caller-owned file in an existing temporary directory.
 /// The generated profile is written there and passed with `sandbox-exec -f`:
 /// source-containing directories can make it larger than the OS argv limit.
-/// Keep the file unchanged until the command exits, then remove it with the
-/// owning directory. A write failure raises rather than disabling protection.
+/// Keep the file until `sandbox-exec` has loaded it; retaining it until the
+/// command exits avoids racing that load. Its final rule denies writes to the
+/// profile even inside a writable lab. Prepare again before a new spawn.
+/// A write failure raises rather than disabling protection.
 pub async fn SandboxedCommand::create_if_available(
   workspace_root : String,
   command : Command,
@@ -94,16 +96,8 @@ pub async fn SandboxedCommand::create_if_available(
     real_root,
     writable_lab?=subtree,
   )
-  @fs.write_file(profile_path, data.profile, create_mode=CreateOrTruncate)
-  let profile_path = @fs.realpath(profile_path)
-  let args = [
-    "-f",
-    profile_path,
-    ..match command {
-      Shell(cmd) => [@platform_shell.program, ..@platform_shell.args(cmd)]
-      Exec(program, args) => [program, ..args]
-    },
-  ]
+  let profile_path = write_profile_file(data.profile, profile_path)
+  let args = sandbox_exec_file_args(profile_path, command)
   Some({
     program: SandboxExecPath,
     args,

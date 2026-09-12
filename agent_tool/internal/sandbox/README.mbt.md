@@ -56,9 +56,15 @@ constructor, because the kernel matches profile rules against real paths.
 The profile is built from the tree as it exists at preparation; renaming the
 root or subtree afterwards makes the rules stale. Prepare close to where the
 command runs. The caller supplies `profile_path` in a temporary directory and
-keeps it until the command exits. The profile travels through `sandbox-exec -f`,
+prepares it again for each spawn. The profile is loaded by `sandbox-exec` at
+launch; keeping the file until the command exits avoids racing that load.
+The profile travels through `sandbox-exec -f`,
 so repository size does not consume the OS command-line argument limit. `mbtx`
 keeps this file in its per-call build directory, including background runs.
+The final profile rule denies writes to the profile itself, even when that
+temporary directory is inside a writable lab. Temporary test workspaces can
+also own the file; a separate temporary directory avoids changing the source
+scan's watched directory mtimes.
 
 ## Commands
 
@@ -101,6 +107,13 @@ The generated profile starts from `(allow default)` and then:
 - denies source-containing directories literally, preventing a direct rename
   or removal of those directories.
 
+The directory rules are intentional: the suffix regex alone would let a
+containing directory be moved outside the protected workspace. Their scan and
+mtime tracking skip `.worktrees` and `.claude/worktrees`, which contain separate
+checkouts rather than the active source tree. The source-file regex still
+covers these paths. An active workspace rooted inside either location is
+scanned normally, and ordinary directories named `worktrees` are not excluded.
+
 The base profile is cached by normalized workspace root; directory mtimes
 from the source-tree scan invalidate the cache when the tree changes. The
 `writable_subtree` variant is composed per command preparation and never cached.
@@ -111,13 +124,18 @@ the kernel profile protects is exactly what that policy calls source.
 
 ## Availability and limitations
 
-Preparation's availability gate is a cached behavioral probe, not an
+Preparation's availability gate is a cached behavioral probe using `-f`, not an
 existence check: it requires an allowed no-op to succeed and a denied
 temporary write to fail. Nested sandboxes that prohibit re-sandboxing
 therefore yield `None`, and the result is cached for the process — a probe
 that failed transiently stays failed, deliberately, because in the
 environments where it genuinely cannot pass (nested sandboxes), re-probing
 on every command would cost two spawns each and never succeed.
+
+CI runs the sandbox package and a reviewer read smoke test on macOS. That job
+sets `OPENSEEK_REQUIRE_SANDBOX_TESTS=1`, turning unavailable enforcement into a
+failure instead of silently skipping the kernel tests. Portable tests also pin
+the file-based argument vector and the worktree scan exclusions on Linux.
 
 The profile is a best-effort write guard, not a complete process-security
 boundary:
