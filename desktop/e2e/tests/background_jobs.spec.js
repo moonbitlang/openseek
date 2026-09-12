@@ -300,3 +300,33 @@ test('completion drains paused output then stops log polling while history stays
   await page.screenshot({ path: testInfo.outputPath('jobs-completed-narrow.png'), fullPage: true });
   expect(app.pageErrors).toEqual([]);
 });
+
+test('interrupted jobs drain final diagnostics despite stale persisted byte counts', async ({ page }) => {
+  await mount(page);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  const original = app.replyFor.bind(app);
+  app.replyFor = async request => {
+    const reply = await original(request);
+    if (request.method === 'jobs.list') {
+      for (const view of reply.jobs) {
+        if (view.job.state.kind === 'interrupted') view.job.output_bytes = 1;
+      }
+    }
+    return reply;
+  };
+  app.write('FINAL DIAGNOSTICS BEFORE ENGINE CRASH\n');
+  await expect.poll(() => readFileSync(app.livePath, 'utf8')).toContain('FINAL DIAGNOSTICS');
+  app.child.once('close', () => {
+    app.jobs[0].job.state = { kind: 'interrupted' };
+    app.jobs[0].job.finished_at_ms = null;
+  });
+  app.child.kill();
+  await expect(page.locator('.jobs-detail-title')).toContainText('Interrupted');
+  await expect(page.getByRole('region', { name: 'Job output' })).toContainText('FINAL DIAGNOSTICS BEFORE ENGINE CRASH');
+  await expect(page.locator('.jobs-output-note')).toHaveText('Output ended');
+  const reads = app.requests.filter(r => r.method === 'jobs.read').length;
+  const lists = app.requests.filter(r => r.method === 'jobs.list').length;
+  await expect.poll(() => app.requests.filter(r => r.method === 'jobs.list').length).toBeGreaterThan(lists + 1);
+  expect(app.requests.filter(r => r.method === 'jobs.read')).toHaveLength(reads);
+  expect(app.pageErrors).toEqual([]);
+});

@@ -19,6 +19,8 @@ pub(all) struct State {
   cursor : Int64?
   reading : Bool
   read_serial : Int
+  reading_state : @wire.JobState?
+  eof_state : @wire.JobState?
   read_budget : Int
   catching_up : Bool
   reload_pending : Bool
@@ -46,6 +48,8 @@ pub fn State::empty() -> State {
     cursor: None,
     reading: false,
     read_serial: 0,
+    reading_state: None,
+    eof_state: None,
     read_budget: 4,
     catching_up: false,
     reload_pending: false,
@@ -85,8 +89,11 @@ fn selected_terminal(state : State) -> Bool {
 }
 
 ///|
+// Persisted byte counts can lag the retained file after an engine crash.
+// Only an EOF from a read requested in this terminal state can finish draining.
 fn output_complete(state : State, job : @wire.JobRecord) -> Bool {
   job.state.is_terminal() &&
+  state.eof_state == Some(job.state) &&
   !state.catching_up &&
   state.cursor is Some(cursor) &&
   cursor >= job.output_bytes
@@ -156,6 +163,7 @@ fn request_read(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
       ..state,
       reading: true,
       read_serial: serial,
+      reading_state: Some(view.job.state),
       read_budget: state.read_budget - 1,
     },
   )
@@ -181,6 +189,7 @@ pub fn reconcile(
       epoch: state.epoch + 1,
       listing: false,
       reading: false,
+      reading_state: None,
       reload_pending: false,
       manual_read: false,
       read_budget: 4,
@@ -304,6 +313,8 @@ pub fn update(
         read_error: None,
         reading: false,
         read_serial: state.read_serial + 1,
+        reading_state: None,
+        eof_state: None,
         read_budget: 4,
         catching_up: false,
         reload_pending: false,
@@ -323,11 +334,12 @@ pub fn update(
         return request_read(emit, {
           ..state,
           reading: false,
+          reading_state: None,
           reload_pending: false,
         })
       }
       if !state.follow && !state.manual_read && !selected_terminal(state) {
-        return (@cmd.none, { ..state, reading: false, })
+        return (@cmd.none, { ..state, reading: false, reading_state: None, })
       }
       match result {
         Err(error) =>
@@ -336,6 +348,8 @@ pub fn update(
             {
               ..state,
               reading: false,
+              reading_state: None,
+              eof_state: None,
               manual_read: false,
               catching_up: false,
               read_error: Some(error),
@@ -360,6 +374,12 @@ pub fn update(
             ..state,
             text,
             cursor: Some(page.next_offset),
+            eof_state: if page.more {
+              None
+            } else {
+              state.reading_state
+            },
+            reading_state: None,
             catching_up: page.more,
             reading: false,
             manual_read: false,
@@ -404,6 +424,7 @@ pub fn update(
         ..state,
         text: "",
         cursor: None,
+        eof_state: None,
         clipped: false,
         catching_up: false,
         read_error: None,

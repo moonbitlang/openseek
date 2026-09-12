@@ -177,6 +177,7 @@ fn reading_fixture() -> State {
     selected: Some(("runtime", "bg-1")),
     reading: true,
     read_serial: 1,
+    reading_state: Some(Running),
     read_budget: 3,
     cursor: Some(0L),
   }
@@ -289,6 +290,7 @@ test "terminal jobs drain remaining pages while paused then stop reading" {
   let state = {
     ..reading_fixture(),
     jobs: [{ ..view, job: { ..view.job, output_bytes: 8L, }, }],
+    reading_state: Some(Exited(0)),
     follow: false,
   }
   let (_, next) = update(emit, Read(0, 1, Ok(page_fixture(0L, true))), state)
@@ -404,4 +406,57 @@ test "historical tail commands do not wait for more output" {
     job_timing(fixture_job("old", Interrupted).job),
     "End time unavailable",
   )
+}
+
+///|
+test "interruption requires a fresh EOF even when persisted bytes trail the cursor" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let live = fixture_job("bg-1", Running)
+  let state = {
+    ..reading_fixture(),
+    jobs: [{ ..live, job: { ..live.job, output_bytes: 5L, }, }],
+    cursor: Some(10L),
+    eof_state: Some(Running),
+  }
+  let interrupted = {
+    ..live,
+    job: { ..live.job, state: Interrupted, output_bytes: 5L, },
+  }
+  let reply : @protocol.JobsListReply = {
+    jobs: [interrupted],
+    selected: None,
+    next_offset: None,
+    errors: [],
+  }
+  let (_, ended) = update(emit, Listed(0, 0, Ok(reply)), state)
+  assert_false(output_complete(ended, interrupted.job))
+  // A pre-interruption read can arrive late with an old EOF; it cannot finish draining.
+  let stale_eof = {
+    ..page_fixture(10L, false),
+    text: "",
+    next_offset: 10L,
+    size: 10L,
+  }
+  let (_, stale) = update(emit, Read(0, 1, Ok(stale_eof)), ended)
+  assert_false(output_complete(stale, interrupted.job))
+  let (_, polled) = update(emit, Poll, { ..stale, follow: false, })
+  assert_true(polled.reading)
+  let final_page = {
+    ..page_fixture(10L, false),
+    text: "last error",
+    next_offset: 20L,
+    size: 20L,
+  }
+  let (_, drained) = update(
+    emit,
+    Read(0, polled.read_serial, Ok(final_page)),
+    polled,
+  )
+  assert_eq(drained.text, "last error")
+  assert_true(output_complete(drained, interrupted.job))
+  let (_, polled) = update(emit, Poll, drained)
+  assert_false(polled.reading)
+  let (_, selected) = update(emit, Select("runtime", "bg-1"), drained)
+  assert_true(selected.reading)
+  assert_true(selected.eof_state is None)
 }
