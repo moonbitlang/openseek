@@ -86,10 +86,10 @@ struct BgJobRuntime {
   publish_lock : @async.Mutex
   on_job_event : ((@protocol.JobEventKind, @protocol.JobRecord) -> Unit)?
   settled : @async.CondVar
-  mut next_index : Int
+  mut last_id_ms : UInt64?
   // Separate counter for the spill files of detachable foreground executions
   // (which are not registered until adopted), so their `fg-<n>.out` files never
-  // collide with a job's `bg-<n>.out`.
+  // collide with a job's `<uuid>.out`.
   mut fg_index : Int
 }
 
@@ -239,16 +239,9 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
     publish_lock: Mutex(),
     on_job_event,
     settled: Cond(),
-    next_index: 1,
+    last_id_ms: None,
     fg_index: 1,
   }
-}
-
-///|
-fn BgJobRuntime::next_id(self : BgJobRuntime) -> String {
-  let id = "bg-\{self.next_index}"
-  self.next_index += 1
-  id
 }
 
 ///|
@@ -763,12 +756,19 @@ async test "start allocates one id per job (id matches its spill file)" {
       AgentTaskScope(group),
       spill_dir=directory,
     )
-    // The first started job is bg-1 (not bg-2): start must not reserve an id for
-    // the spill path and then allocate a second one for the registry entry.
     let a = rt.start(program="sh", args=["-c", "printf a"], command="a")
-    assert_true(a == "bg-1")
+    assert_eq(a.length(), 36)
+    assert_eq(a[14], '7')
+    assert_eq(
+      poll_until_terminal(rt, a).output_file,
+      Some("\{directory}/\{a}.out"),
+    )
     let b = rt.start(program="sh", args=["-c", "printf b"], command="b")
-    assert_true(b == "bg-2")
+    assert_true(a < b)
+    assert_eq(
+      poll_until_terminal(rt, b).output_file,
+      Some("\{directory}/\{b}.out"),
+    )
   })
 }
 

@@ -219,7 +219,7 @@ pub async fn list_jobs(
 
 ///|
 /// Enumerate lightweight names, then decode only the requested page. Runtime
-/// creation stamps and monotonic bg-N ids keep completed records in stable
+/// creation stamps and monotonic UUIDv7 ids (or legacy bg-N ids) keep completed records in stable
 /// order; output writes and terminal metadata updates cannot reshuffle pages.
 async fn job_history_page(
   directory : String,

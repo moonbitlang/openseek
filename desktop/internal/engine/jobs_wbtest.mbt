@@ -320,3 +320,48 @@ async test "correlated job replies reach their waiter but never the stream sink"
     assert_true(emitted.is_empty())
   })
 }
+
+///|
+async test "UUIDv7 history preserves newest-first bounded pages across terminal updates" {
+  let root = @fs.tmpdir(prefix="job-uuid-pages-")
+  defer @fs.rmdir(root, recursive=true)
+  @fs.mkdir("\{root}/gen-1")
+  @fs.write_file("\{root}/gen-1/owner.lock", "")
+  let ids : Array[String] = []
+  for index in 0..<101 {
+    let hex = index.to_string(radix=16)
+    let id = "0194e3c1-" +
+      "0".repeat(4 - hex.length()) +
+      hex +
+      "-7abc-8def-0123456789ab"
+    ids.push(id)
+    let record = { ..job_record_fixture(), id, state: Exited(0), }
+    @fs.write_file("\{root}/gen-1/\{id}.json", record.to_json().stringify())
+  }
+  // An out-of-page corrupt file must not get decoded until its page is read.
+  @fs.write_file("\{root}/gen-1/\{ids[0]}.json", "{}")
+  let errors : Array[String] = []
+  let first = job_history_page(root, Map([]), 0, errors)
+  assert_eq(errors, [])
+  assert_eq(first.jobs.length(), 100)
+  assert_eq(first.jobs[0].job.id, ids[100])
+  assert_eq(first.jobs[99].job.id, ids[1])
+  assert_eq(first.next_offset, Some(100))
+  let updated = {
+    ..job_record_fixture(),
+    id: ids[1],
+    state: Exited(7),
+    revision: 2,
+  }
+  @fs.write_file("\{root}/gen-1/\{ids[1]}.json", updated.to_json().stringify())
+  let refreshed = job_history_page(root, Map([]), 0, [])
+  assert_eq(
+    refreshed.jobs.map(view => view.job.id),
+    first.jobs.map(view => view.job.id),
+  )
+  assert_eq(refreshed.jobs[99].job.state, Exited(7))
+  let second = job_history_page(root, Map([]), 100, errors)
+  assert_eq(second.next_offset, None)
+  assert_eq(errors.length(), 1)
+  assert_true(errors[0].contains(ids[0]))
+}

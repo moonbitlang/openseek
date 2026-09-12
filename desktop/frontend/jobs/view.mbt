@@ -124,7 +124,11 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         on_click=emit(Select(job.generation, job.id)),
         [
           @html.div(class="jobs-row-head", [
-            @html.span(class="jobs-id", job.id),
+            @html.span(
+              class="jobs-id",
+              title=job.id,
+              short_job_id(job.id, state.jobs),
+            ),
             @html.span(
               class="jobs-status jobs-status-\{status_class(job.state)}",
               status_label(job.state),
@@ -162,7 +166,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
       let job = view.job
       let details : Array[@html.Html] = [
         @html.div(class="jobs-detail-title", [
-          @html.strong(job.id),
+          @html.strong(title=job.id, short_job_id(job.id, state.jobs)),
           @html.span(
             class="jobs-status jobs-status-\{status_class(job.state)}",
             status_label(job.state),
@@ -194,7 +198,13 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
           "Elapsed \{seconds}s · \{activity}",
         ),
       )
-      let actions : Array[@html.Html] = []
+      let actions : Array[@html.Html] = [
+        @html.button(
+          class="jobs-action",
+          on_click=@clipboard.copy(Text(job.id)),
+          "Copy job ID",
+        ),
+      ]
       if view.output_path is Some(path) {
         details.push(
           @html.div(class="jobs-path", [@html.code(title=path, path)]),
@@ -339,4 +349,27 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
     }
   }
   @html.div(class="jobs-panel", body)
+}
+
+///|
+/// Use random suffix bits: UUIDv7 prefixes mostly contain the shared date.
+/// Expand on a collision among loaded IDs; shortened labels are never handles.
+/// Legacy bg-N IDs stay intact, including historical records from older builds.
+fn short_job_id(id : String, jobs : Array[@protocol.JobView]) -> String {
+  guard id.length() == 36 &&
+    id[8] == '-' &&
+    id[13] == '-' &&
+    id[18] == '-' &&
+    id[23] == '-' else {
+    return id
+  }
+  let mut width = 8
+  while width < id.length() {
+    let suffix = id[id.length() - width:].to_owned()
+    if !jobs.any(view => view.job.id != id && view.job.id.has_suffix(suffix)) {
+      return "bg-…" + suffix
+    }
+    width += 4
+  }
+  id
 }
