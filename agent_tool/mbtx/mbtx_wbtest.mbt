@@ -139,10 +139,126 @@ test "the spawn policy admits Proton subcommands but not global cwd options" {
   assert_false(proton_prefixes.contains(["--cwd"]))
 }
 
-// The spawn allowlist is taught by each role's system prompt now, and that
-// prose is NOT pinned by a test: asserting a prompt contains particular words
-// only breaks on rewrites. Keeping the list and the prompts in step is a
-// review-time job, not a test-time one.
+///|
+/// The prose that teaches the spawn allowlist is RENDERED from it, so a
+/// command admitted to `spawnable_commands` reaches the model without a
+/// second edit. This pins that: every program and every verb in the table has
+/// to appear in the rendered list, which is the property the old hand-written
+/// prose could not hold — `moon --version` and `moonx` had both drifted out
+/// of a copy by the time it was replaced.
+///
+/// The wording around the list is deliberately not asserted; that only breaks
+/// on rewrites.
+test "the rendered spawn list covers every admitted command" {
+  for entry in spawnable_commands {
+    let (program, args_prefix) = entry
+    let bullet = spawn_bullet(program)
+    match args_prefix {
+      // A program admitted with no prefix takes any arguments; there is no
+      // verb to look for.
+      [] => assert_true(bullet.contains("any arguments"))
+      // Checked inside this program's OWN bullet and delimited, so a dropped
+      // `moon add` cannot be covered by the `add` in `worktree list|add|prune`.
+      [single] => assert_true(bullet_lists_verb(bullet, single))
+      // Longer prefixes are grouped under their first token, so the whole
+      // prefix is never one substring: check the group the parts land in.
+      [head, .. rest] =>
+        assert_true(
+          bullet.contains("`\{head} ") && bullet.contains(rest.join("|")),
+        )
+    }
+  }
+}
+
+///|
+/// The rendered bullet for `program`, whitespace flattened so a wrap cannot
+/// split a verb list, and with the following bullets cut off so a check reads
+/// only this program's grant. Fails the test when the program has no bullet
+/// at all, which is the coverage gap worth reporting by name.
+fn spawn_bullet(program : String) -> String raise {
+  let flattened = {
+    let builder = StringBuilder()
+    let mut in_space = false
+    for char in spawn_list_markdown() {
+      if char is (' ' | '\n') {
+        if !in_space {
+          builder.write_char(' ')
+          in_space = true
+        }
+      } else {
+        builder.write_char(char)
+        in_space = false
+      }
+    }
+    builder.to_string()
+  }
+  let opening = "- `\{program}` — "
+  guard flattened.find(opening) is Some(start) else {
+    fail("the rendered spawn list has no bullet for \{program}")
+  }
+  let body = flattened[start + opening.length():]
+  match body.find(" - `") {
+    Some(next) => body[:next].to_owned()
+    None => body.to_owned()
+  }
+}
+
+///|
+/// Whether `bullet` offers `verb` as a whole entry of its comma-separated verb
+/// list, rather than as a fragment of a longer word or of a grouped prefix.
+/// Flags render as code, so both spellings count.
+fn bullet_lists_verb(bullet : String, verb : String) -> Bool {
+  let verbs = spawn_verbs(bullet)
+  verbs.contains(verb) || verbs.contains("`\{verb}`")
+}
+
+///|
+/// The single-token verbs a bullet lists, split back out of the rendered
+/// prose. The verb list runs to whichever comes first: the `, plus ` that
+/// introduces the grouped multi-token prefixes, or the `. ` that ends the
+/// sentence and starts the note — so neither a grouped prefix nor a note's
+/// own commas can be mistaken for a verb.
+fn spawn_verbs(bullet : String) -> Array[String] {
+  let mut cut = bullet.length()
+  for marker in [", plus ", ". "] {
+    if bullet.find(marker) is Some(index) && index < cut {
+      cut = index
+    }
+  }
+  [
+    for part in bullet[:cut].split(", ").collect() => part.to_owned()
+  ]
+}
+
+///|
+/// Grouping is what lets one bullet describe several two-token prefixes, and
+/// getting it wrong would silently narrow what the model believes it may run.
+test "the rendered spawn list groups multi-token prefixes under one verb" {
+  let rendered = spawn_list_markdown()
+  assert_true(rendered.contains("`worktree list|add|prune`"))
+  assert_true(rendered.contains("`submodule update|status`"))
+  assert_true(rendered.contains("`stash list|show`"))
+  assert_true(rendered.contains("`publish --dry-run`"))
+  // `git stash` with no verb is a push, and stays out along with `pop`.
+  assert_false(rendered.contains("stash list|show|pop"))
+}
+
+///|
+/// The description is the one place the model reads the list, so the render
+/// has to actually reach it — under the heading the system prompt now cites
+/// by name instead of restating the list itself.
+test "the mbtx description carries the rendered spawn list" {
+  let text = description(
+    background=true,
+    escalation=false,
+    hosting=false,
+    auto_background_after_ms=5_000,
+    foreground_timeout_ms=120_000,
+    build_timeout_ms=20_000,
+  )
+  assert_true(text.contains("## Which programs a snippet may start"))
+  assert_true(text.contains(spawn_list_markdown()))
+}
 
 ///|
 /// Codex CLI is admitted one verb only: the read-only `review`. There is no

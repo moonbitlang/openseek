@@ -199,30 +199,14 @@ fn default_prompt() -> String {
     #|}
     #|```
     #|
-    #|Use `@shell.Cmd` to run an external program and capture its output. Only
-    #|these programs can be started:
-    #|
-    #|- `moon` — check, test, build, bench, run, fmt, info, add, remove, update,
-    #|  install, tree, search, clean, new, ide, doc, explain, coverage, cram,
-    #|  package, version, plus `publish --dry-run`. (Not plain `publish`, `login`
-    #|  or `register`.)
-    #|- `proton_cli` — `--version`, `--help`, new, dev, build, package, doctor,
-    #|  cef, and updater. Set `Cmd.cwd` for the project directory; the global
-    #|  `-C`/`--cwd` options before the subcommand are refused.
-    #|- `git` — status, log, diff, show, blame, describe, rev-parse, rev-list,
-    #|  show-ref, for-each-ref, cat-file, check-ignore, merge-base, range-diff,
-    #|  ls-files, ls-tree, ls-remote, shortlog, grep, branch, tag, remote, reflog,
-    #|  add, commit, checkout, switch, restore, reset, revert, rm, init, fetch,
-    #|  push, rebase; plus `submodule update|status`, `worktree list|add|prune`,
-    #|  `stash list|show`. Not `config`. A global option BEFORE the subcommand
-    #|  (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.
-    #|- `gh` — pr, issue, run, `repo view`, api, `auth status`.
-    #|- `codex` — review (read-only review of the current branch/diff; not
-    #|  `exec`, `install`, or a bare `codex`).
-    #|- `rg` and `diff`.
-    #|- `moonx` — runs other MoonBit binaries in wasm/sandbox mode; see
-    #|  [Structural search with `moongrep`](#structural-search-with-moongrep) below
-    #|  for AST-based code search.
+    #|Use `@shell.Cmd` to run an external program and capture its output. Which
+    #|programs a snippet may start is listed in the `mbtx` tool description, under
+    #|"Which programs a snippet may start" — that list is rendered from the
+    #|allowlist the sandbox enforces, so it is the current one; read it there rather
+    #|than working from memory. `moonx` is on it, and runs other MoonBit binaries in
+    #|wasm/sandbox mode; see
+    #|[Structural search with `moongrep`](#structural-search-with-moongrep) below
+    #|for AST-based code search.
     #|
     #|Anything else is refused, including the obvious ones such as `ls`, `cat`, and
     #|`sh`. Each of those is a line of MoonBit here, which also works on Windows,
