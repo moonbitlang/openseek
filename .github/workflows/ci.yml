@@ -12,6 +12,67 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  sandbox-macos:
+    name: sandbox (macOS, native)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      # Fail if sandbox enforcement disappears; guarded tests must not silently
+      # turn this platform-specific regression job green without running.
+      OPENSEEK_REQUIRE_SANDBOX_TESTS: "1"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+          "$HOME/.moon/bin/moon" version --all
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      # Even package-scoped tests run the workspace's module prebuilds, so
+      # Proton needs its runtime although these tests never open Desktop.
+      - name: Resolve pinned Proton version
+        id: proton
+        run: |
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/moon.mod)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Proton runtime
+        id: cef-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
+
+      - name: Assemble Proton CEF runtime
+        run: >-
+          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
+          cef setup
+
+      - name: Save Proton runtime
+        if: github.event_name == 'push' && steps.cef-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: ${{ steps.cef-cache.outputs.cache-primary-key }}
+
+      - name: Test sandbox enforcement and oversized profiles
+        run: moon test agent_tool/internal/sandbox --target native
+
+      - name: Test reviewer printing and file reads
+        run: moon test agent_tool/mbtx --target native --filter 'read-only snippets can print and read workspace source'
+
   check:
     name: check (${{ matrix.moonbit-channel }}, ${{ matrix.target }})
     runs-on: ubuntu-latest

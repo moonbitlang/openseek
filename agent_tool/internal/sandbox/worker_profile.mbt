@@ -116,6 +116,9 @@ pub async fn SandboxedCommand::create_worker_if_available(
     worker_admin_dir~,
   )
   guard sandbox_exec_available() else { return None }
+  // This profile has one rule per provisioned deny root, with no recursive
+  // source scan. Keep its bounded inline form; source profiles use a file in
+  // create_if_available because nested source trees can exceed ARG_MAX.
   let args = match command {
     Shell(cmd) => sandbox_exec_args(data.profile, cmd)
     Exec(program, args) => ["-p", data.profile, program, ..args]
