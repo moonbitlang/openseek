@@ -112,11 +112,7 @@ fn HttpTransport::request_headers(self : HttpTransport) -> @http.Headers {
   if self.protocol_version is Some(version) {
     headers["MCP-Protocol-Version"] = version
   }
-  for key, value in self.extra_headers {
-    if !reserved_header(key) {
-      headers[key] = value
-    }
-  }
+  self.add_extra_headers(headers)
   headers
 }
 
@@ -135,6 +131,21 @@ fn reserved_header(name : String) -> Bool {
   | "content-length"
   | "transfer-encoding"
   | "host")
+}
+
+///|
+/// Merge the configured extras into `headers`, skipping every transport-owned
+/// name (see `reserved_header`). The POST and the teardown DELETE must apply
+/// exactly this policy, so both call it.
+fn HttpTransport::add_extra_headers(
+  self : HttpTransport,
+  headers : @http.Headers,
+) -> Unit {
+  for key, value in self.extra_headers {
+    if !reserved_header(key) {
+      headers[key] = value
+    }
+  }
 }
 
 ///|
@@ -261,11 +272,7 @@ impl @jsonrpc.Transport for HttpTransport with fn close(self) {
     if self.protocol_version is Some(version) {
       headers["MCP-Protocol-Version"] = version
     }
-    for key, value in self.extra_headers {
-      if !reserved_header(key) {
-        headers[key] = value
-      }
-    }
+    self.add_extra_headers(headers)
     (self.spawn)(() => {
       @async.with_timeout_opt(SessionDeleteTimeoutMs, () => {
         delete_session(url, headers)
