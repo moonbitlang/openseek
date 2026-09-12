@@ -1,9 +1,10 @@
 # Plan v3: parallel worker subagents with worktree isolation ("subtask")
 
-> Status (2026-09-06): the model-facing `subtask` tool described here was
-> removed; the worker kind (`agent_worker`), the worktree/capture/integrate
-> machinery (`agent_subtask`), and the sandboxes live on under
-> `agent_workflow`'s worker runner (`worker`, `slices`, `integrate_slice`).
+> Status (2026-09-12): the model-facing `subtask` tool and the unused
+> `agent_workflow` adapter have been removed. The worker kind (`agent_worker`),
+> worktree/capture/integrate primitives (`agent_subtask`), and sandboxes remain,
+> but no product entry point currently provisions worker slices. The bundled
+> agent workflows use `moonbitlang/workflow/hosted` for read-only children.
 
 Date: 2026-07-31. Status: revised after subal xhigh round-2 (subal-round2.log,
 NO-GO with 3 blockers + majors — all adopted below). v2: subtask-plan-v2.md.

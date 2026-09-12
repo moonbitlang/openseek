@@ -22,7 +22,7 @@ pub let default_worker_deadline_ms : Int = 2_700_000
 
 ///|
 /// The geometry and work order a worker child receives from the worker
-/// controller (`agent_workflow`), decoded from the `subrun worker` input line. Every path is
+/// controller, decoded from the `subrun worker` input line. Every path is
 /// canonical (the controller realpaths at provision time) — the child does
 /// not re-derive geometry, it enforces with what it was handed.
 pub struct WorkerInput {
