@@ -3,10 +3,24 @@
 Use this as the calling agent's task recipe when the user asks for cleanup and
 PR delivery. `de-slop.mbtx --deliver` performs read-only discovery/challenge and
 hands control back here; **the calling agent executes the remaining steps**.
-A successful audit is not delivery. Continue until there is one verified PR
-URL, an evidenced no-change result, or a concrete blocker. Do not ask again for
-publication permission already granted by the user. Without PR authorization,
+This is one end-to-end task, with no user handoff between phases. A successful
+audit is an intermediate result. Continue in the same task until there is one
+verified PR URL, an evidenced no-change result, or an unavoidable blocker. Do
+not ask again for publication permission already granted by the user. Without PR authorization,
 stop at the tested diff and ask only when publication is the remaining step.
+
+## Completion contract
+
+When the user requests PR delivery, the final user-facing answer is **only the
+verified PR link**: `[PR #NUMBER](URL)`. Put the change explanation, tests and
+observed CI status in the PR body; retain discovery, rejected candidates and
+workflow feedback in local artifacts. Do not replace delivery with an audit
+summary, a tested patch, a proposed next step, or a request to continue.
+The script's delivery handoff is internal control flow, not a handoff to the user.
+
+A genuine no-change result or unavoidable blocker is the only exception: give
+one concise factual line, without manufacturing a PR. Do not count a draft with
+failing required checks as successful delivery. No summary after a published PR.
 
 ## Establish the batch
 
@@ -17,7 +31,9 @@ stop at the tested diff and ask only when publication is the remaining step.
    reset, stage, commit or publish unrelated work merely to make delivery easy.
 2. Start with `de-slop.mbtx --deliver .` when the scope is unknown. When a
    previous sweep or user feedback supplies a concrete candidate, use a focused
-   invocation, e.g. `args=["--deliver","path/to/file.mbt"]`, instead of paying
+   invocation with `--focus` carrying that candidate verbatim, e.g.
+   `args=["--deliver","--focus","reuse difference in symmetric_difference",
+   "hashset/hashset.mbt"]`, instead of paying
    for the whole scan again. Use `subrun=true`. Wait for the actual workflow
    job and inspect its ledger; outer CLI exit zero is not evidence it succeeded.
    **Phase barrier:** do not edit until the challenge has finished successfully
@@ -90,9 +106,10 @@ required gate do not establish that gate passed.
    head SHA match the tested commit. If the head changed, previous validation
    no longer establishes the published revision. Inspect CI with `gh pr checks`
    or `@builtin/ci-watch.mbtx --once`; pending means pending, not green. Address
-   failures introduced by the patch. Report the URL, exact simplification,
-   tests and observed CI state. A published draft with an unresolved blocker
-   is partial delivery, not a completed task.
+   failures introduced by the patch. Put the exact simplification, tests and
+   observed CI state in the PR body; the final response contains only its link.
+   A published draft with an unresolved blocker is partial delivery, not a
+   completed task.
 
 Leave remaining candidates in the audit report. Do not restart a full sweep
 or open more PRs to fill a quota after this coherent batch has shipped.

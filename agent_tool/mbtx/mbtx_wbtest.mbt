@@ -272,3 +272,16 @@ test "the spawn policy admits only the codex review verb" {
   assert_false(codex_prefixes.contains(["exec"]))
   assert_false(codex_prefixes.contains(["install"]))
 }
+
+///|
+test "validation recipes are admitted without a general just runner" {
+  let recipes = spawn_prefixes("just")
+  assert_eq(recipes, [
+    ["check"],
+    ["test"],
+    ["build"],
+    ["editor-test"],
+    ["editor-test-browser"],
+  ])
+  assert_true(spawn_prefixes("moon").contains(["bundle"]))
+}

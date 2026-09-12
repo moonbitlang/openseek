@@ -326,6 +326,14 @@ async fn de_slop_child(
     fail("Unexpected de-slop request: \{request.stringify()}")
   }
   assert_true(query.contains("[\"sample space\"]"), msg=query)
+  if mode == "focus" {
+    assert_true(
+      query.contains(
+        "candidate with spaces: symmetric_difference -> difference",
+      ),
+      msg=query,
+    )
+  }
   // The second call must consume the first report, not repeat discovery.
   if child == "test-2" {
     assert_eq(read_calls(calls).length(), 1)
@@ -415,7 +423,7 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       "capacity", "help", "no-scope", "unknown-option", "absent-scope", "outside-scope",
       "symlink-scope", "missing-status", "validation-pending", "external-reference",
       "external-only", "no-report", "delivery", "delivery-no-changes", "delivery-incomplete",
-      "delivery-mutated",
+      "delivery-mutated", "focus", "empty-focus", "oversized-focus", "wide-focus",
     ] {
     let calls = temp + "/de-slop-" + mode + ".jsonl"
     let env = clean_env()
@@ -432,6 +440,14 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       env["WORKFLOW_HOST"] = handoff.stringify()
     }
     let args = match mode {
+      "focus" =>
+        [
+          "--focus", "candidate with spaces: symmetric_difference -> difference",
+          "sample space",
+        ]
+      "empty-focus" => ["--focus", " ", "sample space"]
+      "oversized-focus" => ["--focus", "x".repeat(2001), "sample space"]
+      "wide-focus" => ["--focus", "candidate", "."]
       "help" => ["--help"]
       "no-scope" => []
       "unknown-option" => ["--unknown"]
@@ -460,7 +476,8 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       | "external-reference"
       | "validation-pending"
       | "delivery"
-      | "delivery-no-changes")
+      | "delivery-no-changes"
+      | "focus")
     assert_eq(result.exit_code() == 0, succeeds, msg="\{mode}: \{output}")
     let launched = read_calls(calls)
     let expected = match mode {
@@ -471,7 +488,10 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       | "unknown-option"
       | "absent-scope"
       | "outside-scope"
-      | "symlink-scope" => 0
+      | "symlink-scope"
+      | "empty-focus"
+      | "oversized-focus"
+      | "wide-focus" => 0
       "empty-discovery"
       | "oversized"
       | "no-citations"

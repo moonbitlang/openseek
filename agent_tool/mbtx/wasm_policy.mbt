@@ -29,6 +29,8 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("moon", ["check"]),
   ("moon", ["test"]),
   ("moon", ["build"]),
+  // Core's contribution gate builds distributable artifacts for each target.
+  ("moon", ["bundle"]),
   // Benchmarks compile and run workspace code natively, exactly like `test`:
   // admitting one while refusing the other would guard nothing, and
   // performance work is a recurring task shape.
@@ -76,6 +78,14 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // already here; the asymmetry was an oversight, not a decision.
   ("moon", ["--version"]),
   ("moon", ["--help"]),
+  // Execute the repository's validation recipes as written, including their
+  // integration steps. Individual moon commands are not a substitute for
+  // these gates. Keep this vocabulary per recipe, like the toolchain above.
+  ("just", ["check"]),
+  ("just", ["test"]),
+  ("just", ["build"]),
+  ("just", ["editor-test"]),
+  ("just", ["editor-test-browser"]),
   // Proton CLI is SeekMoon's supported desktop application workflow, but it
   // is still listed per subcommand so the surface remains reviewable. Callers
   // set `Cmd.cwd` instead of passing the global `-C`/`--cwd` option, whose
@@ -231,6 +241,7 @@ let spawnable_commands : Array[(String, Array[String])] = [
 /// one edit to one table and the prose that teaches it cannot fall behind.
 let spawn_notes : Map[String, String] = {
   "moon": "(Not plain `publish`, `login` or `register`.)",
+  "just": "Only the listed repository validation recipes; set Cmd.cwd for the repository. Bare just and options placed before the recipe do not match these prefixes.",
   "proton_cli": "Set `Cmd.cwd` for the project directory; the global `-C`/`--cwd` options before the subcommand are refused.",
   "git": "Not `config`. A global option BEFORE the subcommand (`-c`, `-C`, `--git-dir`, `--work-tree`) is refused.",
   "codex": "(A read-only review of the current branch/diff; not `exec`, `install`, or a bare `codex`.)",

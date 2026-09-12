@@ -37,7 +37,8 @@ validation (including escaping symlinks and invalid line numbers); the review
 script's criteria resolution (arguments, the engine's standing goal, or both),
 baseline forwarding and override, the failing exit on blockers, and usage
 errors. De-slop tests cover sequential discovery/challenge handoff, explicit
-scope, no-change success, inspection gaps, partial failure, invalid reports and
+scope, focused-candidate forwarding to both scouts and invalid focus arguments,
+no-change success, inspection gaps, partial failure, invalid reports and
 references, and escaping paths; whole-repository inventory, disjoint shard
 assignment, executable Markdown, large-package source/test pairing, lead
 prioritization, explicit default/non-default trim leads, repeated-body links

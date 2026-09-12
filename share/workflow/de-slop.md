@@ -3,7 +3,9 @@
 Use this workflow to sweep a large repository, then simplify supported sites
 without changing their contract. For an authorized small PR, follow
 [the end-to-end delivery recipe](de-slop-deliver.md) and pass `--deliver`; the
-calling agent continues through edits, tests, final diff review and publication.
+calling agent continues through edits, tests, final diff review and publication
+in the same task. Its final response is only the verified PR link; audit details
+stay in local artifacts and validation belongs in the PR body.
 The script itself remains a read-only audit and emits a delivery handoff only
 after successful candidate review. `--deliver` additionally requires Git-visible
 source and compares scoped file contents before and after the audit; concurrent
@@ -82,7 +84,11 @@ For a focused follow-up, pass one to eight existing files/directories:
 
 `cwd` selects the workspace. Paths must resolve inside it, including through
 symlinks. Only the single argument `.` selects whole-repository mode;
-`--shard` requires it. `args=["--help"]` works without a hosted handoff.
+`--shard` requires it. `--focus TEXT` accepts one candidate (1–2000 characters)
+with explicit paths and passes it to both scouts; it cannot be combined with
+whole-repository scope. This preserves the candidate from a previous sweep or
+user feedback instead of asking the scouts to discover unrelated changes.
+`args=["--help"]` works without a hosted handoff.
 Scope selects candidates; callers/dependencies can be read to verify them.
 This is model guidance, not an additional filesystem sandbox.
 

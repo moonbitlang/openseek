@@ -72,7 +72,9 @@ other colons. Paths with spaces are single args without shell quoting.
   Explicit paths run a focused two-scout audit. See [the history-derived
   criteria and apply/validate loop](de-slop.md). With `--deliver`, the calling
   agent follows [the small-PR recipe](de-slop-deliver.md) through edits, tests,
-  final-diff review and publication; the audit script itself does not publish.
+  final-diff review and publication in the same task, returning only the
+  verified PR link to the user. Audit reports stay in local artifacts; tests
+  and CI status go in the PR body. The audit script is an intermediate stage.
 
 Run these with the hosted child-agent handoff:
 

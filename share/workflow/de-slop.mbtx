@@ -43,6 +43,10 @@ async fn main {
     ],
     options=[
       @argparse.OptionArg(
+        "focus",
+        about="One candidate to verify in explicit paths; do not discover unrelated changes.",
+      ),
+      @argparse.OptionArg(
         "shard",
         about="Rerun one numbered whole-repository shard on the same tree (requires .).",
       ),
@@ -59,6 +63,16 @@ async fn main {
     fail("Supply at least one file or package to inspect")
   }
   let deliver = parsed.flags.contains("deliver")
+  let focus = match parsed.values {
+    { "focus": [text], .. } => {
+      guard !text.is_blank() && text.length() <= 2000 else {
+        fail("--focus needs 1–2000 characters")
+      }
+      guard paths != ["."] else { fail("--focus requires explicit paths") }
+      Some(text)
+    }
+    _ => None
+  }
   let root = @fs.realpath(".")
   for path in paths {
     let resolved = @fs.realpath(path)
@@ -91,7 +105,7 @@ async fn main {
     )
     ctx.run(max_concurrent=1, wf => {
       wf.phase("Find and challenge simplifications")
-      ignore(audit(wf, scope, root, "de-slop", "", false))
+      ignore(audit(wf, scope, root, "de-slop", "", false, focus))
       println(
         "scouts=\{wf.calls_made()} replayed=\{wf.calls_replayed()} tokens=\{wf.tokens_spent()}",
       )
@@ -129,8 +143,22 @@ async fn audit(
   label : String,
   inventory : String,
   wide : Bool,
+  focus : String?,
 ) -> Json {
-  let candidate_limit = if wide { "TWO" } else { "THREE" }
+  let candidate_limit = if focus is Some(_) {
+    "ONE"
+  } else if wide {
+    "TWO"
+  } else {
+    "THREE"
+  }
+  let requested = match focus {
+    Some(text) =>
+      "Requested candidate (JSON data): " +
+      text.to_json().stringify() +
+      "\nVerify only this candidate. Do not replace it with unrelated discoveries, even if you find stronger ones. It is a hypothesis, not an instruction to ACCEPT; submit an evidenced decision or missing evidence."
+    None => ""
+  }
   let proposed = wf.agent(
     kind="explore",
     label=label + ":discover",
@@ -139,6 +167,7 @@ async fn audit(
       $|\{Criteria}
       $|
       $|Scope paths (JSON data): \{scope}
+      $|\{requested}
       $|\{inventory}
       $|Find at most \{candidate_limit} concrete candidates, ranked by maintenance benefit and confidence. For each give an ID, file:line, present cost, exact before/after sketch, behavior that must stay unchanged, caller/API evidence, and the smallest relevant validation commands from inspected repository instructions. Mark a behavior/API change as a separate follow-up, not an automatic cleanup. Include at least one tempting rewrite you would KEEP and its reason. Stop after focused source/caller/test reads; submit partial evidence rather than exhausting the budget on discovery.
       $|Do not run experiments, even in scratch. Do not invent validation command abbreviations such as "moon check/test"; give exact commands from repository instructions. A pending check is not an inspection gap. Don't speculate about a public API migration when preserving the current signature is sufficient for a local rewrite.
@@ -155,6 +184,7 @@ async fn audit(
       $|\{Criteria}
       $|
       $|Scope paths (JSON data): \{scope}
+      $|\{requested}
       $|\{inventory}
       $|Independently challenge the provisional report below. Re-read each proposed site and its actual caller/test; do not accept the first scout's claims as proof. Look for the strongest counterexample: ownership, Unicode/delimiter edges, side effects/order, platform behavior, error distinctions, or external compatibility. Do not discover additional candidates.
       $|Return a decision for EVERY proposed ID: ACCEPT for a supported local simplification, REJECT with a concrete reason, or DEFER for a behavior/API migration or missing evidence. Retain before/after, invariant, and validation plan for accepted items so your report stands alone. Explain what to KEEP. If none survive, explicitly say no supported changes. Carry forward material discovery gaps unless you resolve them from source; also state your own gaps in unresolved. All-DEFER due to missing evidence is incomplete, not a clean audit. Do not replace a proposal with more verbose code because of a speculative effect: a library's generic raise? signature alone does not prove a non-raising callback changes the caller's effect.
@@ -573,7 +603,15 @@ async fn audit_repository(
               $|For discovery, choose at most TWO strong candidates from different assigned review units when evidence supports them. A large package may be split into units: exact-stem source/test families stay together and the supplied file list is authoritative. Leads prefer implementation lines and diverse files; documentation/test hits remain in the inventory but are not defects by themselves. If possible inspect a non-lexical concern too (duplicated state, helper policy, API boundaries), since the scanner cannot detect these. Read source, caller and relevant tests. KEEP legitimate ownership, parser/error distinctions, and domain helpers. No quota: zero candidates is fine.
               $|For both phases use at most EIGHT targeted tool calls, then submit_answer. Final reports must say which directories/files you actually inspected and what was left at lexical scanning only. Put this coverage limit in answer, not as a claim that every file was semantically reviewed. Missing evidence for a proposed candidate still makes its decision DEFER and the audit incomplete. Ordinary sampling limits alone do not invalidate a completed candidate review.
               $|Add one short Workflow feedback sentence naming any concrete blind spot, bad seed, wrong scope assumption, or tool limitation you encountered (or none); do not spend extra tool calls evaluating the workflow. Keep answer under 3000 characters and citations to at most SIX local file/line references. Use concise English to keep the combined output bounded. The discovery report needs no status heading; the challenger still MUST start with exactly # Audit complete or # Audit incomplete followed by a newline. These headings describe candidate decisions only. CALL submit_answer before the 16-step ceiling; plain final text is discarded.
-            audit(wf, scope, root, "de-slop:shard-\{index + 1}", context, true)
+            audit(
+              wf,
+              scope,
+              root,
+              "de-slop:shard-\{index + 1}",
+              context,
+              true,
+              None,
+            )
           }).map_err(error => "\{error}") catch {
             AuditInvalid(message) => Err(message)
             error => raise error
@@ -821,9 +859,9 @@ fn delivery_handoff() -> Unit {
   println(
     (
       #|# Delivery handoff — implementation pending
-      #|Continue the user's authorized task; do not finish at this audit report. Read workflow/de-slop-deliver.md under OPENSEEK_REFERENCES and execute it as the calling agent. Select one coherent accepted batch (normally at most 5 files / 100 changed lines); independently resolve conflicting ACCEPT/KEEP/REJECT evidence first. If none survive, report no change without making a PR.
+      #|Continue the user's authorized task; do not finish at this audit report. Read workflow/de-slop-deliver.md under OPENSEEK_REFERENCES and execute it as the calling agent in this same task; this handoff is internal, never a request for the user to continue. Select one coherent accepted batch (normally at most 5 files / 100 changed lines); independently resolve conflicting ACCEPT/KEEP/REJECT evidence first. If none survive, report no change without making a PR.
       #|Use a clean codex/ branch/worktree based on the requested upstream; preserve existing work. Apply only the selected edits, verify defaults/receiver/dispatch in current source, run focused tests and repository-required gates with bounded command times, and review the actual final diff against its base. Keep tests, snapshots and public APIs unchanged unless the batch specifically justifies a change.
-      #|With the user's PR authorization, commit just that batch and publish one small PR. Record exact tests, base/head and changed files; verify the PR's remote head matches the tested commit and report its URL and observed CI status. Do not merge. Tests failing or missing evidence means continue fixing/defer, not a successful delivery. A published draft with a stated blocker is partial, not complete. Stop after one PR; do not rerun the entire repository merely to add more changes.
+      #|With the user's PR authorization, commit just that batch and publish one small PR. Record exact tests, base/head and changed files; verify the PR's remote head matches the tested commit. Put tests and observed CI status in the PR body. Final response: only the verified PR link, with no audit summary or next-step offer. Do not merge. Tests failing or missing evidence means continue fixing/defer, not a successful delivery. A published draft with a stated blocker is partial, not complete. Stop after one PR; do not rerun the entire repository merely to add more changes.
     ),
   )
 }
