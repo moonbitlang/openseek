@@ -34,8 +34,16 @@ failing required checks as successful delivery. No summary after a published PR.
    invocation with `--focus` carrying that candidate verbatim, e.g.
    `args=["--deliver","--focus","reuse difference in symmetric_difference",
    "hashset/hashset.mbt"]`, instead of paying
-   for the whole scan again. Use `subrun=true`. Wait for the actual workflow
+   for the whole scan again. For user-requested repeated large-repository use,
+   advance `--round N` on a recorded stable inventory rather than suggesting
+   the same seeds each time; preserve the round with `--shard` retries. Do not
+   advance rounds to fill a PR quota. Use `subrun=true`. Wait for the actual workflow
    job and inspect its ledger; outer CLI exit zero is not evidence it succeeded.
+   For a recoverable report-format or missing-submission failure, inspect the
+   saved error before making at most one targeted retry on the same source,
+   workflow version and round. Retain both attempts and count the extra run;
+   a second failure is a blocker, not a reason to restart the whole sweep.
+   Missing semantic evidence requires inspection, not a blind retry.
    **Phase barrier:** do not edit until the challenge has finished successfully
    and emitted the delivery handoff. While it runs, only read and run baseline
    tests. Provisional discovery output is not approval to implement. The script
@@ -59,7 +67,7 @@ required gate do not establish that gate passed.
 ## Prove and apply
 
 4. Independently read the selected sites, callers, current library declarations
-   and tests. Treat ACCEPT, KEEP and REJECT as claims. Resolve contradictory
+   and tests. Treat ACCEPT, KEEP and REJECT as claims. A correct rejection with a false compiler/allocation explanation is still workflow feedback; preserve the actual counterexample instead of treating the label alone as success. Resolve contradictory
    reports before editing; do not vote on them. Verify constants at their
    declarations, defaults by semantic equality (not character order), receiver
    types, backend behavior and trait dispatch. Keep non-default trim character

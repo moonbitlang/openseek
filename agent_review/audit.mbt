@@ -23,8 +23,10 @@ fn audit_task(
       (
         $|
         $|Your scratch lab (writable): \{lab}
-        $|Create files and projects THERE and run any moon command there to
-        $|verify a claim empirically before reporting it. The worktree under
+        $|When experiments are in scope, create projects THERE and run moon
+        $|commands to verify claims. For an inspection-only request with
+        $|supplied validation results, do not create projects or rerun gates;
+        $|report a concrete missing check for the caller instead. The worktree under
         $|audit stays read-only.
       )
     None => ""

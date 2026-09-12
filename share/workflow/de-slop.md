@@ -47,8 +47,15 @@ at most three children running concurrently. Discovery targets at most two
 candidates from different review units and also considers non-lexical issues.
 Sampled leads prefer explicit-trim/repeated-body implementation hits, then
 other implementation lines, tests, and comments/docs,
-with at most four distinct files per unit. The manifest retains **all** hits
-and their roles; a lexical role is a heuristic, not a parser classification.
+interleaving each file's first hit before its second hit, and so on. Each unit
+supplies at most four hits. `args=["--round","2","."]` advances that window
+by four on the same inventory; continue with positive rounds up to 1,000,000
+when repeated use is requested. Every retained hit is eventually suggested,
+including later hits in a single file. Windows wrap when exhausted; this is
+reproducible sampling, not a persistent coverage database or a guarantee that
+a scout read a suggested site. Shard assignments do not change with the round.
+The version-4 manifest records the round and the exact sampled leads as well
+as **all** hits and their roles; a lexical role is a heuristic, not a parser classification.
 It needs two reserved child slots per shard, up to sixteen for a full sweep.
 There are no automatic retries that silently multiply model spend.
 
@@ -63,7 +70,7 @@ other results. Report errors use a separate typed channel: workflow `attempt`
 alone catches child failures, not arbitrary validation exceptions. Cancellation
 and unexpected engine errors still propagate. With
 the **same working tree and workflow version**, rerun one failed shard using
-`args=["--shard","N","."]`; it prints how many shards were unscheduled and
+`args=["--shard","N","--round","R","."]` (round defaults to 1); it prints how many shards were unscheduled and
 must be combined with the earlier reports. Shards are deterministically rebuilt
 from the current tree; after edits, do not combine new shard numbers with an
 old inventory. Re-audit explicit changed paths instead.
@@ -84,12 +91,12 @@ For a focused follow-up, pass one to eight existing files/directories:
 
 `cwd` selects the workspace. Paths must resolve inside it, including through
 symlinks. Only the single argument `.` selects whole-repository mode;
-`--shard` requires it. `--focus TEXT` accepts one candidate (1–2000 characters)
+`--shard` and `--round` require it. `--focus TEXT` accepts one candidate (1–2000 characters)
 with explicit paths and passes it to both scouts; it cannot be combined with
 whole-repository scope. This preserves the candidate from a previous sweep or
 user feedback instead of asking the scouts to discover unrelated changes.
 `args=["--help"]` works without a hosted handoff.
-Scope selects candidates; callers/dependencies can be read to verify them.
+Scope selects candidates; callers/dependencies, including a repeated-body peer outside the shard, can be read to verify them. A proposed exported API or visibility change is DEFER, never ACCEPT with a caveat.
 This is model guidance, not an additional filesystem sandbox.
 
 For explicit paths, the script launches two **sequential, read-only** `explore` children, each
@@ -262,3 +269,7 @@ workflow changes, see [the cross-repository evaluation](de-slop-cross-repo.md).
 
 For the default-argument feedback, negative controls, delivery phase failure
 and a real small PR, see [the delivery evaluation](de-slop-delivery-evaluation.md).
+
+The [two-round scale evaluation](de-slop-scale-evaluation.md) records both real
+PR deliveries, progressive reading coverage, negative controls and remaining
+failures, including the corrected reviewer instruction conflict.

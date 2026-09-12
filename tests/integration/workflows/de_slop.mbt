@@ -140,13 +140,19 @@ async fn verify_de_slop_wide(
   )
   @shell.Cmd("git", ["add", "."], cwd=repo).output().check()
   @fs.remove(repo + "/deleted.mbt")
-  write(repo + "/untracked.mbt", "fn keep() -> String { \"a\".to_owned() }\n")
+  write(
+    repo + "/untracked.mbt",
+    "fn keep() -> String { \"a\".to_owned() }\n".repeat(5),
+  )
   @fs.symlink(target=temp + "/outside.md", repo + "/escape.mbt")
+  let all_leads : Set[String] = Set([])
+  let sampled : Set[String] = Set([])
   for
     mode in [
       "wide-success", "wide-partial", "wide-resume", "wide-unicode", "wide-capacity",
       "wide-invalid", "wide-no-journal", "wide-bad-line", "wide-incomplete", "wide-delivery",
-      "wide-delivery-partial",
+      "wide-delivery-partial", "wide-round-two", "wide-round-three", "wide-round-zero",
+      "wide-round-overflow", "wide-round-text", "wide-round-resume",
     ] {
     let calls = temp + "/" + mode + ".calls"
     let journal = temp + "/" + mode + ".journal"
@@ -165,6 +171,12 @@ async fn verify_de_slop_wide(
     let env = clean_env()
     env["WORKFLOW_HOST"] = handoff.to_json().stringify()
     let args = match mode {
+      "wide-round-two" => ["--round", "2", "."]
+      "wide-round-resume" => ["--round", "2", "--shard", "1", "."]
+      "wide-round-three" => ["--round", "3", "."]
+      "wide-round-zero" => ["--round", "0", "."]
+      "wide-round-overflow" => ["--round", "1000001", "."]
+      "wide-round-text" => ["--round", "two", "."]
       "wide-resume" => ["--shard", "1", "."]
       "wide-invalid" => ["--shard", "0", "."]
       "wide-delivery" | "wide-delivery-partial" => ["--deliver", "."]
@@ -181,7 +193,13 @@ async fn verify_de_slop_wide(
     assert_eq(
       result.exit_code() == 0,
       mode
-      is ("wide-success" | "wide-resume" | "wide-unicode" | "wide-delivery"),
+      is ("wide-success"
+      | "wide-resume"
+      | "wide-unicode"
+      | "wide-delivery"
+      | "wide-round-two"
+      | "wide-round-three"
+      | "wide-round-resume"),
       msg=output,
     )
     assert_true(
@@ -195,23 +213,40 @@ async fn verify_de_slop_wide(
       | "wide-unicode"
       | "wide-incomplete"
       | "wide-delivery"
-      | "wide-delivery-partial" => 16
+      | "wide-delivery-partial"
+      | "wide-round-two"
+      | "wide-round-three" => 16
       "wide-bad-line" => 15
-      "wide-resume" => 2
+      "wide-resume" | "wide-round-resume" => 2
       _ => 0
     }
     assert_eq(launched.length(), expected, msg=output)
-    if mode != "wide-no-journal" {
+    if !(mode
+      is ("wide-no-journal"
+      | "wide-round-zero"
+      | "wide-round-overflow"
+      | "wide-round-text")) {
       guard @json.parse(@fs.read_file(journal + ".inventory.json").text())
         is {
-          "version": 3,
+          "version": 4,
+          "round": Number(round, ..),
           "source_files": 24,
-          "lexical_leads": 28,
+          "lexical_leads": 32,
           "shards": Array(shards),
           ..
         } else {
         fail("Inventory must include every current source exactly once")
       }
+      assert_eq(
+        round.to_int(),
+        if mode is ("wide-round-two" | "wide-round-resume") {
+          2
+        } else if mode == "wide-round-three" {
+          3
+        } else {
+          1
+        },
+      )
       assert_eq(shards.length(), 8)
       let assigned : Array[String] = []
       let defaults : Array[String] = []
@@ -223,10 +258,29 @@ async fn verify_de_slop_wide(
           fail("Missing areas")
         }
         for area in areas {
-          guard area is { "files": Array(files), "leads": Array(leads), .. } else {
+          guard area
+            is {
+              "files": Array(files),
+              "leads": Array(leads),
+              "sample_leads": Array(samples),
+              ..
+            } else {
             fail("Missing files")
           }
+          assert_true(samples.length() <= 4)
+          for sample in samples {
+            assert_true(
+              leads.contains(sample),
+              msg="Samples must come from the complete inventory",
+            )
+            if mode is ("wide-success" | "wide-round-two" | "wide-round-three") {
+              sampled.add(sample.stringify())
+            }
+          }
           for lead in leads {
+            if mode == "wide-success" {
+              all_leads.add(lead.stringify())
+            }
             match lead {
               { "kind": "explicit-trim-characters", "file": String(path), .. } =>
                 defaults.push(path)
@@ -282,7 +336,7 @@ async fn verify_de_slop_wide(
           | "wide-incomplete"
           | "wide-delivery-partial") {
           7
-        } else if mode == "wide-resume" {
+        } else if mode is ("wide-resume" | "wide-round-resume") {
           1
         } else {
           8
@@ -304,6 +358,12 @@ async fn verify_de_slop_wide(
     assert_eq(output.contains("# Delivery handoff"), mode == "wide-delivery")
     println("de-slop: \{mode} passed")
   }
+  assert_eq(
+    sampled.length(),
+    all_leads.length(),
+    msg="Three rounds must reach every fixture lead, including later hits in the same file",
+  )
+  assert_true(all_leads.iter().all(lead => sampled.contains(lead)))
 }
 
 ///|
@@ -424,6 +484,7 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       "symlink-scope", "missing-status", "validation-pending", "external-reference",
       "external-only", "no-report", "delivery", "delivery-no-changes", "delivery-incomplete",
       "delivery-mutated", "focus", "empty-focus", "oversized-focus", "wide-focus",
+      "explicit-round",
     ] {
     let calls = temp + "/de-slop-" + mode + ".jsonl"
     let env = clean_env()
@@ -448,6 +509,7 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       "empty-focus" => ["--focus", " ", "sample space"]
       "oversized-focus" => ["--focus", "x".repeat(2001), "sample space"]
       "wide-focus" => ["--focus", "candidate", "."]
+      "explicit-round" => ["--round", "2", "sample space"]
       "help" => ["--help"]
       "no-scope" => []
       "unknown-option" => ["--unknown"]
@@ -491,7 +553,8 @@ async fn verify_de_slop(root : String, temp : String, exe : String) -> Unit {
       | "symlink-scope"
       | "empty-focus"
       | "oversized-focus"
-      | "wide-focus" => 0
+      | "wide-focus"
+      | "explicit-round" => 0
       "empty-discovery"
       | "oversized"
       | "no-citations"

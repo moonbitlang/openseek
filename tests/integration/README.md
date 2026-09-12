@@ -43,7 +43,7 @@ references, and escaping paths; whole-repository inventory, disjoint shard
 assignment, executable Markdown, large-package source/test pairing, lead
 prioritization, explicit default/non-default trim leads, repeated-body links
 and near-match/test exclusions, untracked/deleted/ignored/symlink handling,
-partial child and report-validation failures, and single-shard reruns. Delivery
+partial child and report-validation failures, and single-shard reruns; rotating rounds that reach later hits in the same file, persist exact samples, and reject invalid round arguments before launching children. Delivery
 tests require a successful audit before handoff and reject source changes
 during the audit, even when Git status would still show the same untracked file. The CI tests
 cover stable completion, PR-head replacement, failure/cancellation states,

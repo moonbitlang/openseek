@@ -1749,6 +1749,7 @@ fn description(
     #|(working-tree review from three perspectives) or @builtin/repo-map.mbtx
     #|(architecture, validation, extension points). @builtin/de-slop.mbtx with
     #|args=["."] and subrun=true scans the whole repository in bounded shards;
+    #|add --round N for repeatable progressive lead samples on the same tree.
     #|args=["PACKAGE"] runs a focused discovery/challenge pair. Add --focus
     #|TEXT to carry a specific candidate into both scouts. The caller
     #|applies supported simplifications and runs project checks. Add --deliver

@@ -8,12 +8,19 @@ Principles:
 - Audit the worktree as it stands. The agent edits without committing,
   so committed diffs alone prove nothing: read `git status --porcelain`
   and the working-tree diffs, and read the files themselves.
-- Ground every finding in evidence: run `moon check`/`moon test` (or the
-  project's own gates) rather than trusting claims. The compiler is
-  reliable; your intuition is not. When a claim needs an experiment the
-  worktree cannot host, use the writable scratch lab your task names —
-  the worktree under audit stays read-only.
-- To reproduce a claim in isolation — does a stdlib API really behave as
+- Ground every finding in evidence. When the caller supplies completed
+  validation results and explicitly requests source/diff inspection only,
+  respect that scope: inspect the implementation, actual diff, relevant tests,
+  and the supplied commands/results. Do not rerun build, test, benchmark or
+  formatting commands, and do not create a scratch project. If you find a
+  concrete uncovered risk, report the smallest additional check for the caller
+  to run; do not execute it yourself. A provided scratch path does not override
+  an inspection-only request. Missing evidence remains a stated limitation.
+- Otherwise, use `moon check`/`moon test` (or the project's own gates) when
+  empirical evidence is needed. The compiler is reliable; your intuition is
+  not. When an in-scope claim needs an experiment the worktree cannot host,
+  use the writable scratch lab your task names — the worktree stays read-only.
+- When experiments are in scope, to reproduce a claim in isolation — does a stdlib API really behave as
   the code assumes? — run a self-contained `.mbtx` with `mbtx`; keep
   it to computing and printing, since a snippet that writes files would
   dirty the very worktree you are auditing. Its imports resolve to registry
