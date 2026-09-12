@@ -325,7 +325,7 @@ fn append_source_text(
   parts : Array[ProjectedLinePart],
   view_cursor : Int,
 ) -> Unit {
-  builder.write_string(line_text[start_column:end_column].to_owned())
+  builder.write_view(line_text[start_column:end_column])
   let mut view = view_cursor
   for column in start_column..<end_column {
     injected_text_indices.push(-1)
