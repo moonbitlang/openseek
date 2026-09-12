@@ -162,9 +162,7 @@ pub async fn list_jobs(
     // live data; duplicate session ids in different stores must stay isolated.
     if engine.session_root is Some(root) &&
       directory == jobs_store_path(root, scope.session) {
-      guard @uuid.mint() is Some(request_id) else {
-        raise EngineError("could not allocate a job request id")
-      }
+      let request_id = @uuid.mint()
       try engine.job_request(request_id, JobsSnapshot(request_id~)) catch {
         error => {
           refresh_failed = true
@@ -441,9 +439,7 @@ pub async fn read_job(
         directory == jobs_store_path(root, scope.session) else {
         raise metadata_error
       }
-      guard @uuid.mint() is Some(request_id) else {
-        raise EngineError("could not allocate a job request id")
-      }
+      let request_id = @uuid.mint()
       match engine.job_request(request_id, JobsSnapshot(request_id~)) {
         JobsSnapshot(jobs~, ..) => {
           guard jobs
@@ -520,9 +516,7 @@ pub async fn stop_job(
     directory == jobs_store_path(root, target.scope.session) else {
     raise EngineError("job controls require its current live engine")
   }
-  guard @uuid.mint() is Some(request_id) else {
-    raise EngineError("could not allocate a job request id")
-  }
+  let request_id = @uuid.mint()
   match
     engine.job_request(
       request_id,
