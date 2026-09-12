@@ -1,60 +1,72 @@
-# Deliver one small de-slop PR
+# Deliver de-slop changes as small PRs
 
 Use this as the calling agent's task recipe when the user asks for cleanup and
 PR delivery. `de-slop.mbtx --deliver` performs read-only discovery/challenge and
 hands control back here; **the calling agent executes the remaining steps**.
 This is one end-to-end task, with no user handoff between phases. A successful
-audit is an intermediate result. Continue in the same task until there is one
-verified PR URL, an evidenced no-change result, or an unavoidable blocker. Do
+audit is an intermediate result. Continue in the same task until the selected
+batches have verified PR URLs or concrete no-change/blocker dispositions. Do
 not ask again for publication permission already granted by the user. Without PR authorization,
 stop at the tested diff and ask only when publication is the remaining step.
 
 ## Completion contract
 
 When the user requests PR delivery, the final user-facing answer is **only the
-verified PR link**: `[PR #NUMBER](URL)`. Put the change explanation, tests and
+verified PR link(s)**: `[PR #NUMBER](URL)`, one per delivered batch. Put the change explanation, tests and
 observed CI status in the PR body; retain discovery, rejected candidates and
 workflow feedback in local artifacts. Do not replace delivery with an audit
 summary, a tested patch, a proposed next step, or a request to continue.
 The script's delivery handoff is internal control flow, not a handoff to the user.
 
 A genuine no-change result or unavoidable blocker is the only exception: give
-one concise factual line, without manufacturing a PR. Do not count a draft with
+one concise factual line, without manufacturing a PR. If part of a selected
+campaign is blocked, return the completed PR links and name that blocker; do not
+present partial delivery as completion of all batches. Do not count a draft with
 failing required checks as successful delivery. No summary after a published PR.
 
-## Establish the batch
+## Establish scope and batches
 
 1. Read repository instructions and their linked validation guides. Record
    HEAD, status and existing work. Fetch the requested upstream. Start from its
    current tip in a clean `codex/` branch/worktree; if the user requested their
    existing changes as the baseline, preserve those instead. Never stash,
    reset, stage, commit or publish unrelated work merely to make delivery easy.
-2. Start with `de-slop.mbtx --deliver .` when the scope is unknown. When a
-   previous sweep or user feedback supplies a concrete candidate, use a focused
-   invocation with `--focus` carrying that candidate verbatim, e.g.
+2. Reuse a completed discovery/challenge ledger before launching more scouts.
+   Record its source/workflow revision and resolve its surviving proposals into
+   a batch queue. At a newer upstream, compare each proposal's source **and the
+   callers, declarations and manifests its reasoning depends on** with the
+   recorded baseline. Reuse unchanged evidence; inspect changed dependencies
+   and rechallenge the affected hypothesis when its justification no longer
+   holds. Do not pay for a new full sweep or a fresh focused pair for every
+   already-reviewed candidate. Invalid/incomplete reports are not reusable
+   approvals, and ACCEPT still needs independent caller verification.
+   When no usable ledger exists, start with `de-slop.mbtx --deliver .` for
+   unknown scope, or `--focus` carrying a concrete candidate verbatim, e.g.
    `args=["--deliver","--focus","reuse difference in symmetric_difference",
-   "hashset/hashset.mbt"]`, instead of paying
-   for the whole scan again. For user-requested repeated large-repository use,
-   advance `--round N` on a recorded stable inventory rather than suggesting
-   the same seeds each time; preserve the round with `--shard` retries. Do not
-   advance rounds to fill a PR quota. Use `subrun=true`. Wait for the actual workflow
-   job and inspect its ledger; outer CLI exit zero is not evidence it succeeded.
-   For a recoverable report-format or missing-submission failure, inspect the
-   saved error before making at most one targeted retry on the same source,
-   workflow version and round. Retain both attempts and count the extra run;
-   a second failure is a blocker, not a reason to restart the whole sweep.
-   Missing semantic evidence requires inspection, not a blind retry.
-   **Phase barrier:** do not edit until the challenge has finished successfully
-   and emitted the delivery handoff. While it runs, only read and run baseline
-   tests. Provisional discovery output is not approval to implement. The script
-   compares Git-visible scoped source before/after and refuses the handoff if
-   it changed; this is a stale-evidence check, not an exclusive filesystem lock.
-3. Choose **one maintenance concern**, normally no more than five files and
-   100 changed lines. Prefer a direct default-argument, copy or duplicated-body
-   simplification with existing behavior tests. Those limits are a batching
-   guideline, not a reason to split a necessary caller fix. Default to one PR
-   per task, not one PR per file. No candidate quota: if none survives, report
-   the actual reasons and make no empty commit/PR.
+   "hashset/hashset.mbt"]`. For repeated exploration, advance `--round N` on a
+   recorded stable inventory; preserve the round with `--shard` retries. Use
+   `subrun=true`, wait for actual job completion and inspect its ledger; outer
+   CLI exit zero is not evidence it succeeded. Before one targeted retry of a
+   recoverable format/submission failure, inspect the saved error. Retain both
+   attempts; a second failure is a blocker, not grounds to restart the sweep.
+   **Phase barrier:** do not edit until challenge succeeds and evidence is
+   current. For a new `--deliver` run, wait for its delivery handoff. While it
+   runs, only read and run baseline tests. Provisional discovery is not approval
+   to implement. The script compares Git-visible scoped source before/after;
+   that guard is neither an exclusive lock nor validation of every dependency.
+3. Match delivery breadth to the user's request. A narrow cleanup or explicitly
+   single-PR request gets one PR. A repository-scale or cross-repository
+   delivery request processes the surviving batch queue in the same task;
+   **one PR is not the task's stopping condition**. First group candidates by
+   maintenance concern and verify all same-concern sites together. Normally
+   keep each PR within five files and 100 changed lines, but preserve necessary
+   caller/backend fixes rather than splitting them to meet a size guideline.
+   Avoid one PR per trivial call site. For every selected batch record its
+   concern, sites, evidence, validation and disposition (published, rejected
+   with counterexample, deferred with a concrete gap, or blocked). Do not
+   silently drop a valid batch after another ships. There is no PR or deletion
+   quota: finish the selected queue, not an arbitrary number of PRs. If the
+   audit found no valid edits, make no empty commit or PR.
 
 Before starting expensive work, check that the calling environment can run the
 repository gates and publish with Git/gh. If an inner CLI policy blocks a
@@ -65,6 +77,10 @@ policy or disguise the command to bypass a denial. Partial substitutes for a
 required gate do not establish that gate passed.
 
 ## Prove and apply
+
+Repeat steps 4–9 for each selected batch, using separate clean branches for
+independent concerns. Each published head needs its own required gate results;
+one batch's tests do not establish another batch's correctness.
 
 4. Independently read the selected sites, callers, current library declarations
    and tests. Treat ACCEPT, KEEP and REJECT as claims. A correct rejection with a false compiler/allocation explanation is still workflow feedback; preserve the actual counterexample instead of treating the label alone as success. Resolve contradictory
@@ -95,14 +111,18 @@ required gate do not establish that gate passed.
    criterion and the recorded gate results. Explicitly ask for source/diff
    inspection without rerunning build, test or benchmark commands: the caller
    already owns validation. If review identifies a concrete uncovered risk,
-   have the caller run the smallest additional check once. Resolve blockers
+   verify that its proposed inputs actually reach the claimed branch, then have
+   the caller run the smallest additional check once. Resolve blockers
    and material inspection gaps before publication.
    Read the findings and limits even if the script exits zero. Recheck every
    changed file, public interface and executed test command yourself. Do not
    expand the scope with unrelated follow-up suggestions from this review.
    Distinguish a current contract violation from a hypothetical future library
    change: the latter alone is not grounds to undo a verified default-argument
-   cleanup or add repetitive call-site tests.
+   cleanup or add repetitive call-site tests. Missing per-wrapper coverage is
+   not itself a defect in a delegation whose current bodies and dispatch are
+   equivalent. Record source equivalence separately from executed coverage;
+   add a regression for a concrete changed-path risk, not every touched line.
 
 ## Publish and verify
 
@@ -122,9 +142,14 @@ required gate do not establish that gate passed.
    CI does not delay returning the verified PR link. Pending means pending,
    not green. Address
    failures introduced by the patch. Put the exact simplification, tests and
-   observed CI state in the PR body; the final response contains only its link.
+   observed CI state in the PR body; retain its verified link for the final response.
    A published draft with an unresolved blocker is partial delivery, not a
    completed task.
 
-Leave remaining candidates in the audit report. Do not restart a full sweep
-or open more PRs to fill a quota after this coherent batch has shipped.
+After each publication, resume the existing queue when campaign delivery was
+requested. Finish when every selected batch has an evidenced disposition. Keep
+unselected/deferred candidates and their reasons in the ledger; neither a large
+inventory nor a few shipped PRs proves exhaustive semantic review. Start another
+sweep only when the request calls for further exploration and the current ledger
+has no actionable candidates. Judge the run by verified maintenance reductions
+and unresolved gaps, not scout count, deleted lines or PR count alone.

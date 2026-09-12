@@ -1,7 +1,7 @@
 # De-slop: simplify, challenge, validate
 
 Use this workflow to sweep a large repository, then simplify supported sites
-without changing their contract. For an authorized small PR, follow
+without changing their contract. For authorized PR delivery, follow
 [the end-to-end delivery recipe](de-slop-deliver.md) and pass `--deliver`; the
 calling agent continues through edits, tests, final diff review and publication
 in the same task. Its final response is only the verified PR link; audit details
@@ -172,7 +172,11 @@ has already requested the cleanup.
    gates on unchanged code.
 6. For PR delivery, use the final-diff review and publication checks in
    [de-slop-deliver.md](de-slop-deliver.md); do not stop at an ACCEPT report or
-   restart full discovery merely to accumulate more changes.
+   restart full discovery merely to accumulate more changes. A narrow request
+   ends with one coherent PR; repository-scale delivery continues the existing
+   surviving batch queue, grouping same-concern sites and giving every selected
+   batch a concrete disposition. Revalidate source/dependency assumptions on a
+   fresh base before reusing an earlier challenge report.
    For an audit/iteration task, rerun on the changed scope to check for supported
    simplifications. Default to at most two apply/validate rounds per scope;
    stop earlier when no candidates survive. If a round repeats a rejected
@@ -272,4 +276,6 @@ and a real small PR, see [the delivery evaluation](de-slop-delivery-evaluation.m
 
 The [two-round scale evaluation](de-slop-scale-evaluation.md) records both real
 PR deliveries, progressive reading coverage, negative controls and remaining
-failures, including the corrected reviewer instruction conflict.
+failures, including the corrected reviewer instruction conflict. Its follow-up
+records three further batches from the existing backlog and the delivery/review
+changes prompted by low yield.

@@ -157,3 +157,90 @@ A bounded scout can still omit its submission, and a complete heading cannot
 prove its semantic claims. There is no automatic retry that silently multiplies
 spend, no PR quota, and no claim that two rounds exhausted these repositories.
 Independent caller verification and existing behavior tests remain required.
+
+## Follow-up: consume the candidate backlog
+
+The user correctly challenged the low delivery yield: two tiny PRs were not a
+sufficient outcome for this much repository-scale exploration. The delivery
+recipe and emitted handoff explicitly stopped after one PR. They now distinguish
+a narrow single-PR task from a repository-scale delivery campaign: group the
+surviving candidates by maintenance concern, finish the selected queue, and keep
+an evidenced disposition for each batch. Reuse completed challenge evidence
+before spending on more discovery; verify its source and dependency assumptions
+on the fresh upstream first. Neither more scouts nor a PR quota measures success.
+
+OpenSeek was rebased onto `a9b36cd91`; independent core branches start at freshly
+fetched `2a34e7a35`. The selected implementation files, relevant package manifests
+and core delegation targets are unchanged from their recorded audit baselines.
+The caller re-read current declarations and resolved the proposals before edits.
+This follow-up reused the earlier reports; it did not perform another whole scan.
+
+Three additional batches were implemented and validated by the **outer calling
+agent**, with one hosted final-diff review each. This exercises the revised batch
+recipe, but is not a claim that a hosted caller autonomously discovered and
+published multiple PRs in one uninterrupted run. The earlier two autonomous
+single-PR deliveries remain separate evidence.
+
+| Batch | Maintenance reduction | Validation |
+| --- | --- | --- |
+| [core #4236](https://github.com/moonbitlang/core/pull/4236) | Eight backend radix helper definitions become three; all nine digit callers handle `Int?`. | BigInt: 167 wasm / 194 wasm-gc / 168 JS / 167 native; full core: 7,610 / 7,637 / 7,570 / 7,525 respectively. |
+| [core #4237](https://github.com/moonbitlang/core/pull/4237) | Seven container/iterator entry points reuse current canonical bodies. | Affected packages: 3,538 / 3,538 / 3,508 / 3,488; full core: 7,609 / 7,636 / 7,569 / 7,524. |
+| [OpenSeek #1490](https://github.com/moonbitlang/openseek/pull/1490) | Three owned-slice conversions become direct view writes; intermediate copies are removed only on non-JS backends. | Affected JS tests: 313; editor: 1,090 wasm / 1,876 JS / 1,224 native (no wasm-gc test entry); 112 browser smoke/component tests. |
+
+Each core batch also passes all-target deny-warning checks, `moon bundle --all`,
+`moon info` and `moon fmt`. The editor batch passes root `just check/test/build`,
+editor all-target checks with warning 73 enabled, formatting, and the browser
+recipe's asset build. The default Xcode clang 16 fails compiling the dependency's
+existing atomic switch; the installed Command Line Tools clang 17 succeeds via
+command-local `DEVELOPER_DIR`, after installing the worktree's locked npm deps.
+No dependency source, lockfile, snapshot or public interface was changed.
+
+The reviews produced useful and incorrect feedback, which the caller separated:
+
+- BigInt's non-power-of-two rejection path lacked executing assertions. New
+  base-3/base-4 cases cover both recognized out-of-range digits and unrecognized
+  characters, including JS's shared parser paths. The reviewer incorrectly
+  suggested `a` as a `None` case: it is `Some(10)`. The test uses `?` for `None`
+  and retains `a` as an out-of-range digit. The recipe now explicitly verifies
+  that a suggested regression input reaches the claimed branch.
+- The editor reviewer asked for non-JS tests; these completed successfully.
+  Its optional pre-existing surrogate-boundary issue is outside this unchanged
+  slice expression. The audit's unqualified allocation claim was corrected:
+  JS `write_view` itself materializes the view, so no JS saving is asserted.
+- The delegation reviewer confirmed equivalence but reported five existing
+  coverage gaps as findings, including two medium findings for untouched
+  deprecated-wrapper coverage. The caller verified each actual callee and
+  dispatch rather than adding tests that merely mirror a one-line wrapper.
+  Direct deprecated-wrapper coverage is absent and is stated as such in the PR.
+  Full-view bounds, identity iteration and the same negative-size guard are
+  preserved; hypothetical future changes are not introduced defects.
+- Reviewers avoided repeating repository gates but still ran inline copied-code
+  probes. The system/task prompts now explicitly exclude these experiments
+  from inspection-only review. They also distinguish actual changed-path risks
+  from missing per-wrapper tests, keep optional pre-existing issues outside
+  actionable findings, and use validation logs rather than guessing test totals
+  from source declarations. These are model instructions, not sandbox controls.
+
+A fourth hosted review rechecked the unchanged delegation diff with the revised
+prompts and actual test logs. It made source/log reads and searches, with no
+inline behavior experiment, repository gate or scratch project. It accepted the
+stated deprecated-wrapper coverage limitation and found no behavior blocker.
+It still emitted two findings: a request for separate info/fmt log receipts
+(which the caller supplied with a clean-tree recheck) and a non-defect nit about
+the moved panic source location. This is improved scope compliance, not a claim
+of perfect finding precision. All four additional reviews completed and submitted
+reports; failed suggestions remain in the original records.
+
+The final workflow gates pass: `just check/test/build`, 3,087 native and 3,204 JS
+tests, 38 cram cases, the CLI lifecycle suite and all 55 de-slop fixture modes.
+The reviewer tests pass 12/12, and `moon info`/`moon fmt` leave interfaces unchanged.
+Batch-queue continuation remains calling-agent guidance; these offline fixtures
+validate hosted audit behavior, not autonomous multi-PR publication.
+
+The selected three-batch queue is distinct from an exhaustive cleanup of every
+lead. Remaining proposals such as List reverse-fold delegation, preview parsing,
+Array/Bytes view bounds and cross-package UI sharing are unselected or deferred;
+the latter require additional behavior/performance evidence or API work. No
+claim is made that the repositories contain only the shipped simplifications.
+Raw diffs, review reports, test logs, publication receipts and issue dispositions
+are retained under `.moonagent/de-slop-batches/` and `/tmp/deslop-batch-*.log`.

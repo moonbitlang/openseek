@@ -38,7 +38,7 @@ async fn main {
     flags=[
       @argparse.FlagArg(
         "deliver",
-        about="After a successful audit, hand off implementation, validation, review and one small PR to the calling agent.",
+        about="After a successful audit, hand off implementation, validation, review and small-PR delivery to the calling agent.",
       ),
     ],
     options=[
@@ -886,9 +886,9 @@ fn delivery_handoff() -> Unit {
   println(
     (
       #|# Delivery handoff — implementation pending
-      #|Continue the user's authorized task; do not finish at this audit report. Read workflow/de-slop-deliver.md under OPENSEEK_REFERENCES and execute it as the calling agent in this same task; this handoff is internal, never a request for the user to continue. Select one coherent accepted batch (normally at most 5 files / 100 changed lines); independently resolve conflicting ACCEPT/KEEP/REJECT evidence first. If none survive, report no change without making a PR.
+      #|Continue the user's authorized task; do not finish at this audit report. Read workflow/de-slop-deliver.md under OPENSEEK_REFERENCES and execute it as the calling agent in this same task; this handoff is internal, never a request for the user to continue. Build a queue of coherent accepted batches (normally at most 5 files / 100 changed lines per PR); independently resolve conflicting ACCEPT/KEEP/REJECT evidence first. Reuse completed current evidence, checking changed source and dependency assumptions against the recorded baseline before reuse. Group same-concern sites rather than publishing one trivial call site per PR. If none survive, report no change without making a PR.
       #|Use a clean codex/ branch/worktree based on the requested upstream; preserve existing work. Apply only the selected edits, verify defaults/receiver/dispatch in current source, run focused tests and repository-required gates with bounded command times, and review the actual final diff against its base. Keep tests, snapshots and public APIs unchanged unless the batch specifically justifies a change.
-      #|With the user's PR authorization, commit just that batch and publish one small PR. Record exact tests, base/head and changed files; verify the PR's remote head matches the tested commit. Put tests and observed CI status in the PR body. Final response: only the verified PR link, with no audit summary or next-step offer. Do not merge. Tests failing or missing evidence means continue fixing/defer, not a successful delivery. A published draft with a stated blocker is partial, not complete. Stop after one PR; do not rerun the entire repository merely to add more changes.
+      #|With the user's PR authorization, commit just that batch and publish one small PR. Record exact tests, base/head and changed files; verify the PR's remote head matches the tested commit. Put tests and observed CI status in the PR body. Final response: only the verified PR link(s), with no audit summary or next-step offer; name any blocker preventing completion of selected batches. Do not merge. Tests failing or missing evidence means continue fixing/defer, not a successful delivery. A published draft with a stated blocker is partial, not complete. For a narrow or explicitly single-PR request, stop after one PR. For repository-scale or cross-repository delivery, continue the surviving batch queue in this task until every selected batch is published or has an evidenced rejection, deferral or blocker. Record each disposition; do not silently abandon valid batches after the first PR. Do not rerun the entire repository or manufacture changes to fill a quota.
     ),
   )
 }
