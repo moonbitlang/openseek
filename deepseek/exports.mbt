@@ -14,4 +14,6 @@ pub impl FromJson for Usage with fn from_json(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Usage with FromJson::{from_json}

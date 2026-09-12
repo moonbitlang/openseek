@@ -248,6 +248,8 @@ pub extend ReviewReport with FromJson::{from_json}
 pub extend ReviewReport with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ReviewReport with ToJson::{to_json}
 
 ///|

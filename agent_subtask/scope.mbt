@@ -161,7 +161,11 @@ test "gitlink introductions are detected from raw -z records" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Change with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend Change with Eq::{equal, not_equal}

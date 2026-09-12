@@ -132,7 +132,7 @@ fn header_line(session : @agent_session.Session) -> String {
     id: session.id().value(),
     system_prompt: session.system_prompt(),
   }
-  "\{header.to_json().stringify()}\n"
+  "\{Json(header).stringify()}\n"
 }
 
 ///|
@@ -834,7 +834,11 @@ pub async fn SessionStore::compact(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionListing with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend SessionStore with Debug::{to_repr}

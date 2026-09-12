@@ -209,25 +209,41 @@ fn optional_string(json : Json, key : String) -> String? {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend CallToolResult with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend CallToolResult with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ContentBlock with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ContentBlock with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend InitializeResult with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend InitializeResult with Eq::{equal, not_equal}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend McpTool with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend McpTool with Eq::{equal, not_equal}

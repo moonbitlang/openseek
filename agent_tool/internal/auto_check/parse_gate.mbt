@@ -589,7 +589,11 @@ test "loc_line_span accepts every lenient loc form" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ParseGate with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ParseGateError with Debug::{to_repr}

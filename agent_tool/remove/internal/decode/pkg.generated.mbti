@@ -15,7 +15,6 @@ pub struct RemoveInput {
   path : String
   reason : String
 } derive(@debug.Debug)
-pub fn RemoveInput::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -33,4 +33,6 @@ pub fn decode(arguments : Json) -> RemoveInput raise {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend RemoveInput with Debug::{to_repr}

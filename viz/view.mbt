@@ -3062,7 +3062,11 @@ pub fn subrun_child_ids(
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ViewMode with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ViewMode with Eq::{equal, not_equal}

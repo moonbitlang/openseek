@@ -47,9 +47,6 @@ pub(all) struct GoalBaseline {
   sha : String
   dirty : Bool
 } derive(Eq, @debug.Debug)
-pub fn GoalBaseline::equal(Self, Self) -> Bool
-pub fn GoalBaseline::not_equal(Self, Self) -> Bool
-pub fn GoalBaseline::to_repr(Self) -> @debug.Repr
 
 pub enum GoalMarker {
   GoalSet(String)
@@ -57,7 +54,6 @@ pub enum GoalMarker {
   GoalBlocked(String)
   GoalUnblocked
 } derive(@debug.Debug)
-pub fn GoalMarker::to_repr(Self) -> @debug.Repr
 
 type RuntimeNotice derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn RuntimeNotice::RuntimeNotice(String) -> Self
@@ -72,12 +68,10 @@ pub fn Session::compact(Self, content~ : String, from_sequence~ : Int, to_sequen
 pub fn Session::current_goal(Self) -> StandingGoal?
 pub fn Session::current_goal_baseline(Self) -> GoalBaseline?
 pub fn Session::events(Self) -> @vector.Vector[SessionEvent]
-pub fn Session::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn Session::id(Self) -> SessionId
 pub fn Session::last_sequence(Self) -> Int
 pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> SessionItem raise
 pub fn Session::system_prompt(Self) -> String
-pub fn Session::to_json(Self) -> Json
 pub impl ToJson for Session
 pub impl @json.FromJson for Session
 
@@ -89,7 +83,6 @@ pub fn SessionEvent::unix_ms(Self) -> Int64
 
 type SessionId derive(Eq, @debug.Debug)
 pub fn SessionId::SessionId(String) -> Self
-pub fn SessionId::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionId::generated(prefix~ : String, now_ms~ : Int64, salt? : String) -> Self
 pub fn SessionId::value(Self) -> String
 pub impl @json.FromJson for SessionId
@@ -102,7 +95,6 @@ pub(all) enum SessionItem {
   Summary(SessionSummary)
   Terminal(TurnTerminal)
 } derive(Eq, @debug.Debug)
-pub fn SessionItem::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub impl @json.FromJson for SessionItem
 
 type SessionSummary derive(Eq, ToJson, @debug.Debug, @json.FromJson)
@@ -116,7 +108,6 @@ pub fn StandingGoal::answered_since_set(Self) -> Bool
 pub fn StandingGoal::blocked(Self) -> Bool
 pub fn StandingGoal::set_sequence(Self) -> Int
 pub fn StandingGoal::text(Self) -> String
-pub fn StandingGoal::to_repr(Self) -> @debug.Repr
 
 type ToolResult derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ToolResult::ToolResult(tool_call_id~ : String, tool_name~ : String, content~ : String, is_error? : Bool, brief? : String) -> Self
@@ -132,7 +123,6 @@ pub(all) enum TurnTerminal {
   Interrupted(String)
   Failed(String)
 } derive(Eq, @debug.Debug)
-pub fn TurnTerminal::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub impl @json.FromJson for TurnTerminal
 
 type UserMessage derive(Eq, ToJson, @debug.Debug, @json.FromJson)

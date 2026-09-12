@@ -529,18 +529,28 @@ test "Tools::function_tools yields one entry per definition" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend AgentControl with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend AgentToolDefinition with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend JsonSchema with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ToolAction with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ToolOutput with Debug::{to_repr}
 
 ///|

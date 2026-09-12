@@ -233,4 +233,6 @@ test "parse chat response extracts native tool calls" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ChatResponse with FromJson::{from_json}

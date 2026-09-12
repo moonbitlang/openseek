@@ -79,7 +79,11 @@ pub fn parse_events(text : String) -> ParsedLog {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ParsedLog with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ParsedLog with Eq::{equal, not_equal}

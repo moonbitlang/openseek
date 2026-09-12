@@ -556,7 +556,11 @@ async test "execution child sees an immediately-closed stdin pipe on Windows" {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ExecStatus with Debug::{to_repr}
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend ExecStatus with Eq::{equal, not_equal}

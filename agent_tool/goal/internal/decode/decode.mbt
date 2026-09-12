@@ -47,4 +47,6 @@ pub fn decode(arguments : Json) -> GoalStatus raise {
 }
 
 ///|
+#doc(hidden)
+#deprecated
 pub extend GoalStatus with Debug::{to_repr}

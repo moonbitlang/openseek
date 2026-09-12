@@ -25,7 +25,6 @@ pub fn ReviewReport::digest(Self) -> String
 pub fn ReviewReport::finding_count(Self) -> Int
 pub fn ReviewReport::has_blockers(Self) -> Bool
 pub fn ReviewReport::parse(Json) -> Result[Self, String]
-pub fn ReviewReport::to_json(Self) -> Json
 pub fn ReviewReport::to_json_string(Self) -> String
 pub fn ReviewReport::validate(Self) -> Array[String]
 

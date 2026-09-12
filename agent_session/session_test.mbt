@@ -162,7 +162,7 @@ test "session JSON round trips typed events" {
       ),
     )
     .append(Terminal(Finished("done")))
-  let encoded = session.to_json()
+  let encoded = Json(session)
   let decoded : @agent_session.Session = @json.from_json(encoded)
   assert_eq(decoded.id().value(), "s1")
   assert_eq(decoded.system_prompt(), "system")

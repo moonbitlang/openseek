@@ -30,7 +30,6 @@ pub(all) struct CheckErrors {
   truncated : Bool
 } derive(@debug.Debug)
 pub fn CheckErrors::first_errors(Self) -> Array[String]
-pub fn CheckErrors::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ErrorSite {
   path : String?
@@ -38,11 +37,8 @@ pub(all) struct ErrorSite {
   code : Int?
   message : String
 } derive(Eq, @debug.Debug)
-pub fn ErrorSite::equal(Self, Self) -> Bool
 pub fn ErrorSite::identity(Self) -> String
 pub fn ErrorSite::line(Self) -> String
-pub fn ErrorSite::not_equal(Self, Self) -> Bool
-pub fn ErrorSite::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PackageGraph {
   dirs : Array[String?]
@@ -50,20 +46,17 @@ pub(all) struct PackageGraph {
 } derive(@debug.Debug)
 pub fn PackageGraph::depends_on(Self, Int, Array[Int]) -> Bool
 pub fn PackageGraph::package_of(Self, String) -> Int?
-pub fn PackageGraph::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ParseGate {
   errors : Array[ParseGateError]
   truncated : Bool
 } derive(@debug.Debug)
-pub fn ParseGate::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ParseGateError {
   loc : String
   message : String
   context : String
 } derive(@debug.Debug)
-pub fn ParseGateError::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -496,7 +496,7 @@ test "session JSON round-trips events" {
     .append(User(UserMessage("hello")))
     .append(Terminal(Finished("done")))
 
-  let decoded : @agent_session.Session = @json.from_json(session.to_json())
+  let decoded : @agent_session.Session = @json.from_json(Json(session))
   debug_inspect(
     decoded,
     content=(

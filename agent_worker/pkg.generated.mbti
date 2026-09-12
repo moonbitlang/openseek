@@ -31,7 +31,6 @@ pub struct WorkerReport {
   // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn WorkerReport::parse_validated(Json) -> Result[Self, String]
-pub fn WorkerReport::to_json(Self) -> Json
 
 // Type aliases
 
