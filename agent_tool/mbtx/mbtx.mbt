@@ -589,7 +589,9 @@ async fn execute(
   // snippet cannot name a session that was not reserved for it.
   let reservation = if input.subrun {
     match subrun {
-      Some(injection) => Some(injection.reserve())
+      Some(injection) =>
+        // A relative cwd must not resolve again inside the running snippet.
+        Some(injection.reserve(cwd=@fs.realpath(run_cwd.unwrap_or("."))))
       // Asked, and cannot be served: say so. A snippet that believed it had a
       // handoff would spawn children with no transcript, and the model would
       // learn nothing until its subagents failed to appear anywhere.
@@ -1586,7 +1588,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
             "cwd",
             {
               "type": "string",
-              "description": "Working directory the program runs in (relative paths resolve against the workspace root); defaults to the workspace root.",
+              "description": "Working directory for the program and its hosted children (relative paths resolve against the workspace root); defaults to the workspace root. Saved-script filenames still resolve against the original workspace.",
             },
           ),
           (
