@@ -80,6 +80,19 @@ fn selected_job(state : State) -> @protocol.JobView? {
 }
 
 ///|
+fn selected_terminal(state : State) -> Bool {
+  selected_job(state) is Some(view) && view.job.state.is_terminal()
+}
+
+///|
+fn output_complete(state : State, job : @wire.JobRecord) -> Bool {
+  job.state.is_terminal() &&
+  !state.catching_up &&
+  state.cursor is Some(cursor) &&
+  cursor >= job.output_bytes
+}
+
+///|
 fn target(owner : Owner, key : (String, String)) -> @protocol.JobTarget {
   { scope: owner.scope, generation: key.0, job_id: key.1, }
 }
@@ -118,7 +131,8 @@ fn request_read(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
     state.owner is Some(owner) &&
     state.selected is Some(key) &&
     selected_job(state) is Some(view) &&
-    view.output_path is Some(_) else {
+    view.output_path is Some(_) &&
+    (!output_complete(state, view.job) || state.manual_read) else {
     return (@cmd.none, state)
   }
   let serial = state.read_serial + 1
@@ -201,7 +215,8 @@ pub fn update(
     Poll => {
       let state = { ..state, read_budget: 4, }
       let (list, state) = request_list(emit, state, 0)
-      let (read, state) = if state.follow && state.read_error is None {
+      let (read, state) = if (state.follow || selected_terminal(state)) &&
+        state.read_error is None {
         request_read(emit, state)
       } else {
         (@cmd.none, state)
@@ -246,7 +261,14 @@ pub fn update(
           }
           let selected = match state.selected {
             Some(_) => state.selected
-            None => jobs.get(0).map(view => (view.job.generation, view.job.id))
+            None => {
+              let first = match
+                jobs.iter().find_first(view => !view.job.state.is_terminal()) {
+                Some(view) => Some(view)
+                None => jobs.get(0)
+              }
+              first.map(view => (view.job.generation, view.job.id))
+            }
           }
           let next_offset = if offset == 0 &&
             reply.next_offset is Some(_) &&
@@ -304,7 +326,7 @@ pub fn update(
           reload_pending: false,
         })
       }
-      if !state.follow && !state.manual_read {
+      if !state.follow && !state.manual_read && !selected_terminal(state) {
         return (@cmd.none, { ..state, reading: false, })
       }
       match result {
@@ -349,7 +371,9 @@ pub fn update(
           let scroll = if state.follow { scroll_to_end() } else { @cmd.none }
           // At most four pages per refresh cycle. A partial UTF-8 suffix may report
           // more without cursor progress; always wait for the next tick then.
-          if state.follow && page.more && page.next_offset > page.start_offset {
+          if (state.follow || selected_terminal(state)) &&
+            page.more &&
+            page.next_offset > page.start_offset {
             let (read, state) = request_read(emit, state)
             (@cmd.batch([scroll, read]), state)
           } else {
@@ -397,7 +421,8 @@ pub fn update(
         state.owner is Some(owner) &&
         state.selected is Some(key) &&
         selected_job(state) is Some(view) &&
-        view.controllable else {
+        view.controllable &&
+        view.job.state is Running else {
         return (@cmd.none, state)
       }
       let cmd = @cmd.attempt(

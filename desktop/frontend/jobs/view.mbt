@@ -2,7 +2,7 @@
 fn status_label(state : @wire.JobState) -> String {
   match state {
     Running => "Running"
-    Stopping => "Stopping"
+    Stopping => "Stopping…"
     Exited(0) => "Completed"
     Exited(code) => "Failed · exit \{code}"
     Stopped("user") => "Stopped"
@@ -18,7 +18,8 @@ fn status_label(state : @wire.JobState) -> String {
 ///|
 fn status_class(state : @wire.JobState) -> String {
   match state {
-    Running | Stopping => "running"
+    Running => "running"
+    Stopping => "stopping"
     Exited(0) => "completed"
     Exited(_) | Stopped("capture_failed" | "output_limit" | "time_limit") =>
       "failed"
@@ -29,21 +30,43 @@ fn status_class(state : @wire.JobState) -> String {
 ///|
 /// The host normalizes output paths: POSIX double-leading slashes collapse to
 /// one, so a normalized // prefix here denotes a Windows UNC path.
-fn tail_command(path : String) -> String {
+fn tail_command(path : String, follow? : Bool = true) -> String {
   if (path.length() >= 2 && path[1] == ':') ||
     path.has_prefix("\\\\") ||
     path.has_prefix("//") {
     "Get-Content -LiteralPath '" +
     path.replace_all(old="'", new="''") +
-    "' -Tail 100 -Wait"
+    "' -Tail 100" +
+    (if follow { " -Wait" } else { "" })
   } else {
-    "tail -n 100 -f -- '" + path.replace_all(old="'", new="'\\''") + "'"
+    "tail -n 100" +
+    (if follow { " -f" } else { "" }) +
+    " -- '" +
+    path.replace_all(old="'", new="'\\''") +
+    "'"
   }
 }
 
 ///|
 extern "js" fn timestamp(value : Double) -> String =
   #| value => new Date(value).toLocaleString()
+
+///|
+fn job_timing(job : @wire.JobRecord) -> String {
+  if job.state.is_terminal() {
+    match job.finished_at_ms {
+      Some(end) => {
+        let seconds = ((end - job.started_at_ms).to_double().max(0) / 1000).to_int()
+        "Ended \{timestamp(end.to_double())} · Total \{seconds}s"
+      }
+      None => "End time unavailable"
+    }
+  } else {
+    let seconds = ((@interop.now_ms() - job.started_at_ms.to_double()).max(0) /
+    1000).to_int()
+    "Running for \{seconds}s"
+  }
+}
 
 ///|
 extern "js" fn away_from_end() -> Bool =
@@ -57,10 +80,17 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
   let header = @html.div(class="jobs-heading", [
     @html.div([
       @html.h3("Background jobs"),
-      @html.span(
-        class="jobs-summary",
-        "\{running} active · \{state.jobs.length()} loaded",
-      ),
+      @html.div(class="jobs-summary", [
+        @html.span(
+          class=if running > 0 {
+            "jobs-summary-active"
+          } else {
+            "jobs-summary-idle"
+          },
+          "\{running} in progress",
+        ),
+        @html.span("\{state.jobs.length() - running} in history"),
+      ]),
     ]),
     @html.button(
       class="jobs-action",
@@ -114,37 +144,57 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
       ]),
     )
   } else {
-    let rows = state.jobs.map(view => {
-      let job = view.job
-      let selected = state.selected == Some((job.generation, job.id))
-      @html.button(
-        class="jobs-row" + (if selected { " selected" } else { "" }),
-        attrs=@html.Attrs::build().aria_pressed(selected.to_string()),
-        title=job.command,
-        on_click=emit(Select(job.generation, job.id)),
-        [
-          @html.div(class="jobs-row-head", [
-            @html.span(
-              class="jobs-id",
-              title=job.id,
-              short_job_id(job.id, state.jobs),
+    let rows : Array[@html.Html] = []
+    for terminal in [false, true] {
+      let group = state.jobs.filter(view => {
+        view.job.state.is_terminal() == terminal
+      })
+      if group.is_empty() {
+        continue
+      }
+      let title = if terminal { "History" } else { "In progress" }
+      let cards = group.map(view => {
+        let job = view.job
+        let selected = state.selected == Some((job.generation, job.id))
+        @html.button(
+          class="jobs-row jobs-row-\{status_class(job.state)}" +
+            (if selected { " selected" } else { "" }),
+          attrs=@html.Attrs::build().aria_pressed(selected.to_string()),
+          title=job.command,
+          on_click=emit(Select(job.generation, job.id)),
+          [
+            @html.div(class="jobs-row-head", [
+              @html.span(class="jobs-id", title=job.id, short_job_id(job.id, state.jobs)),
+              @html.span(
+                class="jobs-status jobs-status-\{status_class(job.state)}",
+                status_label(job.state),
+              ),
+            ]),
+            @html.div(
+              class="jobs-command",
+              job.description.unwrap_or(job.command),
             ),
-            @html.span(
-              class="jobs-status jobs-status-\{status_class(job.state)}",
-              status_label(job.state),
+            @html.div(
+              class="jobs-row-meta",
+              "\{job_timing(job)} · \{job.output_bytes} B",
             ),
-          ]),
-          @html.div(
-            class="jobs-command",
-            job.description.unwrap_or(job.command),
-          ),
-          @html.div(
-            class="jobs-row-meta",
-            "\{timestamp(job.backgrounded_at_ms.to_double())} · \{job.output_bytes} B",
-          ),
-        ],
+          ],
+        )
+      })
+      rows.push(
+        @html.div(
+          class="jobs-group",
+          attrs=@html.Attrs::build().role("group").aria_label(title),
+          [
+            @html.h4(class="jobs-group-title", [
+              @html.span(title),
+              @html.span(class="jobs-group-count", group.length().to_string()),
+            ]),
+            @html.div(class="jobs-cards", cards),
+          ],
+        ),
       )
-    })
+    }
     if state.next_offset is Some(_) {
       rows.push(
         @html.button(
@@ -183,21 +233,15 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
           @html.div(class="jobs-detail-meta", "Working directory: \{cwd}"),
         )
       }
-      let end = job.finished_at_ms
-        .map(n => n.to_double())
-        .unwrap_or(@interop.now_ms())
-      let seconds = ((end - job.started_at_ms.to_double()).max(0) / 1000).to_int()
-      let activity = match job.last_output_at_ms {
-        Some(last) =>
-          "Last output \{((@interop.now_ms() - last.to_double()).max(0) / 1000).to_int()}s ago"
-        None => "No output yet"
+      details.push(@html.div(class="jobs-detail-meta", job_timing(job)))
+      if !job.state.is_terminal() {
+        let activity = match job.last_output_at_ms {
+          Some(last) =>
+            "Last output \{((@interop.now_ms() - last.to_double()).max(0) / 1000).to_int()}s ago"
+          None => "No output yet"
+        }
+        details.push(@html.div(class="jobs-detail-meta", activity))
       }
-      details.push(
-        @html.div(
-          class="jobs-detail-meta",
-          "Elapsed \{seconds}s · \{activity}",
-        ),
-      )
       let actions : Array[@html.Html] = [
         @html.button(
           class="jobs-action",
@@ -217,9 +261,20 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
           ),
           @html.button(
             class="jobs-action",
-            on_click=@clipboard.copy(Text(tail_command(path))),
+            on_click=@clipboard.copy(
+              Text(tail_command(path, follow=!job.state.is_terminal())),
+            ),
             "Copy tail command",
           ),
+          @html.button(
+            class="jobs-action",
+            on_click=emit(Reload),
+            "Reload tail",
+          ),
+        ])
+      }
+      if view.output_path is Some(_) && !job.state.is_terminal() {
+        actions.push(
           @html.button(
             class="jobs-action",
             on_click=emit(ToggleFollow),
@@ -230,25 +285,24 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
               "Follow output"
             },
           ),
-          @html.button(
-            class="jobs-action",
-            on_click=emit(Reload),
-            "Reload tail",
-          ),
-        ])
+        )
       }
-      actions.push(
-        @html.button(
-          class="jobs-action jobs-stop",
-          disabled=!view.controllable || state.stopping,
-          on_click=emit(Stop),
-          if state.stopping {
-            "Stopping…"
-          } else {
-            "Stop job"
-          },
-        ),
-      )
+      if !job.state.is_terminal() {
+        actions.push(
+          @html.button(
+            class="jobs-action jobs-stop",
+            disabled=!view.controllable ||
+              state.stopping ||
+              job.state is Stopping,
+            on_click=emit(Stop),
+            if state.stopping || job.state is Stopping {
+              "Stopping…"
+            } else {
+              "Stop job"
+            },
+          ),
+        )
+      }
       details.push(@html.div(class="jobs-toolbar", actions))
       for
         error in [
@@ -289,6 +343,12 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         "No retained log file for this job."
       } else if state.read_error is Some(_) {
         "Output unavailable · reload to retry."
+      } else if job.state.is_terminal() {
+        if output_complete(state, job) && !state.reading {
+          "Output ended"
+        } else {
+          "Loading remaining output…"
+        }
       } else if state.follow {
         if state.catching_up {
           "Catching up with output…"
@@ -328,6 +388,8 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
                 if state.text.is_empty() {
                   if state.reading {
                     "Loading output…"
+                  } else if job.state.is_terminal() {
+                    "No retained output."
                   } else {
                     "No output yet."
                   }
