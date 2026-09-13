@@ -39,7 +39,7 @@ async fn main {
   println(
     "Surveying architecture and one extension point with two read-only scouts…",
   )
-  ctx.run(max_concurrent=2, wf => {
+  ctx.run(max_concurrent=2) <| wf => {
     wf.phase("Map the repository")
     let lenses = [
       (
@@ -49,9 +49,9 @@ async fn main {
         "extension-points", "Choose ONE extension point named in the supplied README. Inspect its definition and one caller or test. Describe one hypothetical additive feature, its actual implementation file, and an existing related test. Reserve at least one read for a test of the selected extension itself and cite it. Tests may be embedded in implementation .mbt files, not only *_test.mbt; a sibling API test is not equivalent. If no directly relevant test was inspected, report that gap rather than calling another test the closest. This is onboarding, not defect discovery: do not invent a bug to justify the example or assume unverified collection/runtime semantics. Do not suggest changing engine tests merely to add a data file already supported by the current contract. Stop after this one example; do not search for additional extension points.",
       ),
     ]
-    let results = @workflow.fan_out(lenses, lens => {
+    let results = @workflow.fan_out(lenses) <| lens => {
       let (label, question) = lens
-      @workflow.attempt(() => {
+      @workflow.attempt() <| () => {
         wf.agent(
           kind="explore",
           label="repo-map:" + label,
@@ -75,8 +75,8 @@ async fn main {
             $|This is a small orientation task, not an exhaustive audit. Use only mbtx with filename="@builtin/read.mbtx" and file selectors in args for up to six targeted reading calls, then submit_answer. Do not run inline scripts, other workflows, directory traversal, or API experiments for this task. Read the selected MoonBit package manifest and generated interface before implementation details, when available. Reserve reads for implementation and a caller/test. Choose actual filenames from the supplied package inventory; do not guess filenames. If the inventory is insufficient, say what is missing instead of inventing discovery code. Return schema_version 1, a Markdown answer under 350 words, at most eight exact repository-relative citations with positive integer line numbers, and unresolved gaps. Quote commands only from inspected recipes or instructions; do not invent CLI flags. Submission is required even for a partial answer.
           ),
         )
-      })
-    })
+      }
+    }
     // Keep successful evidence visible even if another scout failed. A failed
     // lens makes the overall run incomplete, never a clean bill of health.
     let mut incomplete = false
@@ -135,7 +135,7 @@ async fn main {
     if incomplete {
       fail("repo-map incomplete; see the failed lenses above")
     }
-  })
+  }
 }
 
 ///|
@@ -144,9 +144,9 @@ async fn main {
 /// silently presenting an unreadable document as an absent one.
 async fn repository_context() -> (String, String?) {
   let entries = @fs.readdir(".", sort=true)
-  let inventory = entries.filter(name => {
+  let inventory = entries.filter() <| name => {
     name != ".git" && name != ".mooncakes" && name != "_build"
-  })
+  }
   let out = StringBuilder()
   let mut validation : String? = None
   out.write_string("Root entries (at most 100):\n")
@@ -165,13 +165,13 @@ async fn repository_context() -> (String, String?) {
     scanned += 1
     let files = @fs.readdir(dir, sort=true)
     if files.contains("moon.pkg") || files.contains("moon.mod") {
-      let names = files.filter(name => {
+      let names = files.filter() <| name => {
         name.has_suffix(".mbt") ||
         name.has_suffix(".mbti") ||
         name.has_suffix(".md") ||
         name == "moon.pkg" ||
         name == "moon.mod"
-      })
+      }
       let line = dir + "/: " + names.join(", ") + "\n"
       if inventory_chars + line.length() > 16000 {
         truncated = true

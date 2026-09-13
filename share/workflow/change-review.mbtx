@@ -19,7 +19,7 @@ async fn main {
       "This workflow needs capacity for three children; no scouts were launched",
     )
   }
-  ctx.run(max_concurrent=3, wf => {
+  ctx.run(max_concurrent=3) <| wf => {
     wf.phase("Review working tree changes")
     let lenses = [
       (
@@ -32,9 +32,9 @@ async fn main {
         "tests", "Find changed behavior that existing tests fail to cover. Propose a minimal regression test with a concrete trigger and expected result.",
       ),
     ]
-    let results = @workflow.fan_out(lenses, lens => {
+    let results = @workflow.fan_out(lenses) <| lens => {
       let (label, question) = lens
-      @workflow.attempt(() => {
+      @workflow.attempt() <| () => {
         wf.agent(
           kind="explore",
           label="change-review:" + label,
@@ -49,8 +49,8 @@ async fn main {
             $|Return at most five findings or observations and state the limits of your inspection.
           ),
         )
-      })
-    })
+      }
+    }
     // Keep successful evidence visible even if another scout failed. A failed
     // lens makes the overall run incomplete, never a clean bill of health.
     let mut incomplete = false
@@ -71,5 +71,5 @@ async fn main {
     if incomplete {
       fail("change-review incomplete; see the failed lenses above")
     }
-  })
+  }
 }

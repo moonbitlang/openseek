@@ -81,7 +81,7 @@ async fn main {
     Some(sha) => { "goal": goal, "sha": sha, "dirty": dirty }
     None => { "goal": goal }
   }
-  ctx.run(wf => {
+  ctx.run() <| wf => {
     let report = wf.agent_call(
       kind="review",
       input~,
@@ -107,5 +107,5 @@ async fn main {
     if blockers > 0 {
       fail("\{blockers} blocker finding(s): the claim does not hold yet")
     }
-  })
+  }
 }
