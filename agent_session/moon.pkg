@@ -1,4 +1,5 @@
 import {
+  "bobzhang/openseek_protocol" @protocol,
   "bobzhang/openseek/deepseek",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",

@@ -253,6 +253,7 @@ pub async fn[X] run_turn_in_scope(
   session~ : @agent_session.Session,
   task~ : String,
   submission_id? : String,
+  input_origin? : @agent_session.InputOrigin = Human,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   max_steps? : Int = unbounded_max_steps,
   thinking? : @deepseek.ThinkingMode = Max,
@@ -278,7 +279,8 @@ pub async fn[X] run_turn_in_scope(
     retry_attempts?,
     retry_backoff_ms?,
   )
-  let session = session |> append_item(User(UserMessage(task, submission_id?)))
+  let session = session
+    |> append_item(User(UserMessage(task, submission_id?, origin=input_origin)))
   let tools = try {
     match tools {
       Some(tools) => tools
@@ -308,8 +310,9 @@ fn @agent_runtime.AgentRuntime::pending_steers(
   runtime : Self,
 ) -> Array[@agent_runtime.SteerInput] {
   [
-    for input in runtime.drain_steers() if input
-    is (Prompt(text) | Command(text) | Notice(text)) &&
-    !text.is_blank() => input
+    for input in runtime.drain_steers() if (match input {
+      Goal(_) => true
+      Prompt(text) | Command(text) | Notice(text) => !text.is_blank()
+    }) => input
   ]
 }

@@ -767,7 +767,7 @@ test('transcript overview previews failed turns and jumps among mounted messages
       ts: 1_781_144_351_123,
       item: {
         kind: 'user',
-        payload: { content: 'Show the browser fixture: first question' },
+        payload: { origin: 'human', content: 'Show the browser fixture: first question' },
       },
     },
     {
@@ -803,7 +803,7 @@ test('transcript overview previews failed turns and jumps among mounted messages
       ts: 1_781_144_350_123 + sequence * 1_000,
       item: {
         kind: 'user',
-        payload: { content: `Question ${turn} keeps the overview rail scrollable` },
+        payload: { origin: 'human', content: `Question ${turn} keeps the overview rail scrollable` },
       },
     });
     sequence += 1;
@@ -852,7 +852,7 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
       sequence: 1,
       item: {
         kind: 'user',
-        payload: { content: 'Show the browser fixture with a long transcript' },
+        payload: { origin: 'human', content: 'Show the browser fixture with a long transcript' },
       },
     },
   ];
@@ -936,7 +936,7 @@ test('runtime notices keep the compact result-row presentation', async ({ page }
       sequence: 1,
       item: {
         kind: 'user',
-        payload: { content: 'Show the browser fixture runtime notice' },
+        payload: { origin: 'human', content: 'Show the browser fixture runtime notice' },
       },
     },
     {
@@ -970,7 +970,7 @@ test('a model step shows its thought, then its prose, then its tool rows', async
       sequence: 1,
       item: {
         kind: 'user',
-        payload: { content: 'Show the browser fixture model step' },
+        payload: { origin: 'human', content: 'Show the browser fixture model step' },
       },
     },
     {
@@ -1024,7 +1024,7 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
       sequence: 1,
       item: {
         kind: 'user',
-        payload: { content: 'Show the browser fixture Markdown policy' },
+        payload: { origin: 'human', content: 'Show the browser fixture Markdown policy' },
       },
     },
     {
@@ -2168,7 +2168,7 @@ test('composer follow-up menu supports keyboard choice and a queue default', asy
 test('pending job waits show descriptions from earlier tool rows', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture waiting for CI' } } },
+    { sequence: 1, item: { kind: 'user', payload: { origin: 'human', content: 'Show the browser fixture waiting for CI' } } },
     { sequence: 2, item: { kind: 'assistant', payload: {
       content: '', tool_calls: [{ id: 'start', name: 'mbtx',
         arguments: JSON.stringify({ description: 'Watch CI on rebased PR 27' }) }],

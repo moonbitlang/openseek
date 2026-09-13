@@ -18,7 +18,7 @@ async fn fresh_record(name : String) -> SubrunProbeState {
   @fsx.ensure_dir(@pathx.Path(path).dirname())
   @fs.write_file(
     path,
-    ({ "version": 1, "id": session, "system_prompt": "s" } : Json).stringify() +
+    ({ "version": 2, "id": session, "system_prompt": "s" } : Json).stringify() +
     "\n",
     create_mode=CreateOrTruncate,
   )
@@ -126,7 +126,7 @@ async test "a rewritten record is re-read from its head" {
   // offset; reading on from that offset would land mid-line forever.
   @fs.write_file(
     state.path,
-    ({ "version": 1, "id": "parent-sr-1", "system_prompt": "s" } : Json).stringify() +
+    ({ "version": 2, "id": "parent-sr-1", "system_prompt": "s" } : Json).stringify() +
     "\n",
     create_mode=CreateOrTruncate,
   )
@@ -193,7 +193,7 @@ async test "a same-or-larger rewrite counts survivors once" {
   // events 1 and 2 as they were, plus the event whose append tore.
   @fs.write_file(
     state.path,
-    ({ "version": 1, "id": "parent-sr-1", "system_prompt": "s" } : Json).stringify() +
+    ({ "version": 2, "id": "parent-sr-1", "system_prompt": "s" } : Json).stringify() +
     "\n" +
     item_line(1, "assistant", { "content": "one" }) +
     item_line(2, "tool_result", {

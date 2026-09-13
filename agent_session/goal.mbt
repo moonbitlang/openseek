@@ -1,32 +1,4 @@
 ///|
-/// First line of the runtime notice that sets a standing goal. The full
-/// marker content is `[goal]\n<text>`; `Session::current_goal` keys off the
-/// exact prefix line, so it lives here with `RuntimeNotice` alongside
-/// `PlanReminderPrefix` where producers (the serve engine, the agent loop)
-/// and readers (the scan, viz, tests) share it. The bracket tags below are
-/// reserved: only the goal command paths write notices with these first
-/// lines.
-pub const GoalPrefix : String = "[goal]"
-
-///|
-/// Exact content of the tombstone notice that clears a standing goal.
-pub const GoalClearedNotice : String = "[goal cleared]"
-
-///|
-/// Marker prefix recording that the model declared the standing goal
-/// BLOCKED: the goal keeps standing (the user decides what is next), but
-/// auto-continuation must pause instead of relaunching declared-impossible
-/// work.
-pub const GoalBlockedPrefix : String = "[goal blocked]"
-
-///|
-/// Exact content of the marker that RESCINDS a prior `[goal blocked]`: the
-/// model resumed work on the still-standing goal (via `goal(continuing)`), so
-/// auto-continuation must resume too. A pure state transition, so it carries
-/// no reason payload — exact content, like `[goal cleared]`.
-pub const GoalUnblockedNotice : String = "[goal unblocked]"
-
-///|
 /// First line of the reminder notice the agent loop re-injects so a
 /// long-running conversation keeps the standing goal near the context tail.
 pub const GoalReminderPrefix : String = "[goal reminder]"
@@ -41,10 +13,8 @@ pub const GoalCheckPrefix : String = "[goal check]"
 /// auto-continuation turn on a standing goal.
 ///
 /// It is durably appended as a `User` message like any other prompt — the
-/// model has to read it as one — but no human typed it. Readers that tell
-/// the user's own words apart from engine-injected input (the visualizer)
-/// need the exact text, so it lives here with the goal vocabulary where the
-/// producer (`cmd/openseek` serve) and its readers cannot drift.
+/// model has to read it as one — with `AutoContinue` origin. This wording
+/// is presentation only; consumers classify the explicit origin.
 pub const GoalContinuePrompt : String =
   #|Continue working toward the standing goal. When it is fully met, record
   #|that by calling the goal tool with status "met".
@@ -53,6 +23,7 @@ pub const GoalContinuePrompt : String =
 /// A standing goal derived from the durable event log.
 struct StandingGoal {
   text : String
+  baseline : GoalBaselineState
   answered_since_set : Bool
   set_sequence : Int
   blocked : Bool
@@ -89,39 +60,8 @@ pub fn StandingGoal::blocked(self : StandingGoal) -> Bool {
 }
 
 ///|
-/// A goal marker recognized in a runtime notice.
-pub enum GoalMarker {
-  GoalSet(String)
-  GoalCleared
-  GoalBlocked(String)
-  GoalUnblocked
-} derive(Debug)
-
-///|
-/// Parse a runtime-notice content as a goal marker, if it is one. The set
-/// marker requires the exact `[goal]` first line and the tombstone/unblock
-/// markers require exact content, so other notices (plan reminders, goal
-/// reminders, goal checks) never match. Unknown content is not a marker
-/// (`None`), so a reader from an older build treats `[goal unblocked]` as a
-/// plain notice and keeps the goal blocked — a safe degradation.
-pub fn goal_marker(content : String) -> GoalMarker? {
-  if content == GoalClearedNotice {
-    Some(GoalCleared)
-  } else if content == GoalUnblockedNotice {
-    Some(GoalUnblocked)
-  } else if content.strip_prefix("\{GoalBlockedPrefix}\n") is Some(content) {
-    Some(GoalBlocked(content.to_owned()))
-  } else if content.strip_prefix("\{GoalPrefix}\n") is Some(content) {
-    Some(GoalSet(content.to_owned()))
-  } else {
-    None
-  }
-}
-
-///|
-/// Standing goal state: the last goal marker in the log wins — a
-/// `[goal]\n<text>` notice yields that goal, a `[goal cleared]` tombstone
-/// yields none.
+/// Standing goal state reduced from typed changes: the last set or clear
+/// establishes the goal, and newer block/unblock changes determine its state.
 ///
 /// The scan reads raw events, not the compacted projection, so a goal whose
 /// set marker is covered by a later compaction summary is still recovered
@@ -146,23 +86,23 @@ pub fn Session::current_goal(self : Session) -> StandingGoal? {
       // later events leaves the marker verbatim and must not re-remind.
       Summary(summary) =>
         covered.push((summary.from_sequence(), summary.to_sequence()))
-      Runtime(notice) =>
-        match goal_marker(notice.content()) {
-          Some(GoalCleared) => return None
+      Goal(change) =>
+        match change {
+          GoalCleared => return None
           // Newest-first: a blocked/unblocked marker precedes the set it
           // follows temporally; a NEWER set is found first and naturally
           // resets both. Between them, whichever is newer wins.
-          Some(GoalBlocked(_)) =>
+          GoalBlocked(_) =>
             if !blocked_decided {
               blocked = true
               blocked_decided = true
             }
-          Some(GoalUnblocked) =>
+          GoalUnblocked =>
             if !blocked_decided {
               blocked = false
               blocked_decided = true
             }
-          Some(GoalSet(text)) => {
+          GoalSet(text, baseline~) => {
             let sequence = event.sequence()
             let is_covered = covered.any(range => {
               let (from, to) = range
@@ -170,12 +110,12 @@ pub fn Session::current_goal(self : Session) -> StandingGoal? {
             })
             return Some({
               text,
+              baseline,
               answered_since_set: answered || is_covered,
               set_sequence: sequence,
               blocked,
             })
           }
-          None => ()
         }
       _ => ()
     }
@@ -184,92 +124,19 @@ pub fn Session::current_goal(self : Session) -> StandingGoal? {
 }
 
 ///|
-/// The goal-baseline marker prefix: `[goal baseline] sha=<sha> dirty=<bool>`,
-/// appended IMMEDIATELY BEFORE its `[goal]` set marker by every goal-set
-/// path. Single-line by design (unlike the set marker, it carries no user
-/// text). Unknown to older readers, it degrades to a plain notice.
-const GoalBaselinePrefix : String = "[goal baseline]"
-
-///|
-/// The workspace snapshot recorded when a goal was set: the commit the
-/// worktree sat on, and whether the worktree was already dirty — the
-/// review gate's audit anchor and its attribution caveat.
-pub(all) struct GoalBaseline {
-  sha : String
-  dirty : Bool
-} derive(Debug, Eq)
-
-///|
-/// Render the baseline notice content for `sha`/`dirty`.
-pub fn goal_baseline_notice(sha~ : String, dirty~ : Bool) -> String {
-  "\{GoalBaselinePrefix} sha=\{sha} dirty=\{dirty}"
+/// The standing goal owns its baseline; unrelated events cannot change the pairing.
+pub fn StandingGoal::baseline(self : StandingGoal) -> GoalBaselineState {
+  self.baseline
 }
 
 ///|
-/// Parse a runtime-notice content as a goal baseline, if it is one. Strict
-/// on shape (both fields, in order) so a mangled line degrades to a plain
-/// notice rather than a half-parsed baseline.
-pub fn parse_goal_baseline(content : String) -> GoalBaseline? {
-  guard content.strip_prefix("\{GoalBaselinePrefix} sha=") is Some(rest) else {
-    return None
-  }
-  // Either value literal ends the line, and the sha is the unmatched prefix:
-  // the `$` keeps the value the LAST field, so a line with trailing junk
-  // degrades to a plain notice instead of a half-parsed baseline.
-  let (sha, dirty) = lexmatch rest {
-    (re" dirty=true$", before=sha, after=_) => (sha, true)
-    (re" dirty=false$", before=sha, after=_) => (sha, false)
-    _ => return None
-  }
-  // The FIRST ` dirty=` is the field separator, so a prefix that still holds
-  // one means the line repeated the field — mangled, not a sha containing it.
-  if sha.is_empty() || sha.contains(" dirty=") {
-    return None
-  }
-  Some({ sha: sha.to_owned(), dirty, })
-}
-
-///|
-/// The baseline recorded for the CURRENT standing goal, or `None` when no
-/// goal stands or its set marker has no baseline immediately before it.
-/// Pairing is by adjacency: every goal-set path appends a baseline record
-/// and the set marker back to back with nothing in between (the serve loop
-/// is the single appender on the idle/drain paths, and the steer path
-/// applies its drained inputs sequentially). A failed CAPTURE still appends
-/// an `unavailable` record, so the marker's preceding slot is owned by its
-/// own set and a stale orphan from an earlier fault cannot be inherited by
-/// position. Residual honesty: if a baseline APPEND lands durably and its
-/// marker's append is then lost (store fault or torn tail), AND a later
-/// set's own record append also fails, that later marker could sit
-/// directly after the stale orphan and claim it — a double store fault.
-/// Consumers must treat the baseline as an advisory audit anchor, never a
-/// correctness input.
+/// Available advisory anchor for the current standing goal.
 pub fn Session::current_goal_baseline(self : Session) -> GoalBaseline? {
-  guard self.current_goal() is Some(goal) else { return None }
-  let events = self.events()
-  for index in (events.length() - 1)>=..1 {
-    if events[index].sequence() == goal.set_sequence() {
-      guard events[index - 1].item() is Runtime(notice) else { return None }
-      return parse_goal_baseline(notice.content())
-    }
+  match self.current_goal() {
+    Some({ baseline: Captured(baseline), .. }) => Some(baseline)
+    _ => None
   }
-  None
 }
-
-///|
-#doc(hidden)
-#deprecated
-pub extend GoalBaseline with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend GoalBaseline with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend GoalMarker with Debug::{to_repr}
 
 ///|
 #doc(hidden)

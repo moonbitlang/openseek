@@ -2,6 +2,7 @@
 package "openseek_desktop/frontend/transcript"
 
 import {
+  "bobzhang/openseek_protocol",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/internal/protocol",
@@ -14,7 +15,7 @@ pub fn apply_session_item(Array[TranscriptItem], @protocol.SessionItem, ts? : Do
 
 pub fn decode_engine_event(@protocol.AgentStreamEvent) -> EngineEvent?
 
-pub fn goal_marker(String) -> GoalMarker?
+pub fn goal_marker(@openseek_protocol.GoalChange) -> GoalMarker
 
 pub fn session_from_reply(@protocol.LoadSessionReply) -> SessionLoadView
 
@@ -44,6 +45,8 @@ pub(all) enum EngineEvent {
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   SubrunOpened(id~ : String, kind~ : String, label~ : String)
   SubrunClosed(id~ : String, status~ : String, steps~ : Int, tokens~ : Int)
+  WorkflowOpened(id~ : String, journal~ : String, events~ : String, first_child~ : Int, child_count~ : Int)
+  WorkflowClosed(id~ : String)
   AgentFinished(String)
   ContextYield(String)
   AgentAborted(String)

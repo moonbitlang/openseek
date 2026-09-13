@@ -387,23 +387,16 @@ async fn AgentLoop::apply_steer_inputs(
     let (kind, text, item) : (String, String, @agent_session.SessionItem) = match
       input {
       Prompt(text) => ("prompt", text, User(UserMessage(text)))
-      Command(text) => ("command", text, User(UserMessage(text)))
+      Command(text) =>
+        ("command", text, User(UserMessage(text, origin=Command)))
       Notice(text) => ("notice", text, Runtime(RuntimeNotice(text)))
+      Goal(change) => ("notice", change.model_content(), Goal(change))
     }
     let next = self.append(current, item)
-    // A goal-baseline notice is transport for the durable pairing record:
-    // it must land in the session (adjacent to its marker) but carries
-    // nothing for the model — a commit sha as user input is pure noise —
-    // and nothing for controllers, who would only have to filter it back
-    // out of every echo path.
-    if input is Notice(text) &&
-      @agent_session.parse_goal_baseline(text) is Some(_) {
-      continue next
-    }
     self.messages.push(ChatMessage(User, content=text))
     @emit.emit(SteerApplied(kind~, content=text))
-    if input is Notice(text) {
-      self.goal_cadence.observe_notice(text)
+    if input is Goal(change) {
+      self.goal_cadence.observe_goal(change)
     }
     continue next
   } nobreak {
@@ -1398,4 +1391,15 @@ fn @deepseek.ChatResponse::optional_reasoning_content(
     "" => None
     content => Some(content)
   }
+}
+
+///|
+async fn AgentLoop::append_goal_change(
+  self : Self,
+  session : @agent_session.Session,
+  change : @agent_session.GoalChange,
+) -> @agent_session.Session {
+  let next = self.append(session, Goal(change))
+  self.messages.push(ChatMessage(User, content=change.model_content()))
+  next
 }

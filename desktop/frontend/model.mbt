@@ -4057,8 +4057,8 @@ fn Conversation::apply_commit(
   let changed = @transcript.apply_session_item(messages, item, ts?, sequence~)
   // A `[goal]` marker commit is the durable confirmation of a goal
   // set/clear/block — the only writer of the mirror the banner renders.
-  let goal_marker = if item is @protocol.RuntimeNotice(notice) {
-    @transcript.goal_marker(notice.content)
+  let goal_marker = if item is @protocol.Goal(change) {
+    Some(@transcript.goal_marker(change))
   } else {
     None
   }

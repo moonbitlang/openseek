@@ -71,8 +71,7 @@ async test "goal met defers the tombstone to a batch-safe boundary" {
           assert_eq(tool_result.content(), "probe-result")
           probe_seq = event.sequence()
         }
-        Runtime(notice) if notice.content() == @agent_session.GoalClearedNotice =>
-          tombstone_seq = event.sequence()
+        Goal(GoalCleared) => tombstone_seq = event.sequence()
         Terminal(Finished(_)) => terminal_seq = event.sequence()
         _ => ()
       }
@@ -195,9 +194,7 @@ async test "goal calls without a standing goal or remaining are errors" {
     assert_true(errors[1].content().contains("remaining"))
     // No tombstone was ever appended.
     for event in result.events() {
-      if event.item() is Runtime(notice) {
-        assert_false(notice.content() == @agent_session.GoalClearedNotice)
-      }
+      assert_false(event.item() is Goal(GoalCleared))
     }
   }
 }

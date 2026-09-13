@@ -4,7 +4,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 test('transcript renders editor diagram fences and retains them across updates and themes', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture diagrams' } } },
+    { sequence: 1, item: { kind: 'user', payload: { origin: 'human', content: 'Show the browser fixture diagrams' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: [
       '```mermaid\nflowchart LR\nAlpha --> Beta\n```',
       '```d2\na -> b\n```',
@@ -64,7 +64,7 @@ test('transcript keeps escaped Mermaid source when local module loading fails', 
   const app = new DesktopBrowserHarness(page);
   const source = 'flowchart LR\nA["<img src=x onerror=alert(1)>"] --> B';
   app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture fallback' } } },
+    { sequence: 1, item: { kind: 'user', payload: { origin: 'human', content: 'Show the browser fixture fallback' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: `\`\`\`mermaid\n${source}\n\`\`\`` } } },
   ];
   await app.install();
@@ -80,7 +80,7 @@ test('transcript keeps escaped Mermaid source when local module loading fails', 
 test('transcript ignores a Mermaid result after its conversation is removed', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture diagram' } } },
+    { sequence: 1, item: { kind: 'user', payload: { origin: 'human', content: 'Show the browser fixture diagram' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: '```mermaid\nflowchart LR\nA --> B\n```' } } },
   ];
   await app.install();

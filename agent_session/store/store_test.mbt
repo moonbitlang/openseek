@@ -49,7 +49,7 @@ async test "store writes the header record on the first line" {
   store.create(Session(SessionId("s1"), system_prompt="system"))
   let text = @fs.read_file(session_file(store, "s1")).text()
   assert_eq(
-    text, "{\"version\":1,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
+    text, "{\"version\":2,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
   )
   let loaded = store.load(SessionId("s1"))
   assert_eq(loaded.events().length(), 0)
@@ -309,7 +309,7 @@ async test "first append creates the session file with its header" {
   let text = @fs.read_file(session_file(store, "s1")).text()
   assert_true(
     text.has_prefix(
-      "{\"version\":1,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
+      "{\"version\":2,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
     ),
   )
   let loaded = store.load(SessionId("s1"))
@@ -742,7 +742,7 @@ async test "load keeps a header-only file that lost its newline" {
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
   @fs.write_file(
     session_file(store, "s1"),
-    "{\"version\":1,\"id\":\"s1\",\"system_prompt\":\"system\"}",
+    "{\"version\":2,\"id\":\"s1\",\"system_prompt\":\"system\"}",
     create_mode=CreateOrTruncate,
   )
   let loaded = store.load(SessionId("s1"))
@@ -849,14 +849,14 @@ async test "store names an unsupported session file version on load" {
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
   @fs.write_file(
     session_file(store, "s1"),
-    "{\"version\":2,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
+    "{\"version\":3,\"id\":\"s1\",\"system_prompt\":\"system\"}\n",
     create_mode=CreateOrTruncate,
   )
   try store.load(SessionId("s1")) catch {
     error =>
-      assert_true("\{error}".contains("unsupported session file version 2"))
+      assert_true("\{error}".contains("unsupported session file version 3"))
   } noraise {
-    _ => fail("version-2 session file was accepted")
+    _ => fail("version-3 session file was accepted")
   }
 }
 

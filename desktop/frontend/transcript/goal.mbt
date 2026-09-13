@@ -1,13 +1,5 @@
-// The durable goal markers, re-spelled from `agent_session`'s goal
-// vocabulary: this js-only package cannot depend on that native package, so
-// the marker shapes are duplicated here — `agent_session/goal.mbt` is the
-// authority if they ever drift.
-
 ///|
-/// A goal marker recognized in a durable `runtime_notice`. The set marker
-/// requires the exact `[goal]` first line and the tombstone/unblock markers
-/// require exact content, so the other goal-family notices (reminders,
-/// checks, the baseline pairing record) never match.
+/// Display state projected from the shared durable goal-change type.
 pub(all) enum GoalMarker {
   GoalSet(String)
   GoalCleared
@@ -16,17 +8,12 @@ pub(all) enum GoalMarker {
 } derive(Eq)
 
 ///|
-pub fn goal_marker(content : String) -> GoalMarker? {
-  if content == "[goal cleared]" {
-    Some(GoalCleared)
-  } else if content == "[goal unblocked]" {
-    Some(GoalUnblocked)
-  } else if content.strip_prefix("[goal blocked]\n") is Some(reason) {
-    Some(GoalBlocked(reason.to_owned()))
-  } else if content.strip_prefix("[goal]\n") is Some(text) {
-    Some(GoalSet(text.to_owned()))
-  } else {
-    None
+pub fn goal_marker(change : @desktop_protocol.GoalChange) -> GoalMarker {
+  match change {
+    GoalSet(text, ..) => GoalSet(text)
+    GoalCleared => GoalCleared
+    GoalBlocked(reason) => GoalBlocked(reason)
+    GoalUnblocked => GoalUnblocked
   }
 }
 
@@ -53,30 +40,6 @@ pub fn apply_goal_marker(
     GoalBlocked(reason) => goal.map(goal => { ..goal, blocked: Some(reason), })
     GoalUnblocked => goal.map(goal => { ..goal, blocked: None, })
   }
-}
-
-///|
-test "goal markers parse exactly and other goal-family notices never match" {
-  assert_true(
-    goal_marker("[goal]\nship the feature") is Some(GoalSet("ship the feature")),
-  )
-  assert_true(
-    goal_marker("[goal]\nline one\nline two")
-    is Some(GoalSet("line one\nline two")),
-  )
-  assert_true(goal_marker("[goal cleared]") is Some(GoalCleared))
-  assert_true(
-    goal_marker("[goal blocked]\nneeds a decision")
-    is Some(GoalBlocked("needs a decision")),
-  )
-  assert_true(goal_marker("[goal unblocked]") is Some(GoalUnblocked))
-  // Reminders, checks and the baseline record are transport/model-directed.
-  assert_true(goal_marker("[goal reminder]\nThe standing goal…") is None)
-  assert_true(goal_marker("[goal check]\nThe standing goal…") is None)
-  assert_true(goal_marker("[goal baseline] sha=abc dirty=false") is None)
-  // A bare `[goal]` with no text line is not a set.
-  assert_true(goal_marker("[goal]") is None)
-  assert_true(goal_marker("plain notice") is None)
 }
 
 ///|

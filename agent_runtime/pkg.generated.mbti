@@ -2,6 +2,7 @@
 package "bobzhang/openseek/agent_runtime"
 
 import {
+  "bobzhang/openseek_protocol",
   "moonbitlang/async",
   "moonbitlang/core/debug",
 }
@@ -49,6 +50,7 @@ pub(all) enum SteerInput {
   Prompt(String)
   Command(String)
   Notice(String)
+  Goal(@openseek_protocol.GoalChange)
 }
 
 // Type aliases

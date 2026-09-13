@@ -53,7 +53,7 @@ test "parse round-trips every event kind" {
       #|    {
       #|      sequence: 1,
       #|      ts: 0,
-      #|      item: User({ content: "list the files", submission_id: None }),
+      #|      item: User({ origin: Human, content: "list the files", submission_id: None }),
       #|    },
       #|    {
       #|      sequence: 2,
@@ -102,7 +102,7 @@ test "parse round-trips every event kind" {
 test "parse tolerates a truncated final line" {
   // A half-written last line (a crash mid-append) is dropped, the preceding
   // events survive, and partial_tail flags the truncation.
-  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi"
+  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"origin\":\"human\",\"content\":\"hi\"}}}\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi"
   debug_inspect(
     @log.parse_events(text),
     content=(
@@ -112,7 +112,7 @@ test "parse tolerates a truncated final line" {
       #|    {
       #|      sequence: 1,
       #|      ts: 0,
-      #|      item: User({ content: "hi", submission_id: None }),
+      #|      item: User({ origin: Human, content: "hi", submission_id: None }),
       #|    },
       #|  ],
       #|  errors: [],
@@ -128,7 +128,7 @@ test "parse records a bad interior line without aborting" {
   // still parse. We snapshot the surviving events and the error's line number
   // and original text, but not the parser's `message` — that wording belongs to
   // moonbitlang/core and should not be pinned here.
-  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"hi\"}}}\nnot json at all\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"done\"}}}\n"
+  let text = "{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"origin\":\"human\",\"content\":\"hi\"}}}\nnot json at all\n{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"terminal\",\"payload\":{\"kind\":\"finished\",\"message\":\"done\"}}}\n"
   let parsed = @log.parse_events(text)
   debug_inspect(
     parsed.events,
@@ -137,7 +137,7 @@ test "parse records a bad interior line without aborting" {
       #|  {
       #|    sequence: 1,
       #|    ts: 0,
-      #|    item: User({ content: "hi", submission_id: None }),
+      #|    item: User({ origin: Human, content: "hi", submission_id: None }),
       #|  },
       #|  { sequence: 2, ts: 0, item: Terminal(Finished("done")) },
       #|]
@@ -186,7 +186,7 @@ test "parse lifts the header record from the first line" {
 ///|
 test "classify_header separates versions, headers, and non-headers" {
   debug_inspect(
-    @log.classify_header({ "version": 1, "id": "demo", "system_prompt": "SYS" }),
+    @log.classify_header({ "version": 2, "id": "demo", "system_prompt": "SYS" }),
     content=(
       #|Header({ id: "demo", system_prompt: "SYS" })
     ),
@@ -194,32 +194,40 @@ test "classify_header separates versions, headers, and non-headers" {
   // A file written by a newer format is named as such, not misreported as
   // header-less.
   debug_inspect(
-    @log.classify_header({ "version": 2, "whatever": "future shape" }),
-    content="UnsupportedVersion(2)",
+    @log.classify_header({ "version": 3, "whatever": "future shape" }),
+    content="UnsupportedVersion(3)",
   )
   // An event record is structurally not a header.
   debug_inspect(
     @log.classify_header({
       "sequence": 1,
       "ts": 0,
-      "item": { "kind": "user", "payload": { "content": "hi" } },
+      "item": {
+        "kind": "user",
+        "payload": { "origin": "human", "content": "hi" },
+      },
     }),
     content="NotHeader",
   )
-  // A version-1 object missing required fields is malformed, not a header.
+  // A version-2 object missing required fields is malformed, not a header.
   debug_inspect(
-    @log.classify_header({ "version": 1, "id": "demo" }),
+    @log.classify_header({ "version": 2, "id": "demo" }),
     content="NotHeader",
   )
   // The tolerant parser records an unsupported-version first line as a bad
   // line rather than adopting it as the header.
   let parsed = @log.parse_events(
     (
-      #|{"version":2,"id":"demo","system_prompt":"SYS"}
+      #|{"version":3,"id":"demo","system_prompt":"SYS"}
       #|
     ),
   )
-  debug_inspect(parsed.header, content="None")
+  debug_inspect(
+    parsed.header,
+    content=(
+      #|None
+    ),
+  )
   assert_eq(parsed.errors.length(), 1)
 }
 

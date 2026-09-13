@@ -11,12 +11,12 @@ async fn record_fixture(session : String) -> (@pathx.Absolute, @pathx.Path) {
 
 ///|
 fn header_line(session : String) -> String {
-  "{\"version\":1,\"id\":\"\{session}\",\"system_prompt\":\"be brief\"}\n"
+  "{\"version\":2,\"id\":\"\{session}\",\"system_prompt\":\"be brief\"}\n"
 }
 
 ///|
 fn event_line(sequence : Int, content : String) -> String {
-  "{\"sequence\":\{sequence},\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"\{content}\"}}}\n"
+  "{\"sequence\":\{sequence},\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"origin\":\"human\",\"content\":\"\{content}\"}}}\n"
 }
 
 ///|
@@ -51,7 +51,7 @@ async test "a record's header names the document its events belong to" {
   let document = tail.document()
   debug_inspect(document.id, content="Some(\"s-1\")")
   debug_inspect(document.system_prompt, content="Some(\"be brief\")")
-  debug_inspect(document.version, content="Some(1)")
+  debug_inspect(document.version, content="Some(2)")
   inspect(tail.watermark(), content="1")
 }
 
@@ -143,13 +143,13 @@ async test "a header version this build does not read is refused" {
   let (root, path) = record_fixture("s-7")
   write_record(
     path,
-    "{\"version\":2,\"id\":\"s-7\",\"system_prompt\":\"\"}\n" +
+    "{\"version\":3,\"id\":\"s-7\",\"system_prompt\":\"\"}\n" +
     event_line(1, "one"),
   )
   let refusal = unreadable_detail(root, "s-7")
   inspect(
     refusal,
-    content="the session record uses session file version 2; this build reads version 1",
+    content="the session record uses session file version 3; this build reads version 2",
   )
 }
 
@@ -226,13 +226,13 @@ async test "a line that is not UTF-8 is refused, not silently mangled" {
   // turn it into U+FFFD, and the line would then parse — publishing a durable
   // commit whose text is not what the writer wrote.
   @fsx.write_bytes(
-    path, b"{\"version\":1,\"id\":\"s-13\",\"system_prompt\":\"\"}\n{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"\xff\"}}}\n",
+    path, b"{\"version\":2,\"id\":\"s-13\",\"system_prompt\":\"\"}\n{\"sequence\":1,\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"origin\":\"human\",\"content\":\"\xff\"}}}\n",
   )
   let refusal = unreadable_detail(root, "s-13")
   inspect(
     refusal,
     content=(
-      #|the session record holds a line that is not UTF-8 at byte 65: <BytesView: [0xff, 0x22, 0x7d, 0x7d]>
+      #|the session record holds a line that is not UTF-8 at byte 82: <BytesView: [0xff, 0x22, 0x7d, 0x7d]>
     ),
   )
 }

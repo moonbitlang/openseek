@@ -30,7 +30,7 @@
 /// The header version this build reads. A record announcing any other version
 /// is refused rather than guessed at — its event lines may mean something else
 /// entirely.
-const RecordVersion = 1
+let record_version : Int = @wire.SessionFormatVersion
 
 ///|
 /// The most one read takes from the file at once. A record that grew by a huge
@@ -193,7 +193,7 @@ pub async fn Tail::poll(self : Tail) -> Array[@protocol.SessionEvent] {
 pub fn Tail::document(self : Tail) -> @protocol.SessionDocument {
   {
     version: if self.id is Some(_) {
-      Some(RecordVersion)
+      Some(record_version)
     } else {
       None
     },
@@ -384,9 +384,9 @@ fn Tail::consume(
 /// keeps a file swapped in from elsewhere from being read as this transcript.
 fn Tail::adopt_header(self : Tail, json : Json) -> Unit raise RecordError {
   match json {
-    { "version": Number(version, ..), .. } if version.to_int() != RecordVersion =>
+    { "version": Number(version, ..), .. } if version.to_int() != record_version =>
       raise Unreadable(
-        "the session record uses session file version \{version.to_int()}; this build reads version \{RecordVersion}",
+        "the session record uses session file version \{version.to_int()}; this build reads version \{record_version}",
       )
     {
       "version": Number(_, ..),

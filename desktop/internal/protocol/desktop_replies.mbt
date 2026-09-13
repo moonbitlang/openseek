@@ -369,6 +369,7 @@ pub(all) struct SessionToolCall {
 /// reconciled by exact id instead of by matching text, since two clients can
 /// submit identical text into one session.
 pub(all) struct SessionUserMessage {
+  origin : InputOrigin
   content : String
   submission_id : String?
 } derive(Debug, Eq)
@@ -378,7 +379,10 @@ pub(all) struct SessionUserMessage {
 /// itself writes: an untagged prompt is byte for byte the line every record
 /// held before the field existed.
 pub impl ToJson for SessionUserMessage with fn to_json(self) {
-  let fields = { "content": Json(self.content) }
+  let fields = {
+    "content": Json(self.content),
+    "origin": ToJson::to_json(self.origin),
+  }
   if self.submission_id is Some(submission_id) {
     fields["submission_id"] = Json(submission_id)
   }
@@ -408,7 +412,12 @@ pub impl FromJson for SessionUserMessage with fn from_json(json, path) {
   } else {
     None
   }
-  { content, submission_id, }
+  let origin : InputOrigin = match fields.get("origin") {
+    Some(value) => @json.from_json(value, path=path.add_key("origin"))
+    None =>
+      raise JsonDecodeError((path.add_key("origin"), "expected input origin"))
+  }
+  { content, submission_id, origin, }
 }
 
 ///|
@@ -547,38 +556,7 @@ pub(all) struct SessionSummary {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-pub(all) enum SessionTerminal {
-  Finished(String)
-  Aborted(String)
-  Interrupted(String)
-  Failed(String)
-} derive(Debug, Eq)
-
-///|
-pub impl ToJson for SessionTerminal with fn to_json(self) {
-  match self {
-    Finished(message) => { "kind": "finished", "message": message }
-    Aborted(message) => { "kind": "aborted", "message": message }
-    Interrupted(message) => { "kind": "interrupted", "message": message }
-    Failed(message) => { "kind": "failed", "message": message }
-  }
-}
-
-///|
-pub impl FromJson for SessionTerminal with fn from_json(json, path) {
-  guard json is Object(fields) &&
-    fields.get("kind") is Some(String(kind_)) &&
-    fields.get("message") is Some(String(message)) else {
-    raise JsonDecodeError((path, "expected session terminal"))
-  }
-  match kind_ {
-    "finished" => Finished(message)
-    "aborted" => Aborted(message)
-    "interrupted" => Interrupted(message)
-    "failed" => Failed(message)
-    _ => raise JsonDecodeError((path.add_key("kind"), "unknown terminal kind"))
-  }
-}
+pub using @wire {type TurnTerminal, type GoalChange, type InputOrigin}
 
 ///|
 /// The durable session item's tagged payload. Its manual codec preserves the
@@ -590,9 +568,10 @@ pub(all) enum SessionItem {
   User(SessionUserMessage)
   Assistant(SessionAssistantMessage)
   ToolResult(SessionToolResult)
+  Goal(GoalChange)
   RuntimeNotice(SessionRuntimeNotice)
   Summary(SessionSummary)
-  Terminal(SessionTerminal)
+  Terminal(TurnTerminal)
   UnknownTerminal(Json)
   Unknown(Json)
 } derive(Debug, Eq)
@@ -603,6 +582,7 @@ pub impl ToJson for SessionItem with fn to_json(self) {
     User(payload) => { "kind": "user", "payload": payload }
     Assistant(payload) => { "kind": "assistant", "payload": payload }
     ToolResult(payload) => { "kind": "tool_result", "payload": payload }
+    Goal(payload) => { "kind": "goal", "payload": payload }
     RuntimeNotice(payload) => { "kind": "runtime_notice", "payload": payload }
     Summary(payload) => { "kind": "summary", "payload": payload }
     Terminal(payload) => { "kind": "terminal", "payload": payload }
@@ -641,6 +621,10 @@ pub impl FromJson for SessionItem with fn from_json(json, path) {
       }
     "tool_result" =>
       ToolResult(@json.from_json(payload, path=path.add_key("payload"))) catch {
+        _ => Unknown(json)
+      }
+    "goal" =>
+      Goal(@json.from_json(payload, path=path.add_key("payload"))) catch {
         _ => Unknown(json)
       }
     "runtime_notice" =>
@@ -2642,18 +2626,6 @@ pub extend SessionSummary with Eq::{equal, not_equal}
 
 ///|
 pub extend SessionSummary with ToJson::{to_json}
-
-///|
-pub extend SessionTerminal with Debug::{to_repr}
-
-///|
-pub extend SessionTerminal with FromJson::{from_json}
-
-///|
-pub extend SessionTerminal with Eq::{equal, not_equal}
-
-///|
-pub extend SessionTerminal with ToJson::{to_json}
 
 ///|
 pub extend SessionToolCall with Debug::{to_repr}

@@ -66,43 +66,6 @@ pub impl FromJson for SessionId with fn from_json(
 }
 
 ///|
-/// Encode a terminal status as `{ "kind": ..., "message": ... }`.
-///
-/// `kind` is one of `finished`, `aborted`, `interrupted`, or `failed`. The
-/// variant payload is stored in `message`.
-impl ToJson for TurnTerminal with fn to_json(terminal : TurnTerminal) -> Json {
-  let (kind, message) = match terminal {
-    Finished(message) => ("finished", message)
-    Aborted(message) => ("aborted", message)
-    Interrupted(message) => ("interrupted", message)
-    Failed(message) => ("failed", message)
-  }
-  { "kind": kind, "message": message }
-}
-
-///|
-/// Decode a terminal status from `{ "kind": ..., "message": ... }`.
-///
-/// Missing or non-string fields raise `JsonDecodeError`. Unknown `kind` values
-/// also raise, so persisted data cannot silently turn into the wrong terminal
-/// state.
-pub impl FromJson for TurnTerminal with fn from_json(
-  json : Json,
-  path : @json.JsonPath,
-) -> TurnTerminal {
-  let fields = expect_object(json, path)
-  let message = string_field(fields, path, "message")
-  match string_field(fields, path, "kind") {
-    "finished" => Finished(message)
-    "aborted" => Aborted(message)
-    "interrupted" => Interrupted(message)
-    "failed" => Failed(message)
-    other =>
-      json_decode_error(path.add_key("kind"), "unknown terminal kind: \{other}")
-  }
-}
-
-///|
 /// Encode a `SessionItem` as a tagged payload object.
 ///
 /// The JSON shape is `{ "kind": <tag>, "payload": <variant-json> }`. Tags are
@@ -113,6 +76,7 @@ impl ToJson for SessionItem with fn to_json(item : SessionItem) -> Json {
     User(message) => ("user", ToJson::to_json(message))
     Assistant(message) => ("assistant", ToJson::to_json(message))
     Tool(result) => ("tool_result", ToJson::to_json(result))
+    Goal(change) => ("goal", ToJson::to_json(change))
     Runtime(notice) => ("runtime_notice", ToJson::to_json(notice))
     Summary(summary) => ("summary", ToJson::to_json(summary))
     Terminal(terminal) => ("terminal", ToJson::to_json(terminal))
@@ -141,6 +105,7 @@ pub impl FromJson for SessionItem with fn from_json(
       Assistant(@json.from_json(payload, path=path.add_key("payload")))
     "tool_result" =>
       Tool(@json.from_json(payload, path=path.add_key("payload")))
+    "goal" => Goal(@json.from_json(payload, path=path.add_key("payload")))
     "runtime_notice" =>
       Runtime(@json.from_json(payload, path=path.add_key("payload")))
     "summary" => Summary(@json.from_json(payload, path=path.add_key("payload")))
@@ -162,7 +127,7 @@ pub impl FromJson for SessionItem with fn from_json(
 /// recomputed by `Session::Session` from event sequence numbers when decoded.
 pub impl ToJson for Session with fn to_json(session : Session) -> Json {
   {
-    "version": 1,
+    "version": @protocol.SessionFormatVersion,
     "id": session.id(),
     "system_prompt": session.system_prompt(),
     "events": @json.to_json(session.events()),
@@ -172,7 +137,7 @@ pub impl ToJson for Session with fn to_json(session : Session) -> Json {
 ///|
 /// Decode a complete `Session` snapshot.
 ///
-/// Only version `1` is accepted. Missing `events` is treated as an empty event
+/// Only version `2` is accepted. Missing `events` is treated as an empty event
 /// log for compatibility with older or minimal snapshots. Event order is kept
 /// exactly as encoded; the constructor recomputes `last_sequence` from the
 /// highest event sequence but does not validate contiguity.
@@ -182,7 +147,7 @@ pub impl FromJson for Session with fn from_json(
 ) -> Session {
   let fields = expect_object(json, path)
   match int_field(fields, path, "version") {
-    1 => ()
+    version if version == @protocol.SessionFormatVersion => ()
     other =>
       json_decode_error(
         path.add_key("version"),
@@ -232,8 +197,3 @@ pub extend SessionId with FromJson::{from_json}
 #doc(hidden)
 #deprecated
 pub extend SessionItem with FromJson::{from_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend TurnTerminal with FromJson::{from_json}

@@ -98,7 +98,7 @@ export class DesktopBrowserHarness {
     // UML filter keeps branching nodes, so the fixture has one package with
     // two source dependencies and exercises the real renderer path.
     this.packageGraphSource = JSON.stringify({
-      version: 2,
+      version: 1,
       status: 'success',
       error: null,
       root: [0],
@@ -196,6 +196,7 @@ export class DesktopBrowserHarness {
         item: {
           kind: 'user',
           payload: {
+            origin: 'human',
             content: 'Show the browser fixture at https://example.test/docs but keep `https://inside.example.test` inert.',
           },
         },
@@ -247,8 +248,8 @@ export class DesktopBrowserHarness {
       {
         sequence: 5,
         item: {
-          kind: 'runtime_notice',
-          payload: { content: '[goal]\nShip Rabbita 0.15 browser tests' },
+          kind: 'goal',
+          payload: { kind: 'set', text: 'Ship Rabbita 0.15 browser tests', baseline: { kind: 'unavailable' } },
         },
       },
       {
@@ -529,7 +530,7 @@ export class DesktopBrowserHarness {
       case 'session.load_archived':
         return {
           session: {
-            version: 1,
+            version: 2,
             id: 'session-1',
             events: this.sessionEvents,
           },

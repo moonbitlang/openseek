@@ -1,11 +1,13 @@
 import {
   "bobzhang/openseek/agent_session",
+  "bobzhang/openseek_protocol",
   "bobzhang/openseek/eval/report",
   "moonbitlang/core/json",
 }
 
 import {
   "bobzhang/openseek/agent_session",
+  "bobzhang/openseek_protocol",
   "bobzhang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/async",
   "moonbitlang/async/fs",

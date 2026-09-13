@@ -38,7 +38,7 @@ test "event timestamps round trip through JSON" {
   assert_eq(
     line,
     (
-      #|{"sequence":1,"ts":1781144351123,"item":{"kind":"user","payload":{"content":"hello"}}}
+      #|{"sequence":1,"ts":1781144351123,"item":{"kind":"user","payload":{"origin":"human","content":"hello"}}}
     ),
   )
   let decoded : @agent_session.SessionEvent = @json.from_json(@json.parse(line))
@@ -205,13 +205,7 @@ test "projection skips context-yield terminals" {
         SessionSummary(content="checkpoint", from_sequence=1, to_sequence=1),
       ),
     )
-    .append(
-      Terminal(
-        Finished(
-          "\{@agent_session.ContextYieldAnswerPrefix} continue in a new turn",
-        ),
-      ),
-    )
+    .append(Terminal(ContextYield("[context ceiling] continue in a new turn")))
   let messages = session.chat_messages()
   assert_eq(messages.length(), 3)
   assert_true(messages[1].content.contains("checkpoint"))
@@ -431,9 +425,7 @@ test "a compacted-over set marker re-arms the turn-start reminder" {
   // trusting the lossy summary.
   let session = @agent_session.Session(SessionId("s1"), system_prompt="sys")
     .append(User(UserMessage("task")))
-    .append(
-      Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nbig objective")),
-    )
+    .append(Goal(GoalSet("big objective", baseline=Unavailable)))
     .append(
       Summary(SessionSummary(content="folded", from_sequence=1, to_sequence=2)),
     )
@@ -448,9 +440,7 @@ test "a summary of later events leaves a fresh set marker verbatim" {
   let session = @agent_session.Session(SessionId("s2"), system_prompt="sys")
     .append(User(UserMessage("task one")))
     .append(User(UserMessage("task two")))
-    .append(
-      Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nbig objective")),
-    )
+    .append(Goal(GoalSet("big objective", baseline=Unavailable)))
     .append(
       Summary(SessionSummary(content="folded", from_sequence=1, to_sequence=2)),
     )
@@ -461,19 +451,33 @@ test "a summary of later events leaves a fresh set marker verbatim" {
 ///|
 test "a blocked marker pauses the standing goal without clearing it" {
   let session = @agent_session.Session(SessionId("s3"), system_prompt="sys")
-    .append(
-      Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nbig objective")),
-    )
+    .append(Goal(GoalSet("big objective", baseline=Unavailable)))
     .append(Terminal(Finished("earlier")))
-    .append(
-      Runtime(RuntimeNotice("\{@agent_session.GoalBlockedPrefix}\nneeds a key")),
-    )
+    .append(Goal(GoalBlocked("needs a key")))
   guard session.current_goal() is Some(goal) else { fail("goal must stand") }
   assert_true(goal.blocked())
   // A NEWER set resets the pause.
   let session = session.append(
-    Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nnew objective")),
+    Goal(GoalSet("new objective", baseline=Unavailable)),
   )
   guard session.current_goal() is Some(goal) else { fail("goal must stand") }
   assert_false(goal.blocked())
+}
+
+///|
+test "literal control text remains ordinary input and a successful answer" {
+  let input = @agent_session.UserMessage(@agent_session.GoalContinuePrompt)
+  assert_true(input.origin() is Human)
+  let answer = "[context ceiling] a literal answer"
+  let session = @agent_session.Session(
+      SessionId("literal"),
+      system_prompt="system",
+    )
+    .append(User(input))
+    .append(Terminal(Finished(answer)))
+  assert_eq(session.chat_messages()[2].content, answer)
+  let decoded : @agent_session.Session = @json.from_json(
+    ToJson::to_json(session),
+  )
+  assert_eq(decoded.chat_messages()[2].content, answer)
 }

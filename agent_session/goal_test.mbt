@@ -1,6 +1,6 @@
 ///|
 fn goal_set_notice(text : String) -> @agent_session.SessionItem {
-  Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\n\{text}"))
+  Goal(GoalSet("\{text}", baseline=Unavailable))
 }
 
 ///|
@@ -51,7 +51,7 @@ test "current_goal marks goals the model has answered since" {
 test "cleared tombstone hides earlier goals and a later set revives" {
   let cleared = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(goal_set_notice("first objective"))
-    .append(Runtime(RuntimeNotice(@agent_session.GoalClearedNotice)))
+    .append(Goal(GoalCleared))
   assert_true(cleared.current_goal() is None)
   let revived = cleared.append(goal_set_notice("second objective"))
   guard revived.current_goal() is Some(goal) else { fail("expected a goal") }
@@ -62,7 +62,7 @@ test "cleared tombstone hides earlier goals and a later set revives" {
 test "reminder and check notices are not set markers" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(goal_set_notice("real goal"))
-    .append(Runtime(RuntimeNotice(@agent_session.GoalClearedNotice)))
+    .append(Goal(GoalCleared))
     .append(
       Runtime(
         RuntimeNotice("\{@agent_session.GoalReminderPrefix}\nstale reminder"),
@@ -98,118 +98,30 @@ test "a compaction summary covering the set marker does not hide the goal" {
 }
 
 ///|
-test "goal baseline round-trips through its notice" {
-  let notice = @agent_session.goal_baseline_notice(sha="abc123", dirty=false)
-  assert_eq(notice, "[goal baseline] sha=abc123 dirty=false")
-  debug_inspect(
-    @agent_session.parse_goal_baseline(notice),
-    content=(
-      #|Some({ sha: "abc123", dirty: false })
-    ),
-  )
-  // Strict shape: mangled lines degrade to plain notices.
-  assert_true(@agent_session.parse_goal_baseline("[goal baseline]") is None)
-  assert_true(
-    @agent_session.parse_goal_baseline("[goal baseline] sha= dirty=true")
-    is None,
-  )
-  assert_true(
-    @agent_session.parse_goal_baseline("[goal baseline] sha=x dirty=maybe")
-    is None,
-  )
-  // The `dirty` value must end the line: trailing text is not a baseline.
-  assert_true(
-    @agent_session.parse_goal_baseline("[goal baseline] sha=x dirty=true junk")
-    is None,
-  )
-  // A repeated field is mangled too: the FIRST ` dirty=` is the separator,
-  // so the value that follows it is never `true`/`false` on its own.
-  assert_true(
-    @agent_session.parse_goal_baseline(
-      "[goal baseline] sha=x dirty=true dirty=false",
-    )
-    is None,
-  )
-}
-
-///|
-test "current_goal_baseline pairs by adjacency" {
+test "goal baseline belongs to its set through interleaving and compaction" {
+  let baseline : @agent_session.GoalBaseline = { sha: "abc123", dirty: true, }
   let session = @agent_session.Session(SessionId("b1"), system_prompt="sys")
-    .append(
-      Runtime(
-        RuntimeNotice(
-          @agent_session.goal_baseline_notice(sha="abc123", dirty=true),
-        ),
-      ),
-    )
-    .append(Runtime(RuntimeNotice("[goal]\nship it")))
-  debug_inspect(
-    session.current_goal_baseline(),
-    content=(
-      #|Some({ sha: "abc123", dirty: true })
-    ),
-  )
-}
-
-///|
-test "a set marker without an adjacent baseline has none" {
-  // Baseline exists but something landed between it and the marker: the
-  // adjacency contract is broken, so no baseline is claimed.
-  let session = @agent_session.Session(SessionId("b2"), system_prompt="sys")
-    .append(
-      Runtime(
-        RuntimeNotice(
-          @agent_session.goal_baseline_notice(sha="abc123", dirty=false),
-        ),
-      ),
-    )
+    .append(Goal(GoalSet("ship it", baseline=Captured(baseline))))
     .append(User(UserMessage("interleaved")))
-    .append(Runtime(RuntimeNotice("[goal]\nship it")))
-  assert_true(session.current_goal_baseline() is None)
+    .append(Runtime(RuntimeNotice("[goal baseline] sha=wrong dirty=false")))
+    .compact(content="summary", from_sequence=1, to_sequence=3)
+  assert_eq(session.current_goal_baseline(), Some(baseline))
+  let replacement = session.append(Goal(GoalSet("next", baseline=Unavailable)))
+  assert_true(replacement.current_goal().unwrap().baseline() is Unavailable)
+  assert_true(replacement.current_goal_baseline() is None)
+  assert_true(session.append(Goal(GoalCleared)).current_goal_baseline() is None)
 }
 
 ///|
-test "an orphan baseline is never returned" {
-  // The set marker's append failed: the baseline precedes nothing.
-  let session = @agent_session.Session(SessionId("b3"), system_prompt="sys").append(
-    Runtime(
-      RuntimeNotice(
-        @agent_session.goal_baseline_notice(sha="abc123", dirty=false),
-      ),
-    ),
+test "lookalike text never changes goal state" {
+  let session = @agent_session.Session(SessionId("b2"), system_prompt="sys").append(
+    Runtime(RuntimeNotice("[goal]\nnot a goal")),
   )
   assert_true(session.current_goal() is None)
-  assert_true(session.current_goal_baseline() is None)
-}
-
-///|
-test "a replacement goal pairs with ITS baseline, and a clear drops it" {
-  let session = @agent_session.Session(SessionId("b4"), system_prompt="sys")
-    .append(
-      Runtime(
-        RuntimeNotice(
-          @agent_session.goal_baseline_notice(sha="old000", dirty=false),
-        ),
-      ),
-    )
-    .append(Runtime(RuntimeNotice("[goal]\nfirst")))
-    .append(
-      Runtime(
-        RuntimeNotice(
-          @agent_session.goal_baseline_notice(sha="new111", dirty=true),
-        ),
-      ),
-    )
-    .append(Runtime(RuntimeNotice("[goal]\nsecond")))
-  debug_inspect(
-    session.current_goal_baseline(),
-    content=(
-      #|Some({ sha: "new111", dirty: true })
-    ),
-  )
-  // A replacement WITHOUT a baseline must not inherit the old one.
-  let replaced = session.append(Runtime(RuntimeNotice("[goal]\nthird")))
-  assert_true(replaced.current_goal_baseline() is None)
-  let cleared = session.append(Runtime(RuntimeNotice("[goal cleared]")))
-  assert_true(cleared.current_goal_baseline() is None)
+  let session = session
+    .append(Goal(GoalSet("real", baseline=Unavailable)))
+    .append(Runtime(RuntimeNotice("[goal cleared]")))
+    .append(Runtime(RuntimeNotice("[goal blocked]\nnot blocked")))
+  assert_eq(session.current_goal().unwrap().text(), "real")
+  assert_false(session.current_goal().unwrap().blocked())
 }

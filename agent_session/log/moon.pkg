@@ -1,7 +1,12 @@
 import {
+  "bobzhang/openseek_protocol" @protocol,
   "bobzhang/openseek/agent_session",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
 }
 
 warnings = "+unnecessary_annotation"
+
+import {
+  "bobzhang/openseek_protocol",
+} for "test"

@@ -11,7 +11,7 @@ function longSessionEvents(prefix) {
       ts: 1_781_144_350_123 + sequence * 1_000,
       item: {
         kind: 'user',
-        payload: { content: `${prefix} question ${turn}` },
+        payload: { origin: 'human', content: `${prefix} question ${turn}` },
       },
     });
     sequence += 1;
@@ -99,7 +99,7 @@ test('returning to a conversation restores where the reader left it', async ({ p
       const id = request.params?.session;
       const events = id === 'session-2' ? second : first;
       return {
-        session: { version: 1, id, events },
+        session: { version: 2, id, events },
         watermark: events.at(-1).sequence,
       };
     }

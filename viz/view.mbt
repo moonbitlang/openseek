@@ -307,7 +307,7 @@ fn format_span_total_seconds(span_ms : Int64) -> String {
 fn turn_preview(turn : Array[@agent_session.SessionEvent]) -> String {
   for event in turn {
     if event.item() is User(message) {
-      return if message.content() == @agent_session.GoalContinuePrompt {
+      return if message.origin() is AutoContinue {
         "↻ auto-continue"
       } else {
         truncate(one_line(message.content()), 80)
@@ -320,7 +320,9 @@ fn turn_preview(turn : Array[@agent_session.SessionEvent]) -> String {
 ///|
 test "an auto-continued turn is named rather than previewed" {
   let session = @agent_session.Session(SessionId("t"), system_prompt="")
-    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(
+      User(UserMessage(@agent_session.GoalContinuePrompt, origin=AutoContinue)),
+    )
     .append(Terminal(Finished("done")))
     .append(User(UserMessage("now do the other thing")))
     .append(Terminal(Finished("done again")))
@@ -335,7 +337,9 @@ test "the turn header counts only the steers a person typed" {
     .append(User(UserMessage("start")))
     .append(Assistant(AssistantMessage("working")))
     .append(User(UserMessage("actually, also this")))
-    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(
+      User(UserMessage(@agent_session.GoalContinuePrompt, origin=AutoContinue)),
+    )
     .append(Terminal(Finished("done")))
   let turns = group_turns(session.events())
   // The opening prompt is not a steer, and the engine's prompt never is.
@@ -356,7 +360,7 @@ fn count_turn_steers(turn : Array[@agent_session.SessionEvent]) -> Int {
       seen_first = true
       continue
     }
-    if user_input(message.content(), delegated=false) is Typed {
+    if user_input(message.origin(), delegated=false) is Typed {
       steers += 1
     }
   }
@@ -382,12 +386,14 @@ priv enum UserInput {
 }
 
 ///|
-/// Classify one user-role message. `delegated` is a property of the session
-/// being rendered, not of the text, so it decides first.
-fn user_input(content : String, delegated~ : Bool) -> UserInput {
-  if delegated {
+/// Classify typed provenance, retaining the delegated-session caption.
+fn user_input(
+  origin : @agent_session.InputOrigin,
+  delegated~ : Bool,
+) -> UserInput {
+  if delegated || origin is Delegated {
     Delegated
-  } else if content == @agent_session.GoalContinuePrompt {
+  } else if origin is AutoContinue {
     AutoContinue
   } else {
     Typed
@@ -411,7 +417,7 @@ fn UserInput::card_style(self : UserInput) -> (String, String) {
 /// summary keeps the class the raw log gives it, so the same event reads the
 /// same way in both views.
 fn user_role_card_style(
-  content : String,
+  _content : String,
   origin~ : MessageOrigin,
   delegated~ : Bool,
 ) -> (String, String) {
@@ -421,35 +427,18 @@ fn user_role_card_style(
     // `Other` cannot reach a user-role card: the projection only synthesizes
     // assistant and tool messages. Classifying it as input is the honest
     // fallback if that ever changes — it says no more than the role does.
-    FromUser | Other => user_input(content, delegated~).card_style()
+    FromUser(input_origin) => user_input(input_origin, delegated~).card_style()
+    Other => user_input(Human, delegated~).card_style()
   }
 }
 
 ///|
-/// The engine's auto-continuation prompt is matched against the exact constant
-/// serve submits, so rewording it stops the match instead of silently
-/// captioning engine text as the user's.
-test "user cards name who actually wrote the message" {
-  fn caption(content : String, delegated : Bool) -> String {
-    let (kind, label) = user_input(content, delegated~).card_style()
-    "\{kind} · \{label}"
-  }
-
-  inspect(caption("ship the feature", false), content="user typed · You")
-  inspect(
-    caption(@agent_session.GoalContinuePrompt, false),
-    content="user auto-continue · Auto-continue",
-  )
-  // Text that only resembles the engine's prompt is still the user's own.
-  inspect(
-    caption("Continue working toward the standing goal.", false),
-    content="user typed · You",
-  )
-  // A sub-run child's prompt is its parent agent's task, whatever it says.
-  inspect(
-    caption("survey the parser", true),
-    content="user delegated · Task from parent",
-  )
+test "user cards classify typed origin regardless of text" {
+  assert_true(user_input(Human, delegated=false) is Typed)
+  assert_true(user_input(AutoContinue, delegated=false) is AutoContinue)
+  assert_true(user_input(Delegated, delegated=false) is Delegated)
+  assert_true(user_input(Command, delegated=false) is Typed)
+  assert_true(user_input(Human, delegated=true) is Delegated)
 }
 
 ///|
@@ -468,7 +457,7 @@ fn event_card(
   match event.item() {
     User(message) => {
       let (kind, label) = user_input(
-        message.content(),
+        message.origin(),
         delegated=subrun.delegated,
       ).card_style()
       card(kind, label, seq, time~, [text_block(message.content())])
@@ -485,6 +474,7 @@ fn event_card(
         step_label~,
       )
     Tool(result) => tool_card(seq, time, result, escalated, tags, subrun)
+    Goal(change) => goal_card(seq, time, change)
     Runtime(notice) => runtime_card(seq, time, notice.content())
     Summary(summary) => summary_card(seq, time, summary)
     Terminal(terminal) => terminal_card(seq, time, terminal, step_label~)
@@ -492,36 +482,11 @@ fn event_card(
 }
 
 ///|
-/// Render a `RuntimeNotice` card. Notices the agent loop stamps with a known
-/// first line get dedicated cards: plan-cadence reminders render their
-/// checklist, and the goal-command family — set/cleared/blocked markers
-/// (recognized by the shared `@agent_session.goal_marker` decoder, so the
-/// view can never disagree with the engine about what a marker means) plus
-/// goal reminders and finish-time goal checks — surfaces the goal text
-/// itself instead of a wall of boilerplate. Any other runtime notice keeps
-/// the generic card.
+/// Render model-directed reminders and background notices. Goal changes
+/// have their own typed card path.
 fn runtime_card(seq : Int, time : String, content : String) -> @html.Html {
   if content.has_prefix(@agent_session.PlanReminderPrefix) {
     return plan_reminder_card(seq, time, content)
-  }
-  match @agent_session.goal_marker(content) {
-    Some(GoalSet(text)) =>
-      return card("runtime goal-set", "Goal set", seq, time~, [
-        goal_text_block(text),
-      ])
-    Some(GoalCleared) =>
-      return card("runtime goal-cleared", "Goal cleared", seq, time~, [
-        @html.span(class="goal-cleared-note") <| "standing goal cleared",
-      ])
-    Some(GoalBlocked(reason)) =>
-      return card("runtime goal-blocked", "Goal blocked", seq, time~, [
-        text_block(reason),
-      ])
-    Some(GoalUnblocked) =>
-      return card("runtime goal-unblocked", "Goal unblocked", seq, time~, [
-        @html.span(class="goal-cleared-note") <| "goal resumed; auto-continuation re-enabled",
-      ])
-    None => ()
   }
   if content.has_prefix(@agent_session.GoalReminderPrefix) {
     return goal_notice_card(
@@ -1460,7 +1425,7 @@ fn terminal_card(
   step_label~ : String,
 ) -> @html.Html {
   let (kind, message) = match terminal {
-    Finished(answer) => ("finished", answer)
+    Finished(answer) | ContextYield(answer) => ("finished", answer)
     Aborted(reason) => ("aborted", reason)
     Interrupted(reason) => ("interrupted", reason)
     Failed(message) => ("failed", message)
@@ -1562,7 +1527,7 @@ fn prompt_marks(
   for event in session.events() {
     match event.item() {
       User(message) =>
-        if user_input(message.content(), delegated~) is Typed {
+        if user_input(message.origin(), delegated~) is Typed {
           marks.push({
             seq: event.sequence(),
             time: wall_clock_label(event.unix_ms()),
@@ -1703,7 +1668,9 @@ test "prompt_marks segments errors and replies by typed prompt" {
     .append(User(UserMessage("also fix the docs")))
     .append(Assistant(AssistantMessage("Docs updated.")))
     .append(Terminal(Finished("done")))
-    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(
+      User(UserMessage(@agent_session.GoalContinuePrompt, origin=AutoContinue)),
+    )
     .append(Terminal(Finished("done again")))
   let marks = prompt_marks(s, delegated=false)
   inspect(marks.length(), content="2")
@@ -1845,9 +1812,8 @@ fn terminal_projects_model_message(
     // context-yield terminals never reach the model, so they must not
     // consume a model-view label either — one extra label here shifts
     // every later timestamp/step chip after a continued yield.
-    Finished(answer) =>
-      !answer.is_blank() &&
-      !answer.has_prefix(@agent_session.ContextYieldAnswerPrefix)
+    Finished(answer) => !answer.is_blank()
+    ContextYield(_) => false
     Aborted(_) | Interrupted(_) | Failed(_) => true
   }
 }
@@ -1855,7 +1821,7 @@ fn terminal_projects_model_message(
 ///|
 fn item_projects_model_message(item : @agent_session.SessionItem) -> Bool {
   match item {
-    User(_) | Runtime(_) | Summary(_) | Assistant(_) | Tool(_) => true
+    User(_) | Goal(_) | Runtime(_) | Summary(_) | Assistant(_) | Tool(_) => true
     Terminal(terminal) => terminal_projects_model_message(terminal)
   }
 }
@@ -1902,7 +1868,7 @@ fn model_message_step_labels(session : @agent_session.Session) -> Array[String] 
 /// a message's role — it asks here instead, and a goal marker or a compaction
 /// summary keeps the caption the raw log gives it.
 priv enum MessageOrigin {
-  FromUser
+  FromUser(@agent_session.InputOrigin)
   FromRuntime
   /// A compaction summary, carrying the range it covers so the model view can
   /// caption it exactly as the raw log's own card does.
@@ -1920,8 +1886,8 @@ fn model_message_origins(
 ) -> Array[MessageOrigin] {
   let origin_of = (event : @agent_session.SessionEvent) => {
     match event.item() {
-      User(_) => FromUser
-      Runtime(_) => FromRuntime
+      User(message) => FromUser(message.origin())
+      Runtime(_) | Goal(_) => FromRuntime
       Summary(summary) =>
         FromSummary(from=summary.from_sequence(), to=summary.to_sequence())
       Assistant(_) | Tool(_) | Terminal(_) => Other
@@ -2035,13 +2001,15 @@ test "model-view user cards keep the caption of the event behind them" {
       SessionId("origins"),
       system_prompt="sys",
     )
-    .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nship it")))
+    .append(Goal(GoalSet("ship it", baseline=Unavailable)))
     .append(User(UserMessage("do the thing")))
     .append(Assistant(AssistantMessage("on it")))
     .append(
       Summary(SessionSummary(content="covered", from_sequence=1, to_sequence=3)),
     )
-    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(
+      User(UserMessage(@agent_session.GoalContinuePrompt, origin=AutoContinue)),
+    )
     .append(
       Runtime(RuntimeNotice("\{@agent_session.GoalReminderPrefix}\nship it")),
     )
@@ -2091,7 +2059,7 @@ test "message origins stay aligned with the projection" {
       SessionId("aligned"),
       system_prompt="sys",
     )
-    .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nobjective")))
+    .append(Goal(GoalSet("objective", baseline=Unavailable)))
     .append(User(UserMessage("first")))
     .append(
       Assistant(
@@ -2111,15 +2079,13 @@ test "message origins stay aligned with the projection" {
     .append(
       Summary(SessionSummary(content="covered", from_sequence=8, to_sequence=8)),
     )
-    .append(
-      Terminal(Finished("\{@agent_session.ContextYieldAnswerPrefix} continued")),
-    )
+    .append(Terminal(ContextYield("[context ceiling] continued")))
   let messages = session.chat_messages()
   let origins = model_message_origins(session)
   assert_eq(origins.length(), messages.length())
   for index, message in messages {
     let from_user_item = match origins[index] {
-      FromUser | FromRuntime | FromSummary(..) => true
+      FromUser(_) | FromRuntime | FromSummary(..) => true
       Other => false
     }
     assert_eq(from_user_item, message.role is User)
@@ -3070,3 +3036,27 @@ pub extend ViewMode with Debug::{to_repr}
 #doc(hidden)
 #deprecated
 pub extend ViewMode with Eq::{equal, not_equal}
+
+///|
+fn goal_card(
+  seq : Int,
+  time : String,
+  change : @agent_session.GoalChange,
+) -> @html.Html {
+  match change {
+    GoalSet(text, ..) =>
+      card("runtime goal-set", "Goal set", seq, time~, [goal_text_block(text)])
+    GoalCleared =>
+      card("runtime goal-cleared", "Goal cleared", seq, time~, [
+        @html.span(class="goal-cleared-note") <| "standing goal cleared",
+      ])
+    GoalBlocked(reason) =>
+      card("runtime goal-blocked", "Goal blocked", seq, time~, [
+        text_block(reason),
+      ])
+    GoalUnblocked =>
+      card("runtime goal-unblocked", "Goal unblocked", seq, time~, [
+        @html.span(class="goal-cleared-note") <| "goal resumed; auto-continuation re-enabled",
+      ])
+  }
+}

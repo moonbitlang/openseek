@@ -44,15 +44,18 @@ test "a durable prompt keeps its text whatever the submission tag looks like" {
   // Untagged encodes exactly as every record written before the field
   // existed: the key is absent, not null.
   let untagged : @protocol.SessionUserMessage = {
+    origin: Human,
     content: "hello",
     submission_id: None,
   }
-  @debug.assert_eq(untagged.to_json(), { "content": "hello" })
+  @debug.assert_eq(untagged.to_json(), { "origin": "human", "content": "hello" })
   let tagged : @protocol.SessionUserMessage = {
+    origin: Human,
     content: "hello",
     submission_id: Some("sub-1"),
   }
   @debug.assert_eq(tagged.to_json(), {
+    "origin": "human",
     "content": "hello",
     "submission_id": "sub-1",
   })
@@ -63,16 +66,21 @@ test "a durable prompt keeps its text whatever the submission tag looks like" {
   for
     absent in (
       [
-        { "content": "hello" },
-        { "content": "hello", "submission_id": Json::null() },
-        { "content": "hello", "submission_id": 7 },
-        { "content": "hello", "annotated_by_a_newer_store": true },
+        { "origin": "human", "content": "hello" },
+        { "origin": "human", "content": "hello", "submission_id": Json::null() },
+        { "origin": "human", "content": "hello", "submission_id": 7 },
+        {
+          "origin": "human",
+          "content": "hello",
+          "annotated_by_a_newer_store": true,
+        },
       ] : Array[Json]) {
     let decoded : @protocol.SessionUserMessage = @json.from_json(absent)
     assert_eq(decoded.content, "hello")
     assert_eq(decoded.submission_id, None)
   }
   let carried : @protocol.SessionUserMessage = @json.from_json({
+    "origin": "human",
     "content": "hello",
     "submission_id": "sub-1",
   })
@@ -82,7 +90,7 @@ test "a durable prompt keeps its text whatever the submission tag looks like" {
   // item keep the raw line instead of inventing an empty prompt.
   let contentless : Json = {
     "kind": "user",
-    "payload": { "submission_id": "s" },
+    "payload": { "origin": "human", "submission_id": "s" },
   }
   let item : @protocol.SessionItem = @json.from_json(contentless)
   assert_true(item is Unknown(_))

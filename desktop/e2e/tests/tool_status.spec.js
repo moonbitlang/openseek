@@ -43,7 +43,7 @@ for (const isError of [false, true]) {
   test(`tool status changes from a spinner to ${isError ? 'failure' : 'success'} without closing its inputs`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     app.sessionEvents = [
-      { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture tool status' } } },
+      { sequence: 1, item: { kind: 'user', payload: { origin: 'human', content: 'Show the browser fixture tool status' } } },
       { sequence: 2, item: { kind: 'assistant', payload: {
         content: '',
         tool_calls: [
