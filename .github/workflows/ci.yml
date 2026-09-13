@@ -12,6 +12,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  workflows:
+    name: bundled workflow checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      # Standalone scripts resolve their own declared imports. Check all of them
+      # without executing their main functions or setting up Desktop's runtime.
+      - name: Check all bundled workflow scripts
+        run: python3 scripts/check_workflows.py
+
   sandbox-macos:
     name: sandbox (macOS, native)
     runs-on: macos-latest
