@@ -196,8 +196,8 @@ async fn verify_review(root : String, temp : String, exe : String) -> Unit {
       "blockers" => "does not hold yet"
       "missing" => "subrun=true"
       "no-criteria" => "no criteria given"
-      "dirty-without-sha" => "--dirty needs --sha"
-      "help" => "usage:"
+      "dirty-without-sha" => "'sha' (required by 'dirty')"
+      "help" => "Usage:"
       _ => "findings=0 blockers=0"
     }
     assert_true(output.contains(expected), msg=output)
