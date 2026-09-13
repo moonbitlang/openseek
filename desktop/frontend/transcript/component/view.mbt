@@ -279,7 +279,7 @@ fn tool_result_row_is_visible(call : @transcript.ToolCall) -> Bool {
 ///|
 /// One recorded tool request, always on display as its own row. Its brief is
 /// the result-derived caption the viz renderer also promotes onto the call;
-/// expanding reveals only what the model sent. Failed calls carry a status
+/// expanding reveals the arguments and background job identity. Failed calls carry a status
 /// icon, while their separate result row owns the output and failure stage.
 fn tool_request_view(
   call : @transcript.ToolCall,
@@ -293,7 +293,17 @@ fn tool_request_view(
     Done(is_error~, brief~, ..) => (is_error, brief)
     Pending(..) => (false, None)
   }
-  let label = if brief is Some(brief) && !brief.is_blank() {
+  let background_job_id = match (name, is_error, brief) {
+    ("mbtx", false, Some(brief)) =>
+      match brief.strip_prefix("mbtx → bg ") {
+        Some(id) if !id.is_blank() => Some(id.to_owned())
+        _ => None
+      }
+    _ => None
+  }
+  let label = if background_job_id is Some(_) {
+    "mbtx → background"
+  } else if brief is Some(brief) && !brief.is_blank() {
     brief
   } else if wait_label is Some(label) {
     label
@@ -330,6 +340,21 @@ fn tool_request_view(
   line.push(@plan.fold_progress(call))
   line.push(ToolStatus(call.outcome).view())
   let body : Array[@html.Html] = []
+  if background_job_id is Some(id) {
+    body.push(
+      @html.div(class="tool-call-section", [
+        @html.div(class="tool-call-section-label", "Job ID"),
+        @html.code(id),
+        @html.button(
+          title="Copy job ID",
+          type_="button",
+          attrs=@html.Attrs::build().aria_label("Copy job ID"),
+          on_click=@clipboard.copy(@clipboard.Text(id)),
+          @icons.icon(@icons.icon_copy),
+        ),
+      ]),
+    )
+  }
   // A `plan` call shows the checklist it recorded rather than its JSON, in
   // every state where that checklist is what the model asked for. A pending
   // call qualifies: the card is a record of the call, and the missing Output
