@@ -39,10 +39,10 @@ test: test-moon
     just test-turn-finish
     just test-workflows
 
-# Real CLI lifecycle regression with an offline scripted model (Python 3).
+# Real CLI lifecycle regression with an offline scripted model.
 test-turn-finish:
     moon build cmd/openseek --target native
-    python3 tests/integration/turn_finish.py _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
 
 test-moon:
     moon test --target native
@@ -93,7 +93,7 @@ viz-test-browser:
 
 # Exercise bundled agent workflows against an offline child contract.
 test-workflows:
-    python3 tests/integration/workflows.py
+    moon run tests/integration/workflows
 
 ```
 Surveying architecture and one extension point with two read-only scouts…
