@@ -84,8 +84,8 @@ Run these with the hosted child-agent handoff:
 
 `review.mbtx` launches one `review` child (100-step ceiling). With no
 arguments it audits the standing goal and the baseline it recorded, which the
-engine places in the snippet's environment (`OPENSEEK_GOAL`,
-`OPENSEEK_GOAL_SHA`, `OPENSEEK_GOAL_DIRTY`) when one stands; arguments, joined
+engine places in `WORKFLOW_HOST.openseek.audit` (`goal`, optional `sha` and
+`dirty`) when one stands; arguments, joined
 with spaces, narrow that goal as an audit focus, or are the whole criteria
 when no goal stands. It prints the full report JSON, then a
 `findings=N blockers=M` line, and exits unsuccessfully when any finding is a

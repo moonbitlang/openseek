@@ -1,8 +1,8 @@
 ///|
 import {
   "moonbitlang/async@0.21.1",
-  "moonbitlang/workflow@0.7.0",
-  "moonbitlang/workflow@0.7.0/hosted",
+  "moonbitlang/workflow@0.7.1",
+  "moonbitlang/workflow@0.7.1/hosted",
 }
 
 ///|

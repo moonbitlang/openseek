@@ -51,7 +51,13 @@ test "what this host writes is what the library reads" {
   }
   assert_eq(reservation.env().length(), 1)
   let document = @json.parse(raw)
-  guard @hosted.parse(document) is Some(ctx) else {
+  let previous = @env.get_env_var("WORKFLOW_HOST")
+  @env.set_env_var("WORKFLOW_HOST", raw)
+  defer (match previous {
+    Some(value) => @env.set_env_var("WORKFLOW_HOST", value)
+    None => @env.unset_env_var("WORKFLOW_HOST")
+  })
+  guard @hosted.context() is Some(ctx) else {
     fail("the library must accept what this host wrote")
   }
   assert_eq(ctx.child_capacity(), @host.block_size)
@@ -86,7 +92,7 @@ test "what this host writes is what the library reads" {
 }
 
 ///|
-test "the standing goal rides the guest environment beside the handoff" {
+test "the standing goal rides the hosted extension" {
   // Read at reservation time, so the closure sees whatever goal stands when
   // the snippet actually runs; absent, nothing but the handoff is set.
   let goal : Ref[@host.AuditCriteria?] = Ref(None)
@@ -98,20 +104,50 @@ test "the standing goal rides the guest environment beside the handoff" {
     reserve_ordinals=_ => 1,
     criteria=() => goal.val,
   )
-  assert_eq(injection.reserve().env().length(), 1)
+  let env = injection.reserve().env()
+  assert_eq(env.length(), 1)
+  guard env.get("WORKFLOW_HOST") is Some(raw) else { fail("missing handoff") }
+  assert_true(@json.parse(raw) is { "openseek"? : None, .. })
   goal.val = Some({ goal: "ship the parser", sha: None, dirty: true, })
   let env = injection.reserve().env()
-  assert_eq(env.get("OPENSEEK_GOAL"), Some("ship the parser"))
-  // A dirty flag without a commit describes nothing: neither is set.
-  assert_eq(env.get("OPENSEEK_GOAL_SHA"), None)
-  assert_eq(env.get("OPENSEEK_GOAL_DIRTY"), None)
+  assert_eq(env.length(), 1)
+  guard env.get("WORKFLOW_HOST") is Some(raw) else { fail("missing handoff") }
+  assert_true(
+    @json.parse(raw)
+    is {
+      "openseek": {
+        "audit": {
+          "goal": "ship the parser",
+          "sha"? : None,
+          "dirty"? : None,
+          ..
+        },
+        ..
+      },
+      ..
+    },
+  )
   goal.val = Some({
     goal: "ship the parser",
     sha: Some("abc123"),
     dirty: false,
   })
   let env = injection.reserve().env()
-  assert_eq(env.get("OPENSEEK_GOAL_SHA"), Some("abc123"))
-  assert_eq(env.get("OPENSEEK_GOAL_DIRTY"), Some("false"))
-  assert_true(env.get("WORKFLOW_HOST") is Some(_))
+  assert_eq(env.length(), 1)
+  guard env.get("WORKFLOW_HOST") is Some(raw) else { fail("missing handoff") }
+  assert_true(
+    @json.parse(raw)
+    is {
+      "openseek": {
+        "audit": {
+          "goal": "ship the parser",
+          "sha": "abc123",
+          "dirty": false,
+          ..
+        },
+        ..
+      },
+      ..
+    },
+  )
 }

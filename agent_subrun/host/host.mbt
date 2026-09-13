@@ -34,9 +34,8 @@ pub let block_size : Int = 32
 /// and whether the worktree was already dirty at it.
 ///
 /// The host reads it at reservation time, so a snippet sees the LIVE goal
-/// rather than a turn-start snapshot, and hands it over as guest environment
-/// (`OPENSEEK_GOAL`, `OPENSEEK_GOAL_SHA`, `OPENSEEK_GOAL_DIRTY`) beside the
-/// workflow handoff. The audited party does not get to restate its own
+/// rather than a turn-start snapshot, and hands it over in
+/// `WORKFLOW_HOST.openseek.audit`. The audited party does not restate its own
 /// criteria: a paraphrased goal is where quiet narrowing hides, and the
 /// baseline is something the model does not reliably know at all.
 pub(all) struct AuditCriteria {
@@ -160,9 +159,8 @@ pub fn SubrunReservation::events_path(self : SubrunReservation) -> String {
 }
 
 ///|
-/// The guest environment to set: `WORKFLOW_HOST`, plus the standing goal
-/// (`OPENSEEK_GOAL`, with `OPENSEEK_GOAL_SHA`/`OPENSEEK_GOAL_DIRTY` when it
-/// recorded a baseline) while one stands — and nothing else.
+/// The guest environment to set: `WORKFLOW_HOST`, including the standing
+/// goal and its optional baseline in `openseek.audit`.
 pub fn SubrunReservation::env(self : SubrunReservation) -> Map[String, String] {
   self.env
 }
@@ -223,13 +221,16 @@ pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
     "events": events_path,
     "cwd": self.workspace_root,
   }
-  let env = { "WORKFLOW_HOST": handoff.stringify() }
   if (self.criteria)() is Some(criteria) {
-    env["OPENSEEK_GOAL"] = criteria.goal
-    if criteria.sha is Some(sha) {
-      env["OPENSEEK_GOAL_SHA"] = sha
-      env["OPENSEEK_GOAL_DIRTY"] = if criteria.dirty { "true" } else { "false" }
+    let audit : Json = match criteria.sha {
+      Some(sha) =>
+        { "goal": criteria.goal, "sha": sha, "dirty": criteria.dirty }
+      None => { "goal": criteria.goal }
+    }
+    if handoff is Object(fields) {
+      fields["openseek"] = { "audit": audit }
     }
   }
+  let env = { "WORKFLOW_HOST": handoff.stringify() }
   { base, limit: block_size, dir, journal_path, events_path, env, }
 }

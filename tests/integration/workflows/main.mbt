@@ -78,8 +78,5 @@ fn clean_env() -> Map[String, String] {
   let env = @env.get_env_vars()
   env.remove("WORKFLOW_HOST")
   env.remove("OPENSEEK_CI_FIXTURE")
-  env.remove("OPENSEEK_GOAL")
-  env.remove("OPENSEEK_GOAL_SHA")
-  env.remove("OPENSEEK_GOAL_DIRTY")
   env
 }

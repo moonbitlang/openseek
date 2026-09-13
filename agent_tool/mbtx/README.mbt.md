@@ -405,8 +405,8 @@ same hosted workflow as scouts. Set `subrun: true`; `args` are optional:
 ```
 
 With empty `args` the child audits the standing goal and the baseline it
-recorded. The engine hands both to the snippet's environment at reservation
-time (`OPENSEEK_GOAL`, `OPENSEEK_GOAL_SHA`, `OPENSEEK_GOAL_DIRTY`; see
+recorded. The engine hands both to `WORKFLOW_HOST.openseek.audit` at reservation
+time (`goal`, optional `sha` and `dirty`; see
 `@host.AuditCriteria`), read from the live session rather than a turn-start
 snapshot, so the audited party never restates its own criteria. Given `args`,
 they narrow that goal as an audit focus, or are the whole criteria when no

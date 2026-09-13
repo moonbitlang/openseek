@@ -2,8 +2,8 @@
 import {
   "moonbitlang/async@0.21.1",
   "moonbitlang/core/env",
-  "moonbitlang/workflow@0.7.0",
-  "moonbitlang/workflow@0.7.0/hosted",
+  "moonbitlang/workflow@0.7.1",
+  "moonbitlang/workflow@0.7.1/hosted",
 }
 
 ///|
@@ -16,8 +16,8 @@ const Usage : String =
   #|usage: @builtin/review.mbtx [--sha COMMIT [--dirty]] [--] [CRITERIA...]
   #|
   #|With no arguments the reviewer audits the standing goal and the baseline
-  #|it recorded, which the engine supplies in OPENSEEK_GOAL (and
-  #|OPENSEEK_GOAL_SHA/OPENSEEK_GOAL_DIRTY). The remaining arguments, joined
+  #|it recorded, which the engine supplies in WORKFLOW_HOST.openseek.audit.
+  #|The remaining arguments, joined
   #|with spaces, narrow that goal as an audit focus, or are the whole criteria
   #|when no goal stands. --sha names the baseline commit the criteria were
   #|recorded at (--dirty: the worktree was already dirty then) and overrides
@@ -56,25 +56,44 @@ async fn main {
   }
   guard sha is Some(_) || !dirty else { fail("--dirty needs --sha\n\{Usage}") }
   let focus = criteria.join(" ")
-  let standing = @env.get_env_var("OPENSEEK_GOAL")
+  guard @hosted.context() is Some(ctx) else {
+    fail(
+      "This workflow needs OpenSeek: call mbtx with filename=@builtin/review.mbtx and subrun=true",
+    )
+  }
+  let audit = match ctx.extension("openseek") {
+    None => None
+    Some({ "audit"? : audit, .. }) => audit
+    Some(_) => fail("invalid WORKFLOW_HOST.openseek: expected an object")
+  }
+  let (standing, baseline) : (String?, (String, Bool)?) = match audit {
+    None => (None, None)
+    Some({ "goal": String(goal), "sha"? : sha, "dirty"? : dirty, .. }) => {
+      let baseline = match (sha, dirty) {
+        (None, None) => None
+        (Some(String(sha)), Some(True)) => Some((sha, true))
+        (Some(String(sha)), Some(False)) => Some((sha, false))
+        _ =>
+          fail(
+            "invalid audit baseline: sha and dirty must be a string and boolean pair",
+          )
+      }
+      (Some(goal), baseline)
+    }
+    Some(_) =>
+      fail("invalid WORKFLOW_HOST.openseek.audit: expected a goal string")
+  }
   let goal = match (standing, focus.is_blank()) {
     (Some(text), true) => text
     (Some(text), false) => "\{text}\n\nAudit focus:\n\{focus}"
     (None, false) => focus
     (None, true) => fail("no criteria given and no standing goal\n\{Usage}")
   }
-  // An explicit baseline wins; the engine's accompanies only the standing
-  // goal it was recorded for.
-  let (sha, dirty) = match (sha, standing, @env.get_env_var("OPENSEEK_GOAL_SHA")) {
-    (Some(sha), _, _) => (Some(sha), dirty)
-    (None, Some(_), Some(sha)) =>
-      (Some(sha), @env.get_env_var("OPENSEEK_GOAL_DIRTY") == Some("true"))
-    _ => (None, false)
-  }
-  guard @hosted.context() is Some(ctx) else {
-    fail(
-      "This workflow needs OpenSeek: call mbtx with filename=@builtin/review.mbtx and subrun=true",
-    )
+  // An explicit baseline wins; the host's accompanies its standing goal.
+  let (sha, dirty) = match (sha, baseline) {
+    (Some(sha), _) => (Some(sha), dirty)
+    (None, Some((sha, dirty))) => (Some(sha), dirty)
+    (None, None) => (None, false)
   }
   // The same input a `subrun review` child reads from the goal-met gate.
   let input : Json = match sha {
