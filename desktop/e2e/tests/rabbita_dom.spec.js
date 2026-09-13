@@ -724,8 +724,10 @@ test('tab strip closes every tab type into the New Tab launcher', async ({ page 
 test('file breadcrumbs browse cached directories with keyboard navigation', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.directoryEntries['/workspace/src'] = [
-    { name: 'docs', is_dir: true },
     { name: 'main.mbt', is_dir: false },
+    { name: 'pkg.generated.mbti', is_dir: false },
+    { name: 'docs', is_dir: true },
+    { name: 'README.mbt.md', is_dir: false },
   ];
   app.directoryEntries['/workspace/src/docs'] = [];
   await app.install();
@@ -742,12 +744,20 @@ test('file breadcrumbs browse cached directories with keyboard navigation', asyn
     request.method === 'fs.read_directory' && request.params?.path === '/workspace/src'))
     .toBeTruthy();
   const menu = page.getByRole('menu', { name: 'Files in src' });
+  await expect(menu.getByRole('menuitem').locator('.breadcrumb-picker-name')).toHaveText([
+    'README.mbt.md', 'pkg.generated.mbti', 'docs', 'main.mbt',
+  ]);
   await expect(menu.getByRole('menuitem').last()).toHaveAttribute('aria-current', 'page');
   await expect(menu.getByRole('menuitem').first()).toBeFocused();
   await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('menuitem').nth(1)).toBeFocused();
+  await page.keyboard.press('End');
   await expect(menu.getByRole('menuitem').last()).toBeFocused();
   await page.keyboard.press('Home');
   await expect(menu.getByRole('menuitem').first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('menuitem').nth(2)).toBeFocused();
   await page.keyboard.press('ArrowRight');
 
   await expect.poll(() => app.requests.find(request =>

@@ -2,6 +2,39 @@
 // matching; this package renders only the expanded directory tree.
 
 ///|
+/// Cache a single presentation order for the tree and breadcrumb picker.
+/// Only the two exact package overview filenames are pinned; directories with
+/// those names remain directories. Copy before sorting to preserve messages
+/// and previous state snapshots. The provider index breaks otherwise equal
+/// keys because Array::sort_by is unstable.
+fn ordered_directory_entries(entries : Array[FileEntry]) -> Array[FileEntry] {
+  fn rank(entry : FileEntry) -> Int {
+    if entry.is_dir {
+      2
+    } else {
+      match entry.name {
+        "README.mbt.md" => 0
+        "pkg.generated.mbti" => 1
+        _ => 3
+      }
+    }
+  }
+  let order = Array::makei(entries.length(), index => index)
+  order.sort_by((left, right) => {
+    match rank(entries[left]).compare(rank(entries[right])) {
+      0 =>
+        // String::compare is shortlex, not filename lexicographic order.
+        match entries[left].name.lexical_compare(entries[right].name) {
+          0 => left.compare(right)
+          by_name => by_name
+        }
+      by_rank => by_rank
+    }
+  })
+  order.map(index => entries[index])
+}
+
+///|
 /// Tree rows currently on screen, in depth-first render order with indentation
 /// depth. Only listed, expanded directories contribute descendants.
 fn visible_entries(state : State) -> Array[(FileEntry, Int)] {

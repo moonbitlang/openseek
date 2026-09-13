@@ -2817,7 +2817,7 @@ pub fn update(
         (@cmd.none, state)
       } else {
         let children = state.children.copy()
-        children[path] = entries
+        children[path] = ordered_directory_entries(entries)
         let breadcrumb_cmd = if state.highlighted is Some(highlighted) &&
           highlighted == path {
           focus_breadcrumb_entry_after_render(0)
