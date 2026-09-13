@@ -136,7 +136,7 @@ async fn verify_review(root : String, temp : String, exe : String) -> Unit {
   for
     mode in [
       "success", "baseline", "blockers", "standing", "focus", "override", "missing",
-      "no-criteria", "dirty-without-sha", "help",
+      "no-criteria", "dirty-without-sha", "help", "invalid-audit", "invalid-baseline",
     ] {
     let calls = temp + "/review-" + mode + ".jsonl"
     let env = clean_env()
@@ -150,17 +150,28 @@ async fn verify_review(root : String, temp : String, exe : String) -> Unit {
         "cwd": repo,
         "deadline_ms": 10000,
       }
-      env["WORKFLOW_HOST"] = handoff.stringify()
-    }
-    // The engine's standing goal, as the host hands it over.
-    match mode {
-      "standing" | "override" => {
-        env["OPENSEEK_GOAL"] = "Standing goal"
-        env["OPENSEEK_GOAL_SHA"] = "def"
-        env["OPENSEEK_GOAL_DIRTY"] = "false"
+      // The engine's standing goal, in the same handoff as its coordinates.
+      if handoff is Object(fields) {
+        match mode {
+          "standing" | "override" =>
+            fields["openseek"] = {
+              "audit": { "goal": "Standing goal", "sha": "def", "dirty": false },
+            }
+          "focus" =>
+            fields["openseek"] = { "audit": { "goal": "Standing goal" } }
+          "invalid-audit" => fields["openseek"] = { "audit": { "goal": 42 } }
+          "invalid-baseline" =>
+            fields["openseek"] = {
+              "audit": {
+                "goal": "Standing goal",
+                "sha": "def",
+                "dirty": "false",
+              },
+            }
+          _ => ()
+        }
       }
-      "focus" => env["OPENSEEK_GOAL"] = "Standing goal"
-      _ => ()
+      env["WORKFLOW_HOST"] = handoff.stringify()
     }
     let args = match mode {
       "baseline" =>
@@ -194,6 +205,8 @@ async fn verify_review(root : String, temp : String, exe : String) -> Unit {
     assert_eq(launched.length(), reviewed, msg=output)
     let expected = match mode {
       "blockers" => "does not hold yet"
+      "invalid-audit" => "invalid WORKFLOW_HOST.openseek.audit"
+      "invalid-baseline" => "invalid audit baseline"
       "missing" => "subrun=true"
       "no-criteria" => "no criteria given"
       "dirty-without-sha" => "--dirty needs --sha"

@@ -321,7 +321,7 @@ fn SidebarDispatcher::section_primary(
   }
   match id.source() {
     "openseek.projects" => self.emit(PickProject(channel))
-    "openseek.chats" => self.emit(NewChatIn(channel, None))
+    "openseek.chats" => self.emit(CreateChat(channel))
     source => self.unroutable("section action", "source \{source}")
   }
 }

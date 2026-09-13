@@ -78,6 +78,11 @@ test "a selected Codex draft activates its project without a child row" {
     Some("draft-1"),
   )
   assert_true(state.project_draft(selected, "/work/openseek") is None)
+  assert_true(
+    state.project_draft(selected, "/work/openseek", include_selected=true)
+    is Some(row) &&
+    row.active,
+  )
 
   // Leaving the Codex page does not strand typed work: the off-screen draft
   // becomes a recovery row until the user returns or sends it.

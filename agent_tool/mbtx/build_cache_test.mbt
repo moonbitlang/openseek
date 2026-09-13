@@ -253,6 +253,9 @@ async test "cache: a detached job's cleanup keeps the cache and its own run" {
       let output = dispatch(definition, { "source": source })
       assert_false(output.is_error, msg=output.content)
       assert_true(output.content.contains("moved to the background"))
+      let dirs = @fs.readdir(spill).filter(name => name.has_prefix("snippet-"))
+      assert_eq(dirs.length(), 1)
+      let call_dir = "\{spill}/\{dirs[0]}"
       // Rebuild the shared snippet dir underneath the running job. With the
       // 1ms handoff bound this run is adopted too, but its BUILD happened
       // synchronously first, in the shared directory, while the job ran.
@@ -263,7 +266,7 @@ async test "cache: a detached job's cleanup keeps the cache and its own run" {
       // The job's per-call build dir is reclaimed when it ends...
       let mut reclaimed = false
       for _ in 0..<200 {
-        if !@fs.exists("\{spill}/snippet-0/build") {
+        if !@fs.exists("\{call_dir}/build") {
           reclaimed = true
           break
         }

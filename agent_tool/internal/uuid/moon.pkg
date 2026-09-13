@@ -1,0 +1,6 @@
+import {
+  "moonbitlang/core/env",
+  "moonbitlang/x/uuid" @x_uuid,
+}
+
+warnings = "+unnecessary_annotation"

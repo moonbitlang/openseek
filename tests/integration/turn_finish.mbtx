@@ -1,0 +1,511 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/cond_var",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/io",
+  "moonbitlang/async/process",
+  "moonbitlang/async/shell",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+enum Scenario {
+  Run
+  Serve
+  Controls
+  Read
+} derive(Eq)
+
+///|
+fn field(value : Json, name : String) -> Json raise {
+  guard value is Object(fields) && fields.get(name) is Some(result) else {
+    fail("Missing \{name} in \{value.stringify()}")
+  }
+  result
+}
+
+///|
+fn string_field(value : Json, name : String) -> String raise {
+  guard field(value, name) is String(result) else {
+    fail("Expected string \{name} in \{value.stringify()}")
+  }
+  result
+}
+
+///|
+fn array_field(value : Json, name : String) -> Array[Json] raise {
+  guard field(value, name) is Array(result) else {
+    fail("Expected array \{name} in \{value.stringify()}")
+  }
+  result
+}
+
+///|
+fn has_event(value : Json, name : String) -> Bool {
+  value is { "event": String(event), .. } && event == name
+}
+
+///|
+async fn send(writer : @process.WriteToProcess, value : Json) -> Unit {
+  writer.write(value.stringify() + "\n")
+}
+
+///|
+fn tool_delta(step : Int, name : String, args : Json) -> Json {
+  {
+    "tool_calls": [
+      {
+        "index": 0,
+        "id": "call-\{step}",
+        "type": "function",
+        "function": { "name": name, "arguments": args.stringify() },
+      },
+    ],
+  }
+}
+
+///|
+/// Validate the complete RFC 9562 UUIDv7 shape, including version and variant.
+fn background_id(messages : String) -> String raise {
+  let marker = "moved to the background as job "
+  guard messages.split(marker).nth(1) is Some(tail) else {
+    fail("Missing background job announcement: \{messages}")
+  }
+  let id = tail.iter().take(36).map(c => c.to_string()).collect().join("")
+  assert_eq(id.length(), 36)
+  for i in 0..<id.length() {
+    let c = id[i]
+    if [8, 13, 18, 23].contains(i) {
+      assert_eq(c, '-')
+    } else {
+      assert_true(c is ('0'..='9' | 'a'..='f'))
+    }
+  }
+  assert_eq(id[14], '7')
+  assert_true(id[19] is ('8' | '9' | 'a' | 'b'))
+  id
+}
+
+///|
+async fn run_case(
+  executable : String,
+  root : String,
+  scenario : Scenario,
+) -> String? {
+  let directory = @fs.tmpdir(prefix="openseek-turn-finish-")
+  defer @fs.rmdir(directory, recursive=true)
+  let release = directory + "/release"
+  let store_root = directory + "/store"
+  let session_id = "job-control-session"
+  let serve = scenario is (Serve | Controls)
+  let controls = scenario == Controls
+  let read = scenario == Read
+  let prefix = if controls {
+    "  println(\"PERSISTED-PREFIX 你好🙂\")\n"
+  } else {
+    ""
+  }
+  let source =
+    $|import { "moonbitlang/async", "moonbitlang/async/fs" }
+    $|async fn main {
+    $|\{prefix}  while !@fs.exists("release") { @async.sleep(10) }
+    $|  println("BACKGROUND-RESULT")
+    $|}
+  if read {
+    @fs.write_file(directory + "/sample.mbt", "first\nselected\nlast\n")
+    @fs.write_file(directory + "/note.txt", "whole file")
+  }
+  let mut job_id : String? = None
+  let mut retained : (String, String)? = None
+  let mut active_snapshot_seen = false
+  let snapshot_ready = @cond_var.Cond()
+  let mut requests = 0
+  let events : Array[Json] = []
+  let environment = { "DEEPSEEK": "test", "OPENSEEK_RETRY_ATTEMPTS": "1" }
+  if read {
+    environment["OPENSEEK_REFERENCES"] = root + "/share"
+  }
+  @async.with_timeout(120000, () => {
+    @async.with_task_group(group => {
+      let (child_stdin, writer) = @process.write_to_process()
+      defer writer.close()
+      let (reader, child_stdout) = @process.read_from_process()
+      defer reader.close()
+      let (errors, child_stderr) = @process.read_from_process()
+      defer errors.close()
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      group.spawn_bg(no_wait=true) <| () => {
+        server.run_forever(
+          (request, body, conn) => {
+            assert_eq(request.path, "/chat/completions")
+            let request = @json.parse(body.read_all().text())
+            requests += 1
+            let step = requests
+            let messages = field(request, "messages").stringify()
+            let delta = if read {
+              let names = array_field(request, "tools").filter_map(tool => {
+                match tool {
+                  {
+                    "type": "function",
+                    "function": { "name": String(name), .. },
+                    ..
+                  } => Some(name)
+                  _ => None
+                }
+              })
+              assert_true(names.contains("mbtx") && !names.contains("read"))
+              assert_true(messages.contains("@builtin/read.mbtx"))
+              assert_true(messages.contains("path:start:end"))
+              match step {
+                1 =>
+                  tool_delta(step, "mbtx", {
+                    "filename": "@builtin/read.mbtx",
+                    "args": ["sample.mbt:2:3", "note.txt"],
+                  })
+                2 => {
+                  let outputs = array_field(request, "messages").filter_map(message => {
+                    match message {
+                      { "role": "tool", "content": String(content), .. } =>
+                        Some(content)
+                      _ => None
+                    }
+                  })
+                  assert_eq(outputs.length(), 1)
+                  assert_true(
+                    outputs[0].contains(
+                      "=== \"sample.mbt\" ===\n2 |selected\n3 |last\n",
+                    ),
+                  )
+                  assert_true(
+                    outputs[0].contains(
+                      "start_line=2 shown_lines=2 total_lines=4 truncated=false",
+                    ),
+                  )
+                  assert_true(
+                    outputs[0].contains("=== \"note.txt\" ===\n1 |whole file\n"),
+                  )
+                  tool_delta(step, "finish", {
+                    "answer": "checked the read workflow",
+                  })
+                }
+                _ => fail("Unexpected read workflow request \{step}")
+              }
+            } else {
+              match step {
+                1 => tool_delta(step, "mbtx", { "source": source })
+                2 => {
+                  if controls {
+                    @async.with_timeout(15000, () => {
+                      while !active_snapshot_seen {
+                        snapshot_ready.wait()
+                      }
+                    })
+                  }
+                  job_id = Some(background_id(messages))
+                  { "content": "Waiting for the test result." }
+                }
+                3 => {
+                  assert_true(
+                    messages.contains("Background jobs still need a decision"),
+                  )
+                  guard job_id is Some(id) else {
+                    fail("Missing announced job")
+                  }
+                  tool_delta(step, "job_wait", { "job_ids": [id] })
+                }
+                4 if serve => {
+                  assert_true(messages.contains("user_input"))
+                  assert_true(messages.contains("[goal cleared]"))
+                  assert_true(!@fs.exists(release))
+                  tool_delta(step, "finish", {
+                    "answer": "checked the background result",
+                  })
+                }
+                4 => {
+                  assert_true(messages.contains("job_completed"))
+                  guard job_id is Some(id) else {
+                    fail("Missing announced job")
+                  }
+                  assert_true(
+                    messages.contains("background job \{id} finished"),
+                  )
+                  tool_delta(step, "job_output", { "job_id": id })
+                }
+                5 => {
+                  assert_true(messages.contains("BACKGROUND-RESULT"))
+                  tool_delta(step, "finish", {
+                    "answer": "checked the background result",
+                  })
+                }
+                _ => fail("Unexpected model request \{step}")
+              }
+            }
+            conn.send_response(200, "OK", extra_headers={
+              "Content-Type": "text/event-stream",
+            })
+            let payload : Json = { "choices": [{ "delta": delta }] }
+            conn.write("data: \{payload.stringify()}\n\ndata: [DONE]\n\n")
+            conn.end_response()
+            conn.close()
+            if step == 3 {
+              if serve {
+                send(writer, { "command": "goal", "action": "clear" })
+              } else {
+                @fs.write_file(release, "")
+              }
+            }
+          },
+          max_connections=8,
+          allow_failure=false,
+        )
+      }
+      let command = [
+        if serve {
+          "serve"
+        } else {
+          "run"
+        },
+        "--dir",
+        directory,
+        "--api-key",
+        "test",
+        "--model",
+        "deepseek-v4-flash",
+        "--api-url",
+        "http://127.0.0.1:\{server.addr.port()}/chat/completions",
+        "--max-steps",
+        "8",
+        "--mcp-config",
+        "",
+      ]
+      if controls {
+        command.append(["--session", session_id, "--session-root", store_root])
+      } else {
+        command.push("--no-session")
+      }
+      if !serve {
+        command.push(
+          if read {
+            "Read sample.mbt lines 2 through 3 and all of note.txt, then report the result."
+          } else {
+            "Run a background job and process its result."
+          },
+        )
+      }
+      let process = @process.spawn(
+        group,
+        executable,
+        command,
+        extra_env=environment,
+        stdin=child_stdin,
+        stdout=child_stdout,
+        stderr=child_stderr,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stderr = group.spawn(() => errors.read_all().text())
+      if serve {
+        send(writer, { "command": "prompt", "text": "Run a background job." })
+      } else {
+        writer.close()
+      }
+      while reader.read_until("\n") is Some(line) {
+        if !line.has_prefix("{") {
+          continue
+        }
+        let event = @json.parse(line)
+        events.push(event)
+        if controls &&
+          event is { "event": "job_changed", "kind": "started", "job": job, .. } {
+          let generation = string_field(job, "generation")
+          let path = store_root +
+            "/sessions/" +
+            session_id +
+            "/jobs/" +
+            generation +
+            "/" +
+            string_field(job, "output_file")
+          retained = Some((path, generation))
+          assert_true(@fs.exists(path))
+          assert_true(
+            @fs.read_file(path).text().contains("PERSISTED-PREFIX 你好🙂"),
+          )
+          send(writer, {
+            "command": "jobs_snapshot",
+            "request_id": "active-snapshot",
+          })
+        }
+        if has_event(event, "agent_finished") {
+          if controls {
+            send(writer, {
+              "command": "jobs_snapshot",
+              "request_id": "idle-snapshot",
+            })
+          } else {
+            writer.close()
+          }
+        } else if controls && has_event(event, "jobs_snapshot") {
+          let jobs = array_field(event, "jobs")
+          assert_eq(jobs.length(), 1)
+          let job = jobs[0]
+          match string_field(event, "request_id") {
+            "active-snapshot" | "idle-snapshot" as request => {
+              assert_true(field(job, "state") is { "kind": "running", .. })
+              send(writer, {
+                "command": "job_stop",
+                "request_id": if request == "active-snapshot" {
+                  "active-stale"
+                } else {
+                  "stale-stop"
+                },
+                "generation": "stale-runtime",
+                "job_id": field(job, "id"),
+              })
+            }
+            "final-snapshot" => {
+              assert_eq(field(job, "state"), {
+                "kind": "stopped",
+                "reason": "user",
+              })
+              writer.close()
+            }
+            _ => fail("Unexpected snapshot: \{event.stringify()}")
+          }
+        } else if controls && has_event(event, "job_stop_result") {
+          match string_field(event, "request_id") {
+            "active-stale" => {
+              assert_eq(string_field(event, "outcome"), "wrong_runtime")
+              active_snapshot_seen = true
+              snapshot_ready.signal()
+            }
+            "stale-stop" => {
+              assert_eq(string_field(event, "outcome"), "wrong_runtime")
+              guard retained is Some((_, generation)) && job_id is Some(id) else {
+                fail("Missing retained job")
+              }
+              send(writer, {
+                "command": "job_stop",
+                "request_id": "valid-stop",
+                "generation": generation,
+                "job_id": id,
+              })
+            }
+            "valid-stop" => {
+              assert_eq(string_field(event, "outcome"), "stopped")
+              send(writer, {
+                "command": "jobs_snapshot",
+                "request_id": "final-snapshot",
+              })
+            }
+            _ => fail("Unexpected stop result: \{event.stringify()}")
+          }
+        }
+      }
+      let code = process.wait()
+      let diagnostics = stderr.wait()
+      guard code == 0 else {
+        fail(
+          "CLI exit \{code}: \{diagnostics}\n\{events.to_json().stringify()}",
+        )
+      }
+      assert_eq(requests, if read { 2 } else if serve { 4 } else { 5 })
+      if controls {
+        guard retained is Some((path, generation)) && job_id is Some(id) else {
+          fail("Missing retained job")
+        }
+        assert_eq(@fs.read_file(path).text(), "PERSISTED-PREFIX 你好🙂\n")
+        let changes = events
+          .filter(e => has_event(e, "job_changed"))
+          .map(e => string_field(e, "kind"))
+        assert_eq(changes, ["started", "updated", "finished"])
+        let artifact_dir = store_root +
+          "/sessions/" +
+          session_id +
+          "/jobs/" +
+          generation
+        let metadata = artifact_dir + "/" + id + ".json"
+        let saved = @json.parse(@fs.read_file(metadata).text())
+        assert_eq(field(saved, "state"), { "kind": "stopped", "reason": "user" })
+        let restarted = @shell.Cmd(
+          executable,
+          command,
+          env=environment,
+          stdin=Text(
+            "{\"command\":\"jobs_snapshot\",\"request_id\":\"restart\"}\n",
+          ),
+        ).output(timeout_ms=30000)
+        restarted.check()
+        let snapshots : Array[Json] = []
+        for line in restarted.stdout().split("\n") {
+          if !line.has_prefix("{") {
+            continue
+          }
+          let event = @json.parse(line)
+          if has_event(event, "jobs_snapshot") {
+            snapshots.push(event)
+          }
+        }
+        assert_true(!snapshots.is_empty())
+        assert_eq(array_field(snapshots[0], "jobs"), [])
+        assert_eq(@fs.read_file(path).text(), "PERSISTED-PREFIX 你好🙂\n")
+        assert_eq(@json.parse(@fs.read_file(metadata).text()), saved)
+        assert_eq(
+          @fs.readdir(store_root + "/sessions/" + session_id + "/jobs").length(),
+          1,
+        )
+        println(
+          "PASS: durable serve jobs materialize before announcement, reject stale controls, stop while idle, and survive restart",
+        )
+      }
+    })
+  })
+  let finishes = events.filter(e => has_event(e, "agent_finished"))
+  assert_eq(finishes.length(), 1)
+  assert_eq(
+    string_field(finishes[0], "answer"),
+    if read {
+      "checked the read workflow"
+    } else {
+      "checked the background result"
+    },
+  )
+  if read {
+    let results = events.filter(e => {
+      e is { "event": "tool_result", "tool_name": "mbtx", .. }
+    })
+    assert_eq(results.length(), 1)
+    assert_eq(field(results[0], "is_error"), false)
+  }
+  println(
+    if read {
+      "PASS: real CLI advertises the read workflow, omits read, and returns ranged batch output"
+    } else if serve {
+      "PASS: serve goal clear wakes job_wait while the job is still running"
+    } else {
+      "PASS: real CLI preserves background work through wait, notice, read, and finish"
+    },
+  )
+  job_id
+}
+
+///|
+async fn main {
+  guard @env.args() is [_, executable] else {
+    fail("Usage: moon run tests/integration/turn_finish.mbtx EXE")
+  }
+  let executable = @fs.realpath(executable)
+  let root = @fs.realpath(".")
+  let ids : Array[String] = []
+  for scenario in [Run, Serve, Controls] {
+    guard run_case(executable, root, scenario) is Some(id) else {
+      fail("Missing background job ID")
+    }
+    assert_true(!ids.contains(id))
+    ids.push(id)
+  }
+  println("PASS: independent CLI processes allocate distinct full UUID job IDs")
+  ignore(run_case(executable, root, Read))
+}

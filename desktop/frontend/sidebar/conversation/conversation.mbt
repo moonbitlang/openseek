@@ -351,6 +351,9 @@ pub fn component(
     by=child => child.id(),
   )
   state.map3(input, child_rows, (state, input, child_rows) => {
+    // Opening a workflow child must keep its selected row visible under the parent.
+    let children_open = state.children_open ||
+      input.children.any(child => child.active || child.loading)
     let mut class = "conversation-row"
     if input.nested {
       class += " nested"
@@ -376,11 +379,7 @@ pub fn component(
     } else {
       children.push(
         @html.button(
-          class=if state.children_open {
-            "row-twisty expanded"
-          } else {
-            "row-twisty"
-          },
+          class=if children_open { "row-twisty expanded" } else { "row-twisty" },
           type_="button",
           title=if input.children.length() == 1 {
             "1 subagent run"
@@ -639,7 +638,7 @@ pub fn component(
       children,
     )
     let rows : Array[(String, @html.Html)] = [(input.id.key(), row)]
-    if state.children_open {
+    if children_open {
       for group in child_rows {
         for child in group {
           rows.push(child)

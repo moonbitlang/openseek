@@ -259,6 +259,11 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.fs_browse, async fn(payload) {
       browse_directory_op(payload)
     }),
+    @endpoint.Endpoint::remote(@commands.fs_create_unnamed_workspace, async fn(
+      _,
+    ) {
+      create_unnamed_workspace_op()
+    }),
     @endpoint.Endpoint::remote(@commands.fs_create_directory, async fn(
       payload,
     ) {

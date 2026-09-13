@@ -84,8 +84,8 @@ Run these with the hosted child-agent handoff:
 
 `review.mbtx` launches one `review` child (100-step ceiling). With no
 arguments it audits the standing goal and the baseline it recorded, which the
-engine places in the snippet's environment (`OPENSEEK_GOAL`,
-`OPENSEEK_GOAL_SHA`, `OPENSEEK_GOAL_DIRTY`) when one stands; arguments, joined
+engine places in `WORKFLOW_HOST.openseek.audit` (`goal`, optional `sha` and
+`dirty`) when one stands; arguments, joined
 with spaces, narrow that goal as an audit focus, or are the whole criteria
 when no goal stands. It prints the full report JSON, then a
 `findings=N blockers=M` line, and exits unsuccessfully when any finding is a
@@ -195,3 +195,15 @@ head replacement, external statuses, unknown states, and timeouts. It runs in
 argument forwarding without requiring GitHub credentials.
 
 All bundled-workflow fixtures run in MoonBit; they require no Python runtime.
+
+## Validation
+
+Run `just check-workflows` (`scripts/check-workflows.mbtx`) to type-check every
+`.mbtx` under `share/workflow` against its declared imports with
+`moon check --target wasm --deny-warn`.
+This does not execute the scripts. `just check` includes this gate, and CI
+runs it in the independent `bundled workflow checks` job. Newly added scripts
+are discovered automatically.
+
+`just test-workflows` separately compiles and executes the hosted review,
+repository mapping, change review, and CI watch scripts with offline fixtures.

@@ -9,9 +9,9 @@
 const WorkspaceSettingsFile = "settings.json"
 
 ///|
-/// Existing workspaces and malformed hand-edited settings retain the short
-/// checkout bound chosen for conversation creation.
-const DefaultSubmoduleCheckoutTimeoutSeconds : Int = 10
+/// Workspaces without an override and malformed hand-edited settings use
+/// the default checkout bound for conversation creation.
+const DefaultSubmoduleCheckoutTimeoutSeconds : Int = 30
 
 ///|
 /// Reads and read-modify-write mutations share one process-wide lock, the
@@ -188,10 +188,7 @@ test "workspace settings parse tolerantly and keep unknown fields" {
   }
   let payload = settings_payload(workspace, fields)
   assert_true(payload.checkout_submodules)
-  assert_eq(
-    payload.submodule_checkout_timeout_seconds,
-    DefaultSubmoduleCheckoutTimeoutSeconds,
-  )
+  assert_eq(payload.submodule_checkout_timeout_seconds, 30)
   fields["checkout_submodules"] = false.to_json()
   assert_false(settings_payload(workspace, fields).checkout_submodules)
   fields["submodule_checkout_timeout_seconds"] = Json(30)

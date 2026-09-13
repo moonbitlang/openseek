@@ -1,4 +1,5 @@
 import {
+  "bobzhang/openseek/agent_tool/internal/uuid",
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/agent_tool/write_scope",
   "bobzhang/openseek/agent_subrun/host",

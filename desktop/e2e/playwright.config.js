@@ -32,7 +32,7 @@ export default defineConfig({
   webServer: {
     // Serve Desktop's own tree so the suite exercises the browser artifacts
     // staged by the real Desktop packager, not a test-only copy of the UI.
-    command: `python3 -m http.server ${serverPort} --bind 127.0.0.1 --directory ..`,
+    command: `moon run ../../scripts/serve-static.mbtx .. ${serverPort}`,
     url: `${baseURL}/dist/browser/index.html`,
     reuseExistingServer: Boolean(configuredBaseURL) || !isCI,
     timeout: 60_000,

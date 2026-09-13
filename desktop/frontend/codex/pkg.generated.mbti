@@ -91,6 +91,7 @@ pub fn State::git_details_open(Self) -> Bool
 pub fn State::has_active(Self) -> Bool
 pub fn State::is_busy(Self) -> Bool
 pub fn State::loose_entries(Self, SidebarContext) -> Array[@section.Entry]
+pub fn State::mark_visible_read(Self) -> Self
 pub fn State::model_listing(Self) -> CodexModelListing
 pub fn State::new_thread_cwd(Self) -> String
 pub fn State::not_equal(Self, Self) -> Bool
@@ -98,7 +99,7 @@ pub fn State::page(Self, @cmd.Emit[Msg], @interop.ChannelId, Bool, Bool, PageAct
 pub fn State::pending_auth_url(Self) -> String?
 pub fn State::project_activation(Self, SidebarContext, String) -> String?
 pub fn State::project_conversations(Self, SidebarContext, String) -> Array[CodexProjectRow]
-pub fn State::project_draft(Self, SidebarContext, String) -> @conversation.Input?
+pub fn State::project_draft(Self, SidebarContext, String, include_selected? : Bool) -> @conversation.Input?
 pub fn State::reasoning_effort_chip(Self, Bool) -> @composer.ReasoningSelect?
 pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn State::sign_in_required(Self) -> Bool

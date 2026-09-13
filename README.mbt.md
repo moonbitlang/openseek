@@ -47,8 +47,7 @@ just editor-test-browser
 ```
 
 The CLI lifecycle test (`just test-turn-finish`, also included in `just test`)
-needs Python 3. It uses `python` on Windows and `python3` on macOS/Linux;
-override it with, for example, `just PYTHON="py -3" test-turn-finish`.
+runs as a standalone MoonBit script and needs no Python runtime.
 When passing editor paths containing spaces, quote the whole assignment:
 `just --justfile editor/justfile "ROOT=C:/Users/me/My Project" dev`.
 

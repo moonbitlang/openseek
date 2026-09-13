@@ -1,0 +1,28 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/x/sys",
+}
+
+///|
+/// Type-check bundled workflows without executing their main functions.
+/// Run from the repository root, as with the other maintenance scripts.
+async fn main {
+  let scripts = @fs.readdir("share/workflow", sort=true).filter(name => {
+    name.has_suffix(".mbtx")
+  })
+  guard !scripts.is_empty() else { fail("No bundled workflow scripts found") }
+  for script in scripts {
+    let relative = "share/workflow/\{script}"
+    println("Checking \{relative}")
+    let code = @shell.Cmd("moon", [
+      "check", "--target", "wasm", "--deny-warn", relative,
+    ]).status()
+    if code != 0 {
+      @sys.exit(code)
+    }
+  }
+  println("Checked \{scripts.length()} bundled workflows")
+}

@@ -12,6 +12,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  workflows:
+    name: bundled workflow checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      # Standalone scripts resolve their own declared imports. Check all of them
+      # without executing their main functions or setting up Desktop's runtime.
+      - name: Check all bundled workflow scripts
+        run: moon run scripts/check-workflows.mbtx
+
   sandbox-macos:
     name: sandbox (macOS, native)
     runs-on: macos-latest
@@ -242,7 +264,7 @@ jobs:
         if: matrix.target == 'native'
         run: |
           moon build cmd/openseek --target native
-          python3 tests/integration/turn_finish.py _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+          moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
 
   # cmd/viz_app is a separate MoonBit module and owns its browser test runner.
   # Keep it out of Desktop's recipe so either application can be tested alone.

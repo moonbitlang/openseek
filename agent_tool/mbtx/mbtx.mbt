@@ -130,11 +130,6 @@ pub fn definition(
   approval? : @agent_runtime.ApprovalChannel,
   subrun? : @host.SubrunInjection,
 ) -> @agent_tool.AgentToolDefinition {
-  // Background snippet directories are numbered inside the caller's scratch
-  // dir rather than created as fresh system temp dirs: a detached job outlives
-  // this call, so its snippet, build artifacts, and output log cannot be
-  // removed here — the caller's scratch dir is what eventually reclaims them.
-  let next_background = Ref(0)
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
   let generations : Map[String, Int] = Map([])
@@ -172,7 +167,6 @@ pub fn definition(
         auto_background_after_ms~,
         foreground_timeout_ms~,
         build_timeout_ms~,
-        next_background~,
         generations~,
         approval?,
         subrun?,
@@ -235,7 +229,6 @@ async fn execute(
   auto_background_after_ms~ : Int,
   foreground_timeout_ms~ : Int,
   build_timeout_ms~ : Int,
-  next_background~ : Ref[Int],
   generations~ : Map[String, Int],
   approval? : @agent_runtime.ApprovalChannel,
   subrun? : @host.SubrunInjection,
@@ -433,13 +426,12 @@ async fn execute(
   let policy_active = input.target == "wasm" && !escalated
   let handoff_dir_has_owner = job_dir is Some(_) || scratch_dir is Some(_)
   // A directory that an automatic handoff may give to a job must outlive this
-  // call, so it is numbered inside a caller-owned job dir or scratch lab when
+  // call, so it is UUID-named inside a caller-owned job dir or scratch lab when
   // one exists. Its `tmp` subtree is the snippet's writable result area and may
   // contain paths named in completion output, so only the separate build subtree
   // is reclaimed when a handed-off job becomes terminal.
   let dir = if job_dir is Some(scratch) {
-    let dir = "\{scratch}/snippet-\{next_background.val}"
-    next_background.val += 1
+    let dir = "\{scratch}/snippet-\{@uuid.v7()}"
     @fs.mkdir(dir, recursive=true) catch {
       error if @async.is_being_cancelled() => raise error
       _ =>
@@ -453,8 +445,7 @@ async fn execute(
     // With a lab wired, the snippet builds INSIDE it: the profile re-allows
     // exactly one subtree, and pointing it at the lab then covers both the
     // lab writes the caller sanctioned and moon's own build output.
-    let dir = "\{lab}/mbtx-\{next_background.val}"
-    next_background.val += 1
+    let dir = "\{lab}/mbtx-\{@uuid.v7()}"
     @fs.mkdir(dir, recursive=true) catch {
       error if @async.is_being_cancelled() => raise error
       _ =>
@@ -499,7 +490,7 @@ async fn execute(
   defer cleanup()
   // Keep disposable compiler inputs and artifacts apart from `tmp`, whose
   // result files may need to remain readable after a background job exits.
-  // `dir` is one numbered call directory under `job_dir` or `scratch_dir`,
+  // `dir` is one UUID-named call directory under `job_dir` or `scratch_dir`,
   // or a fresh system temp directory when neither was supplied. Keep moon's
   // target directory in `build/_build`: single-file builds append the input
   // filename, so targeting `build` itself collides with `build/snippet.mbtx`.
