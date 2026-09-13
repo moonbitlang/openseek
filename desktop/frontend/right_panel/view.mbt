@@ -6,6 +6,7 @@ fn panel_view(
   input : Input,
   actions : Actions,
   semantic_review? : @html.Html = @html.nothing,
+  tab_menu? : @html.Html = @html.nothing,
 ) -> @html.Html {
   let chips : Array[@dock.TabChip] = input.dock.tabs.map(tab => {
     match tab {
@@ -120,8 +121,7 @@ fn panel_view(
         menu_open=input.menu_open,
         expanded=input.expanded,
         toggle_menu=actions.toggle_menu,
-        close_all_tabs=actions.close_all_tabs,
-        close_all_tabs_disabled=input.dock.tabs.is_empty(),
+        close_tabs=actions.close_tabs,
         toggle_expanded=actions.toggle_expanded,
         toggle_panel=actions.toggle_panel,
       ),
@@ -153,6 +153,7 @@ fn panel_view(
       @jobs.panel(input.jobs, actions.job_events),
       @workflow.panel(input.workflows, { open_child: actions.open_child, }),
       @dock.launcher_pane(launcher),
+      tab_menu,
     ],
   )
 }

@@ -4,6 +4,8 @@ package "openseek_desktop/frontend/dock"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/action_menu",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
 }
@@ -13,7 +15,11 @@ pub fn active_browser(State) -> Int?
 
 pub fn active_file(State) -> @pathx.Relative?
 
+pub fn active_history_diff(State) -> GitHistoryDiff?
+
 pub fn file_paths(State) -> Array[@pathx.Relative]
+
+pub fn history_diffs(State) -> Array[GitHistoryDiff]
 
 pub fn launcher_pane(LauncherActions) -> @html.Html
 
@@ -21,30 +27,62 @@ pub fn open_browser(State, Int) -> State
 
 pub fn open_file(State, @pathx.Relative) -> State
 
+pub fn open_history_diff(State, GitHistoryDiff) -> State
+
 pub fn open_picker(State) -> State
+
+pub fn open_workflows(State) -> State
 
 pub fn resolve_pick(State, @pathx.Relative) -> State
 
 pub fn sync(State, @interop.ConversationKey) -> State
 
-pub fn tabs_bar(@cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, toggle_expanded~ : @cmd.Cmd, toggle_panel~ : @cmd.Cmd) -> @html.Html
+pub fn tab_menu(State, String, @cmd.Emit[Msg], @cmd.Emit[CloseSelection]) -> @action_menu.Definition?
+
+pub fn tabs_bar(@cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, close_tabs~ : @cmd.Emit[CloseSelection], toggle_expanded~ : @cmd.Cmd, toggle_panel~ : @cmd.Cmd) -> @html.Html
+
+pub fn tabs_to_close(State, CloseSelection) -> Array[DockTab]
 
 pub fn update(Msg, State) -> State
 
 // Errors
 
 // Types and methods
+pub(all) enum CloseSelection {
+  All
+  Others(DockTab)
+  ToLeft(DockTab)
+  ToRight(DockTab)
+}
+
 pub(all) enum DockTab {
   File(path~ : @pathx.Relative)
+  GitDiff(diff~ : GitHistoryDiff)
   Browser(id~ : Int)
   FilePicker
+  Workflows
 } derive(Eq)
+pub fn DockTab::equal(Self, Self) -> Bool
+pub fn DockTab::not_equal(Self, Self) -> Bool
+
+pub(all) struct GitHistoryDiff {
+  commit : String
+  parent : String?
+  path : @pathx.Relative
+  original_path : @pathx.Relative?
+  status : String
+  kind : String
+} derive(Eq, @debug.Debug)
+pub fn GitHistoryDiff::equal(Self, Self) -> Bool
+pub fn GitHistoryDiff::not_equal(Self, Self) -> Bool
+pub fn GitHistoryDiff::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LauncherActions {
   browser : @cmd.Cmd?
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
+  workflows : @cmd.Cmd
 }
 
 pub(all) enum Msg {
@@ -56,6 +94,8 @@ pub(all) struct RememberedStrip {
   tabs : Array[DockTab]
   active : DockTab?
 } derive(Eq)
+pub fn RememberedStrip::equal(Self, Self) -> Bool
+pub fn RememberedStrip::not_equal(Self, Self) -> Bool
 
 pub(all) struct State {
   owner : @interop.ConversationKey?
@@ -64,6 +104,8 @@ pub(all) struct State {
   remembered : Map[@interop.ConversationKey, RememberedStrip]
 } derive(Eq)
 pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
 
 pub(all) struct TabChip {
   tab : DockTab

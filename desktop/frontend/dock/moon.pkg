@@ -5,6 +5,7 @@ import {
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/icons",
+  "openseek_desktop/frontend/action_menu",
 }
 
 import {

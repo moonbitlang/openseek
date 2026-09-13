@@ -121,7 +121,8 @@ button.panel-toggle:not(:disabled):hover {
   cursor: pointer;
   white-space: nowrap;
 }
-.editor-tab:hover {
+.editor-tab:hover,
+.editor-tab[aria-expanded="true"]:not(.active) {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
@@ -426,10 +427,13 @@ html:is(
 .editor.mode-picker.mode-search-picker .viewer-stack::after {
   content: "Select a search result to open";
 }
-/* The strip's new-tab button and its launcher popup. The tabsbar anchors
-   the popup; a click away closes it (see `dismiss_subscription`). */
+/* Keep the launcher attached to + as the panel and tab strip resize. */
 .editor-tabsbar {
   position: relative;
+  anchor-scope: --dock-new-tab;
+}
+.tab-add {
+  anchor-name: --dock-new-tab;
 }
 .tab-action {
   flex: 0 0 auto;
@@ -457,9 +461,16 @@ html:is(
 }
 .dock-menu {
   position: absolute;
-  top: calc(100% - 6px);
-  left: 12px;
-  min-width: 260px;
+  position-anchor: --dock-new-tab;
+  position-area: block-end span-inline-start;
+  /* The popup intentionally extends below its short tab-bar containing block. */
+  align-self: unsafe start;
+  inset: auto;
+  width: max-content;
+  /* 100% spans from the panel's leading edge to the button's trailing edge. */
+  min-width: min(260px, calc(100% - 8px));
+  max-width: calc(100% - 8px);
+  margin: 4px 0 0;
   padding: 5px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
