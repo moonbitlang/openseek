@@ -106,3 +106,22 @@ test('Chats shows the latest three conversations and reveals older chats with Sh
   await expect(page.getByTitle('Show more in Chats', { exact: true })).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('chat storage failure is visible while ordinary projects still load and can be added', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.chatRoot = { error: 'permission denied' };
+  await app.install();
+  await app.goto();
+  await expect(page.getByText('Chats storage unavailable: permission denied', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Add a project', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Add a project' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add project', exact: true })).toBeEnabled();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => app.requests.find(request => request.method === 'workspace.add')).toMatchObject({ params: { path: '/Users/test' } });
+  app.notify('workspace.changed', { workspaces: app.workspaces, chat_root: app.chatRoot });
+  await expect(page.getByRole('button', { name: 'test', exact: true })).toBeVisible();
+  app.notify('workspace.changed', { workspaces: app.workspaces, chat_root: root });
+  await expect(page.getByText('Chats storage unavailable: permission denied', { exact: true })).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});

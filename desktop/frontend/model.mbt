@@ -1256,7 +1256,7 @@ priv struct DeviceState {
   // Registered project directories: the host registry's absolute paths in
   // registration order. The sidebar shows one section per entry.
   projects : Array[@common.Uri]
-  chat_root : @common.Uri?
+  chat_root : Result[@common.Uri, String]?
   // Each project's worktree registry rows, refreshed with the project list
   // and replaced wholesale by `worktree.changed`. The sidebar's name
   // chips read them.
@@ -2258,13 +2258,13 @@ priv enum DeviceMsg {
   // generation rejects an older reply from the current connection.
   ProjectsLoaded(
     Array[@common.Uri],
-    chat_root~ : @common.Uri?,
+    chat_root~ : Result[@common.Uri, String]?,
     connection_generation~ : Int,
     request_generation~ : Int
   )
   // The host's canonical post-commit registry broadcast. Every client adopts
   // the same list in durable write order and invalidates older list replies.
-  ProjectsChanged(Array[@common.Uri], chat_root~ : @common.Uri?)
+  ProjectsChanged(Array[@common.Uri], chat_root~ : Result[@common.Uri, String]?)
   // Our own `workspace.add`'s reply: the canonical list right after the
   // commit, produced under the registry lock. `added` echoes the request's
   // directory, pairing the reply with the confirm that sent it — a reply

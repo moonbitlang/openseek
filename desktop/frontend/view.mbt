@@ -625,7 +625,12 @@ fn Model::sidebar_component_sections(
 fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   let notices : Array[String] = []
   let sections = match self.focused_device() {
-    Some(dev) => self.sidebar_component_sections(dev)
+    Some(dev) => {
+      if dev.chat_root is Some(Err(message)) {
+        notices.push("Chats storage unavailable: \{message}")
+      }
+      self.sidebar_component_sections(dev)
+    }
     None => {
       match self.console {
         Some(console) =>

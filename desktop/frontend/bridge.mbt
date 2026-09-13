@@ -218,13 +218,14 @@ fn device_msg(
         }
         paths.push(resource)
       }
-      let chat_root = match payload.chat_root {
-        Some(path) => {
+      let chat_root : Result[@common.Uri, String]? = match payload.chat_root {
+        Some(Ready(path)) => {
           guard @resource.of_path(channel, path) is Some(root) else {
             return None
           }
-          Some(root)
+          Some(Ok(root))
         }
+        Some(Failed(message)) => Some(Err(message))
         None => None
       }
       Some(ProjectsChanged(paths, chat_root~))

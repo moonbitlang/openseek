@@ -315,6 +315,18 @@ pub fn CancelSearchTextPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CancelSearchTextPayload
 pub impl @json.FromJson for CancelSearchTextPayload
 
+pub(all) enum ChatWorkspaceRoot {
+  Ready(String)
+  Failed(String)
+} derive(Eq, @debug.Debug)
+pub fn ChatWorkspaceRoot::equal(Self, Self) -> Bool
+pub fn ChatWorkspaceRoot::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ChatWorkspaceRoot::not_equal(Self, Self) -> Bool
+pub fn ChatWorkspaceRoot::to_json(Self) -> Json
+pub fn ChatWorkspaceRoot::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ChatWorkspaceRoot
+pub impl @json.FromJson for ChatWorkspaceRoot
+
 pub(all) enum CheckUpdateReply {
   UpToDate
   Available(version~ : String, installable~ : Bool, unavailable_reason~ : String?)
@@ -2701,7 +2713,7 @@ pub fn WorkspaceSymbolsReply::to_repr(Self) -> @debug.Repr
 
 pub(all) struct WorkspacesChangedPayload {
   workspaces : Array[String]
-  chat_root : String?
+  chat_root : ChatWorkspaceRoot?
 } derive(Eq, @debug.Debug)
 pub fn WorkspacesChangedPayload::equal(Self, Self) -> Bool
 pub fn WorkspacesChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2712,7 +2724,7 @@ pub impl ToJson for WorkspacesChangedPayload
 pub impl @json.FromJson for WorkspacesChangedPayload
 
 pub(all) enum WorkspacesReply {
-  Workspaces(Array[String], chat_root~ : String?)
+  Workspaces(Array[String], chat_root~ : ChatWorkspaceRoot?)
   WorkspaceError(String)
 } derive(Eq, @debug.Debug)
 pub fn WorkspacesReply::equal(Self, Self) -> Bool

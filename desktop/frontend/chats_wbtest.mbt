@@ -68,7 +68,7 @@ test "managed chats are flat and user named workspaces remain projects" {
   let model = test_model().with_dev(dev => {
     ..dev,
     projects: [named, managed, prefix_sibling],
-    chat_root: Some(root),
+    chat_root: Some(Ok(root)),
     active_project: Some(managed),
   })
   let model = model.replace_conversation({
@@ -101,7 +101,7 @@ test "stale workspace snapshots cannot move Chats back into Projects" {
   let chat = @interop.ChannelId::Local.test_resource("/app-data/workspaces/one")
   let (_, changed) = update_dev(
     dispatch,
-    ProjectsChanged([chat], chat_root=Some(root)),
+    ProjectsChanged([chat], chat_root=Some(Ok(root))),
     test_model(),
   )
   let (_, stale) = update_dev(
@@ -114,5 +114,51 @@ test "stale workspace snapshots cannot move Chats back into Projects" {
     ),
     changed,
   )
-  assert_eq(stale.dev().chat_root, Some(root))
+  assert_eq(stale.dev().chat_root, Some(Ok(root)))
+}
+
+///|
+test "failed chat metadata preserves ordinary project snapshots and reports its own error" {
+  let dispatch = test_dispatch()
+  let project = @interop.ChannelId::Local.test_resource("/user/project")
+  let (_, loaded) = update_dev(
+    dispatch,
+    ProjectsLoaded(
+      [project],
+      chat_root=Some(Err("permission denied")),
+      connection_generation=0,
+      request_generation=0,
+    ),
+    test_model(),
+  )
+  assert_eq(loaded.dev().projects, [project])
+  assert_true(
+    loaded.sidebar_component_input().notices.contains(
+      "Chats storage unavailable: permission denied",
+    ),
+  )
+  let added = @interop.ChannelId::Local.test_resource("/user/added")
+  let (_, changed) = update_dev(
+    dispatch,
+    ProjectsChanged([project, added], chat_root=Some(Err("permission denied"))),
+    loaded,
+  )
+  assert_eq(changed.dev().projects, [project, added])
+  let (_, removed) = update_dev(
+    dispatch,
+    ProjectsChanged([added], chat_root=Some(Err("permission denied"))),
+    changed,
+  )
+  assert_eq(removed.dev().projects, [added])
+  let (_, recovered) = update_dev(
+    dispatch,
+    ProjectsChanged(
+      [added],
+      chat_root=Some(
+        Ok(@interop.ChannelId::Local.test_resource("/app-data/workspaces")),
+      ),
+    ),
+    removed,
+  )
+  assert_true(recovered.sidebar_component_input().notices.is_empty())
 }
