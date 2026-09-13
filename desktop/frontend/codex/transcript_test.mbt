@@ -123,3 +123,136 @@ test "Codex omits reasoning without visible summary text" {
   )
   assert_eq(items[1].text(), Some("Done."))
 }
+
+///|
+test "Codex marks only the final answer of a successful turn finished" {
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "t",
+      "turns": [
+        {
+          "id": "done",
+          "status": "completed",
+          "items": [
+            {
+              "id": "progress",
+              "type": "agentMessage",
+              "phase": "commentary",
+              "text": "Looking",
+            },
+            {
+              "id": "answer",
+              "type": "agentMessage",
+              "phase": "final_answer",
+              "text": "Result",
+            },
+          ],
+        },
+        {
+          "id": "running",
+          "status": "inProgress",
+          "items": [
+            { "id": "live", "type": "agentMessage", "text": "Still working" },
+          ],
+        },
+      ],
+    },
+  })
+  let items = state.transcript_items()
+  assert_true(items[0].kind is @transcript.Assistant(finished=false, ..))
+  assert_true(items[1].kind is @transcript.Assistant(finished=true, ..))
+  assert_true(items[2].kind is @transcript.Assistant(finished=false, ..))
+}
+
+///|
+test "Codex preserves interrupted failed and answerless boundaries" {
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "t",
+      "turns": [
+        {
+          "id": "stopped",
+          "status": "interrupted",
+          "items": [{ "id": "a", "type": "agentMessage", "text": "Partial" }],
+        },
+        {
+          "id": "failed",
+          "status": "failed",
+          "items": [],
+          "error": { "message": "Unavailable" },
+        },
+        {
+          "id": "empty",
+          "status": "completed",
+          "items": [
+            {
+              "id": "b",
+              "type": "agentMessage",
+              "phase": "commentary",
+              "text": "Checking",
+            },
+          ],
+        },
+        {
+          "id": "legacy",
+          "status": "completed",
+          "items": [
+            { "id": "c", "type": "agentMessage", "text": "Legacy final" },
+          ],
+        },
+      ],
+    },
+  })
+  let items = state.transcript_items()
+  assert_eq(items.length(), 6)
+  assert_true(items[0].kind is @transcript.Assistant(finished=false, ..))
+  assert_true(items[1].kind is @transcript.Failure("Stopped"))
+  assert_true(items[2].kind is @transcript.Failure("Unavailable"))
+  assert_true(items[3].kind is @transcript.Assistant(finished=false, ..))
+  assert_true(items[4].kind is @transcript.TurnEnd)
+  assert_true(items[5].kind is @transcript.Assistant(finished=true, ..))
+}
+
+///|
+test "Codex tool categories use explicit operation metadata" {
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "t",
+      "turns": [
+        {
+          "id": "work",
+          "status": "inProgress",
+          "items": [
+            {
+              "id": "spawn",
+              "type": "collabAgentToolCall",
+              "tool": "spawnAgent",
+              "status": "completed",
+            },
+            {
+              "id": "wait",
+              "type": "collabAgentToolCall",
+              "tool": "wait",
+              "status": "inProgress",
+            },
+            {
+              "id": "mcp",
+              "type": "mcpToolCall",
+              "server": "example",
+              "tool": "read",
+              "status": "completed",
+            },
+          ],
+        },
+      ],
+    },
+  })
+  let names : Array[String] = []
+  for item in state.transcript_items() {
+    if item.kind is @transcript.Assistant(calls=[call], ..) {
+      names.push(call.name)
+    }
+  }
+  // An MCP tool named read is not necessarily a filesystem read.
+  assert_eq(names, ["spawn_agent", "wait_agent", "mcp__example__read"])
+}

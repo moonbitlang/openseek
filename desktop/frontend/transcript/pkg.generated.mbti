@@ -80,6 +80,7 @@ pub(all) enum ItemKind {
   User(String)
   Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool)
   Answer(String)
+  TurnEnd
   Failure(String)
   Notice(label~ : String, brief~ : String?, is_error~ : Bool, body~ : String?)
   Summary(String)

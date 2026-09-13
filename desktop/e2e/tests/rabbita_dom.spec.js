@@ -2186,9 +2186,11 @@ test('pending job waits show descriptions from earlier tool rows', async ({ page
   await app.install();
   await app.goto();
   await app.openSession();
-  const wait = page.locator('details.tool-call').filter({ hasText: 'Waiting for' });
-  await expect(wait.locator('.tool-call-text')).toHaveText(
-    ['Waiting for bg-10: Watch CI on rebased PR 27, bg-11', 'Waiting for bg-11']);
+  const wait = page.locator('details.tool-call').filter({ hasText: 'Wait for' });
+  await expect(wait.locator('.tool-call-text')).toHaveText([
+    'Wait for any of these jobs to complete: "Watch CI on rebased PR 27", bg-11',
+    'Wait for job bg-11 to complete',
+  ]);
   await expect(wait.first()).not.toHaveAttribute('open', '');
   await wait.first().locator('summary').click();
   await expect(wait.first()).toContainText('"job_ids"');

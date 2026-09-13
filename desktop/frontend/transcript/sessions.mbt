@@ -560,6 +560,8 @@ fn SessionTerminalProjection::append_to(
         // A differing terminal message, such as a completion-tool answer,
         // remains a new final bubble.
         items.push({ kind: Answer(message), ts, sequence, })
+      } else {
+        items.push({ kind: TurnEnd, ts, sequence, })
       }
       return false
     }

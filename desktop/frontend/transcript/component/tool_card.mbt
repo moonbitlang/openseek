@@ -15,8 +15,10 @@
 fn custom_card(name : String, arguments : String) -> (String, @html.Html)? {
   match name {
     "mbtx" => mbtx_card(arguments)
-    "edit" => edit_card(arguments).map(card => ("Change", card))
-    "multi_edit" => multi_edit_card(arguments).map(card => ("Changes", card))
+    "edit" | "multi_edit" =>
+      EditChanges::from_arguments(name, arguments).map(changes => {
+        (if name == "edit" { "Change" } else { "Changes" }, changes.render())
+      })
     _ => None
   }
 }

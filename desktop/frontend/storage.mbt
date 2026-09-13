@@ -18,6 +18,7 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           theme=load_setting(ThemeStorageKey),
           font=load_setting(AppFontStorageKey),
           font_size=load_setting(AppFontSizeStorageKey),
+          minimal_transcript=load_setting(MinimalTranscriptStorageKey) == "true",
           fps_overlay_enabled=load_setting(FpsOverlayStorageKey) == "true",
           model=load_setting(ModelStorageKey),
           conversation_models=load_setting(ConversationModelsStorageKey),
@@ -185,4 +186,13 @@ fn save_setting(storage_key : String, value : String) -> Unit {
   ) catch {
     _ => ()
   }
+}
+
+///|
+/// The preference is local to this browser profile, like the other appearance
+/// settings. Constructing this command does not read or write browser state.
+fn save_minimal_transcript(enabled : Bool) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    save_setting(MinimalTranscriptStorageKey, enabled.to_string())
+  })
 }

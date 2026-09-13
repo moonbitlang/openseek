@@ -2589,6 +2589,27 @@ fn CodexItem::tool_name(self : CodexItem) -> String {
   match self.kind {
     "commandExecution" => "shell"
     "fileChange" => "edit"
+    "collabAgentToolCall" =>
+      // The app-server schema identifies the operation explicitly. Do not
+      // infer a spawn from a prompt or from arbitrary tool output.
+      if self.value is Object(fields) &&
+        @jsonx.json_text(fields, "tool") is Some(tool) {
+        match tool {
+          "spawnAgent" => "spawn_agent"
+          "wait" => "wait_agent"
+          _ => self.kind
+        }
+      } else {
+        self.kind
+      }
+    "mcpToolCall" =>
+      if self.value is Object(fields) &&
+        @jsonx.json_text(fields, "server") is Some(server) &&
+        @jsonx.json_text(fields, "tool") is Some(tool) {
+        "mcp__\{server}__\{tool}"
+      } else {
+        self.kind
+      }
     other => other
   }
 }
@@ -2671,7 +2692,13 @@ fn CodexItem::tool_brief(self : CodexItem) -> String? {
       "imageView" => "Viewed image"
       "enteredReviewMode" => "Entered review mode"
       "exitedReviewMode" => "Exited review mode"
-      other => other
+      "collabAgentToolCall" =>
+        match self.tool_name() {
+          "spawn_agent" => "Create subagent"
+          "wait_agent" => "Wait for subagents"
+          name => name
+        }
+      _ => self.tool_name()
     },
   )
 }
@@ -2701,8 +2728,39 @@ pub fn State::transcript_items(
   }
   if self.active_thread() is Some(active) {
     for turn in active.turns {
+      // app-server owns the turn boundary. A commentary message cannot become
+      // the final answer just because it happens to be last in a stopped turn.
+      let mut final_id : String? = None
+      if turn.status == "completed" && turn.error is None {
+        for item in turn.items {
+          if item.kind == "agentMessage" &&
+            !item.text().is_blank() &&
+            item.value is Object(fields) {
+            let phase = @jsonx.json_text(fields, "phase")
+            if phase is None || phase == Some("final_answer") {
+              final_id = Some(item.id)
+            }
+          }
+        }
+      }
       for item in turn.items {
         let transcript_item = item.transcript_item()
+        let transcript_item = if final_id == Some(item.id) &&
+          transcript_item.kind
+          is @transcript.Assistant(reasoning~, prose~, calls~, replay~, ..) {
+          {
+            ..transcript_item,
+            kind: @transcript.Assistant(
+              reasoning~,
+              prose~,
+              calls~,
+              replay~,
+              finished=true,
+            ),
+          }
+        } else {
+          transcript_item
+        }
         // GPT can commit a reasoning item whose only payload is encrypted:
         // until app-server exposes summary text, there is nothing the
         // transcript can display and an empty thought becomes a blank
@@ -2729,6 +2787,22 @@ pub fn State::transcript_items(
           ts: None,
           sequence: None,
         })
+      } else if turn.status == "interrupted" || turn.status == "failed" {
+        items.push({
+          kind: @transcript.Failure(
+            if turn.status == "interrupted" {
+              "Stopped"
+            } else {
+              "Failed"
+            },
+          ),
+          ts: None,
+          sequence: None,
+        })
+      } else if turn.status == "completed" && final_id is None {
+        // Preserve a successful empty turn as a boundary without inventing an
+        // answer or folding its process into a later completed turn.
+        items.push({ kind: @transcript.TurnEnd, ts: None, sequence: None, })
       }
     }
   }

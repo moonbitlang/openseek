@@ -422,6 +422,7 @@ fn Input::empty_content(self : Input) -> EmptyContent {
 
 ///|
 priv enum BlockContent {
+  Minimal(MinimalContent)
   /// Nothing to show: no durable items and nothing streaming.
   Empty(EmptyContent)
   /// One transcript item. `step_label` is the ordinal an OpenSeek provider
@@ -458,6 +459,9 @@ priv enum BlockContent {
 /// response still streaming; or the empty state alone. Vector order determines
 /// visual order; the keys only determine node identity.
 fn stream_blocks(input : Input) -> @vector.Vector[Block] {
+  if input.minimal {
+    return input.minimal_blocks()
+  }
   let stream = TranscriptSectionKey::stream(input)
   // The durable transcript plus client-local notices. Live semantic events
   // never synthesize durable-looking items here; their store commits populate
@@ -545,6 +549,7 @@ fn Block::render(self : Block, actions : Actions) -> @html.Html {
   let on_open = path => (actions.open)(path)
   match self.content {
     Empty(empty) => empty.render(actions)
+    Minimal(content) => content.render(actions)
     Item(
       item~,
       anchor~,

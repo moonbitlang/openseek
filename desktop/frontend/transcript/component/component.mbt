@@ -68,6 +68,7 @@ pub(all) enum ScrollPosition {
 /// transcript subtree and its scroll behavior.
 struct Input {
   dark_mode : Bool
+  minimal : Bool
   source : Source
   focused : @interop.ChannelId
   active_session : String
@@ -105,6 +106,7 @@ struct Input {
 ///|
 pub fn Input::Input(
   dark_mode? : Bool = false,
+  minimal? : Bool = false,
   source~ : Source,
   focused~ : @interop.ChannelId,
   active_session~ : String,
@@ -124,6 +126,7 @@ pub fn Input::Input(
 ) -> Input {
   {
     dark_mode,
+    minimal,
     source,
     focused,
     active_session,
@@ -220,7 +223,11 @@ fn Model::update(
         commands.push(scroll_after_render())
       }
       commands.push(
-        report_visible_turn_after_render(emit, current=self.overview.active),
+        report_visible_turn_after_render(
+          emit,
+          current=self.overview.active,
+          unpinned=!self.pinned,
+        ),
       )
       commands.push(self.images.apply_after_render())
       (self, @cmd.batch(commands))
@@ -552,9 +559,12 @@ fn scroll_turn_into_view(
 ///|
 /// Re-read the overview highlight after content or geometry changed. `current`
 /// is the Model's active turn; an unchanged reading is not re-reported.
+/// Folding content can put an unpinned reader at the bottom without changing
+/// scrollTop, so no scroll event arrives to clear the jump-to-latest button.
 fn report_visible_turn_after_render(
   emit : @cmd.Emit[Msg],
   current~ : @transcript_overview.TurnKey?,
+  unpinned? : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
@@ -563,6 +573,9 @@ fn report_visible_turn_after_render(
         return
       }
       let active = visible_turn(transcript)
+      if unpinned && scroll_position(transcript) is Pinned {
+        scheduler.add(emit(Pinned(true)))
+      }
       if active != current {
         scheduler.add(emit(Overview(ActiveChanged(active))))
       }
@@ -783,6 +796,8 @@ fn TranscriptDomMount::observe_content(
       subtree=true,
       attribute_filter=[
         "data-transcript-diagram", "data-transcript-diagram-source", "data-transcript-theme",
+        // Native disclosures change layout without adding/removing children.
+         "open",
       ],
     )
   }

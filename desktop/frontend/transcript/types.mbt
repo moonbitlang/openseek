@@ -31,6 +31,9 @@ pub(all) enum ItemKind {
   // the preceding response's prose: a completion-tool answer, or the
   // context-ceiling guidance.
   Answer(String)
+  // A successful terminal with no final text still closes a turn. Keep this
+  // boundary so a later answer cannot fold an earlier unfinished-looking run.
+  TurnEnd
   // A turn that ended without an answer — an abort/cancel/failure terminal —
   // or a notice the frontend raised itself. It wears the assistant's bubble
   // but renders as plain red text, never markdown: an error's own `*` and
@@ -92,6 +95,7 @@ pub fn TranscriptItem::text(self : TranscriptItem) -> String? {
     User(text) | Answer(text) | Failure(text) | Summary(text) => Some(text)
     Assistant(prose~, ..) => prose
     Notice(body~, ..) => body
+    TurnEnd => None
   }
 }
 
