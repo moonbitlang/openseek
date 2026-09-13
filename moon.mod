@@ -1,12 +1,12 @@
 name = "bobzhang/openseek"
 
-version = "0.3.1"
+version = "0.3.2"
 
 import {
   "moonbitlang/async@0.21.1",
   "moonbitlang/x@0.4.50",
   "moonbitlang/jsonl@0.2.0",
-  "bobzhang/openseek_protocol@0.1.1",
+  "bobzhang/openseek_protocol@0.1.2",
   "moonbit-community/rabbita@0.15.7",
   "moonbitlang/editor@0.4.5",
   "moonbitlang/workflow@0.7.1",

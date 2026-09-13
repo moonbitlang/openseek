@@ -22,7 +22,7 @@ DEEPSEEK=sk-... moonx bobzhang/openseek/cmd/openseek run --no-session 'summarize
 
 The coordinate is the package path, not the module: `bobzhang/openseek` alone
 resolves to the root package, which is not an executable. Pin a release with
-`bobzhang/openseek/cmd/openseek@0.3.1`, or take the newest with `@latest`.
+`bobzhang/openseek/cmd/openseek@0.3.2`, or take the newest with `@latest`.
 Subprocesses, the filesystem, and HTTPS all work under `moonrun`, so the wasm
 binary drives the same tools as the native one.
 
