@@ -173,3 +173,16 @@ fn failure_stage_class(
     Some(RuntimeError) | None => ""
   }
 }
+
+///|
+/// Replace only the tool caption; recorded names and payloads stay intact.
+fn tool_display_label(name : String, label : String) -> String {
+  guard name == "mbtx" else { return label }
+  if label == "mbtx" {
+    "🐇"
+  } else if label.strip_prefix("mbtx ") is Some(rest) {
+    "🐇 \{rest}"
+  } else {
+    label
+  }
+}

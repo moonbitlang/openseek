@@ -302,15 +302,15 @@ fn tool_request_view(
     _ => None
   }
   let label = if background_job_id is Some(_) {
-    "mbtx → background"
+    "🐇 → background"
   } else if brief is Some(brief) && !brief.is_blank() {
-    brief
+    tool_display_label(name, brief)
   } else if wait_label is Some(label) {
     label
   } else if pending_job_wait_label(call) is Some(label) {
     label
   } else {
-    name
+    tool_display_label(name, name)
   }
   let label = if name == "mbtx" && card_fields(arguments) is Some(fields) {
     match fields.get("description") {
@@ -475,12 +475,14 @@ fn result_row_view(
   subrun? : SubrunLink,
   status? : ToolStatus,
 ) -> @html.Html {
+  let display_name = tool_display_label(name, name)
   let label = match (arguments, brief, pending) {
-    (None, Some(brief), _) if !brief.is_blank() => brief
-    (None, _, _) => name
-    (_, _, true) => "Tool output · \{name}"
-    _ if is_error => "Tool error · \{name}"
-    _ => name
+    (None, Some(brief), _) if !brief.is_blank() =>
+      tool_display_label(name, brief)
+    (None, _, _) => display_name
+    (_, _, true) => "Tool output · \{display_name}"
+    _ if is_error => "Tool error · \{display_name}"
+    _ => display_name
   }
   let error_class = (if is_error { " error" } else { "" }) +
     failure_stage_class(name, brief, is_error)
