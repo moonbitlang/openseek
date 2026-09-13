@@ -40,7 +40,8 @@ proposal for scheduled continuation of existing conversations.
 - The Scheduled page shows lightweight running status and stop controls.
   Open session reuses the existing transcript viewer during and after a run.
   The host follower tails durable CLI events; an operation lease prevents a
-  second writer or archive from racing the CLI.
+  second writer or archive from racing the CLI. The composer is read-only
+  while a scheduled run is active; host status refresh restores it on completion.
   View log also works for failures before a session was created. Large logs
   use the existing file-read size limit and remain available at their path.
 - CLI sessions become visible once their durable record exists.

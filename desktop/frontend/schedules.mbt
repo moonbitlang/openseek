@@ -291,9 +291,14 @@ fn update_schedules(
       (@cmd.batch([placement_cmd, open_cmd]), opened)
     }
     Poll => {
-      guard model.screen is Schedules else { return (@cmd.none, model) }
-      if page.owner != Some(model.focused) {
-        return open_schedules(dispatch, model)
+      guard model.wants_schedule_updates() else { return (@cmd.none, model) }
+      let model = if page.owner != Some(model.focused) {
+        {
+          ..model,
+          schedules: { ..SchedulePage::empty(), sequence: page.sequence + 1, },
+        }
+      } else {
+        model
       }
       request_schedules(dispatch, model, List)
     }
@@ -469,4 +474,32 @@ fn update_schedules(
       )
     }
   }
+}
+
+///|
+// A scheduled CLI accepts no follow-up input. Until its host snapshot arrives,
+// a scheduled session remains read-only rather than exposing a dead composer.
+fn Model::scheduled_session_read_only(
+  self : Model,
+  conv : Conversation,
+) -> Bool {
+  if self.schedules.owner == Some(conv.device) {
+    if self.schedules.snapshot.runs
+      .iter()
+      .find_first(run => run.session == conv.session_id)
+      is Some(run) {
+      return run.status is Running
+    }
+  }
+  conv.session_id.has_prefix("scheduled-")
+}
+
+///|
+fn Model::wants_schedule_updates(self : Model) -> Bool {
+  self.screen is Schedules ||
+  (
+    self.screen is Chat &&
+    self.active_conversation() is Some(conv) &&
+    self.scheduled_session_read_only(conv)
+  )
 }

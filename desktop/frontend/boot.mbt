@@ -513,7 +513,7 @@ pub fn boot() -> Unit {
             emit.map(msg => FileEditor(msg)),
           ),
         )
-        if model.screen is Schedules {
+        if model.wants_schedule_updates() {
           subs.push(@sub.every(2000, emit(SchedulePage(Poll))))
         }
         subs.push(@jobs.subscriptions(model.jobs, emit.map(msg => Jobs(msg))))

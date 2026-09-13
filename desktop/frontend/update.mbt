@@ -3663,7 +3663,7 @@ fn update_msg(
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
-      if conv.is_archived_read_only() {
+      if conv.is_archived_read_only() || model.scheduled_session_read_only(conv) {
         return (@cmd.none, model)
       }
       let checkout = model.conversation_placement(conv)
@@ -4793,7 +4793,7 @@ fn update_msg(
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
-      if conv.is_archived_read_only() {
+      if conv.is_archived_read_only() || model.scheduled_session_read_only(conv) {
         return (@cmd.none, model)
       }
       guard conv.goal_edit is Some(edit) else { return (@cmd.none, model) }
@@ -6739,7 +6739,7 @@ fn update_device_msg(
     SessionsChanged(change~, key~, fresh_session~) => {
       let (sessions, model) = request_sessions_refresh(dispatch, channel, model)
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
-      let (schedules, model) = if model.screen is Schedules &&
+      let (schedules, model) = if model.wants_schedule_updates() &&
         model.focused == channel {
         request_schedules(dispatch, model, List)
       } else {

@@ -149,6 +149,12 @@ for (const broadcastDirectory of [true, false]) {
     await expect(page.getByText('Waiting for workspace placement…', { exact: true })).toHaveCount(0);
     await expect(page.locator('#transcript')).toBeVisible();
     await expect(page.locator('#transcript')).toContainText('Browser result');
+    await expect(page.getByText('Scheduled task · Read only while running', { exact: true })).toBeVisible();
+    await expect(page.locator('textarea#task')).toHaveCount(0);
+    const submissionsBefore = app.requests.filter(r => ['agent.start', 'agent.send', 'agent.goal'].includes(r.method)).length;
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Control+Enter');
+    expect(app.requests.filter(r => ['agent.start', 'agent.send', 'agent.goal'].includes(r.method)).length).toBe(submissionsBefore);
     const readsBefore = app.requests.filter(r => r.method === 'session.load').length;
     let sequence = Math.max(...app.sessionEvents.map(e => e.sequence));
     for (const content of ['Automatic live update one', 'Automatic live update two']) {
@@ -157,6 +163,12 @@ for (const broadcastDirectory of [true, false]) {
       await expect(page.locator('#transcript')).toContainText(content);
     }
     expect(app.requests.filter(r => r.method === 'session.load').length).toBe(readsBefore);
+    app.schedules.runs[0].status = { kind: 'succeeded' };
+    app.schedules.runs[0].finished_at = Date.now();
+    app.notify('session.changed', { change: 'created', session: 'session-1', workspace });
+    await expect(page.locator('textarea#task')).toBeVisible();
+    await expect(page.getByText('Scheduled task · Read only while running', { exact: true })).toHaveCount(0);
+    app.schedules.runs[0].status = { kind: 'running' };
     await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Running', exact: true }).getByRole('button', { name: 'Open session' })).toBeVisible();
     app.schedules.runs[0].status = { kind: 'succeeded' };

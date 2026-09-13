@@ -1792,6 +1792,20 @@ fn view(
             transcript_html,
             if conv.is_archived_read_only() {
               conv.archived_read_only_view(dispatch)
+            } else if model.scheduled_session_read_only(conv) {
+              @html.div(class="composer archived-read-only", [
+                @html.div(class="archived-read-only-bar", [
+                  @html.span(
+                    class="archived-read-only-text",
+                    "Scheduled task · Read only while running",
+                  ),
+                  @html.button(
+                    class="archived-read-only-restore",
+                    on_click=dispatch(OpenSchedules),
+                    "View task",
+                  ),
+                ]),
+              ])
             } else {
               composer_html
             },
