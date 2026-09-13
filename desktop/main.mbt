@@ -245,6 +245,7 @@ async fn main {
             )
           })
         })
+        group.spawn_bg(allow_failure=true, () => state.run_schedules())
         @host.spawn_host_pumps(group, state.host_state(), notification => {
           state.publish(notification)
         })

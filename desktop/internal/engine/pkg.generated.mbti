@@ -2,6 +2,8 @@
 package "openseek_desktop/internal/engine"
 
 import {
+  "moonbitlang/async",
+  "moonbitlang/async/process",
   "moonbitlang/core/debug",
   "openseek_desktop/internal/pathx",
   "openseek_desktop/internal/protocol",
@@ -93,6 +95,20 @@ type EngineManager
 pub fn EngineManager::worktree_host(Self) -> @worktree.WorktreeHost
 
 pub(all) struct EventSink((EngineEvent) -> Unit)
+
+pub struct Schedules {
+  manager : EngineManager
+  directory : @pathx.Path?
+  lock : @async.Mutex
+  mut state : @protocol.SchedulesReply?
+  processes : Map[String, @process.Process]
+  stopped : Map[String, Unit]
+}
+pub fn Schedules::Schedules(EngineManager, @pathx.Path?) -> Self
+pub async fn Schedules::action(Self, @protocol.ScheduleActionPayload) -> @protocol.SchedulesReply
+pub async fn Schedules::list(Self) -> @protocol.SchedulesReply
+pub async fn Schedules::run(Self, on_run_changed~ : (@protocol.ScheduleRun) -> Unit, sink~ : EventSink, on_workspaces~ : (Array[String]) -> Unit) -> Unit
+pub async fn Schedules::save(Self, @protocol.ScheduleSavePayload) -> @protocol.SchedulesReply
 
 pub(all) struct SettingsPatch {
   provider : String?

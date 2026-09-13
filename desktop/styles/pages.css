@@ -750,3 +750,20 @@ h2 {
   font-size: var(--font-size-xs);
   white-space: nowrap;
 }
+
+/* Scheduled tasks share the Settings page's type scale and theme. */
+.schedules-page { max-width: 900px; }
+.schedule-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.schedule-card, .schedule-form { border: 1px solid var(--color-border); border-radius: 10px; padding: 18px; margin: 16px 0; }
+.schedule-card h2, .schedule-card h3 { margin: 0 0 8px; font-size: 16px; }
+.schedule-meta, .schedule-log, .schedule-empty { color: var(--color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
+.schedule-task { white-space: pre-wrap; overflow-wrap: anywhere; }
+.schedule-field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.schedule-field input, .schedule-field select, .schedule-field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 9px; color: inherit; background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; font: inherit; }
+.schedule-field textarea { min-height: 100px; resize: vertical; }
+.schedule-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.schedule-error { padding: 12px; border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-danger); }
+.schedule-history-title { margin-top: 32px; }
+@media (max-width: 640px) { .schedule-form-grid { grid-template-columns: 1fr; gap: 0; } }
+
+.schedule-log-content { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--font-size-sm) var(--font-mono); }

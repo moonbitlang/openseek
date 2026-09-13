@@ -1114,6 +1114,7 @@ priv enum Screen {
   Chat
   Codex
   Skills
+  Schedules
   Settings
   WorkspaceSettings(channel~ : @interop.ChannelId, workspace~ : @common.Uri)
 } derive(Eq)
@@ -1548,6 +1549,7 @@ priv struct Model {
   codex : @codex.State
   // The Skills page's own state — the registry catalog, the search filter,
   // in-flight actions, the last failure — which only that page can see.
+  schedules : SchedulePage
   skills : @skills.State
   // The focused host's skills library. Root-owned rather than page-owned
   // because the composer's `$` completion reads the same list, which is why
@@ -1875,6 +1877,8 @@ priv enum Msg {
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
   SaveApiKey
+  OpenSchedules
+  SchedulePage(SchedulePageMsg)
   OpenSkills
   // Everything the Skills page does with itself once it is open.
   Skills(@skills.Msg)
@@ -2661,6 +2665,7 @@ fn initial_model() -> Model {
     conversation_load_failure: None,
     screen: Chat,
     codex: @codex.State(),
+    schedules: SchedulePage::empty(),
     skills: @skills.State::empty(),
     installed_skills: [],
     composer_context_generation: 0,

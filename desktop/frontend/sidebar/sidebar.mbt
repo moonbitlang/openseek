@@ -21,6 +21,7 @@ pub(all) struct Input {
   sections : Array[@section.Input]
   update_label : String?
   update_enabled : Bool
+  schedules_active : Bool
   skills_active : Bool
   settings_active : Bool
   account : Account?
@@ -29,6 +30,7 @@ pub(all) struct Input {
 ///|
 pub(all) struct Actions {
   update : @cmd.Cmd
+  open_schedules : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
   refresh_account : @cmd.Cmd
@@ -170,6 +172,24 @@ pub fn component(
         [
           @html.span(class="sidebar-icon", @icons.icon(@icons.icon_extensions)),
           @html.span(class="sidebar-label", "Skills"),
+        ],
+      ),
+    )
+    footer.push(
+      @html.button(
+        class=if input.schedules_active {
+          "sidebar-button active"
+        } else {
+          "sidebar-button"
+        },
+        on_click=actions.open_schedules,
+        [
+          @html.span(
+            class="sidebar-icon",
+            attrs=@html.Attrs::build().aria_hidden("true"),
+            "◷",
+          ),
+          @html.span(class="sidebar-label", "Scheduled"),
         ],
       ),
     )

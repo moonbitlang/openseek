@@ -20,6 +20,8 @@ pub fn global_store_root(payload_root? : @pathx.Path) -> @pathx.Absolute?
 
 pub async fn initialize() -> @pathx.Absolute?
 
+pub async fn register_task_directory(@pathx.Absolute, on_committed? : (Array[@pathx.Absolute]) -> Unit raise) -> Unit
+
 pub async fn registered() -> Array[@pathx.Absolute]
 
 pub async fn registered_dir(@pathx.Absolute) -> @pathx.Absolute?

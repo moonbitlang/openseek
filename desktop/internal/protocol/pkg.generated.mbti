@@ -1875,6 +1875,122 @@ pub fn RunsReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for RunsReply
 pub impl @json.FromJson for RunsReply
 
+pub(all) struct ScheduleActionPayload {
+  id : String
+  action : String
+} derive(Eq, @debug.Debug)
+pub fn ScheduleActionPayload::equal(Self, Self) -> Bool
+pub fn ScheduleActionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleActionPayload::not_equal(Self, Self) -> Bool
+pub fn ScheduleActionPayload::to_json(Self) -> Json
+pub fn ScheduleActionPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ScheduleActionPayload
+pub impl @json.FromJson for ScheduleActionPayload
+
+pub(all) struct ScheduleEntry {
+  id : String
+  spec : ScheduleSpec
+  enabled : Bool
+  run_requested : Bool
+  notice : String?
+  next_at : Int64?
+} derive(Eq, @debug.Debug)
+pub fn ScheduleEntry::equal(Self, Self) -> Bool
+pub fn ScheduleEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleEntry::not_equal(Self, Self) -> Bool
+pub fn ScheduleEntry::to_json(Self) -> Json
+pub fn ScheduleEntry::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ScheduleEntry
+pub impl @json.FromJson for ScheduleEntry
+
+pub(all) struct ScheduleRun {
+  id : String
+  schedule_id : String
+  name : String
+  workspace : String
+  session : String
+  started_at : Int64
+  finished_at : Int64?
+  status : ScheduleRunStatus
+  log_path : String
+} derive(Eq, @debug.Debug)
+pub fn ScheduleRun::equal(Self, Self) -> Bool
+pub fn ScheduleRun::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleRun::not_equal(Self, Self) -> Bool
+pub fn ScheduleRun::to_json(Self) -> Json
+pub fn ScheduleRun::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ScheduleRun
+pub impl @json.FromJson for ScheduleRun
+
+pub(all) enum ScheduleRunStatus {
+  Running
+  Succeeded
+  Failed(String)
+  Stopped
+  TimedOut
+  Interrupted
+} derive(Eq, @debug.Debug)
+pub fn ScheduleRunStatus::equal(Self, Self) -> Bool
+pub fn ScheduleRunStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleRunStatus::not_equal(Self, Self) -> Bool
+pub fn ScheduleRunStatus::to_json(Self) -> Json
+pub fn ScheduleRunStatus::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ScheduleRunStatus
+pub impl @json.FromJson for ScheduleRunStatus
+
+pub(all) struct ScheduleSavePayload {
+  id : String?
+  spec : ScheduleSpec
+  run_now : Bool
+} derive(Eq, @debug.Debug)
+pub fn ScheduleSavePayload::equal(Self, Self) -> Bool
+pub fn ScheduleSavePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleSavePayload::not_equal(Self, Self) -> Bool
+pub fn ScheduleSavePayload::to_json(Self) -> Json
+pub fn ScheduleSavePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ScheduleSavePayload
+pub impl @json.FromJson for ScheduleSavePayload
+
+pub(all) struct ScheduleSpec {
+  name : String
+  workspace : String?
+  task : String
+  model : String?
+  timing : ScheduleTiming
+  timeout_minutes : Int
+} derive(Eq, @debug.Debug)
+pub fn ScheduleSpec::equal(Self, Self) -> Bool
+pub fn ScheduleSpec::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleSpec::not_equal(Self, Self) -> Bool
+pub fn ScheduleSpec::to_json(Self) -> Json
+pub fn ScheduleSpec::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ScheduleSpec
+pub impl @json.FromJson for ScheduleSpec
+
+pub(all) enum ScheduleTiming {
+  Once(Int64)
+  Every(Int)
+} derive(Eq, @debug.Debug)
+pub fn ScheduleTiming::equal(Self, Self) -> Bool
+pub fn ScheduleTiming::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ScheduleTiming::not_equal(Self, Self) -> Bool
+pub fn ScheduleTiming::to_json(Self) -> Json
+pub fn ScheduleTiming::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ScheduleTiming
+pub impl @json.FromJson for ScheduleTiming
+
+pub(all) struct SchedulesReply {
+  entries : Array[ScheduleEntry]
+  runs : Array[ScheduleRun]
+} derive(Eq, @debug.Debug)
+pub fn SchedulesReply::equal(Self, Self) -> Bool
+pub fn SchedulesReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SchedulesReply::not_equal(Self, Self) -> Bool
+pub fn SchedulesReply::to_json(Self) -> Json
+pub fn SchedulesReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SchedulesReply
+pub impl @json.FromJson for SchedulesReply
+
 pub(all) struct SearchFilesPayload {
   path : String
   cache_key : String

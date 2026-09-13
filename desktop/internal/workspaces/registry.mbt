@@ -435,3 +435,29 @@ async test "workspace identity follows symlinks and survives deletion" {
 
 ///|
 pub extend WorkspaceError with Debug::{to_repr}
+
+///|
+/// Index a host-created task folder for session discovery. This is a plain
+/// directory, so no Git project or worktree checks apply.
+pub async fn register_task_directory(
+  dir : @pathx.Absolute,
+  on_committed? : (Array[@pathx.Absolute]) -> Unit raise,
+) -> Unit {
+  guard @fsx.is_dir(dir.to_path()) else {
+    raise WorkspaceError("Task working directory is unavailable")
+  }
+  let canonical = canonical_path(dir)
+  workspace_registry_lock.acquire()
+  defer workspace_registry_lock.release()
+  let registry = read_registry_unlocked()
+  let paths = registry.workspaces.copy()
+  @async.protect_from_cancel(() => {
+    if !paths.contains(canonical) {
+      paths.push(canonical)
+      write_registry({ ..registry, workspaces: paths, })
+    }
+    if on_committed is Some(notify) {
+      notify(paths)
+    }
+  })
+}

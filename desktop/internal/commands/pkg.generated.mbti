@@ -187,6 +187,12 @@ pub let moonide_references : Command[@protocol.MoonIdeNavigationPayload, @protoc
 
 pub let pattern_repair : Command[@protocol.PatternRepairPayload, @protocol.PatternRepairReply]
 
+pub let schedules_action : Command[@protocol.ScheduleActionPayload, @protocol.SchedulesReply]
+
+pub let schedules_list : Command[@protocol.EmptyPayload, @protocol.SchedulesReply]
+
+pub let schedules_save : Command[@protocol.ScheduleSavePayload, @protocol.SchedulesReply]
+
 pub let session_archive : Command[@protocol.SessionPayload, @protocol.ArchiveReply]
 
 pub let session_delete_archived : Command[@protocol.ArchivedSessionPayload, @protocol.SessionsReply]

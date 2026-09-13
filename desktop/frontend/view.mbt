@@ -680,6 +680,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     sections,
     update_label,
     update_enabled: self.update_ux is UpdateAvailable(..),
+    schedules_active: self.screen is Schedules,
     skills_active: self.screen is Skills,
     settings_active: self.screen is Settings,
     account,
@@ -1767,7 +1768,7 @@ fn view(
   // treat only its otherwise-empty top edge as window chrome.
   let window_titlebar_page = match model.screen {
     Chat => model.active_conversation() is None
-    Skills | Settings | WorkspaceSettings(..) => true
+    Skills | Schedules | Settings | WorkspaceSettings(..) => true
     Codex => false
   }
   let window_titlebar_drag_strip = window_titlebar_drag_strip_visible(
@@ -1810,6 +1811,7 @@ fn view(
           composer: codex_composer_html,
         },
       )
+    Schedules => [schedules_page(dispatch, model)]
     Skills => [skills_html]
     Settings => [settings_page(dispatch, model)]
     WorkspaceSettings(..) => [workspace_settings_html]

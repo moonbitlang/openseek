@@ -23,6 +23,7 @@ struct ApiState {
   // same Send returns this exact task instead of creating an orphan sibling.
   codex_draft_threads : CodexDraftThreads
   engine : @engine.EngineActor
+  schedules : @engine.Schedules
   manager : @engine.EngineManager
   host : @host.HostState
   hub : Hub
@@ -274,6 +275,7 @@ pub fn ApiState::ApiState(
     codex_draft_threads: CodexDraftThreads(),
     engine: engine_actor,
     manager: engine_actor.manager(),
+    schedules: Schedules(engine_actor.manager(), runtime_dir),
     host: @host.new_host_state(engine, runtime_dir?, executable?, app_version~),
     hub: Hub(),
     auth: match auth {
@@ -529,6 +531,15 @@ pub fn endpoints(
           publish_worktree_changed(state, workspace, worktrees)
         },
       )
+    }),
+    @endpoint.Endpoint::remote(@commands.schedules_list, async fn(_) {
+      state.schedules.list()
+    }),
+    @endpoint.Endpoint::remote(@commands.schedules_save, async fn(payload) {
+      state.schedules.save(payload)
+    }),
+    @endpoint.Endpoint::remote(@commands.schedules_action, async fn(payload) {
+      state.schedules.action(payload)
     }),
     @endpoint.Endpoint::remote(@commands.settings_get, async fn(_) {
       @engine.settings_status(state.manager)
@@ -1269,5 +1280,19 @@ fn publish_worktree_changed(
 ) -> Unit {
   state.hub.publish(
     WorktreeChanged({ workspace: workspace.trim().to_owned(), worktrees, }),
+  )
+}
+
+///|
+pub async fn ApiState::run_schedules(self : ApiState) -> Unit {
+  let chat_root = Some(@host.chat_workspace_root())
+  self.schedules.run(
+    sink=self.sink(),
+    on_workspaces=workspaces => {
+      self.hub.publish(WorkspaceChanged({ workspaces, chat_root, }))
+    },
+    on_run_changed=run => {
+      publish_session_changed(self, "created", run.session, run.workspace)
+    },
   )
 }

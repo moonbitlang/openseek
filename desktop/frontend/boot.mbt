@@ -362,6 +362,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
   }
   {
     update: self.emit(UpdateClicked),
+    open_schedules: self.emit(OpenSchedules),
     open_skills: self.emit(OpenSkills),
     open_settings: self.emit(OpenSetup),
     refresh_account: self.emit(Console(RefreshClicked)),
@@ -512,6 +513,9 @@ pub fn boot() -> Unit {
             emit.map(msg => FileEditor(msg)),
           ),
         )
+        if model.screen is Schedules {
+          subs.push(@sub.every(2000, emit(SchedulePage(Poll))))
+        }
         subs.push(@jobs.subscriptions(model.jobs, emit.map(msg => Jobs(msg))))
         @sub.batch(subs)
       },

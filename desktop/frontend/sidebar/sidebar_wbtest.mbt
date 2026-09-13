@@ -24,6 +24,7 @@ test "the sidebar input keeps peer sections in one component value" {
     ],
     update_label: None,
     update_enabled: false,
+    schedules_active: false,
     skills_active: false,
     settings_active: false,
     account: None,

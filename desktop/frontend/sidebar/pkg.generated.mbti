@@ -29,6 +29,7 @@ pub fn Account::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Actions {
   update : @cmd.Cmd
+  open_schedules : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
   refresh_account : @cmd.Cmd
@@ -41,6 +42,7 @@ pub(all) struct Input {
   sections : Array[@section.Input]
   update_label : String?
   update_enabled : Bool
+  schedules_active : Bool
   skills_active : Bool
   settings_active : Bool
   account : Account?

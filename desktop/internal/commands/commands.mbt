@@ -773,3 +773,21 @@ pub let jobs_read : Command[@protocol.JobReadPayload, @protocol.JobReadReply] = 
 pub let jobs_stop : Command[@protocol.JobTarget, @protocol.JobStopReply] = Command(
   "jobs.stop",
 )
+
+///|
+pub let schedules_list : Command[
+  @protocol.EmptyPayload,
+  @protocol.SchedulesReply,
+] = Command("schedules.list")
+
+///|
+pub let schedules_save : Command[
+  @protocol.ScheduleSavePayload,
+  @protocol.SchedulesReply,
+] = Command("schedules.save")
+
+///|
+pub let schedules_action : Command[
+  @protocol.ScheduleActionPayload,
+  @protocol.SchedulesReply,
+] = Command("schedules.action")

@@ -1589,7 +1589,7 @@ fn desired_browser_view(model : Model) -> Int? {
   let git_details_open = match model.screen {
     Chat => model.git_details_open
     Codex => model.codex.git_details_open()
-    Skills | Settings | WorkspaceSettings(..) => false
+    Skills | Schedules | Settings | WorkspaceSettings(..) => false
   }
   guard model.is_desktop &&
     conversation_screen &&
@@ -2676,7 +2676,8 @@ fn update_msg(
             model,
           )
         }
-        Skills | Settings | WorkspaceSettings(..) => (@cmd.none, model)
+        Skills | Schedules | Settings | WorkspaceSettings(..) =>
+          (@cmd.none, model)
       }
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
@@ -3623,6 +3624,8 @@ fn update_msg(
         }
       }
     }
+    OpenSchedules => open_schedules(dispatch, model)
+    SchedulePage(msg) => update_schedules(dispatch, msg, model)
     OpenSkills => {
       // The page decides whether its catalog still needs fetching; the
       // installed list is the root's mirror, cheap, and refreshed on every
@@ -6736,7 +6739,13 @@ fn update_device_msg(
     SessionsChanged(change~, key~, fresh_session~) => {
       let (sessions, model) = request_sessions_refresh(dispatch, channel, model)
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
-      let commands = @cmd.batch([sessions, archived])
+      let (schedules, model) = if model.screen is Schedules &&
+        model.focused == channel {
+        request_schedules(dispatch, model, List)
+      } else {
+        (@cmd.none, model)
+      }
+      let commands = @cmd.batch([sessions, archived, schedules])
       guard model.device_state(channel) is Some(dev) else {
         return (commands, model)
       }

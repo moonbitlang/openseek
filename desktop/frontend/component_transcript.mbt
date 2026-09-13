@@ -90,7 +90,7 @@ fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
         Transcript(slot~, ..) => Some(slot)
         LoadFailed(..) | Loading | Onboarding => None
       }
-    Skills | Settings | WorkspaceSettings(..) => None
+    Skills | Schedules | Settings | WorkspaceSettings(..) => None
   }
 }
 
