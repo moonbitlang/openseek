@@ -1,0 +1,123 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/io",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/string",
+}
+
+///|
+fn content_type(path : String) -> String {
+  if path.has_suffix(".html") {
+    "text/html; charset=utf-8"
+  } else if path.has_suffix(".js") || path.has_suffix(".mjs") {
+    "text/javascript; charset=utf-8"
+  } else if path.has_suffix(".css") {
+    "text/css; charset=utf-8"
+  } else if path.has_suffix(".json") || path.has_suffix(".map") {
+    "application/json"
+  } else if path.has_suffix(".svg") {
+    "image/svg+xml"
+  } else if path.has_suffix(".png") {
+    "image/png"
+  } else if path.has_suffix(".ico") {
+    "image/x-icon"
+  } else if path.has_suffix(".woff2") {
+    "font/woff2"
+  } else if path.has_suffix(".woff") {
+    "font/woff"
+  } else if path.has_suffix(".ttf") {
+    "font/ttf"
+  } else if path.has_suffix(".wasm") {
+    "application/wasm"
+  } else {
+    "application/octet-stream"
+  }
+}
+
+///|
+fn decode_path(path : StringView) -> String raise {
+  let source = @utf8.encode(path)
+  let bytes : Array[Byte] = []
+  for i = 0; i < source.length(); {
+    if source[i] == b'%' {
+      guard i + 2 < source.length() else { fail("Incomplete URL escape") }
+      let hex = @utf8.decode(source[i + 1:i + 3])
+      bytes.push(@string.parse_int(hex, base=16).to_byte())
+      continue i + 3
+    }
+    bytes.push(source[i])
+    continue i + 1
+  }
+  @utf8.decode(Bytes::from_array(bytes))
+}
+
+///|
+/// Loopback-only static asset server for the Desktop and session-viewer tests.
+async fn main {
+  guard @env.args() is [_, directory, port] else {
+    fail("Usage: moon run scripts/serve-static.mbtx DIRECTORY PORT")
+  }
+  let root = @fs.realpath(directory).replace(old="\\", new="/")
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:\{port}"))
+  @stdio.stdout.write(
+    "Serving \{root} on http://127.0.0.1:\{server.addr.port()}\n",
+  )
+  server.run_forever((request, _, conn) => {
+    defer conn.close()
+    defer conn.end_response()
+    if !(request.meth is (Get | Head)) {
+      conn.send_response(405, "Method Not Allowed")
+      return
+    }
+    guard request.path.split("?").head() is Some(raw_path) else {
+      conn.send_response(400, "Bad Request")
+      return
+    }
+    let path = decode_path(raw_path) catch {
+      _ => {
+        conn.send_response(400, "Bad Request")
+        return
+      }
+    }
+    if path.contains("\\") ||
+      path.contains("\u0000") ||
+      path.split("/").any(part => part == "..") {
+      conn.send_response(403, "Forbidden")
+      return
+    }
+    let mut file = root + "/" + path.trim_start(chars="/").to_owned()
+    if !@fs.exists(file) {
+      conn.send_response(404, "Not Found")
+      return
+    }
+    if @fs.kind(file) == Directory {
+      file += "/index.html"
+    }
+    if !@fs.exists(file) {
+      conn.send_response(404, "Not Found")
+      return
+    }
+    let resolved = @fs.realpath(file).replace(old="\\", new="/")
+    if !resolved.has_prefix(root + "/") {
+      conn.send_response(403, "Forbidden")
+      return
+    }
+    if @fs.kind(file) != Regular {
+      conn.send_response(404, "Not Found")
+      return
+    }
+    let data = @fs.read_file(file)
+    conn.send_response(200, "OK", extra_headers={
+      "Content-Type": content_type(file),
+    })
+    if request.meth == Get {
+      conn.write(data)
+    }
+  })
+}

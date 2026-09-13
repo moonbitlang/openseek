@@ -198,8 +198,9 @@ All bundled-workflow fixtures run in MoonBit; they require no Python runtime.
 
 ## Validation
 
-Run `just check-workflows` to type-check every `.mbtx` under `share/workflow`
-against its declared imports with `moon check --target wasm --deny-warn`.
+Run `just check-workflows` (`scripts/check-workflows.mbtx`) to type-check every
+`.mbtx` under `share/workflow` against its declared imports with
+`moon check --target wasm --deny-warn`.
 This does not execute the scripts. `just check` includes this gate, and CI
 runs it in the independent `bundled workflow checks` job. Newly added scripts
 are discovered automatically.

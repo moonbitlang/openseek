@@ -1,7 +1,6 @@
 # Use Windows PowerShell without requiring Git Bash or WSL.
 set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
 
-PYTHON := if os() == "windows" { "python" } else { "python3" }
 CRAM_SHELL := if os() == "windows" { env_var("ProgramFiles") / "Git/bin/bash.exe" } else { "bash" }
 
 default:
@@ -17,7 +16,7 @@ check:
 
 # Check standalone bundled scripts against their declared dependencies without running them.
 check-workflows:
-    {{ PYTHON }} scripts/check_workflows.py
+    moon run scripts/check-workflows.mbtx
 
 # Build every root workspace member for the production targets.
 build:
@@ -45,10 +44,10 @@ test: test-moon test-cram test-turn-finish test-workflows
 test-cram:
     moon cram test tests/cram --shell '{{ CRAM_SHELL }}'
 
-# Real CLI lifecycle regression with an offline scripted model (Python 3).
+# Real CLI lifecycle regression with an offline scripted model.
 test-turn-finish:
     moon build cmd/openseek --target native
-    {{ PYTHON }} tests/integration/turn_finish.py _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
 
 test-moon:
     moon test --target native
