@@ -162,3 +162,50 @@ test "failed chat metadata preserves ordinary project snapshots and reports its 
   )
   assert_true(recovered.sidebar_component_input().notices.is_empty())
 }
+
+///|
+test "a newer project confirmation wins over an older chat allocation" {
+  let dispatch = test_dispatch()
+  let (_, creating) = update(dispatch, CreateChat(Local), test_model())
+  guard creating.chat_creation is Some((channel, generation, _)) else {
+    fail("expected pending chat allocation")
+  }
+  let (_, opened) = update(dispatch, PickProject(Local), creating)
+  assert_true(opened.chat_creation is None)
+  let (_, confirmed) = adopt_picked_directory(
+    dispatch,
+    Local,
+    "/user/newer-project",
+    opened,
+  )
+  let (_, late) = update(
+    dispatch,
+    ChatWorkspaceCreated(
+      channel~,
+      generation~,
+      result=Ok("/app-data/workspaces/old-chat"),
+    ),
+    confirmed,
+  )
+  assert_true(
+    late.pending_project_adoption is Some(pending) &&
+    pending.requested == "/user/newer-project",
+  )
+  let project = @interop.ChannelId::Local.test_resource("/user/newer-project")
+  let (_, selected) = update(
+    dispatch,
+    NewChatIn(Local, Some(project)),
+    creating,
+  )
+  let (_, late) = update(
+    dispatch,
+    ChatWorkspaceCreated(
+      channel~,
+      generation~,
+      result=Ok("/app-data/workspaces/old-chat"),
+    ),
+    selected,
+  )
+  assert_true(late.pending_project_adoption is None)
+  assert_eq(late.dev().active_project, Some(project))
+}
