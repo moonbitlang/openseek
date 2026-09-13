@@ -477,12 +477,14 @@
   margin-top: 8px;
 }
 .user-bubble {
+  /* Tune each theme independently: a pale wash on paper, a muted blue on
+     dark canvas. Local text also keeps inline code legible on the fill. */
+  --color-text-primary: light-dark(#203e67, #f1f5fc);
   min-width: 0;
   max-width: 85%;
-  padding: 12px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
+  padding: 13px 17px;
+  border-radius: 20px;
+  background: light-dark(#e8effb, #1c3e70);
 }
 
 /* In the accessibility tree, out of the layout: speaker names and the
