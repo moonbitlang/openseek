@@ -13,7 +13,7 @@ import {
 // Values
 pub fn app_bundle_path(String) -> String?
 
-pub async fn chat_workspace_root() -> String?
+pub async fn chat_workspace_root() -> @protocol.ChatWorkspaceRoot
 
 pub fn endpoints(HostState, HostConnection, @engine.EngineManager, () -> Unit) -> Array[@endpoint.Endpoint]
 

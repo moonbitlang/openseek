@@ -724,7 +724,7 @@ pub impl ToJson for SessionExportReply with fn to_json(self) {
 /// refusal rides in the reply body as `{error:"..."}` because the local
 /// bridge summarizes raised handler errors down to "op <name> failed".
 pub(all) enum WorkspacesReply {
-  Workspaces(Array[String], chat_root~ : String?)
+  Workspaces(Array[String], chat_root~ : ChatWorkspaceRoot?)
   WorkspaceError(String)
 } derive(Debug, Eq)
 
@@ -759,7 +759,7 @@ pub impl FromJson for WorkspacesReply with fn from_json(json, path) {
       }
       Workspaces(
         @json.from_json(listed),
-        chat_root=JsonObject::of(fields, path).optional_string("chat_root"),
+        chat_root=decode_chat_workspace_root(JsonObject::of(fields, path)),
       )
     }
   }

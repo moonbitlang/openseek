@@ -1132,7 +1132,7 @@ pub(all) struct SessionChangedPayload {
 ///|
 pub(all) struct WorkspacesChangedPayload {
   workspaces : Array[String]
-  chat_root : String?
+  chat_root : ChatWorkspaceRoot?
 } derive(Debug, Eq)
 
 ///|
@@ -1157,7 +1157,7 @@ pub impl FromJson for WorkspacesChangedPayload with fn from_json(json, path) {
   }
   {
     workspaces: @json.from_json(listed),
-    chat_root: object.optional_string("chat_root"),
+    chat_root: decode_chat_workspace_root(object),
   }
 }
 

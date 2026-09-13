@@ -67,14 +67,32 @@ async fn create_unnamed_workspace_in(
 ///|
 /// Use the canonical storage root so symlinked app-data directories still
 /// classify registered (canonical) workspace paths consistently after reload.
-pub async fn chat_workspace_root() -> String? {
-  let root = unnamed_workspaces_dir() catch { HostError(_) => return None }
-  let resolved = @fs.realpath(root.to_string()) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => root.to_string()
-    error => raise error
+pub async fn chat_workspace_root() -> @protocol.ChatWorkspaceRoot {
+  let root = unnamed_workspaces_dir() catch {
+    HostError(message) => return Failed(message)
   }
-  guard @pathx.Path(resolved).to_absolute() is Some(root) else {
-    raise HostError("workspace storage path is not absolute")
+  chat_workspace_root_in(root)
+}
+
+///|
+async fn chat_workspace_root_in(
+  root : @pathx.Absolute,
+) -> @protocol.ChatWorkspaceRoot {
+  try {
+    let resolved = @fs.realpath(root.to_string()) catch {
+      @os_error.OSError(_) as error if error.is_ENOENT() =>
+        return Ready(root.resource_path())
+      error => raise error
+    }
+    guard @fs.kind(resolved) is Directory else {
+      return Failed("workspace storage path is not a directory")
+    }
+    guard @pathx.Path(resolved).to_absolute() is Some(canonical) else {
+      return Failed("workspace storage path is not absolute")
+    }
+    Ready(canonical.resource_path())
+  } catch {
+    error if @async.is_being_cancelled() => raise error
+    error => Failed("cannot access workspace storage: \{error}")
   }
-  Some(root.resource_path())
 }

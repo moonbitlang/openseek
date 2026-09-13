@@ -30,11 +30,12 @@ fn fetch_projects(
         guard @resource.of_path(channel, path) is Some(resource) else { return }
         projects.push(resource)
       }
-      let chat_root = match chat_root {
-        Some(path) => {
+      let chat_root : Result[@common.Uri, String]? = match chat_root {
+        Some(Ready(path)) => {
           guard @resource.of_path(channel, path) is Some(root) else { return }
-          Some(root)
+          Some(Ok(root))
         }
+        Some(Failed(message)) => Some(Err(message))
         None => None
       }
       scheduler.add(
@@ -1180,7 +1181,7 @@ fn DeviceState::is_chat_workspace(
   self : DeviceState,
   path : @common.Uri,
 ) -> Bool {
-  guard self.chat_root is Some(root) &&
+  guard self.chat_root is Some(Ok(root)) &&
     @resource.belongs_to(root, self.channel) &&
     @resource.belongs_to(path, self.channel) else {
     return false

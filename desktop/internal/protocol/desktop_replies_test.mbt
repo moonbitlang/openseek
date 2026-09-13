@@ -1505,13 +1505,13 @@ test "workspace snapshots preserve managed chat roots and reject malformed metad
   let root = "/app-data/workspaces"
   let reply : @protocol.WorkspacesReply = Workspaces(
     [root + "/one"],
-    chat_root=Some(root),
+    chat_root=Some(Ready(root)),
   )
   let decoded : @protocol.WorkspacesReply = @json.from_json(reply.to_json())
   assert_eq(decoded, reply)
   let changed : @protocol.WorkspacesChangedPayload = {
     workspaces: [root + "/one"],
-    chat_root: Some(root),
+    chat_root: Some(Ready(root)),
   }
   let decoded_change : @protocol.WorkspacesChangedPayload = @json.from_json(
     changed.to_json(),
@@ -1542,4 +1542,30 @@ test "workspace snapshots preserve managed chat roots and reject malformed metad
   assert_eq(absent.chat_root, None)
   assert_eq(nullable.chat_root, None)
   @debug.assert_eq(absent.to_json(), { "workspaces": [] })
+}
+
+///|
+test "chat metadata failure remains distinct from a failed workspace snapshot" {
+  let reply : @protocol.WorkspacesReply = Workspaces(
+    ["/user/project"],
+    chat_root=Some(Failed("permission denied")),
+  )
+  let decoded : @protocol.WorkspacesReply = @json.from_json(reply.to_json())
+  assert_eq(decoded, reply)
+  let changed : @protocol.WorkspacesChangedPayload = {
+    workspaces: ["/user/project"],
+    chat_root: Some(Failed("permission denied")),
+  }
+  let decoded : @protocol.WorkspacesChangedPayload = @json.from_json(
+    changed.to_json(),
+  )
+  assert_eq(decoded, changed)
+  assert_true(
+    refused(() => {
+      let _ : @protocol.WorkspacesReply = @json.from_json({
+        "workspaces": [],
+        "chat_root": { "error": 42 },
+      })
+    }),
+  )
 }
