@@ -7,7 +7,7 @@ import {
   "bobzhang/openseek_protocol" @protocol,
   "moonbitlang/async/process",
   "moonbitlang/core/env",
-  "moonbitlang/x/uuid",
+  "bobzhang/openseek/agent_tool/internal/uuid",
 }
 
 warnings = "+unnecessary_annotation"

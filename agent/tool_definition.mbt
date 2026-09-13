@@ -375,18 +375,21 @@ async test "a handed-off job cleans builds but keeps result files until teardown
       prefix="openseek-job-result-",
       auto_background_after_ms=1,
     )
-    let result_path = "\{spill_dir}/snippet-0/tmp/report.txt"
-    let source = (
+    let source =
       #|import { "moonbitlang/async", "moonbitlang/async/fs" }
       #|
       #|async fn main {
-      #|  @fs.write_file("RESULT_PATH", "kept", create_mode=CreateOrTruncate)
-      #|  println("RESULT_PATH")
+      #|  @async.sleep(100)
+      #|  let path = "\{@fs.tmpdir(prefix="result-")}/report.txt"
+      #|  @fs.write_file(path, "kept", create_mode=CreateOrTruncate)
+      #|  println(path)
       #|}
-    ).replace_all(old="RESULT_PATH", new=result_path)
     let action = run_async_tool(mbtx, { "source": source })
     guard action is Respond(output) else { fail("expected Respond") }
-    assert_true(output.content.contains("moved to the background"))
+    assert_true(
+      output.content.contains("moved to the background"),
+      msg=output.content,
+    )
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
     @async.with_timeout(120_000, () => bg_runtime.wait_any([job.id]))
     let read = run_async_tool(@job_output.definition(bg_runtime), {
@@ -394,11 +397,17 @@ async test "a handed-off job cleans builds but keeps result files until teardown
     })
     guard read is Respond(result) else { fail("expected Respond") }
     assert_false(result.is_error)
+    let dirs = @fs.readdir(spill_dir).filter(name => name.has_prefix("snippet-"))
+    assert_eq(dirs.length(), 1)
+    let call_dir = "\{spill_dir}/\{dirs[0]}"
+    let results = @fs.readdir("\{call_dir}/tmp")
+    assert_eq(results.length(), 1)
+    let result_path = "\{call_dir}/tmp/\{results[0]}/report.txt"
     assert_eq(@fs.read_file(result_path).text(), "kept")
-    let build_dir = "\{spill_dir}/snippet-0/build"
+    let build_dir = "\{call_dir}/build"
     // wait_any includes launcher cleanup and completion publication.
     assert_false(@fs.exists(build_dir))
-    assert_true(@fs.exists("\{spill_dir}/snippet-0/tmp"))
+    assert_true(@fs.exists("\{call_dir}/tmp"))
     @fs.rmdir(spill_dir, recursive=true) catch {
       _ => ()
     }
