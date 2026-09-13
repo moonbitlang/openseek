@@ -3906,6 +3906,7 @@ fn update_msg(
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
       let model = {
         ..model.with_active_project(workspace),
+        chat_creation: None,
         loading_conversation: None,
       }
       let (start_cmd, model) = if model.default_agent is CodexAgent {
@@ -4144,7 +4145,14 @@ fn update_msg(
       )
       (
         @cmd.batch([focus_cmd, quick_open_cmd, browse_cmd]),
-        { ..model, quick_open, project_picker: Some(picker), },
+        {
+          ..model,
+          // A newer project choice supersedes any outstanding chat allocation.
+          // Its directory may still be created, but its reply must not adopt it.
+          chat_creation: None,
+          quick_open,
+          project_picker: Some(picker),
+        },
       )
     }
     AddProjectRequested =>
