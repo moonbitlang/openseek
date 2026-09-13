@@ -181,6 +181,9 @@ priv enum Msg {
   Pinned(Bool)
   JumpToLatest
   ContentRendered
+  // The conversation's image root changed (it resolves after the first
+  // render, or a worktree gets bound). Reads that waited for it are retried.
+  ImageRootChanged
   ImageRequested(String)
   ImageResolved(ImageOwner, String, ImageReadResult)
   Overview(@transcript_overview.Msg)
@@ -197,12 +200,26 @@ fn Model::update(
   // root can move (a worktree gets bound after the first send). Never project
   // the previous root's data URLs into a render for the new one.
   let image_owner = input.image_owner()
-  let self = if self.image_owner == image_owner {
-    self
+  let (self, retried) = if self.image_owner == image_owner {
+    (self, @cmd.none)
   } else {
-    { ..self, image_owner, images: ImageCache::empty(), }
+    let (images, retried) = self.images.rebase(image_owner, emit)
+    ({ ..self, image_owner, images, }, retried)
   }
+  let (next, command) = self.step(input, msg, emit)
+  (next, @cmd.batch([retried, command]))
+}
+
+///|
+fn Model::step(
+  self : Model,
+  input : Input,
+  msg : Msg,
+  emit : @cmd.Emit[Msg],
+) -> (Model, @cmd.Cmd) {
+  let image_owner = input.image_owner()
   match msg {
+    ImageRootChanged => (self, @cmd.none)
     Pinned(pinned) => ({ ..self, pinned, }, @cmd.none)
     JumpToLatest =>
       (
@@ -323,16 +340,39 @@ pub fn component(
     },
     by=block => block.branch_key(),
   )
-  state.view3(input, rendered, (state, input, rendered) => {
+  // The image root is a branch keyed by its value: a change delivers one
+  // message, which is what lets `update` retry reads that waited for it. The
+  // branch renders nothing; it lives in the view only so the graph keeps it
+  // alive.
+  let image_root = input
+    .map(input => input.root)
+    .switch_by(_ => message_on_create(emit(ImageRootChanged)), by=root => {
+      root.map(uri => uri.to_string()).unwrap_or("")
+    })
+  state.view4(input, rendered, image_root, (state, input, rendered, image_root) => {
     transcript_view(
       input,
       pinned=state.pinned,
       overview=state.overview,
       overview_emit=emit.map(msg => Overview(msg)),
       stream=keyed_stream(rendered),
+      image_root~,
       on_jump_latest=emit(JumpToLatest),
     )
   })
+}
+
+///|
+/// A branch body that sends one command when it is created and renders
+/// nothing. Under `switch_by` this turns a change of the branch key — an
+/// input transition the component cannot otherwise observe — into a message.
+fn message_on_create(command : @cmd.Cmd) -> @rabbita.Val[@html.Html] {
+  let (state, _) = @rabbita.create_state_with_init(init=_ => ((), command), update=(
+    state : Unit,
+    _ : Unit,
+    _,
+  ) => (state, @cmd.none))
+  state.map(_ => @html.nothing)
 }
 
 ///|
@@ -642,6 +682,7 @@ fn transcript_sub_loader(
         () => scheduler.add(emit(ContentRendered)),
         path => scheduler.add(emit(ImageRequested(path))),
       )
+      scheduler.add(observers.attach_after_render())
       Some({
         unload: scheduler => {
           target.remove_event_listener_with_options(
@@ -692,6 +733,7 @@ priv struct TranscriptObservers {
   content : @dom.MutationObserver
   resize : @dom.ResizeObserver
   mount : TranscriptDomMount
+  attach : () -> Unit
 }
 
 ///|
@@ -835,9 +877,15 @@ fn TranscriptObservers::install(
   if @dom.document().get_document_element() is Some(root) {
     document.observe(root.as_node(), child_list=true, subtree=true)
   }
-  // The component may already be mounted when its subscription starts.
-  attach()
-  { document, content, resize, mount, }
+  { document, content, resize, mount, attach, }
+}
+
+///|
+/// Look for the scroller once Rabbita has committed this component's DOM.
+/// The subscription starts during the graph read that creates the component,
+/// while the previous conversation's scroller may still be on screen.
+fn TranscriptObservers::attach_after_render(self : Self) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => (self.attach)(), kind=@cmd.after_render)
 }
 
 ///|

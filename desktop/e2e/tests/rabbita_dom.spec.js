@@ -1935,6 +1935,9 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
     request.method === 'codex.draft.open'))
     .toMatchObject({ params: { cwd: '/workspace' } });
 
+  // The pick switches the page to Codex, whose composer is its own element;
+  // the draft-open request is sent before that render commits.
+  await expect(page.getByRole('textbox', { name: /Ask Codex/ })).toBeVisible();
   await page.locator('#task').fill('Run the Codex browser E2E turn');
   await page.getByTitle('Send', { exact: true }).click();
   await expect.poll(() => app.requests.find(request =>
