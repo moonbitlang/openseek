@@ -91,6 +91,166 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
 
 ///|
 #cfg(not(target="js"))
+test "Code search groups semantic hits by pattern before file" {
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "semantic-groups",
+  }
+  let root = @common.Uri::parse("file:///work")
+  let input : Input = { owner, root: Some(root), }
+  let state = State::empty()
+    .handle(ModeChanged(Semantic), input)
+    .handle(PatternChanged(0, "inspect($(x:arg))"), input)
+    .handle(AddPattern, input)
+    .handle(PatternChanged(1, "match($x)"), input)
+    .handle(Submit, input)
+  let page = state.page
+  let first : @protocol.SemanticSearchHit = {
+    path: "src/main.mbt",
+    rule_id: "inspect($(x:arg))",
+    description: None,
+    start_line: 1,
+    start_column: 1,
+    end_line: 1,
+    end_column: 5,
+    matched_source: "inspect(x)",
+    source_context: [{ line: 1, text: "inspect(x)", is_match: true, }],
+  }
+  let second = { ..first, rule_id: "match($x)", start_line: 2, end_line: 2, }
+  let reply : @protocol.SearchSemanticReply = {
+    root: root.path,
+    generation: page.generation,
+    matches: [first, second],
+    match_count: 2,
+    file_count: 1,
+    limit_hit: false,
+    cancelled: false,
+    partial: false,
+    error: None,
+  }
+  let ready = state.handle(
+    SemanticLoaded(owner~, root=root.path, generation=page.generation, reply~),
+    input,
+  )
+  let html = render_search(ready, input)
+  assert_eq(html.split("class=\"search-semantic-pattern-header\"").length(), 3)
+  assert_eq(html.split("class=\"search-file-header\"").length(), 3)
+  let collapsed = ready.handle(TogglePattern(first.rule_id), input)
+  let collapsed_html = render_search(collapsed, input)
+  assert_true(collapsed_html.contains("aria-expanded=\"false\""))
+  assert_eq(
+    collapsed_html.split("class=\"search-semantic-pattern-header\"").length(),
+    3,
+  )
+  assert_eq(collapsed_html.split("class=\"search-file-header\"").length(), 2)
+}
+
+///|
+#cfg(not(target="js"))
+test "semantic selection stays independent from its presentation groups" {
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "semantic-selection",
+  }
+  let root = @common.Uri::parse("file:///work")
+  let input : Input = { owner, root: Some(root), }
+  let state = State::empty()
+    .handle(ModeChanged(Semantic), input)
+    .handle(PatternChanged(0, "inspect($(x:arg))"), input)
+    .handle(Submit, input)
+  let page = state.page
+  let first : @protocol.SemanticSearchHit = {
+    path: "src/main.mbt",
+    rule_id: "inspect($(x:arg))",
+    description: None,
+    start_line: 1,
+    start_column: 1,
+    end_line: 1,
+    end_column: 5,
+    matched_source: "inspect(x)",
+    source_context: [],
+  }
+  let second = { ..first, path: "src/other.mbt", start_line: 2, end_line: 2, }
+  let ready = state.handle(
+    SemanticLoaded(owner~, root=root.path, generation=page.generation, reply={
+      root: root.path,
+      generation: page.generation,
+      matches: [first, second],
+      match_count: 2,
+      file_count: 2,
+      limit_hit: false,
+      cancelled: false,
+      partial: false,
+      error: None,
+    }),
+    input,
+  )
+  let selected = ready.handle(
+    ToggleSemanticFile(first.rule_id, first.path),
+    input,
+  )
+  assert_eq(selected.selected_semantic_hits(), [first])
+  let pattern_selected = selected.handle(
+    ToggleSemanticPattern(first.rule_id),
+    input,
+  )
+  assert_eq(pattern_selected.selected_semantic_hits(), [first, second])
+  let cleared = pattern_selected.handle(ClearSelection, input)
+  assert_true(cleared.selected_semantic_hits().is_empty())
+}
+
+///|
+#cfg(not(target="js"))
+test "semantic selected-only view keeps the original selected hits" {
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "semantic-restore",
+  }
+  let root = @common.Uri::parse("file:///work")
+  let input : Input = { owner, root: Some(root), }
+  let state = State::empty()
+    .handle(ModeChanged(Semantic), input)
+    .handle(PatternChanged(0, "inspect($(x:arg))"), input)
+    .handle(Submit, input)
+  let page = state.page
+  let hit : @protocol.SemanticSearchHit = {
+    path: "src/main.mbt",
+    rule_id: "inspect($(x:arg))",
+    description: None,
+    start_line: 4,
+    start_column: 1,
+    end_line: 4,
+    end_column: 10,
+    matched_source: "inspect(x)",
+    source_context: [],
+  }
+  let ready = state
+    .handle(
+      SemanticLoaded(owner~, root=root.path, generation=page.generation, reply={
+        root: root.path,
+        generation: page.generation,
+        matches: [hit],
+        match_count: 1,
+        file_count: 1,
+        limit_hit: false,
+        cancelled: false,
+        partial: false,
+        error: None,
+      }),
+      input,
+    )
+    .handle(ToggleSemanticHit(semantic_hit_key(hit)), input)
+  let filtered = ready.handle(
+    SetSemanticResultFilter(SelectedSemanticResults),
+    input,
+  )
+  assert_true(
+    render_search(filtered, input).contains("Showing selected matches"),
+  )
+}
+
+///|
+#cfg(not(target="js"))
 test "Search view groups files and marks matching UTF-16 slices" {
   let owner : @interop.ConversationKey = {
     channel: @interop.ChannelId::Local,

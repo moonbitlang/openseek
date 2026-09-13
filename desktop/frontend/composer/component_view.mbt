@@ -40,12 +40,15 @@ fn Draft::mention_chips(
         label: @mention_context.label(mention.ref_),
         title: if mention.ref_ is @mention_context.Annotation(comment~, ..) {
           comment
+        } else if mention.ref_ is @mention_context.SemanticSearch(reference) {
+          "Open semantic search with \{reference.matches.length()} matches"
         } else if target is Some(target) {
           "Jump to \{target.file}"
         } else {
           @mention_context.label(mention.ref_)
         },
-        jump: if target is Some(_) {
+        jump: if target is Some(_) ||
+          mention.ref_ is @mention_context.SemanticSearch(_) {
           Some(emit(MentionJumped(index)))
         } else {
           None

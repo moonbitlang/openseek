@@ -49,6 +49,44 @@ test "encode lays out the task first, then the tagged mention block" {
 }
 
 ///|
+test "semantic search mentions round-trip as one aggregate reference" {
+  let reference : @mention_context.SemanticSearchReference = {
+    id: "search-1",
+    root: "/work",
+    patterns: ["inspect($(x:arg))", "match($x)"],
+    include_glob: "src/**",
+    exclude_glob: "src/generated/**",
+    matches: [
+      {
+        pattern: "inspect($(x:arg))",
+        file: "src/main.mbt",
+        start_line: 4,
+        start_column: 1,
+        end_line: 4,
+        end_column: 12,
+        matched_source: "inspect(x)",
+      },
+      {
+        pattern: "match($x)",
+        file: "src/other.mbt",
+        start_line: 9,
+        start_column: 1,
+        end_line: 10,
+        end_column: 8,
+        matched_source: "match(value)",
+      },
+    ],
+  }
+  let mention = @mention_context.SemanticSearch(reference)
+  let encoded = @mention_context.encode([mention], "Explain these matches")
+  let parsed = @mention_context.parse(encoded).unwrap()
+  assert_eq(parsed.task, "Explain these matches")
+  assert_eq(parsed.mentions, [mention])
+  assert_true(@mention_context.label(mention).contains("2 patterns"))
+  assert_true(@mention_context.target(mention) is None)
+}
+
+///|
 test "encode of chips alone omits the task block" {
   inspect(
     @mention_context.encode([Skill(name="review-pr")], "  "),
