@@ -1,20 +1,19 @@
 ///|
 import {
   "moonbitlang/async@0.21.1",
+  "moonbitlang/core/argparse",
   "moonbitlang/core/env",
   "moonbitlang/workflow@0.7.0",
   "moonbitlang/workflow@0.7.0/hosted",
 }
 
 ///|
-/// Run with mbtx(description="Review the worktree", filename="@builtin/review.mbtx", args=["What to audit against"], subrun=true).
+/// Run with mbtx(description="Review the worktree", filename="@builtin/review.mbtx", args=["--", "What to audit against"], subrun=true).
 /// One review child audits the current worktree against the standing goal
 /// the engine supplies and/or the criteria in args, prints its full
 /// structured report, and fails on a blocker finding; no retries or
 /// automatic edits.
-const Usage : String =
-  #|usage: @builtin/review.mbtx [--sha COMMIT [--dirty]] [--] [CRITERIA...]
-  #|
+const About : String =
   #|With no arguments the reviewer audits the standing goal and the baseline
   #|it recorded, which the engine supplies in OPENSEEK_GOAL (and
   #|OPENSEEK_GOAL_SHA/OPENSEEK_GOAL_DIRTY). The remaining arguments, joined
@@ -26,42 +25,44 @@ const Usage : String =
 
 ///|
 async fn main {
-  let mut sha : String? = None
-  let mut dirty = false
-  let criteria : Array[String] = []
-  for args = @env.args()[1:] {
-    match args {
-      [] => break
-      ["--help" | "-h", ..] => {
-        println(Usage)
-        return
-      }
-      ["--sha", commit, .. rest] => {
-        sha = Some(commit)
-        continue rest
-      }
-      ["--dirty", .. rest] => {
-        dirty = true
-        continue rest
-      }
-      ["--", .. rest] => {
-        criteria.append(rest.to_owned())
-        break
-      }
-      [word, .. rest] => {
-        criteria.push(word)
-        continue rest
-      }
-    }
+  let command = @argparse.Command(
+    "@builtin/review.mbtx",
+    about=About,
+    flags=[
+      @argparse.FlagArg(
+        "dirty",
+        about="The worktree was already dirty at the baseline commit.",
+        requires=["sha"],
+      ),
+    ],
+    options=[
+      @argparse.OptionArg(
+        "sha",
+        about="Baseline commit; overrides the standing goal's baseline.",
+      ),
+    ],
+    positionals=[
+      @argparse.PositionArg(
+        "criteria",
+        about="Audit focus, or the whole criteria when no goal stands.",
+        num_args=@argparse.ValueRange(lower=0),
+      ),
+    ],
+  )
+  let parsed = command.parse()
+  let sha = match parsed.values {
+    { "sha": [commit], .. } => Some(commit)
+    _ => None
   }
-  guard sha is Some(_) || !dirty else { fail("--dirty needs --sha\n\{Usage}") }
+  let dirty = parsed.flags is { "dirty": true, .. }
+  let criteria = parsed.values.get("criteria").unwrap_or([])
   let focus = criteria.join(" ")
   let standing = @env.get_env_var("OPENSEEK_GOAL")
   let goal = match (standing, focus.is_blank()) {
     (Some(text), true) => text
     (Some(text), false) => "\{text}\n\nAudit focus:\n\{focus}"
     (None, false) => focus
-    (None, true) => fail("no criteria given and no standing goal\n\{Usage}")
+    (None, true) => fail("no criteria given and no standing goal\n\{command.render_help()}")
   }
   // An explicit baseline wins; the engine's accompanies only the standing
   // goal it was recorded for.
