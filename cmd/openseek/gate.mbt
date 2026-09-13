@@ -84,12 +84,14 @@ fn build_goal_met_gate(
   review_deadline_ms? : Int = GateDeadlineMs,
   child_session? : @agent_subrun.ChildSession,
 ) -> async (String, @agent_session.GoalBaseline?) -> String? {
+  let (self_exe, launch_prefix) = review_gate_launch(self_exe)
   (goal, baseline) => {
     // The `subrun review` child argv, shaped like every sub-run spawn: the
     // command and its kind, the inherited model and step ceiling, plus
     // `--api-url` only when one is configured (absent, the child falls back
     // to its own default endpoint).
     let args = [
+      ..launch_prefix,
       "subrun",
       "review",
       "--model",
@@ -152,5 +154,16 @@ fn review_deadline_ms(matches : @argparse.Matches) -> Int? raise {
     { values: { "review-deadline": [input, ..], .. }, .. } =>
       Some(@cli.parse_positive_int(input, "--review-deadline"))
     _ => None
+  }
+}
+
+///|
+/// A wasm module needs moonrun, the host providing this engine's process,
+/// filesystem and socket APIs. The fence separates runtime and engine args.
+fn review_gate_launch(exe : String) -> (String, Array[String]) {
+  if exe.has_suffix(".wasm") {
+    ("moonrun", [exe, "--"])
+  } else {
+    (exe, [])
   }
 }
