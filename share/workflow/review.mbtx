@@ -8,7 +8,7 @@ import {
 }
 
 ///|
-/// Run with mbtx(description="Review the worktree", filename="@builtin/review.mbtx", args=["What to audit against"], subrun=true).
+/// Run with mbtx(description="Review the worktree", filename="@builtin/review.mbtx", args=["--", "What to audit against"], subrun=true).
 /// One review child audits the current worktree against the standing goal
 /// the engine supplies and/or the criteria in args, prints its full
 /// structured report, and fails on a blocker finding; no retries or

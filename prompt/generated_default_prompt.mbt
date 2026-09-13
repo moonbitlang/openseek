@@ -590,7 +590,10 @@ fn default_prompt() -> String {
     #|  `mbtx` tool offers `subrun`: run `@builtin/review.mbtx` with `subrun: true`.
     #|  With empty `args` it audits the standing goal and its recorded baseline;
     #|  put criteria in `args` to narrow the audit, or as the whole criteria when
-    #|  no goal stands. A review subagent reads the files, runs the project's own
+    #|  no goal stands. Put free-text criteria after `--`, for example
+    #|  `args: ["--", "Check CSV handling"]`, so leading hyphens remain literal.
+    #|  Put baseline options (`--sha COMMIT`, optionally `--dirty`) before `--`.
+    #|  A review subagent reads the files, runs the project's own
     #|  checks, hunts for vacuous success, and returns severity-tagged findings
     #|  with file:line citations in the printed report. A blocker finding fails
     #|  the call: the claim does not hold yet. Costs a bounded subagent run; for
