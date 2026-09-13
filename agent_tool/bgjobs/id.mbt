@@ -38,8 +38,8 @@ async test "previous runtime and legacy job IDs cannot read wait for or stop a n
 
 ///|
 /// Losslessly encode all 128 UUID bits as 22 URL-safe characters.
-fn compact_id(id : String) -> String raise {
-  @base64.encode(@x_uuid.from_hex(id).to_bytes(), padding=false)
+fn compact_id(id : @x_uuid.UUID) -> String {
+  @base64.encode(id.to_bytes(), padding=false)
   .replace_all(old="+", new="-")
   .replace_all(old="/", new="_")
 }
@@ -47,11 +47,13 @@ fn compact_id(id : String) -> String raise {
 ///|
 test "compact job IDs preserve all UUIDv7 bits" {
   let original = "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"
-  let compact = compact_id(original)
+  let compact = compact_id(@x_uuid.from_hex(original))
   assert_eq(compact, "AX8i4nmwfMOYxNwMDAc5jw")
   let bytes = @base64.decode(compact + "==")
   assert_eq(@x_uuid.from_bytes(bytes).to_string(), original)
-  let edge = compact_id("ffffffff-ffff-7fff-bfff-ffffffffffff")
+  let edge = compact_id(
+    @x_uuid.from_hex("ffffffff-ffff-7fff-bfff-ffffffffffff"),
+  )
   assert_eq(edge.length(), 22)
   assert_false(edge.contains("/") || edge.contains("+") || edge.contains("="))
   let decoded = @base64.decode(

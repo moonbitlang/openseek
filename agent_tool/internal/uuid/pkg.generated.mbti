@@ -2,7 +2,7 @@
 package "bobzhang/openseek/agent_tool/internal/uuid"
 
 // Values
-pub fn mint(UInt64, UInt64?, Bytes?) -> (String, UInt64) raise
+pub fn mint(UInt64, UInt64?, Bytes?) -> (@moonbitlang/x/uuid.UUID, UInt64) raise
 
 pub fn v7() -> String raise
 

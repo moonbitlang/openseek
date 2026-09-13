@@ -7,7 +7,7 @@ priv suberror UuidError {
 /// Generate a UUIDv7 without retaining state between calls.
 pub fn v7() -> String raise {
   let (id, _) = mint(@env.now(), None, @env.rand(10))
-  id
+  id.to_string()
 }
 
 ///|
@@ -17,7 +17,7 @@ pub fn mint(
   now : UInt64,
   previous : UInt64?,
   entropy : Bytes?,
-) -> (String, UInt64) raise {
+) -> (@x_uuid.UUID, UInt64) raise {
   guard entropy is Some(bytes) && bytes.length() == 10 else {
     raise UuidError("Cannot allocate UUID: secure entropy unavailable")
   }
@@ -39,6 +39,6 @@ pub fn mint(
   })
   // x/uuid owns the UUID representation, version/variant bits and formatting.
   // Its Version enum names V1–V5; Unknown(7) selects the RFC 9562 v7 bits.
-  let id = @x_uuid.from_bytes(payload).as_version(Unknown(7)).to_string()
+  let id = @x_uuid.from_bytes(payload).as_version(Unknown(7))
   (id, stamp)
 }

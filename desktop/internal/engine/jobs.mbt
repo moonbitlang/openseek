@@ -316,9 +316,10 @@ async fn job_history_page(
         ids.push(record.id)
       }
     }
-    ids.sort_by((a, b) => {
-      let a = job_id_order_key(a)
-      let b = job_id_order_key(b)
+    let ordered = ids.map(id => (job_id_order_key(id), id))
+    ordered.sort_by((a, b) => {
+      let a = a.0
+      let b = b.0
       let length = b.length().compare(a.length())
       if length != 0 {
         length
@@ -326,7 +327,7 @@ async fn job_history_page(
         b.compare(a)
       }
     })
-    for id in ids {
+    for (_, id) in ordered {
       if skipped < offset {
         skipped += 1
         continue

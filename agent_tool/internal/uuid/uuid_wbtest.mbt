@@ -5,7 +5,7 @@ test "UUIDv7 layout matches the RFC 9562 A.6 test vector" {
     None,
     Some(b"\xcc\xc3\x18\xc4\xdc\x0c\x0c\x07\x39\x8f"),
   )
-  assert_eq(id, "017f22e2-79b0-7cc3-98c4-dc0c0c07398f")
+  assert_eq(id.to_string(), "017f22e2-79b0-7cc3-98c4-dc0c0c07398f")
   assert_eq(stamp, 0x017f22e279b0UL)
 }
 
