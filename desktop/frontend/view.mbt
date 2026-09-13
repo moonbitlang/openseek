@@ -204,6 +204,8 @@ fn Model::push_group_component_inputs(
   // Every row in this group shares the group's store placement; it becomes
   // the `root` half of each conversation's component id.
   let root = workspace.path
+  let items : Array[@transcript.SessionListItem] = []
+  let local_worktrees : Map[String, String?] = Map([])
   for conv in self.conversations.rev_iter() {
     if conv.device != dev.channel ||
       conv.project() != workspace ||
@@ -231,40 +233,39 @@ fn Model::push_group_component_inputs(
     } else {
       worktree_name_for(dev, workspace, conv.session_id)
     }
-    rows.push(
-      (
-        // An in-memory conversation the durable listing does not hold yet is
-        // this session's own work; it leads the stamped history below.
-        ComposingNow,
-        session_component_input(
-          self,
-          dev.channel,
-          conv.session_id,
-          if standalone &&
-            !conv.has_begun() &&
-            conv.task.is_empty() &&
-            conv.pending_prompt is None {
-            "New chat"
-          } else {
-            conversation_title(conv)
-          },
-          nested=!standalone,
-          worktree?,
-          root~,
-        ),
+    local_worktrees[conv.session_id] = worktree
+    items.push({
+      id: conv.session_id,
+      title: Some(
+        if standalone &&
+          !conv.has_begun() &&
+          conv.task.is_empty() &&
+          conv.pending_prompt is None {
+          "New chat"
+        } else {
+          conversation_title(conv)
+        },
       ),
-    )
+      workspace,
+      workspace_name: workspace.path,
+      updated_at_ms: None,
+    })
   }
-  let durable = dev.sessions.filter(item => {
-    item.workspace == workspace && !archived(item.id)
-  })
+  // A child opened from Workflows may not be in the host inventory yet.
+  // Fold live and listed sessions together so either source can own a parent
+  // or child without creating a second top-level conversation.
+  for item in dev.sessions {
+    if item.workspace == workspace && !archived(item.id) {
+      items.push(item)
+    }
+  }
   // Sub-run transcripts fold under the conversation that launched them: they
   // are that turn's evidence, not conversations of their own. They ride the
   // parent's component input, so their disclosure state lives in the
   // conversation component. A label follows the live conversation while it
   // is the one on screen (its title settles at the first send), and
   // otherwise comes from the host's listing.
-  for tree in @transcript.session_tree(durable) {
+  for tree in @transcript.session_tree(items) {
     let parent_label = if tree.item.title is Some(title) && !title.is_blank() {
       title
     } else if self.find_conversation(dev.channel, tree.item.id) is Some(conv) &&
@@ -301,9 +302,13 @@ fn Model::push_group_component_inputs(
         ),
       )
     }
-    let stamp = match tree.item.updated_at_ms {
-      Some(ms) => ActiveAt(ms)
-      None => Unstamped
+    let stamp = if local_worktrees.contains(tree.item.id) {
+      ComposingNow
+    } else {
+      match tree.item.updated_at_ms {
+        Some(ms) => ActiveAt(ms)
+        None => Unstamped
+      }
     }
     rows.push(
       (
@@ -317,9 +322,12 @@ fn Model::push_group_component_inputs(
           // action. A child-shaped root is legacy split state (or belongs to a
           // parent in another store), so it remains independently archivable;
           // once beside its archived parent, family restore picks it up.
-          archivable=true,
+          archivable=!local_worktrees.contains(tree.item.id),
           nested=!standalone,
-          worktree?=worktree_name_for(dev, workspace, tree.item.id),
+          worktree?=match local_worktrees.get(tree.item.id) {
+            Some(worktree) => worktree
+            None => worktree_name_for(dev, workspace, tree.item.id)
+          },
           root~,
           children~,
         ),

@@ -54,3 +54,66 @@ test "a fresh chat selects its project and materializes on first send" {
     codex_page.conversation_selection() == submitted.conversation_selection(),
   )
 }
+
+///|
+test "workflow children fold under live or listed parents before inventory refresh" {
+  let workspace = @interop.ChannelId::Local.test_project()
+  for parent_listed in [false, true] {
+    let page = subrun_page(active="desktop-test-sr-1")
+    let page = page
+      .replace_conversation({
+        ..subrun_child_of(page),
+        messages: [
+          { kind: User("The criteria under audit"), ts: None, sequence: None, },
+        ],
+      })
+      .with_dev(dev => {
+        ..dev,
+        active_project: Some(workspace),
+        sessions: if parent_listed {
+          [
+            {
+              id: "desktop-test",
+              title: Some("<user_mentions>"),
+              workspace,
+              workspace_name: "work",
+              updated_at_ms: Some(1.0),
+            },
+          ]
+        } else {
+          []
+        },
+      })
+    let project = sidebar_project_for_test(page)
+    assert_eq(project.conversations.length(), 1)
+    let parent = project.conversations[0]
+    assert_eq(parent.children.length(), 1)
+    assert_eq(parent.children[0].label, "sr-1 · The criteria under audit")
+    assert_true(parent.children[0].active)
+    assert_true(parent.children[0].subrun)
+
+    // Once the host lists both records, the same family remains without duplicates.
+    let refreshed = page.with_dev(dev => {
+      ..dev,
+      sessions: [
+        {
+          id: "desktop-test",
+          title: Some("<user_mentions>"),
+          workspace,
+          workspace_name: "work",
+          updated_at_ms: Some(1.0),
+        },
+        {
+          id: "desktop-test-sr-1",
+          title: Some("The criteria under audit"),
+          workspace,
+          workspace_name: "work",
+          updated_at_ms: Some(2.0),
+        },
+      ],
+    })
+    let project = sidebar_project_for_test(refreshed)
+    assert_eq(project.conversations.length(), 1)
+    assert_eq(project.conversations[0].children.length(), 1)
+  }
+}
