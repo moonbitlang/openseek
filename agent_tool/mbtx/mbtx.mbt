@@ -589,7 +589,9 @@ async fn execute(
   // snippet cannot name a session that was not reserved for it.
   let reservation = if input.subrun {
     match subrun {
-      Some(injection) => Some(injection.reserve())
+      Some(injection) =>
+        // A relative cwd must not resolve again inside the running snippet.
+        Some(injection.reserve(cwd=@fs.realpath(run_cwd.unwrap_or("."))))
       // Asked, and cannot be served: say so. A snippet that believed it had a
       // handoff would spawn children with no transcript, and the model would
       // learn nothing until its subagents failed to appear anywhere.
@@ -1586,7 +1588,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool) -> Json {
             "cwd",
             {
               "type": "string",
-              "description": "Working directory the program runs in (relative paths resolve against the workspace root); defaults to the workspace root.",
+              "description": "Working directory for the program and its hosted children (relative paths resolve against the workspace root); defaults to the workspace root. Saved-script filenames still resolve against the original workspace.",
             },
           ),
           (
@@ -1747,7 +1749,16 @@ fn description(
     #|For agent workflows, use subrun=true with @builtin/review.mbtx (independent
     #|worktree audit against the criteria in args), @builtin/change-review.mbtx
     #|(working-tree review from three perspectives) or @builtin/repo-map.mbtx
-    #|(architecture, validation, extension points).
+    #|(architecture, validation, extension points). @builtin/de-slop.mbtx with
+    #|args=["."] and subrun=true scans the whole repository in bounded shards;
+    #|add --round N for repeatable progressive lead samples on the same tree.
+    #|args=["PACKAGE"] runs a focused discovery/challenge pair. Add --focus
+    #|TEXT to carry a specific candidate into both scouts. The caller
+    #|applies supported simplifications and runs project checks. Add --deliver
+    #|for the caller's one-small-PR loop in workflow/de-slop-deliver.md; continue
+    #|through final-diff review and publication when the user requested a PR.
+    #|The final user-facing response is only the verified PR link; keep audit
+    #|reports local and put validation details in the PR body.
     #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
     #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.

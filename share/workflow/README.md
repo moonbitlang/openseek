@@ -14,7 +14,7 @@ this resource root's absolute path.
 
 Call `mbtx(description="Check the workspace", filename="@builtin/check.mbtx")` (or another bundled name) and omit `source`. No file
 creation is needed. `cwd` selects the module to check or test, defaulting to
-the workspace. The commands use project/toolchain target defaults, stream
+the workspace; hosted scouts and reviewers also run in that selected worktree. The commands use project/toolchain target defaults, stream
 output, and fail when the underlying command fails. Follow repository-specific
 validation commands when they differ from these defaults.
 
@@ -67,6 +67,15 @@ other colons. Paths with spaces are single args without shell quoting.
   is the working tree against HEAD, not committed branch history.
 - `repo-map.mbtx` surveys architecture and data flow, validation commands, and
   extension points for a new contributor.
+- `de-slop.mbtx` scans a whole Git repository with `args=["."]`, assigning
+  every source to bounded discovery/challenge shards with a coverage manifest.
+  Explicit paths run a focused two-scout audit. See [the history-derived
+  criteria and apply/validate loop](de-slop.md). With `--deliver`, the calling
+  agent follows [the small-PR recipe](de-slop-deliver.md) through edits, tests,
+  final-diff review and publication in the same task, returning only the
+  verified PR links to the user. Repository-scale delivery continues its batch
+  queue instead of stopping after the first PR. Audit reports stay in local artifacts; tests
+  and CI status go in the PR body. The audit script is an intermediate stage.
 
 Run these with the hosted child-agent handoff:
 
@@ -93,7 +102,7 @@ blocker so the caller cannot read past it. `--sha COMMIT` (with `--dirty`
 when the worktree was already dirty at that commit) overrides the engine's
 baseline; `--help` prints usage.
 
-The other two use `moonbitlang/workflow`'s `fan_out` and `attempt` with
+Change review and repo-map use `moonbitlang/workflow`'s `fan_out` and `attempt` with
 read-only `explore` children. Change review runs three scouts, allowing 16 steps each.
 Repo-map runs two scouts, allowing 12 steps each, and displays the root
 `justfile` recipes directly in MoonBit without asking a model to summarize
@@ -142,7 +151,7 @@ The pinned imports make these scripts independent of the inspected project's
 library dependencies. Compile them with `moon run --build-only --target wasm
 share/workflow/repo-map.mbtx`; execute them through OpenSeek with `subrun=true`.
 
-Maintainers: `just test-workflows` exercises all three scripts with an offline
+Maintainers: `just test-workflows` exercises these scripts with an offline
 child contract fixture, including partial failure and missing/insufficient
 handoff.
 
