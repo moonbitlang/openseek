@@ -4,6 +4,7 @@ import {
 
 import {
   "moonbitlang/workflow/hosted",
+  "moonbitlang/core/env",
   "moonbitlang/core/json",
 } for "test"
 
