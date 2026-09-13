@@ -641,7 +641,8 @@ async fn execute(
     ],
     inject=reservation.map(r => r.env()).unwrap_or(Map([])),
     spawnable=match (reservation, subrun) {
-      (Some(_), Some(injection)) => Some(injection.exe())
+      (Some(_), Some(injection)) =>
+        Some((injection.exe(), injection.launch_prefix()))
       _ => None
     },
   )

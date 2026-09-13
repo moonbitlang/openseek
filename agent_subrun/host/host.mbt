@@ -52,6 +52,11 @@ pub(all) struct AuditCriteria {
 /// reading a coordinate it did not choose.
 struct SubrunInjection {
   exe : String
+  /// argv tokens that come BEFORE `subrun` in every child launch. Empty for a
+  /// native engine, which is its own executable; on a wasm build they are the
+  /// runtime and the module — `moonrun <module> --` — because the module is
+  /// not a program any OS will exec.
+  launch_prefix : Array[String]
   session_root : String
   parent : String
   /// Where a child RUNS. Not the session store: an `explore` child reads the
@@ -77,12 +82,16 @@ struct SubrunInjection {
 /// it. Tests pass a local counter so ordinals do not depend on what earlier
 /// tests in the process reserved.
 ///
-/// `exe` must be absolute: a sandbox admits it by exact path, so parent and
-/// child are the same binary and the report's derived JSON codecs cannot
-/// drift — the guarantee `explore` gets by never resolving the engine through
-/// `PATH`.
+/// `exe` is the program to spawn, and `launch_prefix` the argv tokens that
+/// precede the child's own args. A native engine is its own ABSOLUTE
+/// executable; a wasm build — whose argv[0] is a module no OS will exec —
+/// names its runtime and pins the module in the prefix, so the command is one
+/// the kernel can run and a policy can admit. Either way parent and child are
+/// the same binary, which is the guarantee `explore` gets by never resolving
+/// the engine through `PATH`: the report's derived JSON codecs cannot drift.
 pub fn SubrunInjection::SubrunInjection(
   exe~ : String,
+  launch_prefix? : Array[String] = [],
   session_root~ : String,
   parent~ : String,
   workspace_root~ : String,
@@ -93,6 +102,7 @@ pub fn SubrunInjection::SubrunInjection(
 ) -> SubrunInjection {
   {
     exe,
+    launch_prefix,
     session_root,
     parent,
     workspace_root,
@@ -104,10 +114,18 @@ pub fn SubrunInjection::SubrunInjection(
 }
 
 ///|
-/// The engine binary a snippet may spawn — what a sandbox policy admits, by
-/// exact path, for the one delegating verb.
+/// The program a snippet spawns for one delegated child: the engine binary
+/// itself, or — on a wasm build — its runtime, with the module this host
+/// pinned in `launch_prefix`.
 pub fn SubrunInjection::exe(self : SubrunInjection) -> String {
   self.exe
+}
+
+///|
+/// The argv tokens a launch must carry ahead of the child's own args, so the
+/// command a policy admits is one the OS can actually exec.
+pub fn SubrunInjection::launch_prefix(self : SubrunInjection) -> Array[String] {
+  self.launch_prefix
 }
 
 ///|
@@ -195,7 +213,7 @@ pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
   // rides argv — it reaches the child through the inherited environment.
   // Per-call `max_steps` is not here either: it rides the request envelope,
   // where the contract already carries it, and `subrun` reads it from there.
-  let child_args = ["subrun", "{kind}"]
+  let child_args = [..self.launch_prefix, "subrun", "{kind}"]
   if self.model is Some(model) {
     child_args.push("--model")
     child_args.push(model)

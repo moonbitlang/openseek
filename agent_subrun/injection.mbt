@@ -11,13 +11,14 @@
 /// document; it is a leaf and cannot name the allocator, so the wiring is
 /// this function's whole job.
 ///
-/// `exe` must be absolute (the sandbox admits it by exact path);
-/// `workspace_root` is where a child RUNS, since an `explore` child reads code
-/// by paths relative to its cwd. `criteria` is read when a snippet is
-/// reserved, so a review it delegates audits the LIVE standing goal.
+/// `exe` and `launch_prefix` are the host's resolved launch command, shared
+/// with its direct sub-runs. `workspace_root` is where a child runs.
+/// `criteria` is read when a snippet is reserved, so its review audits the
+/// live standing goal.
 pub fn ChildSession::injection(
   self : ChildSession,
   exe~ : String,
+  launch_prefix? : Array[String] = [],
   workspace_root~ : String,
   model? : String,
   api_url? : String,
@@ -26,6 +27,7 @@ pub fn ChildSession::injection(
   let first_free = self.first_free
   SubrunInjection(
     exe~,
+    launch_prefix~,
     session_root=self.root,
     parent=self.parent,
     workspace_root~,
@@ -48,4 +50,35 @@ test "a session's injection draws from the shared counter" {
   assert_true(first.base() >= 1)
   assert_eq(second.base(), first.base() + @host.block_size)
   assert_true(first.dir().has_prefix("/store/run7-wf-"))
+}
+
+///|
+/// The session forwards the host's launch prefix unchanged into the handoff.
+test "a wasm engine's handoff names its runtime, module and fence" {
+  let session = ChildSession(root="/store", parent="run7", first_free=1)
+  let injection = session.injection(
+    exe="moonrun",
+    launch_prefix=["/build/wasm/openseek.wasm", "--"],
+    workspace_root="/ws",
+  )
+  assert_eq(injection.exe(), "moonrun")
+  assert_eq(injection.launch_prefix(), ["/build/wasm/openseek.wasm", "--"])
+  guard injection.reserve().env().get("WORKFLOW_HOST") is Some(raw) else {
+    fail("the handoff variable must be set")
+  }
+  let document = @json.parse(raw)
+  guard document is { "exe": String(exe), "child_args": Array(args), .. } else {
+    fail("handoff shape drifted: \{document.stringify()}")
+  }
+  assert_eq(exe, "moonrun")
+  let args = args.map(item => {
+    match item {
+      String(value) => value
+      _ => "?"
+    }
+  })
+  assert_eq(args, [
+    "/build/wasm/openseek.wasm", "--", "subrun", "{kind}", "--session", "{child}",
+    "--session-root", "/store",
+  ])
 }

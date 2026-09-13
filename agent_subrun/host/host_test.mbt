@@ -151,3 +151,43 @@ test "the standing goal rides the hosted extension" {
     },
   )
 }
+
+///|
+/// The runtime-launched shape round-trips through the library too: `exe` is a
+/// program name (an absolute path is advised, not required, and the policy
+/// pins the module argument instead), and the module rides the argv template
+/// ahead of the verb.
+test "a runtime-launched engine still produces a handoff the library reads" {
+  let injection = @host.SubrunInjection(
+    exe="moonrun",
+    launch_prefix=["/build/wasm/openseek.wasm", "--"],
+    session_root="/store",
+    parent="run7",
+    workspace_root="/ws",
+    reserve_ordinals=_ => 1,
+  )
+  guard injection.reserve().env().get("WORKFLOW_HOST") is Some(raw) else {
+    fail("the handoff variable must be set")
+  }
+  let previous = @env.get_env_var("WORKFLOW_HOST")
+  @env.set_env_var("WORKFLOW_HOST", raw)
+  defer (match previous {
+    Some(value) => @env.set_env_var("WORKFLOW_HOST", value)
+    None => @env.unset_env_var("WORKFLOW_HOST")
+  })
+  guard @hosted.context() is Some(_) else {
+    fail("the library must accept what this host wrote")
+  }
+  guard @json.parse(raw)
+    is { "exe": String(exe), "child_args": Array(args), .. } else {
+    fail("handoff shape drifted: \{raw}")
+  }
+  assert_eq(exe, "moonrun")
+  let args = args.map(item => {
+    match item {
+      String(value) => value
+      _ => "?"
+    }
+  })
+  assert_eq(args[:4], ["/build/wasm/openseek.wasm", "--", "subrun", "{kind}"])
+}

@@ -665,8 +665,10 @@ async fn run_serve(
     // counter `run_subrun` uses, or a snippet's child and a `review` child
     // collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
+      let (exe, launch_prefix) = workflow_launch(exe)
       spec.injection(
         exe~,
+        launch_prefix~,
         workspace_root~,
         model="\{model}",
         api_url?,

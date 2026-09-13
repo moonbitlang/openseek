@@ -391,20 +391,24 @@ fn wrap_bullet(bullet : String) -> String {
 /// refuses git's reconfiguring global options because they precede the
 /// subcommand.
 /// `inject` names variables written into the GUEST environment on top of the
-/// host's, and `spawnable` an extra program the snippet may start. Both exist
-/// for one caller: a snippet that runs a workflow needs the engine's own
-/// absolute path plus the coordinates mbtx reserved for it, and neither can
-/// come from the snippet — the whole point is that only values mbtx chose
-/// resolve to anything the host is watching. `spawnable` is an ABSOLUTE path
-/// for the same reason `run_subrun` callers never resolve the engine through PATH:
-/// parent and child must be the same binary or the report's derived JSON
-/// codecs can drift. moonrun matches the entry exactly, so an absolute rule
+/// host's, and `spawnable` the program a snippet may start for its delegated
+/// children, with the argv tokens that must precede `subrun` in the launch.
+/// Both exist for one caller: a snippet that runs a workflow needs the
+/// engine's own launch command plus the coordinates mbtx reserved for it, and
+/// neither can come from the snippet — the whole point is that only values
+/// mbtx chose resolve to anything the host is watching. The rule is pinned to
+/// the engine's exact command, for the same reason `run_subrun` callers never
+/// resolve the engine through PATH: parent and child must be the same binary
+/// or the report's derived JSON codecs can drift. A native engine is admitted
+/// by its ABSOLUTE path, and a wasm one — which no OS will exec — by its
+/// runtime plus the exact module path this host chose, with the prefix doing
+/// the pinning there. moonrun matches the entry exactly, so an absolute rule
 /// admits only that exact binary and no same-named one earlier in PATH.
 fn wasm_policy_document(
   tmp_dir~ : String,
   extra_roots~ : Array[String],
   inject~ : Map[String, String],
-  spawnable~ : String?,
+  spawnable~ : (String, Array[String])?,
 ) -> Json {
   // A snippet writes NOTHING in the workspace. It does not need to: the file
   // tools make the edits, and the commands whose job is to rewrite source
@@ -433,14 +437,21 @@ fn wasm_policy_document(
     }
     allow.push(rule)
   }
-  // The engine itself, one verb only. `subrun` reads a JSON line and reports
-  // a child agent's result; the other verbs stay out, since a bare `openseek`
-  // starts an interactive agent. An admitted verb spawns children of its own
-  // — the sub-run IS an agent — which is the already-accepted `moon run`
-  // shape; what the prefix buys is that only the delegating FORM of this
-  // program exists in a snippet's vocabulary.
-  if spawnable is Some(exe) {
-    allow.push({ "program": exe, "args_prefix": json_strings(["subrun"]) })
+  // The engine itself, one verb only: `subrun` reads a JSON line and reports
+  // a child agent's result. The other verbs stay out, since a bare `openseek`
+  // starts an interactive agent. A wasm engine's runtime appears with the
+  // module this host chose in front of that verb, so `moonrun` here names
+  // that one engine rather than a general licence to run modules — which is
+  // why this entry is generated per reservation instead of living in
+  // `spawnable_commands`. An admitted verb spawns children of its own — the
+  // sub-run IS an agent — which is the already-accepted `moon run` shape;
+  // what the prefix buys is that only the delegating FORM of this program
+  // exists in a snippet's vocabulary.
+  if spawnable is Some((program, launch_prefix)) {
+    allow.push({
+      "program": program,
+      "args_prefix": json_strings([..launch_prefix, "subrun"]),
+    })
   }
   {
     // A policy run BUILDS the guest environment rather than inheriting one, so
@@ -542,7 +553,7 @@ test "the reservation reaches the guest, and only its own directory is writable"
     tmp_dir="/run/tmp",
     extra_roots=[reservation.dir()],
     inject~,
-    spawnable=Some(injection.exe()),
+    spawnable=Some((injection.exe(), injection.launch_prefix())),
   )
   guard policy
     is {
@@ -566,6 +577,44 @@ test "the reservation reaches the guest, and only its own directory is writable"
   assert_true(
     allow.contains({ "program": "/opt/openseek", "args_prefix": ["subrun"] }),
   )
+}
+
+///|
+/// A wasm engine is admitted through its runtime, and the module this host
+/// chose is what pins the entry: bare `moonrun` would be a general licence to
+/// run modules, and the module alone names no program to run. The entry is
+/// generated per reservation rather than living in `spawnable_commands` for
+/// exactly that reason — the model's vocabulary does not grow.
+test "a wasm engine is admitted as its runtime plus the chosen module" {
+  let injection = @host.SubrunInjection(
+    exe="moonrun",
+    launch_prefix=["/engine/openseek.wasm", "--"],
+    session_root="/store",
+    parent="run7",
+    workspace_root="/ws",
+    reserve_ordinals=_ => 1,
+  )
+  let policy = wasm_policy_document(
+    tmp_dir="/run/tmp",
+    extra_roots=[],
+    inject=Map([]),
+    spawnable=Some((injection.exe(), injection.launch_prefix())),
+  )
+  guard policy is { "process": { "allow": Array(allow), .. }, .. } else {
+    fail("policy lost its process section")
+  }
+  assert_true(
+    allow.contains({
+      "program": "moonrun",
+      "args_prefix": ["/engine/openseek.wasm", "--", "subrun"],
+    }),
+  )
+  // The module is part of the rule: a snippet cannot point the runtime at
+  // another module, nor run one it wrote itself.
+  assert_false(
+    allow.contains({ "program": "moonrun", "args_prefix": ["subrun"] }),
+  )
+  assert_false(allow.contains({ "program": "moonrun" }))
 }
 
 ///|

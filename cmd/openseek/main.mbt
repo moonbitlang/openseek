@@ -316,9 +316,15 @@ async fn run_task_turn(
     // counter `run_subrun` uses, so a snippet's child and a `review` child
     // cannot collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
-      spec.injection(exe~, workspace_root~, model="\{model}", api_url?, criteria=() => {
-        audit_criteria(latest_session)
-      })
+      let (exe, launch_prefix) = workflow_launch(exe)
+      spec.injection(
+        exe~,
+        launch_prefix~,
+        workspace_root~,
+        model="\{model}",
+        api_url?,
+        criteria=() => audit_criteria(latest_session),
+      )
     })
     let tools = @agent.build_tools(
       runtime,
