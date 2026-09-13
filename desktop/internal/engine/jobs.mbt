@@ -83,7 +83,10 @@ async fn read_job_record(
   guard @wire.valid_job_component(generation) && @wire.valid_job_component(id) else {
     raise EngineError("invalid job identity")
   }
-  let file = @fs.open("\{directory}/\{generation}/\{id}.json", mode=ReadOnly)
+  let file = @fs.open(
+    "\{directory}/\{generation}/\{@wire.job_storage_name(id)}.json",
+    mode=ReadOnly,
+  )
   defer file.close()
   guard file.kind() is Regular else {
     raise EngineError("job metadata is not a regular file")
@@ -303,7 +306,7 @@ async fn job_history_page(
     }
     let ids = files.filter_map(name => {
       if name.has_suffix(".json") {
-        Some(name[:name.length() - 5].to_owned())
+        Some(@wire.job_id_from_storage(name[:name.length() - 5].to_owned()))
       } else {
         None
       }
@@ -314,6 +317,8 @@ async fn job_history_page(
       }
     }
     ids.sort_by((a, b) => {
+      let a = job_id_order_key(a)
+      let b = job_id_order_key(b)
       let length = b.length().compare(a.length())
       if length != 0 {
         length
@@ -554,5 +559,16 @@ async fn await_job_settlement(
       raise EngineError(
         "Stop was delivered, but completion is not confirmed yet. The job may still be stopping; refresh its status.",
       )
+  }
+}
+
+///|
+/// Normalize compact UUIDs for chronological sorting alongside historical UUIDs.
+/// Unknown ID formats retain their existing stable lexical ordering.
+fn job_id_order_key(id : String) -> String {
+  guard id.length() == 22 else { return id }
+  let encoded = id.replace_all(old="-", new="+").replace_all(old="_", new="/")
+  @x_uuid.from_bytes(@base64.decode(encoded + "==")).to_string() catch {
+    _ => id
   }
 }

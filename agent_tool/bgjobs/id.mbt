@@ -7,7 +7,7 @@
 fn BgJobRuntime::next_id(self : BgJobRuntime) -> String raise {
   let (id, stamp) = @uuid.mint(@env.now(), self.last_id_ms, @env.rand(10))
   self.last_id_ms = Some(stamp)
-  id
+  compact_id(id)
 }
 
 ///|
@@ -34,4 +34,31 @@ async test "previous runtime and legacy job IDs cannot read wait for or stop a n
     assert_true(current.snapshot(new_id) is Some({ status: Running, .. }))
     assert_true(current.stop(new_id))
   })
+}
+
+///|
+/// Losslessly encode all 128 UUID bits as 22 URL-safe characters.
+fn compact_id(id : String) -> String raise {
+  @base64.encode(@x_uuid.from_hex(id).to_bytes(), padding=false)
+  .replace_all(old="+", new="-")
+  .replace_all(old="/", new="_")
+}
+
+///|
+test "compact job IDs preserve all UUIDv7 bits" {
+  let original = "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"
+  let compact = compact_id(original)
+  assert_eq(compact, "AX8i4nmwfMOYxNwMDAc5jw")
+  let bytes = @base64.decode(compact + "==")
+  assert_eq(@x_uuid.from_bytes(bytes).to_string(), original)
+  let edge = compact_id("ffffffff-ffff-7fff-bfff-ffffffffffff")
+  assert_eq(edge.length(), 22)
+  assert_false(edge.contains("/") || edge.contains("+") || edge.contains("="))
+  let decoded = @base64.decode(
+    edge.replace_all(old="-", new="+").replace_all(old="_", new="/") + "==",
+  )
+  assert_eq(
+    @x_uuid.from_bytes(decoded).to_string(),
+    "ffffffff-ffff-7fff-bfff-ffffffffffff",
+  )
 }

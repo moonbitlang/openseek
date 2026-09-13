@@ -334,12 +334,24 @@ async test "UUIDv7 history preserves newest-first bounded pages across terminal 
       "0".repeat(4 - hex.length()) +
       hex +
       "-7abc-8def-0123456789ab"
+    // Mix persisted hexadecimal IDs with compact IDs, crossing Base64's
+    // non-lexical alphabet boundaries while retaining UUID creation order.
+    let id = if index % 2 == 0 {
+      @base64.encode(@x_uuid.from_hex(id).to_bytes(), padding=false)
+      .replace_all(old="+", new="-")
+      .replace_all(old="/", new="_")
+    } else {
+      id
+    }
     ids.push(id)
     let record = { ..job_record_fixture(), id, state: Exited(0), }
-    @fs.write_file("\{root}/gen-1/\{id}.json", record.to_json().stringify())
+    @fs.write_file(
+      "\{root}/gen-1/\{@wire.job_storage_name(id)}.json",
+      record.to_json().stringify(),
+    )
   }
   // An out-of-page corrupt file must not get decoded until its page is read.
-  @fs.write_file("\{root}/gen-1/\{ids[0]}.json", "{}")
+  @fs.write_file("\{root}/gen-1/\{@wire.job_storage_name(ids[0])}.json", "{}")
   let errors : Array[String] = []
   let first = job_history_page(root, Map([]), 0, errors)
   assert_eq(errors, [])
@@ -353,7 +365,10 @@ async test "UUIDv7 history preserves newest-first bounded pages across terminal 
     state: Exited(7),
     revision: 2,
   }
-  @fs.write_file("\{root}/gen-1/\{ids[1]}.json", updated.to_json().stringify())
+  @fs.write_file(
+    "\{root}/gen-1/\{@wire.job_storage_name(ids[1])}.json",
+    updated.to_json().stringify(),
+  )
   let refreshed = job_history_page(root, Map([]), 0, [])
   assert_eq(
     refreshed.jobs.map(view => view.job.id),

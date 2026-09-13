@@ -84,9 +84,12 @@ Standard durable `run`/`serve` sessions retain job logs below their session's
 `jobs/<runtime-generation>` directory. Compiler/snippet scratch files still
 follow the engine scope. No-session engines label their logs temporary.
 
-Job IDs are opaque, full UUIDv7 strings, unique across runtime restarts. Tools
+Job IDs are opaque, 22-character unpadded Base64url encodings of UUIDv7, unique across runtime restarts. Tools
 must use the exact returned ID, never a shortened UI label. The runtime advances
-a logical millisecond on same-tick allocation or clock rollback, keeping IDs
-ordered within one runtime; 74 secure random bits separate independent runtimes.
+a logical millisecond on same-tick allocation or clock rollback, keeping the underlying UUIDs
+ordered within one runtime (the encoded strings are not lexically ordered); 74 secure random bits separate independent runtimes.
 Entropy failure prevents registration. Retained history still includes legacy
 `bg-N` IDs, scoped by generation; the live registry never aliases them to a new job.
+
+Compact IDs are case-sensitive. On disk, their UUID bytes use reversible lowercase
+`uuid-<32 hex digits>` names, avoiding collisions on case-insensitive filesystems.

@@ -7,6 +7,10 @@ import {
 }
 
 // Values
+pub fn job_id_from_storage(String) -> String
+
+pub fn job_storage_name(String) -> String
+
 pub fn parse(Json) -> Event?
 
 pub fn split_child_session_id(String) -> (String, Int)?

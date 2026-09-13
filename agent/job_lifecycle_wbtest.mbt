@@ -26,10 +26,15 @@ async test "job lifecycle publishes ordered durable start and failure with retai
       assert_eq(events[1].1.output_bytes, 6L)
       assert_true(events[1].1.finished_at_ms is Some(_))
       let saved : @protocol.JobRecord = @json.from_json(
-        @json.parse(@fs.read_file("\{root}/\{id}.json").text()),
+        @json.parse(
+          @fs.read_file("\{root}/\{@protocol.job_storage_name(id)}.json").text(),
+        ),
       )
       assert_eq(saved, events[1].1)
-      assert_eq(@fs.read_file("\{root}/\{id}.out").text(), "你好")
+      assert_eq(
+        @fs.read_file("\{root}/\{@protocol.job_storage_name(id)}.out").text(),
+        "你好",
+      )
       jobs.finalize()
       assert_eq(events.length(), 2)
     })
@@ -75,7 +80,7 @@ async test "session cleanup persists a terminal record after cancellation" {
         fail("missing jobs")
       }
       let id = jobs.start(program="/bin/sleep", args=["30"], command="sleep")
-      "\{root}/\{jobs.generation()}/\{id}.json"
+      "\{root}/\{jobs.generation()}/\{@protocol.job_storage_name(id)}.json"
     })
   })
   let saved : @protocol.JobRecord = @json.from_json(
@@ -100,7 +105,7 @@ async test "metadata write failure remains visible and does not strand stop sett
         on_job_event=(_, record) => events.push(record),
       )
       let id = jobs.start(program="/bin/sleep", args=["30"], command="sleep")
-      @fs.mkdir("\{root}/\{id}.json.tmp")
+      @fs.mkdir("\{root}/\{@protocol.job_storage_name(id)}.json.tmp")
       assert_true(jobs.stop(id))
       assert_true(
         events.last() is Some(record) &&

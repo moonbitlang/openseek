@@ -89,7 +89,7 @@ async fn BgJobRuntime::publish(
   // Execution status/output may advance while filesystem writes are awaiting.
   let record = job.record(self)
   if self.persistent_logs && self.spill_dir is Some(dir) {
-    let path = "\{dir}/\{id}.json"
+    let path = "\{dir}/\{@protocol.job_storage_name(id)}.json"
     let temporary = "\{path}.tmp"
     try {
       @fs.write_file(

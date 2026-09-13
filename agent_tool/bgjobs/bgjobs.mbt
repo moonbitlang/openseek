@@ -291,7 +291,9 @@ pub async fn BgJobRuntime::start(
   // the job id and its `<id>.out` file never diverge.
   self.prepare_output()
   let id = self.next_id()
-  let spill_path = self.spill_dir.map(dir => "\{dir}/\{id}.out")
+  let spill_path = self.spill_dir.map(dir => {
+    "\{dir}/\{@protocol.job_storage_name(id)}.out"
+  })
   let exec = (self.spawn_exec)(
     program, args, cwd, max_output_chars, spill_path, stdin,
   )
@@ -757,17 +759,16 @@ async test "start allocates one id per job (id matches its spill file)" {
       spill_dir=directory,
     )
     let a = rt.start(program="sh", args=["-c", "printf a"], command="a")
-    assert_eq(a.length(), 36)
-    assert_eq(a[14], '7')
+    assert_eq(a.length(), 22)
     assert_eq(
       poll_until_terminal(rt, a).output_file,
-      Some("\{directory}/\{a}.out"),
+      Some("\{directory}/\{@protocol.job_storage_name(a)}.out"),
     )
     let b = rt.start(program="sh", args=["-c", "printf b"], command="b")
-    assert_true(a < b)
+    assert_true(a != b)
     assert_eq(
       poll_until_terminal(rt, b).output_file,
-      Some("\{directory}/\{b}.out"),
+      Some("\{directory}/\{@protocol.job_storage_name(b)}.out"),
     )
   })
 }

@@ -1,5 +1,7 @@
 ///|
 import {
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/core/encoding/hex",
   "moonbitlang/async",
   "moonbitlang/async/cond_var",
   "moonbitlang/async/fs",
@@ -69,24 +71,19 @@ fn tool_delta(step : Int, name : String, args : Json) -> Json {
 }
 
 ///|
-/// Validate the complete RFC 9562 UUIDv7 shape, including version and variant.
+/// Validate the compact UUIDv7 encoding, including version and variant.
 fn background_id(messages : String) -> String raise {
   let marker = "moved to the background as job "
   guard messages.split(marker).nth(1) is Some(tail) else {
     fail("Missing background job announcement: \{messages}")
   }
-  let id = tail.iter().take(36).map(c => c.to_string()).collect().join("")
-  assert_eq(id.length(), 36)
-  for i in 0..<id.length() {
-    let c = id[i]
-    if [8, 13, 18, 23].contains(i) {
-      assert_eq(c, '-')
-    } else {
-      assert_true(c is ('0'..='9' | 'a'..='f'))
-    }
-  }
-  assert_eq(id[14], '7')
-  assert_true(id[19] is ('8' | '9' | 'a' | 'b'))
+  let id = tail.iter().take(22).map(c => c.to_string()).collect().join("")
+  assert_eq(id.length(), 22)
+  assert_true(id.iter().all(c => c is ('A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_')))
+  let bytes = job_id_bytes(id)
+  assert_eq(bytes.length(), 16)
+  assert_eq(bytes[6].to_int() >> 4, 7)
+  assert_eq(bytes[8].to_int() >> 6, 2)
   id
 }
 
@@ -426,7 +423,7 @@ async fn run_case(
           session_id +
           "/jobs/" +
           generation
-        let metadata = artifact_dir + "/" + id + ".json"
+        let metadata = artifact_dir + "/uuid-" + @hex.encode(job_id_bytes(id)) + ".json"
         let saved = @json.parse(@fs.read_file(metadata).text())
         assert_eq(field(saved, "state"), { "kind": "stopped", "reason": "user" })
         let restarted = @shell.Cmd(
@@ -506,6 +503,11 @@ async fn main {
     assert_true(!ids.contains(id))
     ids.push(id)
   }
-  println("PASS: independent CLI processes allocate distinct full UUID job IDs")
+  println("PASS: independent CLI processes allocate distinct compact UUID job IDs")
   ignore(run_case(executable, root, Read))
+}
+
+///|
+fn job_id_bytes(id : String) -> Bytes raise {
+  @base64.decode(id.replace_all(old="-", new="+").replace_all(old="_", new="/") + "==")
 }

@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/core/encoding/base64",
+  "moonbitlang/x/uuid" @x_uuid,
   "bobzhang/openseek/agent_runtime",
   "bobzhang/openseek/agent_tool/internal/sandbox",
   "bobzhang/openseek/agent_tool/shell_exec",

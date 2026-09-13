@@ -254,7 +254,7 @@ async test "failed metadata persistence never prunes an adopted job log" {
       snapshot.output_file is Some(path) else {
       fail("missing log")
     }
-    let metadata = "\{root}/\{jobs.generation()}/\{id}.json"
+    let metadata = "\{root}/\{jobs.generation()}/\{@protocol.job_storage_name(id)}.json"
     @fs.remove(metadata)
     @fs.mkdir(metadata)
     assert_true(jobs.stop(id))
