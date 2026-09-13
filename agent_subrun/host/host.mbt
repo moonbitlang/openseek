@@ -180,7 +180,12 @@ pub fn SubrunReservation::env(self : SubrunReservation) -> Map[String, String] {
 /// write the same document. `attempt_id` in the resulting ledger is the
 /// rendered `child_id` — `<parent>-sr-N` — which is exactly the session id the
 /// transcript viewer links to and the desktop's progress probe tails.
-pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
+/// `cwd` selects this invocation's child workspace. The caller resolves it
+/// to an absolute directory; omitting it keeps the injection's workspace.
+pub fn SubrunInjection::reserve(
+  self : SubrunInjection,
+  cwd? : String,
+) -> SubrunReservation {
   let base = (self.reserve_ordinals)(block_size)
   // The run's directory lives in the session store's root, beside the store's
   // own `sessions/` tree that holds the transcripts it accounts for — with the
@@ -219,7 +224,7 @@ pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
     ],
     "journal": journal_path,
     "events": events_path,
-    "cwd": self.workspace_root,
+    "cwd": cwd.unwrap_or(self.workspace_root),
   }
   if (self.criteria)() is Some(criteria) {
     let audit : Json = match criteria.sha {

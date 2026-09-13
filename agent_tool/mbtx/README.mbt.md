@@ -124,7 +124,10 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   and run without that policy. `native` is deliberately unavailable because
   moonrun cannot apply the policy to it.
 - `cwd` (string, optional, default workspace root): the working directory the
-  program runs in. A relative `cwd` resolves against the workspace root.
+  program and its hosted children run in. A relative `cwd` resolves against
+  the workspace root. With `subrun: true`, scouts and reviewers read this
+  selected worktree; saved-script filenames still resolve against the original
+  workspace, and the snippet's write roots do not change.
 - `escalated` (boolean, optional, default `false`): ask the user to run this
   one snippet with **no sandbox policy**. Offered only when the tool was built
   with an `ask_approval` channel — see *Escalation* below. Absent from the
