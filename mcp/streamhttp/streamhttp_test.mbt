@@ -25,6 +25,9 @@ struct SeenHeaders {
   mut protocol_version : String
   mut accept : String
   mut deleted_session : String
+  // A configured non-reserved extra, recorded on both request paths.
+  mut post_authorization : String?
+  mut delete_authorization : String?
 }
 
 ///|
@@ -44,6 +47,8 @@ async fn mock_mcp_endpoint(
     protocol_version: "",
     accept: "",
     deleted_session: "",
+    post_authorization: None,
+    delete_authorization: None,
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
     server.run_forever(
@@ -53,6 +58,9 @@ async fn mock_mcp_endpoint(
           for key, value in request.headers {
             if key == "mcp-session-id" {
               seen.deleted_session = value
+            }
+            if key == "authorization" {
+              seen.delete_authorization = Some(value)
             }
           }
           conn.send_response(200, "OK")
@@ -81,6 +89,7 @@ async fn mock_mcp_endpoint(
                 "mcp-session-id" => seen.session_id = value
                 "mcp-protocol-version" => seen.protocol_version = value
                 "accept" => seen.accept = value
+                "authorization" => seen.post_authorization = Some(value)
                 _ => ()
               }
             }
@@ -120,7 +129,16 @@ async fn mock_mcp_endpoint(
 async test "http connect handshakes, lists tools over SSE, and echoes session headers" {
   @async.with_task_group() <| group => {
     guard mock_mcp_endpoint(group) is Some((url, seen)) else { return }
-    let conn = connect_or_fail(group, url)
+    // A configured extra must reach both paths, and a forged session id must
+    // not displace the transport's own (`reserved_header`).
+    let conn = connect_or_fail(
+      group,
+      url,
+      headers=Map([
+        ("Authorization", "Bearer test-token"),
+        ("mCp-SeSsIoN-iD", "forged"),
+      ]),
+    )
     assert_eq(conn.init().server_name, "http-mock")
     assert_eq(conn.init().protocol_version, "2025-11-25")
     let tools = conn.client().list_tools()
@@ -130,6 +148,9 @@ async test "http connect handshakes, lists tools over SSE, and echoes session he
     assert_eq(seen.session_id, "session-123")
     assert_eq(seen.protocol_version, "2025-11-25")
     assert_true(seen.accept.contains("text/event-stream"))
+    // The configured non-reserved extra reached the POST, and the reserved one
+    // did not displace the session id the server assigned.
+    assert_eq(seen.post_authorization, Some("Bearer test-token"))
     conn.shutdown()
     // Shutdown releases the server session with a best-effort DELETE.
     for _ in 0..<100 {
@@ -139,6 +160,8 @@ async test "http connect handshakes, lists tools over SSE, and echoes session he
       @async.sleep(20)
     }
     assert_eq(seen.deleted_session, "session-123")
+    // The same merge policy ran for the teardown DELETE.
+    assert_eq(seen.delete_authorization, Some("Bearer test-token"))
   }
 }
 
@@ -346,10 +369,12 @@ async test "tools/list waits for the initialized notification to complete" {
 async fn connect_or_fail(
   group : @async.TaskGroup[Unit],
   url : String,
+  headers? : Map[String, String] = Map([]),
 ) -> @streamhttp.HttpConnection {
   @streamhttp.connect(
     group,
     url~,
+    headers~,
     client_name="openseek",
     client_version="0.1",
     handshake_timeout_ms=10000,
