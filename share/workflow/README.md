@@ -195,3 +195,14 @@ head replacement, external statuses, unknown states, and timeouts. It runs in
 argument forwarding without requiring GitHub credentials.
 
 All bundled-workflow fixtures run in MoonBit; they require no Python runtime.
+
+## Validation
+
+Run `just check-workflows` to type-check every `.mbtx` under `share/workflow`
+against its declared imports with `moon check --target wasm --deny-warn`.
+This does not execute the scripts. `just check` includes this gate, and CI
+runs it in the independent `bundled workflow checks` job. Newly added scripts
+are discovered automatically.
+
+`just test-workflows` separately compiles and executes the hosted review,
+repository mapping, change review, and CI watch scripts with offline fixtures.

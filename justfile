@@ -9,10 +9,15 @@ default:
 
 # Check the two production targets together and verify repository formatting.
 check:
+    just check-workflows
     just check-prompt
     moon check --target native --deny-warn
     moon check --target js --deny-warn
     moon fmt --check
+
+# Check standalone bundled scripts against their declared dependencies without running them.
+check-workflows:
+    {{ PYTHON }} scripts/check_workflows.py
 
 # Build every root workspace member for the production targets.
 build:
