@@ -8,23 +8,44 @@ async fn Schedules::execute(
   sink? : EventSink,
   on_workspaces? : (Array[String]) -> Unit,
 ) -> Unit {
-  let status : @protocol.ScheduleRunStatus = try {
-    @fs.write_file(
-      run.log_path,
-      "Starting scheduled task\n",
-      create_mode=CreateOrTruncate,
-      permission=0o600,
-    )
-    match
-      @async.with_timeout_opt(
-        timeout_ms.unwrap_or(entry.spec.timeout_minutes * 60000),
-        () => self.run_cli(entry.spec, run, sink?, on_workspaces?),
-      ) {
-      Some(0) => scheduled_session_result(run)
-      Some(code) => Failed("CLI exited with code \{code}; see the run log")
-      None => TimedOut
+  let status : @protocol.ScheduleRunStatus = @async.with_task_group(group => {
+    let record_guard = self.manager.begin_record_op(run.session)
+    defer self.manager.end_record_op(run.session, record_guard)
+    // The follower outlives the timed writer scope so Stop and timeout can
+    // reap the CLI first, then drain its last durable commits.
+    defer (if self.manager.followers.get(run.session) is Some(follower) {
+      discard_follower_startup(self.manager, follower)
+    })
+    let status : @protocol.ScheduleRunStatus = try {
+      @fs.write_file(
+        run.log_path,
+        "Starting scheduled task\n",
+        create_mode=CreateOrTruncate,
+        permission=0o600,
+      )
+      match
+        @async.with_timeout_opt(
+          timeout_ms.unwrap_or(entry.spec.timeout_minutes * 60000),
+          () => self.run_cli(group, entry.spec, run, sink?, on_workspaces?),
+        ) {
+        Some(0) => scheduled_session_result(run)
+        Some(code) => Failed("CLI exited with code \{code}; see the run log")
+        None => TimedOut
+      }
+    } catch {
+      error if @async.is_being_cancelled() => raise error
+      error => Failed("\{error}")
     }
-  } catch {
+    if self.manager.followers.get(run.session) is Some(follower) {
+      stop_follower_instance(self.manager, follower, writer_exited=true) catch {
+        error if @async.is_being_cancelled() => raise error
+        error =>
+          @xlog.warn() <?
+            { "event": "schedule_final_scan_failed", "message": "\{error}" }
+      }
+    }
+    status
+  }) catch {
     error if @async.is_being_cancelled() => raise error
     error => Failed("\{error}")
   }
@@ -53,16 +74,17 @@ async fn Schedules::execute(
       self.lock.acquire()
       defer self.lock.release()
       let state = self.load()
+      let settled = { ..run, status, finished_at: Some(schedule_now()), }
       let runs = state.runs.map(item => {
         if item.id == run.id {
-          { ..item, status, finished_at: Some(schedule_now()), }
+          settled
         } else {
           item
         }
       })
       self.commit({ ..state, runs, })
       if on_finished is Some(notify) {
-        notify(run)
+        notify(settled)
       }
     }) catch {
       error if @async.is_being_cancelled() => raise error
@@ -78,8 +100,12 @@ async fn Schedules::execute(
 }
 
 ///|
-async fn Schedules::run_cli(
+// async 0.21 exposes abandoned stdin cleanup only through its deprecated
+// close method; retain it until the dependency supplies a replacement.
+#warnings("-deprecated")
+async fn[G] Schedules::run_cli(
   self : Schedules,
+  follower_group : @async.TaskGroup[G],
   spec : @protocol.ScheduleSpec,
   run : @protocol.ScheduleRun,
   sink? : EventSink,
@@ -96,8 +122,6 @@ async fn Schedules::run_cli(
       }
     })
   }
-  let record_guard = self.manager.begin_record_op(run.session)
-  defer self.manager.end_record_op(run.session, record_guard)
   let config = serve_config(
     spec.task,
     self.manager,
@@ -115,26 +139,35 @@ async fn Schedules::run_cli(
     args.push("--session-root=\{root.to_string()}")
   }
   args.append(["--", spec.task])
+  if self.stopped.contains(run.id) {
+    return 0
+  }
   // File redirection keeps memory bounded and never leaves a pipe undrained.
   let output = @process.redirect_to_file(
     run.log_path,
     create_mode=CreateOrTruncate,
     permission=0o600,
   )
+  defer output.close()
   let (input, writer) = @process.write_to_process()
+  defer input.close()
   writer.close()
   @async.with_task_group(group => {
     if self.stopped.contains(run.id) {
       return 0
     }
-    let follower = match sink {
-      Some(sink) =>
-        ensure_follower(sink~, group~, manager=self.manager, config~)
-      None => None
-    }
-    defer (if follower is Some(follower) {
-      discard_follower_startup(self.manager, follower)
-    })
+    ignore(
+      match sink {
+        Some(sink) =>
+          ensure_follower(
+            sink~,
+            group=follower_group,
+            manager=self.manager,
+            config~,
+          )
+        None => None
+      },
+    )
     let process = @process.spawn(
       group,
       config.engine,
@@ -146,17 +179,15 @@ async fn Schedules::run_cli(
       extra_env=env,
       inherit_env=false,
       no_console_window=true,
-      cancel_handler=@process.graceful_cancel(timeout=1000),
+      // The CLI runtime cancels its tools, whose default grace is 5s.
+      // Leave time for their kill/reap barriers before killing the CLI.
+      cancel_handler=@process.graceful_cancel(timeout=10000),
     )
     self.processes[run.id] = process
     if self.stopped.contains(run.id) {
       process.cancel()
     }
-    let code = process.wait()
-    if follower is Some(follower) {
-      stop_follower_instance(self.manager, follower, writer_exited=true)
-    }
-    code
+    process.wait()
   })
 }
 

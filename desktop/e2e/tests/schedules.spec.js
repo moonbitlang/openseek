@@ -179,3 +179,22 @@ for (const broadcastDirectory of [true, false]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+
+test('reopening Scheduled while save is pending preserves its acknowledgement', async ({ page }) => {
+  const app = new ScheduleHarness(page);
+  app.rpcDelays.set('schedules.save', 1200);
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await page.getByRole('button', { name: 'New schedule', exact: true }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Only one plan');
+  await page.getByLabel('Task', { exact: true }).fill('Summarize updates');
+  await page.getByRole('button', { name: 'Save schedule', exact: true }).click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'schedules.save').length).toBe(1);
+  await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Save schedule', exact: true })).toBeDisabled();
+  await expect(page.locator('.schedule-form')).toHaveCount(0);
+  expect(app.schedules.entries).toHaveLength(1);
+  expect(app.requests.filter(r => r.method === 'schedules.save')).toHaveLength(1);
+});

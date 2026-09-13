@@ -80,7 +80,8 @@ can place its commits. Opening a scheduled session also reconciles its directory
 and requests placement metadata if a prior notification was missed. Run start
 and settlement notifications refresh the visible schedule page.
 
-Clients also poll every two seconds only while the Scheduled page is visible,
+Clients also poll every two seconds while the Scheduled page or a running
+scheduled session is visible,
 with one request in flight. Replies retain their device and request sequence.
 Saved plans outlive the page, and UI state does not drive the timer.
 

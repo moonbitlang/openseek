@@ -68,3 +68,25 @@ test "scheduled status refresh cannot remain busy on a previous host" {
   assert_true(refreshed.schedules.sequence > 4)
   assert_true(refreshed.schedules.busy)
 }
+
+///|
+test "reopening schedules and switching hosts preserve a pending save acknowledgement" {
+  let base = test_model()
+  let page = {
+    ..SchedulePage::empty(),
+    owner: Some(base.focused),
+    busy: true,
+    sequence: 7,
+    form: Some(ScheduleForm::empty()),
+  }
+  let (_, opened) = open_schedules(test_dispatch(), { ..base, schedules: page, })
+  assert_eq(opened.schedules.sequence, 7)
+  assert_true(opened.schedules.busy)
+  let (_, saved) = update_schedules(
+    test_dispatch(),
+    Loaded(base.focused, 7, true, Ok({ entries: [], runs: [], })),
+    { ..opened, focused: @interop.ChannelId::Remote("other"), },
+  )
+  assert_false(saved.schedules.busy)
+  assert_true(saved.schedules.form is None)
+}

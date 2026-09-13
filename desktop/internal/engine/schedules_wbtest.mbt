@@ -297,7 +297,19 @@ async test "scheduled run Stop and timeout reap CLI processes" {
   service.commit({ entries: [entry], runs: [], })
   let launches = service.take_due(at=100000)
   let events : Array[EngineEvent] = []
-  let sink = EventSink(event => events.push(event))
+  let unleased_commit = Ref(false)
+  let sink = EventSink(event => {
+    events.push(event)
+    if event is SessionCommit(_) {
+      try {
+        let lease = manager.begin_record_op(launches[0].1.session)
+        manager.end_record_op(launches[0].1.session, lease)
+        unleased_commit.val = true
+      } catch {
+        _ => ()
+      }
+    }
+  })
   @async.with_task_group(group => {
     let worker = group.spawn(() => {
       service.execute(launches[0].0, launches[0].1, sink~)
@@ -332,8 +344,17 @@ async test "scheduled run Stop and timeout reap CLI processes" {
       _ => true
     }
     assert_true(blocked)
+    let commits_before_stop = events.length()
+    ignore(
+      store.append(
+        store.load(SessionId(run.session)),
+        Terminal(Finished("last commit before stop")),
+      ),
+    )
     ignore(service.action({ id: entry.id, action: "stop", }))
     @async.with_timeout(5000, () => worker.wait())
+    assert_true(events.length() > commits_before_stop)
+    assert_false(unleased_commit.val)
     assert_false(manager.followers.contains(run.session))
   })
   assert_true(service.list().runs[0].status is Stopped)
@@ -343,6 +364,31 @@ async test "scheduled run Stop and timeout reap CLI processes" {
   service.execute(timed[0].0, timed[0].1, timeout_ms=500)
   assert_true(service.list().runs[1].status is TimedOut)
   assert_true(service.processes.is_empty())
+
+  // Simulate a CLI unwinding a tool's cleanup beyond the old one-second
+  // outer deadline. Its cleanup must complete before the slot is released.
+  @fs.write_file(
+    engine.to_string(),
+    "#!/bin/sh\ntrap 'sleep 2; echo cleanup-finished; exit 0' TERM\necho ready\nwhile :; do sleep 0.1; done\n",
+    create_mode=CreateOrTruncate,
+  )
+  let cleanup = service.take_due(at=220000)[0]
+  @async.with_task_group(group => {
+    let worker = group.spawn(() => service.execute(cleanup.0, cleanup.1))
+    @async.with_timeout(5000, () => {
+      while !@fsx.read_text_if_exists(Path(cleanup.1.log_path)).map_or(false, text => {
+              text.contains("ready")
+            }) {
+        @async.sleep(10)
+      }
+    })
+    ignore(service.action({ id: entry.id, action: "stop", }))
+    @async.with_timeout(5000, () => worker.wait())
+  })
+  assert_true(service.list().runs[2].status is Stopped)
+  assert_true(
+    @fsx.read_text(Path(cleanup.1.log_path)).contains("cleanup-finished"),
+  )
 }
 
 ///|

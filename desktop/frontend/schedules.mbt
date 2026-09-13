@@ -146,7 +146,6 @@ fn open_schedules(
   } else {
     { ..SchedulePage::empty(), sequence: model.schedules.sequence, }
   }
-  let page = { ..page, busy: false, sequence: page.sequence + 1, }
   request_schedules(
     dispatch,
     {
@@ -220,9 +219,7 @@ fn update_schedules(
   let page = model.schedules
   match msg {
     Loaded(channel, sequence, saved, result) => {
-      guard page.owner == Some(channel) &&
-        channel == model.focused &&
-        sequence == page.sequence else {
+      guard page.owner == Some(channel) && sequence == page.sequence else {
         return (@cmd.none, model)
       }
       let page = match result {
