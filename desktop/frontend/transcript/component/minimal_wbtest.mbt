@@ -165,3 +165,73 @@ test "a minimal shell caption never repeats the command line brief" {
   }
   assert_eq(MinimalCall::from_tool(call).caption, "shell")
 }
+
+///|
+test "OpenSeek and Codex web search names share the search activity" {
+  for name in ["web_search", "webSearch"] {
+    let call : @transcript.ToolCall = {
+      call_id: "search",
+      name,
+      arguments: None,
+      outcome: Done(
+        content="results",
+        is_error=false,
+        brief=Some("Search results"),
+      ),
+    }
+    assert_eq(MinimalCall::from_tool(call).category, Some("Search the web"))
+  }
+}
+
+///|
+test "registered built-ins and normalized operations have deliberate categories" {
+  // The OpenSeek registry, child submit tools, and Codex adapter are the
+  // sources of these names. Foreign names remain foreign even when they end
+  // in a built-in operation's name.
+  let cases = [
+    ("read", Some("Read files")),
+    ("edit", Some("Edit files")),
+    ("multi_edit", Some("Edit files")),
+    ("write", Some("Write files")),
+    ("remove", Some("Remove files")),
+    ("mbtx", Some("Execute mbtx scripts")),
+    ("shell", Some("Execute commands")),
+    ("imageView", Some("View images")),
+    ("imageGeneration", Some("Generate images")),
+    ("enteredReviewMode", Some("Review code")),
+    ("exitedReviewMode", Some("Review code")),
+    ("spawn_agent", Some("Create subagents")),
+    ("review", Some("Create subagents")),
+    ("wait_agent", Some("Wait for subagents")),
+    ("send_input", Some("Send messages to subagents")),
+    ("send_message", Some("Send messages to subagents")),
+    ("resume_agent", Some("Resume subagents")),
+    ("followup_task", Some("Assign subagent tasks")),
+    ("interrupt_agent", Some("Stop subagents")),
+    ("close_agent", Some("Close subagents")),
+    ("list_agents", Some("List subagents")),
+    ("submit_result", Some("Submit results")),
+    ("submit_answer", Some("Submit results")),
+    ("submit_pattern_repair", Some("Submit results")),
+    ("submit_review", Some("Submit reviews")),
+    ("plan", Some("Update plan")),
+    ("goal", Some("Update goal")),
+    ("finish", None),
+    ("job_wait", None),
+    ("job_output", None),
+    ("job_stop", None),
+    ("sleep", None),
+    ("mcp__example__web_search", Some("Other tool calls")),
+    ("dynamic__example__edit", Some("Other tool calls")),
+    ("unknown", Some("Other tool calls")),
+  ]
+  for (name, expected) in cases {
+    let call : @transcript.ToolCall = {
+      call_id: name,
+      name,
+      arguments: None,
+      outcome: Pending(output=None),
+    }
+    assert_eq(MinimalCall::from_tool(call).category, expected)
+  }
+}

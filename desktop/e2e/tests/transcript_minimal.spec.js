@@ -310,6 +310,11 @@ test('minimal transcript preference persists and full mode restores details', as
 });
 
 class CodexMinimalHarness extends DesktopBrowserHarness {
+  constructor(page, extraItems = []) {
+    super(page);
+    this.extraItems = extraItems;
+  }
+
   replyFor(request) {
     if (request.method === 'codex.turn.start') {
       return { turn: { id: 'codex-turn-e2e', status: 'completed', items: [
@@ -318,6 +323,7 @@ class CodexMinimalHarness extends DesktopBrowserHarness {
         { id: 'progress', type: 'agentMessage', phase: 'commentary', text: 'I will inspect the project.' },
         { id: 'command', type: 'commandExecution', command: 'HIDDEN_CODEX_COMMAND', status: 'completed', aggregatedOutput: 'HIDDEN_CODEX_OUTPUT', exitCode: 0 },
         { id: 'spawn', type: 'collabAgentToolCall', tool: 'spawnAgent', status: 'completed' },
+        ...this.extraItems,
         { id: 'answer', type: 'agentMessage', phase: 'final_answer', text: 'The project is a desktop assistant.' },
       ] } };
     }
@@ -524,5 +530,62 @@ test('minimal job waits name their targets while pending and disappear after suc
   await app.minimalMode().click();
   await app.openSession();
   await expect(stream.locator('details.tool-call')).toHaveCount(4);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('minimal OpenSeek searches and submit tools use registered activity names', async ({ page }) => {
+  const app = new MinimalTranscriptHarness(page);
+  const names = ['web_search', 'submit_result', 'submit_answer', 'submit_pattern_repair', 'submit_review', 'finish'];
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture built-in activities' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: names.map(name => ({ id: name, name, arguments: '{}' })) } } },
+    ...names.map((name, index) => ({ sequence: index + 3, item: { kind: 'tool_result', payload: {
+      tool_call_id: name, tool_name: name, brief: name, content: 'OUTPUT_SENTINEL', is_error: false,
+    } } })),
+  ];
+  await app.install();
+  await app.goto();
+  await app.enableMinimal();
+  const group = page.locator('.minimal-tools');
+  await expect(group.locator('summary')).toHaveText('Search the web · Submit results · Submit reviews');
+  await group.locator('summary').click();
+  await expect(group.locator('.minimal-call-caption')).toHaveText(names);
+  await expect(group).not.toContainText('OUTPUT_SENTINEL');
+});
+
+test('minimal Codex activities render recorded patches without classifying foreign tools as edits', async ({ page }) => {
+  const patch = '--- a/main.mbt\n+++ b/main.mbt\n@@ -1,2 +1,2 @@\n-old\n+++ new\n context';
+  const app = new CodexMinimalHarness(page, [
+    { id: 'edit', type: 'fileChange', status: 'completed', changes: [
+      { path: 'src/main.mbt', kind: { type: 'update', move_path: null }, diff: patch },
+    ] },
+    { id: 'send', type: 'collabAgentToolCall', tool: 'sendMessage', status: 'completed' },
+    { id: 'image', type: 'imageGeneration', status: 'completed' },
+    { id: 'review', type: 'enteredReviewMode', review: 'Review current edits' },
+    { id: 'dynamic', type: 'dynamicToolCall', namespace: 'example', tool: 'edit', status: 'completed', success: false,
+      arguments: { changes: [{ path: 'FOREIGN_PATCH_SENTINEL', diff: patch }] } },
+  ]);
+  app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
+    defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }] }];
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+  await page.locator('#task').fill('Explain the project');
+  await page.getByTitle('Send', { exact: true }).click();
+  const process = page.locator('#stream .minimal-process');
+  await expect(process.locator(':scope > summary')).toHaveText('Execute commands · Create subagents · Edit files · Send messages to subagents · Generate images · Review code · Other tool calls · 1 tool call failed');
+  await expect(process.locator('.tool-diff')).toBeHidden();
+  await process.locator(':scope > summary').click();
+  const diff = process.locator('.tool-diff');
+  await expect(diff).toBeVisible();
+  await expect(diff).toHaveCount(1);
+  await expect(diff.locator('.diff-del')).toHaveText(['-old']);
+  await expect(diff.locator('.diff-add')).toHaveText(['+++ new']);
+  await expect(diff.locator('.diff-ctx')).toHaveText(['--- a/main.mbt', '+++ b/main.mbt', '@@ -1,2 +1,2 @@', ' context']);
+  await expect(process.locator('.tool-card-chip')).toHaveText(['path: src/main.mbt']);
+  await expect(process.locator('.minimal-call-caption').last()).toHaveText('dynamic__example__edit');
+  await expect(process.locator('.minimal-call-status')).toHaveText('Failed');
+  await expect(process).not.toContainText('FOREIGN_PATCH_SENTINEL');
   expect(app.pageErrors).toEqual([]);
 });

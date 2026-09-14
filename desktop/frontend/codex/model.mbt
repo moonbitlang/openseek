@@ -2597,7 +2597,28 @@ fn CodexItem::tool_name(self : CodexItem) -> String {
         match tool {
           "spawnAgent" => "spawn_agent"
           "wait" => "wait_agent"
+          "sendInput" => "send_input"
+          "sendMessage" => "send_message"
+          "resumeAgent" => "resume_agent"
+          "followupTask" => "followup_task"
+          "interruptAgent" => "interrupt_agent"
+          "closeAgent" => "close_agent"
+          "listAgents" => "list_agents"
           _ => self.kind
+        }
+      } else {
+        self.kind
+      }
+    "dynamicToolCall" =>
+      // A dynamically registered tool may be named "edit" or "read" without
+      // implementing our built-in operation. Preserve its name and namespace
+      // for display while keeping it out of built-in category/diff decoding.
+      if self.value is Object(fields) &&
+        @jsonx.json_text(fields, "tool") is Some(tool) {
+        if @jsonx.json_text(fields, "namespace") is Some(tool_namespace) {
+          "dynamic__\{tool_namespace}__\{tool}"
+        } else {
+          "dynamic__\{tool}"
         }
       } else {
         self.kind
@@ -2645,7 +2666,7 @@ fn CodexItem::tool_arguments(self : CodexItem) -> String? {
 fn CodexItem::tool_has_result(self : CodexItem) -> Bool {
   guard self.value is Object(fields) else { return true }
   match @jsonx.json_text(fields, "status") {
-    Some("inProgress") | Some("pending") => false
+    Some("inProgress") | Some("in_progress") | Some("pending") => false
     _ => true
   }
 }
@@ -2659,7 +2680,10 @@ fn CodexItem::tool_failed(self : CodexItem) -> Bool {
     Some("failed") | Some("declined") | Some("cancelled") => true
     _ => false
   }
+  // Dynamic tools may complete transport successfully but report a failed
+  // operation through their explicit success flag.
   failed_status ||
+  (self.kind == "dynamicToolCall" && fields.get("success") is Some(False)) ||
   @jsonx.json_int(fields, "exitCode").map(code => code != 0).unwrap_or(false)
 }
 
@@ -2690,12 +2714,20 @@ fn CodexItem::tool_brief(self : CodexItem) -> String? {
       "fileChange" => "Changed files"
       "webSearch" => "Searched the web"
       "imageView" => "Viewed image"
+      "imageGeneration" => "Generate image"
+      "sleep" => "Wait"
       "enteredReviewMode" => "Entered review mode"
       "exitedReviewMode" => "Exited review mode"
       "collabAgentToolCall" =>
         match self.tool_name() {
           "spawn_agent" => "Create subagent"
           "wait_agent" => "Wait for subagents"
+          "send_input" | "send_message" => "Send message to subagent"
+          "resume_agent" => "Resume subagent"
+          "followup_task" => "Assign subagent task"
+          "interrupt_agent" => "Stop subagent"
+          "close_agent" => "Close subagent"
+          "list_agents" => "List subagents"
           name => name
         }
       _ => self.tool_name()

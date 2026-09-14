@@ -24,14 +24,27 @@ fn MinimalCall::from_tool(
     "remove" => Some("Remove files")
     "mbtx" => Some("Execute mbtx scripts")
     "shell" => Some("Execute commands")
-    "webSearch" => Some("Search the web")
+    "web_search" | "webSearch" => Some("Search the web")
     "imageView" => Some("View images")
+    "imageGeneration" => Some("Generate images")
+    "enteredReviewMode" | "exitedReviewMode" => Some("Review code")
     "review" | "spawn_agent" => Some("Create subagents")
     "wait_agent" => Some("Wait for subagents")
+    "send_input" | "send_message" => Some("Send messages to subagents")
+    "resume_agent" => Some("Resume subagents")
+    "followup_task" => Some("Assign subagent tasks")
+    "interrupt_agent" => Some("Stop subagents")
+    "close_agent" => Some("Close subagents")
+    "list_agents" => Some("List subagents")
+    "submit_result" | "submit_answer" | "submit_pattern_repair" =>
+      Some("Submit results")
+    "submit_review" => Some("Submit reviews")
     "plan" => Some("Update plan")
     "goal" => Some("Update goal")
-    // Job coordination stays in the expanded history, not the work summary.
-    "job_wait" | "job_output" | "job_stop" => None
+    // Coordination and turn completion are not additional kinds of work.
+    // These names come from the registered tools and the Codex adapter; keep
+    // MCP/dynamic names namespaced so a foreign "read" cannot impersonate one.
+    "job_wait" | "job_output" | "job_stop" | "finish" | "sleep" => None
     _ => Some("Other tool calls")
   }
   let (pending, failed, brief) = match call.outcome {

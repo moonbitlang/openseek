@@ -256,3 +256,77 @@ test "Codex tool categories use explicit operation metadata" {
   // An MCP tool named read is not necessarily a filesystem read.
   assert_eq(names, ["spawn_agent", "wait_agent", "mcp__example__read"])
 }
+
+///|
+test "Codex covers every declared collaboration operation and dynamic names" {
+  let operations = [
+    ("spawnAgent", "spawn_agent", "Create subagent"),
+    ("wait", "wait_agent", "Wait for subagents"),
+    ("sendInput", "send_input", "Send message to subagent"),
+    ("sendMessage", "send_message", "Send message to subagent"),
+    ("resumeAgent", "resume_agent", "Resume subagent"),
+    ("followupTask", "followup_task", "Assign subagent task"),
+    ("interruptAgent", "interrupt_agent", "Stop subagent"),
+    ("closeAgent", "close_agent", "Close subagent"),
+    ("listAgents", "list_agents", "List subagents"),
+  ]
+  let raw : Array[Json] = operations.map(operation => {
+    "id": Json(operation.0),
+    "type": "collabAgentToolCall",
+    "tool": Json(operation.0),
+    "status": "completed",
+  })
+  raw.push({
+    "id": "dynamic",
+    "type": "dynamicToolCall",
+    "namespace": "example",
+    "tool": "edit",
+    "status": "completed",
+    "success": false,
+  })
+  raw.push({
+    "id": "dynamic-bare",
+    "type": "dynamicToolCall",
+    "tool": "read",
+    "status": "inProgress",
+  })
+  raw.push({ "id": "image", "type": "imageGeneration", "status": "in_progress" })
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "t",
+      "turns": [{ "id": "work", "status": "inProgress", "items": Json(raw) }],
+    },
+  })
+  let items = state.transcript_items()
+  for index, (_, name, brief) in operations {
+    assert_true(
+      items[index].kind
+      is @transcript.Assistant(
+        calls=[{ name: actual, outcome: Done(brief=Some(caption), ..), .. }],
+        ..
+      ) &&
+      actual == name &&
+      caption == brief,
+    )
+  }
+  assert_true(
+    items[9].kind
+    is @transcript.Assistant(
+      calls=[
+        { name: "dynamic__example__edit", outcome: Done(is_error=true, ..), .. },
+      ],
+      ..
+    ),
+  )
+  assert_true(
+    items[10].kind
+    is @transcript.Assistant(
+      calls=[{ name: "dynamic__read", outcome: Pending(..), .. }],
+      ..
+    ),
+  )
+  assert_true(
+    items[11].kind
+    is @transcript.Assistant(calls=[{ outcome: Pending(..), .. }], ..),
+  )
+}
