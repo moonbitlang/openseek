@@ -24,13 +24,14 @@
 
 /* The article remains the full-width source and pointer surface. Individual
  * prose blocks are capped at a reading measure below, while diagrams, code,
- * and tables retain the full inner width. The measure is flush to the inline
- * start so prose shares one left edge with the full-width blocks; centering it
- * would leave text floating in the middle of a wide document. The inline
- * padding doubles as the fold-toggle gutter, so it stays as wide as one. */
+ * tables, and image-only paragraphs use the wider figure measure. Both
+ * measures are flush to the inline start so prose shares one left edge with
+ * the wide blocks; centering it would leave text floating in the middle of a
+ * wide document. The inline padding doubles as the fold-toggle gutter, so it
+ * stays as wide as one. */
 .moonbit-viewer-markdown-document-article {
   --markdown-prose-measure: 640px;
-  --markdown-figure-measure: 960px;
+  --markdown-figure-measure: 1440px;
 
   box-sizing: border-box;
   min-height: 100%;
@@ -65,19 +66,26 @@
   margin-inline: 0 auto;
 }
 
-/* Figures run wider than the reading measure but not to the window's edge: a
- * diagram stretched across a maximized workbench stops being scannable beside
- * the prose it belongs to, and the document loses its right edge entirely.
- * `:is()` keeps this above the viewport's own `max-width: 100%`. */
+/* Figures use the room available in a large workbench while retaining an
+ * ultrawide cap: a diagram stretched across the entire display stops being
+ * scannable beside the prose it belongs to. `:is()` keeps this above the
+ * viewport's own `max-width: 100%`. */
 .moonbit-viewer-markdown-document-article
   > :is(
     pre,
     table,
-    img,
+    p[data-markdown-image-only="true"],
     .moonbit-viewer-markdown-code-block,
     .moonbit-viewer-markdown-diagram
   ) {
   max-width: var(--markdown-figure-measure);
+}
+
+/* cmark wraps Markdown images in paragraphs. Keep every image inside its
+ * selected prose or figure measure without stretching smaller assets. */
+.moonbit-viewer-markdown-document-article img {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Use one predictable vertical cadence instead of the browser's element-by-

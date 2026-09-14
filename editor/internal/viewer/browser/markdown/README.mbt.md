@@ -30,12 +30,14 @@ renderer.set_markdown(source)      // parses once, retains the DOM it produced
 renderer.dispose()                 // detaches listeners and observers
 ```
 
-`render_markdown` converts through `internal/viewer/markdown`, postprocesses the
-result in an inert template, and then replaces the children of an explicit
-reusable target (or a newly created `div`). Links and images are resolved and
-sanitized before insertion. Action-handler links never retain native
-navigation; native links are limited to HTTP, HTTPS, and mailto. Images are
-removed by default and, when enabled, are limited to HTTP(S).
+`render_markdown` converts through `internal/viewer/markdown`, applies
+browser-only safety and lifetime policy in an inert template, and then replaces
+the children of an explicit reusable target (or a newly created `div`). Links
+and images are resolved and sanitized before insertion. Action-handler links
+never retain native navigation; native links are limited to HTTP, HTTPS, and
+mailto. Images are removed by default and, when enabled, are limited to
+HTTP(S). Image-only paragraph classification is already present in the safe
+HTML, so this layer does not rescan DOM text for layout.
 
 `RenderedMarkdown.projection` is the exact DOM-free
 `MarkdownDocumentProjection` produced by the same cmark parse and configuration
