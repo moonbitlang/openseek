@@ -109,6 +109,8 @@ pub fn ChangedFileReview::equal(Self, Self) -> Bool
 pub fn ChangedFileReview::not_equal(Self, Self) -> Bool
 
 pub(all) struct Ctx {
+  model : String
+  thinking : @protocol.OpenSeekThinking?
   owner : @interop.ConversationKey
   request_epoch : Int
   watch_namespace : String

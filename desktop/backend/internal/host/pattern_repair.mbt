@@ -58,15 +58,19 @@ async fn request_pattern_repair_candidate(
   root : @pathx.Absolute,
   pattern : String,
   instruction : String,
+  model~ : String,
+  thinking~ : @protocol.OpenSeekThinking?,
 ) -> (String, String)? {
   let input = ({ "pattern": pattern, "instruction": instruction } : Json).stringify() +
     "\n"
+  let args = ["subrun", "pattern-repair", "--model", model]
+  if thinking is Some(thinking) {
+    args.push("--thinking")
+    args.push(thinking.wire())
+  }
   let (code, stdout, _) = run_pattern_repair_process(
     state.engine,
-    [
-      "subrun", "pattern-repair", "--model", "deepseek-v4-pro", "--thinking", "no",
-      "--max-steps", "4",
-    ],
+    args,
     input,
     root.0,
     agent_env,
@@ -124,6 +128,8 @@ async fn pattern_repair_op(
       root,
       payload.pattern,
       payload.instruction,
+      model=payload.model,
+      thinking=payload.thinking,
     )
     is Some((candidate, message)) else {
     return failure(

@@ -355,19 +355,23 @@ fn resolved_endpoint(
 /// operation. Credentials stay in the child environment and never enter argv.
 pub async fn pattern_repair_environment(
   manager : EngineManager,
+  model~ : String,
 ) -> Map[String, String] raise EngineError {
   let (settings, _) = manager.settings_snapshot() catch {
     error => raise EngineError("could not read engine settings: \{error}")
   }
   let endpoint = resolved_endpoint(settings)
   let env = @sys.get_env_vars()
-  env["DEEPSEEK"] = endpoint.api_key
+  env[key_env_for(settings.provider, model)] = endpoint.api_key
   match endpoint.api_url {
     Some(url) => env["OPENSEEK_API_URL"] = url
     None => env.remove("OPENSEEK_API_URL")
   }
-  env["OPENSEEK_MODEL"] = "deepseek-v4-pro"
-  env["OPENSEEK_THINKING"] = "max"
+  // Model and thinking travel in argv. Unspecified options use the child
+  // defaults, including its kind-specific step limit.
+  env.remove("OPENSEEK_MODEL")
+  env.remove("OPENSEEK_THINKING")
+  env.remove("OPENSEEK_MAX_STEPS")
   env
 }
 
@@ -887,5 +891,40 @@ async test "a custom provider without a URL refuses to start" {
       _ => ""
     }
     assert_true(refused.contains("custom endpoint URL is required"))
+  })
+}
+
+///|
+async test "pattern repair uses provider credentials and leaves run options to argv" {
+  with_settings_dir(async fn(_dir, manager) {
+    let _ = update_settings(manager, {
+      provider: Some("custom"),
+      custom_api_url: Some("https://proxy.example/chat/completions"),
+      deepseek_api_key: None,
+      glm_api_key: None,
+      custom_api_key: Some("repair-key"),
+    })
+    let previous = ["OPENSEEK_MODEL", "OPENSEEK_THINKING", "OPENSEEK_MAX_STEPS"].map(name => {
+        (name, @sys.get_env_var(name))
+      },
+    )
+    defer (for (name, value) in previous {
+      match value {
+        Some(value) => @sys.set_env_var(name, value)
+        None => @sys.unset_env_var(name)
+      }
+    })
+    @sys.set_env_var("OPENSEEK_MODEL", "deepseek-v4-pro")
+    @sys.set_env_var("OPENSEEK_THINKING", "no")
+    @sys.set_env_var("OPENSEEK_MAX_STEPS", "4")
+    let env = pattern_repair_environment(manager, model="glm-5.3")
+    assert_eq(env.get("GLM"), Some("repair-key"))
+    assert_eq(
+      env.get("OPENSEEK_API_URL"),
+      Some("https://proxy.example/chat/completions"),
+    )
+    assert_eq(env.get("OPENSEEK_MODEL"), None)
+    assert_eq(env.get("OPENSEEK_THINKING"), None)
+    assert_eq(env.get("OPENSEEK_MAX_STEPS"), None)
   })
 }

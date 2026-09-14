@@ -112,16 +112,20 @@ pub fn State::empty() -> State {
 
 ///|
 pub(all) struct Input {
+  model : String
+  thinking : @protocol.OpenSeekThinking?
   owner : @interop.ConversationKey
   root : @common.Uri?
 } derive(Eq)
 
 ///|
 pub fn Input::Input(
+  model~ : String,
+  thinking~ : @protocol.OpenSeekThinking?,
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri?,
 ) -> Input {
-  { owner, root, }
+  { owner, root, model, thinking, }
 }
 
 ///|

@@ -14,3 +14,7 @@ import {
 }
 
 supported_targets = "js"
+
+import {
+  "moonbitlang/core/json",
+} for "wbtest"

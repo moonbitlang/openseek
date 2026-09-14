@@ -730,6 +730,8 @@ pub fn TreeLayout::wire(self : TreeLayout) -> String {
 /// embedded viewer's theme attribute), and the Settings choice of where the
 /// file tree docks.
 pub(all) struct Ctx {
+  model : String
+  thinking : @protocol.OpenSeekThinking?
   owner : @interop.ConversationKey
   // The current placement incarnation for filesystem request/reply fencing.
   request_epoch : Int
@@ -766,7 +768,12 @@ fn Ctx::root(self : Ctx) -> @common.Uri? {
 
 ///|
 fn Ctx::search_input(self : Ctx) -> @grep_search.Input {
-  @grep_search.Input(owner=self.owner, root=self.root())
+  @grep_search.Input(
+    owner=self.owner,
+    root=self.root(),
+    model=self.model,
+    thinking=self.thinking,
+  )
 }
 
 ///|

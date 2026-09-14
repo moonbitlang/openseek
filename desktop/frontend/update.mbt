@@ -1473,6 +1473,10 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     Some(@interop.Scratch(root=None)) if model.screen is Codex => None
     placement => placement
   }
+  let engine_model = model
+    .find_conversation(active.owner.channel, active.owner.session)
+    .map(conv => conv.engine_model)
+    .unwrap_or(model.default_model)
   let file_body_visible = match model.dock.active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) => false
@@ -1483,6 +1487,8 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // stable owner lets an interrupted changed-file review resume after Repair
     // without ever treating the project root as a fallback checkout.
     owner: active.owner,
+    model: engine_model.wire(),
+    thinking: engine_model.thinking(model.reasoning_for(engine_model)),
     request_epoch: model.file_panel.request_epoch,
     // The native bridge and its watcher survive a page reload. Namespace the
     // panel's monotonic counter with this page's existing random identity so
@@ -20167,4 +20173,27 @@ test "a workflow entry refines the parent conversation's run" {
     fail("expected the parent conversation")
   }
   inspect(untouched.workflows[0].rows.length(), content="1")
+}
+
+///|
+test "file context inherits the conversation model and its reasoning family" {
+  let model = {
+    ..test_model(),
+    default_model: DsPro,
+    openseek_reasoning: ReasoningMax,
+    glm_reasoning: ReasoningOff,
+  }
+  let conv = test_conversation()
+  for engine_model in [EngineModel::DsFlash, Glm53] {
+    let ctx = file_ctx(model.replace_conversation({ ..conv, engine_model, }))
+    assert_eq(ctx.model, engine_model.wire())
+    assert_eq(
+      ctx.thinking,
+      if engine_model is Glm53 {
+        Some(@protocol.ThinkingOff)
+      } else {
+        Some(@protocol.ThinkingMax)
+      },
+    )
+  }
 }

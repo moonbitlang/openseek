@@ -12,6 +12,8 @@ fn render_search(state : State, input : Input) -> String {
 #cfg(not(target="js"))
 test "Search renders VS Code's Whole Word codicon instead of a text label" {
   let input : Input = {
+    model: "deepseek-v4-flash",
+    thinking: Some(ThinkingHigh),
     owner: { channel: @interop.ChannelId::Local, session: "icons", },
     root: Some(@common.Uri::parse("file:///work")),
   }
@@ -29,7 +31,12 @@ test "Code search renders the pattern repair placeholder only in semantic mode" 
     session: "pattern-repair",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = {
+    model: "deepseek-v4-flash",
+    thinking: Some(ThinkingHigh),
+    owner,
+    root: Some(root),
+  }
   let text_html = render_search(State::empty(), input)
   assert_false(text_html.contains("Fix Pattern"))
   let semantic = State::empty().handle(ModeChanged(Semantic), input)
@@ -97,7 +104,12 @@ test "Search view groups files and marks matching UTF-16 slices" {
     session: "view",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = {
+    model: "deepseek-v4-flash",
+    thinking: Some(ThinkingHigh),
+    owner,
+    root: Some(root),
+  }
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)
@@ -147,7 +159,12 @@ test "large Search replies render incrementally without changing totals" {
     session: "large-view",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = {
+    model: "deepseek-v4-flash",
+    thinking: Some(ThinkingHigh),
+    owner,
+    root: Some(root),
+  }
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)

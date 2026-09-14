@@ -1755,6 +1755,8 @@ pub impl ToJson for OpenSeekThinking
 pub impl @json.FromJson for OpenSeekThinking
 
 pub(all) struct PatternRepairPayload {
+  model : String
+  thinking : OpenSeekThinking?
   root : String
   pattern : String
   instruction : String

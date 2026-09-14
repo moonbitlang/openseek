@@ -4112,6 +4112,8 @@ fn test_ctx() -> Ctx {
     owner: { channel: @interop.ChannelId::Local, session: "desktop-test", },
     request_epoch: 0,
     watch_namespace: "test-page",
+    model: "deepseek-v4-flash",
+    thinking: Some(ThinkingHigh),
     placement: @resource.of_path(@interop.ChannelId::Local, "/work").map(root => {
       @interop.WorkspaceRoot(root~)
     }),

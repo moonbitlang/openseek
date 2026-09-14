@@ -506,6 +506,8 @@ pub(all) struct CancelSearchSemanticPayload {
 /// user-facing repair intent kept separate from the current pattern so the
 /// future Agent operation can distinguish context from the requested change.
 pub(all) struct PatternRepairPayload {
+  model : String
+  thinking : OpenSeekThinking?
   root : String
   pattern : String
   instruction : String
