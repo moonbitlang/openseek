@@ -55,6 +55,7 @@ pub(all) enum MentionRef {
   Skill(name~ : String)
   File(path~ : String)
   Symbol(name~ : String, file~ : String, line~ : Int)
+  SemanticSearch(SemanticSearchReference)
   Annotation(
     file~ : String,
     start_line~ : Int,
@@ -63,6 +64,30 @@ pub(all) enum MentionRef {
     comment~ : String,
     side~ : AnnotationSide
   )
+} derive(Eq, Debug)
+
+///|
+/// A snapshot of selected semantic-search results. It is one Composer mention
+/// even when it contains many files and ranges; the snapshot stays independent
+/// from the live Search panel so later searches cannot silently change it.
+pub(all) struct SemanticSearchReference {
+  id : String
+  root : String
+  patterns : Array[String]
+  include_glob : String
+  exclude_glob : String
+  matches : Array[SemanticSearchReferenceMatch]
+} derive(Eq, Debug)
+
+///|
+pub(all) struct SemanticSearchReferenceMatch {
+  pattern : String
+  file : String
+  start_line : Int
+  start_column : Int
+  end_line : Int
+  end_column : Int
+  matched_source : String
 } derive(Eq, Debug)
 
 ///|
@@ -140,6 +165,7 @@ pub fn glyph(mention : MentionRef) -> String {
     Skill(_) => "$"
     File(_) => "@"
     Symbol(_) => "#"
+    SemanticSearch(_) => "⌕"
     Annotation(_) => "✎"
   }
 }
@@ -151,6 +177,11 @@ pub fn label(mention : MentionRef) -> String {
     Skill(name~) => name
     File(path~) => path
     Symbol(name~, ..) => name
+    SemanticSearch(reference) => {
+      let pattern_count = reference.patterns.length()
+      let match_count = reference.matches.length()
+      "Semantic search · \{pattern_count} patterns · \{match_count} matches"
+    }
     Annotation(file~, start_line~, end_line~, side~, ..) => {
       let suffix = if side is OriginalRevision { " (original)" } else { "" }
       "\{file}:\{start_line}-\{end_line}\{suffix}"
@@ -178,7 +209,7 @@ pub fn target(mention : MentionRef) -> Target? {
           annotation: None,
         })
       }
-    Annotation(side=OriginalRevision, ..) => None
+    SemanticSearch(_) | Annotation(side=OriginalRevision, ..) => None
     Annotation(
       file~,
       start_line~,
@@ -248,6 +279,7 @@ fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
           "<symbol name=\"\{name}\" file=\"\{file}\" line=\"\{line}\"/>\n"
       }
     }
+    SemanticSearch(reference) => write_semantic_search(parts, reference)
     Annotation(file~, start_line~, end_line~, quote~, comment~, side~) => {
       let file = MentionAttribute::encode(file).wire
       let side_attribute = match side {
@@ -265,6 +297,35 @@ fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
       parts <+ "</annotation>\n"
     }
   }
+}
+
+///|
+fn write_semantic_search(
+  parts : StringBuilder,
+  reference : SemanticSearchReference,
+) -> Unit {
+  let id = MentionAttribute::encode(reference.id).wire
+  let root = MentionAttribute::encode(reference.root).wire
+  let include_value = MentionAttribute::encode(reference.include_glob).wire
+  let exclude = MentionAttribute::encode(reference.exclude_glob).wire
+  parts <+
+    "<semantic_search id=\"\{id}\" root=\"\{root}\" include=\"\{include_value}\" exclude=\"\{exclude}\">\n"
+  for pattern in reference.patterns {
+    parts <+ "<pattern>\n"
+    write_body(parts, pattern)
+    parts <+ "</pattern>\n"
+  }
+  for hit in reference.matches {
+    let pattern = MentionAttribute::encode(hit.pattern).wire
+    let file = MentionAttribute::encode(hit.file).wire
+    parts <+
+      "<match pattern=\"\{pattern}\" file=\"\{file}\" lines=\"\{hit.start_line}-\{hit.end_line}\" columns=\"\{hit.start_column}-\{hit.end_column}\">\n"
+    parts <+ "<matched_source>\n"
+    write_body(parts, hit.matched_source)
+    parts <+ "</matched_source>\n"
+    parts <+ "</match>\n"
+  }
+  parts <+ "</semantic_search>\n"
 }
 
 ///|
@@ -324,6 +385,12 @@ let symbol_pattern : Regex = re"^<symbol name=\"(?<name>[^\"]+)\"( file=\"(?<fil
 /// original-revision line, opening the quote/comment body. An omitted side
 /// denotes the working revision written by `encode`.
 let annotation_pattern : Regex = re"^<annotation file=\"(?<file>[^\"]+)\" lines=\"(?<start>[0-9]+)-(?<end>[0-9]+)\"( side=\"(?<side>original)\")?>$"
+
+///|
+let semantic_search_pattern : Regex = re"^<semantic_search id=\"(?<id>[^\"]*)\" root=\"(?<root>[^\"]*)\" include=\"(?<include>[^\"]*)\" exclude=\"(?<exclude>[^\"]*)\">$"
+
+///|
+let semantic_match_pattern : Regex = re"^<match pattern=\"(?<pattern>[^\"]+)\" file=\"(?<file>[^\"]+)\" lines=\"(?<start>[0-9]+)-(?<end>[0-9]+)\" columns=\"(?<start_column>[0-9]+)-(?<end_column>[0-9]+)\">$"
 
 ///|
 /// The lines between `<user_mentions>` and `</user_mentions>` as chips, or
@@ -410,6 +477,83 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
       index += length + 2
       continue
     }
+    if semantic_search_pattern.execute(line) is Some(matched) {
+      guard matched.named_group("id") is Some(id) &&
+        matched.named_group("root") is Some(root) &&
+        matched.named_group("include") is Some(include_value) &&
+        matched.named_group("exclude") is Some(exclude) else {
+        return None
+      }
+      let patterns : Array[String] = []
+      let matches : Array[SemanticSearchReferenceMatch] = []
+      let mut cursor = index + 1
+      while cursor < lines.length() && lines[cursor] != "</semantic_search>" {
+        let pattern_line = lines[cursor]
+        guard pattern_line == "<pattern>" else {
+          if semantic_match_pattern.execute(pattern_line) is Some(match_header) {
+            guard match_header.named_group("pattern") is Some(pattern) &&
+              match_header.named_group("file") is Some(file) &&
+              match_header.named_group("start") is Some(start) &&
+              match_header.named_group("end") is Some(end) &&
+              match_header.named_group("start_column") is Some(start_column) &&
+              match_header.named_group("end_column") is Some(end_column) else {
+              return None
+            }
+            guard lines[cursor + 1:] is ["<matched_source>", .. source_lines] else {
+              return None
+            }
+            guard source_lines.search("</matched_source>") is Some(source_end) else {
+              return None
+            }
+            let source = source_lines[:source_end].join("\n")
+            guard source_lines[source_end + 1:] is ["</match>", ..] else {
+              return None
+            }
+            matches.push({
+              pattern: MentionAttribute::decode(pattern.to_owned()),
+              file: MentionAttribute::decode(file.to_owned()),
+              start_line: @string.parse_int(start) catch {
+                _ => return None
+              },
+              start_column: @string.parse_int(start_column) catch {
+                _ => return None
+              },
+              end_line: @string.parse_int(end) catch {
+                _ => return None
+              },
+              end_column: @string.parse_int(end_column) catch {
+                _ => return None
+              },
+              matched_source: source,
+            })
+            cursor += source_end + 4
+            continue
+          }
+          return None
+        }
+        let pattern_lines = lines[cursor + 1:]
+        guard pattern_lines.search("</pattern>") is Some(pattern_end) else {
+          return None
+        }
+        patterns.push(pattern_lines[:pattern_end].join("\n"))
+        cursor += pattern_end + 2
+      }
+      guard cursor < lines.length() && lines[cursor] == "</semantic_search>" else {
+        return None
+      }
+      mentions.push(
+        SemanticSearch({
+          id: MentionAttribute::decode(id.to_owned()),
+          root: MentionAttribute::decode(root.to_owned()),
+          patterns,
+          include_glob: MentionAttribute::decode(include_value.to_owned()),
+          exclude_glob: MentionAttribute::decode(exclude.to_owned()),
+          matches,
+        }),
+      )
+      index = cursor + 1
+      continue
+    }
     return None
   }
   if mentions.is_empty() {
@@ -437,6 +581,18 @@ pub extend AnnotationSide with Debug::{to_repr}
 
 ///|
 pub extend AnnotationSide with Eq::{equal, not_equal}
+
+///|
+pub extend SemanticSearchReference with Eq::{equal, not_equal}
+
+///|
+pub extend SemanticSearchReference with Debug::{to_repr}
+
+///|
+pub extend SemanticSearchReferenceMatch with Eq::{equal, not_equal}
+
+///|
+pub extend SemanticSearchReferenceMatch with Debug::{to_repr}
 
 ///|
 pub extend MentionMessage with Debug::{to_repr}

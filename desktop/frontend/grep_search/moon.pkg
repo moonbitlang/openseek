@@ -11,6 +11,7 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/resource",
+  "openseek_desktop/frontend/mention_context",
 }
 
 supported_targets = "js"
