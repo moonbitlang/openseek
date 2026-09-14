@@ -479,12 +479,12 @@
 .user-bubble {
   /* Tune each theme independently: a pale wash on paper, a muted blue on
      dark canvas. Local text also keeps inline code legible on the fill. */
-  --color-text-primary: light-dark(#203e67, #f1f5fc);
+  --color-text-primary: light-dark(#132748, #f1f5fc);
   min-width: 0;
   max-width: 85%;
   padding: 13px 17px;
   border-radius: 20px;
-  background: light-dark(#e8effb, #1c3e70);
+  background: light-dark(#eaf3fd, #1c3e70);
 }
 
 /* In the accessibility tree, out of the layout: speaker names and the
