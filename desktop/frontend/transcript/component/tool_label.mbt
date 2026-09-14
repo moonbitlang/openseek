@@ -4,8 +4,9 @@
 // `edit` and `multi_edit` follow the same treatment. What changes is only the
 // caption: the recorded tool name and payload stay intact, and a brief keeps
 // its own words — the file, the line, the count — which are what a reader came
-// for. A label that does not open with the tool's own name is left alone, so
-// this can never rewrite a phrase that merely mentions an edit.
+// for. A label is left alone unless it opens with the tool's name — or, for
+// `edit`, the `edited` success spelling — so this can never rewrite a phrase
+// that merely mentions an edit.
 
 ///|
 /// Replace a tool caption's leading tool word with the emoji that stands for

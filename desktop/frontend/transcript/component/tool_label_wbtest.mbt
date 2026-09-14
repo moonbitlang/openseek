@@ -28,6 +28,20 @@ test "each tool caption shows its emoji and keeps a brief's own words" {
     tool_display_label("multi_edit", "multi_edit reverted (2 new error(s))"),
     "📝 reverted (2 new error(s))",
   )
+  // The remaining shapes the tools really emit: `edit`'s append/insert briefs
+  // and `multi_edit`'s multi-file brief.
+  assert_eq(
+    tool_display_label("edit", "edited lib/parser.mbt:3-4 (append)"),
+    "✏️ lib/parser.mbt:3-4 (append)",
+  )
+  assert_eq(
+    tool_display_label("edit", "edited lib/parser.mbt:5 (insert)"),
+    "✏️ lib/parser.mbt:5 (insert)",
+  )
+  assert_eq(
+    tool_display_label("multi_edit", "multi_edit 2 files (5×)"),
+    "📝 2 files (5×)",
+  )
 }
 
 ///|
