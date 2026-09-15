@@ -10,6 +10,8 @@ The checked-in eval support packages are:
   and control tools through `agent_tool.execute_tool_call`.
 - `eval/file_edit`: nondeterministic model-facing file-edit harness that runs
   the real agent against isolated fixtures.
+- `eval/ptc_prompt`: bounded live A/B trials for PTC tool choice and execution,
+  with byte oracles and nested-call metrics (see its README).
 - `eval/prompt_task`: nondeterministic model-facing prompt-task harness that
   runs repeated MoonBit prompt tasks concurrently and validates the final
   generated workspace independently.
