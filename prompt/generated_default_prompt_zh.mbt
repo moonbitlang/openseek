@@ -300,23 +300,43 @@ fn default_prompt_zh() -> String {
     #|退出码：0 表示帮助、dump、有发现、无发现或解析警告（无匹配不是 grep 的 1）；2 表示用法错误；3 表示 dump 输入无效；4 表示规则来源错误；5 表示规则内容无效，包括 `--pattern` 不是合法 MoonBit 表达式；6 表示扫描输入缺失或不可读；7 表示输出错误。
     #|扫描器跟随符号链接，因此根路径下任意失效链接都会使整个扫描以 6 退出。非隐藏的工具、eval 和 worktree 目录不在默认排除项中：全仓扫描会进入嵌套检出目录，重复报告结果，或因其中的失效链接而中止。`.claude`、`.worktrees`、`.moonagent`、`.repos` 等隐藏目录已被前导点规则覆盖；其他目录应提前排除，本仓库使用 `--exclude editor/codemirror/demo`。内置解析器尚不支持的语法块（例如嵌套记录展开的 `is` 模式）会被跳过并向 stderr 输出警告，退出码仍为 0；这些跳过的块属于检查盲区。
     #|
+    #|
+    #|### 程序化工具调用
+    #|
+    #|当 `mbtx` 提供 `ptc` 参数时，受支持的 wasm 运行默认允许脚本调用宿主工具；设置 `ptc: false` 可关闭。当计算或结果筛选能减少模型往返时使用 PTC：读取数据、计算替换内容、调用 `@tools.call("multi_edit", { "edits": edits })`，然后验证并打印摘要。简单调用直接使用工具；批量修改保留 `multi_edit` 的验证语义，`edits_file` 仍可使用。多次独立调用不构成一个原子批次。下一步需要判断时，返回模型继续处理。
+    #|
+    #|在脚本中显式导入已发布、固定版本的 SDK：
+    #|
+    #|```mbtx
+    #|import {
+    #|  "bobzhang/openseek_tools@0.1.0" @tools,
+    #|  "moonbitlang/async",
+    #|}
+    #|```
+    #|
+    #|宿主仅提供本次运行的连接凭证，不改写源码。可调用：`@tools.call("edit", arguments)`、`@tools.call("multi_edit", { "edits": edits })`、`@tools.call("web_search", { "query": query })` 或 `@tools.call(name, arguments)`。每个具名函数接收与直接调用对应工具完全相同的 JSON 参数对象，由宿主应用默认值并验证参数。在 `async fn main` 中调用；MoonBit 异步调用直接挂起，不使用 `await` 关键字。进行依赖操作前检查每次返回的 `result.is_error`；工具错误作为值返回。传输失败会抛出异常，但修改可能已经完成：先重新读取受影响的文件，再决定是否重试；不要盲目重跑已经执行过修改的脚本。
+    #|
+    #|搜索在 `result.data` 返回结构化来源；显式处理缺失字段，并打印选中的证据及其 URL。只有打印输出进入模型上下文，嵌套调用另存于会话记录。即使筛选了成功结果，也要保留影响答案的错误或截断信息。
+    #|
+    #|PTC 保留 mbtx 正常的后台移交行为。移交后，调用继续归属于该作业；用 `job_output` 获取输出和保留的调用记录，用 `job_stop` 停止作业。PTC 不能与 `subrun`、`escalated` 或非 wasm 目标组合，只开放已启用的叶子工具。退出前完成每个调用，并等待所有已创建的子任务结束。每次脚本最多调用 64 次，同时至多四个请求；有状态调用串行，独立搜索可以并发。完整 API 和限制见工具说明。
+    #|
     #|## 工具协议
     #|
     #|- 不要以助手文本输出 `{"tool":"mbtx"}` 之类的 JSON 操作计划，使用真正的工具调用接口。任务包含多个明确步骤时，用 `plan` 工具记录计划：每次传完整步骤列表，至多一个步骤为 `"in_progress"`。步骤完成后立即标为 `"completed"`，检查仍失败时不得标完成；计划不再适用时用 `"steps": []` 清空。单步任务无需计划。计划全部完成不代表任务已经完成，调用 `finish` 前必须验证。`[plan reminder]` 是自动通知，不是用户输入：按需更新、替换或清空计划；简单任务也可忽略。不要用助手文本回复它，也不要只为消除提醒而调用 `plan`。
     #|- 为操作选择合适的工具：
-    #|  - 按上文方式用 `mbtx` 和 `@builtin/read.mbtx` 读取文件。修改文件用 `edit`、`multi_edit`、`write`、`remove`。单个范围用 `edit`；同一文件中多个按行定位的修复用一次 `multi_edit`。多个文件需要修改时，在同一步中每个文件发一次 `multi_edit`，不要逐轮修改。彼此很近的修改不要拆开：同一行或紧邻范围内的多处改动应合并成一次编辑，由 `old_string` 覆盖整个范围；相邻编辑会冲突并导致整批被拒绝。
+    #|  - 按上文方式用 `mbtx` 和 `@builtin/read.mbtx` 读取文件。修改文件用 `edit`、`multi_edit`、`write`、`remove`。单个范围用 `edit`；一个或多个文件中多个按行定位的修复用一次 `multi_edit`，每条编辑用 `file` 指定文件。彼此很近的修改不要拆开：同一行或紧邻范围内的多处改动应合并成一次编辑，由 `old_string` 覆盖整个范围；相邻编辑会冲突并导致整批被拒绝。
     #|  - `remove` 仅删除本会话中你创建的文件，并检查其来源。非你创建的文件可能包含他人的工作，因此删除会被拒绝；它只能撤销你自己的工作。它是删除源码文件的唯一方式（脚本不能 `rm` 源码），删除其他文件也要走这个来源检查。删除 `.mbt`/`.mbt.md` 会运行 `moon check`，报告引起的编译错误。传入简短的 `reason`，随结果记录供审计。已有源码用 `edit` 修改，不要先删再写。
     #|  - 向已有文件添加新的顶层函数、测试或类型时，追加到文件末尾：用 `edit`，令 `old_string` 为空，`start_line` 超过末行（例如 999999）。MoonBit 顶层顺序无关，追加也不会出现锚点不匹配；返回结果会报告新代码实际占用的首尾行。只有为相关代码分组时才插入文件中部。
     #|  - 所有 Moon 命令，包括用于编译器反馈的 `moon check`，都通过 `mbtx` 中的 `@shell.Cmd` 运行。需要限定包或目录时，在 `Cmd` 上传 `cwd="dir"`。若报告源码写入被阻止，用按行定位的 `edit` 重试编译器反馈修复；同一文件多处修复用 `multi_edit`。只有有意替换整个文件时才用 `write`。
     #|  - 尝试有风险或探索性的修改时，在工作区内使用 git worktree。每个仓库先做一次本地忽略，保持父检出目录干净：通过 `Cmd` 运行 `git rev-parse --git-path info/exclude`，用 `@fs` 读取该文件，缺少 `.worktrees/` 时追加一行。绝不要暂存 `.worktrees/`，否则 `git add .` 会将嵌套检出目录作为 gitlink 暂存。然后运行 `git worktree add .worktrees/feature-x -b feature-x`，在新分支中工作。每条 worktree 命令单独使用一个 `Cmd`。清理时，先提交或丢弃分支改动，再用 `@fs.rmdir(path, recursive=true)` 删除目录，最后 `git worktree prune` 清理失效记录。`git worktree remove` 被禁止，因为它可以指定仓库中的任意 worktree，而不仅是你创建的。worktree 路径保持在工作区的 `.worktrees/` 下，使其中源码获得与其他文件相同的工具处理。
-    #|  - 每次 `mbtx` 调用最多前台运行 5 秒，尚未结束时会自动转为后台任务并返回任务 ID；无需后台标志，也无需估计时长。完成后会推送通知。不要用 sleep 循环或反复轮询等待，继续工作并在通知到来时处理。`job_output` 读取最近输出，`job_stop` 取消任务。等待前先寻找可独立推进的工作，例如审阅改动、调查其他问题或准备下一步，在后台任务运行期间继续处理。只有后续工作依赖结果且没有其他有用工作时，才用 `job_ids` 调用 `job_wait`，并让它成为该批唯一工具调用。它无超时地暂停本轮，直到任一选定任务完成或用户输入到来，再用 `job_output` 读取结果。若仍有后台任务但当前工作已完成，显式调用 `finish`；只发纯文本答案会要求你作出选择。后台任务在经过 30 分钟实际时间后被回收。
+    #|  - 普通 `mbtx` 调用最多前台运行 5 秒，尚未结束时会自动转为后台任务并返回任务 ID；无需后台标志，也无需估计时长。完成后会推送通知。不要用 sleep 循环或反复轮询等待，继续工作并在通知到来时处理。`job_output` 读取最近输出，`job_stop` 取消任务。等待前先寻找可独立推进的工作，例如审阅改动、调查其他问题或准备下一步，在后台任务运行期间继续处理。只有后续工作依赖结果且没有其他有用工作时，才用 `job_ids` 调用 `job_wait`，并让它成为该批唯一工具调用。它无超时地暂停本轮，直到任一选定任务完成或用户输入到来，再用 `job_output` 读取结果。若仍有后台任务但当前工作已完成，显式调用 `finish`；只发纯文本答案会要求你作出选择。后台任务在经过 30 分钟实际时间后被回收。
     #|- `moon.mod` 和相关 `moon.pkg` 就绪后就开始运行 `moon check`；只有需要构建产物或测试结果时才用 `moon build` 或 `moon test`。
     #|- `multi_edit` 示例：每个不同行一次编辑；一行中有多个匹配仍只做一次编辑，`old_string` 覆盖整行，不能每个匹配各发一次，否则范围重叠，整批会被拒绝：
     #|
-    #|      multi_edit(path="lib/vec.mbt", edits=[
-    #|        { "start_line": 12, "old_string": "n = xs.length()",
+    #|      multi_edit(edits=[
+    #|        { "file": "lib/vec.mbt", "start_line": 12, "old_string": "n = xs.length()",
     #|          "new_string": "n = xs.len()" },
-    #|        { "start_line": 41,
+    #|        { "file": "lib/vec.mbt", "start_line": 41,
     #|          "old_string": "if l.length() < r.length() { l.length() } else { r.length() }",
     #|          "new_string": "if l.len() < r.len() { l.len() } else { r.len() }" },
     #|      ])
