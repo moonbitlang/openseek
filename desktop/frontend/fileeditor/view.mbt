@@ -622,27 +622,13 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
       } else if state.explorer_mode is ExplorerChanges {
         "file-tree review-git-tree"
       } else {
-        "file-tree workspace-files"
+        "file-tree workspace-file-list"
       },
       attrs=@html.Attrs::build()
         .id(ExplorerPanelId)
         .role("tabpanel")
         .aria_labelledby(explorer_tab_id(state.explorer_mode)),
-      if state.explorer_mode is ExplorerFiles {
-        // Folding the section keeps directory expansion and selection intact;
-        // the inner list remains the sole scroller beneath its fixed heading.
-        [
-          @html.details(class="files-section", open=true, [
-            @html.summary(class="review-section-header files-heading", [
-              @html.span(class="files-chevron", @icons.icon_chevron_down()),
-              @html.span(class="review-section-title", "Files"),
-            ]),
-            @html.div(class="workspace-file-list", inventory),
-          ]),
-        ]
-      } else {
-        inventory
-      },
+      inventory,
     ),
     // Rendered even while empty so the row's slot in the pane is stable.
     @html.div(

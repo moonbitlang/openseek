@@ -1133,49 +1133,11 @@ html:is(
   padding: 4px 0 8px;
 }
 
-/* Files owns its disclosure and scroll region; Search and Changes keep their
-   existing layout. Closing Files consumes only its heading's height. */
-.file-tree.workspace-files {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  scrollbar-gutter: auto;
-  padding: 0;
-}
-.files-section {
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 auto;
-  min-height: 0;
-}
-.files-section[open] { flex: 1 1 auto; }
-.files-section::details-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.files-heading {
-  list-style: none;
-  letter-spacing: normal;
-  cursor: pointer;
-}
-.files-heading::-webkit-details-marker { display: none; }
-.files-heading:hover { color: var(--color-text-primary); }
-.files-chevron {
-  display: flex;
-  flex: 0 0 12px;
-  transform: rotate(-90deg);
-}
-.files-chevron svg { width: 12px; height: 12px; }
-.files-section[open] .files-chevron { transform: rotate(0deg); }
-.workspace-file-list {
+/* Keep the tree directly beneath the existing Files tab. Its compact spacing
+   does not change the Search or Changes inventories. */
+.file-tree.workspace-file-list {
   --tree-step: 14px;
   --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   padding: 4px max(0px, 4px - var(--scrollbar-lane)) 8px 4px;
 }

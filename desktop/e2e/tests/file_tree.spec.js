@@ -58,7 +58,7 @@ test('file tree keeps compact aligned rows and continuous ancestor guides', asyn
   expect(parentGuide.x).toBe(rootChevron.x + rootChevron.width / 2);
   for (const colorScheme of ['light', 'dark']) {
     await page.emulateMedia({ colorScheme });
-    const textColor = await page.locator('.files-heading .review-section-title')
+    const textColor = await page.locator('body')
       .evaluate(element => getComputedStyle(element).color);
     await expect(env).toHaveCSS('color', textColor);
     expect(await env.locator('.tree-indent-guides').evaluate(element => getComputedStyle(element).backgroundImage))
@@ -68,23 +68,11 @@ test('file tree keeps compact aligned rows and continuous ancestor guides', asyn
   await env.click();
   await expect(env).toHaveClass(/selected/);
   await expect(page.locator('.editor-tabs .editor-tab.active')).toContainText('.env');
-  const heading = page.locator('.files-heading');
-  const chevron = heading.locator('.files-chevron');
-  const expandedTransform = await chevron.evaluate(element => getComputedStyle(element).transform);
-  await heading.click();
-  await expect(tree).toBeHidden();
-  expect(await chevron.evaluate(element => getComputedStyle(element).transform)).not.toBe(expandedTransform);
-  expect((await page.locator('.files-section').boundingBox()).height)
-    .toBe((await heading.boundingBox()).height);
-  // An unrelated render must not reopen the native disclosure.
+  // Resizing preserves directory expansion and the selected file.
   await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
-  await expect(tree).toBeHidden();
-  await heading.focus();
-  await page.keyboard.press('Enter');
   await expect(nested).toBeVisible();
   await expect(env).toHaveClass(/selected/);
   await expect(staging).toHaveAttribute('aria-expanded', 'true');
-  await expect(chevron).toHaveCSS('transform', expandedTransform);
   await staging.click();
   await expect(nested).toBeHidden();
   await expect(staging).toHaveAttribute('aria-expanded', 'false');
@@ -95,7 +83,7 @@ test('file tree keeps compact aligned rows and continuous ancestor guides', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Files scrolls under its heading and keeps narrow-screen touch targets', async ({ page }, testInfo) => {
+test('Files scrolls below the view tabs and keeps narrow-screen touch targets', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   app.directoryEntries['/workspace'] = Array.from({ length: 80 }, (_, index) => ({
     name: `file_${String(index).padStart(2, '0')}_with_a_very_long_deployment_configuration_name_for_truncation.mbt`,
@@ -109,19 +97,19 @@ test('Files scrolls under its heading and keeps narrow-screen touch targets', as
   const tabs = page.getByRole('tablist', { name: 'Explorer views' });
   await tabs.getByRole('tab', { name: 'Files', exact: true }).click();
   const tree = page.locator('.workspace-file-list');
-  const heading = page.locator('.files-heading');
-  const headingBefore = await heading.boundingBox();
+  // The first row starts directly below the view tabs, without a second title.
+  expect((await tree.locator('.tree-file').first().boundingBox()).y - (await tree.boundingBox()).y).toBe(4);
+  const tabsBefore = await tabs.boundingBox();
   await tree.locator('.tree-file').last().scrollIntoViewIfNeeded();
   expect(await tree.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-  expect(await heading.boundingBox()).toEqual(headingBefore);
+  expect(await tabs.boundingBox()).toEqual(tabsBefore);
   await tabs.getByRole('tab', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Search', exact: true })).toBeVisible();
-  await expect(heading).toHaveCount(0);
+  await expect(tree).toHaveCount(0);
   await tabs.getByRole('tab', { name: 'Files', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 760 });
   await expect(tree).toBeVisible();
   expect((await tree.locator('.tree-file').first().boundingBox()).height).toBe(44);
-  expect((await heading.boundingBox()).height).toBe(44);
   expect(await tree.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await expect.poll(() => tree.locator('.tree-name').first().evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
   await page.locator('.file-tree-pane').screenshot({ path: testInfo.outputPath('files-narrow.png') });
