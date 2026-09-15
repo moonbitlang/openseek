@@ -46,7 +46,7 @@ async fn run_capture(
 /// probe yields the `unavailable` record so the marker's preceding slot is
 /// still owned by this set (see `GoalBaselineUnavailable`); a failed or
 /// timed-out dirty probe keeps the sha and reports dirty=true.
-async fn capture_goal_baseline(workspace_root : String) -> String {
+pub async fn capture_goal_baseline(workspace_root : String) -> String {
   guard run_capture("git", ["rev-parse", "HEAD"], workspace_root)
     is Some(sha_line) else {
     return GoalBaselineUnavailable
@@ -59,28 +59,4 @@ async fn capture_goal_baseline(workspace_root : String) -> String {
     .map(status => !status.is_blank())
     .unwrap_or(true)
   @agent_session.goal_baseline_notice(sha~, dirty~)
-}
-
-///|
-async test "capture_goal_baseline probes the enclosing repo" {
-  // Needs git and spawn permission; this checkout is a git repo. Guarded
-  // rather than asserted: sandboxes without spawn or git report the
-  // unavailable record.
-  let notice = capture_goal_baseline(".")
-  guard notice != GoalBaselineUnavailable else {
-    println("skipped: git probe unavailable")
-    return
-  }
-  guard @agent_session.parse_goal_baseline(notice) is Some(baseline) else {
-    fail("expected a parseable baseline notice: \{notice}")
-  }
-  // A full commit id, not a short one: the gate resolves it exactly.
-  assert_eq(baseline.sha.length(), 40)
-}
-
-///|
-test "the unavailable record is not a parseable baseline" {
-  assert_true(
-    @agent_session.parse_goal_baseline(GoalBaselineUnavailable) is None,
-  )
 }

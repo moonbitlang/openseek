@@ -12,8 +12,8 @@ async fn run_review_cli(
   guard model.api_key(matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
-  let max_steps = max_steps(matches)
-  let (retry_attempts, retry_backoff_ms) = retry_overrides(matches)
+  let max_steps = @options.max_steps(matches)
+  let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
   let (thinking, base, api_url) = match matches {
     {
       values: {
@@ -76,4 +76,28 @@ async fn run_review_cli(
     remove_scratch_lab(scratch_dir)
     @sys.exit(2)
   }
+}
+
+///|
+/// `openseek review [--base <ref>]` — a read-only, ephemeral code review of
+/// `base…HEAD`; stdout carries exactly one JSON ReviewReport, so it never opens
+/// the event sink and every event the agent run reports is dropped.
+pub async fn run_review_command(matches : @argparse.Matches) -> Unit {
+  // No `--approval` check here: review does not declare the option, so argparse
+  // refuses it outright. Review builds its runtime with no approval channel, so
+  // `escalated` is not offered to its model either — a read-only audit has
+  // nothing to escalate.
+  //
+  // Review runs a fixed built-in tool set; say so rather than silently ignoring
+  // an accepted option. Straight to stderr: review's stdout carries exactly one
+  // JSON ReviewReport, and the event sink is closed.
+  if @options.mcp_config_path(matches) != "" {
+    @stdio.stderr.write(
+      "warning: --mcp-config is ignored in review mode (fixed built-in tool set)\n",
+    ) catch {
+      _ => ()
+    }
+  }
+  let workspace_root = @setup.prepare_workspace_root(matches, log_created=false)
+  run_review_cli(matches, workspace_root~)
 }

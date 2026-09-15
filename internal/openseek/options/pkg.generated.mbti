@@ -1,0 +1,45 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/internal/openseek/options"
+
+import {
+  "bobzhang/openseek/deepseek",
+  "moonbitlang/core/argparse",
+}
+
+// Values
+pub fn agent_settings(@argparse.Matches) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise
+
+pub fn approval_policy(@argparse.Matches, interactive~ : Bool) -> ApprovalPolicy raise
+
+pub fn explicitly_provided(@argparse.Matches, String) -> Bool
+
+pub fn export_retry_overrides(@argparse.Matches) -> Unit raise
+
+pub fn max_steps(@argparse.Matches) -> Int? raise
+
+pub fn mcp_config_path(@argparse.Matches) -> String
+
+pub fn reject_session_contradiction(@argparse.Matches) -> Unit raise
+
+pub fn retry_overrides(@argparse.Matches) -> (Int?, Int?) raise
+
+pub fn review_deadline_ms(@argparse.Matches) -> Int? raise
+
+pub fn review_gate_enabled(@argparse.Matches) -> Bool
+
+pub fn root_command() -> @argparse.Command
+
+pub fn task_text(@argparse.Matches) -> String raise
+
+// Errors
+
+// Types and methods
+pub(all) enum ApprovalPolicy {
+  Ask
+  Never
+  Always
+}
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,25 @@
+import {
+  "bobzhang/openseek/agent_review",
+  "bobzhang/openseek/agent_runtime",
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_subrun",
+  "bobzhang/openseek/agent_tool",
+  "moonbitlang/async/aqueue",
+  "moonbitlang/core/argparse",
+  "moonbitlang/async",
+  "bobzhang/openseek/deepseek",
+  "bobzhang/openseek_protocol/emit",
+  "moonbitlang/async/fs",
+  "bobzhang/openseek/agent_subrun/host",
+  "moonbitlang/core/json",
+  "bobzhang/openseek/mcp/config" @mcpconfig,
+  "bobzhang/openseek/mcp/tools" @mcptools,
+  "bobzhang/openseek/internal/openseek/options",
+  "bobzhang/openseek_protocol",
+  "bobzhang/openseek/internal/openseek/setup",
+  "bobzhang/openseek/agent_tool/web_search",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+wasm+native"

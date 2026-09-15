@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/internal/openseek/commands"
+
+import {
+  "moonbitlang/core/argparse",
+}
+
+// Values
+pub async fn run_mcp_command(@argparse.Matches) -> Unit
+
+pub async fn run_review_command(@argparse.Matches) -> Unit
+
+pub async fn run_sessions_command(@argparse.Matches) -> Unit
+
+pub async fn run_subrun_command(@argparse.Matches) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

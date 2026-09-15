@@ -1,0 +1,27 @@
+import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_skill",
+  "moonbitlang/core/argparse",
+  "moonbitlang/async",
+  "bobzhang/openseek/deepseek",
+  "bobzhang/openseek_protocol/emit",
+  "moonbitlang/core/env",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
+  "moonbitlang/x/path",
+  "moonbitlang/async/process",
+  "bobzhang/openseek/prompt",
+  "bobzhang/openseek_protocol",
+  "bobzhang/openseek/agent_session/store",
+  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "bobzhang/openseek/internal/workspace_path",
+}
+
+import {
+  "bobzhang/openseek/cli",
+  "bobzhang/openseek/internal/openseek/options",
+} for "wbtest"
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+wasm+native"

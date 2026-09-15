@@ -1,6 +1,6 @@
 # OpenSeek CLI
 
-This package is the native-only automation entry point for OpenSeek — the
+This package is the automation entry point for OpenSeek — the
 `openseek` binary. It is a subcommand tree for the headless engine (the
 interactive terminal UI is the separate `openseek_tui` binary, maintained in
 [moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui)). It parses arguments with
@@ -8,6 +8,10 @@ interactive terminal UI is the separate `openseek_tui` binary, maintained in
 drives turns through `bobzhang/openseek/agent.run_turn_in_scope` (both one-shot
 `run` and durable sessions; fleet mode's independent attempts use
 `agent.run_turn_with_append`).
+
+The executable package only starts the application and reports process-level
+errors. Command parsing, handlers, and shared setup live under
+[`internal/openseek`](../../internal/openseek/README.md).
 
 ```
 openseek run [options] TASK    run one task headlessly; JSONL events on stdout

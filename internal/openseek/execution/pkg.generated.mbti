@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/internal/openseek/execution"
+
+import {
+  "bobzhang/openseek/agent_runtime",
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_subrun",
+  "bobzhang/openseek/agent_subrun/host",
+  "bobzhang/openseek/agent_tool",
+  "bobzhang/openseek/deepseek",
+  "bobzhang/openseek/internal/openseek/options",
+  "moonbitlang/core/argparse",
+}
+
+// Values
+pub const McpClientVersion : String = "0.2.2"
+
+pub fn approval_channel(@options.ApprovalPolicy, ApprovalDesk) -> @agent_runtime.ApprovalChannel?
+
+pub fn audit_criteria(@agent_session.Session) -> @host.AuditCriteria?
+
+pub async fn[X] build_extra_tools(@argparse.Matches, @agent_runtime.AgentTaskScope[X], model~ : @deepseek.Model, api_key~ : String, workspace_root~ : String, api_url? : String) -> Array[@agent_tool.AgentToolDefinition]
+
+pub fn build_goal_met_gate(self_exe~ : String, model~ : @deepseek.Model, api_url~ : String?, workspace_root~ : String, review_deadline_ms? : Int, child_session? : @agent_subrun.ChildSession) -> async (String, @agent_session.GoalBaseline?) -> String?
+
+pub async fn with_jsonl_stdout(async () -> Unit) -> Unit
+
+// Errors
+
+// Types and methods
+type ApprovalDesk
+pub async fn ApprovalDesk::ApprovalDesk(now_ms~ : Int64) -> Self
+pub fn ApprovalDesk::settle(Self, String, Bool) -> Unit
+pub fn ApprovalDesk::withdraw_all(Self) -> Unit
+
+// Type aliases
+
+// Traits

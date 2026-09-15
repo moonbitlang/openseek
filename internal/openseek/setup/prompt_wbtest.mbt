@@ -1,0 +1,212 @@
+///|
+async test "environment section names the cwd and appends the layout outline" {
+  let parsed = run_matches(argv=["write", "MoonBit"], env={
+    "DEEPSEEK": "test-key",
+    "OPENSEEK_GLOBAL_SKILLS_DIR": "no-global-skills",
+  })
+  let (_, section) = split_composed_prompt(
+    configured_system_prompt(parsed, Deepseek(V4Flash)),
+  )
+  let cwd = @fs.realpath(".")
+  // Normalise the machine-specific CWD so the snapshot is portable across
+  // local dev and CI, while still asserting a stable contiguous layout block.
+  let portable = section.replace_all(old=cwd, new="{cwd}")
+  // Sibling order follows the directory walk, so pin the header and the
+  // nesting (indentation) rather than the order of `cmd/`'s children.
+  for
+    needle in [
+      "Project layout (directories; hidden, build, and vendored dirs omitted):\n",
+      "\ncmd/\n", "\n  openseek/\n", "\n  viz_app/\n    e2e/\n",
+    ] {
+    assert_true(
+      portable.contains(needle),
+      msg="missing \{needle.escape()} in layout outline:\n\{portable}",
+    )
+  }
+}
+
+///|
+async test "environment section reports empty directory layout" {
+  @vfs.with_tmpdir(root => {
+    let parsed = run_matches(argv=["write", "MoonBit"], env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_GLOBAL_SKILLS_DIR": "\{root}/no-global-skills",
+    })
+    let (_, section) = split_composed_prompt(
+      configured_system_prompt(parsed, Deepseek(V4Flash), workspace_root=root),
+    )
+    let resolved_root = @fs.realpath(root)
+    let replaced = section.replace_all(old=resolved_root, new="{resolved_root}")
+    inspect(
+      replaced,
+      content=(
+        #|## Environment
+        #|
+        #|Working directory: {resolved_root}
+        #|Relative paths resolve against it; treat it as the workspace root and stay inside it.
+        #|Parent and sibling directories belong to other projects. Never pass a cwd you have not verified exists.
+        #|Project layout (directories; hidden, build, and vendored dirs omitted):
+        #|(empty directory): use `moon new` to create a new project here
+      ),
+    )
+  })
+}
+
+///|
+async test "environment section inline snapshot for deterministic layout" {
+  @vfs.with_tmpdir(root => {
+    @vfs.FileSystem({
+      "a/one.txt": "x",
+      "b/two.txt": "x",
+      ".git/objects/o": "x",
+      "node_modules/pkg/index.js": "x",
+      "_build/out.log": "x",
+    }).write_to(root)
+    let resolved_root = @fs.realpath(root)
+    let parsed = run_matches(argv=["write", "MoonBit"], env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_GLOBAL_SKILLS_DIR": "\{root}/no-global-skills",
+    })
+    let (_, section) = split_composed_prompt(
+      configured_system_prompt(parsed, Deepseek(V4Flash), workspace_root=root),
+    )
+    inspect(
+      section,
+      content=(
+        $|## Environment
+        $|
+        $|Working directory: \{resolved_root}
+        $|Relative paths resolve against it; treat it as the workspace root and stay inside it.
+        $|Parent and sibling directories belong to other projects. Never pass a cwd you have not verified exists.
+        $|Project layout (directories; hidden, build, and vendored dirs omitted):
+        $|a/
+        $|b/
+      ),
+    )
+  })
+}
+
+///|
+async test "configured system prompt can replace and append files" {
+  @vfs.with_tmpdir(prefix="openseek-prompt-config-", dir => {
+    let prompt_path = "\{dir}/prompt.md"
+    let addendum_path = "\{dir}/addendum.md"
+    @fs.write_file(prompt_path, "base prompt\n", create_mode=CreateOrTruncate)
+    @fs.write_file(addendum_path, "addendum\n", create_mode=CreateOrTruncate)
+    let parsed = run_matches(
+      argv=[
+        "--system-prompt-file", prompt_path, "--system-prompt-addendum-file", addendum_path,
+        "write", "MoonBit",
+      ],
+      // The pinned global-skills dir keeps the exact-text assertion below
+      // machine-independent: without it, a developer's ~/.openseek/skills
+      // would append a ## Skills section (Codex review).
+      env={
+        "DEEPSEEK": "test-key",
+        "OPENSEEK_GLOBAL_SKILLS_DIR": "\{dir}/no-global-skills",
+      },
+    )
+    // Environment last: base and addendum form the cache-shared prefix; the
+    // per-project cwd is the only divergence point.
+    let (prefix, _) = split_composed_prompt(
+      configured_system_prompt(parsed, Deepseek(V4Flash)),
+    )
+    assert_eq(prefix, "base prompt\n\n\naddendum\n\n\n")
+  })
+}
+
+///|
+async test "configured system prompt advertises global skills" {
+  @vfs.with_tmpdir(prefix="openseek-global-skills-", dir => {
+    @fs.mkdir("\{dir}/skills", recursive=true)
+    @fs.write_file(
+      "\{dir}/skills/release.md",
+      (
+        #|---
+        #|name: release
+        #|description: Cut a release.
+        #|---
+        #|steps
+      ),
+      create_mode=CreateOrTruncate,
+    )
+    let prompt_path = "\{dir}/prompt.md"
+    @fs.write_file(prompt_path, "base\n", create_mode=CreateOrTruncate)
+    let parsed = run_matches(
+      argv=["--system-prompt-file", prompt_path, "write", "MoonBit"],
+      env={
+        "DEEPSEEK": "test-key",
+        "OPENSEEK_GLOBAL_SKILLS_DIR": "\{dir}/skills",
+      },
+    )
+    let prompt = configured_system_prompt(parsed, Deepseek(V4Flash))
+    assert_true(prompt.contains("## Skills"))
+    assert_true(
+      prompt.contains(
+        "release — Cut a release. (file: \{dir}/skills/release.md)",
+      ),
+    )
+  })
+}
+
+///|
+async test "configured system prompt uses the selected workspace root" {
+  @vfs.with_tmpdir(prefix="openseek-prompt-workspace-", workspace => {
+    let real_workspace = @fs.realpath(workspace)
+    @fs.write_file(
+      "\{workspace}/prompt.md",
+      "workspace prompt\n",
+      create_mode=CreateOrTruncate,
+    )
+    @fs.mkdir("\{workspace}/.openseek/skills", recursive=true)
+    @fs.write_file(
+      "\{workspace}/.openseek/skills/release.md",
+      (
+        #|---
+        #|name: release
+        #|description: Cut a workspace release.
+        #|---
+        #|steps
+      ),
+      create_mode=CreateOrTruncate,
+    )
+    let parsed = run_matches(
+      argv=[
+        "--dir", workspace, "--system-prompt-file", "prompt.md", "write", "MoonBit",
+      ],
+      env={
+        "DEEPSEEK": "test-key",
+        "OPENSEEK_GLOBAL_SKILLS_DIR": "\{workspace}/no-global-skills",
+      },
+    )
+    let prompt = configured_system_prompt(
+      parsed,
+      Deepseek(V4Flash),
+      workspace_root=real_workspace,
+    )
+    assert_true(prompt.has_prefix("workspace prompt"))
+    assert_true(prompt.contains("Working directory: \{real_workspace}"))
+    assert_true(
+      prompt.contains(
+        "release — Cut a workspace release. (file: \{real_workspace}/.openseek/skills/release.md)",
+      ),
+    )
+  })
+}
+
+///|
+async test "configured system prompt defaults to the flash prompt" {
+  let parsed = run_matches(argv=["write", "MoonBit"], env={
+    "DEEPSEEK": "test-key",
+  })
+  assert_true(
+    configured_system_prompt(parsed, Deepseek(V4Flash)).contains(
+      "an agent focused on implementing user tasks",
+    ),
+  )
+  assert_true(
+    configured_system_prompt(parsed, Deepseek(V4Pro)).contains(
+      "an agent focused on implementing user tasks",
+    ),
+  )
+}

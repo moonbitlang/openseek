@@ -12,20 +12,20 @@ async fn run_fleet(matches : @argparse.Matches, concurrency~ : Int) -> Unit {
   guard !(matches is { flags: { "no-session": true, .. }, .. }) else {
     fail("--concurrency records each run; remove --no-session")
   }
-  let task = task_text(matches)
-  let (model, thinking, api_url) = agent_settings(matches)
+  let task = @options.task_text(matches)
+  let (model, thinking, api_url) = @options.agent_settings(matches)
   guard model.api_key(matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
-  let (retry_attempts, retry_backoff_ms) = retry_overrides(matches)
-  let max_steps = max_steps(matches)
+  let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
+  let max_steps = @options.max_steps(matches)
   // One desk for the whole fleet, not one per attempt: every attempt streams
   // to the same stdout, so one ask counter keeps that stream readable in ask
   // order. `--approval ask` is already refused for `run`, so the only policy
   // that reaches here and does anything is `always`; before this it was parsed
   // and then dropped, leaving the flag silently ineffective.
-  let approval = approval_channel(
-    approval_policy(matches, interactive=false),
+  let approval = @execution.approval_channel(
+    @options.approval_policy(matches, interactive=false),
     ApprovalDesk(now_ms=@env.now().reinterpret_as_int64()),
   )
   let (session, dir_input, session_root_input) = match matches {
@@ -44,7 +44,7 @@ async fn run_fleet(matches : @argparse.Matches, concurrency~ : Int) -> Unit {
   guard session.is_empty() else {
     fail("--concurrency runs independent sessions; remove --session")
   }
-  let dir = trim_trailing_path_separators("\{dir_input.trim()}")
+  let dir = @setup.trim_trailing_path_separators("\{dir_input.trim()}")
   let (run_dirs, source) = resolve_run_dirs(dir, concurrency)
   let session_root_value = "\{session_root_input.trim()}"
   // Skip the configured session store (not just the default) so a custom
@@ -180,12 +180,12 @@ async fn run_one_attempt(
   let id = @agent_session.SessionId::generated(
     prefix="cli",
     now_ms=@env.now().reinterpret_as_int64(),
-    salt=random_salt(),
+    salt=@setup.random_salt(),
   )
   try {
-    let root = session_root(matches, workspace_root=run_dir)
+    let root = @setup.session_root(matches, workspace_root=run_dir)
     let store = @store.SessionStore(root)
-    let session = load_or_new_session(
+    let session = @setup.load_or_new_session(
       store,
       id,
       matches,
@@ -345,7 +345,9 @@ fn copy_skip(rel : String, sessions_rel~ : String) -> Bool {
 /// the configured `--session-root`. `""` when the store is configured outside the
 /// workspace (an absolute root), so nothing inside the copy needs skipping.
 fn workspace_sessions_rel(session_root_value : String) -> String {
-  let root = trim_trailing_path_separators("\{session_root_value.trim()}")
+  let root = @setup.trim_trailing_path_separators(
+    "\{session_root_value.trim()}",
+  )
   if root == "" || @path.Path(root).is_absolute() {
     ""
   } else if root == "." {
@@ -424,201 +426,4 @@ fn one_line_brief(text : String, max : Int) -> String {
   } else {
     "\{String::from_iter(one.iter().take(max))}…"
   }
-}
-
-///|
-test "one_line_brief collapses newlines and caps length" {
-  assert_eq(one_line_brief("a\nb", 10), "a b")
-  assert_eq(one_line_brief("  spaced  ", 10), "spaced")
-  assert_eq(one_line_brief("hello world", 5), "hello…")
-}
-
-///|
-test "copy_skip drops build/vendor/session data but keeps git, skills, sources" {
-  let sr = ".openseek/sessions"
-  assert_true(copy_skip("_build", sessions_rel=sr))
-  assert_true(copy_skip("node_modules", sessions_rel=sr))
-  assert_true(copy_skip("a/b/_build", sessions_rel=sr))
-  // Default session store is skipped; the rest of .openseek (skills) is kept.
-  assert_true(copy_skip(".openseek/sessions", sessions_rel=sr))
-  assert_true(copy_skip("sub/.openseek/sessions", sessions_rel=sr))
-  assert_false(copy_skip(".openseek", sessions_rel=sr))
-  assert_false(copy_skip(".openseek/skills", sessions_rel=sr))
-  assert_false(copy_skip(".git", sessions_rel=sr))
-  assert_false(copy_skip("src", sessions_rel=sr))
-}
-
-///|
-test "copy_skip follows the configured session root" {
-  // A custom --session-root skips its own store, not the default path.
-  assert_true(
-    copy_skip("mysessions/sessions", sessions_rel="mysessions/sessions"),
-  )
-  assert_false(
-    copy_skip(".openseek/sessions", sessions_rel="mysessions/sessions"),
-  )
-  // An absolute/external store (sessions_rel="") skips nothing extra.
-  assert_false(copy_skip("sessions", sessions_rel=""))
-  assert_false(copy_skip(".openseek/sessions", sessions_rel=""))
-}
-
-///|
-test "workspace_sessions_rel derives the store path from --session-root" {
-  assert_eq(workspace_sessions_rel(".openseek"), ".openseek/sessions")
-  assert_eq(workspace_sessions_rel("mysessions"), "mysessions/sessions")
-  assert_eq(workspace_sessions_rel("."), "sessions")
-  assert_eq(workspace_sessions_rel("/abs/root"), "")
-}
-
-///|
-test "has_shebang detects #! scripts" {
-  assert_true(has_shebang(b"#!/bin/sh\n"))
-  assert_false(has_shebang(b"echo hi\n"))
-  assert_false(has_shebang(b"#"))
-}
-
-///|
-test "inspect_hint adds --session-root only when non-default" {
-  assert_eq(
-    inspect_hint(".openseek"),
-    "openseek sessions show <id> --dir <run-dir>",
-  )
-  assert_eq(
-    inspect_hint("myroot"),
-    "openseek sessions show <id> --dir <run-dir> --session-root myroot",
-  )
-}
-
-///|
-async test "copy_tree dereferences an in-workspace file symlink" {
-  @vfs.with_tmpdir(prefix="openseek-fleet-symlink-", root => {
-    let src = "\{root}/s"
-    @fs.mkdir(src, recursive=true)
-    @fs.write_file("\{src}/real.txt", "content", create_mode=CreateOrTruncate)
-    // A relative, in-workspace symlink (like README.md -> README.mbt.md).
-    @fs.symlink(target="real.txt", "\{src}/link.txt")
-    let dst = "\{root}/d"
-    copy_tree(
-      src,
-      dst,
-      sessions_rel=".openseek/sessions",
-      root=@fs.realpath(src),
-    )
-    assert_eq(@fs.read_file("\{dst}/real.txt").text(), "content")
-    // The link is materialized as a regular file with the target's content.
-    assert_eq(@fs.read_file("\{dst}/link.txt").text(), "content")
-  })
-}
-
-///|
-test "terminal_summary reads the last terminal" {
-  let finished = @agent_session.Session(SessionId("t"), system_prompt="")
-    .append(User(UserMessage("hi")))
-    .append(Terminal(Finished("done")))
-  let (status, detail) = terminal_summary(finished)
-  assert_eq(status, "finished")
-  assert_eq(detail, "done")
-  let none = @agent_session.Session(SessionId("e"), system_prompt="")
-  let (no_status, _) = terminal_summary(none)
-  assert_eq(no_status, "(no terminal)")
-}
-
-///|
-async test "resolve_run_dirs names siblings and reports a copy source" {
-  @vfs.with_tmpdir(prefix="openseek-fleet-resolve-", root => {
-    @fs.mkdir("\{root}/proj", recursive=true)
-    // Existing dir → a source to copy, with sibling _run_N names.
-    let (dirs, source) = resolve_run_dirs("\{root}/proj", 2)
-    assert_eq(dirs.length(), 2)
-    assert_true(dirs[0].has_suffix("proj_run_1"))
-    assert_true(dirs[1].has_suffix("proj_run_2"))
-    guard source is Some(_) else {
-      fail("expected a copy source for an existing dir")
-    }
-    // Absent dir (parent exists) → no source (build-from-scratch).
-    let (ghost_dirs, ghost_source) = resolve_run_dirs("\{root}/ghost", 1)
-    assert_true(ghost_dirs[0].has_suffix("ghost_run_1"))
-    guard ghost_source is None else {
-      fail("expected no source for an absent dir")
-    }
-  })
-}
-
-///|
-async test "resolve_run_dirs rejects an existing run directory" {
-  @vfs.with_tmpdir(prefix="openseek-fleet-collide-", root => {
-    @fs.mkdir("\{root}/proj", recursive=true)
-    @fs.mkdir("\{root}/proj_run_1", recursive=true)
-    let mut raised = false
-    let _ = resolve_run_dirs("\{root}/proj", 2) catch {
-      _ => {
-        raised = true
-        ([], None)
-      }
-    }
-    assert_true(raised)
-  })
-}
-
-///|
-async test "copy_tree keeps files, .git dir, skills; skips build and sessions" {
-  @vfs.with_tmpdir(prefix="openseek-fleet-copy-", root => {
-    let src = "\{root}/s"
-    @fs.mkdir("\{src}/sub", recursive=true)
-    @fs.mkdir("\{src}/_build", recursive=true)
-    @fs.mkdir("\{src}/.git", recursive=true)
-    @fs.mkdir("\{src}/.openseek/skills", recursive=true)
-    @fs.mkdir("\{src}/.openseek/sessions/old", recursive=true)
-    @fs.write_file("\{src}/a.txt", "hi", create_mode=CreateOrTruncate)
-    @fs.write_file("\{src}/sub/b.txt", "yo", create_mode=CreateOrTruncate)
-    @fs.write_file("\{src}/_build/junk", "x", create_mode=CreateOrTruncate)
-    @fs.write_file("\{src}/.git/config", "g", create_mode=CreateOrTruncate)
-    @fs.write_file(
-      "\{src}/.openseek/skills/s.md",
-      "skill",
-      create_mode=CreateOrTruncate,
-    )
-    @fs.write_file(
-      "\{src}/.openseek/sessions/old/openseek_session-old.jsonl",
-      "{}",
-      create_mode=CreateOrTruncate,
-    )
-    let dst = "\{root}/d"
-    copy_tree(
-      src,
-      dst,
-      sessions_rel=".openseek/sessions",
-      root=@fs.realpath(src),
-    )
-    assert_eq(@fs.read_file("\{dst}/a.txt").text(), "hi")
-    assert_true(@fs.exists("\{dst}/sub/b.txt"))
-    assert_true(@fs.exists("\{dst}/.git/config")) // normal .git dir kept
-    assert_true(@fs.exists("\{dst}/.openseek/skills/s.md")) // skills kept
-    assert_false(@fs.exists("\{dst}/_build")) // build skipped
-    assert_false(@fs.exists("\{dst}/.openseek/sessions")) // session logs skipped
-  })
-}
-
-///|
-async test "copy_tree skips a worktree .git file (never points at the original)" {
-  @vfs.with_tmpdir(prefix="openseek-fleet-worktree-", root => {
-    let src = "\{root}/wt"
-    @fs.mkdir(src, recursive=true)
-    // A linked worktree/submodule stores .git as a *file* pointing elsewhere.
-    @fs.write_file(
-      "\{src}/.git",
-      "gitdir: \{root}/main/.git/worktrees/wt",
-      create_mode=CreateOrTruncate,
-    )
-    @fs.write_file("\{src}/code.mbt", "x", create_mode=CreateOrTruncate)
-    let dst = "\{root}/d"
-    copy_tree(
-      src,
-      dst,
-      sessions_rel=".openseek/sessions",
-      root=@fs.realpath(src),
-    )
-    assert_true(@fs.exists("\{dst}/code.mbt"))
-    assert_false(@fs.exists("\{dst}/.git")) // worktree pointer not copied
-  })
 }

@@ -1,0 +1,22 @@
+import {
+  "bobzhang/openseek/agent",
+  "bobzhang/openseek/agent_runtime",
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_subrun",
+  "moonbitlang/core/argparse",
+  "moonbitlang/async",
+  "bobzhang/openseek/agent_session/compact",
+  "bobzhang/openseek_protocol/emit",
+  "moonbitlang/core/env",
+  "bobzhang/openseek/internal/openseek/execution",
+  "moonbitlang/jsonl",
+  "bobzhang/openseek/internal/openseek/options",
+  "bobzhang/openseek_protocol" @protocol,
+  "bobzhang/openseek/internal/openseek/setup",
+  "moonbitlang/async/stdio",
+  "bobzhang/openseek/agent_session/store",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+wasm+native"

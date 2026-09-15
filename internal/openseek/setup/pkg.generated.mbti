@@ -1,0 +1,40 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/internal/openseek/setup"
+
+import {
+  "bobzhang/openseek/agent_session",
+  "bobzhang/openseek/agent_session/store",
+  "bobzhang/openseek/deepseek",
+  "moonbitlang/core/argparse",
+}
+
+// Values
+pub async fn capture_goal_baseline(String) -> String
+
+pub async fn configured_system_prompt(@argparse.Matches, @deepseek.Model, workspace_root? : String) -> String
+
+pub async fn first_free_child_ordinal(@store.SessionStore, String) -> Int
+
+pub async fn load_or_new_session(@store.SessionStore, @agent_session.SessionId, @argparse.Matches, @deepseek.Model, workspace_root? : String) -> @agent_session.Session
+
+pub async fn prepare_workspace_root(@argparse.Matches, log_created? : Bool) -> String
+
+pub async fn random_salt() -> String
+
+pub async fn resolved_session_id(@argparse.Matches) -> @agent_session.SessionId?
+
+pub async fn self_executable() -> String
+
+pub fn session_root(@argparse.Matches, workspace_root? : String) -> String raise
+
+pub fn trim_trailing_path_separators(String) -> String
+
+pub fn workflow_launch(String) -> (String, Array[String])
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

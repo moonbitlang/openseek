@@ -1,528 +1,4 @@
 ///|
-/// One decoded command from the serve-mode controller (e.g. the TUI) on
-/// stdin.
-priv enum ServeCommand {
-  Prompt(String, submission_id~ : String?)
-  Steer(@agent_runtime.SteerInput)
-  Compact
-  Cancel
-  JobsSnapshot(request_id~ : String)
-  JobStop(request_id~ : String, generation~ : String, job_id~ : String)
-  Goal(GoalAction)
-  /// The answer to an `approval_requested` event: which question, and whether
-  /// it is granted. Both labelled, because a bare positional pair reads as
-  /// nothing at a call site and the second field is the decision itself.
-  ///
-  /// Unlike every other command here it does not schedule work. It releases a
-  /// tool that is already running and blocked, which is why it is dispatched
-  /// from the loop but never queues behind active work.
-  Approval(id~ : String, allow~ : Bool)
-}
-
-///|
-/// A goal command's payload: set/replace the standing goal or clear it.
-/// `auto` opts the engine into continuing toward the goal on its own after
-/// each finished turn (headless controllers; the TUI composes /loop instead).
-/// Arming never self-starts work: continuation fires only off a finishing
-/// turn, so the controller still sends the first prompt.
-priv enum GoalAction {
-  SetGoal(String, auto~ : Bool)
-  ClearGoal
-}
-
-///|
-/// Turns the engine will start on its own toward one standing goal before
-/// pausing for input — the same order as /loop's default fire budget. Reset
-/// whenever a goal is set with auto continuation.
-const GoalAutoContinueMaxTurns : Int = 20
-
-///|
-/// The prompt that opens an auto-continuation turn. Defined with the goal
-/// vocabulary in `agent_session` because the visualizer has to recognize the
-/// resulting `User` event as engine-injected rather than something the user
-/// said, and a second copy of the text here would let the two drift.
-const GoalContinuePrompt : String = @agent_session.GoalContinuePrompt
-
-///|
-/// Whether a pending auto intent may be promoted to armed: the persisted
-/// standing goal must carry the intent's exact text AND a set marker newer
-/// than the sequence baseline recorded when the command arrived. Text alone
-/// cannot distinguish "this exact set persisted" from "an identical-text
-/// goal was already standing when the new set's append failed" (codex
-/// review), so promotion keys on marker identity.
-fn goal_auto_promotable(
-  current : @agent_session.StandingGoal?,
-  text : String,
-  baseline : Int,
-) -> Bool {
-  current is Some(goal) && goal.text() == text && goal.set_sequence() > baseline
-}
-
-///|
-/// Whether auto-continue is armed for the persisted standing goal. `target`
-/// is only ever set by promotion (goal_auto_promotable), so this is the
-/// cheap per-decision recheck that the armed goal still stands unchanged.
-fn goal_auto_armed(
-  current : @agent_session.StandingGoal?,
-  target : String?,
-) -> Bool {
-  current is Some(goal) && target is Some(text) && goal.text() == text
-}
-
-///|
-/// Whether the engine should start another turn toward the standing goal.
-/// Pure so the policy is unit-testable: only a cleanly finished turn on a
-/// fully idle, still-serving engine with a standing goal and budget left
-/// continues — failures, aborts, interruptions, queued work, and shutdown
-/// all pause for the controller.
-fn should_auto_continue(
-  auto~ : Bool,
-  finished~ : Bool,
-  idle~ : Bool,
-  shutting_down~ : Bool,
-  goal_standing~ : Bool,
-  turns_remaining~ : Int,
-) -> Bool {
-  auto &&
-  finished &&
-  idle &&
-  !shutting_down &&
-  goal_standing &&
-  turns_remaining > 0
-}
-
-///|
-/// A queued serve-mode operation that must wait for active work to finish.
-priv enum PendingWork {
-  PendingPrompt(String, submission_id~ : String?)
-  PendingCompact
-  // A goal marker holding its wire-order position behind a compaction: a
-  // pending compaction must not cover a goal that arrived after the compact
-  // command.
-  // The marker plus the command context that PRECEDED it at arrival: the
-  // drain replays true wire order — context arriving later stays in the
-  // runtime queue and lands after the goal.
-  // marker, arrival-context snapshot, whether THIS command carried auto
-  // (promotion fires only on the auto entry's own durable append), the
-  // command serial, and the baseline notice captured at command receipt —
-  // appended immediately before the marker at drain, preserving the
-  // adjacency contract Session::current_goal_baseline pairs by.
-  PendingGoal(String, Array[@agent_runtime.SteerInput], Bool, Int, String?)
-  // Context that arrived AFTER a queued goal: fenced into the ordered
-  // queue so it cannot overtake the goal via the runtime steer queue (an
-  // earlier pending prompt would otherwise drain it first).
-  PendingContext(@agent_runtime.SteerInput)
-}
-
-///|
-/// The one operation currently occupying the serve loop. Compaction is a
-/// non-steerable active operation, but it is still cancellable like a turn.
-priv enum ActiveWork {
-  ActiveTurn(@async.Task[Unit])
-  ActiveCompact(@async.Task[Unit])
-}
-
-///|
-/// One unit of work for the serve loop's single consumer: a wire command in
-/// arrival order, the completion of active work, or the stdin-EOF shutdown
-/// marker. Funneling all three through one queue is what makes
-/// command handling race-free against turn lifecycle.
-priv enum ServeStep {
-  Wire(ServeCommand)
-  TurnDone(finished~ : Bool)
-  CompactDone(@agent_session.Session)
-  // A background job finished; wake the loop to drain and surface its notice
-  // even when no turn is active.
-  BackgroundNotice
-  Shutdown
-}
-
-///|
-/// Decode one JSONL command line from the controller.
-/// `jobs_snapshot` and `job_stop` are correlated controls handled outside turns.
-///
-/// `prompt` starts a turn, `steer` supplies typed step-boundary input, `compact`
-/// summarizes the current conversation once no work is active, and `cancel`
-/// interrupts the active or next queued prompt. A `steer` with missing `kind` is
-/// prompt steering for compatibility; `kind="command"` is user-shell context
-/// that may be appended while idle without starting a model turn. Anything else
-/// is an `Err` whose text is emitted as a `command_error` event — a controller
-/// bug must be visible on the wire, not silently swallowed, but it must not kill
-/// the session either.
-/// Map one controller line onto the loop's own command type.
-///
-/// `@protocol.Command` owns the wire — the same type the TUI and the desktop
-/// now encode with, so the engine's reader and its controllers cannot spell a
-/// command differently. They did: the desktop sent `steer` without a `kind` and
-/// worked only because this decoder happened to default it.
-///
-/// The mapping stays here because `SteerInput` is the runtime's, and the
-/// protocol is a leaf module that must not depend on the engine — the same
-/// reason every client keeps its own view model.
-///
-/// So is the blank-goal refusal. `{"action":"set","text":"  "}` is a
-/// well-formed command that this engine will not stand: the shape is the
-/// protocol's to read, whether it is acceptable is this loop's to say. Keeping
-/// the check in `parse` would have made `GoalSet(text="  ")` a value the
-/// protocol's own type holds and `to_json` writes but `parse` rejects.
-fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
-  let command = match @protocol.Command::parse(json) {
-    Ok(command) => command
-    Err(message) => return Err(message)
-  }
-  match command {
-    Prompt(text~, submission_id~) => Ok(Prompt(text, submission_id~))
-    Steer(kind~, text~) =>
-      Ok(
-        Steer(
-          match kind {
-            Prompt => Prompt(text)
-            Command => Command(text)
-          },
-        ),
-      )
-    JobsSnapshot(request_id~) => Ok(JobsSnapshot(request_id~))
-    JobStop(request_id~, generation~, job_id~) =>
-      Ok(JobStop(request_id~, generation~, job_id~))
-    Compact => Ok(Compact)
-    Cancel => Ok(Cancel)
-    GoalSet(text~, auto~) =>
-      if text.is_blank() {
-        Err("goal text must not be blank")
-      } else {
-        Ok(Goal(SetGoal(text, auto~)))
-      }
-    GoalClear => Ok(Goal(ClearGoal))
-    ApprovalDecision(id~, allow~) => Ok(Approval(id~, allow~))
-  }
-}
-
-///|
-test "serve commands decode and reject with actionable errors" {
-  assert_true(
-    decode_serve_command({ "command": "jobs_snapshot", "request_id": "list-1" })
-    is Ok(JobsSnapshot(request_id="list-1")),
-  )
-  assert_true(
-    decode_serve_command({
-      "command": "job_stop",
-      "request_id": "stop-1",
-      "generation": "runtime-1",
-      "job_id": "bg-1",
-    })
-    is Ok(JobStop(request_id="stop-1", generation="runtime-1", job_id="bg-1")),
-  )
-  assert_true(
-    decode_serve_command({ "command": "prompt", "text": "hi" })
-    is Ok(Prompt("hi", submission_id=None)),
-  )
-  assert_true(
-    decode_serve_command({
-      "command": "prompt",
-      "text": "hi",
-      "submission_id": "page-1-submission-2",
-    })
-    is Ok(Prompt("hi", submission_id=Some("page-1-submission-2"))),
-  )
-  assert_true(
-    decode_serve_command({ "command": "steer", "text": "left" })
-    is Ok(Steer(Prompt("left"))),
-  )
-  assert_true(
-    decode_serve_command({
-      "command": "steer",
-      "kind": "prompt",
-      "text": "right",
-    })
-    is Ok(Steer(Prompt("right"))),
-  )
-  assert_true(
-    decode_serve_command({
-      "command": "steer",
-      "kind": "command",
-      "text": "<user_shell_command>",
-    })
-    is Ok(Steer(Command("<user_shell_command>"))),
-  )
-  assert_true(decode_serve_command({ "command": "compact" }) is Ok(Compact))
-  assert_true(decode_serve_command({ "command": "cancel" }) is Ok(Cancel))
-  assert_true(
-    decode_serve_command({ "command": "approval", "id": "ap-1", "allow": true })
-    is Ok(Approval(id="ap-1", allow=true)),
-  )
-  assert_true(
-    decode_serve_command({ "command": "approval", "id": "ap-1", "allow": false })
-    is Ok(Approval(id="ap-1", allow=false)),
-  )
-  guard decode_serve_command({ "command": "steer" }) is Err(message) else {
-    fail("textless steer accepted")
-  }
-  assert_true(message.contains("text"))
-  guard decode_serve_command({
-      "command": "steer",
-      "kind": "runtime",
-      "text": "x",
-    })
-    is Err(message) else {
-    fail("unknown steer kind accepted")
-  }
-  assert_true(message.contains("unknown steer kind: runtime"))
-  guard decode_serve_command({ "command": "inject", "text": "x" })
-    is Err(message) else {
-    fail("inject command accepted")
-  }
-  assert_true(message.contains("unknown command: inject"))
-  guard decode_serve_command({ "command": "reboot" }) is Err(message) else {
-    fail("unknown command accepted")
-  }
-  assert_true(message.contains("unknown command: reboot"))
-  guard decode_serve_command("nonsense") is Err(message) else {
-    fail("non-object accepted")
-  }
-  assert_true(message.contains("command"))
-  assert_true(
-    decode_serve_command({
-      "command": "goal",
-      "action": "set",
-      "text": "port the decoder",
-    })
-    is Ok(Goal(SetGoal("port the decoder", auto=false))),
-  )
-  assert_true(
-    decode_serve_command({
-      "command": "goal",
-      "action": "set",
-      "text": "grind it out",
-      "auto": true,
-    })
-    is Ok(Goal(SetGoal("grind it out", auto=true))),
-  )
-  assert_true(
-    decode_serve_command({
-      "command": "goal",
-      "action": "set",
-      "text": "grind it out",
-      "auto": "yes",
-    })
-    is Ok(Goal(SetGoal("grind it out", auto=false))),
-  )
-  assert_true(
-    decode_serve_command({ "command": "goal", "action": "clear" })
-    is Ok(Goal(ClearGoal)),
-  )
-  guard decode_serve_command({
-      "command": "goal",
-      "action": "set",
-      "text": "  ",
-    })
-    is Err(message) else {
-    fail("blank goal accepted")
-  }
-  assert_true(message.contains("blank"))
-  guard decode_serve_command({ "command": "goal", "action": "set" })
-    is Err(message) else {
-    fail("textless goal set accepted")
-  }
-  assert_true(message.contains("action"))
-  guard decode_serve_command({ "command": "goal", "action": "toggle" })
-    is Err(message) else {
-    fail("unknown goal action accepted")
-  }
-  assert_true(message.contains("action"))
-}
-
-///|
-fn remove_next_pending_prompt(pending : Array[PendingWork]) -> Unit {
-  if pending.search_by(work => work is PendingPrompt(_, ..)) is Some(index) {
-    ignore(pending.remove(index))
-  }
-}
-
-///|
-fn has_pending_prompt(pending : Array[PendingWork]) -> Bool {
-  pending.any(work => work is PendingPrompt(_, ..))
-}
-
-///|
-fn has_pending_goal(pending : Array[PendingWork]) -> Bool {
-  pending.any(work => work is PendingGoal(_, _, _, _, _))
-}
-
-///|
-test "pending prompt helpers ignore queued compactions and goals" {
-  let pending : Array[PendingWork] = []
-  assert_false(has_pending_prompt(pending))
-  pending.push(PendingCompact)
-  pending.push(PendingGoal("[goal]\nship it", [], false, 1, None))
-  assert_false(has_pending_prompt(pending))
-  pending.push(PendingPrompt("next", submission_id=None))
-  assert_true(has_pending_prompt(pending))
-  // Cancel targets the next prompt, never a queued goal update.
-  remove_next_pending_prompt(pending)
-  assert_false(has_pending_prompt(pending))
-  assert_eq(pending.length(), 2)
-  assert_true(pending[0] is PendingCompact)
-  assert_true(pending[1] is PendingGoal(_, _, _, _, _))
-}
-
-///|
-test "auto arms only for the exact persisted goal" {
-  let session = @agent_session.Session(SessionId("s1"), system_prompt="p").append(
-    Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nship the feature")),
-  )
-  let standing = session.current_goal()
-  assert_true(goal_auto_armed(standing, Some("ship the feature")))
-  // A set whose append failed (or was superseded) never arms.
-  assert_false(goal_auto_armed(standing, Some("a different goal")))
-  assert_false(goal_auto_armed(standing, None))
-  assert_false(goal_auto_armed(None, Some("ship the feature")))
-}
-
-///|
-test "promotion requires a marker newer than the command baseline" {
-  // The goal marker is event 1.
-  let session = @agent_session.Session(SessionId("s1"), system_prompt="p").append(
-    Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nship the feature")),
-  )
-  let standing = session.current_goal()
-  // A set command that arrived when last_sequence was 0 promotes: the
-  // marker (sequence 1) is newer than its baseline.
-  assert_true(goal_auto_promotable(standing, "ship the feature", 0))
-  // The same-text regression: a re-set arriving AFTER that marker existed
-  // (baseline 1) whose own append failed must NOT promote off the old
-  // marker, even though the text matches.
-  assert_false(goal_auto_promotable(standing, "ship the feature", 1))
-  assert_false(goal_auto_promotable(standing, "different text", 0))
-  assert_false(goal_auto_promotable(None, "ship the feature", 0))
-}
-
-///|
-test "a context-yield turn chains: finished derivation and standing goal" {
-  // The whole PR-B contract in one place: a turn that ended at the context
-  // ceiling is durably Terminal(Finished(...)), so serve derives
-  // finished=true from the last event exactly as for a real completion —
-  // and the goal marker, covered by the checkpoint summary or not, still
-  // stands in the raw log. Auto-continue therefore chains one turn per
-  // context window with no yield-specific code.
-  let session = @agent_session.Session(
-      SessionId("yield-chains"),
-      system_prompt="system",
-    )
-    .append(
-      Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nbig objective")),
-    )
-    .append(Terminal(Finished("turn one answer")))
-    .append(User(UserMessage("continue")))
-    .append(
-      Summary(
-        SessionSummary(content="checkpoint", from_sequence=1, to_sequence=3),
-      ),
-    )
-    .append(
-      Terminal(
-        Finished(
-          "\{@agent_session.ContextYieldAnswerPrefix} continue in a new turn",
-        ),
-      ),
-    )
-  let finished = session.events().peek() is Some(event) &&
-    event.item() is Terminal(Finished(_))
-  assert_true(finished)
-  guard session.current_goal() is Some(goal) else {
-    fail("the goal must survive the checkpoint")
-  }
-  assert_eq(goal.text(), "big objective")
-  assert_true(
-    should_auto_continue(
-      auto=true,
-      finished~,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
-}
-
-///|
-test "an unblocked goal resumes auto-continuation at the boundary" {
-  // serve gates auto-continue on `goal_standing = standing is Some && !blocked`
-  // read fresh from current_goal() each TurnDone. A goal blocked then unblocked
-  // reads as standing-and-not-blocked, so continuation resumes with no serve
-  // change — the whole point of the [goal unblocked] marker.
-  let base = @agent_session.Session(SessionId("resume"), system_prompt="system")
-    .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nobjective")))
-    .append(User(UserMessage("work")))
-    .append(
-      Runtime(RuntimeNotice("\{@agent_session.GoalBlockedPrefix}\nstuck")),
-    )
-    .append(Terminal(Finished("turn answer")))
-  let goal_standing = fn(session : @agent_session.Session) -> Bool {
-    session.current_goal() is Some(goal) && !goal.blocked()
-  }
-  // While blocked, the boundary does NOT auto-continue.
-  assert_false(goal_standing(base))
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=goal_standing(base),
-      turns_remaining=1,
-    ),
-  )
-  // After the unblock marker lands, the same boundary resumes.
-  let resumed = base.append(
-    Runtime(RuntimeNotice(@agent_session.GoalUnblockedNotice)),
-  )
-  assert_true(goal_standing(resumed))
-  assert_true(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=goal_standing(resumed),
-      turns_remaining=1,
-    ),
-  )
-}
-
-///|
-/// Test helper: `should_auto_continue` with every input defaulted to its
-/// continuing value, so a case reads as the one condition it flips.
-fn auto_continues(
-  auto? : Bool = true,
-  finished? : Bool = true,
-  idle? : Bool = true,
-  shutting_down? : Bool = false,
-  goal_standing? : Bool = true,
-  turns_remaining? : Int = 1,
-) -> Bool {
-  should_auto_continue(
-    auto~,
-    finished~,
-    idle~,
-    shutting_down~,
-    goal_standing~,
-    turns_remaining~,
-  )
-}
-
-///|
-test "auto-continue requires a finished idle serving turn with budget" {
-  assert_true(auto_continues())
-  // Any single condition failing pauses for the controller.
-  assert_false(auto_continues(auto=false))
-  assert_false(auto_continues(finished=false))
-  assert_false(auto_continues(idle=false))
-  assert_false(auto_continues(shutting_down=true))
-  assert_false(auto_continues(goal_standing=false))
-  assert_false(auto_continues(turns_remaining=0))
-}
-
-///|
 /// Run the engine as a long-lived session server: read JSONL commands from
 /// stdin, run turns sequentially against one shared session, and write the
 /// usual JSONL event stream to stdout. This is the engine half of the
@@ -568,13 +44,13 @@ async fn run_serve(
   matches : @argparse.Matches,
   workspace_root~ : String,
 ) -> Unit {
-  let (model, thinking, api_url) = agent_settings(matches)
+  let (model, thinking, api_url) = @options.agent_settings(matches)
   guard model.api_key(matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
   }
-  let (retry_attempts, retry_backoff_ms) = retry_overrides(matches)
-  let max_steps = max_steps(matches)
-  let review_deadline_ms = review_deadline_ms(matches)
+  let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
+  let max_steps = @options.max_steps(matches)
+  let review_deadline_ms = @options.review_deadline_ms(matches)
   let session_id = match matches {
     {
       values: {
@@ -591,10 +67,12 @@ async fn run_serve(
   }
   let (store, initial_session) = match session_id {
     Some(id) => {
-      let store = @store.SessionStore(session_root(matches, workspace_root~))
+      let store = @store.SessionStore(
+        @setup.session_root(matches, workspace_root~),
+      )
       (
         Some(store),
-        load_or_new_session(store, id, matches, model, workspace_root~),
+        @setup.load_or_new_session(store, id, matches, model, workspace_root~),
       )
     }
     // No durable session requested: the conversation still spans every
@@ -604,7 +82,7 @@ async fn run_serve(
         None,
         Session(
           SessionId("serve"),
-          system_prompt=configured_system_prompt(
+          system_prompt=@setup.configured_system_prompt(
             matches,
             model,
             workspace_root~,
@@ -619,11 +97,11 @@ async fn run_serve(
   // The desk outlives every turn: a question is asked by a tool inside one
   // turn's task and answered by the loop below, which is the process's single
   // command consumer. Both close over this one value.
-  let approval_desk = ApprovalDesk::ApprovalDesk(
+  let approval_desk = @execution.ApprovalDesk::ApprovalDesk(
     now_ms=@env.now().reinterpret_as_int64(),
   )
-  let approval = approval_channel(
-    approval_policy(matches, interactive=true),
+  let approval = @execution.approval_channel(
+    @options.approval_policy(matches, interactive=true),
     approval_desk,
   )
   @async.with_task_group(group => {
@@ -642,7 +120,7 @@ async fn run_serve(
     // completion instead of leaving it queued until the next prompt.
     // Tools from any configured MCP servers, connected once per engine (their
     // reader/writer tasks live on this group) and reused across turns.
-    let exe = self_executable()
+    let exe = @setup.self_executable()
     // A durable serve session makes its children durable siblings
     // (`<id>-sr-N` in the same root); --no-session keeps them in-memory.
     // The ordinal floor keeps a resumed session from reusing a child id an
@@ -654,7 +132,7 @@ async fn run_serve(
           @agent_subrun.ChildSession(
             root=store.root(),
             parent~,
-            first_free=first_free_child_ordinal(store, parent),
+            first_free=@setup.first_free_child_ordinal(store, parent),
           ),
         )
       }
@@ -665,7 +143,7 @@ async fn run_serve(
     // counter `run_subrun` uses, or a snippet's child and a `review` child
     // collide on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
-      let (exe, launch_prefix) = workflow_launch(exe)
+      let (exe, launch_prefix) = @setup.workflow_launch(exe)
       spec.injection(
         exe~,
         launch_prefix~,
@@ -674,10 +152,10 @@ async fn run_serve(
         api_url?,
         // Read at reservation time from the loop-updated session, never a
         // snapshot: a review requested mid-turn audits the LIVE goal.
-        criteria=() => audit_criteria(session),
+        criteria=() => @execution.audit_criteria(session),
       )
     })
-    let extra_tools = build_extra_tools(
+    let extra_tools = @execution.build_extra_tools(
       matches,
       scope,
       model~,
@@ -687,9 +165,9 @@ async fn run_serve(
     )
     // The advisory goal-met gate (--review-gate): built once, shared by
     // every turn; engine-initiated, so it runs on its own allowance.
-    let on_goal_met = if review_gate_enabled(matches) {
+    let on_goal_met = if @options.review_gate_enabled(matches) {
       Some(
-        build_goal_met_gate(
+        @execution.build_goal_met_gate(
           self_exe=exe,
           model~,
           api_url~,
@@ -1170,7 +648,7 @@ async fn run_serve(
           // — a known divergence: the gate treats the baseline as advisory
           // context for a current-worktree audit, never exact attribution.
           let baseline : String? = match action {
-            SetGoal(_, ..) => Some(capture_goal_baseline(workspace_root))
+            SetGoal(_, ..) => Some(@setup.capture_goal_baseline(workspace_root))
             ClearGoal => None
           }
           if pending.length() > 0 || active_work is Some(ActiveCompact(_)) {

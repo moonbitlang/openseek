@@ -1,0 +1,47 @@
+///|
+/// The client version openseek advertises to MCP servers in the handshake.
+pub const McpClientVersion : String = "0.2.2"
+
+///|
+/// Build the agent tools contributed by the configured MCP servers. `[]` when no
+/// config is set or on any failure (logged). The connections' reader/writer
+/// tasks run on `scope`'s group.
+async fn[X] resolve_mcp_tools(
+  matches : @argparse.Matches,
+  scope : @agent_runtime.AgentTaskScope[X],
+  workspace_root~ : String,
+) -> Array[@agent_tool.AgentToolDefinition] {
+  let path = @options.mcp_config_path(matches)
+  if path == "" {
+    return []
+  }
+  let text = @fs.read_file(path).text() catch {
+    error if @async.is_being_cancelled() => raise error
+    error => {
+      @emit.emit(McpConfigUnreadable(path~, error="\{error}"))
+      return []
+    }
+  }
+  let servers = @mcpconfig.decode(@json.parse(text)) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => {
+      @emit.emit(McpConfigInvalid(path~, error="\{error}"))
+      return []
+    }
+  }
+  let tools = @mcptools.build(
+    scope,
+    servers,
+    client_name="openseek",
+    client_version=McpClientVersion,
+    workspace_root~,
+  )
+  @emit.emit(
+    McpToolsRegistered(
+      servers=servers.length(),
+      tools=tools.length(),
+      names=[ for tool in tools => tool.name ],
+    ),
+  )
+  tools
+}

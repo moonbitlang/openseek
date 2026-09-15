@@ -1,65 +1,3 @@
-// Resolve the configured MCP servers into agent tools. Any problem — no config,
-// an unreadable file, malformed JSON, a bad config shape, a server that fails to
-// start — yields no tools and is logged, so MCP never breaks a session; the
-// engine simply runs with its built-in tools.
-
-///|
-/// The client version openseek advertises to MCP servers in the handshake.
-const McpClientVersion : String = "0.2.2"
-
-///|
-/// The `--mcp-config` path, or "" when unset.
-fn mcp_config_path(matches : @argparse.Matches) -> String {
-  match matches {
-    { values: { "mcp-config": [path, ..], .. }, .. } => path
-    _ => ""
-  }
-}
-
-///|
-/// Build the agent tools contributed by the configured MCP servers. `[]` when no
-/// config is set or on any failure (logged). The connections' reader/writer
-/// tasks run on `scope`'s group.
-async fn[X] resolve_mcp_tools(
-  matches : @argparse.Matches,
-  scope : @agent_runtime.AgentTaskScope[X],
-  workspace_root~ : String,
-) -> Array[@agent_tool.AgentToolDefinition] {
-  let path = mcp_config_path(matches)
-  if path == "" {
-    return []
-  }
-  let text = @fs.read_file(path).text() catch {
-    error if @async.is_being_cancelled() => raise error
-    error => {
-      @emit.emit(McpConfigUnreadable(path~, error="\{error}"))
-      return []
-    }
-  }
-  let servers = @mcpconfig.decode(@json.parse(text)) catch {
-    error if @async.is_being_cancelled() => raise error
-    error => {
-      @emit.emit(McpConfigInvalid(path~, error="\{error}"))
-      return []
-    }
-  }
-  let tools = @mcptools.build(
-    scope,
-    servers,
-    client_name="openseek",
-    client_version=McpClientVersion,
-    workspace_root~,
-  )
-  @emit.emit(
-    McpToolsRegistered(
-      servers=servers.length(),
-      tools=tools.length(),
-      names=[ for tool in tools => tool.name ],
-    ),
-  )
-  tools
-}
-
 ///|
 /// `openseek mcp` — build the MCP tool registry exactly as a session would
 /// (one combined build, so cross-server renames and the global tool budget
@@ -68,14 +6,14 @@ async fn[X] resolve_mcp_tools(
 /// configuration raises, exiting nonzero — the command is usable as a
 /// validation gate. Stdout carries only the summary, so the command never opens
 /// the event sink and an event the tool build reports is dropped.
-async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
-  let path = mcp_config_path(matches)
+pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
+  let path = @options.mcp_config_path(matches)
   if path == "" {
     fail(
       "no MCP configuration: pass --mcp-config <file> (or OPENSEEK_MCP_CONFIG)",
     )
   }
-  let workspace_root = prepare_workspace_root(matches, log_created=false)
+  let workspace_root = @setup.prepare_workspace_root(matches, log_created=false)
   // Failure text reaches the terminal via stderr, and both the path and the
   // decoder's error can embed configuration strings: keep them terminal-safe.
   let text = @fs.read_file(path).text() catch {
@@ -114,7 +52,7 @@ async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
         scope,
         servers,
         client_name="openseek",
-        client_version=McpClientVersion,
+        client_version=@execution.McpClientVersion,
         workspace_root~,
       ) {
       let (name, tools) = entry

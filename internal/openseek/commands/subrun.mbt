@@ -24,13 +24,16 @@
 ///
 /// `pattern-repair` reads one JSON object from stdin:
 /// `{ "pattern": "...", "instruction": "..." }`.
-async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
+pub async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
   // Written by the task-group body inside `with_jsonl_stdout` below, read
   // after its teardown flushed the events; a captured `mut` replaces a Ref.
   let mut report : Json? = None
-  with_jsonl_stdout(() => {
-    let workspace_root = prepare_workspace_root(matches, log_created=false)
-    let (model, thinking, api_url) = agent_settings(matches)
+  @execution.with_jsonl_stdout(() => {
+    let workspace_root = @setup.prepare_workspace_root(
+      matches,
+      log_created=false,
+    )
+    let (model, thinking, api_url) = @options.agent_settings(matches)
     guard matches is { values: { "kind": [kind, ..], .. }, .. } else {
       fail("missing parsed argument: kind")
     }
@@ -117,57 +120,6 @@ async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
 }
 
 ///|
-/// The lowest child ordinal no session `<parent>-sr-N` in the store has
-/// used yet: the floor a resumed parent hands the runner so a restarted
-/// engine process never reuses a persisted child session id.
-async fn first_free_child_ordinal(
-  store : @store.SessionStore,
-  parent : String,
-) -> Int {
-  let highest = store
-    .list()
-    .iter()
-    .filter_map(id => child_session_ordinal(id.value(), parent))
-    .maximum()
-    .unwrap_or(0)
-  highest + 1
-}
-
-///|
-/// The N of a `<parent>-sr-N` child session id, or `None` for any other id
-/// (bounded to 9 digits so a pathological name cannot overflow).
-fn child_session_ordinal(id : String, parent : String) -> Int? {
-  guard id.strip_prefix("\{parent}-sr-") is Some(digits) else { return None }
-  guard !digits.is_empty() &&
-    digits.length() <= 9 &&
-    digits.all(c => c.is_ascii_digit()) else {
-    return None
-  }
-  let value = for c in digits; value = 0 {
-    continue value * 10 + (c.to_int() - '0'.to_int())
-  } nobreak {
-    value
-  }
-  Some(value)
-}
-
-///|
-test "child_session_ordinal parses exactly the runner's derivation" {
-  assert_eq(child_session_ordinal("run-sr-3", "run"), Some(3))
-  assert_eq(child_session_ordinal("run-sr-12", "run"), Some(12))
-  // A child of a DIFFERENT parent, a non-numeric suffix, a bare parent,
-  // and an id that merely contains the parent all parse to nothing.
-  assert_eq(child_session_ordinal("other-sr-3", "run"), None)
-  assert_eq(child_session_ordinal("run-sr-x", "run"), None)
-  assert_eq(child_session_ordinal("run", "run"), None)
-  assert_eq(child_session_ordinal("run-sr-", "run"), None)
-  assert_eq(child_session_ordinal("run-sr-9999999999", "run"), None)
-  // A grandchild-shaped id (`run-sr-1-sr-2`) belongs to parent `run-sr-1`.
-  assert_eq(child_session_ordinal("run-sr-1-sr-2", "run"), None)
-  assert_eq(child_session_ordinal("run-sr-1-sr-2", "run-sr-1"), Some(2))
-}
-
-///|
 /// The child's durable-session target, when the parent passed one: the
 /// `--session` id (blank means none, the same reading the parent CLIs use)
 /// paired with the resolved `--session-root`.
@@ -177,7 +129,7 @@ fn child_durable_session(
 ) -> (String, String)? raise {
   match matches {
     { values: { "session": [session, ..], .. }, .. } if !session.is_blank() =>
-      Some(("\{session}", session_root(matches, workspace_root~)))
+      Some(("\{session}", @setup.session_root(matches, workspace_root~)))
     _ => None
   }
 }
@@ -216,7 +168,7 @@ fn step_ceiling(
   envelope : Int?,
   default : Int,
 ) -> Int raise {
-  match max_steps(matches) {
+  match @options.max_steps(matches) {
     Some(steps) => steps
     None => envelope.unwrap_or(default)
   }
@@ -244,7 +196,7 @@ async fn dispatch_kind(
   // pure read of the child's own already-parsed argv/env. The parent does not
   // inject `--retry-attempts` on the child argv — the retry settings ride the
   // inherited environment, exactly as the API key and `--thinking` do.
-  let (retry_attempts, retry_backoff_ms) = retry_overrides(matches)
+  let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
   // A child spawned from a hosted snippet inherits that snippet's handoff
   // in its environment. One that arrives with the handoff but WITHOUT a
   // reserved session was launched around the library — a hand-rolled
@@ -420,26 +372,5 @@ async fn dispatch_kind(
       @emit.emit(CommandError(error="unknown subrun kind: \{kind}"))
       None
     }
-  }
-}
-
-///|
-/// The executable to spawn for a child sub-run: this process's own binary,
-/// resolved from argv[0]. A path with a separator is made absolute (the
-/// child runs with a different cwd, so a relative path would break); a bare
-/// name stays PATH-resolved, matching however this process was launched.
-/// Never hardcode a name: parent and child must be the SAME binary, or the
-/// typed report channel's same-codec guarantee is gone.
-async fn self_executable() -> String {
-  let argv0 = match @env.args() {
-    [first, ..] => first
-    _ => "openseek"
-  }
-  if argv0.contains("/") || argv0.contains("\\") {
-    @fs.realpath(argv0) catch {
-      _ => argv0
-    }
-  } else {
-    argv0
   }
 }
