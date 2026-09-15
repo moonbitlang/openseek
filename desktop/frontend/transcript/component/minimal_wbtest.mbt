@@ -47,6 +47,45 @@ test "minimal mbtx falls back safely without a usable description" {
 }
 
 ///|
+test "minimal descriptions share the card payload boundary" {
+  let prefix = "{\"description\":\"Check project details\",\"source\":\""
+  let suffix = "\"}"
+  let padding = MAX_CARD_PAYLOAD_CHARS - prefix.length() - suffix.length()
+  for extra in [0, 1] {
+    let arguments = prefix + "x".repeat(padding + extra) + suffix
+    assert_eq(arguments.length(), MAX_CARD_PAYLOAD_CHARS + extra)
+    for name in ["mbtx", "read"] {
+      let call : @transcript.ToolCall = {
+        call_id: name,
+        name,
+        arguments: Some(arguments),
+        outcome: Pending(output=None),
+      }
+      assert_eq(
+        MinimalCall::from_tool(call).caption,
+        if extra == 0 {
+          "Check project details"
+        } else {
+          name
+        },
+      )
+      let completed = {
+        ..call,
+        outcome: Done(content="", is_error=false, brief=Some("Completed work")),
+      }
+      assert_eq(
+        MinimalCall::from_tool(completed).caption,
+        if name == "mbtx" && extra == 0 {
+          "Check project details"
+        } else {
+          "Completed work"
+        },
+      )
+    }
+  }
+}
+
+///|
 test "other minimal tools still prefer their result brief" {
   let call : @transcript.ToolCall = {
     call_id: "read",

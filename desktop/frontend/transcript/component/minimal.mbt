@@ -82,11 +82,12 @@ fn MinimalCall::from_tool(
 
 ///|
 /// The `description` argument a tool call was given, when its payload is a
-/// readable object carrying one.
+/// readable object carrying one. Use the same pre-parse payload ceiling as
+/// detailed cards: a brief must not require parsing an arbitrarily large script.
 fn argument_description(call : @transcript.ToolCall) -> String? {
   guard call.arguments is Some(arguments) else { return None }
-  let value = Some(@json.parse(arguments)) catch { _ => None }
-  if value is Some({ "description": String(text), .. }) && !text.is_blank() {
+  guard card_fields(arguments) is Some(fields) else { return None }
+  if fields.get("description") is Some(String(text)) && !text.is_blank() {
     Some(text)
   } else {
     None

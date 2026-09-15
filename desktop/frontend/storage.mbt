@@ -1,6 +1,9 @@
 // Page-local UI preferences persisted in the webview's localStorage. Access
 // is guarded — a webview profile may deny storage — and a denied store just
 // means the defaults come back next launch.
+// All preferences below share load_setting/save_setting: read errors become
+// the absent-value spelling, and write errors are discarded without a result
+// message. Their in-memory controls can update even when persistence fails.
 //
 // The engine endpoint settings (provider, URLs, API keys) are NOT here: they
 // live on the host (`settings.get`/`set`), because relay pages
