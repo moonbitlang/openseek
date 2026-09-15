@@ -1396,8 +1396,9 @@ pub impl ToJson for ReadFileReply with fn to_json(self) {
 }
 
 ///|
-/// Candidate produced by one Pattern Repair request. It is not applied to the
-/// active search until the user explicitly accepts it.
+/// Candidate produced by one Pattern Repair request. The Host sets `valid`
+/// after validation; the one-click code-search UI applies a valid, current
+/// reply immediately and starts a new semantic search.
 pub(all) struct PatternRepairReply {
   root : String
   generation : Int

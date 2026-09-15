@@ -75,6 +75,22 @@ test "Code search repairs one pattern without a composer or preview" {
     failed.handle(FixPattern, input).page.pattern_repair_phase
     is PatternRepairRequested,
   )
+  let unavailable = semantic
+    .handle(FixPattern, input)
+    .handle(
+      PatternRepairFailed(
+        root=root.path,
+        generation=semantic.page.generation,
+        message="Pattern Repair Agent returned no candidate.",
+      ),
+      input,
+    )
+  let unavailable_html = render_search(unavailable, input)
+  assert_true(
+    unavailable_html.contains(
+      "Pattern repair is unavailable. Configure an AI provider in Settings, then retry.",
+    ),
+  )
 }
 
 ///|

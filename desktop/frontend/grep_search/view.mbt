@@ -256,7 +256,8 @@ fn pattern_repair_failure_label(message : String?) -> String {
     Some(message) if message.contains("settings") ||
       message.contains("API key") ||
       message.contains("endpoint") ||
-      message.contains("unavailable") =>
+      message.contains("unavailable") ||
+      message.contains("Pattern Repair Agent") =>
       "Pattern repair is unavailable. Configure an AI provider in Settings, then retry."
     _ => "Pattern repair failed. Update the pattern or retry."
   }
