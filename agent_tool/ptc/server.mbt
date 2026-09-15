@@ -60,6 +60,10 @@ struct Program {
   revoke : () -> Unit
   mut closed : Bool
   mut on_trace : async (Json) -> Unit
+  // Publications run one at a time and snapshot the trace only once they hold
+  // this, so a slow observer can never deliver a stale snapshot after a later
+  // one; `close` takes it last and its final publish is therefore final.
+  publishing : @async.Mutex
   mut job_id : String?
   call_timeout_ms : Int
   trace_timeout_ms : Int
@@ -257,6 +261,7 @@ pub fn Service::register(
     revoke: () => self.programs.remove(token),
     closed: false,
     on_trace: data => on_trace(data),
+    publishing: Mutex(),
     job_id: None,
     call_timeout_ms: self.call_timeout_ms,
     trace_timeout_ms: self.trace_timeout_ms,
@@ -338,10 +343,6 @@ pub fn Program::interrupted(self : Program) -> Bool {
 pub async fn Program::close(self : Program) -> Unit {
   self.stop()
   @async.protect_from_cancel(() => {
-    // Release the job observer (which captures the runtime) after final data.
-    defer {
-      self.on_trace = _ => ()
-    }
     let tasks = self.active.values().to_array()
     for task in tasks {
       ignore(task.wait()) catch {
@@ -349,9 +350,16 @@ pub async fn Program::close(self : Program) -> Unit {
       }
     }
     self.active.clear()
+    // Wait for any in-flight publication (a timed-out handler's, say) so the
+    // final snapshot is delivered last, then release the job observer, which
+    // captures the runtime. A publisher still queued behind this sees the
+    // final trace and a no-op observer.
+    self.publishing.acquire()
+    defer self.publishing.release()
     if !self.calls.is_empty() {
-      self.publish_trace()
+      self.deliver_trace()
     }
+    self.on_trace = _ => ()
   })
 }
 
@@ -405,14 +413,36 @@ pub fn Program::result(
           self.interrupted() ||
           self.trace_error is Some(_),
         brief?=output.brief,
-        // A script that never called a tool leaves no trace to persist.
-        data?=if self.calls.is_empty() && self.trace_error is None {
-          None
-        } else {
-          Some(self.trace())
-        },
+        data?=self.attach_trace(output.data),
       )
     Control(_) => action
+  }
+}
+
+///|
+/// A script that never called a tool leaves no trace, and the tool's own
+/// structured output passes through untouched. Otherwise the trace fields join
+/// an object-shaped output (trace keys win) and any other shape is kept under
+/// `output`.
+fn Program::attach_trace(self : Program, existing : Json?) -> Json? {
+  if self.calls.is_empty() && self.trace_error is None {
+    return existing
+  }
+  match (existing, self.trace()) {
+    (None, trace) => Some(trace)
+    (Some(Object(fields)), Object(trace)) => {
+      let merged = fields.copy()
+      for key, value in trace {
+        merged[key] = value
+      }
+      Some(Json::object(merged))
+    }
+    (Some(other), Object(trace)) => {
+      let merged = trace.copy()
+      merged["output"] = other
+      Some(Json::object(merged))
+    }
+    (Some(other), _) => Some(other)
   }
 }
 
@@ -548,7 +578,16 @@ pub fn Program::trace_error(self : Program) -> String? {
 }
 
 ///|
+/// Publish the current trace, one publication at a time.
 async fn Program::publish_trace(self : Program) -> Unit {
+  self.publishing.acquire()
+  defer self.publishing.release()
+  self.deliver_trace()
+}
+
+///|
+/// Snapshot and deliver under `publishing`, which the caller must hold.
+async fn Program::deliver_trace(self : Program) -> Unit {
   @async.with_timeout(self.trace_timeout_ms, () => (self.on_trace)(self.trace())) catch {
     error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
       raise error

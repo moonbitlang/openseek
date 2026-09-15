@@ -1,5 +1,9 @@
 # Programmatic tool calls
 
+This package is the service and the per-script registration only. The mbtx
+`ptc` argument, default activation, background handoff, and Desktop rendering
+described below arrive with the integration slices that follow (#1532).
+
 PTC defaults on for supported wasm runs in the standard host. Set `ptc: false`
 to opt out. Scripts call host tools through the published SDK. It invokes the
 same registered executors as direct tool calls, including

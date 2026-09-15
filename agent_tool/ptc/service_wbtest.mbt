@@ -757,3 +757,74 @@ async test "handoff after revocation detaches the foreground observer" {
     })
   })
 }
+
+///|
+/// A timed-out handler publishes after its executor is gone. If that observer
+/// is slow, close must not race past it: the final snapshot has to be the
+/// last one delivered, or a job would retain a trace that still shows a later
+/// call as running.
+async test "a slow publication cannot deliver a stale snapshot after close" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let delivered : Array[Json] = []
+      let gate : @async.Queue[Unit] = Queue(kind=Unbounded)
+      let blocked : @async.Queue[Unit] = Queue(kind=Unbounded)
+      let held = Ref(false)
+      let service = Service::start(
+        group,
+        Tools([
+          AgentToolDefinition(
+            name="slow",
+            description="outlives its deadline",
+            schema=JsonSchema({}),
+            program_callable=true,
+            concurrent_safe=true,
+            execute=Async(_ => {
+              @async.sleep(400)
+              @agent_tool.respond("late")
+            }),
+          ),
+        ]),
+        call_timeout_ms=30,
+      )
+      let program = service.register()
+      program.handoff("job-1", data => {
+        // The first snapshot showing a finished call is the timed-out
+        // handler's publication: hold it until close has been asked for.
+        if !held.val &&
+          data is { "ptc_calls": [{ "status": "done", .. }, ..], .. } {
+          held.val = true
+          blocked.put(())
+          gate.get()
+        }
+        delivered.push(data)
+      })
+      let first = group.spawn(
+        () => request(program.env(), "slow", {}),
+        allow_failure=true,
+      )
+      blocked.get()
+      let second = group.spawn(
+        () => request(program.env(), "slow", {}),
+        allow_failure=true,
+      )
+      while program.calls.length() < 2 {
+        @async.sleep(1)
+      }
+      let closing = group.spawn(() => program.close())
+      @async.sleep(20)
+      gate.put(())
+      closing.wait()
+      ignore(first.wait()) catch {
+        _ => ()
+      }
+      ignore(second.wait()) catch {
+        _ => ()
+      }
+      assert_true(
+        delivered.last()
+        is Some({ "ptc_calls": [_, { "status": "interrupted", .. }], .. }),
+      )
+    })
+  })
+}
