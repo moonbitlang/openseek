@@ -13,6 +13,7 @@ import {
   "bobzhang/openseek/prompt",
   "bobzhang/openseek/agent_session/store",
   "bobzhang/openseek/internal/workspace_path",
+  "bobzhang/openseek_protocol",
 }
 
 import {

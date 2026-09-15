@@ -27,9 +27,6 @@ fn fresh_page() -> Page {
     phase: Idle,
     pattern_repair_phase: PatternRepairIdle,
     pattern_repair_message: None,
-    pattern_repair_candidate: None,
-    pattern_repair_validation_status: None,
-    pattern_repair_instruction: "",
     generation: 0,
     delay_ms: SearchDebounceMs,
   }
@@ -186,50 +183,54 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
     ToggleDetails =>
       { ..self, page: { ..page, details_open: !page.details_open, }, }
     FixPattern =>
-      {
-        ..self,
-        page: {
-          ..page,
-          pattern_repair_phase: PatternRepairComposer,
-          pattern_repair_message: None,
-          pattern_repair_candidate: None,
-        },
-      }
-    OpenPatternRepair(instruction) =>
-      {
-        ..self,
-        page: {
-          ..page,
-          pattern_repair_phase: PatternRepairComposer,
-          pattern_repair_instruction: instruction,
-          pattern_repair_message: None,
-          pattern_repair_candidate: None,
-        },
-      }
-    PatternRepairInstructionChanged(instruction) =>
-      { ..self, page: { ..page, pattern_repair_instruction: instruction, }, }
-    SubmitPatternRepair =>
-      if page.pattern_repair_phase is PatternRepairComposer &&
-        !page.pattern_repair_instruction.trim().is_empty() {
+      if page.pattern_repair_phase is PatternRepairRequested {
+        self
+      } else if page.mode is Semantic &&
+        page.semantic.patterns.length() > 0 &&
+        !page.semantic.patterns[0].trim().is_empty() {
         {
           ..self,
           page: {
             ..page,
             pattern_repair_phase: PatternRepairRequested,
             pattern_repair_message: None,
-            pattern_repair_candidate: None,
+          },
+        }
+      } else if page.mode is Semantic {
+        {
+          ..self,
+          page: {
+            ..page,
+            pattern_repair_phase: PatternRepairInputRequired,
+            pattern_repair_message: Some("Enter a pattern before repairing it."),
           },
         }
       } else {
         self
       }
-    PatternRepairPreview(
-      root~,
-      generation~,
-      candidate_pattern~,
-      validation_status~,
-      message~
-    ) =>
+    PatternRepaired(root~, generation~, candidate_pattern~) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested &&
+        page.semantic.patterns.length() > 0 &&
+        !candidate_pattern.trim().is_empty() {
+        let patterns = page.semantic.patterns.copy()
+        patterns[0] = candidate_pattern
+        self.schedule(
+          {
+            ..page,
+            semantic: { ..page.semantic, patterns, },
+            pattern_repair_phase: PatternRepairIdle,
+            pattern_repair_message: None,
+          },
+          input,
+          immediate=true,
+        )
+      } else {
+        self
+      }
+    PatternRepairUnavailable(root~, generation~, message~) =>
       if page.mode is Semantic &&
         input.root_text() == root &&
         page.generation == generation &&
@@ -238,39 +239,46 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           ..self,
           page: {
             ..page,
-            pattern_repair_phase: PatternRepairPreview,
+            pattern_repair_phase: PatternRepairUnavailable,
             pattern_repair_message: Some(message),
-            pattern_repair_candidate: Some(candidate_pattern),
-            pattern_repair_validation_status: Some(validation_status),
           },
         }
       } else {
         self
       }
-    AcceptPatternRepair =>
-      match page.pattern_repair_candidate {
-        Some(pattern) if page.mode is Semantic =>
-          self.handle(PatternChanged(0, pattern), input)
-        _ => self
+    PatternRepairTimedOut(root~, generation~) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested {
+        {
+          ..self,
+          page: {
+            ..page,
+            pattern_repair_phase: PatternRepairTimedOut,
+            pattern_repair_message: None,
+          },
+        }
+      } else {
+        self
       }
-    RejectPatternRepair =>
-      {
-        ..self,
-        page: {
-          ..page,
-          pattern_repair_phase: PatternRepairIdle,
-          pattern_repair_message: None,
-          pattern_repair_candidate: None,
-          pattern_repair_instruction: "",
-        },
+    PatternRepairValidationFailed(root~, generation~, diagnostic~) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested {
+        {
+          ..self,
+          page: {
+            ..page,
+            pattern_repair_phase: PatternRepairValidationFailed,
+            pattern_repair_message: Some(diagnostic),
+          },
+        }
+      } else {
+        self
       }
-    PatternRepairFailed(
-      root~,
-      generation~,
-      candidate_pattern~,
-      validation_status~,
-      message~
-    ) =>
+    PatternRepairFailed(root~, generation~) =>
       if page.mode is Semantic &&
         input.root_text() == root &&
         page.generation == generation &&
@@ -280,9 +288,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           page: {
             ..page,
             pattern_repair_phase: PatternRepairFailed,
-            pattern_repair_message: Some(message),
-            pattern_repair_candidate: Some(candidate_pattern),
-            pattern_repair_validation_status: Some(validation_status),
+            pattern_repair_message: None,
           },
         }
       } else {
@@ -303,8 +309,6 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           semantic: { ..page.semantic, patterns, },
           pattern_repair_phase: PatternRepairIdle,
           pattern_repair_message: None,
-          pattern_repair_candidate: None,
-          pattern_repair_instruction: "",
         },
         input,
         immediate=false,
@@ -321,7 +325,6 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           },
           pattern_repair_phase: PatternRepairIdle,
           pattern_repair_message: None,
-          pattern_repair_candidate: None,
         },
       }
     RemovePattern(index) => {
@@ -335,7 +338,6 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           semantic: { ..page.semantic, patterns, },
           pattern_repair_phase: PatternRepairIdle,
           pattern_repair_message: None,
-          pattern_repair_candidate: None,
         },
         input,
         immediate=false,
@@ -573,8 +575,6 @@ fn Page::clear_results(self : Page) -> Page {
     visible_lines: InitialVisibleSearchLines,
     pattern_repair_phase: PatternRepairIdle,
     pattern_repair_message: None,
-    pattern_repair_candidate: None,
-    pattern_repair_instruction: "",
   }
 }
 
@@ -585,6 +585,53 @@ fn Page::result_summary(self : Page) -> SearchResultSummary {
     file_count: self.file_count,
     limit_hit: self.limit_hit,
   }
+}
+
+///|
+test "one-click pattern repair applies only the current reply" {
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "pattern-repair",
+  }
+  let root = @common.Uri::parse("file:///work")
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
+  let armed = State::empty()
+    .handle(ModeChanged(Semantic), input)
+    .handle(PatternChanged(0, "inspect($(x:arg"), input)
+    .handle(FixPattern, input)
+  let generation = armed.page.generation
+  assert_true(armed.page.pattern_repair_phase is PatternRepairRequested)
+
+  let stale = armed.handle(
+    PatternRepaired(
+      root=root.path,
+      generation=generation - 1,
+      candidate_pattern="inspect($_)",
+    ),
+    input,
+  )
+  assert_true(stale == armed)
+
+  let repaired = armed.handle(
+    PatternRepaired(
+      root=root.path,
+      generation~,
+      candidate_pattern="inspect($_)",
+    ),
+    input,
+  )
+  assert_eq(repaired.page.semantic.patterns[0], "inspect($_)")
+  assert_true(repaired.page.phase is Loading)
+  assert_true(repaired.page.pattern_repair_phase is PatternRepairIdle)
+
+  let empty = State::empty()
+    .handle(ModeChanged(Semantic), input)
+    .handle(FixPattern, input)
+  assert_true(empty.page.pattern_repair_phase is PatternRepairInputRequired)
+  assert_eq(
+    empty.page.pattern_repair_message,
+    Some("Enter a pattern before repairing it."),
+  )
 }
 
 ///|
@@ -637,6 +684,7 @@ test "checkout reset clears results while preserving the generation fence" {
   let input : Input = {
     owner: { channel: @interop.ChannelId::Local, session: "first", },
     root: Some(@common.Uri::parse("file:///work/a")),
+    pattern_repair_model: None,
   }
   let state = State::empty().handle(QueryChanged("moon"), input)
   let old_generation = state.page.generation
@@ -652,6 +700,7 @@ test "mode changes preserve each search input and shared details" {
   let input : Input = {
     owner: { channel: @interop.ChannelId::Local, session: "mode-state", },
     root: Some(@common.Uri::parse("file:///work")),
+    pattern_repair_model: None,
   }
   let state = State::empty()
     .handle(QueryChanged("text query"), input)
@@ -678,7 +727,7 @@ test "query changes debounce and stale replies cannot replace the page" {
     session: "one",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty().handle(QueryChanged("moon"), input)
   let page = state.page
   assert_true(page.phase is Debouncing)
@@ -707,7 +756,7 @@ test "semantic progress streams partial hits and late progress is fenced" {
     session: "semantic-progress",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg))"), input)
@@ -762,7 +811,7 @@ test "semantic progress batches append only new hits" {
     session: "semantic-batches",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg))"), input)
@@ -813,7 +862,7 @@ test "new semantic search clears partial results and cancellation clears them" {
     session: "semantic-clear",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg))"), input)
@@ -870,7 +919,7 @@ test "active result helpers share file grouping and highlight projection" {
     session: "active-results",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty().handle(QueryChanged("moon"), input)
   let page = state.page
   let first : @protocol.TextSearchMatch = {
@@ -922,7 +971,7 @@ test "parking a checkout keeps its draft and fences the in-flight reply" {
     session: "suspend",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let running = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)
@@ -958,7 +1007,7 @@ test "refresh is immediate and loaded file groups can collapse and clear" {
     session: "one",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Refresh, input)
@@ -1012,7 +1061,7 @@ test "editor highlights include every retained match for the file" {
     session: "editor-highlights",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)
@@ -1080,7 +1129,7 @@ test "invalid regex replies retain their actionable Host error" {
     session: "regex",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(QueryChanged("("), input)
     .handle(ToggleRegex, input)

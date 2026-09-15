@@ -1,7 +1,11 @@
 ///|
-/// Keep candidate validation bounded and deterministic. The Agent must never
-/// choose the executable or invoke this command directly; the host owns both.
+/// Keep candidate validation bounded and deterministic. The Host chooses the
+/// executable and fixed arguments, exposes them to the Agent through the
+/// validator tool, and repeats the check authoritatively after submit.
 const PatternRepairDumpMaxDiagnosticUnits : Int = 1000
+
+///|
+const PatternRepairValidatorEnvironment : String = "OPENSEEK_PATTERN_REPAIR_VALIDATOR"
 
 ///|
 /// Enable after moongrep's `dump --expr` accepts Pattern metavariables.
@@ -12,15 +16,28 @@ fn pattern_repair_provider_args(
   command : String,
   pattern : String,
 ) -> Array[String] {
-  let args : Array[String] = if command == "moonx" ||
+  let args = pattern_repair_provider_prefix_args(command)
+  args.append(["dump", "--expr", pattern, "--exit-code"])
+  args
+}
+
+///|
+fn pattern_repair_provider_prefix_args(command : String) -> Array[String] {
+  if command == "moonx" ||
     command.has_suffix("/moonx") ||
     command.has_suffix("\\moonx") {
     [MoongrepPackageCoordinate, "--"]
   } else {
     []
   }
-  args.append(["dump", "--expr", pattern, "--exit-code"])
-  args
+}
+
+///|
+fn pattern_repair_validator_config(command : String) -> Json {
+  {
+    "command": command,
+    "prefix_args": pattern_repair_provider_prefix_args(command),
+  }
 }
 
 ///|
@@ -98,7 +115,7 @@ fn pattern_repair_validation_code(stderr : String) -> String {
 }
 
 ///|
-test "pattern repair validation preserves the future dump command" {
+test "pattern repair validation preserves the dump command" {
   assert_eq(pattern_repair_provider_args("moonx", "foo()"), [
     MoongrepPackageCoordinate,
     "--",
@@ -107,6 +124,14 @@ test "pattern repair validation preserves the future dump command" {
     "foo()",
     "--exit-code",
   ])
+}
+
+///|
+test "pattern repair validator configuration keeps provider ownership in the Host" {
+  assert_eq(pattern_repair_validator_config("moonx"), {
+    "command": "moonx",
+    "prefix_args": [MoongrepPackageCoordinate, "--"],
+  })
 }
 
 ///|

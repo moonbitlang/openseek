@@ -110,6 +110,7 @@ pub fn ChangedFileReview::not_equal(Self, Self) -> Bool
 
 pub(all) struct Ctx {
   owner : @interop.ConversationKey
+  pattern_repair_model : String?
   request_epoch : Int
   watch_namespace : String
   placement : @interop.CheckoutPlacement?

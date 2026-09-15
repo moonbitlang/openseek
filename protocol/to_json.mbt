@@ -52,6 +52,7 @@ pub fn Event::to_json(self : Event) -> Json {
         "max_attempts": max_attempts,
         "reason": reason,
       }
+    ProviderRequestTimedOut => { "event": "provider_request_timed_out" }
     AgentAborted(reason~) => { "event": "agent_aborted", "reason": reason }
     AgentFinished(answer~) => { "event": "agent_finished", "answer": answer }
     MaxStepsExhausted => { "event": "max_steps_exhausted" }

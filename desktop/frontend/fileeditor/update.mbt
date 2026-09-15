@@ -4110,6 +4110,7 @@ fn test_emit() -> @cmd.Emit[Msg] {
 fn test_ctx() -> Ctx {
   {
     owner: { channel: @interop.ChannelId::Local, session: "desktop-test", },
+    pattern_repair_model: None,
     request_epoch: 0,
     watch_namespace: "test-page",
     placement: @resource.of_path(@interop.ChannelId::Local, "/work").map(root => {

@@ -14,6 +14,7 @@ test "Search renders VS Code's Whole Word codicon instead of a text label" {
   let input : Input = {
     owner: { channel: @interop.ChannelId::Local, session: "icons", },
     root: Some(@common.Uri::parse("file:///work")),
+    pattern_repair_model: None,
   }
   let html = render_search(State::empty(), input)
   assert_true(html.contains("aria-label=\"Match Whole Word\""))
@@ -23,70 +24,123 @@ test "Search renders VS Code's Whole Word codicon instead of a text label" {
 
 ///|
 #cfg(not(target="js"))
-test "Code search renders the pattern repair placeholder only in semantic mode" {
+test "Code search repairs one pattern without a composer or preview" {
   let owner : @interop.ConversationKey = {
     channel: @interop.ChannelId::Local,
     session: "pattern-repair",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let text_html = render_search(State::empty(), input)
   assert_false(text_html.contains("Fix Pattern"))
-  let semantic = State::empty().handle(ModeChanged(Semantic), input)
+  let semantic = State::empty()
+    .handle(ModeChanged(Semantic), input)
+    .handle(PatternChanged(0, "inspect($(x:arg"), input)
+  let semantic_html = render_search(semantic, input)
+  assert_true(semantic_html.contains("aria-label=\"Fix Pattern\""))
+  assert_false(semantic_html.contains("Pattern repair instruction"))
+  assert_false(semantic_html.contains("Submit pattern repair"))
   let requested = semantic.handle(FixPattern, input)
   let requested_html = render_search(requested, input)
-  assert_true(requested_html.contains("PATTERN REPAIR"))
-  assert_true(requested_html.contains("Pattern repair instruction"))
-  assert_true(requested_html.contains("Submit pattern repair"))
-  let collapsed = requested.handle(RejectPatternRepair, input)
-  assert_false(render_search(collapsed, input).contains("PATTERN REPAIR"))
-  let reopened = collapsed.handle(FixPattern, input)
-  assert_true(render_search(reopened, input).contains("PATTERN REPAIR"))
-  let submitted = requested
-    .handle(PatternRepairInstructionChanged("allow labelled arguments"), input)
-    .handle(SubmitPatternRepair, input)
-  let thinking_html = render_search(submitted, input)
-  assert_true(thinking_html.contains("Thinking"))
-  let previewed = submitted.handle(
-    PatternRepairPreview(
+  assert_true(requested_html.contains("Repairing pattern…"))
+  assert_true(requested_html.contains("aria-busy=\"true\""))
+  let repaired = requested.handle(
+    PatternRepaired(
       root=root.path,
-      generation=submitted.page.generation,
+      generation=requested.page.generation,
       candidate_pattern="inspect($_)",
-      validation_status="unavailable",
-      message="Candidate Pattern is ready for review.",
     ),
     input,
   )
-  let preview_html = render_search(previewed, input)
-  assert_true(previewed.page.semantic.patterns[0] != "inspect($_)")
-  assert_true(preview_html.contains("SUGGESTED PATTERN"))
-  assert_true(preview_html.contains("Validation unavailable"))
-  let accepted = previewed.handle(AcceptPatternRepair, input)
-  assert_true(accepted.page.semantic.patterns[0] == "inspect($_)")
-  let discarded = previewed.handle(RejectPatternRepair, input)
-  assert_true(discarded.page.semantic.patterns[0] != "inspect($_)")
+  assert_true(repaired.page.semantic.patterns[0] == "inspect($_)")
+  assert_true(repaired.page.phase is Loading)
+  let repaired_html = render_search(repaired, input)
+  assert_false(repaired_html.contains("SUGGESTED PATTERN"))
+  assert_false(repaired_html.contains("Use pattern"))
   let failed = semantic
     .handle(FixPattern, input)
-    .handle(PatternRepairInstructionChanged("repair it"), input)
-    .handle(SubmitPatternRepair, input)
+    .handle(
+      PatternRepairFailed(root=root.path, generation=semantic.page.generation),
+      input,
+    )
+  let failed_html = render_search(failed, input)
+  assert_true(failed.page.semantic.patterns[0] == "inspect($(x:arg")
+  assert_true(failed_html.contains("Pattern repair failed."))
+  assert_true(failed_html.contains("aria-label=\"Retry pattern repair\""))
+  assert_true(
+    failed.handle(FixPattern, input).page.pattern_repair_phase
+    is PatternRepairRequested,
+  )
+  let unavailable = semantic
+    .handle(FixPattern, input)
+    .handle(
+      PatternRepairUnavailable(
+        root=root.path,
+        generation=semantic.page.generation,
+        message="Pattern Repair Agent returned no candidate.",
+      ),
+      input,
+    )
+  let unavailable_html = render_search(unavailable, input)
+  assert_true(
+    unavailable_html.contains(
+      "Pattern repair failed. Update the pattern or retry.",
+    ),
+  )
+  assert_false(
+    unavailable_html.contains("Pattern Repair Agent returned no candidate."),
+  )
+  let timed_out = semantic
+    .handle(FixPattern, input)
+    .handle(
+      PatternRepairTimedOut(root=root.path, generation=semantic.page.generation),
+      input,
+    )
+  let timed_out_html = render_search(timed_out, input)
+  assert_true(
+    timed_out_html.contains(
+      "Pattern repair timed out while contacting the AI provider.",
+    ),
+  )
+  assert_true(timed_out_html.contains("Retry pattern repair"))
+  let validation_failed = semantic
+    .handle(FixPattern, input)
+    .handle(
+      PatternRepairValidationFailed(
+        root=root.path,
+        generation=semantic.page.generation,
+        diagnostic="invalid_pattern: expected a complete expression",
+      ),
+      input,
+    )
+  let validation_failed_html = render_search(validation_failed, input)
+  assert_true(
+    validation_failed_html.contains(
+      "The repaired pattern could not be validated.",
+    ),
+  )
+  assert_true(validation_failed_html.contains("Show validation details"))
+  assert_true(
+    validation_failed_html.contains(
+      "invalid_pattern: expected a complete expression",
+    ),
+  )
+  let invalid = semantic
+    .handle(FixPattern, input)
     .handle(
       PatternRepairFailed(
         root=root.path,
         generation=semantic.page.generation,
-        candidate_pattern="match $_ { $$$cases }",
-        validation_status="failed",
-        message="Fake repair failed.",
+        message="invalid_pattern: unmatched parenthesis",
       ),
       input,
     )
-  let failed_html = render_search(failed, input)
-  assert_true(failed_html.contains("Fake repair failed."))
-  assert_true(failed_html.contains("Validation failed"))
-  assert_true(failed_html.contains("match $_ { $$$cases }"))
-  let cancelled = requested.handle(RejectPatternRepair, input)
-  let cancelled_html = render_search(cancelled, input)
-  assert_false(cancelled_html.contains("PATTERN REPAIR"))
-  assert_true(cancelled_html.contains("aria-label=\"Fix Pattern\""))
+  let invalid_html = render_search(invalid, input)
+  assert_true(
+    invalid_html.contains(
+      "Pattern repair returned an invalid pattern. The current pattern was not changed; retry.",
+    ),
+  )
 }
 
 ///|
@@ -97,7 +151,7 @@ test "Search view groups files and marks matching UTF-16 slices" {
     session: "view",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)
@@ -147,7 +201,7 @@ test "large Search replies render incrementally without changing totals" {
     session: "large-view",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)

@@ -105,6 +105,9 @@ pub fn decode_engine_event(
     AgentStep(step~) => Some(AgentStep(Some(step)))
     StreamRetry(attempt~, max_attempts~, reason~) =>
       Some(StreamRetry(attempt~, max_attempts~, reason~))
+    // Pattern Repair consumes this child-only signal in the Host. It has no
+    // transcript bubble and must not expose provider diagnostics here.
+    ProviderRequestTimedOut => None
     AssistantDelta(content~) => Some(AssistantDelta(content))
     ReasoningDelta(content~) => Some(ReasoningDelta(content))
     ReasoningMessage(content~) => Some(ReasoningMessage(content))

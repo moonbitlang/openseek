@@ -1,4 +1,10 @@
 ///|
+/// The current subrun protocol still requires an instruction. Keep it an
+/// implementation detail: Pattern Repair is a syntax-repair affordance, not a
+/// second user prompt.
+const DefaultPatternRepairInstruction : String = "Repair this MoonBit pattern with the smallest syntax-only change."
+
+///|
 priv suberror PatternRepairRequestSub {
   PatternRepairRequest(
     @interop.ConversationKey,
@@ -34,7 +40,7 @@ fn pattern_repair_request_loader(
           @commands.pattern_repair,
           request,
         ) catch {
-          error => {
+          _ => {
             settled = true
             guard active else { return }
             scheduler.add(
@@ -42,9 +48,6 @@ fn pattern_repair_request_loader(
                 PatternRepairFailed(
                   root=request.root,
                   generation=request.generation,
-                  candidate_pattern=request.pattern,
-                  validation_status="unavailable",
-                  message=@interop.bridge_error_text(error),
                 ),
               ),
             )
@@ -57,24 +60,41 @@ fn pattern_repair_request_loader(
           reply if reply.valid =>
             scheduler.add(
               emit(
-                PatternRepairPreview(
+                PatternRepaired(
                   root=request.root,
                   generation=request.generation,
                   candidate_pattern=reply.candidate_pattern,
-                  validation_status=reply.validation_status,
+                ),
+              ),
+            )
+          reply if reply.validation_status
+            is @protocol.PatternRepairStatus::Unavailable =>
+            scheduler.add(
+              emit(
+                PatternRepairUnavailable(
+                  root=request.root,
+                  generation=request.generation,
                   message=reply.message,
+                ),
+              ),
+            )
+          reply if reply.validation_status
+            is @protocol.PatternRepairStatus::TimedOut =>
+            scheduler.add(
+              emit(
+                PatternRepairTimedOut(
+                  root=request.root,
+                  generation=request.generation,
                 ),
               ),
             )
           reply =>
             scheduler.add(
               emit(
-                PatternRepairFailed(
+                PatternRepairValidationFailed(
                   root=request.root,
                   generation=request.generation,
-                  candidate_pattern=reply.candidate_pattern,
-                  validation_status=reply.validation_status,
-                  message=reply.message,
+                  diagnostic=reply.message,
                 ),
               ),
             )
@@ -116,7 +136,8 @@ fn Page::pattern_repair_request_payload(
   Some({
     root: root.path,
     pattern: self.semantic.patterns[0],
-    instruction: self.pattern_repair_instruction,
+    instruction: DefaultPatternRepairInstruction,
+    model: input.pattern_repair_model,
     generation: self.generation,
   })
 }

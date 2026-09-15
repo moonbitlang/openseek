@@ -1396,14 +1396,31 @@ pub impl ToJson for ReadFileReply with fn to_json(self) {
 }
 
 ///|
-/// Candidate produced by one Pattern Repair request. It is not applied to the
-/// active search until the user explicitly accepts it.
+/// Closed validation outcome for a Pattern Repair candidate. Kept separate
+/// from `message` so clients never infer recovery behavior from diagnostics.
+pub(all) enum PatternRepairStatus {
+  Passed
+  Unavailable
+  TimedOut
+  Failed
+} derive(Debug, Eq)
+
+///|
+pub extend PatternRepairStatus with Debug::{to_repr}
+
+///|
+pub extend PatternRepairStatus with Eq::{equal, not_equal}
+
+///|
+/// Candidate produced by one Pattern Repair request. The Host sets `valid`
+/// after validation; the one-click code-search UI applies a valid, current
+/// reply immediately and starts a new semantic search.
 pub(all) struct PatternRepairReply {
   root : String
   generation : Int
   candidate_pattern : String
   valid : Bool
-  validation_status : String
+  validation_status : PatternRepairStatus
   message : String
 } derive(Debug, Eq)
 

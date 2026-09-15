@@ -42,6 +42,7 @@ pub(all) enum Event {
   AgentSetupFailed(error~ : String)
   AgentStep(step~ : Int)
   StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
+  ProviderRequestTimedOut
   AgentAborted(reason~ : String)
   AgentFinished(answer~ : String)
   MaxStepsExhausted

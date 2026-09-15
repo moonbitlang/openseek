@@ -8,6 +8,7 @@ import {
   "bobzhang/openseek/cli",
   "bobzhang/openseek/deepseek",
   "bobzhang/openseek_protocol/emit",
+  "bobzhang/openseek_protocol",
   "moonbitlang/core/env",
   "bobzhang/openseek/internal/openseek/execution",
   "moonbitlang/async/fs",

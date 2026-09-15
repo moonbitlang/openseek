@@ -8,6 +8,7 @@ import {
   "moonbitlang/core/argparse",
   "moonbitlang/async",
   "bobzhang/openseek/deepseek",
+  "bobzhang/openseek_protocol",
   "bobzhang/openseek_protocol/emit",
   "moonbitlang/async/fs",
   "bobzhang/openseek/agent_subrun/host",

@@ -33,9 +33,11 @@ enum Mode {
 ///|
 enum PatternRepairPhase {
   PatternRepairIdle
-  PatternRepairComposer
   PatternRepairRequested
-  PatternRepairPreview
+  PatternRepairInputRequired
+  PatternRepairUnavailable
+  PatternRepairTimedOut
+  PatternRepairValidationFailed
   PatternRepairFailed
 } derive(Eq, Debug)
 
@@ -78,9 +80,6 @@ struct Page {
   phase : Phase
   pattern_repair_phase : PatternRepairPhase
   pattern_repair_message : String?
-  pattern_repair_candidate : String?
-  pattern_repair_validation_status : String?
-  pattern_repair_instruction : String
   generation : Int
   delay_ms : Int
 } derive(Eq)
@@ -114,14 +113,16 @@ pub fn State::empty() -> State {
 pub(all) struct Input {
   owner : @interop.ConversationKey
   root : @common.Uri?
+  pattern_repair_model : String?
 } derive(Eq)
 
 ///|
 pub fn Input::Input(
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri?,
+  pattern_repair_model~ : String?,
 ) -> Input {
-  { owner, root, }
+  { owner, root, pattern_repair_model, }
 }
 
 ///|
@@ -133,25 +134,19 @@ pub(all) enum Msg {
   ToggleRegex
   ToggleDetails
   FixPattern
-  OpenPatternRepair(String)
-  PatternRepairInstructionChanged(String)
-  SubmitPatternRepair
-  PatternRepairPreview(
+  PatternRepaired(
     root~ : String,
     generation~ : Int,
-    candidate_pattern~ : String,
-    validation_status~ : String,
-    message~ : String
+    candidate_pattern~ : String
   )
-  PatternRepairFailed(
+  PatternRepairUnavailable(root~ : String, generation~ : Int, message~ : String)
+  PatternRepairTimedOut(root~ : String, generation~ : Int)
+  PatternRepairValidationFailed(
     root~ : String,
     generation~ : Int,
-    candidate_pattern~ : String,
-    validation_status~ : String,
-    message~ : String
+    diagnostic~ : String
   )
-  AcceptPatternRepair
-  RejectPatternRepair
+  PatternRepairFailed(root~ : String, generation~ : Int)
   IncludeChanged(String)
   ExcludeChanged(String)
   // Semantic-mode settings, mirroring the text-mode toggles.

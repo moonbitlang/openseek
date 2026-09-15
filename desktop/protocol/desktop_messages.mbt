@@ -502,13 +502,18 @@ pub(all) struct CancelSearchSemanticPayload {
 } derive(Debug, Eq)
 
 ///|
-/// Request one host-backed Pattern Repair candidate. `instruction` is the
-/// user-facing repair intent kept separate from the current pattern so the
-/// future Agent operation can distinguish context from the requested change.
+/// Request one host-backed structural Pattern Repair. `instruction` remains
+/// separate from the current pattern as the repair constraint; the desktop
+/// one-click UI supplies its fixed syntax-only instruction rather than a
+/// second user prompt.
 pub(all) struct PatternRepairPayload {
   root : String
   pattern : String
   instruction : String
+  // The active OpenSeek model, when the request comes from a conversation.
+  // Older clients omit it and let the Host choose the configured provider's
+  // default model.
+  model : String?
   generation : Int
 } derive(Debug, Eq)
 

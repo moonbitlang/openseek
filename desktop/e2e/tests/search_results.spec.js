@@ -102,3 +102,49 @@ for (const mode of ['Text', 'Code']) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('code search repairs a pattern in one click', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const replyFor = app.replyFor.bind(app);
+  let repairRequest;
+  app.rpcDelays.set('pattern.repair', 30);
+  app.replyFor = request => {
+    if (request.method === 'pattern.repair') {
+      repairRequest = request.params;
+      return {
+        root: request.params.root,
+        generation: request.params.generation,
+        candidate_pattern: 'inspect($_)',
+        valid: true,
+        validation_status: 'passed',
+        message: 'Repaired.',
+      };
+    }
+    return replyFor(request);
+  };
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const shortcut = await page.evaluate(() =>
+    navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
+  await page.keyboard.press(shortcut);
+  await page.getByRole('button', { name: 'Code search', exact: true }).click();
+  const pattern = page.getByRole('textbox', { name: 'pattern', exact: true }).first();
+  await pattern.fill('inspect($(x:arg');
+  await expect(page.getByRole('button', { name: 'Fix Pattern', exact: true })).toBeVisible();
+  const repair = page.locator('.pattern-repair-button');
+  await repair.click();
+  await expect(repair).toBeDisabled();
+  await expect(page.locator('.search-pattern-repair-status')).toHaveText('Repairing pattern…');
+  await expect(pattern).toHaveValue('inspect($_)');
+  await expect(page.locator('.search-pattern-repair-status')).toBeHidden();
+  expect(repairRequest.instruction).toBe(
+    'Repair this MoonBit pattern with the smallest syntax-only change.',
+  );
+  await expect.poll(() => app.requests
+    .filter(request => request.method === 'fs.search_semantic')
+    .at(-1)?.params?.patterns?.[0]).toBe('inspect($_)');
+  await expect(page.getByRole('textbox', { name: 'Pattern repair instruction' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Use pattern' })).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
