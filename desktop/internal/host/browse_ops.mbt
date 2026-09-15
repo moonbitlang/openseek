@@ -38,7 +38,7 @@ async fn browse_directory_listing(
   // space, but on Windows no directory lives there: the level above the
   // drive roots is the drive list, and answering it is what lets the picker
   // reach another drive letter.
-  if requested == "/" && (@sysplatform.win32 || @sysplatform.win64) {
+  if requested == "/" && @platform.is_windows() {
     return Drives(entries=windows_drive_list())
   }
   let target : @pathx.Absolute = if requested.is_empty() {
@@ -194,7 +194,7 @@ async test "directory browsing accepts native input and returns URI paths" {
 async test "the resource root stays a real listing on POSIX hosts" {
   // On Windows the same address answers the drive list; POSIX hosts must
   // keep serving the filesystem root as an ordinary directory.
-  if @sysplatform.win32 || @sysplatform.win64 {
+  if @platform.is_windows() {
     return
   }
   guard browse_directory_op({ path: Some("/"), }) is Listing(path~, parent~, ..) else {

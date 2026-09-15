@@ -293,7 +293,7 @@ test "a real engine connection retires old active runs before readiness" {
   guard hub.runs().runs is [_] else {
     fail("expected one active run before reconnect")
   }
-  hub.engine_connected({ stage: Serving, })
+  hub.engine_connected({ stage: Serving, platform: None, })
   guard hub.runs().runs is [] else {
     fail("old active run survived a new engine pump")
   }
@@ -324,7 +324,7 @@ test "a lagged subscriber learns what it missed and can still replay the finish"
   // notification is the first one to push the start out of the window,
   // reproducing a renderer that fell behind during a long, high-volume turn.
   for _ in 1..<NotificationLogCapacity {
-    hub.publish(AgentConnected({ stage: Serving, }))
+    hub.publish(AgentConnected({ stage: Serving, platform: None, }))
   }
   hub.publish(
     AgentFinished(
@@ -661,7 +661,7 @@ test "a question does not outlive the engine that asked it" {
   // with the old one, so replaying it would offer an answer with nowhere to
   // go.
   hub.publish(ask)
-  hub.engine_connected({ stage: Serving, })
+  hub.engine_connected({ stage: Serving, platform: None, })
   guard hub.runs().approvals is [] else {
     fail("a question outlived the engine that asked it")
   }

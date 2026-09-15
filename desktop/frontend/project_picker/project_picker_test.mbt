@@ -15,7 +15,7 @@ fn listed(
   location~ : @project_picker.Location,
   entries~ : Array[String],
 ) -> @project_picker.State raise {
-  let (_, opening) = @project_picker.State::open(channel, emit())
+  let (_, opening) = @project_picker.State::open(channel, emit(), windows=false)
   let (_, loaded, outcome) = @project_picker.State::handle(
     opening,
     emit(),
@@ -36,6 +36,7 @@ test "a picker refuses to confirm before any listing" {
   let (_, opening) = @project_picker.State::open(
     @interop.ChannelId::Local,
     emit(),
+    windows=false,
   )
   let (_, held, outcome) = @project_picker.State::handle(
     opening,
