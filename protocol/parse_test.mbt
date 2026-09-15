@@ -54,7 +54,11 @@ test "decodes a transient stream retry boundary" {
 ///|
 test "decodes a provider timeout without a provider diagnostic" {
   assert_eq(
-    decode((#|{"event":"provider_request_timed_out"})),
+    decode(
+      (
+        #|{"event":"provider_request_timed_out"}
+      ),
+    ),
     Some(ProviderRequestTimedOut),
   )
 }

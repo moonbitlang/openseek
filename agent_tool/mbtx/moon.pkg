@@ -18,6 +18,7 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async/os_error",
   "bobzhang/openseek_protocol/emit",
+  "bobzhang/openseek_protocol",
 }
 
 warnings = "+unnecessary_annotation"
