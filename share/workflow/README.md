@@ -12,6 +12,9 @@ this resource root's absolute path.
 - `info-fmt.mbtx` runs info then fmt, modifying generated interfaces and formatting.
 - `check-json.mbtx` relays `moon check --output-json` diagnostics without filtering.
 
+See [Checking, testing, and formatting](../../tests/cram/validation-workflows.md)
+for executable examples of these validation scripts against a small project.
+
 Call `mbtx(description="Check the workspace", filename="@builtin/check.mbtx")` (or another bundled name) and omit `source`. No file
 creation is needed. `cwd` selects the module to check or test, defaulting to
 the workspace. The commands use project/toolchain target defaults, stream
@@ -29,6 +32,9 @@ modified source with an ordinary workspace filename; never send source with
 `@builtin/`.
 
 ## Reading files
+
+See [Reading files with `read.mbtx`](../../tests/cram/read-workflow.md) for
+executable examples of ranges, errors, literal filenames, and output limits.
 
 ```json
 {"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod","README.md:50"]}

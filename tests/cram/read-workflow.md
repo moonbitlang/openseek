@@ -1,37 +1,88 @@
-# Verified `@builtin/read.mbtx` Output Contract
+# Reading files with `read.mbtx`
 
-These examples are executed by `moon cram test tests/cram`. They run the
-bundled read workflow, `share/workflow/read.mbtx`, directly through `moon run`
-from a scratch directory, the way the `mbtx` tool runs it for the agent (the
-tool adds only its sandbox policy and its own output cap). The script's
-output is a contract two other parts of the engine consume: the system prompt
-tells the model what the footers mean, and the desktop transcript recognizes
-the headings and gutters to highlight MoonBit source. What is pinned here is
-that text, byte for byte.
+This page is both a usage guide and an executable test of
+[`read.mbtx`](../../share/workflow/read.mbtx). Each `mooncram` block shows a
+shell command after `$`, followed by its expected output. `[1]` means the
+command must exit with status 1; without it, success is expected.
 
-Every example passes `--target-dir _build`, which lands in the scratch
-directory: without it `moon run` would leave a `_build` tree beside the script
-under `share/`, and that tree once made its way into the generated system
-prompt's outline of `share/`. Each block runs one command; the scratch
-directory persists from block to block, so the fixtures below serve every
-example.
+Run this page from the repository root:
 
-## Fixtures
-
-A file that ends in a newline has a final empty line, as the footers below
-count it.
-
-```mooncram
-$ printf 'first\nselected\nlast\n' > sample.mbt && printf 'whole file' > note.txt && : > empty.txt && mkdir dir
+```sh
+moon cram test tests/cram/read-workflow.md --shell bash
 ```
 
-## A Whole File
+These transcripts assume Unix filesystem behavior. On Windows, `just test-cram`
+selects Git Bash, but that alone does not make this page portable: the `log:12`
+fixture is not an ordinary Windows filename, and OS error text can differ.
+The page has been verified locally on macOS; the cram CI job runs on Linux,
+with no Windows cram job currently configured.
 
-Every file gets a JSON-quoted heading, a numbered body, and a `<system>`
-footer.
+In OpenSeek, the equivalent of the first example below is:
+
+```json
+{"filename":"@builtin/read.mbtx","args":["sample.mbt"]}
+```
+
+These tests run the script directly with `moon run`; they verify its text
+output and exit status. The [mbtx package tests](../../agent_tool/mbtx/read_workflow_test.mbt)
+cover execution through the tool, including sandbox and output-limit behavior.
+See [Writing cram documentation](README.md) to add examples for another script.
+
+## Set up the examples
+
+Cram gives this page a temporary working directory. Files persist between
+blocks; `$TESTDIR` points to the directory containing this Markdown file.
+Define `READ` once so each example can focus on the script's arguments:
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- sample.mbt
+$ READ() {
+>   moon run "$TESTDIR/../../share/workflow/read.mbtx" -- "$@"
+> }
+```
+
+Cram preserves this shell function between blocks. `READ` runs the script
+and returns its exit status. `--` separates Moon's options from script
+arguments, and `"$@"` preserves each argument, including spaces.
+
+Create a three-line file with a trailing newline:
+
+```mooncram
+$ cat > sample.mbt <<'EOF'
+> first
+> selected
+> last
+> EOF
+```
+
+The trailing newline counts as a fourth, empty line. The remaining fixtures
+include a file without a trailing newline, an empty file, and a directory:
+
+```mooncram
+$ printf 'whole file' > note.txt
+```
+
+```mooncram
+$ touch empty.txt
+```
+
+```mooncram
+$ mkdir dir
+```
+
+## Read a whole file
+
+Every file gets a JSON-quoted heading, a numbered body, and a `<system>`
+footer. The footer fields describe the selected output:
+
+| Field | Meaning |
+| --- | --- |
+| `start_line` | Requested first line (1-based). |
+| `shown_lines` | Number of lines emitted, including a partially emitted line. |
+| `total_lines` | Number of lines in the whole file, including a final blank line. |
+| `truncated` | Whether the output budget prevented the full selected range from being shown. |
+
+```mooncram
+$ READ sample.mbt
 === "sample.mbt" ===
 1 |first
 2 |selected
@@ -40,13 +91,13 @@ $ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- s
 <system>start_line=1 shown_lines=4 total_lines=4 truncated=false</system>
 ```
 
-## A Range, And A Tail
+## Read an inclusive range or a tail
 
 Selectors are `path`, `path:start`, or `path:start:end`; lines are 1-based
 and both ends are included.
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- sample.mbt:2:3
+$ READ sample.mbt:2:3
 === "sample.mbt" ===
 2 |selected
 3 |last
@@ -54,34 +105,34 @@ $ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- s
 ```
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- sample.mbt:3
+$ READ sample.mbt:3
 === "sample.mbt" ===
 3 |last
 4 |
 <system>start_line=3 shown_lines=2 total_lines=4 truncated=false</system>
 ```
 
-## Past The End, And An Empty File
+## Read past EOF or read an empty file
 
 A range beyond the end is not an error: the footer reports what the file
 holds. An empty file says so explicitly. Several selectors in one call come
 back in order, each under its own heading.
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- sample.mbt:10:20 empty.txt
+$ READ sample.mbt:10:20 empty.txt
 === "sample.mbt" ===
 <system>start_line=10 shown_lines=0 total_lines=4 truncated=false</system>
 === "empty.txt" ===
 <system>start_line=1 shown_lines=0 total_lines=0 truncated=false note=empty file</system>
 ```
 
-## A Batch Survives One Bad File
+## Continue after a file error
 
 A missing file reports its error under its own heading; the files after it
 are still returned, and the call exits 1 so the tool reports it as an error.
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- absent.txt note.txt
+$ READ absent.txt note.txt
 === "absent.txt" ===
 error reading file: "OSError(\"@fs.kind(): \\\"absent.txt\\\": No such file or directory\")"
 === "note.txt" ===
@@ -93,71 +144,95 @@ error reading file: "OSError(\"@fs.kind(): \\\"absent.txt\\\": No such file or d
 A directory is refused with the way to list it instead.
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- dir
+$ READ dir
 === "dir" ===
 error reading file: "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files"
 [1]
 ```
 
-## Names That Look Like Selectors
+## Read filenames that look like selectors or options
 
 A trailing `:number` is read as a line number, so a file actually named that
-way needs `--literal`.
+way needs `--literal`. This fixture uses Unix filename rules; Windows reserves
+the colon, so it is not a portable literal-filename example.
 
 ```mooncram
-$ printf 'kept' > log:12 && moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- log:12
+$ printf 'kept' > log:12
+```
+
+```mooncram
+$ READ log:12
 === "log" ===
 error reading file: "OSError(\"@fs.kind(): \\\"log\\\": No such file or directory\")"
 [1]
 ```
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- --literal log:12
+$ READ --literal log:12
 === "log:12" ===
 1 |kept
 <system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>
 ```
 
-A name starting with `--` needs `--` first.
+A name starting with `--` needs `--` first. This second `--` is passed to
+`read.mbtx`; the function already supplies the separator for `moon run`.
 
 ```mooncram
-$ printf 'dash' > ./--weird && moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- -- --weird
+$ printf 'dash' > ./--weird
+```
+
+```mooncram
+$ READ -- --weird
 === "--weird" ===
 1 |dash
 <system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>
 ```
 
-## The Body Budget
+## Limit output in UTF-8 bytes
 
 `--max-output-bytes` bounds each file's body in UTF-8 bytes, gutters
-included. A body that does not fit is cut at a line and marked `truncated`,
-which is the model's cue to ask for a narrower range.
+included. A body that does not fit is marked `truncated=true`; request a
+smaller range to continue. Truncation is a successful read, so there is no
+`[1]` after the output.
+
+Nine bytes fit the first line (`1 |first`) but not the next line's gutter:
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- --max-output-bytes 9 sample.mbt
+$ READ --max-output-bytes 9 sample.mbt
 === "sample.mbt" ===
 1 |first
 <system>start_line=1 shown_lines=1 total_lines=4 truncated=true</system>
 ```
 
-## Bad Arguments And Help
+A budget can also cut a line short. Five bytes leave room for the gutter
+(`1 |`) and `fi`, so `shown_lines=1` does not promise a complete line.
+Cuts preserve UTF-8 character boundaries.
+
+```mooncram
+$ READ --max-output-bytes 5 sample.mbt
+=== "sample.mbt" ===
+1 |fi
+<system>start_line=1 shown_lines=1 total_lines=4 truncated=true</system>
+```
+
+## Diagnose arguments and show help
 
 Argument errors name what was wrong and exit 1 before any file is read.
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- sample.mbt:5:4
+$ READ sample.mbt:5:4
 error: read expected path:start:end with end >= start (inclusive, 1-based)
 [1]
 ```
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- --unknown
+$ READ --unknown
 error: read unknown option; use --help or -- before a filename starting with --
 [1]
 ```
 
 ```mooncram
-$ moon run -q "$TESTDIR/../../share/workflow/read.mbtx" --target-dir _build -- --help
+$ READ --help
 Usage: mbtx(filename="@builtin/read.mbtx", args=["path", "path:start", "path:start:end"])
 Ranges are inclusive and 1-based. --max-output-bytes N sets each file's UTF-8 body budget (default 12000, maximum 50000). The batch is bounded to 40000 UTF-8 bytes; use smaller batches/ranges when truncated. --literal PATH reads a path without interpreting colon suffixes. -- ends option parsing. Relative paths use cwd (default workspace).
 ```

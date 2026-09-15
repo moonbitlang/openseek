@@ -267,6 +267,11 @@ and exposes each on `PATH` as `<name>.exe` (e.g. `openseek.exe`).
 - [`tests/cram/subrun.md`](tests/cram/subrun.md) — the offline internal child-mode
   wire contract: JSON input on stdin, JSONL events on stdout, typed reports, and
   failure-event delivery. It uses the modelless `echo` kind and needs no API key.
+- [`tests/cram/read-workflow.md`](tests/cram/read-workflow.md) — a tested guide
+  to `read.mbtx`: numbered files, ranges, errors, and output limits. See
+  [Writing cram documentation](tests/cram/README.md) to add a guide for another script.
+- [`tests/cram/validation-workflows.md`](tests/cram/validation-workflows.md) —
+  the bundled check, test, and formatting scripts, exercised on a temporary project.
 - [`tests/live/deepseek.md`](tests/live/deepseek.md) — a real, non-mock DeepSeek
   round trip. It is opt-in (`DEEPSEEK=sk-... moon cram test tests/live`) and
   parses the agent's JSONL log with MoonBit itself: a `moon run -e` script reads
