@@ -160,3 +160,68 @@ fn review_diff_navigation_subscription(
     review_diff_navigation_sub_loader,
   )
 }
+
+///|
+/// Only small presentation values are retained, never an old State or callbacks.
+pub struct ReviewNavigationDisplay {
+  priv file_position : (Int, Int)?
+  priv position : ReviewHunkPosition?
+  priv hunk_toggle : (ReviewHunkState, Bool)?
+  priv enabled : Bool
+} derive(Eq)
+
+///|
+fn review_navigation_complete(state : State, ctx : Ctx) -> Bool {
+  ctx.active_file is Some(path) &&
+  state.docs.get(path) is Some(doc) &&
+  doc.review is Some(review) &&
+  (
+    review.view_mode is ReviewSource ||
+    (
+      !doc.diff_is_pending() &&
+      (
+        doc.diff_content() is None ||
+        state.review_navigation_ready(ctx.active_file)
+      )
+    )
+  )
+}
+
+///|
+fn current_review_navigation_display(
+  state : State,
+  ctx : Ctx,
+) -> ReviewNavigationDisplay {
+  let active = state.active_review_hunk(ctx.active_file)
+  {
+    file_position: active_review_position(state, ctx).map(position => {
+      (position.1, position.2)
+    }),
+    position: active.bind(active => active.position),
+    hunk_toggle: active.map(active => {
+      (
+        state.review_hunk_state(active.change, active.hunk),
+        state.is_change_reviewed(active.change) && active.file_changes is None,
+      )
+    }),
+    enabled: review_diff_navigation_enabled(state, ctx),
+  }
+}
+
+///|
+fn State::sync_review_navigation_display(self : State, ctx : Ctx) -> State {
+  let display = if ctx.active_history_diff is Some(_) ||
+    !ctx.checkout_ready() ||
+    !(ctx.active_file is Some(path) &&
+    self.docs.get(path) is Some({ review: Some(_), .. })) {
+    None
+  } else if review_navigation_complete(self, ctx) {
+    Some(current_review_navigation_display(self, ctx))
+  } else {
+    self.review_navigation_display
+  }
+  { ..self, review_navigation_display: display, }
+}
+
+///|
+pub extend ReviewNavigationDisplay with Eq::{equal, not_equal}

@@ -88,7 +88,7 @@ priv enum ReviewHunkState {
   ReviewHunkUnviewed
   ReviewHunkPartial
   ReviewHunkViewed
-}
+} derive(Eq)
 
 ///|
 pub(all) enum ReviewFileProgress {
@@ -355,6 +355,7 @@ fn State::accept_active_review_hunk(
   file_changes : ReviewHunk?,
   position : ReviewHunkPosition?,
   active_file : @pathx.Relative?,
+  ready~ : Bool,
 ) -> State {
   guard self.current_review_generation(change, active_file) ==
     Some(review_generation) &&
@@ -363,6 +364,11 @@ fn State::accept_active_review_hunk(
   }
   {
     ..self,
+    review_hunk_ready: if ready {
+      Some((change, review_generation, surface_generation))
+    } else {
+      None
+    },
     review_active_hunk: hunk.map(hunk => {
       change,
       review_generation,
@@ -372,6 +378,16 @@ fn State::accept_active_review_hunk(
       position,
     }),
   }
+}
+
+///|
+fn State::review_navigation_ready(
+  self : State,
+  active_file : @pathx.Relative?,
+) -> Bool {
+  self.review_hunk_ready is Some((change, generation, surface)) &&
+  self.current_review_generation(change, active_file) == Some(generation) &&
+  self.review_hunk_surface_generation == surface
 }
 
 ///|
@@ -446,7 +462,7 @@ fn State::toggle_active_review_hunk(
 
 ///|
 fn State::clear_review_active_hunk(self : State) -> State {
-  if self.review_active_hunk is None {
+  if self.review_active_hunk is None && self.review_hunk_ready is None {
     self
   } else {
     self.invalidate_review_hunk_surface()
@@ -459,6 +475,7 @@ fn State::invalidate_review_hunk_surface(self : State) -> State {
     ..self,
     review_hunk_surface_generation: self.review_hunk_surface_generation + 1,
     review_active_hunk: None,
+    review_hunk_ready: None,
   }
 }
 

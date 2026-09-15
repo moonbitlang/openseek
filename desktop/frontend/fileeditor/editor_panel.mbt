@@ -83,6 +83,9 @@ priv struct ViewerHost {
   // the source model, selection, folding, and scroll state. DiffEditor owns
   // two code kernels directly rather than wrapping public Viewers.
   mut diff_editor : @viewer.DiffEditor?
+  // Exact host inputs for the installed review pair. Models normalize CRLF,
+  // so model text cannot identify the original input across async updates.
+  mut review_diff_inputs : (String, String)?
   // Rich Markdown is a separate public surface, never a presentation branch
   // inside the code Viewer. It shares product services but owns its own model
   // and view-state lifetime.
@@ -158,6 +161,7 @@ let viewer_state : ViewerHost = {
   viewer: None,
   _viewer_resize_observer: None,
   diff_editor: None,
+  review_diff_inputs: None,
   markdown_viewer: None,
   mbti_resource: None,
   mbti_source: None,
@@ -771,6 +775,7 @@ fn dispose_diff_comparison_models(previous : @viewer.DiffEditorModel) -> Unit {
 /// this: the last complete pair stays parked behind the inactive surface until
 /// its successor is ready. Hard owner/workspace boundaries clear it here.
 fn clear_diff_comparison() -> Unit {
+  viewer_state.review_diff_inputs = None
   guard viewer_state.diff_editor is Some(diff_editor) else { return }
   let previous = diff_editor.set_model(None)
   if previous is Some(previous) {
@@ -804,8 +809,8 @@ fn show_diff_comparison(
   if diff_editor.get_model() is Some(current) &&
     current.original.uri.to_string() == original_uri.to_string() &&
     current.modified.uri.to_string() == modified_uri.to_string() &&
-    current.original.get_value() == original_content &&
-    current.modified.get_value() == modified_content {
+    viewer_state.review_diff_inputs ==
+    Some((original_content, modified_content)) {
     services.feedback.set_feedback_enabled(original_uri, relative is Some(_))
     return
   }
@@ -835,6 +840,7 @@ fn show_diff_comparison(
   let previous = diff_editor.set_model(
     Some(@viewer.DiffEditorModel(original_model, modified_model)),
   )
+  viewer_state.review_diff_inputs = Some((original_content, modified_content))
   // Match VS Code's TextDiffEditor host policy: a genuinely new comparison
   // with no restored view state starts at its first raw diff mapping. The
   // equality guard above deliberately keeps Source/Diff toggles and unchanged
@@ -878,6 +884,7 @@ fn show_history_diff_in_viewer(
       viewer_state.services is Some(services) else {
       return
     }
+    viewer_state.review_diff_inputs = None
     let original_revision = diff.parent.unwrap_or("empty-tree")
     let original_path = diff.original_path.unwrap_or(diff.path)
     guard history_revision_model_uri(

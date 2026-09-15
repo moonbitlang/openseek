@@ -236,6 +236,119 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
+  test(`Review navigation remains visible while ${pendingMethod} and diff computation finish`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    await page.setViewportSize({ width: 1120, height: 760 });
+    const baseline = Array.from({ length: 15 }, (_, i) => [
+      `fn changed_${i}() -> Int { 0 }`,
+      ...Array.from({ length: 8 }, (_, j) => `fn same_${i}_${j}() -> Int { ${j} }`),
+    ].join('\n')).join('\n');
+    const contents = pendingMethod === 'fs.read_file' ? baseline.replaceAll('\n', '\r\n') : baseline;
+    app.gitFilesByRevision[app.gitBaseline]['src/lib.mbt'] = contents;
+    app.workingFiles['src/lib.mbt'] = contents.replaceAll('-> Int { 0 }', '-> Int { 10 }');
+    const { promise: pending, resolve: release } = Promise.withResolvers();
+    const replyFor = app.replyFor.bind(app);
+    app.replyFor = async (request) => {
+      if (request.method === pendingMethod && request.params?.path?.endsWith('/lib.mbt')) {
+        await pending;
+      }
+      return replyFor(request);
+    };
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    await app.openReview();
+    const changes = page.locator('#review-changes-body');
+    await changes.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    const mode = page.getByRole('toolbar', { name: 'Review mode' });
+    const line = mode.getByRole('button', { name: 'Line diff' });
+    const layout = page.getByRole('group', { name: 'Diff layout' });
+    const split = layout.getByRole('button', { name: 'Split diff layout' });
+    await expect(line).toBeEnabled();
+    await expect(split).toBeEnabled();
+    await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
+
+    const geometry = () => page.locator('.viewer-breadcrumb').evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      const row = element.querySelector('.review-command-row')?.getBoundingClientRect();
+      return { height: rect.height, rowY: row?.y, rowHeight: row?.height };
+    });
+    const navigationAppearance = () => page.locator('.review-command-row').evaluate(group =>
+      Array.from(group.querySelectorAll('span, button')).map(element => {
+        const style = getComputedStyle(element);
+        return { text: element.textContent, color: style.color, background: style.backgroundColor, opacity: style.opacity };
+      }));
+    const appearanceBefore = await navigationAppearance();
+    const before = await geometry();
+    expect(before.rowY).toBeGreaterThan(0);
+    // Sample rendered frames, including the gap after reads finish but before
+    // the editor publishes its computed hunks. Never expose partial navigation.
+    await page.evaluate(() => {
+      window.reviewNavigationFrames = [];
+      window.sampleReviewNavigation = true;
+      const sample = () => {
+        const group = document.querySelector('.review-navigation-controls');
+        window.reviewNavigationFrames.push({
+          visible: !!group?.getClientRects().length,
+          breadcrumbLoading: document.querySelector('.viewer-breadcrumb')?.textContent.includes('Loading diff'),
+          file: group?.querySelector('.review-nav-position')?.textContent,
+          change: group?.querySelector('.review-hunk-position')?.textContent,
+          buttons: Array.from(group?.querySelectorAll('button') ?? []).map(b => b.textContent.trim() || b.getAttribute('aria-label')),
+        });
+        if (window.sampleReviewNavigation) requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+    try {
+      await changes.getByRole('button', { name: /View diff: src\/lib\.mbt/ }).click();
+      await expect(page.locator('.crumb-file')).toHaveText('lib.mbt');
+      await expect.poll(() => app.requests.some(request =>
+        request.method === pendingMethod && request.params?.path?.endsWith('/lib.mbt')))
+        .toBe(true);
+      await expect(line).toBeDisabled();
+      await expect(split).toBeDisabled();
+      await expect(mode.getByRole('button', { name: 'Token diff' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Ignore comments' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Ignore tests' })).toBeVisible();
+      await expect(page.locator('.review-navigation-controls')).toBeVisible();
+      await expect(page.locator('.review-navigation-controls')).toHaveAttribute('aria-busy', 'true');
+      await expect(page.locator('.review-nav-position')).toHaveText('File 1 of 2');
+      await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
+      await expect(page.locator('.review-navigation-controls')).toHaveAttribute('inert', '');
+      expect(await navigationAppearance()).toEqual(appearanceBefore);
+      await expect(page.locator('.viewer-breadcrumb')).not.toContainText('Loading diff');
+      // A deliberately held read eventually shows the delayed overlay. Its
+      // timing is independent of whether navigation retains a complete display.
+      await expect(page.locator('.viewer-notice')).toHaveText('Loading diff for lib.mbt…');
+      await expect(page.locator('.review-navigation-controls')).toContainText('File 1 of 2');
+      expect(await geometry()).toEqual(before);
+    } finally {
+      release();
+    }
+    await expect(line).toBeEnabled();
+    await expect(split).toBeEnabled();
+    await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 15');
+    await expect(page.locator('.review-navigation-controls')).toContainText('Mark viewed');
+    await expect(page.locator('.review-nav-position')).toHaveText('File 2 of 2');
+    await expect(page.locator('.review-navigation-controls')).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator('.viewer-notice')).not.toContainText('Loading diff');
+    const frames = await page.evaluate(() => {
+      window.sampleReviewNavigation = false;
+      return window.reviewNavigationFrames;
+    });
+    for (const frame of frames) {
+      expect(frame.visible).toBe(true);
+      expect(frame.breadcrumbLoading).toBe(false);
+      expect(frame.change).toBe(frame.file === 'File 1 of 2' ? 'Change 1 of 1' : 'Change 1 of 15');
+      expect(frame.buttons).toEqual(['Previous change', 'Next change', 'Mark viewed']);
+    }
+    expect(frames.length).toBeGreaterThan(0);
+    expect(await geometry()).toEqual(before);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 test('Review links hunk and file progress and reports the active hunk', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = [

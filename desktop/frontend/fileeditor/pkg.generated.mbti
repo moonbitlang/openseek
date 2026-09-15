@@ -285,7 +285,7 @@ pub(all) enum Msg {
   MoonModViewModeSelected(MoonModViewMode)
   PackageGraphRequestLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, generation~ : Int, source~ : String)
   PackageGraphRequestFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, generation~ : Int, message~ : String)
-  ReviewActiveHunkChanged(change~ : ChangedFile, review_generation~ : Int, surface_generation~ : Int, hunk~ : ReviewHunk?, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
+  ReviewActiveHunkChanged(ready~ : Bool, change~ : ChangedFile, review_generation~ : Int, surface_generation~ : Int, hunk~ : ReviewHunk?, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
   ToggleActiveReviewHunk
   ToggleReviewHunk(change~ : ChangedFile, review_generation~ : Int, surface_generation~ : Int, hunk~ : ReviewHunk, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
   GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
@@ -375,6 +375,12 @@ pub(all) struct ReviewHunkPosition {
 pub fn ReviewHunkPosition::equal(Self, Self) -> Bool
 pub fn ReviewHunkPosition::not_equal(Self, Self) -> Bool
 
+pub struct ReviewNavigationDisplay {
+  // private fields
+} derive(Eq)
+pub fn ReviewNavigationDisplay::equal(Self, Self) -> Bool
+pub fn ReviewNavigationDisplay::not_equal(Self, Self) -> Bool
+
 pub(all) struct ReviewState {
   generation : Int
   working_generation : Int
@@ -443,6 +449,8 @@ pub(all) struct State {
   review_progress : Array[ChangedFileReview]
   review_hunk_surface_generation : Int
   review_active_hunk : ReviewActiveHunk?
+  review_hunk_ready : (ChangedFile, Int, Int)?
+  review_navigation_display : ReviewNavigationDisplay?
   changes_generation : Int
   request_epoch : Int
   file_link_generation : Int

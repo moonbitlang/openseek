@@ -1466,11 +1466,14 @@ fn sync_semantic_review_editors(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
-      sync_review_hunk_bridge_target(state, active_file, msg => {
-        scheduler.add(dispatch(msg))
-      })
+      // Model installation and layout can publish synchronously. Reconnect
+      // only after the whole section collection belongs to the current input.
+      review_hunk_bridge_target.val = None
       guard state.semantic_review_input is Some(input) else {
         clear_semantic_review_editors()
+        sync_review_hunk_bridge_target(state, active_file, msg => {
+          scheduler.add(dispatch(msg))
+        })
         sync_review_hunk_actions(state)
         return
       }
@@ -1543,6 +1546,9 @@ fn sync_semantic_review_editors(
           semantic_review_editors[key] = entry
         }
       }
+      sync_review_hunk_bridge_target(state, active_file, msg => {
+        scheduler.add(dispatch(msg))
+      })
       if semantic_review_active_key.val is Some(key) &&
         semantic_review_editors.get(key) is Some(entry) {
         publish_semantic_review_active_hunk(
@@ -1551,6 +1557,14 @@ fn sync_semantic_review_editors(
           entry.editor,
           entry.section,
           entry.editor.get_active_hunk_index(),
+        )
+      } else if visible_keys.is_empty() {
+        publish_review_active_hunk(
+          ReviewSemanticSurface,
+          None,
+          None,
+          None,
+          ready=true,
         )
       }
       sync_review_hunk_actions(state)

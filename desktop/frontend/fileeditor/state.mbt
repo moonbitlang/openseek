@@ -482,6 +482,10 @@ pub(all) struct State {
   // Its exact row, diff generation, and surface generation fence callbacks
   // from older inputs.
   review_active_hunk : ReviewActiveHunk?
+  // A completed empty comparison has no active hunk. Track completion with
+  // the same identity fences so navigation can appear atomically in both cases.
+  review_hunk_ready : (ChangedFile, Int, Int)?
+  review_navigation_display : ReviewNavigationDisplay?
   // Monotonic request token retained across conversation re-roots and advanced
   // across same-owner placement changes. Owner plus this generation rejects an
   // old A→B→A reply or one from an earlier checkout incarnation.
@@ -605,6 +609,8 @@ pub fn State::empty() -> State {
     review_progress: [],
     review_hunk_surface_generation: 0,
     review_active_hunk: None,
+    review_hunk_ready: None,
+    review_navigation_display: None,
     changes_generation: 0,
     request_epoch: 0,
     file_link_generation: 0,
@@ -960,6 +966,7 @@ pub(all) enum Msg {
   // The visible DiffEditor publishes only its current projected hunk. The
   // reducer validates exact row, diff generation, and surface generation.
   ReviewActiveHunkChanged(
+    ready~ : Bool,
     change~ : ChangedFile,
     review_generation~ : Int,
     surface_generation~ : Int,

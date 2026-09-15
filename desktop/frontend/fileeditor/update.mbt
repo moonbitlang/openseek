@@ -145,7 +145,7 @@ fn State::shows_delayed_diff_loading(self : State, doc : Doc) -> Bool {
 }
 
 ///|
-const DiffLoadingDelayMilliseconds = 200
+const DiffLoadingDelayMilliseconds = 800
 
 ///|
 fn delayed_diff_loading(
@@ -2254,6 +2254,7 @@ pub fn sync(
   let (navigation_cmd, state) = sync_review_navigation_destination(
     dispatch, state, ctx,
   )
+  let state = state.sync_review_navigation_display(ctx)
   let pending_cmd = @cmd.batch([
     retire_index_cmd,
     reroot_cmd,
@@ -2624,6 +2625,7 @@ pub fn update(
       (@cmd.none, next)
     }
     ReviewActiveHunkChanged(
+      ready~,
       change~,
       review_generation~,
       surface_generation~,
@@ -2634,6 +2636,7 @@ pub fn update(
       (
         @cmd.none,
         state.accept_active_review_hunk(
+          ready~,
           change,
           review_generation,
           surface_generation,
@@ -2657,6 +2660,7 @@ pub fn update(
         return (@cmd.none, state)
       }
       let next = state.accept_active_review_hunk(
+        ready=true,
         change,
         review_generation,
         surface_generation,
@@ -3134,6 +3138,11 @@ pub fn update(
             review_generation,
             review_progress,
             review_active_hunk,
+            review_hunk_ready: if !follow_up && head_changed {
+              None
+            } else {
+              state.review_hunk_ready
+            },
             background_review_requests,
             review_recovery_pending: if follow_up {
               state.review_recovery_pending
@@ -3530,6 +3539,7 @@ pub fn update(
           ..state,
           review_progress: [],
           review_active_hunk: None,
+          review_hunk_ready: None,
           index,
           watching,
           // Agent runs can alter unopened package manifests outside the
@@ -3597,6 +3607,11 @@ pub fn update(
           (Some(active), Some(changes)) if active.change.touched_by(changes) =>
             None
           (active, _) => active
+        }
+        let review_hunk_ready = match (state.review_hunk_ready, changes) {
+          (Some((change, _, _)), Some(changes)) if change.touched_by(changes) =>
+            None
+          (ready, _) => ready
         }
         // A baseline checks the whole selection after watcher replacement.
         // Concrete batches stat only affected open files (the dock strip's
@@ -3747,6 +3762,7 @@ pub fn update(
           loading,
           review_progress,
           review_active_hunk,
+          review_hunk_ready,
           index,
           package_graphs,
         }

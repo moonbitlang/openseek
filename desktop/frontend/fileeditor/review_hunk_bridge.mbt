@@ -17,6 +17,8 @@ priv struct ReviewHunkBridgeTarget {
   active_hunk : ReviewHunk?
   file_changes : ReviewHunk?
   position : ReviewHunkPosition?
+  ready : Bool
+  semantic_keys : Array[String]
   dispatch : (Msg) -> Unit
 }
 
@@ -30,7 +32,11 @@ fn current_review_hunk_bridge_target(
   dispatch : (Msg) -> Unit,
 ) -> ReviewHunkBridgeTarget? {
   guard active_file is Some(path) &&
-    state.docs.get(path) is Some({ review: Some(review), .. }) &&
+    state.docs.get(path) is Some(doc) &&
+    doc.review is Some(review) &&
+    doc.visible_diff() is Some((original, modified)) &&
+    viewer_state.relative == Some(path) &&
+    viewer_state.review_diff_inputs == Some((original, modified)) &&
     state.current_review_generation(review.selected, active_file)
     is Some(review_generation) else {
     return None
@@ -53,6 +59,10 @@ fn current_review_hunk_bridge_target(
     active_hunk,
     file_changes,
     position,
+    ready: state.review_navigation_ready(active_file),
+    semantic_keys: semantic_sections(state.semantic_review_plan)
+    .map(section => section.key)
+    .filter(key => !state.semantic_review_collapsed.contains(key)),
     dispatch,
   })
 }
@@ -117,10 +127,12 @@ fn publish_review_active_hunk(
   hunk : ReviewHunk?,
   file_changes : ReviewHunk?,
   position : ReviewHunkPosition?,
+  ready~ : Bool,
 ) -> Unit {
   guard review_hunk_bridge_target.val is Some(target) &&
     target.surface == surface &&
     (
+      target.ready != ready ||
       target.active_hunk != hunk ||
       (
         hunk is Some(_) &&
@@ -134,9 +146,11 @@ fn publish_review_active_hunk(
     active_hunk: hunk,
     file_changes,
     position,
+    ready,
   })
   (target.dispatch)(
     ReviewActiveHunkChanged(
+      ready~,
       change=target.change,
       review_generation=target.review_generation,
       surface_generation=target.surface_generation,
@@ -156,6 +170,7 @@ fn publish_line_review_hunk_context(editor : @viewer.DiffEditor) -> Unit {
     ReviewLineSurface => {
       let active_index = editor.get_active_hunk_index()
       publish_review_active_hunk(
+        ready=editor.is_diff_up_to_date(),
         ReviewLineSurface,
         projected_review_hunk(hunks, active_index, Some(0), Some(0)),
         file_changes,
@@ -164,6 +179,7 @@ fn publish_line_review_hunk_context(editor : @viewer.DiffEditor) -> Unit {
     }
     ReviewSemanticSurface =>
       publish_review_active_hunk(
+        ready=target.ready,
         ReviewSemanticSurface,
         target.active_hunk,
         file_changes,
@@ -189,6 +205,10 @@ fn publish_semantic_review_active_hunk(
   let hunks = editor.get_hunks()
   let file_changes = mounted_diff_editor().bind(projected_review_file_changes)
   publish_review_active_hunk(
+    ready=target.semantic_keys.all(key => {
+      semantic_review_editors.get(key) is Some(entry) &&
+      entry.editor.is_diff_up_to_date()
+    }),
     ReviewSemanticSurface,
     projected_review_hunk(
       hunks,

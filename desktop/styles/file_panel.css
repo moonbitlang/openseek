@@ -2018,9 +2018,19 @@ button.git-history-file.selected {
 }
 
 .review-command-row {
-  flex-wrap: wrap;
+  /* Keep the toolbar height stable when the ready navigation group appears. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 4px;
   padding-block: 4px;
+  padding-right: 12px;
   background: var(--color-bg-subtle);
+}
+
+/* Scrolling narrow toolbars must not add or remove a scrollbar row. */
+.review-command-row::-webkit-scrollbar {
+  display: none;
 }
 
 /* The path crumbs grow and ellipsize. */
@@ -2311,7 +2321,7 @@ button.git-history-file.selected {
   cursor: pointer;
 }
 
-.review-mode-button:hover,
+.review-mode-button:hover:not(:disabled),
 .review-layout-button:hover:not(:disabled) {
   color: var(--color-text-primary);
   background: var(--color-bg-subtle);
@@ -2345,9 +2355,22 @@ button.git-history-file.selected {
   opacity: 0.5;
 }
 
-.review-layout-button:disabled {
+/* Pending controls keep their settled appearance but remain non-interactive. */
+.review-layout-control:not(.pending) .review-layout-button:disabled {
   color: inherit;
+}
+
+.review-mode-button:disabled,
+.review-layout-button:disabled,
+.review-comments-control:disabled,
+.review-tests-control:disabled {
   cursor: default;
+}
+
+/* Override the shared button dimming for controls awaiting replacement data. */
+.review-command-row .pending :disabled,
+.review-command-row :disabled.pending {
+  opacity: 1;
 }
 
 .review-comments-control,
@@ -2378,14 +2401,21 @@ button.git-history-file.selected {
   background: color-mix(in srgb, var(--color-accent) 20%, transparent);
 }
 
-.review-comments-control:disabled,
-.review-tests-control:disabled {
+.review-comments-control:disabled:not(.pending),
+.review-tests-control:disabled:not(.pending) {
   color: var(--color-text-muted);
-  cursor: default;
   opacity: 0.5;
 }
 
 .review-command-row .review-diff-navigation {
+  margin-left: auto;
+}
+
+.review-navigation-controls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
   margin-left: auto;
 }
 

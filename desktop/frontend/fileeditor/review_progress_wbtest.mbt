@@ -53,6 +53,7 @@ fn activate_review_hunk(
   update(
     test_emit(),
     ReviewActiveHunkChanged(
+      ready=true,
       change=selected,
       review_generation=1,
       surface_generation=state.review_hunk_surface_generation,
@@ -187,6 +188,7 @@ test "active hunk requires exact row, diff generation, and surface generation" {
   let (_, stale_generation) = update(
     test_emit(),
     ReviewActiveHunkChanged(
+      ready=true,
       change=selected,
       review_generation=0,
       surface_generation=state.review_hunk_surface_generation,
@@ -198,10 +200,12 @@ test "active hunk requires exact row, diff generation, and surface generation" {
     ctx,
   )
   assert_true(stale_generation.review_active_hunk is None)
+  assert_false(stale_generation.review_navigation_ready(ctx.active_file))
   let other = { ..selected, index_status: "M", worktree_status: " ", }
   let (_, stale_row) = update(
     test_emit(),
     ReviewActiveHunkChanged(
+      ready=true,
       change=other,
       review_generation=1,
       surface_generation=state.review_hunk_surface_generation,
@@ -213,6 +217,7 @@ test "active hunk requires exact row, diff generation, and surface generation" {
     ctx,
   )
   assert_true(stale_row.review_active_hunk is None)
+  assert_false(stale_row.review_navigation_ready(ctx.active_file))
   let inactive_ctx = {
     ..ctx,
     active_file: Some(@pathx.Relative("src/other.mbt")),
@@ -258,6 +263,7 @@ test "active hunk requires exact row, diff generation, and surface generation" {
   let (_, late_surface) = update(
     test_emit(),
     ReviewActiveHunkChanged(
+      ready=true,
       change=selected,
       review_generation=1,
       surface_generation~,
@@ -269,4 +275,102 @@ test "active hunk requires exact row, diff generation, and surface generation" {
     ctx,
   )
   assert_true(late_surface.review_active_hunk is None)
+}
+
+///|
+test "empty review completion reveals navigation and is invalidated with its surface" {
+  let (state, ctx, selected) = review_progress_state()
+  assert_false(state.review_navigation_ready(ctx.active_file))
+  let ready = state.accept_active_review_hunk(
+    selected,
+    1,
+    state.review_hunk_surface_generation,
+    None,
+    None,
+    None,
+    ctx.active_file,
+    ready=true,
+  )
+  assert_true(ready.review_active_hunk is None)
+  assert_true(ready.review_navigation_ready(ctx.active_file))
+  let invalidated = ready.clear_review_active_hunk()
+  assert_false(invalidated.review_navigation_ready(ctx.active_file))
+  let stale = invalidated.accept_active_review_hunk(
+    selected,
+    1,
+    state.review_hunk_surface_generation,
+    None,
+    None,
+    None,
+    ctx.active_file,
+    ready=true,
+  )
+  assert_false(stale.review_navigation_ready(ctx.active_file))
+}
+
+///|
+test "navigation retains the completed presentation until a replacement completes" {
+  let (state, ctx, selected) = review_progress_state()
+  let other_path = @pathx.Relative("src/other.mbt")
+  let other = test_modified_change(other_path)
+  let docs = state.docs.copy()
+  docs[other_path] = reviewed_doc(other_path, other)
+  let state = {
+    ..state,
+    docs,
+    changes: ChangeListReady(
+      repository=true,
+      files=[selected, other],
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }
+  let hunk = review_test_hunk(2, 4, 2, 4)
+  let displayed = activate_review_hunk(state, ctx, selected, hunk, hunk, 0, 1).sync_review_navigation_display(
+    ctx,
+  )
+  let next_ctx = { ..ctx, active_file: Some(other_path), }
+  let pending = displayed
+    .clear_review_active_hunk()
+    .sync_review_navigation_display(next_ctx)
+  assert_true(
+    pending.review_navigation_display == displayed.review_navigation_display,
+  )
+  assert_false(review_navigation_complete(pending, next_ctx))
+  let completed = activate_review_hunk(
+    pending, next_ctx, other, hunk, hunk, 0, 15,
+  ).sync_review_navigation_display(next_ctx)
+  assert_true(
+    completed.review_navigation_display
+    is Some(
+      {
+        file_position: Some((1, 2)),
+        position: Some({ current: 1, total: 15, }),
+        ..
+      }
+    ),
+  )
+  // An empty result is also a complete presentation, and must retire the
+  // previous file's hunk controls rather than retaining them forever.
+  let empty = completed
+    .accept_active_review_hunk(
+      other,
+      1,
+      completed.review_hunk_surface_generation,
+      None,
+      None,
+      None,
+      next_ctx.active_file,
+      ready=true,
+    )
+    .sync_review_navigation_display(next_ctx)
+  assert_true(
+    empty.review_navigation_display
+    is Some({ position: None, hunk_toggle: None, .. }),
+  )
+  let inactive = empty.sync_review_navigation_display({
+    ..ctx,
+    active_file: None,
+  })
+  assert_true(inactive.review_navigation_display is None)
 }
