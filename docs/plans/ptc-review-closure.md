@@ -79,9 +79,9 @@ Content-Length or plain chunked framing, bounded headers/body/total bytes, and n
 connection reuse, extensions, trailers, or ambiguous framing. It still uses the
 existing HTTP response writer and published SDK. No dependency fork is required.
 
-A disconnect is not an acknowledged cancellation. An accepted request remains
-program-owned until completion, deadline, program exit, or explicit stop. A
-lost reply may follow a successful mutation; there is no automatic retry.
+The client-side consequences (disconnect is not a cancellation, a lost reply may
+follow a successful mutation, no automatic retry) are specified in the README's
+[protocol section](../../agent_tool/ptc/README.mbt.md#protocol-and-bounds).
 
 ## Simplifications retained
 
@@ -140,15 +140,8 @@ expected final response. The offline gate and focused final regressions above pa
 
 ## A/B interpretation
 
-The completed expanded YAML experiment used equal 128-step/1,800-second limits.
-Both implementations passed all 46 oracle cases and preserved protected files.
-Baseline: 105 steps, 22.6 minutes. Candidate: 96 steps, 25.4 minutes. Neither run
-chose PTC, so these results do not establish a PTC efficiency gain. One earlier
-64-step candidate used a real PTC multi-edit for 42 computed replacements.
-The earlier budget-limited runs do not support a no-regression claim.
-
-See [expanded YAML results](../../eval/ptc_prompt/yaml-results-2026-09-15.md) and
-[capability results](../../eval/ptc_prompt/capability-results-2026-09-15.md).
-
-Deadlines are cooperative: already-submitted filesystem I/O and protected
-rollback must settle safely. They are not a hard-stop guarantee for hung storage.
+The [expanded YAML results](../../eval/ptc_prompt/yaml-results-2026-09-15.md) and
+[capability results](../../eval/ptc_prompt/capability-results-2026-09-15.md)
+carry the numbers. Neither expanded run chose PTC, so they establish no PTC
+efficiency gain, and the earlier budget-limited runs support no no-regression
+claim either.

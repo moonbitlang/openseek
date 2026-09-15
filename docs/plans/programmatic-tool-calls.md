@@ -30,17 +30,11 @@ the whole-feature review that preceded the split.
 
 ## Default activation and lifetime
 
-PTC defaults to true when a session service is available and the run is wasm
-without escalation or subrun. Explicit false opts out. Explicit true in an
-incompatible mode errors; omitting it preserves those other modes.
-
-Normal mbtx timing stays unchanged: quick scripts return inline; longer scripts
-move to background jobs. The job retains its registration and publishes trace
-updates through the existing job metadata path. `job_output` returns the trace;
-`job_stop` stops the process and its active calls. No second scheduler or RPC
-server is created for the background job. Standalone hosts without a session
-service create a scoped `Service` and pass it to mbtx. Without a job runtime,
-the same registration stays foreground. There is no second mbtx setup API.
+Activation rules, the background handoff contract, and the standalone-host
+path are specified once, in the package README's
+[lifetime section](../../agent_tool/ptc/README.mbt.md#lifetime-and-deadlock-prevention).
+The design choice they encode: the same registration moves to the background
+job, so no second scheduler, RPC server, or mbtx setup API exists.
 
 At process completion, stop, or session teardown:
 
@@ -51,10 +45,10 @@ At process completion, stop, or session teardown:
 4. Finish launcher cleanup and publish the terminal job record.
 
 An exit-zero process with unfinished calls records a cleanup error. Completed
-mutations are not rolled back by cancellation. Transport failure can follow a
-successful mutation; neither client nor host retries it automatically. A socket
-disconnect is not an acknowledged cancellation. Accepted calls remain owned by
-the program until completion, timeout, program exit, or explicit stop.
+mutations are not rolled back by cancellation. The client-side consequences
+(a lost reply after a successful mutation, disconnect not being a cancellation,
+no automatic retry) are stated in the README's
+[protocol section](../../agent_tool/ptc/README.mbt.md#protocol-and-bounds).
 
 ## Race and deadlock invariants
 
@@ -81,20 +75,13 @@ or success checks; the job panel follows live metadata.
 
 ## Bounds
 
-- Random per-script bearer capability; loopback listener rejects unauthenticated
-  and browser-origin requests.
-- 64 active registrations, 16 connections per session; 64 calls and four active
-  calls per script.
-- 8 KiB aggregate request line/headers, 64 KiB request bodies, 128 KiB total
-  framing; a five-second admission deadline starts at acceptance. One HTTP/1.1
-  POST per connection, with Content-Length or plain chunked framing.
-- 120-second executor deadline including initial trace publication and queueing; 125-second SDK request
-  deadline; bounded sends.
-- 64K-character serialized replies. Oversized results explicitly state that
-  execution occurred and must not be retried just to retrieve output.
-- 512 KiB retained trace plus framing, below the durable job reader's 1 MiB cap.
-  The client receives its full bounded response even when the retained trace
-  explicitly omits that result. Reserve trace space before executing a request.
+Every limit (registrations, connections, calls in flight, request framing,
+executor and SDK deadlines, reply size, retained trace) is listed once in the
+README's [protocol section](../../agent_tool/ptc/README.mbt.md#protocol-and-bounds)
+and defined as named constants at the top of `agent_tool/ptc/server.mbt` and
+`request.mbt`. The design rule behind them: admission (authentication and
+framing) completes and trace space is reserved before any executor runs, so
+a rejected request never executed.
 
 ## Validation and release
 
@@ -122,24 +109,11 @@ state the limits of the sample.
 
 The published-SDK [capability comparison](../../eval/ptc_prompt/capability-results-2026-09-15.md)
 and [YAML parser comparison](../../eval/ptc_prompt/yaml-results-2026-09-15.md)
-are complete. The parser's initial 64-step/15-minute cohort finished no runs;
-the fresh 128-step/30-minute pair both finished and passed all 46 withheld cases.
-One initial candidate demonstrated a computed 42-edit SDK batch. The expanded
-pair chose no PTC, so it establishes no PTC efficiency gain. Keep selective
-prompt guidance, direct tools, and the larger coding-benchmark allowance.
+carry the numbers and their limits; in short, neither expanded pair chose PTC,
+so no efficiency gain is established. Keep selective prompt guidance, direct
+tools, and the larger coding-benchmark allowance.
 
-Trace notifications have a separate five-second deadline. Cancellation records
-interruption in memory and joins the executor; it does not repeat protected
-publication from the executor's cancellation handler. Finalization publishes
-the final snapshot. Publication failures are retained as `ptc_trace_error` and
-surface as an outer result or job cleanup error. Job storage writes for
-`Started` and `Updated` events (the frequent ones, including every trace update)
-have a five-second deadline while holding the publication gate; timeout releases
-that gate and emits the existing persistence-error field. The once-per-job
-terminal `Finished`/`Failed` write is deliberately exempt: nothing retries it and
-a restart reads it, so a slow disk delays it rather than losing it, at the cost
-of holding the gate for that one write. Saved script reads use the file
-gate only to capture a consistent source snapshot, before compilation begins.
-
-Deadlines are cooperative: already-submitted filesystem I/O and protected
-rollback must settle safely. They are not a hard-stop guarantee for hung storage.
+Publication deadlines (trace notifications, the bounded `Started`/`Updated`
+storage writes and the exempt terminal write, the cooperative nature of every
+deadline) are specified in the README's
+[protocol section](../../agent_tool/ptc/README.mbt.md#protocol-and-bounds).
