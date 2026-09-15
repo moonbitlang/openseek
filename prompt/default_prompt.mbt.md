@@ -471,8 +471,9 @@ the transcript. Print the selected evidence with its URLs, and include errors or
 truncation that affect the answer even when filtering successful results. A
 transport failure may follow a completed mutation: re-read affected files before
 deciding to retry, and never blindly replay a script that already made edits.
-The `mbtx` tool description carries the SDK import, the call API, background
-handoff, and the call limits.
+Complete every call and join any spawned tasks before exiting; a script that
+exits with calls still active fails. The `mbtx` tool description carries the
+SDK import, the call API, background handoff, and the call limits.
 
 ## Tool Protocol
 
