@@ -598,21 +598,32 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
           state.explorer_mode,
           ExplorerFiles,
           "Workspace files",
-          [@html.span("Files")],
+          [
+            @icons.icon(@icons.icon_folder),
+            @html.span(class="visually-hidden", "Files"),
+          ],
         ),
         explorer_tab(
           dispatch,
           state.explorer_mode,
           ExplorerChanges,
           "Changed files (click again to refresh)",
-          [@html.span("Changes"), change_count(state.changes)],
+          // Keep the name and count in the accessibility tree, as before.
+          [
+            @icons.icon(@icons.icon_diff_multiple),
+            @html.span(class="visually-hidden", "Changes"),
+            change_count(state.changes),
+          ],
         ),
         explorer_tab(
           dispatch,
           state.explorer_mode,
           ExplorerSearch,
           "Search across the workspace",
-          [@html.span("Search")],
+          [
+            @icons.icon(@icons.icon_search),
+            @html.span(class="visually-hidden", "Search"),
+          ],
         ),
       ],
     ),

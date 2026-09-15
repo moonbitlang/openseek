@@ -31,6 +31,18 @@ test('workspace search supports toggles and keyboard navigation', async ({ page 
   const filesTab = tabs.getByRole('tab', { name: 'Files' });
   const searchTab = tabs.getByRole('tab', { name: 'Search' });
   await expect(searchTab).toHaveAttribute('aria-selected', 'true');
+  // Icon-only tabs keep their existing accessible names and native tooltips.
+  for (const [name, title] of [
+    ['Files', 'Workspace files'],
+    ['Changes', 'Changed files (click again to refresh)'],
+    ['Search', 'Search across the workspace'],
+  ]) {
+    const tab = tabs.getByRole('tab', { name: new RegExp('^' + name) });
+    await expect(tab).toHaveAttribute('title', title);
+    await expect(tab.locator('.icon')).toHaveAttribute('aria-hidden', 'true');
+    await expect(tab.locator('.icon svg')).toHaveAttribute('fill', 'currentColor');
+    await expect(tab.locator('.visually-hidden')).toHaveText(name);
+  }
 
   const query = page.getByRole('textbox', { name: 'Search' });
   await expect(query).toBeFocused();
@@ -57,6 +69,8 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   await app.openSession();
   await app.openReview();
 
+  await expect(page.getByRole('tab', { name: 'Changes 2', exact: true }))
+    .toHaveAttribute('aria-selected', 'true');
   await expect.poll(() => app.requests.find(request => request.method === 'git.changes'))
     .toMatchObject({
       params: {
