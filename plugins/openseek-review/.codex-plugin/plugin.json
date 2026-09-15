@@ -1,0 +1,37 @@
+{
+  "name": "openseek-review",
+  "version": "0.1.0",
+  "description": "Run OpenSeek and DeepSeek as an external reviewer for MoonBit code changes.",
+  "author": {
+    "name": "MoonBit"
+  },
+  "homepage": "https://github.com/moonbitlang/openseek",
+  "repository": "https://github.com/moonbitlang/openseek",
+  "license": "Apache-2.0",
+  "keywords": [
+    "moonbit",
+    "openseek",
+    "deepseek",
+    "review"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "OpenSeek Review",
+    "shortDescription": "Review MoonBit changes with OpenSeek and DeepSeek.",
+    "longDescription": "OpenSeek Review helps Codex invoke the local OpenSeek executable as a DeepSeek-backed reviewer for MoonBit diffs, branches, and commits.",
+    "developerName": "MoonBit",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Review",
+      "MoonBit",
+      "Local"
+    ],
+    "websiteURL": "https://github.com/moonbitlang/openseek",
+    "brandColor": "#00A67E",
+    "defaultPrompt": [
+      "Use OpenSeek to review current changes.",
+      "Ask OpenSeek to review this branch against main.",
+      "Run an OpenSeek review for this commit."
+    ]
+  }
+}

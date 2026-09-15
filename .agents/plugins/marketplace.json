@@ -1,0 +1,20 @@
+{
+  "name": "openseek",
+  "interface": {
+    "displayName": "OpenSeek"
+  },
+  "plugins": [
+    {
+      "name": "openseek-review",
+      "source": {
+        "source": "local",
+        "path": "./plugins/openseek-review"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
