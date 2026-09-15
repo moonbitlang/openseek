@@ -133,6 +133,9 @@ program (MoonBit script is imports + vanilla MoonBit code):
 - Import every package it uses separately, core packages included and by
   their real path: `moonbitlang/core/encoding/base64`, not
   `moonbitlang/core/base64` — `moon ide doc "@base64"` prints the path.
+- One of them may be imported as `"moonbitlang/async/shell" *`, which also
+  binds its names unqualified: `Cmd(...)` as well as `@shell.Cmd(...)`. At
+  most one `*` per script, and only in `.mbtx`.
 - Keep `async fn main` for async IO.
 - Helpers that run an async command/IO are `async fn` too;
   a plain `fn` cannot call them. (so async is contagious)
@@ -224,12 +227,12 @@ The plain command shape captures both streams and reads them back through
 ///|
 import {
   "moonbitlang/async",
-  "moonbitlang/async/shell",
+  "moonbitlang/async/shell" *,
 }
 
 ///|
 async fn main {
-  let out = @shell.Cmd("rg", [
+  let out = Cmd("rg", [
     "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
   ]).output()
   println(out.stdout())
