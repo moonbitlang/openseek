@@ -17,6 +17,8 @@ license = "Apache-2.0"
 
 description = "SeekMoon browser frontend for the OpenSeek desktop client."
 
+warnings = "+implicit_impl_as_method"
+
 preferred_target = "js"
 
 supported_targets = "js"

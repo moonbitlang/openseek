@@ -14,6 +14,8 @@ license = "Apache-2.0"
 
 description = "Shared desktop contracts and policies for SeekMoon."
 
+warnings = "+implicit_impl_as_method"
+
 preferred_target = "native"
 
 supported_targets = "native+js"
