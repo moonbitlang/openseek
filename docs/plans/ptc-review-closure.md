@@ -50,13 +50,12 @@ output draining. Finalization joins calls without holding either execution gate,
 publishes their final trace, and releases the live observer. Terminal jobs freeze
 their data. Completed mutations remain in the trace on launcher or handoff error.
 
-Trace publication is part of the admission-to-execution deadline and also has a
-separate bound. Cancellation records interruption in memory; it does not repeat
-protected publication from the executor. `Started`/`Updated` storage writes under
-the publication gate have a five-second deadline and expose persistence failures;
-the once-per-job terminal write is exempt so it is delayed, never lost. This
-removes the PTC-induced unbounded publication wait without adding a
-notification scheduler.
+Trace publication is bounded on both sides (part of the request budget, and a
+deadline of its own), and the frequent job storage writes are bounded while the
+once-per-job terminal write is not; the README's
+[protocol section](../../agent_tool/ptc/README.mbt.md#protocol-and-bounds)
+has the rules. The design point is that this removes the PTC-induced unbounded
+publication wait without adding a notification scheduler.
 
 ## Review findings resolved
 
@@ -108,7 +107,9 @@ retains it and is validated separately below. Full raw review transcripts remain
 local under `.moonagent/eval_runs/ptc-whole-review-20260915/`.
 
 This is an engineering review and test result, not a proof against all failures.
-The submitted-I/O limitation below remains explicit.
+Deadlines are cooperative; the README's
+[protocol section](../../agent_tool/ptc/README.mbt.md#protocol-and-bounds)
+states the submitted-I/O limitation.
 
 ## Validation
 

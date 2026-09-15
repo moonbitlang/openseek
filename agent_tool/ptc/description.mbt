@@ -34,7 +34,8 @@ pub fn description() -> String {
     #|fields are absent, not empty strings. Keep selected URLs when printing
     #|sources so the final answer can cite them.
     #|
-    #|Up to 64 calls per script, four in flight, 64K characters per result.
+    #|Up to 64 calls per script, four in flight, 64 KiB per request, and 64K
+    #|characters per result; a larger edit batch goes through edits_file.
     #|Stateful calls serialize; independent searches can overlap using a MoonBit
     #|task group. Batch related edits with multi_edit to retain its validation
     #|and rollback semantics.
