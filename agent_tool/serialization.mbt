@@ -8,9 +8,11 @@ pub async fn[T] FileStateMap::with_access(
   self.lock.acquire()
   defer self.lock.release()
   // A mutex release can win against cancellation and grant the lock to its
-  // cancelled waiter. Recheck before entering any synchronous mutation.
-  guard !@async.is_being_cancelled() else {
-    fail("File operation cancelled before execution")
+  // cancelled waiter. Recheck before entering any synchronous mutation, and
+  // yield so the runtime raises its own cancellation error: an ordinary
+  // failure here would fail the waiter's whole task group.
+  if @async.is_being_cancelled() {
+    @async.pause()
   }
   operation()
 }
