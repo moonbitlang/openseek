@@ -83,11 +83,8 @@ async fn request(
 async test "PTC serializes stateful requests and overlaps concurrent-safe requests" {
   for concurrent_safe in [false, true] {
     let journal : Array[String] = []
-    let tool = @agent_tool.AgentToolDefinition(
+    let tool = leaf(
       name="probe",
-      description="probe",
-      schema=JsonSchema({}),
-      program_callable=true,
       concurrent_safe~,
       execute=Async(_ => {
         journal.push("start")

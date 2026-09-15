@@ -412,9 +412,9 @@ pub fn Program::result(
   self : Program,
   action : @agent_tool.ToolAction,
 ) -> @agent_tool.ToolAction {
-  let interrupted = self.interrupted()
   match action {
-    Respond(output) =>
+    Respond(output) => {
+      let interrupted = self.interrupted()
       @agent_tool.respond(
         (if interrupted {
           "\{output.content}\nPTC stopped unfinished tool calls; changes may have occurred. Await every call before exiting."
@@ -430,6 +430,7 @@ pub fn Program::result(
         brief?=output.brief,
         data?=self.attach_trace(output.data),
       )
+    }
     Control(_) => action
   }
 }
