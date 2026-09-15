@@ -1155,28 +1155,24 @@ async fn configured_system_prompt(
     } => (base_path, addendum_path, global_skills_dir)
     _ => fail("missing parsed system-prompt defaults")
   }
-  let base = if base_path == "" {
-    @prompt.system_prompt_for_model(model)
-  } else {
-    @fs.read_file(@workspace_path.resolve(workspace_root, base_path)).text()
-  }
+  let prompt = StringBuilder()
   // The environment section goes LAST: DeepSeek's context cache matches on
   // request prefixes, and the cwd is the only per-project variable in the
   // prompt. Base and addendum are byte-identical across projects (and across
   // an eval harness's N concurrent trial workspaces testing one addendum),
   // so ordering them first keeps the whole shared text cache-hittable; the
   // end position also gives the grounding instruction recency weight.
-  let with_addendum = if addendum_path == "" {
-    base
+  let base = if base_path == "" {
+    @prompt.system_prompt_for_model(model)
   } else {
+    @fs.read_file(@workspace_path.resolve(workspace_root, base_path)).text()
+  }
+  prompt <+ "\{base}"
+  if addendum_path != "" {
     let addendum = @fs.read_file(
       @workspace_path.resolve(workspace_root, addendum_path),
     ).text()
-    (
-      $|\{base}
-      $|
-      $|\{addendum}
-    )
+    prompt <+ "\n\n\{addendum}"
   }
   // The runtime environment block appended to every system prompt — including
   // a `--system-prompt-file` override, since grounding describes the process,
@@ -1193,17 +1189,9 @@ async fn configured_system_prompt(
   // prompt, keeping the installation-dependent path in this tail.
   let target = if workspace_root == "" { "." } else { workspace_root }
   let cwd = @fs.realpath(target) catch { _ => target }
-  // FIXME(upstream)
-  // " \{sb => f(sb)}"
-  // `f` is not allowed to be async, either fix it or better error message (macro expansion should work)
-  let outline = @vfs.dir_outline(cwd)
-  fn layout(sb : StringBuilder) {
-    match outline {
-      Some(body) => sb <+ "\{body}"
-      None =>
-        sb <+ "(empty directory): use `moon new` to create a new project here"
-    }
-  }
+  let outline = @vfs.dir_outline(cwd).unwrap_or(
+    "(empty directory): use `moon new` to create a new project here",
+  )
   let environment_block =
     $|## Environment
     $|
@@ -1211,29 +1199,23 @@ async fn configured_system_prompt(
     $|Relative paths resolve against it; treat it as the workspace root and stay inside it.
     $|Parent and sibling directories belong to other projects. Never pass a cwd you have not verified exists.
     $|Project layout (directories; hidden, build, and vendored dirs omitted):
-    $|\{sb=>layout(sb)}
-  let environment_section = match references_dir_from_environment() {
-    Some(dir) => "\{environment_block}\n\nOPENSEEK_REFERENCES: \{dir}"
-    None => environment_block
+    $|\{outline}
+  prompt <+ "\n\n\{environment_block}"
+  if references_dir_from_environment() is Some(dir) {
+    prompt <+ "\n\nOPENSEEK_REFERENCES: \{dir}"
   }
-  let tail =
-    $|\{with_addendum}
-    $|
-    $|\{environment_section}
   // Workspace skills join the per-project tail after the environment
   // section: like the cwd they vary per project (and change when skills are
   // edited), so they must sit after all globally shared text to keep it
   // prefix-cache hittable.
-  match
-    skills_prompt_section_for_cwd(global_dir=global_skills_dir, workspace_root~) {
-    Some(section) =>
-      (
-        $|\{tail}
-        $|
-        $|\{section}
-      )
-    None => tail
+  let skills_section = skills_prompt_section_for_cwd(
+    global_dir=global_skills_dir,
+    workspace_root~,
+  )
+  if skills_section is Some(section) {
+    prompt <+ "\n\n\{section}"
   }
+  prompt.to_string()
 }
 
 ///|
@@ -1325,10 +1307,13 @@ fn references_dir_from_environment() -> String? {
 /// cache-shared prefix before it — without re-implementing its text. Callers
 /// pin `OPENSEEK_GLOBAL_SKILLS_DIR` off, so nothing follows the block.
 fn split_composed_prompt(prompt : String) -> (String, String) raise {
-  guard prompt.find("## Environment") is Some(index) else {
+  // `split_once` yields the text after the heading, so the heading is put
+  // back: the returned block still starts where the snapshots expect it to.
+  let heading = "## Environment"
+  guard prompt.split_once(heading) is Some((prefix, body)) else {
     fail("composed prompt carries no environment block:\n\{prompt}")
   }
-  (prompt[:index].to_owned(), prompt[index:].to_owned())
+  (prefix.to_owned(), "\{heading}\{body}")
 }
 
 ///|
