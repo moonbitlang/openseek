@@ -1,0 +1,18 @@
+import {
+  "openseek_desktop/backend/internal/entropy",
+  "openseek_desktop/protocol",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/async/socket",
+} for "test"
+
+supported_targets = "native"
+
+import {
+  "moonbitlang/async/socket",
+} for "wbtest"

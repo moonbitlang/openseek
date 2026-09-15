@@ -86,15 +86,17 @@ pub fn StandaloneExport::render(
   self : StandaloneExport,
   sessions : Array[Session],
 ) -> String raise {
-  let listing = sessions.map(session => session.listing_json()).to_json()
-  let data : Map[String, Json] = Map([])
-  data["/api/sessions"] = Json(listing.stringify())
-  for session in sessions {
-    data["/api/sessions/\{session.key}"] = Json(
-      session.envelope_json().stringify(),
-    )
-  }
-  let blob = self.escape_json_for_html(data.to_json().stringify())
+  self.render_json(self.json(sessions))
+}
+
+///|
+/// Embed an already serialized dataset from `json`, so a caller that also
+/// keeps the JSON serializes the captured sessions only once.
+pub fn StandaloneExport::render_json(
+  self : StandaloneExport,
+  json : String,
+) -> String raise {
+  let blob = self.escape_json_for_html(json)
   let bundle = self.escape_script_close(self.bundle_js)
   let scripts = "<script>window.__OPENSEEK_DATA__ = \{blob};</script>\n<script>\n\{bundle}\n</script>"
   let marker = "<script src=\"/viz_app.js\"></script>"
@@ -105,6 +107,24 @@ pub fn StandaloneExport::render(
         "index.html shell is missing the \{marker} tag; cannot inline the bundle",
       )
   }
+}
+
+///|
+/// Downloadable JSON is exactly the visualizer dataset embedded in HTML,
+/// before HTML escaping. Both formats must use the same captured sessions.
+pub fn StandaloneExport::json(
+  _self : StandaloneExport,
+  sessions : Array[Session],
+) -> String {
+  let listing = sessions.map(session => session.listing_json()).to_json()
+  let data : Map[String, Json] = Map([])
+  data["/api/sessions"] = Json(listing.stringify())
+  for session in sessions {
+    data["/api/sessions/\{session.key}"] = Json(
+      session.envelope_json().stringify(),
+    )
+  }
+  data.to_json().stringify()
 }
 
 ///|

@@ -1,6 +1,7 @@
 import {
   "bobzhang/openseek_protocol" @wire,
   "openseek_desktop/frontend/jobs",
+  "openseek_desktop/frontend/export_dialog",
   "moonbitlang/core/cmp",
   "moonbitlang/core/debug",
   "moonbitlang/core/immut/sorted_map",

@@ -97,15 +97,27 @@ async fn SessionExport::sessions(
 }
 
 ///|
-/// Export one current or archived OpenSeek conversation as standalone HTML.
-/// The supplied shell and bundle are the host build's packaged `viz_app`
-/// assets, so the document carries the parser that matches this application.
-pub async fn export_session_html(
+/// One current or archived OpenSeek conversation rendered as the standalone
+/// HTML visualizer plus its embedded dataset. The supplied shell and bundle
+/// are the host build's packaged `viz_app` assets, so the document carries the
+/// parser that matches this application.
+pub struct ConversationExport {
+  html : String
+  json : String
+}
+
+///|
+/// Read the records once so both files describe the same conversation even
+/// when another turn is running while the user exports it.
+pub async fn ConversationExport::capture(
   manager : EngineManager,
   payload : @protocol.SessionExportPayload,
   shell_html : String,
   bundle_js : String,
-) -> String {
+) -> ConversationExport {
   let request = SessionExport::SessionExport(manager, payload)
-  @viz_export.StandaloneExport(shell_html, bundle_js).render(request.sessions())
+  let sessions = request.sessions()
+  let exporter = @viz_export.StandaloneExport(shell_html, bundle_js)
+  let json = exporter.json(sessions)
+  { html: exporter.render_json(json), json, }
 }

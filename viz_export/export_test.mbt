@@ -10,9 +10,17 @@ test "@viz_export renders standalone data and neutralizes script endings" {
     first_prompt="show <script>alert(1)</script>",
     events="{\"message\":\"<!-- <script>unsafe</script>\"}\n",
   )
-  let html = @viz_export.StandaloneExport(
+  let exporter = @viz_export.StandaloneExport(
     "<html><body><script src=\"/viz_app.js\"></script></body></html>", "globalThis.ready = true; /* </SCRIPT> */",
-  ).render([session])
+  )
+  let html = exporter.render([session])
+  // JSON downloads carry exactly the same records as the HTML's embedded
+  // dataset, without applying HTML script escaping to the downloaded file.
+  let json = exporter.json([session])
+  assert_true(json.contains("unsafe</script>"))
+  assert_eq(exporter.render_json(json), html)
+  let escaped = json.replace_all(old="<", new="\\u003c")
+  assert_true(html.contains("window.__OPENSEEK_DATA__ = \{escaped};"))
   assert_true(html.contains("window.__OPENSEEK_DATA__"))
   assert_true(html.contains("session-key"))
   assert_true(html.contains("session-id"))

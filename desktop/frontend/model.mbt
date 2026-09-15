@@ -1442,6 +1442,7 @@ priv struct Model {
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
   api_setup_open : Bool
+  export_dialog : @export_dialog.Model
   // The user answered "Not now" to the setup modal. Held until a usable
   // endpoint re-arms the announcement, and deliberately not part of the
   // host-settings mirror: a reconnect or focus switch clears the mirror but
@@ -1936,7 +1937,8 @@ priv enum Msg {
   HostActionFailed(String)
   // The export is already durable, but its default system application could
   // not be opened. The saved path remains useful in the transient toast.
-  SessionExportOpenFailed(path~ : String)
+  OpenExport(@protocol.SessionExportPayload)
+  ExportDialog(@export_dialog.Msg)
   // A transcript file link's host lookup failed. Unlike other host actions,
   // this carries the click identity so a slower older failure cannot surface
   // after a newer editor navigation has already taken precedence.
@@ -2693,6 +2695,7 @@ fn initial_model() -> Model {
     tree_layout: RightSidebar,
     update_ux: UpdateUnknown,
     api_setup_open: false,
+    export_dialog: @export_dialog.Model(),
     api_setup_dismissed: false,
     remote_access: None,
     remote_connecting: false,

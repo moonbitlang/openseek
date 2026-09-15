@@ -2359,6 +2359,19 @@ pub fn SessionRuntimeNotice::not_equal(Self, Self) -> Bool
 pub fn SessionRuntimeNotice::to_json(Self) -> Json
 pub fn SessionRuntimeNotice::to_repr(Self) -> @debug.Repr
 
+pub(all) enum SessionShareReply {
+  Shared(url~ : String)
+  SignInRequired
+  Failed(message~ : String)
+} derive(Eq, @debug.Debug)
+pub fn SessionShareReply::equal(Self, Self) -> Bool
+pub fn SessionShareReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionShareReply::not_equal(Self, Self) -> Bool
+pub fn SessionShareReply::to_json(Self) -> Json
+pub fn SessionShareReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionShareReply
+pub impl @json.FromJson for SessionShareReply
+
 pub(all) struct SessionSummary {
   content : String
   from_sequence : Int

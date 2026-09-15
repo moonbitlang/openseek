@@ -1493,13 +1493,14 @@ fn topbar_view(
       @html.button(
         class="panel-toggle",
         title="Export conversation",
-        on_click=SessionExport::{
-          channel: conv.device,
-          session: conv.session_id,
-          workspace,
-          title: conversation_title(conv),
-          archived: conv.is_archived_read_only(),
-        }.command(dispatch),
+        on_click=dispatch(
+          OpenExport({
+            session: conv.session_id,
+            workspace: workspace.path,
+            title: conversation_title(conv),
+            archived: conv.is_archived_read_only(),
+          }),
+        ),
         icon(icon_chat_export),
       ),
     )
@@ -1901,6 +1902,9 @@ fn view(
       right_panel_html,
       terminal_html,
     ]),
+    // Keep the dialog before conditional overlays: replacing its DOM node
+    // would lose showModal state during resize or a notification.
+    model.export_dialog.view(dispatch.map(msg => ExportDialog(msg))),
   ]
   // On the narrow layout the sidebar's stable backdrop fades with the drawer;
   // keeping it mounted lets the closing transition finish before it becomes

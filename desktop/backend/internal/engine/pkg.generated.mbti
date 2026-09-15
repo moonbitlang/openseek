@@ -29,8 +29,6 @@ pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) ->
 
 pub async fn engine_command() -> String
 
-pub async fn export_session_html(EngineManager, @protocol.SessionExportPayload, String, String) -> String
-
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
 
 pub async fn list_jobs(EngineManager, @protocol.JobsListPayload) -> @protocol.JobsListReply
@@ -76,6 +74,12 @@ pub(all) suberror EngineError {
 pub fn EngineError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+pub struct ConversationExport {
+  html : String
+  json : String
+}
+pub async fn ConversationExport::capture(EngineManager, @protocol.SessionExportPayload, String, String) -> Self
+
 type EngineActor
 pub fn EngineActor::manager(Self) -> EngineManager
 pub async fn EngineActor::run(Self, EventSink, (String) -> Unit) -> Unit

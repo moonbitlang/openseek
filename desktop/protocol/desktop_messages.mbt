@@ -151,9 +151,9 @@ pub(all) struct LoadSessionPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-/// Export one exact conversation from one registered workspace. The native
-/// window chooses the destination; no filesystem destination crosses this
-/// protocol boundary.
+/// Export one exact conversation from one registered workspace. Download and
+/// Share use the same identity; the native process chooses the save destination
+/// or the login's issuing server. Neither destination crosses this boundary.
 pub(all) struct SessionExportPayload {
   session : String
   workspace : String
@@ -163,8 +163,7 @@ pub(all) struct SessionExportPayload {
 
 ///|
 /// Decode the exact store identity and display metadata needed by an export.
-/// Every field is required and typed; unknown fields are ignored so a newer
-/// frontend can add metadata without breaking an older host.
+/// Every field is required and typed; unknown metadata fields are ignored.
 pub impl FromJson for SessionExportPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "session export payload")
   {
