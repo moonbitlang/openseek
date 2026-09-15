@@ -76,6 +76,12 @@ pub(all) suberror EngineError {
 pub fn EngineError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+pub struct ConversationExport {
+  html : String
+  json : String
+}
+pub async fn ConversationExport::capture(EngineManager, @protocol.SessionExportPayload, String, String) -> Self
+
 type EngineActor
 pub fn EngineActor::manager(Self) -> EngineManager
 pub async fn EngineActor::run(Self, EventSink, (String) -> Unit) -> Unit

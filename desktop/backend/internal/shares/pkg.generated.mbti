@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/shares"
+
+import {
+  "openseek_desktop/protocol",
+}
+
+// Values
+
+// Errors
+pub(all) suberror ShareError {
+  ShareError(String)
+}
+
+// Types and methods
+type Snapshot
+pub fn Snapshot::Snapshot(title~ : String, html~ : String, json~ : String) -> Self raise ShareError
+pub async fn Snapshot::publish(Self, server_url~ : String, token~ : String) -> @protocol.SessionShareReply
+
+// Type aliases
+
+// Traits

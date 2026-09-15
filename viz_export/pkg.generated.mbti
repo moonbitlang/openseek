@@ -11,6 +11,7 @@ pub fn Session::Session(key~ : String, id~ : String, root~ : String, root_label~
 
 type StandaloneExport
 pub fn StandaloneExport::StandaloneExport(String, String) -> Self
+pub fn StandaloneExport::json(Self, Array[Session]) -> String
 pub fn StandaloneExport::render(Self, Array[Session]) -> String raise
 
 // Type aliases

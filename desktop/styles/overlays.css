@@ -67,6 +67,69 @@
 }
 
 /* ---------- notifications ---------- */
+/* The export dialog uses the browser's modal top layer for keyboard focus. */
+dialog.export-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  box-sizing: border-box;
+  overflow: auto;
+  margin: auto;
+  color: var(--color-text-primary);
+}
+dialog.export-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+.export-dialog-header, .export-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.export-dialog-header { justify-content: space-between; }
+.export-dialog-header .modal-title { margin-bottom: 0; }
+.export-dialog-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+.export-dialog-close:hover {
+  background: var(--color-hover-subtle);
+  color: var(--color-text-primary);
+}
+.export-dialog-close:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
+.export-status { margin-top: 12px; font-size: var(--font-size-sm); overflow-wrap: anywhere; }
+.export-status:empty { margin-top: 0; }
+/* Match .button's vertical padding and line height; stretch the row so the
+   field and icon button share their edges even as fonts or touch targets grow. */
+.export-link-row { align-items: stretch; }
+.export-link-row input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  line-height: var(--line-height-normal);
+}
+.export-link-row button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0 8px;
+}
+.export-link-row .export-copy-success { --button-color: var(--color-success); }
+.export-error { color: var(--color-danger); }
+
 /* Transient error toasts, stacked in whichever window corner Settings
    picked. Only rendered while something is up, so it never eats clicks
    meant for the app. It survives the narrow editor and sidebar, while a

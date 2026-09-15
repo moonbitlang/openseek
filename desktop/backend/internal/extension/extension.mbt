@@ -361,6 +361,11 @@ pub fn openseek_capability(
       export_session(context, state, payload)
     }),
   )
+  endpoints.push(
+    @endpoint.Endpoint::window(@commands.session_share, async fn(_, payload) {
+      SessionShare::{ state, payload, }.publish()
+    }),
+  )
   for endpoint in window_endpoints(views) {
     endpoints.push(endpoint)
   }

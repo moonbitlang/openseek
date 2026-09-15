@@ -1145,60 +1145,6 @@ fn load_session_cmd(
 }
 
 ///|
-/// Everything a topbar export click needs after the view that created it is
-/// gone. Keeping the source channel and workspace together prevents a delayed
-/// command from being redirected by a later device or conversation switch.
-priv struct SessionExport {
-  channel : @interop.ChannelId
-  session : String
-  workspace : @common.Uri
-  title : String
-  archived : Bool
-}
-
-///|
-/// Open the native save dialog and ask the local host to freeze this exact
-/// durable conversation into a standalone visualizer document. A saved file
-/// that the platform cannot open is reported separately from an export error.
-fn SessionExport::command(
-  self : SessionExport,
-  dispatch : @cmd.Emit[Msg],
-) -> @cmd.Cmd {
-  guard self.channel is Local &&
-    @resource.belongs_to(self.workspace, self.channel) else {
-    return @cmd.none
-  }
-  @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
-      let reply : @protocol.SessionExportReply = @interop.bridge_request(
-        self.channel,
-        @commands.session_export,
-        {
-          session: self.session,
-          workspace: self.workspace.path,
-          title: self.title,
-          archived: self.archived,
-        },
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              HostActionFailed(
-                "Failed to export conversation: \{@interop.bridge_error_text(error)}",
-              ),
-            ),
-          )
-          return
-        }
-      }
-      if reply.path is Some(path) && !reply.opened {
-        scheduler.add(dispatch(SessionExportOpenFailed(path~)))
-      }
-    })
-  })
-}
-
-///|
 /// Inject steering input into the running turn. Delivery is acknowledged by
 /// the engine's own `steer_applied`/`steer_dropped` events; this command only
 /// distinguishes a definitive host refusal from an indeterminate transport

@@ -109,3 +109,24 @@ pub async fn export_session_html(
   let request = SessionExport::SessionExport(manager, payload)
   @viz_export.StandaloneExport(shell_html, bundle_js).render(request.sessions())
 }
+
+///|
+pub struct ConversationExport {
+  html : String
+  json : String
+}
+
+///|
+/// Read the records once so both files describe the same conversation even
+/// when another turn is running while the user shares it.
+pub async fn ConversationExport::capture(
+  manager : EngineManager,
+  payload : @protocol.SessionExportPayload,
+  shell_html : String,
+  bundle_js : String,
+) -> ConversationExport {
+  let request = SessionExport::SessionExport(manager, payload)
+  let sessions = request.sessions()
+  let exporter = @viz_export.StandaloneExport(shell_html, bundle_js)
+  { html: exporter.render(sessions), json: exporter.json(sessions), }
+}

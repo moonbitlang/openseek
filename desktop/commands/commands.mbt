@@ -105,6 +105,13 @@ pub let session_export : Command[
 ] = Command("session.export")
 
 ///|
+/// Upload the same standalone HTML as Download using this desktop's login.
+pub let session_share : Command[
+  @protocol.SessionExportPayload,
+  @protocol.SessionShareReply,
+] = Command("session.share")
+
+///|
 pub let session_list_archived : Command[
   @protocol.EmptyPayload,
   @protocol.SessionsReply,

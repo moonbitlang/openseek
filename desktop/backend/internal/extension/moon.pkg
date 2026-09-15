@@ -3,6 +3,8 @@ import {
   "moonbit-community/proton/extension" @proton_extension,
   "moonbit-community/proton_contract",
   "openseek_desktop/backend/internal/api",
+  "openseek_desktop/backend/internal/auth",
+  "openseek_desktop/backend/internal/shares",
   "openseek_desktop/backend/internal/broadcast",
   "openseek_desktop/commands",
   "openseek_desktop/backend/internal/engine",

@@ -211,6 +211,8 @@ pub let session_load_archived : Command[@protocol.LoadSessionPayload, @protocol.
 
 pub let session_rename : Command[@protocol.SessionRenamePayload, @protocol.EmptyReply]
 
+pub let session_share : Command[@protocol.SessionExportPayload, @protocol.SessionShareReply]
+
 pub let session_unarchive : Command[@protocol.SessionPayload, @protocol.SessionsReply]
 
 pub let settings_get : Command[@protocol.EmptyPayload, @protocol.SettingsStatusPayload]
