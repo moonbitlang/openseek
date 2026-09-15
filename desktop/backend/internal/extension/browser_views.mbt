@@ -81,6 +81,16 @@ pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json? {
         "code": error_code.to_json(),
         "text": error_text.to_json(),
       }
+    RendererProcessTerminated(url~, status~, error_code~, detail~) =>
+      // Use the tab's existing error display and reload action. Proton leaves
+      // the view open after termination, so this must not become a Closed event.
+      {
+        "id": id.to_json(),
+        "kind": "renderer_process_terminated",
+        "url": url.to_json(),
+        "code": error_code.to_json(),
+        "text": "Renderer process terminated (status \{status}): \{detail}".to_json(),
+      }
     FoundInPage(result~) =>
       {
         "id": id.to_json(),

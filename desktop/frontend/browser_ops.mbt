@@ -274,13 +274,15 @@ fn browser_event_msg(payload : Map[String, Json]) -> Msg? {
       @jsonx.json_text(payload, "title").map(title => {
         Preview(@preview.Msg::TitleUpdated(id~, title~))
       })
-    "load_failed" =>
+    "load_failed" | "renderer_process_terminated" =>
       // CEF reports ERR_ABORTED (-3) whenever a load is superseded — a new
       // navigation, an in-page form submit — not when anything actually
       // failed. It can even arrive after the superseding navigation
       // cleared the failure state, leaving a stale banner over a healthy
       // page; the canonical CEF load-error handler ignores it, so do we.
-      if @jsonx.json_int(payload, "code") is Some(-3) {
+      // Renderer termination codes are not navigation errors; even -3 must
+      // reach the error display when it describes a terminated process.
+      if kind == "load_failed" && @jsonx.json_int(payload, "code") is Some(-3) {
         None
       } else {
         match
@@ -304,6 +306,21 @@ test "browser event decode drops ERR_ABORTED but keeps real failures" {
     "text": "ERR_ABORTED",
   }
   assert_true(browser_event_msg(aborted) is None)
+  let terminated = aborted.copy()
+  terminated["kind"] = "renderer_process_terminated"
+  terminated["text"] = "Renderer process terminated (status 3): killed"
+  assert_true(
+    browser_event_msg(terminated)
+    is Some(
+      Preview(
+        LoadFailed(
+          id=1,
+          text="Renderer process terminated (status 3): killed",
+          ..
+        )
+      )
+    ),
+  )
   let refused : Map[String, Json] = {
     "id": Json(1),
     "kind": "load_failed",
