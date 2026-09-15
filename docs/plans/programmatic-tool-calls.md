@@ -107,8 +107,8 @@ background fixtures pass with a wasm OpenSeek host.
 
 Required repository gates are `just check`, `just test`, and `just build`.
 Desktop adds JS transcript/component/jobs tests and browser reload, diff, live
-status, and cleanup-failure tests. The standalone PR includes the completed
-review fixes; merging #1518 did not authorize merging this feature.
+status, and cleanup-failure tests. (Historical: the unsplit PR #1532 carried
+the whole-feature review fixes; the split PRs listed above are what landed.)
 
 For capability A/B, compare SDK-only baseline commit `70b2af753` against the
 candidate with the **same prompt**, model, fixture bytes, limits, and free tool
@@ -132,9 +132,13 @@ Trace notifications have a separate five-second deadline. Cancellation records
 interruption in memory and joins the executor; it does not repeat protected
 publication from the executor's cancellation handler. Finalization publishes
 the final snapshot. Publication failures are retained as `ptc_trace_error` and
-surface as an outer result or job cleanup error. Job storage writes also have a
-five-second deadline while holding the publication gate; timeout releases that gate
-and emits the existing persistence-error field. Saved script reads use the file
+surface as an outer result or job cleanup error. Job storage writes for
+`Started` and `Updated` events (the frequent ones, including every trace update)
+have a five-second deadline while holding the publication gate; timeout releases
+that gate and emits the existing persistence-error field. The once-per-job
+terminal `Finished`/`Failed` write is deliberately exempt: nothing retries it and
+a restart reads it, so a slow disk delays it rather than losing it, at the cost
+of holding the gate for that one write. Saved script reads use the file
 gate only to capture a consistent source snapshot, before compilation begins.
 
 Deadlines are cooperative: already-submitted filesystem I/O and protected

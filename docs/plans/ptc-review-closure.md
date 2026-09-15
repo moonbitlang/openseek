@@ -28,8 +28,9 @@ JSON arguments are unchanged.
    the non-runtime diff and are not production inputs.
 
 Commits are ordered for cumulative review, with dependent constructor/codec
-updates beside their owning layer. The SDK implementation is already on main;
-only its README import example changes here.
+updates beside their owning layer. (Historical: this describes the unsplit PR.
+The SDK implementation was already on main (#1518) and later moved to a
+call-only API in 823bb9cdb; the split PRs changed no SDK files.)
 
 ## Design
 
@@ -51,9 +52,11 @@ their data. Completed mutations remain in the trace on launcher or handoff error
 
 Trace publication is part of the admission-to-execution deadline and also has a
 separate bound. Cancellation records interruption in memory; it does not repeat
-protected publication from the executor. Storage writes under the publication
-gate have a five-second deadline and expose persistence failures. This removes the
-PTC-induced unbounded publication wait without adding a notification scheduler.
+protected publication from the executor. `Started`/`Updated` storage writes under
+the publication gate have a five-second deadline and expose persistence failures;
+the once-per-job terminal write is exempt so it is delayed, never lost. This
+removes the PTC-induced unbounded publication wait without adding a
+notification scheduler.
 
 ## Review findings resolved
 
