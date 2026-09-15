@@ -41,7 +41,7 @@ async fn export_session(
 ) -> @protocol.SessionExportReply {
   let assets = @host.viz_assets()
   let (shell, bundle) = assets.read()
-  let html = @engine.export_session_html(
+  let files = @engine.ConversationExport::capture(
     state.manager(),
     payload,
     shell,
@@ -53,7 +53,7 @@ async fn export_session(
   }
   // The native dialog has already confirmed replacement for this exact path.
   // `CreateNew` would incorrectly reject an overwrite the user approved.
-  @fs.write_file(path, html, create_mode=CreateOrTruncate) catch {
+  @fs.write_file(path, files.html, create_mode=CreateOrTruncate) catch {
     error =>
       raise @host.HostError("could not save the conversation export: \{error}")
   }

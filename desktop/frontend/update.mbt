@@ -5330,7 +5330,6 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     OpenExport(source) => {
-      guard model.is_desktop else { return (@cmd.none, model) }
       let (cmd, export_dialog) = model.export_dialog.open(source)
       (cmd, { ..model, export_dialog, })
     }

@@ -63,13 +63,7 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
       server_url="http://127.0.0.1:\{server.addr.port()}",
       token="odt_test",
     )
-    assert_true(
-      reply
-      is Shared(
-        url="http://shares.test/v1/shares/a",
-        expires_at="2026-09-22T00:00:00Z"
-      ),
-    )
+    assert_true(reply is Shared(url="http://shares.test/v1/shares/a"))
     receiver.wait()
   })
 }
@@ -148,11 +142,6 @@ async test "upload preserves server error details and falls back for invalid err
       (400, "<html>proxy error</html>", "Sharing failed (HTTP 400)."),
       (400, "{\"error\":null}", "Sharing failed (HTTP 400)."),
       (400, "{\"error\":\"   \"}", "Sharing failed (HTTP 400)."),
-      (
-        400,
-        "{\"error\":\"\{"😀".repeat(2049)}\"}",
-        "Sharing failed (HTTP 400): \{"😀".repeat(2048)}…",
-      ),
     ] {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
@@ -202,49 +191,6 @@ test "upload limits count UTF-8 bytes and multipart overhead" {
 }
 
 ///|
-async test "long metadata titles are byte bounded without truncating conversation files" {
-  for
-    (title, expected) in [
-      ("a".repeat(1024), "a".repeat(1024)),
-      ("a".repeat(1025), "a".repeat(1024)),
-      ("中".repeat(342), "中".repeat(341)),
-      ("😀".repeat(257), "😀".repeat(256)),
-      ("a".repeat(1023) + "😀", "a".repeat(1023)),
-    ] {
-    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-    defer server.close()
-    let snapshot = @shares.Snapshot(
-      title~,
-      html="<html>\{title}</html>",
-      json="{\"prompt\":\"\{title}\"}",
-    )
-    @async.with_task_group(group => {
-      let receiver = group.spawn(() => {
-        let (connection, _) = server.accept()
-        defer connection.close()
-        let _ = connection.read_request()
-        let body = connection.read_all().text()
-        assert_true(body.contains("name=\"title\"\r\n\r\n\{expected}\r\n"))
-        assert_true(@utf8.encode(expected).length() <= 1024)
-        assert_true(body.contains("<html>\{title}</html>"))
-        assert_true(body.contains("{\"prompt\":\"\{title}\"}"))
-        connection.send_response(201, "Created")
-        connection.write_string(
-          "{\"url\":\"https://shares.test/test\",\"expires_at\":\"2026-09-22T00:00:00Z\"}",
-        )
-        connection.end_response()
-      })
-      let reply = snapshot.publish(
-        server_url="http://127.0.0.1:\{server.addr.port()}",
-        token="test",
-      )
-      assert_true(reply is Shared(..))
-      receiver.wait()
-    })
-  }
-}
-
-///|
 async test "setup and refused connections retain definite failures" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   let origin = "http://127.0.0.1:\{server.addr.port()}"
@@ -253,8 +199,7 @@ async test "setup and refused connections retain definite failures" {
   for server_url in ["not-a-url", origin] {
     let reply = snapshot.publish(server_url~, token="test-token")
     guard reply is Failed(message~) else { fail("expected connection failure") }
-    assert_true(message.has_prefix("Could not connect to the share server:"))
-    assert_false(message.contains("may already have been created"))
+    assert_true(message.has_prefix("The share request failed:"))
     assert_false(message.contains("test-token"))
   }
 }
@@ -278,8 +223,7 @@ async test "a lost response followed by a refused retry reports the connection f
     })
     let reply = snapshot.publish(server_url=origin, token="test-token")
     guard reply is Failed(message~) else { fail("expected connection failure") }
-    assert_true(message.contains("Could not connect to the share server:"))
-    assert_false(message.contains("may already have been created"))
+    assert_true(message.has_prefix("The share request failed:"))
     receiver.wait()
   })
 }

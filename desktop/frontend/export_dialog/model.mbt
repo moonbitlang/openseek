@@ -32,7 +32,6 @@ priv enum Operation {
 ///|
 priv struct Publication {
   url : String
-  expires_at : String
   copy : CopyState
 } derive(Eq, Debug)
 
@@ -53,6 +52,18 @@ pub(all) enum Msg {
   Published(generation~ : Int, @protocol.SessionShareReply)
   SignedIn(generation~ : Int, Result[Unit, String])
   ClipboardFinished(generation~ : Int, Result[Unit, String])
+}
+
+///|
+/// The opening a reply belongs to; user actions always target the current one.
+fn Msg::generation(self : Msg) -> Int? {
+  match self {
+    Downloaded(generation~, _)
+    | Published(generation~, _)
+    | SignedIn(generation~, _)
+    | ClipboardFinished(generation~, _) => Some(generation)
+    Close | Download | Share | SignIn => None
+  }
 }
 
 ///|
@@ -80,86 +91,76 @@ fn Operation::busy(self : Operation) -> Bool {
 }
 
 ///|
+fn Model::showing(self : Model, content : Content) -> Model {
+  { ..self, content: Some(content), }
+}
+
+///|
 pub fn Model::update(
   self : Model,
   emit : @cmd.Emit[Msg],
   msg : Msg,
 ) -> (@cmd.Cmd, Model) {
   guard self.content is Some(content) else { return (@cmd.none, self) }
-  let generation = self.generation
-  let operation = match msg {
-    Close => return (@dialog.close(DialogId), { ..self, content: None, })
-    Download if !content.operation.busy() =>
-      return (
+  if msg.generation() is Some(generation) && generation != self.generation {
+    return (@cmd.none, self)
+  }
+  let busy = content.operation.busy()
+  match msg {
+    Close => (@dialog.close(DialogId), { ..self, content: None, })
+    Download if !busy =>
+      (
         self.download(emit, content.source),
-        { ..self, content: Some({ ..content, operation: Downloading, }), },
+        self.showing({ ..content, operation: Downloading, }),
       )
-    Share if !content.operation.busy() && content.publication is None =>
-      return (
+    Share if !busy && content.publication is None =>
+      (
         self.share(emit, content.source),
-        { ..self, content: Some({ ..content, operation: Sharing, }), },
+        self.showing({ ..content, operation: Sharing, }),
       )
     SignIn if content.operation is (SignInRequired | SignInFailed(_)) =>
-      return (
-        self.sign_in(emit),
-        { ..self, content: Some({ ..content, operation: SigningIn, }), },
-      )
-    Downloaded(generation=id, result) if id == generation &&
-      content.operation is Downloading =>
-      match result {
+      (self.sign_in(emit), self.showing({ ..content, operation: SigningIn, }))
+    Downloaded(result, ..) if content.operation is Downloading => {
+      let operation = match result {
         Ok({ path: Some(path), opened, }) => Saved(path~, opened~)
         Ok({ path: None, .. }) => Ready
         Err(message) => Failed(message)
       }
-    Published(generation=id, reply) if id == generation &&
-      content.operation is Sharing =>
-      match reply {
-        Shared(url~, expires_at~) =>
-          return (
-            @cmd.none,
-            {
-              ..self,
-              content: Some({
-                ..content,
-                operation: Ready,
-                publication: Some({ url, expires_at, copy: Available, }),
-              }),
-            },
-          )
-        SignInRequired => SignInRequired
-        Failed(message~) => Failed(message)
+      (@cmd.none, self.showing({ ..content, operation, }))
+    }
+    Published(reply, ..) if content.operation is Sharing => {
+      let content = match reply {
+        Shared(url~) =>
+          {
+            ..content,
+            operation: Ready,
+            publication: Some({ url, copy: Available, }),
+          }
+        SignInRequired => { ..content, operation: SignInRequired, }
+        Failed(message~) => { ..content, operation: Failed(message), }
       }
-    SignedIn(generation=id, result) if id == generation &&
-      content.operation is SigningIn =>
-      match result {
+      (@cmd.none, self.showing(content))
+    }
+    SignedIn(result, ..) if content.operation is SigningIn => {
+      let operation = match result {
         Ok(_) => Ready
         // Keep the command's diagnostic while retaining the sign-in retry action.
         Err(message) => SignInFailed(message)
       }
-    ClipboardFinished(generation=id, result) if id == generation =>
-      match content.publication {
-        Some(publication) =>
-          return (
-            @cmd.none,
-            {
-              ..self,
-              content: Some({
-                ..content,
-                publication: Some({
-                  ..publication,
-                  copy: match result {
-                    Ok(_) => Copied
-                    Err(message) => Failed(message)
-                  },
-                }),
-              }),
-            },
-          )
-        None => return (@cmd.none, self)
+      (@cmd.none, self.showing({ ..content, operation, }))
+    }
+    ClipboardFinished(result, ..) if content.publication is Some(publication) => {
+      let copy = match result {
+        Ok(_) => Copied
+        Err(message) => Failed(message)
       }
-    _ => return (@cmd.none, self)
+      (
+        @cmd.none,
+        self.showing({ ..content, publication: Some({ ..publication, copy, }), }),
+      )
+    }
+    _ => (@cmd.none, self)
   }
-  (@cmd.none, { ..self, content: Some({ ..content, operation, }), })
 }
 
 ///|

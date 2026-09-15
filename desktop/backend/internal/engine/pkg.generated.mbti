@@ -29,8 +29,6 @@ pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) ->
 
 pub async fn engine_command() -> String
 
-pub async fn export_session_html(EngineManager, @protocol.SessionExportPayload, String, String) -> String
-
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
 
 pub async fn list_jobs(EngineManager, @protocol.JobsListPayload) -> @protocol.JobsListReply

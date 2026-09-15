@@ -36,10 +36,7 @@ test "dialog updates are pure and late replies cannot cross openings" {
   let (_, closed) = pending.update(emit, Close)
   let reply = Published(
     generation=first.generation,
-    Shared(
-      url="https://shares.test/v1/shares/a",
-      expires_at="2026-09-22T00:00:00Z",
-    ),
+    Shared(url="https://shares.test/v1/shares/a"),
   )
   let (_, late) = closed.update(emit, reply)
   assert_true(late == closed)
@@ -68,10 +65,7 @@ test "share login failure success and clipboard feedback transitions" {
     reply in [
       @protocol.SignInRequired,
       @protocol.Failed(message="Storage unavailable"),
-      @protocol.Shared(
-        url="http://shares.test/a",
-        expires_at="2026-09-22T00:00:00Z",
-      ),
+      @protocol.Shared(url="http://shares.test/a"),
     ] {
     let msg = Published(generation=pending.generation, reply)
     let (_, first) = pending.update(emit, msg)

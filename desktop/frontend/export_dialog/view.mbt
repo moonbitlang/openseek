@@ -96,7 +96,7 @@ pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
       ),
     )
     if content.publication is Some(publication) {
-      let { url, copy, .. } = publication
+      let { url, copy, } = publication
       children.push(
         @html.div(
           class="export-status",

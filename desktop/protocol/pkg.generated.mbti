@@ -2358,7 +2358,7 @@ pub fn SessionRuntimeNotice::to_json(Self) -> Json
 pub fn SessionRuntimeNotice::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SessionShareReply {
-  Shared(url~ : String, expires_at~ : String)
+  Shared(url~ : String)
   SignInRequired
   Failed(message~ : String)
 } derive(Eq, @debug.Debug)
