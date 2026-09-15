@@ -29,6 +29,13 @@ fn app_shortcut_sub_loader(
         // consume the event.
         event.prevent_default()
         event.stop_propagation()
+        // The rename dialog owns interaction until it is saved or cancelled.
+        guard @dom.document()
+          .get_element_by_id("conversation-rename-dialog")
+          .to_option()
+          is None else {
+          return
+        }
         scheduler.add(emit(message))
       }
       target.add_event_listener_with_options("keydown", listener, capture=true)
@@ -342,11 +349,6 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
     restore: id => self.conversation_restore(id),
     delete: id => self.conversation_delete(id),
     rename: (id, label) => self.emit(ConversationRenameRequested(id~, label~)),
-    rename_changed: (id, value) => {
-      self.emit(ConversationRenameChanged(id~, value~))
-    },
-    rename_submit: id => self.emit(ConversationRenameSubmitted(id)),
-    rename_cancel: id => self.emit(ConversationRenameCancelled(id)),
   }
   let project : @project.Actions = {
     new_conversation: id => self.project_new(id),

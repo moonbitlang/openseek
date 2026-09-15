@@ -167,7 +167,6 @@ fn session_component_input(
     } else {
       []
     },
-    rename: None,
     children,
   })
 }
@@ -585,7 +584,6 @@ fn Model::sidebar_component_sections(
               title="Permanently delete this archived conversation",
             ),
           ],
-          rename: None,
           children: [],
         }),
       ),
@@ -1951,6 +1949,9 @@ fn view(
   }
   if model.archived_delete_confirm is Some(confirm) {
     children.push(archived_delete_modal(dispatch, confirm))
+  }
+  if model.conversation_rename is Some(rename) {
+    children.push(conversation_rename_dialog(dispatch, rename))
   }
   // Rendered whether or not the palette is open — closed it is an empty
   // placeholder — so opening it never shifts the overlay children around it.
