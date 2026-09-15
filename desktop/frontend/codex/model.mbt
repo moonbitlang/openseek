@@ -2564,6 +2564,7 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
       response(None, None, [
         {
           call_id: self.id,
+          children: [],
           name: self.tool_name(),
           arguments: self.tool_arguments(),
           outcome,

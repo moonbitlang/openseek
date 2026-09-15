@@ -446,3 +446,46 @@ test('font settings scale Jobs with the transcript and persist code font choices
   await page.screenshot({ path: testInfo.outputPath('jobs-font-small-narrow.png'), animations: 'disabled' });
   expect(app.pageErrors).toEqual([]);
 });
+
+test('background program calls update live and retain edit diffs after reload', async ({ page }, testInfo) => {
+  app = new BackgroundJobsHarness(page);
+  const job = app.jobs[0].job;
+  job.data = { ptc_calls: [
+    { name: 'edit', arguments: { path: 'note.txt', start_line: 1, old_string: 'before', new_string: 'after' }, status: 'running' },
+  ] };
+  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
+  const trace = page.locator('.job-program-calls');
+  await trace.locator(':scope > summary').click();
+  await expect(trace.locator('.tool-status-spinner')).toBeVisible();
+  job.data.ptc_calls[0].status = 'done';
+  job.data.ptc_calls[0].result = { content: 'Updated note.txt', is_error: false };
+  job.revision++;
+  await page.locator('.jobs-panel').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(trace.getByRole('img', { name: 'Tool succeeded' })).toBeVisible();
+  await expect(trace.locator('.tool-status-spinner')).toHaveCount(0);
+  await page.reload(); await app.openSession(); await app.openJobs();
+  await trace.locator(':scope > summary').click();
+  const edit = trace.locator('details.tool-call').first();
+  await edit.locator(':scope > summary').click();
+  await expect(edit).toContainText('before');
+  await expect(edit).toContainText('after');
+  await expect(edit.getByRole('img', { name: 'Tool succeeded' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('background-program-calls.png') });
+  job.cleanup_error = 'PTC script exited with unfinished tool calls';
+  job.state = { kind: 'exited', code: 0 };
+  job.revision++;
+  await page.locator('.jobs-panel').getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.locator('.jobs-detail-title')).toContainText('Failed · cleanup incomplete');
+  await expect(page.getByRole('alert')).toContainText('unfinished tool calls');
+  job.cleanup_error = null;
+  job.state = { kind: 'interrupted' };
+  job.data.ptc_calls[0] = { name: 'edit', arguments: { path: 'note.txt' }, status: 'running' };
+  job.revision++;
+  await page.reload(); await app.openSession(); await app.openJobs();
+  await expandHistory(page);
+  await page.getByRole('button', { name: /Watch build output/ }).click();
+  await trace.locator(':scope > summary').click();
+  await expect(trace.getByRole('img', { name: 'Tool failed' })).toBeVisible();
+  await expect(trace.locator('.tool-status-spinner')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});

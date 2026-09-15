@@ -1,5 +1,8 @@
 ///|
-fn status_label(state : @wire.JobState) -> String {
+fn status_label(state : @wire.JobState, cleanup_error? : String) -> String {
+  if cleanup_error is Some(_) {
+    return "Failed · cleanup incomplete"
+  }
   match state {
     Running => "Running"
     Stopping => "Stopping…"
@@ -16,7 +19,10 @@ fn status_label(state : @wire.JobState) -> String {
 }
 
 ///|
-fn status_class(state : @wire.JobState) -> String {
+fn status_class(state : @wire.JobState, cleanup_error? : String) -> String {
+  if cleanup_error is Some(_) {
+    return "failed"
+  }
   match state {
     Running => "running"
     Stopping => "stopping"
@@ -157,7 +163,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         let job = view.job
         let selected = state.selected == Some((job.generation, job.id))
         @html.button(
-          class="jobs-row jobs-row-\{status_class(job.state)}" +
+          class="jobs-row jobs-row-\{status_class(job.state, cleanup_error?=job.cleanup_error)}" +
             (if selected { " selected" } else { "" }),
           attrs=@html.Attrs::build().aria_pressed(selected.to_string()),
           title=job.command,
@@ -170,8 +176,8 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
                 short_job_id(job.id, state.jobs),
               ),
               @html.span(
-                class="jobs-status jobs-status-\{status_class(job.state)}",
-                status_label(job.state),
+                class="jobs-status jobs-status-\{status_class(job.state, cleanup_error?=job.cleanup_error)}",
+                status_label(job.state, cleanup_error?=job.cleanup_error),
               ),
             ]),
             @html.div(
@@ -239,8 +245,8 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         @html.div(class="jobs-detail-title", [
           @html.strong(title=job.id, short_job_id(job.id, state.jobs)),
           @html.span(
-            class="jobs-status jobs-status-\{status_class(job.state)}",
-            status_label(job.state),
+            class="jobs-status jobs-status-\{status_class(job.state, cleanup_error?=job.cleanup_error)}",
+            status_label(job.state, cleanup_error?=job.cleanup_error),
           ),
         ]),
         @html.pre(class="jobs-full-command", job.command),
@@ -325,6 +331,14 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         )
       }
       details.push(@html.div(class="jobs-toolbar", actions))
+      if @transcript_component.program_calls_view(
+          job.data,
+          "job/\{job.generation}/\{job.id}",
+          terminal=job.state.is_terminal(),
+        )
+        is Some(calls) {
+        details.push(calls)
+      }
       for
         error in [
           view.error,

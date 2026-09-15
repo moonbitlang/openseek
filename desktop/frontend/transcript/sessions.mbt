@@ -360,6 +360,7 @@ pub fn apply_session_item(
       for call in payload.tool_calls.unwrap_or([]) {
         calls.push({
           call_id: call.id,
+          children: [],
           name: if call.name.is_blank() {
             "tool"
           } else {
@@ -412,6 +413,7 @@ pub fn apply_session_item(
           } else {
             payload.tool_name
           },
+          children: program_calls(payload.data, call.call_id, snapshot=true),
           outcome: Done(
             content=payload.content,
             is_error=payload.is_error,

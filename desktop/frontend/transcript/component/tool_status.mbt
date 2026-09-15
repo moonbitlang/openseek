@@ -6,6 +6,8 @@ priv struct ToolStatus(@transcript.ToolOutcome)
 ///|
 fn ToolStatus::view(self : ToolStatus) -> @html.Html {
   let (label, class, icon) = match self.0 {
+    Snapshot(..) =>
+      ("Recorded snapshot", "tool-status snapshot", @html.text("·"))
     Pending(..) =>
       (
         "Tool in progress",

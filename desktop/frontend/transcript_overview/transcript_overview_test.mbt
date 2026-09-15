@@ -23,6 +23,7 @@ fn response(
 fn shell_call(is_error : Bool) -> @transcript.ToolCall {
   {
     call_id: "c1",
+    children: [],
     name: "shell",
     arguments: Some("{}"),
     outcome: Done(
