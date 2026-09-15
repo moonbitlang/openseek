@@ -34,3 +34,39 @@ async test "execution observes process exit before draining descendant-held outp
     })
   })
 }
+
+///|
+/// Session teardown cancels the monitor while the child is still running. The
+/// hook must fire on that path too, before the output reader is joined and
+/// before the terminal status lands.
+#cfg(not(platform="windows"))
+async test "session cancellation fires the ending hook before output cleanup" {
+  @async.with_timeout(3000, () => {
+    let observed : Ref[ExecStatus?] = Ref(None)
+    let calls = Ref(0)
+    @async.with_task_group(outer => {
+      // The inner group plays the session: failing its body cancels the
+      // monitor spawned on it.
+      let session = outer.spawn(allow_failure=true, () => {
+        @async.with_task_group(group => {
+          let exec = ShellExecution::start(
+            AgentTaskScope(group),
+            program="sh",
+            args=["-c", "sleep 10"],
+          )
+          exec.on_ending(() => {
+            calls.val += 1
+            observed.val = Some(exec.status())
+          })
+          @async.sleep(50)
+          fail("session shutdown")
+        })
+      })
+      session.wait() catch {
+        _ => ()
+      }
+    })
+    assert_eq(calls.val, 1)
+    assert_true(observed.val is Some(Running))
+  })
+}

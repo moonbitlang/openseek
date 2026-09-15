@@ -218,6 +218,10 @@ async fn ShellExecution::monitor(
     } catch {
       error => {
         if @async.is_being_cancelled() {
+          // Session teardown: the child is being cancelled independently.
+          // Revoke dependents now, before this group joins a reader that may
+          // still be settling a spill-file write.
+          self.begin_ending()
           reader.close()
           raise error
         }
