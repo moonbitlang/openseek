@@ -165,51 +165,6 @@ html.is-resizing .sidebar-resize-handle {
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
-.conversation-rename-editor {
-  flex: 1 1 auto;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-.conversation-rename-editor > .conversation-rename {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 2px 4px;
-  border: 1px solid var(--color-accent-border);
-  border-radius: var(--radius-sm);
-  outline: none;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font: inherit;
-}
-.conversation-rename-action {
-  flex: 0 0 auto;
-  padding: 2px 4px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-accent-strong);
-  font: inherit;
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-}
-.conversation-rename-action:hover:not(:disabled) {
-  background: var(--color-accent-soft);
-}
-.conversation-rename-action:disabled {
-  color: var(--color-text-muted);
-  cursor: default;
-  opacity: 0.6;
-}
-.conversation-rename-error {
-  flex: 0 0 100%;
-  color: var(--color-danger);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-tight);
-}
-
 .conversation-row:hover {
   background: var(--color-bg-subtle);
 }

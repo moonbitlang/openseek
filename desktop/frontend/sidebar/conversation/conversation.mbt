@@ -122,19 +122,6 @@ pub(all) enum TrailingAction {
 } derive(Debug, Eq)
 
 ///|
-pub(all) struct RenameInput {
-  draft : String
-  saving : Bool
-  error : String?
-} derive(Debug, Eq)
-
-///|
-pub const RenameInputId : String = "sidebar-conversation-rename"
-
-///|
-pub const RenameEditorId : String = "sidebar-conversation-rename-editor"
-
-///|
 /// Plain, comparable input to one conversation component. Child runs are
 /// nested data so their lifetime follows the parent branch rather than array
 /// position in the global sidebar.
@@ -152,7 +139,6 @@ pub(all) struct Input {
   worktree : String?
   run_mark : RunMark
   trailing : Array[TrailingAction]
-  rename : RenameInput?
   children : Array[Input]
 } derive(Debug, Eq)
 
@@ -171,9 +157,6 @@ pub(all) struct Actions {
   restore : (Id) -> @cmd.Cmd
   delete : (Id) -> @cmd.Cmd
   rename : (Id, String) -> @cmd.Cmd
-  rename_changed : (Id, String) -> @cmd.Cmd
-  rename_submit : (Id) -> @cmd.Cmd
-  rename_cancel : (Id) -> @cmd.Cmd
 }
 
 ///|
@@ -394,128 +377,7 @@ pub fn component(
         ),
       )
     }
-    match input.rename {
-      Some(rename) => {
-        let valid = !rename.draft.trim().is_empty() && !rename.saving
-        let input_node = @html.input(
-          id=RenameInputId,
-          input_type=@html.InputType::Text,
-          class="sidebar-label conversation-rename",
-          value=rename.draft,
-          autofocus=true,
-          on_input=value => (actions.rename_changed)(input.id, value),
-          attrs=@html.Attrs::build()
-            .aria_label("Rename conversation")
-            .disabled(rename.saving)
-            .on_click(event => {
-              event.stop_propagation()
-              @cmd.none
-            })
-            .on_contextmenu(event => {
-              event.stop_propagation()
-              @cmd.none
-            })
-            .on_blur(event => {
-              if event.related_target() is Some(target) &&
-                target.to_node() is Some(next) &&
-                @dom.document().get_element_by_id(RenameEditorId).to_option()
-                is Some(editor) &&
-                editor.contains(next) {
-                @cmd.none
-              } else {
-                (actions.rename_cancel)(input.id)
-              }
-            })
-            .on_keydown(event => {
-              if event.is_composing() {
-                return @cmd.none
-              }
-              match event.key() {
-                "Enter" => {
-                  event.prevent_default()
-                  if valid {
-                    (actions.rename_submit)(input.id)
-                  } else {
-                    @cmd.none
-                  }
-                }
-                "Escape" => {
-                  event.prevent_default()
-                  (actions.rename_cancel)(input.id)
-                }
-                _ => @cmd.none
-              }
-            }),
-        )
-        let buttons : Array[@html.Html] = [
-          @html.button(
-            class="conversation-rename-action",
-            type_="button",
-            disabled=!valid,
-            on_click=(actions.rename_submit)(input.id),
-            if rename.saving {
-              "Saving…"
-            } else {
-              "Save"
-            },
-          ),
-          @html.button(
-            class="conversation-rename-action",
-            type_="button",
-            disabled=rename.saving,
-            on_click=(actions.rename_cancel)(input.id),
-            "Cancel",
-          ),
-        ]
-        let editor_children : Array[@html.Html] = [input_node, ..buttons]
-        if rename.error is Some(error) {
-          editor_children.push(
-            @html.span(
-              class="conversation-rename-error",
-              attrs=@html.Attrs::build().role("alert"),
-              error,
-            ),
-          )
-        }
-        children.push(
-          @html.span(
-            id=RenameEditorId,
-            class="conversation-rename-editor",
-            attrs=@html.Attrs::build()
-              .on_click(event => {
-                event.stop_propagation()
-                @cmd.none
-              })
-              .on_contextmenu(event => {
-                event.stop_propagation()
-                @cmd.none
-              }),
-            editor_children,
-          ),
-        )
-      }
-      None =>
-        children.push(
-          if input.openable {
-            // Native keyboard activation bubbles to the row's existing open
-            // handler, just like a pointer click on the title.
-            @html.button(
-              type_="button",
-              class="sidebar-label conversation-open",
-              attrs=@html.Attrs::build().aria_current(
-                if input.active {
-                  "true"
-                } else {
-                  "false"
-                },
-              ),
-              input.label,
-            )
-          } else {
-            @html.span(class="sidebar-label", input.label)
-          },
-        )
-    }
+    children.push(@html.span(class="sidebar-label", input.label))
     let status : Array[@html.Html] = []
     if input.loading {
       status.push(
@@ -704,12 +566,6 @@ pub extend TrailingAction with Debug::{to_repr}
 
 ///|
 pub extend TrailingAction with Eq::{equal, not_equal}
-
-///|
-pub extend RenameInput with Debug::{to_repr}
-
-///|
-pub extend RenameInput with Eq::{equal, not_equal}
 
 ///|
 pub extend RunOutcome with Eq::{equal, not_equal}

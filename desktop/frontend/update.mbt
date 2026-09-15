@@ -4428,13 +4428,13 @@ fn update_msg(
     ConversationRenameCancelled(id) =>
       match model.conversation_rename {
         Some(rename) if rename.id == id && !rename.saving =>
-          (@cmd.none, { ..model, conversation_rename: None, })
+          (close_conversation_rename(), { ..model, conversation_rename: None, })
         _ => (@cmd.none, model)
       }
     ConversationRenameSucceeded(id) =>
       match model.conversation_rename {
         Some(rename) if rename.id == id =>
-          (@cmd.none, { ..model, conversation_rename: None, })
+          (close_conversation_rename(), { ..model, conversation_rename: None, })
         _ => (@cmd.none, model)
       }
     ConversationRenameFailed(id~, message~) =>

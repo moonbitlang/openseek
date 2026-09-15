@@ -1,4 +1,4 @@
-// Root-owned coordination for inline title editing. The shared action-menu
+// Root-owned coordination for the title dialog. The shared action-menu
 // component owns transient WebView menu state; only the asynchronous rename
 // operation crosses into the application model.
 
@@ -36,16 +36,7 @@ fn Model::decorate_conversation_input(
     selected &&
     !self.selected_conversation_loaded() &&
     !load_failed
-  let rename = match self.conversation_rename {
-    Some(rename) if rename.id == input.id =>
-      Some(@conversation.RenameInput::{
-        draft: rename.draft,
-        saving: rename.saving,
-        error: rename.error,
-      })
-    _ => None
-  }
-  { ..input, active: selected, loading, load_failed, rename, }
+  { ..input, active: selected, loading, load_failed, }
 }
 
 ///|
@@ -61,7 +52,14 @@ fn focus_conversation_rename() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       if @dom.document()
-        .get_element_by_id(@conversation.RenameInputId)
+        .get_element_by_id("conversation-rename-dialog")
+        .to_option()
+        is Some(element) &&
+        element.to_html_dialog_element() is Some(dialog) {
+        dialog.show_modal()
+      }
+      if @dom.document()
+        .get_element_by_id("conversation-rename-input")
         .to_option()
         is Some(input) {
         let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
@@ -163,4 +161,91 @@ fn rename_conversation(
       scheduler.add(dispatch(ConversationRenameSucceeded(rename.id)))
     })
   })
+}
+
+///|
+fn close_conversation_rename() -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    if @dom.document()
+      .get_element_by_id("conversation-rename-dialog")
+      .to_option()
+      is Some(element) &&
+      element.to_html_dialog_element() is Some(dialog) {
+      dialog.close()
+    }
+  })
+}
+
+///|
+fn conversation_rename_dialog(
+  dispatch : @cmd.Emit[Msg],
+  rename : ConversationRename,
+) -> @html.Html {
+  let valid = !rename.draft.trim().is_empty() && !rename.saving
+  @html.dialog(
+    id="conversation-rename-dialog",
+    class="modal conversation-rename-dialog",
+    on_cancel=dispatch(ConversationRenameCancelled(rename.id)),
+    attrs=@html.Attrs::build()
+      .aria_label("Rename conversation")
+      .on_keydown(event => {
+        event.stop_propagation()
+        @cmd.none
+      }),
+    [
+      @html.div(class="modal-title", "Rename conversation"),
+      @html.input(
+        id="conversation-rename-input",
+        input_type=@html.InputType::Text,
+        class="conversation-rename-input",
+        value=rename.draft,
+        on_input=value => {
+          dispatch(ConversationRenameChanged(id=rename.id, value~))
+        },
+        attrs=@html.Attrs::build()
+          .aria_label("Rename conversation")
+          .readonly_(rename.saving)
+          .on_keydown(event => {
+            guard !event.is_composing() && event.key() == "Enter" else {
+              return @cmd.none
+            }
+            event.prevent_default()
+            if valid {
+              dispatch(ConversationRenameSubmitted(rename.id))
+            } else {
+              @cmd.none
+            }
+          }),
+      ),
+      ..rename.error.map_or([], error => {
+        [
+          @html.div(
+            class="conversation-rename-error",
+            attrs=@html.Attrs::build().role("alert"),
+            error,
+          ),
+        ]
+      }),
+      @html.div(class="modal-actions", [
+        @html.button(
+          class="button secondary",
+          type_="button",
+          disabled=rename.saving,
+          on_click=dispatch(ConversationRenameCancelled(rename.id)),
+          "Cancel",
+        ),
+        @html.button(
+          class="button primary",
+          type_="button",
+          disabled=!valid,
+          on_click=dispatch(ConversationRenameSubmitted(rename.id)),
+          if rename.saving {
+            "Saving…"
+          } else {
+            "Save"
+          },
+        ),
+      ]),
+    ],
+  )
 }
