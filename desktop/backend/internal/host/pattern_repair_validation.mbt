@@ -1,7 +1,11 @@
 ///|
-/// Keep candidate validation bounded and deterministic. The Agent must never
-/// choose the executable or invoke this command directly; the host owns both.
+/// Keep candidate validation bounded and deterministic. The Host chooses the
+/// executable and fixed arguments, exposes them to the Agent through the
+/// validator tool, and repeats the check authoritatively after submit.
 const PatternRepairDumpMaxDiagnosticUnits : Int = 1000
+
+///|
+const PatternRepairValidatorEnvironment : String = "OPENSEEK_PATTERN_REPAIR_VALIDATOR"
 
 ///|
 /// Enable after moongrep's `dump --expr` accepts Pattern metavariables.
@@ -111,7 +115,7 @@ fn pattern_repair_validation_code(stderr : String) -> String {
 }
 
 ///|
-test "pattern repair validation preserves the future dump command" {
+test "pattern repair validation preserves the dump command" {
   assert_eq(pattern_repair_provider_args("moonx", "foo()"), [
     MoongrepPackageCoordinate,
     "--",
@@ -124,7 +128,7 @@ test "pattern repair validation preserves the future dump command" {
 
 ///|
 test "pattern repair validator configuration keeps provider ownership in the Host" {
-  @debug.assert_eq(pattern_repair_validator_config("moonx"), {
+  assert_eq(pattern_repair_validator_config("moonx"), {
     "command": "moonx",
     "prefix_args": [MoongrepPackageCoordinate, "--"],
   })

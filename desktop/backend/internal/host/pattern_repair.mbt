@@ -85,6 +85,13 @@ async fn request_pattern_repair_candidate(
   pattern : String,
   instruction : String,
 ) -> PatternRepairCandidateOutcome {
+  // The Agent receives only a closed validator configuration. It cannot
+  // select another executable or alter the dump arguments.
+  if moongrep_command() is Some(command) {
+    agent_env[PatternRepairValidatorEnvironment] = pattern_repair_validator_config(
+      command,
+    ).stringify()
+  }
   let input = ({ "pattern": pattern, "instruction": instruction } : Json).stringify() +
     "\n"
   let process = run_pattern_repair_process(

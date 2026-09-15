@@ -14,8 +14,10 @@ struct PatternRepairValidator {
 } derive(FromJson)
 
 ///|
-fn pattern_repair_validator_from_environment(
-) -> Result[PatternRepairValidator, String] {
+fn pattern_repair_validator_from_environment() -> Result[
+  PatternRepairValidator,
+  String,
+] {
   guard @env.get_env_var(PatternRepairValidatorEnv) is Some(raw) else {
     return Err("Pattern validation is unavailable.")
   }
@@ -64,11 +66,15 @@ async fn run_pattern_repair_validator(
     stdin_writer.close()
     let stdout_task = group.spawn(() => {
       defer stdout_reader.close()
-      stdout_reader.read_all().text() catch { _ => "" }
+      stdout_reader.read_all().text() catch {
+        _ => ""
+      }
     })
     let stderr_task = group.spawn(() => {
       defer stderr_reader.close()
-      stderr_reader.read_all().text() catch { _ => "" }
+      stderr_reader.read_all().text() catch {
+        _ => ""
+      }
     })
     let code = process.wait()
     (code, stdout_task.wait(), stderr_task.wait())
@@ -95,7 +101,11 @@ async fn run_pattern_repair_validator(
 async fn validate_pattern_tool_action(
   args : Json,
   workspace_root : String,
+  validated_pattern : Ref[String?],
 ) -> @agent_tool.ToolAction {
+  // A failed or superseding validation must invalidate the previous success;
+  // submit_pattern_repair is gated on this ref matching its candidate.
+  validated_pattern.val = None
   guard args is { "pattern": String(pattern), .. } else {
     return @agent_tool.respond(
       "validate_pattern requires a string pattern.",
@@ -113,7 +123,10 @@ async fn validate_pattern_tool_action(
     Err(message) => return @agent_tool.respond(message, is_error=true)
   }
   match run_pattern_repair_validator(validator, pattern, workspace_root) {
-    Ok(_) => @agent_tool.respond(({ "valid": true } : Json).stringify())
+    Ok(_) => {
+      validated_pattern.val = Some(pattern)
+      @agent_tool.respond(({ "valid": true } : Json).stringify())
+    }
     Err(diagnostic) =>
       @agent_tool.respond(
         ({ "valid": false, "diagnostic": diagnostic } : Json).stringify(),
@@ -124,29 +137,29 @@ async fn validate_pattern_tool_action(
 ///|
 fn validate_pattern_tool(
   workspace_root : String,
+  validated_pattern : Ref[String?],
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="validate_pattern",
-    description=(
-      "Validate one candidate MoonBit structural pattern with the Host-provided moongrep parser. Use it before submitting a candidate; a false result includes a diagnostic to repair."
-    ),
+    description="Validate one candidate MoonBit structural pattern with the Host-provided moongrep parser. Use it before submitting a candidate; a false result includes a diagnostic to repair.",
     schema=JsonSchema({
       "type": "object",
-      "properties": {
-        "pattern": { "type": "string" },
-      },
+      "properties": { "pattern": { "type": "string" } },
       "required": ["pattern"],
     }),
-    execute=Async(args => validate_pattern_tool_action(args, workspace_root)),
+    execute=Async(args => {
+      validate_pattern_tool_action(args, workspace_root, validated_pattern)
+    }),
   )
 }
 
 ///|
 test "pattern repair validator accepts only Host-provided configuration" {
-  let raw = ({
-    "command": "moonx",
-    "prefix_args": ["moonbit-community/moongrep@0.3.1", "--"],
-  } : Json)
+  let raw = (
+    {
+      "command": "moonx",
+      "prefix_args": ["moonbit-community/moongrep@0.3.1", "--"],
+    } : Json)
   let validator : PatternRepairValidator = @json.from_json(raw)
   assert_eq(validator.command, "moonx")
   assert_eq(validator.prefix_args, ["moonbit-community/moongrep@0.3.1", "--"])

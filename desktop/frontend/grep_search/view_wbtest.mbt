@@ -83,6 +83,11 @@ test "Code search repairs one pattern without a composer or preview" {
     )
   let unavailable_html = render_search(unavailable, input)
   assert_true(
+    unavailable_html.contains(
+      "Pattern repair failed. Update the pattern or retry.",
+    ),
+  )
+  assert_false(
     unavailable_html.contains("Pattern Repair Agent returned no candidate."),
   )
   let timed_out = semantic
@@ -131,9 +136,11 @@ test "Code search repairs one pattern without a composer or preview" {
       input,
     )
   let invalid_html = render_search(invalid, input)
-  assert_true(invalid_html.contains(
-    "Pattern repair returned an invalid pattern. The current pattern was not changed; retry.",
-  ))
+  assert_true(
+    invalid_html.contains(
+      "Pattern repair returned an invalid pattern. The current pattern was not changed; retry.",
+    ),
+  )
 }
 
 ///|

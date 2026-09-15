@@ -257,9 +257,7 @@ fn pattern_repair_failure_label(page : Page) -> String {
   match page.pattern_repair_phase {
     PatternRepairInputRequired => "Enter a pattern before repairing it."
     PatternRepairUnavailable =>
-      page.pattern_repair_message.unwrap_or(
-        "Pattern repair is unavailable. Configure an AI provider in Settings, then retry.",
-      )
+      "Pattern repair failed. Update the pattern or retry."
     PatternRepairTimedOut =>
       "Pattern repair timed out while contacting the AI provider. Check your connection or provider endpoint, then retry."
     PatternRepairValidationFailed =>
