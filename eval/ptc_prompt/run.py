@@ -9,12 +9,59 @@ import re
 from pathlib import Path
 import signal
 import subprocess
+import tempfile
 import time
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 CASES = ('single_edit', 'computed_edits', 'search')
+MODEL = 'deepseek-v4-flash'
+MAX_STEPS = 24
+
+
+def bounded(command, cwd, env, log, timeout, grace=10):
+    """Run `command` with its output in `log`; None when killed at `timeout`.
+
+    The child gets its own session so the whole tree is signalled: SIGTERM,
+    then SIGKILL after `grace` seconds.
+    """
+    with log.open('w') as output:
+        process = subprocess.Popen(command, cwd=cwd, env=env, stdout=output,
+                                   stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            return process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=grace)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+            return None
+
+
+def trial_env(workspace):
+    """The engine's environment: credentials inherited, skills and references pinned."""
+    env = os.environ.copy()
+    env['OPENSEEK_GLOBAL_SKILLS_DIR'] = str(workspace / '.no-global-skills')
+    env['OPENSEEK_REFERENCES'] = str(ROOT / 'share')
+    return env
+
+
+def engine_command(engine, workspace, name, prompt, task, max_steps):
+    return [str(engine), 'run', '--model', MODEL, '--max-steps', str(max_steps),
+            '--dir', str(workspace), '--session', name,
+            '--system-prompt-file', str(prompt), task]
+
+
+def engine_hashes(engines):
+    return {variant: hashlib.sha256(binary.read_bytes()).hexdigest()
+            for variant, binary in engines.items()}
+
+
+def head_commit():
+    return subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
 
 
 def fixture(case, workspace):
@@ -72,14 +119,26 @@ def source_urls(result):
                           result.get('content', '')))
 
 
-def analyze(case, workspace, expected, exit_code, require_ptc=False, session_name=None):
-    # The parent session by name: a review child leaves a second journal.
-    items = session_items(workspace, session_name=session_name)
+def session_metrics(items):
+    """Split a session into its parts and count the calls both runners report."""
     assistants = [i['payload'] for i in items if i['kind'] == 'assistant']
     results = [i['payload'] for i in items if i['kind'] == 'tool_result']
     terminals = [i['payload'] for i in items if i['kind'] == 'terminal']
     nested = [call for r in results for call in (r.get('data') or {}).get('ptc_calls', [])]
-    calls = [c for a in assistants for c in a.get('tool_calls', [])]
+    metrics = {
+        'steps': len(assistants),
+        'outer_calls': sum(len(a.get('tool_calls', [])) for a in assistants),
+        'nested_calls': len(nested),
+        'tool_errors': sum(r['is_error'] for r in results),
+        'nested_errors': sum(c.get('result', {}).get('is_error', False) for c in nested),
+    }
+    return metrics, results, nested, terminals
+
+
+def analyze(case, workspace, expected, exit_code, require_ptc=False, session_name=None):
+    # The parent session by name: a review child leaves a second journal.
+    items = session_items(workspace, session_name=session_name)
+    metrics, results, nested, terminals = session_metrics(items)
     failures = []
     if require_ptc and not any(c['name'] in ('edit', 'multi_edit', 'web_search') for c in nested):
         failures.append('requested PTC was not used')
@@ -120,10 +179,7 @@ def analyze(case, workspace, expected, exit_code, require_ptc=False, session_nam
         if final is None or '12' not in final or str(total) not in final.replace(',', ''):
             failures.append('computed summary count/sum missing')
     return {
-        'passed': not failures, 'failures': failures, 'steps': len(assistants),
-        'outer_calls': len(calls), 'nested_calls': len(nested),
-        'tool_errors': sum(r['is_error'] for r in results),
-        'nested_errors': sum(c.get('result', {}).get('is_error', False) for c in nested),
+        'passed': not failures, 'failures': failures, **metrics,
         'interrupted_calls': sum(c['status'] != 'done' for c in nested),
         'model_tool_output_chars': sum(len(r['content']) for r in results),
         'final': final,
@@ -138,26 +194,9 @@ def trial(engine, out, variant, case, repeat, timeout, require_ptc):
     if require_ptc:
         task += '\nUse mbtx with ptc: true and the bundled tools client for the requested edits or searches.'
     (workspace / '.eval-task.txt').write_text(task)
-    env = os.environ.copy()
-    env['OPENSEEK_GLOBAL_SKILLS_DIR'] = str(workspace / '.no-global-skills')
-    env['OPENSEEK_REFERENCES'] = str(ROOT / 'share')
-    command = [str(engine), 'run', '--model', 'deepseek-v4-flash', '--max-steps', '24',
-               '--dir', str(workspace), '--session', name,
-               '--system-prompt-file', str(out / f'{variant}.md'), task]
     started = time.monotonic()
-    with (out / f'{name}.log').open('w') as log:
-        process = subprocess.Popen(command, cwd=ROOT, env=env, stdout=log,
-                                   stderr=subprocess.STDOUT, start_new_session=True)
-        try:
-            exit_code = process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGTERM)
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
-            exit_code = None
+    exit_code = bounded(engine_command(engine, workspace, name, out / f'{variant}.md', task, MAX_STEPS),
+                        ROOT, trial_env(workspace), out / f'{name}.log', timeout)
     result = {'name': name, 'variant': variant, 'case': case, 'repeat': repeat,
               'seconds': round(time.monotonic() - started, 2), 'exit_code': exit_code}
     try:
@@ -194,7 +233,6 @@ def reanalyze(out):
             continue
         workspace = out / 'workspaces' / result['name']
         # Compute expectations in a separate temporary fixture, never reset a trial.
-        import tempfile
         with tempfile.TemporaryDirectory() as directory:
             _, expected = fixture(result['case'], Path(directory))
         result.update(analyze(result['case'], workspace, expected, result['exit_code'],
@@ -271,15 +309,14 @@ def main():
     engine = args.engine.resolve()
     engines = {'candidate': engine, 'baseline': args.baseline_engine.resolve()
                if args.baseline_engine is not None else engine}
-    manifest = {'model': 'deepseek-v4-flash',
+    manifest = {'model': MODEL,
                 'experiment': 'prompt' if args.prompt_ab else 'capability',
-                'runs': args.runs, 'max_steps': 24,
+                'runs': args.runs, 'max_steps': MAX_STEPS,
                 'concurrency': args.concurrency, 'timeout': args.timeout,
                 'require_ptc': args.require_ptc,
                 'cases': args.cases, 'prompt_sha256': hashes,
-                'engine_sha256': {variant: hashlib.sha256(binary.read_bytes()).hexdigest()
-                                  for variant, binary in engines.items()},
-                'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()}
+                'engine_sha256': engine_hashes(engines),
+                'commit': head_commit()}
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     # Interleave paired variants and alternate which launches first per repeat.
     jobs = [(variant, case, repeat) for repeat in range(1, args.runs + 1)

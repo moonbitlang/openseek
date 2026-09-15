@@ -58,9 +58,12 @@ python3 eval/ptc_prompt/run.py --prompt-ab \
 ```
 
 `--base-prompt` is the plain-text system prompt of that historical checkout
-(decode its `prompt/generated_default_prompt.mbt`, or dump it from the engine);
-the current prompt has no `### Programmatic tool calls` section to substitute,
-and the runner refuses to proceed without one.
+(decode its `prompt/generated_default_prompt.mbt`, or dump it from the engine).
+The runner splices the two variants over the `### Programmatic tool calls`
+section; the current checkout's section documents the published SDK rather
+than the historical injected client, so the comparison needs the prompt the
+original binary was run with, and the runner refuses a base prompt without
+that section.
 
 Historical mode splices the saved PTC sections into the rendered prompt and uses
 one engine for both variants. `--require-ptc --cases computed_edits` reproduces

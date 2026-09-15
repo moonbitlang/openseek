@@ -8,8 +8,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import signal
-import subprocess
 import time
 import run
 
@@ -129,19 +127,8 @@ def fixture(workspace):
 
 
 def bounded(command, cwd, env, log, timeout):
-    with log.open('w') as output:
-        process = subprocess.Popen(command, cwd=cwd, env=env, stdout=output,
-                                   stderr=subprocess.STDOUT, start_new_session=True)
-        try:
-            return process.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGTERM)
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait()
-            return None
+    # A module-level name, not a bare import: the tests patch `bench.bounded`.
+    return run.bounded(command, cwd, env, log, timeout, grace=5)
 
 
 IMPORT_BLOCK = re.compile(r'\bimport\s*\{([^}]*)\}', re.S)
@@ -213,16 +200,12 @@ def trial(engine, out, variant, repeat, timeout, max_steps=128):
     name = f'yaml-{repeat}-{variant}'
     workspace = out / 'workspaces' / name
     fixture(workspace)
-    env = os.environ.copy()
-    env['OPENSEEK_GLOBAL_SKILLS_DIR'] = str(workspace / '.no-global-skills')
-    env['OPENSEEK_REFERENCES'] = str(run.ROOT / 'share')
     started = time.monotonic()
     log = out / f'{name}.log'
-    code = bounded([str(engine), 'run', '--model', 'deepseek-v4-flash', '--max-steps', str(max_steps),
-                    '--dir', str(workspace), '--session', name,
-                    '--system-prompt-file', str(out / f'{variant}.md'),
-                    'Read TASK.md and implement the requested YAML parser completely.'],
-                   run.ROOT, env, log, timeout)
+    code = bounded(run.engine_command(engine, workspace, name, out / f'{variant}.md',
+                                      'Read TASK.md and implement the requested YAML parser completely.',
+                                      max_steps),
+                   run.ROOT, run.trial_env(workspace), log, timeout)
     result = {'name': name, 'variant': variant, 'repeat': repeat,
               'seconds': round(time.monotonic() - started, 2), 'exit_code': code}
     (out / f'{name}-execution.json').write_text(json.dumps(result, indent=2) + '\n')
@@ -254,14 +237,8 @@ def analyze_trial(out, variant, repeat, execution=None):
                          'seconds_source': 'log creation to last write; excludes silent waits' if hasattr(stat, 'st_birthtime') else 'unavailable without execution checkpoint'}
     result = dict(execution)
     items = run.session_items(workspace, session_name=name)
-    assistants = [i['payload'] for i in items if i['kind'] == 'assistant']
-    outputs = [i['payload'] for i in items if i['kind'] == 'tool_result']
-    nested = [c for r in outputs for c in (r.get('data') or {}).get('ptc_calls', [])]
-    terminals = [i['payload'] for i in items if i['kind'] == 'terminal']
-    result.update(steps=len(assistants), outer_calls=sum(len(a.get('tool_calls', [])) for a in assistants),
-                  nested_calls=len(nested), tool_errors=sum(r['is_error'] for r in outputs),
-                  nested_errors=sum(c.get('result', {}).get('is_error', False) for c in nested),
-                  final=terminals[-1] if terminals else None, usage=run.usage(log))
+    metrics, _, _, terminals = run.session_metrics(items)
+    result.update(metrics, final=terminals[-1] if terminals else None, usage=run.usage(log))
     child_sessions = list(workspace.rglob(f'openseek_session-{name}-sr-*.jsonl'))
     result['child_sessions'] = len(child_sessions)
     result['child_steps'] = sum(sum(json.loads(line).get('item', {}).get('kind') == 'assistant'
@@ -305,19 +282,19 @@ def main():
         parser.error('runs, concurrency, timeout, and max-steps must be positive')
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    generated = (run.ROOT / 'prompt/generated_default_prompt.mbt').read_text()
-    prompt = '\n'.join(line.removeprefix('    #|') for line in generated.splitlines() if line.startswith('    #|'))
+    prompt = run.generated_prompt(run.ROOT / 'prompt/generated_default_prompt.mbt')
     engines = {'baseline': args.baseline_engine.resolve(), 'candidate': args.engine.resolve()}
     for variant in engines:
         (out / f'{variant}.md').write_text(prompt)
-    manifest = {'experiment': 'yaml-parser-capability', 'model': 'deepseek-v4-flash',
+    manifest = {'experiment': 'yaml-parser-capability', 'model': run.MODEL,
                 'runs': args.runs, 'max_steps': args.max_steps, 'timeout': args.timeout, 'concurrency': args.concurrency,
                 'visible_cases': len(VISIBLE), 'withheld_cases': len(CASES) + len(INVALID),
                 'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest(),
                 'spec_sha256': hashlib.sha256(SPEC.encode()).hexdigest(),
                 'oracle_sha256': hashlib.sha256(tests(CASES, INVALID).encode()).hexdigest(),
-                'engine_sha256': {k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in engines.items()},
-                'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()}
+                'engine_sha256': run.engine_hashes(engines),
+                # Pinned to the repository, whatever directory the runner was launched from.
+                'commit': run.head_commit()}
     (out / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
     jobs = [(variant, repeat) for repeat in range(1, args.runs + 1)
             for variant in (('baseline', 'candidate') if repeat % 2 else ('candidate', 'baseline'))]
