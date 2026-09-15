@@ -89,6 +89,7 @@ pub fn Tools::Tools(Array[AgentToolDefinition], background_jobs? : @bgjobs.BgJob
 pub fn Tools::background_job_runtime(Self) -> @bgjobs.BgJobRuntime?
 pub fn Tools::find(Self, String) -> AgentToolDefinition?
 pub fn Tools::function_tools(Self) -> Array[@deepseek.ToolDefinition]
+pub fn Tools::program_tools(Self) -> Self raise
 
 // Type aliases
 

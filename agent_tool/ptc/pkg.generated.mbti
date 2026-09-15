@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/agent_tool/ptc"
+
+import {
+  "bobzhang/openseek/agent_tool",
+  "moonbitlang/async",
+}
+
+// Values
+pub fn description() -> String
+
+// Errors
+
+// Types and methods
+type Program
+pub fn Program::adopted(Self) -> Bool
+pub async fn Program::close(Self) -> Unit
+pub fn Program::env(Self) -> Map[String, String]
+pub fn Program::handoff(Self, String, async (Json) -> Unit) -> Unit
+pub fn Program::interrupted(Self) -> Bool
+pub fn Program::result(Self, @agent_tool.ToolAction) -> @agent_tool.ToolAction
+pub fn Program::stop(Self) -> Unit
+pub fn Program::trace(Self) -> Json
+pub fn Program::trace_error(Self) -> String?
+
+type Service
+pub async fn Service::close(Self) -> Unit
+pub fn Service::register(Self, on_trace? : (Json) -> Unit) -> Program raise
+pub async fn[X] Service::start(@async.TaskGroup[X], @agent_tool.Tools, call_timeout_ms? : Int, trace_timeout_ms? : Int) -> Self
+
+// Type aliases
+
+// Traits

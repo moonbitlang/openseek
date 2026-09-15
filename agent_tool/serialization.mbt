@@ -31,3 +31,14 @@ pub fn FileStateMap::serialize(
     }),
   }
 }
+
+///|
+/// Registered tools explicitly available to a program. Executors and their
+/// captured session state are retained, rather than rebuilt for the client.
+pub fn Tools::program_tools(self : Tools) -> Tools raise {
+  Tools(
+    [
+      for tool in self.by_name.values() if tool.is_program_callable() => tool
+    ],
+  )
+}
