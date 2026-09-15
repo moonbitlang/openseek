@@ -59,9 +59,9 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
     await expect(this.page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   }
 
-  append(kind, payload) {
+  append(kind, payload, ts) {
     const sequence = (this.sessionEvents.at(-1)?.sequence || 0) + 1;
-    const event = { sequence, item: { kind, payload } };
+    const event = { sequence, ts, item: { kind, payload } };
     this.sessionEvents.push(event);
     this.notify('session.event', {
       session: 'session-1', session_root: '/workspace/.openseek', sequence, event,
@@ -110,7 +110,7 @@ test('minimal transcript groups live tools and folds completed work around user 
   app.append('tool_result', {
     tool_call_id: 'unknown', tool_name: 'mcp__example__inspect', content: 'OUTPUT_SENTINEL', is_error: true,
   });
-  app.append('assistant', { content: 'Here is the **final summary**.' });
+  app.append('assistant', { content: 'Here is the **final summary**.' }, 1700000000000);
   app.append('terminal', { kind: 'finished', message: 'Here is the **final summary**.' });
 
   const processes = stream.locator('.minimal-process');
@@ -121,6 +121,9 @@ test('minimal transcript groups live tools and folds completed work around user 
   await expect(stream.getByText('Please focus on the architecture.', { exact: true })).toBeVisible();
   await expect(stream.locator('.msg-content strong')).toHaveText('final summary');
   await expect(stream.locator('.assistant-message-copy')).toHaveCount(1);
+  // Minimal mode mirrors detailed mode's finish line: the confirmed final
+  // answer carries its durable commit instant beside the copy action.
+  await expect(stream.locator('.assistant-message-actions .assistant-message-time')).toHaveCount(1);
   await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('minimal-completed.png') });
   for (const process of await processes.all()) {
     await process.locator(':scope > summary').click();
@@ -130,7 +133,7 @@ test('minimal transcript groups live tools and folds completed work around user 
   }
   await expect(stream.getByText('mcp__example__inspect', { exact: true })).toBeVisible();
   await expect(stream).not.toContainText(/REASONING_SENTINEL|PARAMETER_SENTINEL|OUTPUT_SENTINEL|SCRIPT_SENTINEL/);
-  await expect(stream.locator('.tool-call-tabs, .activity-thinking, .assistant-message-time')).toHaveCount(0);
+  await expect(stream.locator('.tool-call-tabs, .activity-thinking')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

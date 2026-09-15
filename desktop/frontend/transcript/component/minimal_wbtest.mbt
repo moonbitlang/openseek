@@ -274,3 +274,48 @@ test "registered built-ins and normalized operations have deliberate categories"
     assert_eq(MinimalCall::from_tool(call).category, expected)
   }
 }
+
+///|
+/// Minimal mode's finish line mirrors detailed mode: a finished answer carries
+/// the item's own durable commit instant, so the completion stamp appears
+/// beside the copy action that same rule withholds from anything else. Prose
+/// still inside the process, and the live preview, carry none.
+test "minimal prose keeps the durable completion stamp only when finished" {
+  let input = Input(
+    minimal=true,
+    source=OpenSeek,
+    focused=@interop.ChannelId::Local,
+    active_session="desktop-test",
+    current_project=None,
+    projects=[],
+    can_choose_project=false,
+    project_menu_open=false,
+    project_query="",
+    root=None,
+    items=[
+      {
+        item: {
+          kind: Answer("the answer"),
+          ts: Some(1_700_000_000_000.0),
+          sequence: Some(7),
+        },
+        identity: "s7",
+      },
+    ],
+    streaming_response=None,
+    streaming_identity="r1",
+  )
+  guard input.minimal_blocks().to_array()
+    is [{ content: Minimal(Prose(completed_at~, ..)), .. }] else {
+    fail("expected one finished minimal prose block")
+  }
+  assert_eq(completed_at, Some(1_700_000_000_000.0))
+  // A preview that has not committed yet never claims a completion instant.
+  let streaming = { ..input, items: [], streaming_response: Some("partial"), }
+  guard streaming.minimal_blocks().to_array()
+    is [{ content: Minimal(Prose(completed_at~, live~, ..)), .. }] else {
+    fail("expected one live minimal prose block")
+  }
+  assert_eq(completed_at, None)
+  assert_true(live)
+}
