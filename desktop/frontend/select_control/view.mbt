@@ -66,8 +66,8 @@ fn Presentation::button_class(self : Presentation, open : Bool) -> String {
 ///|
 fn Presentation::menu_class(self : Presentation) -> String {
   match self {
-    Composer(_, _) => "custom-select-menu composer-picker-menu"
-    Setting => "custom-select-menu setting-select-menu"
+    Composer(_, _) => "menu-surface custom-select-menu composer-picker-menu"
+    Setting => "menu-surface custom-select-menu setting-select-menu"
   }
 }
 
@@ -294,9 +294,9 @@ pub fn Control::render(self : Control) -> @html.Html {
         rows.push(
           @html.button(
             class=if selected {
-              "custom-select-option selected"
+              "menu-option custom-select-option selected"
             } else {
-              "custom-select-option"
+              "menu-option custom-select-option"
             },
             type_="button",
             title=option.label,
