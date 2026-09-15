@@ -110,9 +110,6 @@ class OracleTests(unittest.TestCase):
                          (2, 1, 1))
 
 
-if __name__ == '__main__':
-    unittest.main()
-
 
 class BoundedRunnerTests(unittest.TestCase):
     def setUp(self):
@@ -147,3 +144,7 @@ class BoundedRunnerTests(unittest.TestCase):
         self.assertIsNone(code)
         self.assertEqual(output.strip(), 'up')
         self.assertLess(time.monotonic() - started, 10)
+
+
+if __name__ == '__main__':
+    unittest.main()
