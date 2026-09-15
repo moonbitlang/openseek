@@ -1178,10 +1178,48 @@ async fn configured_system_prompt(
       $|\{addendum}
     )
   }
+  // The runtime environment block appended to every system prompt — including
+  // a `--system-prompt-file` override, since grounding describes the process,
+  // not the prompt content. Without it the model has no idea where it is and
+  // guesses: in a five-run benchmark batch one agent passed
+  // `cwd="/workspace"` on its very first call, then explored the parent
+  // directory, found a concurrent sibling run's files, and adopted that
+  // workspace wholesale. A durable session stores the prompt at creation, so
+  // the recorded directory is where the session was started — resume it from
+  // the same project root.
+  //
+  // OPENSEEK_REFERENCES adds the resolved share/ resource directory value.
+  // Documentation layout and usage instructions live in the static default
+  // prompt, keeping the installation-dependent path in this tail.
+  let target = if workspace_root == "" { "." } else { workspace_root }
+  let cwd = @fs.realpath(target) catch { _ => target }
+  // FIXME(upstream)
+  // " \{sb => f(sb)}"
+  // `f` is not allowed to be async, either fix it or better error message (macro expansion should work)
+  let outline = @vfs.dir_outline(cwd)
+  fn layout(sb : StringBuilder) {
+    match outline {
+      Some(body) => sb <+ "\{body}"
+      None =>
+        sb <+ "(empty directory): use `moon new` to create a new project here"
+    }
+  }
+  let environment_block =
+    $|## Environment
+    $|
+    $|Working directory: \{cwd}
+    $|Relative paths resolve against it; treat it as the workspace root and stay inside it.
+    $|Parent and sibling directories belong to other projects. Never pass a cwd you have not verified exists.
+    $|Project layout (directories; hidden, build, and vendored dirs omitted):
+    $|\{sb=>layout(sb)}
+  let environment_section = match references_dir_from_environment() {
+    Some(dir) => "\{environment_block}\n\nOPENSEEK_REFERENCES: \{dir}"
+    None => environment_block
+  }
   let tail =
     $|\{with_addendum}
     $|
-    $|\{environment_prompt_section(workspace_root~)}
+    $|\{environment_section}
   // Workspace skills join the per-project tail after the environment
   // section: like the cwd they vary per project (and change when skills are
   // edited), so they must sit after all globally shared text to keep it
@@ -1209,6 +1247,16 @@ fn global_skills_dir_for_home(value : String?) -> String? {
 }
 
 ///|
+/// The user-level skills default: `USERPROFILE` on Windows, `HOME` everywhere
+/// else — a Windows `HOME` may be a Git Bash/MSYS translation of it.
+///
+/// The platform is picked by `#cfg`, not by a runtime check: this package is
+/// `+wasm+native`, and the one native platform probe available
+/// (`tonyfettes/platform`) is built on the `extern "c"` FFI the wasm backend
+/// refuses; the js-only sniff in `moonbitlang/editor/base/common` reports an
+/// unknown platform natively, and `moonbitlang/async/internal/env_util` is
+/// internal. Both arms are private, so no `#cfg` value reaches
+/// `pkg.generated.mbti`.
 #cfg(platform="windows")
 fn default_global_skills_dir() -> String? {
   if global_skills_dir_for_home(@env.get_env_var("USERPROFILE")) is Some(dir) {
@@ -1221,6 +1269,7 @@ fn default_global_skills_dir() -> String? {
 }
 
 ///|
+/// `HOME` alone on every other target — see the note above.
 #cfg(not(platform="windows"))
 fn default_global_skills_dir() -> String? {
   global_skills_dir_for_home(@env.get_env_var("HOME"))
@@ -1261,48 +1310,6 @@ async fn skills_prompt_section_for_cwd(
 }
 
 ///|
-/// The runtime environment block appended to every system prompt — including
-/// a `--system-prompt-file` override, since grounding describes the process,
-/// not the prompt content. Without it the model has no idea where it is and
-/// guesses: in a five-run benchmark batch one agent passed
-/// `cwd="/workspace"` on its very first call, then explored the parent
-/// directory, found a concurrent sibling run's files, and adopted that
-/// workspace wholesale. A durable session stores the prompt at creation, so
-/// the recorded directory is where the session was started — resume it from
-/// the same project root.
-///
-/// OPENSEEK_REFERENCES adds the resolved share/ resource directory value.
-/// Documentation layout and usage instructions live in the static default
-/// prompt, keeping the installation-dependent path in this tail.
-async fn environment_prompt_section(workspace_root? : String = ".") -> String {
-  let target = if workspace_root == "" { "." } else { workspace_root }
-  let cwd = @fs.realpath(target) catch { _ => target }
-  // FIXME(upstream)
-  // " \{sb => f(sb)}"
-  // `f` is not allowed to be async, either fix it or better error message (macro expansion should work)
-  let outline = @vfs.dir_outline(cwd)
-  fn layout(sb : StringBuilder) {
-    match outline {
-      Some(body) => sb <+ "\{body}"
-      None =>
-        sb <+ "(empty directory): use `moon new` to create a new project here"
-    }
-  }
-  let section =
-    $|## Environment
-    $|
-    $|Working directory: \{cwd}
-    $|Relative paths resolve against it; treat it as the workspace root and stay inside it.
-    $|Parent and sibling directories belong to other projects. Never pass a cwd you have not verified exists.
-    $|Project layout (directories; hidden, build, and vendored dirs omitted):
-    $|\{sb=>layout(sb)}
-  match references_dir_from_environment() {
-    Some(dir) => "\{section}\n\nOPENSEEK_REFERENCES: \{dir}"
-    None => section
-  }
-}
-
-///|
 /// The bundled share/ resource directory, when the process environment
 /// sets `OPENSEEK_REFERENCES` to a non-empty value.
 fn references_dir_from_environment() -> String? {
@@ -1313,8 +1320,26 @@ fn references_dir_from_environment() -> String? {
 }
 
 ///|
+/// Test helper: split a composed system prompt at the environment block it
+/// ends with, so the assertions below can target that block — or the
+/// cache-shared prefix before it — without re-implementing its text. Callers
+/// pin `OPENSEEK_GLOBAL_SKILLS_DIR` off, so nothing follows the block.
+fn split_composed_prompt(prompt : String) -> (String, String) raise {
+  guard prompt.find("## Environment") is Some(index) else {
+    fail("composed prompt carries no environment block:\n\{prompt}")
+  }
+  (prompt[:index].to_owned(), prompt[index:].to_owned())
+}
+
+///|
 async test "environment section names the cwd and appends the layout outline" {
-  let section = environment_prompt_section()
+  let parsed = run_matches(argv=["write", "MoonBit"], env={
+    "DEEPSEEK": "test-key",
+    "OPENSEEK_GLOBAL_SKILLS_DIR": "no-global-skills",
+  })
+  let (_, section) = split_composed_prompt(
+    configured_system_prompt(parsed, Deepseek(V4Flash)),
+  )
   let cwd = @fs.realpath(".")
   // Normalise the machine-specific CWD so the snapshot is portable across
   // local dev and CI, while still asserting a stable contiguous layout block.
@@ -1336,7 +1361,13 @@ async test "environment section names the cwd and appends the layout outline" {
 ///|
 async test "environment section reports empty directory layout" {
   @vfs.with_tmpdir(root => {
-    let section = environment_prompt_section(workspace_root=root)
+    let parsed = run_matches(argv=["write", "MoonBit"], env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_GLOBAL_SKILLS_DIR": "\{root}/no-global-skills",
+    })
+    let (_, section) = split_composed_prompt(
+      configured_system_prompt(parsed, Deepseek(V4Flash), workspace_root=root),
+    )
     let resolved_root = @fs.realpath(root)
     let replaced = section.replace_all(old=resolved_root, new="{resolved_root}")
     inspect(
@@ -1365,7 +1396,13 @@ async test "environment section inline snapshot for deterministic layout" {
       "_build/out.log": "x",
     }).write_to(root)
     let resolved_root = @fs.realpath(root)
-    let section = environment_prompt_section(workspace_root=root)
+    let parsed = run_matches(argv=["write", "MoonBit"], env={
+      "DEEPSEEK": "test-key",
+      "OPENSEEK_GLOBAL_SKILLS_DIR": "\{root}/no-global-skills",
+    })
+    let (_, section) = split_composed_prompt(
+      configured_system_prompt(parsed, Deepseek(V4Flash), workspace_root=root),
+    )
     inspect(
       section,
       content=(
@@ -1836,10 +1873,10 @@ async test "configured system prompt can replace and append files" {
     )
     // Environment last: base and addendum form the cache-shared prefix; the
     // per-project cwd is the only divergence point.
-    assert_eq(
+    let (prefix, _) = split_composed_prompt(
       configured_system_prompt(parsed, Deepseek(V4Flash)),
-      "base prompt\n\n\naddendum\n\n\n\{environment_prompt_section()}",
     )
+    assert_eq(prefix, "base prompt\n\n\naddendum\n\n\n")
   })
 }
 
@@ -1958,7 +1995,11 @@ async test "load_or_new_session defers first durable write until append" {
       },
     )
     let created = load_or_new_session(store, id, parsed, Deepseek(V4Pro))
-    let grounded_prompt = "system\n\n\{environment_prompt_section()}"
+    // The environment block is pinned by the environment-section tests above;
+    // what this test owns is that the block reaches the stored prompt behind
+    // the `--system-prompt-file` base.
+    let grounded_prompt = configured_system_prompt(parsed, Deepseek(V4Pro))
+    assert_true(grounded_prompt.has_prefix("system\n\n## Environment"))
     assert_eq(created.system_prompt(), grounded_prompt)
     assert_eq(created.events().length(), 0)
     assert_false(store.exists(id))
@@ -2051,10 +2092,12 @@ async test "load_or_new_session recovers empty interrupted session directory" {
     )
     let store = @store.SessionStore(root)
     let session = load_or_new_session(store, id, parsed, Deepseek(V4Pro))
-    assert_eq(
-      session.system_prompt(),
-      "system\n\n\{environment_prompt_section()}",
-    )
+    // The environment block is pinned by the environment-section tests above;
+    // what this test owns is that the block reaches the stored prompt behind
+    // the `--system-prompt-file` base.
+    let grounded_prompt = configured_system_prompt(parsed, Deepseek(V4Pro))
+    assert_true(grounded_prompt.has_prefix("system\n\n## Environment"))
+    assert_eq(session.system_prompt(), grounded_prompt)
     assert_eq(session.events().length(), 0)
     let with_event = store.append(session, User(UserMessage("hello")))
     assert_eq(with_event.events().length(), 1)
