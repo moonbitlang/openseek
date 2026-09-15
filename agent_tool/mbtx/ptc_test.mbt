@@ -232,10 +232,11 @@ async test "explicit PTC without a session service is an error" {
     })
     assert_true(output.is_error)
     assert_true(output.content.contains("unavailable"))
-    // Omitted or explicitly false: the plain path, no registration involved.
+    // Omitted, null, or explicitly false: the plain path, no registration.
     for
       args in [
         ({ "source": "fn main { println(1) }" } : Json),
+        { "ptc": null, "source": "fn main { println(1) }" },
         { "ptc": false, "source": "fn main { println(1) }" },
       ] {
       let output = dispatch(@mbtx.definition(workspace_root=ws), args)

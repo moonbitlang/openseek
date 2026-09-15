@@ -226,7 +226,8 @@ pub fn definition(
       }
       match (saved.val, action) {
         (Some(filename), Respond(output)) => {
-          // The hint repeats an explicit choice; a defaulted one stays implicit.
+          // The hint carries `ptc` whenever PTC ran or was explicitly declined,
+          // so the re-run lands in the same mode; a defaulted-off run omits it.
           let retry : Map[String, Json] = { "filename": filename.to_json() }
           if enabled || input.ptc is Some(false) {
             retry["ptc"] = enabled.to_json()
@@ -1070,6 +1071,13 @@ async fn execute(
         })
       }),
     )
+    // Revoke the moment the child is gone, before the log read suspends: an
+    // accepted call must be marked interrupted, not allowed to finish under
+    // a capability whose process has exited. The defer above covers the
+    // raising path.
+    if program is Some(program) {
+      program.stop()
+    }
     (exit_code, read_capped(log))
   })
   // A refusal is this tool's confinement firing, not an environment fault:
