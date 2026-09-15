@@ -193,15 +193,53 @@ test "upload limits count UTF-8 bytes and multipart overhead" {
     error => Err(error)
   }
   assert_true(combined is Err(_))
-  for
-    (title, html) in [
-      ("  ", "html"),
-      ("中".repeat(342), "html"),
-      ("Test", "x".repeat(20 * 1024 * 1024)),
-    ] {
+  for (title, html) in [("  ", "html"), ("Test", "x".repeat(20 * 1024 * 1024))] {
     let result = Ok(@shares.Snapshot(title~, html~, json="{}")) catch {
       e => Err(e)
     }
     assert_true(result is Err(_))
+  }
+}
+
+///|
+async test "long metadata titles are byte bounded without truncating conversation files" {
+  for
+    (title, expected) in [
+      ("a".repeat(1024), "a".repeat(1024)),
+      ("a".repeat(1025), "a".repeat(1024)),
+      ("中".repeat(342), "中".repeat(341)),
+      ("😀".repeat(257), "😀".repeat(256)),
+      ("a".repeat(1023) + "😀", "a".repeat(1023)),
+    ] {
+    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+    defer server.close()
+    let snapshot = @shares.Snapshot(
+      title~,
+      html="<html>\{title}</html>",
+      json="{\"prompt\":\"\{title}\"}",
+    )
+    @async.with_task_group(group => {
+      let receiver = group.spawn(() => {
+        let (connection, _) = server.accept()
+        defer connection.close()
+        let _ = connection.read_request()
+        let body = connection.read_all().text()
+        assert_true(body.contains("name=\"title\"\r\n\r\n\{expected}\r\n"))
+        assert_true(@utf8.encode(expected).length() <= 1024)
+        assert_true(body.contains("<html>\{title}</html>"))
+        assert_true(body.contains("{\"prompt\":\"\{title}\"}"))
+        connection.send_response(201, "Created")
+        connection.write_string(
+          "{\"url\":\"https://shares.test/test\",\"expires_at\":\"2026-09-22T00:00:00Z\"}",
+        )
+        connection.end_response()
+      })
+      let reply = snapshot.publish(
+        server_url="http://127.0.0.1:\{server.addr.port()}",
+        token="test",
+      )
+      assert_true(reply is Shared(..))
+      receiver.wait()
+    })
   }
 }

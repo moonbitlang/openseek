@@ -56,10 +56,24 @@ pub fn Snapshot::Snapshot(
   html~ : String,
   json~ : String,
 ) -> Snapshot raise ShareError {
-  let title_size = @utf8.encode(title).length()
-  guard title_size > 0 && title_size <= 1024 && !title.trim().is_empty() else {
-    raise ShareError("The conversation title must be between 1 and 1024 bytes.")
+  let title = title.trim().to_owned()
+  guard !title.is_empty() else {
+    raise ShareError("The conversation title must not be empty.")
   }
+  // A generated title may be the entire first prompt. Bound only this metadata
+  // to the API's UTF-8 limit; the HTML and JSON retain the complete records.
+  // Iterate Unicode characters so neither CJK text nor emoji is split.
+  let metadata = StringBuilder()
+  let mut size = 0
+  for c in title.iter() {
+    let next_size = size + @utf8.encode(c.to_string()).length()
+    if next_size > 1024 {
+      break
+    }
+    metadata.write_char(c)
+    size = next_size
+  }
+  let title = metadata.to_string()
   guard @entropy.random_hex(32) is Some(key) else {
     raise ShareError(
       "Could not create a secure share request. Please try again.",

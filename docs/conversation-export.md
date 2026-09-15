@@ -12,6 +12,8 @@ opened is reported as saved, with its path.
 
 Share uses the desktop's existing OpenSeek login. If sign-in is required, the
 modal offers the existing browser sign-in flow; the user then clicks Share again.
+An HTTP 401 clears the rejected persisted login before offering sign-in. A late
+rejection never clears a newer registration selected during the upload.
 The native process captures records once and sends both HTML and JSON to
 `POST /v1/shares` at the credential's issuing server. JSON contains the same
 visualizer dataset embedded in HTML: request paths map to serialized session
@@ -29,6 +31,8 @@ response is retried once with identical content and the same idempotency key.
 If publication still cannot be confirmed, the UI says that a share may exist;
 another Share click starts a new upload. The full multipart request must fit the
 server's 20 MiB limit.
+Share titles are trimmed and capped at 1024 UTF-8 bytes on a Unicode character
+boundary. This metadata limit never truncates the HTML or JSON conversation.
 
 ## Native commands
 
