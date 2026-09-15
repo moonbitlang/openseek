@@ -37,10 +37,13 @@ async fn SessionShare::publish(
   } catch {
     error if @async.is_being_cancelled() => raise error
     @shares.ShareError(message) => Failed(message~)
-    _ =>
-      Failed(
-        message="Could not prepare the conversation export. Check that the conversation is still available.",
-      )
+    error => {
+      // This scope includes capture, upload and rejected-login cleanup. Do not
+      // mislabel an unrelated failure as a missing conversation.
+      @xlog.error(category="shares") <?
+        { "event": "share_failed", "error": "\{error}" }
+      Failed(message="Could not share the conversation: \{error}")
+    }
   }
 }
 

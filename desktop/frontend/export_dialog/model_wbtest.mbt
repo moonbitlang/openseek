@@ -89,10 +89,13 @@ test "share login failure success and clipboard feedback transitions" {
           let (_, again) = signing_in.update(emit, signed_in)
           assert_true(done == again)
           assert_true(
-            done.content is Some({ operation: Ready | SignInFailed, .. }),
+            done.content is Some({ operation: Ready | SignInFailed(_), .. }),
           )
-          if result is Err(_) {
-            assert_true(done.content is Some({ operation: SignInFailed, .. }))
+          if result is Err(message) {
+            guard done.content is Some({ operation: SignInFailed(detail), .. }) else {
+              fail("expected sign-in failure with its diagnostic")
+            }
+            assert_eq(detail, message)
             let (_, retry) = done.update(emit, SignIn)
             assert_true(retry.content is Some({ operation: SigningIn, .. }))
           }

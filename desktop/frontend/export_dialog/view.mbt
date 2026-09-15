@@ -66,11 +66,11 @@ pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
           @html.p("Sign in to your OpenSeek server to share this conversation."),
           @html.button(class="button primary", on_click=emit(SignIn), "Sign in"),
         ])
-      SignInFailed =>
+      SignInFailed(message) =>
         @html.div([
           @html.p(
             class="export-error",
-            "Sign-in could not be completed. Try again and complete sign-in in your browser. You can still download this conversation.",
+            "\{message} You can try signing in again, or download this conversation.",
           ),
           @html.button(
             class="button primary",

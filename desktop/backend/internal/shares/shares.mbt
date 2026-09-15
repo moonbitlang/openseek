@@ -110,19 +110,45 @@ pub async fn Snapshot::publish(
   server_url~ : String,
   token~ : String,
 ) -> @protocol.SessionShareReply {
+  self.publish_with_timeout(server_url~, token~, timeout_ms=240_000)
+}
+
+///|
+/// Client construction completes DNS, TCP and TLS before any upload is sent.
+/// Report connection failures separately from failures while sending/reading.
+priv suberror BeforeUpload {
+  BeforeUpload(Error)
+}
+
+///|
+async fn Snapshot::publish_with_timeout(
+  self : Snapshot,
+  server_url~ : String,
+  token~ : String,
+  timeout_ms~ : Int,
+) -> @protocol.SessionShareReply {
+  let mut failure : String? = None
   for attempt = 0; attempt < 2; attempt = attempt + 1 {
-    let result = @async.with_timeout_opt(240_000, () => {
+    let result = @async.with_timeout_opt(timeout_ms, () => {
       self.send(server_url~, token~)
     }) catch {
       error if @async.is_being_cancelled() => raise error
-      _ => None
+      BeforeUpload(error) => {
+        failure = Some("Could not connect to the share server: \{error}")
+        continue
+      }
+      error => {
+        failure = Some("The share request failed: \{error}")
+        continue
+      }
     }
     if result is Some(reply) {
       return reply
     }
+    failure = Some("The share request timed out. Please try again.")
   }
   @protocol.Failed(
-    message="Could not confirm publication. Check your connection; a share may already have been created. Sharing again starts a new upload.",
+    message=failure.unwrap_or("The share request timed out. Please try again."),
   )
 }
 
@@ -132,7 +158,10 @@ async fn Snapshot::send(
   server_url~ : String,
   token~ : String,
 ) -> @protocol.SessionShareReply {
-  let client = @http.Client(server_url)
+  let client = @http.Client(server_url) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise BeforeUpload(error)
+  }
   defer client.close()
   let response = client.post("/v1/shares", self.body, extra_headers={
     "Authorization": "Bearer \{token}",

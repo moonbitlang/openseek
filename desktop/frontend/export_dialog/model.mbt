@@ -24,7 +24,7 @@ priv enum Operation {
   Sharing
   SigningIn
   SignInRequired
-  SignInFailed
+  SignInFailed(String)
   Saved(path~ : String, opened~ : Bool)
   Failed(String)
 } derive(Eq, Debug)
@@ -99,7 +99,7 @@ pub fn Model::update(
         self.share(emit, content.source),
         { ..self, content: Some({ ..content, operation: Sharing, }), },
       )
-    SignIn if content.operation is (SignInRequired | SignInFailed) =>
+    SignIn if content.operation is (SignInRequired | SignInFailed(_)) =>
       return (
         self.sign_in(emit),
         { ..self, content: Some({ ..content, operation: SigningIn, }), },
@@ -133,9 +133,8 @@ pub fn Model::update(
       content.operation is SigningIn =>
       match result {
         Ok(_) => Ready
-        // The command error may only name an internal operation. It cannot
-        // distinguish cancellation, timeout, or a browser sign-in failure.
-        Err(_) => SignInFailed
+        // Keep the command's diagnostic while retaining the sign-in retry action.
+        Err(message) => SignInFailed(message)
       }
     ClipboardFinished(generation=id, result) if id == generation =>
       match content.publication {

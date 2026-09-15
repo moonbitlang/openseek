@@ -172,23 +172,21 @@ test('share offers sign-in and keeps upload failures actionable', async ({ page 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('sign-in errors explain recovery without exposing internal operation names', async ({ page }) => {
+test('sign-in errors preserve their cause and offer recovery', async ({ page }) => {
   const app = new ExportHarness(page);
   app.shareReply = { status: 'sign_in_required' };
-  app.signInError = 'op ext:openseek/auth.connect failed';
+  app.signInError = 'TLS certificate verification failed';
   await app.openDesktop();
   const dialog = await app.openExport();
   await dialog.getByRole('button', { name: 'Share', exact: true }).click();
   await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(dialog).toContainText('Sign-in could not be completed.');
-  await expect(dialog).toContainText('You can still download this conversation.');
-  await expect(dialog).not.toContainText('auth.connect');
-  await expect(dialog).not.toContainText('op ext:');
+  await expect(dialog).toContainText('Could not sign in: TLS certificate verification failed');
+  await expect(dialog).toContainText('You can try signing in again, or download this conversation.');
   await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
   app.signInError = null;
   await dialog.getByRole('button', { name: 'Try signing in again', exact: true }).click();
   await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
-  await expect(dialog).not.toContainText('Sign-in could not be completed.');
+  await expect(dialog).not.toContainText('TLS certificate verification failed');
   expect(app.count('auth.connect')).toBe(2);
   expect(app.count('session.share')).toBe(1); // retrying sign-in does not publish
   expect(app.pageErrors).toEqual([]);

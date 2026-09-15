@@ -243,3 +243,43 @@ async test "long metadata titles are byte bounded without truncating conversatio
     })
   }
 }
+
+///|
+async test "setup and refused connections retain definite failures" {
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  let origin = "http://127.0.0.1:\{server.addr.port()}"
+  server.close()
+  let snapshot = @shares.Snapshot(title="Test", html="<html/>", json="{}")
+  for server_url in ["not-a-url", origin] {
+    let reply = snapshot.publish(server_url~, token="test-token")
+    guard reply is Failed(message~) else { fail("expected connection failure") }
+    assert_true(message.has_prefix("Could not connect to the share server:"))
+    assert_false(message.contains("may already have been created"))
+    assert_false(message.contains("test-token"))
+  }
+}
+
+///|
+async test "a lost response followed by a refused retry reports the connection failure" {
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  defer server.close()
+  let origin = "http://127.0.0.1:\{server.addr.port()}"
+  let snapshot = @shares.Snapshot(title="Test", html="<html/>", json="{}")
+  @async.with_task_group(group => {
+    let receiver = group.spawn(() => {
+      let (connection, _) = server.accept()
+      defer connection.close()
+      ignore(connection.read_request())
+      connection.skip_request_body()
+      // The upload reached the server. Close the listener before dropping the
+      // response so the retry fails definitively, without resolving attempt one.
+      server.close()
+      connection.close()
+    })
+    let reply = snapshot.publish(server_url=origin, token="test-token")
+    guard reply is Failed(message~) else { fail("expected connection failure") }
+    assert_true(message.contains("Could not connect to the share server:"))
+    assert_false(message.contains("may already have been created"))
+    receiver.wait()
+  })
+}
