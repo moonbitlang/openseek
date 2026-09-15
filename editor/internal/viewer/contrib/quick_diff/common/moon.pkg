@@ -5,5 +5,4 @@ import {
 }
 
 import {
-  "moonbitlang/editor/viewer/common/model",
 } for "wbtest"
