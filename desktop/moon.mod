@@ -6,13 +6,14 @@ import {
   "bobzhang/openseek_protocol@0.1.2",
   "moonbit-community/fuzzy_match@0.2.6",
   "moonbit-community/proton_contract@0.2.9",
+  "moonbitlang/async@0.21.0",
 }
 
 readme = "README.md"
 
 license = "Apache-2.0"
 
-description = "Shared desktop contracts and policies for SeekMoon."
+description = "Shared desktop contracts, policies, and packaging tools for SeekMoon."
 
 warnings = "+implicit_impl_as_method"
 

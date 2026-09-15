@@ -20,7 +20,7 @@ import {
 
 license = "Apache-2.0"
 
-description = "SeekMoon native desktop backend and platform packagers."
+description = "SeekMoon native desktop backend."
 
 warnings = "+implicit_impl_as_method"
 

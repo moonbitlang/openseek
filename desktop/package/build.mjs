@@ -83,8 +83,8 @@ class Build {
   constructor(command, argv) {
     this.command = command;
     this.argv = argv;
-    this.backend = fileURLToPath(new URL("../", import.meta.url));
-    this.desktop = fileURLToPath(new URL("../../", import.meta.url));
+    this.desktop = fileURLToPath(new URL("../", import.meta.url));
+    this.backend = join(this.desktop, "backend");
     this.repo = resolve(this.desktop, "..");
     this.host = Hosts[process.platform];
   }
@@ -120,7 +120,7 @@ class Build {
         : this.command === "windows"
           ? "[--release] [--target app|zip|installer]"
           : this.command === "linux" || this.command === "browser" ? "[--release]" : "";
-      console.log(`Usage: moon run ./desktop/backend/package/${this.command} -- ${suffix}`.trim());
+      console.log(`Usage: moon run ./desktop/package/${this.command} -- ${suffix}`.trim());
       return null;
     }
     const targets = values.target ?? (this.command === "macos"
@@ -404,7 +404,7 @@ class Build {
     if (this.command === "macos") {
       // LLDB may attach to a running development app. Keep get-task-allow
       // out of the shipped app by selecting its entitlements separately.
-      env.PROTON_MACOS_ENTITLEMENTS = join(this.backend, "package/macos",
+      env.PROTON_MACOS_ENTITLEMENTS = join(this.desktop, "package/macos",
         options.release ? "SeekMoon.entitlements" : "SeekMoonDev.entitlements");
     }
     if (options.sign) env.PROTON_MACOS_SIGNING_IDENTITY = options.sign;

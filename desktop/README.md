@@ -240,7 +240,7 @@ just desktop-build-scripts-check
 
 Build the current host's debug package with `just desktop-package`. The
 `just` recipe selects the existing platform-specific Moon entry, and that
-entry forwards its arguments unchanged to `backend/package/build.mjs`. See
+entry forwards its arguments unchanged to `package/build.mjs`. See
 [BUILD.md](BUILD.md) for file ownership, execution order, caching, and
 validation limits.
 
@@ -261,7 +261,7 @@ Proton's user-level immutable store. That first setup may download a large
 archive; later development and platform-package runs reuse the validated store
 entries.
 
-The executable in `backend/package/dev` is only a compatibility entry. It accepts no
+The executable in `package/dev` is only a compatibility entry. It accepts no
 path or build-mode arguments and contains no build or launch implementation.
 
 Development does not use Moon's `data_dir` and does not assemble a package
@@ -308,7 +308,7 @@ narrow-viewport layout without requiring a packaged Desktop host. The
 repository root also exposes `just desktop-test-browser` as an alias.
 
 When adding another command-line binary to the Desktop bundle, follow
-[`backend/package/README.md`](backend/package/README.md). Copying a file into the package is
+[`package/README.md`](package/README.md). Copying a file into the package is
 only one part of the contract: runtime lookup, child-process and integrated
 terminal `PATH`, licensing, signing, platform dependencies, and installed
 package smoke tests must move together.
@@ -334,7 +334,7 @@ Build the Windows package on Windows with:
 
 ```powershell
 cd desktop
-moon -C backend run package/windows
+moon run package/windows
 ```
 
 The shared build program builds and verifies the application inputs under
@@ -345,7 +345,7 @@ signing targets. Pass `--release` for optimized MoonBit artifacts. `--target`
 is repeatable; for example, build only the portable application and ZIP with:
 
 ```powershell
-moon -C backend run package/windows -- --release --target app --target zip
+moon run package/windows -- --release --target app --target zip
 ```
 
 This does not require NSIS. Installer builds require Proton's NSIS dependency,
@@ -376,7 +376,7 @@ signing, ZIP, and DMG to `proton_cli package`. Build a debug app with:
 ```sh
 just desktop-package
 # Equivalent macOS entry from the repository root:
-moon run ./desktop/backend/package/macos
+moon run ./desktop/package/macos
 ```
 
 The app-only output is ad-hoc signed by Proton for local use. Codex is not part
@@ -386,8 +386,8 @@ To build a distribution artifact, select `dmg` or `zip`:
 
 ```sh
 cd desktop
-moon -C backend run package/macos -- --release --no-open --target dmg
-moon -C backend run package/macos -- --release --no-open --target zip
+moon run package/macos -- --release --no-open --target dmg
+moon run package/macos -- --release --no-open --target zip
 ```
 
 - `dist/SeekMoon.dmg` is for first-time installation. It
@@ -416,7 +416,7 @@ timestamp are applied automatically) and notarize:
 ```sh
 # one-time: xcrun notarytool store-credentials openseek \
 #   --apple-id you@example.com --team-id TEAMID --password <app-specific-pw>
-moon -C backend run package/macos -- \
+moon run package/macos -- \
   --release --no-open --target dmg --target zip \
   --sign "Developer ID Application: Your Name (TEAMID)" \
   --notarize openseek
@@ -440,7 +440,7 @@ just desktop-package
 For an optimized AppImage, invoke the Linux entry from `desktop/`:
 
 ```sh
-moon -C backend run package/linux -- --release
+moon run package/linux -- --release
 ```
 
 Build requirements: `pkg-config` plus the GTK3 and WebKitGTK dev packages

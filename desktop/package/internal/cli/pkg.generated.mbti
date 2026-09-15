@@ -1,7 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "openseek_desktop/backend/package/dev"
+package "openseek_desktop/package/internal/cli"
 
 // Values
+pub async fn run(String) -> Unit
 
 // Errors
 

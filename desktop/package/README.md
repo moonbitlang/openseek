@@ -87,9 +87,9 @@ just build
 Then build on every target operating system:
 
 ```sh
-moon run ./desktop/backend/package/macos -- --no-open
-moon run ./desktop/backend/package/linux
-moon run ./desktop/backend/package/windows
+moon run ./desktop/package/macos -- --no-open
+moon run ./desktop/package/linux
+moon run ./desktop/package/windows
 ```
 
 These commands download fixed Mermaid and xterm browser distributions plus a

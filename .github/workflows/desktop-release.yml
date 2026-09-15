@@ -228,7 +228,7 @@ jobs:
       - name: Build, sign, and notarize macOS artifacts
         shell: bash
         run: |
-          moon -C desktop/backend run package/macos --target native -- \
+          moon -C desktop run package/macos --target native -- \
             --release \
             --no-open \
             --target dmg \
@@ -253,7 +253,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          moon -C desktop/backend run package/browser --target native -- --release
+          moon -C desktop run package/browser --target native -- --release
           test -f desktop/dist/browser/index.html
           test -f desktop/dist/browser/browser.js
           COPYFILE_DISABLE=1 tar \
@@ -365,7 +365,7 @@ jobs:
           CL: /bigobj
         # Keep the unpacked application for the version check below. Proton
         # removes it after packaging when only the installer is requested.
-        run: moon run ./desktop/backend/package/windows --target native -- --release --target app --target installer
+        run: moon run ./desktop/package/windows --target native -- --release --target app --target installer
 
       # Proton names the installer after the executable. The release keeps
       # the platform in the filename, matching the other download names.

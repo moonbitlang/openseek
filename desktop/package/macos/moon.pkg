@@ -1,5 +1,5 @@
 import {
-  "openseek_desktop/backend/package/internal/cli",
+  "openseek_desktop/package/internal/cli",
   "moonbitlang/async",
 }
 

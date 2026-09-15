@@ -100,7 +100,7 @@ jobs:
       - name: Build Windows app
         env:
           CL: /bigobj
-        run: moon run ./desktop/backend/package/windows --target native -- --release --target app
+        run: moon run ./desktop/package/windows --target native -- --release --target app
 
       - name: Test Windows background job paths and retained reads
         env:
@@ -190,7 +190,7 @@ jobs:
         working-directory: desktop
         # The Moon entrypoint remains a compatibility CLI. CI can call the same
         # build program directly because the job already prepared Proton.
-        run: node backend/package/build.mjs browser
+        run: node package/build.mjs browser
 
       - name: Run Desktop E2E tests
         working-directory: desktop/e2e

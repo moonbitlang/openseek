@@ -9,8 +9,8 @@
     "version": "0.1.5",
     "formats": ["app", "zip"],
     "icons": [
-      "backend/package/macos/AppIcon.icns",
-      "backend/package/linux/appicon.png"
+      "package/macos/AppIcon.icns",
+      "package/linux/appicon.png"
     ],
     "resources": ["seekmoon/**"],
     "sign": {
