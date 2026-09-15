@@ -12,15 +12,28 @@ fn pattern_repair_provider_args(
   command : String,
   pattern : String,
 ) -> Array[String] {
-  let args : Array[String] = if command == "moonx" ||
+  let args = pattern_repair_provider_prefix_args(command)
+  args.append(["dump", "--expr", pattern, "--exit-code"])
+  args
+}
+
+///|
+fn pattern_repair_provider_prefix_args(command : String) -> Array[String] {
+  if command == "moonx" ||
     command.has_suffix("/moonx") ||
     command.has_suffix("\\moonx") {
     [MoongrepPackageCoordinate, "--"]
   } else {
     []
   }
-  args.append(["dump", "--expr", pattern, "--exit-code"])
-  args
+}
+
+///|
+fn pattern_repair_validator_config(command : String) -> Json {
+  {
+    "command": command,
+    "prefix_args": pattern_repair_provider_prefix_args(command),
+  }
 }
 
 ///|
@@ -107,6 +120,14 @@ test "pattern repair validation preserves the future dump command" {
     "foo()",
     "--exit-code",
   ])
+}
+
+///|
+test "pattern repair validator configuration keeps provider ownership in the Host" {
+  @debug.assert_eq(pattern_repair_validator_config("moonx"), {
+    "command": "moonx",
+    "prefix_args": [MoongrepPackageCoordinate, "--"],
+  })
 }
 
 ///|

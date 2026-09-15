@@ -120,6 +120,20 @@ test "Code search repairs one pattern without a composer or preview" {
       "invalid_pattern: expected a complete expression",
     ),
   )
+  let invalid = semantic
+    .handle(FixPattern, input)
+    .handle(
+      PatternRepairFailed(
+        root=root.path,
+        generation=semantic.page.generation,
+        message="invalid_pattern: unmatched parenthesis",
+      ),
+      input,
+    )
+  let invalid_html = render_search(invalid, input)
+  assert_true(invalid_html.contains(
+    "Pattern repair returned an invalid pattern. The current pattern was not changed; retry.",
+  ))
 }
 
 ///|

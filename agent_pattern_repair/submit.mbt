@@ -25,7 +25,8 @@ fn submit_pattern_repair_tool(
 }
 
 ///|
-/// Run one bounded Pattern Repair Agent turn without exposing workspace tools.
+/// Run one bounded Pattern Repair Agent turn. It has no workspace tools: its
+/// only non-submit capability is the Host-owned syntax validator.
 pub async fn run(
   pattern : String,
   instruction : String,
@@ -42,7 +43,10 @@ pub async fn run(
     session_id="pattern-repair",
     system_prompt=pattern_repair_system_prompt(),
     task=pattern_repair_task(pattern, instruction),
-    tools=captured => Tools([submit_pattern_repair_tool(captured)]),
+    tools=captured => Tools([
+      validate_pattern_tool(workspace_root),
+      submit_pattern_repair_tool(captured),
+    ]),
     max_steps~,
     api_key~,
     model~,

@@ -76,7 +76,8 @@ async fn run_pattern_repair_process(
 
 ///|
 /// Run the bundled OpenSeek executable as a one-shot Pattern Repair Agent.
-/// The child receives no workspace tools; it can only submit a candidate report.
+/// The child receives no workspace tools; its sole non-submit tool validates a
+/// pattern through the provider command selected by this Host.
 async fn request_pattern_repair_candidate(
   state : HostState,
   agent_env : Map[String, String],
