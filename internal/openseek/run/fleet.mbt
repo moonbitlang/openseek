@@ -117,29 +117,14 @@ priv struct AttemptOutcome {
 /// workspaces). Fails if `--dir` is a file, if its parent is missing, or if a run
 /// directory already exists.
 async fn resolve_run_dirs(dir : String, n : Int) -> (Array[String], String?) {
-  if dir.is_empty() {
-    fail("--dir must not be empty")
-  }
-  let (parent, base, source) = if @fs.exists(dir) {
-    if @fs.kind(dir) != Directory {
-      fail("--dir is not a directory: \{dir}")
-    }
-    let abs = @fs.realpath(dir)
-    (
-      @path.Path(abs).dirname().to_string(),
-      @path.Path(abs).basename(),
-      Some(abs),
-    )
-  } else {
-    let parent_raw = @path.Path(dir).dirname().to_string()
-    let parent_raw = if parent_raw == "" { "." } else { parent_raw }
-    if !@fs.exists(parent_raw) {
-      fail("parent directory for --dir does not exist: \{parent_raw}")
-    }
-    if @fs.kind(parent_raw) != Directory {
-      fail("parent path for --dir is not a directory: \{parent_raw}")
-    }
-    (@fs.realpath(parent_raw), @path.Path(dir).basename(), None)
+  let (parent, base, source) = match @setup.probe_dir(dir) {
+    Exists(abs) =>
+      (
+        @path.Path(abs).dirname().to_string(),
+        @path.Path(abs).basename().to_owned(),
+        Some(abs),
+      )
+    Absent(parent~, base~) => (parent, base, None)
   }
   if base.is_empty() {
     fail("cannot derive a run-directory name from --dir: \{dir}")

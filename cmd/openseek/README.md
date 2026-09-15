@@ -163,16 +163,20 @@ moon run cmd/openseek -- run --concurrency 3 --dir myproject "fix the failing te
 
 ## Package Boundary
 
-This package should stay thin: subcommand dispatch, argument parsing,
-environment-backed defaults, model parsing, prompt override file loading,
-session-store setup, and delegation to the agent package. The interactive UI is
-the separate `openseek_tui` binary ([moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui)),
+This package should stay minimal: `main.mbt` hands control to
+`internal/openseek` and turns a failure into an exit status. Subcommand
+dispatch, argument parsing, environment-backed defaults, model parsing, prompt
+override file loading, session-store setup, and the command handlers live under
+[`internal/openseek`](../../internal/openseek/README.md), which documents its
+own package layout. The interactive UI is the separate `openseek_tui` binary
+([moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui)),
 which consumes this module from mooncakes; the prompt package owns built-in
 prompt selection; the agent package owns tool definitions and the execution
 loop.
 
-Run the package tests with:
+This package has no tests of its own; the CLI's tests live with the packages
+that own the behavior:
 
 ```bash
-moon test cmd/openseek
+moon test internal/openseek/options internal/openseek/setup internal/openseek/execution internal/openseek/run internal/openseek/serve internal/openseek/commands --target native
 ```

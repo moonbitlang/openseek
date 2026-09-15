@@ -102,7 +102,8 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `bobzhang/openseek_protocol/emit` | Writer for that stream (native or wasm): owns each event's log level. | `protocol/emit/README.mbt.md` |
 | `bobzhang/openseek/agent` | OpenSeek agent loop (native or wasm) and local tool dispatch. | `agent/README.mbt.md` |
 | `bobzhang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind `openseek review`. | `agent_review/README.mbt.md` |
-| `bobzhang/openseek/cmd/openseek` | Headless automation CLI (`openseek`), built for native or wasm. | `cmd/openseek/README.md` |
+| `bobzhang/openseek/cmd/openseek` | Headless automation CLI (`openseek`), built for native or wasm: the executable entry point only. | `cmd/openseek/README.md` |
+| `bobzhang/openseek/internal/openseek` | The CLI's dispatcher and implementation: `options` (argparse tree), `setup` (workspace, prompt, session), `execution` (event sink, approvals, tools, review gate), `run`, `serve`, and `commands`. | `internal/openseek/README.md` |
 | `bobzhang/openseek/cli` | Shared command-main helpers: the agent options (`--api-key`, `--model`, …) and failure-text sanitizer used by `openseek` and the out-of-tree `openseek_tui`. | — |
 | `bobzhang/openseek/viz` | Browser viewer for durable session logs (JS). | `viz/README.md` |
 | `bobzhang/inspect` (in `inspect/`, own module) | HTTP server (native or wasm) that serves the visualizer over recorded sessions. | `inspect/README.md` |

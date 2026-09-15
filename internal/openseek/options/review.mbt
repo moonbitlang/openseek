@@ -17,9 +17,9 @@ fn review_gate_flag() -> @argparse.FlagArg {
 
 ///|
 /// The `--review-deadline` option (milliseconds), shared by `run` and `serve`
-/// like `--review-gate`: the wall clock one automatic goal-met audit
-/// may take before it is treated as
-/// stuck. Absent, the audit falls back to `GateDeadlineMs`.
+/// like `--review-gate`: the wall clock one automatic goal-met audit may take
+/// before it is treated as stuck. Absent, the audit falls back to
+/// `execution`'s `GateDeadlineMs` (900000, fifteen minutes).
 fn review_deadline_option() -> @argparse.OptionArg {
   OptionArg(
     "review-deadline",
@@ -29,7 +29,7 @@ fn review_deadline_option() -> @argparse.OptionArg {
 }
 
 ///|
-/// `None` — no flag — means the `GateDeadlineMs` default.
+/// `None` — no flag — means `execution`'s `GateDeadlineMs` default (900000).
 pub fn review_deadline_ms(matches : @argparse.Matches) -> Int? raise {
   match matches {
     { values: { "review-deadline": [input, ..], .. }, .. } =>

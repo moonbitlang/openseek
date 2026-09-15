@@ -19,6 +19,8 @@ pub async fn load_or_new_session(@store.SessionStore, @agent_session.SessionId, 
 
 pub async fn prepare_workspace_root(@argparse.Matches, log_created? : Bool) -> String
 
+pub async fn probe_dir(String) -> DirProbe
+
 pub async fn random_salt() -> String
 
 pub async fn resolved_session_id(@argparse.Matches) -> @agent_session.SessionId?
@@ -34,6 +36,10 @@ pub fn workflow_launch(String) -> (String, Array[String])
 // Errors
 
 // Types and methods
+pub(all) enum DirProbe {
+  Exists(String)
+  Absent(parent~ : String, base~ : String)
+}
 
 // Type aliases
 
