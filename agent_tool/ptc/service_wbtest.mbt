@@ -2,11 +2,8 @@
 async test "session listener reuses its port with isolated revocable capabilities" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let tool = @agent_tool.AgentToolDefinition(
+      let tool = leaf(
         name="echo",
-        description="echo",
-        schema=JsonSchema({}),
-        program_callable=true,
         concurrent_safe=true,
         execute=Sync(arguments => @agent_tool.respond("ok", data=arguments)),
       )
@@ -15,14 +12,8 @@ async test "session listener reuses its port with isolated revocable capabilitie
       let background : Array[Json] = []
       let first = service.register(on_trace=data => foreground.push(data))
       let second = service.register()
-      guard @json.parse(first.env()["OPENSEEK_PTC"])
-        is { "url": String(url), "token": String(token), .. } else {
-        fail("first capability")
-      }
-      guard @json.parse(second.env()["OPENSEEK_PTC"])
-        is { "url": String(other_url), "token": String(other_token), .. } else {
-        fail("second capability")
-      }
+      let (url, token) = capability(first.env())
+      let (other_url, other_token) = capability(second.env())
       assert_eq(url, other_url)
       assert_true(token != other_token)
       ignore(request(first.env(), "echo", { "owner": "first" }))
@@ -67,11 +58,8 @@ async test "closing queued and running RPC calls does not deadlock the shared fi
       let release : @async.Queue[Unit] = Queue(kind=Unbounded)
       let journal : Array[String] = []
       let tool = state.serialize(
-        AgentToolDefinition(
+        leaf(
           name="edit",
-          description="file gate probe",
-          schema=JsonSchema({}),
-          program_callable=true,
           execute=Async(arguments => {
             guard arguments is { "id": String(id), .. } else {
               fail("missing id")
@@ -98,9 +86,7 @@ async test "closing queued and running RPC calls does not deadlock the shared fi
         () => request(queued.env(), "edit", { "id": "queued" }),
         allow_failure=true,
       )
-      while queued.calls.is_empty() {
-        @async.sleep(1)
-      }
+      await_admission(queued)
       queued.close()
       assert_true(queued.interrupted())
       let direct = group.spawn(() => {
@@ -112,12 +98,8 @@ async test "closing queued and running RPC calls does not deadlock the shared fi
       running.close()
       assert_true(running.interrupted())
       assert_true(direct.wait() is Respond({ is_error: false, .. }))
-      ignore(first.wait()) catch {
-        _ => ()
-      }
-      ignore(second.wait()) catch {
-        _ => ()
-      }
+      settle(first)
+      settle(second)
       assert_eq(journal, ["running", "direct"])
     })
   })
@@ -130,11 +112,8 @@ async test "session teardown joins active calls and revokes all registrations" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let entered : @async.Queue[Unit] = Queue(kind=Unbounded)
-      let tool = @agent_tool.AgentToolDefinition(
+      let tool = leaf(
         name="block",
-        description="block",
-        schema=JsonSchema({}),
-        program_callable=true,
         execute=Async(_ => {
           defer {
             stopped.val = true
@@ -165,13 +144,7 @@ async test "session teardown joins active calls and revokes all registrations" {
 async test "retained trace stays within job record bounds without truncating client replies" {
   @async.with_task_group(group => {
     let text = "x".repeat(50000)
-    let tool = @agent_tool.AgentToolDefinition(
-      name="large",
-      description="large",
-      schema=JsonSchema({}),
-      program_callable=true,
-      execute=Sync(_ => @agent_tool.respond(text)),
-    )
+    let tool = leaf(name="large", execute=Sync(_ => @agent_tool.respond(text)))
     let service = Service::start(group, Tools([tool]))
     let program = service.register()
     for _ in 0..<16 {
@@ -215,11 +188,8 @@ async test "synchronous revocation prevents queued mutation before asynchronous 
         group,
         Tools([
           state.serialize(
-            AgentToolDefinition(
+            leaf(
               name="edit",
-              description="queued mutation",
-              schema=JsonSchema({}),
-              program_callable=true,
               execute=Sync(_ => {
                 mutations.val += 1
                 @agent_tool.respond("applied")
@@ -233,17 +203,13 @@ async test "synchronous revocation prevents queued mutation before asynchronous 
         () => request(program.env(), "edit", {}),
         allow_failure=true,
       )
-      while program.calls.is_empty() {
-        @async.sleep(1)
-      }
+      await_admission(program)
       program.stop()
       assert_true(service.programs.is_empty())
       // Simulate publication/output draining before close is able to join.
       release.put(())
       holder.wait()
-      ignore(pending.wait()) catch {
-        _ => ()
-      }
+      settle(pending)
       assert_eq(mutations.val, 0)
       program.close()
       assert_true(program.interrupted())
@@ -281,11 +247,8 @@ async test "HTTP admission rejects oversized headers and ambiguous framing witho
     let service = Service::start(
       group,
       Tools([
-        AgentToolDefinition(
+        leaf(
           name="probe",
-          description="probe",
-          schema=JsonSchema({}),
-          program_callable=true,
           execute=Sync(_ => {
             executed.val += 1
             @agent_tool.respond("ok")
@@ -340,11 +303,8 @@ async test "client disconnect leaves an accepted call owned by its live program"
       let service = Service::start(
         group,
         Tools([
-          AgentToolDefinition(
+          leaf(
             name="edit",
-            description="accepted mutation",
-            schema=JsonSchema({}),
-            program_callable=true,
             execute=Async(_ => {
               entered.put(())
               release.get()
@@ -390,11 +350,8 @@ async test "stateful dispatch rechecks cancellation when a lock handoff wins" {
       let service = Service::start(
         group,
         Tools([
-          AgentToolDefinition(
+          leaf(
             name="edit",
-            description="standalone stateful tool",
-            schema=JsonSchema({}),
-            program_callable=true,
             execute=Async(arguments => {
               if arguments == "hold" {
                 entered.put(())
@@ -415,9 +372,7 @@ async test "stateful dispatch rechecks cancellation when a lock handoff wins" {
         () => request(queued.env(), "edit", "mutate"),
         allow_failure=true,
       )
-      while queued.calls.is_empty() {
-        @async.sleep(1)
-      }
+      await_admission(queued)
       // Cancellation without revoking the program also occurs on an executor
       // deadline or handler cancellation. A later call can still use the program.
       for task in queued.active.values() {
@@ -425,9 +380,7 @@ async test "stateful dispatch rechecks cancellation when a lock handoff wins" {
       }
       release.put(())
       ignore(first.wait())
-      ignore(second.wait()) catch {
-        _ => ()
-      }
+      settle(second)
       assert_eq(mutations.val, 0)
       assert_true(
         queued.interrupted() ||
@@ -456,11 +409,8 @@ async test "request deadline includes blocked pre-dispatch publication" {
       let service = Service::start(
         group,
         Tools([
-          AgentToolDefinition(
+          leaf(
             name="edit",
-            description="mutation",
-            schema=JsonSchema({}),
-            program_callable=true,
             execute=Sync(_ => {
               mutations.val += 1
               @agent_tool.respond("applied")
@@ -508,9 +458,7 @@ async test "stop joins calls without repeating blocked cancellation-time publica
       )
       entered.get()
       program.close()
-      ignore(pending.wait()) catch {
-        _ => ()
-      }
+      settle(pending)
       assert_true(program.interrupted())
       assert_eq(publications.val, 2) // Initial attempt and one final snapshot.
       assert_true(
@@ -533,11 +481,8 @@ async test "an RPC gate grant followed by cancellation cannot enter a standalone
       let service = Service::start(
         group,
         Tools([
-          AgentToolDefinition(
+          leaf(
             name="edit",
-            description="mutation",
-            schema=JsonSchema({}),
-            program_callable=true,
             execute=Sync(_ => {
               mutations.val += 1
               @agent_tool.respond("done")
@@ -551,17 +496,13 @@ async test "an RPC gate grant followed by cancellation cannot enter a standalone
         () => request(program.env(), "edit", {}),
         allow_failure=true,
       )
-      while program.calls.is_empty() {
-        @async.sleep(1)
-      }
+      await_admission(program)
       @async.sleep(20)
       service.serial.release()
       for task in program.active.values() {
         task.cancel()
       }
-      ignore(pending.wait()) catch {
-        _ => ()
-      }
+      settle(pending)
       assert_eq(mutations.val, 0)
       assert_true(
         program.interrupted() ||
@@ -585,11 +526,8 @@ async test "HTTP accepts fragmented headers and UTF-8 across single-byte chunks"
       let service = Service::start(
         group,
         Tools([
-          AgentToolDefinition(
+          leaf(
             name="probe",
-            description="probe",
-            schema=JsonSchema({}),
-            program_callable=true,
             execute=Sync(value => {
               arguments.val = Some(value)
               @agent_tool.respond("ok")
@@ -631,11 +569,8 @@ async test "HTTP rejects malformed chunks and excessive framing before reservati
       let service = Service::start(
         group,
         Tools([
-          AgentToolDefinition(
+          leaf(
             name="probe",
-            description="probe",
-            schema=JsonSchema({}),
-            program_callable=true,
             execute=Sync(_ => {
               executions.val += 1
               @agent_tool.respond("ok")
@@ -681,11 +616,8 @@ async test "an acknowledged call deadline remains a tool error the script can ha
       let service = Service::start(
         group,
         Tools([
-          AgentToolDefinition(
+          leaf(
             name="slow",
-            description="slow",
-            schema=JsonSchema({}),
-            program_callable=true,
             execute=Async(_ => {
               @async.sleep(60000)
               @agent_tool.respond("unexpected")
@@ -730,11 +662,8 @@ async test "handoff after revocation detaches the foreground observer" {
       let service = Service::start(
         group,
         Tools([
-          AgentToolDefinition(
+          leaf(
             name="edit",
-            description="leaf",
-            schema=JsonSchema({}),
-            program_callable=true,
             concurrent_safe=true,
             execute=Sync(_ => @agent_tool.respond("applied")),
           ),
@@ -773,11 +702,8 @@ async test "a slow publication cannot deliver a stale snapshot after close" {
       let service = Service::start(
         group,
         Tools([
-          AgentToolDefinition(
+          leaf(
             name="slow",
-            description="outlives its deadline",
-            schema=JsonSchema({}),
-            program_callable=true,
             concurrent_safe=true,
             execute=Async(_ => {
               @async.sleep(400)
@@ -815,12 +741,8 @@ async test "a slow publication cannot deliver a stale snapshot after close" {
       @async.sleep(20)
       gate.put(())
       closing.wait()
-      ignore(first.wait()) catch {
-        _ => ()
-      }
-      ignore(second.wait()) catch {
-        _ => ()
-      }
+      settle(first)
+      settle(second)
       assert_true(
         delivered.last()
         is Some({ "ptc_calls": [_, { "status": "interrupted", .. }], .. }),

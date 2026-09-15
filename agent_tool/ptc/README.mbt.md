@@ -4,11 +4,12 @@ This package is the service and the per-script registration; mbtx wires it
 into the standard host (the `ptc` argument, default activation, background
 handoff) and the desktop renders the retained traces.
 
-PTC defaults on for supported wasm runs in the standard host. Set `ptc: false`
-to opt out. Scripts call host tools through the published SDK. It invokes the
-same registered executors as direct tool calls, including
-edit validation, rollback checks, and the session's shared `FileStateMap`.
-Direct `edit`, `multi_edit`, and `multi_edit(edits_file=...)` remain available.
+The script-facing contract (API, result shape, error rule, budgets) is
+`description()`, the text appended to the mbtx tool description; this file
+covers hosting, lifetime, and wire bounds. Scripts call host tools through
+the published SDK, which invokes the same registered executors as direct
+tool calls, including edit validation, rollback checks, and the session's
+shared `FileStateMap`. Direct `edit` and `multi_edit` remain available.
 
 For example, pass this as `source` to mbtx:
 
@@ -33,13 +34,9 @@ integration tests exercise this exact registry import.
 
 ## Results and search
 
-All calls return `@tools.CallResult { content : String, is_error : Bool, data : Json? }`.
-Tool errors are values. Transport failures raise `@tools.TransportError`: the tool
-may already have executed, so never automatically retry a mutation.
-
-`@tools.call(name : String, arguments : Json)` is the whole API. `arguments`
-is the same JSON object the direct host tool takes; the SDK forwards it
-unchanged and validation and defaults stay in the host. The PTC-enabled tools:
+`@tools.call(name : String, arguments : Json)` is the whole API; transport
+failures raise `@tools.TransportError` while tool errors are results. The
+PTC-enabled tools and their argument shapes:
 
 - `edit`
 - `multi_edit`, e.g. `{ "edits": edits }` or `{ "edits_file": "edits.json" }`
@@ -47,9 +44,6 @@ unchanged and validation and defaults stay in the host. The PTC-enabled tools:
 
 SDK 0.1.0 also ships `@tools.edit` and friends as thin wrappers; 0.2.0 removes
 them in favor of `call`, so new scripts should use `call` directly.
-
-For search, `data` is `{sources: [{url, title?, snippet?, published_at?}],
-truncated: Bool}`. Optional source fields are absent when unavailable.
 
 ```mbtx
 import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
@@ -66,11 +60,9 @@ async fn main {
 }
 ```
 
-Only printed output enters the next model request. Nested arguments and results
-are stored as metadata on the outer result and displayed as nested Desktop tool
-cards. Print the information the model needs, retaining source URLs for citations.
-A program can branch, compute arguments, and filter results; return to the model
-when the next step requires its judgment.
+Nested arguments and results are stored as metadata on the outer result and
+displayed as nested Desktop tool cards; only printed output enters the next
+model request.
 
 ## Lifetime and deadlock prevention
 

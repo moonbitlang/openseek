@@ -21,15 +21,55 @@ async fn run(
 }
 
 ///|
+/// A program-callable leaf tool; the description is never asserted on.
+fn leaf(
+  name~ : String,
+  execute~ : @agent_tool.ToolExecutor,
+  concurrent_safe? : Bool = false,
+) -> @agent_tool.AgentToolDefinition {
+  AgentToolDefinition(
+    name~,
+    description=name,
+    schema=JsonSchema({}),
+    program_callable=true,
+    concurrent_safe~,
+    execute~,
+  )
+}
+
+///|
+/// The SDK's discovery handoff, as a script would read it.
+fn capability(env : Map[String, String]) -> (String, String) raise {
+  guard @json.parse(env["OPENSEEK_PTC"])
+    is { "url": String(url), "token": String(token), .. } else {
+    fail("missing PTC handoff")
+  }
+  (url, token)
+}
+
+///|
+/// Join a task whose outcome the test does not care about.
+async fn[T] settle(task : @async.Task[T]) -> Unit {
+  ignore(task.wait()) catch {
+    _ => ()
+  }
+}
+
+///|
+/// Wait until the listener has admitted a program's first request.
+async fn await_admission(program : Program) -> Unit {
+  while program.calls.is_empty() {
+    @async.sleep(1)
+  }
+}
+
+///|
 async fn request(
   env : Map[String, String],
   name : String,
   arguments : Json,
 ) -> Json {
-  guard @json.parse(env["OPENSEEK_PTC"])
-    is { "url": String(url), "token": String(token), .. } else {
-    fail("missing handoff")
-  }
+  let (url, token) = capability(env)
   let (response, body) = @http.post(
     url,
     ({ "version": 1, "name": name, "arguments": arguments } : Json),
@@ -128,11 +168,8 @@ async test "PTC cancellation joins handlers releases shared state and retains in
   let stopped = Ref(false)
   let trace : Ref[Json?] = Ref(None)
   let tool = state.serialize(
-    AgentToolDefinition(
+    leaf(
       name="block",
-      description="block",
-      schema=JsonSchema({}),
-      program_callable=true,
       execute=Async(_ => {
         defer {
           stopped.val = true
@@ -169,13 +206,7 @@ async test "PTC cancellation joins handlers releases shared state and retains in
 
 ///|
 async test "PTC tool failures are results and do not end the program" {
-  let failed = @agent_tool.AgentToolDefinition(
-    name="fail",
-    description="fail",
-    schema=JsonSchema({}),
-    program_callable=true,
-    execute=Async(_ => fail("expected failure")),
-  )
+  let failed = leaf(name="fail", execute=Async(_ => fail("expected failure")))
   let action = run(Tools([failed]), env => {
     assert_true(
       request(env, "fail", {})
@@ -190,21 +221,15 @@ async test "PTC tool failures are results and do not end the program" {
 ///|
 async test "PTC rejects malformed requests and enforces execution and result budgets" {
   let executions = Ref(0)
-  let tool = @agent_tool.AgentToolDefinition(
+  let tool = leaf(
     name="probe",
-    description="probe",
-    schema=JsonSchema({}),
-    program_callable=true,
     execute=Sync(_ => {
       executions.val += 1
       @agent_tool.respond(String::make(65537, 'x'))
     }),
   )
   let action = run(Tools([tool]), env => {
-    guard @json.parse(env["OPENSEEK_PTC"])
-      is { "url": String(url), "token": String(token), .. } else {
-      fail("missing handoff")
-    }
+    let (url, token) = capability(env)
     for
       invalid in [
         "{",
@@ -241,11 +266,8 @@ async test "PTC rejects malformed requests and enforces execution and result bud
 
 ///|
 async test "PTC preserves completed calls when the program fails" {
-  let probe = @agent_tool.AgentToolDefinition(
+  let probe = leaf(
     name="probe",
-    description="probe",
-    schema=JsonSchema({}),
-    program_callable=true,
     execute=Sync(_ => @agent_tool.respond("applied")),
   )
   let action = run(Tools([probe]), env => {
@@ -278,11 +300,8 @@ async test "PTC and direct file calls share one execution gate" {
   let release : @async.Queue[Unit] = Queue(kind=Unbounded)
   let journal : Array[String] = []
   let definition = state.serialize(
-    AgentToolDefinition(
+    leaf(
       name="edit",
-      description="probe",
-      schema=JsonSchema({}),
-      program_callable=true,
       execute=Async(arguments => {
         if arguments == "ptc" {
           journal.push("ptc start")
@@ -327,11 +346,8 @@ async test "PTC program exit joins an unawaited request and revokes its endpoint
   let started : @async.Queue[Unit] = Queue(kind=Unbounded)
   let stopped = Ref(false)
   let handoff : Ref[Map[String, String]?] = Ref(None)
-  let tool = @agent_tool.AgentToolDefinition(
+  let tool = leaf(
     name="block",
-    description="block",
-    schema=JsonSchema({}),
-    program_callable=true,
     execute=Async(_ => {
       defer {
         stopped.val = true
