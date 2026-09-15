@@ -413,7 +413,7 @@ pub fn apply_session_item(
           } else {
             payload.tool_name
           },
-          children: program_calls(payload.data, call.call_id, snapshot=true),
+          children: program_calls(payload.data, call.call_id, origin=Recorded),
           outcome: Done(
             content=payload.content,
             is_error=payload.is_error,

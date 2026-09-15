@@ -14,7 +14,7 @@ import {
 // Values
 pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
 
-pub fn program_calls_view(Json?, String, terminal? : Bool) -> @html.Html?
+pub fn program_calls_view(Json?, String, origin? : @transcript.TraceOrigin) -> @html.Html?
 
 pub fn scroll_to_latest() -> @cmd.Cmd
 

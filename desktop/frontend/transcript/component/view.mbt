@@ -441,49 +441,33 @@ fn tool_result_view(
   } else {
     None
   }
-  match call.outcome {
-    Snapshot(content~) =>
-      result_row_view(
-        call.name,
-        call.arguments,
-        pending=false,
-        is_error=false,
-        brief=Some("Snapshot"),
-        Some(content),
-        key,
-        subrun?,
-        status?,
-      )
-    Pending(output~) =>
-      result_row_view(
-        call.name,
-        call.arguments,
-        pending=true,
-        is_error=false,
-        brief=None,
-        output,
-        key,
-        subrun?,
-        status?,
-      )
+  let (pending, is_error, brief, output) = match call.outcome {
+    Snapshot(content~) => (false, false, Some("Snapshot"), Some(content))
+    Pending(output~) => (true, false, None, output)
+    // An empty result still gets its row; it just has nothing to expand.
     Done(content~, is_error~, brief~) =>
-      result_row_view(
-        call.name,
-        call.arguments,
-        pending=false,
-        is_error~,
-        brief~,
-        // An empty result still gets its row; it just has nothing to expand.
+      (
+        false,
+        is_error,
+        brief,
         if content.is_blank() {
           None
         } else {
           Some(content)
         },
-        key,
-        subrun?,
-        status?,
       )
   }
+  result_row_view(
+    call.name,
+    call.arguments,
+    pending~,
+    is_error~,
+    brief~,
+    output,
+    key,
+    subrun?,
+    status?,
+  )
 }
 
 ///|
@@ -1072,9 +1056,9 @@ fn transcript_view(
 pub fn program_calls_view(
   data : Json?,
   parent : String,
-  terminal? : Bool = false,
+  origin? : @transcript.TraceOrigin = Live,
 ) -> @html.Html? {
-  let calls = @transcript.program_calls(data, parent, terminal~)
+  let calls = @transcript.program_calls(data, parent, origin~)
   guard !calls.is_empty() else { return None }
   let rows : Map[String, @html.Html] = Map([])
   for index, call in calls {

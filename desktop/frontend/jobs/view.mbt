@@ -1,9 +1,11 @@
 ///|
-fn status_label(state : @wire.JobState, cleanup_error? : String) -> String {
-  if cleanup_error is Some(_) {
-    return "Failed · cleanup incomplete"
+/// A job's status text and CSS class, decided together: a cleanup failure
+/// overrides the process state in both.
+fn job_status(job : @wire.JobRecord) -> (String, String) {
+  if job.cleanup_error is Some(_) {
+    return ("Failed · cleanup incomplete", "failed")
   }
-  match state {
+  let label = match job.state {
     Running => "Running"
     Stopping => "Stopping…"
     Exited(0) => "Completed"
@@ -16,14 +18,7 @@ fn status_label(state : @wire.JobState, cleanup_error? : String) -> String {
     Stopped(reason) => "Stopped · \{reason}"
     Interrupted => "Interrupted"
   }
-}
-
-///|
-fn status_class(state : @wire.JobState, cleanup_error? : String) -> String {
-  if cleanup_error is Some(_) {
-    return "failed"
-  }
-  match state {
+  let class = match job.state {
     Running => "running"
     Stopping => "stopping"
     Exited(0) => "completed"
@@ -31,6 +26,7 @@ fn status_class(state : @wire.JobState, cleanup_error? : String) -> String {
       "failed"
     _ => "stopped"
   }
+  (label, class)
 }
 
 ///|
@@ -170,8 +166,9 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
       let cards = group.map(view => {
         let job = view.job
         let selected = state.selected == Some((job.generation, job.id))
+        let (status_label, status_class) = job_status(job)
         @html.button(
-          class="jobs-row jobs-row-\{status_class(job.state, cleanup_error?=job.cleanup_error)}" +
+          class="jobs-row jobs-row-\{status_class}" +
             (if selected { " selected" } else { "" }),
           attrs=@html.Attrs::build().aria_pressed(selected.to_string()),
           title=job.command,
@@ -184,8 +181,8 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
                 short_job_id(job.id, state.jobs),
               ),
               @html.span(
-                class="jobs-status jobs-status-\{status_class(job.state, cleanup_error?=job.cleanup_error)}",
-                status_label(job.state, cleanup_error?=job.cleanup_error),
+                class="jobs-status jobs-status-\{status_class}",
+                status_label,
               ),
             ]),
             @html.div(
@@ -249,12 +246,13 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
     )
     if selected_job(state) is Some(view) {
       let job = view.job
+      let (status_label, status_class) = job_status(job)
       let details : Array[@html.Html] = [
         @html.div(class="jobs-detail-title", [
           @html.strong(title=job.id, short_job_id(job.id, state.jobs)),
           @html.span(
-            class="jobs-status jobs-status-\{status_class(job.state, cleanup_error?=job.cleanup_error)}",
-            status_label(job.state, cleanup_error?=job.cleanup_error),
+            class="jobs-status jobs-status-\{status_class}",
+            status_label,
           ),
         ]),
         @html.pre(class="jobs-full-command", job.command),
@@ -342,7 +340,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
       if @transcript_component.program_calls_view(
           job.data,
           "job/\{job.generation}/\{job.id}",
-          terminal=job.state.is_terminal(),
+          origin=if job.state.is_terminal() { Terminal } else { Live },
         )
         is Some(calls) {
         details.push(calls)

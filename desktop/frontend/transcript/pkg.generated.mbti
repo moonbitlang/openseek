@@ -16,7 +16,7 @@ pub fn decode_engine_event(@protocol.AgentStreamEvent) -> EngineEvent?
 
 pub fn goal_marker(String) -> GoalMarker?
 
-pub fn program_calls(Json?, String, terminal? : Bool, snapshot? : Bool) -> Array[ToolCall]
+pub fn program_calls(Json?, String, origin? : TraceOrigin) -> Array[ToolCall]
 
 pub fn session_from_reply(@protocol.LoadSessionReply) -> SessionLoadView
 
@@ -133,6 +133,12 @@ pub(all) enum ToolOutcome {
 } derive(Eq)
 pub fn ToolOutcome::equal(Self, Self) -> Bool
 pub fn ToolOutcome::not_equal(Self, Self) -> Bool
+
+pub(all) enum TraceOrigin {
+  Live
+  Terminal
+  Recorded
+}
 
 pub(all) struct TranscriptItem {
   kind : ItemKind
