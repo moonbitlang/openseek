@@ -1,6 +1,5 @@
 import {
   "moonbitlang/editor/base/common" @base_common,
-  "moonbitlang/editor/language",
   "moonbitlang/editor/viewer",
   "moonbitlang/editor/viewer/common/markers",
   "moonbitlang/editor/viewer/common/model",

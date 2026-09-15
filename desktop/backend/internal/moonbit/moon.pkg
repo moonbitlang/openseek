@@ -8,7 +8,6 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/async/semaphore",
   "moonbitlang/core/env" @sys,
-  "moonbitlang/core/string",
   "tonyfettes/xlog",
 }
 

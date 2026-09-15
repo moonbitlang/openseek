@@ -19,7 +19,6 @@ import {
   "bobzhang/openseek/mcp/config" @mcpconfig,
   "bobzhang/openseek/mcp/tools" @mcptools,
   "bobzhang/openseek/internal/openseek/options",
-  "bobzhang/openseek_protocol",
   "bobzhang/openseek/internal/openseek/setup",
   "moonbitlang/async/stdio",
   "bobzhang/openseek/agent_session/store",

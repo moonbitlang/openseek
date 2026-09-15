@@ -8,7 +8,6 @@ import {
   "bobzhang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/core/json",
 }
 
 warnings = "+unnecessary_annotation"

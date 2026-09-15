@@ -8,8 +8,4 @@ import {
   "moonbit-community/rabbita/dom" @rdom,
 }
 
-import {
-  "moonbitlang/editor/viewer/common/editor_api",
-} for "wbtest"
-
 supported_targets = "js"

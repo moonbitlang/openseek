@@ -14,7 +14,6 @@ import {
   "moonbitlang/core/json",
   "bobzhang/openseek/mcp/config" @mcpconfig,
   "bobzhang/openseek/mcp/tools" @mcptools,
-  "bobzhang/openseek_protocol",
   "bobzhang/openseek/internal/openseek/setup",
   "bobzhang/openseek/agent_tool/web_search",
 }

@@ -13,7 +13,6 @@ import {
   "moonbitlang/async/fs",
   "bobzhang/openseek/internal/openseek/options",
   "moonbitlang/x/path",
-  "bobzhang/openseek_protocol",
   "bobzhang/openseek/internal/openseek/setup",
   "moonbitlang/async/stdio",
   "bobzhang/openseek/agent_session/store",

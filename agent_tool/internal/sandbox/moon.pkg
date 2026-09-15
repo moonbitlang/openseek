@@ -1,7 +1,6 @@
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/async/io",
   "moonbitlang/async/process",
   "moonbitlang/x/path",
   "bobzhang/openseek/agent_tool/internal/platform_shell",

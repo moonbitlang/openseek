@@ -11,7 +11,6 @@ import {
   "moonbitlang/x/path",
   "moonbitlang/async/process",
   "bobzhang/openseek/prompt",
-  "bobzhang/openseek_protocol",
   "bobzhang/openseek/agent_session/store",
   "bobzhang/openseek/internal/workspace_path",
 }
