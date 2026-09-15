@@ -167,12 +167,26 @@ pub async fn[X] build_tools(
       }
     })
   })
+  // Every file operation, direct or (later) programmatic, runs under the
+  // session's one file gate so validation, write, check, and rollback never
+  // interleave across an async suspension. Stateful extras share it; a
+  // concurrent-safe extra never touches files and stays unwrapped.
+  let file_tools = [
+    @edit.definition(workspace_root~, file_state~),
+    @multi_edit.definition(workspace_root~, file_state~),
+    @write.definition(workspace_root~, file_state~),
+    @remove.definition(workspace_root~, file_state~),
+  ].map(tool => file_state.serialize(tool))
+  let extras = extra_tools.map(tool => {
+    if tool.is_concurrent_safe() {
+      tool
+    } else {
+      file_state.serialize(tool)
+    }
+  })
   Tools(
+    file_tools +
     [
-      @edit.definition(workspace_root~, file_state~),
-      @multi_edit.definition(workspace_root~, file_state~),
-      @write.definition(workspace_root~, file_state~),
-      @remove.definition(workspace_root~, file_state~),
       @plan.definition(),
       @goal.definition(),
       // The escalation argument exists for this registry only when the runtime
@@ -202,7 +216,7 @@ pub async fn[X] build_tools(
       @job_wait.definition(),
       @finish.definition(),
     ] +
-    extra_tools,
+    extras,
     background_jobs=bg_runtime,
   )
 }

@@ -251,14 +251,16 @@ async fn execute(
           is_error=true,
         )
       }
-      save_script(
-        workspace_root,
-        filename,
-        source,
-        read_only~,
-        file_state~,
-        write_scope?,
-      ) catch {
+      file_state.with_access(() => {
+        save_script(
+          workspace_root,
+          filename,
+          source,
+          read_only~,
+          file_state~,
+          write_scope?,
+        )
+      }) catch {
         error if @async.is_being_cancelled() => raise error
         error =>
           return @agent_tool.respond(
@@ -288,18 +290,15 @@ async fn execute(
             is_error=true,
           )
       }
-      if is_bundled_filename(filename) &&
-        @env.get_env_var("OPENSEEK_REFERENCES") is Some(root) {
-        check_builtin_containment(path, root) catch {
-          error if @async.is_being_cancelled() => raise error
-          error =>
-            return @agent_tool.respond(
-              "error: mbtx \{@tool_error.failure_message("\{error}")}",
-              is_error=true,
-            )
-        }
-      }
-      let source = @fs.read_file(path).text() catch {
+      let source = read_script_snapshot(
+        file_state,
+        path,
+        if is_bundled_filename(filename) {
+          @env.get_env_var("OPENSEEK_REFERENCES")
+        } else {
+          None
+        },
+      ) catch {
         error if @async.is_being_cancelled() => raise error
         error => {
           let hint = if is_bundled_filename(filename) {
@@ -1887,4 +1886,20 @@ fn description(
     $|work is complete.
     $|\{delegation}
   )
+}
+
+///|
+/// Capture saved source only after any shared edit/check/rollback has settled.
+/// Release the file gate before compilation or waiting for the program.
+async fn read_script_snapshot(
+  state : @agent_tool.FileStateMap,
+  path : String,
+  builtin_root : String?,
+) -> String {
+  state.with_access(() => {
+    if builtin_root is Some(root) {
+      check_builtin_containment(path, root)
+    }
+    @fs.read_file(path).text()
+  })
 }

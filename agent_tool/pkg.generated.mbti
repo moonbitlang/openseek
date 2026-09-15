@@ -58,6 +58,8 @@ pub fn FileStateMap::get(Self, String) -> FileState?
 pub fn FileStateMap::record_created(Self, String, String) -> Unit
 pub fn FileStateMap::record_edited(Self, String, String, String) -> Unit
 pub fn FileStateMap::record_modified(Self, String, String) -> Unit
+pub fn FileStateMap::serialize(Self, AgentToolDefinition) -> AgentToolDefinition
+pub async fn[T] FileStateMap::with_access(Self, async () -> T) -> T
 
 pub(all) struct JsonSchema(Json) derive(@debug.Debug)
 

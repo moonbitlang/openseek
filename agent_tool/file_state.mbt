@@ -58,12 +58,13 @@ priv struct Entry {
 /// never as "not created".
 struct FileStateMap {
   entries : Map[String, Entry]
+  lock : @async.Mutex
 }
 
 ///|
 /// A fresh, empty session file-state map.
 pub fn FileStateMap::FileStateMap() -> FileStateMap {
-  { entries: Map([]), }
+  { entries: Map([]), lock: Mutex(), }
 }
 
 ///|
