@@ -144,6 +144,34 @@ def bounded(command, cwd, env, log, timeout):
             return None
 
 
+CORE_IMPORT = re.compile(r'^"(moonbitlang/(?:core|x)/[A-Za-z0-9_/]+)"(?:\s+@([a-z_][a-z0-9_]*))?$')
+SECRET_MARKERS = ('DEEPSEEK', 'OPENAI', 'ANTHROPIC', 'KEY', 'TOKEN', 'SECRET', 'PASSWORD')
+
+
+def trusted_manifest(candidate):
+    """Rebuild moon.pkg from the candidate's core imports only.
+
+    A package manifest can carry build rules that run shell commands before
+    `moon test`; none of that reaches the grading project. Only quoted
+    moonbitlang/core or moonbitlang/x imports (optionally aliased) survive.
+    """
+    imports = []
+    for line in candidate.splitlines():
+        match = CORE_IMPORT.match(line.strip().rstrip(','))
+        if match:
+            path, alias = match.groups()
+            imports.append(f'"{path}"' + (f' @{alias}' if alias else ''))
+    if not imports:
+        return ''
+    return 'import {\n' + ''.join(f'  {entry},\n' for entry in imports) + '}\n'
+
+
+def grading_env():
+    """Grading runs without any credential in its environment."""
+    return {key: value for key, value in os.environ.items()
+            if not any(marker in key.upper() for marker in SECRET_MARKERS)}
+
+
 def score(workspace, grading, log):
     grading.mkdir()
     # Only root-package implementation and its core imports enter the trusted
@@ -151,10 +179,10 @@ def score(workspace, grading, log):
     for path in workspace.glob('*.mbt'):
         if not path.name.endswith(('_test.mbt', '_wbtest.mbt')):
             shutil.copyfile(path, grading / path.name)
-    shutil.copyfile(workspace / 'moon.pkg', grading / 'moon.pkg')
+    (grading / 'moon.pkg').write_text(trusted_manifest((workspace / 'moon.pkg').read_text()))
     (grading / 'moon.mod').write_text(MODULE)
     (grading / 'oracle_test.mbt').write_text(tests(CASES, INVALID))
-    code = bounded(['moon', 'test', '--target', 'native', '--filter', 'oracle:*'], grading, os.environ.copy(), log, 120)
+    code = bounded(['moon', 'test', '--target', 'native', '--filter', 'oracle:*'], grading, grading_env(), log, 120)
     text = log.read_text()
     matches = re.findall(r'Total tests: (\d+), passed: (\d+), failed: (\d+)\.', text)
     passed = int(matches[-1][1]) if matches else 0
@@ -164,8 +192,9 @@ def score(workspace, grading, log):
             'valid_passed': len(CASES) - sum(n in {c[0] for c in CASES} for n in failures) if matches else 0,
             'invalid_passed': len(INVALID) - sum(n in {c[0] for c in INVALID} for n in failures) if matches else 0,
             'compile_or_harness_error': not bool(matches),
-            'preserved_fixture': (workspace / 'moon.mod').read_text() == MODULE and
-                (workspace / 'visible_test.mbt').read_text() == tests(VISIBLE, prefix='visible')}
+            # Byte-exact: a candidate that only rewrote line endings changed protected bytes.
+            'preserved_fixture': (workspace / 'moon.mod').read_bytes() == MODULE.encode('utf-8') and
+                (workspace / 'visible_test.mbt').read_bytes() == tests(VISIBLE, prefix='visible').encode('utf-8')}
 
 
 def trial(engine, out, variant, repeat, timeout, max_steps=128):

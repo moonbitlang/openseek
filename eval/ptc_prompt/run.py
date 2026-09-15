@@ -72,8 +72,9 @@ def source_urls(result):
                           result.get('content', '')))
 
 
-def analyze(case, workspace, expected, exit_code, require_ptc=False):
-    items = session_items(workspace)
+def analyze(case, workspace, expected, exit_code, require_ptc=False, session_name=None):
+    # The parent session by name: a review child leaves a second journal.
+    items = session_items(workspace, session_name=session_name)
     assistants = [i['payload'] for i in items if i['kind'] == 'assistant']
     results = [i['payload'] for i in items if i['kind'] == 'tool_result']
     terminals = [i['payload'] for i in items if i['kind'] == 'terminal']
@@ -160,7 +161,7 @@ def trial(engine, out, variant, case, repeat, timeout, require_ptc):
     result = {'name': name, 'variant': variant, 'case': case, 'repeat': repeat,
               'seconds': round(time.monotonic() - started, 2), 'exit_code': exit_code}
     try:
-        result.update(analyze(case, workspace, expected, exit_code, require_ptc))
+        result.update(analyze(case, workspace, expected, exit_code, require_ptc, session_name=name))
     except (OSError, ValueError, KeyError) as error:
         result.update(passed=False, failures=[str(error)])
     result['usage'] = usage(out / f'{name}.log')
@@ -197,20 +198,33 @@ def reanalyze(out):
         with tempfile.TemporaryDirectory() as directory:
             _, expected = fixture(result['case'], Path(directory))
         result.update(analyze(result['case'], workspace, expected, result['exit_code'],
-                              manifest.get('require_ptc', False)))
+                              manifest.get('require_ptc', False), session_name=result['name']))
         result['usage'] = usage(out / f"{result['name']}.log")
         path.write_text(json.dumps(result, indent=2) + '\n')
         results.append(result)
     (out / 'results.json').write_text(json.dumps(results, indent=2) + '\n')
 
 
+PTC_HEADING = '### Programmatic tool calls\n'
+
+
 def prompt_variants(base, prompt_ab):
     if not prompt_ab:
         return {variant: base for variant in ('baseline', 'candidate')}
-    start = base.index('### Programmatic tool calls\n')
+    if PTC_HEADING not in base:
+        raise ValueError('the base prompt has no "### Programmatic tool calls" section; '
+                         'pass --base-prompt with the historical prompt that had one')
+    start = base.index(PTC_HEADING)
     end = base.index('## Tool Protocol', start)
     return {variant: base[:start] + (HERE / f'{variant}.md').read_text().rstrip()
             + '\n\n' + base[end:] for variant in ('baseline', 'candidate')}
+
+
+def generated_prompt(path):
+    """Decode the generated literal, including its expanded references tree."""
+    generated = path.read_text()
+    return '\n'.join(line.removeprefix('    #|') for line in generated.splitlines()
+                     if line.startswith('    #|'))
 
 
 def main():
@@ -218,6 +232,9 @@ def main():
     parser.add_argument('--engine', type=Path)
     parser.add_argument('--baseline-engine', type=Path)
     parser.add_argument('--prompt-ab', action='store_true', help='Reproduce the historical prompt-only comparison')
+    parser.add_argument('--base-prompt', type=Path,
+                        help='Base system prompt as plain text (default: decode prompt/generated_default_prompt.mbt '
+                             'from this checkout); --prompt-ab needs one with a PTC section')
     parser.add_argument('--analyze-only', action='store_true')
     parser.add_argument('--require-ptc', action='store_true')
     parser.add_argument('--out', type=Path, required=True)
@@ -239,14 +256,16 @@ def main():
         parser.error('export DEEPSEEK before running this live evaluation')
     if min(args.runs, args.concurrency, args.timeout) <= 0:
         parser.error('runs, concurrency, and timeout must be positive')
+    base = (args.base_prompt.read_text() if args.base_prompt
+            else generated_prompt(ROOT / 'prompt/generated_default_prompt.mbt'))
+    try:
+        variants = prompt_variants(base, args.prompt_ab)
+    except ValueError as error:
+        parser.error(str(error))
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    # Decode the generated literal, including its expanded references tree.
-    generated = (ROOT / 'prompt/generated_default_prompt.mbt').read_text()
-    base = '\n'.join(line.removeprefix('    #|') for line in generated.splitlines()
-                     if line.startswith('    #|'))
     hashes = {}
-    for variant, prompt in prompt_variants(base, args.prompt_ab).items():
+    for variant, prompt in variants.items():
         (out / f'{variant}.md').write_text(prompt)
         hashes[variant] = hashlib.sha256(prompt.encode()).hexdigest()
     engine = args.engine.resolve()
