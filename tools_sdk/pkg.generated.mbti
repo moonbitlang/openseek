@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek_tools"
+
+// Values
+pub async fn call(String, Json) -> CallResult
+
+pub async fn edit(path~ : String, old_string~ : String, new_string~ : String, start_line~ : Int, end_line? : Int, revert_on_parse_errors? : Bool) -> CallResult
+
+pub async fn multi_edit(Array[Json], revert_when_errors_above? : Int, revert_on_parse_errors? : Bool) -> CallResult
+
+pub async fn web_search(String) -> CallResult
+
+// Errors
+pub suberror TransportError {
+  TransportError(String)
+}
+
+// Types and methods
+pub struct CallResult {
+  content : String
+  is_error : Bool
+  data : Json?
+}
+
+// Type aliases
+
+// Traits

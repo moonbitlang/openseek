@@ -1,0 +1,31 @@
+name: Tools SDK
+
+on:
+  pull_request:
+    paths:
+      - "tools_sdk/**"
+      - ".github/workflows/tools-sdk.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tools_sdk/**"
+      - ".github/workflows/tools-sdk.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: moon update
+      - run: moon -C tools_sdk check --target native --deny-warn
+      - run: moon -C tools_sdk test --target native
+      - run: moon -C tools_sdk test --target wasm
+      - run: moon -C tools_sdk fmt --check
+      - run: moon -C tools_sdk package
