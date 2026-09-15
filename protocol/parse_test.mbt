@@ -52,6 +52,14 @@ test "decodes a transient stream retry boundary" {
 }
 
 ///|
+test "decodes a provider timeout without a provider diagnostic" {
+  assert_eq(
+    decode((#|{"event":"provider_request_timed_out"})),
+    Some(ProviderRequestTimedOut),
+  )
+}
+
+///|
 /// The envelope is ignored: a reader cares about the event, not about which
 /// line of the engine reported it.
 test "decodes with the envelope absent" {

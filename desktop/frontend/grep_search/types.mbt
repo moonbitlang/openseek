@@ -36,6 +36,7 @@ enum PatternRepairPhase {
   PatternRepairRequested
   PatternRepairInputRequired
   PatternRepairUnavailable
+  PatternRepairTimedOut
   PatternRepairValidationFailed
   PatternRepairFailed
 } derive(Eq, Debug)
@@ -138,11 +139,8 @@ pub(all) enum Msg {
     generation~ : Int,
     candidate_pattern~ : String
   )
-  PatternRepairUnavailable(
-    root~ : String,
-    generation~ : Int,
-    message~ : String
-  )
+  PatternRepairUnavailable(root~ : String, generation~ : Int, message~ : String)
+  PatternRepairTimedOut(root~ : String, generation~ : Int)
   PatternRepairValidationFailed(
     root~ : String,
     generation~ : Int,

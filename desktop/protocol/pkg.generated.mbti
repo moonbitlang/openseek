@@ -1788,6 +1788,7 @@ pub impl @json.FromJson for PatternRepairReply
 pub(all) enum PatternRepairStatus {
   Passed
   Unavailable
+  TimedOut
   Failed
 } derive(Eq, @debug.Debug)
 pub fn PatternRepairStatus::equal(Self, Self) -> Bool

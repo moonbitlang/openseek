@@ -22,6 +22,7 @@ fn pattern_repair_status_from_wire(
   match value {
     "passed" => Passed
     "unavailable" => Unavailable
+    "timed_out" => TimedOut
     "failed" => Failed
     _ => raise JsonDecodeError((path, "expected pattern-repair status"))
   }
@@ -32,6 +33,7 @@ fn PatternRepairStatus::wire(self : PatternRepairStatus) -> String {
   match self {
     Passed => "passed"
     Unavailable => "unavailable"
+    TimedOut => "timed_out"
     Failed => "failed"
   }
 }

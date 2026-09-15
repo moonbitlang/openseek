@@ -40,7 +40,7 @@ fn pattern_repair_request_loader(
           @commands.pattern_repair,
           request,
         ) catch {
-          error => {
+          _ => {
             settled = true
             guard active else { return }
             scheduler.add(
@@ -67,13 +67,24 @@ fn pattern_repair_request_loader(
                 ),
               ),
             )
-          reply if reply.validation_status is @protocol.PatternRepairStatus::Unavailable =>
+          reply if reply.validation_status
+            is @protocol.PatternRepairStatus::Unavailable =>
             scheduler.add(
               emit(
                 PatternRepairUnavailable(
                   root=request.root,
                   generation=request.generation,
                   message=reply.message,
+                ),
+              ),
+            )
+          reply if reply.validation_status
+            is @protocol.PatternRepairStatus::TimedOut =>
+            scheduler.add(
+              emit(
+                PatternRepairTimedOut(
+                  root=request.root,
+                  generation=request.generation,
                 ),
               ),
             )

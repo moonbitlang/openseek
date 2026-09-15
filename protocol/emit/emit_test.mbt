@@ -68,6 +68,7 @@ fn all_events() -> Array[@protocol.Event] {
       max_attempts=3,
       reason="DeepSeek stream transport error: ConnectionClosed",
     ),
+    ProviderRequestTimedOut,
     AgentAborted(reason="interrupted"),
     AgentFinished(answer="done"),
     MaxStepsExhausted,
