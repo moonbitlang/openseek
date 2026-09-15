@@ -18,6 +18,7 @@ pub async fn Program::close(Self) -> Unit
 pub fn Program::env(Self) -> Map[String, String]
 pub fn Program::handoff(Self, String, async (Json) -> Unit) -> Unit
 pub fn Program::interrupted(Self) -> Bool
+pub async fn Program::republish(Self) -> Unit
 pub fn Program::result(Self, @agent_tool.ToolAction) -> @agent_tool.ToolAction
 pub fn Program::stop(Self) -> Unit
 pub fn Program::trace(Self) -> Json

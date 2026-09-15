@@ -981,9 +981,11 @@ async fn execute(
       if program is Some(program) {
         program.handoff(id, _ => runtime.metadata_changed(id))
         // Capture calls that completed while job registration was suspended.
-        if program.trace() is { "ptc_calls": [_, ..], .. } {
-          runtime.metadata_changed(id)
-        }
+        // Through the program, not the runtime directly: a failure here is a
+        // trace error the job's terminal cleanup reports, and a program whose
+        // process already ended has nothing to catch up (its terminal record
+        // reads the final trace through the supplier).
+        program.republish()
       }
       let handoff = if staged {
         "mbtx: the build succeeded and the RUNNING PROGRAM was still going after \{duration_label(auto_background_after_ms)}, so it moved to the background as job \{id} (nothing was lost; any later nonzero exit is the program's own). Read its output with job_output (job_id=\"\{id}\") and stop it with job_stop (job_id=\"\{id}\")."

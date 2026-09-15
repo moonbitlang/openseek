@@ -332,6 +332,17 @@ pub fn Program::adopted(self : Program) -> Bool {
 }
 
 ///|
+/// Publish the current trace to the current observer, if there is anything
+/// to publish. A failure is retained as the trace error, never raised: the
+/// caller (a host that just handed the program to a job) has no better place
+/// to put it than the program's own final report.
+pub async fn Program::republish(self : Program) -> Unit {
+  if !self.calls.is_empty() {
+    self.publish_trace()
+  }
+}
+
+///|
 /// True when execution ended with unfinished calls; changes may have occurred.
 pub fn Program::interrupted(self : Program) -> Bool {
   self.calls.any(call => call is { "status": "interrupted", .. })
