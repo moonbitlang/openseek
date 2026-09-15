@@ -1,29 +1,7 @@
 ///|
+/// A model turn that runs `source` through mbtx with PTC on.
 fn ptc_payload(source : String) -> String {
-  (
-    {
-      "choices": [
-        {
-          "delta": {
-            "tool_calls": [
-              {
-                "index": 0,
-                "id": "program",
-                "function": {
-                  "name": "mbtx",
-                  "arguments": ({ "ptc": true, "source": source } : Json).stringify(),
-                },
-              },
-            ],
-          },
-        },
-      ],
-      "usage": {
-        "prompt_tokens": 1000,
-        "completion_tokens": 100,
-        "total_tokens": 1100,
-      },
-    } : Json).stringify()
+  wait_call_payload("mbtx", { "ptc": true, "source": source })
 }
 
 ///|

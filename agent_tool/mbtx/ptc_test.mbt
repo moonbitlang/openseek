@@ -220,3 +220,27 @@ async test "PTC leaves the script namespace and source unchanged" {
     })
   })
 }
+
+///|
+/// A registry without a PTC service does not advertise `ptc`; an explicit
+/// request for it is refused rather than silently run without tools.
+async test "explicit PTC without a session service is an error" {
+  @vfs.with_tmpdir(ws => {
+    let output = dispatch(@mbtx.definition(workspace_root=ws), {
+      "ptc": true,
+      "source": "fn main { println(1) }",
+    })
+    assert_true(output.is_error)
+    assert_true(output.content.contains("unavailable"))
+    // Omitted or explicitly false: the plain path, no registration involved.
+    for
+      args in [
+        ({ "source": "fn main { println(1) }" } : Json),
+        { "ptc": false, "source": "fn main { println(1) }" },
+      ] {
+      let output = dispatch(@mbtx.definition(workspace_root=ws), args)
+      assert_false(output.is_error, msg=output.content)
+      assert_true(output.data is None)
+    }
+  })
+}

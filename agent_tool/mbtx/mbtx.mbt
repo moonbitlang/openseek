@@ -130,7 +130,7 @@ pub fn definition(
   approval? : @agent_runtime.ApprovalChannel,
   subrun? : @host.SubrunInjection,
   program_service? : @ptc.Service,
-  on_program_trace? : (Json) -> Unit = _ => (),
+  on_program_trace? : (Json) -> Unit,
 ) -> @agent_tool.AgentToolDefinition {
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
@@ -173,10 +173,7 @@ pub fn definition(
       let enabled = input.ptc.unwrap_or(
         compatible && program_service is Some(_),
       )
-      async fn run(
-        program_env : Map[String, String]?,
-        program : @ptc.Program?,
-      ) -> @agent_tool.ToolAction {
+      async fn run(program : @ptc.Program?) -> @agent_tool.ToolAction {
         execute(
           workspace_root,
           input,
@@ -194,7 +191,6 @@ pub fn definition(
           generations~,
           approval?,
           subrun?,
-          program_env?,
           program?,
         )
       }
@@ -206,9 +202,9 @@ pub fn definition(
           )
         }
         if program_service is Some(service) {
-          let program = service.register(on_trace=on_program_trace)
+          let program = service.register(on_trace?=on_program_trace)
           errdefer program.close()
-          let action = run(Some(program.env()), Some(program)) catch {
+          let action = run(Some(program)) catch {
             error if @async.is_being_cancelled() ||
               @async.is_cancellation_error(error) => raise error
             error =>
@@ -226,19 +222,17 @@ pub fn definition(
           )
         }
       } else {
-        run(None, None)
+        run(None)
       }
       match (saved.val, action) {
         (Some(filename), Respond(output)) => {
-          let retry : Json = if enabled {
-            { "filename": filename, "ptc": true }
-          } else if input.ptc is Some(false) {
-            { "filename": filename, "ptc": false }
-          } else {
-            { "filename": filename }
+          // The hint repeats an explicit choice; a defaulted one stays implicit.
+          let retry : Map[String, Json] = { "filename": filename.to_json() }
+          if enabled || input.ptc is Some(false) {
+            retry["ptc"] = enabled.to_json()
           }
           @agent_tool.respond(
-            "Script saved at \{filename}. For subsequent runs, call mbtx with \{retry.stringify()} and omit source.\n\n\{output.content}",
+            "Script saved at \{filename}. For subsequent runs, call mbtx with \{Json::object(retry).stringify()} and omit source.\n\n\{output.content}",
             is_error=output.is_error,
             brief?=output.brief,
             data?=output.data,
@@ -296,7 +290,6 @@ async fn execute(
   generations~ : Map[String, Int],
   approval? : @agent_runtime.ApprovalChannel,
   subrun? : @host.SubrunInjection,
-  program_env? : Map[String, String],
   program? : @ptc.Program,
 ) -> @agent_tool.ToolAction {
   // Read once, before validation/approval, then compile this same snapshot.
@@ -695,8 +688,8 @@ async fn execute(
     @emit.emit(WorkflowFinished(id="wf-\{r.base()}"))
   })
   let injected = reservation.map(r => r.env()).unwrap_or(Map([]))
-  if program_env is Some(env) {
-    for key, value in env {
+  if program is Some(program) {
+    for key, value in program.env() {
       injected[key] = value
     }
   }
@@ -948,15 +941,15 @@ async fn execute(
             _ => ()
           }
         })
-        if program is Some(program) && program.trace_error() is Some(error) {
-          fail("PTC trace publication failed: \{error}")
-        }
-        if program is Some(program) &&
-          program.interrupted() &&
-          exec.status() is Exited(0) {
-          fail(
-            "PTC script exited with unfinished tool calls; changes may have occurred",
-          )
+        if program is Some(program) {
+          if program.trace_error() is Some(error) {
+            fail("PTC trace publication failed: \{error}")
+          }
+          if program.interrupted() && exec.status() is Exited(0) {
+            fail(
+              "PTC script exited with unfinished tool calls; changes may have occurred",
+            )
+          }
         }
       }
       // A staged job's label carries the phase marker: the notice and the job
@@ -1077,9 +1070,6 @@ async fn execute(
         })
       }),
     )
-    if program is Some(program) {
-      program.stop()
-    }
     (exit_code, read_capped(log))
   })
   // A refusal is this tool's confinement firing, not an environment fault:

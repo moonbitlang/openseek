@@ -167,11 +167,12 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         { "subrun": _, .. } => fail("arguments.subrun to be a boolean")
         _ => false
       }
-      let ptc = match fields.get("ptc") {
-        Some(True) => Some(true)
-        Some(False) => Some(false)
-        None => None
-        _ => fail("arguments.ptc to be a boolean")
+      let ptc = match arguments {
+        { "ptc": true, .. } => Some(true)
+        { "ptc": false, .. } => Some(false)
+        { "ptc": Null, .. } => None
+        { "ptc": _, .. } => fail("arguments.ptc to be a boolean")
+        _ => None
       }
       {
         program,
