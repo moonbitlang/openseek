@@ -23,7 +23,7 @@ In OpenSeek, the equivalent of the first example below is:
 {"filename":"@builtin/read.mbtx","args":["sample.mbt"]}
 ```
 
-These tests run the script directly with `moon run`; they verify its text
+These tests run the script directly with `moonx`; they verify its text
 output and exit status. The [mbtx package tests](../../agent_tool/mbtx/read_workflow_test.mbt)
 cover execution through the tool, including sandbox and output-limit behavior.
 See [Writing cram documentation](README.md) to add examples for another script.
@@ -35,14 +35,12 @@ blocks; `$TESTDIR` points to the directory containing this Markdown file.
 Define `READ` once so each example can focus on the script's arguments:
 
 ```mooncram
-$ READ() {
->   moon run "$TESTDIR/../../share/workflow/read.mbtx" -- "$@"
-> }
+$ READ="$TESTDIR/../../share/workflow/read.mbtx"
 ```
 
-Cram preserves this shell function between blocks. `READ` runs the script
-and returns its exit status. `--` separates Moon's options from script
-arguments, and `"$@"` preserves each argument, including spaces.
+Cram preserves this shell variable between blocks. `moonx "$READ"` runs the
+script; quoting the expanded path keeps spaces in it intact. Arguments after
+the script path are passed to the script.
 
 Create a three-line file with a trailing newline:
 
@@ -82,7 +80,7 @@ footer. The footer fields describe the selected output:
 | `truncated` | Whether the output budget prevented the full selected range from being shown. |
 
 ```mooncram
-$ READ sample.mbt
+$ moonx "$READ" sample.mbt
 === "sample.mbt" ===
 1 |first
 2 |selected
@@ -97,7 +95,7 @@ Selectors are `path`, `path:start`, or `path:start:end`; lines are 1-based
 and both ends are included.
 
 ```mooncram
-$ READ sample.mbt:2:3
+$ moonx "$READ" sample.mbt:2:3
 === "sample.mbt" ===
 2 |selected
 3 |last
@@ -105,7 +103,7 @@ $ READ sample.mbt:2:3
 ```
 
 ```mooncram
-$ READ sample.mbt:3
+$ moonx "$READ" sample.mbt:3
 === "sample.mbt" ===
 3 |last
 4 |
@@ -119,7 +117,7 @@ holds. An empty file says so explicitly. Several selectors in one call come
 back in order, each under its own heading.
 
 ```mooncram
-$ READ sample.mbt:10:20 empty.txt
+$ moonx "$READ" sample.mbt:10:20 empty.txt
 === "sample.mbt" ===
 <system>start_line=10 shown_lines=0 total_lines=4 truncated=false</system>
 === "empty.txt" ===
@@ -132,7 +130,7 @@ A missing file reports its error under its own heading; the files after it
 are still returned, and the call exits 1 so the tool reports it as an error.
 
 ```mooncram
-$ READ absent.txt note.txt
+$ moonx "$READ" absent.txt note.txt
 === "absent.txt" ===
 error reading file: "OSError(\"@fs.kind(): \\\"absent.txt\\\": No such file or directory\")"
 === "note.txt" ===
@@ -144,7 +142,7 @@ error reading file: "OSError(\"@fs.kind(): \\\"absent.txt\\\": No such file or d
 A directory is refused with the way to list it instead.
 
 ```mooncram
-$ READ dir
+$ moonx "$READ" dir
 === "dir" ===
 error reading file: "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files"
 [1]
@@ -161,28 +159,28 @@ $ printf 'kept' > log:12
 ```
 
 ```mooncram
-$ READ log:12
+$ moonx "$READ" log:12
 === "log" ===
 error reading file: "OSError(\"@fs.kind(): \\\"log\\\": No such file or directory\")"
 [1]
 ```
 
 ```mooncram
-$ READ --literal log:12
+$ moonx "$READ" --literal log:12
 === "log:12" ===
 1 |kept
 <system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>
 ```
 
-A name starting with `--` needs `--` first. This second `--` is passed to
-`read.mbtx`; the function already supplies the separator for `moon run`.
+A name starting with `--` needs two separators: the first `--` ends `moonx`
+option parsing, and the second is passed to `read.mbtx` to end its option parsing.
 
 ```mooncram
 $ printf 'dash' > ./--weird
 ```
 
 ```mooncram
-$ READ -- --weird
+$ moonx "$READ" -- -- --weird
 === "--weird" ===
 1 |dash
 <system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>
@@ -198,7 +196,7 @@ smaller range to continue. Truncation is a successful read, so there is no
 Nine bytes fit the first line (`1 |first`) but not the next line's gutter:
 
 ```mooncram
-$ READ --max-output-bytes 9 sample.mbt
+$ moonx "$READ" --max-output-bytes 9 sample.mbt
 === "sample.mbt" ===
 1 |first
 <system>start_line=1 shown_lines=1 total_lines=4 truncated=true</system>
@@ -209,7 +207,7 @@ A budget can also cut a line short. Five bytes leave room for the gutter
 Cuts preserve UTF-8 character boundaries.
 
 ```mooncram
-$ READ --max-output-bytes 5 sample.mbt
+$ moonx "$READ" --max-output-bytes 5 sample.mbt
 === "sample.mbt" ===
 1 |fi
 <system>start_line=1 shown_lines=1 total_lines=4 truncated=true</system>
@@ -220,19 +218,19 @@ $ READ --max-output-bytes 5 sample.mbt
 Argument errors name what was wrong and exit 1 before any file is read.
 
 ```mooncram
-$ READ sample.mbt:5:4
+$ moonx "$READ" sample.mbt:5:4
 error: read expected path:start:end with end >= start (inclusive, 1-based)
 [1]
 ```
 
 ```mooncram
-$ READ --unknown
+$ moonx "$READ" --unknown
 error: read unknown option; use --help or -- before a filename starting with --
 [1]
 ```
 
 ```mooncram
-$ READ --help
+$ moonx "$READ" --help
 Usage: mbtx(filename="@builtin/read.mbtx", args=["path", "path:start", "path:start:end"])
 Ranges are inclusive and 1-based. --max-output-bytes N sets each file's UTF-8 body budget (default 12000, maximum 50000). The batch is bounded to 40000 UTF-8 bytes; use smaller batches/ranges when truncated. --literal PATH reads a path without interpreting colon suffixes. -- ends option parsing. Relative paths use cwd (default workspace).
 ```

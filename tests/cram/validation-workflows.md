@@ -14,30 +14,30 @@ with no model or credentials. Run it from the repository root:
 moon cram test tests/cram/validation-workflows.md --shell bash
 ```
 
-## Define the commands once
+## Define the script paths once
 
-As in the [read guide](read-workflow.md), shell functions keep each example
-short. Cram preserves the functions between blocks. `"$@"` forwards arguments
-without splitting paths containing spaces.
+As in the [read guide](read-workflow.md), path variables keep each example
+short. Cram preserves the variables between blocks. Quote each expanded path
+when passing it to `moonx` so paths containing spaces remain one argument.
 
 ```mooncram
-$ CHECK() { moon run "$TESTDIR/../../share/workflow/check.mbtx" -- "$@"; }
+$ CHECK="$TESTDIR/../../share/workflow/check.mbtx"
 ```
 
 ```mooncram
-$ TEST() { moon run "$TESTDIR/../../share/workflow/test.mbtx" -- "$@"; }
+$ TEST="$TESTDIR/../../share/workflow/test.mbtx"
 ```
 
 ```mooncram
-$ CHECK_TEST() { moon run "$TESTDIR/../../share/workflow/check-test.mbtx" -- "$@"; }
+$ CHECK_TEST="$TESTDIR/../../share/workflow/check-test.mbtx"
 ```
 
 ```mooncram
-$ INFO_FMT() { moon run "$TESTDIR/../../share/workflow/info-fmt.mbtx" -- "$@"; }
+$ INFO_FMT="$TESTDIR/../../share/workflow/info-fmt.mbtx"
 ```
 
 ```mooncram
-$ CHECK_JSON() { moon run "$TESTDIR/../../share/workflow/check-json.mbtx" -- "$@"; }
+$ CHECK_JSON="$TESTDIR/../../share/workflow/check-json.mbtx"
 ```
 
 ## Create a project with one test
@@ -77,7 +77,7 @@ stderr. Cram checks stdout and the exit status by default, so no quiet flag
 is needed.
 
 ```mooncram
-$ CHECK
+$ moonx "$CHECK"
 ```
 
 ## Run tests
@@ -86,7 +86,7 @@ $ CHECK
 summary. It does not update snapshots.
 
 ```mooncram
-$ TEST
+$ moonx "$TEST"
 Total tests: 1, passed: 1, failed: 0.
 ```
 
@@ -94,7 +94,7 @@ Total tests: 1, passed: 1, failed: 0.
 runs the tests when checking succeeds.
 
 ```mooncram
-$ CHECK_TEST
+$ moonx "$CHECK_TEST"
 Total tests: 1, passed: 1, failed: 0.
 ```
 
@@ -104,7 +104,7 @@ Total tests: 1, passed: 1, failed: 0.
 `moon fmt`. It modifies files in the selected project.
 
 ```mooncram
-$ INFO_FMT
+$ moonx "$INFO_FMT"
 ```
 
 The public function is now listed in the generated interface:
@@ -131,7 +131,7 @@ pub fn answer() -> Int {
 This valid project has no diagnostics:
 
 ```mooncram
-$ CHECK_JSON
+$ moonx "$CHECK_JSON"
 ```
 
 ## Fail when checking fails
@@ -145,20 +145,20 @@ $ cat > answer.mbt <<'EOF'
 > EOF
 ```
 
-`CHECK` fails. Compiler diagnostics go to stderr; the workflow's failure
+`moonx "$CHECK"` fails. Compiler diagnostics go to stderr; the workflow's failure
 message appears on stdout. `(glob)` matches the runtime's source location and
 the compiler's exit code, while `[1]` checks the script's own exit status.
 
 ```mooncram
-$ CHECK
+$ moonx "$CHECK"
 Failure(* FAILED: moon check failed (exit=*)) (glob)
 [1]
 ```
 
-`CHECK_TEST` also fails at the check step, without printing a test summary:
+`moonx "$CHECK_TEST"` also fails at the check step, without printing a test summary:
 
 ```mooncram
-$ CHECK_TEST
+$ moonx "$CHECK_TEST"
 Failure(* FAILED: moon check failed (exit=*)) (glob)
 [1]
 ```

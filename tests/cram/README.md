@@ -24,7 +24,7 @@ the shell only: individual examples may still assume Unix filenames or OS error
 messages, as noted in the read guide. The cram CI job currently runs on Linux.
 
 `moon cram test` builds the project's native executables and adds them to
-`PATH`. Standalone `.mbtx` examples invoke `moon run` themselves. They can also
+`PATH`. Standalone `.mbtx` examples invoke `moonx` themselves. They can also
 run with `moon-cram test tests/cram/read-workflow.md --shell bash` to skip the
 project executable build. The script's declared dependencies must be available;
 Moon may download them on the first run. The read examples need no model or
@@ -42,11 +42,11 @@ credentials.
 3. Create small fixtures in the test's temporary working directory. Files
    persist between blocks in a document. Use `$TESTDIR` to locate the script
    relative to the Markdown file.
-4. Define a shell function such as `READ` once, containing the full `moon run`
-   invocation. Cram preserves it between blocks. Forward `"$@"` to preserve
-   argument boundaries; the function returns the last command's exit status.
-   Each example can then use `READ file.mbt:12`. Keep setup separate from the
-   expected output.
+4. Assign the script path to a variable once, for example
+   `READ="$TESTDIR/../../share/workflow/read.mbtx"`. Cram preserves the variable
+   between blocks. Each example can then use `moonx "$READ" file.mbt:12`.
+   The `$` expands the variable; quotes preserve spaces in the script path.
+   Keep setup separate from the expected output.
 5. Run the document and review its output. Link it from the relevant usage
    docs. New Markdown files under this directory are picked up by the existing
    test recipe and CI.
