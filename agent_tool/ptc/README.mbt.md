@@ -144,9 +144,11 @@ Trace notifications have a separate five-second deadline. Cancellation records
 interruption in memory and joins the executor; it does not repeat protected
 publication from the executor's cancellation handler. Finalization publishes
 the final snapshot. Publication failures are retained as `ptc_trace_error` and
-surface as an outer result or job cleanup error. Job storage writes also have a
-five-second deadline while holding the publication gate; timeout releases that gate
-and emits the existing persistence-error field. Saved script reads use the file
+surface as an outer result or job cleanup error. Job storage writes for
+`Started`/`Updated` events (every trace update) have a five-second deadline
+while holding the publication gate; timeout releases that gate and emits the
+existing persistence-error field. The once-per-job terminal write is exempt so
+a slow disk delays it rather than losing it. Saved script reads use the file
 gate only to capture a consistent source snapshot, before compilation begins.
 
 Deadlines are cooperative: already-submitted filesystem I/O and protected
