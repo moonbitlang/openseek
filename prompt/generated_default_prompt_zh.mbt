@@ -196,7 +196,7 @@ fn default_prompt_zh() -> String {
     #|
     #|捕获命令输出时，不要将变量命名为 `test`：它是开始测试块的 MoonBit 关键字。`let test = @shell.Cmd("moon", ["test"]).output()` 会导致解析错误（`unexpected token` 指向 `test`）；使用 `let test_out = @shell.Cmd("moon", ["test"]).output()` 或 `let result = ...`，将 `test` 留给 `test { ... }`。
     #|
-    #|只打印捕获输出的有限片段时，不要使用固定终点切片：输出不足 8000 字符时，`println(out.stdout()[:8000])` 会 panic。用 `out.stdout().clamped_view(start=0, end=8000)`，或先检查长度，安全截取可用部分。
+    #|只打印捕获输出的有限片段时，直接切片即可：`println(out.stdout()[:8000])` 在输出不足 8000 字符时同样安全，因为切片会裁剪而不是 panic。
     #|
     #|获取编译器反馈时，流式处理一次 `moon check` 产生的逐行 JSON，不要收集完整输出后再解析：
     #|
@@ -279,9 +279,8 @@ fn default_prompt_zh() -> String {
     #|  ]).output()
     #|  println("exit=\{out.exit_code()}")
     #|  // Whole-repo scans can match many nodes; keep the printed excerpt bounded.
-    #|  let stdout = out.stdout()
-    #|  let n = if stdout.length() > 2000 { 2000 } else { stdout.length() }
-    #|  println(stdout[:n])
+    #|  // Slicing clamps, so a shorter output needs no length guard.
+    #|  println(out.stdout()[:2000])
     #|}
     #|```
     #|
@@ -618,8 +617,7 @@ fn default_prompt_zh() -> String {
     #|- `Array::sort` 和 `Array::sort_by` 原地排序并返回 `Unit`，对返回值继续链式操作会报类型错误：`xs.sort()[0]` 报 “Unit has no method op_get”，`for x in xs.sort() { ... }` 也不合法。先排序再读取，如 `xs.sort(); xs[0]`；或用级联运算符 `..`，调用方法后返回数组本身：`let sorted = xs..sort()`。目录列表需要排序时直接传 `sort=true`，如 `@fs.readdir(dir, sort=true)`，不要链式调用排序。
     #|- `Array::rev` 和 `String::rev` 返回新值，原值不变，例如 `let ys = xs.rev()`。原地反转用 `Array::rev_in_place`，与 `sort` 一样返回 `Unit`。没有 `Array::reverse` 方法。
     #|- `s[start:end]`、`s[:end]`、`s[start:]` 创建零拷贝 `StringView`。直接将视图传给字符串 API 和解析器；仅在被调用方保存或要求拥有所有权的 `String` 时用 `.to_owned()`。
-    #|- 切片索引越界或落在无效 UTF-16 边界时会 panic；索引来自不可信输入时，用 `s.get_view(start=..., end=...)`。
-    #|- 摘要等尽力截取场景用 `s.clamped_view(start=..., end=...)`；它会限制越界偏移，并将边界向内调整，避免切断 UTF-16 代理对。
+    #|- 切片永不 panic：偏移会被裁剪，因此对 10 字符的字符串取 `s[:400]` 得到整个字符串，截取无需检查长度。负偏移裁剪为 0，不是从末尾倒数。
     #|
     #|```mbt check
     #|///|
@@ -631,6 +629,7 @@ fn default_prompt_zh() -> String {
     #|  assert_eq(value, s[5:])
     #|  let owned : String = value.to_owned()
     #|  assert_eq(owned, "value")
+    #|  assert_eq(s[:400].to_owned(), s) // 裁剪，不会 panic
     #|}
     #|```
     #|

@@ -255,10 +255,9 @@ When a probe captures a command's output, do not bind it to the name `test`:
 `let test_out = @shell.Cmd("moon", ["test"]).output()` or `let result = ...`
 instead, and keep `test` for `test { ... }` blocks.
 
-When a probe prints only a bounded excerpt of captured output, do not slice
-with a fixed end: `println(out.stdout()[:8000])` panics when the output is
-shorter than 8000 chars. Use `out.stdout().clamped_view(start=0, end=8000)`
-(or guard the length first) for best-effort truncation.
+When a probe prints only a bounded excerpt of captured output, just slice it:
+`println(out.stdout()[:8000])` is safe on shorter output, because slicing
+clamps instead of panicking.
 
 For compiler feedback, stream the line-delimited JSON from one `moon check`
 rather than collecting it and parsing it afterward:
@@ -392,9 +391,8 @@ async fn main {
   ]).output()
   println("exit=\{out.exit_code()}")
   // Whole-repo scans can match many nodes; keep the printed excerpt bounded.
-  let stdout = out.stdout()
-  let n = if stdout.length() > 2000 { 2000 } else { stdout.length() }
-  println(stdout[:n])
+  // Slicing clamps, so a shorter output needs no length guard.
+  println(out.stdout()[:2000])
 }
 ```
 
@@ -1073,11 +1071,9 @@ fn message(name : String, line : Int) -> String {
 - `s[start:end]`, `s[:end]`, and `s[start:]` create zero-copy `StringView`s.
   Pass views directly to string APIs and parsers; use `.to_owned()` only when a
   callee stores or requires an owned `String`.
-- Slice syntax panics for out-of-range indices or invalid UTF-16 boundaries; use
-  `s.get_view(start=..., end=...)` when indices come from untrusted input.
-- For best-effort truncation such as summaries, use
-  `s.clamped_view(start=..., end=...)`. It clamps out-of-range offsets and snaps
-  a boundary inward rather than splitting a UTF-16 surrogate pair.
+- Slice syntax never panics: offsets clamp, so `s[:400]` on a 10-char string
+  is the whole string and truncation needs no length guard. A negative offset
+  clamps to zero — it does not count back from the end.
 
 ```mbt check
 ///|
@@ -1089,6 +1085,7 @@ test {
   assert_eq(value, s[5:])
   let owned : String = value.to_owned()
   assert_eq(owned, "value")
+  assert_eq(s[:400].to_owned(), s) // clamped, not a panic
 }
 ```
 
