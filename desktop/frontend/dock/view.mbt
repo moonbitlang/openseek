@@ -108,7 +108,7 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
   )
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.jobs, [
-      @icons.icon(@icons.icon_terminal),
+      @icons.icon(@icons.icon_tasklist),
       @html.span(class="dock-launcher-name", "Jobs"),
       @html.span(
         class="dock-launcher-hint",

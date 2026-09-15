@@ -22,7 +22,7 @@ test('new-tab popup and empty launcher share Codicons without changing actions',
     await expect(icon).toHaveAttribute('aria-hidden', 'true');
     const svg = icon.locator('svg');
     await expect(svg).toHaveAttribute('fill', 'currentColor');
-    await expect(svg).toHaveAttribute('viewBox', label === 'Jobs' ? '0 0 24 24' : '0 0 16 16');
+    await expect(svg).toHaveAttribute('viewBox', '0 0 16 16');
     await expect(svg.locator('path')).toHaveCount(1);
     const path = await svg.locator('path').getAttribute('d');
     expect(path.length).toBeGreaterThan(0);
