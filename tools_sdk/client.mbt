@@ -1,5 +1,8 @@
 ///|
-/// Call a host-enabled tool using its ordinary JSON schema. Reads the run-scoped
+/// The canonical SDK entry point for every host-enabled tool. The host owns
+/// tool names, argument validation, defaults, and callable-tool permissions;
+/// enabling another tool needs no SDK release. Arguments are forwarded unchanged.
+/// Reads the run-scoped
 /// OPENSEEK_PTC capability. Never retries. Missing/invalid capabilities fail
 /// before sending a request; cancellation propagates to the caller.
 pub async fn call(name : String, arguments : Json) -> CallResult {

@@ -2,17 +2,19 @@
 
 An ordinary MoonBit package for calling tools exposed by the current OpenSeek
 `mbtx` invocation. This module has no dependency on the agent, editor, or host
-implementation. Version 0.1.0 speaks PTC protocol version 1.
+implementation. SDK 0.2.0 (unreleased) speaks PTC protocol version 1.
 
-After this module is published, scripts can import a pinned version:
+The dynamic API also works with published 0.1.0, so the runnable examples pin
+that version until 0.2.0 is released:
 
 ```mbtx
 import {
   "bobzhang/openseek_tools@0.1.0" @tools,
+  "moonbitlang/async",
 }
 
 async fn main {
-  let result = @tools.edit({
+  let result = @tools.call("edit", {
     "path": "note.txt", "start_line": 1,
     "old_string": "before", "new_string": "after",
   })
@@ -28,17 +30,24 @@ calling the SDK raises `TransportError`.
 
 ## API
 
-Each named function accepts one `Json` object, using exactly the same arguments
-as the direct host tool. The SDK forwards it unchanged; validation and defaults
-stay in the host. There is no second argument schema to learn.
+Use **`@tools.call(name, arguments)`** for every host-enabled tool. `arguments`
+is the same `Json` object used by the direct tool. The SDK forwards it unchanged;
+validation, defaults, and callable-tool permissions stay in the host. Adding a
+host tool needs no SDK release. Use the current host tool descriptions for names
+and schemas; the SDK does not carry a second tool catalog.
 
-- `edit(arguments)` forwards to `edit`.
-- `multi_edit(arguments)` forwards to `multi_edit`, including `edits` or `edits_file`.
-- `web_search(arguments)` forwards to `web_search`.
-- `call(name, arguments)` supports other explicitly enabled host tools.
+```mbt nocheck
+///|
+let batch = @tools.call("multi_edit", { "edits": edits })
 
-For example, use `@tools.multi_edit({ "edits": edits })` and
-`@tools.web_search({ "query": "MoonBit async" })`.
+///|
+let search = @tools.call("web_search", { "query": "MoonBit async" })
+```
+
+The SDK exposes only `call(name, arguments)`, `CallResult`, and `TransportError`.
+Version 0.2.0 removes the tool-specific wrappers from 0.1.0. Replace
+`@tools.edit(args)` with `@tools.call("edit", args)` (likewise for `multi_edit`
+and `web_search`). The wire protocol and JSON arguments are unchanged.
 
 `CallResult` contains `content : String`, `is_error : Bool`, and `data : Json?`.
 A host tool error is a result. Connection/protocol failures raise
@@ -55,18 +64,27 @@ the next model request; preserve selected source URLs and relevant failures.
 Run `moon -C tools_sdk test --target native` and
 `moon -C tools_sdk test --target wasm`; no OpenSeek host or SDK publication is
 needed. The public-API test sets `OPENSEEK_PTC` to a temporary loopback HTTP
-server, calls each exported entry point, and checks authentication, unchanged
-JSON arguments (including both multi_edit forms), and typed results. It restores
+server, calls the dynamic entry point with built-in and extension tool names,
+and checks authentication, unchanged JSON arguments (including both multi_edit forms), and typed results. It restores
 the environment and joins the server on exit. Separate transport tests cover
 invalid capabilities/responses, errors, no retries, and cancellation.
 
-## Release order
+## Complete example: fix deprecation warnings
 
-1. Review and merge this independent SDK module.
-2. Check, test, package, and publish version 0.1.0 from `tools_sdk/`.
-3. Verify that a fresh `.mbtx` process resolves the pinned public import.
-4. Merge the dependent host bridge after its real-script tests pass against
-   that published version. Desktop and prompt changes follow the bridge.
+The host [PR #1532](https://github.com/moonbitlang/openseek/pull/1532) includes a
+complete deprecation migration example. It reads real compiler
+diagnostics, prepares line-anchored edits for a known API migration, calls
+`@tools.call("multi_edit", { "edits": edits })`, then verifies the project with
+`moon check --deny-warn` and `moon test`. Its integration test runs the script
+through the published SDK and verifies that a second run performs no edits.
+The example needs a PTC-enabled OpenSeek build; the SDK tests above remain
+independent of the host PR.
+
+## Development and releases
+
+Version 0.1.0 is published; 0.2.0 is prepared here and is not published yet. Both
+speak wire protocol v1. Keep SDK and wire versions separate. Documentation and host tool additions do not require changing the SDK
+API. For a future SDK release, check and test the independent module first:
 
 ```sh
 moon -C tools_sdk check --target native --deny-warn

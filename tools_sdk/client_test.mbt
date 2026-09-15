@@ -77,13 +77,10 @@ async test "public calls discover the host and forward JSON arguments unchanged"
         ("web_search", { "query": "MoonBit async" }),
         ("extension", { "nested": { "values": [1, true, "value"] } }),
       ]
-      let results = [
-        @openseek_tools.edit(requests[0].1),
-        @openseek_tools.multi_edit(requests[1].1),
-        @openseek_tools.multi_edit(requests[2].1),
-        @openseek_tools.web_search(requests[3].1),
-        @openseek_tools.call(requests[4].0, requests[4].1),
-      ]
+      let results = []
+      for (name, arguments) in requests {
+        results.push(@openseek_tools.call(name, arguments))
+      }
       assert_eq(received.length(), requests.length())
       for i, (name, arguments) in requests {
         let expected : Json = {
