@@ -36,80 +36,6 @@ fn icon_restore_panel() -> @html.Html {
 }
 
 ///|
-/// A simple globe for the launcher's Browse row (drawn here, not a
-/// codicon): a circle with one meridian and the equator.
-fn icon_globe() -> @html.Html {
-  @svg.svg(
-    width=16,
-    height=16,
-    view_box="0 0 16 16",
-    attrs=@svg.Attrs::build().fill("none").stroke("currentColor"),
-    [
-      @svg.circle(cx=8, cy=8, r=6),
-      @svg.node(
-        "ellipse",
-        @svg.Attrs::build().cx("8").cy("8").rx("2.6").ry("6"),
-        [],
-      ),
-      @svg.path(d="M2 8h12"),
-    ],
-  )
-}
-
-///|
-/// A compact diff document for the launcher's Review row.
-fn icon_review() -> @html.Html {
-  @svg.svg(
-    width=16,
-    height=16,
-    view_box="0 0 16 16",
-    attrs=@svg.Attrs::build()
-      .fill("none")
-      .stroke("currentColor")
-      .stroke_linecap("round"),
-    [
-      @svg.path(d="M5.5 2.5h7v11h-9v-7"),
-      @svg.path(d="M1 3.5h4M3 1.5v4M1 9.5h4"),
-      @svg.path(d="M7 6.5h3.5M7 9.5h3.5"),
-    ],
-  )
-}
-
-///|
-/// A command prompt and output lines for background job logs.
-fn icon_jobs() -> @html.Html {
-  @svg.svg(
-    width=16,
-    height=16,
-    view_box="0 0 16 16",
-    attrs=@svg.Attrs::build()
-      .fill("none")
-      .stroke("currentColor")
-      .stroke_linecap("round"),
-    [@svg.path(d="M2 4l3 3-3 3M7 10h6M7 4h6M7 7h6")],
-  )
-}
-
-///|
-/// One node fanning out to three: the launcher's Workflows row.
-fn icon_workflows() -> @html.Html {
-  @svg.svg(
-    width=16,
-    height=16,
-    view_box="0 0 16 16",
-    attrs=@svg.Attrs::build()
-      .fill("none")
-      .stroke("currentColor")
-      .stroke_linecap("round"),
-    [
-      @svg.path(d="M2.5 8h4"),
-      @svg.path(d="M6.5 8c2 0 2-4.5 4-4.5M6.5 8c2 0 2 4.5 4 4.5M6.5 8h4"),
-      @svg.path(d="M10.5 3.5h3M10.5 8h3M10.5 12.5h3"),
-    ],
-  )
-}
-
-///|
 /// One strip entry as the root view presents it: the tab's identity plus the
 /// decorations only the owning subsystem knows — the label text, the hover
 /// title, and whether the tab's backing content is missing (a deleted file),
@@ -143,7 +69,7 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
   if actions.browser is Some(open_browser) {
     rows.push(
       @html.button(class="dock-launcher-row", on_click=open_browser, [
-        @icons.icon(icon_globe),
+        @icons.icon(@icons.icon_globe),
         @html.span(class="dock-launcher-name", "Browse"),
         @html.span(class="dock-launcher-hint", "Open a page in a tab"),
       ]),
@@ -165,14 +91,14 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
   )
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.review, [
-      @icons.icon(icon_review),
+      @icons.icon(@icons.icon_diff),
       @html.span(class="dock-launcher-name", "Review"),
       @html.span(class="dock-launcher-hint", "Review changed files and diffs"),
     ]),
   )
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.workflows, [
-      @icons.icon(icon_workflows),
+      @icons.icon(@icons.icon_organization),
       @html.span(class="dock-launcher-name", "Workflows"),
       @html.span(
         class="dock-launcher-hint",
@@ -182,7 +108,7 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
   )
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.jobs, [
-      @icons.icon(icon_jobs),
+      @icons.icon(@icons.icon_terminal),
       @html.span(class="dock-launcher-name", "Jobs"),
       @html.span(
         class="dock-launcher-hint",
