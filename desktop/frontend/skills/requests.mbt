@@ -3,20 +3,10 @@
 // on the engine-host bridge, and each settles as one `Msg`.
 
 ///|
-extern "js" fn copy_text_to_clipboard(text : String) -> Unit =
-  #| (text) => {
-  #|   try {
-  #|     const clipboard = globalThis.navigator?.clipboard;
-  #|     if (clipboard && typeof clipboard.writeText === "function") {
-  #|       clipboard.writeText(text).catch(() => {});
-  #|     }
-  #|   } catch {
-  #|   }
-  #| }
-
-///|
+/// Best effort: a rejected clipboard write (no permission, no API) is not
+/// worth a message, so neither outcome maps back into update.
 fn copy_content(content : String) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => copy_text_to_clipboard(content))
+  @clipboard.copy(@clipboard.Text(content))
 }
 
 ///|

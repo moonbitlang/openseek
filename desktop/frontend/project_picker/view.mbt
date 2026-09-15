@@ -42,8 +42,12 @@ fn scroll_path_row_after_render(index : Int) -> @cmd.Cmd {
 }
 
 ///|
-extern "js" fn scroll_path_row(id : String) -> Unit =
-  #| (id) => document.getElementById(id)?.scrollIntoView({ block: "nearest" })
+/// `nearest` leaves every row that is already visible where it is.
+fn scroll_path_row(id : String) -> Unit {
+  if @dom.document().get_element_by_id(id).to_option() is Some(row) {
+    row.scroll_into_view_with_options(block="nearest")
+  }
+}
 
 ///|
 pub fn view(emit : @cmd.Emit[Msg], picker : State) -> @html.Html {

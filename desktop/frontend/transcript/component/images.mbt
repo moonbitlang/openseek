@@ -3,16 +3,15 @@
 // display data for the conversation currently mounted in the page.
 
 ///|
-#external
-priv type TranscriptImageObserver
-
-///|
-/// Observe only transcript-local image placeholders. Once a placeholder enters
-/// the viewport it is unobserved before its path is sent back to MoonBit, so a
-/// slow host read cannot produce repeated requests.
-extern "js" fn TranscriptImageObserver::install(
+/// Rabbita wraps `IntersectionObserver::observe/unobserve/disconnect` but not
+/// the entry fields this callback reads (`isIntersecting`, `target.dataset`),
+/// so only construction stays JS. The observer it returns is the ordinary
+/// `@dom.IntersectionObserver`. Only transcript-local placeholders are
+/// observed, and each one is unobserved before its path is sent back to
+/// MoonBit, so a slow host read cannot produce repeated requests.
+extern "js" fn transcript_image_observer(
   on_image : (String) -> Unit,
-) -> Self =
+) -> @dom.IntersectionObserver =
   #| (onImage) => new IntersectionObserver((entries, observer) => {
   #|   for (const entry of entries) {
   #|     if (!entry.isIntersecting) continue;
@@ -23,19 +22,15 @@ extern "js" fn TranscriptImageObserver::install(
   #| })
 
 ///|
-extern "js" fn TranscriptImageObserver::scan(
-  self : Self,
+/// Observe every image placeholder currently rendered under `transcript`.
+fn observe_transcript_images(
+  observer : @dom.IntersectionObserver,
   transcript : @dom.Element,
-) -> Unit =
-  #| (self, transcript) => {
-  #|   for (const image of transcript.querySelectorAll("img[data-transcript-image]")) {
-  #|     self.observe(image);
-  #|   }
-  #| }
-
-///|
-extern "js" fn TranscriptImageObserver::disconnect(self : Self) -> Unit =
-  #| (self) => self.disconnect()
+) -> Unit {
+  for image in transcript.query_selector_all("img[data-transcript-image]") {
+    observer.observe(image)
+  }
+}
 
 ///|
 priv enum LocalImageState {

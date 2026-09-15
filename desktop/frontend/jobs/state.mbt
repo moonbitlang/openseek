@@ -491,8 +491,11 @@ pub fn update(
 }
 
 ///|
-extern "js" fn scroll_end() -> Unit =
-  #| () => { const el = document.getElementById("bg-job-output"); if (el) el.scrollTop = el.scrollHeight; }
+fn scroll_end() -> Unit {
+  if @dom.document().get_element_by_id("bg-job-output").to_option() is Some(el) {
+    el.set_scroll_top(el.get_scroll_height())
+  }
+}
 
 ///|
 fn scroll_to_end() -> @cmd.Cmd {

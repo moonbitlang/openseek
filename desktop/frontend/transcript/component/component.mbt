@@ -715,7 +715,7 @@ priv struct TranscriptDomMount {
   mut element : @dom.Element?
   mut diagrams : @diagram_viewport.DiagramViewports?
   mut rendered_diagrams : Array[TranscriptDiagram]
-  images : TranscriptImageObserver
+  images : @dom.IntersectionObserver
   on_size_changed : () -> Unit
 }
 
@@ -728,7 +728,7 @@ fn TranscriptDomMount::TranscriptDomMount(
     element: None,
     diagrams: None,
     rendered_diagrams: [],
-    images: TranscriptImageObserver::install(on_image),
+    images: transcript_image_observer(on_image),
     on_size_changed,
   }
 }
@@ -766,7 +766,7 @@ fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
     self.diagrams = Some(
       @diagram_viewport.DiagramViewports(element, self.on_size_changed),
     )
-    self.images.scan(element)
+    observe_transcript_images(self.images, element)
   }
 }
 
@@ -779,7 +779,7 @@ fn TranscriptDomMount::refresh_content(self : Self) -> Unit {
     diagrams.refresh()
   }
   if self.element is Some(element) {
-    self.images.scan(element)
+    observe_transcript_images(self.images, element)
   }
 }
 

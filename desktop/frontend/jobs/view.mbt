@@ -75,8 +75,16 @@ fn job_timing(job : @wire.JobRecord) -> String {
 }
 
 ///|
-extern "js" fn away_from_end() -> Bool =
-  #| () => { const el = document.getElementById("bg-job-output"); return !!el && el.scrollHeight - el.scrollTop - el.clientHeight > 24; }
+/// Whether the output pane has been scrolled far enough from the bottom that
+/// following it would yank the reader away. A missing pane never follows.
+fn away_from_end() -> Bool {
+  match @dom.document().get_element_by_id("bg-job-output").to_option() {
+    Some(el) =>
+      el.get_scroll_height() - el.get_scroll_top() - el.get_client_height() >
+      24.0
+    None => false
+  }
+}
 
 ///|
 pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
