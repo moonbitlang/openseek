@@ -50,6 +50,16 @@ MoonBit async calls suspend directly; no `await` keyword is needed. Complete
 all calls and join spawned tasks before exiting. Only printed output enters
 the next model request; preserve selected source URLs and relevant failures.
 
+## Standalone tests
+
+Run `moon -C tools_sdk test --target native` and
+`moon -C tools_sdk test --target wasm`; no OpenSeek host or SDK publication is
+needed. The public-API test sets `OPENSEEK_PTC` to a temporary loopback HTTP
+server, calls each exported entry point, and checks authentication, unchanged
+JSON arguments (including both multi_edit forms), and typed results. It restores
+the environment and joins the server on exit. Separate transport tests cover
+invalid capabilities/responses, errors, no retries, and cancellation.
+
 ## Release order
 
 1. Review and merge this independent SDK module.
