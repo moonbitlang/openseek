@@ -13,6 +13,7 @@ type StandaloneExport
 pub fn StandaloneExport::StandaloneExport(String, String) -> Self
 pub fn StandaloneExport::json(Self, Array[Session]) -> String
 pub fn StandaloneExport::render(Self, Array[Session]) -> String raise
+pub fn StandaloneExport::render_json(Self, String) -> String raise
 
 // Type aliases
 

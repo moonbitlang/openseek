@@ -18,6 +18,7 @@ test "@viz_export renders standalone data and neutralizes script endings" {
   // dataset, without applying HTML script escaping to the downloaded file.
   let json = exporter.json([session])
   assert_true(json.contains("unsafe</script>"))
+  assert_eq(exporter.render_json(json), html)
   let escaped = json.replace_all(old="<", new="\\u003c")
   assert_true(html.contains("window.__OPENSEEK_DATA__ = \{escaped};"))
   assert_true(html.contains("window.__OPENSEEK_DATA__"))

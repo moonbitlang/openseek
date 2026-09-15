@@ -63,7 +63,10 @@ async fn SessionShare::upload(
   guard reply is SignInRequired else { return reply }
   @async.protect_from_cancel(() => {
     let store = self.state.auth_store()
-    guard store.desired_connector() == Some(config) else {
+    // The relay actor may already have retired this same login for its own
+    // refusal, leaving no connector: that is the signed-out outcome below,
+    // not a newer sign-in.
+    if store.desired_connector() is Some(current) && current != config {
       return Failed(
         message="Sign-in changed during the upload. Try sharing again.",
       )

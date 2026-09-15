@@ -73,3 +73,53 @@ async test "share refusal clears persisted login before offering sign in and pre
     })
   }
 }
+
+///|
+async test "a login the relay already retired during the upload still offers sign in" {
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  defer server.close()
+  let origin = "http://127.0.0.1:\{server.addr.port()}"
+  let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-auth-"))
+  defer @fs.rmdir(dir.to_string(), recursive=true)
+  @fs.write_file(
+    dir.join("auth.json").to_string(),
+    "{\"server_url\":\"\{origin}\",\"device_token\":\"current-token\",\"device\":{\"id\":\"device\",\"name\":\"Test\"},\"user\":{\"login\":\"test\",\"avatar_url\":\"\"}}",
+  )
+  let store = @auth.AuthStore::load(runtime_dir=dir)
+  guard store.desired_connector() is Some(config) else {
+    fail("fixture did not load login")
+  }
+  let state = @api.ApiState(engine="unused-test-engine", auth=store)
+  let share = SessionShare::{
+    state,
+    payload: {
+      session: "test",
+      workspace: ".",
+      title: "Test",
+      archived: false,
+    },
+  }
+  let snapshot = @shares.Snapshot(
+    title="Test",
+    html="<html>test</html>",
+    json="{}",
+  )
+  @async.with_task_group(group => {
+    let receiver = group.spawn(() => {
+      let (connection, _) = server.accept()
+      defer connection.close()
+      ignore(connection.read_request())
+      connection.skip_request_body()
+      // The relay refuses the same token while this upload is in flight.
+      store.handle_refusal()
+      assert_true(store.desired_connector() is None)
+      connection.send_response(401, "Unauthorized")
+      connection.write_string("{}")
+      connection.end_response()
+    })
+    let reply = share.upload(snapshot, config)
+    receiver.wait()
+    assert_true(reply is SignInRequired)
+    assert_false(store.signed_in())
+  })
+}

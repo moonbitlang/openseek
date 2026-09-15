@@ -86,7 +86,17 @@ pub fn StandaloneExport::render(
   self : StandaloneExport,
   sessions : Array[Session],
 ) -> String raise {
-  let blob = self.escape_json_for_html(self.json(sessions))
+  self.render_json(self.json(sessions))
+}
+
+///|
+/// Embed an already serialized dataset from `json`, so a caller that also
+/// keeps the JSON serializes the captured sessions only once.
+pub fn StandaloneExport::render_json(
+  self : StandaloneExport,
+  json : String,
+) -> String raise {
+  let blob = self.escape_json_for_html(json)
   let bundle = self.escape_script_close(self.bundle_js)
   let scripts = "<script>window.__OPENSEEK_DATA__ = \{blob};</script>\n<script>\n\{bundle}\n</script>"
   let marker = "<script src=\"/viz_app.js\"></script>"

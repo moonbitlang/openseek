@@ -118,5 +118,6 @@ pub async fn ConversationExport::capture(
   let request = SessionExport::SessionExport(manager, payload)
   let sessions = request.sessions()
   let exporter = @viz_export.StandaloneExport(shell_html, bundle_js)
-  { html: exporter.render(sessions), json: exporter.json(sessions), }
+  let json = exporter.json(sessions)
+  { html: exporter.render_json(json), json, }
 }
