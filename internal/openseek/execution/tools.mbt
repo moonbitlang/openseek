@@ -13,7 +13,7 @@ pub async fn[X] build_extra_tools(
   model~ : @deepseek.Model,
   api_key~ : String,
   workspace_root~ : String,
-  mcp_config_path~ : String,
+  mcp_config_path? : String,
   deepseek_api_key? : String,
   api_url? : String,
 ) -> Array[@agent_tool.AgentToolDefinition] {

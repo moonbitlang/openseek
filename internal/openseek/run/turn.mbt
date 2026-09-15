@@ -41,7 +41,7 @@ async fn run_task_turn(
       model~,
       api_key~,
       workspace_root~,
-      mcp_config_path=@options.mcp_config_path(matches),
+      mcp_config_path?=@options.mcp_config_path(matches),
       deepseek_api_key?=@options.deepseek_api_key(matches),
       api_url?,
     )

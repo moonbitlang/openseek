@@ -116,10 +116,11 @@ pub fn deepseek_api_key(matches : @argparse.Matches) -> String? {
 }
 
 ///|
-/// The `--mcp-config` path, or "" when unset.
-pub fn mcp_config_path(matches : @argparse.Matches) -> String {
+/// The `--mcp-config` path, or `None` when unset.
+pub fn mcp_config_path(matches : @argparse.Matches) -> String? {
   match matches {
-    { values: { "mcp-config": [path, ..], .. }, .. } => path
-    _ => ""
+    { values: { "mcp-config": [path, ..], .. }, .. } if !path.is_empty() =>
+      Some(path)
+    _ => None
   }
 }

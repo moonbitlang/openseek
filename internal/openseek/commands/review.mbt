@@ -91,7 +91,7 @@ pub async fn run_review_command(matches : @argparse.Matches) -> Unit {
   // Review runs a fixed built-in tool set; say so rather than silently ignoring
   // an accepted option. Straight to stderr: review's stdout carries exactly one
   // JSON ReviewReport, and the event sink is closed.
-  if @options.mcp_config_path(matches) != "" {
+  if @options.mcp_config_path(matches) is Some(_) {
     @stdio.stderr.write(
       "warning: --mcp-config is ignored in review mode (fixed built-in tool set)\n",
     ) catch {

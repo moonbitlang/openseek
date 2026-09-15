@@ -7,7 +7,7 @@ as the implementation grows.
 
 | Package | Owns |
 | --- | --- |
-| `options` | The argparse command tree, option definitions, and value validation — except `--approval`, whose policy `execution` parses and owns. |
+| `options` | The argparse command tree, option definitions, and value validation — except `--approval`'s value, which `execution` parses into its policy. |
 | `setup` | Workspace preparation, prompt assembly, session initialization, child IDs, launch paths and scratch labs, and goal baseline capture. |
 | `execution` | JSONL event draining, the approval policy and its requests, extra tools and MCP connections, and review gates. |
 | `run` | One-shot turns and fleet attempts in independent workspaces. |
@@ -33,8 +33,9 @@ in particular, a subrun's final report must follow all its queued events, and
 process exit belongs outside the drain's scope.
 
 There is no logger in this binary: nothing linked into `cmd/openseek` logs, so
-stdout carries only the event stream or the command's own output. That holds
-across every package here — a logging import added to any one of them would
+stdout carries only the event stream or the command's own output. The
+`MOON_XLOG` case in `tests/cram/cli.md` guards this for `run`; keep it true
+for every package here, since a logging import in any one of them would
 corrupt fd 1 for every `run`, `serve`, and `subrun` consumer.
 
 Tests live in the owning packages' `*_wbtest.mbt` files. The test-only parser

@@ -17,7 +17,7 @@ pub fn export_retry_overrides(@argparse.Matches) -> Unit raise
 
 pub fn max_steps(@argparse.Matches) -> Int? raise
 
-pub fn mcp_config_path(@argparse.Matches) -> String
+pub fn mcp_config_path(@argparse.Matches) -> String?
 
 pub fn reject_session_contradiction(@argparse.Matches) -> Unit raise
 

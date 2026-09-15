@@ -7,8 +7,7 @@
 /// validation gate. Stdout carries only the summary, so the command never opens
 /// the event sink and an event the tool build reports is dropped.
 pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
-  let path = @options.mcp_config_path(matches)
-  if path == "" {
+  guard @options.mcp_config_path(matches) is Some(path) else {
     fail(
       "no MCP configuration: pass --mcp-config <file> (or OPENSEEK_MCP_CONFIG)",
     )

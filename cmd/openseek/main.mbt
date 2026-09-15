@@ -1,7 +1,6 @@
 ///|
-/// Start the headless CLI and report process-level failures. There is no
-/// logger in this binary: nothing linked into it logs, so stdout carries only
-/// the event stream or the command's own output.
+/// Start the headless CLI and report process-level failures. Nothing linked
+/// into this binary logs (see `internal/openseek/README.md`).
 async fn main {
   @app.dispatch() catch {
     error => {

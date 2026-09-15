@@ -29,7 +29,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
     if fleet_mode(matches, concurrency) {
       // Fleet members own separate materialized workspaces; per-member MCP
       // connections are not wired, so say so instead of silently ignoring.
-      if @options.mcp_config_path(matches) != "" {
+      if @options.mcp_config_path(matches) is Some(_) {
         @emit.emit(
           McpConfigIgnored(reason="fleet mode does not support MCP servers"),
         )

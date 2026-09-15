@@ -4,7 +4,7 @@
 /// The knob is the engine's, never the controller's, which is what lets the
 /// tool registry decide at BUILD time whether the escalation argument is
 /// offered to the model at all.
-pub(all) enum ApprovalPolicy {
+pub enum ApprovalPolicy {
   Ask
   /// No channel is wired, so the tools that would ask do not offer the
   /// argument that asks. The stance for unattended runs.
