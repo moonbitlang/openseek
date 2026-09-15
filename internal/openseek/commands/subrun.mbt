@@ -135,30 +135,6 @@ fn child_durable_session(
 }
 
 ///|
-/// Create a child's scratch lab, realpath'd so the path the child is told,
-/// the read-only guard, and the sandbox profile all name the SAME
-/// kernel-canonical directory (macOS `/tmp` → `/private/tmp`) — otherwise
-/// the sandbox's allow-subpath would never match the writes it means to
-/// permit.
-async fn new_scratch_lab(prefix : String) -> String {
-  let dir = @fs.tmpdir(prefix~)
-  @fs.realpath(dir) catch {
-    _ => dir
-  }
-}
-
-///|
-/// Remove a child's scratch lab after it finishes: `moon check` inside a
-/// lab leaves a `_build` tree, so a long run's labs would otherwise
-/// accumulate until the OS cleans temp. Best-effort — a failed cleanup is
-/// not worth failing the sub-run over.
-async fn remove_scratch_lab(dir : String) -> Unit {
-  @fs.rmdir(dir, recursive=true) catch {
-    _ => ()
-  }
-}
-
-///|
 /// The step ceiling for one child, by precedence: the explicit `--max-steps`
 /// flag (the operator's word), else the request envelope's `max_steps` (where
 /// the workflow contract carries a caller's per-call ceiling), else the
@@ -227,8 +203,8 @@ async fn dispatch_kind(
       guard model.api_key(matches.values) is Some(api_key) else {
         fail("an API key is required for \{model}: pass --api-key")
       }
-      let scratch_dir = new_scratch_lab("openseek-explore-lab-")
-      defer remove_scratch_lab(scratch_dir)
+      let scratch_dir = @setup.new_scratch_lab("openseek-explore-lab-")
+      defer @setup.remove_scratch_lab(scratch_dir)
       let report = @agent_explore.run_child(
         input,
         api_key~,
@@ -262,8 +238,8 @@ async fn dispatch_kind(
       guard model.api_key(matches.values) is Some(api_key) else {
         fail("an API key is required for \{model}: pass --api-key")
       }
-      let scratch_dir = new_scratch_lab("openseek-review-lab-")
-      defer remove_scratch_lab(scratch_dir)
+      let scratch_dir = @setup.new_scratch_lab("openseek-review-lab-")
+      defer @setup.remove_scratch_lab(scratch_dir)
       let report = @agent_review.run_goal_audit(
         goal~,
         baseline~,

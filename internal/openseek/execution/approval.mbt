@@ -150,7 +150,7 @@ pub fn ApprovalDesk::withdraw_all(self : ApprovalDesk) -> Unit {
 /// would ask offer the argument that asks. A refusing channel would leave the
 /// argument advertised and every use of it dead on arrival.
 pub fn approval_channel(
-  policy : @options.ApprovalPolicy,
+  policy : ApprovalPolicy,
   desk : ApprovalDesk,
 ) -> @agent_runtime.ApprovalChannel? {
   match policy {

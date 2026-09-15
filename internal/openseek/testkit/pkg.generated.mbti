@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/internal/openseek/testkit"
+
+import {
+  "moonbitlang/core/argparse",
+}
+
+// Values
+pub fn run_matches(argv~ : Array[String], env~ : Map[String, String]) -> @argparse.Matches raise
+
+pub fn sessions_leaf_matches(sub~ : String, argv~ : Array[String], env~ : Map[String, String]) -> @argparse.Matches raise
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

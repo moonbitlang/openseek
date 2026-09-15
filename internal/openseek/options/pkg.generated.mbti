@@ -9,7 +9,7 @@ import {
 // Values
 pub fn agent_settings(@argparse.Matches) -> (@deepseek.Model, @deepseek.ThinkingMode, String?) raise
 
-pub fn approval_policy(@argparse.Matches, interactive~ : Bool) -> ApprovalPolicy raise
+pub fn deepseek_api_key(@argparse.Matches) -> String?
 
 pub fn explicitly_provided(@argparse.Matches, String) -> Bool
 
@@ -34,11 +34,6 @@ pub fn task_text(@argparse.Matches) -> String raise
 // Errors
 
 // Types and methods
-pub(all) enum ApprovalPolicy {
-  Ask
-  Never
-  Always
-}
 
 // Type aliases
 

@@ -5,6 +5,10 @@ import {
   "moonbitlang/core/env",
 }
 
+import {
+  "bobzhang/openseek/internal/openseek/testkit",
+} for "wbtest"
+
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"

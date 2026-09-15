@@ -105,6 +105,17 @@ pub fn task_text(matches : @argparse.Matches) -> String raise {
 }
 
 ///|
+/// The dedicated `--deepseek-api-key`/`$DEEPSEEK` credential, trimmed, or
+/// `None` when blank: what `web_search` uses on a non-DeepSeek model run.
+pub fn deepseek_api_key(matches : @argparse.Matches) -> String? {
+  match matches {
+    { values: { "deepseek-api-key": [key, ..], .. }, .. } if !key.is_blank() =>
+      Some(key.trim().to_owned())
+    _ => None
+  }
+}
+
+///|
 /// The `--mcp-config` path, or "" when unset.
 pub fn mcp_config_path(matches : @argparse.Matches) -> String {
   match matches {

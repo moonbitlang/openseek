@@ -17,16 +17,17 @@ async fn run_task_turn(
   retry_backoff_ms? : Int,
   workspace_root~ : String,
   review_deadline_ms~ : Int?,
+  approval_policy~ : @execution.ApprovalPolicy,
   child_session? : @agent_subrun.ChildSession,
   job_log_dir? : String,
 ) -> Unit {
   @async.with_task_group() <| group => {
     // `run` reads no commands, so there is nobody to ask: `--approval ask` is
-    // refused at parse time (see parse_approval_policy) and the surviving
+    // refused where `run_task_command` reads it, and the surviving
     // policies need no pending desk of their own — `always` answers from the
     // channel itself, `never` wires none.
     let approval = @execution.approval_channel(
-      @options.approval_policy(matches, interactive=false),
+      approval_policy,
       ApprovalDesk(now_ms=@env.now().reinterpret_as_int64()),
     )
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
@@ -36,11 +37,12 @@ async fn run_task_turn(
     // audits against the LIVE standing goal, not the turn-start snapshot.
     let mut latest_session : @agent_session.Session = session
     let extra_tools = @execution.build_extra_tools(
-      matches,
       scope,
       model~,
       api_key~,
       workspace_root~,
+      mcp_config_path=@options.mcp_config_path(matches),
+      deepseek_api_key?=@options.deepseek_api_key(matches),
       api_url?,
     )
     // A snippet's workflow delegates to children named from the SAME ordinal

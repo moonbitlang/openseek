@@ -6,7 +6,11 @@
 ///
 /// Naming uses `<base>_run_<i>` (underscores, not a dotted suffix that reads as a
 /// file extension) so the run directories are unambiguous and easy to recognize.
-async fn run_fleet(matches : @argparse.Matches, concurrency~ : Int) -> Unit {
+async fn run_fleet(
+  matches : @argparse.Matches,
+  concurrency~ : Int,
+  approval_policy~ : @execution.ApprovalPolicy,
+) -> Unit {
   // Fleet mode owns session creation and is a one-shot batch, so it conflicts
   // with the single-session and no-session modes of `openseek run`.
   guard !(matches is { flags: { "no-session": true, .. }, .. }) else {
@@ -25,7 +29,7 @@ async fn run_fleet(matches : @argparse.Matches, concurrency~ : Int) -> Unit {
   // that reaches here and does anything is `always`; before this it was parsed
   // and then dropped, leaving the flag silently ineffective.
   let approval = @execution.approval_channel(
-    @options.approval_policy(matches, interactive=false),
+    approval_policy,
     ApprovalDesk(now_ms=@env.now().reinterpret_as_int64()),
   )
   let (session, dir_input, session_root_input) = match matches {

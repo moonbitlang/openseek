@@ -4,14 +4,13 @@ pub const McpClientVersion : String = "0.2.2"
 
 ///|
 /// Build the agent tools contributed by the configured MCP servers. `[]` when no
-/// config is set or on any failure (logged). The connections' reader/writer
+/// config is set or on any failure (emitted as events). The connections' reader/writer
 /// tasks run on `scope`'s group.
 async fn[X] resolve_mcp_tools(
-  matches : @argparse.Matches,
+  path : String,
   scope : @agent_runtime.AgentTaskScope[X],
   workspace_root~ : String,
 ) -> Array[@agent_tool.AgentToolDefinition] {
-  let path = @options.mcp_config_path(matches)
   if path == "" {
     return []
   }

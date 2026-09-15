@@ -9,15 +9,16 @@
 /// two chances for one entry point to grow a tool surface the other does not
 /// have.
 pub async fn[X] build_extra_tools(
-  matches : @argparse.Matches,
   scope : @agent_runtime.AgentTaskScope[X],
   model~ : @deepseek.Model,
   api_key~ : String,
   workspace_root~ : String,
+  mcp_config_path~ : String,
+  deepseek_api_key? : String,
   api_url? : String,
 ) -> Array[@agent_tool.AgentToolDefinition] {
-  let extra_tools = resolve_mcp_tools(matches, scope, workspace_root~)
-  if web_search_api_key(model, api_key, api_url, matches)
+  let extra_tools = resolve_mcp_tools(mcp_config_path, scope, workspace_root~)
+  if web_search_api_key(model, api_key, api_url, deepseek_api_key)
     is Some(web_search_key) {
     extra_tools.push(@web_search.definition(api_key=web_search_key))
   }
@@ -43,13 +44,12 @@ fn web_search_api_key(
   model : @deepseek.Model,
   api_key : String,
   api_url : String?,
-  matches : @argparse.Matches,
+  deepseek_api_key : String?,
 ) -> String? {
   guard api_url is None else { return None }
-  match (model, matches.values) {
+  match (model, deepseek_api_key) {
     (Deepseek(_), _) => Some(api_key)
-    (_, { "deepseek-api-key": [key, ..], .. }) if !key.is_blank() =>
-      Some(key.trim().to_owned())
+    (_, Some(key)) => Some(key)
     _ => None
   }
 }

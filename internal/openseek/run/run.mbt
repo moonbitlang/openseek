@@ -9,8 +9,9 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
     // HERE, before a session directory exists and before the model is
     // contacted: resolving it at the first turn instead left a run that
     // announced `session_started` and only then refused, which is a failure
-    // the caller pays for in artifacts on disk.
-    @options.approval_policy(matches, interactive=false) |> ignore
+    // the caller pays for in artifacts on disk. Read once: the turn and the
+    // fleet below take the value rather than parsing it again.
+    let approval_policy = @execution.approval_policy(matches, interactive=false)
     // Validate this before fleet mode materializes sibling workspaces. The
     // fleet path currently has no review subruns, but an invalid run option
     // must still be rejected instead of being silently accepted there.
@@ -33,7 +34,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
           McpConfigIgnored(reason="fleet mode does not support MCP servers"),
         )
       }
-      run_fleet(matches, concurrency~)
+      run_fleet(matches, concurrency~, approval_policy~)
       return
     }
     let workspace_root = @setup.prepare_workspace_root(
@@ -74,6 +75,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
           retry_backoff_ms?,
           workspace_root~,
           review_deadline_ms~,
+          approval_policy~,
         )
       }
       Some(id) => {
@@ -112,6 +114,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
           retry_backoff_ms?,
           workspace_root~,
           review_deadline_ms~,
+          approval_policy~,
           child_session=ChildSession(
             root=store.root(),
             parent=id.value(),

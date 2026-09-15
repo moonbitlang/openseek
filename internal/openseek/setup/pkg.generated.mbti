@@ -17,11 +17,15 @@ pub async fn first_free_child_ordinal(@store.SessionStore, String) -> Int
 
 pub async fn load_or_new_session(@store.SessionStore, @agent_session.SessionId, @argparse.Matches, @deepseek.Model, workspace_root? : String) -> @agent_session.Session
 
+pub async fn new_scratch_lab(String) -> String
+
 pub async fn prepare_workspace_root(@argparse.Matches, log_created? : Bool) -> String
 
 pub async fn probe_dir(String) -> DirProbe
 
 pub async fn random_salt() -> String
+
+pub async fn remove_scratch_lab(String) -> Unit
 
 pub async fn resolved_session_id(@argparse.Matches) -> @agent_session.SessionId?
 

@@ -22,6 +22,7 @@ import {
 
 import {
   "bobzhang/openseek/testkit/filesystem" @vfs,
+  "bobzhang/openseek/internal/openseek/testkit",
 } for "wbtest"
 
 warnings = "+unnecessary_annotation"

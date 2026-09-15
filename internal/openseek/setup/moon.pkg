@@ -13,13 +13,12 @@ import {
   "bobzhang/openseek/prompt",
   "bobzhang/openseek_protocol",
   "bobzhang/openseek/agent_session/store",
-  "bobzhang/openseek/testkit/filesystem" @vfs,
   "bobzhang/openseek/internal/workspace_path",
 }
 
 import {
-  "bobzhang/openseek/cli",
-  "bobzhang/openseek/internal/openseek/options",
+  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "bobzhang/openseek/internal/openseek/testkit",
 } for "wbtest"
 
 warnings = "+unnecessary_annotation"

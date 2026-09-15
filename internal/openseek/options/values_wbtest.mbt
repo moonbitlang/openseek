@@ -2,7 +2,7 @@
 /// V4.1 Flash's canonical wire name is `deepseek-flash`; the retired
 /// `deepseek-v4-flash` name still parses to its own legacy tier.
 test "cli accepts the v4.1 flash wire name" {
-  let parsed = run_matches(argv=["write", "MoonBit"], env={
+  let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
     "OPENSEEK_MODEL": "deepseek-flash",
   })
@@ -16,7 +16,7 @@ test "cli accepts the v4.1 flash wire name" {
 
 ///|
 test "cli retry flags override the environment and reject non-positives" {
-  let parsed = run_matches(
+  let parsed = @testkit.run_matches(
     argv=["--retry-attempts", "2", "--retry-backoff-ms", "7", "write"],
     env={ "DEEPSEEK": "test-key", "OPENSEEK_RETRY_ATTEMPTS": "9" },
   )
@@ -24,7 +24,7 @@ test "cli retry flags override the environment and reject non-positives" {
   // Rejection is checked through the environment: argparse refuses a bare
   // `-1` as a missing value before the parsed string ever reaches here.
   for bad in ["0", "-1", "many"] {
-    let rejected = run_matches(argv=["write"], env={
+    let rejected = @testkit.run_matches(argv=["write"], env={
       "DEEPSEEK": "test-key",
       "OPENSEEK_RETRY_ATTEMPTS": bad,
     })
@@ -43,7 +43,7 @@ test "cli retry flags override the environment and reject non-positives" {
 /// The flag has to reach subagents, and they are handed the environment, not
 /// this process's argv — see `export_retry_overrides`.
 test "cli exports argv retry overrides into the environment for children" {
-  let parsed = run_matches(
+  let parsed = @testkit.run_matches(
     argv=["--retry-attempts", "3", "--retry-backoff-ms", "11", "write"],
     env={ "DEEPSEEK": "test-key" },
   )
@@ -54,7 +54,7 @@ test "cli exports argv retry overrides into the environment for children" {
   @env.unset_env_var("OPENSEEK_RETRY_BACKOFF_MS")
   // Nothing to carry means nothing written: a child keeps falling back to the
   // client default rather than being pinned to a value nobody asked for.
-  let bare = run_matches(argv=["write"], env={ "DEEPSEEK": "test-key" })
+  let bare = @testkit.run_matches(argv=["write"], env={ "DEEPSEEK": "test-key" })
   export_retry_overrides(bare)
   assert_eq(@env.get_env_var("OPENSEEK_RETRY_ATTEMPTS"), None)
   assert_eq(@env.get_env_var("OPENSEEK_RETRY_BACKOFF_MS"), None)
@@ -62,19 +62,19 @@ test "cli exports argv retry overrides into the environment for children" {
 
 ///|
 test "cli uses provider API keys only for their models" {
-  let kimi = run_matches(argv=["write", "MoonBit"], env={
+  let kimi = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "KIMI": "kimi-key",
     "OPENSEEK_MODEL": "kimi-k2.7-code-highspeed",
   })
   let kimi_model : @deepseek.Model = Kimi(K27CodeHighSpeed)
   assert_eq(kimi_model.api_key(kimi.values), Some("kimi-key"))
-  let glm = run_matches(argv=["write", "MoonBit"], env={
+  let glm = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "GLM": "glm-key",
     "OPENSEEK_MODEL": "glm-5.3-flash",
   })
   let glm_model : @deepseek.Model = Glm(G53Flash)
   assert_eq(glm_model.api_key(glm.values), Some("glm-key"))
-  let deepseek = run_matches(argv=["write", "MoonBit"], env={
+  let deepseek = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "KIMI": "kimi-key",
     "GLM": "glm-key",
   })
@@ -86,14 +86,14 @@ test "cli uses provider API keys only for their models" {
 
 ///|
 test "agent runs require api key" {
-  let parsed = run_matches(argv=["write", "MoonBit"], env=Map([]))
+  let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env=Map([]))
   let model : @deepseek.Model = Deepseek(V4Pro)
   assert_true(model.api_key(parsed.values) is None)
 }
 
 ///|
 test "agent runs require task text" {
-  let parsed = run_matches(argv=[], env={ "DEEPSEEK": "test-key" })
+  let parsed = @testkit.run_matches(argv=[], env={ "DEEPSEEK": "test-key" })
   let _ = task_text(parsed) catch {
     error => {
       assert_true("\{error}".contains("task description is required"))
@@ -105,17 +105,19 @@ test "agent runs require task text" {
 
 ///|
 test "cli parses max steps option" {
-  let parsed = run_matches(argv=["--max-steps", "25", "write", "MoonBit"], env={
-    "DEEPSEEK": "test-key",
-  })
+  let parsed = @testkit.run_matches(
+    argv=["--max-steps", "25", "write", "MoonBit"],
+    env={ "DEEPSEEK": "test-key" },
+  )
   assert_true(max_steps(parsed) is Some(25))
 }
 
 ///|
 test "cli rejects invalid max steps" {
-  let parsed = run_matches(argv=["--max-steps", "0", "write", "MoonBit"], env={
-    "DEEPSEEK": "test-key",
-  })
+  let parsed = @testkit.run_matches(
+    argv=["--max-steps", "0", "write", "MoonBit"],
+    env={ "DEEPSEEK": "test-key" },
+  )
   let _ = max_steps(parsed) catch {
     error => {
       assert_true("\{error}".contains("--max-steps must be a positive integer"))
@@ -127,7 +129,7 @@ test "cli rejects invalid max steps" {
 
 ///|
 test "cli parses review deadline option" {
-  let parsed = run_matches(
+  let parsed = @testkit.run_matches(
     argv=["--review-deadline", "60000", "write", "MoonBit"],
     env={ "DEEPSEEK": "test-key" },
   )
@@ -136,7 +138,7 @@ test "cli parses review deadline option" {
 
 ///|
 test "cli defaults review deadline to none" {
-  let parsed = run_matches(argv=["write", "MoonBit"], env={
+  let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
   })
   assert_true(review_deadline_ms(parsed) is None)
@@ -144,7 +146,7 @@ test "cli defaults review deadline to none" {
 
 ///|
 test "cli rejects invalid review deadline" {
-  let parsed = run_matches(
+  let parsed = @testkit.run_matches(
     argv=["--review-deadline", "0", "write", "MoonBit"],
     env={ "DEEPSEEK": "test-key" },
   )

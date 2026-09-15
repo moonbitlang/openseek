@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/core/argparse",
+  "bobzhang/openseek/internal/openseek/options",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+wasm+native"

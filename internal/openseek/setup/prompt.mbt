@@ -51,7 +51,7 @@ pub async fn configured_system_prompt(
   // prompt, keeping the installation-dependent path in this tail.
   let target = if workspace_root == "" { "." } else { workspace_root }
   let cwd = @fs.realpath(target) catch { _ => target }
-  let outline = @vfs.dir_outline(cwd).unwrap_or(
+  let outline = dir_outline(cwd).unwrap_or(
     "(empty directory): use `moon new` to create a new project here",
   )
   let environment_block =

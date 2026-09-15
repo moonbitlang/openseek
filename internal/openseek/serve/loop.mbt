@@ -101,7 +101,7 @@ async fn run_serve(
     now_ms=@env.now().reinterpret_as_int64(),
   )
   let approval = @execution.approval_channel(
-    @options.approval_policy(matches, interactive=true),
+    @execution.approval_policy(matches, interactive=true),
     approval_desk,
   )
   @async.with_task_group(group => {
@@ -156,11 +156,12 @@ async fn run_serve(
       )
     })
     let extra_tools = @execution.build_extra_tools(
-      matches,
       scope,
       model~,
       api_key~,
       workspace_root~,
+      mcp_config_path=@options.mcp_config_path(matches),
+      deepseek_api_key?=@options.deepseek_api_key(matches),
       api_url?,
     )
     // The advisory goal-met gate (--review-gate): built once, shared by

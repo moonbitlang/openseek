@@ -14,11 +14,14 @@ import {
   "moonbitlang/core/json",
   "bobzhang/openseek/mcp/config" @mcpconfig,
   "bobzhang/openseek/mcp/tools" @mcptools,
-  "bobzhang/openseek/internal/openseek/options",
   "bobzhang/openseek_protocol",
   "bobzhang/openseek/internal/openseek/setup",
   "bobzhang/openseek/agent_tool/web_search",
 }
+
+import {
+  "bobzhang/openseek/internal/openseek/testkit",
+} for "wbtest"
 
 warnings = "+unnecessary_annotation"
 

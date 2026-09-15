@@ -30,7 +30,7 @@ test "bare parse is rejected (no default subcommand)" {
 
 ///|
 test "cli rejects unknown options before task text" {
-  let _ = run_matches(argv=["--xxy", "he"], env=Map([])) catch {
+  let _ = @testkit.run_matches(argv=["--xxy", "he"], env=Map([])) catch {
     error => {
       assert_true("\{error}".contains("unexpected argument '--xxy' found"))
       return
@@ -41,7 +41,7 @@ test "cli rejects unknown options before task text" {
 
 ///|
 test "cli accepts hyphen-leading task text after option delimiter" {
-  let parsed = run_matches(argv=["--", "--xxy", "he"], env=Map([]))
+  let parsed = @testkit.run_matches(argv=["--", "--xxy", "he"], env=Map([]))
   assert_eq(task_text(parsed), "--xxy he")
 }
 
@@ -49,7 +49,7 @@ test "cli accepts hyphen-leading task text after option delimiter" {
 test "sessions list needs no api key or task" {
   // The `sessions` subcommands do not declare api-key/task at all, so listing
   // works with no DeepSeek setup.
-  let parsed = sessions_leaf_matches(sub="list", argv=[], env=Map([]))
+  let parsed = @testkit.sessions_leaf_matches(sub="list", argv=[], env=Map([]))
   assert_eq(@cli.value(parsed, "format"), "text")
   assert_eq(@cli.value(parsed, "session-root"), ".openseek")
 }

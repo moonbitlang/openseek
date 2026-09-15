@@ -20,7 +20,7 @@ test "session listing rows are tab-separated and survive odd prompts" {
 
 ///|
 async test "session commands reject empty session root" {
-  let parsed = sessions_leaf_matches(
+  let parsed = @testkit.sessions_leaf_matches(
     sub="list",
     argv=["--session-root", ""],
     env=Map([]),
@@ -40,7 +40,7 @@ async test "session list command does not require deepseek setup" {
     let store = @store.SessionStore(root)
     store.create(Session(SessionId("b"), system_prompt="system"))
     store.create(Session(SessionId("a"), system_prompt="system"))
-    let parsed = sessions_leaf_matches(
+    let parsed = @testkit.sessions_leaf_matches(
       sub="list",
       argv=["--session-root", root],
       env=Map([]),
@@ -52,15 +52,19 @@ async test "session list command does not require deepseek setup" {
 
 ///|
 test "session list format defaults to text and rejects unknown values" {
-  let default_format = sessions_leaf_matches(sub="list", argv=[], env=Map([]))
+  let default_format = @testkit.sessions_leaf_matches(
+    sub="list",
+    argv=[],
+    env=Map([]),
+  )
   assert_true(session_list_format(default_format) is Text)
-  let json_format = sessions_leaf_matches(
+  let json_format = @testkit.sessions_leaf_matches(
     sub="list",
     argv=["--format", "json"],
     env=Map([]),
   )
   assert_true(session_list_format(json_format) is Json)
-  let bogus = sessions_leaf_matches(
+  let bogus = @testkit.sessions_leaf_matches(
     sub="list",
     argv=["--format", "yaml"],
     env=Map([]),
@@ -155,7 +159,7 @@ async test "session compact command appends summary without api key" {
       "summarized turn",
       create_mode=CreateOrTruncate,
     )
-    let parsed = sessions_leaf_matches(
+    let parsed = @testkit.sessions_leaf_matches(
       sub="compact",
       argv=[
         "cli-test", "--session-root", root, "--file", summary_path, "--from", "1",
@@ -190,7 +194,7 @@ async test "session compact file resolves relative to workspace root" {
       "workspace summary",
       create_mode=CreateOrTruncate,
     )
-    let parsed = sessions_leaf_matches(
+    let parsed = @testkit.sessions_leaf_matches(
       sub="compact",
       argv=[
         "cli-test", "--dir", workspace, "--file", "summary.txt", "--from", "1", "--to",
@@ -209,7 +213,7 @@ async test "session compact file resolves relative to workspace root" {
 
 ///|
 async test "session compaction rejects missing summary file" {
-  let parsed = sessions_leaf_matches(
+  let parsed = @testkit.sessions_leaf_matches(
     sub="compact",
     argv=["cli-test", "--from", "1", "--to", "2"],
     env=Map([]),

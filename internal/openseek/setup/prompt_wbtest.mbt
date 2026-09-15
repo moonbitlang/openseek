@@ -1,6 +1,6 @@
 ///|
 async test "environment section names the cwd and appends the layout outline" {
-  let parsed = run_matches(argv=["write", "MoonBit"], env={
+  let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
     "OPENSEEK_GLOBAL_SKILLS_DIR": "no-global-skills",
   })
@@ -28,7 +28,7 @@ async test "environment section names the cwd and appends the layout outline" {
 ///|
 async test "environment section reports empty directory layout" {
   @vfs.with_tmpdir(root => {
-    let parsed = run_matches(argv=["write", "MoonBit"], env={
+    let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
       "DEEPSEEK": "test-key",
       "OPENSEEK_GLOBAL_SKILLS_DIR": "\{root}/no-global-skills",
     })
@@ -63,7 +63,7 @@ async test "environment section inline snapshot for deterministic layout" {
       "_build/out.log": "x",
     }).write_to(root)
     let resolved_root = @fs.realpath(root)
-    let parsed = run_matches(argv=["write", "MoonBit"], env={
+    let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
       "DEEPSEEK": "test-key",
       "OPENSEEK_GLOBAL_SKILLS_DIR": "\{root}/no-global-skills",
     })
@@ -93,7 +93,7 @@ async test "configured system prompt can replace and append files" {
     let addendum_path = "\{dir}/addendum.md"
     @fs.write_file(prompt_path, "base prompt\n", create_mode=CreateOrTruncate)
     @fs.write_file(addendum_path, "addendum\n", create_mode=CreateOrTruncate)
-    let parsed = run_matches(
+    let parsed = @testkit.run_matches(
       argv=[
         "--system-prompt-file", prompt_path, "--system-prompt-addendum-file", addendum_path,
         "write", "MoonBit",
@@ -132,7 +132,7 @@ async test "configured system prompt advertises global skills" {
     )
     let prompt_path = "\{dir}/prompt.md"
     @fs.write_file(prompt_path, "base\n", create_mode=CreateOrTruncate)
-    let parsed = run_matches(
+    let parsed = @testkit.run_matches(
       argv=["--system-prompt-file", prompt_path, "write", "MoonBit"],
       env={
         "DEEPSEEK": "test-key",
@@ -170,7 +170,7 @@ async test "configured system prompt uses the selected workspace root" {
       ),
       create_mode=CreateOrTruncate,
     )
-    let parsed = run_matches(
+    let parsed = @testkit.run_matches(
       argv=[
         "--dir", workspace, "--system-prompt-file", "prompt.md", "write", "MoonBit",
       ],
@@ -196,7 +196,7 @@ async test "configured system prompt uses the selected workspace root" {
 
 ///|
 async test "configured system prompt defaults to the flash prompt" {
-  let parsed = run_matches(argv=["write", "MoonBit"], env={
+  let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
   })
   assert_true(
