@@ -34,7 +34,7 @@ pub fn icon_copy() -> @html.Html
 
 pub fn icon_debug_stop() -> @html.Html
 
-pub fn icon_diff() -> @html.Html
+pub fn icon_diff_multiple() -> @html.Html
 
 pub fn icon_edit() -> @html.Html
 

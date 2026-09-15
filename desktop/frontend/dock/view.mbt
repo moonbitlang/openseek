@@ -91,7 +91,7 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
   )
   rows.push(
     @html.button(class="dock-launcher-row", on_click=actions.review, [
-      @icons.icon(@icons.icon_diff),
+      @icons.icon(@icons.icon_diff_multiple),
       @html.span(class="dock-launcher-name", "Review"),
       @html.span(class="dock-launcher-hint", "Review changed files and diffs"),
     ]),
