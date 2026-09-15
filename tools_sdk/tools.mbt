@@ -1,46 +1,21 @@
 ///|
-/// Apply one line-anchored replacement through the host editing tool.
-pub async fn edit(
-  path~ : String,
-  old_string~ : String,
-  new_string~ : String,
-  start_line~ : Int,
-  end_line? : Int,
-  revert_on_parse_errors? : Bool = true,
-) -> CallResult {
-  let fields : Map[String, Json] = {
-    "path": path.to_json(),
-    "old_string": old_string.to_json(),
-    "new_string": new_string.to_json(),
-    "start_line": start_line.to_json(),
-    "revert_on_parse_errors": revert_on_parse_errors.to_json(),
-  }
-  if end_line is Some(line) {
-    fields["end_line"] = line.to_json()
-  }
-  call("edit", Json::object(fields))
+/// Call edit with the same JSON arguments as the direct host tool.
+/// Validation and defaults are applied by the host.
+pub async fn edit(arguments : Json) -> CallResult {
+  call("edit", arguments)
 }
 
 ///|
-/// Apply a host-validated batch. Each edit uses file, start_line, old_string,
-/// and new_string fields; optional fields follow the host tool schema.
-pub async fn multi_edit(
-  edits : Array[Json],
-  revert_when_errors_above? : Int,
-  revert_on_parse_errors? : Bool = true,
-) -> CallResult {
-  let fields : Map[String, Json] = {
-    "edits": edits.to_json(),
-    "revert_on_parse_errors": revert_on_parse_errors.to_json(),
-  }
-  if revert_when_errors_above is Some(limit) {
-    fields["revert_when_errors_above"] = limit.to_json()
-  }
-  call("multi_edit", Json::object(fields))
+/// Call multi_edit with the same JSON arguments as the direct host tool,
+/// including either edits or edits_file. Validation and defaults belong to
+/// the host.
+pub async fn multi_edit(arguments : Json) -> CallResult {
+  call("multi_edit", arguments)
 }
 
 ///|
-/// Search through the host. Structured sources, when present, are in data.
-pub async fn web_search(query : String) -> CallResult {
-  call("web_search", { "query": query })
+/// Call web_search with the same JSON arguments as the direct host tool.
+/// Structured sources, when present, are in the returned data field.
+pub async fn web_search(arguments : Json) -> CallResult {
+  call("web_search", arguments)
 }

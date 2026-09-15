@@ -12,8 +12,10 @@ import {
 }
 
 async fn main {
-  let result = @tools.edit(path="note.txt", start_line=1,
-    old_string="before", new_string="after")
+  let result = @tools.edit({
+    "path": "note.txt", "start_line": 1,
+    "old_string": "before", "new_string": "after",
+  })
   if result.is_error { fail(result.content) }
   println(result.content)
 }
@@ -26,11 +28,17 @@ calling the SDK raises `TransportError`.
 
 ## API
 
-- `call(name, arguments)` uses the host tool's JSON schema.
-- `edit(path~, start_line~, old_string~, new_string~, ...)` replaces one span.
-- `multi_edit(edits, ...)` preserves the host's batch-validation semantics.
-  Each JSON edit uses `file`, `start_line`, `old_string`, and `new_string`.
-- `web_search(query)` returns search sources in `result.data`, when available.
+Each named function accepts one `Json` object, using exactly the same arguments
+as the direct host tool. The SDK forwards it unchanged; validation and defaults
+stay in the host. There is no second argument schema to learn.
+
+- `edit(arguments)` forwards to `edit`.
+- `multi_edit(arguments)` forwards to `multi_edit`, including `edits` or `edits_file`.
+- `web_search(arguments)` forwards to `web_search`.
+- `call(name, arguments)` supports other explicitly enabled host tools.
+
+For example, use `@tools.multi_edit({ "edits": edits })` and
+`@tools.web_search({ "query": "MoonBit async" })`.
 
 `CallResult` contains `content : String`, `is_error : Bool`, and `data : Json?`.
 A host tool error is a result. Connection/protocol failures raise
