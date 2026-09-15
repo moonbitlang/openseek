@@ -78,8 +78,10 @@ or success checks; the job panel follows live metadata.
 Every limit (registrations, connections, calls in flight, request framing,
 executor and SDK deadlines, reply size, retained trace) is listed once in the
 README's [protocol section](../../agent_tool/ptc/README.mbt.md#protocol-and-bounds)
-and defined as named constants at the top of `agent_tool/ptc/server.mbt` and
-`request.mbt`. The design rule behind them: admission (authentication and
+and defined in `agent_tool/ptc/server.mbt` and `request.mbt`: the byte and
+count limits as named constants at the top of each file, the executor and
+trace deadlines as `Service::start` parameter defaults. The design rule behind
+them: admission (authentication and
 framing) completes and trace space is reserved before any executor runs, so
 a rejected request never executed.
 
