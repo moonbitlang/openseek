@@ -13,6 +13,7 @@ test "empty transcript title names its project when available" {
 test "transcript stream children use stable typed keys in display order" {
   let call : @transcript.ToolCall = {
     call_id: "c1",
+    children: [],
     name: "shell",
     arguments: Some("{}"),
     outcome: Pending(output=None),

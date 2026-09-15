@@ -134,6 +134,8 @@ pub fn classify(call : @transcript.ToolCall) -> Call? {
     @transcript.ToolOutcome::Done(is_error=true, ..) => return Some(Rejected)
     @transcript.ToolOutcome::Done(..) => true
     @transcript.ToolOutcome::Pending(..) => false
+    @transcript.ToolOutcome::Snapshot(..) =>
+      return Some(Unreadable(applied=false))
   }
   // Absent arguments are a call whose source recorded no payload. The payload
   // is gone, but the recorded call is still evidence it ran.

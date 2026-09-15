@@ -271,7 +271,7 @@ fn subrun_chip(child : String, open : (String) -> @cmd.Cmd) -> @html.Html {
 /// completed item arrives.
 fn tool_result_row_is_visible(call : @transcript.ToolCall) -> Bool {
   match call.outcome {
-    Done(..) => true
+    Done(..) | Snapshot(..) => true
     Pending(output~) => output is Some(_)
   }
 }
@@ -292,6 +292,7 @@ fn tool_request_view(
   let (is_error, brief) = match call.outcome {
     Done(is_error~, brief~, ..) => (is_error, brief)
     Pending(..) => (false, None)
+    Snapshot(..) => (false, Some("Snapshot"))
   }
   let background_job_id = match (name, is_error, brief) {
     ("mbtx", false, Some(brief)) =>
@@ -392,6 +393,19 @@ fn tool_request_view(
       )
     }
   }
+  if !call.children.is_empty() {
+    let nested : Array[@html.Html] = [
+      @html.div(
+        class="tool-call-section-label",
+        "Program tool calls (\{call.children.length()})",
+      ),
+    ]
+    for child in call.children {
+      nested.push(tool_request_view(child, sequence?))
+      nested.push(tool_result_view(child, sequence?))
+    }
+    body.push(@html.div(class="tool-call-section", nested))
+  }
   if body.is_empty() {
     @html.div(class="tool-call-label" + error_class, line)
   } else {
@@ -428,6 +442,18 @@ fn tool_result_view(
     None
   }
   match call.outcome {
+    Snapshot(content~) =>
+      result_row_view(
+        call.name,
+        call.arguments,
+        pending=false,
+        is_error=false,
+        brief=Some("Snapshot"),
+        Some(content),
+        key,
+        subrun?,
+        status?,
+      )
     Pending(output~) =>
       result_row_view(
         call.name,
@@ -1038,5 +1064,29 @@ fn transcript_view(
         },
       ),
     children,
+  )
+}
+
+///|
+/// Reuse the ordinary tool cards for live and retained background-job traces.
+pub fn program_calls_view(
+  data : Json?,
+  parent : String,
+  terminal? : Bool = false,
+) -> @html.Html? {
+  let calls = @transcript.program_calls(data, parent, terminal~)
+  guard !calls.is_empty() else { return None }
+  let rows : Map[String, @html.Html] = Map([])
+  for index, call in calls {
+    rows[tool_run_row_key(call, index, "request")] = tool_request_view(call)
+    if tool_result_row_is_visible(call) {
+      rows[tool_run_row_key(call, index, "result")] = tool_result_view(call)
+    }
+  }
+  Some(
+    @html.details(class="job-program-calls", [
+      @html.summary("Program tool calls (\{calls.length()})"),
+      @html.div(class="tool-call-section", rows),
+    ]),
   )
 }

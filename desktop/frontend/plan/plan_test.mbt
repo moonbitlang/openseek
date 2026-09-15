@@ -11,6 +11,7 @@ fn plan_call(
 ) -> @transcript.ToolCall {
   {
     call_id: id,
+    children: [],
     name: "plan",
     arguments: Some(arguments),
     outcome: if has_result {
@@ -27,6 +28,7 @@ fn plan_call(
 fn unpaired_result() -> @transcript.ToolCall {
   {
     call_id: "c9",
+    children: [],
     name: "plan",
     arguments: None,
     outcome: Done(content="Plan updated.", is_error=false, brief=None),
@@ -125,6 +127,7 @@ test "classify names every state a plan call can be observed in" {
   assert_true(
     @plan.classify({
       call_id: "c1",
+      children: [],
       name: "shell",
       arguments: Some("{}"),
       outcome: Done(content="", is_error=false, brief=None),

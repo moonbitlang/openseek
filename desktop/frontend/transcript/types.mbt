@@ -60,6 +60,8 @@ pub(all) struct ToolCall {
   name : String
   arguments : String?
   outcome : ToolOutcome
+  /// Programmatic calls recorded beneath this model-issued call.
+  children : Array[ToolCall]
 } derive(Eq)
 
 ///|
@@ -68,6 +70,8 @@ pub(all) struct ToolCall {
 /// carries the result — its content may legitimately be empty — with the
 /// error flag and the display brief the result came with.
 pub(all) enum ToolOutcome {
+  // Historical observation of a background call, with no terminal outcome yet.
+  Snapshot(content~ : String)
   Pending(output~ : String?)
   Done(content~ : String, is_error~ : Bool, brief~ : String?)
 } derive(Eq)

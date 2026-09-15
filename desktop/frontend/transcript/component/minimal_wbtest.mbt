@@ -1,6 +1,7 @@
 ///|
 test "minimal mbtx retains its description across completion and failure" {
   let call : @transcript.ToolCall = {
+    children: [],
     call_id: "script",
     name: "mbtx",
     arguments: Some("{\"description\":\"Check project details\"}"),
@@ -29,6 +30,7 @@ test "minimal mbtx falls back safely without a usable description" {
   for
     arguments in [None, Some("{"), Some("{}"), Some("{\"description\":\" \"}")] {
     let call : @transcript.ToolCall = {
+      children: [],
       call_id: "script",
       name: "mbtx",
       arguments,
@@ -56,6 +58,7 @@ test "minimal descriptions share the card payload boundary" {
     assert_eq(arguments.length(), MAX_CARD_PAYLOAD_CHARS + extra)
     for name in ["mbtx", "read"] {
       let call : @transcript.ToolCall = {
+        children: [],
         call_id: name,
         name,
         arguments: Some(arguments),
@@ -88,6 +91,7 @@ test "minimal descriptions share the card payload boundary" {
 ///|
 test "other minimal tools still prefer their result brief" {
   let call : @transcript.ToolCall = {
+    children: [],
     call_id: "read",
     name: "read",
     arguments: Some("{\"description\":\"Read project files\"}"),
@@ -174,6 +178,7 @@ test "job coordination does not add categories to a work summary" {
   let entries : Array[MinimalActivity] = []
   for name in ["read", "job_wait", "job_output", "job_stop", "mbtx"] {
     let call : @transcript.ToolCall = {
+      children: [],
       call_id: name,
       name,
       arguments: None,
@@ -193,6 +198,7 @@ test "a minimal shell caption never repeats the command line brief" {
   // Codex briefs a command execution with the command itself; that is an
   // argument, so the caption falls back to the tool name instead.
   let call : @transcript.ToolCall = {
+    children: [],
     call_id: "cmd",
     name: "shell",
     arguments: None,
@@ -209,6 +215,7 @@ test "a minimal shell caption never repeats the command line brief" {
 test "OpenSeek and Codex web search names share the search activity" {
   for name in ["web_search", "webSearch"] {
     let call : @transcript.ToolCall = {
+      children: [],
       call_id: "search",
       name,
       arguments: None,
@@ -266,6 +273,7 @@ test "registered built-ins and normalized operations have deliberate categories"
   ]
   for (name, expected) in cases {
     let call : @transcript.ToolCall = {
+      children: [],
       call_id: name,
       name,
       arguments: None,
