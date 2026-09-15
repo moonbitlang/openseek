@@ -33,6 +33,7 @@ pub fn ShellExecution::killed_by_output_limit(Self) -> Bool
 pub fn ShellExecution::killed_by_time_limit(Self) -> Bool
 pub fn ShellExecution::last_output_at_ms(Self) -> Int64?
 pub async fn ShellExecution::materialize_output(Self) -> Unit
+pub fn ShellExecution::on_ending(Self, () -> Unit) -> Unit
 pub fn ShellExecution::output_bytes(Self) -> Int64
 pub fn ShellExecution::output_error(Self) -> String?
 pub fn ShellExecution::output_truncated(Self) -> Bool

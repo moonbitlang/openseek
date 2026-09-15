@@ -131,6 +131,7 @@ async fn execute(
   }
   let is_error = exit_error ||
     snapshot.output_error is Some(_) ||
+    snapshot.cleanup_error is Some(_) ||
     snapshot.had_invalid_utf8 ||
     sandbox_denied is Some(_)
   // Truncated whenever what we show is less than what the job produced — this
@@ -178,6 +179,9 @@ async fn execute(
   }
   if snapshot.output_error is Some(error) {
     content.write_string("Output capture failed: \{error}\n")
+  }
+  if snapshot.cleanup_error is Some(error) {
+    content.write_string("Job cleanup failed: \{error}\n")
   }
   content.write_string(footer)
   let content = content.to_string()

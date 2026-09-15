@@ -2,20 +2,24 @@
 /// The completion notice pushed to the model when a background job exits: its
 /// id, terminal status, and how to read its output.
 fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
-  let status = match snapshot.status {
-    Exited(0) => "exit=0"
-    Exited(code) => "exit=\{code}"
-    Stopped =>
-      if snapshot.output_error is Some(error) {
-        "output capture failed: \{error}"
-      } else if snapshot.killed_by_output_limit {
-        "killed: flooded past the output cap"
-      } else if snapshot.killed_by_time_limit {
-        "killed: outlived the wall-clock cap"
-      } else {
-        "stopped"
-      }
-    Running => "running"
+  let status = if snapshot.cleanup_error is Some(error) {
+    "cleanup failed: \{error}"
+  } else {
+    match snapshot.status {
+      Exited(0) => "exit=0"
+      Exited(code) => "exit=\{code}"
+      Stopped =>
+        if snapshot.output_error is Some(error) {
+          "output capture failed: \{error}"
+        } else if snapshot.killed_by_output_limit {
+          "killed: flooded past the output cap"
+        } else if snapshot.killed_by_time_limit {
+          "killed: outlived the wall-clock cap"
+        } else {
+          "stopped"
+        }
+      Running => "running"
+    }
   }
   let label = match snapshot.description {
     Some(description) => "\{description} · \{snapshot.command}"

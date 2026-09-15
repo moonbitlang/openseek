@@ -49,6 +49,8 @@ struct ShellExecution {
   // Set before the child is cancelled (by `stop`, or by the output-limit kill)
   // so the monitor reports `Killed` rather than the kill signal's exit code.
   mut cancel_requested : Bool
+  mut ending : Bool
+  mut on_ending : (() -> Unit)?
   // Foreground semantics: kill the child once the sink fills (output prefix hit
   // the hard cap or the kill threshold), so an un-timed runaway cannot hang the
   // tool call. Cleared by `background()` — a detached job keeps running.
@@ -129,6 +131,8 @@ pub async fn[X] ShellExecution::start(
     process,
     status: Running,
     cancel_requested: false,
+    ending: false,
+    on_ending: None,
     kill_when_full,
     kill_at_hard_cap,
     killed_by_output_limit: false,
@@ -220,6 +224,7 @@ async fn ShellExecution::monitor(
         Killed
       }
     }
+    self.begin_ending()
     // The child is gone, but the pipe may still hold output it wrote before
     // exiting. Let the reader drain to EOF; only if it is still blocked after a
     // short grace — a descendant is holding the pipe open — force it closed.
@@ -255,6 +260,7 @@ fn ShellExecution::set_terminal(
   self : ShellExecution,
   status : ExecStatus,
 ) -> Unit {
+  self.begin_ending()
   guard !self.status.is_terminal() else { return }
   self.status = status
   self.finished_at_ms = Some(@env.now().reinterpret_as_int64())
@@ -279,6 +285,7 @@ pub async fn ShellExecution::stop(self : ShellExecution) -> Bool {
 /// not — to stop a session-group execution before it can outlive the turn as an
 /// orphan. The monitor (on the session group) then reaps it to `Killed`.
 pub fn ShellExecution::request_stop(self : ShellExecution) -> Unit {
+  self.begin_ending()
   self.cancel_requested = true
   self.process.cancel()
 }
@@ -637,5 +644,29 @@ pub fn ShellExecution::output_bytes(self : ShellExecution) -> Int64 {
     self.sink.file_bytes
   } else {
     @utf8.encode(self.head()).length().to_int64()
+  }
+}
+
+///|
+/// Observe stop initiation or the direct child's exit, before output draining.
+/// Registration is synchronous; a late observer is called immediately. The
+/// callback must only revoke resources, never wait for their cleanup.
+pub fn ShellExecution::on_ending(
+  self : ShellExecution,
+  callback : () -> Unit,
+) -> Unit {
+  if self.ending {
+    callback()
+  } else {
+    self.on_ending = Some(callback)
+  }
+}
+
+///|
+fn ShellExecution::begin_ending(self : ShellExecution) -> Unit {
+  self.ending = true
+  if self.on_ending is Some(callback) {
+    self.on_ending = None
+    callback()
   }
 }

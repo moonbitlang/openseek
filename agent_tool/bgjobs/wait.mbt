@@ -3,7 +3,7 @@
 /// Including the latter closes the exit/notice gap in a turn's finish check.
 pub fn BgJobRuntime::pending(self : BgJobRuntime) -> Array[BgJobSnapshot] {
   [
-    for _, job in self.jobs if !job.completion_published => {
+    for _, job in self.jobs if job.phase != Published => {
       job.to_snapshot(self.persistent_logs)
     }
   ]
@@ -23,9 +23,7 @@ pub async fn BgJobRuntime::wait_any(
       fail("no background job with id \{id}")
     }
   }
-  while !ids.any(id => {
-          self.jobs.get(id) is Some(job) && job.completion_published
-        }) {
+  while !ids.any(id => self.jobs.get(id) is Some(job) && job.phase == Published) {
     self.settled.wait()
   }
 }

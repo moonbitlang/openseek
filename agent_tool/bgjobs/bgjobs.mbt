@@ -94,6 +94,18 @@ struct BgJobRuntime {
 }
 
 ///|
+/// The finish sequence of a job, advanced only by `finish_job`. A process may
+/// already be terminal while the job is still `Live`: launcher cleanup and
+/// the completion notice each mark a later milestone, and readers report a
+/// job as running/stopping until `CleanedUp`.
+priv enum JobPhase {
+  Live
+  Finishing
+  CleanedUp
+  Published
+} derive(Eq)
+
+///|
 /// One background job: session-visible metadata plus the shared execution that
 /// owns the process, output, and status. Fully private — callers see only a
 /// `BgJobSnapshot`.
@@ -124,8 +136,8 @@ priv struct BgJob {
   // Cleared before invocation so cleanup is exactly once even if more terminal
   // observers are added later.
   mut on_terminal : (async () -> Unit)?
-  // True only after launcher cleanup and the existing completion notification.
-  mut completion_published : Bool
+  // Where the job is in its finish sequence; see `JobPhase`.
+  mut phase : JobPhase
   // A terminal denial scan may read a large retained log. Cache its
   // classification so repeated job_output calls do not repeat that allocation.
   mut denial_scanned : Bool
@@ -137,6 +149,7 @@ priv struct BgJob {
 /// (the first inline-budget characters); the *full* output — when `over_inline_cap`
 /// — is read with `BgJobRuntime::read_output`.
 pub struct BgJobSnapshot {
+  cleanup_error : String?
   id : String
   command : String
   description : String?
@@ -379,7 +392,7 @@ async fn BgJobRuntime::register(
     output_rewrites: output_rewrites.copy(),
     moonrun_policy_active,
     on_terminal,
-    completion_published: false,
+    phase: Live,
     denial_scanned: false,
     denial_feedback: None,
   }
@@ -421,7 +434,12 @@ fn BgJob::to_snapshot(self : BgJob, persistent_logs : Bool) -> BgJobSnapshot {
     id: self.id,
     command: self.command,
     description: self.description,
-    status: bg_status(self.exec.status()),
+    status: if self.phase is (Live | Finishing) {
+      Running
+    } else {
+      bg_status(self.exec.status())
+    },
+    cleanup_error: self.cleanup_error,
     output: self.exec.head(),
     output_file: self.exec.spill_path(),
     output_persistent: persistent_logs,

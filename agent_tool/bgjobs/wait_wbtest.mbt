@@ -65,7 +65,9 @@ async test "pending covers terminal cleanup and notice publication" {
         release.get()
       })
       entered.get()
-      assert_true(jobs.snapshot(id) is Some(job) && job.status is Exited(0))
+      defer release.put(())
+      assert_true(jobs.snapshot(id) is Some(job) && job.status is Running)
+      assert_true(jobs.records() is [record] && record.state is Stopping)
       assert_eq(jobs.pending().length(), 1)
       assert_eq(notices, 0)
       release.put(())
@@ -100,6 +102,85 @@ async test "cancelled wait does not cancel a job or consume later completion" {
       release.close()
       jobs.wait_any([id])
       assert_true(jobs.snapshot(id) is Some(job) && job.status is Exited(0))
+    })
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "stalled persistence reports failure and releases publication for other jobs" {
+  @async.with_timeout(1000, () => {
+    @async.with_task_group(group => {
+      let errors : Array[String] = []
+      let jobs = BgJobRuntime(AgentTaskScope(group), on_job_event=(_, record) => {
+        if record.persistence_error is Some(error) {
+          errors.push(error)
+        }
+      })
+      let (input, release) = @process.write_to_process()
+      defer release.close()
+      let id = jobs.start(
+        program="/bin/cat",
+        args=[],
+        command="persistence test",
+        stdin=input,
+      )
+      let entered : @async.Queue[Unit] = Queue(kind=Unbounded)
+      let blocked : @async.Queue[Unit] = Queue(kind=Unbounded)
+      let first = group.spawn(() => {
+        jobs.publish_record(id, Updated, Some(20), _ => {
+          entered.put(())
+          blocked.get()
+        })
+      })
+      entered.get()
+      let next = group.spawn(() => jobs.metadata_changed(id))
+      first.wait()
+      next.wait()
+      assert_true(errors is [error] && error.contains("Timeout"))
+      release.close()
+      jobs.wait_any([id])
+      assert_true(jobs.snapshot(id) is Some({ status: Exited(0), .. }))
+    })
+  })
+}
+
+///|
+/// Only the frequent Started/Updated writes are bounded. The terminal record
+/// is written once and read back after a restart, so a slow disk delays it
+/// rather than losing it.
+#cfg(not(platform="windows"))
+async test "terminal publication waits out a slow persistence write" {
+  assert_eq(persistence_deadline_ms(Started), Some(5000))
+  assert_eq(persistence_deadline_ms(Updated), Some(5000))
+  assert_eq(persistence_deadline_ms(Finished), None)
+  assert_eq(persistence_deadline_ms(Failed), None)
+  @async.with_timeout(1000, () => {
+    @async.with_task_group(group => {
+      let events : Array[(@protocol.JobEventKind, String?)] = []
+      let jobs = BgJobRuntime(AgentTaskScope(group), on_job_event=(kind, record) => {
+        events.push((kind, record.persistence_error))
+      })
+      let id = jobs.start(program="/usr/bin/true", args=[], command="terminal")
+      jobs.wait_any([id])
+      let written : Array[Unit] = []
+      let entered : @async.Queue[Unit] = Queue(kind=Unbounded)
+      let blocked : @async.Queue[Unit] = Queue(kind=Unbounded)
+      let terminal = group.spawn(() => {
+        jobs.publish_record(id, Finished, persistence_deadline_ms(Finished), _ => {
+          entered.put(())
+          blocked.get()
+          written.push(())
+        })
+      })
+      entered.get()
+      // Longer than the bounded Updated deadline used above; the terminal
+      // write is still waiting, not abandoned.
+      @async.sleep(60)
+      blocked.put(())
+      terminal.wait()
+      assert_eq(written.length(), 1)
+      assert_true(events.last() is Some((Finished, None)))
     })
   })
 }

@@ -20,6 +20,7 @@ pub async fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : St
 pub async fn BgJobRuntime::finalize(Self) -> Unit
 pub fn BgJobRuntime::generation(Self) -> String
 pub fn BgJobRuntime::list(Self) -> Array[BgJobSnapshot]
+pub async fn BgJobRuntime::metadata_changed(Self, String) -> Unit
 pub fn BgJobRuntime::pending(Self) -> Array[BgJobSnapshot]
 pub async fn BgJobRuntime::read_output(Self, String) -> String?
 pub async fn BgJobRuntime::read_output_tail(Self, String, Int) -> String?
@@ -32,6 +33,7 @@ pub async fn BgJobRuntime::terminal_denial_feedback(Self, String) -> String?
 pub async fn BgJobRuntime::wait_any(Self, Array[String]) -> Unit
 
 pub struct BgJobSnapshot {
+  cleanup_error : String?
   id : String
   command : String
   description : String?

@@ -9,28 +9,33 @@ fn artifact_basename(path : String) -> String {
 
 ///|
 fn BgJob::record(self : BgJob, runtime : BgJobRuntime) -> @protocol.JobRecord {
-  let state : @protocol.JobState = match self.exec.status() {
-    Running | Backgrounded =>
-      if self.requested_stop {
-        Stopping
-      } else {
-        Running
-      }
-    Exited(code) => Exited(code)
-    Killed =>
-      Stopped(
-        if self.exec.output_error() is Some(_) {
-          "capture_failed"
-        } else if self.exec.killed_by_output_limit() {
-          "output_limit"
-        } else if self.exec.killed_by_time_limit() {
-          "time_limit"
-        } else if self.requested_stop {
-          "user"
+  let state : @protocol.JobState = if self.phase is (Live | Finishing) &&
+    self.exec.status() is (Exited(_) | Killed) {
+    Stopping
+  } else {
+    match self.exec.status() {
+      Running | Backgrounded =>
+        if self.requested_stop {
+          Stopping
         } else {
-          "session_ended"
-        },
-      )
+          Running
+        }
+      Exited(code) => Exited(code)
+      Killed =>
+        Stopped(
+          if self.exec.output_error() is Some(_) {
+            "capture_failed"
+          } else if self.exec.killed_by_output_limit() {
+            "output_limit"
+          } else if self.exec.killed_by_time_limit() {
+            "time_limit"
+          } else if self.requested_stop {
+            "user"
+          } else {
+            "session_ended"
+          },
+        )
+    }
   }
   {
     generation: runtime.generation,
@@ -73,25 +78,28 @@ pub fn BgJobRuntime::records(self : BgJobRuntime) -> Array[@protocol.JobRecord] 
 }
 
 ///|
+/// Started and Updated events can be frequent (a program's trace publishes on
+/// every nested call), so their storage write is bounded: a slow disk must not
+/// stall every other job's publication behind the lock. The one terminal write
+/// is exempt. It happens once per job, nothing retries it later, and a restart
+/// reads it to learn that the job is over; late beats lost.
+fn persistence_deadline_ms(kind : @protocol.JobEventKind) -> Int? {
+  match kind {
+    Finished | Failed => None
+    Started | Updated => Some(5000)
+  }
+}
+
+///|
 async fn BgJobRuntime::publish(
   self : BgJobRuntime,
   id : String,
   kind : @protocol.JobEventKind,
 ) -> Unit {
-  self.publish_lock.acquire()
-  defer self.publish_lock.release()
-  guard self.jobs.get(id) is Some(job) else { return }
-  if kind != Started {
-    job.revision += 1
-  }
-  job.persistence_error = None
-  // One immutable revision is shared by persistence and the lifecycle event.
-  // Execution status/output may advance while filesystem writes are awaiting.
-  let record = job.record(self)
-  if self.persistent_logs && self.spill_dir is Some(dir) {
-    let path = "\{dir}/\{@protocol.job_storage_name(id)}.json"
-    let temporary = "\{path}.tmp"
-    try {
+  self.publish_record(id, kind, persistence_deadline_ms(kind), record => {
+    if self.persistent_logs && self.spill_dir is Some(dir) {
+      let path = "\{dir}/\{@protocol.job_storage_name(id)}.json"
+      let temporary = "\{path}.tmp"
       @fs.write_file(
         temporary,
         record.to_json().stringify(),
@@ -101,9 +109,50 @@ async fn BgJobRuntime::publish(
       )
       @fs.rename(temporary, path, replace=true)
       sync_job_directories(dir)
-    } catch {
-      error => job.persistence_error = Some("failed to persist job: \{error}")
     }
+  })
+}
+
+///|
+/// Keep publication ordered and, when a deadline is given, bound the storage
+/// work. Submitted I/O still has to settle safely; this is not a hard kill of
+/// kernel operations. In-memory records and events carry a persistence
+/// failure on timeout.
+async fn BgJobRuntime::publish_record(
+  self : BgJobRuntime,
+  id : String,
+  kind : @protocol.JobEventKind,
+  persistence_timeout_ms : Int?,
+  persist : async (@protocol.JobRecord) -> Unit,
+) -> Unit {
+  self.publish_lock.acquire()
+  defer self.publish_lock.release()
+  // A release can grant the lock to a waiter that was cancelled before it
+  // resumed. Yielding here lets the runtime raise its own cancellation error,
+  // so the caller's task group sees a cancellation rather than a failure.
+  if @async.is_being_cancelled() {
+    @async.pause()
+  }
+  guard self.jobs.get(id) is Some(job) else { return }
+  if kind == Updated && job.phase == Published {
+    return
+  }
+  if kind != Started {
+    job.revision += 1
+  }
+  job.persistence_error = None
+  // One immutable revision is shared by persistence and the lifecycle event.
+  // Execution status/output may advance while filesystem writes are awaiting.
+  let record = job.record(self)
+  try {
+    match persistence_timeout_ms {
+      Some(ms) => @async.with_timeout(ms, () => persist(record))
+      None => persist(record)
+    }
+  } catch {
+    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
+      raise error
+    error => job.persistence_error = Some("failed to persist job: \{error}")
   }
   job.announced = true
   if self.on_job_event is Some(publish) {
@@ -128,15 +177,23 @@ async fn sync_job_directories(dir : String) -> Unit {
 ///|
 async fn BgJobRuntime::finish_job(self : BgJobRuntime, id : String) -> Unit {
   @async.protect_from_cancel(() => {
-    guard self.jobs.get(id) is Some(job) && !job.completion_published else {
+    guard self.jobs.get(id) is Some(job) && job.phase != Published else {
       return
     }
+    if job.phase != Live {
+      while job.phase != Published {
+        self.settled.wait()
+      }
+      return
+    }
+    job.phase = Finishing
     if job.on_terminal is Some(cleanup) {
       job.on_terminal = None
       cleanup() catch {
         error => job.cleanup_error = Some("\{error}")
       }
     }
+    job.phase = CleanedUp
     let record = job.record(self)
     let failed = match record.state {
       Exited(code) => code != 0
@@ -161,7 +218,7 @@ async fn BgJobRuntime::finish_job(self : BgJobRuntime, id : String) -> Unit {
       ) {
       callback(snapshot)
     }
-    job.completion_published = true
+    job.phase = Published
     self.settled.broadcast()
   })
 }
@@ -173,4 +230,14 @@ pub async fn BgJobRuntime::finalize(self : BgJobRuntime) -> Unit {
   for id, _ in self.jobs {
     self.finish_job(id)
   }
+}
+
+///|
+/// Publish fresh launcher metadata under the owning job. Terminal records have
+/// the final snapshot and never receive a later Updated event.
+pub async fn BgJobRuntime::metadata_changed(
+  self : BgJobRuntime,
+  id : String,
+) -> Unit {
+  self.publish(id, Updated)
 }
