@@ -120,6 +120,7 @@ fn panel_view(
         menu_open=input.menu_open,
         expanded=input.expanded,
         toggle_menu=actions.toggle_menu,
+        close_menu=actions.close_menu,
         close_all_tabs=actions.close_all_tabs,
         close_all_tabs_disabled=input.dock.tabs.is_empty(),
         toggle_expanded=actions.toggle_expanded,

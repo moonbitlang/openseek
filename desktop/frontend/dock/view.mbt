@@ -64,58 +64,75 @@ pub(all) struct LauncherActions {
 ///|
 /// The launcher rows shared by the empty-strip pane and the `+` popup: the
 /// kinds of tab the dock can open.
-fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
-  let rows : Array[@html.Html] = []
-  if actions.browser is Some(open_browser) {
-    rows.push(
-      @html.button(class="dock-launcher-row", on_click=open_browser, [
-        @icons.icon(@icons.icon_globe),
-        @html.span(class="dock-launcher-name", "Browse"),
-        @html.span(class="dock-launcher-hint", "Open a page in a tab"),
-      ]),
+fn LauncherActions::rows(
+  self : LauncherActions,
+  popup? : Bool = false,
+) -> Array[@html.Html] {
+  let entries : Array[(String, String, () -> @html.Html, @cmd.Cmd)] = []
+  if self.browser is Some(open_browser) {
+    entries.push(
+      ("Browse", "Open a page in a tab", @icons.icon_globe, open_browser),
     )
   }
-  rows.push(
-    @html.button(class="dock-launcher-row", on_click=actions.search, [
-      @icons.icon(@icons.icon_search),
-      @html.span(class="dock-launcher-name", "Search"),
-      @html.span(class="dock-launcher-hint", "Search text across the workspace"),
-    ]),
+  entries.push(
+    (
+      "Search",
+      "Search text across the workspace",
+      @icons.icon_search,
+      self.search,
+    ),
   )
-  rows.push(
-    @html.button(class="dock-launcher-row", on_click=actions.files, [
-      @icons.icon(@icons.icon_folder),
-      @html.span(class="dock-launcher-name", "Files"),
-      @html.span(class="dock-launcher-hint", "Open a file from the workspace"),
-    ]),
+  entries.push(
+    ("Files", "Open a file from the workspace", @icons.icon_folder, self.files),
   )
-  rows.push(
-    @html.button(class="dock-launcher-row", on_click=actions.review, [
-      @icons.icon(@icons.icon_diff_multiple),
-      @html.span(class="dock-launcher-name", "Review"),
-      @html.span(class="dock-launcher-hint", "Review changed files and diffs"),
-    ]),
+  entries.push(
+    (
+      "Review",
+      "Review changed files and diffs",
+      @icons.icon_diff_multiple,
+      self.review,
+    ),
   )
-  rows.push(
-    @html.button(class="dock-launcher-row", on_click=actions.workflows, [
-      @icons.icon(@icons.icon_organization),
-      @html.span(class="dock-launcher-name", "Workflows"),
-      @html.span(
-        class="dock-launcher-hint",
-        "Subagents this conversation delegated to",
+  entries.push(
+    (
+      "Workflows",
+      "Subagents this conversation delegated to",
+      @icons.icon_organization,
+      self.workflows,
+    ),
+  )
+  entries.push(
+    (
+      "Jobs",
+      "Follow background commands and their logs",
+      @icons.icon_tasklist,
+      self.jobs,
+    ),
+  )
+  let rows : Array[@html.Html] = []
+  for entry in entries {
+    let (label, hint, image, choose) = entry
+    rows.push(
+      @html.button(
+        class=if popup {
+          "menu-option dock-menu-row"
+        } else {
+          "dock-launcher-row"
+        },
+        on_click=choose,
+        attrs=if popup {
+          @html.Attrs::build().role("menuitem").aria_label(label)
+        } else {
+          @html.Attrs::build()
+        },
+        [
+          @icons.icon(image),
+          @html.span(class="dock-launcher-name", label),
+          @html.span(class="dock-launcher-hint", hint),
+        ],
       ),
-    ]),
-  )
-  rows.push(
-    @html.button(class="dock-launcher-row", on_click=actions.jobs, [
-      @icons.icon(@icons.icon_tasklist),
-      @html.span(class="dock-launcher-name", "Jobs"),
-      @html.span(
-        class="dock-launcher-hint",
-        "Follow background commands and their logs",
-      ),
-    ]),
-  )
+    )
+  }
   rows
 }
 
@@ -125,7 +142,7 @@ fn launcher_rows(actions : LauncherActions) -> Array[@html.Html] {
 /// the strip is empty — so the panel's child order stays structural.
 pub fn launcher_pane(actions : LauncherActions) -> @html.Html {
   @html.div(class="dock-launcher", [
-    @html.div(class="dock-launcher-menu", launcher_rows(actions)),
+    @html.div(class="dock-launcher-menu", actions.rows()),
   ])
 }
 
@@ -143,11 +160,13 @@ pub fn tabs_bar(
   menu_open~ : Bool,
   expanded~ : Bool,
   toggle_menu~ : @cmd.Cmd,
+  close_menu~ : @cmd.Cmd,
   close_all_tabs~ : @cmd.Cmd,
   close_all_tabs_disabled~ : Bool,
   toggle_expanded~ : @cmd.Cmd,
   toggle_panel~ : @cmd.Cmd,
 ) -> @html.Html {
+  let menu : LauncherMenu = { toggle: toggle_menu, dismiss: close_menu, }
   let tabs : Array[@html.Html] = []
   for chip in chips {
     let mut classes = "editor-tab"
@@ -199,7 +218,12 @@ pub fn tabs_bar(
         "tab-action tab-add"
       },
       title="New tab",
-      on_click=toggle_menu,
+      attrs=@html.Attrs::build()
+        .id("dock-new-tab")
+        .aria_haspopup("menu")
+        .aria_controls("dock-new-tab-menu")
+        .aria_expanded(menu_open.to_string()),
+      on_click=menu.toggle(),
       @icons.icon(@icons.icon_add),
     ),
     @html.button(
@@ -221,7 +245,18 @@ pub fn tabs_bar(
   if menu_open {
     // No backdrop element: the frontend package installs a click-away
     // dismissal that does not consume the click that closes it.
-    children.push(@html.div(class="dock-menu", launcher_rows(actions)))
+    children.push(
+      @html.div(
+        class="menu-surface dock-menu",
+        attrs=@html.Attrs::build()
+          .id("dock-new-tab-menu")
+          .role("menu")
+          .aria_label("New tab")
+          .popover("manual")
+          .on_keydown(event => menu.keydown(event)),
+        actions.rows(popup=true),
+      ),
+    )
   }
   @html.div(class="editor-tabsbar", children)
 }

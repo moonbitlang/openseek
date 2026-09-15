@@ -8,7 +8,7 @@ test('new-tab popup and empty launcher share Codicons without changing actions',
   await app.openSession();
   await app.openReview();
   await page.getByTitle('New tab', { exact: true }).click();
-  const menu = page.locator('.dock-menu');
+  const menu = page.getByRole('menu', { name: 'New tab', exact: true });
   await expect(menu).toBeVisible();
   const labels = await menu.locator('.dock-launcher-name').allTextContents();
   // Browse is available only when the current renderer supports browser tabs.
@@ -17,7 +17,8 @@ test('new-tab popup and empty launcher share Codicons without changing actions',
   ]);
   const paths = [];
   for (const label of labels) {
-    const row = menu.getByRole('button', { name: new RegExp('^' + label + ' ') });
+    // Popup items expose the label alone; the empty launcher remains buttons.
+    const row = menu.getByRole('menuitem', { name: label, exact: true });
     const icon = row.locator('.icon');
     await expect(icon).toHaveAttribute('aria-hidden', 'true');
     const svg = icon.locator('svg');
@@ -33,14 +34,14 @@ test('new-tab popup and empty launcher share Codicons without changing actions',
     await page.emulateMedia({ colorScheme });
     await menu.screenshot({ path: testInfo.outputPath('launcher-' + colorScheme + '.png') });
   }
-  await menu.getByRole('button', { name: /^Files / }).click();
+  await menu.getByRole('menuitem', { name: 'Files', exact: true }).click();
   await expect(menu).toBeHidden();
   await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
   await page.getByTitle('New tab', { exact: true }).click();
-  await menu.getByRole('button', { name: /^Workflows / }).click();
+  await menu.getByRole('menuitem', { name: 'Workflows', exact: true }).click();
   await expect(page.locator('.editor-tab.active')).toContainText('Workflows');
   await page.getByTitle('New tab', { exact: true }).click();
-  await menu.getByRole('button', { name: /^Jobs / }).click();
+  await menu.getByRole('menuitem', { name: 'Jobs', exact: true }).click();
   await expect(page.locator('.jobs-panel')).toBeVisible();
   await page.getByRole('button', { name: 'Close all tabs', exact: true }).click();
   const launcher = page.locator('.dock-launcher');

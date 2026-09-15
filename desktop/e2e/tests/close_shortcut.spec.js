@@ -140,7 +140,8 @@ test('Selecting a dock tab moves focus out of the composer', async ({ page }) =>
   await page.getByRole('button', { name: /^Review / }).click();
   const review = page.locator('.editor-tab', { hasText: 'Review Changes' });
   await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('button', { name: /^Browse / }).click();
+  await page.getByRole('menu', { name: 'New tab', exact: true })
+    .getByRole('menuitem', { name: 'Browse', exact: true }).click();
   await page.locator('#task').click();
   await review.click();
   await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
@@ -199,7 +200,8 @@ test('Close respects dialogs and closes successive dock tabs without closing the
   await expect(tabs).toHaveCount(1);
   await expect(page.getByRole('region', { name: 'Readonly code viewer' })).toBeVisible();
   await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('button', { name: /^Browse/ }).click();
+  await page.getByRole('menu', { name: 'New tab', exact: true })
+    .getByRole('menuitem', { name: 'Browse', exact: true }).click();
   await expect(tabs).toHaveCount(2);
 
   await app.openQuickOpen();
