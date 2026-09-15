@@ -428,3 +428,10 @@ hand-written workflow reaches the same child with
 scout-shaped `agent`. Without a durable session, hosted delegation is
 unavailable; the standalone `openseek review --base REF` still calls the review
 engine directly, without a workflow.
+
+## Programmatic tool calls
+
+Hosts that advertise `ptc` can run scripts with `ptc: true` and a bundled
+`tools.edit`, `tools.multi_edit`, `tools.web_search`, and `tools.call` client.
+See [the PTC guide](../ptc/README.mbt.md) for examples, structured results, and
+the foreground lifetime contract.

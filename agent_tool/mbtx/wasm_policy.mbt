@@ -511,6 +511,11 @@ fn env_set(tmp_dir : String, inject : Map[String, String]) -> Map[String, Json] 
   if !set.contains(HostHandoffVar) {
     set[HostHandoffVar] = "".to_json()
   }
+  if !set.contains("OPENSEEK_PTC") {
+    set["OPENSEEK_PTC"] = ({ "version": 1, "available": false } : Json)
+      .stringify()
+      .to_json()
+  }
   set["TMPDIR"] = tmp_dir.to_json()
   set
 }
@@ -642,9 +647,13 @@ test "no injection clears any inherited handoff and admits no engine" {
   // whose handoff it inherited. Left alone, that handoff would reach this
   // snippet, which would mint child ids from a block that belongs to its
   // grandparent. An empty value fails the library's reader closed.
-  assert_eq(set.length(), 2)
+  assert_eq(set.length(), 3)
   assert_true(set.get("TMPDIR") is Some(_))
   assert_eq(set.get("WORKFLOW_HOST"), Some(Json::string("")))
+  guard set.get("OPENSEEK_PTC") is Some(String(ptc)) else {
+    fail("missing PTC capability override")
+  }
+  assert_eq(@json.parse(ptc), { "version": 1, "available": false })
   for rule in allow {
     guard rule is { "program": String(program), .. } else { continue }
     assert_false(program.contains("openseek"))

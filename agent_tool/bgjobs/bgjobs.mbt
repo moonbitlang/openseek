@@ -95,9 +95,9 @@ struct BgJobRuntime {
 
 ///|
 /// The finish sequence of a job, advanced only by `finish_job`. A process may
-/// already be terminal while the job is still `Live`: launcher cleanup and
-/// the completion notice each mark a later milestone, and readers report a
-/// job as running/stopping until `CleanedUp`.
+/// already be terminal while the job is still `Live`: launcher cleanup, the
+/// frozen final data, and the completion notice each mark a later milestone,
+/// and readers report a job as running/stopping until `CleanedUp`.
 priv enum JobPhase {
   Live
   Finishing
@@ -138,6 +138,8 @@ priv struct BgJob {
   mut on_terminal : (async () -> Unit)?
   // Where the job is in its finish sequence; see `JobPhase`.
   mut phase : JobPhase
+  // Launcher-supplied structured results; frozen to a constant at `CleanedUp`.
+  mut data : (() -> Json)?
   // A terminal denial scan may read a large retained log. Cache its
   // classification so repeated job_output calls do not repeat that allocation.
   mut denial_scanned : Bool
@@ -149,6 +151,7 @@ priv struct BgJob {
 /// (the first inline-budget characters); the *full* output — when `over_inline_cap`
 /// — is read with `BgJobRuntime::read_output`.
 pub struct BgJobSnapshot {
+  data : Json?
   cleanup_error : String?
   id : String
   command : String
@@ -323,6 +326,7 @@ pub async fn BgJobRuntime::start(
     output_rewrites~,
     moonrun_policy_active~,
     on_terminal=None,
+    data=None,
   )
   id
 }
@@ -342,6 +346,7 @@ pub async fn BgJobRuntime::adopt(
   output_rewrites? : Array[(String, String)] = [],
   moonrun_policy_active? : Bool = false,
   on_terminal? : async () -> Unit,
+  data? : () -> Json,
 ) -> String {
   errdefer exec.request_stop()
   self.prepare_output()
@@ -358,6 +363,7 @@ pub async fn BgJobRuntime::adopt(
     output_rewrites~,
     moonrun_policy_active~,
     on_terminal~,
+    data~,
   )
   id
 }
@@ -375,6 +381,7 @@ async fn BgJobRuntime::register(
   output_rewrites~ : Array[(String, String)],
   moonrun_policy_active~ : Bool,
   on_terminal~ : (async () -> Unit)?,
+  data~ : (() -> Json)?,
 ) -> Unit {
   self.jobs[id] = {
     id,
@@ -393,6 +400,7 @@ async fn BgJobRuntime::register(
     moonrun_policy_active,
     on_terminal,
     phase: Live,
+    data,
     denial_scanned: false,
     denial_feedback: None,
   }
@@ -439,6 +447,7 @@ fn BgJob::to_snapshot(self : BgJob, persistent_logs : Bool) -> BgJobSnapshot {
     } else {
       bg_status(self.exec.status())
     },
+    data: self.data.map(get => get()),
     cleanup_error: self.cleanup_error,
     output: self.exec.head(),
     output_file: self.exec.spill_path(),

@@ -697,8 +697,26 @@ async fn AgentLoop::execute_tool_call(
     // Already executed concurrently with its batch siblings; recording and
     // accounting proceed exactly as for a fresh execution.
     Some(action) => action
-    None => @agent_tool.execute_tool_call(tool_call, self.tools)
+    None => {
+      errdefer (if self.tools.take_program_trace() is Some(data) {
+        @async.protect_from_cancel(() => {
+          self.record_tool_result(
+            session,
+            tool_call_id=native_call.id,
+            tool_name=tool_call.name,
+            content="programmatic tool call interrupted or failed",
+            is_error=true,
+            data~,
+          )
+          |> ignore
+        }) catch {
+          _ => ()
+        }
+      })
+      @agent_tool.execute_tool_call(tool_call, self.tools)
+    }
   }
+  ignore(self.tools.take_program_trace())
   match result {
     Control(WaitJobs(ids)) => {
       let (output, is_error) = if response.tool_calls.length() != 1 {

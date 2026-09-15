@@ -171,10 +171,6 @@ pub async fn[X] build_tools(
       }
     })
   })
-  // Every file operation, direct or (later) programmatic, runs under the
-  // session's one file gate so validation, write, check, and rollback never
-  // interleave across an async suspension. Stateful extras share it; a
-  // concurrent-safe extra never touches files and stays unwrapped.
   let file_tools = [
     @edit.definition(workspace_root~, file_state~),
     @multi_edit.definition(workspace_root~, file_state~),
@@ -188,6 +184,9 @@ pub async fn[X] build_tools(
       file_state.serialize(tool)
     }
   })
+  let program_tools = @agent_tool.Tools(file_tools + extras)
+  let program_service = @ptc.Service::start(scope.group(), program_tools)
+  let program_trace : Ref[Json?] = Ref(None)
   Tools(
     file_tools +
     [
@@ -210,6 +209,8 @@ pub async fn[X] build_tools(
         job_dir=scratch,
         approval?=runtime.approval_channel(),
         subrun?=mbtx_subrun,
+        program_service~,
+        on_program_trace=data => program_trace.val = Some(data),
       ),
       // Deliberately NOT told about escalation. It reports a job that already
       // ran — a policy refusal reaches it after minutes of real work — and the
@@ -222,6 +223,7 @@ pub async fn[X] build_tools(
     ] +
     extras,
     background_jobs=bg_runtime,
+    program_trace~,
   )
 }
 

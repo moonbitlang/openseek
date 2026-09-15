@@ -5,6 +5,7 @@ import {
   "bobzhang/openseek/agent_tool/bgjobs",
   "bobzhang/openseek/deepseek",
   "moonbitlang/core/debug",
+  "moonbitlang/core/ref",
 }
 
 // Values
@@ -85,11 +86,12 @@ pub struct ToolOutput {
 } derive(@debug.Debug)
 
 type Tools
-pub fn Tools::Tools(Array[AgentToolDefinition], background_jobs? : @bgjobs.BgJobRuntime) -> Self raise
+pub fn Tools::Tools(Array[AgentToolDefinition], background_jobs? : @bgjobs.BgJobRuntime, program_trace? : @ref.Ref[Json?]) -> Self raise
 pub fn Tools::background_job_runtime(Self) -> @bgjobs.BgJobRuntime?
 pub fn Tools::find(Self, String) -> AgentToolDefinition?
 pub fn Tools::function_tools(Self) -> Array[@deepseek.ToolDefinition]
 pub fn Tools::program_tools(Self) -> Self raise
+pub fn Tools::take_program_trace(Self) -> Json?
 
 // Type aliases
 

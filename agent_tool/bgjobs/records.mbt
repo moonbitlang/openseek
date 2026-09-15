@@ -58,8 +58,7 @@ fn BgJob::record(self : BgJob, runtime : BgJobRuntime) -> @protocol.JobRecord {
     output_error: self.exec.output_error(),
     persistence_error: self.persistence_error,
     cleanup_error: self.cleanup_error,
-    // Structured results are not attached by any launcher yet.
-    data: None,
+    data: self.data.map(get => get()),
   }
 }
 
@@ -195,6 +194,12 @@ async fn BgJobRuntime::finish_job(self : BgJobRuntime, id : String) -> Unit {
         error => job.cleanup_error = Some("\{error}")
       }
     }
+    // Completed jobs retain immutable data, not the live supplier and all the
+    // program/runtime resources it captured.
+    job.data = job.data.map(supply => {
+      let final_data = supply()
+      () => final_data
+    })
     job.phase = CleanedUp
     let record = job.record(self)
     let failed = match record.state {

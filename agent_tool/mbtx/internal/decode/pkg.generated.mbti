@@ -20,6 +20,7 @@ pub struct MbtxInput {
   warning : Bool
   escalated : Bool
   subrun : Bool
+  ptc : Bool?
 } derive(@debug.Debug)
 
 pub enum Program {

@@ -268,6 +268,7 @@ struct Tools {
   by_name : Map[String, AgentToolDefinition]
   /// Shared execution registry, also used by the loop for wait/finish decisions.
   background_jobs : @bgjobs.BgJobRuntime?
+  program_trace : Ref[Json?]
 }
 
 ///|
@@ -278,6 +279,7 @@ struct Tools {
 pub fn Tools::Tools(
   definitions : Array[AgentToolDefinition],
   background_jobs? : @bgjobs.BgJobRuntime,
+  program_trace? : Ref[Json?] = Ref(None),
 ) -> Tools raise {
   let by_name : Map[String, AgentToolDefinition] = Map([])
   for definition in definitions {
@@ -286,7 +288,7 @@ pub fn Tools::Tools(
     }
     by_name[definition.name] = definition
   }
-  { by_name, background_jobs, }
+  { by_name, background_jobs, program_trace, }
 }
 
 ///|
@@ -597,4 +599,13 @@ pub fn ToolAction::wait_jobs(ids : Array[String]) -> ToolAction {
 /// Kept behind an accessor so the storage is not part of the public record.
 pub fn Tools::background_job_runtime(self : Tools) -> @bgjobs.BgJobRuntime? {
   self.background_jobs
+}
+
+///|
+/// Take nested-call metadata, including when a cancelled mbtx produced no
+/// normal result. Only the owning agent loop drains this session-local slot.
+pub fn Tools::take_program_trace(self : Tools) -> Json? {
+  let trace = self.program_trace.val
+  self.program_trace.val = None
+  trace
 }

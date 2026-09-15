@@ -108,6 +108,33 @@ async test "cancelled wait does not cancel a job or consume later completion" {
 
 ///|
 #cfg(not(platform="windows"))
+async test "terminal jobs freeze metadata and release the live supplier" {
+  @async.with_task_group(group => {
+    let live = Ref(1)
+    let reads = Ref(0)
+    let jobs = BgJobRuntime(AgentTaskScope(group))
+    let exec = @shell_exec.ShellExecution::start(
+      AgentTaskScope(group),
+      program="/usr/bin/true",
+      args=[],
+    )
+    let id = jobs.adopt(exec, command="metadata snapshot", data=() => {
+      reads.val += 1
+      { "value": live.val }
+    })
+    jobs.wait_any([id])
+    let final_reads = reads.val
+    live.val = 2
+    assert_true(
+      jobs.snapshot(id) is Some({ data: Some({ "value": 1, .. }), .. }),
+    )
+    assert_true(jobs.records() is [{ data: Some({ "value": 1, .. }), .. }])
+    assert_eq(reads.val, final_reads)
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
 async test "stalled persistence reports failure and releases publication for other jobs" {
   @async.with_timeout(1000, () => {
     @async.with_task_group(group => {
