@@ -289,7 +289,11 @@ fn ReferenceResultsTree::render_group(
   row.set_attribute("data-reference-group-index", group.group_index.to_string())
   let basename = @base_common.basename_or_authority(group.uri)
   let relative_label = (self.resource_path_label)(group.uri)
-  let parent = @base_common.dirname(relative_label.unwrap_or(group.uri.path))
+  let parent = match
+    @base_common.dirname(relative_label.unwrap_or(group.uri.path)) {
+    "." | "" => None
+    path => Some(path)
+  }
   row.set_attribute(
     "aria-label",
     reference_group_accessible_label(group, basename, parent),
@@ -304,7 +308,7 @@ fn ReferenceResultsTree::render_group(
   filename.append_child(document.create_text_node(basename).as_node())
   let dirname = document.create_element("span")
   dirname.set_attribute("class", "moonbit-viewer-reference-results-file-parent")
-  if parent != "" {
+  if parent is Some(parent) {
     dirname.append_child(document.create_text_node(parent).as_node())
   }
   let badge = document.create_element("span")
@@ -1008,7 +1012,7 @@ fn reference_accessible_label(
 fn reference_group_accessible_label(
   group : @references.ReferenceGroup,
   basename : String,
-  parent : String,
+  parent : String?,
 ) -> String {
   let count = group.references.length()
   let result = if count == 1 {
@@ -1016,10 +1020,9 @@ fn reference_group_accessible_label(
   } else {
     count.to_string() + " results in " + basename
   }
-  if parent == "" {
-    result
-  } else {
-    result + ", full path " + parent
+  match parent {
+    None => result
+    Some(parent) => result + ", full path " + parent
   }
 }
 

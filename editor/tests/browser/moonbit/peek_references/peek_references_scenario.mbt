@@ -106,7 +106,7 @@ pub fn run_peek_references_browser_test() -> Unit {
   let remote_uri = try! @base_common.Uri::from(
     scheme="inmemory",
     authority="references",
-    path="/workspace/lib/remote.mbt",
+    path="/workspace/remote.mbt",
   )
   let other_uri = try! @base_common.Uri::from(
     scheme="inmemory",

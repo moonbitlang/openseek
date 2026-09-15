@@ -26,8 +26,17 @@ test "both Peek modes use host paths and preserve outside resource labels" {
     for group in model.groups {
       let row = references_peek_test_row(tree, "group", group.group_index)
       match group.uri.path {
-        "/workspace/main.mbt" =>
+        "/workspace/main.mbt" => {
           assert_eq(references_peek_test_attribute(row, "title"), "main.mbt")
+          let parent = references_peek_test_class_descendant(
+            row, "moonbit-viewer-reference-results-file-parent", 0,
+          )
+          assert_eq(references_peek_test_text_content(parent), "")
+          assert_eq(
+            references_peek_test_attribute(row, "aria-label"),
+            "1 result in main.mbt",
+          )
+        }
         "/workspace/src/main.mbt" => {
           assert_eq(
             references_peek_test_attribute(row, "title"),

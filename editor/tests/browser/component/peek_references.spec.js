@@ -95,13 +95,14 @@ test('public locations render an accessible lazy tree, snippets, and decorated p
     await expect(remoteGroup).toHaveAttribute('aria-expanded', 'false');
     await expect(remoteGroup).toHaveAttribute(
       'aria-label',
-      '2 results in remote.mbt, full path lib',
+      '2 results in remote.mbt',
     );
     await expect(sourceGroup).toHaveAttribute('aria-expanded', 'true');
     await expect(sourceGroup).toContainText('source.mbt');
     await expect(sourceGroup.locator('.moonbit-viewer-reference-results-file-parent')).toHaveText('src');
     await expect(sourceGroup).toHaveAttribute('title', 'src/source.mbt');
-    await expect(remoteGroup).toHaveAttribute('title', 'lib/remote.mbt');
+    await expect(remoteGroup).toHaveAttribute('title', 'remote.mbt');
+    await expect(remoteGroup.locator('.moonbit-viewer-reference-results-file-parent')).toHaveText('');
     await expect(sourceGroup).toContainText('3');
     await expect(otherGroup).toHaveAttribute('aria-expanded', 'false');
 
@@ -209,7 +210,7 @@ test('Enter uses Current and Ctrl+Enter uses Side before closing Peek', async ({
       .poll(async () => (await state(page)).openModes)
       .toEqual(['Current']);
     expect((await state(page)).openUris[0]).toContain(
-      '/workspace/lib/remote.mbt',
+      '/workspace/remote.mbt',
     );
     expect((await state(page)).openLines).toEqual([1]);
     expect((await state(page)).openColumns).toEqual([8]);
