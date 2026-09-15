@@ -455,17 +455,45 @@ html:is(
 .tab-add.hidden {
   display: none;
 }
+.editor-tabsbar {
+  anchor-scope: --dock-menu-trigger;
+}
+.tab-add {
+  anchor-name: --dock-menu-trigger;
+}
+/* Match select_control's surface and escape clipping by the sidebar.
+   Grow left from +, flipping sides when the viewport has more room there. */
 .dock-menu {
-  position: absolute;
-  top: calc(100% - 6px);
-  left: 12px;
-  min-width: 260px;
-  padding: 5px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
-  box-shadow: var(--shadow-overlay);
+  position: fixed;
+  position-anchor: --dock-menu-trigger;
+  position-visibility: anchors-visible;
+  position-area: block-end span-inline-start;
+  position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+  inset: auto;
+  margin: 6px 0 0;
+  width: 280px;
+  max-width: calc(100dvw - 24px);
+  max-height: min(360px, calc(100dvh - 24px), calc(100% - 12px));
+  overflow: auto;
+  overscroll-behavior: contain;
   z-index: var(--z-menu);
+}
+.dock-menu:popover-open {
+  display: grid;
+}
+.dock-menu-row {
+  grid-template-columns: 16px minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 2px;
+}
+.dock-menu .dock-launcher-hint {
+  grid-column: 2;
+  min-width: 0;
+  margin-left: 0;
+  overflow-wrap: anywhere;
+}
+.dock-menu .dock-launcher-name {
+  font-weight: inherit;
 }
 /* The empty strip's centered launcher pane, same rows as the popup. */
 .dock-launcher {
