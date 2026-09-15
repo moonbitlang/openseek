@@ -51,13 +51,14 @@ struct Service {
 ///|
 /// A script's capability and trace, retained by its job after background handoff.
 struct Program {
-  environment : Map[String, String]
+  // The owning listener: its tools, its stateful-call mutex, its deadlines,
+  // and the registry this program's token lives in.
+  service : Service
+  token : String
   calls : Array[Json]
   reservations : Array[Int]
   mut trace_bytes : Int
   active : Map[Int, @async.Task[Json]]
-  serial : @async.Mutex
-  revoke : () -> Unit
   mut closed : Bool
   mut on_trace : async (Json) -> Unit
   // Publications run one at a time and snapshot the trace only once they hold
@@ -65,9 +66,26 @@ struct Program {
   // one; `close` takes it last and its final publish is therefore final.
   publishing : @async.Mutex
   mut job_id : String?
-  call_timeout_ms : Int
-  trace_timeout_ms : Int
   mut trace_error : String?
+}
+
+///|
+/// One retained trace entry. `result` is present only once the call is done.
+fn call_entry(
+  name : String,
+  arguments : Json,
+  status : String,
+  result? : Json,
+) -> Json {
+  let fields : Map[String, Json] = {
+    "name": name.to_json(),
+    "arguments": arguments,
+    "status": status.to_json(),
+  }
+  if result is Some(result) {
+    fields["result"] = result
+  }
+  Json::object(fields)
 }
 
 ///|
@@ -160,12 +178,7 @@ pub async fn[X] Service::start(
         return
       }
       let index = program.calls.length()
-      let entry : Json = {
-        "name": name,
-        "arguments": arguments,
-        "status": "running",
-      }
-      // Leave space for terminal status and an explicit omitted-result marker.
+      let entry = call_entry(name, arguments, "running")
       let reservation = @utf8.encode(entry.stringify()).length() +
         TraceEntryReserveBytes
       guard program.trace_bytes + reservation <= MaxTraceBytes else {
@@ -175,19 +188,19 @@ pub async fn[X] Service::start(
       program.calls.push(entry)
       program.reservations.push(reservation)
       program.trace_bytes += reservation
-      let task = (service.spawn)(() => {
-        program.execute(service.tools, index, name, arguments)
-      })
+      let task = (service.spawn)(() => program.execute(index, name, arguments))
       program.active[index] = task
       defer program.active.remove(index)
-      // Cancellation of this HTTP handler must not orphan its executor.
-      errdefer {
+      // Cancel the executor and join it: a handler that unwinds, by
+      // cancellation or by its deadline, must not orphan it.
+      let abandon = () => {
         program.cancel_call(index)
         @async.protect_from_cancel(() => ignore(task.wait()) catch { _ => () })
       }
+      errdefer abandon()
       let result = @async.with_task_group(waiters => {
         waiters.spawn_bg(no_wait=true, () => {
-          @async.sleep(program.call_timeout_ms)
+          @async.sleep(service.call_timeout_ms)
           // Revoke at expiry, before the waiter unwinds and a granted
           // executor gets a chance to resume.
           program.cancel_call(index)
@@ -198,8 +211,7 @@ pub async fn[X] Service::start(
         error if @async.is_being_cancelled() ||
           @async.is_cancellation_error(error) => raise error
         error => {
-          program.cancel_call(index)
-          @async.protect_from_cancel(() => ignore(task.wait()) catch { _ => () })
+          abandon()
           let response = error_result(
             "PTC call failed: \{@agent_tool.brief_line("\{error}", limit=128)}; changes may have occurred",
           )
@@ -208,12 +220,12 @@ pub async fn[X] Service::start(
             // The deadline has joined the call and returns an acknowledged
             // tool error. The script may handle it. This small result fits
             // the entry's reserved 1 KiB; never replace a completed mutation.
-            program.calls[index] = {
-              "name": name,
-              "arguments": arguments,
-              "status": "done",
-              "result": response,
-            }
+            program.calls[index] = call_entry(
+              name,
+              arguments,
+              "done",
+              result=response,
+            )
             program.publish_trace()
           }
           response
@@ -245,26 +257,16 @@ pub fn Service::register(
   }
   let token = @crypto.bytes_to_hex_string(entropy)
   let program : Program = {
-    environment: {
-      "OPENSEEK_PTC": (
-        {
-          "version": 1,
-          "url": "http://127.0.0.1:\{self.server.addr.port()}/call",
-          "token": token,
-        } : Json).stringify(),
-    },
+    service: self,
+    token,
     calls: [],
     reservations: [],
     trace_bytes: 0,
     active: Map([]),
-    serial: self.serial,
-    revoke: () => self.programs.remove(token),
     closed: false,
     on_trace: data => on_trace(data),
     publishing: Mutex(),
     job_id: None,
-    call_timeout_ms: self.call_timeout_ms,
-    trace_timeout_ms: self.trace_timeout_ms,
     trace_error: None,
   }
   self.programs[token] = program
@@ -293,9 +295,16 @@ pub async fn Service::close(self : Service) -> Unit {
 }
 
 ///|
-/// Guest environment for this script only.
+/// Guest environment for this script only: the SDK's discovery handoff.
 pub fn Program::env(self : Program) -> Map[String, String] {
-  self.environment.copy()
+  {
+    "OPENSEEK_PTC": (
+      {
+        "version": 1,
+        "url": "http://127.0.0.1:\{self.service.server.addr.port()}/call",
+        "token": self.token,
+      } : Json).stringify(),
+  }
 }
 
 ///|
@@ -379,7 +388,7 @@ pub async fn Program::close(self : Program) -> Unit {
 /// process exit or stop initiation; close later joins and persists final data.
 pub fn Program::stop(self : Program) -> Unit {
   self.closed = true
-  (self.revoke)()
+  self.service.programs.remove(self.token)
   for index in 0..<self.calls.length() {
     self.cancel_call(index)
   }
@@ -389,12 +398,8 @@ pub fn Program::stop(self : Program) -> Unit {
 /// Record revocation even when a queued executor has not started yet.
 fn Program::cancel_call(self : Program, index : Int) -> Unit {
   if self.calls[index]
-    is { "name": name, "arguments": arguments, "status": "running", .. } {
-    self.calls[index] = {
-      "name": name,
-      "arguments": arguments,
-      "status": "interrupted",
-    }
+    is { "name": String(name), "arguments": arguments, "status": "running", .. } {
+    self.calls[index] = call_entry(name, arguments, "interrupted")
   }
   if self.active.get(index) is Some(task) {
     task.cancel()
@@ -407,10 +412,11 @@ pub fn Program::result(
   self : Program,
   action : @agent_tool.ToolAction,
 ) -> @agent_tool.ToolAction {
+  let interrupted = self.interrupted()
   match action {
     Respond(output) =>
       @agent_tool.respond(
-        (if self.interrupted() {
+        (if interrupted {
           "\{output.content}\nPTC stopped unfinished tool calls; changes may have occurred. Await every call before exiting."
         } else {
           output.content
@@ -420,9 +426,7 @@ pub fn Program::result(
             "\nPTC trace publication failed: \{error}. Calls may have executed; inspect the retained trace."
           None => ""
         }),
-        is_error=output.is_error ||
-          self.interrupted() ||
-          self.trace_error is Some(_),
+        is_error=output.is_error || interrupted || self.trace_error is Some(_),
         brief?=output.brief,
         data?=self.attach_trace(output.data),
       )
@@ -460,11 +464,11 @@ fn Program::attach_trace(self : Program, existing : Json?) -> Json? {
 ///|
 async fn Program::execute(
   self : Program,
-  tools : @agent_tool.Tools,
   index : Int,
   name : String,
   arguments : Json,
 ) -> Json {
+  let tools = self.service.tools
   let result = try {
     self.publish_trace()
     match tools.find(name) {
@@ -474,10 +478,11 @@ async fn Program::execute(
           is_error=true,
         )
       Some(tool) => {
+        let serial = self.service.serial
         if !tool.is_concurrent_safe() {
-          self.serial.acquire()
+          serial.acquire()
         }
-        defer (if !tool.is_concurrent_safe() { self.serial.release() })
+        defer (if !tool.is_concurrent_safe() { serial.release() })
         guard !self.closed &&
           !@async.is_being_cancelled() &&
           !(self.calls[index] is { "status": "interrupted", .. }) else {
@@ -491,11 +496,7 @@ async fn Program::execute(
     }
   } catch {
     error if @async.is_being_cancelled() || @async.is_cancellation_error(error) => {
-      self.calls[index] = {
-        "name": name,
-        "arguments": arguments,
-        "status": "interrupted",
-      }
+      self.calls[index] = call_entry(name, arguments, "interrupted")
       raise error
     }
     error => @agent_tool.respond("PTC tool failed: \{error}", is_error=true)
@@ -516,12 +517,7 @@ async fn Program::execute(
   if self.calls[index] is { "status": "interrupted", .. } {
     return response
   }
-  let entry : Json = {
-    "name": name,
-    "arguments": arguments,
-    "status": "done",
-    "result": response,
-  }
+  let entry = call_entry(name, arguments, "done", result=response)
   let size = @utf8.encode(entry.stringify()).length()
   if self.trace_bytes - self.reservations[index] + size <= MaxTraceBytes {
     self.trace_bytes += size - self.reservations[index]
@@ -530,20 +526,15 @@ async fn Program::execute(
   } else {
     // The client still receives the full bounded response. Retained job
     // metadata must fit the existing 1 MiB durable-record reader.
-    self.calls[index] = {
-      "name": name,
-      "arguments": arguments,
-      "status": "done",
-      "result": {
-        "version": 1,
-        "content": "Result omitted from retained trace: trace size limit reached",
-        "is_error": match response {
-          { "is_error": value, .. } => value
-          _ => true
-        },
-        "trace_truncated": true,
+    self.calls[index] = call_entry(name, arguments, "done", result={
+      "version": 1,
+      "content": "Result omitted from retained trace: trace size limit reached",
+      "is_error": match response {
+        { "is_error": value, .. } => value
+        _ => true
       },
-    }
+      "trace_truncated": true,
+    })
   }
   self.publish_trace()
   response
@@ -599,7 +590,9 @@ async fn Program::publish_trace(self : Program) -> Unit {
 ///|
 /// Snapshot and deliver under `publishing`, which the caller must hold.
 async fn Program::deliver_trace(self : Program) -> Unit {
-  @async.with_timeout(self.trace_timeout_ms, () => (self.on_trace)(self.trace())) catch {
+  @async.with_timeout(self.service.trace_timeout_ms, () => {
+    (self.on_trace)(self.trace())
+  }) catch {
     error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
       raise error
     error =>
