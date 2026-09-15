@@ -171,6 +171,50 @@ test "durable tool results explicitly encode their optional brief" {
 }
 
 ///|
+test "durable tool result data round-trips and null reads as absent" {
+  let structured : @protocol.SessionToolResult = {
+    data: Some({ "sources": [{ "url": "https://example.com" }] }),
+    tool_call_id: "call-2",
+    tool_name: "web_search",
+    content: "Sources:",
+    is_error: false,
+    brief: None,
+  }
+  let encoded = structured.to_json()
+  @debug.assert_eq(encoded, {
+    "tool_call_id": "call-2",
+    "tool_name": "web_search",
+    "content": "Sources:",
+    "is_error": false,
+    "data": { "sources": [{ "url": "https://example.com" }] },
+  })
+  let decoded : @protocol.SessionToolResult = @json.from_json(encoded)
+  assert_eq(decoded, structured)
+  // Absent and explicit null both decode to None, and neither is re-emitted.
+  for
+    wire in [
+      (
+        {
+          "tool_call_id": "c",
+          "tool_name": "t",
+          "content": "",
+          "is_error": false,
+        } : Json),
+      {
+        "tool_call_id": "c",
+        "tool_name": "t",
+        "content": "",
+        "is_error": false,
+        "data": null,
+      },
+    ] {
+    let decoded : @protocol.SessionToolResult = @json.from_json(wire)
+    assert_true(decoded.data is None)
+    assert_false(decoded.to_json() is { "data": _, .. })
+  }
+}
+
+///|
 test "durable tool result brief cannot hide a valid result" {
   for
     payload in (
