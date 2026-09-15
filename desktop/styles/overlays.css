@@ -556,3 +556,33 @@
 .quick-open-kind.codicon-symbol-misc::before {
   content: "\eb63";
 }
+
+.conversation-rename-dialog {
+  margin: auto;
+  color: var(--color-text-primary);
+}
+.conversation-rename-dialog::backdrop {
+  background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
+}
+.conversation-rename-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+.conversation-rename-input:focus-visible {
+  outline: 2px solid var(--color-accent-border);
+  outline-offset: 2px;
+}
+.conversation-rename-error {
+  margin-top: 8px;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}

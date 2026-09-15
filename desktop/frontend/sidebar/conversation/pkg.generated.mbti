@@ -10,10 +10,6 @@ import {
 }
 
 // Values
-pub const RenameEditorId : String = "sidebar-conversation-rename-editor"
-
-pub const RenameInputId : String = "sidebar-conversation-rename"
-
 pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[Array[(String, @html.Html)]]
 
 // Errors
@@ -25,9 +21,6 @@ pub(all) struct Actions {
   restore : (Id) -> @cmd.Cmd
   delete : (Id) -> @cmd.Cmd
   rename : (Id, String) -> @cmd.Cmd
-  rename_changed : (Id, String) -> @cmd.Cmd
-  rename_submit : (Id) -> @cmd.Cmd
-  rename_cancel : (Id) -> @cmd.Cmd
 }
 
 pub(all) enum ConversationSource {
@@ -75,7 +68,6 @@ pub(all) struct Input {
   worktree : String?
   run_mark : RunMark
   trailing : Array[TrailingAction]
-  rename : RenameInput?
   children : Array[Input]
 } derive(Eq, @debug.Debug)
 pub fn Input::equal(Self, Self) -> Bool
@@ -83,15 +75,6 @@ pub fn Input::id(Self) -> Id
 pub fn Input::menu_entries(Self, Actions) -> Array[@action_menu.Entry]?
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::to_repr(Self) -> @debug.Repr
-
-pub(all) struct RenameInput {
-  draft : String
-  saving : Bool
-  error : String?
-} derive(Eq, @debug.Debug)
-pub fn RenameInput::equal(Self, Self) -> Bool
-pub fn RenameInput::not_equal(Self, Self) -> Bool
-pub fn RenameInput::to_repr(Self) -> @debug.Repr
 
 pub(all) enum RunMark {
   NoRunMark

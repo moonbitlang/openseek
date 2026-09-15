@@ -54,7 +54,6 @@ fn test_conversations(
       worktree: None,
       run_mark: @conversation.NoRunMark,
       trailing: [],
-      rename: None,
       children: [],
     })
   }

@@ -1675,16 +1675,36 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
   await page.getByRole('menuitem', { name: 'Rename…' }).click({ button: 'right' });
   const input = page.getByRole('textbox', { name: 'Rename conversation' });
+  const dialog = page.getByRole('dialog', { name: 'Rename conversation' });
+  await expect(dialog).toBeVisible();
+  await expect(liveRow.getByRole('textbox')).toHaveCount(0);
+  expect(await dialog.evaluate(element => element.matches(':modal'))).toBe(true);
   await expect(input).toBeFocused();
   await expect.poll(() => input.evaluate(element => ({
     start: element.selectionStart,
     end: element.selectionEnd,
     length: element.value.length,
   }))).toEqual({ start: 0, end: 23, length: 23 });
+  await input.fill('   ');
+  await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+  await input.press('Enter');
+  await expect(dialog).toBeVisible();
   await input.fill('Renamed in WebView');
+  await input.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(input).toBeFocused();
+  await page.mouse.click(5, 5);
+  await expect(input).toHaveValue('Renamed in WebView');
+  await expect(dialog).toBeVisible();
   await input.click({ button: 'right' });
   await expect(menu).toHaveCount(0);
-  await page.getByRole('button', { name: 'Save' }).click();
+  app.rpcDelays.set('session.rename', 1200);
+  await input.press('Enter');
+  await expect(dialog.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  await input.press('Escape');
+  await expect(dialog).toBeVisible();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'session.rename')).toMatchObject({
       params: {
@@ -1694,6 +1714,10 @@ test('shared WebView action menu supports context position, keyboard, and rename
       },
     });
 
+  await expect(dialog).toHaveCount(0);
+  await expect(archiveButton).toBeFocused();
+
+  app.rpcDelays.delete('session.rename');
   app.rpcErrors.set('session.rename', 'fixture rename unavailable');
   await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
   await page.getByRole('menuitem', { name: 'Rename…' }).click();
@@ -1704,6 +1728,9 @@ test('shared WebView action menu supports context position, keyboard, and rename
   );
   await expect(input).toHaveValue('Rename that will fail');
   await expect(input).toBeEnabled();
+  await input.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(archiveButton).toBeFocused();
   expect(app.pageErrors).toEqual([]);
 });
 

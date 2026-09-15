@@ -115,7 +115,6 @@ fn SidebarContext::draft_input(
     worktree: None,
     run_mark: @conversation.NoRunMark,
     trailing: [],
-    rename: None,
     children: [],
   }
 }
@@ -285,7 +284,6 @@ fn CodexThreadRow::archived_sidebar_input(
         title="Restore this Codex conversation to the sidebar",
       ),
     ],
-    rename: None,
     children: [],
   }
 }
@@ -344,7 +342,6 @@ fn CodexThreadRow::sidebar_input(
     .map(worktree => worktree.name),
     run_mark,
     trailing: [@conversation.Archive(title="Archive Codex conversation")],
-    rename: None,
     children: [],
   }
 }
