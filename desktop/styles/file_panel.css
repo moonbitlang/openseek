@@ -1133,6 +1133,65 @@ html:is(
   padding: 4px 0 8px;
 }
 
+/* Files owns its disclosure and scroll region; Search and Changes keep their
+   existing layout. Closing Files consumes only its heading's height. */
+.file-tree.workspace-files {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+  padding: 0;
+}
+.files-section {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+.files-section[open] { flex: 1 1 auto; }
+.files-section::details-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.files-heading {
+  list-style: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+.files-heading::-webkit-details-marker { display: none; }
+.files-heading:hover { color: var(--color-text-primary); }
+.files-chevron {
+  display: flex;
+  flex: 0 0 12px;
+  transform: rotate(-90deg);
+}
+.files-chevron svg { width: 12px; height: 12px; }
+.files-section[open] .files-chevron { transform: rotate(0deg); }
+.workspace-file-list {
+  --tree-step: 14px;
+  --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  padding: 4px max(0px, 4px - var(--scrollbar-lane)) 8px 4px;
+}
+/* One continuous guide per ancestor, centered below its chevron. A root row
+   has zero guide width, ending the preceding subtree without extra state. */
+.tree-indent-guides {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 12px;
+  width: calc(var(--tree-depth) * var(--tree-step));
+  pointer-events: none;
+  background: repeating-linear-gradient(to right,
+    var(--tree-guide-color) 0 1px, transparent 1px var(--tree-step));
+}
+
 /* Review splits the tree inventory into two independently scrolling panes:
    current working changes above and immutable Git history below. */
 .file-tree.review-git-tree {
@@ -1797,15 +1856,17 @@ button.git-history-file.selected {
 }
 
 .tree-row {
+  position: relative;
+  --tree-indent: calc(4px + var(--tree-depth) * var(--tree-step));
   display: flex;
   align-items: center;
   gap: 4px;
-  padding-left: var(--tree-indent, 8px);
-  padding-top: 3px;
-  padding-bottom: 3px;
-  padding-right: 10px;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 4px 0 var(--tree-indent);
+  border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -1927,16 +1988,16 @@ button.git-history-file.selected {
   background: transparent;
 }
 
-.tree-chevron {
-  flex: 0 0 auto;
-  width: 12px;
+.tree-twistie {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  height: 16px;
   color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
 }
-
-.tree-dir .tree-name {
-  font-weight: 600;
-}
+.tree-twistie svg { width: 16px; height: 16px; transform: rotate(-90deg); }
+.tree-twistie.expanded svg { transform: rotate(0deg); }
 
 .tree-name {
   overflow: hidden;

@@ -124,6 +124,11 @@
     border-top: 0;
     border-left: 0;
   }
+  /* Compact desktop rows still provide full touch targets on phones. */
+  .workspace-file-list .tree-row,
+  .files-heading {
+    min-height: 44px;
+  }
   .editor-resize-handle,
   .sidebar-resize-handle,
   .tree-resize-handle {
