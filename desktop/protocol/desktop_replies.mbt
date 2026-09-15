@@ -473,6 +473,7 @@ pub(all) struct SessionToolResult {
   content : String
   is_error : Bool
   brief : String?
+  data : Json?
 } derive(Debug, Eq)
 
 ///|
@@ -488,6 +489,9 @@ pub impl ToJson for SessionToolResult with fn to_json(self) {
   }
   if self.brief is Some(brief) {
     fields["brief"] = Json(brief)
+  }
+  if self.data is Some(data) {
+    fields["data"] = data
   }
   Json(fields)
 }
@@ -531,7 +535,11 @@ pub impl FromJson for SessionToolResult with fn from_json(json, path) {
   } else {
     None
   }
-  { tool_call_id, tool_name, content, is_error, brief, }
+  let data = match fields.get("data") {
+    None | Some(Null) => None
+    Some(value) => Some(value)
+  }
+  { tool_call_id, tool_name, content, is_error, brief, data, }
 }
 
 ///|

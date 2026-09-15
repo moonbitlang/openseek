@@ -53,6 +53,8 @@ fn BgJob::record(self : BgJob, runtime : BgJobRuntime) -> @protocol.JobRecord {
     output_error: self.exec.output_error(),
     persistence_error: self.persistence_error,
     cleanup_error: self.cleanup_error,
+    // Structured results are not attached by any launcher yet.
+    data: None,
   }
 }
 

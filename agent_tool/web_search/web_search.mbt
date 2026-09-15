@@ -110,6 +110,7 @@ pub fn definition(
   timeout_ms? : Int = DefaultTimeoutMs,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
+    program_callable=true,
     name="web_search",
     concurrent_safe=true,
     description=(
@@ -176,6 +177,7 @@ async fn execute(
   }
   @agent_tool.respond(
     format_output(outcome),
+    data=outcome.to_data(),
     brief=success_brief(query, outcome.sources.length()),
   )
 }

@@ -21,6 +21,7 @@ fn sample_job() -> @openseek_protocol.JobRecord {
     output_error: None,
     persistence_error: None,
     cleanup_error: None,
+    data: None,
   }
 }
 
@@ -67,4 +68,14 @@ test "job record decoder rejects malformed optional fields and unsafe identities
         fail("accepted invalid field \{key}")
     }
   }
+}
+
+///|
+test "job metadata is optional and preserves structured tool traces" {
+  let ordinary = sample_job()
+  assert_true(ordinary.to_json() is { "data"? : None, .. })
+  let metadata : Json = { "ptc_calls": [{ "name": "edit", "status": "done" }] }
+  let job = { ..ordinary, data: Some(metadata), }
+  let decoded : @openseek_protocol.JobRecord = @json.from_json(job.to_json())
+  assert_eq(decoded.data, Some(metadata))
 }

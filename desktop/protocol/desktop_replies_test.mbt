@@ -144,6 +144,7 @@ test "durable assistant replay provenance has an explicit codec" {
 ///|
 test "durable tool results explicitly encode their optional brief" {
   let plain : @protocol.SessionToolResult = {
+    data: None,
     tool_call_id: "call-1",
     tool_name: "read",
     content: "contents",

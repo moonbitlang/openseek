@@ -137,12 +137,20 @@ async test "goal fallback validates registry calls" {
     ],
     content=(
       #|[
-      #|  Respond({ content: "goal status recorded", is_error: false, brief: None }),
+      #|  Respond(
+      #|    {
+      #|      content: "goal status recorded",
+      #|      is_error: false,
+      #|      brief: None,
+      #|      data: None,
+      #|    },
+      #|  ),
       #|  Respond(
       #|    {
       #|      content: "error: goal requires a string \"remaining\" when status is \"continuing\"",
       #|      is_error: true,
       #|      brief: None,
+      #|      data: None,
       #|    },
       #|  ),
       #|]

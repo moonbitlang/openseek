@@ -47,6 +47,7 @@ pub fn definition(
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
+    program_callable=true,
     name="edit",
     description=(
       #|Replace the first exact text span at or after arguments.start_line in

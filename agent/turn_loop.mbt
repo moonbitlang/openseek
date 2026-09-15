@@ -839,6 +839,7 @@ async fn AgentLoop::execute_tool_call(
         content~,
         is_error=output.is_error,
         brief?=output.brief,
+        data?=output.data,
       )
       self.plan_cadence.record_plan_success(tool_call, output)
       log_tool_result(
@@ -1070,11 +1071,14 @@ async fn AgentLoop::record_tool_result(
   content~ : String,
   is_error? : Bool = false,
   brief? : String,
+  data? : Json,
 ) -> @agent_session.Session {
   let content = clamp_tool_result_content(content)
   let session = self.append(
     session,
-    Tool(ToolResult(tool_call_id~, tool_name~, content~, is_error~, brief?)),
+    Tool(
+      ToolResult(tool_call_id~, tool_name~, content~, is_error~, brief?, data?),
+    ),
   )
   self.messages.push(ChatMessage(Tool(tool_call_id), content~))
   session

@@ -77,6 +77,7 @@ test "parse round-trips every event kind" {
       #|          content: "README.md\nsrc",
       #|          is_error: false,
       #|          brief: None,
+      #|          data: None,
       #|        },
       #|      ),
       #|    },

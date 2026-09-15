@@ -49,6 +49,8 @@ pub(all) struct JobRecord {
   output_error : String?
   persistence_error : String?
   cleanup_error : String?
+  /// Optional structured results retained with this job.
+  data : Json?
 } derive(Eq, Debug)
 
 ///|
@@ -160,7 +162,7 @@ pub fn valid_job_component(value : String) -> Bool {
 
 ///|
 pub impl ToJson for JobRecord with fn to_json(self) {
-  {
+  let fields : Map[String, Json] = {
     "schema_version": 1,
     "cleanup_error": job_optional_json(self.cleanup_error),
     "generation": self.generation.to_json(),
@@ -187,6 +189,10 @@ pub impl ToJson for JobRecord with fn to_json(self) {
     "output_error": job_optional_json(self.output_error),
     "persistence_error": job_optional_json(self.persistence_error),
   }
+  if self.data is Some(data) {
+    fields["data"] = data
+  }
+  Json::object(fields)
 }
 
 ///|
@@ -196,6 +202,7 @@ pub impl FromJson for JobRecord with fn from_json(json, path) {
     raise JsonDecodeError((path, "expected background job schema version 1"))
   }
   let cleanup_error : String? = job_optional(fields, "cleanup_error", path)
+  let data : Json? = job_optional(fields, "data", path)
   let generation : String = FromJson::from_json(
     job_field(fields, "generation", path),
     path,
@@ -253,6 +260,7 @@ pub impl FromJson for JobRecord with fn from_json(json, path) {
   {
     generation,
     cleanup_error,
+    data,
     id,
     revision: revision.to_int(),
     command,

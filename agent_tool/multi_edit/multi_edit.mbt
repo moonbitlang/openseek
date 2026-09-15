@@ -14,6 +14,7 @@ pub fn definition(
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
+    program_callable=true,
     name="multi_edit",
     description=(
       #|Apply many exact line-anchored replacements across one or more files in a single

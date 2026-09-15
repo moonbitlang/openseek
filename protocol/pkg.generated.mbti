@@ -138,6 +138,7 @@ pub(all) struct JobRecord {
   output_error : String?
   persistence_error : String?
   cleanup_error : String?
+  data : Json?
 } derive(Eq, @debug.Debug)
 pub fn JobRecord::equal(Self, Self) -> Bool
 pub fn JobRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

@@ -2399,6 +2399,7 @@ pub(all) struct SessionToolResult {
   content : String
   is_error : Bool
   brief : String?
+  data : Json?
 } derive(Eq, @debug.Debug)
 pub fn SessionToolResult::equal(Self, Self) -> Bool
 pub fn SessionToolResult::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

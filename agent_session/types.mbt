@@ -247,6 +247,8 @@ struct ToolResult {
   content : String
   is_error : Bool
   brief : String?
+  /// Machine-readable output and nested PTC trace, excluded from model projection.
+  data : Json?
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -269,8 +271,9 @@ pub fn ToolResult::ToolResult(
   content~ : String,
   is_error? : Bool = false,
   brief? : String,
+  data? : Json,
 ) -> ToolResult {
-  { tool_call_id, tool_name, content, is_error, brief, }
+  { tool_call_id, tool_name, content, is_error, brief, data, }
 }
 
 ///|
@@ -811,3 +814,9 @@ pub extend UserMessage with Eq::{equal, not_equal}
 #doc(hidden)
 #deprecated
 pub extend UserMessage with ToJson::{to_json}
+
+///|
+/// Optional machine-readable metadata; never included in model messages.
+pub fn ToolResult::data(self : ToolResult) -> Json? {
+  self.data
+}

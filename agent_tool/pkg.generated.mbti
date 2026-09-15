@@ -16,7 +16,7 @@ pub fn content_digest(String) -> String
 
 pub async fn execute_tool_call(AgentToolCall, Tools) -> ToolAction
 
-pub fn respond(String, is_error? : Bool, brief? : String) -> ToolAction
+pub fn respond(String, is_error? : Bool, brief? : String, data? : Json) -> ToolAction
 
 // Errors
 
@@ -32,6 +32,7 @@ pub struct AgentToolCall {
   arguments : Json
 }
 pub fn AgentToolCall::AgentToolCall(@deepseek.ToolCall) -> Self raise
+pub fn AgentToolCall::from_arguments(String, Json) -> Self
 
 pub struct AgentToolDefinition {
   name : String
@@ -41,9 +42,10 @@ pub struct AgentToolDefinition {
   control : Bool
   // private fields
 } derive(@debug.Debug)
-pub fn AgentToolDefinition::AgentToolDefinition(name~ : String, description~ : String, schema~ : JsonSchema, execute~ : ToolExecutor, control? : Bool, concurrent_safe? : Bool) -> Self
+pub fn AgentToolDefinition::AgentToolDefinition(name~ : String, description~ : String, schema~ : JsonSchema, execute~ : ToolExecutor, control? : Bool, concurrent_safe? : Bool, program_callable? : Bool) -> Self
 pub fn AgentToolDefinition::is_concurrent_safe(Self) -> Bool
 pub fn AgentToolDefinition::is_control(Self) -> Bool
+pub fn AgentToolDefinition::is_program_callable(Self) -> Bool
 
 pub enum FileState {
   Created
@@ -77,6 +79,7 @@ pub struct ToolOutput {
   content : String
   is_error : Bool
   brief : String?
+  data : Json?
 } derive(@debug.Debug)
 
 type Tools
