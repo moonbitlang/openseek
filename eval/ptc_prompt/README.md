@@ -53,8 +53,14 @@ To reproduce the original experiment, use an engine built from `c5c1210d2`
 ```sh
 python3 eval/ptc_prompt/run.py --prompt-ab \
   --engine /absolute/path/to/original-injected-client-openseek \
+  --base-prompt /absolute/path/to/original-system-prompt.md \
   --out .moonagent/eval_runs/historical_prompt_ab --runs 3 --concurrency 3
 ```
+
+`--base-prompt` is the plain-text system prompt of that historical checkout
+(decode its `prompt/generated_default_prompt.mbt`, or dump it from the engine);
+the current prompt has no `### Programmatic tool calls` section to substitute,
+and the runner refuses to proceed without one.
 
 Historical mode splices the saved PTC sections into the rendered prompt and uses
 one engine for both variants. `--require-ptc --cases computed_edits` reproduces
@@ -118,9 +124,9 @@ cohorts separate when analyzing results.
 
 See [the YAML parser report](yaml-results-2026-09-15.md) for artifact
 correctness, workflow completion, actual PTC use, and budget limits. The
-runners write per-trial `results.json` ledgers (hashes, metrics, artifact
-paths) next to their logs; those are regenerated on each run and are not
-committed.
+runners write `manifest.json` (model, limits, prompt and binary hashes) and
+`results.json` (per-trial metrics and artifact paths) next to their logs;
+both are regenerated on each run and are not committed.
 
 The reader selects the named parent session when review children exist. Token
 usage from the parent event log excludes child usage when the workflow journal

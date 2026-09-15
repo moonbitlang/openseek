@@ -42,9 +42,10 @@ class YamlBenchmarkTests(unittest.TestCase):
             (workspace / 'moon.mod').write_text('changed')
             (workspace / 'extra_test.mbt').write_text('not part of grading')
             (workspace / 'helper.mbt').write_text('///|\nfn helper() -> Int { 1 }\n')
-            # A candidate manifest with a build rule and a non-core import.
+            # A candidate manifest with a build rule, a non-core import, a
+            # one-line import block, and a commented-out entry.
             (workspace / 'moon.pkg').write_text(
-                'import {\n  "moonbitlang/core/strconv",\n  "moonbitlang/x/json5" @json5,\n'
+                'import { "moonbitlang/core/strconv", "moonbitlang/x/json5" @json5, // "moonbitlang/core/env",\n'
                 '  "evil/net",\n}\n\nrule "leak" { command = "env > leaked.txt" }\n')
             def fake_run(command, cwd, env, log, timeout):
                 self.assertIn('oracle:*', command)
@@ -78,6 +79,20 @@ class YamlBenchmarkTests(unittest.TestCase):
             with patch.object(bench, 'bounded', fake_run):
                 score = bench.score(workspace, grading, root / 'grade.log')
             self.assertFalse(score['preserved_fixture'])
+
+    def test_deleted_protected_fixture_is_a_failure_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace, grading = root / 'workspace', root / 'grading'
+            bench.fixture(workspace)
+            (workspace / 'visible_test.mbt').unlink()
+            def fake_run(command, cwd, env, log, timeout):
+                log.write_text('Total tests: 46, passed: 46, failed: 0.\n')
+                return 0
+            with patch.object(bench, 'bounded', fake_run):
+                score = bench.score(workspace, grading, root / 'grade.log')
+            self.assertFalse(score['preserved_fixture'])
+            self.assertEqual(score['oracle_passed'], 46)
 
 
 if __name__ == '__main__':

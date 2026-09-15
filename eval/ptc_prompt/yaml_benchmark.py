@@ -144,7 +144,8 @@ def bounded(command, cwd, env, log, timeout):
             return None
 
 
-CORE_IMPORT = re.compile(r'^"(moonbitlang/(?:core|x)/[A-Za-z0-9_/]+)"(?:\s+@([a-z_][a-z0-9_]*))?$')
+IMPORT_BLOCK = re.compile(r'\bimport\s*\{([^}]*)\}', re.S)
+CORE_IMPORT = re.compile(r'"(moonbitlang/(?:core|x)/[A-Za-z0-9_/]+)"(?:\s+@([a-z_][a-z0-9_]*))?')
 SECRET_MARKERS = ('DEEPSEEK', 'OPENAI', 'ANTHROPIC', 'KEY', 'TOKEN', 'SECRET', 'PASSWORD')
 
 
@@ -153,17 +154,28 @@ def trusted_manifest(candidate):
 
     A package manifest can carry build rules that run shell commands before
     `moon test`; none of that reaches the grading project. Only quoted
-    moonbitlang/core or moonbitlang/x imports (optionally aliased) survive.
+    moonbitlang/core or moonbitlang/x imports (optionally aliased) inside
+    `import { ... }` blocks survive, however they are laid out; comments are
+    stripped first so a commented-out entry is not resurrected.
     """
+    uncommented = '\n'.join(line.split('//', 1)[0] for line in candidate.splitlines())
     imports = []
-    for line in candidate.splitlines():
-        match = CORE_IMPORT.match(line.strip().rstrip(','))
-        if match:
-            path, alias = match.groups()
-            imports.append(f'"{path}"' + (f' @{alias}' if alias else ''))
+    for block in IMPORT_BLOCK.findall(uncommented):
+        for path, alias in CORE_IMPORT.findall(block):
+            entry = f'"{path}"' + (f' @{alias}' if alias else '')
+            if entry not in imports:
+                imports.append(entry)
     if not imports:
         return ''
     return 'import {\n' + ''.join(f'  {entry},\n' for entry in imports) + '}\n'
+
+
+def preserved(path, expected):
+    """Byte-exact fixture check; a deleted protected file is a failure, not a crash."""
+    try:
+        return path.read_bytes() == expected.encode('utf-8')
+    except FileNotFoundError:
+        return False
 
 
 def grading_env():
@@ -193,8 +205,8 @@ def score(workspace, grading, log):
             'invalid_passed': len(INVALID) - sum(n in {c[0] for c in INVALID} for n in failures) if matches else 0,
             'compile_or_harness_error': not bool(matches),
             # Byte-exact: a candidate that only rewrote line endings changed protected bytes.
-            'preserved_fixture': (workspace / 'moon.mod').read_bytes() == MODULE.encode('utf-8') and
-                (workspace / 'visible_test.mbt').read_bytes() == tests(VISIBLE, prefix='visible').encode('utf-8')}
+            'preserved_fixture': preserved(workspace / 'moon.mod', MODULE) and
+                preserved(workspace / 'visible_test.mbt', tests(VISIBLE, prefix='visible'))}
 
 
 def trial(engine, out, variant, repeat, timeout, max_steps=128):

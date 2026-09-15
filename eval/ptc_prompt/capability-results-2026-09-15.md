@@ -5,8 +5,9 @@
 SDK-only baseline `70b2af753` versus the session-owned PTC host. Both received
 the identical updated system prompt, `deepseek-v4-flash`, free tool choice,
 24 steps, and 600 seconds. Three repetitions of each case per variant;
-concurrency three. Binary and prompt hashes are in the run's `results.json`
-ledger, which the runner regenerates and which is not committed.
+concurrency three. Binary and prompt hashes are in the run's `manifest.json`
+and per-trial metrics in its `results.json`; the runner regenerates both and
+neither is committed.
 
 The search scorer accepts either the baseline's Markdown source bullets or
 the candidate's structured sources. This normalization fixes a candidate-only
