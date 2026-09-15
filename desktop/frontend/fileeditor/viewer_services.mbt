@@ -37,6 +37,7 @@ fn DesktopViewerServices::DesktopViewerServices(
     agent_feedback=feedback.agent_feedback_handle(),
     location_opener~,
     text_model_resolver~,
+    resource_path_label=navigation_resource_path_label,
     quick_diff=quick_diff.quick_diff_handle(),
   )
   {

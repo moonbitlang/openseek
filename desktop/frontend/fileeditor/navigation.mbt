@@ -384,6 +384,23 @@ test "navigation root follows resource and workspace-relative paths" {
     navigation_root_from_file(outside, Relative("lib/main.mbt")) is None,
   )
   assert_true(context.relative_path(outside) is None)
+  for
+    uri in [
+      "openseek://local/ws/project-other/main.mbt", "openseek://device/ws/project/src/main.mbt",
+      "file:///ws/project/src/main.mbt", "openseek://local/ws/project",
+    ] {
+    assert_true(context.relative_path(@common.Uri::parse(uri)) is None)
+  }
+  let windows : NavigationContext = {
+    owner: context.owner,
+    root: @common.Uri::parse("openseek://local/C:/work/project/"),
+  }
+  assert_eq(
+    windows.relative_path(
+      @common.Uri::parse("openseek://local/C:/work/project/src/main.mbt"),
+    ),
+    Some(Relative("src/main.mbt")),
+  )
 }
 
 ///|
@@ -438,4 +455,11 @@ test "moon ide locations stay one based and channel routed" {
     resource.path == "/ws/lib.mbt" &&
     locations[0].range == @common.Range(2, 3, 2, 9),
   )
+}
+
+///|
+/// Label against the live workspace, retaining resource identity for navigation.
+fn navigation_resource_path_label(uri : @common.Uri) -> String? {
+  guard viewer_state.navigation is Some(context) else { return None }
+  context.relative_path(uri).map(path => path.0)
 }

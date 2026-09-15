@@ -41,6 +41,7 @@ struct ReferencesPeekWidget {
 pub fn ReferencesPeekWidget::ReferencesPeekWidget(
   mode : @references.ReferencesPeekMode,
   callbacks : ReferencesPeekWidgetCallbacks,
+  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
 ) -> ReferencesPeekWidget {
   let document = @rdom.document()
   let root = document.create_element("section")
@@ -90,9 +91,12 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
   let results_scrollbar_input = @scrollbar.NativeScrollableElementInput(
     results_scrollable,
   )
-  let tree = ReferenceResultsTree(tree_node, callbacks, () => {
-    results_scrollbar_input.refresh()
-  })
+  let tree = ReferenceResultsTree(
+    tree_node,
+    callbacks,
+    () => results_scrollbar_input.refresh(),
+    resource_path_label~,
+  )
   let status = document.create_element("div")
   status.set_attribute("class", "moonbit-viewer-references-peek-status")
   status.set_attribute("role", "status")

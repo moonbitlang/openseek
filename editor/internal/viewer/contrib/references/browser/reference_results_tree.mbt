@@ -14,6 +14,7 @@ priv enum ReferenceResultsTreeRow {
 priv struct ReferenceResultsTree {
   node : @rdom.Element
   callbacks : ReferencesPeekWidgetCallbacks
+  resource_path_label : (@base_common.Uri) -> String?
   layout_changed : () -> Unit
   listeners : Array[@base_common.Disposable]
   mut model : @references.ReferencesModel?
@@ -33,6 +34,7 @@ fn ReferenceResultsTree::ReferenceResultsTree(
   node : @rdom.Element,
   callbacks : ReferencesPeekWidgetCallbacks,
   layout_changed : () -> Unit,
+  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
 ) -> ReferenceResultsTree {
   node.set_attribute("class", "moonbit-viewer-reference-results-tree")
   node.set_attribute("role", "tree")
@@ -41,6 +43,7 @@ fn ReferenceResultsTree::ReferenceResultsTree(
   let tree : ReferenceResultsTree = {
     node,
     callbacks,
+    resource_path_label,
     layout_changed,
     listeners: [],
     model: None,
@@ -129,7 +132,13 @@ fn ReferenceResultsTree::set_results(
     self.expanded_groups[0] = true
   }
   self.render()
-  self.node.set_attribute("aria-label", reference_results_summary(model))
+  self.node.set_attribute(
+    "aria-label",
+    reference_results_summary(
+      model,
+      resource_path_label=self.resource_path_label,
+    ),
+  )
   match selected_item {
     Some(item) => self.request_group(item.group_index)
     None => ()
@@ -279,12 +288,13 @@ fn ReferenceResultsTree::render_group(
   row.set_attribute("data-reference-row-kind", "group")
   row.set_attribute("data-reference-group-index", group.group_index.to_string())
   let basename = @base_common.basename_or_authority(group.uri)
-  let parent = @base_common.dirname(group.uri.path)
+  let relative_label = (self.resource_path_label)(group.uri)
+  let parent = @base_common.dirname(relative_label.unwrap_or(group.uri.path))
   row.set_attribute(
     "aria-label",
     reference_group_accessible_label(group, basename, parent),
   )
-  row.set_attribute("title", group.uri_string)
+  row.set_attribute("title", relative_label.unwrap_or(group.uri_string))
   let twistie = document.create_element("span")
   twistie.set_attribute("class", "moonbit-viewer-reference-results-twistie")
   twistie.set_attribute("aria-hidden", "true")
@@ -1014,18 +1024,26 @@ fn reference_group_accessible_label(
 }
 
 ///|
-fn reference_results_summary(model : @references.ReferencesModel) -> String {
+fn reference_results_summary(
+  model : @references.ReferencesModel,
+  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
+) -> String {
   let reference_count = model.references.length()
   let group_count = model.groups.length()
   if reference_count == 0 {
     "No results found"
   } else if reference_count == 1 {
-    "Found 1 result in " + model.references[0].uri_string
+    "Found 1 result in " +
+    resource_path_label(model.references[0].uri).unwrap_or(
+      model.references[0].uri_string,
+    )
   } else if group_count == 1 {
     "Found " +
     reference_count.to_string() +
     " results in " +
-    model.groups[0].uri_string
+    resource_path_label(model.groups[0].uri).unwrap_or(
+      model.groups[0].uri_string,
+    )
   } else {
     "Found " +
     reference_count.to_string() +

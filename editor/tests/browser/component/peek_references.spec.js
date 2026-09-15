@@ -95,11 +95,13 @@ test('public locations render an accessible lazy tree, snippets, and decorated p
     await expect(remoteGroup).toHaveAttribute('aria-expanded', 'false');
     await expect(remoteGroup).toHaveAttribute(
       'aria-label',
-      '2 results in remote.mbt, full path /workspace/lib',
+      '2 results in remote.mbt, full path lib',
     );
     await expect(sourceGroup).toHaveAttribute('aria-expanded', 'true');
     await expect(sourceGroup).toContainText('source.mbt');
-    await expect(sourceGroup).toContainText('/workspace/src');
+    await expect(sourceGroup.locator('.moonbit-viewer-reference-results-file-parent')).toHaveText('src');
+    await expect(sourceGroup).toHaveAttribute('title', 'src/source.mbt');
+    await expect(remoteGroup).toHaveAttribute('title', 'lib/remote.mbt');
     await expect(sourceGroup).toContainText('3');
     await expect(otherGroup).toHaveAttribute('aria-expanded', 'false');
 

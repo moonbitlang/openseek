@@ -7,12 +7,16 @@ struct ViewerServices {
 }
 
 ///|
+/// Creates shared viewer services. `resource_path_label` returns a host-relative
+/// file path for Peek labels, or `None` to retain the default resource label.
+/// It is evaluated when results render so hosts can consult the live workspace.
 pub fn ViewerServices::ViewerServices(
   languages? : @languages.LanguageHandle,
   markers? : @markers.MarkerDecorationsSource,
   agent_feedback? : @agent_feedback_api.AgentFeedbackHandle,
   location_opener? : @navigation_api.LocationOpenerHandle,
   text_model_resolver? : @navigation_api.TextModelResolverHandle,
+  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
   quick_diff? : @quick_diff_api.QuickDiffHandle,
   log_service? : @log.LogHandle,
 ) -> ViewerServices {
@@ -23,6 +27,7 @@ pub fn ViewerServices::ViewerServices(
       agent_feedback?,
       location_opener?,
       text_model_resolver?,
+      resource_path_label~,
       quick_diff?,
       log_service?,
     ),

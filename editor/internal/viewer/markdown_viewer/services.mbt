@@ -6,6 +6,7 @@ struct MarkdownViewerServices {
   marker_decorations : @markers.MarkerDecorationsHandle
   location_opener : @navigation_api.LocationOpenerHandle?
   text_model_resolver : @navigation_api.TextModelResolverHandle?
+  resource_path_label : (@base_common.Uri) -> String?
   preview_factory : @references_browser.ReferencesPeekPreviewFactory?
   launch_async_task : (async () -> Unit noraise) -> Unit
   log_service : @log.LogHandle
@@ -22,6 +23,7 @@ pub fn MarkdownViewerServices::MarkdownViewerServices(
   markers? : @markers.MarkerDecorationsSource,
   location_opener? : @navigation_api.LocationOpenerHandle,
   text_model_resolver? : @navigation_api.TextModelResolverHandle,
+  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
   preview_factory? : @references_browser.ReferencesPeekPreviewFactory,
   launch_async_task? : (async () -> Unit noraise) -> Unit = task => {
     @js.async_run(task)
@@ -56,6 +58,7 @@ pub fn MarkdownViewerServices::MarkdownViewerServices(
     marker_decorations,
     location_opener,
     text_model_resolver,
+    resource_path_label,
     preview_factory,
     launch_async_task,
     log_service,

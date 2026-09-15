@@ -123,6 +123,7 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
         },
         preview_factory,
         resolver?=viewer.services.text_model_resolver(),
+        resource_path_label=viewer.services.resource_path_label,
         task => viewer.services.launch_async_task(task),
       )
     })

@@ -217,3 +217,12 @@ fn begin_preview_resource_shutdown(state : PreviewResourceState) -> Unit {
   }
   retire_preview_resource_if_unused(state)
 }
+
+///|
+fn workbench_resource_path_label(uri : @base_common.Uri) -> String? {
+  guard is_workbench_resource(uri) else { return None }
+  guard uri.path.strip_prefix("/") is Some(path) && !path.is_empty() else {
+    return None
+  }
+  Some(path.to_owned())
+}

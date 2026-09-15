@@ -135,6 +135,7 @@ struct ReferencesController {
   host : ReferencesPeekHost
   preview_factory : ReferencesPeekPreviewFactory
   resolver : @navigation_api.TextModelResolverHandle?
+  resource_path_label : (@base_common.Uri) -> String?
   mut launch_async_task : (async () -> Unit noraise) -> Unit
   mut generation : Int
   mut preview_generation : Int
@@ -159,12 +160,14 @@ pub fn ReferencesController::ReferencesController(
   host : ReferencesPeekHost,
   preview_factory : ReferencesPeekPreviewFactory,
   resolver? : @navigation_api.TextModelResolverHandle,
+  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
   launch_async_task : (async () -> Unit noraise) -> Unit,
 ) -> ReferencesController {
   {
     host,
     preview_factory,
     resolver,
+    resource_path_label,
     launch_async_task,
     generation: 0,
     preview_generation: 0,
@@ -263,43 +266,47 @@ pub fn ReferencesController::toggle_locations(
   }
   self.anchor = Some(anchor)
   self.session_key = Some(key)
-  let widget = ReferencesPeekWidget(mode, {
-    on_close: () => {
-      if self.session_is_current(generation) {
-        self.close(restore_focus=true)
-      }
+  let widget = ReferencesPeekWidget(
+    mode,
+    {
+      on_close: () => {
+        if self.session_is_current(generation) {
+          self.close(restore_focus=true)
+        }
+      },
+      on_select: item => {
+        if self.session_is_current(generation) {
+          self.select_item(item)
+        }
+      },
+      on_confirm: item => {
+        if self.session_is_current(generation) {
+          self.confirm_item(item, Current)
+        }
+      },
+      on_open_side: item => {
+        if self.session_is_current(generation) {
+          self.confirm_item(item, Side)
+        }
+      },
+      on_next: () => {
+        if self.session_is_current(generation) {
+          self.move_selection(1)
+        }
+      },
+      on_previous: () => {
+        if self.session_is_current(generation) {
+          self.move_selection(-1)
+        }
+      },
+      on_expand_group: group => {
+        if self.session_is_current(generation) {
+          self.load_group(group)
+        }
+      },
     },
-    on_select: item => {
-      if self.session_is_current(generation) {
-        self.select_item(item)
-      }
-    },
-    on_confirm: item => {
-      if self.session_is_current(generation) {
-        self.confirm_item(item, Current)
-      }
-    },
-    on_open_side: item => {
-      if self.session_is_current(generation) {
-        self.confirm_item(item, Side)
-      }
-    },
-    on_next: () => {
-      if self.session_is_current(generation) {
-        self.move_selection(1)
-      }
-    },
-    on_previous: () => {
-      if self.session_is_current(generation) {
-        self.move_selection(-1)
-      }
-    },
-    on_expand_group: group => {
-      if self.session_is_current(generation) {
-        self.load_group(group)
-      }
-    },
-  })
+    resource_path_label=self.resource_path_label,
+  )
   self.widget = Some(widget)
   let mount = (self.host.mount)(widget.get_dom_node(), anchor)
   guard mount is Some(mount) else {

@@ -269,6 +269,7 @@ fn CodeEditorWidget::create_references_controller(
     },
     code_editor_references_preview_factory(self.services, self.get_options()),
     resolver?=self.services.text_model_resolver,
+    resource_path_label=self.services.resource_path_label,
     launch_async_task,
   )
 }

@@ -13,6 +13,7 @@ struct CodeEditorServices {
   agent_feedback : @agent_feedback_api.AgentFeedbackHandle
   location_opener : @navigation_api.LocationOpenerHandle?
   text_model_resolver : @navigation_api.TextModelResolverHandle?
+  resource_path_label : (@base_common.Uri) -> String?
   quick_diff : @quick_diff_api.QuickDiffHandle
   log_service : @log.LogHandle
   /// Concrete defaults owned by this exact bundle. Caller-supplied handles
@@ -35,6 +36,7 @@ pub fn CodeEditorServices::CodeEditorServices(
   agent_feedback? : @agent_feedback_api.AgentFeedbackHandle,
   location_opener? : @navigation_api.LocationOpenerHandle,
   text_model_resolver? : @navigation_api.TextModelResolverHandle,
+  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
   quick_diff? : @quick_diff_api.QuickDiffHandle,
   log_service? : @log.LogHandle,
 ) -> CodeEditorServices {
@@ -80,6 +82,7 @@ pub fn CodeEditorServices::CodeEditorServices(
     agent_feedback,
     location_opener,
     text_model_resolver,
+    resource_path_label,
     quick_diff,
     log_service,
     owned_marker_decorations,

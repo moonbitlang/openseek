@@ -89,6 +89,11 @@ The host owns files, transport, persistence, reload policy, shell chrome, and
 error presentation. The viewer owns readonly rendering, selection, scrolling,
 widgets, language-feature presentation, and editor events.
 
+`ViewerServices(resource_path_label=...)` lets each host supply workspace-relative
+paths for Code and Markdown Peek labels. It returns `None` for resources without
+a host label; resource identity, model resolution, and navigation still use the
+original URI. Workspace membership and the current root remain host policy.
+
 ## Package Tiers
 
 Dependencies point strictly downward through the tiers; no lower tier imports

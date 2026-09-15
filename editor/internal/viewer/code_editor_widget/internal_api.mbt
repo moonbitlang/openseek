@@ -54,3 +54,10 @@ pub fn CodeEditorServices::log_service(
 pub fn CodeEditorWidget::is_disposed(self : CodeEditorWidget) -> Bool {
   self.disposed
 }
+
+///|
+pub fn CodeEditorServices::resource_path_label(
+  self : CodeEditorServices,
+) -> (@base_common.Uri) -> String? {
+  self.resource_path_label
+}

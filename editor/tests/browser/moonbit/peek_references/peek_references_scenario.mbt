@@ -180,6 +180,14 @@ pub fn run_peek_references_browser_test() -> Unit {
   let services = @viewer.ViewerServices(
     location_opener=opener,
     text_model_resolver=resolver,
+    resource_path_label=uri => {
+      let root = try! @base_common.Uri::parse("inmemory://references/workspace")
+      if @base_common.ext_uri.is_equal_or_parent(uri, root) {
+        @base_common.ext_uri.relative_path(root, uri)
+      } else {
+        None
+      }
+    },
   )
   let options = @viewer.ViewerOptions(
     soft_wrap=false,

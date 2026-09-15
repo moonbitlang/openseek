@@ -289,7 +289,7 @@ pub fn ViewerOptions::with_tab_size(Self, Int) -> Self
 pub fn ViewerOptions::with_theme(Self, String) -> Self
 
 type ViewerServices
-pub fn ViewerServices::ViewerServices(languages? : @languages.LanguageHandle, markers? : @markers.MarkerDecorationsSource, agent_feedback? : @agent_feedback_api.AgentFeedbackHandle, location_opener? : @navigation_api.LocationOpenerHandle, text_model_resolver? : @navigation_api.TextModelResolverHandle, quick_diff? : @quick_diff_api.QuickDiffHandle, log_service? : @log.LogHandle) -> Self
+pub fn ViewerServices::ViewerServices(languages? : @languages.LanguageHandle, markers? : @markers.MarkerDecorationsSource, agent_feedback? : @agent_feedback_api.AgentFeedbackHandle, location_opener? : @navigation_api.LocationOpenerHandle, text_model_resolver? : @navigation_api.TextModelResolverHandle, resource_path_label? : (@common.Uri) -> String?, quick_diff? : @quick_diff_api.QuickDiffHandle, log_service? : @log.LogHandle) -> Self
 pub fn ViewerServices::dispose(Self) -> Unit
 
 type ViewerViewState derive(@debug.Debug)

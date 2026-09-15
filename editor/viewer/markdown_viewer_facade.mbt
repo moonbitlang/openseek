@@ -105,6 +105,7 @@ fn ViewerServices::markdown_services(
     markers=Decorations(self.marker_decorations()),
     location_opener?=self.location_opener(),
     text_model_resolver?=self.text_model_resolver(),
+    resource_path_label=self.inner.resource_path_label(),
     preview_factory=@code_widget.code_editor_references_preview_factory(
       self.code_services(),
       CodeEditorOptions(theme=options.theme),

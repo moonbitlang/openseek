@@ -165,6 +165,7 @@ fn workbench_services() -> WorkbenchServices {
         agent_feedback=agent_feedback_handle,
         location_opener~,
         text_model_resolver~,
+        resource_path_label=workbench_resource_path_label,
         log_service=log_service.log_handle(),
       )
       let services : WorkbenchServices = {

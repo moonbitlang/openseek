@@ -53,3 +53,9 @@ Exact callable types are in `pkg.generated.mbti`. Focused coverage is:
 ```sh
 moon test internal/viewer/contrib/references/browser --target js
 ```
+
+Hosts may supply `ViewerServices(resource_path_label=...)` to display a
+workspace-relative resource path in Peek file rows, tooltips, and accessible
+summaries. Returning `None` preserves the default label for resources outside
+the workspace. Both Code and Markdown Peek use this callback; resource URIs,
+group identity, resolution, and opening requests retain their original values.
