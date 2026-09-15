@@ -693,30 +693,34 @@ async fn AgentLoop::execute_tool_call(
   if tool_call.name == "goal" && self.goal_cadence.tool_registered {
     return self.handle_goal_tool_call(session, native_call, tool_call)
   }
+  // Nested-call metadata must survive a cancellation anywhere between the
+  // execution and the durable append of its result: a completed mutation with
+  // no recorded trace is the one outcome the transcript may never show. On an
+  // error exit the recovery below runs first and persists whatever the slot
+  // holds; the slot is then cleared on every exit, which on success happens
+  // only after the result (which carries the trace itself) has been recorded.
+  defer ignore(self.tools.take_program_trace())
+  errdefer (if self.tools.take_program_trace() is Some(data) {
+    @async.protect_from_cancel(() => {
+      self.record_tool_result(
+        session,
+        tool_call_id=native_call.id,
+        tool_name=tool_call.name,
+        content="programmatic tool call interrupted or failed",
+        is_error=true,
+        data~,
+      )
+      |> ignore
+    }) catch {
+      _ => ()
+    }
+  })
   let result = match prefetched {
     // Already executed concurrently with its batch siblings; recording and
     // accounting proceed exactly as for a fresh execution.
     Some(action) => action
-    None => {
-      errdefer (if self.tools.take_program_trace() is Some(data) {
-        @async.protect_from_cancel(() => {
-          self.record_tool_result(
-            session,
-            tool_call_id=native_call.id,
-            tool_name=tool_call.name,
-            content="programmatic tool call interrupted or failed",
-            is_error=true,
-            data~,
-          )
-          |> ignore
-        }) catch {
-          _ => ()
-        }
-      })
-      @agent_tool.execute_tool_call(tool_call, self.tools)
-    }
+    None => @agent_tool.execute_tool_call(tool_call, self.tools)
   }
-  ignore(self.tools.take_program_trace())
   match result {
     Control(WaitJobs(ids)) => {
       let (output, is_error) = if response.tool_calls.length() != 1 {

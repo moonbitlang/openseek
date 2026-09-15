@@ -431,7 +431,7 @@ engine directly, without a workflow.
 
 ## Programmatic tool calls
 
-Hosts that advertise `ptc` can run scripts with `ptc: true` and a bundled
-`tools.edit`, `tools.multi_edit`, `tools.web_search`, and `tools.call` client.
-See [the PTC guide](../ptc/README.mbt.md) for examples, structured results, and
-the foreground lifetime contract.
+Hosts that advertise `ptc` run wasm scripts with it on by default; a script
+imports the published SDK explicitly and calls host tools through
+`@tools.call(name, arguments)`. See [the PTC guide](../ptc/README.mbt.md) for
+examples, structured results, and the foreground lifetime contract.

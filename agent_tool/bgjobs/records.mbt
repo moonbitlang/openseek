@@ -247,4 +247,12 @@ pub async fn BgJobRuntime::metadata_changed(
   id : String,
 ) -> Unit {
   self.publish(id, Updated)
+  // A live job's metadata is only as durable as the record that carries it:
+  // a publication that could not be persisted must reach the caller, which
+  // retains it as a trace error and fails the job at its end.
+  if self.jobs.get(id) is Some(job) &&
+    job.phase != Published &&
+    job.persistence_error is Some(error) {
+    fail("job metadata not persisted: \{error}")
+  }
 }

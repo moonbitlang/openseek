@@ -134,6 +134,50 @@ async test "terminal jobs freeze metadata and release the live supplier" {
 }
 
 ///|
+/// A live job's metadata publication that cannot be persisted must reach the
+/// caller: the PTC program retains it as a trace error and fails the job.
+#cfg(not(platform="windows"))
+async test "metadata_changed reports a publication that could not be persisted" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let dir = @fs.tmpdir(prefix="bgjobs-metadata-")
+      defer @async.protect_from_cancel(() => {
+        @fs.rmdir(dir, recursive=true) catch {
+          _ => ()
+        }
+      })
+      let jobs = BgJobRuntime(
+        AgentTaskScope(group),
+        spill_dir=dir,
+        persistent_logs=true,
+      )
+      let (input, release) = @process.write_to_process()
+      defer release.close()
+      let id = jobs.start(
+        program="/bin/cat",
+        args=[],
+        command="metadata",
+        stdin=input,
+      )
+      jobs.metadata_changed(id)
+      // Put a directory where the record file goes: the atomic rename fails.
+      let record = "\{dir}/\{@protocol.job_storage_name(id)}.json"
+      @fs.remove(record)
+      @fs.mkdir(record)
+      let reported = try {
+        jobs.metadata_changed(id)
+        false
+      } catch {
+        _ => true
+      }
+      assert_true(reported)
+      release.close()
+      jobs.wait_any([id])
+    })
+  })
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "stalled persistence reports failure and releases publication for other jobs" {
   @async.with_timeout(1000, () => {
