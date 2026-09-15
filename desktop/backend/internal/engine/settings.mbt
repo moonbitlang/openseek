@@ -351,16 +351,32 @@ fn resolved_endpoint(
 }
 
 ///|
+/// Safe outcomes for the short-lived Pattern Repair configuration path.
+/// `Configuration` is emitted only by `resolved_endpoint`, whose messages are
+/// user-facing setup instructions; storage and system failures stay opaque.
+pub(all) enum PatternRepairEnvironment {
+  Ready(Map[String, String])
+  Configuration(String)
+  Unavailable
+} derive(Debug)
+
+///|
+pub extend PatternRepairEnvironment with Debug::{to_repr}
+
+///|
 /// Resolve the credential and endpoint environment for a short-lived host
-/// operation. Credentials stay in the child environment and never enter argv.
+/// operation. Credentials stay in the child environment and never enter argv;
+/// callers receive safe configuration guidance without receiving I/O details.
 pub async fn pattern_repair_environment(
   manager : EngineManager,
   model~ : String?,
-) -> Map[String, String] raise EngineError {
+) -> PatternRepairEnvironment {
   let (settings, _) = manager.settings_snapshot() catch {
-    error => raise EngineError("could not read engine settings: \{error}")
+    _ => return Unavailable
   }
-  let endpoint = resolved_endpoint(settings)
+  let endpoint = resolved_endpoint(settings) catch {
+    EngineError(message) => return Configuration(message)
+  }
   let model = model.unwrap_or(settings.provider.default_model())
   let key_env = key_env_for(settings.provider, model)
   let env = @sys.get_env_vars()
@@ -371,7 +387,7 @@ pub async fn pattern_repair_environment(
   }
   env["OPENSEEK_MODEL"] = model
   env["OPENSEEK_THINKING"] = "max"
-  env
+  Ready(env)
 }
 
 ///|
@@ -831,6 +847,9 @@ async test "pattern repair environment follows the selected provider model" {
       manager,
       model=Some("deepseek-flash"),
     )
+    guard deepseek is Ready(deepseek) else {
+      fail("expected DeepSeek pattern-repair environment")
+    }
     assert_eq(deepseek["DEEPSEEK"], "deepseek-stored")
     assert_eq(deepseek["OPENSEEK_MODEL"], "deepseek-flash")
 
@@ -842,8 +861,29 @@ async test "pattern repair environment follows the selected provider model" {
       custom_api_key: None,
     })
     let glm = pattern_repair_environment(manager, model=Some("glm-5.3"))
+    guard glm is Ready(glm) else {
+      fail("expected GLM pattern-repair environment")
+    }
     assert_eq(glm["GLM"], "glm-stored")
     assert_eq(glm["OPENSEEK_MODEL"], "glm-5.3")
+  })
+}
+
+///|
+async test "pattern repair reports a safe missing-endpoint instruction" {
+  with_settings_dir(async fn(_dir, manager) {
+    let _ = update_settings(manager, {
+      provider: Some("custom"),
+      custom_api_url: Some(""),
+      deepseek_api_key: None,
+      glm_api_key: None,
+      custom_api_key: None,
+    })
+    let result = pattern_repair_environment(manager, model=None)
+    assert_true(
+      result
+      is Configuration("custom endpoint URL is required; set it in Settings"),
+    )
   })
 }
 

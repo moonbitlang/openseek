@@ -235,10 +235,18 @@ pub fn endpoints(
       cancel_search_semantic_op(connection.semantic_search, payload)
     }),
     @endpoint.Endpoint::remote(@commands.pattern_repair, async fn(payload) {
-      let env = @engine.pattern_repair_environment(manager, model=payload.model) catch {
-        _ => raise HostError("Pattern Repair settings are unavailable")
+      match @engine.pattern_repair_environment(manager, model=payload.model) {
+        Ready(env) => pattern_repair_op(state, env, payload)
+        Configuration(message) =>
+          pattern_repair_failure(payload, Unavailable, payload.pattern, message)
+        Unavailable =>
+          pattern_repair_failure(
+            payload,
+            Unavailable,
+            payload.pattern,
+            "Pattern Repair settings are unavailable.",
+          )
       }
-      pattern_repair_op(state, env, payload)
     }),
     @endpoint.Endpoint::remote(@commands.fs_clear_file_search_cache, async fn(
       payload,

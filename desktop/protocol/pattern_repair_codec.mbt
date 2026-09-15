@@ -15,6 +15,28 @@ fn required_generation(
 }
 
 ///|
+fn pattern_repair_status_from_wire(
+  value : String,
+  path : @json.JsonPath,
+) -> PatternRepairStatus raise @json.JsonDecodeError {
+  match value {
+    "passed" => Passed
+    "unavailable" => Unavailable
+    "failed" => Failed
+    _ => raise JsonDecodeError((path, "expected pattern-repair status"))
+  }
+}
+
+///|
+fn PatternRepairStatus::wire(self : PatternRepairStatus) -> String {
+  match self {
+    Passed => "passed"
+    Unavailable => "unavailable"
+    Failed => "failed"
+  }
+}
+
+///|
 pub impl FromJson for PatternRepairPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "pattern-repair payload")
   let generation = required_generation(object, path)
@@ -56,7 +78,10 @@ pub impl FromJson for PatternRepairReply with fn from_json(json, path) {
     generation,
     candidate_pattern: object.required_string("candidate_pattern"),
     valid: object.required_bool("valid"),
-    validation_status: object.required_string("validation_status"),
+    validation_status: pattern_repair_status_from_wire(
+      object.required_string("validation_status"),
+      path.add_key("validation_status"),
+    ),
     message: object.required_string("message"),
   }
 }
@@ -71,7 +96,7 @@ pub impl ToJson for PatternRepairReply with fn to_json(self) {
     "generation": self.generation,
     "candidate_pattern": self.candidate_pattern,
     "valid": self.valid,
-    "validation_status": self.validation_status,
+    "validation_status": self.validation_status.wire(),
     "message": self.message,
   }
 }

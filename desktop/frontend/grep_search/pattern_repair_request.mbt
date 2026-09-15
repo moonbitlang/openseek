@@ -48,7 +48,6 @@ fn pattern_repair_request_loader(
                 PatternRepairFailed(
                   root=request.root,
                   generation=request.generation,
-                  message=@interop.bridge_error_text(error),
                 ),
               ),
             )
@@ -68,13 +67,23 @@ fn pattern_repair_request_loader(
                 ),
               ),
             )
-          reply =>
+          reply if reply.validation_status is @protocol.PatternRepairStatus::Unavailable =>
             scheduler.add(
               emit(
-                PatternRepairFailed(
+                PatternRepairUnavailable(
                   root=request.root,
                   generation=request.generation,
                   message=reply.message,
+                ),
+              ),
+            )
+          reply =>
+            scheduler.add(
+              emit(
+                PatternRepairValidationFailed(
+                  root=request.root,
+                  generation=request.generation,
+                  diagnostic=reply.message,
                 ),
               ),
             )

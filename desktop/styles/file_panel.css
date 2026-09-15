@@ -948,10 +948,26 @@ html:is(
   flex: 0 0 auto;
 }
 .search-pattern-repair-status.error {
+  flex-wrap: wrap;
   border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
   color: var(--color-danger);
 }
 .search-pattern-repair-status.error svg { color: var(--color-danger); }
+.search-pattern-repair-details {
+  width: 100%;
+  color: var(--color-text-secondary);
+}
+.search-pattern-repair-details summary {
+  margin-top: 4px;
+  cursor: pointer;
+}
+.search-pattern-repair-diagnostic {
+  margin: 5px 0 0;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .pattern-repair-button.is-loading {
   cursor: progress;
   opacity: .72;

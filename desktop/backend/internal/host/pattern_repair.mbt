@@ -88,29 +88,33 @@ async fn request_pattern_repair_candidate(
 }
 
 ///|
+fn pattern_repair_failure(
+  payload : @protocol.PatternRepairPayload,
+  validation_status : @protocol.PatternRepairStatus,
+  candidate_pattern : String,
+  message : String,
+) -> @protocol.PatternRepairReply {
+  {
+    root: payload.root,
+    generation: payload.generation,
+    candidate_pattern,
+    valid: false,
+    validation_status,
+    message,
+  }
+}
+
+///|
 async fn pattern_repair_op(
   state : HostState,
   agent_env : Map[String, String],
   payload : @protocol.PatternRepairPayload,
 ) -> @protocol.PatternRepairReply {
-  let failure = fn(
-    candidate_pattern : String,
-    validation_status : String,
-    message : String,
-  ) -> @protocol.PatternRepairReply {
-    {
-      root: payload.root,
-      generation: payload.generation,
-      candidate_pattern,
-      valid: false,
-      validation_status,
-      message,
-    }
-  }
   guard state.engine != "" else {
-    return failure(
+    return pattern_repair_failure(
+      payload,
+      Unavailable,
       payload.pattern,
-      "unavailable",
       "Pattern Repair Agent is unavailable.",
     )
   }
@@ -123,9 +127,10 @@ async fn pattern_repair_op(
       payload.instruction,
     )
     is Some((candidate, message)) else {
-    return failure(
+    return pattern_repair_failure(
+      payload,
+      Unavailable,
       payload.pattern,
-      "unavailable",
       "Pattern Repair Agent returned no candidate.",
     )
   }
@@ -136,7 +141,7 @@ async fn pattern_repair_op(
         generation: payload.generation,
         candidate_pattern: candidate,
         valid: true,
-        validation_status: "passed",
+        validation_status: Passed,
         message,
       }
     PatternRepairUnavailable =>
@@ -145,10 +150,15 @@ async fn pattern_repair_op(
         generation: payload.generation,
         candidate_pattern: candidate,
         valid: true,
-        validation_status: "unavailable",
+        validation_status: Unavailable,
         message,
       }
     PatternRepairInvalid(code, diagnostic) =>
-      failure(candidate, "failed", "\{code}: \{diagnostic}")
+      pattern_repair_failure(
+        payload,
+        Failed,
+        candidate,
+        "\{code}: \{diagnostic}",
+      )
   }
 }

@@ -225,7 +225,13 @@ fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
   let requested = page.pattern_repair_phase is PatternRepairRequested
   let label = if requested {
     "Repairing pattern"
-  } else if page.pattern_repair_phase is PatternRepairFailed {
+  } else if page.pattern_repair_phase
+    is (
+      PatternRepairInputRequired |
+      PatternRepairUnavailable |
+      PatternRepairValidationFailed |
+      PatternRepairFailed
+    ) {
     "Retry pattern repair"
   } else {
     "Fix Pattern"
@@ -247,18 +253,16 @@ fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-/// Keep repair failures actionable without exposing raw child-process or
-/// validation diagnostics in the compact search panel.
-fn pattern_repair_failure_label(message : String?) -> String {
-  match message {
-    Some("Enter a pattern before repairing it.") =>
-      "Enter a pattern before repairing it."
-    Some(message) if message.contains("settings") ||
-      message.contains("API key") ||
-      message.contains("endpoint") ||
-      message.contains("unavailable") ||
-      message.contains("Pattern Repair Agent") =>
-      "Pattern repair is unavailable. Configure an AI provider in Settings, then retry."
+/// Select recovery copy from the closed repair state, never the error text.
+fn pattern_repair_failure_label(page : Page) -> String {
+  match page.pattern_repair_phase {
+    PatternRepairInputRequired => "Enter a pattern before repairing it."
+    PatternRepairUnavailable =>
+      page.pattern_repair_message.unwrap_or(
+        "Pattern repair is unavailable. Configure an AI provider in Settings, then retry.",
+      )
+    PatternRepairValidationFailed =>
+      "The repaired pattern could not be validated."
     _ => "Pattern repair failed. Update the pattern or retry."
   }
 }
@@ -271,11 +275,30 @@ fn pattern_repair_notice(page : Page) -> @html.Html {
       attrs=@html.Attrs::build().role("status").aria_live("polite"),
       [@icons.icon(@icons.icon_sparkle), @html.span("Repairing pattern…")],
     )
-  } else if page.pattern_repair_phase is PatternRepairFailed {
+  } else if page.pattern_repair_phase
+    is (
+      PatternRepairInputRequired |
+      PatternRepairUnavailable |
+      PatternRepairValidationFailed |
+      PatternRepairFailed
+    ) {
     @html.div(
       class="search-pattern-repair-status error",
-      attrs=@html.Attrs::build().role("alert"),
-      [@html.span(pattern_repair_failure_label(page.pattern_repair_message))],
+      [
+        @html.span(
+          attrs=@html.Attrs::build().role("alert"),
+          pattern_repair_failure_label(page),
+        ),
+        if page.pattern_repair_phase is PatternRepairValidationFailed &&
+          page.pattern_repair_message is Some(diagnostic) {
+          @html.details(class="search-pattern-repair-details", [
+            @html.summary("Show validation details"),
+            @html.pre(class="search-pattern-repair-diagnostic", diagnostic),
+          ])
+        } else {
+          @html.nothing
+        },
+      ],
     )
   } else {
     @html.nothing

@@ -201,7 +201,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           ..self,
           page: {
             ..page,
-            pattern_repair_phase: PatternRepairFailed,
+            pattern_repair_phase: PatternRepairInputRequired,
             pattern_repair_message: Some("Enter a pattern before repairing it."),
           },
         }
@@ -230,7 +230,39 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
       } else {
         self
       }
-    PatternRepairFailed(root~, generation~, message~) =>
+    PatternRepairUnavailable(root~, generation~, message~) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested {
+        {
+          ..self,
+          page: {
+            ..page,
+            pattern_repair_phase: PatternRepairUnavailable,
+            pattern_repair_message: Some(message),
+          },
+        }
+      } else {
+        self
+      }
+    PatternRepairValidationFailed(root~, generation~, diagnostic~) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested {
+        {
+          ..self,
+          page: {
+            ..page,
+            pattern_repair_phase: PatternRepairValidationFailed,
+            pattern_repair_message: Some(diagnostic),
+          },
+        }
+      } else {
+        self
+      }
+    PatternRepairFailed(root~, generation~) =>
       if page.mode is Semantic &&
         input.root_text() == root &&
         page.generation == generation &&
@@ -240,7 +272,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           page: {
             ..page,
             pattern_repair_phase: PatternRepairFailed,
-            pattern_repair_message: Some(message),
+            pattern_repair_message: None,
           },
         }
       } else {
@@ -579,7 +611,7 @@ test "one-click pattern repair applies only the current reply" {
   let empty = State::empty()
     .handle(ModeChanged(Semantic), input)
     .handle(FixPattern, input)
-  assert_true(empty.page.pattern_repair_phase is PatternRepairFailed)
+  assert_true(empty.page.pattern_repair_phase is PatternRepairInputRequired)
   assert_eq(
     empty.page.pattern_repair_message,
     Some("Enter a pattern before repairing it."),

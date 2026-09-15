@@ -30,3 +30,24 @@ test "pattern repair payload carries the optional selected model" {
     "generation": 4,
   })
 }
+
+///|
+test "pattern repair reply decodes its closed status" {
+  let reply : @protocol.PatternRepairReply = @json.from_json({
+    "root": "/work/project",
+    "generation": 3,
+    "candidate_pattern": "inspect($_)",
+    "valid": false,
+    "validation_status": "unavailable",
+    "message": "Pattern Repair settings are unavailable.",
+  })
+  assert_true(reply.validation_status is @protocol.PatternRepairStatus::Unavailable)
+  @debug.assert_eq(reply.to_json(), {
+    "root": "/work/project",
+    "generation": 3,
+    "candidate_pattern": "inspect($_)",
+    "valid": false,
+    "validation_status": "unavailable",
+    "message": "Pattern Repair settings are unavailable.",
+  })
+}

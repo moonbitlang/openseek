@@ -63,7 +63,6 @@ test "Code search repairs one pattern without a composer or preview" {
       PatternRepairFailed(
         root=root.path,
         generation=semantic.page.generation,
-        message="Fake repair failed.",
       ),
       input,
     )
@@ -78,7 +77,7 @@ test "Code search repairs one pattern without a composer or preview" {
   let unavailable = semantic
     .handle(FixPattern, input)
     .handle(
-      PatternRepairFailed(
+      PatternRepairUnavailable(
         root=root.path,
         generation=semantic.page.generation,
         message="Pattern Repair Agent returned no candidate.",
@@ -88,8 +87,26 @@ test "Code search repairs one pattern without a composer or preview" {
   let unavailable_html = render_search(unavailable, input)
   assert_true(
     unavailable_html.contains(
-      "Pattern repair is unavailable. Configure an AI provider in Settings, then retry.",
+      "Pattern Repair Agent returned no candidate.",
     ),
+  )
+  let validation_failed = semantic
+    .handle(FixPattern, input)
+    .handle(
+      PatternRepairValidationFailed(
+        root=root.path,
+        generation=semantic.page.generation,
+        diagnostic="invalid_pattern: expected a complete expression",
+      ),
+      input,
+    )
+  let validation_failed_html = render_search(validation_failed, input)
+  assert_true(
+    validation_failed_html.contains("The repaired pattern could not be validated."),
+  )
+  assert_true(validation_failed_html.contains("Show validation details"))
+  assert_true(
+    validation_failed_html.contains("invalid_pattern: expected a complete expression"),
   )
 }
 
