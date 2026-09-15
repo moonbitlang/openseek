@@ -20,11 +20,15 @@ pub fn program_calls(
   origin? : TraceOrigin = Live,
 ) -> Array[ToolCall] {
   guard data is Some({ "ptc_calls": Array(entries), .. }) else { return [] }
-  let snapshot_note = match data {
-    Some({ "ptc_job_id": String(id), .. }) =>
-      "Running when this snapshot was recorded. See background job \{id} for its current status."
-    _ =>
-      "Running when this snapshot was recorded. See the background job for its current status."
+  // Only a recorded trace with a still-running entry needs the note; name
+  // the owning job when the trace knows it.
+  let snapshot_note = () => {
+    match data {
+      Some({ "ptc_job_id": String(id), .. }) =>
+        "Running when this snapshot was recorded. See background job \{id} for its current status."
+      _ =>
+        "Running when this snapshot was recorded. See the background job for its current status."
+    }
   }
   let calls : Array[ToolCall] = []
   for index, entry in entries[:entries.length().min(64)] {
@@ -39,7 +43,7 @@ pub fn program_calls(
     }
     let outcome = match entry {
       _ if status == "running" && origin is Recorded =>
-        Snapshot(content=snapshot_note)
+        Snapshot(content=snapshot_note())
       _ if status == "running" && origin is Live => Pending(output=None)
       {
         "result": {

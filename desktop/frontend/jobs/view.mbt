@@ -5,28 +5,19 @@ fn job_status(job : @wire.JobRecord) -> (String, String) {
   if job.cleanup_error is Some(_) {
     return ("Failed · cleanup incomplete", "failed")
   }
-  let label = match job.state {
-    Running => "Running"
-    Stopping => "Stopping…"
-    Exited(0) => "Completed"
-    Exited(code) => "Failed · exit \{code}"
-    Stopped("user") => "Stopped"
-    Stopped("session_ended") => "Session ended"
-    Stopped("output_limit") => "Stopped · output limit reached"
-    Stopped("time_limit") => "Stopped · time limit reached"
-    Stopped("capture_failed") => "Stopped · output capture failed"
-    Stopped(reason) => "Stopped · \{reason}"
-    Interrupted => "Interrupted"
+  match job.state {
+    Running => ("Running", "running")
+    Stopping => ("Stopping…", "stopping")
+    Exited(0) => ("Completed", "completed")
+    Exited(code) => ("Failed · exit \{code}", "failed")
+    Stopped("user") => ("Stopped", "stopped")
+    Stopped("session_ended") => ("Session ended", "stopped")
+    Stopped("output_limit") => ("Stopped · output limit reached", "failed")
+    Stopped("time_limit") => ("Stopped · time limit reached", "failed")
+    Stopped("capture_failed") => ("Stopped · output capture failed", "failed")
+    Stopped(reason) => ("Stopped · \{reason}", "stopped")
+    Interrupted => ("Interrupted", "stopped")
   }
-  let class = match job.state {
-    Running => "running"
-    Stopping => "stopping"
-    Exited(0) => "completed"
-    Exited(_) | Stopped("capture_failed" | "output_limit" | "time_limit") =>
-      "failed"
-    _ => "stopped"
-  }
-  (label, class)
 }
 
 ///|
