@@ -355,18 +355,21 @@ fn resolved_endpoint(
 /// operation. Credentials stay in the child environment and never enter argv.
 pub async fn pattern_repair_environment(
   manager : EngineManager,
+  model~ : String?,
 ) -> Map[String, String] raise EngineError {
   let (settings, _) = manager.settings_snapshot() catch {
     error => raise EngineError("could not read engine settings: \{error}")
   }
   let endpoint = resolved_endpoint(settings)
+  let model = model.unwrap_or(settings.provider.default_model())
+  let key_env = key_env_for(settings.provider, model)
   let env = @sys.get_env_vars()
-  env["DEEPSEEK"] = endpoint.api_key
+  env[key_env] = endpoint.api_key
   match endpoint.api_url {
     Some(url) => env["OPENSEEK_API_URL"] = url
     None => env.remove("OPENSEEK_API_URL")
   }
-  env["OPENSEEK_MODEL"] = "deepseek-v4-pro"
+  env["OPENSEEK_MODEL"] = model
   env["OPENSEEK_THINKING"] = "max"
   env
 }
@@ -811,6 +814,36 @@ async test "run config resolves the endpoint from the stored provider" {
     // stored DeepSeek key.
     assert_eq(custom.api_key, PlaceholderApiKey)
     assert_eq(custom.key_env, "DEEPSEEK")
+  })
+}
+
+///|
+async test "pattern repair environment follows the selected provider model" {
+  with_settings_dir(async fn(_dir, manager) {
+    let _ = update_settings(manager, {
+      provider: Some("deepseek"),
+      custom_api_url: None,
+      deepseek_api_key: Some("deepseek-stored"),
+      glm_api_key: None,
+      custom_api_key: None,
+    })
+    let deepseek = pattern_repair_environment(
+      manager,
+      model=Some("deepseek-flash"),
+    )
+    assert_eq(deepseek["DEEPSEEK"], "deepseek-stored")
+    assert_eq(deepseek["OPENSEEK_MODEL"], "deepseek-flash")
+
+    let _ = update_settings(manager, {
+      provider: Some("glm"),
+      custom_api_url: None,
+      deepseek_api_key: None,
+      glm_api_key: Some("glm-stored"),
+      custom_api_key: None,
+    })
+    let glm = pattern_repair_environment(manager, model=Some("glm-5.3"))
+    assert_eq(glm["GLM"], "glm-stored")
+    assert_eq(glm["OPENSEEK_MODEL"], "glm-5.3")
   })
 }
 

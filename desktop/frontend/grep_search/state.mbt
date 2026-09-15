@@ -637,6 +637,7 @@ test "checkout reset clears results while preserving the generation fence" {
   let input : Input = {
     owner: { channel: @interop.ChannelId::Local, session: "first", },
     root: Some(@common.Uri::parse("file:///work/a")),
+    pattern_repair_model: None,
   }
   let state = State::empty().handle(QueryChanged("moon"), input)
   let old_generation = state.page.generation
@@ -652,6 +653,7 @@ test "mode changes preserve each search input and shared details" {
   let input : Input = {
     owner: { channel: @interop.ChannelId::Local, session: "mode-state", },
     root: Some(@common.Uri::parse("file:///work")),
+    pattern_repair_model: None,
   }
   let state = State::empty()
     .handle(QueryChanged("text query"), input)
@@ -678,7 +680,7 @@ test "query changes debounce and stale replies cannot replace the page" {
     session: "one",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty().handle(QueryChanged("moon"), input)
   let page = state.page
   assert_true(page.phase is Debouncing)
@@ -707,7 +709,7 @@ test "semantic progress streams partial hits and late progress is fenced" {
     session: "semantic-progress",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg))"), input)
@@ -762,7 +764,7 @@ test "semantic progress batches append only new hits" {
     session: "semantic-batches",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg))"), input)
@@ -813,7 +815,7 @@ test "new semantic search clears partial results and cancellation clears them" {
     session: "semantic-clear",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(ModeChanged(Semantic), input)
     .handle(PatternChanged(0, "inspect($(x:arg))"), input)
@@ -870,7 +872,7 @@ test "active result helpers share file grouping and highlight projection" {
     session: "active-results",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty().handle(QueryChanged("moon"), input)
   let page = state.page
   let first : @protocol.TextSearchMatch = {
@@ -922,7 +924,7 @@ test "parking a checkout keeps its draft and fences the in-flight reply" {
     session: "suspend",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let running = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)
@@ -958,7 +960,7 @@ test "refresh is immediate and loaded file groups can collapse and clear" {
     session: "one",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Refresh, input)
@@ -1012,7 +1014,7 @@ test "editor highlights include every retained match for the file" {
     session: "editor-highlights",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(QueryChanged("moon"), input)
     .handle(Submit, input)
@@ -1080,7 +1082,7 @@ test "invalid regex replies retain their actionable Host error" {
     session: "regex",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = { owner, root: Some(root), }
+  let input : Input = { owner, root: Some(root), pattern_repair_model: None, }
   let state = State::empty()
     .handle(QueryChanged("("), input)
     .handle(ToggleRegex, input)

@@ -509,6 +509,10 @@ pub(all) struct PatternRepairPayload {
   root : String
   pattern : String
   instruction : String
+  // The active OpenSeek model, when the request comes from a conversation.
+  // Older clients omit it and let the Host choose the configured provider's
+  // default model.
+  model : String?
   generation : Int
 } derive(Debug, Eq)
 

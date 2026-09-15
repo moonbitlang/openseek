@@ -63,10 +63,7 @@ async fn request_pattern_repair_candidate(
     "\n"
   let (code, stdout, _) = run_pattern_repair_process(
     state.engine,
-    [
-      "subrun", "pattern-repair", "--model", "deepseek-v4-pro", "--thinking", "no",
-      "--max-steps", "4",
-    ],
+    ["subrun", "pattern-repair", "--thinking", "no", "--max-steps", "4"],
     input,
     root.0,
     agent_env,

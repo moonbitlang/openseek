@@ -114,14 +114,16 @@ pub fn State::empty() -> State {
 pub(all) struct Input {
   owner : @interop.ConversationKey
   root : @common.Uri?
+  pattern_repair_model : String?
 } derive(Eq)
 
 ///|
 pub fn Input::Input(
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri?,
+  pattern_repair_model~ : String?,
 ) -> Input {
-  { owner, root, }
+  { owner, root, pattern_repair_model, }
 }
 
 ///|
