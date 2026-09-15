@@ -1,7 +1,10 @@
 """Offline checks that the live eval cannot pass by merely claiming success."""
 import json
+import os
 from pathlib import Path
+import sys
 import tempfile
+import time
 import unittest
 import run
 
@@ -109,3 +112,38 @@ class OracleTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class BoundedRunnerTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.workspace = Path(self.directory.name)
+
+    def run_bounded(self, script, **limits):
+        log = self.workspace / 'run.log'
+        code = run.bounded([sys.executable, '-c', script], self.workspace, os.environ.copy(),
+                           log, **limits)
+        return code, log.read_text()
+
+    def test_exit_code_and_output_are_returned_within_the_timeout(self):
+        code, output = self.run_bounded('print("done"); raise SystemExit(3)', timeout=30)
+        self.assertEqual(code, 3)
+        self.assertEqual(output.strip(), 'done')
+
+    def test_timeout_terminates_the_process_group(self):
+        started = time.monotonic()
+        code, output = self.run_bounded(
+            'import time; print("up", flush=True); time.sleep(60)', timeout=0.5, grace=5)
+        self.assertIsNone(code)
+        self.assertEqual(output.strip(), 'up')
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_grace_expiry_kills_a_process_that_ignores_sigterm(self):
+        started = time.monotonic()
+        code, output = self.run_bounded(
+            'import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); '
+            'print("up", flush=True); time.sleep(60)', timeout=0.5, grace=0.5)
+        self.assertIsNone(code)
+        self.assertEqual(output.strip(), 'up')
+        self.assertLess(time.monotonic() - started, 10)

@@ -94,6 +94,11 @@ class YamlBenchmarkTests(unittest.TestCase):
             self.assertFalse(score['preserved_fixture'])
             self.assertEqual(score['oracle_passed'], 46)
 
+    def test_bounded_keeps_the_benchmark_grace(self):
+        with patch.object(bench.run, 'bounded', return_value=0) as shared:
+            self.assertEqual(bench.bounded(['x'], Path('.'), {}, Path('run.log'), 7), 0)
+        shared.assert_called_once_with(['x'], Path('.'), {}, Path('run.log'), 7, grace=5)
+
 
 if __name__ == '__main__':
     unittest.main()

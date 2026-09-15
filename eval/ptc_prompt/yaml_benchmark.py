@@ -127,7 +127,7 @@ def fixture(workspace):
 
 
 def bounded(command, cwd, env, log, timeout):
-    # A module-level name, not a bare import: the tests patch `bench.bounded`.
+    # The benchmark keeps its shorter five-second SIGTERM grace.
     return run.bounded(command, cwd, env, log, timeout, grace=5)
 
 
@@ -200,12 +200,13 @@ def trial(engine, out, variant, repeat, timeout, max_steps=128):
     name = f'yaml-{repeat}-{variant}'
     workspace = out / 'workspaces' / name
     fixture(workspace)
-    started = time.monotonic()
     log = out / f'{name}.log'
-    code = bounded(run.engine_command(engine, workspace, name, out / f'{variant}.md',
-                                      'Read TASK.md and implement the requested YAML parser completely.',
-                                      max_steps),
-                   run.ROOT, run.trial_env(workspace), log, timeout)
+    command = run.engine_command(engine, workspace, name, out / f'{variant}.md',
+                                 'Read TASK.md and implement the requested YAML parser completely.',
+                                 max_steps)
+    env = run.trial_env(workspace)
+    started = time.monotonic()
+    code = bounded(command, run.ROOT, env, log, timeout)
     result = {'name': name, 'variant': variant, 'repeat': repeat,
               'seconds': round(time.monotonic() - started, 2), 'exit_code': code}
     (out / f'{name}-execution.json').write_text(json.dumps(result, indent=2) + '\n')

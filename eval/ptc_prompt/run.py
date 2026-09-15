@@ -194,9 +194,10 @@ def trial(engine, out, variant, case, repeat, timeout, require_ptc):
     if require_ptc:
         task += '\nUse mbtx with ptc: true and the bundled tools client for the requested edits or searches.'
     (workspace / '.eval-task.txt').write_text(task)
+    command = engine_command(engine, workspace, name, out / f'{variant}.md', task, MAX_STEPS)
+    env = trial_env(workspace)
     started = time.monotonic()
-    exit_code = bounded(engine_command(engine, workspace, name, out / f'{variant}.md', task, MAX_STEPS),
-                        ROOT, trial_env(workspace), out / f'{name}.log', timeout)
+    exit_code = bounded(command, ROOT, env, out / f'{name}.log', timeout)
     result = {'name': name, 'variant': variant, 'case': case, 'repeat': repeat,
               'seconds': round(time.monotonic() - started, 2), 'exit_code': exit_code}
     try:
