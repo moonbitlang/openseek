@@ -998,7 +998,9 @@ async fn qualified(
   guard @auto_check.check_cwd(path) is Some(project) else { return tally }
   fn place(site : @auto_check.ErrorSite) -> @auto_check.ErrorSite {
     match site.path {
-      Some(file) if !file.has_prefix("/") && !file.has_prefix("\\") =>
+      Some(file) if !absolutize(file, None).has_prefix("/") &&
+        !file.has_prefix("\\") &&
+        !(file.length() > 1 && file[1:2] == ":") =>
         { ..site, path: Some("\{project}/\{file}"), }
       _ => site
     }
@@ -1226,7 +1228,10 @@ fn failures_data(failures : Array[EditFailure]) -> Json {
           if failure.index is Some(index) {
             fields["index"] = index.to_json()
           }
-          fields["range"] = failure.range.to_json()
+          // A file-level problem (unreadable, write-guarded) has no range.
+          if failure.range != "" {
+            fields["range"] = failure.range.to_json()
+          }
           fields["message"] = failure.message.to_json()
           Json::object(fields)
         }
