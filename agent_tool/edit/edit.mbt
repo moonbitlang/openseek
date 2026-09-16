@@ -1267,6 +1267,14 @@ async fn restore_content(
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
     return Some("write blocked: \{reason}")
   }
+  // `path` is the resolved target pinned before the baseline; if it now
+  // resolves elsewhere, the file was replaced by a link meanwhile, and the
+  // restore would land on whatever that link names.
+  if resolved_target(path) != path {
+    return Some(
+      "the file was replaced by a link after the edit was written, so it was left as it is",
+    )
+  }
   // The check between the write and this restore is a window in which
   // another writer (an editor save) may have changed the file; restoring over
   // that would erase their work. Only the content this edit wrote is undone.
