@@ -334,3 +334,48 @@ async test "guards reach a MoonBit target through a link with another name" {
     assert_eq(@fs.read_file(target).text(), original)
   })
 }
+
+///|
+/// `a/lib/alias.mbt -> b/lib/lib.mbt`: both spellings are MoonBit paths, in
+/// different modules. Module `a` compiles the link alone and stays clean; the
+/// edit breaks a caller that exists only in module `b`, so the guard must
+/// have checked `b` too.
+#cfg(all(target="native", not(platform="windows")))
+async test "guards check the module of a link's target as well as the link's own" {
+  @vfs.with_tmpdir(prefix="openseek-edit-guard-cross-", dir => {
+    @vfs.FileSystem::from_pairs([
+      ("a/moon.mod", "name = \"tmp/a\"\n"),
+      ("a/lib/moon.pkg", ""),
+      ("b/moon.mod", "name = \"tmp/b\"\n"),
+      ("b/lib/moon.pkg", ""),
+      ("b/lib/lib.mbt", "///|\npub fn f() -> Int {\n  1\n}\n"),
+      ("b/lib/caller.mbt", "///|\npub fn g() -> Int {\n  f() + 1\n}\n"),
+    ]).write_to(dir)
+    let target = "\{dir}/b/lib/lib.mbt"
+    let link = "\{dir}/a/lib/alias.mbt"
+    @fs.symlink(target~, link)
+    let original = @fs.read_file(target).text()
+    // Valid on its own (module a has no caller), breaking in module b.
+    let reverted = run_edit({
+      "path": link,
+      "old_string": "pub fn f() -> Int {\n  1",
+      "new_string": "pub fn f(x : Int) -> Int {\n  x",
+      "start_line": 2,
+      "revert_on_errors": true,
+    })
+    assert_true(reverted.is_error, msg=reverted.content)
+    guard reverted.data
+      is Some(
+        {
+          "outcome": "reverted",
+          "reason": "introduced_errors",
+          "introduced": { "errors": [{ "path": String(site), .. }, ..], .. },
+          ..
+        }
+      ) else {
+      fail("unexpected data: \{shown(reverted.data)}")
+    }
+    assert_true(site.contains("caller.mbt"), msg=site)
+    assert_eq(@fs.read_file(target).text(), original)
+  })
+}

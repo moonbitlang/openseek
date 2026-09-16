@@ -757,24 +757,31 @@ async fn commit_edit(
     )
   }
 
-  // The check classifies its path by name, and a link may carry a different
-  // name from its target (`alias.txt -> lib.mbt`, or the reverse): try the
-  // written spelling first, then the target, so a MoonBit file reached
-  // through either spelling is checked from its module.
+  // A link is compiled twice over: moon reads its content as a member of the
+  // package the link sits in, and again as the target's own package — which
+  // may be another module (`a/lib/alias.mbt -> b/lib/lib.mbt`). The guard's
+  // verdict has to cover both, so the tree is checked from each project the
+  // two spellings belong to (once, when they share one), and the tallies are
+  // merged.
+  let check_from = check_projects(path)
   async fn check_tree() -> @auto_check.CheckOutcome {
-    match @auto_check.check(path) {
-      NotApplicable => {
-        let target = @fs.realpath(path) catch {
-          error if @async.is_being_cancelled() => raise error
-          _ => path
-        }
-        if target == path {
-          NotApplicable
-        } else {
-          @auto_check.check(target)
-        }
+    let mut merged : @auto_check.CheckErrors? = None
+    for spelling in check_from {
+      match @auto_check.check(spelling) {
+        Checked(tally) =>
+          merged = Some(
+            match merged {
+              Some(sum) => merge_tallies(sum, tally)
+              None => tally
+            },
+          )
+        NotApplicable => ()
+        other => return other
       }
-      outcome => outcome
+    }
+    match merged {
+      Some(tally) => Checked(tally)
+      None => NotApplicable
     }
   }
 
@@ -800,10 +807,10 @@ async fn commit_edit(
       outcome="error",
     )
   }
-  @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
-  // A guarded edit interrupted during its post-write check must not stay on
-  // disk unverified: put the original back before the cancellation unwinds.
-  // `check` raises only for cancellation; every other failure is an outcome.
+  // A guarded edit interrupted during its write or its post-write check must
+  // not stay on disk unverified (or truncated): put the original back before
+  // the cancellation unwinds. Registered before the write, since the write
+  // itself truncates first and can be cancelled between that and its data.
   async fn restore_on_unwind() -> Unit {
     if baseline is Some(_) {
       @async.protect_from_cancel(() => {
@@ -813,6 +820,7 @@ async fn commit_edit(
   }
 
   errdefer restore_on_unwind()
+  @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
   let after = check_tree()
   fn keep(
     check_line : String?,
@@ -884,6 +892,58 @@ async fn commit_edit(
 /// Why a guard cannot compare an overflowed capture: the lists are then
 /// windows onto moon's output, and a site can enter one without being new.
 const TruncatedCapture : String = "moon check produced more output than the capture budget, so the guard cannot compare the two runs"
+
+///|
+/// The spellings of `path` whose projects a check must cover: the written one
+/// and, when it is a link into a different project, its target. Spellings
+/// outside any MoonBit project are dropped; an unresolvable link is just its
+/// written spelling.
+async fn check_projects(path : String) -> Array[String] {
+  let target = @fs.realpath(path) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => path
+  }
+  let own = @auto_check.check_cwd(path)
+  let spellings = []
+  if own is Some(_) {
+    spellings.push(path)
+  }
+  if target != path && @auto_check.check_cwd(target) is Some(theirs) {
+    // Project directories compare by their canonical form: `/tmp/x` and
+    // `/private/tmp/x` are one project, not two checks.
+    async fn canonical(dir : String) -> String {
+      @fs.realpath(dir) catch {
+        error if @async.is_being_cancelled() => raise error
+        _ => dir
+      }
+    }
+
+    let same = match own {
+      Some(own) => canonical(own) == canonical(theirs)
+      None => false
+    }
+    if !same {
+      spellings.push(target)
+    }
+  }
+  spellings
+}
+
+///|
+/// Two projects' tallies as one: counts add, sites concatenate, and an
+/// overflow on either side overflows the sum.
+fn merge_tallies(
+  a : @auto_check.CheckErrors,
+  b : @auto_check.CheckErrors,
+) -> @auto_check.CheckErrors {
+  {
+    error_count: a.error_count + b.error_count,
+    warning_count: a.warning_count + b.warning_count,
+    errors: [..a.errors, ..b.errors],
+    warnings: [..a.warnings, ..b.warnings],
+    truncated: a.truncated || b.truncated,
+  }
+}
 
 ///|
 fn exited_without_diagnostics(code : Int) -> String {
