@@ -15,7 +15,7 @@ test "prefix sum constructors accept an empty view" {
 ///|
 test "prefix sum constructors accept a complete array view" {
   let source : ReadOnlyArray[Int] = [1, 2, 3]
-  assert_view_total(source[:], 6)
+  assert_view_total(source, 6)
 }
 
 ///|

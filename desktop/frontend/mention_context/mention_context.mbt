@@ -289,7 +289,7 @@ pub fn parse(content : String) -> MentionMessage? {
   let lines = [
     for raw in content.split("\n") => raw.trim_end(chars="\r").to_owned()
   ]
-  let lines = if lines is [.. head, ""] { head } else { lines[:] }
+  let lines = if lines is [.. head, ""] { head } else { lines }
   guard lines is [.. head, "</user_mentions>"] else { return None }
   // The task text is arbitrary, so the envelope's opener is the last one —
   // matched from the end inward, as the closing tag was.

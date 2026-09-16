@@ -229,7 +229,7 @@ pub fn ViewModelLinesFromProjectedModel::set_hidden_areas(
   ranges : Array[@base_common.Range],
 ) -> Bool {
   let validated_ranges = ranges.map(r => self.model.validate_range(r))
-  let new_ranges = normalize_line_ranges(validated_ranges[:])
+  let new_ranges = normalize_line_ranges(validated_ranges)
 
   // This checks if there really was a change
   let old_ranges = self.get_hidden_areas()

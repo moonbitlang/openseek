@@ -209,7 +209,7 @@ test "sparse fragments align ignored prefix middle and suffix at unchanged ancho
     }
   ]
   guard fragment_document_diff(
-      { hunks: hunks[:], },
+      { hunks, },
       "head\nold-a\nkeep-1\n// removed\nkeep-2\nold-b\ntail",
       "// added\nhead\nnew-a\nkeep-1\nkeep-2\nnew-b\ntail\n// end",
     )

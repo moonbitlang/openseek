@@ -39,8 +39,8 @@ fn AttachedViewState::equals(
     return true
   }
   if !line_range_arrays_equal(
-      self.visible_line_ranges[:],
-      other.visible_line_ranges[:],
+      self.visible_line_ranges,
+      other.visible_line_ranges,
     ) {
     return false
   }
@@ -197,8 +197,8 @@ fn AttachedViewHandler::line_ranges(
 fn AttachedViewHandler::update(self : AttachedViewHandler) -> Unit {
   if self.disposed ||
     line_range_arrays_equal(
-      self.computed_line_ranges[:],
-      self.requested_line_ranges[:],
+      self.computed_line_ranges,
+      self.requested_line_ranges,
     ) {
     return
   }

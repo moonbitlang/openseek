@@ -331,7 +331,7 @@ fn parse_moon_loc(loc : String) -> @base_common.Range? {
         _ => None
       }
     None =>
-      match parse_check_position(loc[:]) {
+      match parse_check_position(loc) {
         Some(position) =>
           Some(@base_common.Range::from_positions(position, position))
         None => None

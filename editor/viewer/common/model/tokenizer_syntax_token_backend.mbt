@@ -234,7 +234,7 @@ fn TokenizerSyntaxTokenBackend::refresh_all_visible_line_tokens(
   for entry in self.attached_view_states {
     ranges.append(entry.handler.line_ranges())
   }
-  self.refresh_ranges(join_line_ranges(ranges[:]))
+  self.refresh_ranges(join_line_ranges(ranges))
 }
 
 ///|

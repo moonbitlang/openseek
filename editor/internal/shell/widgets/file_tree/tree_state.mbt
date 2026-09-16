@@ -255,7 +255,7 @@ fn TreeNode::reveal_step(
   guard self.ancestor_uris(target) is Some(ancestors) else {
     return (self, RevealUnreachable)
   }
-  self.reveal_ancestors(ancestors[:], 0)
+  self.reveal_ancestors(ancestors, 0)
 }
 
 ///|

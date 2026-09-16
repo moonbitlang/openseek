@@ -80,10 +80,10 @@ pub fn LineRangeSet::add_range(self : LineRangeSet, range : LineRange) -> Unit {
     return
   }
   let ranges = self.normalized_ranges
-  let join_range_start_idx = find_first_idx_monotonous_or_arr_len(ranges[:], r => {
+  let join_range_start_idx = find_first_idx_monotonous_or_arr_len(ranges, r => {
     r.end_line_number_exclusive >= range.start_line_number
   })
-  let join_range_end_idx_exclusive = find_last_idx_monotonous(ranges[:], r => {
+  let join_range_end_idx_exclusive = find_last_idx_monotonous(ranges, r => {
       r.start_line_number <= range.end_line_number_exclusive
     }) +
     1

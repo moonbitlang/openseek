@@ -602,14 +602,14 @@ fn Win32::relative_impl(from : String, to : String) -> String {
       return to_orig
     } else if i == length {
       if to_len > length {
-        return join_range(to_split[:], i, "\\")
+        return join_range(to_split, i, "\\")
       }
       if from_len > length {
         return "\{"..\\".repeat(from_len - 1 - i)}.."
       }
       return ""
     }
-    return "..\\".repeat(from_len - i) + join_range(to_split[:], i, "\\")
+    return "..\\".repeat(from_len - i) + join_range(to_split, i, "\\")
   }
 
   // Trim any leading backslashes
@@ -1086,7 +1086,7 @@ fn Posix::join_impl(paths : Array[String]) -> String {
   if path is [] {
     return "."
   }
-  Posix::normalize(join_range(path[:], 0, "/"))
+  Posix::normalize(join_range(path, 0, "/"))
 }
 
 ///|

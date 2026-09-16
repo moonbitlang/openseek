@@ -74,8 +74,8 @@ fn AnyPsc::remove_values(
 
 ///|
 fn for_both(values : Array[Int], cb : (AnyPsc) -> Unit raise) -> Unit raise {
-  cb(Linear(PrefixSumComputer(values[:])))
-  cb(Constant(ConstantTimePrefixSumComputer(values[:])))
+  cb(Linear(PrefixSumComputer(values)))
+  cb(Constant(ConstantTimePrefixSumComputer(values)))
 }
 
 ///|

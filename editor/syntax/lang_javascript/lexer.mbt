@@ -127,7 +127,7 @@ fn normal_step(view : StringView, top : Byte) -> (StepOp, StringView) {
     // Unreachable while `.` covers the full charset (it includes lone
     // surrogates); consumes the rest defensively so the driver loop can
     // never stall on zero progress.
-    _ => (Blank, ""[:])
+    _ => (Blank, "")
   }
 }
 
@@ -140,7 +140,7 @@ fn comment_step(
     (re"^\*/", after=rest) => (Pop(tag), rest)
     (re"^[^*]+", after=rest) => (Emit(tag), rest)
     (re"^\*", after=rest) => (Emit(tag), rest)
-    _ => (Blank, ""[:])
+    _ => (Blank, "")
   }
 }
 
@@ -152,7 +152,7 @@ fn template_step(view : StringView) -> (StepOp, StringView) {
     (re"^`", after=rest) => (Pop(String), rest)
     (re"^[^`\\\$]+", after=rest) => (Emit(String), rest)
     (re"^.", after=rest) => (Emit(String), rest)
-    _ => (Blank, ""[:])
+    _ => (Blank, "")
   }
 }
 
