@@ -17,7 +17,10 @@ struct ValidationProbeSpec {
   stdout_contains : String
   stderr_contains : String
   stdout_json : Bool
-}
+} derive(ToJson)
+
+///|
+pub extend ValidationProbeSpec with ToJson::{to_json}
 
 ///|
 /// Build a validation probe spec. Empty strings disable optional checks.
@@ -58,7 +61,7 @@ priv struct TrialArtifact {
   session_id : String
   events_path : String
   exit_code : Int
-}
+} derive(ToJson)
 
 ///|
 /// Build a trial artifact entry for a completed prompt-task experiment trial.
@@ -87,7 +90,10 @@ pub struct RunManifest {
   out_dir : String
   priv validation_probes : Array[ValidationProbeSpec]
   priv trials : Array[TrialArtifact]
-}
+} derive(ToJson)
+
+///|
+pub extend RunManifest with ToJson::{to_json}
 
 ///|
 /// Build a manifest for a completed prompt-task experiment run.
@@ -130,7 +136,7 @@ pub fn manifest_path(out_dir : String) -> String {
 async fn write_manifest(manifest : RunManifest) -> Unit {
   @fs.write_file(
     manifest_path(manifest.out_dir),
-    manifest.to_json().stringify(),
+    ToJson::to_json(manifest).stringify(),
     create_mode=CreateOrTruncate,
   )
 }
@@ -140,54 +146,6 @@ async fn write_manifest(manifest : RunManifest) -> Unit {
 async fn read_manifest(out_dir : String) -> RunManifest {
   let text = @fs.read_file(manifest_path(out_dir)).text()
   RunManifest::from_json(@json.parse(text))
-}
-
-///|
-fn RunManifest::to_json(self : RunManifest) -> Json {
-  {
-    "model": self.model,
-    "problem_id": self.problem_id,
-    "prompt_label": self.prompt_label,
-    "task_file": self.task_file,
-    "runs": self.runs,
-    "concurrency": self.concurrency,
-    "min_successes": self.min_successes,
-    "max_steps": self.max_steps,
-    "out_dir": self.out_dir,
-    "validation_probes": (
-      [
-        for probe in self.validation_probes => probe.to_json()
-      ] : Json),
-    "trials": ([ for trial in self.trials => trial.to_json() ] : Json),
-  }
-}
-
-///|
-fn ValidationProbeSpec::to_json(self : ValidationProbeSpec) -> Json {
-  {
-    "name": self.name,
-    "command": self.command,
-    "stdin": self.stdin,
-    "write_file": self.write_file,
-    "write_content": self.write_content,
-    "expect_exit": self.expect_exit,
-    "output_contains": self.output_contains,
-    "stdout_contains": self.stdout_contains,
-    "stderr_contains": self.stderr_contains,
-    "stdout_json": self.stdout_json,
-  }
-}
-
-///|
-fn TrialArtifact::to_json(self : TrialArtifact) -> Json {
-  {
-    "index": self.index,
-    "workspace": self.workspace,
-    "log_path": self.log_path,
-    "session_id": self.session_id,
-    "events_path": self.events_path,
-    "exit_code": self.exit_code,
-  }
 }
 
 ///|

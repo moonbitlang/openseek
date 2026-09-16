@@ -9,34 +9,7 @@ fn EvalReport::to_json(self : EvalReport) -> Json {
     "successes": self.successes,
     "passed": self.passed(),
     "out_dir": self.out_dir,
-    "results": ([ for result in self.results => result.to_json() ] : Json),
-  }
-}
-
-///|
-fn TrialResult::to_json(self : TrialResult) -> Json {
-  {
-    "index": self.index,
-    "case_id": self.case_id,
-    "prompt_label": self.prompt_label,
-    "success": self.success,
-    "reason": self.reason,
-    "workspace": self.workspace,
-    "log_path": self.log_path,
-    "exit_code": self.exit_code,
-    "steps": self.steps,
-    "tool_errors": self.tool_errors,
-    "moon_run_e_mentions": self.moon_run_e_mentions,
-    "moon_run_c_mentions": self.moon_run_c_mentions,
-    "moon_check_uses": self.moon_check_uses,
-    "moon_test_uses": self.moon_test_uses,
-    "moon_info_uses": self.moon_info_uses,
-    "moon_fmt_uses": self.moon_fmt_uses,
-    "edit_successes": self.edit_successes,
-    "write_successes": self.write_successes,
-    "validation_passed": self.validation_passed,
-    "marker_present": self.marker_present,
-    "warnings": self.warnings,
+    "results": self.results,
   }
 }
 

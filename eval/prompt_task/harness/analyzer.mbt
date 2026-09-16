@@ -5,7 +5,7 @@ priv struct ProbeResult {
   name : String
   passed : Bool
   reason : String
-}
+} derive(ToJson)
 
 ///|
 /// Build one validation probe result.
@@ -29,7 +29,7 @@ priv struct ValidationResult {
   stdin_probe : Bool
   duplicate_probe : Bool
   probes : Array[ProbeResult]
-}
+} derive(ToJson)
 
 ///|
 /// Validation probes used by the historical TOML parser prompt task.
@@ -117,7 +117,7 @@ priv struct EvalResult {
   result_style_mentions : Int
   try_mentions : Int
   warnings : String
-}
+} derive(ToJson)
 
 ///|
 /// One prompt-task eval analysis report.

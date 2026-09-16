@@ -8,7 +8,7 @@ priv struct ProblemSpec {
   prompt_label : String
   task_file : String
   validation_probes : Array[ValidationProbeSpec]
-}
+} derive(ToJson)
 
 ///|
 /// Build one benchmark problem. Empty `prompt_label` falls back to `id`.
@@ -92,7 +92,7 @@ priv struct ComboRun {
   task_file : String
   out_dir : String
   manifest_path : String
-}
+} derive(ToJson)
 
 ///|
 /// Build a suite combo manifest entry.
@@ -120,7 +120,10 @@ pub struct SuiteManifest {
   priv models : Array[String]
   priv problems : Array[ProblemSpec]
   priv combos : Array[ComboRun]
-}
+} derive(ToJson)
+
+///|
+pub extend SuiteManifest with ToJson::{to_json}
 
 ///|
 /// Build a durable suite manifest.
@@ -524,7 +527,7 @@ fn relocate_suite_combo(
 async fn write_suite_manifest(manifest : SuiteManifest) -> Unit {
   @fs.write_file(
     suite_manifest_path(manifest.out_dir),
-    manifest.to_json().stringify(),
+    ToJson::to_json(manifest).stringify(),
     create_mode=CreateOrTruncate,
   )
 }
@@ -533,21 +536,6 @@ async fn write_suite_manifest(manifest : SuiteManifest) -> Unit {
 async fn read_suite_manifest(out_dir : String) -> SuiteManifest {
   let text = @fs.read_file(suite_manifest_path(out_dir)).text()
   SuiteManifest::from_json(@json.parse(text))
-}
-
-///|
-fn SuiteManifest::to_json(self : SuiteManifest) -> Json {
-  {
-    "name": self.name,
-    "out_dir": self.out_dir,
-    "runs_per_combo": self.runs_per_combo,
-    "concurrency": self.concurrency,
-    "min_successes": self.min_successes,
-    "max_steps": self.max_steps,
-    "models": self.models,
-    "problems": ([ for problem in self.problems => problem.to_json() ] : Json),
-    "combos": ([ for combo in self.combos => combo.to_json() ] : Json),
-  }
 }
 
 ///|
@@ -590,19 +578,6 @@ fn suite_manifest_combos(fields : Map[String, Json]) -> Array[ComboRun] raise {
 }
 
 ///|
-fn ProblemSpec::to_json(self : ProblemSpec) -> Json {
-  {
-    "id": self.id,
-    "prompt_label": self.prompt_label,
-    "task_file": self.task_file,
-    "validation_probes": (
-      [
-        for probe in self.validation_probes => probe.to_json()
-      ] : Json),
-  }
-}
-
-///|
 fn ProblemSpec::from_manifest_json(json : Json) -> ProblemSpec raise {
   let fields = object_fields(json, "suite manifest problem")
   let probes : Array[ValidationProbeSpec] = match
@@ -620,18 +595,6 @@ fn ProblemSpec::from_manifest_json(json : Json) -> ProblemSpec raise {
     task_file=string_field(fields, "task_file"),
     validation_probes=probes,
   )
-}
-
-///|
-fn ComboRun::to_json(self : ComboRun) -> Json {
-  {
-    "model": self.model,
-    "problem_id": self.problem_id,
-    "prompt_label": self.prompt_label,
-    "task_file": self.task_file,
-    "out_dir": self.out_dir,
-    "manifest_path": self.manifest_path,
-  }
 }
 
 ///|

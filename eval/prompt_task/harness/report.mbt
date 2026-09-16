@@ -16,7 +16,7 @@ async fn write_eval_result_files(out_dir : String, result : EvalResult) -> Unit 
   @report.write_files(
     "\{out_dir}/eval_results/\{eval_result_artifact_name(result)}",
     result.markdown(),
-    result.to_json(),
+    ToJson::to_json(result),
     html=result.html(),
   )
 }
@@ -33,68 +33,8 @@ fn EvalReport::to_json(self : EvalReport) -> Json {
     "successes": self.successes,
     "passed": self.passed(),
     "out_dir": self.out_dir,
-    "results": ([ for result in self.results => result.to_json() ] : Json),
+    "results": self.results,
   }
-}
-
-///|
-fn EvalResult::to_json(self : EvalResult) -> Json {
-  {
-    "index": self.index,
-    "prompt_label": self.prompt_label,
-    "success": self.success,
-    "reason": self.reason,
-    "workspace": self.workspace,
-    "log_path": self.log_path,
-    "session_id": self.session_id,
-    "events_path": self.events_path,
-    "exit_code": self.exit_code,
-    "steps": self.steps,
-    "tool_results": self.tool_results,
-    "tool_errors": self.tool_errors,
-    "runtime_notices": self.runtime_notices,
-    "finished": self.finished,
-    "finish_message": self.finish_message,
-    "terminal_status": self.terminal_status,
-    "terminal_message": self.terminal_message,
-    "validation": self.validation.to_json(),
-    "parse_errors": self.parse_errors,
-    "partial_tail": self.partial_tail,
-    "moon_check_uses": self.moon_check_uses,
-    "moon_test_uses": self.moon_test_uses,
-    "moon_run_e_mentions": self.moon_run_e_mentions,
-    "moon_run_c_mentions": self.moon_run_c_mentions,
-    "bad_run_e_mentions": self.bad_run_e_mentions,
-    "from_str_mentions": self.from_str_mentions,
-    "parse_int_mentions": self.parse_int_mentions,
-    "argparse_mentions": self.argparse_mentions,
-    "old_argparse_mentions": self.old_argparse_mentions,
-    "c_ffi_mentions": self.c_ffi_mentions,
-    "env_args_mentions": self.env_args_mentions,
-    "result_style_mentions": self.result_style_mentions,
-    "try_mentions": self.try_mentions,
-    "warnings": self.warnings,
-  }
-}
-
-///|
-fn ValidationResult::to_json(self : ValidationResult) -> Json {
-  {
-    "ran": self.ran,
-    "passed": self.passed,
-    "reason": self.reason,
-    "moon_check": self.moon_check,
-    "moon_test": self.moon_test,
-    "file_probe": self.file_probe,
-    "stdin_probe": self.stdin_probe,
-    "duplicate_probe": self.duplicate_probe,
-    "probes": ([ for probe in self.probes => probe.to_json() ] : Json),
-  }
-}
-
-///|
-fn ProbeResult::to_json(self : ProbeResult) -> Json {
-  { "name": self.name, "passed": self.passed, "reason": self.reason }
 }
 
 ///|

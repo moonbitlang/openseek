@@ -28,7 +28,7 @@ priv struct TrialResult {
   validation_passed : Bool
   marker_present : Bool
   warnings : String
-}
+} derive(ToJson)
 
 ///|
 /// One file-edit eval run's outcome: the configuration that defined it, the

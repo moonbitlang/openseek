@@ -49,21 +49,24 @@ pub fn EvalReport::passed(Self) -> Bool
 pub struct RunManifest {
   out_dir : String
   // private fields
-}
+} derive(ToJson)
+pub fn RunManifest::to_json(Self) -> Json
 
 type SuiteConfig
 
 pub struct SuiteManifest {
   out_dir : String
   // private fields
-}
+} derive(ToJson)
+pub fn SuiteManifest::to_json(Self) -> Json
 
 type SuiteReport
 pub fn SuiteReport::failure_message(Self) -> String
 pub fn SuiteReport::markdown(Self) -> String
 pub fn SuiteReport::passed(Self) -> Bool
 
-type ValidationProbeSpec
+type ValidationProbeSpec derive(ToJson)
+pub fn ValidationProbeSpec::to_json(Self) -> Json
 
 // Type aliases
 
