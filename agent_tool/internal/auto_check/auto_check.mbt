@@ -166,6 +166,22 @@ pub fn CheckErrors::to_json(self : CheckErrors) -> Json {
 }
 
 ///|
+/// The tally reduced to what a per-edit result should carry: the counts and
+/// the first `RevertErrorDisplayLimit` error sites, no warning list. A script
+/// that applies one edit per diagnostic already holds the warning list it is
+/// working from; repeating it in every reply would spend the retained trace
+/// on nothing.
+pub fn CheckErrors::summary_json(self : CheckErrors) -> Json {
+  let shown = self.errors.length().min(RevertErrorDisplayLimit)
+  {
+    "error_count": self.error_count.to_json(),
+    "warning_count": self.warning_count.to_json(),
+    "truncated": self.truncated.to_json(),
+    "errors": Json::array([ for site in self.errors[:shown] => site.to_json() ]),
+  }
+}
+
+///|
 /// What a change introduced, judged by diagnostic identity rather than
 /// position: the sites of the later run whose `(path, code, message)` occurs
 /// more often than in the earlier one. Ignoring `loc` keeps an edit's own line
@@ -250,7 +266,7 @@ pub fn CheckErrors::first_errors(self : CheckErrors) -> Array[String] {
 /// batch unguarded, matching `append_summary`'s fail-open behavior.
 pub async fn count_errors(path : String) -> CheckErrors? {
   match check(path) {
-    Checked(tally) => Some(tally)
+    Checked(tally) | Failed(_, tally) => Some(tally)
     NotApplicable | Unavailable(_) => None
   }
 }
@@ -264,6 +280,11 @@ pub(all) enum CheckOutcome {
   NotApplicable
   /// The check could not run; carries the reason, e.g. `timed out`.
   Unavailable(String)
+  /// moon exited non-zero without reporting a single error diagnostic — a
+  /// build plan it could not make (a broken manifest, a missing dependency),
+  /// so the tally says nothing about the tree. Carries the exit code and the
+  /// (error-free) tally for callers that never distinguished this case.
+  Failed(Int, CheckErrors)
   Checked(CheckErrors)
 }
 
@@ -295,7 +316,7 @@ pub async fn check(path : String) -> CheckOutcome {
       // tally from a failed run is not a clean tree.
       match output.exit_code {
         Some(code) if code != 0 && tally.error_count == 0 && !tally.truncated =>
-          Unavailable("moon check exited \{code} without diagnostics")
+          Failed(code, tally)
         _ => Checked(tally)
       }
     }
@@ -616,6 +637,17 @@ test "introduced compares identities, not positions" {
   ])
   assert_eq([ for site in delta.errors => site.line() ], [
     "a.mbt:4:1-4:2: Type mismatch",
+  ])
+  // Multiplicity counts: one occurrence before, two after is one new site.
+  let doubled = tally_diagnostics(
+    [
+      diag("warning", "b.mbt", "2:7-2:8", 2, "Unused variable 'x'"),
+      diag("warning", "b.mbt", "9:7-9:8", 2, "Unused variable 'x'"),
+    ].join("\n"),
+    truncated=false,
+  )
+  assert_eq([ for site in introduced(before, doubled).warnings => site.loc ], [
+    "9:7-9:8",
   ])
   // The same identity in another file is a different diagnostic.
   let moved = tally_diagnostics(
