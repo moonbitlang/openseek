@@ -81,8 +81,7 @@ pub fn GoalStanding::equal(Self, Self) -> Bool
 pub fn GoalStanding::not_equal(Self, Self) -> Bool
 
 pub(all) enum ItemKind {
-  User(String)
-  UserWithImages(String, Array[String])
+  User(text~ : String, images~ : Array[String])
   Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool)
   Answer(String)
   TurnEnd

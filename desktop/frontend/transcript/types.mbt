@@ -12,8 +12,9 @@
 /// absent (a response's prose, a notice's body) is an option, never an empty
 /// string.
 pub(all) enum ItemKind {
-  User(String)
-  UserWithImages(String, Array[String])
+  // Attachments are data on the user message, not a different kind of turn.
+  // Text-only messages have no images; image-only messages have empty text.
+  User(text~ : String, images~ : Array[String])
   // One provider response. `reasoning` is the thinking that preceded the
   // prose, `prose` what the model said (absent for a tool-only response), and
   // `calls` the tool calls that followed it, in the model's own order.
@@ -97,11 +98,7 @@ pub(all) struct TranscriptItem {
 /// thought or only called tools has none.
 pub fn TranscriptItem::text(self : TranscriptItem) -> String? {
   match self.kind {
-    User(text)
-    | UserWithImages(text, _)
-    | Answer(text)
-    | Failure(text)
-    | Summary(text) => Some(text)
+    User(text~, ..) | Answer(text) | Failure(text) | Summary(text) => Some(text)
     Assistant(prose~, ..) => prose
     Notice(body~, ..) => body
     TurnEnd => None

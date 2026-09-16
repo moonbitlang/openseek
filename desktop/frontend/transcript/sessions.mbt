@@ -332,7 +332,7 @@ pub fn apply_session_item(
     @desktop_protocol.User(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
-        items.push({ kind: User(content), ts, sequence, })
+        items.push({ kind: User(text=content, images=[]), ts, sequence, })
       }
     }
     @desktop_protocol.Assistant(payload) => {
@@ -944,7 +944,7 @@ test "transcript mapping replays a finished conversation" {
   let items = transcript_from_session(session_reply(events))
   // The result at sequence 2 answers no recorded call and is dropped.
   inspect(items.length(), content="2")
-  guard items[0].kind is User(_) else { fail("expected user item") }
+  guard items[0].kind is User(..) else { fail("expected user item") }
   assert_eq(items[0].text(), Some("question"))
   guard items[1].kind
     is Assistant(

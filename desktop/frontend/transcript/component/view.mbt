@@ -890,8 +890,7 @@ fn transcript_item_view(
   subrun? : SubrunLink,
 ) -> @html.Html {
   match item.kind {
-    User(prompt) => user_message_view(prompt, anchor?, on_jump?)
-    UserWithImages(prompt, images) =>
+    User(text=prompt, images~) =>
       user_message_view(prompt, images~, anchor?, on_jump?)
     Assistant(reasoning~, prose~, calls~, replay=_, finished~) =>
       assistant_view(

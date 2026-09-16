@@ -41,7 +41,7 @@ test "Codex adapts app-server items to the shared transcript model" {
   })
   let items = state.transcript_items()
   assert_eq(items.length(), 4)
-  guard items[0].kind is @transcript.User(prompt) else {
+  guard items[0].kind is @transcript.User(text=prompt, ..) else {
     fail("expected the submitted prompt as the first item")
   }
   guard @mention_context.parse(prompt) is Some(user) else {
@@ -355,8 +355,7 @@ test "Codex history preserves image-only and mixed user messages" {
       ],
     },
   })
-  guard state.transcript_items()[0].kind
-    is @transcript.UserWithImages(text, images) else {
+  guard state.transcript_items()[0].kind is @transcript.User(text~, images~) else {
     fail("expected image content in the user message")
   }
   assert_eq(text, "Look at this")

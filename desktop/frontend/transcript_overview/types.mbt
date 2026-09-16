@@ -83,9 +83,7 @@ pub fn entries(
 ) -> Array[Entry] {
   let result : Array[Entry] = []
   for index, item in items {
-    guard item.kind is (User(prompt) | UserWithImages(prompt, _)) else {
-      continue
-    }
+    guard item.kind is User(text=prompt, ..) else { continue }
     // The turn's answer is the first prose the agent said — a response that
     // only thought or only ran tools is not an answer yet. An abort/failure
     // bubble counts: it is what the turn got.
@@ -97,7 +95,7 @@ pub fn entries(
     let mut failed = false
     for cursor in (index + 1)..<items.length() {
       let item = items[cursor]
-      if item.kind is (User(_) | UserWithImages(_, _)) {
+      if item.kind is User(..) {
         break
       }
       match item.kind {

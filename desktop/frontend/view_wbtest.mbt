@@ -64,7 +64,11 @@ test "workflow children fold under live or listed parents before inventory refre
       .replace_conversation({
         ..subrun_child_of(page),
         messages: [
-          { kind: User("The criteria under audit"), ts: None, sequence: None, },
+          {
+            kind: User(text="The criteria under audit", images=[]),
+            ts: None,
+            sequence: None,
+          },
         ],
       })
       .with_dev(dev => {

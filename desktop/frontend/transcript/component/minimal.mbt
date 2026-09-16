@@ -352,7 +352,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
   for index, row in self.items {
     let identity = row.identity
     match row.item.kind {
-      User(_) | UserWithImages(_, _) => {
+      User(..) => {
         builder.flush_parts()
         builder.sections.push(
           User(

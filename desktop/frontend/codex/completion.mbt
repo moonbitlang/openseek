@@ -639,7 +639,7 @@ test "Codex image-only first prompt stays visible and survives failure" {
     { "type": "image", "url": draft.images[0].url },
   ])
   assert_true(
-    once.transcript_items()[0].kind is @transcript.UserWithImages("", [_]),
+    once.transcript_items()[0].kind is @transcript.User(text="", images=[_]),
   )
   let (_, failed) = update(
     emit,
@@ -672,7 +672,7 @@ test "Codex sends text and every image and clears only on acknowledgement" {
   let steering = ready.with_pending_steer("turn-images")
   assert_true(
     steering.pending_steers[0].transcript_item().kind
-    is @transcript.UserWithImages(_, [_, _]),
+    is @transcript.User(images=[_, _], ..),
   )
   assert_true(steering.with_turn_start_reply({}).images.is_empty())
   assert_true(

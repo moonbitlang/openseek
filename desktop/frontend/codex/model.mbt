@@ -2557,11 +2557,7 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
           }
         }
       }
-      if images.is_empty() {
-        @transcript.User(self.text())
-      } else {
-        @transcript.UserWithImages(self.text(), images)
-      }
+      @transcript.User(text=self.text(), images~)
     }
     "agentMessage" | "plan" => response(None, Some(self.text()), [])
     "reasoning" => response(Some(self.text()), None, [])
