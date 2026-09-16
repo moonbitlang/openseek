@@ -637,7 +637,7 @@ test "checkout reset clears results while preserving the generation fence" {
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
-    owner: { channel: @interop.ChannelId::Local, session: "first", },
+    owner: { channel: Local, session: "first", },
     root: Some(@common.Uri::parse("file:///work/a")),
   }
   let state = State::empty().handle(QueryChanged("moon"), input)
@@ -654,7 +654,7 @@ test "mode changes preserve each search input and shared details" {
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
-    owner: { channel: @interop.ChannelId::Local, session: "mode-state", },
+    owner: { channel: Local, session: "mode-state", },
     root: Some(@common.Uri::parse("file:///work")),
   }
   let state = State::empty()
@@ -677,10 +677,7 @@ test "mode changes preserve each search input and shared details" {
 
 ///|
 test "query changes debounce and stale replies cannot replace the page" {
-  let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
-    session: "one",
-  }
+  let owner : @interop.ConversationKey = { channel: Local, session: "one", }
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
@@ -712,7 +709,7 @@ test "query changes debounce and stale replies cannot replace the page" {
 ///|
 test "semantic progress streams partial hits and late progress is fenced" {
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "semantic-progress",
   }
   let root = @common.Uri::parse("file:///work")
@@ -772,7 +769,7 @@ test "semantic progress streams partial hits and late progress is fenced" {
 ///|
 test "semantic progress batches append only new hits" {
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "semantic-batches",
   }
   let root = @common.Uri::parse("file:///work")
@@ -828,7 +825,7 @@ test "semantic progress batches append only new hits" {
 ///|
 test "new semantic search clears partial results and cancellation clears them" {
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "semantic-clear",
   }
   let root = @common.Uri::parse("file:///work")
@@ -890,7 +887,7 @@ test "new semantic search clears partial results and cancellation clears them" {
 ///|
 test "active result helpers share file grouping and highlight projection" {
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "active-results",
   }
   let root = @common.Uri::parse("file:///work")
@@ -938,18 +935,15 @@ test "active result helpers share file grouping and highlight projection" {
     fail("expected text highlights")
   }
   assert_eq(highlights.ranges(), [
-    @common.Range(2, 1, 2, 5),
-    @common.Range(2, 6, 2, 10),
-    @common.Range(4, 1, 4, 5),
+    Range(2, 1, 2, 5),
+    Range(2, 6, 2, 10),
+    Range(4, 1, 4, 5),
   ])
 }
 
 ///|
 test "parking a checkout keeps its draft and fences the in-flight reply" {
-  let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
-    session: "suspend",
-  }
+  let owner : @interop.ConversationKey = { channel: Local, session: "suspend", }
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
@@ -987,10 +981,7 @@ test "parking a checkout keeps its draft and fences the in-flight reply" {
 
 ///|
 test "refresh is immediate and loaded file groups can collapse and clear" {
-  let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
-    session: "one",
-  }
+  let owner : @interop.ConversationKey = { channel: Local, session: "one", }
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
@@ -1047,7 +1038,7 @@ test "refresh is immediate and loaded file groups can collapse and clear" {
 ///|
 test "editor highlights include every retained match for the file" {
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "editor-highlights",
   }
   let root = @common.Uri::parse("file:///work")
@@ -1104,9 +1095,9 @@ test "editor highlights include every retained match for the file" {
     fail("main file should have editor highlights")
   }
   assert_eq(highlights.ranges(), [
-    @common.Range(2, 1, 2, 5),
-    @common.Range(2, 6, 2, 10),
-    @common.Range(7, 1, 7, 5),
+    Range(2, 1, 2, 5),
+    Range(2, 6, 2, 10),
+    Range(7, 1, 7, 5),
   ])
   assert_true(ready.editor_highlights("missing.mbt") is None)
   assert_true(
@@ -1119,10 +1110,7 @@ test "editor highlights include every retained match for the file" {
 
 ///|
 test "invalid regex replies retain their actionable Host error" {
-  let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
-    session: "regex",
-  }
+  let owner : @interop.ConversationKey = { channel: Local, session: "regex", }
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",

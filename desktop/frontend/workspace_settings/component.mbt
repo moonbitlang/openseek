@@ -133,7 +133,7 @@ fn setting_select(
       }
     Inactive => (_ : String) => @cmd.none
   }
-  @select_control.Control::{
+  {
     id,
     groups: [{ label: aria_label, options, }],
     selected,

@@ -237,7 +237,7 @@ fn ModelLineProjection::get_view_lines_data(
         data.projected_line,
       )
       let resolved_injection_options = resolve_injection_options(
-        injection_options[:],
+        injection_options,
       )
       let break_offsets = data.segments.map(segment => segment.end_offset)
       let wrapped_text_indent_length = if data.segments.length() > 1 {

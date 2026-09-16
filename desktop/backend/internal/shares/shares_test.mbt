@@ -141,7 +141,7 @@ test "upload limits count UTF-8 bytes and multipart overhead" {
       json="x".repeat(10 * 1024 * 1024),
     )
   catch {
-    @shares.Oversized => ()
+    Oversized => ()
     error => raise error
   } noraise {
     _ => fail("files that only together exceed the limit must be refused")
@@ -149,13 +149,13 @@ test "upload limits count UTF-8 bytes and multipart overhead" {
   try
     @shares.Snapshot(title="Test", html="x".repeat(20 * 1024 * 1024), json="{}")
   catch {
-    @shares.Oversized => ()
+    Oversized => ()
     error => raise error
   } noraise {
     _ => fail("multipart framing must count toward the limit")
   }
   try @shares.Snapshot(title="  ", html="html", json="{}") catch {
-    @shares.EmptyTitle => ()
+    EmptyTitle => ()
     error => raise error
   } noraise {
     _ => fail("a blank title must be refused")

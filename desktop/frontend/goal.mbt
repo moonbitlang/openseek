@@ -62,7 +62,7 @@ test "only the matching set marker settles the pending text" {
         session="desktop-test",
         sequence~,
         ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
+        item=RuntimeNotice({ content, }),
         session_root=@interop.ChannelId::Local.test_store_root(),
       ),
       model,
@@ -152,7 +152,7 @@ test "a clear waits for its tombstone, not for any goal marker" {
         session="desktop-test",
         sequence~,
         ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
+        item=RuntimeNotice({ content, }),
         session_root=@interop.ChannelId::Local.test_store_root(),
       ),
       model,
@@ -181,7 +181,7 @@ test "each conversation owns its own goal edit" {
   // rather than in one model-wide slot.
   let neighbour : Conversation = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-other",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -200,8 +200,7 @@ test "each conversation owns its own goal edit" {
   }
   for msg in [ClearGoal, OpenGoalEditor, CloseGoalEditor] {
     let (_, next) = update(dispatch, msg, model)
-    guard next.find_conversation(@interop.ChannelId::Local, "desktop-test")
-      is Some(hidden) else {
+    guard next.find_conversation(Local, "desktop-test") is Some(hidden) else {
       fail("the neighbour should survive")
     }
     guard hidden.goal_edit is Some(edit) else {
@@ -220,7 +219,7 @@ test "goal marker commits write the mirror and render cards" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal]\nship the feature", }),
+      item=RuntimeNotice({ content: "[goal]\nship the feature", }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
@@ -237,9 +236,7 @@ test "goal marker commits write the mirror and render cards" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.RuntimeNotice({
-        content: "[goal blocked]\nneeds a decision",
-      }),
+      item=RuntimeNotice({ content: "[goal blocked]\nneeds a decision", }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     set,
@@ -254,7 +251,7 @@ test "goal marker commits write the mirror and render cards" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal cleared]", }),
+      item=RuntimeNotice({ content: "[goal cleared]", }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     blocked,
@@ -374,7 +371,7 @@ test "a clear over an unconfirmed set waits for a goal to actually go away" {
         session="desktop-test",
         sequence~,
         ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
+        item=RuntimeNotice({ content, }),
         session_root=@interop.ChannelId::Local.test_store_root(),
       ),
       model,
@@ -414,7 +411,7 @@ test "a tombstone over an empty mirror still ends the clear" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal cleared]", }),
+      item=RuntimeNotice({ content: "[goal cleared]", }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -443,7 +440,7 @@ test "re-asserting an unchanged goal waits for its own marker too" {
         session="desktop-test",
         sequence~,
         ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
+        item=RuntimeNotice({ content, }),
         session_root=@interop.ChannelId::Local.test_store_root(),
       ),
       model,
@@ -555,7 +552,7 @@ test "re-asserting a blocked goal waits for its own marker" {
         session="desktop-test",
         sequence~,
         ts=None,
-        item=@protocol.RuntimeNotice({ content, }),
+        item=RuntimeNotice({ content, }),
         session_root=@interop.ChannelId::Local.test_store_root(),
       ),
       model,
@@ -672,7 +669,7 @@ test "a kept goal draft is a conversation you can get back to" {
   // conversation lives on with no way to reach it again. Retention and the
   // sidebar therefore ask one predicate, not two.
   let fresh = empty_conversation(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-fresh",
     @interop.ChannelId::Local.test_project(),
   )
@@ -720,7 +717,7 @@ test "the frontier a goal is sent from counts what is already buffered" {
       {
         sequence: 7,
         ts: None,
-        item: @protocol.RuntimeNotice({ content: "[goal]\nship the feature", }),
+        item: RuntimeNotice({ content: "[goal]\nship the feature", }),
       },
     ]),
     goal_edit: Some({ draft: "ship the feature", }),
@@ -735,7 +732,7 @@ test "the frontier a goal is sent from counts what is already buffered" {
         {
           sequence: 7,
           ts: None,
-          item: @protocol.RuntimeNotice({ content: "[goal]\nship the feature", }),
+          item: RuntimeNotice({ content: "[goal]\nship the feature", }),
         },
       ]),
     }.durable_frontier(),
@@ -758,7 +755,7 @@ test "a request in flight is reason enough to re-read the record" {
   // without this the reconnect that follows a lost reply would never ask the
   // record the one question the transport could not answer.
   let fresh = empty_conversation(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-fresh",
     @interop.ChannelId::Local.test_project(),
   )
@@ -919,7 +916,7 @@ test "an undelivered reply goes quiet once its send has been settled" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal]\nship the feature", }),
+      item=RuntimeNotice({ content: "[goal]\nship the feature", }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -976,7 +973,7 @@ test "a rejection that arrives after the record has spoken only reports" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.RuntimeNotice({ content: "[goal]\nthe goal that won", }),
+      item=RuntimeNotice({ content: "[goal]\nthe goal that won", }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -1167,7 +1164,7 @@ test "a fresh conversation survives on its goal draft alone" {
   // halves — otherwise activating a neighbour prunes the conversation and
   // takes the only copy of the draft with it.
   let fresh = empty_conversation(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-fresh",
     @interop.ChannelId::Local.test_project(),
   )
@@ -1188,7 +1185,7 @@ test "a fresh conversation survives on its goal draft alone" {
     conversations: [
       { ..fresh, goal_edit: Some({ draft: "a goal still being written", }), },
       empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "desktop-other",
         @interop.ChannelId::Local.test_project(),
       ),
@@ -1196,12 +1193,9 @@ test "a fresh conversation survives on its goal draft alone" {
     active_session: "desktop-fresh",
   }
   let switched = model.activate(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-other",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(
-    switched.find_conversation(@interop.ChannelId::Local, "desktop-fresh")
-    is Some(_),
-  )
+  assert_true(switched.find_conversation(Local, "desktop-fresh") is Some(_))
 }

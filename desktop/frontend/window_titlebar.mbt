@@ -117,7 +117,7 @@ priv suberror WindowTitlebarSubscription {
 ///|
 fn window_titlebar_sub_loader(
   payload : Error,
-  scheduler : &Scheduler,
+  scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
     WindowTitlebarSubscription(emit) => {

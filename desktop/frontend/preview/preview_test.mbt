@@ -36,7 +36,7 @@ test "close_page drops only its page" {
 test "navigate commits url, mirrors the draft, clears the failure" {
   let (state, id) = @preview.open_page(@preview.State::empty())
   let state = @preview.update(
-    @preview.Msg::LoadFailed(id~, url="http://x/", text="boom"),
+    LoadFailed(id~, url="http://x/", text="boom"),
     state,
   )
   let state = @preview.navigate(state, id, "http://127.0.0.1:8080/")
@@ -77,21 +77,18 @@ test "a new document drops the title; a fragment jump keeps it" {
     @preview.State::empty(),
     url="https://example.com/docs",
   )
-  let titled = @preview.update(
-    @preview.Msg::TitleUpdated(id~, title="Docs"),
-    state,
-  )
+  let titled = @preview.update(TitleUpdated(id~, title="Docs"), state)
   // Same document, new anchor: the page never reloads, so no `TitleUpdated`
   // is coming and the title must survive.
   let anchored = @preview.update(
-    @preview.Msg::Navigated(id~, url="https://example.com/docs#install"),
+    Navigated(id~, url="https://example.com/docs#install"),
     titled,
   )
   assert_eq(@preview.page_label(@preview.page(anchored, id).unwrap()), "Docs")
   // A different document is a different page: labelling it "Docs" until some
   // title arrives (a failed load reports none) would name the wrong site.
   let moved = @preview.update(
-    @preview.Msg::Navigated(id~, url="https://other.test/x"),
+    Navigated(id~, url="https://other.test/x"),
     anchored,
   )
   assert_eq(
@@ -115,21 +112,13 @@ test "a failure for a superseded URL never reaches the page" {
   // The user moves on before the old load's error is reported.
   let moved = @preview.navigate(state, id, "https://example.com/")
   let late = @preview.update(
-    @preview.Msg::LoadFailed(
-      id~,
-      url="http://localhost:5173/",
-      text="ERR_CONNECTION_REFUSED",
-    ),
+    LoadFailed(id~, url="http://localhost:5173/", text="ERR_CONNECTION_REFUSED"),
     moved,
   )
   assert_true(late == moved)
   // The current URL's own failure still shows.
   let failed = @preview.update(
-    @preview.Msg::LoadFailed(
-      id~,
-      url="https://example.com/",
-      text="ERR_NAME_NOT_RESOLVED",
-    ),
+    LoadFailed(id~, url="https://example.com/", text="ERR_NAME_NOT_RESOLVED"),
     moved,
   )
   let page = @preview.page(failed, id).unwrap()
@@ -140,10 +129,7 @@ test "a failure for a superseded URL never reaches the page" {
 ///|
 test "events for unknown pages are dropped" {
   let state = @preview.State::empty()
-  let next = @preview.update(
-    @preview.Msg::TitleUpdated(id=7, title="ghost"),
-    state,
-  )
+  let next = @preview.update(TitleUpdated(id=7, title="ghost"), state)
   assert_true(next == state)
 }
 
@@ -154,17 +140,14 @@ test "load failure records and navigation label falls back sensibly" {
     url="http://localhost:5173/",
   )
   let state = @preview.update(
-    @preview.Msg::LoadFailed(id~, url="http://localhost:5173/", text="refused"),
+    LoadFailed(id~, url="http://localhost:5173/", text="refused"),
     state,
   )
   let page = @preview.page(state, id).unwrap()
   assert_false(page.loading)
   assert_true(page.failure is Some(_))
   assert_eq(@preview.page_label(page), "localhost")
-  let titled = @preview.update(
-    @preview.Msg::TitleUpdated(id~, title="Docs"),
-    state,
-  )
+  let titled = @preview.update(TitleUpdated(id~, title="Docs"), state)
   assert_eq(@preview.page_label(@preview.page(titled, id).unwrap()), "Docs")
   let (blank_state, blank) = @preview.open_page(state)
   assert_eq(

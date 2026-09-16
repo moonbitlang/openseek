@@ -42,7 +42,7 @@ test "the composer is handed the turn's facts, not a rendered row" {
 test "composer submission stays bound to its originating conversation" {
   let origin = test_conversation()
   let visible = empty_conversation(
-    @interop.ChannelId::Local,
+    Local,
     "visible-session",
     @interop.ChannelId::Local.test_project(),
   )
@@ -52,33 +52,24 @@ test "composer submission stays bound to its originating conversation" {
     conversations: [origin, visible],
   }
   let identity : @composer.Identity = {
-    owner: { channel: @interop.ChannelId::Local, session: origin.session_id, },
+    owner: { channel: Local, session: origin.session_id, },
     archive_generation: 0,
   }
   let (_, submitted) = update(
     test_dispatch(),
     ComposerAction(
-      @composer.DraftSubmitted(identity~, draft={
-        task: "send to origin",
-        mentions: [],
-      }),
+      DraftSubmitted(identity~, draft={ task: "send to origin", mentions: [], }),
     ),
     model,
   )
   // Running the root operation may temporarily select the owner, but the
   // user's visible navigation is restored before the action returns.
   inspect(submitted.active_session, content="visible-session")
-  guard submitted.find_conversation(
-      @interop.ChannelId::Local,
-      origin.session_id,
-    )
+  guard submitted.find_conversation(Local, origin.session_id)
     is Some(origin_after) else {
     fail("the originating conversation disappeared")
   }
-  guard submitted.find_conversation(
-      @interop.ChannelId::Local,
-      visible.session_id,
-    )
+  guard submitted.find_conversation(Local, visible.session_id)
     is Some(visible_after) else {
     fail("the visible conversation disappeared")
   }
@@ -90,30 +81,24 @@ test "composer submission stays bound to its originating conversation" {
 test "annotation-only composer submission starts its conversation" {
   let model = test_model()
   let identity : @composer.Identity = {
-    owner: {
-      channel: @interop.ChannelId::Local,
-      session: model.active().session_id,
-    },
+    owner: { channel: Local, session: model.active().session_id, },
     archive_generation: 0,
   }
   let mention : Mention = {
-    ref_: @mention_context.Annotation(
+    ref_: Annotation(
       file="bench/bench.mbt",
       start_line=69,
       end_line=69,
       quote="bench()",
       comment="inspect this selection",
-      side=@mention_context.WorkingRevision,
+      side=WorkingRevision,
     ),
-    range: Some(@common.Range(69, 1, 69, 1)),
+    range: Some(Range(69, 1, 69, 1)),
   }
   let (_, submitted) = update(
     test_dispatch(),
     ComposerAction(
-      @composer.DraftSubmitted(identity~, draft={
-        task: "",
-        mentions: [mention],
-      }),
+      DraftSubmitted(identity~, draft={ task: "", mentions: [mention], }),
     ),
     model,
   )
@@ -139,7 +124,7 @@ test "annotation-only composer submission starts its conversation" {
 ///|
 test "a background retirement expires old actions without poisoning a reopened id" {
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "desktop-test",
   }
   let model = { ..test_model(), composer_entry_retirements: [owner], }
@@ -155,18 +140,14 @@ test "a background retirement expires old actions without poisoning a reopened i
 
 ///|
 test "composer follow-up overrides route the message without changing the default" {
-  for
-    pair in [
-      (@composer.QueueNext, FollowupSteer),
-      (@composer.SteerNow, FollowupQueue),
-    ] {
+  for pair in [(@composer.QueueNext, FollowupSteer), (SteerNow, FollowupQueue)] {
     let (choice, default) = pair
     let model = { ..running_model(), followup_behavior: default, }
     let identity = model.composer_input().identity
     let (_, submitted) = update(
       test_dispatch(),
       ComposerAction(
-        @composer.FollowupSubmitted(
+        FollowupSubmitted(
           identity~,
           draft={ task: "one message", mentions: [], },
           choice~,
@@ -178,11 +159,11 @@ test "composer follow-up overrides route the message without changing the defaul
     let conv = submitted.active()
     assert_eq(conv.pending_steers.length(), 1)
     match choice {
-      @composer.QueueNext => {
+      QueueNext => {
         assert_true(conv.pending_steers[0].behavior is FollowupQueue)
         assert_eq(conv.queued_inputs.length(), 1)
       }
-      @composer.SteerNow => {
+      SteerNow => {
         assert_true(conv.pending_steers[0].behavior is FollowupSteer)
         assert_true(conv.queued_inputs.is_empty())
       }

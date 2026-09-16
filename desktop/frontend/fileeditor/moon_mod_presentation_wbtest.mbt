@@ -81,7 +81,7 @@ test "package graph replies accept only the current owner epoch path and generat
   let wrong_path = PackageGraphRequestLoaded(
     owner=ctx.owner,
     epoch=ctx.request_epoch,
-    path=@pathx.Relative("nested/moon.mod"),
+    path=Relative("nested/moon.mod"),
     generation=1,
     source="wrong-path",
   )
@@ -191,7 +191,7 @@ test "positioned moon.mod opens source and close forgets all graph state" {
     ctx,
     path,
     name="moon.mod",
-    range=Some(@common.Range(1, 1, 1, 5)),
+    range=Some(Range(1, 1, 1, 5)),
     had_active=true,
   )
   assert_true(positioned.moon_mod_view_mode(path) is MoonModSource)
@@ -263,21 +263,14 @@ test "reviewed and historical moon.mod views remain source-only" {
 
 ///|
 test "package graph invalidation covers manifests but not source edits" {
-  assert_true(Modified(@pathx.Relative("moon.mod")).package_graph_relevant())
+  assert_true(Modified(Relative("moon.mod")).package_graph_relevant())
+  assert_true(Modified(Relative("nested/moon.pkg")).package_graph_relevant())
   assert_true(
-    Modified(@pathx.Relative("nested/moon.pkg")).package_graph_relevant(),
+    Renamed(old=Relative("old/moon.work"), new=Relative("new/moon.work")).package_graph_relevant(),
   )
-  assert_true(
-    Renamed(
-      old=@pathx.Relative("old/moon.work"),
-      new=@pathx.Relative("new/moon.work"),
-    ).package_graph_relevant(),
-  )
+  assert_false(Modified(Relative("src/main.mbt")).package_graph_relevant())
   assert_false(
-    Modified(@pathx.Relative("src/main.mbt")).package_graph_relevant(),
-  )
-  assert_false(
-    Modified(@pathx.Relative("notes/moon.mod.bak")).package_graph_relevant(),
+    Modified(Relative("notes/moon.mod.bak")).package_graph_relevant(),
   )
 }
 

@@ -1,7 +1,4 @@
 ///|
-using @cmd {trait Scheduler}
-
-///|
 extern "js" fn open_link_in_browser(url : String) -> Unit =
   #| (url) => {
   #|   let parsed;
@@ -35,11 +32,7 @@ fn open_external_link(dispatch : @cmd.Emit[Msg], url : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       ignore(
-        @interop.bridge_request(
-          @interop.ChannelId::Local,
-          @commands.shell_open_external,
-          { url, },
-        ) catch {
+        @interop.bridge_request(Local, @commands.shell_open_external, { url, }) catch {
           error => {
             scheduler.add(
               dispatch(HostActionFailed(@interop.bridge_error_text(error))),

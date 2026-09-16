@@ -9,13 +9,13 @@ test "picker paths join with URI separators" {
 test "a listing keeps its raw protocol path" {
   assert_true(
     reply_message(
-      @interop.ChannelId::Local,
-      @protocol.Listing(path="/C:/project", parent=Some("/C:/"), entries=[]),
+      Local,
+      Listing(path="/C:/project", parent=Some("/C:/"), entries=[]),
       generation=7,
       drives=true,
     )
     is Loaded(
-      channel=@interop.ChannelId::Local,
+      channel=Local,
       location=Directory("/C:/project"),
       entries=[],
       generation=7
@@ -25,13 +25,13 @@ test "a listing keeps its raw protocol path" {
 
 ///|
 fn emit() -> @cmd.Emit[Msg] {
-  @cmd.Emit(_ => @cmd.none)
+  Emit(_ => @cmd.none)
 }
 
 ///|
 /// Open the picker and land one listing at `location`.
 fn opened(
-  channel? : @interop.ChannelId = @interop.ChannelId::Local,
+  channel? : @interop.ChannelId = Local,
   location~ : Location,
   entries? : Array[String] = [],
 ) -> State raise {
@@ -57,14 +57,14 @@ fn updated(picker : State, msg : Msg) -> State raise {
 ///|
 test "the picker opens loading and adopts the first listing" {
   let home = "/home/u"
-  let (_, opening) = State::open(@interop.ChannelId::Local, emit())
+  let (_, opening) = State::open(Local, emit())
   assert_true(opening.loading)
   assert_true(opening.location is None)
   let (_, loaded, _) = State::handle(
     opening,
     emit(),
     Loaded(
-      channel=@interop.ChannelId::Local,
+      channel=Local,
       location=Directory(home),
       entries=["proj"],
       generation=opening.generation,
@@ -84,7 +84,7 @@ test "a listing for another channel or generation is dropped" {
     opening,
     emit(),
     Loaded(
-      channel=@interop.ChannelId::Remote("d_b"),
+      channel=Remote("d_b"),
       location=Directory("/from-b"),
       entries=["wrong"],
       generation=opening.generation,
@@ -108,7 +108,7 @@ test "a listing for another channel or generation is dropped" {
     browsing,
     emit(),
     Loaded(
-      channel=@interop.ChannelId::Local,
+      channel=Local,
       location=Directory("/elsewhere"),
       entries=["wrong"],
       generation=opening.generation,
@@ -125,7 +125,7 @@ test "a failed navigation keeps the listing" {
     opening,
     emit(),
     Failed(
-      channel=@interop.ChannelId::Local,
+      channel=Local,
       message="no such directory: /gone",
       generation=opening.generation,
     ),
@@ -144,8 +144,8 @@ test "a failed navigation keeps the listing" {
 
 ///|
 test "reopened pickers do not reuse request generations" {
-  let (_, first) = State::open(@interop.ChannelId::Local, emit())
-  let (_, second) = State::open(@interop.ChannelId::Local, emit())
+  let (_, first) = State::open(Local, emit())
+  let (_, second) = State::open(Local, emit())
   assert_true(first.generation != second.generation)
 }
 
@@ -236,7 +236,7 @@ test "typing a separator after an exact child navigates immediately" {
   let loaded_after_cancel = updated(
     cancelled,
     Loaded(
-      channel=@interop.ChannelId::Local,
+      channel=Local,
       location=Directory(git),
       entries=["openseek"],
       generation=navigating.generation,
@@ -248,7 +248,7 @@ test "typing a separator after an exact child navigates immediately" {
   let loaded = updated(
     navigating,
     Loaded(
-      channel=@interop.ChannelId::Local,
+      channel=Local,
       location=Directory(git),
       entries=["openseek"],
       generation=navigating.generation,
@@ -272,7 +272,7 @@ test "typing a separator after an exact child navigates immediately" {
   let loaded_drive = updated(
     navigating_drive,
     Loaded(
-      channel=@interop.ChannelId::Local,
+      channel=Local,
       location=Directory(drive),
       entries=["Users"],
       generation=navigating_drive.generation,
@@ -374,7 +374,7 @@ test "new folder creation enters the created directory" {
     creating,
     emit(),
     Loaded(
-      channel=@interop.ChannelId::Local,
+      channel=Local,
       location=Directory(created),
       entries=[],
       generation=creating.generation,
@@ -404,7 +404,7 @@ test "a failed folder create keeps its name editable" {
     creating,
     emit(),
     Failed(
-      channel=@interop.ChannelId::Local,
+      channel=Local,
       message="already exists",
       generation=creating.generation,
     ),

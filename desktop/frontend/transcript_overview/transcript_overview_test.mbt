@@ -53,12 +53,12 @@ test "entries pick user turns and pair each with its first answer" {
     display=text => text,
   )
   inspect(rows.length(), content="2")
-  @debug.assert_eq(rows[0].key, @transcript_overview.Durable(1))
+  @debug.assert_eq(rows[0].key, Durable(1))
   inspect(rows[0].text, content="first question")
   // The first prose answers the turn; the afterthought does not replace it,
   // and the open second turn has no answer yet.
   @debug.assert_eq(rows[0].reply, Some("first answer"))
-  @debug.assert_eq(rows[1].key, @transcript_overview.Durable(5))
+  @debug.assert_eq(rows[1].key, Durable(5))
   @debug.assert_eq(rows[1].reply, None)
 }
 
@@ -138,7 +138,7 @@ test "a row without a sequence keys by its position" {
     display=text => text,
   )
   inspect(rows.length(), content="1")
-  @debug.assert_eq(rows[0].key, @transcript_overview.Local(1))
+  @debug.assert_eq(rows[0].key, Local(1))
 }
 
 ///|
@@ -152,7 +152,7 @@ test "the display projection owns the prompt's shown form" {
 
 ///|
 test "anchor ids round-trip through the DOM" {
-  for key in [@transcript_overview.Durable(12), @transcript_overview.Local(0)] {
+  for key in [@transcript_overview.Durable(12), Local(0)] {
     @debug.assert_eq(
       @transcript_overview.TurnKey::from_anchor(key.anchor()),
       Some(key),
@@ -170,17 +170,11 @@ test "the state machine's transitions are idempotent" {
   for
     msg in (
       [
-        @transcript_overview.Entered(
-          @transcript_overview.Durable(3),
-          flip=false,
-          anchor=48,
-        ),
-        @transcript_overview.Left,
-        @transcript_overview.Clicked(@transcript_overview.Local(2)),
-        @transcript_overview.ActiveChanged(
-          Some(@transcript_overview.Durable(9)),
-        ),
-        @transcript_overview.ActiveChanged(None),
+        Entered(Durable(3), flip=false, anchor=48),
+        Left,
+        Clicked(Local(2)),
+        ActiveChanged(Some(Durable(9))),
+        ActiveChanged(None),
       ] : Array[@transcript_overview.Msg]) {
     let once = @transcript_overview.update(msg, initial)
     @debug.assert_eq(@transcript_overview.update(msg, once), once)
@@ -191,20 +185,17 @@ test "the state machine's transitions are idempotent" {
 test "hover opens on enter, survives a click, and closes on leaving the rail" {
   let key = @transcript_overview.Durable(7)
   let state = @transcript_overview.update(
-    @transcript_overview.Entered(key, flip=true, anchor=132),
+    Entered(key, flip=true, anchor=132),
     @transcript_overview.State::empty(),
   )
   // The enter-time flip and anchor measurements ride along with the hover.
   @debug.assert_eq(state.hover, Some({ key, flip: true, anchor: 132, }))
-  let clicked = @transcript_overview.update(
-    @transcript_overview.Clicked(key),
-    state,
-  )
+  let clicked = @transcript_overview.update(Clicked(key), state)
   // The click highlights eagerly and keeps the popover: the pointer is
   // still on the tick.
   @debug.assert_eq(clicked.active, Some(key))
   @debug.assert_eq(clicked.hover, Some({ key, flip: true, anchor: 132, }))
-  let left = @transcript_overview.update(@transcript_overview.Left, clicked)
+  let left = @transcript_overview.update(Left, clicked)
   @debug.assert_eq(left.hover, None)
   @debug.assert_eq(left.active, Some(key))
 }

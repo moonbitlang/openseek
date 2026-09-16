@@ -462,9 +462,9 @@ fn @protocol.CodexPermissionMode::short_label(
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval => "Ask"
-    @protocol.AutoReview => "Approve for me"
-    @protocol.FullAccess => "Full access"
+    RequestApproval => "Ask"
+    AutoReview => "Approve for me"
+    FullAccess => "Full access"
   }
 }
 
@@ -473,9 +473,9 @@ fn @protocol.CodexPermissionMode::title(
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval => "Request approval"
-    @protocol.AutoReview => "Approve for me"
-    @protocol.FullAccess => "Full access"
+    RequestApproval => "Request approval"
+    AutoReview => "Approve for me"
+    FullAccess => "Full access"
   }
 }
 
@@ -484,11 +484,10 @@ fn @protocol.CodexPermissionMode::description(
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval =>
+    RequestApproval =>
       "Always ask before editing outside the workspace or using the internet"
-    @protocol.AutoReview =>
-      "Ask only when the reviewer detects a risky operation"
-    @protocol.FullAccess =>
+    AutoReview => "Ask only when the reviewer detects a risky operation"
+    FullAccess =>
       "Unrestricted internet access and access to any file on this computer"
   }
 }
@@ -498,9 +497,9 @@ fn @protocol.CodexPermissionMode::glyph(
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval => "✋"
-    @protocol.AutoReview => ">_"
-    @protocol.FullAccess => "!"
+    RequestApproval => "✋"
+    AutoReview => ">_"
+    FullAccess => "!"
   }
 }
 
@@ -511,7 +510,7 @@ fn @protocol.CodexPermissionMode::render_option(
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
-  let class_name = if self is @protocol.FullAccess {
+  let class_name = if self is FullAccess {
     "codex-permission-option danger"
   } else {
     "codex-permission-option"
@@ -544,7 +543,7 @@ fn PermissionControl::render(
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
-  let class_name = if self.mode is @protocol.FullAccess {
+  let class_name = if self.mode is FullAccess {
     "codex-permission-control danger"
   } else {
     "codex-permission-control"

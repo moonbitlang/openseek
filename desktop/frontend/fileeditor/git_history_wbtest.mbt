@@ -64,7 +64,7 @@ test "historical model URIs encode revision side and path immutably" {
     test_ctx().owner,
     revision,
     "original",
-    @pathx.Relative("src/a #.mbt"),
+    Relative("src/a #.mbt"),
   ).unwrap()
   assert_eq(uri.scheme, HistoryRevisionScheme)
   assert_eq(uri.path, "/\{revision}/original/src/a #.mbt")

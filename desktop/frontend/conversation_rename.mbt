@@ -16,11 +16,11 @@ fn Model::decorate_conversation_input(
   input : @conversation.Input,
 ) -> @conversation.Input {
   let openseek = match input.id.source() {
-    @conversation.OpenSeekLive | @conversation.OpenSeekArchived => true
+    OpenSeekLive | OpenSeekArchived => true
     _ => false
   }
   let selected = match input.id.source() {
-    @conversation.OpenSeekLive | @conversation.OpenSeekArchived =>
+    OpenSeekLive | OpenSeekArchived =>
       // Remembered OpenSeek selection survives page switches, but its row
       // must stop highlighting while Codex or another page is on screen.
       self.screen is Chat &&
@@ -97,7 +97,7 @@ fn rename_conversation(
       }
       let title = rename.draft.trim().to_owned()
       match rename.id.source() {
-        @conversation.OpenSeekLive => {
+        OpenSeekLive => {
           guard rename.id.root() is Some(workspace) else {
             scheduler.add(
               dispatch(
@@ -127,7 +127,7 @@ fn rename_conversation(
             }
           }
         }
-        @conversation.CodexLive => {
+        CodexLive => {
           let _ : @protocol.EmptyReply = @interop.codex_request(
             channel,
             @commands.codex_thread_rename,
@@ -256,7 +256,7 @@ fn conversation_rename_dialog(
       @html.div(class="modal-title", "Rename conversation"),
       @html.input(
         id="conversation-rename-input",
-        input_type=@html.InputType::Text,
+        input_type=Text,
         class="conversation-rename-input",
         value=rename.draft,
         on_input=value => {

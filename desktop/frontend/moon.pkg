@@ -1,5 +1,4 @@
 import {
-  "bobzhang/openseek_protocol" @wire,
   "openseek_desktop/frontend/jobs",
   "openseek_desktop/frontend/export_dialog",
   "moonbitlang/core/cmp",
@@ -13,7 +12,6 @@ import {
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
-  "moonbit-community/rabbita/url",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/internal/jsonx",
   "openseek_desktop/uri",
@@ -28,7 +26,6 @@ import {
   "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/fileeditor",
   "openseek_desktop/frontend/files",
-  "openseek_desktop/frontend/grep_search",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/labels",
   "openseek_desktop/frontend/sidebar",

@@ -35,7 +35,7 @@ fn fetch_host_settings(
       let reply = @interop.bridge_request(
         channel,
         @commands.settings_get,
-        @protocol.EmptyPayload::NoPayload,
+        NoPayload,
       ) catch {
         _ => return
       }

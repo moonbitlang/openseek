@@ -95,8 +95,8 @@ fn CodexActivityLedger::completed(
     Some(turn) =>
       match turn.status {
         "completed" => Some((turn.id, @conversation.Completed))
-        "failed" => Some((turn.id, @conversation.Failed))
-        "interrupted" => Some((turn.id, @conversation.Stopped))
+        "failed" => Some((turn.id, Failed))
+        "interrupted" => Some((turn.id, Stopped))
         _ => None
       }
     None => None

@@ -69,7 +69,7 @@ test "positioned MBTI opens use source and closing forgets the tab preference" {
     ctx,
     path,
     name="pkg.generated.mbti",
-    range=Some(@common.Range(3, 1, 3, 8)),
+    range=Some(Range(3, 1, 3, 8)),
     had_active=true,
   )
   assert_true(positioned.mbti_view_mode(path) is MbtiSource)

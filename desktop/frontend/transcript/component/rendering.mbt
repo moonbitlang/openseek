@@ -222,7 +222,7 @@ fn EmptyProjectControl::render(
                 @icons.icon(@icons.icon_search),
               ),
               @html.input(
-                input_type=@html.InputType::Text,
+                input_type=Text,
                 value=self.query,
                 autofocus=true,
                 placeholder="Search projects",
@@ -566,7 +566,7 @@ fn Block::render(self : Block, actions : Actions) -> @html.Html {
         on_jump=target => (actions.jump)(target),
         assistant_name~,
         step_label?,
-        subrun?=subrun_parent.map(parent => SubrunLink::{
+        subrun?=subrun_parent.map(parent => {
           parent,
           open: session => (actions.open_session)(session),
         }),

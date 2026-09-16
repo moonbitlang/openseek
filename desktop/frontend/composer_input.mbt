@@ -27,42 +27,40 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     self.api_ready() &&
     checkout_ready
   let primary_action : @composer.PrimaryAction = if conv.is_running() {
-    @composer.Running(
+    Running(
       queue_available=true,
       steer_available=root_ready &&
         conv.run is Open(stage~, ..) &&
         !(stage is Cancelling),
       can_stop=can_stop(conv),
       submit=if conv.queue_edit_id is Some(_) {
-        @composer.SaveQueue
+        SaveQueue
       } else if self.followup_behavior is FollowupQueue {
-        @composer.Queue
+        Queue
       } else {
-        @composer.Steer
+        Steer
       },
     )
   } else {
-    @composer.Send(available=root_ready && conv.compaction is NotCompacting)
+    Send(available=root_ready && conv.compaction is NotCompacting)
   }
   let status : Array[@composer.StatusComponent] = [
-    @composer.ModelStatus(self.openseek_model_chip(conv)),
+    ModelStatus(self.openseek_model_chip(conv)),
   ]
   if self.openseek_reasoning_chip(conv) is Some(control) {
-    status.push(@composer.ReasoningStatus(control))
+    status.push(ReasoningStatus(control))
   }
   if conv.git_presentation() is Some(presentation) {
-    status.push(
-      @composer.GitStatus({ presentation, open: self.git_details_open, }),
-    )
+    status.push(GitStatus({ presentation, open: self.git_details_open, }))
   }
   if self.worktree_control(conv) is Some(control) {
-    status.push(@composer.WorktreeStatus(control))
+    status.push(WorktreeStatus(control))
   }
   // The composer owns the stable container and every context view. The root
   // projects only typed state, so no caller-owned DOM or command can alter
   // the component's child ordering.
   let context : Array[@composer.ContextComponent] = [
-    @composer.ConnectionBanner(
+    ConnectionBanner(
       device_name=if self.console is Some(_) &&
         self.bridge_state() is BridgeLost(_) {
         Some(self.focused_device_name())
@@ -74,7 +72,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     // progress is live run status that no durable event describes, and the
     // scroller shows only what the record can place. The plan is the mirror
     // image: it is durable, so it stays in the transcript.
-    @composer.SubrunDock(lanes=conv.visible_subruns()),
+    SubrunDock(lanes=conv.visible_subruns()),
   ]
   // The BYOK reminder: readiness is otherwise folded silently into Send's
   // availability, and the top-bar status is owned by the run state — without
@@ -90,14 +88,14 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     } else {
       "No DeepSeek API key configured — Send is disabled."
     }
-    context.push(@composer.ApiSetupNotice(text~))
+    context.push(ApiSetupNotice(text~))
   }
   // First among the notices, because it is the only one the turn is waiting
   // on: everything else here is advice, and this is a question with a tool
   // blocked behind it.
   if conv.pending_approval is Some(pending) {
     context.push(
-      @composer.ApprovalRequest({
+      ApprovalRequest({
         tool_name: pending.tool_name,
         detail: pending.detail,
         body: pending.body,
@@ -110,7 +108,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   })
   if !steering.is_empty() {
     context.push(
-      @composer.PendingSteerPanel(
+      PendingSteerPanel(
         items=steering.map(steer => user_display_text(steer.content)),
       ),
     )
@@ -128,9 +126,9 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       id: item.id,
       content: user_display_text(item.content),
       state: if queueing {
-        @composer.Queueing
+        Queueing
       } else {
-        @composer.Queued(
+        Queued(
           editing=conv.queue_edit_id is Some(id) && id == item.id,
           interactive~,
         )
@@ -138,29 +136,25 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     })
   }
   if !queued_items.is_empty() {
-    context.push(@composer.QueuedInputPanel(items=queued_items))
+    context.push(QueuedInputPanel(items=queued_items))
   }
   match conv.compaction {
-    Requested | Compacting =>
-      context.push(@composer.CompactionNotice(queued=false))
-    Queued => context.push(@composer.CompactionNotice(queued=true))
+    Requested | Compacting => context.push(CompactionNotice(queued=false))
+    Queued => context.push(CompactionNotice(queued=true))
     NotCompacting => ()
   }
   match checkout {
-    None => context.push(@composer.WorktreePlacementNotice)
-    Some(@interop.MissingWorktree(name~, ..)) =>
+    None => context.push(WorktreePlacementNotice)
+    Some(MissingWorktree(name~, ..)) =>
       context.push(
-        @composer.MissingWorktreeNoticeComponent({
-          name,
-          conversation_noun: "chat",
-        }),
+        MissingWorktreeNoticeComponent({ name, conversation_noun: "chat", }),
       )
     Some(_) => ()
   }
   let pending : @composer.GoalPending? = conv.goal_pending.map(command => {
     match command.request {
-      Setting(text) => @composer.GoalSetting(text)
-      Clearing => @composer.GoalClearing
+      Setting(text) => GoalSetting(text)
+      Clearing => GoalClearing
     }
   })
   let file_index = self.composer_file_index()
@@ -229,14 +223,11 @@ fn Model::composer_input(self : Model) -> @composer.Input {
 /// observing this one authoritative index epoch.
 fn Model::composer_file_index(self : Model) -> @composer.FileIndex {
   match self.file_panel.index {
-    @fileeditor.IndexEmpty =>
-      @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
-    @fileeditor.IndexLoading(_) =>
-      @composer.FileIndexLoading(epoch=self.file_panel.request_epoch)
-    @fileeditor.IndexReady(truncated~, ..) =>
-      @composer.FileIndexReady(epoch=self.file_panel.request_epoch, truncated~)
-    @fileeditor.IndexFailed =>
-      @composer.FileIndexFailed(epoch=self.file_panel.request_epoch)
+    IndexEmpty => FileIndexEmpty(epoch=self.file_panel.request_epoch)
+    IndexLoading(_) => FileIndexLoading(epoch=self.file_panel.request_epoch)
+    IndexReady(truncated~, ..) =>
+      FileIndexReady(epoch=self.file_panel.request_epoch, truncated~)
+    IndexFailed => FileIndexFailed(epoch=self.file_panel.request_epoch)
   }
 }
 
@@ -253,7 +244,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
   let search = if workspace_ready {
     self.file_search()
   } else {
-    @files.Search([], [], None)
+    Search([], [], None)
   }
   self.codex.composer_input({
     channel: self.focused,
@@ -278,7 +269,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
     file_index: if workspace_ready {
       self.composer_file_index()
     } else {
-      @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
+      FileIndexEmpty(epoch=self.file_panel.request_epoch)
     },
   })
 }
@@ -312,7 +303,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
       status: [],
       placeholder: "",
       disabled: true,
-      primary_action: @composer.Send(available=false),
+      primary_action: Send(available=false),
     },
   }
 }

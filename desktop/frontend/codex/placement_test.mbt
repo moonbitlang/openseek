@@ -14,7 +14,7 @@ test "managed worktree snapshots use the registry checkout instead of app-server
         "turns": [],
       },
     })
-    let placement = state.active_placement(@interop.ChannelId::Local)
+    let placement = state.active_placement(Local)
     assert_eq(
       placement.bind(value => value.checkout_root()).map(root => root.path),
       Some("/work/project/.worktrees/wt-4"),

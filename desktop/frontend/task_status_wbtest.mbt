@@ -9,7 +9,7 @@ test "Codex outcomes remain unread while the editor covers the transcript" {
   for
     outcome in [
       ("completed", @conversation.CompletedMark),
-      ("failed", @conversation.FailedMark),
+      ("failed", FailedMark),
     ] {
     let (wire_status, expected) = outcome
     for layout in [(false, true), (true, false), (true, true)] {
@@ -56,11 +56,11 @@ test "Codex outcomes remain unread while the editor covers the transcript" {
         }
         let (_, restored) = update(dispatch, reveal, completed)
         let rows = restored.codex.project_conversations(context, "/workspace")
-        assert_true(rows[0].input.run_mark is @conversation.NoRunMark)
+        assert_true(rows[0].input.run_mark is NoRunMark)
       }
       let (_, revealed) = update(dispatch, ToggleRightPanel, completed)
       let rows = revealed.codex.project_conversations(context, "/workspace")
-      assert_true(rows[0].input.run_mark is @conversation.NoRunMark)
+      assert_true(rows[0].input.run_mark is NoRunMark)
     }
   }
 }
@@ -103,7 +103,7 @@ test "Codex outcomes are read when the transcript remains visible beside the edi
     { channel: Local, selected: true, registered_projects: ["/workspace"], },
     "/workspace",
   )
-  assert_true(rows[0].input.run_mark is @conversation.NoRunMark)
+  assert_true(rows[0].input.run_mark is NoRunMark)
 }
 
 ///|
@@ -125,12 +125,12 @@ test "OpenSeek outcomes remain unread while the editor covers the transcript" {
     )
     assert_true(
       session_component_input(completed, Local, "desktop-test", "Task A").run_mark
-      is @conversation.CompletedMark,
+      is CompletedMark,
     )
     let (_, revealed) = update(dispatch, ToggleRightPanel, completed)
     assert_true(
       session_component_input(revealed, Local, "desktop-test", "Task A").run_mark
-      is @conversation.NoRunMark,
+      is NoRunMark,
     )
   }
 }

@@ -220,7 +220,7 @@ fn dialog_view(emit : @cmd.Emit[Msg], open : Open) -> @html.Html {
         @html.div(class="quick-open-input-wrap", [
           @icons.icon(@icons.icon_search),
           @html.input(
-            input_type=@html.InputType::Text,
+            input_type=Text,
             value=open.value,
             placeholder~,
             on_input=emit.map(value => ValueChanged(value)),

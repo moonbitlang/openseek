@@ -74,7 +74,7 @@ fn TranscriptDomMount::refresh_diagrams(
       let renderer = match language {
         "mermaid" =>
           TranscriptDiagramRenderer::Mermaid(
-            @editor_viewer.MermaidDiagram(
+            MermaidDiagram(
               element,
               source,
               dark_mode~,

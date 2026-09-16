@@ -1344,8 +1344,7 @@ fn ConversationSelection::matches_id(
   id : @conversation.Id,
 ) -> Bool {
   let record_matches = match (self.record, id.source()) {
-    (LiveRecord, @conversation.OpenSeekLive)
-    | (ArchivedRecord, @conversation.OpenSeekArchived) => true
+    (LiveRecord, OpenSeekLive) | (ArchivedRecord, OpenSeekArchived) => true
     _ => false
   }
   record_matches &&
@@ -2598,7 +2597,7 @@ fn initial_model() -> Model {
   }
   let preselect_owner = match page_channel {
     Some(channel) => Some(channel)
-    None => page_device.map(id => @interop.ChannelId::Remote(id))
+    None => page_device.map(id => Remote(id))
   }
   let preselect_project = match
     (@interop.page_query_param("workspace"), preselect_owner) {
@@ -2615,7 +2614,7 @@ fn initial_model() -> Model {
       None => []
     },
     websocket_epoch: 0,
-    focused: page_channel.unwrap_or(@interop.ChannelId::Local),
+    focused: page_channel.unwrap_or(Local),
     default_model: DsFlash,
     default_agent: OpenSeekAgent,
     conversation_models: [],
@@ -2674,7 +2673,7 @@ fn initial_model() -> Model {
     selected_conversation: None,
     conversation_load_failure: None,
     screen: Chat,
-    codex: @codex.State(),
+    codex: State(),
     schedules: SchedulePage::empty(),
     skills: @skills.State::empty(),
     installed_skills: [],
@@ -2695,7 +2694,7 @@ fn initial_model() -> Model {
     tree_layout: RightSidebar,
     update_ux: UpdateUnknown,
     api_setup_open: false,
-    export_dialog: @export_dialog.Model(),
+    export_dialog: Model(),
     api_setup_dismissed: false,
     remote_access: None,
     remote_connecting: false,
@@ -3187,7 +3186,7 @@ fn DeviceState::project_for_session_root(
   guard session_root is Some(session_root) else { return None }
   for workspace in self.projects {
     if @resource.relative_to(session_root, workspace) ==
-      Some(@pathx.Relative(".openseek")) {
+      Some(Relative(".openseek")) {
       return Some(workspace)
     }
   }
@@ -4087,7 +4086,7 @@ fn Conversation::apply_commit(
   let changed = @transcript.apply_session_item(messages, item, ts?, sequence~)
   // A `[goal]` marker commit is the durable confirmation of a goal
   // set/clear/block — the only writer of the mirror the banner renders.
-  let goal_marker = if item is @protocol.RuntimeNotice(notice) {
+  let goal_marker = if item is RuntimeNotice(notice) {
     @transcript.goal_marker(notice.content)
   } else {
     None

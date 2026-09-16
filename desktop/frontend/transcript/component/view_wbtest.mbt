@@ -31,7 +31,7 @@ test "transcript stream children use stable typed keys in display order" {
   }
   let input = Input(
     source=OpenSeek,
-    focused=@interop.ChannelId::Local,
+    focused=Local,
     active_session="desktop-test",
     current_project=None,
     projects=[],
@@ -89,7 +89,7 @@ test "the live response is one node, replaced by the durable one" {
   }
   let live_input = Input(
     source=OpenSeek,
-    focused=@interop.ChannelId::Local,
+    focused=Local,
     active_session="desktop-test",
     current_project=None,
     projects=[],
@@ -136,7 +136,7 @@ test "the live response is one node, replaced by the durable one" {
 test "a streaming delta changes only the live block" {
   let input = Input(
     source=OpenSeek,
-    focused=@interop.ChannelId::Local,
+    focused=Local,
     active_session="desktop-test",
     current_project=None,
     projects=[],
@@ -186,7 +186,7 @@ test "a streaming delta changes only the live block" {
 test "transcript stream section key scopes equal session ids by channel" {
   let local_input = Input(
     source=OpenSeek,
-    focused=@interop.ChannelId::Local,
+    focused=Local,
     active_session="desktop-test",
     current_project=None,
     projects=[],
@@ -198,10 +198,7 @@ test "transcript stream section key scopes equal session ids by channel" {
     streaming_response=None,
     streaming_identity="idle",
   )
-  let remote = {
-    ..local_input,
-    focused: @interop.ChannelId::Remote("device-a"),
-  }
+  let remote = { ..local_input, focused: Remote("device-a"), }
   assert_eq(
     TranscriptSectionKey::stream(local_input).wire(),
     "stream\u{0}openseek\u{0}local\u{0}desktop-test",

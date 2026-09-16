@@ -1,7 +1,7 @@
 ///|
 /// Project durable panel data into the independent right-panel package.
 fn Model::right_panel_input(self : Model) -> @right_panel.Input {
-  @right_panel.Input(
+  Input(
     dock=self.dock,
     jobs=self.jobs,
     file_panel=self.file_panel,

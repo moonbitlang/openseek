@@ -208,9 +208,9 @@ fn read_package_graph(
         }
       }
       let message = match reply {
-        @protocol.PackageGraphSource(source~) =>
+        PackageGraphSource(source~) =>
           PackageGraphRequestLoaded(owner~, epoch~, path~, generation~, source~)
-        @protocol.PackageGraphError(message~) =>
+        PackageGraphError(message~) =>
           PackageGraphRequestFailed(
             owner~,
             epoch~,
@@ -265,12 +265,12 @@ fn FileContent::from_reply(
   channel : @interop.ChannelId,
 ) -> FileContent? {
   match reply {
-    @protocol.Binary => Some(Binary)
-    @protocol.Oversized => Some(Oversized)
+    Binary => Some(Binary)
+    Oversized => Some(Oversized)
     // Supported raster files carry display bytes for transcript rendering.
     // The text editor still presents them through its ordinary binary notice.
-    @protocol.BinaryContent(..) => Some(Binary)
-    @protocol.Content(content~, absolute~, sig~) => {
+    BinaryContent(..) => Some(Binary)
+    Content(content~, absolute~, sig~) => {
       // Bind the backend resource path to the device that produced the reply.
       guard @resource.of_path(channel, absolute) is Some(absolute) else {
         return None
@@ -362,7 +362,7 @@ fn watch_workspace(
           @interop.bridge_request_in_order(
             channel,
             @commands.fs_unwatch,
-            @protocol.EmptyPayload::NoPayload,
+            NoPayload,
           ) catch {
             _ => return
           },
@@ -403,15 +403,15 @@ test "a cross-host file read settles through its generation-fenced failure" {
     seen = Some(message)
     @cmd.none
   })
-  guard @resource.of_path(@interop.ChannelId::Local, "/work") is Some(workspace) else {
+  guard @resource.of_path(Local, "/work") is Some(workspace) else {
     fail("test workspace resource was not absolute")
   }
   ignore(
     read_file(
       dispatch,
-      { channel: @interop.ChannelId::Remote("other"), session: "remote-test", },
+      { channel: Remote("other"), session: "remote-test", },
       0,
-      @pathx.Relative("src/main.mbt"),
+      Relative("src/main.mbt"),
       "main.mbt",
       review_generation=7,
       range=None,
@@ -422,9 +422,9 @@ test "a cross-host file read settles through its generation-fenced failure" {
     seen
     is Some(
       FileFailed(
-        owner={ channel: @interop.ChannelId::Remote("other"), .. },
+        owner={ channel: Remote("other"), .. },
         epoch=0,
-        path=@pathx.Relative("src/main.mbt"),
+        path=Relative("src/main.mbt"),
         file_link_generation=None,
         review_generation=Some(7),
         message="file root moved to another host before file read"
@@ -481,35 +481,26 @@ test "typed directory rows build full relative paths" {
 ///|
 test "typed file replies map to viewer content" {
   guard FileContent::from_reply(
-      @protocol.Content(content="hello", absolute="/ws/a.mbt", sig="12:34"),
-      @interop.ChannelId::Local,
+      Content(content="hello", absolute="/ws/a.mbt", sig="12:34"),
+      Local,
     )
     is Some(Content(content~, absolute~, sig~)) else {
     fail("valid text reply was rejected")
   }
   assert_eq(content, "hello")
   assert_eq(absolute.path, "/ws/a.mbt")
-  assert_eq(@resource.channel(absolute), Some(@interop.ChannelId::Local))
+  assert_eq(@resource.channel(absolute), Some(Local))
   assert_eq(sig, "12:34")
+  assert_true(FileContent::from_reply(Binary, Local) is Some(Binary))
+  assert_true(FileContent::from_reply(Oversized, Local) is Some(Oversized))
   assert_true(
-    FileContent::from_reply(@protocol.Binary, @interop.ChannelId::Local)
-    is Some(Binary),
-  )
-  assert_true(
-    FileContent::from_reply(@protocol.Oversized, @interop.ChannelId::Local)
-    is Some(Oversized),
-  )
-  assert_true(
-    FileContent::from_reply(
-      @protocol.Content(content="x", absolute="", sig="1:2"),
-      @interop.ChannelId::Local,
-    )
+    FileContent::from_reply(Content(content="x", absolute="", sig="1:2"), Local)
     is None,
   )
   assert_true(
     FileContent::from_reply(
-      @protocol.Content(content="x", absolute="relative.mbt", sig="1:2"),
-      @interop.ChannelId::Local,
+      Content(content="x", absolute="relative.mbt", sig="1:2"),
+      Local,
     )
     is None,
   )

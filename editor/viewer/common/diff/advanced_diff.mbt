@@ -231,11 +231,7 @@ fn myers_sequence_diffs(
   sequence1 : Array[Int],
   sequence2 : Array[Int],
 ) -> Array[SequenceDiff] {
-  let edits = @core_diff.Diff(
-    old=sequence1[:],
-    new=sequence2[:],
-    algorithm=Myers,
-  ).edits()
+  let edits = @core_diff.Diff(old=sequence1, new=sequence2, algorithm=Myers).edits()
   let changes : Array[SequenceDiff] = []
   let mut index = 0
   while index < edits.length() {

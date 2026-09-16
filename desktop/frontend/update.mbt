@@ -55,7 +55,7 @@ fn focus_channel(
       // the request method against the old state would reuse an old token.
       dispatch(Codex(channel~, @codex.Msg::refresh())),
     ])
-  } else if channel == @interop.ChannelId::Local && model.console is Some(_) {
+  } else if channel == Local && model.console is Some(_) {
     @cmd.none
   } else {
     return (@cmd.none, model)
@@ -77,7 +77,7 @@ fn focus_channel(
       // Codex is host-owned just like the other focused mirrors. Clear the
       // previous device's account and conversation list before its replies
       // can be mistaken for this device's sidebar section.
-      codex: @codex.State(loading=true),
+      codex: State(loading=true),
       // The old HostConnection is already parked. Preserve the remaining
       // owner/root state until the post-dispatch sync retires its file-index
       // cache and re-roots against the newly focused host.
@@ -813,7 +813,7 @@ fn open_explorer(
   }
   let (cmd, file_panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
-    @fileeditor.ExplorerModeSelected(mode),
+    ExplorerModeSelected(mode),
     next.file_panel,
     file_ctx(next),
   )
@@ -846,7 +846,7 @@ fn reveal_local_directory(
   }
   let (cmd, panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
-    @fileeditor.RevealDirectory(path),
+    RevealDirectory(path),
     model.file_panel,
     file_ctx(model),
   )
@@ -856,7 +856,7 @@ fn reveal_local_directory(
   }
   let (expand_cmd, panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
-    @fileeditor.DirToggle(path),
+    DirToggle(path),
     panel,
     file_ctx(model),
   )
@@ -1470,7 +1470,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
   // typed placement in Codex state, then project this capability as absent at
   // the file-editor boundary rather than inventing a directory.
   let file_placement = match active.placement {
-    Some(@interop.Scratch(root=None)) if model.screen is Codex => None
+    Some(Scratch(root=None)) if model.screen is Codex => None
     placement => placement
   }
   let engine_model = model
@@ -1530,7 +1530,7 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
     Some(dev) => dev.bridge is Connected && dev.reconnect_failures == 0
     None => false
   }
-  @terminal.Ctx(
+  Ctx(
     channel=active.owner.channel,
     session=active.owner.session,
     placement=active.placement,
@@ -1955,13 +1955,13 @@ fn update(
 /// the panel later, after the host has classified the target as editable text.
 fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
   self
-  is (ComposerAction(@composer.MentionOpened(..))
-  | CodexComposerAction(@composer.MentionOpened(..))
+  is (ComposerAction(MentionOpened(..))
+  | CodexComposerAction(MentionOpened(..))
   | JumpToMention(_)
   | JumpToLocation(..)
-  | QuickOpen(@quick_open.Pick(_))
+  | QuickOpen(Pick(_))
   | OpenFileAt(..)
-  | FileEditor(@fileeditor.SearchMatchSelected(..)))
+  | FileEditor(SearchMatchSelected(..)))
 }
 
 ///|
@@ -2138,42 +2138,42 @@ fn update_msg(
     // apply it once the last write settles.
     CodexComposerAction(action) =>
       match action {
-        @composer.ModelMenuToggled(identity~) => {
+        ModelMenuToggled(identity~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
             return (@cmd.none, model)
           }
           update_msg(dispatch, ToggleSelectMenu(CodexModelMenu), model)
         }
-        @composer.ReasoningMenuToggled(identity~) => {
+        ReasoningMenuToggled(identity~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
             return (@cmd.none, model)
           }
           update_msg(dispatch, ToggleSelectMenu(CodexReasoningMenu), model)
         }
-        @composer.SelectMenuDismissed(identity~) => {
+        SelectMenuDismissed(identity~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
             return (@cmd.none, model)
           }
           update_msg(dispatch, CloseSelectMenu, model)
         }
-        @composer.ModelSelected(identity~, value~) => {
+        ModelSelected(identity~, value~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
             return (@cmd.none, model)
           }
           update_msg(dispatch, ModelPicked(value), model)
         }
-        @composer.ReasoningSelected(identity~, value~) => {
+        ReasoningSelected(identity~, value~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
             return (@cmd.none, model)
           }
           update_msg(dispatch, CodexEffortPicked(value), model)
         }
-        @composer.MentionOpened(identity~, mention~) => {
+        MentionOpened(identity~, mention~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
             return (@cmd.none, model)
@@ -2194,12 +2194,12 @@ fn update_msg(
             annotation?=target.annotation,
           )
         }
-        @composer.FileIndexEnsured(identity~) => {
+        FileIndexEnsured(identity~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
             return (@cmd.none, model)
           }
-          update_msg(dispatch, FileEditor(@fileeditor.EnsureFileIndex), model)
+          update_msg(dispatch, FileEditor(EnsureFileIndex), model)
         }
         _ => {
           let channel = model.focused
@@ -2215,26 +2215,26 @@ fn update_msg(
       }
     ComposerAction(action) =>
       match action {
-        @composer.ModelMenuToggled(..)
-        | @composer.ReasoningMenuToggled(..)
-        | @composer.SelectMenuDismissed(..)
-        | @composer.ModelSelected(..)
-        | @composer.ReasoningSelected(..)
-        | @composer.ApprovalAnswered(..)
-        | @composer.CodexRequestAnswerChanged(..)
-        | @composer.CodexRequestResponded(..)
-        | @composer.PermissionMenuToggled(..)
-        | @composer.PermissionMenuDismissed(..)
-        | @composer.PermissionSelected(..)
-        | @composer.GitDetailsToggled(..)
-        | @composer.WorktreeModeToggled(..)
-        | @composer.ApiSetupRequested(..)
-        | @composer.QueuedInputEditRequested(..)
-        | @composer.QueuedInputSteerRequested(..)
-        | @composer.QueuedInputDeleteRequested(..)
-        | @composer.WorktreePlacementRetried(..)
-        | @composer.MissingWorktreeRebuildRequested(..)
-        | @composer.MissingWorktreeArchiveRequested(..) => {
+        ModelMenuToggled(..)
+        | ReasoningMenuToggled(..)
+        | SelectMenuDismissed(..)
+        | ModelSelected(..)
+        | ReasoningSelected(..)
+        | ApprovalAnswered(..)
+        | CodexRequestAnswerChanged(..)
+        | CodexRequestResponded(..)
+        | PermissionMenuToggled(..)
+        | PermissionMenuDismissed(..)
+        | PermissionSelected(..)
+        | GitDetailsToggled(..)
+        | WorktreeModeToggled(..)
+        | ApiSetupRequested(..)
+        | QueuedInputEditRequested(..)
+        | QueuedInputSteerRequested(..)
+        | QueuedInputDeleteRequested(..)
+        | WorktreePlacementRetried(..)
+        | MissingWorktreeRebuildRequested(..)
+        | MissingWorktreeArchiveRequested(..) => {
           let identity = action.identity()
           guard model.screen is Chat &&
             model.conversation_for_composer_action(identity) is Some(conv) &&
@@ -2243,29 +2243,28 @@ fn update_msg(
             return (@cmd.none, model)
           }
           match action {
-            @composer.ModelMenuToggled(..) =>
+            ModelMenuToggled(..) =>
               update_msg(dispatch, ToggleSelectMenu(OpenSeekModelMenu), model)
-            @composer.ReasoningMenuToggled(..) =>
+            ReasoningMenuToggled(..) =>
               update_msg(
                 dispatch,
                 ToggleSelectMenu(OpenSeekReasoningMenu),
                 model,
               )
-            @composer.SelectMenuDismissed(..) =>
+            SelectMenuDismissed(..) =>
               update_msg(dispatch, CloseSelectMenu, model)
-            @composer.ModelSelected(value~, ..) =>
+            ModelSelected(value~, ..) =>
               update_msg(dispatch, ModelPicked(value), model)
-            @composer.ReasoningSelected(value~, ..) =>
+            ReasoningSelected(value~, ..) =>
               update_msg(dispatch, OpenSeekEffortPicked(value), model)
-            @composer.ApprovalAnswered(allow~, ..) =>
+            ApprovalAnswered(allow~, ..) =>
               update_msg(dispatch, ApprovalAnswered(allow~), model)
-            @composer.GitDetailsToggled(..) =>
+            GitDetailsToggled(..) =>
               update_msg(dispatch, ToggleGitDetails, model)
-            @composer.WorktreeModeToggled(..) =>
+            WorktreeModeToggled(..) =>
               update_msg(dispatch, ToggleWorktreeMode, model)
-            @composer.ApiSetupRequested(..) =>
-              update_msg(dispatch, OpenApiSetup, model)
-            @composer.QueuedInputEditRequested(id~, ..) => {
+            ApiSetupRequested(..) => update_msg(dispatch, OpenApiSetup, model)
+            QueuedInputEditRequested(id~, ..) => {
               guard conv.run is Open(stage~, ..) &&
                 !(stage is Cancelling) &&
                 conv.queued_inputs.search_by(item => item.id == id)
@@ -2284,7 +2283,7 @@ fn update_msg(
                 }),
               )
             }
-            @composer.QueuedInputSteerRequested(id~, ..) => {
+            QueuedInputSteerRequested(id~, ..) => {
               guard conv.run is Open(run_id~, stage~) && !(stage is Cancelling) else {
                 return (@cmd.none, model)
               }
@@ -2307,13 +2306,13 @@ fn update_msg(
                   dispatch,
                   conv.device,
                   conv.session_id,
-                  @protocol.QueueSteer(id~),
+                  QueueSteer(id~),
                   run_id,
                 ),
                 model.replace_conversation(conv),
               )
             }
-            @composer.QueuedInputDeleteRequested(id~, ..) => {
+            QueuedInputDeleteRequested(id~, ..) => {
               guard conv.run is Open(run_id~, stage~) && !(stage is Cancelling) else {
                 return (@cmd.none, model)
               }
@@ -2324,7 +2323,7 @@ fn update_msg(
                   dispatch,
                   conv.device,
                   conv.session_id,
-                  @protocol.QueueWithdraw(id~),
+                  QueueWithdraw(id~),
                   run_id,
                 ),
                 if editing {
@@ -2340,26 +2339,26 @@ fn update_msg(
                 },
               )
             }
-            @composer.WorktreePlacementRetried(..) =>
+            WorktreePlacementRetried(..) =>
               update_msg(dispatch, RetryWorktreePlacement, model)
-            @composer.MissingWorktreeRebuildRequested(..) =>
+            MissingWorktreeRebuildRequested(..) =>
               update_msg(dispatch, RepairWorktree, model)
-            @composer.MissingWorktreeArchiveRequested(..) =>
+            MissingWorktreeArchiveRequested(..) =>
               update_msg(
                 dispatch,
                 ArchiveSession(conv.device, conv.session_id),
                 model,
               )
-            @composer.PermissionMenuToggled(..)
-            | @composer.PermissionMenuDismissed(..)
-            | @composer.PermissionSelected(..)
-            | @composer.CodexRequestAnswerChanged(..)
-            | @composer.CodexRequestResponded(..) => (@cmd.none, model)
+            PermissionMenuToggled(..)
+            | PermissionMenuDismissed(..)
+            | PermissionSelected(..)
+            | CodexRequestAnswerChanged(..)
+            | CodexRequestResponded(..) => (@cmd.none, model)
             _ => (@cmd.none, model)
           }
         }
-        @composer.DraftSubmitted(identity~, draft~)
-        | @composer.FollowupSubmitted(identity~, draft~, ..) => {
+        DraftSubmitted(identity~, draft~)
+        | FollowupSubmitted(identity~, draft~, ..) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
@@ -2379,7 +2378,7 @@ fn update_msg(
             active_session: conv.session_id,
           }
           let submit = match action {
-            @composer.FollowupSubmitted(choice~, ..) => SendFollowup(choice)
+            FollowupSubmitted(choice~, ..) => SendFollowup(choice)
             _ => Send
           }
           let (command, submitted) = update_msg(dispatch, submit, target)
@@ -2392,7 +2391,7 @@ fn update_msg(
             },
           )
         }
-        @composer.DraftPresenceChanged(identity~, present~, cleared_source~) =>
+        DraftPresenceChanged(identity~, present~, cleared_source~) =>
           if model.conversation_for_composer_action(identity) is Some(conv) {
             let task = if !present &&
               cleared_source is Some(source) &&
@@ -2420,7 +2419,7 @@ fn update_msg(
           } else {
             (@cmd.none, model)
           }
-        @composer.RootMentionRemoved(identity~, mention~) => {
+        RootMentionRemoved(identity~, mention~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
@@ -2434,7 +2433,7 @@ fn update_msg(
             }),
           )
         }
-        @composer.SlashCommand(identity~, command~) => {
+        SlashCommand(identity~, command~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
@@ -2452,7 +2451,7 @@ fn update_msg(
             },
           )
         }
-        @composer.MentionOpened(identity~, mention~) => {
+        MentionOpened(identity~, mention~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
@@ -2480,13 +2479,13 @@ fn update_msg(
             },
           )
         }
-        @composer.GoalCancelled(identity~) => {
+        GoalCancelled(identity~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
           (@cmd.none, model.replace_conversation({ ..conv, goal_edit: None, }))
         }
-        @composer.GoalEditStarted(identity~) => {
+        GoalEditStarted(identity~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
@@ -2504,7 +2503,7 @@ fn update_msg(
             },
           )
         }
-        @composer.GoalCleared(identity~) => {
+        GoalCleared(identity~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
@@ -2522,7 +2521,7 @@ fn update_msg(
             },
           )
         }
-        @composer.GoalSubmitted(identity~, draft~, prompt_present~) => {
+        GoalSubmitted(identity~, draft~, prompt_present~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
@@ -2546,13 +2545,13 @@ fn update_msg(
             },
           )
         }
-        @composer.FileIndexEnsured(identity~) => {
+        FileIndexEnsured(identity~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
           let (command, indexed) = update_msg(
             dispatch,
-            FileEditor(@fileeditor.EnsureFileIndex),
+            FileEditor(EnsureFileIndex),
             { ..model, focused: conv.device, active_session: conv.session_id, },
           )
           (
@@ -2564,7 +2563,7 @@ fn update_msg(
             },
           )
         }
-        @composer.StopRequested(identity~) => {
+        StopRequested(identity~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
@@ -2653,7 +2652,7 @@ fn update_msg(
             end_line=range.end_line_number,
             quote~,
             comment~,
-            side=@mention_context.WorkingRevision,
+            side=WorkingRevision,
           ),
           range: Some(range),
         }).mentions
@@ -2669,7 +2668,7 @@ fn update_msg(
     // so the new annotation is already in the visible composer batch. Reuse
     // each agent's normal submit path: an idle task starts, while a running
     // task receives the batch through its existing steer/message queue.
-    FileEditor(@fileeditor.ApplyAllFeedback) =>
+    FileEditor(ApplyAllFeedback) =>
       match model.screen {
         Chat => update_msg(dispatch, Send, model)
         Codex => {
@@ -2677,10 +2676,7 @@ fn update_msg(
           update_msg(
             dispatch,
             CodexComposerAction(
-              @composer.DraftSubmitted(
-                identity=input.identity,
-                draft=input.draft,
-              ),
+              DraftSubmitted(identity=input.identity, draft=input.draft),
             ),
             model,
           )
@@ -2721,14 +2717,14 @@ fn update_msg(
         _ =>
           match original_line_number {
             Some(line_number) if line_number >= 1 =>
-              (line_number, None, @mention_context.OriginalRevision)
+              (line_number, None, OriginalRevision)
             _ => return (clear_feedback, model)
           }
       }
       if model.screen is Codex {
         let end_column = if quote.is_empty() { 1 } else { quote.length() + 1 }
         let comment_range = range.unwrap_or(
-          @common.Range(line_number, 1, line_number, end_column),
+          Range(line_number, 1, line_number, end_column),
         )
         return (
           clear_feedback,
@@ -2766,7 +2762,7 @@ fn update_msg(
     // Search rows use the same ordinary positioned-open path as definition,
     // mention, and Quick Open navigation. An active picker is fulfilled in
     // place; an already-open file is activated.
-    FileEditor(@fileeditor.SearchMatchSelected(path~, range~)) =>
+    FileEditor(SearchMatchSelected(path~, range~)) =>
       open_editor_at(dispatch, model, path, Some(range))
     // Intercepted like the comment above: which dock tab a tree click opens
     // is the strip's business. The dock opens (or re-activates) the tab,
@@ -2880,7 +2876,7 @@ fn update_msg(
     // their host failures belong on the app's ordinary toast rail. Fence the
     // callback by its original conversation and coalesce identical live
     // toasts: one user gesture can cause Viewer to ask more than once.
-    FileEditor(@fileeditor.LanguageRequestFailed(owner~, message~)) => {
+    FileEditor(LanguageRequestFailed(owner~, message~)) => {
       guard model.file_panel.owner is Some(panel_owner) &&
         panel_owner == owner &&
         file_ctx(model).owner == owner else {
@@ -2896,9 +2892,7 @@ fn update_msg(
     // accepted current-generation failure on the app-owned toast rail. The
     // before/after check uses that package's owner/root/generation fencing and
     // also prevents a repeated host notification from stacking duplicates.
-    FileEditor(
-      @fileeditor.FileWatchFailed(channel~, root~, generation~, message~)
-    ) => {
+    FileEditor(FileWatchFailed(channel~, root~, generation~, message~)) => {
       let file_message = @fileeditor.FileWatchFailed(
         channel~,
         root~,
@@ -3664,15 +3658,15 @@ fn update_msg(
       // A settled install or uninstall changed the library the root owns;
       // what the page shows must come from disk, not from a client-side
       // guess.
-      guard outcome is Some(@skills.LibraryChanged(channel~)) else {
+      guard outcome is Some(LibraryChanged(channel~)) else {
         return (page_cmd, model)
       }
       (@cmd.batch([page_cmd, fetch_installed_skills(dispatch, channel)]), model)
     }
     Send | SendFollowup(_) => {
       let followup_behavior = match msg {
-        SendFollowup(@composer.SteerNow) => FollowupSteer
-        SendFollowup(@composer.QueueNext) => FollowupQueue
+        SendFollowup(SteerNow) => FollowupSteer
+        SendFollowup(QueueNext) => FollowupQueue
         _ => model.followup_behavior
       }
       guard model.active_conversation() is Some(conv) else {
@@ -3693,7 +3687,7 @@ fn update_msg(
         !(model.bridge_state() is Connected) ||
         !model.api_ready() ||
         checkout is None ||
-        checkout is Some(@interop.MissingWorktree(..)) {
+        checkout is Some(MissingWorktree(..)) {
         (@cmd.none, model)
       } else if conv.is_running() {
         // Submitting while this conversation's turn runs steers it: the text
@@ -3709,7 +3703,7 @@ fn update_msg(
                 dispatch,
                 model.focused,
                 conv.session_id,
-                @protocol.QueueEdit(id~, text=task),
+                QueueEdit(id~, text=task),
                 run_id,
               ),
               // Keep the edit in the composer until the in-memory mutation is
@@ -3731,7 +3725,7 @@ fn update_msg(
               dispatch,
               model.focused,
               conv.session_id,
-              @protocol.QueueAdd(id=submission_id, text=task),
+              QueueAdd(id=submission_id, text=task),
               run_id,
             )
           } else {
@@ -3984,8 +3978,7 @@ fn update_msg(
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
       }
-      guard model.conversation_placement(conv)
-        is Some(@interop.MissingWorktree(..)) &&
+      guard model.conversation_placement(conv) is Some(MissingWorktree(..)) &&
         conv.workspace is Worktree(project=workspace, ..) else {
         return (@cmd.none, model)
       }
@@ -4194,7 +4187,7 @@ fn update_msg(
           match outcome {
             None => (cmd, model)
             // A failed browse or create leaves the previous listing usable.
-            Some(@project_picker.Outcome::Failed(message)) => {
+            Some(Failed(message)) => {
               let (toast, model) = model.notify_error(dispatch, message)
               (@cmd.batch([cmd, toast]), model)
             }
@@ -4202,7 +4195,7 @@ fn update_msg(
             // something it confirmed exists — never raw pasted text; a paste
             // navigates (and validates) first. The pending adoption later
             // focuses the project the add committed.
-            Some(@project_picker.Outcome::Picked(channel, path)) => {
+            Some(Picked(channel, path)) => {
               let (add_cmd, next) = adopt_picked_directory(
                 dispatch, channel, path, model,
               )
@@ -4385,7 +4378,7 @@ fn update_msg(
       )
     }
     ConversationRenameRequested(id~, label~) =>
-      if id.source() is (@conversation.OpenSeekLive | @conversation.CodexLive) {
+      if id.source() is (OpenSeekLive | CodexLive) {
         (
           focus_conversation_rename(),
           {
@@ -5099,13 +5092,13 @@ fn update_msg(
       // mismatched flash; the second covers engines whose document element
       // did not exist at the earlier event.
       let theme_cmd = match msg {
-        @preview.Msg::Navigated(id~, ..) =>
+        Navigated(id~, ..) =>
           browser_set_theme(
             dispatch,
             id,
             model.theme.is_dark(model.system_dark),
           )
-        @preview.Msg::LoadingChanged(id~, loading~) =>
+        LoadingChanged(id~, loading~) =>
           if loading {
             @cmd.none
           } else {
@@ -5166,10 +5159,7 @@ fn update_msg(
             @cmd.none,
             {
               ..model,
-              preview: @preview.update(
-                @preview.Msg::InputChanged(id~, value~),
-                model.preview,
-              ),
+              preview: @preview.update(InputChanged(id~, value~), model.preview),
             },
           )
         None => (@cmd.none, model)
@@ -5253,7 +5243,7 @@ fn update_msg(
           browser_op(
             dispatch,
             @commands.app_toggle_maximized,
-            @protocol.NoPayload,
+            NoPayload,
             quiet=false,
           ),
           model,
@@ -5266,7 +5256,7 @@ fn update_msg(
         browser_op(
           dispatch,
           @commands.app_open_devtools,
-          @protocol.NoPayload,
+          NoPayload,
           quiet=false,
         ),
         model,
@@ -5274,12 +5264,7 @@ fn update_msg(
     AppCloseWindowRequested => {
       guard model.is_desktop else { return (@cmd.none, model) }
       (
-        browser_op(
-          dispatch,
-          @commands.app_close_window,
-          @protocol.NoPayload,
-          quiet=false,
-        ),
+        browser_op(dispatch, @commands.app_close_window, NoPayload, quiet=false),
         model,
       )
     }
@@ -5322,10 +5307,9 @@ fn update_msg(
         },
       )
     }
-    Terminal(@terminal.LinkActivated(url~)) =>
+    Terminal(LinkActivated(url~)) =>
       update_msg(dispatch, ExternalLinkClicked(url), model)
-    Terminal(@terminal.InputFailed(message~)) =>
-      model.notify_error(dispatch, message)
+    Terminal(InputFailed(message~)) => model.notify_error(dispatch, message)
     Terminal(msg) => {
       let (cmd, terminal) = model.terminal.handle(
         dispatch.map(next => Terminal(next)),
@@ -5994,11 +5978,11 @@ fn update_device_msg(
         return (@cmd.none, model)
       }
       let next = match action {
-        @protocol.QueueAdd(id~, ..) => {
+        QueueAdd(id~, ..) => {
           let (next, _) = conv.acknowledge_steer(id, Some(run_id))
           next
         }
-        @protocol.QueueEdit(id~, text=content) => {
+        QueueEdit(id~, text=content) => {
           guard conv.queued_inputs.search_by(item => item.id == id)
             is Some(index) else {
             return (@cmd.none, model)
@@ -6018,7 +6002,7 @@ fn update_device_msg(
             { ..conv, queued_inputs, }
           }
         }
-        @protocol.QueueWithdraw(id~) | @protocol.QueueSteer(id~) => {
+        QueueWithdraw(id~) | QueueSteer(id~) => {
           let (next, _) = conv.remove_queued_input(id)
           next
         }
@@ -8249,7 +8233,7 @@ fn test_dispatch() -> @cmd.Emit[Msg] {
 ///|
 /// Test-only: a device-scoped message as the page's one channel delivers it.
 fn on_home(msg : DeviceMsg) -> Msg {
-  FromDevice(@interop.ChannelId::Local, msg)
+  FromDevice(Local, msg)
 }
 
 ///|
@@ -8314,7 +8298,7 @@ fn @interop.ChannelId::test_worktrees(
 ///|
 fn test_conversation() -> Conversation {
   empty_conversation(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
@@ -8340,13 +8324,13 @@ fn test_model() -> Model {
     ,
     devices: [
       {
-        ..empty_device_state(@interop.ChannelId::Local),
+        ..empty_device_state(Local),
         bridge: Connected,
         projects: [@interop.ChannelId::Local.test_project()],
         worktrees: [@interop.ChannelId::Local.test_worktrees()],
       },
     ],
-    focused: @interop.ChannelId::Local,
+    focused: Local,
     console: None,
     // The shared fixture represents a connected desktop after its initial
     // settings snapshot. Loading-state tests opt back into revision -1.
@@ -8569,7 +8553,7 @@ fn encoded_start_workspace(conv : Conversation) -> String? {
 test "runs resync names exact Starting Open and Idle owners" {
   let starting = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "starting-session",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -8577,7 +8561,7 @@ test "runs resync names exact Starting Open and Idle owners" {
   }
   let open = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "open-session",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -8585,14 +8569,14 @@ test "runs resync names exact Starting Open and Idle owners" {
   }
   let idle = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "idle-session",
       @interop.ChannelId::Local.test_project(),
     ),
     last_run_id: Some("run-idle"),
   }
   let empty = empty_conversation(
-    @interop.ChannelId::Local,
+    Local,
     "never-started",
     @interop.ChannelId::Local.test_project(),
   )
@@ -8601,9 +8585,7 @@ test "runs resync names exact Starting Open and Idle owners" {
     .replace_conversation(open)
     .replace_conversation(idle)
     .replace_conversation(empty)
-  let json = runs_payload(
-    model.run_snapshot_frontier(@interop.ChannelId::Local),
-  ).to_json()
+  let json = runs_payload(model.run_snapshot_frontier(Local)).to_json()
   guard json is { "known": Array(known), .. } else {
     fail("runs payload omitted known selectors")
   }
@@ -8919,7 +8901,7 @@ test "a matching durable commit de-duplicates without mutating the preview" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=Assistant({
         content: "answer",
         tool_calls: None,
         reasoning_content: Some("think"),
@@ -8948,7 +8930,7 @@ test "commit-first reasoning keeps late prefixes and de-duplicates when sealed" 
     session="desktop-test",
     sequence=1,
     ts=None,
-    item=@protocol.Assistant({
+    item=Assistant({
       content: "answer",
       tool_calls: None,
       reasoning_content: Some("complete thought"),
@@ -8989,7 +8971,7 @@ test "a delayed untagged commit cannot truncate a newer reasoning stream" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=Assistant({
         content: "older answer",
         tool_calls: None,
         reasoning_content: Some("shared"),
@@ -9101,7 +9083,7 @@ test "a new run frontier includes commits already buffered by reload" {
   let buffered : BufferedCommit = {
     sequence: 3,
     ts: None,
-    item: @protocol.Assistant({
+    item: Assistant({
       content: "older answer",
       tool_calls: None,
       reasoning_content: Some("shared opening"),
@@ -9501,12 +9483,7 @@ test "a finish behind settings stays unread until the chat is reopened" {
   )
   inspect(next.active().unseen_finish, content="true")
   inspect(next.notification_badge_count(), content="1")
-  let (_, opened) = open_session_on(
-    dispatch,
-    @interop.ChannelId::Local,
-    next,
-    "desktop-test",
-  )
+  let (_, opened) = open_session_on(dispatch, Local, next, "desktop-test")
   assert_true(opened.screen is Chat)
   inspect(opened.active().unseen_finish, content="false")
   inspect(opened.notification_badge_count(), content="0")
@@ -9522,18 +9499,16 @@ test "a background finish marks its conversation until it is opened" {
     Finished(run_id="r7", status="finished", answer=Some("done")),
     model,
   )
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-test")
-    is Some(conv) else {
+  guard next.find_conversation(Local, "desktop-test") is Some(conv) else {
     fail("conversation missing")
   }
   inspect(conv.unseen_finish, content="true")
   let opened = next.activate(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
-  guard opened.find_conversation(@interop.ChannelId::Local, "desktop-test")
-    is Some(seen) else {
+  guard opened.find_conversation(Local, "desktop-test") is Some(seen) else {
     fail("conversation missing after activate")
   }
   inspect(seen.unseen_finish, content="false")
@@ -9614,8 +9589,7 @@ test "session rotation activates a fresh conversation, keeping the old one" {
   inspect(next.active().turn.usage_tokens, content="0")
   assert_true(next.display_status() is Ready)
   // The previous conversation keeps running in the background.
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-test")
-    is Some(old) else {
+  guard next.find_conversation(Local, "desktop-test") is Some(old) else {
     fail("expected the old conversation to survive")
   }
   inspect(old.is_running(), content="true")
@@ -9647,7 +9621,7 @@ test "a delayed rotation cannot steal focus from another channel" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      { ..empty_device_state(Local), bridge: Connected, },
       { ..empty_device_state(remote), bridge: Connected, },
     ],
   }
@@ -9690,18 +9664,12 @@ test "session list assigns a commit-first conversation to its durable workspace"
       session="desktop-foreign",
       sequence=1,
       ts=None,
-      item=@protocol.User({
-        content: "arrived before the list",
-        submission_id: None,
-      }),
+      item=User({ content: "arrived before the list", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
   )
-  guard committed.find_conversation(
-      @interop.ChannelId::Local,
-      "desktop-foreign",
-    )
+  guard committed.find_conversation(Local, "desktop-foreign")
     is Some(provisional) else {
     fail("commit did not materialize its conversation")
   }
@@ -9726,13 +9694,12 @@ test "session list assigns a commit-first conversation to its durable workspace"
       request_generation=committed.dev().sessions_request_generation,
     ),
     committed.activate(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-foreign",
       @interop.ChannelId::Local.test_project(),
     ),
   )
-  guard listed.find_conversation(@interop.ChannelId::Local, "desktop-foreign")
-    is Some(reconciled) else {
+  guard listed.find_conversation(Local, "desktop-foreign") is Some(reconciled) else {
     fail("listed conversation disappeared")
   }
   assert_eq(reconciled.workspace, Project(root=workspace))
@@ -9752,19 +9719,12 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-foreign",
       sequence=1,
       ts=None,
-      item=@protocol.User({
-        content: "arrived before the list",
-        submission_id: None,
-      }),
+      item=User({ content: "arrived before the list", submission_id: None, }),
       session_root=store,
     ),
     model,
   )
-  guard committed.find_conversation(
-      @interop.ChannelId::Local,
-      "desktop-foreign",
-    )
-    is Some(placed) else {
+  guard committed.find_conversation(Local, "desktop-foreign") is Some(placed) else {
     fail("rooted commit did not materialize its conversation")
   }
   assert_eq(placed.workspace, Project(root=workspace))
@@ -9776,16 +9736,12 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-registered",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=User({ content: "hi", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     committed,
   )
-  guard registered.find_conversation(
-      @interop.ChannelId::Local,
-      "desktop-registered",
-    )
-    is Some(known) else {
+  guard registered.find_conversation(Local, "desktop-registered") is Some(known) else {
     fail("rooted commit for a registered store did not materialize")
   }
   assert_eq(
@@ -9801,15 +9757,14 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-unseen",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=User({ content: "hi", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_resource(
         "/work/unseen/.openseek",
       ),
     ),
     registered,
   )
-  guard unseen.find_conversation(@interop.ChannelId::Local, "desktop-unseen")
-    is Some(pending) else {
+  guard unseen.find_conversation(Local, "desktop-unseen") is Some(pending) else {
     fail("unregistered-store commit did not materialize its conversation")
   }
   assert_eq(
@@ -9852,7 +9807,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=User({ content: "hi", submission_id: None, }),
       session_root=store,
     ),
     model,
@@ -9866,7 +9821,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
       session="desktop-listed-only",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=User({ content: "hi", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     committed,
@@ -9905,14 +9860,13 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "listed", submission_id: None, }),
+      item=User({ content: "listed", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
   assert_eq(first.dev().sessions_request_generation, 0)
-  guard first.find_conversation(@interop.ChannelId::Local, "desktop-shared")
-    is Some(consumed) else {
+  guard first.find_conversation(Local, "desktop-shared") is Some(consumed) else {
     fail("listed commit did not materialize its conversation")
   }
   assert_eq(consumed.watermark, 1)
@@ -9924,7 +9878,7 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "other project", submission_id: None, }),
+      item=User({ content: "other project", submission_id: None, }),
       session_root=store,
     ),
     first,
@@ -9938,7 +9892,7 @@ test "a background session list updates only its channel's same-id workspace" {
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "shared",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -9951,7 +9905,7 @@ test "a background session list updates only its channel's same-id workspace" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      { ..empty_device_state(Local), bridge: Connected, },
       { ..empty_device_state(remote), bridge: Connected, },
     ],
     active_session: "shared",
@@ -9977,8 +9931,7 @@ test "a background session list updates only its channel's same-id workspace" {
     ),
     model,
   )
-  guard next.find_conversation(@interop.ChannelId::Local, "shared")
-    is Some(local_conv) &&
+  guard next.find_conversation(Local, "shared") is Some(local_conv) &&
     next.find_conversation(remote, "shared") is Some(remote_conv) else {
     fail("same-id conversations disappeared")
   }
@@ -10008,10 +9961,7 @@ test "session list assigns a Started-first conversation to its durable workspace
     ),
     test_model(),
   )
-  guard started.find_conversation(
-      @interop.ChannelId::Local,
-      "desktop-started-first",
-    )
+  guard started.find_conversation(Local, "desktop-started-first")
     is Some(provisional) else {
     fail("Started did not materialize its conversation")
   }
@@ -10034,10 +9984,7 @@ test "session list assigns a Started-first conversation to its durable workspace
     ]),
     started,
   )
-  guard listed.find_conversation(
-      @interop.ChannelId::Local,
-      "desktop-started-first",
-    )
+  guard listed.find_conversation(Local, "desktop-started-first")
     is Some(reconciled) else {
     fail("listed conversation disappeared")
   }
@@ -10066,10 +10013,7 @@ test "Started places a foreign conversation from its host session root" {
     ),
     model,
   )
-  guard started.find_conversation(
-      @interop.ChannelId::Local,
-      "desktop-workspace-run",
-    )
+  guard started.find_conversation(Local, "desktop-workspace-run")
     is Some(foreign) else {
     fail("Started did not materialize its conversation")
   }
@@ -10098,7 +10042,7 @@ test "open session is a no-op for the current session" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(Local, "desktop-test"),
     test_model(),
   )
   inspect(next.active_session, content="desktop-test")
@@ -10113,10 +10057,7 @@ test "a sub-run child opens through its parent before the store lists it" {
   // store, so the parent's placement is its own.
   let dispatch = test_dispatch()
   let model = test_model()
-  assert_true(
-    model.session_project(@interop.ChannelId::Local, "desktop-test-sr-2")
-    is Some(_),
-  )
+  assert_true(model.session_project(Local, "desktop-test-sr-2") is Some(_))
   let (_, next) = update(dispatch, OpenSessionHere("desktop-test-sr-2"), model)
   // The click selects the child and starts its first load; the view switches
   // when the snapshot lands, as for any session opened from the sidebar.
@@ -10129,8 +10070,7 @@ test "a sub-run child opens through its parent before the store lists it" {
     next.loading_conversation
     is Some({ channel: Local, session: "desktop-test-sr-2", }),
   )
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-test-sr-2")
-    is Some(child) else {
+  guard next.find_conversation(Local, "desktop-test-sr-2") is Some(child) else {
     fail("expected the child conversation to exist, loading")
   }
   assert_true(child.sync is Reloading(..))
@@ -10148,7 +10088,7 @@ test "open session keeps live state on screen while re-reading the store" {
   let dispatch = test_dispatch()
   let background = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-bg",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -10156,7 +10096,7 @@ test "open session keeps live state on screen while re-reading the store" {
     messages: [{ kind: User("background task"), ts: None, sequence: None, }],
     turn: {
       ..empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "desktop-bg",
         @interop.ChannelId::Local.test_project(),
       ).turn,
@@ -10164,16 +10104,8 @@ test "open session keeps live state on screen while re-reading the store" {
     },
   }
   let model = running_model().replace_conversation(background)
-  let (_, once) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-bg"),
-    model,
-  )
-  let (_, twice) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-bg"),
-    model,
-  )
+  let (_, once) = update(dispatch, OpenSession(Local, "desktop-bg"), model)
+  let (_, twice) = update(dispatch, OpenSession(Local, "desktop-bg"), model)
   inspect(once.active_session, content="desktop-bg")
   // The live state stays on screen; the store re-read happens behind it
   // (this client may have been absent for part of this conversation).
@@ -10184,8 +10116,7 @@ test "open session keeps live state on screen while re-reading the store" {
     is Some({ channel: Local, session: "desktop-bg", }),
   )
   // The previous conversation is still running in the background.
-  guard once.find_conversation(@interop.ChannelId::Local, "desktop-test")
-    is Some(old) else {
+  guard once.find_conversation(Local, "desktop-test") is Some(old) else {
     fail("expected the old conversation to survive")
   }
   inspect(old.is_running(), content="true")
@@ -10210,7 +10141,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.User({ content: "future", submission_id: None, }),
+      item=User({ content: "future", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     refreshing,
@@ -10237,14 +10168,14 @@ test "BridgeReady clears every non-replayable stream and compaction phase" {
   }
   let background = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-bg",
       @interop.ChannelId::Local.test_project(),
     ),
     compaction: Compacting,
     turn: {
       ..empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "desktop-bg",
         @interop.ChannelId::Local.test_project(),
       ).turn,
@@ -10290,7 +10221,7 @@ test "a reconnect retires the file index watcher until placement returns" {
   let dispatch = test_dispatch()
   let model = test_model()
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "desktop-test",
   }
   let root = @interop.ChannelId::Local.test_project()
@@ -10304,7 +10235,7 @@ test "a reconnect retires the file index watcher until placement returns" {
   let panel = {
     ..model.file_panel,
     owner: Some(owner),
-    placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
+    placement: PlacementLive(WorkspaceRoot(root~)),
     watching: Some(watched),
     watch_generation: 7,
   }
@@ -10312,18 +10243,13 @@ test "a reconnect retires the file index watcher until placement returns" {
   let file_emit = dispatch.map(msg => FileEditor(msg))
   let (_, loading) = @fileeditor.update(
     file_emit,
-    @fileeditor.EnsureFileIndex,
+    EnsureFileIndex,
     panel,
     file_ctx(model),
   )
   let (_, ready) = @fileeditor.update(
     file_emit,
-    @fileeditor.FilesIndexed(
-      owner~,
-      epoch=loading.request_epoch,
-      files=[],
-      truncated=false,
-    ),
+    FilesIndexed(owner~, epoch=loading.request_epoch, files=[], truncated=false),
     loading,
     file_ctx(model),
   )
@@ -10333,7 +10259,7 @@ test "a reconnect retires the file index watcher until placement returns" {
   // is unknown again. Both the watcher and the index retire rather than keep
   // addressing a root the new connection has not confirmed.
   assert_true(reconnected.file_panel.watching is None)
-  assert_false(reconnected.file_panel.index is @fileeditor.IndexReady(..))
+  assert_false(reconnected.file_panel.index is IndexReady(..))
   // The registry answering does not by itself resurrect them: nothing is
   // watched again until a fresh index is built against the confirmed root.
   let (_, placed) = update_dev(
@@ -10356,7 +10282,7 @@ test "device focus retires the outgoing watcher and file index" {
   let remote : @interop.ChannelId = Remote("remote-device")
   let model = test_model()
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "desktop-test",
   }
   let root = @interop.ChannelId::Local.test_project()
@@ -10369,18 +10295,18 @@ test "device focus retires the outgoing watcher and file index" {
   let panel = {
     ..model.file_panel,
     owner: Some(owner),
-    placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
+    placement: PlacementLive(WorkspaceRoot(root~)),
     watching: Some({ owner, root, files: [], directories: [], recursive: true, }),
     watch_generation: 7,
   }
   let model = { ..model, devices, conversations, file_panel: panel, }
   let (_, loading) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
-    @fileeditor.EnsureFileIndex,
+    EnsureFileIndex,
     panel,
     file_ctx(model),
   )
-  assert_true(loading.index is @fileeditor.IndexLoading(_))
+  assert_true(loading.index is IndexLoading(_))
   let (_, next) = update(dispatch, OpenSession(remote, "remote-session"), {
     ..model,
     file_panel: loading,
@@ -10394,7 +10320,7 @@ test "device focus retires the outgoing watcher and file index" {
   )
   assert_true(next.file_panel.watching is None)
   assert_eq(next.file_panel.watch_generation, 8)
-  assert_true(next.file_panel.index is @fileeditor.IndexEmpty)
+  assert_true(next.file_panel.index is IndexEmpty)
 }
 
 ///|
@@ -10403,14 +10329,14 @@ test "BridgeReady resets only conversations owned by its channel" {
   let background : @interop.ChannelId = Remote("d-bg")
   let local_conv = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "shared",
       @interop.ChannelId::Local.test_project(),
     ),
     compaction: Queued,
     turn: {
       ..empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "shared",
         @interop.ChannelId::Local.test_project(),
       ).turn,
@@ -10428,15 +10354,14 @@ test "BridgeReady resets only conversations owned by its channel" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      { ..empty_device_state(Local), bridge: Connected, },
       { ..empty_device_state(background), bridge: Connected, },
     ],
     active_session: "shared",
     conversations: [local_conv, remote],
   }
   let (_, next) = update(dispatch, FromDevice(background, BridgeReady), model)
-  guard next.find_conversation(@interop.ChannelId::Local, "shared")
-    is Some(kept) &&
+  guard next.find_conversation(Local, "shared") is Some(kept) &&
     next.find_conversation(background, "shared") is Some(reset) else {
     fail("same-id conversations were not preserved")
   }
@@ -10592,7 +10517,7 @@ test "open session tracks the latest load and ignores stale replies" {
   let dispatch = test_dispatch()
   let (_, loading_a) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-a"),
+    OpenSession(Local, "desktop-a"),
     test_model().with_listed(["desktop-a", "desktop-b"]),
   )
   inspect(loading_a.active_session, content="desktop-test")
@@ -10602,7 +10527,7 @@ test "open session tracks the latest load and ignores stale replies" {
   )
   let (_, loading_b) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-b"),
+    OpenSession(Local, "desktop-b"),
     loading_a,
   )
   assert_true(
@@ -10666,13 +10591,8 @@ test "a restored session keeps the placement its listing named" {
     ]),
     test_model(),
   )
-  let (_, loading) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, session),
-    listed,
-  )
-  guard loading.find_conversation(@interop.ChannelId::Local, session)
-    is Some(before) else {
+  let (_, loading) = update(dispatch, OpenSession(Local, session), listed)
+  guard loading.find_conversation(Local, session) is Some(before) else {
     fail("conversation was not materialized for loading")
   }
   assert_true(
@@ -10711,7 +10631,7 @@ test "same-id session loads are fenced by channel owner" {
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "shared",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -10724,7 +10644,7 @@ test "same-id session loads are fenced by channel owner" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      { ..empty_device_state(Local), bridge: Connected, },
       { ..empty_device_state(remote), bridge: Connected, },
     ],
     active_session: "shared",
@@ -10737,7 +10657,7 @@ test "same-id session loads are fenced by channel owner" {
   )
   let (_, loading_local) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "shared"),
+    OpenSession(Local, "shared"),
     loading_remote,
   )
   assert_true(
@@ -10800,7 +10720,7 @@ test "reselecting a synced active session reloads idle external writes" {
   })
   let (_, reloading) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(Local, "desktop-test"),
     model,
   )
   assert_true(
@@ -10812,7 +10732,7 @@ test "reselecting a synced active session reloads idle external writes" {
   }
   let (_, still_single_flight) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(Local, "desktop-test"),
     reloading,
   )
   inspect(still_single_flight.transcript_request_generation, content="1")
@@ -10860,11 +10780,7 @@ test "returning to a fresh active chat does not load a missing session" {
     }),
     screen: Skills,
   }
-  let (_, next) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
-    model,
-  )
+  let (_, next) = update(dispatch, OpenSession(Local, "desktop-test"), model)
   assert_true(next.screen is Chat)
   assert_true(next.loading_conversation is None)
   inspect(next.transcript_request_generation, content="0")
@@ -10877,30 +10793,25 @@ test "pruning and reopening cannot reuse a transcript request token" {
   let dispatch = test_dispatch()
   let (_, opening) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-pruned"),
+    OpenSession(Local, "desktop-pruned"),
     test_model().with_listed(["desktop-pruned"]),
   )
-  guard opening.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
-    is Some(first) &&
+  guard opening.find_conversation(Local, "desktop-pruned") is Some(first) &&
     first.sync is Reloading(generation=1, ..) else {
     fail("expected the original request")
   }
   let pruned = opening.activate(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-other",
     @interop.ChannelId::Local.test_project(),
   )
-  assert_true(
-    pruned.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
-    is None,
-  )
+  assert_true(pruned.find_conversation(Local, "desktop-pruned") is None)
   let (_, reopened) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-pruned"),
+    OpenSession(Local, "desktop-pruned"),
     pruned,
   )
-  guard reopened.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
-    is Some(second) &&
+  guard reopened.find_conversation(Local, "desktop-pruned") is Some(second) &&
     second.sync is Reloading(generation=2, ..) else {
     fail("reopened conversation reused its old request token")
   }
@@ -10920,8 +10831,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
     stale.loading_conversation
     is Some({ channel: Local, session: "desktop-pruned", }),
   )
-  guard stale.find_conversation(@interop.ChannelId::Local, "desktop-pruned")
-    is Some(current) &&
+  guard stale.find_conversation(Local, "desktop-pruned") is Some(current) &&
     current.sync is Reloading(generation=2, ..) else {
     fail("late reply changed the reopened conversation")
   }
@@ -10948,7 +10858,7 @@ test "archive removal and reopening cannot reuse a transcript request token" {
   let dispatch = test_dispatch()
   let (_, opening) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-archived"),
+    OpenSession(Local, "desktop-archived"),
     test_model().with_listed(["desktop-archived"]),
   )
   let (_, archived) = update(
@@ -10956,23 +10866,16 @@ test "archive removal and reopening cannot reuse a transcript request token" {
     archived_loaded([archived_item("desktop-archived")]),
     opening,
   )
-  assert_true(
-    archived.find_conversation(@interop.ChannelId::Local, "desktop-archived")
-    is None,
-  )
+  assert_true(archived.find_conversation(Local, "desktop-archived") is None)
   let (_, restored) = update(dispatch, archived_loaded([]), archived)
   // Archiving pruned the live row; the list refresh that follows an
   // unarchive is what puts it back, and the row is what names its store.
   let (_, reopened) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-archived"),
+    OpenSession(Local, "desktop-archived"),
     restored.with_listed(["desktop-archived"]),
   )
-  guard reopened.find_conversation(
-      @interop.ChannelId::Local,
-      "desktop-archived",
-    )
-    is Some(current) &&
+  guard reopened.find_conversation(Local, "desktop-archived") is Some(current) &&
     current.sync is Reloading(generation=2, ..) else {
     fail("archive removal allowed a request token to be reused")
   }
@@ -10990,8 +10893,7 @@ test "archive removal and reopening cannot reuse a transcript request token" {
     ),
     reopened,
   )
-  guard stale.find_conversation(@interop.ChannelId::Local, "desktop-archived")
-    is Some(unchanged) &&
+  guard stale.find_conversation(Local, "desktop-archived") is Some(unchanged) &&
     unchanged.sync is Reloading(generation=2, ..) else {
     fail("late pre-archive reply changed the reopened conversation")
   }
@@ -11004,7 +10906,7 @@ test "an abandoned session load retries silently" {
   let dispatch = test_dispatch()
   let (_, loading) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-a"),
+    OpenSession(Local, "desktop-a"),
     test_model().with_listed(["desktop-a"]),
   )
   let (_, abandoned) = update(dispatch, NewChat, loading)
@@ -11027,7 +10929,7 @@ test "a foreground load preserves state through retries and reports exhaustion" 
   let dispatch = test_dispatch()
   let (_, loading) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-a"),
+    OpenSession(Local, "desktop-a"),
     test_model().with_listed(["desktop-a"]),
   )
   let failure = SessionLoadFailed(
@@ -11041,14 +10943,12 @@ test "a foreground load preserves state through retries and reports exhaustion" 
     is Some({ channel: Local, session: "desktop-a", }),
   )
   inspect(retrying2.notifications.length(), content="0")
-  guard retrying2.find_conversation(@interop.ChannelId::Local, "desktop-a")
-    is Some(conv2) &&
+  guard retrying2.find_conversation(Local, "desktop-a") is Some(conv2) &&
     conv2.sync is Reloading(attempt=2, ..) else {
     fail("expected the second foreground attempt")
   }
   let (_, retrying3) = update_dev(dispatch, failure, retrying2)
-  guard retrying3.find_conversation(@interop.ChannelId::Local, "desktop-a")
-    is Some(conv3) &&
+  guard retrying3.find_conversation(Local, "desktop-a") is Some(conv3) &&
     conv3.sync is Reloading(attempt=3, ..) else {
     fail("expected the third foreground attempt")
   }
@@ -11059,8 +10959,7 @@ test "a foreground load preserves state through retries and reports exhaustion" 
     next.notifications[0].message,
     content="Transcript refresh failed repeatedly. New commits are buffered; reopen the conversation or wait for the next update to retry. (failed to load session desktop-a: no such file)",
   )
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-a")
-    is Some(failed) else {
+  guard next.find_conversation(Local, "desktop-a") is Some(failed) else {
     fail("expected the failed conversation")
   }
   assert_true(failed.sync is ReloadFailed(..))
@@ -11184,7 +11083,7 @@ test "run semantic errors never duplicate their terminal commit" {
     session="desktop-test",
     sequence=1,
     ts=None,
-    item=@protocol.Terminal(@protocol.Failed("engine error")),
+    item=Terminal(Failed("engine error")),
     session_root=@interop.ChannelId::Local.test_store_root(),
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
@@ -11265,7 +11164,7 @@ test "session loaded swaps the active conversation onto the stored session" {
     })
   let (_, loading) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-stored"),
+    OpenSession(Local, "desktop-stored"),
     model,
   )
   let items : Array[@transcript.TranscriptItem] = [
@@ -11329,7 +11228,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
   // The active conversation runs; loading some other stored session is fine.
   let (_, loading_other) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-stored"),
+    OpenSession(Local, "desktop-stored"),
     model,
   )
   let (_, other) = update_dev(
@@ -11345,8 +11244,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
     loading_other,
   )
   inspect(other.active_session, content="desktop-stored")
-  guard other.find_conversation(@interop.ChannelId::Local, "desktop-test")
-    is Some(live) else {
+  guard other.find_conversation(Local, "desktop-test") is Some(live) else {
     fail("expected the running conversation to survive")
   }
   inspect(live.is_running(), content="true")
@@ -11419,7 +11317,7 @@ test "started routes by session without restating its placement" {
 
 ///|
 test "started decoder preserves optional placement and submission id" {
-  guard started_msg(@interop.ChannelId::Local, {
+  guard started_msg(Local, {
       run_id: "r7",
       submission_id: Some("submission-7"),
       engine: None,
@@ -11448,12 +11346,10 @@ test "host path decoders reject relative placement and diagnostic paths" {
     session: "desktop-test",
     session_root: Some("relative/session-root"),
   }
-  assert_true(started_msg(@interop.ChannelId::Local, payload) is None)
+  assert_true(started_msg(Local, payload) is None)
+  assert_true(RecoveredRun::from_started(Local, payload) is None)
   assert_true(
-    RecoveredRun::from_started(@interop.ChannelId::Local, payload) is None,
-  )
-  assert_true(
-    diagnostics_msg(@interop.ChannelId::Local, {
+    diagnostics_msg(Local, {
       root: "relative/workspace",
       path: "relative/file.mbt",
       diagnostics: [],
@@ -11479,8 +11375,7 @@ test "started for an unknown session materializes its conversation" {
   )
   // Another client's run is now trackable here: cancellable, steerable,
   // and its events route to a real conversation.
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-ghost")
-    is Some(ghost) else {
+  guard next.find_conversation(Local, "desktop-ghost") is Some(ghost) else {
     fail("expected the foreign run's conversation to materialize")
   }
   inspect(ghost.is_running(), content="true")
@@ -11508,10 +11403,7 @@ test "started for an unknown session materializes its conversation" {
     ),
     test_model(),
   )
-  assert_true(
-    rootless.find_conversation(@interop.ChannelId::Local, "desktop-rootless")
-    is None,
-  )
+  assert_true(rootless.find_conversation(Local, "desktop-rootless") is None)
 }
 
 ///|
@@ -11543,11 +11435,7 @@ test "started places a conversation before the registry arrives" {
   // The registry is empty: the store layout is the only evidence, and it
   // names the project.
   let unregistered = start(test_model(), "desktop-foreign", Some(store))
-  guard unregistered.find_conversation(
-      @interop.ChannelId::Local,
-      "desktop-foreign",
-    )
-    is Some(placed) else {
+  guard unregistered.find_conversation(Local, "desktop-foreign") is Some(placed) else {
     fail("expected the foreign run's conversation to materialize")
   }
   assert_eq(placed.workspace, Project(root=workspace))
@@ -11557,11 +11445,7 @@ test "started places a conversation before the registry arrives" {
     "desktop-registered",
     Some(store),
   )
-  guard registered.find_conversation(
-      @interop.ChannelId::Local,
-      "desktop-registered",
-    )
-    is Some(known) else {
+  guard registered.find_conversation(Local, "desktop-registered") is Some(known) else {
     fail("expected the registered run's conversation to materialize")
   }
   assert_eq(known.workspace, Project(root=workspace))
@@ -11983,14 +11867,14 @@ test "runs settled closes runs the host no longer has, sparing live and starting
   // gone for good, so only the `agent.runs` reply can close it.
   let stale = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-stale",
       @interop.ChannelId::Local.test_project(),
     ),
     run: Open(run_id="r9", stage=AtStep(Some(4))),
     turn: {
       ..empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "desktop-stale",
         @interop.ChannelId::Local.test_project(),
       ).turn,
@@ -12001,7 +11885,7 @@ test "runs settled closes runs the host no longer has, sparing live and starting
   // failure) is coming and must be the one to settle it.
   let starting = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-starting",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -12030,8 +11914,7 @@ test "runs settled closes runs the host no longer has, sparing live and starting
   )
   // Run 7 is still in flight on the host: untouched.
   inspect(next.active().is_running(), content="true")
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-stale")
-    is Some(settled) else {
+  guard next.find_conversation(Local, "desktop-stale") is Some(settled) else {
     fail("expected the stale conversation")
   }
   inspect(settled.is_running(), content="false")
@@ -12039,8 +11922,7 @@ test "runs settled closes runs the host no longer has, sparing live and starting
   guard settled.run is NoRun(ended=None) else {
     fail("expected the stale run to settle without a verdict")
   }
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-starting")
-    is Some(sending) else {
+  guard next.find_conversation(Local, "desktop-starting") is Some(sending) else {
     fail("expected the starting conversation")
   }
   assert_true(sending.run is Starting(..))
@@ -12063,10 +11945,7 @@ test "reconnect runs snapshot settles only its captured Starting submission" {
   inspect(bridged.active().pending_steers.length(), content="0")
   let (_, settled) = update_dev(
     dispatch,
-    RunsSettled(
-      live=[],
-      frontier=bridged.run_snapshot_frontier(@interop.ChannelId::Local),
-    ),
+    RunsSettled(live=[], frontier=bridged.run_snapshot_frontier(Local)),
     bridged,
   )
   assert_true(settled.active().run is NoRun(ended=None))
@@ -12078,7 +11957,7 @@ test "reconnect recovers a Finished notification dropped behind a slow page" {
   // The host has already finished r7, but this page missed that one live
   // notification and still presents the run as open.
   let (_, bridged) = update_dev(dispatch, BridgeReady, running_model())
-  let frontier = bridged.run_snapshot_frontier(@interop.ChannelId::Local)
+  let frontier = bridged.run_snapshot_frontier(Local)
   let (_, recovered) = update_dev(
     dispatch,
     RunsLoaded(
@@ -12173,7 +12052,7 @@ test "an older start rejection cannot close the current start" {
 ///|
 test "a Started racing ahead of an older runs response stays open" {
   let dispatch = test_dispatch()
-  let frontier = test_model().run_snapshot_frontier(@interop.ChannelId::Local)
+  let frontier = test_model().run_snapshot_frontier(Local)
   let (_, started) = update_dev(
     dispatch,
     Started(
@@ -12214,7 +12093,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
     settled=[],
     approvals=[],
     live=["old-run"],
-    frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
+    frontier=generation_one.run_snapshot_frontier(Local),
     connection_generation=generation_one.dev().connection_generation,
   )
   let (_, generation_two) = update_dev(dispatch, BridgeReady, generation_one)
@@ -12227,19 +12106,15 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       settled=[],
       approvals=[],
       live=[],
-      frontier=generation_two.run_snapshot_frontier(@interop.ChannelId::Local),
+      frontier=generation_two.run_snapshot_frontier(Local),
       connection_generation=generation_two.dev().connection_generation,
     ),
     generation_two,
   )
   let (_, once) = update_dev(dispatch, stale, current)
   let (_, twice) = update_dev(dispatch, stale, current)
-  assert_true(
-    once.find_conversation(@interop.ChannelId::Local, "old-session") is None,
-  )
-  assert_true(
-    twice.find_conversation(@interop.ChannelId::Local, "old-session") is None,
-  )
+  assert_true(once.find_conversation(Local, "old-session") is None)
+  assert_true(twice.find_conversation(Local, "old-session") is None)
   inspect(once.dev().connection_generation, content="2")
   inspect(twice.dev().connection_generation, content="2")
 }
@@ -12254,7 +12129,7 @@ test "a settlement captured for an older Starting owner cannot close its success
   )
   let frontier = test_model()
     .replace_conversation(old)
-    .run_snapshot_frontier(@interop.ChannelId::Local)
+    .run_snapshot_frontier(Local)
   let current = with_pending_prompt(
     { ..old, run: Starting(submission_id="new-owner"), },
     "new-owner",
@@ -12288,7 +12163,7 @@ test "a settlement captured for an older Starting owner cannot close its success
 test "an older positive runs row cannot replace a newer Started" {
   let dispatch = test_dispatch()
   let model = running_model()
-  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let frontier = model.run_snapshot_frontier(Local)
   let (_, finished) = update_dev(
     dispatch,
     Finished(run_id="r7", status="finished", answer=None),
@@ -12335,7 +12210,7 @@ test "an older positive runs row cannot replace a newer Started" {
 test "an older positive runs row cannot resurrect a finished run" {
   let dispatch = test_dispatch()
   let model = running_model()
-  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let frontier = model.run_snapshot_frontier(Local)
   let (_, finished) = update_dev(
     dispatch,
     Finished(run_id="r7", status="finished", answer=None),
@@ -12375,10 +12250,7 @@ test "Finished after RunsSettled fills the last run outcome idempotently" {
   })
   let (_, settled) = update_dev(
     dispatch,
-    RunsSettled(
-      live=[],
-      frontier=model.run_snapshot_frontier(@interop.ChannelId::Local),
-    ),
+    RunsSettled(live=[], frontier=model.run_snapshot_frontier(Local)),
     model,
   )
   assert_true(settled.active().run is NoRun(ended=None))
@@ -12481,7 +12353,7 @@ test "concurrent conversations keep their streams apart" {
   let dispatch = test_dispatch()
   let second = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-second",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -12495,8 +12367,7 @@ test "concurrent conversations keep their streams apart" {
   )
   // Run 8 belongs to the background conversation; the active one is untouched.
   assert_eq(next.active().turn.streaming_response, None)
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-second")
-    is Some(bg) else {
+  guard next.find_conversation(Local, "desktop-second") is Some(bg) else {
     fail("expected the background conversation")
   }
   assert_eq(bg.turn.streaming_response, Some("for B"))
@@ -12507,7 +12378,7 @@ test "a background run finishes without disturbing the conversation on screen" {
   let dispatch = test_dispatch()
   let second = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-second",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -12520,8 +12391,7 @@ test "a background run finishes without disturbing the conversation on screen" {
     Finished(run_id="r8", status="finished", answer=Some("done")),
     model,
   )
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-second")
-    is Some(bg) else {
+  guard next.find_conversation(Local, "desktop-second") is Some(bg) else {
     fail("expected the background conversation")
   }
   inspect(bg.is_running(), content="false")
@@ -12654,7 +12524,7 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
       session~,
       sequence~,
       ts=Some(ts),
-      item=@protocol.User({ content: "question", submission_id: None, }),
+      item=User({ content: "question", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     )
   }
@@ -12700,7 +12570,7 @@ test "a canonical user commit never settles a local steer" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "go left", submission_id: None, }),
+      item=User({ content: "go left", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -12853,7 +12723,7 @@ test "a foreign background run schedules one causal read after Started" {
   let session = "desktop-background"
   let conv = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       session,
       @interop.ChannelId::Local.test_project(),
     ),
@@ -12872,7 +12742,7 @@ test "a foreign background run schedules one causal read after Started" {
       session~,
       sequence=2,
       ts=None,
-      item=@protocol.Assistant({
+      item=Assistant({
         content: "previous answer",
         tool_calls: None,
         reasoning_content: None,
@@ -12894,8 +12764,7 @@ test "a foreign background run schedules one causal read after Started" {
     ),
     buffered_answer,
   )
-  guard started.find_conversation(@interop.ChannelId::Local, session)
-    is Some(started_conv) else {
+  guard started.find_conversation(Local, session) is Some(started_conv) else {
     fail("missing background conversation")
   }
   assert_true(
@@ -12907,7 +12776,7 @@ test "a foreign background run schedules one causal read after Started" {
       session~,
       sequence=3,
       ts=None,
-      item=@protocol.Terminal(@protocol.Finished("previous answer")),
+      item=Terminal(Finished("previous answer")),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     started,
@@ -12918,7 +12787,7 @@ test "a foreign background run schedules one causal read after Started" {
       session~,
       sequence=4,
       ts=None,
-      item=@protocol.User({ content: "current question", submission_id: None, }),
+      item=User({ content: "current question", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     buffered_terminal,
@@ -12937,8 +12806,7 @@ test "a foreign background run schedules one causal read after Started" {
     ),
     buffered_user,
   )
-  guard after_old_cut.find_conversation(@interop.ChannelId::Local, session)
-    is Some(after_old) else {
+  guard after_old_cut.find_conversation(Local, session) is Some(after_old) else {
     fail("missing conversation after old snapshot")
   }
   assert_true(after_old.sync is Reloading(generation=2, ..))
@@ -12967,8 +12835,7 @@ test "a foreign background run schedules one causal read after Started" {
     ),
     after_old_cut,
   )
-  guard causal.find_conversation(@interop.ChannelId::Local, session)
-    is Some(current) else {
+  guard causal.find_conversation(Local, session) is Some(current) else {
     fail("missing conversation after causal snapshot")
   }
   assert_true(current.sync is Synced)
@@ -12990,7 +12857,7 @@ test "buffered commits are delivery, not applied chronology" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({ content: "current question", submission_id: None, }),
+      item=User({ content: "current question", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -13001,7 +12868,7 @@ test "buffered commits are delivery, not applied chronology" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.Assistant({
+      item=Assistant({
         content: "current answer",
         tool_calls: None,
         reasoning_content: None,
@@ -13017,7 +12884,7 @@ test "buffered commits are delivery, not applied chronology" {
       session="desktop-test",
       sequence=4,
       ts=None,
-      item=@protocol.Terminal(@protocol.Finished("current answer")),
+      item=Terminal(Finished("current answer")),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     answer,
@@ -13067,7 +12934,7 @@ test "a trailing applied receipt settles after an empty runs snapshot" {
   let model = running_model().replace_conversation(
     with_pending_steers(running_conversation(), ["late applied"]),
   )
-  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let frontier = model.run_snapshot_frontier(Local)
   let (_, settled) = update_dev(
     dispatch,
     RunsSettled(live=[], frontier~),
@@ -13091,7 +12958,7 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
   let model = running_model().replace_conversation(
     with_pending_steers(running_conversation(), ["late dropped"]),
   )
-  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let frontier = model.run_snapshot_frontier(Local)
   let (_, settled) = update_dev(
     dispatch,
     RunsSettled(live=[], frontier~),
@@ -13229,7 +13096,7 @@ test "the model selector switches one conversation, not the app" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation(
     empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "other-chat",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -13254,8 +13121,7 @@ test "the model selector switches one conversation, not the app" {
   @debug.assert_eq(flash.default_model, flash_again.default_model)
   @debug.assert_eq(flash.conversation_models, flash_again.conversation_models)
   // The conversation next door keeps the tier it was already on.
-  guard flash.find_conversation(@interop.ChannelId::Local, "other-chat")
-    is Some(other) else {
+  guard flash.find_conversation(Local, "other-chat") is Some(other) else {
     fail("the second conversation vanished")
   }
   assert_true(other.engine_model is DsPro)
@@ -13263,11 +13129,7 @@ test "the model selector switches one conversation, not the app" {
   assert_true(flash.default_model is DsFlash)
   assert_true(
     flash
-    .activate(
-      @interop.ChannelId::Local,
-      "fresh-chat",
-      @interop.ChannelId::Local.test_project(),
-    )
+    .activate(Local, "fresh-chat", @interop.ChannelId::Local.test_project())
     .active().engine_model
     is DsFlash,
   )
@@ -13319,7 +13181,7 @@ test "reopening a conversation recovers its own tier, not the last pick" {
     test_model(),
   )
   let other = flash.activate(
-    @interop.ChannelId::Local,
+    Local,
     "other-chat",
     @interop.ChannelId::Local.test_project(),
   )
@@ -13334,7 +13196,7 @@ test "reopening a conversation recovers its own tier, not the last pick" {
   // so `activate` does not retain it) — exactly the path that used to hand
   // back the unrelated default.
   let reopened = pro.activate(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
@@ -13358,13 +13220,10 @@ test "a run pins an inherited tier the user never clicked for" {
     ),
     test_model(),
   )
-  assert_true(
-    ran.remembered_model(@interop.ChannelId::Local, "desktop-test")
-    is Some(DsPro),
-  )
+  assert_true(ran.remembered_model(Local, "desktop-test") is Some(DsPro))
   // Another chat moves the page default to DsFlash...
   let elsewhere = ran.activate(
-    @interop.ChannelId::Local,
+    Local,
     "other-chat",
     @interop.ChannelId::Local.test_project(),
   )
@@ -13376,7 +13235,7 @@ test "a run pins an inherited tier the user never clicked for" {
   assert_true(moved.default_model is DsFlash)
   // ...and the first one still comes back on the tier it ran with.
   let reopened = moved.activate(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-test",
     @interop.ChannelId::Local.test_project(),
   )
@@ -13502,7 +13361,7 @@ test "Codex threads share the Projects section's project rows" {
   assert_true(!sections[0].initially_collapsed)
   assert_eq(sections[0].preview_limit, Some(3))
   inspect(sections[1].label, content="Projects")
-  guard sections[1].entries[0] is @section.Project(project) else {
+  guard sections[1].entries[0] is Project(project) else {
     fail("expected the fixture project's row")
   }
   // The fixture's unsent OpenSeek chat is represented by its project rather
@@ -13510,7 +13369,7 @@ test "Codex threads share the Projects section's project rows" {
   // both agents.
   let order = project.conversations.map(row => row.id.conversation())
   assert_eq(order, ["desktop-newer", "codex-thread-1", "desktop-older"])
-  assert_true(project.conversations[1].id.source() is @conversation.CodexLive)
+  assert_true(project.conversations[1].id.source() is CodexLive)
   assert_true(project.conversations[1].nested)
   // With the Codex page on screen, its active task claims the activation.
   assert_eq(sections[1].activation, Some("codex-thread-1"))
@@ -13572,7 +13431,7 @@ test "the remembered list stays capped, newest first" {
   // falls off and reverts to the page default.
   for index in 0..<=ConversationModelsLimit {
     model = model.remember_model(
-      @interop.ChannelId::Local,
+      Local,
       "session-\{index}",
       if index % 2 == 0 {
         DsFlash
@@ -13582,27 +13441,15 @@ test "the remembered list stays capped, newest first" {
     )
   }
   assert_eq(model.conversation_models.length(), ConversationModelsLimit)
+  assert_true(model.remembered_model(Local, "session-0") is None)
   assert_true(
-    model.remembered_model(@interop.ChannelId::Local, "session-0") is None,
-  )
-  assert_true(
-    model.remembered_model(
-      @interop.ChannelId::Local,
-      "session-\{ConversationModelsLimit}",
-    )
+    model.remembered_model(Local, "session-\{ConversationModelsLimit}")
     is Some(DsFlash),
   )
   // Re-choosing an existing conversation moves it, never duplicates it.
-  let again = model.remember_model(
-    @interop.ChannelId::Local,
-    "session-1",
-    DsFlash,
-  )
+  let again = model.remember_model(Local, "session-1", DsFlash)
   assert_eq(again.conversation_models.length(), ConversationModelsLimit)
-  assert_true(
-    again.remembered_model(@interop.ChannelId::Local, "session-1")
-    is Some(DsFlash),
-  )
+  assert_true(again.remembered_model(Local, "session-1") is Some(DsFlash))
 }
 
 ///|
@@ -13628,11 +13475,7 @@ test "a conversation first met through a live run adopts its tier" {
       engine_model: DsFlash,
     }),
   )
-  guard background.find_conversation(
-      @interop.ChannelId::Local,
-      "background-chat",
-    )
-    is Some(conv) else {
+  guard background.find_conversation(Local, "background-chat") is Some(conv) else {
     fail("the background run materialized no conversation")
   }
   assert_true(conv.engine_model is DsPro)
@@ -14121,7 +13964,7 @@ test "a background device's pushes leave the focused mirrors alone" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      { ..empty_device_state(Local), bridge: Connected, },
       { ..empty_device_state(background), bridge: Connected, },
     ],
   }
@@ -14501,17 +14344,11 @@ test "a superseded branch probe cannot put its older answer back" {
   let (_, first) = probe_branch(
     dispatch,
     test_model(),
-    @interop.ChannelId::Local,
+    Local,
     "desktop-test",
     None,
   )
-  let (_, second) = probe_branch(
-    dispatch,
-    first,
-    @interop.ChannelId::Local,
-    "desktop-test",
-    None,
-  )
+  let (_, second) = probe_branch(dispatch, first, Local, "desktop-test", None)
   assert_eq(second.active().branch_generation, 2)
   let newer : DiffStat = {
     added: 9,
@@ -14945,11 +14782,7 @@ test "right-panel menu closes without reopening on a second dismissal" {
   let (_, docked) = update(dispatch, ToggleRightPanel, desktop_model())
   // The empty strip is the launcher's deliberate open state. A delayed close
   // for a tab that is already gone must not collapse that surface.
-  let (_, empty) = update(
-    dispatch,
-    Dock(TabClosed(@dock.DockTab::FilePicker)),
-    docked,
-  )
+  let (_, empty) = update(dispatch, Dock(TabClosed(FilePicker)), docked)
   assert_true(empty.right_panel_open)
   let (_, menued) = update(dispatch, ToggleRightPanelMenu, empty)
   assert_true(menued.right_panel_menu_open)
@@ -14975,7 +14808,7 @@ test "right-panel menu closes when the dock owner changes" {
   let dispatch = test_dispatch()
   let model = desktop_model()
   let stale_owner : @interop.ConversationKey = {
-    channel: @interop.Local,
+    channel: Local,
     session: "stale-panel-owner",
   }
   let stale = {
@@ -15027,7 +14860,7 @@ test "opening an archived row creates a read-only transcript owner" {
   let item = archived_item("desktop-archived")
   let model = test_model().with_dev(dev => { ..dev, archived: [item], })
   let open = OpenArchivedSession(
-    @interop.ChannelId::Local,
+    Local,
     session=item.id,
     workspace=item.workspace,
   )
@@ -15074,7 +14907,7 @@ test "switching same-id archived stores fences the first transcript load" {
   let (_, loading_first) = update(
     dispatch,
     OpenArchivedSession(
-      @interop.ChannelId::Local,
+      Local,
       session=first_item.id,
       workspace=first_item.workspace,
     ),
@@ -15087,7 +14920,7 @@ test "switching same-id archived stores fences the first transcript load" {
   let (_, loading_second) = update(
     dispatch,
     OpenArchivedSession(
-      @interop.ChannelId::Local,
+      Local,
       session=second_item.id,
       workspace=second_item.workspace,
     ),
@@ -15182,11 +15015,7 @@ test "an archived snapshot stays open across archived-list reconciliation" {
   let model = test_model().with_dev(dev => { ..dev, archived: [item], })
   let (_, loading) = update(
     dispatch,
-    OpenArchivedSession(
-      @interop.ChannelId::Local,
-      session=item.id,
-      workspace=item.workspace,
-    ),
+    OpenArchivedSession(Local, session=item.id, workspace=item.workspace),
     model,
   )
   let (_, loaded) = update_dev(
@@ -15227,7 +15056,7 @@ test "unarchiving an open transcript fences its archived snapshot" {
   let item = archived_item("desktop-archived")
   let archived = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       item.id,
       @interop.ChannelId::Local.test_project(),
     ),
@@ -15298,7 +15127,7 @@ test "unarchiving an open transcript fences its archived snapshot" {
 ///|
 test "session.changed decoder preserves archive invalidation identity" {
   let store = @interop.ChannelId::Local.test_project()
-  guard session_changed_msg(@interop.ChannelId::Local, {
+  guard session_changed_msg(Local, {
       change: "archived",
       session: "desktop-old",
       workspace: store.path,
@@ -15309,7 +15138,7 @@ test "session.changed decoder preserves archive invalidation identity" {
     fail("archive invalidation was not decoded")
   }
   assert_true(archived == { session: "desktop-old", workspace: store, })
-  guard session_changed_msg(@interop.ChannelId::Local, {
+  guard session_changed_msg(Local, {
       change: "deleted",
       session: "desktop-old",
       workspace: store.path,
@@ -15323,7 +15152,7 @@ test "session.changed decoder preserves archive invalidation identity" {
   // Every durable record lives in a workspace store, so a notification that
   // names none identifies no record and is refused outright.
   assert_true(
-    session_changed_msg(@interop.ChannelId::Local, {
+    session_changed_msg(Local, {
       change: "archived",
       session: "desktop-old",
       workspace: "",
@@ -15343,7 +15172,7 @@ test "archived deletion confirmation owns one visible conversation family" {
   })
   let (_, staged) = update(
     dispatch,
-    DeleteArchivedSession(@interop.ChannelId::Local, {
+    DeleteArchivedSession(Local, {
       session: "desktop-parent",
       workspace: @interop.ChannelId::Local.test_project(),
     }),
@@ -15404,7 +15233,7 @@ test "archived deletion keeps same-id rows in other stores" {
     ..test_model()
     .replace_conversation({
       ..empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "shared",
         @interop.ChannelId::Local.test_project(),
       ),
@@ -15420,11 +15249,7 @@ test "archived deletion keeps same-id rows in other stores" {
     active_session: "shared",
   }
   let key : ArchiveRecordKey = { session: "shared", workspace: project, }
-  let (_, staged) = update(
-    dispatch,
-    DeleteArchivedSession(@interop.ChannelId::Local, key),
-    model,
-  )
+  let (_, staged) = update(dispatch, DeleteArchivedSession(Local, key), model)
   guard staged.archived_delete_confirm is Some(confirm) else {
     fail("delete confirmation was not staged")
   }
@@ -15467,7 +15292,7 @@ test "delete response tombstones a family before stale list replies" {
     conversations: [
       {
         ..empty_conversation(
-          @interop.ChannelId::Local,
+          Local,
           "desktop-parent",
           @interop.ChannelId::Local.test_project(),
         ),
@@ -15475,7 +15300,7 @@ test "delete response tombstones a family before stale list replies" {
         task: "keep local draft",
       },
       empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "desktop-parent-sr-1",
         @interop.ChannelId::Local.test_project(),
       ),
@@ -15503,14 +15328,8 @@ test "delete response tombstones a family before stale list replies" {
   assert_eq(deleted.dev().archived[0].id, "desktop-other")
   assert_false(deleted.dev().sessions.contains(parent))
   assert_false(deleted.dev().sessions.contains(child))
-  assert_true(
-    deleted.find_conversation(@interop.ChannelId::Local, "desktop-parent")
-    is None,
-  )
-  assert_true(
-    deleted.find_conversation(@interop.ChannelId::Local, "desktop-parent-sr-1")
-    is None,
-  )
+  assert_true(deleted.find_conversation(Local, "desktop-parent") is None)
+  assert_true(deleted.find_conversation(Local, "desktop-parent-sr-1") is None)
   let (_, stale_live) = update_dev(
     dispatch,
     SessionsLoaded(
@@ -15611,13 +15430,12 @@ test "a new Started incarnation retires its exact deleted tombstone" {
       session=deleted_item.id,
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "new incarnation", submission_id: None, }),
+      item=User({ content: "new incarnation", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     started,
   )
-  guard committed.find_conversation(@interop.ChannelId::Local, deleted_item.id)
-    is Some(recreated) else {
+  guard committed.find_conversation(Local, deleted_item.id) is Some(recreated) else {
     fail("the recreated conversation stayed hidden")
   }
   guard recreated.sync is Reloading(generation~, buffered~, ..) else {
@@ -15637,8 +15455,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
     ),
     committed,
   )
-  guard reconciled.find_conversation(@interop.ChannelId::Local, deleted_item.id)
-    is Some(recreated) else {
+  guard reconciled.find_conversation(Local, deleted_item.id) is Some(recreated) else {
     fail("the recreated conversation disappeared after its snapshot")
   }
   assert_true(
@@ -15661,7 +15478,7 @@ test "deleted broadcast is immediate and idempotent" {
     ..test_model()
     .replace_conversation({
       ..empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "desktop-gone",
         @interop.ChannelId::Local.test_project(),
       ),
@@ -15689,9 +15506,7 @@ test "deleted broadcast is immediate and idempotent" {
   assert_eq(same_input.active_session, deleted.active_session)
   assert_eq(same_input.active().task, deleted.active().task)
   inspect(deleted.active().task, content="")
-  assert_true(
-    deleted.find_conversation(@interop.ChannelId::Local, "desktop-gone") is None,
-  )
+  assert_true(deleted.find_conversation(Local, "desktop-gone") is None)
   assert_false(deleted.dev().sessions.contains(item))
   assert_false(deleted.dev().archived.contains(item))
   assert_true(deleted.dev().sessions.contains(same_id_project))
@@ -15716,7 +15531,7 @@ test "deleted broadcast rotates the active conversation's exact store" {
     ..test_model()
     .replace_conversation({
       ..empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "shared",
         @interop.ChannelId::Local.test_project(),
       ),
@@ -15760,7 +15575,7 @@ test "archive facts rotate the open conversation's exact store" {
     ..test_model()
     .replace_conversation({
       ..empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "shared",
         @interop.ChannelId::Local.test_project(),
       ),
@@ -15781,16 +15596,12 @@ test "archive facts rotate the open conversation's exact store" {
   )
   inspect(notified.active_session, content="notification-fresh")
   inspect(notified.active().task, content="")
-  assert_true(
-    notified.find_conversation(@interop.ChannelId::Local, "shared") is None,
-  )
+  assert_true(notified.find_conversation(Local, "shared") is None)
   assert_true(notified.dev().sessions == [unplaced])
   let (_, listed) = update(dispatch, archived_loaded([project_item]), model)
   inspect(listed.active_session, content="desktop-archive-replacement")
   inspect(listed.active().task, content="")
-  assert_true(
-    listed.find_conversation(@interop.ChannelId::Local, "shared") is None,
-  )
+  assert_true(listed.find_conversation(Local, "shared") is None)
   assert_true(listed.dev().sessions == [unplaced])
 }
 
@@ -15830,10 +15641,7 @@ test "archive broadcast invalidates the active send target before list replies" 
     model,
   )
   inspect(invalidated.active_session, content="desktop-fresh")
-  assert_true(
-    invalidated.find_conversation(@interop.ChannelId::Local, "desktop-test")
-    is None,
-  )
+  assert_true(invalidated.find_conversation(Local, "desktop-test") is None)
   inspect(invalidated.active().session_id, content="desktop-fresh")
   assert_eq(invalidated.dev().active_project, Some(workspace))
   assert_eq(invalidated.active().workspace, Project(root=workspace))
@@ -15854,9 +15662,7 @@ test "archive broadcast invalidates the active send target before list replies" 
   inspect(sent.active_session, content="desktop-fresh")
   inspect(sent.active().session_id, content="desktop-fresh")
   assert_true(sent.active().run is Starting(..))
-  assert_true(
-    sent.find_conversation(@interop.ChannelId::Local, "desktop-test") is None,
-  )
+  assert_true(sent.find_conversation(Local, "desktop-test") is None)
 }
 
 ///|
@@ -15972,7 +15778,7 @@ test "a background archive removes only its channel's same-id conversation" {
   let remote : @interop.ChannelId = Remote("d-remote")
   let local_conv = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "shared",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -15985,7 +15791,7 @@ test "a background archive removes only its channel's same-id conversation" {
   let model = {
     ..test_model(),
     devices: [
-      { ..empty_device_state(@interop.ChannelId::Local), bridge: Connected, },
+      { ..empty_device_state(Local), bridge: Connected, },
       { ..empty_device_state(remote), bridge: Connected, },
     ],
     active_session: "shared",
@@ -16006,8 +15812,7 @@ test "a background archive removes only its channel's same-id conversation" {
   )
   assert_true(next.focused is Local)
   inspect(next.active_session, content="shared")
-  guard next.find_conversation(@interop.ChannelId::Local, "shared")
-    is Some(kept) else {
+  guard next.find_conversation(Local, "shared") is Some(kept) else {
     fail("the focused same-id conversation was removed")
   }
   assert_eq(kept.messages[0].text(), Some("local"))
@@ -16046,7 +15851,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
   let item = archived_item("desktop-old")
   let archived = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       item.id,
       @interop.ChannelId::Local.test_project(),
     ),
@@ -16069,7 +15874,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
   let model = {
     ..test_model()
     .with_archive_override(
-      @interop.ChannelId::Local,
+      Local,
       {
         session: "desktop-old",
         workspace: @interop.ChannelId::Local.test_project(),
@@ -16088,8 +15893,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     SessionsLoaded([item], connection_generation=1, request_generation=1),
     ready,
   )
-  guard live.find_conversation(@interop.ChannelId::Local, item.id)
-    is Some(restored) else {
+  guard live.find_conversation(Local, item.id) is Some(restored) else {
     fail("the freshly live record disappeared during reconnect")
   }
   assert_true(restored.record is LiveRecord)
@@ -16136,8 +15940,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     SessionsLoaded([item], connection_generation=1, request_generation=1),
     ready,
   )
-  guard live_again.find_conversation(@interop.ChannelId::Local, item.id)
-    is Some(restored_again) else {
+  guard live_again.find_conversation(Local, item.id) is Some(restored_again) else {
     fail("the repeated live-list update dropped the restored record")
   }
   assert_true(restored_again.record is LiveRecord)
@@ -16245,7 +16048,7 @@ test "an archived background session drops its live state, active stays" {
     conversations: [
       test_conversation(),
       empty_conversation(
-        @interop.ChannelId::Local,
+        Local,
         "desktop-old",
         @interop.ChannelId::Local.test_project(),
       ),
@@ -16258,9 +16061,7 @@ test "an archived background session drops its live state, active stays" {
   )
   inspect(next.dev().archived.length(), content="1")
   inspect(next.dev().archived[0].id, content="desktop-old")
-  assert_true(
-    next.find_conversation(@interop.ChannelId::Local, "desktop-old") is None,
-  )
+  assert_true(next.find_conversation(Local, "desktop-old") is None)
   inspect(next.active_session, content="desktop-test")
 }
 
@@ -16272,9 +16073,7 @@ test "an archived-list reply immediately replaces the active conversation" {
     archived_loaded([placed_archived_item("desktop-test")]),
     test_model(),
   )
-  assert_true(
-    next.find_conversation(@interop.ChannelId::Local, "desktop-test") is None,
-  )
+  assert_true(next.find_conversation(Local, "desktop-test") is None)
   inspect(next.active_session, content="desktop-archive-replacement")
   inspect(next.dev().archived[0].id, content="desktop-test")
 }
@@ -16394,11 +16193,7 @@ test "selecting a conversation returns from the skills page to the chat" {
   assert_true(opened.screen is Skills)
 
   // Re-selecting the active conversation is enough to switch back…
-  let (_, back) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
-    opened,
-  )
+  let (_, back) = update(dispatch, OpenSession(Local, "desktop-test"), opened)
   assert_true(back.screen is Chat)
 
   // …and so is rotating to a fresh one.
@@ -16434,23 +16229,20 @@ test "Codex sidebar selection uses the main conversation screen" {
   guard opened.active_checkout() is Some(active) else {
     fail("selected Codex task did not project an active checkout")
   }
-  assert_eq(active.owner, {
-    channel: @interop.ChannelId::Local,
-    session: "codex-thread-1",
-  })
+  assert_eq(active.owner, { channel: Local, session: "codex-thread-1", })
   assert_eq(
     active.placement.bind(value => value.checkout_root()),
     Some(workspace),
   )
   assert_true(opened.conversation_root(opened.active()) != Some(workspace))
-  assert_true(file_ctx(opened).placement is Some(@interop.WorkspaceRoot(..)))
+  assert_true(file_ctx(opened).placement is Some(WorkspaceRoot(..)))
   assert_eq(
     file_ctx(opened).placement.bind(value => value.checkout_root()),
     Some(workspace),
   )
   let opened_terminal = terminal_ctx(opened)
   inspect(opened_terminal.session, content="codex-thread-1")
-  assert_true(opened_terminal.placement is Some(@interop.WorkspaceRoot(..)))
+  assert_true(opened_terminal.placement is Some(WorkspaceRoot(..)))
   assert_eq(
     opened_terminal.placement.bind(value => value.checkout_root()),
     Some(workspace),
@@ -16480,7 +16272,7 @@ test "Codex events from a background device cannot mutate the focused host" {
   let (_, next) = update(
     dispatch,
     Codex(
-      channel=@interop.ChannelId::Remote("background"),
+      channel=Remote("background"),
       @codex.Msg::status_changed({ "status": "ready" }),
     ),
     model,
@@ -16503,7 +16295,7 @@ test "cwd-less Codex tasks keep Files unavailable and use scratch Terminal" {
   // host-lazy scratch group by task id without inventing a Files directory.
   let terminal = terminal_ctx(model)
   inspect(terminal.session, content="codex-scratch-1")
-  assert_true(terminal.placement is Some(@interop.Scratch(root=None)))
+  assert_true(terminal.placement is Some(Scratch(root=None)))
   assert_true(terminal.connected)
 }
 
@@ -16651,7 +16443,7 @@ test "only synchronous file-open messages suppress panel reactivation" {
   assert_true(JumpToMention(0).opens_file_before_panel_reconciliation())
   assert_true(
     ComposerAction(
-      @composer.MentionOpened(identity~, mention={
+      MentionOpened(identity~, mention={
         ref_: File(path="a.mbt"),
         range: None,
       }),
@@ -16659,7 +16451,7 @@ test "only synchronous file-open messages suppress panel reactivation" {
   )
   assert_true(
     CodexComposerAction(
-      @composer.MentionOpened(identity~, mention={
+      MentionOpened(identity~, mention={
         ref_: File(path="a.mbt"),
         range: None,
       }),
@@ -16668,9 +16460,7 @@ test "only synchronous file-open messages suppress panel reactivation" {
   assert_true(
     JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(),
   )
-  assert_true(
-    QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(),
-  )
+  assert_true(QuickOpen(Pick(0)).opens_file_before_panel_reconciliation())
   assert_true(
     OpenFileAt(owner~, generation=1, path="a.mbt", line=Some(1), column=None).opens_file_before_panel_reconciliation(),
   )
@@ -16685,7 +16475,7 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
   let dispatch = test_dispatch()
   let mention : Mention = {
     ref_: Symbol(name="parse_hover", file="src/main.mbt", line=5),
-    range: Some(@common.Range(5, 1, 5, 12)),
+    range: Some(Range(5, 1, 5, 12)),
   }
   let model = test_model().replace_conversation({
     ..test_conversation(),
@@ -16767,7 +16557,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       ],
     })
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "desktop-test",
   }
   // Spending the generation is part of the pure click transition, before the
@@ -16838,9 +16628,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     @dock.active_file(after_opened_reply.dock) is Some(Relative("README.md")),
   )
   assert_false(
-    after_opened_reply.dock.tabs.contains(
-      @dock.DockTab::File(path=Relative("src/main.mbt")),
-    ),
+    after_opened_reply.dock.tabs.contains(File(path=Relative("src/main.mbt"))),
   )
   // The first host reply is stale as soon as the second click happens.
   let (_, old_host_reply) = update(
@@ -16876,10 +16664,10 @@ test "update is pure: a resolved transcript position opens its owning file" {
   let (_, ordinary_pending) = update(
     dispatch,
     FileEditor(
-      @fileeditor.OpenNavigationLocation(
+      OpenNavigationLocation(
         owner~,
         path=Relative("src/main.mbt"),
-        range=@common.Range(9, 1, 9, 4),
+        range=Range(9, 1, 9, 4),
       ),
     ),
     first,
@@ -16888,7 +16676,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
   let (_, ordinary_failed) = update(
     dispatch,
     FileEditor(
-      @fileeditor.FileFailed(
+      FileFailed(
         owner~,
         epoch=ordinary_pending.file_panel.request_epoch,
         path=Relative("src/main.mbt"),
@@ -16901,22 +16689,20 @@ test "update is pure: a resolved transcript position opens its owning file" {
   )
   assert_true(
     ordinary_failed.file_panel.docs.get(Relative("src/main.mbt"))
-    is Some(
-      { state: @fileeditor.TabReadFailed("newer ordinary read failed"), .. }
-    ),
+    is Some({ state: TabReadFailed("newer ordinary read failed"), .. }),
   )
   let (_, old_after_failure) = update(
     dispatch,
     FileEditor(
-      @fileeditor.FileLoaded(
+      FileLoaded(
         owner~,
         epoch=ordinary_failed.file_panel.request_epoch,
         path=Relative("src/main.mbt"),
         name="main.mbt",
-        file=@fileeditor.Content(content="old", absolute=target, sig="1:3"),
+        file=Content(content="old", absolute=target, sig="1:3"),
         file_link_generation=Some(2),
         review_generation=None,
-        range=Some(@common.Range(2738, 17, 2738, 17)),
+        range=Some(Range(2738, 17, 2738, 17)),
         annotation=None,
       ),
     ),
@@ -16929,15 +16715,15 @@ test "update is pure: a resolved transcript position opens its owning file" {
   let (_, old_file_reply) = update(
     dispatch,
     FileEditor(
-      @fileeditor.FileLoaded(
+      FileLoaded(
         owner~,
         epoch=first.file_panel.request_epoch,
         path=Relative("src/main.mbt"),
         name="main.mbt",
-        file=@fileeditor.Content(content="old", absolute=target, sig="1:3"),
+        file=Content(content="old", absolute=target, sig="1:3"),
         file_link_generation=Some(1),
         review_generation=None,
-        range=Some(@common.Range(1, 1, 1, 1)),
+        range=Some(Range(1, 1, 1, 1)),
         annotation=None,
       ),
     ),
@@ -16945,14 +16731,14 @@ test "update is pure: a resolved transcript position opens its owning file" {
   )
   assert_true(
     old_file_reply.file_panel.docs.get(Relative("src/main.mbt"))
-    is Some({ state: @fileeditor.TabLoaded(content="old", ..), .. }),
+    is Some({ state: TabLoaded(content="old", ..), .. }),
   )
   // A stale failure likewise makes its loading tab retryable without raising
   // a panel-wide error or applying the old position.
   let (_, old_file_failure) = update(
     dispatch,
     FileEditor(
-      @fileeditor.FileFailed(
+      FileFailed(
         owner~,
         epoch=first.file_panel.request_epoch,
         path=Relative("src/main.mbt"),
@@ -16966,14 +16752,14 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_true(old_file_failure.file_panel.error is None)
   assert_true(
     old_file_failure.file_panel.docs.get(Relative("src/main.mbt"))
-    is Some({ state: @fileeditor.TabReadFailed("old read failed"), .. }),
+    is Some({ state: TabReadFailed("old read failed"), .. }),
   )
   // The current failure is authoritative even if the stale success filled the
   // cache first, so the superseded snapshot cannot survive the failed read.
   let (_, current_file_failure) = update(
     dispatch,
     FileEditor(
-      @fileeditor.FileFailed(
+      FileFailed(
         owner~,
         epoch=first.file_panel.request_epoch,
         path=Relative("src/main.mbt"),
@@ -16987,20 +16773,20 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_true(current_file_failure.file_panel.error is None)
   assert_true(
     current_file_failure.file_panel.docs.get(Relative("src/main.mbt"))
-    is Some({ state: @fileeditor.TabReadFailed("current read failed"), .. }),
+    is Some({ state: TabReadFailed("current read failed"), .. }),
   )
   let (_, current_file_reply) = update(
     dispatch,
     FileEditor(
-      @fileeditor.FileLoaded(
+      FileLoaded(
         owner~,
         epoch=first.file_panel.request_epoch,
         path=Relative("src/main.mbt"),
         name="main.mbt",
-        file=@fileeditor.Content(content="new", absolute=target, sig="2:3"),
+        file=Content(content="new", absolute=target, sig="2:3"),
         file_link_generation=Some(2),
         review_generation=None,
-        range=Some(@common.Range(2738, 17, 2738, 17)),
+        range=Some(Range(2738, 17, 2738, 17)),
         annotation=None,
       ),
     ),
@@ -17008,7 +16794,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
   )
   assert_true(
     current_file_reply.file_panel.docs.get(Relative("src/main.mbt"))
-    is Some({ state: @fileeditor.TabLoaded(content="new", ..), .. }),
+    is Some({ state: TabLoaded(content="new", ..), .. }),
   )
   // Closing an inactive file tab is also newer than a pending positioned
   // link to that file. Its delayed host reply must not recreate the tab.
@@ -17026,7 +16812,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
   let pending_generation = inactive_pending.file_panel.file_link_generation
   let (_, inactive_closed) = update(
     dispatch,
-    Dock(TabClosed(@dock.DockTab::File(path=Relative("src/main.mbt")))),
+    Dock(TabClosed(File(path=Relative("src/main.mbt")))),
     inactive_pending,
   )
   assert_eq(
@@ -17034,9 +16820,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     pending_generation + 1,
   )
   assert_false(
-    inactive_closed.dock.tabs.contains(
-      @dock.DockTab::File(path=Relative("src/main.mbt")),
-    ),
+    inactive_closed.dock.tabs.contains(File(path=Relative("src/main.mbt"))),
   )
   let (_, after_inactive_reply) = update(
     dispatch,
@@ -17050,9 +16834,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     inactive_closed,
   )
   assert_false(
-    after_inactive_reply.dock.tabs.contains(
-      @dock.DockTab::File(path=Relative("src/main.mbt")),
-    ),
+    after_inactive_reply.dock.tabs.contains(File(path=Relative("src/main.mbt"))),
   )
   // A later tree pick competes with the transcript request just like a newer
   // transcript click: it advances the same token before opening its document.
@@ -17122,7 +16904,7 @@ test "EditorCommentAdded attaches a deduplicated annotation chip" {
     EditorCommentAdded(
       resource=@fileeditor.ModelUri::of(absolute),
       file=Relative("src/main.mbt"),
-      range=@common.Range(5, 1, 6, 3),
+      range=Range(5, 1, 6, 3),
       quote="fn parse_hover() {",
       comment="rename this",
       feedback_id="viewer-feedback-0",
@@ -17152,7 +16934,7 @@ test "ApplyAllFeedback queues the attached annotation on a running task" {
           @interop.ChannelId::Local.test_resource("/work/project/src/main.mbt"),
         ),
         file=Relative("src/main.mbt"),
-        range=@common.Range(5, 1, 6, 3),
+        range=Range(5, 1, 6, 3),
         quote="fn parse_hover() {",
         comment="rename this",
         feedback_id="viewer-feedback-immediate",
@@ -17161,11 +16943,7 @@ test "ApplyAllFeedback queues the attached annotation on a running task" {
     model,
   )
   assert_eq(batched.active().mentions.length(), 1)
-  let (_, applied) = update(
-    dispatch,
-    FileEditor(@fileeditor.ApplyAllFeedback),
-    batched,
-  )
+  let (_, applied) = update(dispatch, FileEditor(ApplyAllFeedback), batched)
   assert_true(applied.active().mentions.is_empty())
   assert_eq(applied.active().pending_steers.length(), 1)
   let steer = applied.active().pending_steers[0]
@@ -17200,10 +16978,10 @@ test "DiffCommentAdded preserves modified and original-only line identity" {
       end_line=7,
       quote="let answer = 42",
       comment="name this constant",
-      side=@mention_context.WorkingRevision
+      side=WorkingRevision
     ),
   )
-  assert_eq(added_mentions[0].range, Some(@common.Range(7, 1, 7, 16)))
+  assert_eq(added_mentions[0].range, Some(Range(7, 1, 7, 16)))
   let deleted : Msg = FileEditor(
     DiffCommentAdded(
       file~,
@@ -17226,7 +17004,7 @@ test "DiffCommentAdded preserves modified and original-only line identity" {
       end_line=3,
       quote="obsolete()",
       comment="good removal",
-      side=@mention_context.OriginalRevision
+      side=OriginalRevision
     ),
   )
   assert_eq(deleted_mentions[1].range, None)
@@ -17272,18 +17050,14 @@ test "Codex original-side diff feedback queues in the Codex draft" {
       end_line=3,
       quote="obsolete()",
       comment="keep this removal",
-      side=@mention_context.OriginalRevision
+      side=OriginalRevision
     ),
   )
   assert_eq(draft.mentions[0].range, None)
-  let (_, applied) = update(
-    dispatch,
-    FileEditor(@fileeditor.ApplyAllFeedback),
-    batched,
-  )
+  let (_, applied) = update(dispatch, FileEditor(ApplyAllFeedback), batched)
   let queued = applied.codex.transcript_items()
   assert_eq(queued.length(), 1)
-  guard queued[0].kind is @transcript.User(prompt) else {
+  guard queued[0].kind is User(prompt) else {
     fail("expected the queued feedback as a user prompt")
   }
   assert_true(prompt.contains("side=\"original\""))
@@ -17300,7 +17074,7 @@ test "original-revision diff comment chip does not navigate into the working fil
       end_line=3,
       quote="obsolete()",
       comment="good removal",
-      side=@mention_context.OriginalRevision,
+      side=OriginalRevision,
     ),
     range: None,
   }
@@ -17331,7 +17105,7 @@ test "Codex editor comments use annotation context, not textarea text or OpenSee
         @interop.ChannelId::Local.test_resource("/work/project/src/main.mbt"),
       ),
       file=Relative("src/main.mbt"),
-      range=@common.Range(5, 1, 6, 3),
+      range=Range(5, 1, 6, 3),
       quote="fn parse_hover() {",
       comment="rename this",
       feedback_id="viewer-feedback-codex",
@@ -17369,7 +17143,7 @@ test "Codex ApplyAllFeedback steers the running task through its composer" {
           @interop.ChannelId::Local.test_resource("/work/project/src/main.mbt"),
         ),
         file=Relative("src/main.mbt"),
-        range=@common.Range(5, 1, 6, 3),
+        range=Range(5, 1, 6, 3),
         quote="fn parse_hover() {",
         comment="rename this",
         feedback_id="viewer-feedback-codex-immediate",
@@ -17379,14 +17153,10 @@ test "Codex ApplyAllFeedback steers the running task through its composer" {
   )
   let before = batched.codex_composer_input()
   assert_eq(before.draft.mentions.length(), 1)
-  let (_, applied) = update(
-    dispatch,
-    FileEditor(@fileeditor.ApplyAllFeedback),
-    batched,
-  )
+  let (_, applied) = update(dispatch, FileEditor(ApplyAllFeedback), batched)
   let queued = applied.codex.transcript_items()
   assert_eq(queued.length(), 1)
-  guard queued[0].kind is @transcript.User(prompt) else {
+  guard queued[0].kind is User(prompt) else {
     fail("expected the queued comment as a user prompt")
   }
   assert_true(prompt.contains("<user_mentions>"))
@@ -17411,13 +17181,10 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ..model,
     file_panel: {
       ..model.file_panel,
-      owner: Some({
-        channel: @interop.ChannelId::Remote("previous"),
-        session: "previous-session",
-      }),
+      owner: Some({ channel: Remote("previous"), session: "previous-session", }),
       tree_open: false,
-      explorer_mode: @fileeditor.ExplorerChanges,
-      review_view_mode: @fileeditor.ReviewDiff,
+      explorer_mode: ExplorerChanges,
+      review_view_mode: ReviewDiff,
       changes_generation: 7,
       watch_generation: 11,
     },
@@ -17426,15 +17193,15 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     dispatch,
     JumpToLocation(
       path="/work/project/src/main.mbt",
-      range=Some(@common.Range(5, 1, 5, 1)),
+      range=Some(Range(5, 1, 5, 1)),
       annotation=None,
     ),
     model,
   )
   assert_true(@dock.active_file(next.dock) is Some(Relative("src/main.mbt")))
   assert_false(next.file_panel.tree_open)
-  assert_true(next.file_panel.explorer_mode is @fileeditor.ExplorerChanges)
-  assert_true(next.file_panel.review_view_mode is @fileeditor.ReviewDiff)
+  assert_true(next.file_panel.explorer_mode is ExplorerChanges)
+  assert_true(next.file_panel.review_view_mode is ReviewDiff)
   // The eager re-root retains 7. The jump keeps the explorer hidden while the
   // file is active, so Changes waits until the pane is shown before refreshing.
   assert_true(next.file_panel.changes_generation == 7)
@@ -17456,7 +17223,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     dispatch,
     JumpToLocation(
       path="/work/project/src/main.mbt",
-      range=Some(@common.Range(5, 1, 5, 1)),
+      range=Some(Range(5, 1, 5, 1)),
       annotation=None,
     ),
     model,
@@ -17468,7 +17235,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     dispatch,
     JumpToLocation(
       path="/elsewhere/note.md",
-      range=Some(@common.Range(1, 1, 1, 1)),
+      range=Some(Range(1, 1, 1, 1)),
       annotation=None,
     ),
     model,
@@ -18131,7 +17898,7 @@ test "send does not show a prompt until its commit lands" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "build the thing", submission_id: None, }),
+      item=User({ content: "build the thing", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     sent,
@@ -18157,7 +17924,7 @@ test "a replayed commit at or below the watermark is dropped" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({ content: "already there", submission_id: None, }),
+      item=User({ content: "already there", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -18179,7 +17946,7 @@ test "a commit past the frontier buffers and flips into a reload" {
       session="desktop-test",
       sequence=5,
       ts=None,
-      item=@protocol.User({ content: "from the future", submission_id: None, }),
+      item=User({ content: "from the future", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -18207,7 +17974,7 @@ test "commits buffer while a reload is in flight" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.User({ content: "mid-reload", submission_id: None, }),
+      item=User({ content: "mid-reload", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -18230,12 +17997,12 @@ test "a snapshot drains buffered commits in sequence order" {
       {
         sequence: 4,
         ts: None,
-        item: @protocol.User({ content: "four", submission_id: None, }),
+        item: User({ content: "four", submission_id: None, }),
       },
       {
         sequence: 3,
         ts: None,
-        item: @protocol.User({ content: "three", submission_id: None, }),
+        item: User({ content: "three", submission_id: None, }),
       },
     ]),
   })
@@ -18280,7 +18047,7 @@ test "a snapshot already containing the buffered commits drops them" {
       {
         sequence: 2,
         ts: None,
-        item: @protocol.User({ content: "dup", submission_id: None, }),
+        item: User({ content: "dup", submission_id: None, }),
       },
     ]),
   })
@@ -18313,7 +18080,7 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
       {
         sequence: 9,
         ts: None,
-        item: @protocol.User({ content: "far", submission_id: None, }),
+        item: User({ content: "far", submission_id: None, }),
       },
     ]),
   })
@@ -18348,7 +18115,7 @@ test "background retries preserve buffered commits until a later success" {
       {
         sequence: 3,
         ts: None,
-        item: @protocol.User({ content: "x", submission_id: None, }),
+        item: User({ content: "x", submission_id: None, }),
       },
     ]),
   })
@@ -18377,7 +18144,7 @@ test "background retries preserve buffered commits until a later success" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({ content: "next", submission_id: None, }),
+      item=User({ content: "next", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     failed,
@@ -18417,14 +18184,14 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
       {
         sequence: 2,
         ts: None,
-        item: @protocol.User({ content: "two", submission_id: None, }),
+        item: User({ content: "two", submission_id: None, }),
       },
     ]),
   })
   let model = { ..model, transcript_request_generation: 1, }
   let (_, reopened) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-test"),
+    OpenSession(Local, "desktop-test"),
     model,
   )
   assert_true(
@@ -18470,7 +18237,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
         {
           sequence: 6,
           ts: None,
-          item: @protocol.User({ content: "six", submission_id: None, }),
+          item: User({ content: "six", submission_id: None, }),
         },
       ],
       reload_after_current=false,
@@ -18529,7 +18296,7 @@ test "tool decode semantics wait for their durable error tool result" {
     session="desktop-test",
     sequence=1,
     ts=None,
-    item=@protocol.Assistant({
+    item=Assistant({
       content: "",
       tool_calls: Some([{ id: "c1", name: "edit", arguments: "{", }]),
       reasoning_content: None,
@@ -18541,7 +18308,7 @@ test "tool decode semantics wait for their durable error tool result" {
     session="desktop-test",
     sequence=2,
     ts=None,
-    item=@protocol.ToolResult({
+    item=ToolResult({
       data: None,
       tool_call_id: "c1",
       tool_name: "edit",
@@ -18588,7 +18355,7 @@ test "assistant semantic events wait for their durable commit" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=Assistant({
         content: "answer",
         tool_calls: None,
         reasoning_content: Some("think"),
@@ -18612,7 +18379,7 @@ test "assistant semantic events wait for their durable commit" {
 test "a committed tool result visibly changes its existing call row" {
   let (_, called) = running_conversation().apply_commit(
     1,
-    @protocol.Assistant({
+    Assistant({
       content: "",
       tool_calls: Some([
         { id: "c1", name: "read", arguments: "{\"path\":\"moon.mod\"}", },
@@ -18624,7 +18391,7 @@ test "a committed tool result visibly changes its existing call row" {
   inspect(called.messages.length(), content="1")
   let (changed, completed) = called.apply_commit(
     2,
-    @protocol.ToolResult({
+    ToolResult({
       data: None,
       tool_call_id: "c1",
       tool_name: "read",
@@ -18664,7 +18431,7 @@ test "a delayed assistant commit never clears a newer live delta" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=Assistant({
         content: "older committed answer",
         tool_calls: None,
         reasoning_content: Some("older reasoning"),
@@ -18702,7 +18469,7 @@ test "a delayed terminal commit never clears a newer live delta" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.Terminal(@protocol.Finished("older answer")),
+      item=Terminal(Finished("older answer")),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -18726,7 +18493,7 @@ test "commit-first assistant semantics do not append again" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=Assistant({
         content: "answer",
         tool_calls: None,
         reasoning_content: Some("think"),
@@ -18760,15 +18527,14 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=User({ content: "hi", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
   )
   inspect(next.conversations.length(), content="2")
   inspect(next.active().messages.length(), content="0")
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-elsewhere")
-    is Some(hidden) else {
+  guard next.find_conversation(Local, "desktop-elsewhere") is Some(hidden) else {
     fail("unknown commit did not materialize its session")
   }
   inspect(hidden.messages.length(), content="1")
@@ -18781,7 +18547,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=User({ content: "hi", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     next,
@@ -18798,13 +18564,12 @@ test "a gapped commit for an unknown session materializes then reloads" {
       session="desktop-gap",
       sequence=3,
       ts=None,
-      item=@protocol.User({ content: "third", submission_id: None, }),
+      item=User({ content: "third", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
   )
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-gap")
-    is Some(hidden) else {
+  guard next.find_conversation(Local, "desktop-gap") is Some(hidden) else {
     fail("gapped commit did not materialize its session")
   }
   inspect(hidden.messages.length(), content="0")
@@ -18837,15 +18602,12 @@ test "a late commit cannot resurrect a locally known archived session" {
       session="desktop-archived",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "stale", submission_id: None, }),
+      item=User({ content: "stale", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
-  assert_true(
-    next.find_conversation(@interop.ChannelId::Local, "desktop-archived")
-    is None,
-  )
+  assert_true(next.find_conversation(Local, "desktop-archived") is None)
   inspect(next.conversations.length(), content="1")
 }
 
@@ -18853,7 +18615,7 @@ test "a late commit cannot resurrect a locally known archived session" {
 test "an archive tombstone blocks commits before the archived list refreshes" {
   let dispatch = test_dispatch()
   let model = test_model().with_archive_override(
-    @interop.ChannelId::Local,
+    Local,
     {
       session: "desktop-tombstoned",
       workspace: @interop.ChannelId::Local.test_project(),
@@ -18866,15 +18628,12 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
       session="desktop-tombstoned",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "stale", submission_id: None, }),
+      item=User({ content: "stale", submission_id: None, }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
   )
-  assert_true(
-    next.find_conversation(@interop.ChannelId::Local, "desktop-tombstoned")
-    is None,
-  )
+  assert_true(next.find_conversation(Local, "desktop-tombstoned") is None)
   inspect(next.conversations.length(), content="1")
 }
 
@@ -18959,7 +18718,7 @@ fn desktop_model() -> Model {
   let model = { ..test_model(), is_desktop: true, }
   let (_, model) = update(
     test_dispatch(),
-    Terminal(@terminal.TabSelected(key="missing-tab")),
+    Terminal(TabSelected(key="missing-tab")),
     model,
   )
   model
@@ -18970,9 +18729,9 @@ test "terminal visibility changes in the root-owned terminal state" {
   let dispatch = test_dispatch()
   let model = test_model()
   assert_false(model.terminal.is_open())
-  let (_, opened) = update(dispatch, Terminal(@terminal.ToggleTerminal), model)
+  let (_, opened) = update(dispatch, Terminal(ToggleTerminal), model)
   assert_true(opened.terminal.is_open())
-  let (_, closed) = update(dispatch, Terminal(@terminal.ToggleTerminal), opened)
+  let (_, closed) = update(dispatch, Terminal(ToggleTerminal), opened)
   assert_false(closed.terminal.is_open())
 }
 
@@ -18990,13 +18749,11 @@ test "launcher rows open Browser and all Explorer destinations" {
   assert_true(page.url is None)
   assert_false(page.loading)
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerFiles), model)
-  assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(model.dock.active == Some(FilePicker))
   assert_true(model.file_panel.explorer_mode is ExplorerFiles)
-  assert_true(
-    model.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
-  )
+  assert_true(model.dock.tabs == [Browser(id=1), FilePicker])
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerChanges), model)
-  assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(model.dock.active == Some(FilePicker))
   assert_true(model.file_panel.explorer_mode is ExplorerChanges)
   assert_true(model.file_panel.changes is ChangeListLoading(_))
   // Files is an explicit destination even after Review selected Changes.
@@ -19020,9 +18777,7 @@ test "CloseAllTabs tears down mixed tabs and keeps the empty launcher open" {
     right_panel_menu_open: true,
     right_panel_expanded: true,
   }
-  assert_true(
-    mixed.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
-  )
+  assert_true(mixed.dock.tabs == [Browser(id=1), FilePicker])
   let (_, closed) = update(dispatch, CloseAllTabs, mixed)
   assert_true(closed.dock.tabs.is_empty())
   assert_true(closed.dock.active is None)
@@ -19043,9 +18798,7 @@ test "a tree pick fulfills the active picker in place" {
     FileEditor(FileSelected(path=Relative("src/main.mbt"), name="main.mbt")),
     model,
   )
-  assert_true(
-    model.dock.tabs == [@dock.DockTab::File(path=Relative("src/main.mbt"))],
-  )
+  assert_true(model.dock.tabs == [File(path=Relative("src/main.mbt"))])
   assert_true(@dock.active_file(model.dock) == Some(Relative("src/main.mbt")))
 }
 
@@ -19069,7 +18822,7 @@ test "a changed row opens the file tab in review mode" {
     ),
     model,
   )
-  assert_true(model.dock.tabs == [@dock.DockTab::File(path~)])
+  assert_true(model.dock.tabs == [File(path~)])
   assert_true(@dock.active_file(model.dock) == Some(path))
   assert_true(
     model.file_panel.docs.get(path)
@@ -19117,7 +18870,7 @@ test "file rows and location jumps cannot open while checkout placement is missi
     FileEditor(FileSelected(path~, name="main.mbt")),
     model,
   )
-  assert_false(ordinary.dock.tabs.contains(@dock.DockTab::File(path~)))
+  assert_false(ordinary.dock.tabs.contains(File(path~)))
   assert_false(ordinary.file_panel.docs.contains(path))
   let (_, review) = update(
     dispatch,
@@ -19132,18 +18885,18 @@ test "file rows and location jumps cannot open while checkout placement is missi
     ),
     model,
   )
-  assert_false(review.dock.tabs.contains(@dock.DockTab::File(path~)))
+  assert_false(review.dock.tabs.contains(File(path~)))
   assert_false(review.file_panel.docs.contains(path))
   let (_, jumped) = update(
     dispatch,
     JumpToLocation(
       path="/proj/src/main.mbt",
-      range=Some(@common.Range(1, 1, 1, 1)),
+      range=Some(Range(1, 1, 1, 1)),
       annotation=None,
     ),
     model,
   )
-  assert_false(jumped.dock.tabs.contains(@dock.DockTab::File(path~)))
+  assert_false(jumped.dock.tabs.contains(File(path~)))
   assert_false(jumped.file_panel.docs.contains(path))
   let (_, navigation) = update(
     dispatch,
@@ -19151,12 +18904,12 @@ test "file rows and location jumps cannot open while checkout placement is missi
       OpenNavigationLocation(
         owner=file_ctx(model).owner,
         path~,
-        range=@common.Range(1, 1, 1, 1),
+        range=Range(1, 1, 1, 1),
       ),
     ),
     model,
   )
-  assert_false(navigation.dock.tabs.contains(@dock.DockTab::File(path~)))
+  assert_false(navigation.dock.tabs.contains(File(path~)))
   assert_false(navigation.file_panel.docs.contains(path))
 }
 
@@ -19166,7 +18919,7 @@ test "language request failures toast once and remain conversation fenced" {
   let model = desktop_model()
   let owner = file_ctx(model).owner
   let msg = FileEditor(
-    @fileeditor.LanguageRequestFailed(
+    LanguageRequestFailed(
       owner~,
       message="Go to definition failed: workspace index is unavailable",
     ),
@@ -19185,7 +18938,7 @@ test "language request failures toast once and remain conversation fenced" {
   let (_, stale) = update(
     dispatch,
     FileEditor(
-      @fileeditor.LanguageRequestFailed(
+      LanguageRequestFailed(
         owner={ channel: Local, session: "another-conversation", },
         message="late failure",
       ),
@@ -19205,7 +18958,7 @@ test "file watcher failures toast once and retain lifecycle state" {
   let panel = {
     ..model.file_panel,
     owner: Some(owner),
-    placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
+    placement: PlacementLive(WorkspaceRoot(root~)),
     watching: Some({ owner, root, files: [], directories: [], recursive: true, }),
     watch_generation: generation,
   }
@@ -19215,25 +18968,20 @@ test "file watcher failures toast once and retain lifecycle state" {
   let file_emit = dispatch.map(next => FileEditor(next))
   let (_, loading) = @fileeditor.update(
     file_emit,
-    @fileeditor.EnsureFileIndex,
+    EnsureFileIndex,
     panel,
     file_ctx(model),
   )
   let (_, ready) = @fileeditor.update(
     file_emit,
-    @fileeditor.FilesIndexed(
-      owner~,
-      epoch=loading.request_epoch,
-      files=[],
-      truncated=false,
-    ),
+    FilesIndexed(owner~, epoch=loading.request_epoch, files=[], truncated=false),
     loading,
     file_ctx(model),
   )
   let model = { ..model, file_panel: ready, }
   let message = "File watching stopped: too many open files"
   let failure = FileEditor(
-    @fileeditor.FileWatchFailed(
+    FileWatchFailed(
       channel=owner.channel,
       root~,
       generation="\{file_ctx(model).watch_namespace}:\{generation}",
@@ -19254,7 +19002,7 @@ test "file watcher failures toast once and retain lifecycle state" {
   let (_, stale) = update(
     dispatch,
     FileEditor(
-      @fileeditor.FileWatchFailed(
+      FileWatchFailed(
         channel=owner.channel,
         root~,
         generation="\{file_ctx(model).watch_namespace}:\{generation - 1}",
@@ -19535,8 +19283,8 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
     desktop_model(),
   )
   assert_true(opened.right_panel_open)
-  assert_true(opened.dock.active is Some(@dock.DockTab::FilePicker))
-  assert_true(opened.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(opened.dock.active is Some(FilePicker))
+  assert_true(opened.dock.tabs == [FilePicker])
   assert_true(opened.file_panel.explorer_mode is ExplorerSearch)
   assert_true(opened.file_panel.tree_open)
   let (_, reopened_picker) = update(
@@ -19544,24 +19292,20 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
     ExplorerRequested(ExplorerSearch),
     opened,
   )
-  assert_true(reopened_picker.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(reopened_picker.dock.tabs == [FilePicker])
   let (_, edited) = update(
     dispatch,
-    FileEditor(Search(@grep_search.QueryChanged("moon"))),
+    FileEditor(Search(QueryChanged("moon"))),
     reopened_picker,
   )
-  let (_, running) = update(
-    dispatch,
-    FileEditor(Search(@grep_search.Submit)),
-    edited,
-  )
+  let (_, running) = update(dispatch, FileEditor(Search(Submit)), edited)
   let (_, files) = update(
     dispatch,
-    FileEditor(@fileeditor.ExplorerModeSelected(ExplorerFiles)),
+    FileEditor(ExplorerModeSelected(ExplorerFiles)),
     running,
   )
   let (_, reopened) = update(dispatch, ExplorerRequested(ExplorerSearch), files)
-  assert_true(reopened.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(reopened.dock.tabs == [FilePicker])
   assert_true(reopened.file_panel.explorer_mode is ExplorerSearch)
 }
 
@@ -19575,7 +19319,7 @@ test "a Search result fulfills the picker while preserving Search beside the fil
   )
   let (_, edited) = update(
     dispatch,
-    FileEditor(Search(@grep_search.QueryChanged("moon"))),
+    FileEditor(Search(QueryChanged("moon"))),
     opened,
   )
   let path = @pathx.Relative("src/main.mbt")
@@ -19585,7 +19329,7 @@ test "a Search result fulfills the picker while preserving Search beside the fil
     FileEditor(SearchMatchSelected(path=path.0, range~)),
     edited,
   )
-  assert_true(selected.dock.tabs == [@dock.DockTab::File(path~)])
+  assert_true(selected.dock.tabs == [File(path~)])
   assert_true(@dock.active_file(selected.dock) == Some(path))
   assert_true(selected.file_panel.explorer_mode is ExplorerSearch)
   assert_true(selected.file_panel.tree_open)
@@ -19601,15 +19345,13 @@ test "a Search result fulfills the picker while preserving Search beside the fil
     ExplorerRequested(ExplorerSearch),
     selected,
   )
-  assert_true(
-    picker.dock.tabs == [@dock.DockTab::File(path~), @dock.DockTab::FilePicker],
-  )
+  assert_true(picker.dock.tabs == [File(path~), FilePicker])
   let (_, reused) = update(
     dispatch,
     FileEditor(SearchMatchSelected(path=path.0, range~)),
     picker,
   )
-  assert_true(reused.dock.tabs == [@dock.DockTab::File(path~)])
+  assert_true(reused.dock.tabs == [File(path~)])
   assert_true(@dock.active_file(reused.dock) == Some(path))
   assert_true(reused.file_panel.explorer_mode is ExplorerSearch)
 }
@@ -19625,7 +19367,7 @@ test "narrow Search drill-down hides and restores the retained Explorer" {
   let (_, opened) = update(dispatch, ExplorerRequested(ExplorerSearch), narrow)
   let (_, edited) = update(
     dispatch,
-    FileEditor(Search(@grep_search.QueryChanged("needle"))),
+    FileEditor(Search(QueryChanged("needle"))),
     opened,
   )
   let path = @pathx.Relative("src/narrow.mbt")
@@ -19637,11 +19379,7 @@ test "narrow Search drill-down hides and restores the retained Explorer" {
   )
   assert_true(drilled.file_panel.explorer_mode is ExplorerSearch)
   assert_false(drilled.file_panel.tree_open)
-  let (_, restored) = update(
-    dispatch,
-    FileEditor(@fileeditor.ToggleTree),
-    drilled,
-  )
+  let (_, restored) = update(dispatch, FileEditor(ToggleTree), drilled)
   assert_true(restored.file_panel.tree_open)
   assert_true(restored.file_panel.explorer_mode is ExplorerSearch)
 }
@@ -19663,20 +19401,12 @@ test "Search requests survive hidden Explorer Browser and panel states" {
   )
   let (_, edited) = update(
     dispatch,
-    FileEditor(Search(@grep_search.QueryChanged("moon"))),
+    FileEditor(Search(QueryChanged("moon"))),
     file,
   )
-  let (_, running) = update(
-    dispatch,
-    FileEditor(Search(@grep_search.Submit)),
-    edited,
-  )
+  let (_, running) = update(dispatch, FileEditor(Search(Submit)), edited)
 
-  let (_, tree_hidden) = update(
-    dispatch,
-    FileEditor(@fileeditor.ToggleTree),
-    running,
-  )
+  let (_, tree_hidden) = update(dispatch, FileEditor(ToggleTree), running)
   let (_, browser) = update(dispatch, BrowserTabRequested, tree_hidden)
   let (_, panel_closed) = update(dispatch, ToggleRightPanel, browser)
   assert_false(panel_closed.right_panel_open)
@@ -19721,14 +19451,10 @@ test "the launcher popup and final tab close both retire the shown view" {
   assert_true(covered.browser_pane.shown is None)
   // Closing the tab drops the page and the placement.
   let closing = { ..model, right_panel_expanded: true, }
-  let (_, closed) = update(
-    dispatch,
-    Dock(TabClosed(@dock.DockTab::Browser(id=1))),
-    closing,
-  )
+  let (_, closed) = update(dispatch, Dock(TabClosed(Browser(id=1))), closing)
   let (_, closed_again) = update(
     dispatch,
-    Dock(TabClosed(@dock.DockTab::Browser(id=1))),
+    Dock(TabClosed(Browser(id=1))),
     closing,
   )
   assert_true(closed_again == closed)
@@ -19756,11 +19482,7 @@ test "closing a background Browser tab keeps the shown view placement" {
   let rect : @preview.Rect = { x: 480, y: 46, width: 640, height: 700, }
   let (_, shown) = update(dispatch, BrowserPaneMeasured(rect~), second)
   assert_true(shown.browser_pane.shown == Some(2))
-  let (_, closed) = update(
-    dispatch,
-    Dock(TabClosed(@dock.DockTab::Browser(id=1))),
-    shown,
-  )
+  let (_, closed) = update(dispatch, Dock(TabClosed(Browser(id=1))), shown)
   assert_true(closed.browser_pane.shown == Some(2))
   assert_true(closed.browser_pane.rect == Some(rect))
   assert_true(@preview.page(closed.preview, 1) is None)
@@ -19786,11 +19508,7 @@ test "full-screen modals hide the native view and closing restores it" {
   assert_true(covered.project_picker is Some(_))
   assert_true(covered.browser_pane.shown is None)
   // Closing the modal re-measures; the next measurement re-places the view.
-  let (_, closed) = update(
-    dispatch,
-    ProjectPicker(@project_picker.Msg::Close),
-    covered,
-  )
+  let (_, closed) = update(dispatch, ProjectPicker(Close), covered)
   let (_, restored) = update(dispatch, BrowserPaneMeasured(rect~), closed)
   assert_true(restored.browser_pane.shown == Some(1))
   // Setup API owns the whole screen too. The browser is a native view above
@@ -19827,11 +19545,7 @@ test "full-screen modals hide the native view and closing restores it" {
   )
   assert_true(archiving.archive_confirm is Some(_))
   assert_true(archiving.browser_pane.shown is None)
-  let (_, searching) = update(
-    dispatch,
-    QuickOpenOpen(@quick_open.Symbols),
-    restored,
-  )
+  let (_, searching) = update(dispatch, QuickOpenOpen(Symbols), restored)
   assert_true(searching.quick_open.is_open())
   assert_true(searching.browser_pane.shown is None)
 }
@@ -19852,7 +19566,7 @@ fn subrun_page(active~ : String, child_sync? : TranscriptSync) -> Model {
   let parent = { ..base, turn: { ..base.turn, subruns: [lane], }, }
   let child = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-test-sr-1",
       @interop.ChannelId::Local.test_project(),
     )
@@ -19870,8 +19584,7 @@ fn subrun_page(active~ : String, child_sync? : TranscriptSync) -> Model {
 
 ///|
 fn subrun_child_of(model : Model) -> Conversation raise {
-  guard model.find_conversation(@interop.ChannelId::Local, "desktop-test-sr-1")
-    is Some(child) else {
+  guard model.find_conversation(Local, "desktop-test-sr-1") is Some(child) else {
     fail("expected the sub-run's child conversation")
   }
   child
@@ -19933,8 +19646,7 @@ test "a sub-run's progress refreshes the child transcript on screen" {
   assert_eq(child.watermark, 5)
   assert_eq(child.messages.length(), 1)
   // The parent's lane still advances: the two readers are independent.
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-test")
-    is Some(parent) else {
+  guard next.find_conversation(Local, "desktop-test") is Some(parent) else {
     fail("expected the parent conversation to survive")
   }
   assert_eq(parent.turn.subruns[0].steps, 3)
@@ -19956,8 +19668,7 @@ test "a sub-run's progress leaves a child nobody is viewing alone" {
     subrun_page(active="desktop-test"),
   )
   assert_true(subrun_child_of(next).sync is Synced)
-  guard next.find_conversation(@interop.ChannelId::Local, "desktop-test")
-    is Some(parent) else {
+  guard next.find_conversation(Local, "desktop-test") is Some(parent) else {
     fail("expected the parent conversation to survive")
   }
   assert_eq(parent.turn.subruns[0].steps, 3)
@@ -20129,11 +19840,10 @@ test "a workflow entry refines the parent conversation's run" {
   }
   let (_, next) = update_dev(
     test_dispatch(),
-    WorkflowEntryArrived(@interop.ChannelId::Local, entry),
+    WorkflowEntryArrived(Local, entry),
     model,
   )
-  guard next.find_conversation(@interop.ChannelId::Local, base.session_id)
-    is Some(conv) else {
+  guard next.find_conversation(Local, base.session_id) is Some(conv) else {
     fail("expected the parent conversation")
   }
   inspect(conv.workflows[0].rows.length(), content="1")
@@ -20142,17 +19852,11 @@ test "a workflow entry refines the parent conversation's run" {
   debug_inspect(conv.workflows[0].cost_usd(), content="Some(0.01)")
   let (_, same) = update_dev(
     test_dispatch(),
-    WorkflowEntryArrived(@interop.ChannelId::Local, {
-      ..entry,
-      session: "elsewhere",
-    }),
+    WorkflowEntryArrived(Local, { ..entry, session: "elsewhere", }),
     next,
   )
-  assert_true(
-    same.find_conversation(@interop.ChannelId::Local, "elsewhere") is None,
-  )
-  guard same.find_conversation(@interop.ChannelId::Local, base.session_id)
-    is Some(untouched) else {
+  assert_true(same.find_conversation(Local, "elsewhere") is None)
+  guard same.find_conversation(Local, base.session_id) is Some(untouched) else {
     fail("expected the parent conversation")
   }
   inspect(untouched.workflows[0].rows.length(), content="1")
@@ -20173,9 +19877,9 @@ test "file context inherits the conversation model and its reasoning family" {
     assert_eq(
       ctx.thinking,
       if engine_model is Glm53 {
-        Some(@protocol.ThinkingOff)
+        Some(ThinkingOff)
       } else {
-        Some(@protocol.ThinkingMax)
+        Some(ThinkingMax)
       },
     )
   }

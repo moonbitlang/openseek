@@ -285,7 +285,7 @@ pub fn session_from_reply(
     // The standing goal replays from the same durable markers the cards
     // above come from, so a resumed conversation shows exactly the goal the
     // engine holds — see `goal.mbt`.
-    if event.item is @desktop_protocol.RuntimeNotice(notice) &&
+    if event.item is RuntimeNotice(notice) &&
       goal_marker(notice.content) is Some(marker) {
       goal = apply_goal_marker(goal, marker)
       goal_markers.push((event.sequence, marker))
@@ -329,13 +329,13 @@ pub fn apply_session_item(
   let before = items.length()
   let mut updated_existing = false
   match item {
-    @desktop_protocol.User(payload) => {
+    User(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
         items.push({ kind: User(content), ts, sequence, })
       }
     }
-    @desktop_protocol.Assistant(payload) => {
+    Assistant(payload) => {
       let is_replay = payload.is_replay is Some(true)
       // Thinking-mode turns store the reasoning alongside the answer (the
       // store omits the field entirely otherwise). A checkpoint replay
@@ -384,7 +384,7 @@ pub fn apply_session_item(
         })
       }
     }
-    @desktop_protocol.ToolResult(payload) => {
+    ToolResult(payload) => {
       // A result answers the still-pending call recorded with its id. The
       // engine appends every response before running its calls, so the call
       // is always on record; a result nothing is waiting for changes nothing,
@@ -428,7 +428,7 @@ pub fn apply_session_item(
         break
       }
     }
-    @desktop_protocol.RuntimeNotice(payload) =>
+    RuntimeNotice(payload) =>
       if !payload.content.is_blank() {
         match goal_marker(payload.content) {
           // The set/clear/block/unblock markers are the durable goal
@@ -500,20 +500,20 @@ pub fn apply_session_item(
             }
         }
       }
-    @desktop_protocol.Summary(payload) => {
+    Summary(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
         items.push({ kind: Summary(content), ts, sequence, })
       }
     }
-    @desktop_protocol.Terminal(terminal) =>
+    Terminal(terminal) =>
       updated_existing = SessionTerminalProjection(terminal).append_to(
         items,
         ts?,
         sequence?,
       )
-    @desktop_protocol.UnknownTerminal(_) => ()
-    @desktop_protocol.Unknown(_) => ()
+    UnknownTerminal(_) => ()
+    Unknown(_) => ()
   }
   items.length() > before || updated_existing
 }
@@ -533,7 +533,7 @@ fn SessionTerminalProjection::append_to(
     // A current no-tool final is already the last provider response. Mark
     // that response finished instead of duplicating its prose; it keeps its
     // own stamp and sequence, so the settled bubble stays the same keyed node.
-    @desktop_protocol.Finished(message) => {
+    Finished(message) => {
       let message = message.trim().to_owned()
       if !message.is_empty() &&
         items is [.., last] &&
@@ -567,17 +567,17 @@ fn SessionTerminalProjection::append_to(
       }
       return false
     }
-    @desktop_protocol.Aborted(message) =>
+    Aborted(message) =>
       match message.trim().to_owned() {
         "" => "aborted"
         message => "aborted: \{message}"
       }
-    @desktop_protocol.Interrupted(message) =>
+    Interrupted(message) =>
       match message.trim() {
         "" => "cancelled"
         message => "cancelled: \{message}"
       }
-    @desktop_protocol.Failed(message) =>
+    Failed(message) =>
       match message.trim().to_owned() {
         "" => "failed"
         message => message
@@ -640,7 +640,7 @@ test "session list projection preserves grouping and skips empty ids" {
         },
       ],
     },
-    @interop.ChannelId::Local,
+    Local,
   )
   inspect(items.length(), content="2")
   inspect(items[0].id, content="desktop-b")
@@ -671,7 +671,7 @@ test "a group naming no readable workspace contributes no rows" {
         },
       ],
     },
-    @interop.ChannelId::Local,
+    Local,
   )
   assert_true(items.is_empty())
 }
@@ -680,7 +680,7 @@ test "a group naming no readable workspace contributes no rows" {
 /// The store `listed` rows belong to. Valid by construction; a total fixture
 /// keeps the tree tests free of a synthetic error effect.
 fn listed_workspace(path : String) -> @common.Uri {
-  match @resource.of_path(@interop.ChannelId::Local, path) {
+  match @resource.of_path(Local, path) {
     Some(root) => root
     None => @common.Uri::file(path)
   }
@@ -726,8 +726,7 @@ test "sub-run transcripts fold under the conversation that launched them" {
 
 ///|
 test "session trees never fold children across stores" {
-  guard @resource.of_path(@interop.ChannelId::Local, "/project")
-    is Some(project) else {
+  guard @resource.of_path(Local, "/project") is Some(project) else {
     fail("test project path was invalid")
   }
   let other_parent = listed(["same"])[0]

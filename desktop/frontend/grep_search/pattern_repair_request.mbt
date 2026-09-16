@@ -154,6 +154,6 @@ fn State::pattern_repair_subscription(
     "grep-pattern-repair:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{request.root}:\{request.generation}",
     Local,
     PatternRepairRequestSub::PatternRepairRequest(input.owner, request, 0, emit),
-    @sub.SubLoader(pattern_repair_request_loader),
+    SubLoader(pattern_repair_request_loader),
   )
 }

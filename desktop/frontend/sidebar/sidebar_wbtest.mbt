@@ -4,7 +4,7 @@ test "the sidebar input keeps peer sections in one component value" {
     notices: [],
     sections: [
       {
-        id: @section.Id(source="openseek.projects", channel="local"),
+        id: Id(source="openseek.projects", channel="local"),
         label: "Projects",
         initially_collapsed: false,
         preview_limit: None,
@@ -13,7 +13,7 @@ test "the sidebar input keeps peer sections in one component value" {
         entries: [],
       },
       {
-        id: @section.Id(source="archived", channel="local"),
+        id: Id(source="archived", channel="local"),
         label: "Archived chats",
         initially_collapsed: true,
         preview_limit: None,

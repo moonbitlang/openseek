@@ -218,7 +218,7 @@ fn apply_roster(
   let commands : Array[@cmd.Cmd] = []
   let mut websocket_epoch = model.websocket_epoch
   let page_channel : @interop.ChannelId? = console.page_device.map(id => {
-    @interop.ChannelId::Remote(id)
+    Remote(id)
   })
   // Retire first: anything other than this page's target, or a target the
   // roster no longer grants, drops its state and conversations and disposes
@@ -250,7 +250,7 @@ fn apply_roster(
     devices.any(dev => dev.channel == channel) {
     channel
   } else {
-    @interop.ChannelId::Local
+    Local
   }
   let refocused = focused != model.focused
   let focus_held = devices.any(dev => dev.channel == focused)
@@ -307,7 +307,7 @@ fn console_test_model() -> Model {
   {
     ..initial_model(),
     devices: [],
-    focused: @interop.ChannelId::Local,
+    focused: Local,
     console: Some(empty_console_state(Some("d_on"), None)),
   }
 }
@@ -372,7 +372,7 @@ test "a browser page without device never selects the first online roster entry"
     signed,
   )
   inspect(listed_once.devices.length(), content="0")
-  assert_true(listed_once.focused == @interop.ChannelId::Local)
+  assert_true(listed_once.focused == Local)
   guard listed_once.console is Some(first) else { fail("console lost") }
   guard listed_twice.console is Some(second) else { fail("console lost") }
   assert_true(first.page_device is None)
@@ -467,7 +467,7 @@ test "an unavailable page device never falls through to an online device" {
     Console(RosterLoaded(metas, generation=1)),
     signed,
   )
-  assert_true(listed.focused == @interop.ChannelId::Local)
+  assert_true(listed.focused == Local)
   inspect(listed.devices.length(), content="0")
   assert_true(listed.device_state(Remote("online")) is None)
   guard listed.console is Some(console) else { fail("console lost") }
@@ -501,7 +501,7 @@ test "a revoked page device is retired without connecting a survivor" {
   let seeded = {
     ..listed.replace_conversation(
       empty_conversation(
-        @interop.ChannelId::Remote("d_a"),
+        Remote("d_a"),
         "s1",
         @interop.ChannelId::Remote("d_a").test_project(),
       ),
@@ -539,7 +539,7 @@ test "a revoked page device is retired without connecting a survivor" {
     Console(RosterLoaded(survivor, generation=1)),
     seeded,
   )
-  assert_true(refreshed.focused == @interop.ChannelId::Local)
+  assert_true(refreshed.focused == Local)
   assert_true(refreshed.device_state(Remote("d_a")) is None)
   assert_true(refreshed.device_state(Remote("d_b")) is None)
   assert_eq(refreshed.installed_skills.length(), 0)
@@ -606,7 +606,7 @@ test "an older roster reply cannot restore a device removed by a newer one" {
   inspect(console.roster[0].id, content="d_b")
   assert_true(stale.device_state(Remote("d_a")) is None)
   assert_true(stale.device_state(Remote("d_b")) is None)
-  assert_true(stale.focused == @interop.ChannelId::Local)
+  assert_true(stale.focused == Local)
 }
 
 ///|
@@ -732,7 +732,7 @@ test "sign-out tears every channel down and returns to the gate" {
   inspect(out.devices.length(), content="0")
   inspect(out.conversations.length(), content="0")
   inspect(out.active_session, content="")
-  assert_true(out.focused == @interop.ChannelId::Local)
+  assert_true(out.focused == Local)
 }
 
 ///|
@@ -793,7 +793,7 @@ fn console_signed_out(
     {
       ..model,
       devices: [],
-      focused: @interop.ChannelId::Local,
+      focused: Local,
       active_session: "",
       loading_conversation: None,
       conversations: [],

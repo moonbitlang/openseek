@@ -126,11 +126,11 @@ extern "js" fn settle_transcript_image(path : String, source : String) -> Unit =
 ///|
 test "image cache starts one read and settles only the pending entry" {
   let owner : ImageOwner = {
-    channel: @interop.Local,
+    channel: Local,
     session: "chat",
-    root: @resource.of_path(@interop.Local, "/work"),
+    root: @resource.of_path(Local, "/work"),
   }
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let (loading, _) = ImageCache::empty().begin_read(owner, "image.png", emit)
   assert_true(loading.0.get("image.png") is Some(ImageLoading))
   let (duplicate, _) = loading.begin_read(owner, "image.png", emit)
@@ -154,11 +154,11 @@ test "image cache starts one read and settles only the pending entry" {
 
 ///|
 test "image read targets preserve absolute or rooted-relative paths" {
-  guard @resource.of_path(@interop.Local, "/work/project") is Some(root) else {
+  guard @resource.of_path(Local, "/work/project") is Some(root) else {
     fail("expected an absolute resource root")
   }
   let owner : ImageOwner = {
-    channel: @interop.Local,
+    channel: Local,
     session: "chat",
     root: Some(root),
   }
@@ -230,10 +230,9 @@ fn ImageOwner::read_image(
         }
       }
       let result = match reply {
-        @protocol.BinaryContent(data_base64~, media_type~) =>
+        BinaryContent(data_base64~, media_type~) =>
           ImageReadReady("data:\{media_type};base64,\{data_base64}")
-        @protocol.Binary | @protocol.Oversized | @protocol.Content(..) =>
-          ImageReadUnavailable
+        Binary | Oversized | Content(..) => ImageReadUnavailable
       }
       scheduler.add(emit(ImageResolved(self, path, result)))
     })

@@ -13,7 +13,7 @@ priv suberror ViewerExternalLinkSubscription {
 ///|
 fn viewer_external_link_sub_loader(
   payload : Error,
-  scheduler : &Scheduler,
+  scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
     ViewerExternalLinkSubscription(emit) => {

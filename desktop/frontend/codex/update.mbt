@@ -151,7 +151,7 @@ pub fn update(
           mentions: [],
           submitted_first_prompt: None,
           pending_steers: [],
-          placement: @composer.LocalCheckout,
+          placement: LocalCheckout,
           foreground: None,
           loading: false,
           notice: "",
@@ -600,13 +600,13 @@ fn State::with_turn_steer_reply(self : State, value : Json) -> State {
 
 ///|
 test "Codex project add stays local until the first prompt" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let open_external = (_ : String) => @cmd.none
   let (_, draft) = update(
     dispatch,
     StartDraft(id="desktop-draft-1", cwd="/work/project"),
     State(),
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   // The add action owns panels with a client-local id, but app-server still
@@ -623,41 +623,41 @@ test "Codex project add stays local until the first prompt" {
       "projectRoot": "/work/project",
     }),
     draft,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(opened.can_prompt())
   assert_eq(
-    opened.worktree_launch_workspace(@interop.ChannelId::Local),
-    @resource.of_path(@interop.ChannelId::Local, "/work/project"),
+    opened.worktree_launch_workspace(Local),
+    @resource.of_path(Local, "/work/project"),
   )
 
   let (_, wants_worktree) = update(
     dispatch,
     ToggleWorktreeMode,
     opened,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
-  assert_true(wants_worktree.placement is @composer.FreshWorktree)
+  assert_true(wants_worktree.placement is FreshWorktree)
   let submit = ComposerAction(
-    @composer.DraftSubmitted(
-      identity=wants_worktree.composer_identity(@interop.ChannelId::Local),
-      draft={ task: "inspect this", mentions: [], },
-    ),
+    DraftSubmitted(identity=wants_worktree.composer_identity(Local), draft={
+      task: "inspect this",
+      mentions: [],
+    }),
   )
   let (_, submitting) = update(
     dispatch,
     submit,
     wants_worktree,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   let (_, submitting_again) = update(
     dispatch,
     submit,
     wants_worktree,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   // Submit changes pure state immediately: the local User row and Starting
@@ -666,7 +666,7 @@ test "Codex project add stays local until the first prompt" {
   assert_true(submitting.waiting_for_first_user_item())
   let starting_items = submitting.transcript_items()
   assert_eq(starting_items.length(), 1)
-  assert_true(starting_items[0].kind is @transcript.User(_))
+  assert_true(starting_items[0].kind is User(_))
   assert_eq(starting_items[0].text(), Some("inspect this"))
   let (_, adopted) = update(
     dispatch,
@@ -679,14 +679,14 @@ test "Codex project add stays local until the first prompt" {
       },
     }),
     submitting,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   // `thread/start` is adopted before worktree/turn completion. A later error
   // therefore retries this stored empty thread instead of making another.
   assert_eq(adopted.active_id(), Some("thread-real-1"))
   assert_true(adopted.active_thread() is Some(_))
-  assert_true(adopted.placement is @composer.FreshWorktree)
+  assert_true(adopted.placement is FreshWorktree)
   assert_true(adopted.loading)
   assert_true(adopted.waiting_for_first_user_item())
   assert_eq(adopted.transcript_items().length(), 1)
@@ -706,7 +706,7 @@ test "Codex project add stays local until the first prompt" {
       },
     }),
     adopted,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   // An ACK may omit its items. The accepted draft leaves the textarea but its
@@ -722,13 +722,13 @@ test "Codex project add stays local until the first prompt" {
   let (_, early_steer) = update(
     dispatch,
     ComposerAction(
-      @composer.DraftSubmitted(
-        identity=acknowledged.composer_identity(@interop.ChannelId::Local),
-        draft={ task: "steer early", mentions: [], },
-      ),
+      DraftSubmitted(identity=acknowledged.composer_identity(Local), draft={
+        task: "steer early",
+        mentions: [],
+      }),
     ),
     acknowledged,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_eq(early_steer.pending_steers.length(), 1)
@@ -749,16 +749,16 @@ test "Codex project add stays local until the first prompt" {
       generation=1,
     ),
     early_steer,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_false(observed.waiting_for_first_user_item())
   let observed_items = observed.transcript_items()
   assert_eq(observed.pending_steers.length(), 1)
   assert_eq(observed_items.length(), 2)
-  assert_true(observed_items[0].kind is @transcript.User(_))
+  assert_true(observed_items[0].kind is User(_))
   assert_eq(observed_items[0].text(), Some("inspect this"))
-  assert_true(observed_items[1].kind is @transcript.User(_))
+  assert_true(observed_items[1].kind is User(_))
   assert_eq(observed_items[1].text(), Some("steer early"))
 
   let (_, steered) = update(
@@ -777,7 +777,7 @@ test "Codex project add stays local until the first prompt" {
       generation=2,
     ),
     observed,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(steered.pending_steers.is_empty())
@@ -786,7 +786,7 @@ test "Codex project add stays local until the first prompt" {
 
 ///|
 test "Codex full steer replies replace their local receipt" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let open_external = (_ : String) => @cmd.none
   let state = {
     ..State::from_thread_snapshot({
@@ -812,13 +812,13 @@ test "Codex full steer replies replace their local receipt" {
   let (_, sending) = update(
     dispatch,
     ComposerAction(
-      @composer.DraftSubmitted(
-        identity=state.composer_identity(@interop.ChannelId::Local),
-        draft={ task: "steer once", mentions: [], },
-      ),
+      DraftSubmitted(identity=state.composer_identity(Local), draft={
+        task: "steer once",
+        mentions: [],
+      }),
     ),
     state,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_eq(sending.pending_steers.length(), 1)
@@ -841,20 +841,8 @@ test "Codex full steer replies replace their local receipt" {
       ],
     },
   })
-  let (_, once) = update(
-    dispatch,
-    reply,
-    sending,
-    @interop.ChannelId::Local,
-    open_external,
-  )
-  let (_, twice) = update(
-    dispatch,
-    reply,
-    sending,
-    @interop.ChannelId::Local,
-    open_external,
-  )
+  let (_, once) = update(dispatch, reply, sending, Local, open_external)
+  let (_, twice) = update(dispatch, reply, sending, Local, open_external)
   assert_true(once == twice)
   assert_true(once.pending_steers.is_empty())
   let items = once.transcript_items()
@@ -865,7 +853,7 @@ test "Codex full steer replies replace their local receipt" {
 
 ///|
 test "Codex steer failure preserves an older first-prompt receipt" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let open_external = (_ : String) => @cmd.none
   let state = {
     ..State::from_thread_snapshot({
@@ -880,32 +868,32 @@ test "Codex steer failure preserves an older first-prompt receipt" {
   let (_, sending_first) = update(
     dispatch,
     ComposerAction(
-      @composer.DraftSubmitted(
-        identity=state.composer_identity(@interop.ChannelId::Local),
-        draft={ task: "accepted steer", mentions: [], },
-      ),
+      DraftSubmitted(identity=state.composer_identity(Local), draft={
+        task: "accepted steer",
+        mentions: [],
+      }),
     ),
     state,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   let (_, accepted_first) = update(
     dispatch,
     Reply(kind=CodexTurnSteerReply("thread-1"), value={ "turnId": "turn-1" }),
     sending_first,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   let (_, sending_second) = update(
     dispatch,
     ComposerAction(
-      @composer.DraftSubmitted(
-        identity=accepted_first.composer_identity(@interop.ChannelId::Local),
-        draft={ task: "rejected steer", mentions: [], },
-      ),
+      DraftSubmitted(identity=accepted_first.composer_identity(Local), draft={
+        task: "rejected steer",
+        mentions: [],
+      }),
     ),
     accepted_first,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   let failure = Failed(
@@ -916,14 +904,14 @@ test "Codex steer failure preserves an older first-prompt receipt" {
     dispatch,
     failure,
     sending_second,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   let (_, failed_again) = update(
     dispatch,
     failure,
     sending_second,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(failed == failed_again)
@@ -948,7 +936,7 @@ test "Codex steer failure preserves an older first-prompt receipt" {
       generation=1,
     ),
     failed,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_false(observed_initial.waiting_for_first_user_item())
@@ -970,7 +958,7 @@ test "Codex steer failure preserves an older first-prompt receipt" {
       generation=2,
     ),
     observed_initial,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(observed_steer.pending_steers.is_empty())
@@ -978,7 +966,7 @@ test "Codex steer failure preserves an older first-prompt receipt" {
 
 ///|
 test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let open_external = (_ : String) => @cmd.none
   let state = {
     ..State::from_thread_snapshot({
@@ -1002,18 +990,12 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
     connection: CodexReady,
   }
   let submit = ComposerAction(
-    @composer.DraftSubmitted(
-      identity=state.composer_identity(@interop.ChannelId::Local),
-      draft={ task: "same text", mentions: [], },
-    ),
+    DraftSubmitted(identity=state.composer_identity(Local), draft={
+      task: "same text",
+      mentions: [],
+    }),
   )
-  let (_, sending_first) = update(
-    dispatch,
-    submit,
-    state,
-    @interop.ChannelId::Local,
-    open_external,
-  )
+  let (_, sending_first) = update(dispatch, submit, state, Local, open_external)
   assert_eq(sending_first.pending_steers.length(), 1)
   assert_eq(sending_first.pending_steers[0].submission_id, 1)
   assert_true(sending_first.pending_steers[0].delivery is CodexSteerSending)
@@ -1023,20 +1005,20 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
     dispatch,
     Reply(kind=CodexTurnSteerReply("thread-1"), value={ "turnId": "turn-1" }),
     sending_first,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(accepted_first.pending_steers[0].delivery is CodexSteerAccepted)
   let (_, sending_second) = update(
     dispatch,
     ComposerAction(
-      @composer.DraftSubmitted(
-        identity=accepted_first.composer_identity(@interop.ChannelId::Local),
-        draft={ task: "same text", mentions: [], },
-      ),
+      DraftSubmitted(identity=accepted_first.composer_identity(Local), draft={
+        task: "same text",
+        mentions: [],
+      }),
     ),
     accepted_first,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_eq(sending_second.pending_steers.length(), 2)
@@ -1047,7 +1029,7 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
     dispatch,
     Failed(kind=CodexTurnSteerReply("thread-1"), message="steer rejected"),
     sending_second,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_eq(failed_second.pending_steers.length(), 1)
@@ -1072,14 +1054,14 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
     dispatch,
     first_started,
     sending_second,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   let (_, observed_first_again) = update(
     dispatch,
     first_started,
     sending_second,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(observed_first == observed_first_again)
@@ -1105,7 +1087,7 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
       generation=2,
     ),
     observed_first,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_eq(completed_first.pending_steers.length(), 1)
@@ -1127,35 +1109,29 @@ test "Codex steer receipts reconcile duplicate text by item id and FIFO" {
       generation=3,
     ),
     completed_first,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(observed_second.pending_steers.is_empty())
   let items = observed_second.transcript_items()
   assert_eq(items.length(), 3)
-  assert_true(items.all(item => item.kind is @transcript.User(_)))
+  assert_true(items.all(item => item.kind is User(_)))
   assert_true(items.all(item => item.text() == Some("same text")))
 }
 
 ///|
 test "abandoning a draft deselects it and clears its composer state" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let open_external = (_ : String) => @cmd.none
   let (_, drafting) = update(
     dispatch,
     StartDraft(id="desktop-draft-1", cwd="/work/project"),
     State(),
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   let typed = { ..drafting, draft: "half a prompt", }
-  let (_, dropped) = update(
-    dispatch,
-    AbandonDraft,
-    typed,
-    @interop.ChannelId::Local,
-    open_external,
-  )
+  let (_, dropped) = update(dispatch, AbandonDraft, typed, Local, open_external)
   assert_false(dropped.composing_draft())
   assert_eq(dropped.active_id(), None)
   inspect(dropped.draft_text(), content="")
@@ -1164,7 +1140,7 @@ test "abandoning a draft deselects it and clears its composer state" {
     dispatch,
     AbandonDraft,
     State(),
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(unchanged.active_id() is None)
@@ -1174,69 +1150,67 @@ test "abandoning a draft deselects it and clears its composer state" {
 test "Codex cwd-less draft remains a Local first prompt" {
   let draft = State().select_draft("desktop-draft-local", "")
   assert_true(draft.can_prompt())
-  assert_true(
-    draft.worktree_launch_workspace(@interop.ChannelId::Local) is None,
-  )
+  assert_true(draft.worktree_launch_workspace(Local) is None)
 }
 
 ///|
 test "Codex permission picker confirms full access and freezes while running" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let open_external = (_ : String) => @cmd.none
   let idle = State::from_thread_snapshot({
     "thread": { "id": "thread-1", "turns": [] },
   })
-  assert_eq(idle.permission_mode(), @protocol.AutoReview)
+  assert_eq(idle.permission_mode(), AutoReview)
   let (_, opened) = update(
     dispatch,
     TogglePermissionMenu,
     idle,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(opened.permission_picker is CodexPermissionOpen(_))
   let (_, requested) = update(
     dispatch,
-    ChoosePermission(@protocol.RequestApproval),
+    ChoosePermission(RequestApproval),
     opened,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
-  assert_eq(requested.permission_mode(), @protocol.RequestApproval)
+  assert_eq(requested.permission_mode(), RequestApproval)
   let (_, warning) = update(
     dispatch,
-    ChoosePermission(@protocol.FullAccess),
+    ChoosePermission(FullAccess),
     requested,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(
     warning.permission_picker is CodexPermissionConfirmingFullAccess(_),
   )
-  assert_eq(warning.permission_mode(), @protocol.RequestApproval)
+  assert_eq(warning.permission_mode(), RequestApproval)
   let (_, cancelled) = update(
     dispatch,
     CancelFullAccess,
     warning,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
-  assert_eq(cancelled.permission_mode(), @protocol.RequestApproval)
+  assert_eq(cancelled.permission_mode(), RequestApproval)
   let (_, warning) = update(
     dispatch,
-    ChoosePermission(@protocol.FullAccess),
+    ChoosePermission(FullAccess),
     cancelled,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   let (_, confirmed) = update(
     dispatch,
     ConfirmFullAccess,
     warning,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
-  assert_eq(confirmed.permission_mode(), @protocol.FullAccess)
+  assert_eq(confirmed.permission_mode(), FullAccess)
 
   let running = State::from_thread_snapshot({
     "thread": {
@@ -1246,20 +1220,20 @@ test "Codex permission picker confirms full access and freezes while running" {
   })
   let (_, unchanged1) = update(
     dispatch,
-    ChoosePermission(@protocol.RequestApproval),
+    ChoosePermission(RequestApproval),
     running,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   let (_, unchanged2) = update(
     dispatch,
-    ChoosePermission(@protocol.RequestApproval),
+    ChoosePermission(RequestApproval),
     running,
-    @interop.ChannelId::Local,
+    Local,
     open_external,
   )
   assert_true(unchanged1 == unchanged2)
-  assert_eq(unchanged1.permission_mode(), @protocol.AutoReview)
+  assert_eq(unchanged1.permission_mode(), AutoReview)
 }
 
 ///|
@@ -1267,17 +1241,14 @@ test "cwd-less stored Codex tasks expose Terminal scratch without Files" {
   let state = State::from_thread_snapshot({
     "thread": { "id": "thread-scratch", "turns": [] },
   })
-  assert_true(
-    state.active_placement(@interop.ChannelId::Local)
-    is Some(@interop.Scratch(root=None)),
-  )
-  assert_true(state.terminal_available(@interop.ChannelId::Local))
+  assert_true(state.active_placement(Local) is Some(Scratch(root=None)))
+  assert_true(state.terminal_available(Local))
   assert_true(state.active_context() is None)
 }
 
 ///|
 test "Codex turn connection errors settle immediately without a history read" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let original = {
     ..State::from_thread_snapshot({
       "thread": { "id": "thread-1", "turns": [] },
@@ -1292,7 +1263,7 @@ test "Codex turn connection errors settle immediately without a history read" {
       message="SeekMoon connection lost",
     ),
     original,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(failed.draft_text(), "new prompt")
@@ -1315,17 +1286,17 @@ test "Codex turn connection errors settle immediately without a history read" {
       message="SeekMoon connection lost",
     ),
     original,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
-  assert_true(worktree_failed.placement is @composer.BoundWorktree("wt-1"))
+  assert_true(worktree_failed.placement is BoundWorktree("wt-1"))
   assert_eq(worktree_failed.draft_text(), "new prompt")
   assert_eq(worktree_failed.notice, "Codex turn: SeekMoon connection lost")
 }
 
 ///|
 test "Codex update handlers are pure and idempotent" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = {
     ..State::from_thread_snapshot({
       "thread": {
@@ -1347,19 +1318,17 @@ test "Codex update handlers are pure and idempotent" {
       },
     ],
   }
-  let composer_identity = state.composer_identity(@interop.ChannelId::Local)
+  let composer_identity = state.composer_identity(Local)
   let messages : Array[Msg] = [
     Refresh,
-    ComposerAction(
-      @composer.SlashCommand(identity=composer_identity, command="unknown"),
-    ),
+    ComposerAction(SlashCommand(identity=composer_identity, command="unknown")),
     ModelChanged("gpt-test"),
     EffortChanged("high"),
     TogglePermissionMenu,
     DismissPermissionMenu,
-    ChoosePermission(@protocol.RequestApproval),
-    ChoosePermission(@protocol.AutoReview),
-    ChoosePermission(@protocol.FullAccess),
+    ChoosePermission(RequestApproval),
+    ChoosePermission(AutoReview),
+    ChoosePermission(FullAccess),
     ConfirmFullAccess,
     CancelFullAccess,
     WorktreeChanged(
@@ -1468,27 +1437,15 @@ test "Codex update handlers are pure and idempotent" {
     ),
   ]
   for message in messages {
-    let (_, once) = update(
-      dispatch,
-      message,
-      state,
-      @interop.ChannelId::Local,
-      _ => @cmd.none,
-    )
-    let (_, twice) = update(
-      dispatch,
-      message,
-      state,
-      @interop.ChannelId::Local,
-      _ => @cmd.none,
-    )
+    let (_, once) = update(dispatch, message, state, Local, _ => @cmd.none)
+    let (_, twice) = update(dispatch, message, state, Local, _ => @cmd.none)
     assert_true(once == twice)
   }
 }
 
 ///|
 test "Codex worktree broadcasts bind every frontend with the task open" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = State::from_thread_snapshot({
     "thread": {
       "id": "thread-1",
@@ -1507,17 +1464,13 @@ test "Codex worktree broadcasts bind every frontend with the task open" {
     path="/work/project/.worktrees/wt-1",
     present=true,
   )
-  let (_, once) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
-    @cmd.none
-  })
-  let (_, twice) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
-    @cmd.none
-  })
+  let (_, once) = update(dispatch, message, state, Local, _ => @cmd.none)
+  let (_, twice) = update(dispatch, message, state, Local, _ => @cmd.none)
   assert_true(once == twice)
-  assert_true(once.placement is @composer.BoundWorktree("wt-1"))
+  assert_true(once.placement is BoundWorktree("wt-1"))
   assert_eq(
     once
-    .active_placement(@interop.ChannelId::Local)
+    .active_placement(Local)
     .bind(placement => placement.checkout_root())
     .map(root => root.path),
     Some("/work/project/.worktrees/wt-1"),
@@ -1530,7 +1483,7 @@ test "Codex worktree broadcasts bind every frontend with the task open" {
 
 ///|
 test "Codex missing worktree waits for rebuild or archive confirmation" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = State::from_thread_snapshot({
     "thread": {
       "id": "thread-1",
@@ -1546,13 +1499,12 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
   })
   assert_true(state.has_missing_worktree())
   assert_true(
-    state.active_placement(@interop.ChannelId::Local)
-    is Some(@interop.MissingWorktree(name="wt-1", ..)),
+    state.active_placement(Local) is Some(MissingWorktree(name="wt-1", ..)),
   )
   // A retained registry row names the checkout for Repair, but a missing path
   // is never sent back to app-server as a runnable cwd.
   assert_true(state.registry_turn_cwd() is None)
-  assert_false(state.terminal_available(@interop.ChannelId::Local))
+  assert_false(state.terminal_available(Local))
   let (_, confirming) = update(
     dispatch,
     Reply(kind=CodexArchiveReply("thread-1"), value={
@@ -1562,7 +1514,7 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
       "dirty_path_count": 1,
     }),
     state,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   guard confirming.archive_confirm is Some(confirm) else {
@@ -1574,7 +1526,7 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
     dispatch,
     CancelArchiveDiscard,
     confirming,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(cancelled.archive_confirm is None)
@@ -1587,13 +1539,13 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
     dispatch,
     Reply(kind=CodexWorktreeRepairReply("thread-1", rebuilt), value={}),
     state,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_false(ready.has_missing_worktree())
   assert_eq(
     ready
-    .active_placement(@interop.ChannelId::Local)
+    .active_placement(Local)
     .bind(placement => placement.checkout_root())
     .map(uri => uri.path),
     Some("/work/project/.worktrees/wt-1"),
@@ -1602,7 +1554,7 @@ test "Codex missing worktree waits for rebuild or archive confirmation" {
 
 ///|
 test "Codex Git replies stay with the latest checkout request" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let main_cwd = "/workspace/openseek"
   let worktree_cwd = "/workspace/.codex/worktrees/wt-3/openseek"
   let opened = State().with_thread_reply(
@@ -1618,10 +1570,7 @@ test "Codex Git replies stay with the latest checkout request" {
     CodexImportedSnapshot,
   )
   // Opening the thread starts the lookup against the main checkout.
-  let (_, main_pending) = opened.refresh_git(
-    dispatch,
-    @interop.ChannelId::Local,
-  )
+  let (_, main_pending) = opened.refresh_git(dispatch, Local)
   assert_eq(main_pending.git_request_generation, 1)
 
   // Fresh-worktree creation retargets the same thread and starts a newer
@@ -1633,10 +1582,7 @@ test "Codex Git replies stay with the latest checkout request" {
     present: true,
   }
   let retargeted = main_pending.with_created_worktree(worktree)
-  let (_, worktree_pending) = retargeted.refresh_git(
-    dispatch,
-    @interop.ChannelId::Local,
-  )
+  let (_, worktree_pending) = retargeted.refresh_git(dispatch, Local)
   assert_eq(worktree_pending.git_request_generation, 2)
 
   let worktree_reply = GitLoaded(
@@ -1660,18 +1606,14 @@ test "Codex Git replies stay with the latest checkout request" {
       branch: Some("openseek/wt-3"),
     },
   )
-  let (_, applied) = update(
-    dispatch,
-    worktree_reply,
-    worktree_pending,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, applied) = update(dispatch, worktree_reply, worktree_pending, Local, _ => {
+    @cmd.none
+  })
   let (_, applied_again) = update(
     dispatch,
     worktree_reply,
     worktree_pending,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   // The handler is pure: the same state and message produce the same result.
@@ -1699,13 +1641,7 @@ test "Codex Git replies stay with the latest checkout request" {
       branch: Some("docs/desktop-ux-guidelines"),
     },
   )
-  let (_, stale) = update(
-    dispatch,
-    main_reply,
-    applied,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, stale) = update(dispatch, main_reply, applied, Local, _ => @cmd.none)
   // The main-checkout reply arrives last but cannot replace the worktree's
   // newer answer.
   assert_true(stale == applied)
@@ -1725,7 +1661,7 @@ test "Codex Git replies stay with the latest checkout request" {
     dispatch,
     wrong_cwd_reply,
     worktree_pending,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(wrong_cwd == worktree_pending)
@@ -1733,7 +1669,7 @@ test "Codex Git replies stay with the latest checkout request" {
 
 ///|
 test "Codex history replies stay with the latest selected thread" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let listed = State().with_threads(
     {
       "data": [
@@ -1744,18 +1680,14 @@ test "Codex history replies stay with the latest selected thread" {
     false,
     State().activity.frontier(),
   )
-  let (_, waiting_a) = update(
-    dispatch,
-    OpenThread("thread-a"),
-    listed,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, waiting_a) = update(dispatch, OpenThread("thread-a"), listed, Local, _ => {
+    @cmd.none
+  })
   let (_, waiting_b) = update(
     dispatch,
     OpenThread("thread-b"),
     waiting_a,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(waiting_b.requested_thread, Some("thread-b"))
@@ -1768,7 +1700,7 @@ test "Codex history replies stay with the latest selected thread" {
       "thread": { "id": "thread-a", "turns": [] },
     }),
     waiting_b,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale_success == waiting_b)
@@ -1779,7 +1711,7 @@ test "Codex history replies stay with the latest selected thread" {
       message="late failure",
     ),
     waiting_b,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale_failure == waiting_b)
@@ -1790,7 +1722,7 @@ test "Codex history replies stay with the latest selected thread" {
       "thread": { "id": "thread-b", "turns": [] },
     }),
     waiting_b,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(selected_b.active_id(), Some("thread-b"))
@@ -1804,7 +1736,7 @@ test "Codex history replies stay with the latest selected thread" {
       "thread": { "id": "thread-a", "turns": [] },
     }),
     selected_b,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(late_a == selected_b)
@@ -1812,7 +1744,7 @@ test "Codex history replies stay with the latest selected thread" {
 
 ///|
 test "Codex reconnect preserves a pending history target for a new epoch" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let selected = State()
     .with_threads(
       {
@@ -1830,18 +1762,14 @@ test "Codex reconnect preserves a pending history target for a new epoch" {
     )
   let ready = { ..selected, connection: CodexReady, }
   let old_frontier = ready.activity.frontier()
-  let (_, opening) = update(
-    dispatch,
-    OpenThread("thread-b"),
-    ready,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, opening) = update(dispatch, OpenThread("thread-b"), ready, Local, _ => {
+    @cmd.none
+  })
   let (_, disconnected) = update(
     dispatch,
     StatusChanged({ "status": "starting" }),
     opening,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(disconnected.requested_thread, Some("thread-b"))
@@ -1857,7 +1785,7 @@ test "Codex reconnect preserves a pending history target for a new epoch" {
     dispatch,
     Reply(kind=CodexThreadReply("thread-b", old_frontier), value=reply),
     disconnected,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale == disconnected)
@@ -1865,7 +1793,7 @@ test "Codex reconnect preserves a pending history target for a new epoch" {
     dispatch,
     StatusChanged({ "status": "ready" }),
     disconnected,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(reconnected.requested_thread, Some("thread-b"))
@@ -1876,7 +1804,7 @@ test "Codex reconnect preserves a pending history target for a new epoch" {
       value=reply,
     ),
     reconnected,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(opened.active_id(), Some("thread-b"))
@@ -1886,7 +1814,7 @@ test "Codex reconnect preserves a pending history target for a new epoch" {
 
 ///|
 test "Codex draft and turn replies stay with their originating task" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let current_draft = {
     ..State().select_draft("draft-current", ""),
     draft: "keep current input",
@@ -1898,7 +1826,7 @@ test "Codex draft and turn replies stay with their originating task" {
       "thread": { "id": "thread-old", "turns": [] },
     }),
     current_draft,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale_draft == current_draft)
@@ -1906,7 +1834,7 @@ test "Codex draft and turn replies stay with their originating task" {
     dispatch,
     Failed(kind=CodexDraftThreadReply("draft-old"), message="late failure"),
     current_draft,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale_draft_failure == current_draft)
@@ -1924,7 +1852,7 @@ test "Codex draft and turn replies stay with their originating task" {
       "turn": { "id": "turn-old", "status": "inProgress", "items": [] },
     }),
     current_thread,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale_turn == current_thread)
@@ -1941,7 +1869,7 @@ test "Codex draft and turn replies stay with their originating task" {
       },
     ),
     current_thread,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale_worktree == current_thread)
@@ -1956,7 +1884,7 @@ test "Codex draft and turn replies stay with their originating task" {
       value={},
     ),
     current_thread,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale_repair == current_thread)
@@ -1964,7 +1892,7 @@ test "Codex draft and turn replies stay with their originating task" {
     dispatch,
     Failed(kind=CodexTurnStartReply("thread-old"), message="late failure"),
     current_thread,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale_turn_failure == current_thread)
@@ -1972,7 +1900,7 @@ test "Codex draft and turn replies stay with their originating task" {
 
 ///|
 test "Codex observed running task steers without resume" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let observed = {
     ..State::from_thread_snapshot({
       "thread": {
@@ -1984,16 +1912,13 @@ test "Codex observed running task steers without resume" {
     draft: "follow up",
   }
   assert_true(observed.is_running())
-  let (_, steering) = observed.submit_composer(
-    dispatch,
-    @interop.ChannelId::Local,
-  )
+  let (_, steering) = observed.submit_composer(dispatch, Local)
   assert_true(steering.owns_foreground(CodexTurnSteerReply("thread-1")))
 }
 
 ///|
 test "Codex idle stored task resumes before starting a turn" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let idle = {
     ..State::from_thread_snapshot({
       "thread": { "id": "thread-1", "turns": [] },
@@ -2001,51 +1926,35 @@ test "Codex idle stored task resumes before starting a turn" {
     connection: CodexReady,
     draft: "follow up",
   }
-  let (_, resuming) = idle.submit_composer(dispatch, @interop.ChannelId::Local)
+  let (_, resuming) = idle.submit_composer(dispatch, Local)
   assert_true(resuming.owns_foreground(CodexResumeReply("thread-1")))
   let message = ResumeSucceeded("thread-1")
-  let (_, once) = update(
-    dispatch,
-    message,
-    resuming,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
-  let (_, twice) = update(
-    dispatch,
-    message,
-    resuming,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, once) = update(dispatch, message, resuming, Local, _ => @cmd.none)
+  let (_, twice) = update(dispatch, message, resuming, Local, _ => @cmd.none)
   assert_true(once.owns_foreground(CodexTurnStartReply("thread-1")))
   assert_true(once == twice)
 }
 
 ///|
 test "Codex task selection clears the adapter submission snapshot" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = {
     ..State::from_thread_snapshot({
       "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
     }),
     draft: "belongs to A",
-    mentions: [{ ref_: @mention_context.File(path="src/a.mbt"), range: None, }],
+    mentions: [{ ref_: File(path="src/a.mbt"), range: None, }],
   }
-  let (_, next) = update(
-    dispatch,
-    OpenThread("thread-b"),
-    state,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, next) = update(dispatch, OpenThread("thread-b"), state, Local, _ => {
+    @cmd.none
+  })
   assert_eq(next.draft, "")
   assert_true(next.mentions.is_empty())
 }
 
 ///|
 test "reopening the selected Codex task preserves its foreground state" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = {
     ..State::from_thread_snapshot({
       "thread": {
@@ -2057,19 +1966,15 @@ test "reopening the selected Codex task preserves its foreground state" {
     draft: "unsent follow-up",
   }.begin_foreground(CodexTurnSteerReply("thread-a"))
   let message = OpenThread("thread-a")
-  let (_, once) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
-    @cmd.none
-  })
-  let (_, twice) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
-    @cmd.none
-  })
+  let (_, once) = update(dispatch, message, state, Local, _ => @cmd.none)
+  let (_, twice) = update(dispatch, message, state, Local, _ => @cmd.none)
   assert_true(once == state)
   assert_true(twice == state)
 }
 
 ///|
 test "archiving the selected Codex task settles its owned foreground work" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = {
     ..State::from_thread_snapshot({
       "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
@@ -2090,12 +1995,8 @@ test "archiving the selected Codex task settles its owned foreground work" {
     params={ "threadId": "thread-a" },
     generation=1,
   )
-  let (_, once) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
-    @cmd.none
-  })
-  let (_, twice) = update(dispatch, message, state, @interop.ChannelId::Local, _ => {
-    @cmd.none
-  })
+  let (_, once) = update(dispatch, message, state, Local, _ => @cmd.none)
+  let (_, twice) = update(dispatch, message, state, Local, _ => @cmd.none)
   assert_true(once.active_thread() is None)
   assert_false(once.loading)
   assert_true(once.foreground is None)
@@ -2105,7 +2006,7 @@ test "archiving the selected Codex task settles its owned foreground work" {
 
 ///|
 test "background Codex metadata does not settle a foreground action" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = State(loading=true)
   let (_, next) = update(
     dispatch,
@@ -2114,7 +2015,7 @@ test "background Codex metadata does not settle a foreground action" {
       "account": Json::null(),
     }),
     state,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(next.loading)
@@ -2122,7 +2023,7 @@ test "background Codex metadata does not settle a foreground action" {
 
 ///|
 test "Codex approval reply cannot settle an active turn" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = State::from_thread_snapshot({
     "thread": { "id": "thread-1", "turns": [] },
   }).begin_foreground(CodexTurnStartReply("thread-1"))
@@ -2130,7 +2031,7 @@ test "Codex approval reply cannot settle an active turn" {
     dispatch,
     Reply(kind=CodexApprovalReply, value={}),
     state,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(after_approval.loading)
@@ -2143,7 +2044,7 @@ test "Codex approval reply cannot settle an active turn" {
       "turn": { "id": "turn-1", "status": "inProgress" },
     }),
     after_approval,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_false(after_turn.loading)
@@ -2152,7 +2053,7 @@ test "Codex approval reply cannot settle an active turn" {
 
 ///|
 test "Codex request generations reject stale snapshots" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = State::from_thread_snapshot({
     "thread": { "id": "thread-1", "turns": [] },
   })
@@ -2165,14 +2066,14 @@ test "Codex request generations reject stale snapshots" {
       generation=2,
     ),
     state,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   let (_, stale) = update(
     dispatch,
     Reply(kind=CodexRequestsReply, value={ "data": [], "generation": 1 }),
     notified,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(stale.pending_requests.length(), 1)
@@ -2206,7 +2107,7 @@ test "Codex approvals cannot be edited from another thread" {
 
 ///|
 test "Codex composer reverse-request actions keep their task identity" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = {
     ..State::from_thread_snapshot({
       "thread": { "id": "thread-1", "turns": [] },
@@ -2221,11 +2122,11 @@ test "Codex composer reverse-request actions keep their task identity" {
       },
     ],
   }
-  let identity = state.composer_identity(@interop.ChannelId::Local)
+  let identity = state.composer_identity(Local)
   let (_, answered) = update(
     dispatch,
     ComposerAction(
-      @composer.CodexRequestAnswerChanged(
+      CodexRequestAnswerChanged(
         identity~,
         request_key=Json("request-1").stringify(),
         question_id="scope",
@@ -2233,16 +2134,16 @@ test "Codex composer reverse-request actions keep their task identity" {
       ),
     ),
     state,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(answered.pending_requests[0].answers.get("scope"), Some("all"))
   let (_, unchanged) = update(
     dispatch,
     ComposerAction(
-      @composer.CodexRequestAnswerChanged(
+      CodexRequestAnswerChanged(
         identity={
-          owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
+          owner: { channel: Local, session: "thread-2", },
           archive_generation: 0,
         },
         request_key=Json("request-1").stringify(),
@@ -2251,7 +2152,7 @@ test "Codex composer reverse-request actions keep their task identity" {
       ),
     ),
     answered,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(unchanged.pending_requests[0].answers.get("scope"), Some("all"))
@@ -2259,21 +2160,9 @@ test "Codex composer reverse-request actions keep their task identity" {
 
 ///|
 test "newer Codex catalog refresh rejects an older pagination result" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let (_, first) = update(
-    dispatch,
-    Refresh,
-    State(),
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
-  let (_, second) = update(
-    dispatch,
-    Refresh,
-    first,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let (_, first) = update(dispatch, Refresh, State(), Local, _ => @cmd.none)
+  let (_, second) = update(dispatch, Refresh, first, Local, _ => @cmd.none)
   let (_, stale) = update(
     dispatch,
     Reply(
@@ -2285,7 +2174,7 @@ test "newer Codex catalog refresh rejects an older pagination result" {
       value={ "data": [{ "id": "stale", "preview": "Stale" }] },
     ),
     second,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_true(stale == second)
@@ -2300,7 +2189,7 @@ test "newer Codex catalog refresh rejects an older pagination result" {
       value={ "data": [{ "id": "current", "preview": "Current" }] },
     ),
     stale,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   assert_eq(current.threads[0].id, "current")
@@ -2308,25 +2197,19 @@ test "newer Codex catalog refresh rejects an older pagination result" {
 
 ///|
 test "Codex list and history snapshots follow request order" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let listed = State().with_threads(
     { "data": [{ "id": "thread-a", "preview": "Thread A" }] },
     false,
     State().activity.frontier(),
   )
-  let (_, refreshing) = update(
-    dispatch,
-    Refresh,
-    listed,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, refreshing) = update(dispatch, Refresh, listed, Local, _ => @cmd.none)
   let catalog_frontier = refreshing.activity.frontier()
   let (_, opening) = update(
     dispatch,
     OpenThread("thread-a"),
     refreshing,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   let read_frontier = opening.activity.frontier()
@@ -2336,7 +2219,7 @@ test "Codex list and history snapshots follow request order" {
       "thread": { "id": "thread-a", "status": { "type": "idle" }, "turns": [] },
     }),
     opening,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   let (_, stale_active) = update(
@@ -2358,22 +2241,16 @@ test "Codex list and history snapshots follow request order" {
       },
     ),
     idle,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
-  assert_true(
-    stale_active.activity.presentation("thread-a") is @conversation.NoRunMark,
-  )
+  assert_true(stale_active.activity.presentation("thread-a") is NoRunMark)
 
   // A subsequently requested catalog is newer than the history read and may
   // authoritatively recover running state even if no notification was seen.
-  let (_, reloading) = update(
-    dispatch,
-    Refresh,
-    stale_active,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, reloading) = update(dispatch, Refresh, stale_active, Local, _ => {
+    @cmd.none
+  })
   let (_, current_active) = update(
     dispatch,
     Reply(
@@ -2393,18 +2270,15 @@ test "Codex list and history snapshots follow request order" {
       },
     ),
     reloading,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
-  assert_true(
-    current_active.activity.presentation("thread-a")
-    is @conversation.RunningMark,
-  )
+  assert_true(current_active.activity.presentation("thread-a") is RunningMark)
 }
 
 ///|
 test "archived Codex catalog removes a selected task in either reply order" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let snapshot = State::from_thread_snapshot({
     "thread": { "id": "thread-a", "cwd": "/work/a", "turns": [] },
   })
@@ -2429,40 +2303,22 @@ test "archived Codex catalog removes a selected task in either reply order" {
       "data": [{ "id": "thread-a", "cwd": "/work/a", "preview": "Archived A" }],
     },
   )
-  let (_, live_first) = update(
-    dispatch,
-    live,
-    selected,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, live_first) = update(dispatch, live, selected, Local, _ => @cmd.none)
   assert_true(live_first.active_thread() is Some(_))
-  let (_, archived_second) = update(
-    dispatch,
-    archived,
-    live_first,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, archived_second) = update(dispatch, archived, live_first, Local, _ => {
+    @cmd.none
+  })
   assert_true(archived_second.active_thread() is None)
   assert_true(archived_second.threads.is_empty())
   assert_eq(archived_second.archived_threads.length(), 1)
   assert_false(archived_second.loading)
 
-  let (_, archived_first) = update(
-    dispatch,
-    archived,
-    selected,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
-  let (_, live_second) = update(
-    dispatch,
-    live,
-    archived_first,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, archived_first) = update(dispatch, archived, selected, Local, _ => {
+    @cmd.none
+  })
+  let (_, live_second) = update(dispatch, live, archived_first, Local, _ => {
+    @cmd.none
+  })
   assert_true(live_second.active_thread() is None)
   assert_true(live_second.threads.is_empty())
   assert_eq(live_second.archived_threads.length(), 1)
@@ -2470,7 +2326,7 @@ test "archived Codex catalog removes a selected task in either reply order" {
 
 ///|
 test "Codex settings notifications do not retarget the selected task" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = State::from_thread_snapshot({
     "thread": { "id": "thread-1", "cwd": "/work/old", "turns": [] },
   })
@@ -2485,7 +2341,7 @@ test "Codex settings notifications do not retarget the selected task" {
       generation=0,
     ),
     state,
-    @interop.ChannelId::Local,
+    Local,
     _ => @cmd.none,
   )
   // OpenSeek already owns every setting it sends with `turn/start`. The
@@ -2499,7 +2355,7 @@ test "Codex settings notifications do not retarget the selected task" {
 
 ///|
 test "Codex Git pill opens and closes its details" {
-  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let state = State::from_thread_snapshot({
     "thread": {
       "id": "thread-1",
@@ -2508,20 +2364,12 @@ test "Codex Git pill opens and closes its details" {
       "turns": [],
     },
   })
-  let (_, opened) = update(
-    dispatch,
-    ToggleGitDetails,
-    state,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, opened) = update(dispatch, ToggleGitDetails, state, Local, _ => {
+    @cmd.none
+  })
   assert_true(opened.git_details_open())
-  let (_, closed) = update(
-    dispatch,
-    CloseGitDetails,
-    opened,
-    @interop.ChannelId::Local,
-    _ => @cmd.none,
-  )
+  let (_, closed) = update(dispatch, CloseGitDetails, opened, Local, _ => {
+    @cmd.none
+  })
   assert_false(closed.git_details_open())
 }

@@ -28,12 +28,12 @@ fn review_test_hunk(
 ) -> ReviewHunk {
   ReviewHunk(
     old_ranges=if old_start < old_end {
-      [@common.LineRange(old_start, old_end)]
+      [LineRange(old_start, old_end)]
     } else {
       []
     },
     new_ranges=if new_start < new_end {
-      [@common.LineRange(new_start, new_end)]
+      [LineRange(new_start, new_end)]
     } else {
       []
     },
@@ -70,26 +70,20 @@ fn activate_review_hunk(
 test "review hunk normalizes unions and subtraction" {
   let coverage = ReviewHunk(
     old_ranges=[
-      @common.LineRange(4, 7),
-      @common.LineRange(1, 3),
-      @common.LineRange(3, 5),
-      @common.LineRange(8, 8),
+      LineRange(4, 7),
+      LineRange(1, 3),
+      LineRange(3, 5),
+      LineRange(8, 8),
     ],
-    new_ranges=[@common.LineRange(10, 13)],
+    new_ranges=[LineRange(10, 13)],
   )
-  assert_eq(coverage.old_ranges, [@common.LineRange(1, 7)])
-  let removed = ReviewHunk(old_ranges=[@common.LineRange(2, 4)], new_ranges=[
-    @common.LineRange(11, 12),
+  assert_eq(coverage.old_ranges, [LineRange(1, 7)])
+  let removed = ReviewHunk(old_ranges=[LineRange(2, 4)], new_ranges=[
+    LineRange(11, 12),
   ])
   let retained = coverage.subtract(removed)
-  assert_eq(retained.old_ranges, [
-    @common.LineRange(1, 2),
-    @common.LineRange(4, 7),
-  ])
-  assert_eq(retained.new_ranges, [
-    @common.LineRange(10, 11),
-    @common.LineRange(12, 13),
-  ])
+  assert_eq(retained.old_ranges, [LineRange(1, 2), LineRange(4, 7)])
+  assert_eq(retained.new_ranges, [LineRange(10, 11), LineRange(12, 13)])
   assert_true(retained.union(removed) == coverage)
 }
 
@@ -146,7 +140,7 @@ test "hunk and file review progress stay linked in both directions" {
   assert_true(
     one_unviewed.review_hunk_state(selected, deleted) is ReviewHunkViewed,
   )
-  let overlapping = ReviewHunk(old_ranges=[@common.LineRange(9, 12)], new_ranges=[])
+  let overlapping = ReviewHunk(old_ranges=[LineRange(9, 12)], new_ranges=[])
   assert_true(
     one_unviewed.review_hunk_state(selected, overlapping) is ReviewHunkPartial,
   )
@@ -218,10 +212,7 @@ test "active hunk requires exact row, diff generation, and surface generation" {
   )
   assert_true(stale_row.review_active_hunk is None)
   assert_false(stale_row.review_navigation_ready(ctx.active_file))
-  let inactive_ctx = {
-    ..ctx,
-    active_file: Some(@pathx.Relative("src/other.mbt")),
-  }
+  let inactive_ctx = { ..ctx, active_file: Some(Relative("src/other.mbt")), }
   let inactive = activate_review_hunk(
     state, inactive_ctx, selected, hunk, hunk, 0, 1,
   )

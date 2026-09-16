@@ -31,7 +31,7 @@ fn Model::share(
       generation~,
       match result {
         Ok(reply) => reply
-        Err(message) => @protocol.Failed(message~)
+        Err(message) => Failed(message~)
       },
     )
   })
@@ -61,7 +61,7 @@ fn Model::sign_in(self : Model, emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
   request(
     emit,
     @commands.auth_connect,
-    @protocol.NoPayload,
+    NoPayload,
     failure="Could not sign in",
     result => SignedIn(generation~, result.map(_ => ())),
   )
@@ -74,11 +74,7 @@ fn Model::sign_in(self : Model, emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
 fn cancel_sign_in() -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     @js.async_run(() => {
-      let _ = @interop.bridge_request(
-        Local,
-        @commands.auth_cancel,
-        @protocol.NoPayload,
-      ) catch {
+      let _ = @interop.bridge_request(Local, @commands.auth_cancel, NoPayload) catch {
         _ => return
       }
     })

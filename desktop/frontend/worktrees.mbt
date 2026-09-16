@@ -146,8 +146,8 @@ fn start_in_new_worktree(
             }
           }
           let reply = match result {
-            @protocol.WorktreeCreatedReply(reply) => reply
-            @protocol.WorktreeCreateError(message) => {
+            WorktreeCreatedReply(reply) => reply
+            WorktreeCreateError(message) => {
               scheduler.add(
                 device_dispatch(
                   WorktreeSetupFailed(
@@ -293,8 +293,8 @@ fn set_goal_in_new_worktree(
             }
           }
           let reply = match result {
-            @protocol.WorktreeCreatedReply(reply) => reply
-            @protocol.WorktreeCreateError(message) => {
+            WorktreeCreatedReply(reply) => reply
+            WorktreeCreateError(message) => {
               scheduler.add(
                 device_dispatch(
                   GoalRejected(
@@ -376,7 +376,7 @@ fn repair_worktree_cmd(
           return
         }
       }
-      if result is @protocol.WorktreeCreateError(message) {
+      if result is WorktreeCreateError(message) {
         scheduler.add(
           dispatch(WorktreeFailed("Couldn’t repair the worktree. " + message)),
         )
@@ -490,7 +490,7 @@ fn Model::conversation_placement(
         dev.worktrees.any(group => group.project == root) else {
         return None
       }
-      Some(@interop.WorkspaceRoot(root~))
+      Some(WorkspaceRoot(root~))
     }
     Worktree(project~, name=_) => {
       // The durable name is not a directory. Wait for the registry row before
@@ -507,9 +507,9 @@ fn Model::conversation_placement(
         return None
       }
       if row.present {
-        row.path.map(root => @interop.Worktree(project~, name=row.name, root~))
+        row.path.map(root => Worktree(project~, name=row.name, root~))
       } else {
-        Some(@interop.MissingWorktree(project~, name=row.name))
+        Some(MissingWorktree(project~, name=row.name))
       }
     }
   }
@@ -605,8 +605,8 @@ fn Model::worktree_control(
   guard conv.messages.length() == 0 else { return None }
   let choice = match conv.workspace {
     Worktree(name~, ..) => @composer.BoundWorktree(name)
-    Project(_) if conv.worktree_mode => @composer.FreshWorktree
-    Project(_) => @composer.LocalCheckout
+    Project(_) if conv.worktree_mode => FreshWorktree
+    Project(_) => LocalCheckout
   }
   Some({ choice, enabled: self.can_choose_launch_mode(conv), })
 }
@@ -654,7 +654,7 @@ test "worktree commit decoder carries the workspace and its rows" {
     is Some(notification) else {
     fail("known notification was rejected")
   }
-  guard notification_msg(@interop.ChannelId::Local, notification)
+  guard notification_msg(Local, notification)
     is Some(FromDevice(_, WorktreesChanged(rows, workspace~))) else {
     fail("expected a worktree change")
   }
@@ -740,10 +740,7 @@ test "new conversations inherit only their workspace's launch default" {
     "/preferred",
   )
   assert_false(
-    preferred_model.default_worktree_mode(
-      @interop.ChannelId::Remote("device-a"),
-      remote_workspace,
-    ),
+    preferred_model.default_worktree_mode(Remote("device-a"), remote_workspace),
   )
 }
 
@@ -804,7 +801,7 @@ test "the launch mode stops being a choice once a placement is in flight" {
     guard test_model().worktree_control(pinned) is Some(control) else {
       fail("expected worktree control state")
     }
-    assert_true(control.choice is @composer.FreshWorktree)
+    assert_true(control.choice is FreshWorktree)
     assert_false(control.enabled)
   }
   // Still a choice while nothing is out.
@@ -929,12 +926,12 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     })
   assert_true(
     bound.conversation_placement(bound.active())
-    is Some(@interop.Worktree(name="wt", ..)),
+    is Some(Worktree(name="wt", ..)),
   )
   // Model the production path with an active changed-file review. Placement
   // health must park host work without replacing this real owner or document.
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "desktop-test",
   }
   let review_path = @pathx.Relative("src/reviewed.mbt")
@@ -1006,7 +1003,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   )
   assert_true(
     gone.conversation_placement(gone.active())
-    is Some(@interop.MissingWorktree(name="wt", ..)),
+    is Some(MissingWorktree(name="wt", ..)),
   )
   assert_true(file_ctx(gone).owner == owner)
   assert_false(gone.file_panel.review_recovery_pending)
@@ -1049,8 +1046,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     is Some({ review: Some({ generation: 4, .. }), stale: true, .. }),
   )
   assert_true(
-    terminal_ctx(gone).placement
-    is Some(@interop.MissingWorktree(name="wt", ..)),
+    terminal_ctx(gone).placement is Some(MissingWorktree(name="wt", ..)),
   )
   // Session-list reconstruction does not itself carry the worktree name; the
   // retained registry row still keeps its terminal group away from main.
@@ -1061,8 +1057,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     .conversation_workspace(workspace, "desktop-test", Project(root=workspace)),
   })
   assert_true(
-    terminal_ctx(resumed).placement
-    is Some(@interop.MissingWorktree(name="wt", ..)),
+    terminal_ctx(resumed).placement is Some(MissingWorktree(name="wt", ..)),
   )
   // The binding is NOT dropped: the conversation must never silently read as
   // a plain workspace chat.
@@ -1072,7 +1067,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   let (_, repairing) = update(dispatch, RepairWorktree, gone)
   assert_true(
     repairing.conversation_placement(repairing.active())
-    is Some(@interop.MissingWorktree(name="wt", ..)),
+    is Some(MissingWorktree(name="wt", ..)),
   )
   assert_true(repairing.active().worktree_name() is Some("wt"))
   // Archive is the other exit. Like every update handler, applying the same
@@ -1080,17 +1075,17 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   // until the host moves the conversation out of the live list.
   let (_, archiving) = update(
     dispatch,
-    ArchiveSession(@interop.ChannelId::Local, "desktop-test"),
+    ArchiveSession(Local, "desktop-test"),
     gone,
   )
   let (_, archiving_again) = update(
     dispatch,
-    ArchiveSession(@interop.ChannelId::Local, "desktop-test"),
+    ArchiveSession(Local, "desktop-test"),
     gone,
   )
   assert_true(
     archiving.conversation_placement(archiving.active())
-    is Some(@interop.MissingWorktree(name="wt", ..)),
+    is Some(MissingWorktree(name="wt", ..)),
   )
   assert_eq(
     archiving.dev().sessions_request_generation,
@@ -1105,8 +1100,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   let (_, noop) = update(dispatch, RepairWorktree, bound)
   assert_true(noop.active().worktree_name() is Some("wt"))
   assert_true(
-    noop.conversation_placement(noop.active())
-    is Some(@interop.Worktree(name="wt", ..)),
+    noop.conversation_placement(noop.active()) is Some(Worktree(name="wt", ..)),
   )
 }
 
@@ -1141,8 +1135,7 @@ test "a restored workspace conversation waits for placement before using root" {
     unresolved,
   )
   assert_true(
-    loaded.conversation_placement(loaded.active())
-    is Some(@interop.WorkspaceRoot(..)),
+    loaded.conversation_placement(loaded.active()) is Some(WorkspaceRoot(..)),
   )
   assert_eq(file_ctx(loaded).owner.session, "desktop-test")
 }
@@ -1250,7 +1243,7 @@ test "a worktree list failure stays unresolved and ignores stale errors" {
   assert_eq(stale_failure.notifications.length(), 1)
   assert_true(
     stale_failure.conversation_placement(stale_failure.active())
-    is Some(@interop.WorkspaceRoot(..)),
+    is Some(WorkspaceRoot(..)),
   )
 }
 
@@ -1337,7 +1330,7 @@ test "a worktree commit broadcast supersedes lists and unbinds removed names" {
   // The durable worktree name has no registry row bound to this session, so
   // the conversation has no live checkout yet. Open Quick Open there, giving
   // the broadcast a running search to fence.
-  let (_, model) = update(dispatch, QuickOpenOpen(@quick_open.Files), placed)
+  let (_, model) = update(dispatch, QuickOpenOpen(Files), placed)
   assert_eq(model.conversation_root(model.active()), None)
   assert_true(model.quick_open.is_open())
   let changed_msg = WorktreesChanged([], workspace~)
@@ -1508,12 +1501,11 @@ test "worktree broadcasts and reconnect snapshots update an open Codex task" {
   assert_true(once.conversations == twice.conversations)
   assert_true(once.archive_confirm == twice.archive_confirm)
   assert_true(
-    once.codex.active_placement(@interop.ChannelId::Local)
-    is Some(@interop.Worktree(name="wt-1", ..)),
+    once.codex.active_placement(Local) is Some(Worktree(name="wt-1", ..)),
   )
   assert_eq(
     once.codex
-    .active_placement(@interop.ChannelId::Local)
+    .active_placement(Local)
     .bind(placement => placement.checkout_root())
     .map(root => root.path),
     Some("/work/project/.worktrees/wt-1"),
@@ -1536,12 +1528,12 @@ test "worktree broadcasts and reconnect snapshots update an open Codex task" {
   )
   assert_true(reconnected_once.codex == once.codex)
   assert_true(
-    reconnected_once.codex.active_placement(@interop.ChannelId::Local)
-    is Some(@interop.Worktree(name="wt-1", ..)),
+    reconnected_once.codex.active_placement(Local)
+    is Some(Worktree(name="wt-1", ..)),
   )
   assert_eq(
     reconnected_once.codex
-    .active_placement(@interop.ChannelId::Local)
+    .active_placement(Local)
     .bind(placement => placement.checkout_root())
     .map(root => root.path),
     Some("/work/project/.worktrees/wt-1"),

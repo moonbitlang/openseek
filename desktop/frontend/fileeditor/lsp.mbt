@@ -136,9 +136,9 @@ fn HoverProjection::to_viewer(self : HoverProjection) -> @language.Hover? {
   let content = if self.reply.markdown {
     @language.HoverContent::Markdown(self.reply.value)
   } else {
-    @language.HoverContent::PlainText(self.reply.value)
+    PlainText(self.reply.value)
   }
-  Some(@language.Hover::{ range: self.range(), contents: [content], })
+  Some({ range: self.range(), contents: [content], })
 }
 
 ///|
@@ -228,8 +228,8 @@ fn DiagnosticProjection::to_viewer(
   self : DiagnosticProjection,
 ) -> @language.Diagnostic {
   let diagnostic = self.0
-  @language.Diagnostic::{
-    range: @common.Range(
+  {
+    range: Range(
       diagnostic.range.start.line + 1,
       diagnostic.range.start.character + 1,
       diagnostic.range.end.line + 1,
@@ -382,5 +382,5 @@ test "semantic hover response range projects back to fragment coordinates" {
     line_offset: 29,
   }.to_viewer()
   guard projected is Some(hover) else { fail("expected projected hover") }
-  assert_eq(hover.range, @common.Range(2, 3, 2, 4))
+  assert_eq(hover.range, Range(2, 3, 2, 4))
 }

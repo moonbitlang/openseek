@@ -41,7 +41,7 @@ test "Codex adapts app-server items to the shared transcript model" {
   })
   let items = state.transcript_items()
   assert_eq(items.length(), 4)
-  guard items[0].kind is @transcript.User(prompt) else {
+  guard items[0].kind is User(prompt) else {
     fail("expected the submitted prompt as the first item")
   }
   guard @mention_context.parse(prompt) is Some(user) else {
@@ -51,18 +51,12 @@ test "Codex adapts app-server items to the shared transcript model" {
   assert_true(
     user.mentions
     is [
-      @mention_context.Symbol(
-        name="model.mbt",
-        file="desktop/frontend/codex/model.mbt",
-        line=0
-      ),
+      Symbol(name="model.mbt", file="desktop/frontend/codex/model.mbt", line=0),
     ],
   )
-  assert_true(
-    items[1].kind is @transcript.Assistant(reasoning=None, calls=[], ..),
-  )
+  assert_true(items[1].kind is Assistant(reasoning=None, calls=[], ..))
   assert_eq(items[1].text(), Some("**Working on it.**"))
-  guard items[2].kind is @transcript.Assistant(reasoning=None, calls=[call], ..) else {
+  guard items[2].kind is Assistant(reasoning=None, calls=[call], ..) else {
     fail("expected commandExecution to become one shared tool call")
   }
   assert_eq(call.name, "shell")
@@ -72,7 +66,7 @@ test "Codex adapts app-server items to the shared transcript model" {
   assert_true(arguments.contains("moon test"))
   assert_true(call.outcome is Done(content="test failed", is_error=true, ..))
   assert_true(items[2].text() is None)
-  assert_true(items[3].kind is @transcript.Failure(_))
+  assert_true(items[3].kind is Failure(_))
   assert_eq(items[3].text(), Some("turn failed"))
 }
 
@@ -112,15 +106,12 @@ test "Codex omits reasoning without visible summary text" {
   })
   let items = state.transcript_items()
   assert_eq(items.length(), 2)
-  guard items[0].kind
-    is @transcript.Assistant(reasoning=Some(thought), calls=[], ..) else {
+  guard items[0].kind is Assistant(reasoning=Some(thought), calls=[], ..) else {
     fail("expected the visible thought as its own response")
   }
   assert_eq(thought, "Inspecting the fix")
   assert_true(items[0].text() is None)
-  assert_true(
-    items[1].kind is @transcript.Assistant(reasoning=None, calls=[], ..),
-  )
+  assert_true(items[1].kind is Assistant(reasoning=None, calls=[], ..))
   assert_eq(items[1].text(), Some("Done."))
 }
 
@@ -159,9 +150,9 @@ test "Codex marks only the final answer of a successful turn finished" {
     },
   })
   let items = state.transcript_items()
-  assert_true(items[0].kind is @transcript.Assistant(finished=false, ..))
-  assert_true(items[1].kind is @transcript.Assistant(finished=true, ..))
-  assert_true(items[2].kind is @transcript.Assistant(finished=false, ..))
+  assert_true(items[0].kind is Assistant(finished=false, ..))
+  assert_true(items[1].kind is Assistant(finished=true, ..))
+  assert_true(items[2].kind is Assistant(finished=false, ..))
 }
 
 ///|
@@ -205,12 +196,12 @@ test "Codex preserves interrupted failed and answerless boundaries" {
   })
   let items = state.transcript_items()
   assert_eq(items.length(), 6)
-  assert_true(items[0].kind is @transcript.Assistant(finished=false, ..))
-  assert_true(items[1].kind is @transcript.Failure("Stopped"))
-  assert_true(items[2].kind is @transcript.Failure("Unavailable"))
-  assert_true(items[3].kind is @transcript.Assistant(finished=false, ..))
-  assert_true(items[4].kind is @transcript.TurnEnd)
-  assert_true(items[5].kind is @transcript.Assistant(finished=true, ..))
+  assert_true(items[0].kind is Assistant(finished=false, ..))
+  assert_true(items[1].kind is Failure("Stopped"))
+  assert_true(items[2].kind is Failure("Unavailable"))
+  assert_true(items[3].kind is Assistant(finished=false, ..))
+  assert_true(items[4].kind is TurnEnd)
+  assert_true(items[5].kind is Assistant(finished=true, ..))
 }
 
 ///|
@@ -249,7 +240,7 @@ test "Codex tool categories use explicit operation metadata" {
   })
   let names : Array[String] = []
   for item in state.transcript_items() {
-    if item.kind is @transcript.Assistant(calls=[call], ..) {
+    if item.kind is Assistant(calls=[call], ..) {
       names.push(call.name)
     }
   }
@@ -301,7 +292,7 @@ test "Codex covers every declared collaboration operation and dynamic names" {
   for index, (_, name, brief) in operations {
     assert_true(
       items[index].kind
-      is @transcript.Assistant(
+      is Assistant(
         calls=[{ name: actual, outcome: Done(brief=Some(caption), ..), .. }],
         ..
       ) &&
@@ -311,7 +302,7 @@ test "Codex covers every declared collaboration operation and dynamic names" {
   }
   assert_true(
     items[9].kind
-    is @transcript.Assistant(
+    is Assistant(
       calls=[
         { name: "dynamic__example__edit", outcome: Done(is_error=true, ..), .. },
       ],
@@ -320,13 +311,12 @@ test "Codex covers every declared collaboration operation and dynamic names" {
   )
   assert_true(
     items[10].kind
-    is @transcript.Assistant(
+    is Assistant(
       calls=[{ name: "dynamic__read", outcome: Pending(..), .. }],
       ..
     ),
   )
   assert_true(
-    items[11].kind
-    is @transcript.Assistant(calls=[{ outcome: Pending(..), .. }], ..),
+    items[11].kind is Assistant(calls=[{ outcome: Pending(..), .. }], ..),
   )
 }

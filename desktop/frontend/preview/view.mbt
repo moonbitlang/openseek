@@ -87,7 +87,7 @@ pub fn toolbar_view(page : PageState, actions : ToolbarActions) -> @html.Html {
       icon(icon_sync),
     ),
     @html.input(
-      input_type=@html.InputType::Text,
+      input_type=Text,
       value=page.input,
       placeholder="Enter a URL",
       on_input=actions.input,

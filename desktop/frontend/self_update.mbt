@@ -117,12 +117,12 @@ priv enum UpdateCheck {
 ///|
 fn UpdateCheck::from_reply(reply : @protocol.CheckUpdateReply) -> UpdateCheck {
   match reply {
-    @protocol.UpToDate => CheckUpToDate
-    @protocol.Available(version~, installable~, unavailable_reason~) =>
+    UpToDate => CheckUpToDate
+    Available(version~, installable~, unavailable_reason~) =>
       CheckFound(version~, installable~, unavailable_reason~)
-    @protocol.Unreachable(reason~) => CheckUnreachable(reason~)
-    @protocol.Malformed(reason~) => CheckMalformed(reason~)
-    @protocol.Broken(version~, reason~) => CheckBroken(version~, reason~)
+    Unreachable(reason~) => CheckUnreachable(reason~)
+    Malformed(reason~) => CheckMalformed(reason~)
+    Broken(version~, reason~) => CheckBroken(version~, reason~)
   }
 }
 
@@ -134,11 +134,7 @@ fn Model::fetch_app_info(self : Model, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   guard self.is_desktop else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let reply = @interop.bridge_request(
-        Local,
-        @commands.app_info,
-        @protocol.EmptyPayload::NoPayload,
-      ) catch {
+      let reply = @interop.bridge_request(Local, @commands.app_info, NoPayload) catch {
         _ => return
       }
       scheduler.add(dispatch(AppInfoLoaded(reply.version)))
@@ -159,7 +155,7 @@ fn check_for_updates(dispatch : @cmd.Emit[Msg], explicit~ : Bool) -> @cmd.Cmd {
         let reply = @interop.bridge_request(
           Local,
           @commands.update_check,
-          @protocol.EmptyPayload::NoPayload,
+          NoPayload,
         )
         UpdateCheck::from_reply(reply)
       } catch {
@@ -179,11 +175,7 @@ fn download_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       ignore(
-        @interop.bridge_request(
-          Local,
-          @commands.update_download,
-          @protocol.EmptyPayload::NoPayload,
-        ) catch {
+        @interop.bridge_request(Local, @commands.update_download, NoPayload) catch {
           error => {
             scheduler.add(
               dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),

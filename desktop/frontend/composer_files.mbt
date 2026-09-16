@@ -4,8 +4,7 @@
 /// may offer it as a destination.
 fn Model::live_editor_files(self : Model) -> Array[@pathx.Relative] {
   @dock.file_paths(self.dock).filter(path => {
-    !(self.file_panel.docs.get(path) is Some(doc) &&
-    doc.state is @fileeditor.TabDeleted)
+    !(self.file_panel.docs.get(path) is Some(doc) && doc.state is TabDeleted)
   })
 }
 
@@ -15,8 +14,8 @@ fn Model::live_editor_files(self : Model) -> Array[@pathx.Relative] {
 /// during index refreshes.
 fn Model::file_search(self : Model) -> @files.Search {
   let indexed = match self.file_panel.index {
-    @fileeditor.IndexReady(files~, ..) => files
+    IndexReady(files~, ..) => files
     _ => []
   }
-  @files.Search(indexed, self.live_editor_files(), @dock.active_file(self.dock))
+  Search(indexed, self.live_editor_files(), @dock.active_file(self.dock))
 }

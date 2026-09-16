@@ -16,4 +16,4 @@ description = "Versioned client for OpenSeek programmatic tool calls."
 
 preferred_target = "native"
 
-warnings = "+missing_doc+test_unqualified_package"
+warnings = "+missing_doc+test_unqualified_package+declaration_implemented+unqualified_local_using+unnecessary_annotation+unnecessary_view_op"

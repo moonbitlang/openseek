@@ -720,7 +720,7 @@ pub fn[Input : Eq] component(
       }
     },
     subscriptions=(state, input, emit) => {
-      let open = open_subscription(emit.map(open => Msg::Open(open)))
+      let open = open_subscription(emit.map(open => Open(open)))
       guard state.menu is Some(menu) else { return open }
       let enabled = resolve(input, menu.target).map(definition => {
         definition.enabled_indices()
@@ -728,14 +728,14 @@ pub fn[Input : Eq] component(
       let focus = focus_subscription(
         menu.target,
         enabled,
-        emit.map((_ : Unit) => Msg::Close),
+        emit.map((_ : Unit) => Close),
       )
       guard enabled is Some(enabled) && !enabled.is_empty() else {
         return @sub.batch([open, focus])
       }
       @sub.batch([
         open,
-        dismiss_subscription(menu.target, emit.map((_ : Unit) => Msg::Close)),
+        dismiss_subscription(menu.target, emit.map((_ : Unit) => Close)),
         focus,
       ])
     },

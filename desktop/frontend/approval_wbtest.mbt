@@ -141,7 +141,7 @@ test "notification badge counts local conversations needing attention" {
   let active = { ..running_conversation(), pending_approval: Some(pending), }
   let background = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-background",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -154,7 +154,7 @@ test "notification badge counts local conversations needing attention" {
   }
   let answered = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-answered",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -162,7 +162,7 @@ test "notification badge counts local conversations needing attention" {
   }
   let finished = {
     ..empty_conversation(
-      @interop.ChannelId::Local,
+      Local,
       "desktop-finished",
       @interop.ChannelId::Local.test_project(),
     ),
@@ -184,7 +184,7 @@ test "notification badge counts local conversations needing attention" {
   }
   assert_eq(model.notification_badge_count(), 3)
   let seen = model.activate(
-    @interop.ChannelId::Local,
+    Local,
     "desktop-finished",
     @interop.ChannelId::Local.test_project(),
   )
@@ -294,12 +294,12 @@ fn runs_loaded_with_approvals(
   model : Model,
   approvals : Array[RecoveredApproval],
 ) -> Msg {
-  let frontier = model.run_snapshot_frontier(@interop.ChannelId::Local)
+  let frontier = model.run_snapshot_frontier(Local)
   let live : Array[String] = [
     for conv in model.conversations if conv.run is Open(run_id~, ..) => run_id
   ]
   FromDevice(
-    @interop.ChannelId::Local,
+    Local,
     RunsLoaded(
       runs=[],
       settled=[],
@@ -342,11 +342,7 @@ test "a decision that never left the page restores the card" {
   assert_eq(answered.notification_badge_count(), 0)
   let (_, restored) = update(
     test_dispatch(),
-    ApprovalAnswerFailed(
-      channel=@interop.ChannelId::Local,
-      session=asked.session_id,
-      id="ap-1",
-    ),
+    ApprovalAnswerFailed(channel=Local, session=asked.session_id, id="ap-1"),
     answered,
   )
   guard restored.active_conversation() is Some(conv) else {
@@ -387,11 +383,7 @@ test "a failure for an older question leaves the current one alone" {
   )
   let (_, unchanged) = update(
     test_dispatch(),
-    ApprovalAnswerFailed(
-      channel=@interop.ChannelId::Local,
-      session=asked.session_id,
-      id="ap-1",
-    ),
+    ApprovalAnswerFailed(channel=Local, session=asked.session_id, id="ap-1"),
     answered,
   )
   guard unchanged.active_conversation() is Some(conv) else {
@@ -564,7 +556,7 @@ test "a session missing from the frontier still gets its question" {
   let (_, resynced) = update(
     test_dispatch(),
     FromDevice(
-      @interop.ChannelId::Local,
+      Local,
       RunsLoaded(
         runs=[],
         settled=[],
@@ -614,7 +606,7 @@ test "a question survives a run handoff inside one snapshot" {
   let (_, resynced) = update(
     test_dispatch(),
     FromDevice(
-      @interop.ChannelId::Local,
+      Local,
       RunsLoaded(
         runs=[
           {
@@ -697,7 +689,7 @@ test "a finished run takes its unanswered question with it" {
   }
   let (_, ended) = update_device_msg(
     test_dispatch(),
-    @interop.ChannelId::Local,
+    Local,
     Finished(run_id~, status="finished", answer=None),
     test_model().replace_conversation(asked),
   )
@@ -726,7 +718,7 @@ test "a finished run leaves a question belonging to another run" {
   }
   let (_, ended) = update_device_msg(
     test_dispatch(),
-    @interop.ChannelId::Local,
+    Local,
     Finished(run_id="r-stale", status="finished", answer=None),
     test_model().replace_conversation(successor),
   )

@@ -80,7 +80,7 @@ fn panel_view(
     items.push(
       @html.span(class="terminal-status", "Waiting for workspace placement…"),
     )
-  } else if ctx.placement is Some(@interop.MissingWorktree(..)) {
+  } else if ctx.placement is Some(MissingWorktree(..)) {
     items.push(
       @html.span(
         class="terminal-status terminal-error",

@@ -37,15 +37,12 @@ fn notification_msg(
       } else {
         let decoded = payload.events.filter_map(item => {
           match item.kind_ {
-            "modify" => Some(@fileeditor.Modified(@pathx.Relative(item.path)))
-            "create" => Some(@fileeditor.Created(@pathx.Relative(item.path)))
-            "remove" => Some(@fileeditor.Removed(@pathx.Relative(item.path)))
+            "modify" => Some(@fileeditor.Modified(Relative(item.path)))
+            "create" => Some(Created(Relative(item.path)))
+            "remove" => Some(Removed(Relative(item.path)))
             "rename" =>
               item.old_path.map(old => {
-                @fileeditor.Renamed(
-                  old=@pathx.Relative(old),
-                  new=@pathx.Relative(item.path),
-                )
+                Renamed(old=Relative(old), new=Relative(item.path))
               })
             _ => None
           }
@@ -146,8 +143,8 @@ fn notification_msg(
         FromDevice(
           channel,
           FilePanel(
-            @fileeditor.Msg::Search(
-              @grep_search.Msg::SemanticProgress(
+            Search(
+              SemanticProgress(
                 root=payload.root,
                 session_key=payload.session_key,
                 generation=payload.generation,
@@ -290,12 +287,12 @@ fn session_changed_msg(
 /// decoded into root messages here alongside connection and window events.
 fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
   match event {
-    @bridge.Event::Notification(channel~, notification~) =>
+    Notification(channel~, notification~) =>
       match notification {
         TerminalOutput(payload) =>
           @terminal.output(channel, payload.id, payload.sequence, payload.data)
         TerminalExit(payload) =>
-          @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
+          SessionExited(channel~, id=payload.id, code=payload.code)
           |> Terminal
           |> dispatch
         _ =>
@@ -305,17 +302,17 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
             @cmd.none
           }
       }
-    @bridge.Event::Unavailable(channel~, message~) =>
+    Unavailable(channel~, message~) =>
       dispatch(FromDevice(channel, BridgeUnavailable(message)))
-    @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
+    ChannelDown(channel~, websocket_epoch~) =>
       dispatch(FromDevice(channel, ChannelDown(websocket_epoch~)))
-    @bridge.Event::BrowserEvent(payload~) =>
+    BrowserEvent(payload~) =>
       if browser_event_msg(payload) is Some(msg) {
         dispatch(msg)
       } else {
         @cmd.none
       }
-    @bridge.Event::MenuCommand(command_id~) =>
+    MenuCommand(command_id~) =>
       if command_id == @commands.app_open_devtools.name() {
         dispatch(AppDeveloperToolsRequested)
       } else if command_id == @commands.CloseFocusedMenuCommand {
@@ -323,8 +320,7 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
       } else {
         @cmd.none
       }
-    @bridge.Event::NotificationClicked(run_id~) =>
-      dispatch(NotificationClicked(run_id~))
+    NotificationClicked(run_id~) => dispatch(NotificationClicked(run_id~))
   }
 }
 
@@ -364,7 +360,7 @@ test "Codex app-server notifications route to Codex state" {
   assert_true(
     notification_msg(
       Local,
-      @protocol.Notification::CodexNotification({
+      CodexNotification({
         "method": "turn/completed",
         "params": { "threadId": "t1" },
         "generation": 1,
@@ -377,7 +373,7 @@ test "Codex app-server notifications route to Codex state" {
 ///|
 test "skill invalidations are device-scoped catalog events" {
   assert_true(
-    notification_msg(Remote("d1"), @protocol.Notification::SkillsChanged)
+    notification_msg(Remote("d1"), SkillsChanged)
     is Some(FromDevice(Remote("d1"), SkillsChanged)),
   )
 }
@@ -387,54 +383,37 @@ test "update download notifications control only the local desktop flow" {
   assert_true(
     notification_msg(
       Local,
-      @protocol.Notification::UpdateDownloadProgress({
-        downloaded_bytes: 42,
-        total_bytes: Some(100),
-      }),
+      UpdateDownloadProgress({ downloaded_bytes: 42, total_bytes: Some(100), }),
     )
     is Some(UpdateDownloadProgress(downloaded_bytes=42, total_bytes=Some(100))),
   )
   assert_true(
-    notification_msg(
-      Local,
-      @protocol.Notification::UpdateDownloaded({ version: "test", }),
-    )
+    notification_msg(Local, UpdateDownloaded({ version: "test", }))
     is Some(UpdateDownloaded),
   )
   assert_true(
     notification_msg(
       Local,
-      @protocol.Notification::UpdateDownloadFailed({
-        message: "digest mismatch",
-      }),
+      UpdateDownloadFailed({ message: "digest mismatch", }),
     )
     is Some(UpdateFailed(message="digest mismatch")),
   )
   assert_true(
     notification_msg(
       Local,
-      @protocol.Notification::UpdateDownloadProgress({
-        downloaded_bytes: -1,
-        total_bytes: None,
-      }),
+      UpdateDownloadProgress({ downloaded_bytes: -1, total_bytes: None, }),
     )
     is None,
   )
   assert_true(
     notification_msg(
       Remote("d1"),
-      @protocol.Notification::UpdateDownloadProgress({
-        downloaded_bytes: 42,
-        total_bytes: None,
-      }),
+      UpdateDownloadProgress({ downloaded_bytes: 42, total_bytes: None, }),
     )
     is None,
   )
   assert_true(
-    notification_msg(
-      Remote("d1"),
-      @protocol.Notification::UpdateDownloaded({ version: "test", }),
-    )
+    notification_msg(Remote("d1"), UpdateDownloaded({ version: "test", }))
     is None,
   )
 }
@@ -445,7 +424,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
   assert_true(
     notification_msg(
       channel,
-      @protocol.Notification::FsChanged({
+      FsChanged({
         root: "/work/project",
         baseline: true,
         events: [],
@@ -462,7 +441,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
   assert_true(
     notification_msg(
       channel,
-      @protocol.Notification::FsChanged({
+      FsChanged({
         root: "/work/project",
         baseline: false,
         events: [
@@ -500,7 +479,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
   assert_true(
     notification_msg(
       channel,
-      @protocol.Notification::FsWatchFailed({
+      FsWatchFailed({
         root: "/work/project",
         message: "File watching stopped",
         generation: "page-a:7",
@@ -524,7 +503,7 @@ test "file-panel pushes carry their channel; auth.changed is Local-only" {
   assert_true(
     notification_msg(
       channel,
-      @protocol.Notification::AuthChanged({
+      AuthChanged({
         connected: false,
         server_url: None,
         managed_by_env: None,
@@ -784,7 +763,7 @@ fn session_event_msg(
 ///|
 fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
   guard !payload.session.is_empty() else { return None }
-  if payload.event.event is @wire.JobChanged(..) {
+  if payload.event.event is JobChanged(..) {
     return Some(JobsChanged(payload.session))
   }
   guard @transcript.decode_engine_event(payload.event) is Some(event) else {
@@ -841,7 +820,7 @@ fn diagnostics_msg(
   guard @resource.of_path(channel, payload.root) is Some(root) else {
     return None
   }
-  let absolute = @resource.join_relative(root, @pathx.Relative(payload.path))
+  let absolute = @resource.join_relative(root, Relative(payload.path))
   Some(
     DiagnosticsPublished(channel~, absolute~, diagnostics=payload.diagnostics),
   )
@@ -1005,7 +984,7 @@ async fn refresh_sessions_into(
   let reply = @interop.bridge_request(
     channel,
     @commands.session_list,
-    @protocol.EmptyPayload::NoPayload,
+    NoPayload,
   ) catch {
     error => {
       scheduler.add(dispatch(SessionsFailed(@interop.bridge_error_text(error))))
@@ -1543,11 +1522,7 @@ fn apply_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       // Self-update always targets the page's own desktop host, never a
       // focused remote device.
       ignore(
-        @interop.bridge_request(
-          Local,
-          @commands.update_apply,
-          @protocol.EmptyPayload::NoPayload,
-        ) catch {
+        @interop.bridge_request(Local, @commands.update_apply, NoPayload) catch {
           error => {
             scheduler.add(
               dispatch(UpdateFailed(message=@interop.bridge_error_text(error))),
@@ -1587,7 +1562,7 @@ fn open_codex_config(
       let _ : @protocol.EmptyReply = @interop.codex_request(
         channel,
         @commands.codex_config_open,
-        @protocol.EmptyPayload::NoPayload,
+        NoPayload,
       ) catch {
         error => {
           scheduler.add(

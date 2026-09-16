@@ -3,7 +3,7 @@ fn auto_fold_policy_model(
   display_name : String,
   language_id : String,
 ) -> @model.TextModel {
-  @model.TextModel(
+  TextModel(
     try! @common.Uri::from(
       scheme="inmemory",
       authority="auto-fold-policy",

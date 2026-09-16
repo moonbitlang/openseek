@@ -35,7 +35,7 @@ fn fetch_archived(
       let reply = @interop.bridge_request(
         channel,
         @commands.session_list_archived,
-        @protocol.EmptyPayload::NoPayload,
+        NoPayload,
       ) catch {
         _ => return
       }

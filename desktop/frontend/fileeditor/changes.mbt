@@ -23,8 +23,8 @@ fn ChangeKind::parse(value : String) -> ChangeKind {
 fn ChangedFile::from_reply(change : @protocol.GitChange) -> ChangedFile? {
   guard !change.path.is_empty() else { return None }
   Some({
-    path: @pathx.Relative(change.path),
-    original_path: change.original_path.map(path => @pathx.Relative(path)),
+    path: Relative(change.path),
+    original_path: change.original_path.map(path => Relative(path)),
     index_status: change.index_status,
     worktree_status: change.worktree_status,
     kind: ChangeKind::parse(change.kind),
@@ -275,8 +275,8 @@ test "changed-file replies decode presentation categories and rename sources" {
     ChangedFile::from_reply(change)
     is Some(
       {
-        path: @pathx.Relative("new.mbt"),
-        original_path: Some(@pathx.Relative("old.mbt")),
+        path: Relative("new.mbt"),
+        original_path: Some(Relative("old.mbt")),
         index_status: "R",
         worktree_status: " ",
         kind: ChangeRenamed,
@@ -314,7 +314,7 @@ test "task baselines win over moving HEAD with a legacy fallback" {
 ///|
 test "deleted rows use baseline previews while non-file rows stay inert" {
   let deleted : ChangedFile = {
-    path: @pathx.Relative("removed.mbt"),
+    path: Relative("removed.mbt"),
     original_path: None,
     index_status: " ",
     worktree_status: "D",
@@ -347,7 +347,7 @@ test "deleted rows use baseline previews while non-file rows stay inert" {
   assert_false(
     {
       ..deleted,
-      path: @pathx.Relative("nested/"),
+      path: Relative("nested/"),
       index_status: "?",
       worktree_status: "?",
       kind: ChangeUntracked,

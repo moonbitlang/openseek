@@ -1,6 +1,6 @@
 ///|
 fn codelens_test_model() -> @model.TextModel {
-  @model.TextModel(
+  TextModel(
     try! @common.Uri::parse("openseek://local/ws/src/main.mbt"),
     "main.mbt",
     "moonbit",
@@ -24,7 +24,7 @@ test "Moon IDE CodeLens accepts only exact source ranges and the Source model" {
       start: { line: 0, character: 7, },
       end: { line: 0, character: 12, },
     }),
-    Some(@common.Range(1, 8, 1, 13)),
+    Some(Range(1, 8, 1, 13)),
   )
   let invalid : Array[@protocol.LspRange] = [
     { start: { line: -1, character: 0, }, end: { line: 0, character: 0, }, },

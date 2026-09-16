@@ -43,7 +43,7 @@ test "Codex threads nest under their registered project row" {
     },
   })
   let context : @codex.SidebarContext = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     selected: true,
     registered_projects: ["/work/openseek"],
   }
@@ -60,16 +60,16 @@ test "Codex threads nest under their registered project row" {
 
 ///|
 test "a selected Codex draft activates its project without a child row" {
-  let dispatch : @cmd.Emit[@codex.Msg] = @cmd.Emit(_ => @cmd.none)
+  let dispatch : @cmd.Emit[@codex.Msg] = Emit(_ => @cmd.none)
   let (_, state) = @codex.update(
     dispatch,
     @codex.Msg::start_draft("draft-1", "/work/openseek"),
-    @codex.State::State(),
-    @interop.ChannelId::Local,
+    State(),
+    Local,
     _ => @cmd.none,
   )
   let selected : @codex.SidebarContext = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     selected: true,
     registered_projects: ["/work/openseek"],
   }
@@ -102,14 +102,14 @@ test "unregistered Codex roots remain direct conversation inputs" {
     },
   })
   let context : @codex.SidebarContext = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     selected: true,
     registered_projects: [],
   }
   assert_eq(state.project_conversations(context, "/work/scratch").length(), 0)
   let entries = state.loose_entries(context)
   assert_eq(entries.length(), 1)
-  guard entries[0] is @section.Conversation(row) else {
+  guard entries[0] is Conversation(row) else {
     fail("expected a direct Codex conversation input")
   }
   assert_false(row.nested)

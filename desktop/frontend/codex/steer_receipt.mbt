@@ -195,5 +195,5 @@ fn State::with_observed_steer_item(
 fn CodexSteerReceipt::transcript_item(
   self : CodexSteerReceipt,
 ) -> @transcript.TranscriptItem {
-  { kind: @transcript.User(self.submitted.prompt()), ts: None, sequence: None, }
+  { kind: User(self.submitted.prompt()), ts: None, sequence: None, }
 }

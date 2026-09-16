@@ -168,16 +168,16 @@ let viewer_state : ViewerHost = {
   mbti_diagram_viewports: None,
   package_graph: None,
   package_diagram_viewports: None,
-  diff_options: @viewer.DiffEditorOptions(
-    editor_options=@viewer.ViewerOptions(
+  diff_options: DiffEditorOptions(
+    editor_options=ViewerOptions(
       theme="light",
       soft_wrap=true,
       font_family=DefaultEditorFontFamily,
       font_size=DefaultEditorFontSize,
     ),
-    layout=@viewer.SideBySide,
+    layout=SideBySide,
     automatic_inline=false,
-    diff_word_wrap=@viewer.Off,
+    diff_word_wrap=Off,
     render_markdown_comments=false,
   ),
   point_range_highlight: None,
@@ -350,9 +350,9 @@ fn uses_moon_mod_presentation(name : String) -> Bool {
 ///|
 fn markdown_resource_kind(name : String) -> @viewer.MarkdownResourceKind {
   if name.to_lower().has_suffix(".mbt.md") {
-    @viewer.MoonBitMarkdown
+    MoonBitMarkdown
   } else {
-    @viewer.OrdinaryMarkdown
+    OrdinaryMarkdown
   }
 }
 
@@ -388,7 +388,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         let viewer = @viewer.Viewer::create(
           host,
           services=services.viewer_services,
-          options=@viewer.ViewerOptions(
+          options=ViewerOptions(
             theme=viewer_state.theme,
             placeholder="Select a file to view",
             font_family=viewer_state.font_family,
@@ -407,9 +407,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           viewer.create_decorations_collection(),
         )
         services.feedback.on_did_add_feedback(event => {
-          guard event.feedback.kind is @agent_feedback_api.UserReview else {
-            return
-          }
+          guard event.feedback.kind is UserReview else { return }
           if semantic_feedback_model_projection(event.feedback.resource)
             is Some(projection) {
             let range = project_semantic_feedback_range(
@@ -505,7 +503,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           @viewer.MarkdownViewer::create(
             markdown_host,
             services=services.viewer_services,
-            options=@viewer.MarkdownViewerOptions(
+            options=MarkdownViewerOptions(
               theme=viewer_state.theme,
               placeholder="Select a Markdown file to view",
             ),
@@ -595,7 +593,7 @@ fn apply_review_diff_layout(layout : ReviewDiffLayout) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     let editor_layout = match layout {
       ReviewSideBySide => @viewer.SideBySide
-      ReviewInline => @viewer.Inline
+      ReviewInline => Inline
     }
     let options = viewer_state.diff_options.with_layout(editor_layout)
     viewer_state.diff_options = options
@@ -608,7 +606,7 @@ fn apply_review_diff_layout(layout : ReviewDiffLayout) -> @cmd.Cmd {
 
 ///|
 fn current_diff_pane_options() -> @viewer.ViewerOptions {
-  @viewer.ViewerOptions(
+  ViewerOptions(
     theme=viewer_state.theme,
     soft_wrap=true,
     font_family=viewer_state.font_family,
@@ -838,7 +836,7 @@ fn show_diff_comparison(
     modified_content,
   )
   let previous = diff_editor.set_model(
-    Some(@viewer.DiffEditorModel(original_model, modified_model)),
+    Some(DiffEditorModel(original_model, modified_model)),
   )
   viewer_state.review_diff_inputs = Some((original_content, modified_content))
   // Match VS Code's TextDiffEditor host policy: a genuinely new comparison
@@ -932,7 +930,7 @@ fn show_history_diff_in_viewer(
       modified_content,
     )
     let previous = diff_editor.set_model(
-      Some(@viewer.DiffEditorModel(original_model, modified_model)),
+      Some(DiffEditorModel(original_model, modified_model)),
     )
     // Historical comparisons are fresh DiffEditor inputs too. Equal pairs
     // return above, preserving the reader's position just like a restored VS
@@ -970,13 +968,8 @@ fn navigation_target_presentation(
   let point = range.is_empty()
   let decoration : @model.ModelDeltaDecoration = if point {
     {
-      range: @common.Range(
-        range.start_line_number,
-        1,
-        range.start_line_number,
-        1,
-      ),
-      options: @model.ModelDecorationOptions(
+      range: Range(range.start_line_number, 1, range.start_line_number, 1),
+      options: ModelDecorationOptions(
         "rangeHighlight",
         is_whole_line=true,
         description="point-range-line-highlight",
@@ -985,7 +978,7 @@ fn navigation_target_presentation(
   } else {
     {
       range,
-      options: @model.ModelDecorationOptions(
+      options: ModelDecorationOptions(
         "symbolHighlight",
         description="symbol-navigate-action-highlight",
       ),
@@ -1004,12 +997,12 @@ fn search_match_decorations(
 ) -> Array[@model.ModelDeltaDecoration] {
   ranges.map(range => {
     range,
-    options: @model.ModelDecorationOptions(
+    options: ModelDecorationOptions(
       "findMatch",
       inline_class_name="findMatchInline",
       z_index=10,
       show_if_collapsed=true,
-      stickiness=@model.NeverGrowsWhenTypingAtEdges,
+      stickiness=NeverGrowsWhenTypingAtEdges,
       description="search-find-match",
     ),
   })
@@ -1090,7 +1083,7 @@ fn mount_generated_svg_viewport(
   wrapper.set_attribute("data-diagram-language", "uml")
   wrapper.set_inner_html(svg)
   host.append_child(wrapper.as_node())
-  @diagram_viewport.DiagramViewports(host, () => (), fill_container=true)
+  DiagramViewports(host, () => (), fill_container=true)
 }
 
 ///|
@@ -1363,12 +1356,7 @@ fn show_file_in_viewer(
         viewer.set_model(None)
         dispose_source_model(code_model)
         let previous = markdown_viewer.set_model(
-          Some(
-            @viewer.MarkdownViewerModel(
-              text_model,
-              markdown_resource_kind(name),
-            ),
-          ),
+          Some(MarkdownViewerModel(text_model, markdown_resource_kind(name))),
         )
         match previous {
           Some(previous) => dispose_markdown_model(previous)
@@ -1463,12 +1451,7 @@ fn show_file_in_viewer(
         if !same_document || annotation is Some(_) {
           services.feedback.clear_feedback(uri)
           if annotation is Some(text) && range is Some(range) {
-            services.feedback.add_feedback(
-              uri,
-              range,
-              text,
-              state=@agent_feedback_api.Submitted,
-            )
+            services.feedback.add_feedback(uri, range, text, state=Submitted)
             |> ignore
           }
         }
