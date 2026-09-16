@@ -1,7 +1,9 @@
 # Bundled resources
 
-This directory is checked in and copied into the packaged toolchain's `share/`.
-`OPENSEEK_REFERENCES` points to that installed copy.
+This directory is checked in and installed as `share/` beside OpenSeek's `bin/`.
+OpenSeek resolves it from its current executable (or loaded Wasm module), without
+an environment override or a working-directory fallback. The prompt's
+`Bundled resources` field gives the resolved absolute path.
 
 - `doc/moonbit/`: official MoonBit documentation from the upstream markdown build.
 - `doc/moonbit.commit`: the exact upstream build commit used for the snapshot.
@@ -32,5 +34,9 @@ upstream files except browser presentation assets and upstream ignore rules.
 The updater also regenerates the static system prompt's directory layout.
 Review and commit the documentation diff, `doc/moonbit.commit`, and generated prompt.
 After manually changing resource directories, run `just prompt`.
-Packaging reads this checked-in tree without downloading documentation; its
-content hash invalidates the prepared resource cache when any file changes.
+Packaging copies this checked-in tree directly into the application, independently
+of the MoonBit toolchain cache. It does not download documentation.
+
+For local CLI development, run `just cli` and use `.tmp/openseek/bin/openseek`
+(`openseek.exe` on Windows). This stages the same `bin/` and `share/` layout.
+Evaluation runners should receive this staged executable via `--engine`.

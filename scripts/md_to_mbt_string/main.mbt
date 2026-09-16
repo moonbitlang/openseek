@@ -119,7 +119,7 @@ fn example_link_target(line : StringView) -> String? {
 ///|
 /// Expand before stripping Markdown comments or emitting the static string.
 async fn expand_resource_layout(markdown : String, root : String) -> String {
-  let marker = "{{OPENSEEK_REFERENCES_LAYOUT}}"
+  let marker = "{{BUNDLED_RESOURCES_LAYOUT}}"
   if !markdown.contains(marker) {
     return markdown
   }
@@ -484,7 +484,7 @@ async test "resource layout is sorted, directory-only, skips build output and tu
     @fs.mkdir("\{root}/workflow/_build/wasm", recursive=true)
     @fs.mkdir("\{root}/doc/moonbit/gmachine-tutorial")
     @fs.write_file("\{root}/doc/moonbit/index.md", "docs")
-    let template = "before\n{{OPENSEEK_REFERENCES_LAYOUT}}\nafter"
+    let template = "before\n{{BUNDLED_RESOURCES_LAYOUT}}\nafter"
     inspect(
       expand_resource_layout(template, root),
       content=(

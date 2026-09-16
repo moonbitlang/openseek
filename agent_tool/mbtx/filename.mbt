@@ -27,7 +27,7 @@ fn resolve_filename(
     }
     guard references is Some(root) && !root.trim().is_empty() else {
       fail(
-        "bundled filename \{filename} needs OPENSEEK_REFERENCES; bundled workflows are unavailable in this environment. Use a workspace filename or inline source instead",
+        "bundled filename \{filename} needs bundled resources beside the executable; bundled workflows are unavailable in this environment. Use a workspace filename or inline source instead",
       )
     }
     @workspace_path.resolve(root, "workflow/\{name}")
@@ -64,7 +64,8 @@ test "only the builtin namespace selects bundled workflows" {
   assert_false(is_bundled_filename("C:\\scripts\\check.mbtx"))
   for references in [None, Some("  ")] {
     try resolve_filename("/project", "@builtin/check.mbtx", references) catch {
-      error => assert_true(error.to_string().contains("OPENSEEK_REFERENCES"))
+      error =>
+        assert_true(error.to_string().contains("needs bundled resources"))
     } noraise {
       _ => fail("missing resources must not select a workspace file")
     }

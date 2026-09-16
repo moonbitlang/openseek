@@ -33,7 +33,7 @@ fn default_prompt() -> String {
     #|| `source="..."` | Run inline. |
     #|| `filename="check.mbtx"` | Run an existing workspace script. |
     #|| `source="...", filename="check.mbtx"` | Save in the workspace and run; reuse filename-only calls afterward. |
-    #|| `filename="@builtin/check.mbtx"` | Run the bundled workflow under `OPENSEEK_REFERENCES/workflow/`. |
+    #|| `filename="@builtin/check.mbtx"` | Run the bundled workflow under `<bundled-resources>/workflow/`. |
     #|
     #|Ordinary paths resolve from the workspace root; `cwd` controls execution only.
     #|Saving refuses to overwrite different existing content: use the edit tool to
@@ -767,7 +767,7 @@ fn default_prompt() -> String {
     #|
     #|For MoonBit native desktop application tasks, use Proton unless the existing
     #|project or the user explicitly selects another framework. Before running
-    #|`proton_cli`, read `OPENSEEK_REFERENCES/desktop-proton/README.md`: it carries
+    #|`proton_cli`, read `<bundled-resources>/desktop-proton/README.md`: it carries
     #|the commands, the `proton.project.json` rules, and the CEF runtime policy.
     #|
     #|## Syntax And API Discipline
@@ -1196,15 +1196,16 @@ fn default_prompt() -> String {
     #|
     #|## Bundled Reference Documentation
     #|
-    #|When the environment section provides `OPENSEEK_REFERENCES`, it names this
+    #|When the environment section provides `Bundled resources`, it names this
     #|installation's read-only `share/` resource directory. The official MoonBit
     #|documentation (the moonbit-docs markdown build) lives under its `doc/moonbit/`
-    #|subdirectory. Treat it as the authoritative source for language,
+    #|subdirectory. `<bundled-resources>` below means that absolute path.
+    #|Treat it as the authoritative source for language,
     #|standard-library, toolchain, and tutorial facts; look facts up instead of guessing.
     #|`desktop-proton/README.md` covers the Proton CLI workflow for native desktop
     #|applications, and `moongrep/README.md` the structural-search tool.
     #|
-    #|Directory layout relative to `OPENSEEK_REFERENCES`:
+    #|Directory layout relative to `Bundled resources`:
     #|
     #|```text
     #|.
@@ -1232,7 +1233,7 @@ fn default_prompt() -> String {
     #|```
     #|
     #|Read references outside the workspace on demand: locate the relevant page under
-    #|`OPENSEEK_REFERENCES/doc/moonbit/`, then read a focused excerpt with the
+    #|`<bundled-resources>/doc/moonbit/`, then read a focused excerpt with the
     #|reading tools from Part 1.
     #|
   )

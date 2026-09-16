@@ -303,8 +303,6 @@ class Build {
     await this.commandRun("tar", ["-xf", core, "-C", join(seed, "lib")]);
     await rm(join(seed, "lib/core/_build"), { recursive: true, force: true });
 
-    const resourceHash = await stageResources(join(this.repo, "share"), join(seed, "share"));
-
     if (this.command !== "windows") await this.commandRun("chmod", ["-R", "+x", join(seed, "bin")]);
     const compiler = join(seed, `bin/moonc${this.command === "windows" ? ".exe" : ""}`);
     const actual = (await this.commandOutput(compiler, ["-v"])).trim().split(/\s+/)[0].replace(/^v/, "");
@@ -315,7 +313,7 @@ class Build {
     }
     await writeFile(
       join(seed, ".openseek-moonbit-seed-version"),
-      `${version} resources=${resourceHash}\n`,
+      `${version}\n`,
     );
     return { rg, seed };
   }
@@ -333,6 +331,8 @@ class Build {
     await this.sharedWeb(join(root, "web"));
     const suffix = this.command === "windows" ? ".exe" : "";
     await cp(engine, join(root, `bin/openseek${suffix}`));
+    // OpenSeek locates resources relative to its own executable.
+    await stageResources(join(this.repo, "share"), join(root, "share"));
     await cp(join(vendors.rg, `rg${suffix}`), join(root, `bin/rg${suffix}`));
     await cp(join(vendors.rg, "LICENSE-MIT"), join(root, "licenses/ripgrep/LICENSE-MIT"));
     await cp(join(vendors.rg, "UNLICENSE"), join(root, "licenses/ripgrep/UNLICENSE"));

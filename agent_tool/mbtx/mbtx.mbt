@@ -332,26 +332,24 @@ async fn execute(
       (source, filename, path)
     }
     File(filename) => {
-      let path = resolve_filename(
-        workspace_root,
-        filename,
-        @env.get_env_var("OPENSEEK_REFERENCES"),
-      ) catch {
+      // Resolve once for both namespace lookup and its read-only boundary.
+      // Ordinary workspace scripts do not depend on installation resources.
+      let (path, resources) = try {
+        let resources = if is_bundled_filename(filename) {
+          @resources.directory()
+        } else {
+          None
+        }
+        (resolve_filename(workspace_root, filename, resources), resources)
+      } catch {
+        error if @async.is_being_cancelled() => raise error
         error =>
           return @agent_tool.respond(
             "error: mbtx \{@tool_error.failure_message("\{error}")}",
             is_error=true,
           )
       }
-      let source = read_script_snapshot(
-        file_state,
-        path,
-        if is_bundled_filename(filename) {
-          @env.get_env_var("OPENSEEK_REFERENCES")
-        } else {
-          None
-        },
-      ) catch {
+      let source = read_script_snapshot(file_state, path, resources) catch {
         error if @async.is_being_cancelled() => raise error
         error => {
           let hint = if is_bundled_filename(filename) {
@@ -1652,7 +1650,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
             {
               "type": "string",
               "minLength": 1,
-              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx resolves under OPENSEEK_REFERENCES/workflow/. Alone: read and run. With source: save and run inside the workspace, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
+              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx resolves under <bundled-resources>/workflow/. Alone: read and run. With source: save and run inside the workspace, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
             },
           ),
           (
@@ -1841,14 +1839,14 @@ fn description(
     #|The script runs on wasm. Import "moonbitlang/core/env" and read
     #|`@env.args()[1:]` to skip the executable name.
     #|Arguments are passed verbatim, without shell expansion or splitting.
-    #|When OPENSEEK_REFERENCES is available, these scripts are already bundled:
+    #|When bundled resources are available, these scripts are already bundled:
     #|Read text files with {"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}.
     #|Selectors: path, path:start, path:start:end (inclusive, 1-based); batch in args.
     #|Use ["--literal","name:123"] for numeric-colon filenames, and "--" before
     #|option-like filenames. Headings, numbered lines and footers report each file,
     #|including empty files; errors fail the call but remaining files still return.
     #|Follow truncated/skipped_files with focused reads. args=["--help"] gives budgets.
-    #|Without OPENSEEK_REFERENCES, use a bounded inline @fs.read_file program.
+    #|Without bundled resources, use a bounded inline @fs.read_file program.
     #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
     #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
     #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).

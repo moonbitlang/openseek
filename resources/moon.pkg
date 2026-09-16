@@ -1,0 +1,8 @@
+import {
+  "bobzhang/openseek/env" @exe,
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
+  "moonbitlang/x/path",
+}
+
+supported_targets = "+native+wasm"

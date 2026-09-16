@@ -38,16 +38,15 @@ inspect *args:
     moon run inspect -- {{ args }}
 
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
-test: test-moon test-cram test-turn-finish test-workflows
+test: test-moon test-cram test-turn-finish test-workflows test-resources
 
 # Run the offline CLI documentation tests (Git Bash on Windows).
 test-cram:
     moon cram test tests/cram --shell '{{ CRAM_SHELL }}'
 
 # Real CLI lifecycle regression with an offline scripted model.
-test-turn-finish:
-    moon build cmd/openseek --target native
-    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+test-turn-finish: cli
+    moon run tests/integration/turn_finish.mbtx .tmp/openseek/bin/{{ if os() == "windows" { "openseek.exe" } else { "openseek" } }}
 
 test-moon:
     moon test --target native
@@ -101,3 +100,15 @@ viz-test-browser:
 # Exercise bundled agent workflows against an offline child contract.
 test-workflows:
     moon run tests/integration/workflows
+
+# Build a CLI with executable-relative docs and workflows for local use/evals.
+cli:
+    moon build cmd/openseek --target native
+    node scripts/stage-cli.mjs _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+
+# Exercise copied native and Wasm programs independently of cwd and environment.
+test-resources:
+    moon build tests/integration/resources --target native
+    node tests/integration/resources.mjs _build/native/debug/build/bobzhang/openseek/tests/integration/resources/resources.exe native
+    moon build tests/integration/resources --target wasm
+    node tests/integration/resources.mjs _build/wasm/debug/build/bobzhang/openseek/tests/integration/resources/resources.wasm wasm

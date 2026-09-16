@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { stageResources } from "./resources.mjs";
 
-test("package checked-in docs and workflows; edits change the payload stamp", async () => {
+test("package checked-in docs and workflows; edits change the resource snapshot", async () => {
   const temp = await mkdtemp(join(tmpdir(), "openseek-resources-"));
   try {
     const source = fileURLToPath(new URL("../../share/", import.meta.url));

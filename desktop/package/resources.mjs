@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { cp, readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-// Hash names and bytes in stable order, so any checked-in resource change
-// refreshes the prepared payload even when the compiler version is unchanged.
+// Validate and copy the installation resource tree. The returned content hash
+// identifies the copied snapshot independently of the MoonBit toolchain.
 export async function stageResources(source, destination) {
   for (const entry of ["doc/moonbit/index.md", "doc/moonbit/language", "doc/moonbit/toolchain", "workflow"]) {
     await stat(join(source, entry));

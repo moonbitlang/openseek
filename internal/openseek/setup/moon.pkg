@@ -1,4 +1,5 @@
 import {
+  "bobzhang/openseek/resources",
   "bobzhang/openseek/agent_session",
   "bobzhang/openseek/agent_skill",
   "moonbitlang/core/argparse",

@@ -1,17 +1,6 @@
 ///|
-/// Run with OPENSEEK_REFERENCES=<checkout>/share to exercise the public
-/// namespace; otherwise use this checkout's script, never another installation.
-async fn read_workflow_filename() -> String {
-  if @env.get_env_var("OPENSEEK_REFERENCES") == Some(@fs.realpath("share")) {
-    "@builtin/read.mbtx"
-  } else {
-    @fs.realpath("share/workflow/read.mbtx")
-  }
-}
-
-///|
 async test "read workflow batches whole files inclusive ranges empty files and EOF" {
-  let filename = read_workflow_filename()
+  let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {
     @vfs.FileSystem({
       "nested/source.mbt": "alpha\nbeta\ngamma\n",
@@ -65,7 +54,7 @@ async test "read workflow batches whole files inclusive ranges empty files and E
 
 ///|
 async test "read workflow continues after distinct file errors and fails the call" {
-  let filename = read_workflow_filename()
+  let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {
     @fs.mkdir("\{ws}/directory")
     @fs.write_file("\{ws}/invalid", b"\xff", create_mode=CreateOrTruncate)
@@ -90,7 +79,7 @@ async test "read workflow continues after distinct file errors and fails the cal
 
 ///|
 async test "read workflow caps Unicode gutters and the whole foreground batch successfully" {
-  let filename = read_workflow_filename()
+  let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {
     @fs.write_file("\{ws}/emoji", "A😀B", create_mode=CreateOrTruncate)
     @fs.write_file(
@@ -148,7 +137,7 @@ async test "read workflow caps Unicode gutters and the whole foreground batch su
 
 ///|
 async test "read workflow errors explain invalid selectors and arguments" {
-  let filename = read_workflow_filename()
+  let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {
     for
       args in [
@@ -176,7 +165,7 @@ async test "read workflow errors explain invalid selectors and arguments" {
 ///|
 #cfg(not(platform="windows"))
 async test "read workflow parses colons from the right and has literal paths" {
-  let filename = read_workflow_filename()
+  let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {
     @fs.write_file(
       "\{ws}/C:\\src\\main.mbt",
@@ -199,7 +188,7 @@ async test "read workflow parses colons from the right and has literal paths" {
 
 ///|
 async test "read workflow reads absolute paths and sandbox wording as ordinary source" {
-  let filename = read_workflow_filename()
+  let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {
     @vfs.with_tmpdir(outside => {
       let path = "\{outside}/sample.mbt"

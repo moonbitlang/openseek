@@ -10,9 +10,6 @@
 pub struct ResolvedToolchain {
   bin_dir : @pathx.Absolute
   moon : @pathx.Absolute
-  /// The bundled share/ resource root: doc/moonbit/ and workflow/.
-  /// External toolchains have none. Advertised as OPENSEEK_REFERENCES.
-  references : @pathx.Absolute?
 }
 
 ///|
@@ -26,7 +23,7 @@ pub struct ResolvedToolchain {
 async fn toolchain_at(bin_dir : @pathx.Absolute) -> ResolvedToolchain? {
   let moon = bin_dir.join("moon" + ExecutableSuffix)
   guard @fsx.is_executable_file(moon.to_path()) else { return None }
-  Some({ bin_dir, moon, references: None, })
+  Some({ bin_dir, moon, })
 }
 
 ///|
@@ -65,17 +62,7 @@ pub async fn resolve_toolchain(
       toolchain_at(bin_dir) is Some(toolchain) else {
       fail("bundled MoonBit toolchain payload is not a complete toolchain")
     }
-    // The seed's `share/` resources came along in the payload copy, so the
-    // reference path is exactly as stable as `moon` itself: the per-user
-    // runtime directory, never the bundle (an AppImage mounts afresh per
-    // launch).
-    let resources = payload.join("share")
-    let references = if @fsx.is_dir(resources) {
-      resources.to_absolute()
-    } else {
-      None
-    }
-    return { ..toolchain, references, }
+    return toolchain
   }
   external_toolchain(path_env?=@env.get("PATH"), home_dir?=@home.dir())
 }

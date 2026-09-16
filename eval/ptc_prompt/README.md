@@ -1,5 +1,12 @@
 # PTC capability and prompt evaluation
 
+Build the candidate with `just cli` and pass the absolute path to
+`.tmp/openseek/bin/openseek` (`openseek.exe` on Windows) as `--engine`.
+Keep its sibling `share/` directory when moving the installation: documentation
+and bundled workflows are resolved relative to the executable, not injected
+through the evaluation environment.
+
+
 A focused, manual evaluation of tool orchestration guidance using the real
 OpenSeek CLI and `deepseek-v4-flash`. It is not a general MoonBit coding
 benchmark. The small Python standard-library runner stages byte-exact fixtures

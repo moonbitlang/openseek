@@ -262,11 +262,20 @@ jobs:
         if: matrix.target == 'native'
         run: moon cram test tests/cram
 
+      - name: Executable-relative resources
+        if: matrix.target != 'js'
+        run: |
+          moon build tests/integration/resources --target ${{ matrix.target }}
+          suffix=exe
+          if [ '${{ matrix.target }}' = wasm ]; then suffix=wasm; fi
+          node tests/integration/resources.mjs "_build/${{ matrix.target }}/debug/build/bobzhang/openseek/tests/integration/resources/resources.$suffix" '${{ matrix.target }}'
+
       - name: Background turn lifecycle (offline CLI)
         if: matrix.target == 'native'
         run: |
           moon build cmd/openseek --target native
-          moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+          node scripts/stage-cli.mjs _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+          moon run tests/integration/turn_finish.mbtx .tmp/openseek/bin/openseek
 
   # cmd/viz_app is a separate MoonBit module and owns its browser test runner.
   # Keep it out of Desktop's recipe so either application can be tested alone.

@@ -42,10 +42,9 @@ def bounded(command, cwd, env, log, timeout, grace=10):
 
 
 def trial_env(workspace):
-    """The engine's environment: credentials inherited, skills and references pinned."""
+    """The engine's environment: credentials inherited and global skills disabled."""
     env = os.environ.copy()
     env['OPENSEEK_GLOBAL_SKILLS_DIR'] = str(workspace / '.no-global-skills')
-    env['OPENSEEK_REFERENCES'] = str(ROOT / 'share')
     return env
 
 

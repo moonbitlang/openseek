@@ -97,7 +97,7 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   filesystem/stdio work.
 - `filename` (string): a `.mbtx` script name or path. Ordinary names, including
   `check.mbtx`, resolve from the workspace root. `@builtin/check.mbtx` resolves
-  under `OPENSEEK_REFERENCES/workflow/`. Other namespaces are reserved for future
+  under `<bundled-resources>/workflow/`. Other namespaces are reserved for future
   use and currently rejected. Paths cannot escape the namespace root, including
   through symlinks. Use `./@builtin/check.mbtx` for a literal workspace path;
   absolute paths remain absolute. There is no fallback between locations.

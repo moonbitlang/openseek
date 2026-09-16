@@ -13,15 +13,15 @@
 
 ## 内置参考文档
 
-环境信息若提供 `OPENSEEK_REFERENCES`，它指向本次安装的只读 `share/` 资源目录。MoonBit 官方文档（moonbit-docs 的 Markdown 构建版）位于其 `doc/moonbit/` 子目录。关于语言、标准库、工具链和教程的事实，以这些文档为准，先查阅再使用。
+环境信息若提供 `Bundled resources`，它指向本次安装的只读 `share/` 资源目录。MoonBit 官方文档（moonbit-docs 的 Markdown 构建版）位于其 `doc/moonbit/` 子目录。下文的 `<bundled-resources>` 表示该绝对路径。关于语言、标准库、工具链和教程的事实，以这些文档为准，先查阅再使用。
 
-相对于 `OPENSEEK_REFERENCES` 的目录结构：
+相对于 `Bundled resources` 的目录结构：
 
 ```text
-{{OPENSEEK_REFERENCES_LAYOUT}}
+{{BUNDLED_RESOURCES_LAYOUT}}
 ```
 
-按需读取工作区外的参考资料：先在 `OPENSEEK_REFERENCES/doc/moonbit/` 下定位相关页面，再按下述方式读取所需片段。
+按需读取工作区外的参考资料：先在 `<bundled-resources>/doc/moonbit/` 下定位相关页面，再按下述方式读取所需片段。
 
 ## 读取文件
 
@@ -36,7 +36,7 @@
 | `source="..."` | 直接运行。 |
 | `filename="check.mbtx"` | 运行工作区中已有的脚本。 |
 | `source="...", filename="check.mbtx"` | 保存到工作区并运行；以后仅传文件名即可复用。 |
-| `filename="@builtin/check.mbtx"` | 运行 `OPENSEEK_REFERENCES/workflow/` 下的内置工作流。 |
+| `filename="@builtin/check.mbtx"` | 运行 `<bundled-resources>/workflow/` 下的内置工作流。 |
 
 普通路径相对于工作区根目录解析；`cwd` 只控制执行目录。保存时不会覆盖内容不同的已有文件：修改已保存的脚本应使用编辑工具。命名空间脚本只读，使用 `@builtin/` 时不得提供 `source`。目前仅支持 `@builtin/`，其他命名空间保留。若要引用工作区中名为 `@builtin` 的真实目录，写作 `./@builtin/check.mbtx`。
 

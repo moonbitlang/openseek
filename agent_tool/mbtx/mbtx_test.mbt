@@ -227,21 +227,12 @@ async test "saving refuses symlinks escaping the workspace" {
 
 ///|
 async test "bundled workflows use cwd and propagate check and test failures" {
-  // Run this test with OPENSEEK_REFERENCES set to this checkout's share/ to
-  // exercise @builtin/ dispatch too. Ordinary suite runs use absolute paths.
-  let references = @fs.realpath("share")
-  async fn workflow_filename(name : String) -> String {
-    if @env.get_env_var("OPENSEEK_REFERENCES") == Some(references) {
-      "@builtin/\{name}"
-    } else {
-      @fs.realpath("share/workflow/\{name}")
-    }
-  }
-  let check_path = workflow_filename("check.mbtx")
-  let test_path = workflow_filename("test.mbtx")
-  let combined_path = workflow_filename("check-test.mbtx")
-  let json_path = workflow_filename("check-json.mbtx")
-  let format_path = workflow_filename("info-fmt.mbtx")
+  // Script behavior is independent of the installed executable layout.
+  let check_path = @fs.realpath("share/workflow/check.mbtx")
+  let test_path = @fs.realpath("share/workflow/test.mbtx")
+  let combined_path = @fs.realpath("share/workflow/check-test.mbtx")
+  let json_path = @fs.realpath("share/workflow/check-json.mbtx")
+  let format_path = @fs.realpath("share/workflow/info-fmt.mbtx")
   @vfs.with_tmpdir(ws => {
     let project = "\{ws}/nested"
     @fs.mkdir(project)
@@ -2118,12 +2109,7 @@ async test "a hosted run is announced before it runs and closed on every exit" {
 
 ///|
 async test "CI monitor bundled entry forwards arguments before querying GitHub" {
-  let references = @fs.realpath("share")
-  let filename = if @env.get_env_var("OPENSEEK_REFERENCES") == Some(references) {
-    "@builtin/ci-watch.mbtx"
-  } else {
-    @fs.realpath("share/workflow/ci-watch.mbtx")
-  }
+  let filename = @fs.realpath("share/workflow/ci-watch.mbtx")
   @vfs.with_tmpdir(ws => {
     let out = run_in(ws, {
       "description": "Show CI monitor help",

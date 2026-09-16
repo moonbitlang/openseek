@@ -2,7 +2,7 @@
 
 These OpenSeek scripts ship in the toolchain payload's `share/workflow/`,
 alongside the official documentation in `share/doc/moonbit/`.
-`OPENSEEK_REFERENCES` points to `share/`; the engine's environment prompt gives
+`Bundled resources` points to `share/`; the engine's environment prompt gives
 this resource root's absolute path.
 
 - `read.mbtx` reads text files with numbered lines and per-file ranges (see below).
@@ -28,7 +28,7 @@ validation commands when they differ from these defaults.
 Scripts use the ordinary mbtx sandbox and approval path. Read them with the
 read workflow to inspect their behavior; save a customized copy in the workspace
 when needed. The bundled copies are installation resources and should not be
-edited. `@builtin/` resolves under `OPENSEEK_REFERENCES/workflow/` and refuses
+edited. `@builtin/` resolves under `<bundled-resources>/workflow/` and refuses
 escaping paths. Ordinary names such as `check.mbtx` resolve from the workspace.
 Missing bundled names do not fall back to workspace files. Other `@namespace/`
 prefixes are reserved and currently rejected. To customize a script, save the

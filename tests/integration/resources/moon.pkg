@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/async",
+  "bobzhang/openseek/resources" @bundled,
+  "bobzhang/openseek/agent_tool/mbtx",
+  "moonbitlang/async/fs",
+}
+
+supported_targets = "+native+wasm"
+
+pkgtype(kind: "executable")

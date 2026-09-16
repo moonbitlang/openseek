@@ -1,4 +1,5 @@
 import {
+  "bobzhang/openseek/resources",
   "bobzhang/openseek/agent_tool/ptc",
   "bobzhang/openseek/agent_tool/internal/uuid",
   "bobzhang/openseek/agent_tool",
@@ -14,7 +15,6 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/core/json",
-  "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async/os_error",
   "bobzhang/openseek_protocol/emit",
