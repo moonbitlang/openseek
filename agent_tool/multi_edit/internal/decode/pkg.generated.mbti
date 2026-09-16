@@ -18,7 +18,7 @@ pub struct MultiEditArgs {
   edits_file : String?
   revert_when_errors_above : Int?
   revert_on_parse_errors : Bool
-  revert_on_warnings : Bool
+  revert_when_warnings_above : Int?
 } derive(@debug.Debug)
 
 pub struct MultiEditItem {

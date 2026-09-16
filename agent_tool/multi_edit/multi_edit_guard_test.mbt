@@ -118,8 +118,41 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       ) else {
       fail("unexpected data: \{shown(reverted.data)}")
     }
-    // Unguarded, the same batch lands and the check line reports the warning.
-    let unguarded = run_multi_edit({
+    // Two introduced warnings against a tolerance of one: rolled back, with
+    // the counts saying by how much.
+    let over = run_multi_edit({
+      "edits": [
+        {
+          "file": path,
+          "old_string": "  len([1, 2, 3]) + len([4])",
+          "new_string": "  let unused = 0\n  let idle = 1\n  len([1, 2, 3]) + len([4])",
+          "start_line": 14,
+        },
+      ],
+      "revert_when_warnings_above": 1,
+    })
+    assert_true(over.is_error, msg=over.content)
+    assert_true(
+      over.content.contains(
+        "reported 2 warning(s) the tree did not have (> revert_when_warnings_above=1)",
+      ),
+      msg=over.content,
+    )
+    guard over.data
+      is Some(
+        {
+          "outcome": "reverted",
+          "introduced_count": { "warnings": Number(2, ..), .. },
+          "removed_count": { "warnings": Number(0, ..), .. },
+          ..
+        }
+      ) else {
+      fail("unexpected data: \{shown(over.data)}")
+    }
+    assert_eq(@fs.read_file(path).text(), after_fix)
+    // Exactly one against a tolerance of one: kept, and the counts still
+    // quantify the delta on a kept batch.
+    let tolerated = run_multi_edit({
       "edits": [
         {
           "file": path,
@@ -128,10 +161,35 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
           "start_line": 14,
         },
       ],
+      "revert_when_warnings_above": 1,
+    })
+    assert_false(tolerated.is_error, msg=tolerated.content)
+    guard tolerated.data
+      is Some(
+        {
+          "outcome": "applied",
+          "introduced_count": { "warnings": Number(1, ..), .. },
+          "removed_count": { "warnings": Number(0, ..), .. },
+          ..
+        }
+      ) else {
+      fail("unexpected data: \{shown(tolerated.data)}")
+    }
+    // Unguarded, a batch lands and the check line reports the tree.
+    let unguarded = run_multi_edit({
+      "edits": [
+        {
+          "file": path,
+          "old_string": "  let unused = 0",
+          "new_string": "  let unused = 0\n  let idle = 1",
+          "start_line": 14,
+        },
+      ],
     })
     assert_false(unguarded.is_error, msg=unguarded.content)
     assert_true(
-      unguarded.content.contains("moon check: ok — 0 errors, 1 warning(s)"),
+      unguarded.content.contains("moon check: ok — 0 errors, 2 warning(s)"),
+      msg=unguarded.content,
     )
     guard unguarded.data
       is Some(
@@ -139,8 +197,8 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
           "outcome": "applied",
           "baseline"? : None,
           "check": {
-            "warning_count": Number(1, ..),
-            "warnings": [{ "code": Number(2, ..), .. }],
+            "warning_count": Number(2, ..),
+            "warnings": [{ "code": Number(2, ..), .. }, ..],
             ..
           },
           ..
@@ -210,6 +268,8 @@ async test "the error guard's data names the verdict and the sites" {
         {
           "reason": "introduced_errors",
           "baseline_error_count": Number(0, ..),
+          "introduced_count": { "errors": Number(1, ..), .. },
+          "removed_count": { "errors": Number(0, ..), .. },
           ..
         }
       ),

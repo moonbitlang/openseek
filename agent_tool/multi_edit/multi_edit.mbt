@@ -782,6 +782,13 @@ async fn revert_guarded_response(
             after,
             writes,
           )
+          // The guarded delta, quantified over the first project (the scope
+          // this decision was made in) — a warning-guarded caller expects
+          // the counts on every outcome.
+          let counts = delta_json(
+            @auto_check.introduced(before.first, after),
+            @auto_check.introduced(after, before.first),
+          )
           return reverted_by_errors(
             writes,
             after,
@@ -789,6 +796,7 @@ async fn revert_guarded_response(
             threshold~,
             restore_failures~,
             evidence~,
+            counts~,
           )
         }
         introduced_errors = Some(introduced)
@@ -1104,6 +1112,7 @@ fn reverted_by_errors(
   threshold~ : Int,
   restore_failures~ : Array[String],
   evidence~ : Comparability,
+  counts? : Map[String, Json],
 ) -> @agent_tool.ToolAction {
   let verdict = evidence.verdict()
   let extra : Map[String, Json] = {
@@ -1117,6 +1126,11 @@ fn reverted_by_errors(
     "new_in_dependents": string_array(evidence.new_in_dependents),
     "new_independent": evidence.new_independent.to_json(),
     "restore_failures": string_array(restore_failures),
+  }
+  if counts is Some(counts) {
+    for key, value in counts {
+      extra[key] = value
+    }
   }
   if verdict is Inconclusive(reason) {
     extra["verdict_reason"] = reason.to_json()
