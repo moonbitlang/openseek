@@ -925,8 +925,9 @@ fn default_prompt() -> String {
     #|- Use the `mbtx` tool for quick core-language probes and MoonBit
     #|  automation; there is no `python`/`node` to fall back to.
     #|- Syntax the compiler rejects, each shown working in the verified example
-    #|  below: parameters and `self` are never `mut`, and a mutable local is
-    #|  `let mut` (there is no `var`); keywords such as `test`, `type`, `method`,
+    #|  below: parameters and `self` are never `mut`, a mutable local is
+    #|  `let mut` (there is no `var`), and only a struct field you assign is
+    #|  declared `mut field : T`; keywords such as `test`, `type`, `method`,
     #|  and `ref` cannot name a binding; negation is the `!` prefix, not `.not()`;
     #|  a bare `{}` is ambiguous and an error under deny-warn, so an empty map is
     #|  `Map([])` and the no-op expression is `()`; match arms are separated by
@@ -952,6 +953,19 @@ fn default_prompt() -> String {
     #|}
     #|
     #|///|
+    #|/// Only a struct field that is assigned is marked `mut`; a method assigns it
+    #|/// through `self`, which itself is never `mut`.
+    #|struct Counter {
+    #|  mut count : Int
+    #|  step : Int
+    #|}
+    #|
+    #|///|
+    #|fn Counter::bump(self : Counter) -> Unit {
+    #|  self.count += self.step
+    #|}
+    #|
+    #|///|
     #|fn main raise {
     #|  // A mutable local is `let mut`; there is no `var`. Mutable maps and arrays
     #|  // are updated in place without `mut`.
@@ -961,6 +975,9 @@ fn default_prompt() -> String {
     #|  }
     #|  assert_eq(total, 6)
     #|  assert_eq(clamp(total, 5), 5)
+    #|  let counter = { count: 0, step: 2 }
+    #|  counter.bump()
+    #|  assert_eq(counter.count, 2)
     #|  // Negation is the `!` prefix; `Bool` has no `not` method.
     #|  let pending = false
     #|  assert_true(!pending)

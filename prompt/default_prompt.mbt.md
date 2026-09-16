@@ -900,8 +900,9 @@ pkgtype(kind: "executable")
 - Use the `mbtx` tool for quick core-language probes and MoonBit
   automation; there is no `python`/`node` to fall back to.
 - Syntax the compiler rejects, each shown working in the verified example
-  below: parameters and `self` are never `mut`, and a mutable local is
-  `let mut` (there is no `var`); keywords such as `test`, `type`, `method`,
+  below: parameters and `self` are never `mut`, a mutable local is
+  `let mut` (there is no `var`), and only a struct field you assign is
+  declared `mut field : T`; keywords such as `test`, `type`, `method`,
   and `ref` cannot name a binding; negation is the `!` prefix, not `.not()`;
   a bare `{}` is ambiguous and an error under deny-warn, so an empty map is
   `Map([])` and the no-op expression is `()`; match arms are separated by

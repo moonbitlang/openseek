@@ -16,6 +16,19 @@ fn clamp(x : Int, limit : Int) -> Int {
 }
 
 ///|
+/// Only a struct field that is assigned is marked `mut`; a method assigns it
+/// through `self`, which itself is never `mut`.
+struct Counter {
+  mut count : Int
+  step : Int
+}
+
+///|
+fn Counter::bump(self : Counter) -> Unit {
+  self.count += self.step
+}
+
+///|
 fn main raise {
   // A mutable local is `let mut`; there is no `var`. Mutable maps and arrays
   // are updated in place without `mut`.
@@ -25,6 +38,9 @@ fn main raise {
   }
   assert_eq(total, 6)
   assert_eq(clamp(total, 5), 5)
+  let counter = { count: 0, step: 2 }
+  counter.bump()
+  assert_eq(counter.count, 2)
   // Negation is the `!` prefix; `Bool` has no `not` method.
   let pending = false
   assert_true(!pending)
