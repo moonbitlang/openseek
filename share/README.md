@@ -4,7 +4,6 @@ This directory is checked in and copied into the packaged toolchain's `share/`.
 `OPENSEEK_REFERENCES` points to that installed copy.
 
 - `doc/moonbit/`: official MoonBit documentation from the upstream markdown build.
-  The updater drops the `example/gmachine` tutorial chapters, which are not reference material.
 - `doc/moonbit.commit`: the exact upstream build commit used for the snapshot.
 - `workflow/`: OpenSeek-maintained scripts, packaged for future agent integration.
 
