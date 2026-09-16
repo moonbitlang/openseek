@@ -197,3 +197,36 @@ async test "append_summary runs for MoonBit source without local package" {
     assert_false(result.contains("skipped"))
   })
 }
+
+///|
+/// A manifest moon cannot load makes `moon check` exit non-zero without a
+/// single diagnostic object. That is `Failed` for a caller that asks, and —
+/// for `count_errors`, whose callers never told the case apart — still the
+/// zero-error tally it always returned.
+async test "check names a failed run; count_errors keeps its tally" {
+  @vfs.with_tmpdir(prefix="openseek-auto-check-failed-", dir => {
+    @vfs.FileSystem({
+      "moon.mod": "name = \n",
+      "moon.pkg": "",
+      "main.mbt": "///|\npub fn f() -> Int {\n  1\n}\n",
+    }).write_to(dir)
+    let path = "\{dir}/main.mbt"
+    guard @auto_check.check(path) is Failed(code, tally) else {
+      fail("expected Failed")
+    }
+    assert_true(code != 0)
+    assert_eq(tally.error_count, 0)
+    guard @auto_check.count_errors(path) is Some(counted) else {
+      fail("expected the tally")
+    }
+    assert_eq(counted.error_count, 0)
+    // A clean module is `Checked`.
+    @fs.write_file(
+      "\{dir}/moon.mod",
+      "name = \"tmp/checked\"\n",
+      create_mode=CreateOrTruncate,
+    )
+    assert_true(@auto_check.check(path) is Checked({ error_count: 0, .. }))
+    assert_true(@auto_check.check("\{dir}/notes.txt") is NotApplicable)
+  })
+}

@@ -85,15 +85,18 @@ pub fn ErrorSite::identity(self : ErrorSite) -> String {
 }
 
 ///|
-/// The site as a JSON object for a tool's machine-readable `data`: `path` and
-/// `code` are present only when moon supplied them, so a consumer never
-/// mistakes an unknown file or a codeless diagnostic for a known one.
+/// The site as a JSON object for a tool's machine-readable `data`: `path`,
+/// `loc` and `code` are present only when moon supplied them (a module-level
+/// diagnostic has no span), so a consumer branches on absence, never on a
+/// sentinel.
 pub fn ErrorSite::to_json(self : ErrorSite) -> Json {
   let fields : Map[String, Json] = Map([])
   if self.path is Some(path) {
     fields["path"] = path.to_json()
   }
-  fields["loc"] = self.loc.to_json()
+  if self.loc != "" {
+    fields["loc"] = self.loc.to_json()
+  }
   if self.code is Some(code) {
     fields["code"] = code.to_json()
   }
@@ -570,7 +573,7 @@ test "to_json carries both severities, caps each list, and marks the cut" {
     "error_count": 1,
     "warning_count": 1,
     "truncated": false,
-    "errors": [{ "path": "a.mbt", "loc": "", "message": "module-level boom" }],
+    "errors": [{ "path": "a.mbt", "message": "module-level boom" }],
     "errors_truncated": false,
     "warnings": [
       { "path": "a.mbt", "loc": "1:1-1:2", "code": 20, "message": "old" },
