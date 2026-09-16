@@ -20,8 +20,8 @@ pub struct EditInput {
   start_line : Int
   end_line : Int?
   revert_on_parse_errors : Bool
-  revert_on_errors : Bool
-  revert_on_warnings : Bool
+  revert_when_errors_above : Int?
+  revert_when_warnings_above : Int?
 } derive(@debug.Debug)
 
 // Type aliases

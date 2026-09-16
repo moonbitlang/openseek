@@ -122,8 +122,8 @@ pub fn definition(
             #|errors the tree did not have — counted by diagnostic identity (path, code,
             #|message), so line shifts never count; 0 reverts on any — the file is
             #|restored and the call returns is_error with the introduced sites. The
-            #|result's data always carries introduced_count and removed_count per
-            #|severity. A baseline that already has errors makes the comparison
+            #|result's data carries introduced_count and removed_count per severity on
+            #|kept and reverted outcomes, not on unverified ones. A baseline that already has errors makes the comparison
             #|approximate: moon skips the dependents of a failing package, so a fix that
             #|lets the build reach further can read as introducing errors; the result
             #|says when that caveat applies. If moon check cannot run, a guarded edit is
@@ -819,7 +819,13 @@ async fn commit_edit(
   async fn restore_on_unwind() -> Unit {
     if baseline is Some(_) {
       @async.protect_from_cancel(() => {
-        restore_content(path, original_content, write_scope?) |> ignore
+        restore_content(
+          path,
+          original_content,
+          written=new_content,
+          write_scope?,
+        )
+        |> ignore
       })
     }
   }
@@ -855,6 +861,7 @@ async fn commit_edit(
     revert_edit(
       path,
       original_content~,
+      written=new_content,
       lines~,
       fail_brief~,
       { "reason": "unverified", "check": Json::null() },
@@ -882,6 +889,7 @@ async fn commit_edit(
       guarded_outcome(
         path,
         original_content~,
+        new_content~,
         lines~,
         fail_brief~,
         guards,
@@ -978,6 +986,7 @@ const IntroducedDisplayLimit : Int = 20
 async fn guarded_outcome(
   path : String,
   original_content~ : String,
+  new_content~ : String,
   lines~ : (Int, Int),
   fail_brief~ : String,
   guards : Guards,
@@ -1064,6 +1073,7 @@ async fn guarded_outcome(
   revert_edit(
     path,
     original_content~,
+    written=new_content,
     lines~,
     fail_brief~,
     common,
@@ -1080,6 +1090,7 @@ async fn guarded_outcome(
 async fn revert_edit(
   path : String,
   original_content~ : String,
+  written~ : String,
   lines~ : (Int, Int),
   fail_brief~ : String,
   extra : Map[String, Json],
@@ -1087,12 +1098,17 @@ async fn revert_edit(
   detail~ : String,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
-  let restore_failure = restore_content(path, original_content, write_scope?)
+  let restore_failure = restore_content(
+    path,
+    original_content,
+    written~,
+    write_scope?,
+  )
   let content = match restore_failure {
     None =>
       "reverted: \{head}, so \{path} was restored to its pre-edit content.\{detail}"
     Some(error) =>
-      "reverted: \{head}, but \{path} could NOT be restored (\{error}) — the file still holds the rejected edit; inspect it manually.\{detail}"
+      "reverted: \{head}, but \{path} could NOT be restored (\{error}); inspect it manually.\{detail}"
   }
   extra["restore_failed"] = (restore_failure is Some(_)).to_json()
   @agent_tool.respond(
@@ -1106,14 +1122,31 @@ async fn revert_edit(
 ///|
 /// Put the pre-edit content back, under the same containment rule as the
 /// write it undoes (a path re-linked during the check must not redirect the
-/// restore either). Returns why it could not, or `None` when it did.
+/// restore either), and only if the file still holds `written`. Returns why
+/// it could not, or `None` when it did.
 async fn restore_content(
   path : String,
   original_content : String,
+  written~ : String,
   write_scope? : @write_scope.WriteScope,
 ) -> String? {
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
     return Some("write blocked: \{reason}")
+  }
+  // The check between the write and this restore is a window in which
+  // another writer (an editor save) may have changed the file; restoring over
+  // that would erase their work. Only the content this edit wrote is undone.
+  let current = @fs.read_file(path).text() catch {
+    error if @async.is_being_cancelled() => raise error
+    error =>
+      return Some(
+        "cannot read the file to verify it before restoring: \{error}",
+      )
+  }
+  if current != written {
+    return Some(
+      "the file changed after the edit was written (another writer?), so it was left as it is",
+    )
   }
   @fs.write_file(path, original_content, create_mode=CreateOrTruncate) catch {
     error if @async.is_being_cancelled() => raise error

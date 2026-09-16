@@ -105,6 +105,24 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       fail("unexpected data: \{shown(reverted.data)}")
     }
     assert_true(loc.has_prefix("14:"))
+    // Two introduced warnings against a tolerance of one: still reverted.
+    let over = run_edit({
+      "path": path,
+      "old_string": "  len([1, 2, 3]) + length([4])",
+      "new_string": "  let unused = 0\n  let idle = 1\n  len([1, 2, 3]) + len([4])",
+      "start_line": 14,
+      "revert_when_warnings_above": 1,
+    })
+    assert_true(over.is_error, msg=over.content)
+    assert_true(
+      over.content.contains("2 warning(s) (> revert_when_warnings_above=1)"),
+      msg=over.content,
+    )
+    assert_true(
+      over.data
+      is Some({ "introduced_count": { "warnings": Number(2, ..), .. }, .. }),
+    )
+    assert_eq(@fs.read_file(path).text(), after_fix)
     // With a tolerance of one the same edit is kept, and the data quantifies
     // the delta: one warning introduced, one removed.
     let tolerated = run_edit({
@@ -291,6 +309,36 @@ async test "guards are moot outside a MoonBit project and data still names the o
       ),
     )
     assert_true(bad.data is Some({ "outcome": "error", .. }))
+    // Every other shape a threshold can take: negative, fractional and
+    // boolean are argument errors; null is a guard that is off.
+    for value in ([-1, 1.5, true] : Array[Json]) {
+      let rejected = run_edit({
+        "path": path,
+        "old_string": "new",
+        "new_string": "x",
+        "start_line": 1,
+        "revert_when_errors_above": value,
+      })
+      assert_true(rejected.is_error, msg=rejected.content)
+      assert_true(
+        rejected.content.contains(
+          "arguments.revert_when_errors_above to be a non-negative integer",
+        ),
+        msg=rejected.content,
+      )
+    }
+    assert_eq(@fs.read_file(path).text(), "new\n")
+    let off = run_edit({
+      "path": path,
+      "old_string": "new",
+      "new_string": "newer",
+      "start_line": 1,
+      "revert_when_errors_above": Json::null(),
+    })
+    assert_false(off.is_error, msg=off.content)
+    assert_true(
+      off.data is Some({ "outcome": "applied", "baseline"? : None, .. }),
+    )
   })
 }
 

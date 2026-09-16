@@ -137,10 +137,13 @@ PTC scripts and kept in the transcript): `outcome` is one of `applied`,
 `path` and, for writes, `lines` (`start`/`end`). A kept edit in a MoonBit
 project adds `check` (`error_count`, `warning_count`, `truncated`, first
 `errors`); a guarded edit adds `baseline` counts, `introduced_count` and
-`removed_count` per severity, and `reach_caveat`; a
+`removed_count` per severity (on kept and reverted outcomes; an `unverified`
+outcome has none of them), and `reach_caveat`; a
 reverted one adds `reason` (`introduced_errors`, `introduced_warnings`,
 `unverified`), `introduced` (`errors`, `warnings`, `complete`), and
-`restore_failed`; a rejected one adds `parse_errors`. Guards refuse an
+`restore_failed` (also set when the file no longer held the edit at restore
+time, so another writer's content was left alone); a rejected one adds
+`parse_errors`. Guards refuse an
 overflowed check capture (`unverified`), since its lists are windows, not the
 whole. A response with no `data` at all means the call failed before the
 tool's own reporting ran (a filesystem error raised to the dispatcher).
