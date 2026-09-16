@@ -250,7 +250,7 @@ async fn edit_file(
         "replace_all_preview requires a non-empty old_string (an insertion has no match sites to preview)",
       )
     }
-    return preview_replace_all(input, path~, err)
+    return preview_replace_all(input, path~)
   }
   let content = @fs.read_file(path).text()
   if input.old_string == "" {
@@ -410,7 +410,6 @@ const PreviewEntriesBudgetChars : Int = 24_000
 async fn preview_replace_all(
   input : @decode.EditInput,
   path~ : String,
-  err : (String) -> @agent_tool.ToolAction,
 ) -> @agent_tool.ToolAction {
   let orig_content = @fs.read_file(path).text()
   let (content, _) = @matching.normalize_content_for_matching(orig_content)
