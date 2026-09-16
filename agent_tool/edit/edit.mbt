@@ -831,7 +831,16 @@ async fn commit_edit(
   }
 
   errdefer restore_on_unwind()
-  @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
+  // A guarded write runs to completion for the same reason: a truncated,
+  // half-written file is neither the edit nor the original, and the rollback
+  // restores only what it recognizes.
+  if baseline is Some(_) {
+    @async.protect_from_cancel(() => {
+      @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
+    })
+  } else {
+    @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
+  }
   let after = check_tree()
   fn keep(
     check_line : String?,
@@ -976,10 +985,11 @@ priv struct Guards {
 const IntroducedDisplayLimit : Int = 20
 
 ///|
-/// Decide a guarded edit from its two checks. "Introduced" is judged by
-/// diagnostic identity when both captures are complete, and by count when
-/// either overflowed (the lists are then windows, and a site can enter one
-/// without being new). A baseline with errors makes either reading
+/// Decide a guarded edit from its two checks: the diagnostics introduced, by
+/// identity, are counted against each severity's threshold (an overflowed
+/// capture never reaches here — it is refused as unverified, since its lists
+/// are windows and a site can enter one without being new). A baseline with
+/// errors makes the reading
 /// approximate — moon skips the dependents of a failing package, so a fix
 /// that lets the build reach further surfaces diagnostics that were always
 /// there — and the result says so rather than pretending otherwise.
@@ -1069,6 +1079,8 @@ async fn guarded_outcome(
     "errors": Json::array([ for site in shown_errors => site.to_json() ]),
     "warnings": Json::array([ for site in shown_warnings => site.to_json() ]),
     "complete": delta.complete.to_json(),
+    "errors_omitted": (delta.errors.length() - shown_errors.length()).to_json(),
+    "warnings_omitted": (delta.warnings.length() - shown_warnings.length()).to_json(),
   }
   revert_edit(
     path,
@@ -1148,11 +1160,16 @@ async fn restore_content(
       "the file changed after the edit was written (another writer?), so it was left as it is",
     )
   }
-  @fs.write_file(path, original_content, create_mode=CreateOrTruncate) catch {
-    error if @async.is_being_cancelled() => raise error
-    error => return Some("\{error}")
-  }
-  None
+  // The write truncates before it writes; a cancellation between the two
+  // would leave an empty file that no later restore recognizes as this edit.
+  // So the restore runs to completion once started.
+  let mut failure : String? = None
+  @async.protect_from_cancel(() => {
+    @fs.write_file(path, original_content, create_mode=CreateOrTruncate) catch {
+      error => failure = Some("\{error}")
+    }
+  })
+  failure
 }
 
 ///|

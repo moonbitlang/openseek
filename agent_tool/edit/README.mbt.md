@@ -142,8 +142,12 @@ outcome has none of them), and `reach_caveat`; a
 reverted one adds `reason` (`introduced_errors`, `introduced_warnings`,
 `unverified`), `introduced` (`errors`, `warnings`, `complete`), and
 `restore_failed` (also set when the file no longer held the edit at restore
-time, so another writer's content was left alone); a rejected one adds
-`parse_errors`. Guards refuse an
+time, so another writer's content was left alone; the comparison and the
+restore are two operations, so a save landing in the instant between them is
+still overwritten — the window is a file read, not the whole check);
+`introduced` lists at most 20 sites per severity and says how many it left
+out in `errors_omitted` / `warnings_omitted`, while its `complete` refers to
+the comparison itself; a rejected one adds `parse_errors`. Guards refuse an
 overflowed check capture (`unverified`), since its lists are windows, not the
 whole. A response with no `data` at all means the call failed before the
 tool's own reporting ran (a filesystem error raised to the dispatcher).
