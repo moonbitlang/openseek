@@ -166,8 +166,19 @@ async fn main {
     index += 1
   }
   let base = @env.current_dir().unwrap_or(".")
+  // moon names a file as it was invoked: absolute (POSIX `/…`, Windows
+  // `C:\…` or `\\server\…`) or relative to the check's directory.
   fn absolute(path : String) -> String {
-    if path.has_prefix("/") {
+    // `path[i]` is a UTF-16 unit: 58 is `:`, 92 is `\\`, 47 is `/`.
+    let letter = path.length() >= 1 &&
+      (
+        (path[0] >= 65 && path[0] <= 90) || (path[0] >= 97 && path[0] <= 122)
+      )
+    let drive = path.length() >= 3 &&
+      letter &&
+      path[1] == 58 &&
+      (path[2] == 92 || path[2] == 47)
+    if path.has_prefix("/") || path.has_prefix("\\\\") || drive {
       path
     } else {
       "\{base}/\{path}"
@@ -358,16 +369,23 @@ async fn main {
   if !dry_run && fixed > 0 {
     let mut errors_after = 0
     let mut warnings_after = 0
-    @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => {
+    let code_after = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => {
       if line.contains("\"level\":\"error\"") {
         errors_after += 1
       } else if line.contains("\"level\":\"warning\"") {
         warnings_after += 1
       }
     })
-    |> ignore
-    println(
-      "after: \{errors_after} error(s), \{warnings_after} warning(s) (was \{errors}/\{warnings})",
-    )
+    if code_after != 0 && errors_after == 0 {
+      // The same rule as the first check: a failed run with no diagnostic is
+      // not a clean tree, and the counts above say nothing.
+      println(
+        "after: moon check exited \{code_after} without diagnostics; the tree could not be verified (was \{errors}/\{warnings})",
+      )
+    } else {
+      println(
+        "after: \{errors_after} error(s), \{warnings_after} warning(s) (was \{errors}/\{warnings})",
+      )
+    }
   }
 }
