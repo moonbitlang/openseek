@@ -15,7 +15,7 @@ license = "Apache-2.0"
 
 description = "Shared desktop contracts, policies, and packaging tools for SeekMoon."
 
-warnings = "+implicit_impl_as_method"
+warnings = "+implicit_impl_as_method+test_unqualified_package"
 
 preferred_target = "native"
 

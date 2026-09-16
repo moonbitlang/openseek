@@ -41,8 +41,8 @@ fn flush_cancellations(scheduled : Array[ScheduledCancellation]) -> Unit {
 
 ///|
 test "None" {
-  let first = CancellationToken::none()
-  let second = CancellationToken::none()
+  let first = @language.CancellationToken::none()
+  let second = @language.CancellationToken::none()
   assert_false(first.is_cancellation_requested())
   assert_true(physical_equal(first, second))
   let count = Ref(0)
@@ -145,8 +145,8 @@ test "token stays the same" {
   assert_true(physical_equal(canceled, canceled_before_read.token()))
   assert_true(
     physical_equal(
-      CancellationToken::cancelled(),
-      CancellationToken::cancelled(),
+      @language.CancellationToken::cancelled(),
+      @language.CancellationToken::cancelled(),
     ),
   )
 }
@@ -261,7 +261,7 @@ test "repeated dispose is harmless and detaches the parent" {
 
 ///|
 test "compatibility token remains directly cancellable" {
-  let token = CancellationToken::CancellationToken()
+  let token = @language.CancellationToken::CancellationToken()
   let count = Ref(0)
   token.on_cancellation_requested(() => count.val += 1) |> ignore
   token.cancel()

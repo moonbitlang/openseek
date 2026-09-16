@@ -2,7 +2,7 @@
 fn feedback_fixture(
   resource : @base_common.Uri,
   id? : String = "feedback-1",
-) -> AgentFeedback {
+) -> @agent_feedback_api.AgentFeedback {
   {
     id,
     text: "note",
@@ -114,7 +114,7 @@ test "AgentFeedbackHandle forwards its exact callback floor" {
 test "planned submitted-feedback DTO remains a public value contract" {
   let resource = try! @base_common.Uri::parse("memory://session/a.mbt")
   let feedback = feedback_fixture(resource)
-  let submitted : AgentFeedbackSubmittedEvent = {
+  let submitted : @agent_feedback_api.AgentFeedbackSubmittedEvent = {
     resource,
     items: [feedback],
     user_count: 1,

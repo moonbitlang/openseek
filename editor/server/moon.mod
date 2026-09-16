@@ -10,7 +10,7 @@ supported_targets = "native+wasm"
 
 preferred_target = "wasm"
 
-warnings = "+prefer_readonly_array+implicit_impl_as_method"
+warnings = "+prefer_readonly_array+implicit_impl_as_method+test_unqualified_package"
 
 import {
   "moonbitlang/editor@0.4.5",

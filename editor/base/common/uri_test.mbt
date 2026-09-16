@@ -4,20 +4,20 @@
 
 ///|
 test "Eq/Hash ignore the lazy caches (D5)" {
-  let a = Uri::parse("file:///x/y.txt")
-  let b = Uri::parse("file:///x/y.txt")
+  let a = @common.Uri::parse("file:///x/y.txt")
+  let b = @common.Uri::parse("file:///x/y.txt")
   // populate a's caches only
   ignore(a.to_string())
   ignore(a.fs_path())
   assert_true(a == b)
-  let table : Map[Uri, Int] = Map([])
+  let table : Map[@common.Uri, Int] = Map([])
   table[a] = 1
   assert_true(table.get(b) == Some(1))
 }
 
 ///|
 test "Debug repr uses the formatted form (D5)" {
-  let uri = Uri::parse("http://example.com/p")
+  let uri = @common.Uri::parse("http://example.com/p")
   debug_inspect(
     uri,
     content=(
@@ -30,17 +30,17 @@ test "Debug repr uses the formatted form (D5)" {
 test "UriError carries the Monaco message (D6)" {
   // `fäil` has an illegal scheme char, so even non-strict parse raises;
   // note `1:path` would be legal — `\w` includes digits.
-  try Uri::parse("fäil:path") |> ignore catch {
+  try @common.Uri::parse("fäil:path") |> ignore catch {
     UriError(message) => assert_true(message.contains("[UriError]"))
   } noraise {
     _ => fail("expected UriError")
   }
-  assert_eq(Uri::parse("1:path").scheme, "1")
+  assert_eq(@common.Uri::parse("1:path").scheme, "1")
 }
 
 ///|
 test "to_string caches only the encoded form" {
-  let uri = Uri::parse("file:///a b")
+  let uri = @common.Uri::parse("file:///a b")
   let encoded1 = uri.to_string()
   let encoded2 = uri.to_string()
   assert_eq(encoded1, "file:///a%20b")

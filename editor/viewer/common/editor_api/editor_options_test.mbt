@@ -1,6 +1,6 @@
 ///|
 test "RenderWhitespace exposes every canonical mode" {
-  let modes : Array[RenderWhitespace] = [
+  let modes : Array[@editor_api.RenderWhitespace] = [
     None,
     Boundary,
     Selection,
@@ -17,7 +17,7 @@ test "RenderWhitespace exposes every canonical mode" {
 
 ///|
 test "RenderLineHighlight exposes every canonical mode" {
-  let modes : Array[RenderLineHighlight] = [None, Gutter, Line, All]
+  let modes : Array[@editor_api.RenderLineHighlight] = [None, Gutter, Line, All]
   assert_eq(modes.length(), 4)
   assert_eq(modes[0], None)
   assert_eq(modes[1], Gutter)
@@ -27,7 +27,12 @@ test "RenderLineHighlight exposes every canonical mode" {
 
 ///|
 test "WrappingIndent exposes every canonical mode" {
-  let modes : Array[WrappingIndent] = [None, Same, Indent, DeepIndent]
+  let modes : Array[@editor_api.WrappingIndent] = [
+    None,
+    Same,
+    Indent,
+    DeepIndent,
+  ]
   assert_eq(modes.length(), 4)
   assert_eq(modes[0], None)
   assert_eq(modes[1], Same)
@@ -37,7 +42,11 @@ test "WrappingIndent exposes every canonical mode" {
 
 ///|
 test "RenderValidationDecorations exposes every canonical mode" {
-  let modes : Array[RenderValidationDecorations] = [Editable, On, Off]
+  let modes : Array[@editor_api.RenderValidationDecorations] = [
+    Editable,
+    On,
+    Off,
+  ]
   assert_eq(modes.length(), 3)
   assert_eq(modes[0], Editable)
   assert_eq(modes[1], On)
@@ -46,7 +55,11 @@ test "RenderValidationDecorations exposes every canonical mode" {
 
 ///|
 test "ShowFoldingControls exposes every canonical mode" {
-  let modes : Array[ShowFoldingControls] = [Always, Never, Mouseover]
+  let modes : Array[@editor_api.ShowFoldingControls] = [
+    Always,
+    Never,
+    Mouseover,
+  ]
   assert_eq(modes.length(), 3)
   assert_eq(modes[0], Always)
   assert_eq(modes[1], Never)

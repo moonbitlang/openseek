@@ -8,33 +8,40 @@ test "language selectors match language scheme and path" {
     "rev-1",
     "fn main {}\n",
   )
-  assert_true(LanguageSelector::LanguageId("moonbit").matches(model))
-  assert_eq(LanguageSelector::LanguageId("moonbit").score(model), 10)
-  assert_eq(LanguageSelector::LanguageId("*").score(model), 5)
+  assert_true(@language.LanguageSelector::LanguageId("moonbit").matches(model))
+  assert_eq(@language.LanguageSelector::LanguageId("moonbit").score(model), 10)
+  assert_eq(@language.LanguageSelector::LanguageId("*").score(model), 5)
   assert_true(
-    LanguageFilter::LanguageFilter(
+    @language.LanguageFilter::LanguageFilter(
       language="moonbit",
       scheme="file",
       pattern="src/*.mbt",
     ).matches(model),
   )
   assert_true(
-    LanguageSelector::LanguageSelectorList([
+    @language.LanguageSelector::LanguageSelectorList([
       LanguageId("javascript"),
       LanguageFilter(LanguageFilter(language="moonbit")),
     ]).matches(model),
   )
-  assert_true(!LanguageSelector::LanguageId("javascript").matches(model))
-  assert_false(LanguageFilter::LanguageFilter().matches(model))
-  assert_eq(
-    LanguageFilter::LanguageFilter(language="*", scheme="*").score(model),
-    5,
-  )
-  assert_false(LanguageFilter::LanguageFilter(pattern="").matches(model))
   assert_true(
-    !LanguageFilter::LanguageFilter(language="moonbit", scheme="memory").matches(
+    !@language.LanguageSelector::LanguageId("javascript").matches(model),
+  )
+  assert_false(@language.LanguageFilter::LanguageFilter().matches(model))
+  assert_eq(
+    @language.LanguageFilter::LanguageFilter(language="*", scheme="*").score(
       model,
     ),
+    5,
+  )
+  assert_false(
+    @language.LanguageFilter::LanguageFilter(pattern="").matches(model),
+  )
+  assert_true(
+    !@language.LanguageFilter::LanguageFilter(
+      language="moonbit",
+      scheme="memory",
+    ).matches(model),
   )
 }
 

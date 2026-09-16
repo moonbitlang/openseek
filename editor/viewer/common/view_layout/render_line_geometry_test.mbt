@@ -13,8 +13,8 @@ fn geometry_render_input(
   middot_width? : Double = 10.0,
   wsmiddot_width? : Double = 10.0,
   render_whitespace? : @editor_api.RenderWhitespace = All,
-) -> RenderLineInput {
-  RenderLineInput::from_view_line(
+) -> @view_layout.RenderLineInput {
+  @view_layout.RenderLineInput::from_view_line(
     {
       min_column: 1,
       max_column: content.length() + 1,
@@ -110,7 +110,9 @@ test "RenderLineInput render-space choice uses strict-less and middot tie" {
   )
   assert_eq(word_separator.render_space_width, 9.0)
   assert_eq(word_separator.render_space_char_code, 0x2E31)
-  assert_true(render_view_line2(word_separator).html.contains("\u{2e31}"))
+  assert_true(
+    @view_layout.render_view_line2(word_separator).html.contains("\u{2e31}"),
+  )
   let tie = geometry_render_input(
     " ",
     space_width=10.0,
@@ -119,12 +121,12 @@ test "RenderLineInput render-space choice uses strict-less and middot tie" {
   )
   assert_eq(tie.render_space_width, 11.0)
   assert_eq(tie.render_space_char_code, 0xB7)
-  assert_true(render_view_line2(tie).html.contains("·"))
+  assert_true(@view_layout.render_view_line2(tie).html.contains("·"))
 }
 
 ///|
 test "rendered tab arrow matrix covers safe and unsafe one and multi columns" {
-  let safe_one = render_view_line2(
+  let safe_one = @view_layout.render_view_line2(
     geometry_render_input(
       "\t",
       start_visible_column=3,
@@ -133,7 +135,7 @@ test "rendered tab arrow matrix covers safe and unsafe one and multi columns" {
   )
   assert_true(safe_one.html.contains("￫"))
   assert_false(safe_one.html.contains("→"))
-  let unsafe_one = render_view_line2(
+  let unsafe_one = @view_layout.render_view_line2(
     geometry_render_input(
       "\t",
       start_visible_column=3,
@@ -142,7 +144,7 @@ test "rendered tab arrow matrix covers safe and unsafe one and multi columns" {
   )
   assert_true(unsafe_one.html.contains("→"))
   assert_false(unsafe_one.html.contains("￫"))
-  let safe_multi = render_view_line2(
+  let safe_multi = @view_layout.render_view_line2(
     geometry_render_input(
       "\t",
       start_visible_column=1,
@@ -151,7 +153,7 @@ test "rendered tab arrow matrix covers safe and unsafe one and multi columns" {
   )
   assert_true(safe_multi.html.contains("→"))
   assert_false(safe_multi.html.contains("￫"))
-  let unsafe_multi = render_view_line2(
+  let unsafe_multi = @view_layout.render_view_line2(
     geometry_render_input(
       "\t",
       start_visible_column=1,
@@ -166,7 +168,7 @@ test "rendered tab arrow matrix covers safe and unsafe one and multi columns" {
 test "nonzero start visible column drives every tab residue and mapping end" {
   for start_visible_column in 1..<=4 {
     let expected_width = 4 - start_visible_column % 4
-    let output = render_view_line2(
+    let output = @view_layout.render_view_line2(
       geometry_render_input("\t", start_visible_column~),
     )
     assert_eq(output.character_mapping.get_horizontal_offset(1), 0)

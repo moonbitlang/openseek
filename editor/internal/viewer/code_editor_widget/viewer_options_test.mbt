@@ -1,6 +1,6 @@
 ///|
 test "CodeEditorOptions builders preserve an immutable opaque snapshot" {
-  let original = CodeEditorOptions::default()
+  let original = @code_editor_widget.CodeEditorOptions::default()
   let updated = original
     .with_placeholder("loading")
     .with_theme("light")
@@ -32,7 +32,7 @@ test "CodeEditorOptions builders preserve an immutable opaque snapshot" {
       line_height=21.0,
     ),
   )
-  assert_eq(original, CodeEditorOptions::default())
+  assert_eq(original, @code_editor_widget.CodeEditorOptions::default())
   assert_false(original.soft_wrap())
   assert_true(updated.soft_wrap())
   assert_eq(updated.line_height(), 21.0)
@@ -41,19 +41,25 @@ test "CodeEditorOptions builders preserve an immutable opaque snapshot" {
 ///|
 test "CodeEditorOptions builders preserve constructor normalization" {
   assert_eq(
-    CodeEditorOptions::default().with_tab_size(0),
+    @code_editor_widget.CodeEditorOptions::default().with_tab_size(0),
     CodeEditorOptions(tab_size=1),
   )
   assert_eq(
-    CodeEditorOptions::default().with_line_numbers_min_chars(0),
+    @code_editor_widget.CodeEditorOptions::default().with_line_numbers_min_chars(
+      0,
+    ),
     CodeEditorOptions(line_numbers_min_chars=1),
   )
   assert_eq(
-    CodeEditorOptions::default().with_line_decorations_width(-1),
+    @code_editor_widget.CodeEditorOptions::default().with_line_decorations_width(
+      -1,
+    ),
     CodeEditorOptions(line_decorations_width=0),
   )
   assert_eq(
-    CodeEditorOptions::default().with_additional_line_decorations_width(-1),
-    CodeEditorOptions::default(),
+    @code_editor_widget.CodeEditorOptions::default().with_additional_line_decorations_width(
+      -1,
+    ),
+    @code_editor_widget.CodeEditorOptions::default(),
   )
 }

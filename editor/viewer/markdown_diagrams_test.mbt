@@ -5,12 +5,12 @@ test "public Viewer UML renderer returns SVG only for valid diagrams" {
     #|participant Alice
     #|Alice -> Bob : hello
     #|@enduml
-  guard render_uml_diagram_svg(valid) is Some(svg) else {
+  guard @viewer.render_uml_diagram_svg(valid) is Some(svg) else {
     fail("expected UML SVG")
   }
   assert_true(svg.contains("<svg"))
   assert_true(svg.contains("--vscode-editor-foreground"))
-  assert_true(render_uml_diagram_svg("@startuml\n@enduml") is None)
+  assert_true(@viewer.render_uml_diagram_svg("@startuml\n@enduml") is None)
 }
 
 ///|
@@ -28,13 +28,15 @@ test "public Viewer MBTI renderer accepts a bare generated interface" {
     #|}
     #|
     #|impl Shape for Point
-  guard render_mbti_diagram_svg(source) is Some(svg) else {
+  guard @viewer.render_mbti_diagram_svg(source) is Some(svg) else {
     fail("expected MBTI SVG")
   }
   assert_true(svg.contains("<svg"))
   assert_true(svg.contains("Point"))
   assert_true(svg.contains("--vscode-editor-foreground"))
-  assert_true(render_mbti_diagram_svg("pub struct MissingPackage") is None)
+  assert_true(
+    @viewer.render_mbti_diagram_svg("pub struct MissingPackage") is None,
+  )
 }
 
 ///|
@@ -59,7 +61,7 @@ test "public Viewer package dependency renderer accepts moon tree JSON" {
     #|  ],
     #|  "logs": []
     #|}
-  guard render_package_dep_diagram_svg(source) is Some(svg) else {
+  guard @viewer.render_package_dep_diagram_svg(source) is Some(svg) else {
     fail("expected package dependency SVG")
   }
   assert_true(svg.contains("<svg"))
@@ -67,14 +69,14 @@ test "public Viewer package dependency renderer accepts moon tree JSON" {
   assert_true(svg.contains("core"))
   assert_true(svg.contains("util"))
   assert_true(svg.contains("--vscode-editor-foreground"))
-  assert_true(render_package_dep_diagram_svg("{\"nodes\":[]}") is None)
+  assert_true(@viewer.render_package_dep_diagram_svg("{\"nodes\":[]}") is None)
 }
 
 ///|
 test "public Viewer Diago renderer preserves invalid source fallback" {
-  guard render_diago_diagram_svg("a -> b") is Some(svg) else {
+  guard @viewer.render_diago_diagram_svg("a -> b") is Some(svg) else {
     fail("expected Diago SVG")
   }
   assert_true(svg.contains("<svg"))
-  assert_true(render_diago_diagram_svg("a ->") is None)
+  assert_true(@viewer.render_diago_diagram_svg("a ->") is None)
 }
