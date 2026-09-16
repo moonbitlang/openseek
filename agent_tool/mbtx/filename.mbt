@@ -1,9 +1,13 @@
 ///|
+/// Only the @builtin/ prefix selects bundled workflows. This does not validate
+/// the path or check file existence; resolve_filename validates the remainder.
 fn is_bundled_filename(filename : String) -> Bool {
   filename.has_prefix("@builtin/")
 }
 
 ///|
+/// Raises for an unknown @ namespace, an invalid @builtin/ path, or missing
+/// bundled resources. This resolves a filename without checking file existence.
 fn resolve_filename(
   workspace_root : String,
   filename : String,
