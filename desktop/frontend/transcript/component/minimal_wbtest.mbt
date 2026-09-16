@@ -11,8 +11,13 @@ test "minimal user boundaries group recorded and streaming assistant content" {
     project_menu_open=false,
     project_query="",
     root=None,
+    // Text-only turns use the same User variant with an empty attachment list.
     items=VisibleRow::history([
-      { kind: User("First question"), ts: None, sequence: Some(1), },
+      {
+        kind: User(text="First question", images=[]),
+        ts: None,
+        sequence: Some(1),
+      },
       {
         kind: Assistant(
           reasoning=None,
@@ -32,14 +37,18 @@ test "minimal user boundaries group recorded and streaming assistant content" {
         ts: None,
         sequence: Some(2),
       },
-      { kind: User("Second question"), ts: None, sequence: Some(3), },
+      {
+        kind: User(text="Second question", images=[]),
+        ts: None,
+        sequence: Some(3),
+      },
     ]),
     streaming_response=Some("Checking another file"),
     streaming_identity="live",
   )
   let blocks = input.minimal_blocks().to_array()
   assert_eq(blocks.length(), 4)
-  assert_true(blocks[0].content is Item(item={ kind: User(_), .. }, ..))
+  assert_true(blocks[0].content is Item(item={ kind: User(..), .. }, ..))
   assert_true(
     blocks[1].content
     is Minimal(
@@ -49,7 +58,7 @@ test "minimal user boundaries group recorded and streaming assistant content" {
       )
     ),
   )
-  assert_true(blocks[2].content is Item(item={ kind: User(_), .. }, ..))
+  assert_true(blocks[2].content is Item(item={ kind: User(..), .. }, ..))
   assert_true(
     blocks[3].content
     is Minimal(
