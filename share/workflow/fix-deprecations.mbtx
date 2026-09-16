@@ -50,7 +50,7 @@ fn replacement_in(message : String) -> String? {
   guard message.find("use `") is Some(start) else { return None }
   let rest = message[start + 5:]
   guard rest.find("`") is Some(end) else { return None }
-  let name = rest[:end].to_string()
+  let name = rest[:end].to_owned()
   if name.is_empty() || !is_identifier(name) {
     return None
   }
@@ -116,13 +116,13 @@ fn split_qualified(span : String) -> (String, String) {
   match (by_dot, by_path) {
     (Some(dot), Some(path)) =>
       if dot > path {
-        (span[:dot + 1].to_string(), span[dot + 1:].to_string())
+        (span[:dot + 1].to_owned(), span[dot + 1:].to_owned())
       } else {
-        (span[:path + 2].to_string(), span[path + 2:].to_string())
+        (span[:path + 2].to_owned(), span[path + 2:].to_owned())
       }
-    (Some(dot), None) => (span[:dot + 1].to_string(), span[dot + 1:].to_string())
+    (Some(dot), None) => (span[:dot + 1].to_owned(), span[dot + 1:].to_owned())
     (None, Some(path)) =>
-      (span[:path + 2].to_string(), span[path + 2:].to_string())
+      (span[:path + 2].to_owned(), span[path + 2:].to_owned())
     (None, None) => ("", span)
   }
 }
@@ -279,7 +279,7 @@ async fn main {
             continue
           }
         }
-        let file_lines = text.split("\n").map(view => view.to_string()).collect()
+        let file_lines = text.split("\n").map(view => view.to_owned()).collect()
         cache[site.path] = file_lines
         file_lines
       }
@@ -291,7 +291,7 @@ async fn main {
     let line = file_lines[site.line - 1]
     let start = utf16_offset(line, site.start_col)
     let end = utf16_offset(line, site.end_col)
-    let span = line[start:end].to_string()
+    let span = line[start:end].to_owned()
     // The span may carry a qualifier — `@a.length` for a call into another
     // package, `Pile::size` for a method by path — and only the name after
     // it is deprecated, so the qualifier is kept and the name swapped.
@@ -305,8 +305,8 @@ async fn main {
     }
     // The whole line prefix through the span, so the first match at this line
     // is exactly this occurrence and no earlier same-named text on the line.
-    let old_string = line[:end].to_string()
-    let new_string = line[:start].to_string() + qualifier + site.replacement
+    let old_string = line[:end].to_owned()
+    let new_string = line[:start].to_owned() + qualifier + site.replacement
     if dry_run {
       planned += 1
       println(
@@ -328,7 +328,7 @@ async fn main {
         fixed += 1
         // Keep the cached line current for a second site on the same line
         // (which sits to the LEFT, so its columns are unchanged).
-        file_lines[site.line - 1] = new_string + line[end:].to_string()
+        file_lines[site.line - 1] = new_string + line[end:].to_owned()
       }
       Some({ "outcome": "reverted", "restore_failed": true, .. }) => {
         // The rejected edit is still on disk: say so with the host's own
