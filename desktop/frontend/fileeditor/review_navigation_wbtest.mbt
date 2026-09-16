@@ -1,11 +1,11 @@
 ///|
 test "review navigation skips unavailable rows and stops at queue edges" {
-  let first = test_modified_change(@pathx.Relative("first.mbt"))
+  let first = test_modified_change(Relative("first.mbt"))
   let unavailable = {
-    ..test_modified_change(@pathx.Relative("link.mbt")),
+    ..test_modified_change(Relative("link.mbt")),
     kind: ChangeSymlink,
   }
-  let last = test_modified_change(@pathx.Relative("last.mbt"))
+  let last = test_modified_change(Relative("last.mbt"))
   let state = {
     ..owned_state(),
     changes: ChangeListReady(
@@ -57,11 +57,11 @@ test "review navigation distinguishes duplicate same-path Git rows" {
 
 ///|
 test "continuous review navigation wraps the selectable queue even with an empty diff" {
-  let first = test_modified_change(@pathx.Relative("first.mbt"))
-  let last = test_modified_change(@pathx.Relative("last.mbt"))
+  let first = test_modified_change(Relative("first.mbt"))
+  let last = test_modified_change(Relative("last.mbt"))
   let unavailable = {
     ..first,
-    path: @pathx.Relative("link.mbt"),
+    path: Relative("link.mbt"),
     kind: ChangeSymlink,
   }
   let docs = owned_state().docs.copy()

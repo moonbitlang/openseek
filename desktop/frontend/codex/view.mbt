@@ -94,8 +94,8 @@ fn SidebarContext::draft_input(
 ) -> @conversation.Input {
   let root = draft.project_root.unwrap_or(draft.cwd).trim().to_owned()
   {
-    id: @conversation.Id(
-      source=@conversation.CodexDraft,
+    id: Id(
+      source=CodexDraft,
       channel=self.channel.uri_authority(),
       conversation=draft.id,
       root?=if root.is_empty() { None } else { Some(root) },
@@ -113,7 +113,7 @@ fn SidebarContext::draft_input(
     running: false,
     openable: true,
     worktree: None,
-    run_mark: @conversation.NoRunMark,
+    run_mark: NoRunMark,
     trailing: [],
     children: [],
   }
@@ -177,7 +177,7 @@ pub fn State::project_conversations(
   [
     for thread in self.threads if thread.project_key() is Some(thread_project) &&
     thread_project == project => {
-      CodexProjectRow::{
+      {
         input: thread.sidebar_input(self, context, true),
         updated_at_ms: thread.updated_at_ms,
       }
@@ -228,16 +228,14 @@ pub fn State::loose_entries(
       root.is_empty() || !context.project_registered(root)
     })
   if loose_draft is Some(draft) {
-    entries.push(@section.Conversation(context.draft_input(draft, false)))
+    entries.push(Conversation(context.draft_input(draft, false)))
   }
   for thread in self.threads {
     if thread
       .project_key()
       .map(project => !context.project_registered(project.0))
       .unwrap_or(true) {
-      entries.push(
-        @section.Conversation(thread.sidebar_input(self, context, false)),
-      )
+      entries.push(Conversation(thread.sidebar_input(self, context, false)))
     }
   }
   entries
@@ -252,7 +250,7 @@ pub fn State::archived_sidebar_entries(
   channel : @interop.ChannelId,
 ) -> Array[@section.Entry] {
   self.archived_threads.map(thread => {
-    @section.Conversation(thread.archived_sidebar_input(channel))
+    Conversation(thread.archived_sidebar_input(channel))
   })
 }
 
@@ -262,8 +260,8 @@ fn CodexThreadRow::archived_sidebar_input(
   channel : @interop.ChannelId,
 ) -> @conversation.Input {
   {
-    id: @conversation.Id(
-      source=@conversation.CodexArchived,
+    id: Id(
+      source=CodexArchived,
       channel=channel.uri_authority(),
       conversation=self.id,
       root?=self.project_root,
@@ -278,12 +276,8 @@ fn CodexThreadRow::archived_sidebar_input(
     running: false,
     openable: false,
     worktree: None,
-    run_mark: @conversation.NoRunMark,
-    trailing: [
-      @conversation.Restore(
-        title="Restore this Codex conversation to the sidebar",
-      ),
-    ],
+    run_mark: NoRunMark,
+    trailing: [Restore(title="Restore this Codex conversation to the sidebar")],
     children: [],
   }
 }
@@ -322,8 +316,8 @@ fn CodexThreadRow::sidebar_input(
     unseen_outcome=activity.unseen_outcome.map(outcome => outcome.1),
   )
   {
-    id: @conversation.Id(
-      source=@conversation.CodexLive,
+    id: Id(
+      source=CodexLive,
       channel=context.channel.uri_authority(),
       conversation=self.id,
       root?=self.project_root,
@@ -341,7 +335,7 @@ fn CodexThreadRow::sidebar_input(
     .filter(worktree => worktree.present)
     .map(worktree => worktree.name),
     run_mark,
-    trailing: [@conversation.Archive(title="Archive Codex conversation")],
+    trailing: [Archive(title="Archive Codex conversation")],
     children: [],
   }
 }
@@ -361,17 +355,17 @@ fn CodexGitStatus::presentation(
     _ => return None
   }
   Some(
-    @composer.GitPresentation(
+    GitPresentation(
       branch~,
       pull_request?=self.pull_request.map(pull_request => {
-        @composer.GitPullRequest(
+        GitPullRequest(
           number=pull_request.number,
           title=pull_request.title,
           state=pull_request.state,
           draft=pull_request.draft,
           url=pull_request.url,
           checks?=pull_request.checks.map(checks => {
-            @composer.GitChecks(
+            GitChecks(
               passed=checks.passed,
               failed=checks.failed,
               pending=checks.pending,
@@ -527,13 +521,13 @@ test "Codex archived catalog contributes restore inputs" {
     true,
     State().activity.frontier(),
   )
-  let entries = state.archived_sidebar_entries(@interop.ChannelId::Local)
+  let entries = state.archived_sidebar_entries(Local)
   assert_eq(entries.length(), 1)
-  guard entries[0] is @section.Conversation(row) else {
+  guard entries[0] is Conversation(row) else {
     fail("expected an archived conversation input")
   }
   assert_false(row.openable)
-  assert_true(row.trailing is [@conversation.Restore(..)])
+  assert_true(row.trailing is [Restore(..)])
 }
 
 ///|
@@ -553,7 +547,7 @@ test "Codex threads join their registered project's shared row" {
     State().activity.frontier(),
   )
   let context : SidebarContext = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     selected: true,
     registered_projects: ["/work/openseek"],
   }
@@ -567,7 +561,7 @@ test "Codex threads join their registered project's shared row" {
 ///|
 test "Codex snapshots preserve running activity across task switches" {
   let context : SidebarContext = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     selected: true,
     registered_projects: ["/work/openseek"],
   }
@@ -594,8 +588,8 @@ test "Codex snapshots preserve running activity across task switches" {
     State().activity.frontier(),
   )
   let listed_rows = listed.project_conversations(context, "/work/openseek")
-  assert_true(listed_rows[0].input.run_mark is @conversation.RunningMark)
-  assert_true(listed_rows[0].input.trailing is [@conversation.Archive(..)])
+  assert_true(listed_rows[0].input.run_mark is RunningMark)
+  assert_true(listed_rows[0].input.trailing is [Archive(..)])
 
   // Older app-server snapshots may omit thread status. A full read still
   // carries the active turn and must survive after another task is selected.
@@ -632,9 +626,7 @@ test "Codex snapshots preserve running activity across task switches" {
       },
       CodexHistoryRead("thread-running", State().activity.frontier()),
     )
-  assert_true(
-    read.activity.presentation("thread-running") is @conversation.RunningMark,
-  )
+  assert_true(read.activity.presentation("thread-running") is RunningMark)
   let switched = read.with_thread_reply(
     {
       "thread": {
@@ -648,8 +640,8 @@ test "Codex snapshots preserve running activity across task switches" {
     CodexHistoryRead("thread-selected", read.activity.frontier()),
   )
   let switched_rows = switched.project_conversations(context, "/work/openseek")
-  assert_true(switched_rows[0].input.run_mark is @conversation.RunningMark)
-  assert_true(switched_rows[0].input.trailing is [@conversation.Archive(..)])
+  assert_true(switched_rows[0].input.run_mark is RunningMark)
+  assert_true(switched_rows[0].input.trailing is [Archive(..)])
 
   let notified = State().with_notification(
     "thread/status/changed",
@@ -659,18 +651,13 @@ test "Codex snapshots preserve running activity across task switches" {
     },
     1,
   )
-  assert_true(
-    notified.activity.presentation("thread-running")
-    is @conversation.RunningMark,
-  )
+  assert_true(notified.activity.presentation("thread-running") is RunningMark)
   let idle = notified.with_notification(
     "thread/status/changed",
     { "threadId": "thread-running", "status": { "type": "idle" } },
     2,
   )
-  assert_true(
-    idle.activity.presentation("thread-running") is @conversation.NoRunMark,
-  )
+  assert_true(idle.activity.presentation("thread-running") is NoRunMark)
 }
 
 ///|
@@ -718,20 +705,20 @@ test "background Codex activity follows its thread instead of selection" {
   )
   assert_eq(running.active_id(), Some("thread-selected"))
   let context : SidebarContext = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     selected: true,
     registered_projects: ["/work/openseek"],
   }
   let rows = running.project_conversations(context, "/work/openseek")
   assert_eq(rows.length(), 2)
-  assert_true(rows[0].input.run_mark is @conversation.RunningMark)
-  assert_true(rows[0].input.trailing is [@conversation.Archive(..)])
-  assert_true(rows[1].input.run_mark is @conversation.NoRunMark)
+  assert_true(rows[0].input.run_mark is RunningMark)
+  assert_true(rows[0].input.trailing is [Archive(..)])
+  assert_true(rows[1].input.run_mark is NoRunMark)
 
   for
     outcome in [
       ("completed", @conversation.CompletedMark),
-      ("failed", @conversation.FailedMark),
+      ("failed", FailedMark),
     ] {
     let (wire_status, expected) = outcome
     let stale_frontier = running.activity.frontier()
@@ -762,7 +749,7 @@ test "background Codex activity follows its thread instead of selection" {
     let settled = idle.project_conversations(context, "/work/openseek")
     assert_eq(settled[0].input.run_mark, expected)
     assert_false(settled[0].input.running)
-    assert_true(settled[0].input.trailing is [@conversation.Archive(..)])
+    assert_true(settled[0].input.trailing is [Archive(..)])
     // Selecting A acknowledges only after the terminal turn is loaded.
     let opened = idle
       .with_thread_reply(
@@ -778,6 +765,6 @@ test "background Codex activity follows its thread instead of selection" {
       )
       .mark_visible_read()
     let read = opened.project_conversations(context, "/work/openseek")
-    assert_true(read[0].input.run_mark is @conversation.NoRunMark)
+    assert_true(read[0].input.run_mark is NoRunMark)
   }
 }

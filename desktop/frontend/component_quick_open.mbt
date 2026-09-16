@@ -12,7 +12,7 @@ fn Model::quick_open_input(
   self : Model,
   active : ActiveCheckout,
 ) -> @quick_open.Input {
-  @quick_open.Input(
+  Input(
     owner=active.owner,
     root=active.placement.bind(placement => placement.checkout_root()),
     open_files=self.live_editor_files(),

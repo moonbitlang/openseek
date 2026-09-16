@@ -781,7 +781,7 @@ fn Ctx::root(self : Ctx) -> @common.Uri? {
 
 ///|
 fn Ctx::search_input(self : Ctx) -> @grep_search.Input {
-  @grep_search.Input(
+  Input(
     owner=self.owner,
     root=self.root(),
     model=self.model,

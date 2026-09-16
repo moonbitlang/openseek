@@ -1,9 +1,9 @@
 ///|
 test "Codex activity retires running evidence on disconnect" {
   let activity = CodexActivityLedger::empty().started("thread-1")
-  assert_true(activity.presentation("thread-1") is @conversation.RunningMark)
+  assert_true(activity.presentation("thread-1") is RunningMark)
   let disconnected = activity.disconnected()
-  assert_true(disconnected.presentation("thread-1") is @conversation.NoRunMark)
+  assert_true(disconnected.presentation("thread-1") is NoRunMark)
 }
 
 ///|
@@ -13,7 +13,7 @@ test "Codex activity accepts snapshot-only running evidence" {
     [("thread-1", Some(ThreadActive))],
     activity.frontier(),
   )
-  assert_true(recovered.presentation("thread-1") is @conversation.RunningMark)
+  assert_true(recovered.presentation("thread-1") is RunningMark)
 }
 
 ///|
@@ -25,7 +25,7 @@ test "Codex activity accepts idle catalog evidence without a run mark" {
     frontier,
   )
   assert_true(reconciled != pending)
-  assert_true(reconciled.presentation("thread-1") is @conversation.NoRunMark)
+  assert_true(reconciled.presentation("thread-1") is NoRunMark)
   assert_true(reconciled.retired("thread-3") == reconciled)
 }
 
@@ -50,7 +50,7 @@ test "Codex activity rejects active snapshot older than completion" {
     activity => activity.started("thread-1").completed("thread-1"),
     ThreadActive,
   )
-  assert_true(mark is @conversation.NoRunMark)
+  assert_true(mark is NoRunMark)
 }
 
 ///|
@@ -59,7 +59,7 @@ test "Codex activity rejects active snapshot older than idle notification" {
     activity => activity.status_changed("thread-1", Some(ThreadInactive)),
     ThreadActive,
   )
-  assert_true(mark is @conversation.NoRunMark)
+  assert_true(mark is NoRunMark)
 }
 
 ///|
@@ -75,7 +75,7 @@ test "newer idle history snapshot fences older active Codex catalog" {
     [("thread-1", Some(ThreadActive))],
     catalog_frontier,
   )
-  assert_true(reconciled.presentation("thread-1") is @conversation.NoRunMark)
+  assert_true(reconciled.presentation("thread-1") is NoRunMark)
 }
 
 ///|
@@ -91,7 +91,7 @@ test "newer active Codex catalog fences older idle history snapshot" {
     [("thread-1", Some(ThreadInactive))],
     read_frontier,
   )
-  assert_true(reconciled.presentation("thread-1") is @conversation.RunningMark)
+  assert_true(reconciled.presentation("thread-1") is RunningMark)
 }
 
 ///|
@@ -103,7 +103,7 @@ test "failed newer Codex snapshot does not fence older catalog evidence" {
     [("thread-1", Some(ThreadActive))],
     catalog_frontier,
   )
-  assert_true(reconciled.presentation("thread-1") is @conversation.RunningMark)
+  assert_true(reconciled.presentation("thread-1") is RunningMark)
 }
 
 ///|
@@ -112,7 +112,7 @@ test "Codex activity rejects idle snapshot older than start" {
     activity => activity.started("thread-1"),
     ThreadInactive,
   )
-  assert_true(mark is @conversation.RunningMark)
+  assert_true(mark is RunningMark)
 }
 
 ///|
@@ -121,5 +121,5 @@ test "Codex activity rejects snapshots from an earlier connection" {
     activity => activity.disconnected(),
     ThreadActive,
   )
-  assert_true(mark is @conversation.NoRunMark)
+  assert_true(mark is NoRunMark)
 }

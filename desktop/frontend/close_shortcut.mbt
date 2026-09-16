@@ -12,7 +12,7 @@ fn focused_close_message() -> Msg? {
     is Some(_) {
     None
   } else if element.closest(".terminal-panel") is Some(_) {
-    Some(Terminal(@terminal.CloseActiveTerminal))
+    Some(Terminal(CloseActiveTerminal))
   } else if element.closest(".editor") is Some(_) {
     Some(CloseActiveDockTab)
   } else {
@@ -34,9 +34,9 @@ fn close_focused(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let focused = @interop.bridge_request(
-        @interop.ChannelId::Local,
+        Local,
         @commands.app_focused_browser,
-        @protocol.NoPayload,
+        NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -48,7 +48,7 @@ fn close_focused(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       if focused.id is Some(id) {
         scheduler.add(
           @cmd.batch([
-            dispatch(Dock(TabClosed(@dock.Browser(id~)))),
+            dispatch(Dock(TabClosed(Browser(id~)))),
             focus_dock_after_render(),
           ]),
         )

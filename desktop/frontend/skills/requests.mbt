@@ -6,7 +6,7 @@
 /// Best effort: a rejected clipboard write (no permission, no API) is not
 /// worth a message, so neither outcome maps back into update.
 fn copy_content(content : String) -> @cmd.Cmd {
-  @clipboard.copy(@clipboard.Text(content))
+  @clipboard.copy(Text(content))
 }
 
 ///|
@@ -33,7 +33,7 @@ fn fetch_catalog(
       let reply = @interop.bridge_request(
         channel,
         @commands.skills_catalog,
-        @protocol.EmptyPayload::NoPayload,
+        NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -123,8 +123,7 @@ fn preview_reply(
   reply : @protocol.ReadFileReply,
 ) -> Msg {
   match reply {
-    @protocol.ReadFileReply::Content(content~, ..) =>
-      PreviewLoaded(request~, target~, content~)
+    Content(content~, ..) => PreviewLoaded(request~, target~, content~)
     _ => PreviewFailed(request~, target~, message="SKILL.md is not readable")
   }
 }

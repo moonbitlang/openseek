@@ -135,7 +135,7 @@ pub fn State::refresh(
         dispatch,
         channel,
         @commands.codex_status,
-        @protocol.NoPayload,
+        NoPayload,
       ),
       CodexAccountReply.request(
         dispatch,
@@ -147,7 +147,7 @@ pub fn State::refresh(
         dispatch,
         channel,
         @commands.codex_server_request_list,
-        @protocol.NoPayload,
+        NoPayload,
       ),
       CodexModelsReply.request(dispatch, channel, @commands.codex_model_list, {
         limit: 100,
@@ -195,7 +195,7 @@ fn State::close_draft(
     @js.async_run(() => {
       ignore(
         try
-          @interop.codex_request(channel, @commands.codex_draft_close, @protocol.CodexDraftClosePayload::{
+          @interop.codex_request(channel, @commands.codex_draft_close, {
             draft_id,
           })
         catch {
@@ -529,8 +529,8 @@ fn State::start_turn_in_new_worktree(
             }
           }
           let reply = match result {
-            @protocol.WorktreeCreatedReply(reply) => reply
-            @protocol.WorktreeCreateError(message) => {
+            WorktreeCreatedReply(reply) => reply
+            WorktreeCreateError(message) => {
               scheduler.add(
                 dispatch(
                   Failed(
@@ -622,7 +622,7 @@ fn State::start_turn_in_new_worktree(
 fn State::prompt_text(self : State) -> String {
   let markers : Array[String] = []
   for mention in self.mentions {
-    if mention.ref_ is @mention_context.Skill(name~) {
+    if mention.ref_ is Skill(name~) {
       markers.push("$" + name)
     }
   }
@@ -639,14 +639,14 @@ fn State::prompt_text(self : State) -> String {
 ///|
 fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
   match mention.ref_ {
-    @mention_context.File(path~) => {
+    File(path~) => {
       let name = match [..path.split("/")] {
         [] => path
         [.., last] => last.to_owned()
       }
       Some({ "type": "mention", "name": name, "path": path })
     }
-    @mention_context.Skill(name~) => {
+    Skill(name~) => {
       guard self.active_context() is Some(context) &&
         self.skills is CodexSkillsReady(cwd, skills) &&
         cwd == context.cwd else {
@@ -665,7 +665,7 @@ fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
         "text": @mention_context.encode([mention.ref_], ""),
       })
     }
-    @mention_context.Symbol(..) | @mention_context.Annotation(..) =>
+    Symbol(..) | Annotation(..) =>
       Some({
         "type": "text",
         "text": @mention_context.encode([mention.ref_], ""),
@@ -823,8 +823,8 @@ fn State::repair_worktree(
         }
       }
       let reply = match result {
-        @protocol.WorktreeCreatedReply(reply) => reply
-        @protocol.WorktreeCreateError(message) => {
+        WorktreeCreatedReply(reply) => reply
+        WorktreeCreateError(message) => {
           scheduler.add(
             dispatch(
               Failed(
@@ -888,7 +888,7 @@ fn State::logout(
     dispatch,
     channel,
     @commands.codex_account_logout,
-    @protocol.NoPayload,
+    NoPayload,
   )
 }
 

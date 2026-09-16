@@ -37,11 +37,7 @@ fn test_conversations(
   for index = 0; index < count; index = index + 1 {
     let id = index.to_string()
     conversations.push({
-      id: @conversation.Id(
-        source=@conversation.OpenSeekLive,
-        channel="local",
-        conversation=id,
-      ),
+      id: Id(source=OpenSeekLive, channel="local", conversation=id),
       title: id,
       label: "Chat \{id}",
       nested: true,
@@ -52,7 +48,7 @@ fn test_conversations(
       running: false,
       openable: true,
       worktree: None,
-      run_mark: @conversation.NoRunMark,
+      run_mark: NoRunMark,
       trailing: [],
       children: [],
     })

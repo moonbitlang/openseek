@@ -72,10 +72,8 @@ pub async fn Snapshot::publish(
       @async.with_timeout(timeout_ms, () => self.send(server_url~, token~)) catch {
         error if @async.is_being_cancelled() => raise error
         @async.TimeoutError =>
-          @protocol.Failed(
-            message="The share request timed out. Please try again.",
-          )
-        error => @protocol.Failed(message="The share request failed: \{error}")
+          Failed(message="The share request timed out. Please try again.")
+        error => Failed(message="The share request failed: \{error}")
       }
   }
 }
@@ -92,11 +90,11 @@ async fn Snapshot::send(
     "Content-Type": "multipart/form-data; boundary=\{self.key}",
   })
   if response.code == 401 {
-    return @protocol.SignInRequired
+    return SignInRequired
   }
   if response.code == 404 {
     // A device login can still point at a deployment without share routes.
-    return @protocol.Failed(
+    return Failed(
       message="The signed-in server does not provide sharing at \{server_url}/v1/shares (HTTP 404). Sign in to a server with sharing enabled.",
     )
   }
@@ -112,13 +110,13 @@ async fn Snapshot::send(
         "Sharing failed (HTTP \{response.code}): \{detail.trim()}"
       _ => fallback
     }
-    return @protocol.Failed(message~)
+    return Failed(message~)
   }
   let invalid = "The share server did not return a valid share link."
   try body.json() catch {
-    _ => @protocol.Failed(message=invalid)
+    _ => Failed(message=invalid)
   } noraise {
-    { "url": String(url), .. } => @protocol.Shared(url~)
-    _ => @protocol.Failed(message=invalid)
+    { "url": String(url), .. } => Shared(url~)
+    _ => Failed(message=invalid)
   }
 }

@@ -667,8 +667,8 @@ test "a straggler reply for a detached workspace is rejected" {
 ///|
 test "settings commit decoder carries the workspace identity" {
   guard notification_msg(
-      @interop.ChannelId::Local,
-      @protocol.Notification::WorkspaceSettingsChanged({
+      Local,
+      WorkspaceSettingsChanged({
         workspace: "/proj",
         worktree_mode: true,
         checkout_submodules: false,

@@ -450,26 +450,16 @@ fn Entry::accept_completion(
         ),
       )
     SkillMentions =>
-      Some({
-        ref_: @mention_context.Skill(name=item.insert.trim().to_owned()),
-        range: None,
-      })
+      Some({ ref_: Skill(name=item.insert.trim().to_owned()), range: None, })
     Symbols => {
       let (file, line) = if item.path is Some(path) && item.range is Some(range) {
         (path, range.start_line_number)
       } else {
         ("", 0)
       }
-      Some({
-        ref_: @mention_context.Symbol(name=item.label, file~, line~),
-        range: item.range,
-      })
+      Some({ ref_: Symbol(name=item.label, file~, line~), range: item.range, })
     }
-    Files =>
-      item.path.map(path => Mention::{
-        ref_: @mention_context.File(path~),
-        range: None,
-      })
+    Files => item.path.map(path => { ref_: File(path~), range: None, })
   }
   guard mention is Some(mention) else {
     return ({ ..self, completion: None, }, @cmd.none)

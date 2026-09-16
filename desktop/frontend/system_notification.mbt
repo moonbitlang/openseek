@@ -237,11 +237,7 @@ test "only live local approval events create system notifications" {
   )
   assert_true(approval_system_notification(Local, None, event) is None)
   assert_true(
-    approval_system_notification(
-      Local,
-      Some("r1"),
-      @transcript.ApprovalResolved(id="ap-1"),
-    )
+    approval_system_notification(Local, Some("r1"), ApprovalResolved(id="ap-1"))
     is None,
   )
 }

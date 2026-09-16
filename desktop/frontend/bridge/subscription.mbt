@@ -17,7 +17,7 @@ priv suberror BridgeSubscription {
 pub fn local_connection(dispatch : @cmd.Emit[Event]) -> @sub.Sub {
   @sub.custom_sub(
     LocalBridgeKey,
-    @sub.Global,
+    Global,
     LocalBridge(dispatch~),
     bridge_sub_loader,
   )
@@ -36,7 +36,7 @@ pub fn remote_connection(
     RemoteBridgeSub::subscription_key(
       device_id, websocket_epoch, reconnect_attempt,
     ),
-    @sub.Global,
+    Global,
     RemoteBridge(dispatch~, device_id~, websocket_epoch~),
     bridge_sub_loader,
   )

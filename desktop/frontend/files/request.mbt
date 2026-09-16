@@ -149,7 +149,7 @@ pub fn Request::searching(
     "workspace-file-query\u{0}\{self.channel.uri_authority()}\u{0}\{self.session}\u{0}\{root_key}\u{0}\{epoch}\u{0}\{query}",
     Local,
     SearchingSub::Searching(self, query, loaded, failed),
-    @sub.SubLoader(searching_loader),
+    SubLoader(searching_loader),
   )
 }
 

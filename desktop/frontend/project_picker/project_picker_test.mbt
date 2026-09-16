@@ -5,7 +5,7 @@
 
 ///|
 fn emit() -> @cmd.Emit[@project_picker.Msg] {
-  @cmd.Emit(_ => @cmd.none)
+  Emit(_ => @cmd.none)
 }
 
 ///|
@@ -19,7 +19,7 @@ fn listed(
   let (_, loaded, outcome) = @project_picker.State::handle(
     opening,
     emit(),
-    @project_picker.Msg::Loaded(
+    Loaded(
       channel~,
       location~,
       entries~,
@@ -33,14 +33,11 @@ fn listed(
 
 ///|
 test "a picker refuses to confirm before any listing" {
-  let (_, opening) = @project_picker.State::open(
-    @interop.ChannelId::Local,
-    emit(),
-  )
+  let (_, opening) = @project_picker.State::open(Local, emit())
   let (_, held, outcome) = @project_picker.State::handle(
     opening,
     emit(),
-    @project_picker.Msg::Confirm,
+    Confirm,
   )
   assert_true(held is Some(_))
   assert_true(outcome is None)
@@ -49,37 +46,29 @@ test "a picker refuses to confirm before any listing" {
 ///|
 test "confirm picks the browsed directory and closes the picker" {
   let home = "/home/u/proj"
-  let picker = listed(
-    channel=@interop.ChannelId::Local,
-    location=@project_picker.Location::Directory(home),
-    entries=[],
-  )
+  let picker = listed(channel=Local, location=Directory(home), entries=[])
   let (_, closed, outcome) = @project_picker.State::handle(
     picker,
     emit(),
-    @project_picker.Msg::Confirm,
+    Confirm,
   )
   assert_true(closed is None)
   assert_true(
-    outcome is Some(@project_picker.Outcome::Picked(channel, path)) &&
-    channel == @interop.ChannelId::Local &&
-    path == home,
+    outcome is Some(Picked(channel, path)) && channel == Local && path == home,
   )
 }
 
 ///|
 test "a listing for another channel is dropped" {
-  let picker = listed(
-    channel=@interop.ChannelId::Local,
-    location=@project_picker.Location::Directory("/home/u"),
-    entries=["proj"],
-  )
+  let picker = listed(channel=Local, location=Directory("/home/u"), entries=[
+    "proj",
+  ])
   let (_, foreign, outcome) = @project_picker.State::handle(
     picker,
     emit(),
-    @project_picker.Msg::Loaded(
-      channel=@interop.ChannelId::Remote("d_b"),
-      location=@project_picker.Location::Directory("/from-b"),
+    Loaded(
+      channel=Remote("d_b"),
+      location=Directory("/from-b"),
       entries=["wrong"],
       generation=picker.request_generation(),
     ),
@@ -94,15 +83,11 @@ test "a listing for another channel is dropped" {
 ///|
 test "a stale listing leaves the picker untouched" {
   let home = "/home/u"
-  let picker = listed(
-    channel=@interop.ChannelId::Local,
-    location=@project_picker.Location::Directory(home),
-    entries=["proj"],
-  )
+  let picker = listed(channel=Local, location=Directory(home), entries=["proj"])
   let (_, browsing, _) = @project_picker.State::handle(
     picker,
     emit(),
-    @project_picker.Msg::Navigate("/home/u/proj"),
+    Navigate("/home/u/proj"),
   )
   guard browsing is Some(navigating) else {
     fail("picker closed by navigation")
@@ -112,9 +97,9 @@ test "a stale listing leaves the picker untouched" {
   let (_, stale, outcome) = @project_picker.State::handle(
     navigating,
     emit(),
-    @project_picker.Msg::Loaded(
-      channel=@interop.ChannelId::Local,
-      location=@project_picker.Location::Directory("/elsewhere"),
+    Loaded(
+      channel=Local,
+      location=Directory("/elsewhere"),
       entries=["wrong"],
       generation=picker.request_generation(),
     ),
@@ -127,16 +112,12 @@ test "a stale listing leaves the picker untouched" {
 ///|
 test "a failed navigation reports the failure and keeps the picker" {
   let home = "/home/u"
-  let picker = listed(
-    channel=@interop.ChannelId::Local,
-    location=@project_picker.Location::Directory(home),
-    entries=["proj"],
-  )
+  let picker = listed(channel=Local, location=Directory(home), entries=["proj"])
   let (_, kept, outcome) = @project_picker.State::handle(
     picker,
     emit(),
-    @project_picker.Msg::Failed(
-      channel=@interop.ChannelId::Local,
+    Failed(
+      channel=Local,
       message="no such directory: /gone",
       generation=picker.request_generation(),
     ),
@@ -146,18 +127,14 @@ test "a failed navigation reports the failure and keeps the picker" {
   }
   assert_true(state == picker)
   assert_true(
-    outcome is Some(@project_picker.Outcome::Failed(message)) &&
+    outcome is Some(Failed(message)) &&
     message == "Cannot open folder: no such directory: /gone",
   )
   // A failure answering a superseded navigation stays silent.
   let (_, stale, outcome) = @project_picker.State::handle(
     picker,
     emit(),
-    @project_picker.Msg::Failed(
-      channel=@interop.ChannelId::Local,
-      message="stale",
-      generation=99,
-    ),
+    Failed(channel=Local, message="stale", generation=99),
   )
   guard stale is Some(state) else { fail("picker closed by a stale failure") }
   assert_true(state == picker)
@@ -166,17 +143,13 @@ test "a failed navigation reports the failure and keeps the picker" {
 
 ///|
 test "the Windows drive list refuses a confirm" {
-  let picker = listed(
-    channel=@interop.ChannelId::Local,
-    location=@project_picker.Location::DriveList,
-    entries=["C:", "D:"],
-  )
+  let picker = listed(channel=Local, location=DriveList, entries=["C:", "D:"])
   // The drive list is not a directory: Enter and "Add" have nothing to
   // register, so the picker stays open with nothing picked.
   let (_, held, outcome) = @project_picker.State::handle(
     picker,
     emit(),
-    @project_picker.Msg::Confirm,
+    Confirm,
   )
   assert_true(held is Some(_))
   assert_true(outcome is None)
@@ -184,15 +157,11 @@ test "the Windows drive list refuses a confirm" {
 
 ///|
 test "close empties the picker slot" {
-  let picker = listed(
-    channel=@interop.ChannelId::Local,
-    location=@project_picker.Location::DriveList,
-    entries=[],
-  )
+  let picker = listed(channel=Local, location=DriveList, entries=[])
   let (_, closed, outcome) = @project_picker.State::handle(
     picker,
     emit(),
-    @project_picker.Msg::Close,
+    Close,
   )
   assert_true(closed is None)
   assert_true(outcome is None)

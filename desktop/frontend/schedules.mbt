@@ -97,7 +97,7 @@ fn request_schedules(
             @interop.bridge_request(
               channel,
               @commands.schedules_list,
-              @protocol.EmptyPayload::NoPayload,
+              NoPayload,
             )
           Save(payload) =>
             @interop.bridge_request(channel, @commands.schedules_save, payload)
@@ -457,7 +457,7 @@ fn update_schedules(
               @interop.bridge_request(
                 channel,
                 @commands.session_list,
-                @protocol.EmptyPayload::NoPayload,
+                NoPayload,
               ),
             ) catch {
               error => Err(@interop.bridge_error_text(error))

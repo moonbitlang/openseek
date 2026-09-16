@@ -60,7 +60,7 @@ fn project_picker_capture_loader(
 fn capture_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
   @sub.custom_sub(
     "project-picker-capture",
-    @sub.Scope::Global,
+    Global,
     ProjectPickerCapture(emit),
     project_picker_capture_loader,
   )

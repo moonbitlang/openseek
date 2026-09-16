@@ -1,7 +1,7 @@
 ///|
 test "pattern repair carries model and thinking through the request codec" {
   let input : Input = {
-    owner: { channel: @interop.ChannelId::Local, session: "repair", },
+    owner: { channel: Local, session: "repair", },
     root: Some(@common.Uri::parse("file:///work")),
     model: "glm-5.3",
     thinking: Some(ThinkingMax),

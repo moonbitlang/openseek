@@ -3,7 +3,7 @@
 /// context most cases below start from.
 fn local_ctx(session : String, placement : @interop.CheckoutPlacement) -> Ctx {
   {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session,
     placement: Some(placement),
     dark_mode: false,
@@ -13,15 +13,11 @@ fn local_ctx(session : String, placement : @interop.CheckoutPlacement) -> Ctx {
 
 ///|
 test "Windows workspace paths use their final component as the tab label" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  guard @resource.of_path(@interop.ChannelId::Local, "/C:/Users/alice/project")
-    is Some(workspace) else {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  guard @resource.of_path(Local, "/C:/Users/alice/project") is Some(workspace) else {
     fail("Windows resource fixture was invalid")
   }
-  let ctx = local_ctx(
-    "windows-workspace",
-    @interop.WorkspaceRoot(root=workspace),
-  )
+  let ctx = local_ctx("windows-workspace", WorkspaceRoot(root=workspace))
   let (_, state) = update(emit, ToggleTerminal, State::empty(), ctx)
   guard state.tabs.get(0) is Some(tab) else {
     fail("terminal tab was not opened")
@@ -31,47 +27,39 @@ test "Windows workspace paths use their final component as the tab label" {
 
 ///|
 test "an exit before the open reply cannot revive a dead terminal" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/project")
-    is Some(workspace) else {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  guard @resource.of_path(Local, "/work/project") is Some(workspace) else {
     fail("workspace resource fixture was invalid")
   }
-  let ctx = local_ctx("exit-race", @interop.WorkspaceRoot(root=workspace))
+  let ctx = local_ctx("exit-race", WorkspaceRoot(root=workspace))
   let (_, opening) = update(emit, ToggleTerminal, State::empty(), ctx)
   let key = opening.tabs[0].key
   let terminal_id = "terminal-exit-race"
   let (_, exited) = update(
     emit,
-    SessionExited(channel=@interop.ChannelId::Local, id=terminal_id, code=0),
+    SessionExited(channel=Local, id=terminal_id, code=0),
     opening,
     ctx,
   )
-  assert_true(
-    exited.exited_before_open.contains((@interop.ChannelId::Local, terminal_id)),
-  )
+  assert_true(exited.exited_before_open.contains((Local, terminal_id)))
   let (_, replied) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key~, id=terminal_id),
+    Opened(channel=Local, key~, id=terminal_id),
     exited,
     ctx,
   )
   assert_true(replied.tabs.is_empty())
-  assert_true(
-    !replied.exited_before_open.contains(
-      (@interop.ChannelId::Local, terminal_id),
-    ),
-  )
+  assert_true(!replied.exited_before_open.contains((Local, terminal_id)))
   assert_true(!replied.open)
 }
 
 ///|
 test "sync records color-scheme changes even when the shown tab is unchanged" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  guard @resource.of_path(@interop.ChannelId::Local, "/scratch/theme")
-    is Some(scratch_root) else {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  guard @resource.of_path(Local, "/scratch/theme") is Some(scratch_root) else {
     fail("scratch resource fixture was invalid")
   }
-  let light_ctx = local_ctx("theme", @interop.Scratch(root=Some(scratch_root)))
+  let light_ctx = local_ctx("theme", Scratch(root=Some(scratch_root)))
   let (light, _) = sync(emit, State::empty(), light_ctx)
   assert_true(light.shown is None)
   assert_true(light.synced_dark_mode is Some(false))
@@ -82,14 +70,13 @@ test "sync records color-scheme changes even when the shown tab is unchanged" {
 
 ///|
 test "terminal UUIDs route independently of the focused device" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/project")
-    is Some(local_workspace) else {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  guard @resource.of_path(Local, "/work/project") is Some(local_workspace) else {
     fail("local workspace resource fixture was invalid")
   }
   let local_ctx = local_ctx(
     "shared-session",
-    @interop.WorkspaceRoot(root=local_workspace),
+    WorkspaceRoot(root=local_workspace),
   )
   let remote : @interop.ChannelId = Remote("device-1")
   guard @resource.of_path(remote, "/work/project") is Some(remote_workspace) else {
@@ -98,7 +85,7 @@ test "terminal UUIDs route independently of the focused device" {
   let remote_ctx : Ctx = {
     ..local_ctx,
     channel: remote,
-    placement: Some(@interop.WorkspaceRoot(root=remote_workspace)),
+    placement: Some(WorkspaceRoot(root=remote_workspace)),
   }
   let (_, local_opening) = update(
     emit,
@@ -110,7 +97,7 @@ test "terminal UUIDs route independently of the focused device" {
   let local_id = "terminal-local"
   let (_, local_running) = update(
     emit,
-    Opened(channel=@interop.ChannelId::Local, key=local_key, id=local_id),
+    Opened(channel=Local, key=local_key, id=local_id),
     local_opening,
     local_ctx,
   )
@@ -135,7 +122,7 @@ test "terminal UUIDs route independently of the focused device" {
     fail("local terminal was not preserved")
   }
   assert_true(
-    tab.workspace is Project(@interop.ChannelId::Local, resource) &&
+    tab.workspace is Project(Local, resource) &&
     resource.path == "/work/project",
   )
   assert_true(tab.id == Some(local_id))
@@ -143,7 +130,7 @@ test "terminal UUIDs route independently of the focused device" {
 
 ///|
 test "a disconnected channel retires only its terminal tabs" {
-  let local_channel : @interop.ChannelId = @interop.ChannelId::Local
+  let local_channel : @interop.ChannelId = Local
   let remote : @interop.ChannelId = Remote("device-1")
   guard @resource.of_path(local_channel, "/local") is Some(local_workspace) &&
     @resource.of_path(remote, "/remote") is Some(remote_workspace) else {
@@ -186,8 +173,7 @@ test "a disconnected channel retires only its terminal tabs" {
   let (_, disconnected) = disconnect(state, remote)
   inspect(disconnected.tabs.length(), content="1")
   assert_true(
-    disconnected.tabs[0].workspace
-    is Project(@interop.ChannelId::Local, resource) &&
+    disconnected.tabs[0].workspace is Project(Local, resource) &&
     resource.path == "/local",
   )
   assert_true(disconnected.shown is None)
@@ -198,15 +184,15 @@ test "a disconnected channel retires only its terminal tabs" {
 
 ///|
 test "an open panel waits for a reconnected channel before replacing its PTY" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let remote : @interop.ChannelId = @interop.ChannelId::Remote("device-1")
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let remote : @interop.ChannelId = Remote("device-1")
   guard @resource.of_path(remote, "/scratch/reconnect") is Some(scratch_root) else {
     fail("scratch resource fixture was invalid")
   }
   let disconnected_ctx : Ctx = {
     channel: remote,
     session: "reconnect",
-    placement: Some(@interop.Scratch(root=Some(scratch_root))),
+    placement: Some(Scratch(root=Some(scratch_root))),
     dark_mode: false,
     connected: false,
   }
@@ -226,56 +212,45 @@ test "an open panel waits for a reconnected channel before replacing its PTY" {
   })
   inspect(reconnected.tabs.length(), content="1")
   assert_true(
-    reconnected.tabs[0].workspace
-    is Scratch(@interop.ChannelId::Remote("device-1"), "reconnect"),
+    reconnected.tabs[0].workspace is Scratch(Remote("device-1"), "reconnect"),
   )
 }
 
 ///|
 test "a missing checkout refuses new PTYs and retires only its conversation" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/project")
-    is Some(workspace) &&
-    @resource.of_path(@interop.ChannelId::Local, "/work/worktrees/wt")
-    is Some(worktree_root) else {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  guard @resource.of_path(Local, "/work/project") is Some(workspace) &&
+    @resource.of_path(Local, "/work/worktrees/wt") is Some(worktree_root) else {
     fail("workspace resource fixture was invalid")
   }
   let ctx = local_ctx(
     "missing",
-    @interop.Worktree(project=workspace, name="wt", root=worktree_root),
+    Worktree(project=workspace, name="wt", root=worktree_root),
   )
   let (_, opening) = update(emit, ToggleTerminal, State::empty(), ctx)
   let opening_key = opening.tabs[0].key
   let (_, running) = update(
     emit,
-    Opened(
-      channel=@interop.ChannelId::Local,
-      key=opening_key,
-      id="terminal-missing",
-    ),
+    Opened(channel=Local, key=opening_key, id="terminal-missing"),
     opening,
     ctx,
   )
   let other_ctx = {
     ..ctx,
     session: "other",
-    placement: Some(@interop.WorkspaceRoot(root=workspace)),
+    placement: Some(WorkspaceRoot(root=workspace)),
   }
   let (_, other_opening) = update(emit, NewTerminal, running, other_ctx)
   let other_key = other_opening.tabs[1].key
   let (_, both_running) = update(
     emit,
-    Opened(
-      channel=@interop.ChannelId::Local,
-      key=other_key,
-      id="terminal-other",
-    ),
+    Opened(channel=Local, key=other_key, id="terminal-other"),
     other_opening,
     other_ctx,
   )
   let missing_ctx = {
     ..ctx,
-    placement: Some(@interop.MissingWorktree(project=workspace, name="wt")),
+    placement: Some(MissingWorktree(project=workspace, name="wt")),
   }
   let (retired, _) = sync(emit, both_running, missing_ctx)
   assert_eq(retired.tabs.length(), 1)
@@ -292,45 +267,36 @@ test "a missing checkout refuses new PTYs and retires only its conversation" {
 
 ///|
 test "a worktree conversation never reuses the main checkout terminal group" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/project")
-    is Some(workspace) &&
-    @resource.of_path(@interop.ChannelId::Local, "/work/worktrees/wt-1")
-    is Some(worktree_root) else {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  guard @resource.of_path(Local, "/work/project") is Some(workspace) &&
+    @resource.of_path(Local, "/work/worktrees/wt-1") is Some(worktree_root) else {
     fail("workspace resource fixture was invalid")
   }
-  let main = local_ctx("main-chat", @interop.WorkspaceRoot(root=workspace))
+  let main = local_ctx("main-chat", WorkspaceRoot(root=workspace))
   let (_, main_opening) = update(emit, ToggleTerminal, State::empty(), main)
   let worktree = {
     ..main,
     session: "worktree-chat",
     placement: Some(
-      @interop.Worktree(project=workspace, name="wt-1", root=worktree_root),
+      Worktree(project=workspace, name="wt-1", root=worktree_root),
     ),
   }
   // The panel is already open, but the worktree group is empty, so sync must
   // create a second tab rather than reveal the main checkout's tab.
   let (separated, _) = sync(emit, main_opening, worktree)
   assert_eq(separated.tabs.length(), 2)
-  assert_true(
-    separated.tabs[0].workspace == Project(@interop.ChannelId::Local, workspace),
-  )
-  assert_true(
-    separated.tabs[1].workspace ==
-    Worktree(@interop.ChannelId::Local, workspace, "wt-1"),
-  )
+  assert_true(separated.tabs[0].workspace == Project(Local, workspace))
+  assert_true(separated.tabs[1].workspace == Worktree(Local, workspace, "wt-1"))
 }
 
 ///|
 test "an unresolved placement cannot reveal or create a project terminal" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/project")
-    is Some(workspace) &&
-    @resource.of_path(@interop.ChannelId::Local, "/work/worktrees/wt-1")
-    is Some(worktree_root) else {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  guard @resource.of_path(Local, "/work/project") is Some(workspace) &&
+    @resource.of_path(Local, "/work/worktrees/wt-1") is Some(worktree_root) else {
     fail("workspace resource fixture was invalid")
   }
-  let main = local_ctx("main-chat", @interop.WorkspaceRoot(root=workspace))
+  let main = local_ctx("main-chat", WorkspaceRoot(root=workspace))
   let (_, project_opening) = update(emit, ToggleTerminal, State::empty(), main)
   let unresolved : Ctx = { ..main, session: "restored-chat", placement: None, }
   // The existing project tab stays alive for its owner, but the restored
@@ -348,13 +314,10 @@ test "an unresolved placement cannot reveal or create a project terminal" {
   let resolved = {
     ..unresolved,
     placement: Some(
-      @interop.Worktree(project=workspace, name="wt-1", root=worktree_root),
+      Worktree(project=workspace, name="wt-1", root=worktree_root),
     ),
   }
   let (separated, _) = sync(emit, waiting, resolved)
   assert_eq(separated.tabs.length(), 2)
-  assert_true(
-    separated.tabs[1].workspace ==
-    Worktree(@interop.ChannelId::Local, workspace, "wt-1"),
-  )
+  assert_true(separated.tabs[1].workspace == Worktree(Local, workspace, "wt-1"))
 }

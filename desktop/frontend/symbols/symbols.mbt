@@ -92,7 +92,7 @@ pub fn searching(
     "workspace-symbols\u{0}\{owner.channel.uri_authority()}\u{0}\{owner.session}\u{0}\{root.to_string()}\u{0}\{query}",
     Local,
     SearchingSub::Searching(owner, query, root, loaded, failed),
-    @sub.SubLoader(searching_loader),
+    SubLoader(searching_loader),
   )
 }
 

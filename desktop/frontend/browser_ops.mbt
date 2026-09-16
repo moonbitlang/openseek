@@ -27,7 +27,7 @@ fn[Payload : ToJson] browser_op(
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let _ : @protocol.EmptyReply = @interop.bridge_request_in_order(
-        @interop.ChannelId::Local,
+        Local,
         command,
         payload,
       ) catch {
@@ -263,16 +263,14 @@ fn browser_event_msg(payload : Map[String, Json]) -> Msg? {
   }
   match kind {
     "navigated" =>
-      @jsonx.json_text(payload, "url").map(url => {
-        Preview(@preview.Msg::Navigated(id~, url~))
-      })
+      @jsonx.json_text(payload, "url").map(url => Preview(Navigated(id~, url~)))
     "loading" =>
       @jsonx.json_bool(payload, "loading").map(loading => {
-        Preview(@preview.Msg::LoadingChanged(id~, loading~))
+        Preview(LoadingChanged(id~, loading~))
       })
     "title" =>
       @jsonx.json_text(payload, "title").map(title => {
-        Preview(@preview.Msg::TitleUpdated(id~, title~))
+        Preview(TitleUpdated(id~, title~))
       })
     "load_failed" | "renderer_process_terminated" =>
       // CEF reports ERR_ABORTED (-3) whenever a load is superseded — a new
@@ -287,8 +285,7 @@ fn browser_event_msg(payload : Map[String, Json]) -> Msg? {
       } else {
         match
           (@jsonx.json_text(payload, "url"), @jsonx.json_text(payload, "text")) {
-          (Some(url), Some(text)) =>
-            Some(Preview(@preview.Msg::LoadFailed(id~, url~, text~)))
+          (Some(url), Some(text)) => Some(Preview(LoadFailed(id~, url~, text~)))
           _ => None
         }
       }

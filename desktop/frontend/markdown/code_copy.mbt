@@ -13,7 +13,7 @@ fn code_copy_button(source : String) -> @html.Html {
           return @cmd.none
         }
         @clipboard.copy(
-          @clipboard.Text(source),
+          Text(source),
           copied=@cmd.custom_cmd(_ => code_copy_feedback(button, true)),
           failed=_ => @cmd.custom_cmd(_ => code_copy_feedback(button, false)),
         )

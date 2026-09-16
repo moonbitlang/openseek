@@ -37,10 +37,7 @@ fn LocalBridgeSub::install(self : LocalBridgeSub, attempt : Int) -> @cmd.Cmd {
       if attempt > 120 {
         scheduler.add(
           (self.dispatch)(
-            Unavailable(
-              channel=@interop.ChannelId::Local,
-              message="Bridge unavailable",
-            ),
+            Unavailable(channel=Local, message="Bridge unavailable"),
           ),
         )
       } else {
@@ -72,7 +69,7 @@ fn LocalBridgeSub::open_host_connection(
         scheduler.add(
           (self.dispatch)(
             Unavailable(
-              channel=@interop.ChannelId::Local,
+              channel=Local,
               message=@interop.bridge_error_text(error),
             ),
           ),
@@ -128,11 +125,7 @@ fn LocalBridgeSub::wire(
         is Some(notification) else {
         return
       }
-      scheduler.add(
-        (self.dispatch)(
-          Notification(channel=@interop.ChannelId::Local, notification~),
-        ),
-      )
+      scheduler.add((self.dispatch)(Notification(channel=Local, notification~)))
     }
     self.subscribe(extension_events, "openseek." + method_, handler)
   }

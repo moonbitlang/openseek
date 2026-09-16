@@ -269,9 +269,9 @@ fn MoonIdeProjection::to_viewer(
     guard @resource.of_path(self.channel, location.path) is Some(absolute) else {
       continue
     }
-    result.push(@language.Location::{
+    result.push({
       uri: model_uri_of(absolute),
-      range: @common.Range(
+      range: Range(
         location.start_line,
         location.start_column,
         location.end_line,
@@ -363,8 +363,7 @@ async fn resolve_navigation_preview(
 
 ///|
 test "navigation root follows resource and workspace-relative paths" {
-  guard @resource.of_path(@interop.ChannelId::Local, "/ws/project/src/main.mbt")
-    is Some(file) else {
+  guard @resource.of_path(Local, "/ws/project/src/main.mbt") is Some(file) else {
     fail("test resource path was not absolute")
   }
   guard navigation_root_from_file(file, Relative("src/main.mbt")) is Some(root) else {
@@ -372,12 +371,11 @@ test "navigation root follows resource and workspace-relative paths" {
   }
   assert_eq(root.path, "/ws/project")
   let context : NavigationContext = {
-    owner: { channel: @interop.ChannelId::Local, session: "test", },
+    owner: { channel: Local, session: "test", },
     root,
   }
   assert_eq(context.relative_path(file), Some(Relative("src/main.mbt")))
-  guard @resource.of_path(@interop.ChannelId::Local, "/other/src/main.mbt")
-    is Some(outside) else {
+  guard @resource.of_path(Local, "/other/src/main.mbt") is Some(outside) else {
     fail("test outside resource was not absolute")
   }
   assert_true(
@@ -406,7 +404,7 @@ test "navigation root follows resource and workspace-relative paths" {
 ///|
 test "semantic navigation projects fragment-local lines onto the source" {
   let context : NavigationContext = {
-    owner: { channel: @interop.ChannelId::Local, session: "test", },
+    owner: { channel: Local, session: "test", },
     root: @common.Uri::parse("openseek://local/work"),
   }
   let projection : MoonIdeModelProjection = {
@@ -446,14 +444,14 @@ test "moon ide locations stay one based and channel routed" {
         },
       ],
     },
-    channel: @interop.ChannelId::Remote("device"),
+    channel: Remote("device"),
   }.to_viewer()
   assert_eq(locations.length(), 1)
   assert_true(
     model_uri_channel(locations[0].uri) == Some(Remote("device")) &&
     model_uri_path(locations[0].uri) is Some(resource) &&
     resource.path == "/ws/lib.mbt" &&
-    locations[0].range == @common.Range(2, 3, 2, 9),
+    locations[0].range == Range(2, 3, 2, 9),
   )
 }
 

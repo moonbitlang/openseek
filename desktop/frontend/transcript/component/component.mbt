@@ -608,7 +608,7 @@ fn transcript_subscription(
 ) -> @sub.Sub {
   @sub.custom_sub(
     "transcript-dom",
-    @sub.Local,
+    Local,
     TranscriptSubscription(
       emit~,
       departed~,
@@ -763,9 +763,7 @@ fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
   self.element = next
   if next is Some(element) {
     self.refresh_diagrams(element)
-    self.diagrams = Some(
-      @diagram_viewport.DiagramViewports(element, self.on_size_changed),
-    )
+    self.diagrams = Some(DiagramViewports(element, self.on_size_changed))
     observe_transcript_images(self.images, element)
   }
 }
@@ -898,7 +896,7 @@ fn pinned_model(input : Input) -> Model {
 test "local pinned transitions are pure" {
   let input = base_input()
   let state = pinned_model(input)
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let (first, _) = state.update(input, Pinned(false), emit)
   let (second, _) = state.update(input, Pinned(false), emit)
   assert_false(first.pinned)
@@ -931,7 +929,7 @@ test "an overview click unpins and highlights inside the component" {
   let key = @transcript_overview.Durable(3)
   let input = base_input()
   let state = pinned_model(input)
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let (next, _) = state.update(input, Overview(Clicked(key)), emit)
   assert_false(next.pinned)
   @debug.assert_eq(next.overview.active, Some(key))

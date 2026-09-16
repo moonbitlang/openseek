@@ -10,14 +10,14 @@ priv struct DesktopQuickDiffService {
 
 ///|
 fn DesktopQuickDiffService::DesktopQuickDiffService() -> DesktopQuickDiffService {
-  { originals: Map([]), did_change_original: @common.Emitter(), }
+  { originals: Map([]), did_change_original: Emitter(), }
 }
 
 ///|
 fn DesktopQuickDiffService::quick_diff_handle(
   self : DesktopQuickDiffService,
 ) -> @quick_diff_api.QuickDiffHandle {
-  @quick_diff_api.QuickDiffHandle(
+  QuickDiffHandle(
     get_original_content=resource => self.originals.get(resource.to_string()),
     on_did_change_original=listener => self.did_change_original.event(listener),
   )

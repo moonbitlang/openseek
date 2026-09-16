@@ -135,10 +135,9 @@ pub fn Ctx::Ctx(
 fn workspace_key(ctx : Ctx) -> WorkspaceKey? {
   guard ctx.placement is Some(placement) else { return None }
   match placement {
-    @interop.Scratch(..) => Some(Scratch(ctx.channel, ctx.session))
-    @interop.WorkspaceRoot(root~) => Some(Project(ctx.channel, root))
-    @interop.Worktree(project~, name~, ..)
-    | @interop.MissingWorktree(project~, name~) =>
+    Scratch(..) => Some(Scratch(ctx.channel, ctx.session))
+    WorkspaceRoot(root~) => Some(Project(ctx.channel, root))
+    Worktree(project~, name~, ..) | MissingWorktree(project~, name~) =>
       Some(Worktree(ctx.channel, project, name))
   }
 }

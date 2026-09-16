@@ -114,9 +114,9 @@ fn session_component_input(
         match conv.run {
           NoRun(ended=Some(RunFinished(Completed))) => @conversation.Completed
           NoRun(ended=Some(RunFinished(RunFailed) | RunFailed | RunErrored)) =>
-            @conversation.Failed
-          NoRun(ended=Some(RunFinished(Aborted))) => @conversation.Stopped
-          _ => @conversation.Ended
+            Failed
+          NoRun(ended=Some(RunFinished(Aborted))) => Stopped
+          _ => Ended
         },
       )
     _ => None
@@ -139,8 +139,8 @@ fn session_component_input(
     // The store placement rides in `root`: session ids may repeat across
     // project stores, and without it two same-id rows would collide on one
     // key in the sidebar's keyed container.
-    id: @conversation.Id(
-      source=@conversation.OpenSeekLive,
+    id: Id(
+      source=OpenSeekLive,
       channel=channel.uri_authority(),
       conversation=session_id,
       root?,
@@ -160,7 +160,7 @@ fn session_component_input(
     run_mark,
     trailing: if archivable {
       [
-        @conversation.Archive(
+        Archive(
           title="Archive — tuck this chat away; its files stay where they are",
         ),
       ]
@@ -473,8 +473,8 @@ fn Model::sidebar_component_sections(
     }
     let conversations = ordered_by_recency(stamped)
     projects.push(
-      @section.Project({
-        id: @project.Id(source="openseek.projects", channel~, root=path.path),
+      Project({
+        id: Id(source="openseek.projects", channel~, root=path.path),
         title: path.path,
         label: @resource.label(path),
         // The Chat and Codex screens are exclusive, so at most one side
@@ -497,8 +497,8 @@ fn Model::sidebar_component_sections(
     for entry in self.codex.loose_entries(context) {
       projects.push(
         match entry {
-          @section.Conversation(input) =>
-            @section.Conversation(self.decorate_conversation_input(input))
+          Conversation(input) =>
+            Conversation(self.decorate_conversation_input(input))
           other => other
         },
       )
@@ -508,7 +508,7 @@ fn Model::sidebar_component_sections(
     dev.active_project is Some(project) && !dev.is_chat_workspace(project),
   )
   sections.push({
-    id: @section.Id(source="openseek.chats", channel~),
+    id: Id(source="openseek.chats", channel~),
     label: "Chats",
     initially_collapsed: false,
     preview_limit: Some(3),
@@ -523,10 +523,10 @@ fn Model::sidebar_component_sections(
       self.pending_project_adoption is Some(_) ||
       dev.bridge != Connected,
     }),
-    entries: ordered_by_recency(chat_rows).map(row => @section.Conversation(row)),
+    entries: ordered_by_recency(chat_rows).map(row => Conversation(row)),
   })
   sections.push({
-    id: @section.Id(source="openseek.projects", channel~),
+    id: Id(source="openseek.projects", channel~),
     label: "Projects",
     initially_collapsed: false,
     preview_limit: None,
@@ -557,10 +557,10 @@ fn Model::sidebar_component_sections(
       self.find_conversation(dev.channel, item.id) is Some(conv) &&
       conv.is_archived_read_only()
     archived_entries.push(
-      @section.Conversation(
+      Conversation(
         self.decorate_conversation_input({
-          id: @conversation.Id(
-            source=@conversation.OpenSeekArchived,
+          id: Id(
+            source=OpenSeekArchived,
             channel~,
             conversation=item.id,
             root=item.workspace.path,
@@ -575,14 +575,10 @@ fn Model::sidebar_component_sections(
           running: false,
           openable: true,
           worktree: None,
-          run_mark: @conversation.NoRunMark,
+          run_mark: NoRunMark,
           trailing: [
-            @conversation.Restore(
-              title="Restore this conversation to the sidebar",
-            ),
-            @conversation.Delete(
-              title="Permanently delete this archived conversation",
-            ),
+            Restore(title="Restore this conversation to the sidebar"),
+            Delete(title="Permanently delete this archived conversation"),
           ],
           children: [],
         }),
@@ -593,15 +589,15 @@ fn Model::sidebar_component_sections(
     for entry in self.codex.archived_sidebar_entries(dev.channel) {
       archived_entries.push(
         match entry {
-          @section.Conversation(input) =>
-            @section.Conversation(self.decorate_conversation_input(input))
+          Conversation(input) =>
+            Conversation(self.decorate_conversation_input(input))
           other => other
         },
       )
     }
   }
   sections.push({
-    id: @section.Id(source="archived", channel~),
+    id: Id(source="archived", channel~),
     label: if archived_entries.is_empty() {
       "Archived chats"
     } else {
@@ -1124,7 +1120,7 @@ fn api_settings_rows(
         "Endpoint URL",
         [
           @html.input(
-            input_type=@html.InputType::Text,
+            input_type=Text,
             value=model.custom_api_url,
             placeholder="https://host/chat/completions",
             on_input=dispatch.map(value => CustomApiUrlChanged(value)),
@@ -1152,7 +1148,7 @@ fn api_settings_rows(
         key_label,
         [
           @html.input(
-            input_type=@html.InputType::Password,
+            input_type=Password,
             value=model.setup_api_key,
             placeholder=if key_saved {
               "saved — enter to replace"
@@ -1199,7 +1195,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       "Max steps",
       [
         @html.input(
-          input_type=@html.InputType::Number,
+          input_type=Number,
           value=model.max_steps,
           placeholder="1000",
           on_input=dispatch.map(value => MaxStepsChanged(value)),
@@ -1847,7 +1843,7 @@ fn view(
         model.focused,
         terminal_panel_visible,
         file_panel_visible,
-        @codex.PageActions::{
+        {
           toggle_terminal,
           toggle_files: toggle_right_panel,
           workspace_label: workspace => @resource.label(workspace),
@@ -2100,13 +2096,11 @@ test "archived families collapse while a live orphan child stays archivable" {
     }
   }
   assert_eq(archived_entries.length(), 1)
-  guard archived_entries[0] is @section.Conversation(archived) else {
+  guard archived_entries[0] is Conversation(archived) else {
     fail("expected archived parent conversation")
   }
   assert_eq(archived.id().conversation(), "chat")
-  assert_true(
-    archived.trailing is [@conversation.Restore(_), @conversation.Delete(_)],
-  )
+  assert_true(archived.trailing is [Restore(_), Delete(_)])
   let orphan_model = test_model().with_dev(dev => {
     ..dev,
     sessions: [placed_archived_item("chat-sr-1")],
@@ -2119,7 +2113,7 @@ test "archived families collapse while a live orphan child stays archivable" {
   for section in orphan_sections {
     guard section.id().source() == "openseek.projects" else { continue }
     for entry in section.entries {
-      guard entry is @section.Project(project) else { continue }
+      guard entry is Project(project) else { continue }
       for row in project.conversations {
         if row.id().conversation() == "chat-sr-1" {
           orphan = Some(row)
@@ -2131,7 +2125,7 @@ test "archived families collapse while a live orphan child stays archivable" {
     fail("expected live orphan conversation")
   }
   assert_eq(orphan.id().conversation(), "chat-sr-1")
-  assert_true(orphan.trailing is [@conversation.Archive(_)])
+  assert_true(orphan.trailing is [Archive(_)])
 }
 
 ///|
@@ -2158,7 +2152,7 @@ test "project component receives the complete conversation list" {
   for section in sections {
     if section.id().source() == "openseek.projects" {
       for entry in section.entries {
-        if entry is @section.Project(value) {
+        if entry is Project(value) {
           project = Some(value)
         }
       }
@@ -2201,13 +2195,13 @@ test "same-id records in two project stores keep distinct row keys" {
   for section in model.sidebar_component_sections(model.dev()) {
     for entry in section.entries {
       match entry {
-        @section.Project(project) =>
+        Project(project) =>
           for conversation in project.conversations {
             if conversation.id.conversation() == "desktop-shared" {
               keys.push(conversation.id.key())
             }
           }
-        @section.Conversation(conversation) =>
+        Conversation(conversation) =>
           if conversation.id.conversation() == "desktop-shared" {
             keys.push(conversation.id.key())
           }

@@ -281,27 +281,25 @@ pub fn State::composer_input(
       }
     }
   }
-  let before : Array[@composer.ContextComponent] = [
-    @composer.CodexRequests(requests~),
-  ]
+  let before : Array[@composer.ContextComponent] = [CodexRequests(requests~)]
   if self.active_thread() is Some(active) &&
     active.worktree is Some(worktree) &&
     !worktree.present {
     before.push(
-      @composer.MissingWorktreeNoticeComponent({
+      MissingWorktreeNoticeComponent({
         name: worktree.name,
         conversation_noun: "task",
       }),
     )
   }
   let status : Array[@composer.StatusComponent] = [
-    @composer.ModelStatus(context.model_control),
+    ModelStatus(context.model_control),
   ]
   if context.reasoning_control is Some(control) {
-    status.push(@composer.ReasoningStatus(control))
+    status.push(ReasoningStatus(control))
   }
   status.push(
-    @composer.PermissionStatus({
+    PermissionStatus({
       mode: self.permission_picker.mode(),
       open: self.permission_picker.is_open(),
       enabled: self.can_choose_permission(),
@@ -310,16 +308,14 @@ pub fn State::composer_input(
   if self.worktree_launch_workspace(context.channel) is Some(_) &&
     self.active_draft() is Some(_) {
     status.push(
-      @composer.WorktreeStatus({
+      WorktreeStatus({
         choice: self.placement,
         enabled: self.can_choose_worktree(),
       }),
     )
   }
   if self.git_status is Some(git) && git.presentation() is Some(presentation) {
-    status.push(
-      @composer.GitStatus({ presentation, open: self.git_details_open, }),
-    )
+    status.push(GitStatus({ presentation, open: self.git_details_open, }))
   }
   let active_turn = self.active_turn_id()
   let missing_worktree = self.has_missing_worktree()
@@ -331,10 +327,10 @@ pub fn State::composer_input(
       queue_available=false,
       steer_available=can_edit,
       can_stop=true,
-      submit=@composer.Steer,
+      submit=Steer,
     )
   } else {
-    @composer.Send(available=!self.loading && can_edit && self.has_active())
+    Send(available=!self.loading && can_edit && self.has_active())
   }
   {
     identity: self.composer_identity(context.channel),
@@ -343,7 +339,7 @@ pub fn State::composer_input(
     // is that this accepted local submission is starting. Later Codex turns
     // can overlap, so no broader single-turn heartbeat is inferred here.
     run: if self.waiting_for_first_user_item() {
-      Some({ stage: @composer.Starting, started_ms: None, tokens: 0, })
+      Some({ stage: Starting, started_ms: None, tokens: 0, })
     } else {
       None
     },
@@ -428,15 +424,11 @@ fn State::apply_composer_action(
     return (@cmd.none, self)
   }
   match action {
-    @composer.DraftSubmitted(draft~, ..) => {
+    DraftSubmitted(draft~, ..) => {
       let next = { ..self, draft: draft.task, mentions: draft.mentions, }
       next.submit_composer(dispatch, channel)
     }
-    @composer.DraftPresenceChanged(
-      present=false,
-      cleared_source=Some(source),
-      ..
-    ) => {
+    DraftPresenceChanged(present=false, cleared_source=Some(source), ..) => {
       let draft = if self.draft == source.task { "" } else { self.draft }
       let mentions = if self.mentions == source.mentions {
         []
@@ -445,7 +437,7 @@ fn State::apply_composer_action(
       }
       (@cmd.none, { ..self, draft, mentions, })
     }
-    @composer.RootMentionRemoved(mention~, ..) =>
+    RootMentionRemoved(mention~, ..) =>
       (
         @cmd.none,
         {
@@ -455,26 +447,25 @@ fn State::apply_composer_action(
           }),
         },
       )
-    @composer.SlashCommand(command~, ..) =>
+    SlashCommand(command~, ..) =>
       self.run_composer_command(dispatch, channel, command)
-    @composer.StopRequested(..) => (self.interrupt(dispatch, channel), self)
-    @composer.ModelSelected(value~, ..) =>
-      (@cmd.none, self.with_selected_model(value))
-    @composer.ReasoningSelected(value~, ..) =>
+    StopRequested(..) => (self.interrupt(dispatch, channel), self)
+    ModelSelected(value~, ..) => (@cmd.none, self.with_selected_model(value))
+    ReasoningSelected(value~, ..) =>
       (@cmd.none, self.with_selected_effort(value))
-    @composer.PermissionMenuToggled(..) =>
+    PermissionMenuToggled(..) =>
       update(dispatch, TogglePermissionMenu, self, channel, _ => @cmd.none)
-    @composer.PermissionMenuDismissed(..) =>
+    PermissionMenuDismissed(..) =>
       update(dispatch, DismissPermissionMenu, self, channel, _ => @cmd.none)
-    @composer.PermissionSelected(mode~, ..) =>
+    PermissionSelected(mode~, ..) =>
       update(dispatch, ChoosePermission(mode), self, channel, _ => @cmd.none)
-    @composer.GitDetailsToggled(..) =>
+    GitDetailsToggled(..) =>
       update(dispatch, ToggleGitDetails, self, channel, _ => @cmd.none)
-    @composer.WorktreeModeToggled(..) =>
+    WorktreeModeToggled(..) =>
       update(dispatch, ToggleWorktreeMode, self, channel, _ => @cmd.none)
-    @composer.MissingWorktreeRebuildRequested(..) =>
+    MissingWorktreeRebuildRequested(..) =>
       update(dispatch, RepairWorktree, self, channel, _ => @cmd.none)
-    @composer.MissingWorktreeArchiveRequested(..) =>
+    MissingWorktreeArchiveRequested(..) =>
       match self.active_thread() {
         Some(active) =>
           update(dispatch, ArchiveThread(active.id), self, channel, _ => {
@@ -482,7 +473,7 @@ fn State::apply_composer_action(
           })
         None => (@cmd.none, self)
       }
-    @composer.CodexRequestAnswerChanged(request_key~, question_id~, answer~, ..) =>
+    CodexRequestAnswerChanged(request_key~, question_id~, answer~, ..) =>
       update(
         dispatch,
         RequestAnswer(request_key~, question_id~, answer~),
@@ -490,27 +481,27 @@ fn State::apply_composer_action(
         channel,
         _ => @cmd.none,
       )
-    @composer.CodexRequestResponded(request_key~, decision~, ..) =>
+    CodexRequestResponded(request_key~, decision~, ..) =>
       update(dispatch, Respond(request_key~, decision~), self, channel, _ => {
         @cmd.none
       })
-    @composer.DraftPresenceChanged(..)
-    | @composer.MentionOpened(..)
-    | @composer.GoalEditStarted(..)
-    | @composer.GoalCancelled(..)
-    | @composer.GoalCleared(..)
-    | @composer.GoalSubmitted(..)
-    | @composer.FileIndexEnsured(..)
-    | @composer.ModelMenuToggled(..)
-    | @composer.ReasoningMenuToggled(..)
-    | @composer.SelectMenuDismissed(..)
-    | @composer.ApprovalAnswered(..)
-    | @composer.ApiSetupRequested(..)
-    | @composer.FollowupSubmitted(..)
-    | @composer.QueuedInputEditRequested(..)
-    | @composer.QueuedInputSteerRequested(..)
-    | @composer.QueuedInputDeleteRequested(..)
-    | @composer.WorktreePlacementRetried(..) => (@cmd.none, self)
+    DraftPresenceChanged(..)
+    | MentionOpened(..)
+    | GoalEditStarted(..)
+    | GoalCancelled(..)
+    | GoalCleared(..)
+    | GoalSubmitted(..)
+    | FileIndexEnsured(..)
+    | ModelMenuToggled(..)
+    | ReasoningMenuToggled(..)
+    | SelectMenuDismissed(..)
+    | ApprovalAnswered(..)
+    | ApiSetupRequested(..)
+    | FollowupSubmitted(..)
+    | QueuedInputEditRequested(..)
+    | QueuedInputSteerRequested(..)
+    | QueuedInputDeleteRequested(..)
+    | WorktreePlacementRetried(..) => (@cmd.none, self)
   }
 }
 
@@ -557,7 +548,7 @@ test "Codex projects app-server facts into the shared composer contract" {
     },
   })
   let input = state.composer_input({
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     model_control: {
       id: "codex-model-picker",
       groups: [],
@@ -567,14 +558,14 @@ test "Codex projects app-server facts into the shared composer contract" {
       title: "Model",
     },
     reasoning_control: None,
-    file_candidates: [@pathx.Relative("src/main.mbt")],
+    file_candidates: [Relative("src/main.mbt")],
     open_files: [],
     active_file: None,
-    file_index: @composer.FileIndexReady(epoch=1, truncated=false),
+    file_index: FileIndexReady(epoch=1, truncated=false),
   })
   assert_eq(input.identity.owner.session, "thread-shared-composer")
   assert_eq(input.slash_commands.length(), 2)
-  assert_eq(input.file_candidates, [@pathx.Relative("src/main.mbt")])
+  assert_eq(input.file_candidates, [Relative("src/main.mbt")])
   guard input.root is Some(root) else {
     fail("stored Codex task should expose a composer root")
   }

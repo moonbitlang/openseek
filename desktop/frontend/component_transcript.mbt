@@ -132,10 +132,10 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       let project_label = placement
         .bind(value => value.project_root())
         .bind(project => self.project_display_label(project))
-      @transcript_component.Input(
+      Input(
         dark_mode=self.theme.is_dark(self.system_dark),
         minimal=self.minimal_transcript,
-        source=@transcript_component.Codex,
+        source=Codex,
         focused=self.focused,
         active_session=self.codex.active_id().unwrap_or("none"),
         scroll=self.remembered_scroll(),
@@ -156,10 +156,10 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
     _ =>
       match self.active_conversation() {
         None =>
-          @transcript_component.Input(
+          Input(
             dark_mode=self.theme.is_dark(self.system_dark),
             minimal=self.minimal_transcript,
-            source=@transcript_component.OpenSeek,
+            source=OpenSeek,
             focused=self.focused,
             active_session=self.active_session,
             current_project=None,
@@ -175,10 +175,10 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         Some(conversation) => {
           let (streaming_reasoning, reasoning_complete) = conversation.reasoning_for_render()
           let can_choose_project = self.can_choose_new_chat_project()
-          @transcript_component.Input(
+          Input(
             dark_mode=self.theme.is_dark(self.system_dark),
             minimal=self.minimal_transcript,
-            source=@transcript_component.OpenSeek,
+            source=OpenSeek,
             focused=self.focused,
             active_session=self.active_session,
             scroll=self.remembered_scroll(),

@@ -368,7 +368,7 @@ fn sync(
       @cmd.batch(commands),
     )
   }
-  if ctx.placement is Some(@interop.MissingWorktree(..)) {
+  if ctx.placement is Some(MissingWorktree(..)) {
     let shown_changed = state.shown is Some(_)
     let theme_changed = state.synced_dark_mode != Some(ctx.dark_mode)
     let (commands, state) = state.retire_missing_session(ctx)

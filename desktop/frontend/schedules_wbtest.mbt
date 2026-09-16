@@ -27,11 +27,7 @@ test "scheduled session blocks direct send until the host reports completion" {
   let (_, sent) = update(test_dispatch(), Send, model)
   assert_true(sent.active().run == conv.run)
   assert_eq(sent.active().task, conv.task)
-  let (_, steered) = update(
-    test_dispatch(),
-    SendFollowup(@composer.SteerNow),
-    model,
-  )
+  let (_, steered) = update(test_dispatch(), SendFollowup(SteerNow), model)
   assert_true(steered.active().run == conv.run)
   let completed = {
     ..model,
@@ -58,7 +54,7 @@ test "scheduled status refresh cannot remain busy on a previous host" {
     screen: Schedules,
     schedules: {
       ..SchedulePage::empty(),
-      owner: Some(@interop.ChannelId::Remote("other")),
+      owner: Some(Remote("other")),
       busy: true,
       sequence: 4,
     },
@@ -85,7 +81,7 @@ test "reopening schedules and switching hosts preserve a pending save acknowledg
   let (_, saved) = update_schedules(
     test_dispatch(),
     Loaded(base.focused, 7, true, Ok({ entries: [], runs: [], })),
-    { ..opened, focused: @interop.ChannelId::Remote("other"), },
+    { ..opened, focused: Remote("other"), },
   )
   assert_false(saved.schedules.busy)
   assert_true(saved.schedules.form is None)

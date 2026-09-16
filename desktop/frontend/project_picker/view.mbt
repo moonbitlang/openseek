@@ -252,7 +252,7 @@ fn path_editor(
       @icons.icon(@icons.icon_folder_opened),
     ),
     @html.input(
-      input_type=@html.InputType::Text,
+      input_type=Text,
       value~,
       autofocus=true,
       placeholder="Enter a folder path",
@@ -280,7 +280,7 @@ fn new_folder_row(
   @html.div(class="picker-create-row", [
     @html.span(class="picker-create-icon", @icons.icon(@icons.icon_folder)),
     @html.input(
-      input_type=@html.InputType::Text,
+      input_type=Text,
       value=name,
       autofocus=true,
       placeholder="New folder name",

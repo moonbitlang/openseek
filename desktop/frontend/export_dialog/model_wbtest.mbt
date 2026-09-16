@@ -1,6 +1,6 @@
 ///|
 test "dialog updates are pure and late replies cannot cross openings" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let source : @protocol.SessionExportPayload = {
     session: "a",
     workspace: "/workspace",
@@ -53,7 +53,7 @@ test "dialog updates are pure and late replies cannot cross openings" {
 
 ///|
 test "share login failure success and clipboard feedback transitions" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let (_, open) = Model().open({
     session: "a",
     workspace: "/workspace",
@@ -64,8 +64,8 @@ test "share login failure success and clipboard feedback transitions" {
   for
     reply in [
       @protocol.SignInRequired,
-      @protocol.Failed(message="Storage unavailable"),
-      @protocol.Shared(url="http://shares.test/a"),
+      Failed(message="Storage unavailable"),
+      Shared(url="http://shares.test/a"),
     ] {
     let msg = Published(generation=pending.generation, reply)
     let (_, first) = pending.update(emit, msg)
@@ -138,7 +138,7 @@ test "share login failure success and clipboard feedback transitions" {
 
 ///|
 test "download cancellation and saved but not opened remain distinct" {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
   let (_, open) = Model().open({
     session: "a",
     workspace: "/workspace",

@@ -14,7 +14,7 @@ test "clipped previews preserve UTF-16 navigation and occurrence counts" {
   guard SearchResultItem::from_text(raw) is Some(item) else {
     fail("expected a navigable search result")
   }
-  assert_eq(item.target, @common.Range(7, 12, 7, 16))
+  assert_eq(item.target, Range(7, 12, 7, 16))
   assert_eq(item.ranges.length(), 3)
   assert_eq(item.preview[0].highlight_slices(item.ranges), [(3, 7), (8, 12)])
   let groups = visible_file_groups([item, item], 1)
@@ -42,7 +42,7 @@ test "structural previews highlight only the matched multiline extent" {
     ],
   }
   let item = SearchResultItem::from_semantic(raw)
-  assert_eq(item.target, @common.Range(3, 3, 5, 1))
+  assert_eq(item.target, Range(3, 3, 5, 1))
   assert_eq(item.preview.map(line => line.highlight_slices(item.ranges)), [
     [],
     [(2, 10)],
@@ -103,8 +103,8 @@ test "shared results merge neighboring contexts without losing counts or destina
   let distant = {
     ..adjacent,
     preview: [{ line: 20, text: "inspect(3)", start_column: 1, }],
-    target: @common.Range(20, 1, 20, 11),
-    ranges: [@common.Range(20, 1, 20, 11)],
+    target: Range(20, 1, 20, 11),
+    ranges: [Range(20, 1, 20, 11)],
   }
   let other_file = { ..first, path: "src/other.mbt", }
   let groups = visible_file_groups(

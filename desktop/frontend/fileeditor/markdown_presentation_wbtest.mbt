@@ -6,8 +6,8 @@ test "desktop selects Markdown presentation and resource kind explicitly" {
   assert_false(uses_markdown_presentation("main.mbt"))
   assert_eq(language_id("README.md"), "markdown")
   assert_eq(language_id("tour.mbt.md"), "moonbit")
-  assert_true(markdown_resource_kind("README.md") is @viewer.OrdinaryMarkdown)
-  assert_true(markdown_resource_kind("tour.MBT.MD") is @viewer.MoonBitMarkdown)
+  assert_true(markdown_resource_kind("README.md") is OrdinaryMarkdown)
+  assert_true(markdown_resource_kind("tour.MBT.MD") is MoonBitMarkdown)
 }
 
 ///|
@@ -16,7 +16,7 @@ fn feedback_test_model(
   path : String,
   content : String,
 ) -> @model.TextModel {
-  @model.TextModel(
+  TextModel(
     try! @common.Uri::from(scheme~, path~),
     path,
     "markdown",

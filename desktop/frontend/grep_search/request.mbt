@@ -212,9 +212,7 @@ fn State::search_subscription(
       .text_request_payload(input)
       .map(payload => SearchRequest::Text(payload))
     Semantic =>
-      page
-      .semantic_request_payload(input)
-      .map(payload => SearchRequest::Semantic(payload))
+      page.semantic_request_payload(input).map(payload => Semantic(payload))
   }
   guard request is Some(request) else { return @sub.none }
   let identity = request.identity()
@@ -223,7 +221,7 @@ fn State::search_subscription(
     "grep-search:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{request_root}:\{identity.generation}:\{identity.kind}",
     Local,
     SearchRequestSub::SearchRequest(input.owner, request, page.delay_ms, emit),
-    @sub.SubLoader(search_request_loader),
+    SubLoader(search_request_loader),
   )
 }
 

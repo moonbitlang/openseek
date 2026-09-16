@@ -563,7 +563,7 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
   }
   let inventory = if ctx.placement is None {
     [@html.div(class="file-panel-empty", "Waiting for workspace placement…")]
-  } else if ctx.placement is Some(@interop.MissingWorktree(..)) {
+  } else if ctx.placement is Some(MissingWorktree(..)) {
     [@html.div(class="file-panel-empty", "Worktree checkout is missing.")]
   } else if ctx.owner.session.is_empty() {
     [@html.div(class="file-panel-empty", "No conversation selected.")]
@@ -1390,10 +1390,8 @@ fn git_commit_files(
             let diff : @dock.GitHistoryDiff = {
               commit: commit.id,
               parent,
-              path: @pathx.Relative(file.path),
-              original_path: file.original_path.map(path => {
-                @pathx.Relative(path)
-              }),
+              path: Relative(file.path),
+              original_path: file.original_path.map(path => Relative(path)),
               status: file.status,
               kind: file.kind,
             }
@@ -3096,7 +3094,7 @@ fn review_filter_controls(
     ),
     @html.div(class="review-path-filter", [
       @html.input(
-        input_type=@html.InputType::Text,
+        input_type=Text,
         value=state.change_path_filter,
         placeholder="Filter files by path",
         on_input=dispatch.map(value => ChangePathFilterChanged(value)),
@@ -3210,7 +3208,7 @@ fn change_extension_filter(
         ..options.map(option => {
           @html.label(class="review-type-option", [
             @html.input(
-              input_type=@html.InputType::Checkbox,
+              input_type=Checkbox,
               checked=state.change_extensions is None ||
                 (
                   state.change_extensions is Some(selected) &&

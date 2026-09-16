@@ -350,7 +350,7 @@ fn tool_request_view(
           title="Copy job ID",
           type_="button",
           attrs=@html.Attrs::build().aria_label("Copy job ID"),
-          on_click=@clipboard.copy(@clipboard.Text(id)),
+          on_click=@clipboard.copy(Text(id)),
           @icons.icon(@icons.icon_copy),
         ),
       ]),
@@ -948,7 +948,7 @@ fn assistant_message_view(
         class="assistant-message-copy",
         type_="button",
         title="Copy Markdown",
-        on_click=@clipboard.copy(@clipboard.Text(content)),
+        on_click=@clipboard.copy(Text(content)),
         attrs=@html.Attrs::build().aria_label(
           "Copy assistant message as Markdown",
         ),

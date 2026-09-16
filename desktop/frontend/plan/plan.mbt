@@ -131,11 +131,10 @@ pub enum Call {
 pub fn classify(call : @transcript.ToolCall) -> Call? {
   guard call.name == "plan" else { return None }
   let applied = match call.outcome {
-    @transcript.ToolOutcome::Done(is_error=true, ..) => return Some(Rejected)
-    @transcript.ToolOutcome::Done(..) => true
-    @transcript.ToolOutcome::Pending(..) => false
-    @transcript.ToolOutcome::Snapshot(..) =>
-      return Some(Unreadable(applied=false))
+    Done(is_error=true, ..) => return Some(Rejected)
+    Done(..) => true
+    Pending(..) => false
+    Snapshot(..) => return Some(Unreadable(applied=false))
   }
   // Absent arguments are a call whose source recorded no payload. The payload
   // is gone, but the recorded call is still evidence it ran.

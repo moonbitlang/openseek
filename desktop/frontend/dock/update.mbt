@@ -65,14 +65,14 @@ fn open_tab(state : State, tab : DockTab) -> State {
 /// Open `path`'s file tab (appending one if it is not in the strip yet) and
 /// make it active — the strip half of a tree click or a chip jump.
 pub fn open_file(state : State, path : @pathx.Relative) -> State {
-  open_tab(state, DockTab::File(path~))
+  open_tab(state, File(path~))
 }
 
 ///|
 /// Open one immutable historical comparison. Equality includes the commit, so
 /// the same path at two revisions stays independently inspectable.
 pub fn open_history_diff(state : State, diff : GitHistoryDiff) -> State {
-  open_tab(state, DockTab::GitDiff(diff~))
+  open_tab(state, GitDiff(diff~))
 }
 
 ///|
@@ -80,7 +80,7 @@ pub fn open_history_diff(state : State, diff : GitHistoryDiff) -> State {
 /// yet) and make it active. The caller owns the id: allocating the page and
 /// asking the host for its native view are the browser subsystem's business.
 pub fn open_browser(state : State, id : Int) -> State {
-  open_tab(state, DockTab::Browser(id~))
+  open_tab(state, Browser(id~))
 }
 
 ///|

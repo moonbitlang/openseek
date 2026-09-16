@@ -20,13 +20,13 @@ test "selected option does not request a change command" {
     // Emit is the caller boundary. Recording which payload commands the view
     // asks it to construct proves that the selected row cannot later dispatch
     // a false change, while an unselected row still receives its command.
-    change: @cmd.Emit(value => {
+    change: Emit(value => {
       requested_changes.push(value)
       @cmd.none
     }),
     title: "Provider",
     aria_label: "Provider",
-    presentation: @select_control.Setting,
+    presentation: Setting,
   }
   ignore(control.render())
   @debug.assert_eq(requested_changes, ["custom"])

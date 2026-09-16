@@ -309,7 +309,7 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
       [
         icon(icon_search),
         @html.input(
-          input_type=@html.InputType::Search,
+          input_type=Search,
           value=state.query,
           placeholder="Search skills…",
           on_input=emit.map(value => QueryChanged(value)),

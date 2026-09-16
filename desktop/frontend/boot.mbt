@@ -109,11 +109,11 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
   let platform = if !self.is_desktop {
     @action_menu.Web
   } else if browser_platform_is_apple(app_shortcut_browser_platform()) {
-    @action_menu.MacOS
+    MacOS
   } else if @common.platform_is_win32() {
-    @action_menu.Windows
+    Windows
   } else {
-    @action_menu.Linux
+    Linux
   }
   // The client platform names the file manager, so only a checkout on this
   // same Desktop may expose reveal. `Open` remains available for remote hosts
@@ -139,7 +139,7 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
     !keyboard.shift_key() &&
     !keyboard.is_composing() &&
     !keyboard.repeat() {
-    return Some(Terminal(@terminal.ToggleTerminal))
+    return Some(Terminal(ToggleTerminal))
   }
   let command = if is_apple {
     keyboard.meta_key() && !keyboard.ctrl_key()
@@ -153,13 +153,13 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
     return None
   }
   match (keyboard.code(), keyboard.shift_key()) {
-    ("KeyP", false) => Some(QuickOpenOpen(@quick_open.Files))
-    ("KeyT", false) => Some(QuickOpenOpen(@quick_open.Symbols))
+    ("KeyP", false) => Some(QuickOpenOpen(Files))
+    ("KeyT", false) => Some(QuickOpenOpen(Symbols))
     ("KeyN", false) => Some(NewChat)
     ("KeyO", false) => Some(AddProjectRequested)
     ("KeyB", false) => Some(ToggleSidebar)
     ("KeyB", true) => Some(ToggleRightPanel)
-    ("KeyJ", false) if is_apple => Some(Terminal(@terminal.ToggleTerminal))
+    ("KeyJ", false) if is_apple => Some(Terminal(ToggleTerminal))
     ("KeyF", true) => Some(ExplorerRequested(ExplorerSearch))
     _ => None
   }
@@ -199,9 +199,8 @@ fn SidebarDispatcher::conversation_open(
     return self.unroutable("open", "channel \{id.channel()}")
   }
   match id.source() {
-    @conversation.OpenSeekLive =>
-      self.emit(OpenSession(channel, id.conversation()))
-    @conversation.OpenSeekArchived => {
+    OpenSeekLive => self.emit(OpenSession(channel, id.conversation()))
+    OpenSeekArchived => {
       // The row carries the store its record lives in; without one the click
       // would name a session id in no particular store.
       guard id.root() is Some(root) &&
@@ -212,8 +211,8 @@ fn SidebarDispatcher::conversation_open(
         OpenArchivedSession(channel, session=id.conversation(), workspace~),
       )
     }
-    @conversation.CodexLive => self.emit(CodexOpenThread(id.conversation()))
-    @conversation.CodexDraft => self.emit(OpenCodex)
+    CodexLive => self.emit(CodexOpenThread(id.conversation()))
+    CodexDraft => self.emit(OpenCodex)
     source => self.unroutable("open", "source \{Repr(source)}")
   }
 }
@@ -227,9 +226,8 @@ fn SidebarDispatcher::conversation_archive(
     return self.unroutable("archive", "channel \{id.channel()}")
   }
   match id.source() {
-    @conversation.OpenSeekLive =>
-      self.emit(ArchiveSession(channel, id.conversation()))
-    @conversation.CodexLive => self.emit(CodexArchiveThread(id.conversation()))
+    OpenSeekLive => self.emit(ArchiveSession(channel, id.conversation()))
+    CodexLive => self.emit(CodexArchiveThread(id.conversation()))
     source => self.unroutable("archive", "\{Repr(source)}@\{id.channel()}")
   }
 }
@@ -243,10 +241,8 @@ fn SidebarDispatcher::conversation_restore(
     return self.unroutable("restore", "channel \{id.channel()}")
   }
   match id.source() {
-    @conversation.OpenSeekArchived =>
-      self.emit(UnarchiveSession(channel, id.conversation()))
-    @conversation.CodexArchived =>
-      self.emit(CodexUnarchiveThread(id.conversation()))
+    OpenSeekArchived => self.emit(UnarchiveSession(channel, id.conversation()))
+    CodexArchived => self.emit(CodexUnarchiveThread(id.conversation()))
     source => self.unroutable("restore", "\{Repr(source)}@\{id.channel()}")
   }
 }
@@ -259,7 +255,7 @@ fn SidebarDispatcher::conversation_delete(
   // The row carries the store its record lives in; a delete that could not
   // name one would address every same-id record at once.
   guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(channel) &&
-    id.source() is @conversation.OpenSeekArchived &&
+    id.source() is OpenSeekArchived &&
     id.root() is Some(root) &&
     @resource.of_path(channel, root) is Some(workspace) else {
     return self.unroutable("delete", "\{Repr(id.source())}@\{id.channel()}")
@@ -478,8 +474,8 @@ pub fn boot() -> Unit {
               emit.map(request => {
                 ExternalLinkClicked(
                   match request {
-                    @url.Internal(url) => url.to_string()
-                    @url.External(url) => url
+                    Internal(url) => url.to_string()
+                    External(url) => url
                   },
                 )
               }),
@@ -685,7 +681,7 @@ pub fn boot() -> Unit {
       ) => {
         view(
           emit,
-          terminal_emit(@terminal.ToggleTerminal),
+          terminal_emit(ToggleTerminal),
           emit(ToggleRightPanel),
           model,
           terminal_html,

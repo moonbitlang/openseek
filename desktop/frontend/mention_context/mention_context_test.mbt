@@ -18,7 +18,7 @@ test "encode lays out the task first, then the tagged mention block" {
         end_line=13,
         quote="fn parse_hover() {\n  ...\n}",
         comment="this looks wrong",
-        side=@mention_context.WorkingRevision,
+        side=WorkingRevision,
       ),
     ],
     "look at this",
@@ -73,7 +73,7 @@ test "parse round-trips what encode wrote" {
       end_line=13,
       quote="fn parse_hover() {\n  ...\n}",
       comment="this looks wrong",
-      side=@mention_context.WorkingRevision,
+      side=WorkingRevision,
     ),
   ]
   let task = "look at this\nand this"
@@ -111,7 +111,7 @@ test "parse round-trips an annotation with empty bodies" {
       end_line=3,
       quote="",
       comment="",
-      side=@mention_context.WorkingRevision,
+      side=WorkingRevision,
     ),
   ]
   guard @mention_context.parse(@mention_context.encode(mentions, ""))
@@ -130,7 +130,7 @@ test "original-revision annotation side survives the prompt round trip" {
       end_line=4,
       quote="obsolete()",
       comment="good removal",
-      side=@mention_context.OriginalRevision,
+      side=OriginalRevision,
     ),
   ]
   let encoded = @mention_context.encode(mentions, "review this")

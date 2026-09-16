@@ -72,7 +72,7 @@ fn CodexPermissionPicker::choose(
   self : CodexPermissionPicker,
   mode : @protocol.CodexPermissionMode,
 ) -> CodexPermissionPicker {
-  if mode is @protocol.FullAccess {
+  if mode is FullAccess {
     CodexPermissionConfirmingFullAccess(self.mode())
   } else {
     CodexPermissionClosed(mode)
@@ -84,8 +84,7 @@ fn CodexPermissionPicker::confirm_full_access(
   self : CodexPermissionPicker,
 ) -> CodexPermissionPicker {
   match self {
-    CodexPermissionConfirmingFullAccess(_) =>
-      CodexPermissionClosed(@protocol.FullAccess)
+    CodexPermissionConfirmingFullAccess(_) => CodexPermissionClosed(FullAccess)
     _ => self
   }
 }
@@ -645,7 +644,7 @@ pub fn State::State(loading? : Bool = false) -> State {
     selected_effort: "",
     // Match Codex App's assisted workflow: the workspace sandbox remains in
     // force, while eligible boundary requests go to the reviewer agent.
-    permission_picker: CodexPermissionClosed(@protocol.AutoReview),
+    permission_picker: CodexPermissionClosed(AutoReview),
     threads: [],
     archived_threads: [],
     activity: CodexActivityLedger::empty(),
@@ -663,7 +662,7 @@ pub fn State::State(loading? : Bool = false) -> State {
     next_steer_submission_id: 1,
     submission_sequence: 0,
     skills: CodexSkillsEmpty,
-    placement: @composer.LocalCheckout,
+    placement: LocalCheckout,
     archive_confirm: None,
     pending_requests: [],
     request_generation: 0,
@@ -1063,7 +1062,7 @@ pub fn State::active_placement(
     CodexDraftTask(draft) =>
       draft.project_root
       .bind(root => @resource.of_path(channel, root))
-      .map(root => @interop.WorkspaceRoot(root~))
+      .map(root => WorkspaceRoot(root~))
     CodexStoredTask(thread) => thread.placement(channel)
   }
 }
@@ -1204,7 +1203,7 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
     submitted_first_prompt: None,
     pending_steers: [],
     skills: CodexSkillsEmpty,
-    placement: @composer.LocalCheckout,
+    placement: LocalCheckout,
     archive_confirm: None,
     loading: false,
     foreground: None,
@@ -1230,11 +1229,11 @@ pub fn State::with_editor_comment(
   range : @common.Range,
   comment : String,
   quote : String,
-  side? : @mention_context.AnnotationSide = @mention_context.WorkingRevision,
+  side? : @mention_context.AnnotationSide = WorkingRevision,
 ) -> State {
   let mentions = self.mentions.copy()
   let annotation : @composer.Mention = {
-    ref_: @mention_context.Annotation(
+    ref_: Annotation(
       file~,
       start_line=range.start_line_number,
       end_line=range.end_line_number,
@@ -1242,7 +1241,7 @@ pub fn State::with_editor_comment(
       comment~,
       side~,
     ),
-    range: if side is @mention_context.OriginalRevision {
+    range: if side is OriginalRevision {
       None
     } else {
       Some(range)
@@ -1374,25 +1373,23 @@ fn CodexThread::placement(
         return None
       }
       if !worktree.present {
-        return Some(@interop.MissingWorktree(project~, name=worktree.name))
+        return Some(MissingWorktree(project~, name=worktree.name))
       }
       guard !worktree.path.trim().is_empty() &&
         @resource.of_path(channel, worktree.path) is Some(root) else {
         return None
       }
-      Some(@interop.Worktree(project~, name=worktree.name, root~))
+      Some(Worktree(project~, name=worktree.name, root~))
     }
     None =>
       match self.cwd {
         Some(cwd) if !cwd.trim().is_empty() =>
-          @resource.of_path(channel, cwd).map(root => {
-            @interop.WorkspaceRoot(root~)
-          })
+          @resource.of_path(channel, cwd).map(root => WorkspaceRoot(root~))
         // app-server tasks created without cwd still own a host-lazy scratch
         // terminal. The host does not disclose its path, so keep `root=None`:
         // Terminal can use the task id while Files and language services stay
         // unavailable instead of receiving an invented directory.
-        _ => Some(@interop.Scratch(root=None))
+        _ => Some(Scratch(root=None))
       }
   }
 }
@@ -1756,13 +1753,13 @@ fn State::with_thread_reply(
     }),
     git_details_open: false,
     placement: match active.worktree {
-      Some(worktree) => @composer.BoundWorktree(worktree.name)
-      None if self.placement is @composer.FreshWorktree &&
+      Some(worktree) => BoundWorktree(worktree.name)
+      None if self.placement is FreshWorktree &&
         (
           self.active_draft() is Some(_) ||
           (self.active_thread() is Some(previous) && previous.id == active.id)
-        ) => @composer.FreshWorktree
-      None => @composer.LocalCheckout
+        ) => FreshWorktree
+      None => LocalCheckout
     },
     notice: "",
   }
@@ -1788,7 +1785,7 @@ fn State::with_created_worktree(
   {
     ..self,
     selection: CodexStoredTask(active),
-    placement: @composer.BoundWorktree(worktree.name),
+    placement: BoundWorktree(worktree.name),
     threads: self.threads.map(thread => {
       if thread.id == active.id {
         { ..thread, cwd: Some(worktree.path), worktree: Some(worktree), }
@@ -1825,7 +1822,7 @@ fn State::with_worktree_change(
   {
     ..self,
     selection: CodexStoredTask(active),
-    placement: @composer.BoundWorktree(name),
+    placement: BoundWorktree(name),
     threads: self.threads.map(thread => {
       if thread.id == thread_id {
         {
@@ -1919,7 +1916,7 @@ fn State::without_thread(self : State, thread_id : String) -> State {
       other => other
     },
     placement: if removing_active {
-      @composer.LocalCheckout
+      LocalCheckout
     } else {
       self.placement
     },
@@ -2455,7 +2452,7 @@ fn CodexItem::text(self : CodexItem) -> String {
             // lets the shared transcript rebuild the same chips its composer
             // showed without changing the app-server payload.
             mentions.push(
-              @mention_context.Symbol(
+              Symbol(
                 name=@jsonx.json_text(input, "name").unwrap_or(path),
                 file=path,
                 line=0,
@@ -2545,7 +2542,7 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
     "userMessage" => @transcript.User(self.text())
     "agentMessage" | "plan" => response(None, Some(self.text()), [])
     "reasoning" => response(Some(self.text()), None, [])
-    "contextCompaction" => @transcript.Summary(self.text())
+    "contextCompaction" => Summary(self.text())
     _ => {
       // A command still running may have streamed part of its output; the
       // app-server reports nothing at all as an empty string.
@@ -2745,19 +2742,11 @@ pub fn State::transcript_items(
 ) -> Array[@transcript.TranscriptItem] {
   let items : Array[@transcript.TranscriptItem] = []
   if !self.notice.is_empty() {
-    items.push({
-      kind: @transcript.Failure(self.notice),
-      ts: None,
-      sequence: None,
-    })
+    items.push({ kind: Failure(self.notice), ts: None, sequence: None, })
   }
   if self.waiting_for_first_user_item() &&
     self.submitted_first_prompt is Some(submitted) {
-    items.push({
-      kind: @transcript.User(submitted.prompt()),
-      ts: None,
-      sequence: None,
-    })
+    items.push({ kind: User(submitted.prompt()), ts: None, sequence: None, })
   }
   if self.active_thread() is Some(active) {
     for turn in active.turns {
@@ -2780,16 +2769,10 @@ pub fn State::transcript_items(
         let transcript_item = item.transcript_item()
         let transcript_item = if final_id == Some(item.id) &&
           transcript_item.kind
-          is @transcript.Assistant(reasoning~, prose~, calls~, replay~, ..) {
+          is Assistant(reasoning~, prose~, calls~, replay~, ..) {
           {
             ..transcript_item,
-            kind: @transcript.Assistant(
-              reasoning~,
-              prose~,
-              calls~,
-              replay~,
-              finished=true,
-            ),
+            kind: Assistant(reasoning~, prose~, calls~, replay~, finished=true),
           }
         } else {
           transcript_item
@@ -2800,7 +2783,7 @@ pub fn State::transcript_items(
         // "Thought" card. Keep the semantic item in Codex state so a later
         // summary delta can reveal it, but omit it from this display snapshot.
         let blank_thought = transcript_item.kind
-          is @transcript.Assistant(reasoning=Some(summary), ..) &&
+          is Assistant(reasoning=Some(summary), ..) &&
           summary.is_blank()
         if !blank_thought {
           items.push(transcript_item)
@@ -2815,14 +2798,10 @@ pub fn State::transcript_items(
         }
       }
       if turn.error is Some(message) {
-        items.push({
-          kind: @transcript.Failure(message),
-          ts: None,
-          sequence: None,
-        })
+        items.push({ kind: Failure(message), ts: None, sequence: None, })
       } else if turn.status == "interrupted" || turn.status == "failed" {
         items.push({
-          kind: @transcript.Failure(
+          kind: Failure(
             if turn.status == "interrupted" {
               "Stopped"
             } else {
@@ -2835,7 +2814,7 @@ pub fn State::transcript_items(
       } else if turn.status == "completed" && final_id is None {
         // Preserve a successful empty turn as a boundary without inventing an
         // answer or folding its process into a later completed turn.
-        items.push({ kind: @transcript.TurnEnd, ts: None, sequence: None, })
+        items.push({ kind: TurnEnd, ts: None, sequence: None, })
       }
     }
   }
@@ -3147,7 +3126,7 @@ test "Codex thread replies are visible before catalog refresh" {
   assert_eq(state.threads[0].id, "thread-1")
   assert_eq(state.threads[0].title, "Smoke test")
   assert_eq(state.threads[0].project_root, Some("/project"))
-  assert_eq(state.worktree_launch_workspace(@interop.ChannelId::Local), None)
+  assert_eq(state.worktree_launch_workspace(Local), None)
   let external_worktree = State().with_thread_reply(
     {
       "thread": {
@@ -3159,10 +3138,7 @@ test "Codex thread replies are visible before catalog refresh" {
     },
     CodexImportedSnapshot,
   )
-  assert_eq(
-    external_worktree.worktree_launch_workspace(@interop.ChannelId::Local),
-    None,
-  )
+  assert_eq(external_worktree.worktree_launch_workspace(Local), None)
   let refreshed = state.with_threads(
     { "data": [] },
     false,
@@ -3192,9 +3168,7 @@ test "carried Codex rows do not revive running after completion" {
     },
     0,
   )
-  assert_true(
-    completed.activity.presentation("thread-1") is @conversation.CompletedMark,
-  )
+  assert_true(completed.activity.presentation("thread-1") is CompletedMark)
   let (frontier, activity) = completed.activity.reserve_snapshot()
   let refreshed = { ..completed, activity, }.with_threads(
     { "data": [] },
@@ -3202,9 +3176,7 @@ test "carried Codex rows do not revive running after completion" {
     frontier,
   )
   assert_eq(refreshed.threads.map(thread => thread.id), ["thread-1"])
-  assert_true(
-    refreshed.activity.presentation("thread-1") is @conversation.CompletedMark,
-  )
+  assert_true(refreshed.activity.presentation("thread-1") is CompletedMark)
 }
 
 ///|
@@ -3321,32 +3293,32 @@ test "Codex editor annotations stay in chips and preserve model context" {
     fail("expected the annotation chip to use the shared mention envelope")
   }
   assert_eq(parsed.mentions, [
-    @mention_context.Annotation(
+    Annotation(
       file="src/main.mbt",
       start_line=5,
       end_line=6,
       quote="fn parse_hover() {",
       comment="rename this",
-      side=@mention_context.WorkingRevision,
+      side=WorkingRevision,
     ),
   ])
   let original = twice.with_editor_comment(
     "src/main.mbt",
-    @common.Range(3, 1, 3, 11),
+    Range(3, 1, 3, 11),
     "keep this removal",
     "obsolete()",
-    side=@mention_context.OriginalRevision,
+    side=OriginalRevision,
   )
   assert_eq(original.mentions.length(), 2)
   assert_true(
     original.mentions[1].ref_
-    is @mention_context.Annotation(
+    is Annotation(
       file="src/main.mbt",
       start_line=3,
       end_line=3,
       quote="obsolete()",
       comment="keep this removal",
-      side=@mention_context.OriginalRevision
+      side=OriginalRevision
     ),
   )
   assert_eq(original.mentions[1].range, None)

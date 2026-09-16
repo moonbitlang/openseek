@@ -16,7 +16,7 @@ impl @language.MarkdownCommentProvider for MoonBitMarkdownCommentProvider with f
 ///|
 fn install_moonbit_markdown_comment_provider() -> Unit {
   @languages.languages.register_markdown_comment_provider(
-    @language.LanguageId("moonbit"),
+    LanguageId("moonbit"),
     MoonBitMarkdownCommentProvider::{ },
     foldable=true,
   )
@@ -60,7 +60,7 @@ fn moonbit_markdown_comments_in_snapshot(
       }
     }
     blocks.push({
-      line_range: @common.LineRange(start_line_number, line_number),
+      line_range: LineRange(start_line_number, line_number),
       markdown: if contents.is_empty() {
         "---"
       } else {

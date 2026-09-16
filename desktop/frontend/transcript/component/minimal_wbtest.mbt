@@ -3,7 +3,7 @@ test "minimal user boundaries group recorded and streaming assistant content" {
   let input = Input(
     minimal=true,
     source=OpenSeek,
-    focused=@interop.ChannelId::Local,
+    focused=Local,
     active_session="messages-test",
     current_project=None,
     projects=[],
@@ -461,7 +461,7 @@ test "minimal prose keeps the durable completion stamp only when finished" {
   let input = Input(
     minimal=true,
     source=OpenSeek,
-    focused=@interop.ChannelId::Local,
+    focused=Local,
     active_session="desktop-test",
     current_project=None,
     projects=[],

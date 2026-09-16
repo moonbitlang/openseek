@@ -6,17 +6,17 @@
 
 ///|
 fn test_emit() -> @cmd.Emit[Msg] {
-  @cmd.Emit(_ => @cmd.none)
+  Emit(_ => @cmd.none)
 }
 
 ///|
 fn test_owner() -> @interop.ConversationKey {
-  { channel: @interop.ChannelId::Local, session: "desktop-test", }
+  { channel: Local, session: "desktop-test", }
 }
 
 ///|
 fn test_uri(path : String) -> @common.Uri raise {
-  guard @resource.of_path(@interop.ChannelId::Local, path) is Some(resource) else {
+  guard @resource.of_path(Local, path) is Some(resource) else {
     fail("test resource path was invalid: \{path}")
   }
   resource
@@ -39,7 +39,7 @@ fn test_symbol(name : String, path : String) -> @symbols.Symbol {
     kind: Some(12),
     container: Some("Parser"),
     path,
-    range: @common.Range(5, 2, 5, 13),
+    range: Range(5, 2, 5, 13),
   }
 }
 

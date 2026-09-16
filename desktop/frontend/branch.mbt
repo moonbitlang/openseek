@@ -126,18 +126,14 @@ fn PullRequest::from_reply(reply : @protocol.GitPullRequest) -> PullRequest? {
 
 ///|
 fn Checks::composer_checks(self : Checks) -> @composer.GitChecks {
-  @composer.GitChecks(
-    passed=self.passed,
-    failed=self.failed,
-    pending=self.pending,
-  )
+  GitChecks(passed=self.passed, failed=self.failed, pending=self.pending)
 }
 
 ///|
 fn PullRequest::composer_pull_request(
   self : PullRequest,
 ) -> @composer.GitPullRequest {
-  @composer.GitPullRequest(
+  GitPullRequest(
     number=self.number,
     title=self.title,
     state=match self.state {
@@ -153,7 +149,7 @@ fn PullRequest::composer_pull_request(
 
 ///|
 fn DiffStat::composer_changes(self : DiffStat) -> @composer.GitChanges {
-  @composer.GitChanges(
+  GitChanges(
     added=self.added,
     removed=self.removed,
     files=self.files,
@@ -171,7 +167,7 @@ fn Conversation::git_presentation(
   }
   let probe = self.settled_probe()
   Some(
-    @composer.GitPresentation(
+    GitPresentation(
       branch~,
       changes?=self.diffstat.map(stat => stat.composer_changes()),
       pull_request?=probe.bind(current => {
@@ -306,7 +302,7 @@ test "a settled pull request supplies the baseline the next probe measures from"
   // could name it. The pull request is the only exact answer, so it is what
   // later probes carry back to the host.
   let conv = empty_conversation(
-    @interop.ChannelId::Local,
+    Local,
     "s",
     @interop.ChannelId::Local.test_project(),
   )

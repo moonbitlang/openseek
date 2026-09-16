@@ -5,17 +5,17 @@
 
 ///|
 fn emit() -> @cmd.Emit[@skills.Msg] {
-  @cmd.Emit(_ => @cmd.none)
+  Emit(_ => @cmd.none)
 }
 
 ///|
 fn other_device() -> @interop.ChannelId {
-  @interop.ChannelId::Remote("d_b")
+  Remote("d_b")
 }
 
 ///|
 fn input(installed? : Array[@skills.InstalledItem] = []) -> @skills.Input {
-  { channel: @interop.ChannelId::Local, installed, }
+  { channel: Local, installed, }
 }
 
 ///|
@@ -39,17 +39,11 @@ test "a duplicate refresh while loading is a no-op" {
   let (_, opened) = @skills.State::empty().opening(emit(), input())
   let (_, ready, _) = opened.handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
-      market_item(),
-    ]),
+    CatalogLoaded(channel=Local, items=[market_item()]),
     input(),
   )
-  let (_, refreshed, _) = ready.handle(emit(), @skills.RefreshCatalog, input())
-  let (_, duplicate, _) = refreshed.handle(
-    emit(),
-    @skills.RefreshCatalog,
-    input(),
-  )
+  let (_, refreshed, _) = ready.handle(emit(), RefreshCatalog, input())
+  let (_, duplicate, _) = refreshed.handle(emit(), RefreshCatalog, input())
   assert_true(duplicate == refreshed)
 }
 
@@ -64,25 +58,20 @@ test "catalog completions cannot cross a device focus switch" {
   assert_false(remote_loading == local_loading)
   let (_, ignored_loaded, _) = remote_loading.handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
-      market_item(),
-    ]),
+    CatalogLoaded(channel=Local, items=[market_item()]),
     remote_input,
   )
   assert_true(ignored_loaded == remote_loading)
   let (_, ignored_failed, _) = ignored_loaded.handle(
     emit(),
-    @skills.CatalogFailed(
-      channel=@interop.ChannelId::Local,
-      message="old host offline",
-    ),
+    CatalogFailed(channel=Local, message="old host offline"),
     remote_input,
   )
   assert_true(ignored_failed == remote_loading)
 
   let (_, ready, _) = ignored_failed.handle(
     emit(),
-    @skills.CatalogLoaded(channel=other_device(), items=[market_item()]),
+    CatalogLoaded(channel=other_device(), items=[market_item()]),
     remote_input,
   )
   assert_false(ready == remote_loading)
@@ -92,24 +81,14 @@ test "catalog completions cannot cross a device focus switch" {
 test "an install marks its entry busy exactly once" {
   let (_, ready, _) = @skills.State::empty().handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
-      market_item(),
-    ]),
+    CatalogLoaded(channel=Local, items=[market_item()]),
     input(),
   )
-  let (_, busy, outcome) = ready.handle(
-    emit(),
-    @skills.Install(market_item()),
-    input(),
-  )
+  let (_, busy, outcome) = ready.handle(emit(), Install(market_item()), input())
   assert_true(outcome is None)
 
   // A second click while in flight is a no-op.
-  let (_, again, _) = busy.handle(
-    emit(),
-    @skills.Install(market_item()),
-    input(),
-  )
+  let (_, again, _) = busy.handle(emit(), Install(market_item()), input())
   assert_true(again == busy)
 }
 
@@ -117,43 +96,25 @@ test "an install marks its entry busy exactly once" {
 test "a settled install releases its entry and asks for a library re-read" {
   let (_, ready, _) = @skills.State::empty().handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
-      market_item(),
-    ]),
+    CatalogLoaded(channel=Local, items=[market_item()]),
     input(),
   )
-  let (_, busy, _) = ready.handle(
-    emit(),
-    @skills.Install(market_item()),
-    input(),
-  )
+  let (_, busy, _) = ready.handle(emit(), Install(market_item()), input())
   let (_, done, outcome) = busy.handle(
     emit(),
-    @skills.ActionDone(
-      channel=@interop.ChannelId::Local,
-      key="acme/widget@1.0.0",
-      error="",
-    ),
+    ActionDone(channel=Local, key="acme/widget@1.0.0", error=""),
     input(),
   )
   guard outcome is Some(LibraryChanged(channel~)) else {
     fail("a successful install should report the library change")
   }
-  assert_true(channel == @interop.ChannelId::Local)
+  assert_true(channel == Local)
 
   // A failure surfaces as the page's notice instead, and reports nothing.
-  let (_, retried, _) = done.handle(
-    emit(),
-    @skills.Install(market_item()),
-    input(),
-  )
+  let (_, retried, _) = done.handle(emit(), Install(market_item()), input())
   let (_, failed, failure_outcome) = retried.handle(
     emit(),
-    @skills.ActionDone(
-      channel=@interop.ChannelId::Local,
-      key="acme/widget@1.0.0",
-      error="digest mismatch",
-    ),
+    ActionDone(channel=Local, key="acme/widget@1.0.0", error="digest mismatch"),
     input(),
   )
   assert_true(failure_outcome is None)
@@ -164,19 +125,13 @@ test "a settled install releases its entry and asks for a library re-read" {
 test "a result from another device settles without a local outcome" {
   let (_, ready, _) = @skills.State::empty().handle(
     emit(),
-    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[
-      market_item(),
-    ]),
+    CatalogLoaded(channel=Local, items=[market_item()]),
     input(),
   )
-  let (_, busy, _) = ready.handle(
-    emit(),
-    @skills.Install(market_item()),
-    input(),
-  )
+  let (_, busy, _) = ready.handle(emit(), Install(market_item()), input())
   let (_, settled, outcome) = busy.handle(
     emit(),
-    @skills.ActionDone(
+    ActionDone(
       channel=other_device(),
       key="acme/widget@1.0.0",
       error="digest mismatch",
@@ -201,12 +156,12 @@ test "uninstall is keyed by the library id and deduplicated" {
   ]
   let (_, busy, _) = @skills.State::empty().handle(
     emit(),
-    @skills.Uninstall("acme-widget"),
+    Uninstall("acme-widget"),
     input(installed~),
   )
   let (_, again, _) = busy.handle(
     emit(),
-    @skills.Uninstall("acme-widget"),
+    Uninstall("acme-widget"),
     input(installed~),
   )
   assert_true(again == busy)

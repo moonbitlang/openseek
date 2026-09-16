@@ -25,17 +25,14 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
     error: None,
   }
   let search = @grep_search.State::empty().handle(
-    @grep_search.Loaded(owner=ctx.owner, root=root.path, generation=0, reply~),
+    Loaded(owner=ctx.owner, root=root.path, generation=0, reply~),
     ctx.search_input(),
   )
   let visible = { ..owned_state(), explorer_mode: ExplorerSearch, search, }
   guard visible.editor_search_highlights(path) is Some(highlights) else {
     fail("Search inventory should expose active editor matches")
   }
-  assert_eq(highlights.ranges(), [
-    @common.Range(3, 1, 3, 7),
-    @common.Range(3, 8, 3, 14),
-  ])
+  assert_eq(highlights.ranges(), [Range(3, 1, 3, 7), Range(3, 8, 3, 14)])
   assert_true(
     { ..visible, explorer_mode: ExplorerFiles, }.editor_search_highlights(path)
     is None,

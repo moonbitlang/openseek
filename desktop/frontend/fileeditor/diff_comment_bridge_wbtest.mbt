@@ -11,7 +11,7 @@ test "full-diff comments cross the Desktop boundary without losing line identity
   assert_true(
     deletion
     is DiffCommentAdded(
-      file=@pathx.Relative("src/main.mbt"),
+      file=Relative("src/main.mbt"),
       original_line_number=Some(4),
       modified_line_number=None,
       quote="obsolete()",

@@ -15,7 +15,7 @@ fn fetch_installed_skills(
       let reply = @interop.bridge_request(
         channel,
         @commands.skills_installed,
-        @protocol.EmptyPayload::NoPayload,
+        NoPayload,
       ) catch {
         error => {
           scheduler.add(

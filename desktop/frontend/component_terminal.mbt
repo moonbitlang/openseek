@@ -3,7 +3,7 @@
 /// package. The projection is read-only; the opaque terminal state itself is
 /// stored once in the application Model.
 fn Model::terminal_input(self : Model) -> @terminal.Input {
-  @terminal.Input(
+  Input(
     ctx=terminal_ctx(self),
     live_channels=self.devices
       .iter()

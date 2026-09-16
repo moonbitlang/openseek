@@ -1,7 +1,7 @@
 ///|
 fn Input::fixture(task : String) -> Input {
   let owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "composer-test",
   }
   {
@@ -32,12 +32,12 @@ fn Input::fixture(task : String) -> Input {
 
 ///|
 fn Msg::test_emit() -> @cmd.Emit[Msg] {
-  @cmd.Emit(_ => @cmd.none)
+  Emit(_ => @cmd.none)
 }
 
 ///|
 fn Action::test_emit() -> @cmd.Emit[Action] {
-  @cmd.Emit(_ => @cmd.none)
+  Emit(_ => @cmd.none)
 }
 
 ///|
@@ -91,7 +91,7 @@ test "typing is local, pure, and idempotent" {
 test "each conversation keeps an independent local draft" {
   let first = Input::fixture("")
   let second_owner : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Local,
+    channel: Local,
     session: "composer-second",
   }
   let second = {
@@ -137,7 +137,7 @@ test "background retirement prevents an old draft from reviving" {
 test "file completion accepts a local candidate inside the component" {
   let input = {
     ..Input::fixture(""),
-    file_candidates: [@pathx.Relative("src/main.mbt")],
+    file_candidates: [Relative("src/main.mbt")],
   }
   let (searching, _) = Model(input).update(
     input,
@@ -161,8 +161,7 @@ test "file completion accepts a local candidate inside the component" {
   let draft = accepted.active(input).draft
   inspect(draft.task, content="Inspect ")
   assert_true(
-    draft.mentions ==
-    [{ ref_: @mention_context.File(path="src/main.mbt"), range: None, }],
+    draft.mentions == [{ ref_: File(path="src/main.mbt"), range: None, }],
   )
 }
 
@@ -187,7 +186,7 @@ test "a symbols reply settles the menu through its declared identity" {
     kind: None,
     container: None,
     path: "src/table.mbt",
-    range: @common.Range(1, 1, 1, 1),
+    range: Range(1, 1, 1, 1),
   }
   let reply = SymbolsLoaded(owner=input.identity.owner, root~, query="Sy", items=[
     symbol,
@@ -227,7 +226,7 @@ test "a symbols reply for another root cannot settle the menu" {
     kind: None,
     container: None,
     path: "src/table.mbt",
-    range: @common.Range(1, 1, 1, 1),
+    range: Range(1, 1, 1, 1),
   }
   let (unchanged, _) = typing.update(
     input,
@@ -276,7 +275,7 @@ test "a context switch drops a late symbols reply instead of reopening" {
 test "a remote file reply settles a truncated index menu, stale epochs do not" {
   let input = {
     ..Input::fixture(""),
-    file_candidates: [@pathx.Relative("src/local.mbt")],
+    file_candidates: [Relative("src/local.mbt")],
     file_index: FileIndexReady(epoch=3, truncated=true),
   }
   let (typing, _) = Model(input).update(
@@ -295,7 +294,7 @@ test "a remote file reply settles a truncated index menu, stale epochs do not" {
   let (stale, _) = typing.update(
     input,
     FilesLoaded(owner=input.identity.owner, root~, query="ma", epoch=2, files=[
-      @pathx.Relative("src/main.mbt"),
+      Relative("src/main.mbt"),
     ]),
     Msg::test_emit(),
     Action::test_emit(),
@@ -307,8 +306,8 @@ test "a remote file reply settles a truncated index menu, stale epochs do not" {
   let (settled, _) = typing.update(
     input,
     FilesLoaded(owner=input.identity.owner, root~, query="ma", epoch=3, files=[
-      @pathx.Relative("src/main.mbt"),
-      @pathx.Relative("docs/notes.md"),
+      Relative("src/main.mbt"),
+      Relative("docs/notes.md"),
     ]),
     Msg::test_emit(),
     Action::test_emit(),
@@ -348,9 +347,7 @@ test "goal submission acknowledgement preserves the prompt underneath" {
 test "draft prompt encoding belongs to composer" {
   let draft : Draft = {
     task: "inspect this",
-    mentions: [
-      { ref_: @mention_context.File(path="src/main.mbt"), range: None, },
-    ],
+    mentions: [{ ref_: File(path="src/main.mbt"), range: None, }],
   }
   assert_true(draft.prompt().contains("<user_mentions>"))
   assert_true(draft.prompt().contains("inspect this"))
@@ -360,7 +357,7 @@ test "draft prompt encoding belongs to composer" {
 test "a mention-only draft is a submit-ready prompt" {
   let input = {
     ..Input::fixture(""),
-    file_candidates: [@pathx.Relative("src/main.mbt")],
+    file_candidates: [Relative("src/main.mbt")],
   }
   let (searching, _) = Model(input).update(
     input,

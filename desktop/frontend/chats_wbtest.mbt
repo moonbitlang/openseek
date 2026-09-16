@@ -87,7 +87,7 @@ test "managed chats are flat and user named workspaces remain projects" {
   assert_eq(chats.length(), 1)
   assert_eq(chats[0].activation, Some(model.active_session))
   assert_true(
-    chats[0].entries is [@section.Conversation(row)] &&
+    chats[0].entries is [Conversation(row)] &&
     row.label == "New chat" &&
     !row.nested &&
     row.active,

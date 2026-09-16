@@ -65,7 +65,7 @@ fn ReviewHunk::from_diff_hunk(
   for mapping in hunk.members {
     if old_offset is Some(offset) && !mapping.original.is_empty() {
       old_ranges.push(
-        @common.LineRange(
+        LineRange(
           mapping.original.start_line_number + offset,
           mapping.original.end_line_number_exclusive + offset,
         ),
@@ -73,7 +73,7 @@ fn ReviewHunk::from_diff_hunk(
     }
     if new_offset is Some(offset) && !mapping.modified.is_empty() {
       new_ranges.push(
-        @common.LineRange(
+        LineRange(
           mapping.modified.start_line_number + offset,
           mapping.modified.end_line_number_exclusive + offset,
         ),
@@ -161,7 +161,7 @@ fn normalize_review_line_ranges(
     let last_index = result.length() - 1
     let last = result[last_index]
     if range.start_line_number <= last.end_line_number_exclusive {
-      result[last_index] = @common.LineRange(
+      result[last_index] = LineRange(
         last.start_line_number,
         last.end_line_number_exclusive.max(range.end_line_number_exclusive),
       )
@@ -191,7 +191,7 @@ fn review_line_ranges_subtract(
       }
       if cut.start_line_number > cursor {
         result.push(
-          @common.LineRange(
+          LineRange(
             cursor,
             cut.start_line_number.min(range.end_line_number_exclusive),
           ),
@@ -203,7 +203,7 @@ fn review_line_ranges_subtract(
       }
     }
     if cursor < range.end_line_number_exclusive {
-      result.push(@common.LineRange(cursor, range.end_line_number_exclusive))
+      result.push(LineRange(cursor, range.end_line_number_exclusive))
     }
   }
   result

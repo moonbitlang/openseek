@@ -1417,7 +1417,7 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
   let index_live = self.index is IndexLoading(..) ||
     self.index is IndexReady(..)
   if ctx.placement is None ||
-    ctx.placement is Some(@interop.MissingWorktree(..)) ||
+    ctx.placement is Some(MissingWorktree(..)) ||
     (!ctx.panel_open && ctx.open_files.is_empty() && !index_live) ||
     ctx.owner.session.is_empty() {
     return None
@@ -3350,10 +3350,10 @@ fn update_inner(
         return (@cmd.none, { ..state, background_review_requests, })
       }
       let review = match original {
-        @protocol.OriginalContent(content) => ReviewContent(content)
-        @protocol.Missing => ReviewMissing
-        @protocol.BinaryOriginal => ReviewBinary
-        @protocol.OversizedOriginal => ReviewOversized
+        OriginalContent(content) => ReviewContent(content)
+        Missing => ReviewMissing
+        BinaryOriginal => ReviewBinary
+        OversizedOriginal => ReviewOversized
       }
       let docs = state.docs.copy()
       let next_doc = {
@@ -3433,10 +3433,10 @@ fn update_inner(
         return (@cmd.none, state)
       }
       let settled = match blob {
-        @protocol.OriginalContent(content) => HistoryBlobContent(content)
-        @protocol.Missing => HistoryBlobMissing
-        @protocol.BinaryOriginal => HistoryBlobBinary
-        @protocol.OversizedOriginal => HistoryBlobOversized
+        OriginalContent(content) => HistoryBlobContent(content)
+        Missing => HistoryBlobMissing
+        BinaryOriginal => HistoryBlobBinary
+        OversizedOriginal => HistoryBlobOversized
       }
       let doc = match side {
         HistoryOriginal => { ..doc, original: settled, }
@@ -4198,13 +4198,13 @@ fn test_emit() -> @cmd.Emit[Msg] {
 ///|
 fn test_ctx() -> Ctx {
   {
-    owner: { channel: @interop.ChannelId::Local, session: "desktop-test", },
+    owner: { channel: Local, session: "desktop-test", },
     request_epoch: 0,
     watch_namespace: "test-page",
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
-    placement: @resource.of_path(@interop.ChannelId::Local, "/work").map(root => {
-      @interop.WorkspaceRoot(root~)
+    placement: @resource.of_path(Local, "/work").map(root => {
+      WorkspaceRoot(root~)
     }),
     dark_mode: false,
     tree_layout: BottomPanel,
@@ -4239,7 +4239,7 @@ fn Ctx::test_resource(self : Ctx, path : String) -> @common.Uri raise {
 /// availability, matching the production registry transition.
 fn Ctx::test_worktree(self : Ctx, name : String) -> Ctx raise {
   let root = self.test_root()
-  { ..self, placement: Some(@interop.Worktree(project=root, name~, root~)), }
+  { ..self, placement: Some(Worktree(project=root, name~, root~)), }
 }
 
 ///|
@@ -4260,8 +4260,7 @@ fn owned_state_at(ctx : Ctx) -> State {
 
 ///|
 fn loaded_doc(path : String) -> Doc raise {
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/" + path)
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/" + path) is Some(absolute) else {
     fail("test document resource was not absolute")
   }
   {
@@ -4633,8 +4632,7 @@ test "changed-file review fences paired replies and ordinary opens leave review"
     different_row,
     had_active=true,
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/a.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/a.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   // An ordinary read that began before the first review click carries no
@@ -4698,7 +4696,7 @@ test "changed-file review fences paired replies and ordinary opens leave review"
       background=false,
       path~,
       generation=1,
-      original=@protocol.OriginalContent("old one"),
+      original=OriginalContent("old one"),
     ),
     old_working,
     ctx,
@@ -4716,7 +4714,7 @@ test "changed-file review fences paired replies and ordinary opens leave review"
       background=false,
       path~,
       generation=2,
-      original=@protocol.OriginalContent("old two"),
+      original=OriginalContent("old two"),
     ),
     ignored,
     ctx,
@@ -4750,7 +4748,7 @@ test "changed-file review fences paired replies and ordinary opens leave review"
     ctx,
     path,
     name="a.mbt",
-    range=Some(@common.Range(2, 1, 2, 4)),
+    range=Some(Range(2, 1, 2, 4)),
     had_active=true,
   )
   assert_true(
@@ -4869,7 +4867,7 @@ test "changed-file review preserves a stale cached working document until reload
       background=false,
       path~,
       generation=1,
-      original=@protocol.OriginalContent("HEAD source"),
+      original=OriginalContent("HEAD source"),
     ),
     reviewing,
     ctx,
@@ -5032,7 +5030,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
       background=false,
       path=deleted_path,
       generation=1,
-      original=@protocol.OriginalContent("removed source"),
+      original=OriginalContent("removed source"),
     ),
     loading,
     ctx,
@@ -5093,13 +5091,12 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
       background=false,
       path=live_path,
       generation=1,
-      original=@protocol.Missing,
+      original=Missing,
     ),
     live_loading,
     live_ctx,
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/live.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/live.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   let (_, loaded) = update(
@@ -5233,8 +5230,7 @@ test "close_document drops the entry and forces the tree open on the last one" {
 ///|
 test "FileLoaded settles content into its document, active or not" {
   let emit = test_emit()
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/a.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/a.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   let docs : Map[@pathx.Relative, Doc] = Map([])
@@ -5272,8 +5268,7 @@ test "FileLoaded settles content into its document, active or not" {
     is Some({ state: TabLoaded(content="fn main {}", ..), .. }),
   )
   // A reply for a closed document (or another conversation) is dropped.
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/gone.mbt")
-    is Some(gone_absolute) else {
+  guard @resource.of_path(Local, "/work/gone.mbt") is Some(gone_absolute) else {
     fail("test closed file resource was not absolute")
   }
   let (_, stray) = update(
@@ -5296,10 +5291,7 @@ test "FileLoaded settles content into its document, active or not" {
   let (_, other) = update(
     emit,
     FileLoaded(
-      owner={
-        channel: @interop.ChannelId::Remote("other"),
-        session: "desktop-test",
-      },
+      owner={ channel: Remote("other"), session: "desktop-test", },
       epoch=0,
       path=Relative("a.mbt"),
       name="a.mbt",
@@ -5327,8 +5319,7 @@ test "FileLoaded settles content into its document, active or not" {
     ctx,
   )
   assert_true(old_epoch == epoch_state)
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/a.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/a.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   let (_, old_read) = update(
@@ -5391,10 +5382,7 @@ test "sync re-roots the document table from the dock's projection" {
   // one; the table re-seeds from it, identities only.
   let other : Ctx = {
     ..test_ctx(),
-    owner: {
-      channel: @interop.ChannelId::Remote("other"),
-      session: "desktop-test",
-    },
+    owner: { channel: Remote("other"), session: "desktop-test", },
     open_files: [Relative("a.mbt"), Relative("b.mbt")],
     active_file: Some(Relative("a.mbt")),
   }
@@ -5442,10 +5430,7 @@ test "a closed panel still re-roots when the conversation switches" {
   // The new conversation has nothing open and the panel is closed.
   let other : Ctx = {
     ..test_ctx(),
-    owner: {
-      channel: @interop.ChannelId::Remote("other"),
-      session: "desktop-test",
-    },
+    owner: { channel: Remote("other"), session: "desktop-test", },
     panel_open: false,
   }
   let (parked, _) = sync(emit, state, other)
@@ -5485,8 +5470,7 @@ test "a closed panel still re-roots when the conversation switches" {
 test "a resolved placement change reroots documents and fences old replies" {
   let emit = test_emit()
   let path = @pathx.Relative("reviewed.mbt")
-  guard @resource.of_path(@interop.ChannelId::Local, "/project-a")
-    is Some(old_workspace) else {
+  guard @resource.of_path(Local, "/project-a") is Some(old_workspace) else {
     fail("test workspace resource was not absolute")
   }
   let docs : Map[@pathx.Relative, Doc] = Map([])
@@ -5502,7 +5486,7 @@ test "a resolved placement change reroots documents and fences old replies" {
   }
   let state = {
     ..owned_state(),
-    placement: PlacementLive(@interop.WorkspaceRoot(root=old_workspace)),
+    placement: PlacementLive(WorkspaceRoot(root=old_workspace)),
     changes: ChangeListReady(
       repository=true,
       files=[test_modified_change(path)],
@@ -5538,7 +5522,7 @@ test "a resolved placement change reroots documents and fences old replies" {
   let worktree_ctx : Ctx = {
     ..test_ctx(),
     placement: Some(
-      @interop.Worktree(
+      Worktree(
         project=old_workspace,
         name="wt-1",
         root=test_ctx().test_resource("/project-a/.worktrees/wt-1"),
@@ -5551,9 +5535,7 @@ test "a resolved placement change reroots documents and fences old replies" {
   assert_eq(moved.request_epoch, state.request_epoch + 1)
   assert_eq(moved.changes_generation, state.changes_generation + 1)
   assert_eq(moved.file_link_generation, state.file_link_generation + 1)
-  assert_true(
-    moved.placement.identity() is Some(@interop.Worktree(name="wt-1", ..)),
-  )
+  assert_true(moved.placement.identity() is Some(Worktree(name="wt-1", ..)))
   assert_eq(
     moved.placement.identity().bind(value => value.project_root()),
     Some(old_workspace),
@@ -5572,13 +5554,13 @@ test "a resolved placement change reroots documents and fences old replies" {
       {
         owner: { channel: Local, session: "desktop-test", },
         root: _,
-        files: [@pathx.Relative("reviewed.mbt")],
-        directories: [@pathx.Relative("")],
+        files: [Relative("reviewed.mbt")],
+        directories: [Relative("")],
         recursive: false,
       }
     ),
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/project-a/reviewed.mbt")
+  guard @resource.of_path(Local, "/project-a/reviewed.mbt")
     is Some(old_absolute) else {
     fail("test file resource was not absolute")
   }
@@ -5615,19 +5597,16 @@ test "a resolved placement change reroots documents and fences old replies" {
 
   // A workspace reassignment for the same conversation is the same hard
   // boundary even when both sides resolve to the ordinary project root.
-  guard @resource.of_path(@interop.ChannelId::Local, "/project-b")
-    is Some(new_workspace) else {
+  guard @resource.of_path(Local, "/project-b") is Some(new_workspace) else {
     fail("test workspace resource was not absolute")
   }
   let (reassigned, _) = sync(emit, state, {
     ..worktree_ctx,
-    placement: Some(@interop.WorkspaceRoot(root=new_workspace)),
+    placement: Some(WorkspaceRoot(root=new_workspace)),
   })
   assert_eq(reassigned.request_epoch, state.request_epoch + 1)
   assert_eq(reassigned.file_link_generation, state.file_link_generation + 1)
-  assert_true(
-    reassigned.placement.identity() is Some(@interop.WorkspaceRoot(..)),
-  )
+  assert_true(reassigned.placement.identity() is Some(WorkspaceRoot(..)))
   assert_eq(
     reassigned.placement.identity().bind(value => value.checkout_root()),
     Some(new_workspace),
@@ -5675,9 +5654,7 @@ test "a missing checkout parks files and refuses editor actions until repair" {
   }
   let missing : Ctx = {
     ..present,
-    placement: Some(
-      @interop.MissingWorktree(project=present.test_root(), name="wt"),
-    ),
+    placement: Some(MissingWorktree(project=present.test_root(), name="wt")),
     open_files: [Relative("a.mbt"), Relative("b.mbt")],
     active_file: Some(Relative("a.mbt")),
   }
@@ -5793,9 +5770,7 @@ test "opening after a hidden checkout repair restores a stale reviewed tab" {
   let state = { ..owned_state_at(present), docs, review_generation: 4, }
   let missing : Ctx = {
     ..present,
-    placement: Some(
-      @interop.MissingWorktree(project=present.test_root(), name="wt"),
-    ),
+    placement: Some(MissingWorktree(project=present.test_root(), name="wt")),
   }
   let (parked, _) = sync(emit, state, missing)
   let (restored, _) = sync(emit, parked, present)
@@ -5845,7 +5820,7 @@ test "an unresolved gap retains identity so same-checkout recovery restores" {
   // The gap must not erase the last known identity.
   assert_true(
     parked.placement
-    is PlacementParked(last_known=Some(@interop.Worktree(name="wt", ..))),
+    is PlacementParked(last_known=Some(Worktree(name="wt", ..))),
   )
   // The refreshed registry reports the same worktree: an availability change,
   // so the review survives for revalidation instead of a hard reroot.
@@ -5883,7 +5858,7 @@ test "recovery from an unresolved gap into another checkout reroots" {
   let (parked, _) = sync(emit, state, { ..present, placement: None, })
   assert_true(
     parked.placement
-    is PlacementParked(last_known=Some(@interop.Worktree(name="wt", ..))),
+    is PlacementParked(last_known=Some(Worktree(name="wt", ..))),
   )
   // Another client unbound the worktree during the gap; the conversation now
   // resolves to the project's main checkout. The retained identity exposes
@@ -5891,10 +5866,10 @@ test "recovery from an unresolved gap into another checkout reroots" {
   // restored against files read from the new root.
   let recovered : Ctx = {
     ..present,
-    placement: Some(@interop.WorkspaceRoot(root=present.test_root())),
+    placement: Some(WorkspaceRoot(root=present.test_root())),
   }
   let (rerooted, _) = sync(emit, parked, recovered)
-  assert_true(rerooted.placement is PlacementLive(@interop.WorkspaceRoot(..)))
+  assert_true(rerooted.placement is PlacementLive(WorkspaceRoot(..)))
   assert_eq(rerooted.request_epoch, parked.request_epoch + 1)
   assert_true(
     rerooted.docs.get(path)
@@ -5921,9 +5896,7 @@ test "a missing checkout settles an in-flight Changes request for retry" {
   }
   let missing : Ctx = {
     ..present,
-    placement: Some(
-      @interop.MissingWorktree(project=present.test_root(), name="wt"),
-    ),
+    placement: Some(MissingWorktree(project=present.test_root(), name="wt")),
   }
   let (parked, _) = sync(emit, state, missing)
   assert_true(parked.changes is ChangeListIdle)
@@ -5997,9 +5970,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
   }
   let missing : Ctx = {
     ..present,
-    placement: Some(
-      @interop.MissingWorktree(project=present.test_root(), name="wt"),
-    ),
+    placement: Some(MissingWorktree(project=present.test_root(), name="wt")),
     open_files: [path],
     active_file: Some(path),
   }
@@ -6092,9 +6063,7 @@ test "hidden checkout recovery retries failed Changes once before parking" {
   }
   let missing : Ctx = {
     ..present,
-    placement: Some(
-      @interop.MissingWorktree(project=present.test_root(), name="wt"),
-    ),
+    placement: Some(MissingWorktree(project=present.test_root(), name="wt")),
     open_files: [path],
     active_file: Some(path),
   }
@@ -6610,10 +6579,7 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, stale) = update(
     emit,
     ChangesLoaded(
-      owner={
-        channel: @interop.ChannelId::Remote("other"),
-        session: "desktop-test",
-      },
+      owner={ channel: Remote("other"), session: "desktop-test", },
       generation=1,
       repository=true,
       head=None,
@@ -6626,10 +6592,7 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, stale_failure) = update(
     emit,
     ChangesFailed(
-      owner={
-        channel: @interop.ChannelId::Remote("other"),
-        session: "desktop-test",
-      },
+      owner={ channel: Remote("other"), session: "desktop-test", },
       generation=1,
       message="stale git failure",
     ),
@@ -6772,8 +6735,7 @@ test "a review that becomes a symlink clears its cached regular-file source" {
     ctx,
   )
   assert_true(still_unavailable == unavailable)
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/src/replaced.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/src/replaced.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   let stale_reply = FileLoaded(
@@ -6877,8 +6839,7 @@ test "a disappearing review row hands an active reload to an ordinary read" {
     settled.docs.get(path)
     is Some({ state: TabLoaded(..), review: None, stale: true, .. }),
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/src/committed.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/src/committed.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   let (_, fenced) = update(
@@ -6964,8 +6925,7 @@ test "a newer review reload fences an older working-tree reply" {
       }
     ),
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/src/racing.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/src/racing.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   let (_, newest) = update(
@@ -7143,7 +7103,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
       path~,
       generation=4,
       background=false,
-      original=@protocol.OriginalContent("new HEAD"),
+      original=OriginalContent("new HEAD"),
     ),
     settled,
     { ..test_ctx(), open_files: [path], active_file: Some(path), },
@@ -7209,8 +7169,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
       }
     ),
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/src/paired.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/src/paired.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   let (_, ignored_old_working) = update(
@@ -7237,7 +7196,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
       background=false,
       path~,
       generation=4,
-      original=@protocol.OriginalContent("new HEAD"),
+      original=OriginalContent("new HEAD"),
     ),
     ignored_old_working,
     ctx,
@@ -7367,7 +7326,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
       path~,
       generation=4,
       background=true,
-      original=@protocol.OriginalContent("new HEAD"),
+      original=OriginalContent("new HEAD"),
     ),
     coalesced,
     ctx,
@@ -7669,7 +7628,7 @@ test "a changed rename source refreshes its review without moving HEAD" {
   let path = @pathx.Relative("src/new.mbt")
   let previous : ChangedFile = {
     path,
-    original_path: Some(@pathx.Relative("src/old.mbt")),
+    original_path: Some(Relative("src/old.mbt")),
     index_status: "R",
     worktree_status: " ",
     kind: ChangeRenamed,
@@ -7888,9 +7847,7 @@ test "a parked checkout stops the fallback poll until repair" {
   assert_true(changes_poll_wanted(state, reviewing))
   let missing : Ctx = {
     ..reviewing,
-    placement: Some(
-      @interop.MissingWorktree(project=present.test_root(), name="wt"),
-    ),
+    placement: Some(MissingWorktree(project=present.test_root(), name="wt")),
   }
   // The parked panel keeps its settled inventory and its open review readable,
   // so every other axis of the predicate still holds. Only the lost checkout
@@ -7990,10 +7947,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
 test "conversation re-roots retain the change request generation" {
   let state = {
     ..owned_state(),
-    owner: Some({
-      channel: @interop.ChannelId::Remote("previous"),
-      session: "previous-session",
-    }),
+    owner: Some({ channel: Remote("previous"), session: "previous-session", }),
     explorer_mode: ExplorerChanges,
     changes_generation: 7,
   }
@@ -8403,10 +8357,7 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   let (_, other) = update(
     emit,
     StatsLoaded(
-      owner={
-        channel: @interop.ChannelId::Remote("other"),
-        session: "desktop-test",
-      },
+      owner={ channel: Remote("other"), session: "desktop-test", },
       epoch=0,
       stats=[{ path: Relative("a.mbt"), signature: Missing, }],
     ),
@@ -8689,8 +8640,7 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
     ordinary,
     ctx,
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/recreated.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/recreated.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   let (_, restored) = update(
@@ -8774,8 +8724,7 @@ test "a vanished review retries a failed ordinary read" {
     ordinary,
     ctx,
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/committed.mbt")
-    is Some(absolute) else {
+  guard @resource.of_path(Local, "/work/committed.mbt") is Some(absolute) else {
     fail("test file resource was not absolute")
   }
   let (_, restored) = update(
@@ -9040,7 +8989,7 @@ test "watcher failures are visible only in their owning conversation" {
   )
   assert_true(failed.watch_error is Some("File watching stopped"))
   let other : @interop.ConversationKey = {
-    channel: @interop.ChannelId::Remote("other"),
+    channel: Remote("other"),
     session: owner.session,
   }
   let other_ctx : Ctx = { ..test_ctx(), owner: other, }

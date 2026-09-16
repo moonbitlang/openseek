@@ -226,7 +226,7 @@ fn Input::completion(
       } else {
         self.installed_skills
         .filter(skill => trigger.matches([skill.name, skill.description]))
-        .map(skill => CompletionItem::{
+        .map(skill => {
           label: "$\{skill.name}",
           detail: skill.description,
           command: "",

@@ -38,7 +38,7 @@ fn Draft::mention_chips(
       MentionChip::{
         glyph: @mention_context.glyph(mention.ref_),
         label: @mention_context.label(mention.ref_),
-        title: if mention.ref_ is @mention_context.Annotation(comment~, ..) {
+        title: if mention.ref_ is Annotation(comment~, ..) {
           comment
         } else if target is Some(target) {
           "Jump to \{target.file}"

@@ -155,7 +155,7 @@ fn review_diff_navigation_subscription(
   guard review_diff_navigation_enabled(state, ctx) else { return @sub.none }
   @sub.custom_sub(
     "fileeditor-review-diff-navigation",
-    @sub.Local,
+    Local,
     ReviewDiffNavigationSubscription(dispatch),
     review_diff_navigation_sub_loader,
   )

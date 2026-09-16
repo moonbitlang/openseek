@@ -20,7 +20,7 @@ test "in-place model replacement preserves view state" {
 test "symbol navigation highlights the exact target without a selection" {
   let range = @common.Range(7, 3, 7, 12)
   let target = navigation_target_presentation(range)
-  assert_eq(target.position, @common.Position(7, 3))
+  assert_eq(target.position, Position(7, 3))
   assert_eq(target.decoration.range, range)
   assert_eq(target.decoration.options.class_name, "symbolHighlight")
   assert_eq(
@@ -33,9 +33,9 @@ test "symbol navigation highlights the exact target without a selection" {
 
 ///|
 test "point navigation keeps its column and highlights the whole line" {
-  let target = navigation_target_presentation(@common.Range(9, 17, 9, 17))
-  assert_eq(target.position, @common.Position(9, 17))
-  assert_eq(target.decoration.range, @common.Range(9, 1, 9, 1))
+  let target = navigation_target_presentation(Range(9, 17, 9, 17))
+  assert_eq(target.position, Position(9, 17))
+  assert_eq(target.decoration.range, Range(9, 1, 9, 1))
   assert_eq(target.decoration.options.class_name, "rangeHighlight")
   assert_eq(target.decoration.options.description, "point-range-line-highlight")
   assert_true(target.decoration.options.is_whole_line)
@@ -49,20 +49,17 @@ test "point navigation keeps its column and highlights the whole line" {
 /// keeps one presentation for readability instead of promoting a current row.
 test "workspace Search decorates every match with one readable style" {
   let decorations = search_match_decorations([
-    @common.Range(2, 1, 2, 5),
-    @common.Range(4, 7, 4, 11),
-    @common.Range(9, 3, 9, 7),
+    Range(2, 1, 2, 5),
+    Range(4, 7, 4, 11),
+    Range(9, 3, 9, 7),
   ])
   assert_eq(decorations.length(), 3)
-  assert_eq(decorations[0].range, @common.Range(2, 1, 2, 5))
+  assert_eq(decorations[0].range, Range(2, 1, 2, 5))
   assert_eq(decorations[0].options.class_name, "findMatch")
   assert_eq(decorations[0].options.inline_class_name, Some("findMatchInline"))
   assert_eq(decorations[0].options.z_index, 10)
-  assert_eq(
-    decorations[0].options.stickiness,
-    @model.NeverGrowsWhenTypingAtEdges,
-  )
-  assert_eq(decorations[1].range, @common.Range(4, 7, 4, 11))
+  assert_eq(decorations[0].options.stickiness, NeverGrowsWhenTypingAtEdges)
+  assert_eq(decorations[1].range, Range(4, 7, 4, 11))
   assert_eq(decorations[1].options.class_name, "findMatch")
   assert_eq(decorations[1].options.inline_class_name, Some("findMatchInline"))
   assert_eq(decorations[1].options.z_index, 10)

@@ -35,7 +35,7 @@ fn fetch_remote_status(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       let status = @interop.bridge_request(
         Local,
         @commands.auth_status,
-        @protocol.EmptyPayload::NoPayload,
+        NoPayload,
       ) catch {
         _ => return
       }
@@ -56,7 +56,7 @@ fn connect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       let status = @interop.bridge_request(
         Local,
         @commands.auth_connect,
-        @protocol.EmptyPayload::NoPayload,
+        NoPayload,
       ) catch {
         error => {
           scheduler.add(
@@ -78,11 +78,7 @@ fn connect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 fn cancel_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
-      let _ = @interop.bridge_request(
-        Local,
-        @commands.auth_cancel,
-        @protocol.EmptyPayload::NoPayload,
-      ) catch {
+      let _ = @interop.bridge_request(Local, @commands.auth_cancel, NoPayload) catch {
         error => {
           scheduler.add(
             dispatch(RemoteDisconnectFailed(@interop.bridge_error_text(error))),
@@ -102,7 +98,7 @@ fn disconnect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       let reply = @interop.bridge_request(
         Local,
         @commands.auth_disconnect,
-        @protocol.EmptyPayload::NoPayload,
+        NoPayload,
       ) catch {
         error => {
           scheduler.add(

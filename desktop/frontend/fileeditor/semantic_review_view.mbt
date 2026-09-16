@@ -35,8 +35,8 @@ fn ReviewDiffMode::semantic_mode(
 ) -> @moon_diff_provider.MoonDiffMode? {
   match self {
     ReviewDiffLine => None
-    ReviewDiffToken => Some(@moon_diff_provider.Token)
-    ReviewDiffTree => Some(@moon_diff_provider.Tree)
+    ReviewDiffToken => Some(Token)
+    ReviewDiffTree => Some(Tree)
   }
 }
 
@@ -166,12 +166,9 @@ fn semantic_section_status(
   kind : @moon_diff_provider.SemanticReviewSectionKind,
 ) -> @html.Html {
   match kind {
-    @moon_diff_provider.SemanticReviewSectionKind::Inserted =>
-      @html.span(class="semantic-entry-status added", "A")
-    @moon_diff_provider.SemanticReviewSectionKind::Deleted =>
-      @html.span(class="semantic-entry-status deleted", "D")
-    @moon_diff_provider.SemanticReviewSectionKind::Whole
-    | @moon_diff_provider.SemanticReviewSectionKind::Matched => @html.nothing
+    Inserted => @html.span(class="semantic-entry-status added", "A")
+    Deleted => @html.span(class="semantic-entry-status deleted", "D")
+    Whole | Matched => @html.nothing
   }
 }
 
@@ -203,9 +200,8 @@ fn semantic_fallback_notice(
   if section.fallbacks.is_empty() {
     return @html.nothing
   }
-  let whole = section.kind
-    is @moon_diff_provider.SemanticReviewSectionKind::Whole
-  let tree = requested is @moon_diff_provider.Tree
+  let whole = section.kind is Whole
+  let tree = requested is Tree
   @html.div(
     class=if whole {
       "diff-notice fallback"
@@ -316,7 +312,7 @@ fn semantic_status_empty_view(
   input : SemanticReviewInput,
 ) -> @html.Html? {
   match plan.status {
-    @moon_diff_provider.SemanticReviewStatus::IgnoredOnly => {
+    IgnoredOnly => {
       let subject = if input.ignore_comments && input.ignore_tests {
         "comments, blank lines, or test blocks"
       } else if input.ignore_tests {
@@ -330,28 +326,27 @@ fn semantic_status_empty_view(
         ),
       )
     }
-    @moon_diff_provider.SemanticReviewStatus::Identical =>
+    Identical =>
       Some(
         semantic_empty_view(
-          if input.mode is @moon_diff_provider.Tree {
+          if input.mode is Tree {
             "No structural changes found. Switch to Token or Line to inspect text."
           } else {
             "No token changes found."
           },
         ),
       )
-    @moon_diff_provider.SemanticReviewStatus::NoStructuralChanges =>
+    NoStructuralChanges =>
       Some(
         semantic_empty_view(
-          if input.mode is @moon_diff_provider.Tree {
+          if input.mode is Tree {
             "No structural changes found. Switch to Token to view text changes."
           } else {
             "No declaration-owned token changes found. Switch to Line to inspect the complete file."
           },
         ),
       )
-    @moon_diff_provider.SemanticReviewStatus::Changed
-    | @moon_diff_provider.SemanticReviewStatus::Reordered => None
+    Changed | Reordered => None
   }
 }
 
@@ -418,14 +413,7 @@ pub fn semantic_review_view(
   @html.div(
     class="semantic-review",
     attrs=@html.Attrs::build()
-      .data_set(
-        "mode",
-        if input.mode is @moon_diff_provider.Token {
-          "token"
-        } else {
-          "tree"
-        },
-      )
+      .data_set("mode", if input.mode is Token { "token" } else { "tree" })
       .data_set(
         "layout",
         if state.review_diff_layout is ReviewSideBySide {
@@ -518,15 +506,15 @@ fn sync_semantic_review_scroll_left(scroll_left : Double) -> Unit {
 fn semantic_diff_options(
   layout : ReviewDiffLayout,
 ) -> @viewer.DiffEditorOptions {
-  @viewer.DiffEditorOptions(
+  DiffEditorOptions(
     editor_options=current_diff_pane_options(),
     layout=match layout {
-      ReviewSideBySide => @viewer.SideBySide
-      ReviewInline => @viewer.Inline
+      ReviewSideBySide => SideBySide
+      ReviewInline => Inline
     },
     automatic_inline=false,
     sash_enabled=true,
-    diff_word_wrap=@viewer.Off,
+    diff_word_wrap=Off,
     overview_ruler=false,
     render_indicators=true,
     render_markdown_comments=false,
@@ -558,7 +546,7 @@ fn semantic_feedback_line_offset(
   section : @moon_diff_provider.SemanticReviewSection,
   side : SemanticReviewSide,
 ) -> Int? {
-  if section.kind is @moon_diff_provider.SemanticReviewSectionKind::Whole {
+  if section.kind is Whole {
     return Some(0)
   }
   let range = match side {
@@ -595,7 +583,7 @@ fn project_semantic_feedback_range(
   range : @common.Range,
   line_offset : Int,
 ) -> @common.Range {
-  @common.Range(
+  Range(
     range.start_line_number + line_offset,
     range.start_column,
     range.end_line_number + line_offset,
@@ -762,7 +750,7 @@ fn project_semantic_modified_diagnostics(
     let start_line = local_start.max(1)
     let end_line = local_end.min(line_count)
     let range = model.validate_range(
-      @common.Range(
+      Range(
         start_line,
         if local_start < 1 {
           1
@@ -1147,7 +1135,7 @@ fn create_semantic_review_editor(
     "\{semantic_estimated_height(section, layout)}px",
   )
   let (editor, provider) = match section.diff {
-    @moon_diff_provider.SemanticReviewDiff::Line =>
+    Line =>
       (
         @viewer.DiffEditor::create(
           host,
@@ -1156,7 +1144,7 @@ fn create_semantic_review_editor(
         ),
         None,
       )
-    @moon_diff_provider.SemanticReviewDiff::Fragment(document) => {
+    Fragment(document) => {
       let provider = @moon_diff_provider.MoonFragmentDiffProvider(document)
       (
         @viewer.DiffEditor::create(
@@ -1212,7 +1200,7 @@ fn create_semantic_review_editor(
   let focus_subscription = @common.Disposable::from(() => {
     host.remove_event_listener("focusin", focus_listener)
   })
-  editor.set_model(Some(@viewer.DiffEditorModel(original, modified))) |> ignore
+  editor.set_model(Some(DiffEditorModel(original, modified))) |> ignore
   sync_semantic_feedback(
     services,
     input.feedback_file,
@@ -1281,8 +1269,8 @@ fn update_semantic_review_editor_layout(layout : ReviewDiffLayout) -> Unit {
 fn refresh_semantic_review_editor_options() -> Unit {
   for _, entry in semantic_review_editors {
     let layout = match entry.editor.get_layout() {
-      @viewer.SideBySide => ReviewSideBySide
-      @viewer.Inline => ReviewInline
+      SideBySide => ReviewSideBySide
+      Inline => ReviewInline
     }
     entry.editor.update_options(semantic_diff_options(layout))
     entry.editor.layout()

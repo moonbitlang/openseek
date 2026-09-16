@@ -18,7 +18,7 @@ fn fetch_projects(
       let reply = @interop.bridge_request(
         channel,
         @commands.workspace_list,
-        @protocol.EmptyPayload::NoPayload,
+        NoPayload,
       ) catch {
         _ => return
       }
@@ -156,20 +156,13 @@ test "a project new chat rotates into that project" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/home/u/proj")
   let model = test_model().with_dev(dev => { ..dev, projects: [workspace], })
-  let (_, chosen) = update(
-    dispatch,
-    NewChatIn(@interop.ChannelId::Local, Some(workspace)),
-    model,
-  )
+  let (_, chosen) = update(dispatch, NewChatIn(Local, Some(workspace)), model)
   assert_eq(chosen.dev().active_project, Some(workspace))
   // The rotation lands like any other; the fresh conversation carries the
   // active workspace, and the next plain "New chat" stays there.
   let (_, rotated) = update(
     dispatch,
-    SessionRotated({
-      channel: @interop.ChannelId::Local,
-      session: "desktop-ws",
-    }),
+    SessionRotated({ channel: Local, session: "desktop-ws", }),
     chosen,
   )
   assert_eq(rotated.active().workspace, Project(root=workspace))
@@ -232,7 +225,7 @@ test "a rotation lands in the device's active project" {
   let dispatch = test_dispatch()
   let (_, next) = update(
     dispatch,
-    SessionRotated({ channel: @interop.ChannelId::Local, session: "desktop-s", }),
+    SessionRotated({ channel: Local, session: "desktop-s", }),
     test_model().with_dev(dev => {
       ..dev,
       active_project: Some(@interop.ChannelId::Local.test_project()),
@@ -526,11 +519,8 @@ test "a workspace commit broadcast supersedes list replies and refreshes session
 ///|
 test "workspace commit decoder carries the canonical registry list" {
   guard notification_msg(
-      @interop.ChannelId::Local,
-      @protocol.Notification::WorkspaceChanged({
-        workspaces: ["/one", "/two"],
-        chat_root: None,
-      }),
+      Local,
+      WorkspaceChanged({ workspaces: ["/one", "/two"], chat_root: None, }),
     )
     is Some(FromDevice(_, ProjectsChanged(paths, chat_root=None))) else {
     fail("expected a workspace change")
@@ -555,11 +545,7 @@ test "opening a stored session joins its project and loaded worktree" {
       },
     ],
   })
-  let (_, opening) = update(
-    dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-w"),
-    model,
-  )
+  let (_, opening) = update(dispatch, OpenSession(Local, "desktop-w"), model)
   assert_eq(opening.dev().active_project, Some(workspace))
   assert_true(
     opening.loading_conversation
@@ -595,7 +581,7 @@ test "opening a stored session joins its project and loaded worktree" {
   })
   let (_, worktree_opening) = update(
     dispatch,
-    OpenSession(@interop.ChannelId::Local, "desktop-w"),
+    OpenSession(Local, "desktop-w"),
     bound,
   )
   guard worktree_opening.find_conversation(Local, "desktop-w") is Some(pending) else {
@@ -615,26 +601,14 @@ test "the two full-screen pickers never share the screen" {
   let base = { ..test_model(), is_desktop: true, }
   // The picker's capture-phase keys would claim Enter and Escape from a
   // palette that is painted on top of it, so opening one retires the other.
-  let (_, searching) = update(
-    dispatch,
-    QuickOpenOpen(@quick_open.Symbols),
-    base,
-  )
+  let (_, searching) = update(dispatch, QuickOpenOpen(Symbols), base)
   assert_true(searching.quick_open.is_open())
-  let (_, browsing) = update(
-    dispatch,
-    PickProject(@interop.ChannelId::Local),
-    searching,
-  )
+  let (_, browsing) = update(dispatch, PickProject(Local), searching)
   assert_true(browsing.project_picker is Some(_))
   assert_false(browsing.quick_open.is_open())
   // The exclusion runs the other way as a refusal instead: the browse position
   // is worth more than a query the user can retype.
-  let (_, still_browsing) = update(
-    dispatch,
-    QuickOpenOpen(@quick_open.Files),
-    browsing,
-  )
+  let (_, still_browsing) = update(dispatch, QuickOpenOpen(Files), browsing)
   assert_false(still_browsing.quick_open.is_open())
   assert_true(still_browsing.project_picker is Some(_))
 }
@@ -645,9 +619,9 @@ test "a picker message with no picker open is dropped" {
   let (_, next) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Loaded(
+      Loaded(
         channel=Local,
-        location=@project_picker.Location::Directory("/home/u"),
+        location=Directory("/home/u"),
         entries=[],
         generation=1,
       ),
@@ -669,17 +643,13 @@ fn picker_generation(model : Model) -> Int raise {
 ///|
 test "a failed navigation keeps the listing and pops a toast" {
   let dispatch = test_dispatch()
-  let (_, opened) = update(
-    dispatch,
-    PickProject(@interop.ChannelId::Local),
-    test_model(),
-  )
+  let (_, opened) = update(dispatch, PickProject(Local), test_model())
   let (_, loaded) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Loaded(
+      Loaded(
         channel=Local,
-        location=@project_picker.Location::Directory("/home/u"),
+        location=Directory("/home/u"),
         entries=["proj"],
         generation=picker_generation(opened),
       ),
@@ -689,7 +659,7 @@ test "a failed navigation keeps the listing and pops a toast" {
   let (_, failed) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Failed(
+      Failed(
         channel=Local,
         message="no such directory: /gone",
         generation=picker_generation(loaded),
@@ -716,7 +686,7 @@ test "a failed navigation keeps the listing and pops a toast" {
   let (_, stale) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Failed(
+      Failed(
         channel=Local,
         message="stale",
         generation=picker_generation(failed) + 1,
@@ -730,37 +700,25 @@ test "a failed navigation keeps the listing and pops a toast" {
 ///|
 test "confirming registers the browsed directory and closes the picker" {
   let dispatch = test_dispatch()
-  let (_, opened) = update(
-    dispatch,
-    PickProject(@interop.ChannelId::Local),
-    test_model(),
-  )
+  let (_, opened) = update(dispatch, PickProject(Local), test_model())
   let (_, loaded) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Loaded(
+      Loaded(
         channel=Local,
-        location=@project_picker.Location::Directory("/home/u/proj"),
+        location=Directory("/home/u/proj"),
         entries=[],
         generation=picker_generation(opened),
       ),
     ),
     opened,
   )
-  let (_, confirmed) = update(
-    dispatch,
-    ProjectPicker(@project_picker.Msg::Confirm),
-    loaded,
-  )
+  let (_, confirmed) = update(dispatch, ProjectPicker(Confirm), loaded)
   assert_true(confirmed.project_picker is None)
   inspect(confirmed.dev().projects_request_generation, content="0")
   // Confirming before anything was browsed has nothing to register and
   // keeps the picker open.
-  let (_, early) = update(
-    dispatch,
-    ProjectPicker(@project_picker.Msg::Confirm),
-    opened,
-  )
+  let (_, early) = update(dispatch, ProjectPicker(Confirm), opened)
   assert_true(early.project_picker is Some(_))
 }
 
@@ -789,9 +747,9 @@ test "the add-project chord opens the picker once and never restarts it" {
   let (_, loaded) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Loaded(
+      Loaded(
         channel=Local,
-        location=@project_picker.Location::Directory("/home/u"),
+        location=Directory("/home/u"),
         entries=["proj"],
         generation=picker_generation(opened),
       ),
@@ -813,28 +771,20 @@ fn confirmed_add(
   requested? : String,
 ) -> Model raise {
   let requested = requested.unwrap_or(picked.path)
-  let (_, opened) = update(
-    dispatch,
-    PickProject(@interop.ChannelId::Local),
-    test_model(),
-  )
+  let (_, opened) = update(dispatch, PickProject(Local), test_model())
   let (_, loaded) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Loaded(
+      Loaded(
         channel=Local,
-        location=@project_picker.Location::Directory(requested),
+        location=Directory(requested),
         entries=[],
         generation=picker_generation(opened),
       ),
     ),
     opened,
   )
-  let (_, confirmed) = update(
-    dispatch,
-    ProjectPicker(@project_picker.Msg::Confirm),
-    loaded,
-  )
+  let (_, confirmed) = update(dispatch, ProjectPicker(Confirm), loaded)
   assert_true(confirmed.project_picker is None)
   confirmed
 }
@@ -1022,28 +972,20 @@ test "a superseded confirm's reply cannot resolve the newer pending" {
   let confirmed_first = confirmed_add(dispatch, first)
   // The picker reopens and a second directory is confirmed while the
   // first add is still in flight: the pending now follows the second.
-  let (_, reopened) = update(
-    dispatch,
-    PickProject(@interop.ChannelId::Local),
-    confirmed_first,
-  )
+  let (_, reopened) = update(dispatch, PickProject(Local), confirmed_first)
   let (_, listed) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Loaded(
+      Loaded(
         channel=Local,
-        location=@project_picker.Location::Directory(second.path),
+        location=Directory(second.path),
         entries=[],
         generation=picker_generation(reopened),
       ),
     ),
     reopened,
   )
-  let (_, confirmed_second) = update(
-    dispatch,
-    ProjectPicker(@project_picker.Msg::Confirm),
-    listed,
-  )
+  let (_, confirmed_second) = update(dispatch, ProjectPicker(Confirm), listed)
   // The first add's reply answers a confirm the user has moved past: it
   // must neither resolve nor clear the second's pending.
   let (_, ignored) = update_dev(
@@ -1098,28 +1040,20 @@ test "a resolved add wins over the detach fallback in one snapshot" {
       workspace: Project(root=gone),
     })
     .with_dev(dev => { ..dev, projects: [gone], active_project: Some(gone), })
-  let (_, opened) = update(
-    dispatch,
-    PickProject(@interop.ChannelId::Local),
-    model,
-  )
+  let (_, opened) = update(dispatch, PickProject(Local), model)
   let (_, listed) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Loaded(
+      Loaded(
         channel=Local,
-        location=@project_picker.Location::Directory(picked.path),
+        location=Directory(picked.path),
         entries=[],
         generation=picker_generation(opened),
       ),
     ),
     opened,
   )
-  let (_, confirmed) = update(
-    dispatch,
-    ProjectPicker(@project_picker.Msg::Confirm),
-    listed,
-  )
+  let (_, confirmed) = update(dispatch, ProjectPicker(Confirm), listed)
   let (_, resolved) = update_dev(
     dispatch,
     ProjectAddCommitted(added=picked.path, paths=[gone, picked]),
@@ -1142,17 +1076,13 @@ test "a resolved add wins over the detach fallback in one snapshot" {
 test "confirm waits for an in-flight navigation" {
   let dispatch = test_dispatch()
   let picked = @interop.ChannelId::Local.test_resource("/home/u")
-  let (_, opened) = update(
-    dispatch,
-    PickProject(@interop.ChannelId::Local),
-    test_model(),
-  )
+  let (_, opened) = update(dispatch, PickProject(Local), test_model())
   let (_, loaded) = update(
     dispatch,
     ProjectPicker(
-      @project_picker.Msg::Loaded(
+      Loaded(
         channel=Local,
-        location=@project_picker.Location::Directory(picked.path),
+        location=Directory(picked.path),
         entries=[],
         generation=picker_generation(opened),
       ),
@@ -1163,14 +1093,10 @@ test "confirm waits for an in-flight navigation" {
   // stale, so Enter right now must not attach the previous directory.
   let (_, navigating) = update(
     dispatch,
-    ProjectPicker(@project_picker.Msg::Navigate("/home/u/proj")),
+    ProjectPicker(Navigate("/home/u/proj")),
     loaded,
   )
-  let (_, held) = update(
-    dispatch,
-    ProjectPicker(@project_picker.Msg::Confirm),
-    navigating,
-  )
+  let (_, held) = update(dispatch, ProjectPicker(Confirm), navigating)
   assert_true(held.project_picker is Some(_))
   assert_true(held.pending_project_adoption is None)
 }
@@ -1241,7 +1167,7 @@ fn create_chat_workspace(
           @interop.bridge_request(
             channel,
             @commands.fs_create_unnamed_workspace,
-            @protocol.EmptyPayload::NoPayload,
+            NoPayload,
           ) {
           Listing(path~, ..) => Ok(path)
           BrowseError(message) => Err(message)

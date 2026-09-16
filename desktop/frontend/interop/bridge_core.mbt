@@ -117,7 +117,7 @@ let ordered_request_lanes : Map[String, Lane] = Map([])
 
 ///|
 fn ordered_request_lane(lane : String) -> Lane {
-  ordered_request_lanes.get_or_init(lane, () => Lane::Lane())
+  ordered_request_lanes.get_or_init(lane, () => Lane())
 }
 
 ///|
@@ -229,13 +229,7 @@ test "an ordered request failure releases its channel lane" {
   let failures = []
   for _ in 0..<2 {
     @js.async_run(() => {
-      ignore(
-        bridge_request_in_order(
-          Local,
-          @commands.fs_unwatch,
-          @protocol.EmptyPayload::NoPayload,
-        ),
-      ) catch {
+      ignore(bridge_request_in_order(Local, @commands.fs_unwatch, NoPayload)) catch {
         _ => {
           failures.push(true)
           return

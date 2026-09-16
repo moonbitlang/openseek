@@ -17,7 +17,7 @@ fn semantic_test_section(
     fallbacks: [],
     original_source,
     modified_source,
-    diff: @moon_diff_provider.SemanticReviewDiff::Line,
+    diff: Line,
   }
 }
 
@@ -46,7 +46,7 @@ test "semantic input follows active MoonBit review and ignores layout" {
   }
   assert_eq(input.old_source, "fn value() { 1 }")
   assert_eq(input.new_source, "fn value() { 2 }")
-  assert_true(input.mode is @moon_diff_provider.Token)
+  assert_true(input.mode is Token)
   assert_eq(input.feedback_file, Some(path))
   assert_true(
     input.live_modified is Some({ resource, path: live_path, }) &&
@@ -86,7 +86,7 @@ test "semantic feedback enables only physical sides of working-tree sections" {
   let matched = semantic_test_section(
     "section-1",
     Some(1),
-    @moon_diff_provider.SemanticReviewSectionKind::Matched,
+    Matched,
     "old",
     "new",
   )
@@ -101,7 +101,7 @@ test "semantic feedback enables only physical sides of working-tree sections" {
   )
   let deleted = {
     ..matched,
-    kind: @moon_diff_provider.SemanticReviewSectionKind::Deleted,
+    kind: Deleted,
     new_range: None,
     modified_source: "",
   }
@@ -113,7 +113,7 @@ test "semantic feedback enables only physical sides of working-tree sections" {
   )
   let inserted = {
     ..matched,
-    kind: @moon_diff_provider.SemanticReviewSectionKind::Inserted,
+    kind: Inserted,
     old_range: None,
     original_source: "",
   }
@@ -130,7 +130,7 @@ test "semantic feedback projects local ranges into each physical source side" {
   let section = semantic_test_section(
     "section-2",
     Some(2),
-    @moon_diff_provider.SemanticReviewSectionKind::Matched,
+    Matched,
     "old one\nold two",
     "new one\nnew two",
   )
@@ -145,17 +145,17 @@ test "semantic feedback projects local ranges into each physical source side" {
   let local_range = @common.Range(1, 2, 2, 5)
   assert_eq(
     project_semantic_feedback_range(local_range, 9),
-    @common.Range(10, 2, 11, 5),
+    Range(10, 2, 11, 5),
   )
   assert_eq(
     project_semantic_feedback_range(local_range, 29),
-    @common.Range(30, 2, 31, 5),
+    Range(30, 2, 31, 5),
   )
   let whole = {
     ..section,
     key: "whole",
     identity: None,
-    kind: @moon_diff_provider.SemanticReviewSectionKind::Whole,
+    kind: Whole,
     old_range: None,
     new_range: None,
   }
@@ -176,7 +176,7 @@ test "semantic feedback messages preserve projected side and range identity" {
   let modified = semantic_feedback_message(
     file,
     SemanticReviewModified,
-    @common.Range(30, 2, 31, 5),
+    Range(30, 2, 31, 5),
     "new one\nnew two",
     "keep this",
     resource,
@@ -185,18 +185,18 @@ test "semantic feedback messages preserve projected side and range identity" {
   assert_true(
     modified
     is EditorCommentAdded(
-      file=@pathx.Relative("src/main.mbt"),
+      file=Relative("src/main.mbt"),
       range=modified_range,
       quote="new one\nnew two",
       comment="keep this",
       ..
     ) &&
-    modified_range == @common.Range(30, 2, 31, 5),
+    modified_range == Range(30, 2, 31, 5),
   )
   let original = semantic_feedback_message(
     file,
     SemanticReviewOriginal,
-    @common.Range(10, 2, 11, 5),
+    Range(10, 2, 11, 5),
     "old one\nold two",
     "restore this",
     ModelUri("openseek-semantic-diff-original:/section-2.mbt"),
@@ -205,7 +205,7 @@ test "semantic feedback messages preserve projected side and range identity" {
   assert_true(
     original
     is DiffCommentAdded(
-      file=@pathx.Relative("src/main.mbt"),
+      file=Relative("src/main.mbt"),
       original_line_number=Some(10),
       modified_line_number=None,
       quote="old one\nold two",
@@ -228,19 +228,19 @@ test "semantic diagnostics retain only and relocate the section overlap" {
   defer model.dispose()
   let diagnostics : Array[@language.Diagnostic] = [
     {
-      range: @common.Range(2, 1, 2, 4),
+      range: Range(2, 1, 2, 4),
       severity: Error,
       message: "outside",
       tags: None,
     },
     {
-      range: @common.Range(30, 4, 30, 9),
+      range: Range(30, 4, 30, 9),
       severity: Warning,
       message: "inside",
       tags: None,
     },
     {
-      range: @common.Range(28, 8, 32, 8),
+      range: Range(28, 8, 32, 8),
       severity: Info,
       message: "crossing",
       tags: None,
@@ -249,9 +249,9 @@ test "semantic diagnostics retain only and relocate the section overlap" {
   let projected = project_semantic_modified_diagnostics(diagnostics, model, 29)
   assert_eq(projected.length(), 2)
   assert_eq(projected[0].message, "inside")
-  assert_eq(projected[0].range, @common.Range(1, 4, 1, 9))
+  assert_eq(projected[0].range, Range(1, 4, 1, 9))
   assert_eq(projected[1].message, "crossing")
-  assert_eq(projected[1].range, @common.Range(1, 1, 3, 2))
+  assert_eq(projected[1].range, Range(1, 1, 3, 2))
 }
 
 ///|
@@ -259,15 +259,15 @@ test "semantic multi-diff entry collapse is tab-local retained state" {
   let section = semantic_test_section(
     "section-4",
     Some(4),
-    @moon_diff_provider.SemanticReviewSectionKind::Matched,
+    Matched,
     "old",
     "new",
   )
   let state = {
     ..State::empty(),
     semantic_review_plan: Some({
-      requested: @moon_diff_provider.Token,
-      status: @moon_diff_provider.SemanticReviewStatus::Changed,
+      requested: Token,
+      status: Changed,
       reordered: false,
       main_sections: [section],
       deleted_sections: [],

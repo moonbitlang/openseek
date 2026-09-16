@@ -624,7 +624,7 @@ fn page_view(
       @html.label([
         @html.span("files to include"),
         @html.input(
-          input_type=@html.InputType::Text,
+          input_type=Text,
           value=page.include_glob,
           placeholder="e.g. src/**, tests/**",
           on_input=emit.map(value => IncludeChanged(value)),
@@ -636,7 +636,7 @@ fn page_view(
       @html.label([
         @html.span("files to exclude"),
         @html.input(
-          input_type=@html.InputType::Text,
+          input_type=Text,
           value=page.exclude_glob,
           placeholder="e.g. **/*.snap, generated/**",
           on_input=emit.map(value => ExcludeChanged(value)),
@@ -655,7 +655,7 @@ fn page_view(
       mode_control(page.mode, emit),
       if page.mode is Text {
         @html.input(
-          input_type=@html.InputType::Text,
+          input_type=Text,
           value=page.text.query,
           placeholder="Search",
           on_input=emit.map(value => QueryChanged(value)),
@@ -663,7 +663,7 @@ fn page_view(
         )
       } else {
         @html.input(
-          input_type=@html.InputType::Text,
+          input_type=Text,
           value=page.semantic.patterns[0],
           placeholder="inspect($(x:arg))",
           on_input=emit.map(value => PatternChanged(0, value)),
@@ -698,7 +698,7 @@ fn page_view(
           patterns.push(
             @html.div(class="search-semantic-source", [
               @html.input(
-                input_type=@html.InputType::Text,
+                input_type=Text,
                 value=pattern,
                 placeholder="inspect($(x:arg))",
                 on_input=emit.map(value => PatternChanged(index, value)),

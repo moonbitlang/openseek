@@ -42,7 +42,7 @@ pub(all) struct Actions {
 fn Input::find_project(self : Input, key : String) -> @project.Input? {
   for section in self.sections {
     for entry in section.entries {
-      if entry is @section.Project(project) && project.id().key() == key {
+      if entry is Project(project) && project.id().key() == key {
         return Some(project)
       }
     }
@@ -71,15 +71,15 @@ fn Input::find_conversation(self : Input, key : String) -> @conversation.Input? 
   for section in self.sections {
     for entry in section.entries {
       match entry {
-        @section.Project(project) =>
+        Project(project) =>
           if find_conversation_in(project.conversations, key) is Some(found) {
             return Some(found)
           }
-        @section.Conversation(row) =>
+        Conversation(row) =>
           if find_conversation_in([row], key) is Some(found) {
             return Some(found)
           }
-        @section.Placeholder(_) => ()
+        Placeholder(_) => ()
       }
     }
   }
