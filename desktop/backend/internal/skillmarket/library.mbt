@@ -77,12 +77,7 @@ fn slugify(name : String) -> String {
       pending_dash = true
     }
   }
-  let slug = builder.to_string()
-  if slug.length() > 64 {
-    slug[:64].to_owned()
-  } else {
-    slug
-  }
+  builder.to_string()[:64].to_owned()
 }
 
 ///|
