@@ -43,22 +43,18 @@ struct Skipped {
 
 ///|
 /// The replacement a deprecation message names, when it is a bare identifier
-/// the diagnosed span can be swapped for: "use `len` instead" → `len`, and
-/// "Use `compare` instead" (the core library's spelling) alike. Anything else
-/// (a path like `@pkg.f`, a method like `Array::len`, prose, no replacement
-/// at all) is a human's call.
+/// the diagnosed span can be swapped for: the `x` of the last "use `x`
+/// instead" (or "Use `x` instead", the core library's spelling) in the
+/// message. Anchoring on the complete phrase keeps prose such as "Do not use
+/// `fast`; use `safe` instead" from naming `fast`. Anything else (a path like
+/// `@pkg.f`, a method like `Array::len`, prose, no replacement at all) is a
+/// human's call.
 fn replacement_in(message : String) -> String? {
-  let start = match message.find("use `") {
-    Some(start) => start
-    None =>
-      match message.find("Use `") {
-        Some(start) => start
-        None => return None
-      }
-  }
-  let rest = message[start + 5:]
-  guard rest.find("`") is Some(end) else { return None }
-  let name = rest[:end].to_owned()
+  guard message.rev_find("` instead") is Some(close) else { return None }
+  guard message[:close].rev_find("`") is Some(open) else { return None }
+  let lead = message[:open]
+  guard lead.has_suffix("use ") || lead.has_suffix("Use ") else { return None }
+  let name = message[open + 1:close].to_owned()
   if name.is_empty() || !is_identifier(name) {
     return None
   }

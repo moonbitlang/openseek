@@ -124,9 +124,11 @@ async test "fix-deprecations fixes deprecation sites through guarded edits" {
 
 ///|
 /// Deprecations used across packages: a qualified call `@a.length(...)`, a
-/// method `p.size()` deprecated in favor of `p.count()`, and a message in the
-/// core library's capitalized spelling (`Use \`total\` instead`). Whatever
-/// moon reports as the span, the script must swap only the deprecated name.
+/// method `p.size()` deprecated in favor of `p.count()`, a message in the
+/// core library's capitalized spelling (`Use \`total\` instead`), and prose
+/// that names a wrong identifier before the right one ("Do not use \`sum\`;
+/// use \`total\` instead"). Whatever moon reports as the span, the script
+/// must swap only the deprecated name, for the replacement the phrase names.
 async test "fix-deprecations handles qualified calls and methods across packages" {
   @vfs.with_tmpdir(ws => {
     @async.with_task_group(group => {
@@ -169,10 +171,16 @@ async test "fix-deprecations handles qualified calls and methods across packages
         #|  xs.fold(init=0, (a, b) => a + b)
         #|}
         #|
+        #|///|
+        #|#deprecated("Do not use `sum`; use `total` instead")
+        #|pub fn add_all(xs : Array[Int]) -> Int {
+        #|  xs.fold(init=0, (a, b) => a + b)
+        #|}
+        #|
       let b =
         #|///|
         #|pub fn use_all(p : @a.Pile) -> Int {
-        #|  @a.length([1, 2]) + p.size() + @a.length([]) + @a.sum([3])
+        #|  @a.length([1, 2]) + p.size() + @a.length([]) + @a.sum([3]) + @a.add_all([4])
         #|}
         #|
         #|///|
@@ -211,16 +219,16 @@ async test "fix-deprecations handles qualified calls and methods across packages
         })
       })
       assert_false(output.is_error, msg=output.content)
-      assert_true(output.content.contains("fixed: 6"), msg=output.content)
+      assert_true(output.content.contains("fixed: 7"), msg=output.content)
       // The one warning left is unrelated (the struct is never constructed).
       assert_true(
-        output.content.contains("after: 0 error(s), 1 warning(s) (was 0/7)"),
+        output.content.contains("after: 0 error(s), 1 warning(s) (was 0/8)"),
         msg=output.content,
       )
       let fixed = @fs.read_file("\{ws}/b/b.mbt").text()
       assert_true(
         fixed.contains(
-          "  @a.len([1, 2]) + p.count() + @a.len([]) + @a.total([3])\n",
+          "  @a.len([1, 2]) + p.count() + @a.len([]) + @a.total([3]) + @a.total([4])\n",
         ),
         msg=fixed,
       )
