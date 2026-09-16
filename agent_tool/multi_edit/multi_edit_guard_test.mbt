@@ -313,13 +313,14 @@ async test "failed and rejected batches report their problems in data; an unchec
 }
 
 ///|
-/// The warning guard covers every project a batch touches: the edit in
-/// module `a` is clean, the one in module `b` leaves an unused binding, and
-/// both files come back.
-async test "the warning guard checks every project a batch touches" {
+/// The guards over a batch that touches two independent projects. Module `b`
+/// starts with one warning of its own; the warning guard compares the merged
+/// picture, the applied result reports it, and the error guard keeps its
+/// arithmetic inside the first project.
+async test "the guards cover every project a batch touches" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-guard-projects-", dir => {
     let a = "///|\npub fn f() -> Int {\n  1\n}\n"
-    let b = "///|\npub fn g() -> Int {\n  2\n}\n"
+    let b = "///|\npub fn g() -> Int {\n  let idle = 0\n  2\n}\n"
     @vfs.FileSystem::from_pairs([
       ("a/moon.mod", "name = \"tmp/pa\"\n"),
       ("a/lib/moon.pkg", ""),
@@ -328,6 +329,7 @@ async test "the warning guard checks every project a batch touches" {
       ("b/lib/moon.pkg", ""),
       ("b/lib/lib.mbt", b),
     ]).write_to(dir)
+    // A clean edit in `a` and one that adds a warning in `b`: both come back.
     let reverted = run_multi_edit({
       "edits": [
         {
@@ -340,7 +342,7 @@ async test "the warning guard checks every project a batch touches" {
           "file": "\{dir}/b/lib/lib.mbt",
           "old_string": "  2",
           "new_string": "  let unused = 0\n  2",
-          "start_line": 3,
+          "start_line": 4,
         },
       ],
       "revert_on_warnings": true,
@@ -352,6 +354,7 @@ async test "the warning guard checks every project a batch touches" {
           "outcome": "reverted",
           "reason": "introduced_warnings",
           "introduced": { "warnings": [{ "path": String(site), .. }], .. },
+          "baseline": { "warning_count": Number(1, ..), .. },
           ..
         }
       ) else {
@@ -360,7 +363,8 @@ async test "the warning guard checks every project a batch touches" {
     assert_true(site.contains("b/lib/lib.mbt"), msg=site)
     assert_eq(@fs.read_file("\{dir}/a/lib/lib.mbt").text(), a)
     assert_eq(@fs.read_file("\{dir}/b/lib/lib.mbt").text(), b)
-    // Clean in both: kept, with a merged baseline count.
+    // Clean in both: kept, and the result carries `b`'s own warning, which
+    // the first project's check alone would not show.
     let kept = run_multi_edit({
       "edits": [
         {
@@ -373,21 +377,58 @@ async test "the warning guard checks every project a batch touches" {
           "file": "\{dir}/b/lib/lib.mbt",
           "old_string": "  2",
           "new_string": "  4",
-          "start_line": 3,
+          "start_line": 4,
         },
       ],
       "revert_on_warnings": true,
     })
     assert_false(kept.is_error, msg=kept.content)
     assert_true(
-      kept.data
+      kept.content.contains("moon check: ok — 0 errors, 1 warning(s)"),
+      msg=kept.content,
+    )
+    guard kept.data
       is Some(
         {
           "outcome": "applied",
-          "baseline": { "warning_count": Number(0, ..), .. },
+          "check": { "warning_count": Number(1, ..), .. },
+          "baseline": { "warning_count": Number(1, ..), .. },
           ..
         }
-      ),
+      ) else {
+      fail("unexpected data: \{shown(kept.data)}")
+    }
+    // The error guard stays inside the first project: an error that already
+    // exists in `b` must not offset one this batch introduces in `a`.
+    @fs.write_file(
+      "\{dir}/b/lib/lib.mbt",
+      "///|\npub fn g() -> Int {\n  \"s\"\n}\n",
+      create_mode=CreateOrTruncate,
     )
+    let a_now = @fs.read_file("\{dir}/a/lib/lib.mbt").text()
+    let broken = run_multi_edit({
+      "edits": [
+        {
+          "file": "\{dir}/a/lib/lib.mbt",
+          "old_string": "  3",
+          "new_string": "  \"x\"",
+          "start_line": 3,
+        },
+        {
+          "file": "\{dir}/b/lib/lib.mbt",
+          "old_string": "  \"s\"",
+          "new_string": "  \"t\"",
+          "start_line": 3,
+        },
+      ],
+      "revert_when_errors_above": 0,
+      "revert_on_warnings": true,
+    })
+    assert_true(broken.is_error, msg=broken.content)
+    assert_true(
+      broken.data is Some({ "reason": "introduced_errors", .. }),
+      msg=shown(broken.data),
+    )
+    assert_eq(@fs.read_file("\{dir}/a/lib/lib.mbt").text(), a_now)
   })
 }

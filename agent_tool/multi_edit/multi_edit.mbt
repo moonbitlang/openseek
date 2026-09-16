@@ -410,13 +410,10 @@ async fn multi_edit_files(
       )
     }
 
-    match check_all(check_paths) {
-      Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
-      Checked(tally) => Some(tally)
-      NotApplicable => None
-      Unavailable(reason) => return not_verified(reason)
-      Failed(code, _) =>
-        return not_verified("moon check exited \{code} without diagnostics")
+    match measure_baseline(check_paths) {
+      Measured(baseline) => Some(baseline)
+      Nothing => None
+      Refused(reason) => return not_verified(reason)
     }
   } else {
     None
@@ -444,7 +441,7 @@ async fn multi_edit_files(
         write_files(written, write => write.original_content, write_scope?)
       })
       return @agent_tool.respond(
-        "error multi_editing \{problem}; the \{written.length()} file(s) written before it were restored (revert_on_warnings)\{restore_note(restore_failures)}",
+        "error multi_editing \{problem}; the \{written.length()} file(s) touched so far were restored (revert_on_warnings)\{restore_note(restore_failures)}",
         is_error=true,
         brief~,
         data=batch_data("error", writes, {
@@ -469,12 +466,15 @@ async fn multi_edit_files(
       scope.deny_reason(write.path) is Some(reason) {
       return write_failed("\{write.path}: write blocked: \{reason}")
     }
+    // Counted as touched before the attempt: the write truncates before it
+    // writes, so a failure can leave the file empty, and the rollback must
+    // cover it.
+    written.push(write)
     @fs.write_file(write.path, write.new_content, create_mode=CreateOrTruncate) catch {
       error if @async.is_being_cancelled() => raise error
       error =>
         return write_failed("\{write.path}: error writing file: \{error}")
     }
-    written.push(write)
   }
   // The batch is on disk. Run the auto-revert guard from the first written
   // file's module: it appends `moon check` feedback and, if this batch
@@ -713,7 +713,7 @@ async fn revert_guarded_response(
   check_paths : Array[String],
   writes : Array[PreparedWrite],
   threshold : Int,
-  baseline : @auto_check.CheckErrors?,
+  baseline : Baseline?,
   warnings_guard~ : Bool,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
@@ -765,7 +765,7 @@ async fn revert_guarded_response(
   if after.error_count > threshold {
     match baseline {
       Some(before) => {
-        let introduced = after.error_count - before.error_count
+        let introduced = after.error_count - before.first.error_count
         if introduced > threshold {
           let restore_failures = write_files(
             writes,
@@ -774,7 +774,7 @@ async fn revert_guarded_response(
           )
           let evidence = gather_comparability(
             check_path,
-            Some(before),
+            Some(before.first),
             after,
             writes,
           )
@@ -856,6 +856,9 @@ async fn revert_guarded_response(
   }
   // The warning guard: identity comparison against the pre-batch baseline,
   // over every project the batch touched (the first is already checked).
+  // `after_all` is what a warning-guarded result reports, so a warning that
+  // lives in a later project is not lost from the applied payload.
+  let mut after_all = after
   if warnings_guard && baseline is Some(before) {
     let mut all = after
     for path in check_paths[1:] {
@@ -872,11 +875,11 @@ async fn revert_guarded_response(
           )
       }
     }
-    let after = all
-    if after.truncated {
+    after_all = all
+    if all.truncated {
       return reverted_unverified(writes, TruncatedCapture, write_scope?)
     }
-    let delta = @auto_check.introduced(before, after)
+    let delta = @auto_check.introduced(before.all, all)
     if !delta.warnings.is_empty() {
       let restore_failures = write_files(
         writes,
@@ -885,15 +888,15 @@ async fn revert_guarded_response(
       )
       return reverted_by_warnings(
         writes,
-        before,
-        after,
+        before.all,
+        all,
         delta,
         restore_failures~,
       )
     }
   }
   let extra : Map[String, Json] = {
-    "check": after.to_json(),
+    "check": after_all.to_json(),
     "threshold": threshold.to_json(),
   }
   if introduced_errors is Some(introduced) {
@@ -903,10 +906,10 @@ async fn revert_guarded_response(
     extra["restore_failures"] = string_array(baseline_restore_failures)
   }
   if baseline is Some(before) {
-    extra["baseline"] = baseline_json(before)
+    extra["baseline"] = baseline_json(before.all)
   }
   @agent_tool.respond(
-    keep_response(summary, after, threshold, introduced?=introduced_errors) +
+    keep_response(summary, after_all, threshold, introduced?=introduced_errors) +
     baseline_note,
     brief~,
     data=batch_data("applied", writes, extra),
@@ -947,26 +950,52 @@ async fn batch_projects(writes : Array[PreparedWrite]) -> Array[String] {
 }
 
 ///|
-/// Every project checked and the tallies merged; the first check that could
-/// not run is the outcome, since a partial view is no verdict.
-async fn check_all(paths : Array[String]) -> @auto_check.CheckOutcome {
-  let mut merged : @auto_check.CheckErrors? = None
+/// The pre-batch measurement the guards compare against. The error guard has
+/// always read one project (the first the batch touches) and its threshold
+/// arithmetic must stay within that project, so its baseline is that
+/// project's tally alone; the warning guard reads every project the batch
+/// touches, so its baseline is all of them merged.
+priv struct Baseline {
+  first : @auto_check.CheckErrors
+  all : @auto_check.CheckErrors
+}
+
+///|
+priv enum BaselineOutcome {
+  Measured(Baseline)
+  // A check that could not run, or overflowed: a partial view is no verdict.
+  Refused(String)
+  // No project to check.
+  Nothing
+}
+
+///|
+async fn measure_baseline(paths : Array[String]) -> BaselineOutcome {
+  let mut first : @auto_check.CheckErrors? = None
+  let mut all : @auto_check.CheckErrors? = None
   for path in paths {
     match @auto_check.check(path) {
-      Checked(tally) =>
-        merged = Some(
-          match merged {
+      Checked(tally) if tally.truncated => return Refused(TruncatedCapture)
+      Checked(tally) => {
+        if first is None {
+          first = Some(tally)
+        }
+        all = Some(
+          match all {
             Some(sum) => sum.merged(tally)
             None => tally
           },
         )
+      }
       NotApplicable => ()
-      other => return other
+      Unavailable(reason) => return Refused(reason)
+      Failed(code, _) =>
+        return Refused("moon check exited \{code} without diagnostics")
     }
   }
-  match merged {
-    Some(tally) => Checked(tally)
-    None => NotApplicable
+  match (first, all) {
+    (Some(first), Some(all)) => Measured({ first, all, })
+    _ => Nothing
   }
 }
 
