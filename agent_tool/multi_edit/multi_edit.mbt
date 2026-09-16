@@ -455,7 +455,7 @@ async fn multi_edit_files(
       "error multi_editing \{problem}; earlier files in the batch may already be written",
       is_error=true,
       brief~,
-      data={ "outcome": "error", "partial": true },
+      data=batch_data("error", writes, { "partial": true }),
     )
   }
 
@@ -885,7 +885,14 @@ async fn revert_guarded_response(
         write => write.original_content,
         write_scope?,
       )
-      return reverted_by_warnings(writes, before, all, delta, restore_failures~)
+      return reverted_by_warnings(
+        writes,
+        before,
+        after,
+        all,
+        delta,
+        restore_failures~,
+      )
     }
   }
   // `check` and the check line describe the first project, the one the
@@ -1125,6 +1132,7 @@ fn reverted_by_errors(
 fn reverted_by_warnings(
   writes : Array[PreparedWrite],
   baseline : Baseline,
+  after_first : @auto_check.CheckErrors,
   after : @auto_check.CheckErrors,
   delta : @auto_check.Introduced,
   restore_failures~ : Array[String],
@@ -1154,7 +1162,8 @@ fn reverted_by_warnings(
     brief="multi_edit reverted (\{count} new warning(s))",
     data=batch_data("reverted", writes, {
       "reason": "introduced_warnings",
-      "check": after.to_json(),
+      "check": after_first.to_json(),
+      "check_all": after.to_json(),
       "baseline": baseline_json(baseline.first),
       "baseline_all": baseline_json(before),
       "reach_caveat": reach_caveat.to_json(),

@@ -353,6 +353,8 @@ async test "the guards cover every project a batch touches" {
           "outcome": "reverted",
           "reason": "introduced_warnings",
           "introduced": { "warnings": [{ "path": String(site), .. }], .. },
+          "check": { "warning_count": Number(0, ..), .. },
+          "check_all": { "warning_count": Number(2, ..), .. },
           "baseline": { "warning_count": Number(0, ..), .. },
           "baseline_all": { "warning_count": Number(1, ..), .. },
           ..

@@ -116,9 +116,9 @@ when a reach verdict names the value that admits the unchanged batch; a
 failed batch adds `failures` (`file`, `index`, `range`, `message`); a
 rejected one adds `parse_errors` (per file: `path`, `introduced`, `errors`).
 `check`, `threshold`, and `baseline` describe the first project the batch
-touches (the error guard's scope); a warning-guarded batch over several
-projects adds `check_all` and `baseline_all`, the merged view its guard
-compared.
+touches (the error guard's scope); a warning-guarded batch adds `check_all`
+and `baseline_all`, the merged view over every project its guard compared
+(on an applied batch only when more than one project was touched).
 
 ```moonbit check
 ///|
