@@ -3,7 +3,7 @@ name: publish-editor
 # Publishes the `moonbitlang/editor` module (the `editor/` directory) to
 # mooncakes. Manual: bump `version` in editor/moon.mod first. The module is
 # published under the moonbitlang namespace, so it uses the organization's
-# mooncakes token, not a personal one. `bobzhang/openseek` (the root module)
+# mooncakes token, not a personal one. `moonbitlang/openseek` (the root module)
 # depends on it, so a root publish that needs new editor packages must be
 # preceded by a run of this workflow.
 
