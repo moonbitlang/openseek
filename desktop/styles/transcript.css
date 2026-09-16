@@ -272,6 +272,7 @@
   align-items: baseline;
   justify-content: center;
   flex-wrap: wrap;
+  column-gap: 0.25em;
   font-size: calc(var(--font-size-base) + 12px);
   font-weight: 600;
   line-height: 1.25;
@@ -293,16 +294,19 @@
   align-items: center;
   max-width: min(42vw, 420px);
   margin: 0;
-  padding: 0.08em 0.34em;
+  padding: 0;
   overflow: hidden;
-  border: 1px solid var(--color-border-subtle);
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-subtle);
+  background: transparent;
   color: inherit;
-  font-family: var(--font-family-mono);
-  font-size: 0.9em;
-  font-weight: 500;
-  line-height: 1.15;
+  font: inherit;
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--color-text-muted);
+  text-decoration-thickness: 0.05em;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.16em;
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: baseline;
@@ -310,8 +314,6 @@
 }
 .empty-project-trigger:hover,
 .empty-project-trigger.open {
-  border-color: var(--color-accent-border);
-  background: var(--color-accent-soft);
   color: var(--color-accent-strong);
 }
 .empty-project-trigger:focus-visible {
