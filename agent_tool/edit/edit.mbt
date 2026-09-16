@@ -921,6 +921,16 @@ async fn commit_edit(
     record()
   }
   let after = check_tree()
+  // The identity pinned before the baseline must still hold after the check:
+  // a link or project replaced meanwhile makes the tally about another tree.
+  let after = if baseline is Some(_) &&
+    (resolved_target(path) != target || project_roots(check_from) != roots_from) {
+    @auto_check.CheckOutcome::Unavailable(
+      "the file's target or project changed during the check",
+    )
+  } else {
+    after
+  }
   fn keep(
     check_line : String?,
     extra : Map[String, Json],
@@ -1004,28 +1014,32 @@ async fn check_projects(path : String) -> Array[String] {
     error if @async.is_being_cancelled() => raise error
     _ => path
   }
-  let own = @auto_check.check_cwd(path)
-  let spellings = []
-  if own is Some(_) {
-    spellings.push(path)
+  // Project directories compare by their canonical form: `/tmp/x` and
+  // `/private/tmp/x` are one project, not two checks.
+  async fn canonical(dir : String) -> String {
+    @fs.realpath(dir) catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => dir
+    }
   }
-  if target != path && @auto_check.check_cwd(target) is Some(theirs) {
-    // Project directories compare by their canonical form: `/tmp/x` and
-    // `/private/tmp/x` are one project, not two checks.
-    async fn canonical(dir : String) -> String {
-      @fs.realpath(dir) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => dir
-      }
-    }
 
-    let same = match own {
-      Some(own) => canonical(own) == canonical(theirs)
-      None => false
-    }
-    if !same {
-      spellings.push(target)
-    }
+  let own = @auto_check.check_cwd(path)
+  let theirs = @auto_check.check_cwd(target)
+  let spellings = []
+  // The resolved target first: a fully resolved path has no link left to
+  // retarget, so the module checked is the module written.
+  if theirs is Some(_) {
+    spellings.push(target)
+  }
+  // The written spelling too, when it belongs to a project of its own (a
+  // link inside module a pointing into module b is compiled by both).
+  match (own, theirs) {
+    (Some(own_dir), Some(their_dir)) =>
+      if canonical(own_dir) != canonical(their_dir) {
+        spellings.push(path)
+      }
+    (Some(_), None) => spellings.push(path)
+    _ => ()
   }
   spellings
 }
