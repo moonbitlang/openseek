@@ -931,6 +931,26 @@ async fn commit_edit(
   } else {
     after
   }
+  // And the content: a guarded verdict is about the edit only if the file
+  // still holds it. A foreign save during the check (an editor writing an
+  // older buffer) is left alone, and the edit's effect is reported unknown.
+  if baseline is Some(_) {
+    let current = @fs.read_file(target).text() catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => ""
+    }
+    if current != new_content {
+      return @agent_tool.respond(
+        "unverified: \{path} changed during the post-write check (another writer?), so the edit's effect is unknown; the file was left as it is — re-read it and retry",
+        is_error=true,
+        brief="\{fail_brief} (unverified)",
+        data=edit_data("unverified", path, lines, {
+          "reason": "the file changed during the post-write check".to_json(),
+          "restore_failed": false,
+        }),
+      )
+    }
+  }
   fn keep(
     check_line : String?,
     extra : Map[String, Json],
