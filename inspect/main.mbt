@@ -1240,7 +1240,9 @@ async test "locate_bundle prefers the freshest artifact; explicit wins" {
   let old_path = "\{root}/old.js"
   let new_path = "\{root}/new.js"
   @fs.write_file(old_path, "old", create_mode=CreateOrTruncate)
-  // Written after, so strictly newer (APFS nanosecond mtimes).
+  // Written after a settling delay, so strictly newer even on filesystems with
+  // coarse timestamp granularity (CI containers are not always APFS).
+  @async.sleep(20)
   @fs.write_file(new_path, "new", create_mode=CreateOrTruncate)
   // No explicit bundle: recency beats candidate order.
   assert_eq(locate_bundle(["", old_path, new_path]), Some(new_path))
