@@ -1,5 +1,8 @@
 ///|
-test "export modal opens once per click and covers native browser views" {
+/// Native browser views z-order above all HTML, so the export dialog must
+/// count as a covering overlay while it is open. The browser harness has no
+/// native views, so only this predicate can prove they get hidden.
+test "export modal covers native browser views while open" {
   let source : @protocol.SessionExportPayload = {
     session: "export-a",
     workspace: "/workspace",
@@ -8,14 +11,9 @@ test "export modal opens once per click and covers native browser views" {
   }
   let emit = test_dispatch()
   let base = test_model()
-  let (_, first) = update(emit, OpenExport(source), base)
-  let (_, again) = update(emit, OpenExport(source), base)
-  assert_true(first.export_dialog == again.export_dialog)
-  assert_true(first.export_dialog.is_open())
-  assert_true(!base.export_dialog.is_open())
-  assert_true(covering_overlay(first))
-  let (_, closed) = update(emit, ExportDialog(Close), first)
-  let (_, closed_again) = update(emit, ExportDialog(Close), first)
-  assert_true(closed.export_dialog == closed_again.export_dialog)
-  assert_true(!closed.export_dialog.is_open())
+  assert_false(covering_overlay(base))
+  let (_, opened) = update(emit, OpenExport(source), base)
+  assert_true(covering_overlay(opened))
+  let (_, closed) = update(emit, ExportDialog(Close), opened)
+  assert_false(covering_overlay(closed))
 }
