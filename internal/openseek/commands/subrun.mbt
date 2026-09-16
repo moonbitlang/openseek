@@ -319,7 +319,10 @@ async fn dispatch_kind(
         instruction,
         api_key~,
         model~,
-        max_steps=step_ceiling(matches, ceiling, 8),
+        // Pattern repair is bounded by the Host's wall timeout. Keep the
+        // agent loop unbounded by default so a repair can validate, inspect
+        // the diagnostic, and retry as many times as needed.
+        max_steps=step_ceiling(matches, ceiling, @agent.unbounded_max_steps),
         thinking~,
         api_url?,
         retry_attempts?,

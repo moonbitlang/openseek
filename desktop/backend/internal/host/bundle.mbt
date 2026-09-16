@@ -173,7 +173,7 @@ pub async fn frontend_entry_path() -> String {
 ///|
 /// The pinned mooncakes coordinate used when the host resolves moongrep through
 /// `moonx`. Search and Pattern Repair must validate with the same provider.
-const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.1"
+const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.3"
 
 ///|
 /// Locate ripgrep in the canonical Proton resource tree. An installed bundle

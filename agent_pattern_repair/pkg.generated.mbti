@@ -15,6 +15,9 @@ pub async fn run(String, String, api_key~ : String, model~ : @deepseek.Model, ma
 // Types and methods
 type PatternRepairReport derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
+type PatternRepairValidator derive(@json.FromJson)
+pub fn PatternRepairValidator::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+
 // Type aliases
 
 // Traits

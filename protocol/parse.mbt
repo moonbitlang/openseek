@@ -89,6 +89,7 @@ pub fn parse(line : Json) -> Event? {
       }
       Some(StreamRetry(attempt~, max_attempts~, reason~))
     }
+    "provider_request_timed_out" => Some(ProviderRequestTimedOut)
     "agent_aborted" =>
       text(fields, "reason").map(reason => AgentAborted(reason~))
     "agent_finished" =>

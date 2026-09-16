@@ -2,6 +2,9 @@ import {
   "bobzhang/openseek/agent_kind",
   "bobzhang/openseek/agent_tool",
   "bobzhang/openseek/deepseek",
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/core/env",
   "moonbitlang/core/json",
 }
 

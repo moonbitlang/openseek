@@ -8,8 +8,8 @@ test "pattern repair carries model and thinking through the request codec" {
   }
   let state = State::empty()
     .handle(ModeChanged(Semantic), input)
-    .handle(OpenPatternRepair("allow labelled arguments"), input)
-    .handle(SubmitPatternRepair, input)
+    .handle(PatternChanged(0, "inspect($(x:arg)"), input)
+    .handle(FixPattern, input)
   guard state.page.pattern_repair_request_payload(input) is Some(request) else {
     fail("submitted repair must produce a request")
   }

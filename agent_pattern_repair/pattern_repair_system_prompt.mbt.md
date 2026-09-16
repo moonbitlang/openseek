@@ -23,7 +23,12 @@ the fragment into a complete expression instead of preserving the fragment.
 not turn it into a second task or add explanatory prose to the pattern.
 3. Construct the complete CST shape before adding any metavariables.
 4. Validate mentally that the result is one complete expression pattern.
-5. Call submit_pattern_repair exactly once. Never finish with prose only.
+5. Call validate_pattern before submitting. If validation is false, use its
+  diagnostic to repair the candidate and validate the new candidate again.
+6. Call submit_pattern_repair exactly once, and only with the exact candidate
+  returned by the most recent successful validation. Never finish with prose
+  only. The Host also validates after submit, so do not submit an unvalidated
+  candidate.
 
 Detailed checklist before submission:
 1. Decide whether the request asks for an exact shape, one variable part,

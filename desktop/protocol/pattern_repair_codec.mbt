@@ -15,6 +15,30 @@ fn required_generation(
 }
 
 ///|
+fn pattern_repair_status_from_wire(
+  value : String,
+  path : @json.JsonPath,
+) -> PatternRepairStatus raise @json.JsonDecodeError {
+  match value {
+    "passed" => Passed
+    "unavailable" => Unavailable
+    "timed_out" => TimedOut
+    "failed" => Failed
+    _ => raise JsonDecodeError((path, "expected pattern-repair status"))
+  }
+}
+
+///|
+fn PatternRepairStatus::wire(self : PatternRepairStatus) -> String {
+  match self {
+    Passed => "passed"
+    Unavailable => "unavailable"
+    TimedOut => "timed_out"
+    Failed => "failed"
+  }
+}
+
+///|
 pub impl FromJson for PatternRepairPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "pattern-repair payload")
   let generation = required_generation(object, path)
@@ -56,9 +80,12 @@ pub impl FromJson for PatternRepairReply with fn from_json(json, path) {
   {
     root: object.required_string("root"),
     generation,
-    candidate_pattern: object.required_string("candidate_pattern"),
+    candidate_pattern: object.optional_string("candidate_pattern"),
     valid: object.required_bool("valid"),
-    validation_status: object.required_string("validation_status"),
+    validation_status: pattern_repair_status_from_wire(
+      object.required_string("validation_status"),
+      path.add_key("validation_status"),
+    ),
     message: object.required_string("message"),
   }
 }
@@ -68,14 +95,17 @@ pub extend PatternRepairReply with FromJson::{from_json}
 
 ///|
 pub impl ToJson for PatternRepairReply with fn to_json(self) {
-  {
+  let fields : Map[String, Json] = {
     "root": self.root,
     "generation": self.generation,
-    "candidate_pattern": self.candidate_pattern,
     "valid": self.valid,
-    "validation_status": self.validation_status,
+    "validation_status": self.validation_status.wire(),
     "message": self.message,
   }
+  if self.candidate_pattern is Some(candidate) {
+    fields["candidate_pattern"] = Json(candidate)
+  }
+  Json::object(fields)
 }
 
 ///|

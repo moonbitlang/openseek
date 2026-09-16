@@ -28,8 +28,6 @@ fn fresh_page() -> Page {
     pattern_repair_phase: PatternRepairIdle,
     pattern_repair_message: None,
     pattern_repair_candidate: None,
-    pattern_repair_validation_status: None,
-    pattern_repair_instruction: "",
     generation: 0,
     delay_ms: SearchDebounceMs,
   }
@@ -155,6 +153,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           semantic: { ..page.semantic, hits: [], partial: false, },
           pattern_repair_phase: PatternRepairIdle,
           pattern_repair_message: None,
+          pattern_repair_candidate: None,
           match_count: 0,
           file_count: 0,
           collapsed: Map([]),
@@ -186,31 +185,11 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
     ToggleDetails =>
       { ..self, page: { ..page, details_open: !page.details_open, }, }
     FixPattern =>
-      {
-        ..self,
-        page: {
-          ..page,
-          pattern_repair_phase: PatternRepairComposer,
-          pattern_repair_message: None,
-          pattern_repair_candidate: None,
-        },
-      }
-    OpenPatternRepair(instruction) =>
-      {
-        ..self,
-        page: {
-          ..page,
-          pattern_repair_phase: PatternRepairComposer,
-          pattern_repair_instruction: instruction,
-          pattern_repair_message: None,
-          pattern_repair_candidate: None,
-        },
-      }
-    PatternRepairInstructionChanged(instruction) =>
-      { ..self, page: { ..page, pattern_repair_instruction: instruction, }, }
-    SubmitPatternRepair =>
-      if page.pattern_repair_phase is PatternRepairComposer &&
-        !page.pattern_repair_instruction.trim().is_empty() {
+      if page.pattern_repair_phase is PatternRepairRequested {
+        self
+      } else if page.mode is Semantic &&
+        page.semantic.patterns.length() > 0 &&
+        !page.semantic.patterns[0].trim().is_empty() {
         {
           ..self,
           page: {
@@ -220,16 +199,43 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
             pattern_repair_candidate: None,
           },
         }
+      } else if page.mode is Semantic {
+        {
+          ..self,
+          page: {
+            ..page,
+            pattern_repair_phase: PatternRepairInputRequired,
+            pattern_repair_message: Some("Enter a pattern before repairing it."),
+            pattern_repair_candidate: None,
+          },
+        }
       } else {
         self
       }
-    PatternRepairPreview(
-      root~,
-      generation~,
-      candidate_pattern~,
-      validation_status~,
-      message~
-    ) =>
+    PatternRepaired(root~, generation~, candidate_pattern~) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested &&
+        page.semantic.patterns.length() > 0 &&
+        !candidate_pattern.trim().is_empty() {
+        let patterns = page.semantic.patterns.copy()
+        patterns[0] = candidate_pattern
+        self.schedule(
+          {
+            ..page,
+            semantic: { ..page.semantic, patterns, },
+            pattern_repair_phase: PatternRepairIdle,
+            pattern_repair_message: None,
+            pattern_repair_candidate: None,
+          },
+          input,
+          immediate=true,
+        )
+      } else {
+        self
+      }
+    PatternRepairUnavailable(root~, generation~, message~) =>
       if page.mode is Semantic &&
         input.root_text() == root &&
         page.generation == generation &&
@@ -238,39 +244,58 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           ..self,
           page: {
             ..page,
-            pattern_repair_phase: PatternRepairPreview,
+            pattern_repair_phase: PatternRepairUnavailable,
             pattern_repair_message: Some(message),
-            pattern_repair_candidate: Some(candidate_pattern),
-            pattern_repair_validation_status: Some(validation_status),
+            pattern_repair_candidate: None,
           },
         }
       } else {
         self
       }
-    AcceptPatternRepair =>
-      match page.pattern_repair_candidate {
-        Some(pattern) if page.mode is Semantic =>
-          self.handle(PatternChanged(0, pattern), input)
-        _ => self
+    PatternRepairTimedOut(root~, generation~) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested {
+        {
+          ..self,
+          page: {
+            ..page,
+            pattern_repair_phase: PatternRepairTimedOut,
+            pattern_repair_message: None,
+            pattern_repair_candidate: None,
+          },
+        }
+      } else {
+        self
       }
-    RejectPatternRepair =>
-      {
-        ..self,
-        page: {
-          ..page,
-          pattern_repair_phase: PatternRepairIdle,
-          pattern_repair_message: None,
-          pattern_repair_candidate: None,
-          pattern_repair_instruction: "",
-        },
-      }
-    PatternRepairFailed(
+    PatternRepairValidationFailed(
       root~,
       generation~,
       candidate_pattern~,
-      validation_status~,
-      message~
+      diagnostic~
     ) =>
+      if page.mode is Semantic &&
+        input.root_text() == root &&
+        page.generation == generation &&
+        page.pattern_repair_phase is PatternRepairRequested {
+        let rejected_candidate = match candidate_pattern {
+          Some(candidate) if !candidate.trim().is_empty() => Some(candidate)
+          _ => None
+        }
+        {
+          ..self,
+          page: {
+            ..page,
+            pattern_repair_phase: PatternRepairValidationFailed,
+            pattern_repair_message: Some(diagnostic),
+            pattern_repair_candidate: rejected_candidate,
+          },
+        }
+      } else {
+        self
+      }
+    PatternRepairFailed(root~, generation~) =>
       if page.mode is Semantic &&
         input.root_text() == root &&
         page.generation == generation &&
@@ -280,9 +305,8 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           page: {
             ..page,
             pattern_repair_phase: PatternRepairFailed,
-            pattern_repair_message: Some(message),
-            pattern_repair_candidate: Some(candidate_pattern),
-            pattern_repair_validation_status: Some(validation_status),
+            pattern_repair_message: None,
+            pattern_repair_candidate: None,
           },
         }
       } else {
@@ -304,7 +328,6 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
           pattern_repair_phase: PatternRepairIdle,
           pattern_repair_message: None,
           pattern_repair_candidate: None,
-          pattern_repair_instruction: "",
         },
         input,
         immediate=false,
@@ -574,7 +597,6 @@ fn Page::clear_results(self : Page) -> Page {
     pattern_repair_phase: PatternRepairIdle,
     pattern_repair_message: None,
     pattern_repair_candidate: None,
-    pattern_repair_instruction: "",
   }
 }
 

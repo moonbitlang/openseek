@@ -318,7 +318,7 @@ fn semantic_search_args(
       args.append(["--pattern", pattern])
     }
   }
-  args.append(["--output-json"])
+  args.append(["--json"])
   args
 }
 
@@ -829,14 +829,14 @@ test "semantic search builds moonx and bundled moongrep invocations" {
     "scan",
     "--pattern",
     "inspect($(x:arg))",
-    "--output-json",
+    "--json",
   ])
   let second_pattern : SearchSemanticPayload = {
     ..pattern,
     patterns: ["match($x)"],
   }
   assert_eq(semantic_search_args("/opt/bin/moongrep", second_pattern), [
-    "scan", "--pattern", "match($x)", "--output-json",
+    "scan", "--pattern", "match($x)", "--json",
   ])
 }
 

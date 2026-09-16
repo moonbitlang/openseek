@@ -1,7 +1,11 @@
 ///|
-/// Keep candidate validation bounded and deterministic. The Agent must never
-/// choose the executable or invoke this command directly; the host owns both.
+/// Keep candidate validation bounded and deterministic. The Host chooses the
+/// executable and fixed arguments, exposes them to the Agent through the
+/// validator tool, and repeats the check authoritatively after submit.
 const PatternRepairDumpMaxDiagnosticUnits : Int = 1000
+
+///|
+const PatternRepairValidatorEnvironment : String = "OPENSEEK_PATTERN_REPAIR_VALIDATOR"
 
 ///|
 /// Enable after moongrep's `dump --expr` accepts Pattern metavariables.
@@ -12,22 +16,35 @@ fn pattern_repair_provider_args(
   command : String,
   pattern : String,
 ) -> Array[String] {
-  let args : Array[String] = if command == "moonx" ||
+  let args = pattern_repair_provider_prefix_args(command)
+  args.append(["dump", "--expr", pattern, "--strict-check", "--exit-code"])
+  args
+}
+
+///|
+fn pattern_repair_provider_prefix_args(command : String) -> Array[String] {
+  if command == "moonx" ||
     command.has_suffix("/moonx") ||
     command.has_suffix("\\moonx") {
     [MoongrepPackageCoordinate, "--"]
   } else {
     []
   }
-  args.append(["dump", "--expr", pattern, "--exit-code"])
-  args
+}
+
+///|
+fn pattern_repair_validator_config(command : String) -> Json {
+  {
+    "command": command,
+    "prefix_args": pattern_repair_provider_prefix_args(command),
+  }
 }
 
 ///|
 priv enum PatternRepairValidation {
   PatternRepairValid
   PatternRepairUnavailable
-  PatternRepairInvalid(String, String)
+  PatternRepairInvalid(String)
 }
 
 ///|
@@ -40,7 +57,7 @@ async fn validate_pattern_repair_candidate(
   } else {
     guard moongrep_command() is Some(command) else {
       return PatternRepairInvalid(
-        "moongrep_unavailable", "The semantic-search provider is unavailable.",
+        "The semantic-search provider is unavailable.",
       )
     }
     let (code, stdout, stderr) = @processx.collect_output_no_stdin(
@@ -50,7 +67,6 @@ async fn validate_pattern_repair_candidate(
     ) catch {
       error =>
         return PatternRepairInvalid(
-          "validation_failed",
           "Cannot validate Pattern Repair candidate: \{error}",
         )
     }
@@ -62,10 +78,7 @@ async fn validate_pattern_repair_candidate(
       } else {
         stdout.text()
       }
-      PatternRepairInvalid(
-        pattern_repair_validation_code(detail),
-        pattern_repair_diagnostic(detail),
-      )
+      PatternRepairInvalid(pattern_repair_diagnostic(detail))
     }
   }
 }
@@ -83,45 +96,31 @@ fn pattern_repair_diagnostic(stderr : String) -> String {
 }
 
 ///|
-fn pattern_repair_validation_code(stderr : String) -> String {
-  let lower = stderr.to_lower()
-  if lower.contains("not a valid") ||
-    lower.contains("lexical error") ||
-    lower.contains("parse error") {
-    "invalid_pattern"
-  } else if lower.contains("permission denied") ||
-    lower.contains("access is denied") {
-    "permission_denied"
-  } else {
-    "validation_failed"
-  }
-}
-
-///|
-test "pattern repair validation preserves the future dump command" {
+test "pattern repair validation preserves the dump command" {
   assert_eq(pattern_repair_provider_args("moonx", "foo()"), [
     MoongrepPackageCoordinate,
     "--",
     "dump",
     "--expr",
     "foo()",
+    "--strict-check",
     "--exit-code",
   ])
 }
 
 ///|
-test "pattern repair validation bounds diagnostics and classifies errors" {
+test "pattern repair validator configuration keeps provider ownership in the Host" {
+  assert_eq(pattern_repair_validator_config("moonx"), {
+    "command": "moonx",
+    "prefix_args": [MoongrepPackageCoordinate, "--"],
+  })
+}
+
+///|
+test "pattern repair validation preserves the provider diagnostic" {
   assert_eq(
-    pattern_repair_validation_code("Pattern is not a valid MoonBit expression"),
-    "invalid_pattern",
-  )
-  assert_eq(
-    pattern_repair_validation_code("Access is denied"),
-    "permission_denied",
-  )
-  assert_eq(
-    pattern_repair_validation_code("unexpected failure"),
-    "validation_failed",
+    pattern_repair_diagnostic("Pattern is not a valid MoonBit expression"),
+    "Pattern is not a valid MoonBit expression",
   )
   assert_eq(
     pattern_repair_diagnostic(""),
