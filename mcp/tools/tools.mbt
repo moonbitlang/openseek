@@ -57,11 +57,7 @@ fn sanitize_segment(segment : String) -> String {
 ///|
 /// Truncate `name` to at most `limit` characters (all-ASCII by construction).
 fn cap_name(name : String, limit? : Int = MaxFunctionNameChars) -> String {
-  if name.length() <= limit {
-    name
-  } else {
-    name[:limit].to_owned()
-  }
+  name[:limit].to_owned()
 }
 
 ///|
