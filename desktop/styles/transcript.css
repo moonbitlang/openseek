@@ -1658,7 +1658,7 @@
    inside a message group uses this spacing, before and after completion. */
 .minimal-rows,
 .minimal-call-list {
-  --minimal-row-gap: 8px;
+  --minimal-row-gap: 12px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--minimal-row-gap);

@@ -390,7 +390,7 @@ test('minimal message groups separate outer turns from internal tool and prose s
         }));
       expect(Math.abs(gaps[0].before - gaps[1].before)).toBeLessThanOrEqual(1);
       expect(Math.abs(gaps[0].after - gaps[1].after)).toBeLessThanOrEqual(1);
-      const expectedGap = 8;
+      const expectedGap = 12;
       for (const gap of gaps) {
         expect(Math.abs(gap.before - expectedGap)).toBeLessThanOrEqual(1);
         expect(Math.abs(gap.after - expectedGap)).toBeLessThanOrEqual(1);
@@ -456,8 +456,8 @@ for (const count of [1, 2]) test(`minimal first tool row has balanced spacing wi
       };
     });
     expect(Math.abs(gaps.before - gaps.after)).toBeLessThanOrEqual(1);
-    expect(Math.abs(gaps.before - 8)).toBeLessThanOrEqual(1);
-    expect(Math.abs(gaps.after - 8)).toBeLessThanOrEqual(1);
+    expect(Math.abs(gaps.before - 12)).toBeLessThanOrEqual(1);
+    expect(Math.abs(gaps.after - 12)).toBeLessThanOrEqual(1);
     await page.screenshot({ animations: 'disabled', path: testInfo.outputPath(`first-tool-${width}.png`) });
   }
   expect(app.pageErrors).toEqual([]);
