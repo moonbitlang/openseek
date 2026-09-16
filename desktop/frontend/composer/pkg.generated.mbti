@@ -89,11 +89,14 @@ pub fn ContextComponent::render(Self, Identity, @cmd.Emit[Action]) -> @html.Html
 pub(all) struct Draft {
   task : String
   mentions : Array[Mention]
+  images : Array[Image]
 } derive(Eq, @debug.Debug)
 pub fn Draft::equal(Self, Self) -> Bool
+pub fn Draft::is_empty(Self) -> Bool
 pub fn Draft::not_equal(Self, Self) -> Bool
 pub fn Draft::prompt(Self) -> String
 pub fn Draft::to_repr(Self) -> @debug.Repr
+pub fn Draft::user_item(Self) -> @transcript.ItemKind
 pub fn Draft::with_mention(Self, Mention) -> Self
 
 pub(all) enum FileIndex {
@@ -169,6 +172,14 @@ pub fn Identity::equal(Self, Self) -> Bool
 pub fn Identity::not_equal(Self, Self) -> Bool
 pub fn Identity::to_repr(Self) -> @debug.Repr
 
+pub(all) struct Image {
+  name : String
+  url : String
+} derive(Eq, @debug.Debug)
+pub fn Image::equal(Self, Self) -> Bool
+pub fn Image::not_equal(Self, Self) -> Bool
+pub fn Image::to_repr(Self) -> @debug.Repr
+
 pub(all) struct Input {
   identity : Identity
   draft : Draft
@@ -242,6 +253,7 @@ pub(all) struct Presentation {
   placeholder : String
   disabled : Bool
   primary_action : PrimaryAction
+  images_enabled : Bool
 } derive(Eq)
 pub fn Presentation::equal(Self, Self) -> Bool
 pub fn Presentation::not_equal(Self, Self) -> Bool

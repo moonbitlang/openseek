@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/image_input"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
+}
+
+// Values
+pub fn dragged(@dom.DragEvent) -> @cmd.Cmd
+
+pub fn dropped(@dom.DragEvent, @cmd.Emit[Event]) -> @cmd.Cmd
+
+pub fn pasted(@dom.ClipboardEvent, @cmd.Emit[Event]) -> @cmd.Cmd
+
+pub fn pick(@cmd.Emit[Event]) -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+pub(all) enum Event {
+  Reading
+  Ready(Array[(String, String)])
+  Failed(String)
+}
+
+// Type aliases
+
+// Traits

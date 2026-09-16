@@ -491,7 +491,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
     } else {
       None
     }
-    let anchor = if item.kind is User(_) {
+    let anchor = if item.kind is (User(_) | UserWithImages(_, _)) {
       Some(@transcript_overview.TurnKey::of(item, index~).anchor())
     } else {
       None
@@ -508,7 +508,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
         wait_labels=job_wait_labels(item, descriptions),
       ),
     })
-    if item.kind is User(_) {
+    if item.kind is (User(_) | UserWithImages(_, _)) {
       blocks.push({
         stream,
         key: TranscriptRenderKey::turn_rule(row.identity),

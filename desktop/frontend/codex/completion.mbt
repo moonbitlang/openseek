@@ -91,7 +91,7 @@ fn State::installed_codex_skills(self : State) -> Array[@skills.InstalledItem] {
 /// next to the shared composer projection so send and draft-thread creation
 /// use the same definition of an empty Codex prompt.
 fn State::input_empty(self : State) -> Bool {
-  self.draft.is_blank() && self.mentions.is_empty()
+  self.draft.is_blank() && self.mentions.is_empty() && self.images.is_empty()
 }
 
 ///|
@@ -122,6 +122,7 @@ fn State::submit_composer(
       submitted_first_prompt: Some({
         task: self.draft,
         mentions: self.mentions.copy(),
+        images: self.images.copy(),
       }),
     }
     (
@@ -338,7 +339,7 @@ pub fn State::composer_input(
   }
   {
     identity: self.composer_identity(context.channel),
-    draft: { task: self.draft, mentions: self.mentions, },
+    draft: { task: self.draft, mentions: self.mentions, images: self.images, },
     // Before the first real User item arrives, the only honest progress fact
     // is that this accepted local submission is starting. Later Codex turns
     // can overlap, so no broader single-turn heartbeat is inferred here.
@@ -383,6 +384,7 @@ pub fn State::composer_input(
         "Ask Codex to inspect, edit, or explain this workspace."
       },
       disabled: !can_edit,
+      images_enabled: !self.loading,
       primary_action,
     },
   }
@@ -429,7 +431,12 @@ fn State::apply_composer_action(
   }
   match action {
     @composer.DraftSubmitted(draft~, ..) => {
-      let next = { ..self, draft: draft.task, mentions: draft.mentions, }
+      let next = {
+        ..self,
+        draft: draft.task,
+        mentions: draft.mentions,
+        images: draft.images,
+      }
       next.submit_composer(dispatch, channel)
     }
     @composer.DraftPresenceChanged(
@@ -443,7 +450,19 @@ fn State::apply_composer_action(
       } else {
         self.mentions
       }
-      (@cmd.none, { ..self, draft, mentions, })
+      (
+        @cmd.none,
+        {
+          ..self,
+          draft,
+          mentions,
+          images: if self.images == source.images {
+            []
+          } else {
+            self.images
+          },
+        },
+      )
     }
     @composer.RootMentionRemoved(mention~, ..) =>
       (
@@ -594,4 +613,69 @@ test "Codex draft skills wait for the host-confirmed project root" {
     fail("confirmed draft should expose a Codex skill context")
   }
   assert_eq(context.cwd, "/canonical/project")
+}
+
+///|
+test "Codex image-only first prompt stays visible and survives failure" {
+  let ready = {
+    ..State().select_draft("image-draft", ""),
+    connection: CodexReady,
+  }
+  let draft : @composer.Draft = {
+    task: "",
+    mentions: [],
+    images: [{ name: "screen.png", url: "data:image/png;base64,aGVsbG8=", }],
+  }
+  let action = @composer.DraftSubmitted(
+    identity=ready.composer_identity(@interop.Local),
+    draft~,
+  )
+  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let (_, once) = ready.apply_composer_action(emit, @interop.Local, action)
+  let (_, twice) = ready.apply_composer_action(emit, @interop.Local, action)
+  assert_true(once == twice)
+  assert_false(once.input_empty())
+  assert_eq(once.turn_inputs(), [
+    { "type": "image", "url": draft.images[0].url },
+  ])
+  assert_true(
+    once.transcript_items()[0].kind is @transcript.UserWithImages("", [_]),
+  )
+  let (_, failed) = update(
+    emit,
+    Failed(kind=CodexDraftThreadReply("image-draft"), message="offline"),
+    once,
+    @interop.Local,
+    _ => @cmd.none,
+  )
+  assert_eq(failed.images, draft.images)
+  assert_false(failed.loading)
+}
+
+///|
+test "Codex sends text and every image and clears only on acknowledgement" {
+  let ready = {
+    ..State::from_thread_snapshot({
+      "thread": { "id": "thread-images", "turns": [] },
+    }),
+    draft: "Compare these",
+    images: [
+      { name: "a.png", url: "data:image/png;base64,YQ==", },
+      { name: "b.jpg", url: "data:image/jpeg;base64,Yg==", },
+    ],
+  }
+  assert_eq(ready.turn_inputs(), [
+    { "type": "text", "text": "Compare these" },
+    { "type": "image", "url": "data:image/png;base64,YQ==" },
+    { "type": "image", "url": "data:image/jpeg;base64,Yg==" },
+  ])
+  let steering = ready.with_pending_steer("turn-images")
+  assert_true(
+    steering.pending_steers[0].transcript_item().kind
+    is @transcript.UserWithImages(_, [_, _]),
+  )
+  assert_true(steering.with_turn_start_reply({}).images.is_empty())
+  assert_true(
+    steering.with_turn_steer_reply({ "turnId": "turn-images" }).images.is_empty(),
+  )
 }

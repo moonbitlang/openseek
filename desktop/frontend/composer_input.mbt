@@ -166,7 +166,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   let file_index = self.composer_file_index()
   {
     identity,
-    draft: { task: conv.task, mentions: conv.mentions, },
+    draft: { images: [], task: conv.task, mentions: conv.mentions, },
     // The outer run heartbeat and child-run lanes are both typed live status,
     // rendered by the composer above the draft rather than persisted into the
     // transcript.
@@ -202,6 +202,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     active_file: @dock.active_file(self.dock),
     file_index,
     presentation: {
+      images_enabled: false,
       context,
       status,
       placeholder: if conv.goal_edit is Some(_) {
@@ -293,7 +294,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
       owner: { channel: self.focused, session: self.active_session, },
       archive_generation: self.composer_entry_retirements.length(),
     },
-    draft: { task: "", mentions: [], },
+    draft: { images: [], task: "", mentions: [], },
     run: None,
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [],
@@ -308,6 +309,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
     active_file: None,
     file_index: self.composer_file_index(),
     presentation: {
+      images_enabled: false,
       context: [],
       status: [],
       placeholder: "",

@@ -59,6 +59,7 @@ test "composer submission stays bound to its originating conversation" {
     test_dispatch(),
     ComposerAction(
       @composer.DraftSubmitted(identity~, draft={
+        images: [],
         task: "send to origin",
         mentions: [],
       }),
@@ -111,6 +112,7 @@ test "annotation-only composer submission starts its conversation" {
     test_dispatch(),
     ComposerAction(
       @composer.DraftSubmitted(identity~, draft={
+        images: [],
         task: "",
         mentions: [mention],
       }),
@@ -129,6 +131,7 @@ test "annotation-only composer submission starts its conversation" {
   // otherwise this asserts on a value the test made up.
   assert_true(pending.mentions == [mention])
   let sent = @composer.Draft::{
+    images: [],
     task: pending.draft,
     mentions: pending.mentions,
   }.prompt()
@@ -168,7 +171,7 @@ test "composer follow-up overrides route the message without changing the defaul
       ComposerAction(
         @composer.FollowupSubmitted(
           identity~,
-          draft={ task: "one message", mentions: [], },
+          draft={ images: [], task: "one message", mentions: [], },
           choice~,
         ),
       ),

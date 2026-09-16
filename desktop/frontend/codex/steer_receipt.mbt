@@ -44,7 +44,11 @@ fn State::with_pending_steer(self : State, turn_id : String) -> State {
   pending_steers.push({
     submission_id: self.next_steer_submission_id,
     turn_id,
-    submitted: { task: self.draft, mentions: self.mentions.copy(), },
+    submitted: {
+      task: self.draft,
+      mentions: self.mentions.copy(),
+      images: self.images.copy(),
+    },
     known_user_item_ids: active.user_item_ids(turn_id),
     delivery: CodexSteerSending,
   })
@@ -195,5 +199,5 @@ fn State::with_observed_steer_item(
 fn CodexSteerReceipt::transcript_item(
   self : CodexSteerReceipt,
 ) -> @transcript.TranscriptItem {
-  { kind: @transcript.User(self.submitted.prompt()), ts: None, sequence: None, }
+  { kind: self.submitted.user_item(), ts: None, sequence: None, }
 }

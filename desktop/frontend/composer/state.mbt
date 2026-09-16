@@ -159,7 +159,19 @@ fn Draft::reconciled(self : Draft, source~ : Draft, incoming~ : Draft) -> Draft 
     }
     merged.mentions
   }
-  { task, mentions, }
+  let images = if incoming.images == source.images {
+    self.images
+  } else if self.images == source.images {
+    incoming.images
+  } else {
+    [
+      ..self.images,
+      ..incoming.images.filter(image => {
+        !source.images.contains(image) && !self.images.contains(image)
+      }),
+    ]
+  }
+  { task, mentions, images, }
 }
 
 ///|

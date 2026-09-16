@@ -84,6 +84,8 @@ priv struct Entry {
   turn_id : String?
   followup_choice : FollowupChoice?
   followup_menu_open : Bool
+  image_reads : Int
+  image_error : String?
   pending_submission : PendingSubmission?
 } derive(Eq)
 
@@ -106,6 +108,8 @@ fn Entry::Entry(input : Input) -> Entry {
     turn_id: input.turn_id,
     followup_choice: None,
     followup_menu_open: false,
+    image_reads: 0,
+    image_error: None,
     pending_submission: None,
   }
 }
@@ -173,6 +177,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
   if acknowledged is Some(draft) {
     return {
       ..self,
+      image_error: None,
       source: incoming,
       draft,
       source_goal: incoming_goal,
@@ -342,6 +347,8 @@ priv enum Msg {
   // the clock, and the message exists only to advance the span on screen.
   ClockTicked
   MentionRemoved(Int)
+  ImageRemoved(Int)
+  ImageRead(Identity, @image_input.Event)
   MentionJumped(Int)
   GoalCancelled
   SubmitRequested
@@ -376,8 +383,8 @@ priv enum Msg {
 
 ///|
 fn Entry::holds_draft(self : Entry) -> Bool {
-  !self.draft.task.is_blank() ||
-  !self.draft.mentions.is_empty() ||
+  self.image_reads > 0 ||
+  !self.draft.is_empty() ||
   (self.goal_draft is Some(goal) && !goal.is_blank())
 }
 
@@ -570,6 +577,57 @@ fn Model::update(
   let entry = self.active(input)
   let self = self.with_entry(entry)
   match msg {
+    ImageRead(identity, event) => {
+      // A read belongs to the draft that selected it. Navigation may retain
+      // that draft in the cache, but cannot redirect its bytes into another.
+      let target = self.entries
+        .iter()
+        .find_first(entry => entry.identity() == identity)
+      guard target is Some(target) else { return (self, @cmd.none) }
+      let next = match event {
+        @image_input.Reading =>
+          { ..target, image_reads: target.image_reads + 1, image_error: None, }
+        @image_input.Ready(images) => {
+          guard target.image_reads > 0 else { return (self, @cmd.none) }
+          if target.draft.images.length() + images.length() > 4 {
+            {
+              ..target,
+              image_reads: target.image_reads - 1,
+              image_error: Some("Attach up to 4 images per message."),
+            }
+          } else {
+            {
+              ..target,
+              image_reads: target.image_reads - 1,
+              draft: {
+                ..target.draft,
+                images: [
+                  ..target.draft.images,
+                  ..images.map(image => { name: image.0, url: image.1, }),
+                ],
+              },
+            }
+          }
+        }
+        @image_input.Failed(message) => {
+          guard target.image_reads > 0 else { return (self, @cmd.none) }
+          {
+            ..target,
+            image_reads: target.image_reads - 1,
+            image_error: Some(message),
+          }
+        }
+      }
+      self.commit_entry_change(target, next, @cmd.none, action_emit)
+    }
+    ImageRemoved(index) => {
+      let next = {
+        ..entry,
+        draft: entry.draft.without_image(index),
+        image_error: None,
+      }
+      self.commit_entry_change(entry, next, @cmd.none, action_emit)
+    }
     FollowupMenuToggled => {
       guard input.presentation.primary_action
         is Running(
@@ -705,13 +763,12 @@ fn Model::update(
             GoalSubmitted(
               identity=entry.identity(),
               draft=text,
-              prompt_present=!entry.draft.task.is_blank() ||
-                !entry.draft.mentions.is_empty(),
+              prompt_present=!entry.draft.is_empty(),
             ),
           ),
         )
       } else {
-        guard !entry.draft.task.is_blank() || !entry.draft.mentions.is_empty() else {
+        guard !entry.draft.is_empty() && entry.image_reads == 0 else {
           return (self.with_entry(entry), @cmd.none)
         }
         (

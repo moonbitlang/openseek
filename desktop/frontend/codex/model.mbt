@@ -604,9 +604,10 @@ struct State {
   git_details_open : Bool
   draft : String
   mentions : Array[@composer.Mention]
+  images : Array[@composer.Image]
   // The first submitted input remains visible while thread/worktree startup
   // has not produced its real app-server User item yet. This is display-only:
-  // request construction continues to read `draft` and `mentions`, and no
+  // request construction continues to read `draft`, `mentions`, and `images`, and no
   // retry or history read is derived from this field.
   submitted_first_prompt : @composer.Draft?
   // Later inputs sent into an in-progress turn get the same immediate visual
@@ -658,6 +659,7 @@ pub fn State::State(loading? : Bool = false) -> State {
     git_details_open: false,
     draft: "",
     mentions: [],
+    images: [],
     submitted_first_prompt: None,
     pending_steers: [],
     next_steer_submission_id: 1,
@@ -1201,6 +1203,7 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
     git_details_open: false,
     draft: "",
     mentions: [],
+    images: [],
     submitted_first_prompt: None,
     pending_steers: [],
     skills: CodexSkillsEmpty,
@@ -2542,7 +2545,24 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
     )
   }
   let kind = match self.kind {
-    "userMessage" => @transcript.User(self.text())
+    "userMessage" => {
+      let images : Array[String] = []
+      if self.value is Object(fields) &&
+        fields.get("content") is Some(Array(content)) {
+        for value in content {
+          if value is Object(input) &&
+            input.get("type") is Some(String("image")) &&
+            input.get("url") is Some(String(url)) {
+            images.push(url)
+          }
+        }
+      }
+      if images.is_empty() {
+        @transcript.User(self.text())
+      } else {
+        @transcript.UserWithImages(self.text(), images)
+      }
+    }
     "agentMessage" | "plan" => response(None, Some(self.text()), [])
     "reasoning" => response(Some(self.text()), None, [])
     "contextCompaction" => @transcript.Summary(self.text())
@@ -2753,11 +2773,7 @@ pub fn State::transcript_items(
   }
   if self.waiting_for_first_user_item() &&
     self.submitted_first_prompt is Some(submitted) {
-    items.push({
-      kind: @transcript.User(submitted.prompt()),
-      ts: None,
-      sequence: None,
-    })
+    items.push({ kind: submitted.user_item(), ts: None, sequence: None, })
   }
   if self.active_thread() is Some(active) {
     for turn in active.turns {

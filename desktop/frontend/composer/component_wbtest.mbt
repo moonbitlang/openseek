@@ -6,7 +6,7 @@ fn Input::fixture(task : String) -> Input {
   }
   {
     identity: { owner, archive_generation: 0, },
-    draft: { task, mentions: [], },
+    draft: { images: [], task, mentions: [], },
     run: None,
     turn_id: None,
     goal: { draft: None, standing: None, pending: None, },
@@ -21,6 +21,7 @@ fn Input::fixture(task : String) -> Input {
     active_file: None,
     file_index: FileIndexReady(epoch=0, truncated=false),
     presentation: {
+      images_enabled: false,
       context: [],
       status: [],
       placeholder: "Prompt",
@@ -347,6 +348,7 @@ test "goal submission acknowledgement preserves the prompt underneath" {
 ///|
 test "draft prompt encoding belongs to composer" {
   let draft : Draft = {
+    images: [],
     task: "inspect this",
     mentions: [
       { ref_: @mention_context.File(path="src/main.mbt"), range: None, },
@@ -511,7 +513,7 @@ test "follow-up choice is per draft and resets after submission or turn completi
   assert_eq(sending.active(input).submission_choice(input), Some(QueueNext))
   let accepted = {
     ..input,
-    draft: { task: "", mentions: [], },
+    draft: { images: [], task: "", mentions: [], },
     submission_sequence: 1,
   }
   assert_eq(
@@ -676,4 +678,170 @@ test "a background successor turn resets the unsent follow-up override" {
   assert_eq(returned.draft.task, "unsent draft")
   assert_eq(returned.submission_choice(successor), Some(SteerNow))
   assert_false(returned.followup_menu_open)
+}
+
+///|
+test "image-only drafts submit and preserve pictures until acknowledged" {
+  let base = Input::fixture("")
+  let input = {
+    ..base,
+    draft: {
+      ..base.draft,
+      images: [{ name: "screen.png", url: "data:image/png;base64,YQ==", }],
+    },
+  }
+  let model = Model(base).with_entry({ ..Entry(base), draft: input.draft, })
+  let (once, _) = model.update(
+    base,
+    SubmitRequested,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let (twice, _) = model.update(
+    base,
+    SubmitRequested,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(once == twice)
+  assert_true(
+    once.active(base).pending_submission is Some(PromptSubmission(_, ..)),
+  )
+  assert_true(once.active(base).holds_draft())
+  assert_false(
+    once
+    .active(base)
+    .action_buttons(Msg::test_emit(), Action::test_emit(), input)[0].disabled,
+  )
+  assert_eq(once.active(base).draft.images, input.draft.images)
+  let acknowledged = { ..base, submission_sequence: 1, }
+  assert_true(once.active(acknowledged).draft.images.is_empty())
+}
+
+///|
+test "image draft reconciliation preserves local removals and additions" {
+  let a : Image = { name: "a.png", url: "data:image/png;base64,YQ==", }
+  let b : Image = { name: "b.png", url: "data:image/png;base64,Yg==", }
+  let c : Image = { name: "c.png", url: "data:image/png;base64,Yw==", }
+  let source : Draft = { task: "", mentions: [], images: [a], }
+  let edited = { ..source, images: [b], }
+  let incoming = { ..source, images: [a, c], }
+  let merged = edited.reconciled(source~, incoming~)
+  assert_eq(merged.images, [b, c])
+  assert_eq(edited.images, [b])
+  assert_eq(source.images, [a])
+}
+
+///|
+test "removing an image is pure and affects only the selected draft" {
+  let input = Input::fixture("")
+  let images : Array[Image] = [
+    { name: "a.png", url: "data:image/png;base64,YQ==", },
+  ]
+  let model = Model(input).with_entry({
+    ..Entry(input),
+    draft: { ..input.draft, images, },
+  })
+  let (once, _) = model.update(
+    input,
+    ImageRemoved(0),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let (twice, _) = model.update(
+    input,
+    ImageRemoved(0),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(once == twice)
+  assert_true(once.active(input).draft.is_empty())
+  assert_eq(model.active(input).draft.images, images)
+  let (invalid, _) = model.update(
+    input,
+    ImageRemoved(5),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_eq(invalid.active(input).draft.images, images)
+}
+
+///|
+test "image read events remain pure and settle their original cached draft" {
+  let input = Input::fixture("keep text")
+  let model = Model(input)
+  let started = ImageRead(input.identity, @image_input.Reading)
+  let (reading, _) = model.update(
+    input,
+    started,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let (again, _) = model.update(
+    input,
+    started,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(reading == again)
+  assert_eq(reading.active(input).image_reads, 1)
+  let (blocked, _) = reading.update(
+    input,
+    SubmitRequested,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(blocked.active(input).pending_submission is None)
+  let other = {
+    ..input,
+    identity: {
+      ..input.identity,
+      owner: { ..input.identity.owner, session: "other", },
+    },
+  }
+  let ready = ImageRead(
+    input.identity,
+    @image_input.Ready([("screen.png", "data:image/png;base64,YQ==")]),
+  )
+  let (settled, _) = reading.update(
+    other,
+    ready,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let (settled_again, _) = reading.update(
+    other,
+    ready,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(settled == settled_again)
+  assert_true(settled.active(other).draft.images.is_empty())
+  assert_eq(settled.active(input).draft.images.length(), 1)
+  assert_eq(settled.active(input).image_reads, 0)
+  let failed = ImageRead(input.identity, @image_input.Failed("read failed"))
+  let (failure, _) = reading.update(
+    input,
+    failed,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let (failure_again, _) = reading.update(
+    input,
+    failed,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(failure == failure_again)
+  assert_eq(failure.active(input).image_error, Some("read failed"))
+  assert_eq(failure.active(input).image_reads, 0)
+  assert_eq(failure.active(input).draft.task, "keep text")
+  let retired = { ..other, retirements: [input.identity.owner], }
+  let (dropped, _) = reading.update(
+    retired,
+    ready,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(dropped.entries.all(entry => entry.owner != input.identity.owner))
 }

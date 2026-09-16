@@ -180,8 +180,7 @@ fn Entry::action_buttons(
           id: "send",
           class_name: "icon-button send-button",
           title: "Send",
-          disabled: !available ||
-          (self.draft.task.is_blank() && self.draft.mentions.is_empty()),
+          disabled: !available || self.image_reads > 0 || self.draft.is_empty(),
           command: emit(SubmitRequested),
           content: @icons.icon(@icons.icon_arrow_up),
         },
@@ -198,8 +197,7 @@ fn Entry::action_buttons(
           content: @icons.icon(@icons.icon_debug_stop),
         },
       ]
-      if steer_available &&
-        (!self.draft.task.is_blank() || !self.draft.mentions.is_empty()) {
+      if steer_available && !self.draft.is_empty() {
         actions.push({
           id: "send",
           class_name: "icon-button send-button",
@@ -208,7 +206,7 @@ fn Entry::action_buttons(
             Queue => "Queue for the next turn"
             SaveQueue => "Save queued message"
           },
-          disabled: false,
+          disabled: self.image_reads > 0,
           command: emit(SubmitRequested),
           content: @icons.icon(@icons.icon_arrow_up),
         })
@@ -238,9 +236,48 @@ fn Entry::view(
   // other's child index as a run starts and ends.
   context.push(running_row(input.run, clock_ms~))
   context.push(input.goal.view(self.identity(), action_emit))
+  let image_emit = emit.map(event => ImageRead(self.identity(), event))
+  let can_attach = input.presentation.images_enabled &&
+    !input.presentation.disabled &&
+    !goal_mode
+  let status = input.presentation.status.map(component => {
+    component.render(self.identity(), action_emit)
+  })
+  if can_attach {
+    status.push(
+      @html.button(
+        class="composer-attach",
+        type_="button",
+        title="Attach up to 4 images, 5 MiB each",
+        on_click=@image_input.pick(image_emit),
+        attrs=@html.Attrs::build().aria_label("Attach images"),
+        "Attach images",
+      ),
+    )
+  }
+  if self.image_reads > 0 {
+    context.push(@html.div(class="composer-image-notice", "Reading images…"))
+  }
+  if self.image_error is Some(message) {
+    context.push(
+      @html.div(
+        class="composer-image-notice error",
+        attrs=@html.Attrs::build().role("alert"),
+        message,
+      ),
+    )
+  }
   View::{
+    images: if can_attach {
+      Some(image_emit)
+    } else {
+      None
+    },
     before_inner: context,
-    mentions: self.draft.mention_chips(emit),
+    mentions: [
+      ..self.draft.mention_chips(emit),
+      ..self.draft.image_previews(emit),
+    ],
     value: if goal_mode {
       self.goal_draft.unwrap_or("")
     } else {
@@ -268,9 +305,7 @@ fn Entry::view(
         None
       },
     },
-    status: input.presentation.status.map(component => {
-      component.render(self.identity(), action_emit)
-    }),
+    status,
     actions,
     followup_menu: self.followup_menu(input, emit),
     overlay: if goal_mode {
@@ -336,7 +371,7 @@ fn Entry::followup_menu(
         SteerNow => "steer"
         QueueNext => "queue"
       },
-      disabled: !steer_available,
+      disabled: !steer_available || self.image_reads > 0,
       open: self.followup_menu_open,
       toggle: emit(FollowupMenuToggled),
       dismiss: emit(FollowupMenuDismissed),

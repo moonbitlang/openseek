@@ -117,6 +117,28 @@ steered prompt keeps the active turn's settings. Compatibility is catalog
 driven: if an older app-server omits reasoning metadata, OpenSeek hides the
 picker and omits `effort` instead of guessing supported values.
 
+## Image input
+
+The Codex composer accepts selected, pasted, and dropped PNG, JPEG, WebP,
+and GIF images, up to four per message and 5 MiB per image. The attachment
+tray previews each image and allows removal before sending. Image-only
+messages and images added while a turn is running are supported.
+
+`desktop/frontend/image_input` owns the browser File bindings and bounded
+byte reads. Its DOM callbacks capture file lists before the browser clears
+clipboard or drag data; the returned commands perform the asynchronous reads.
+The composer receives plain results tagged with the draft identity. A late
+read can update its original cached draft, never the newly selected task.
+Sending waits for outstanding reads, and read or send failures preserve the
+existing text and attachments.
+
+The Codex adapter sends each image as an app-server `image` input with a
+base64 data URL, separate from text and mentions. This also works when the
+browser and Desktop run on different devices: browser-local paths are never
+sent as `localImage` paths on the Desktop computer. App-server owns the
+persisted user items; the shared transcript displays their image content,
+including when history is loaded again.
+
 ## Isolated Codex home
 
 OpenSeek Desktop gives its app-server a dedicated `CODEX_HOME` instead of

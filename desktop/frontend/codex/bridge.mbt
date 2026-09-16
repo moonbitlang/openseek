@@ -489,6 +489,9 @@ fn State::turn_inputs(self : State) -> Array[Json] {
       inputs.push(input)
     }
   }
+  for image in self.images {
+    inputs.push({ "type": "image", "url": image.url })
+  }
   inputs
 }
 

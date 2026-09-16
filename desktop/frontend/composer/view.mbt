@@ -710,6 +710,7 @@ fn MentionChip::render(self : MentionChip) -> @html.Html {
 /// tray, toolbar, action group, stable DOM order, and surrounding chrome;
 /// callers cannot construct it or pass rendered fragments through it.
 priv struct View {
+  images : @cmd.Emit[@image_input.Event]?
   before_inner : Array[@html.Html]
   mentions : Array[@html.Html]
   value : String
@@ -781,13 +782,18 @@ fn View::render(self : View) -> @html.Html {
   // The context is one permanent sibling even when caller-specific panels
   // appear or disappear. This prevents their count from changing the inner
   // card's index and destroying textarea focus.
+  let attrs = @html.Attrs::build().data_set("focus-owner", "")
+  let attrs = if self.images is Some(emit) {
+    attrs
+    .on_paste(event => @image_input.pasted(event, emit))
+    .on_drop(event => @image_input.dropped(event, emit))
+    .on_dragover(event => @image_input.dragged(event))
+  } else {
+    attrs
+  }
   @html.section(class="composer", [
     @html.div(class="composer-context", self.before_inner),
-    @html.div(
-      class="composer-inner",
-      attrs=@html.Attrs::build().data_set("focus-owner", ""),
-      inner,
-    ),
+    @html.div(class="composer-inner", attrs~, inner),
   ])
 }
 

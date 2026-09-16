@@ -42,7 +42,7 @@ fn SelectMenu::setting_control(
 fn conversation_title(conv : Conversation) -> String {
   // Titles follow the committed user transcript.
   for item in conv.messages {
-    if item.kind is User(prompt) {
+    if item.kind is (User(prompt) | UserWithImages(prompt, _)) {
       // A prompt sent with chips titles by what was typed (or, chips alone,
       // by their labels) — never by the raw `<user_mentions>` envelope.
       let title = user_display_text(prompt).trim().to_owned()
@@ -57,7 +57,11 @@ fn conversation_title(conv : Conversation) -> String {
   // never flashes a generic product name.
   if conv.pending_prompt is Some(pending) {
     let title = user_display_text(
-        @composer.Draft::{ task: pending.draft, mentions: pending.mentions, }.prompt(),
+        @composer.Draft::{
+          images: [],
+          task: pending.draft,
+          mentions: pending.mentions,
+        }.prompt(),
       )
       .trim()
       .to_owned()

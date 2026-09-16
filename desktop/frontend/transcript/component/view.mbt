@@ -679,6 +679,7 @@ fn speaker_label(name : String) -> @html.Html {
 /// caller wires one.
 fn user_message_view(
   content : String,
+  images? : Array[String] = [],
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -727,6 +728,29 @@ fn user_message_view(
     }
     None =>
       body.push(@html.div(class="msg-content", inline_code_nodes(content)))
+  }
+  // Image sources are separate from user prose. Never interpret a supplied
+  // image URL as HTML or let it become an arbitrary executable URL scheme.
+  let pictures : Array[@html.Html] = []
+  for url in images {
+    if url.has_prefix("data:image/png;base64,") ||
+      url.has_prefix("data:image/jpeg;base64,") ||
+      url.has_prefix("data:image/webp;base64,") ||
+      url.has_prefix("data:image/gif;base64,") ||
+      url.has_prefix("https://") ||
+      url.has_prefix("http://") {
+      pictures.push(
+        @html.img(
+          src=url,
+          alt="Attached image",
+          loading="lazy",
+          class="user-image",
+        ),
+      )
+    }
+  }
+  if !pictures.is_empty() {
+    body.push(@html.div(class="user-images", pictures))
   }
   // The overview rail and scroll watcher share this stable turn anchor.
   @html.div(class="msg user", id?=anchor, [@html.div(class="user-bubble", body)])
@@ -867,6 +891,8 @@ fn transcript_item_view(
 ) -> @html.Html {
   match item.kind {
     User(prompt) => user_message_view(prompt, anchor?, on_jump?)
+    UserWithImages(prompt, images) =>
+      user_message_view(prompt, images~, anchor?, on_jump?)
     Assistant(reasoning~, prose~, calls~, replay=_, finished~) =>
       assistant_view(
         on_open,

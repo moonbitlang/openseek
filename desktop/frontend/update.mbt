@@ -2644,6 +2644,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let mentions = @composer.Draft::{
+          images: [],
           task: conv.task,
           mentions: conv.mentions,
         }.with_mention({
@@ -2748,6 +2749,7 @@ fn update_msg(
         return (clear_feedback, model)
       }
       let mentions = @composer.Draft::{
+          images: [],
           task: conv.task,
           mentions: conv.mentions,
         }.with_mention({
@@ -3685,7 +3687,11 @@ fn update_msg(
       // The outgoing prompt is the typed text with the chips folded in as the
       // `<user_mentions>` envelope. The envelope is itself valid prompt
       // content, so an explicitly attached chip can be sent without text.
-      let task = @composer.Draft::{ task: conv.task, mentions: conv.mentions, }
+      let task = @composer.Draft::{
+          images: [],
+          task: conv.task,
+          mentions: conv.mentions,
+        }
         .prompt()
         .trim()
         .to_owned()

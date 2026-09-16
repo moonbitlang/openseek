@@ -1791,3 +1791,17 @@
 .minimal-context-summary[open] > .minimal-activity-summary > .minimal-chevron {
   transform: rotate(0deg);
 }
+
+/* User attachments retain their aspect ratio without widening the transcript. */
+.user-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.user-image {
+  max-width: min(100%, 320px);
+  max-height: 240px;
+  object-fit: contain;
+  border-radius: 8px;
+}

@@ -72,6 +72,8 @@ priv enum Inbound {
   Invalid
   // A valid request envelope whose catalog params are not an object (-32602).
   InvalidParams(Json)
+  // The bounded reader stops before parsing an oversized request.
+  Oversized
 }
 
 ///|
@@ -100,11 +102,9 @@ const OutboundQueueCapacity = 64
 const InflightRequestCapacity = 32
 
 ///|
-/// JSON-RPC requests carry prompts and small operation payloads, never
-/// transcripts or file contents. Reading one extra byte distinguishes the
-/// allowed exact limit from an oversized message without letting
-/// `Reader::read_all` grow until a peer-provided 64-bit frame length.
-const InboundFrameMaxBytes : Int = 1024 * 1024
+/// Four 5 MiB images expand to about 27 MiB in base64. Leave room for the
+/// prompt and JSON envelope, while keeping a hard bound on incoming data.
+const InboundFrameMaxBytes : Int = 32 * 1024 * 1024
 
 ///|
 /// Enforce one outbound bound for notifications and responses. A producer
@@ -225,28 +225,14 @@ async fn WsClientActor::serve(
         // The protocol is JSON text; a binary frame is a peer bug.
         continue
       }
-      let frame = FixedArray::make(InboundFrameMaxBytes + 1, b'\x00')
-      let mut received = 0
-      for ;; {
-        let count = message.read(
-          frame,
-          offset=received,
-          max_len=frame.length() - received,
-        )
-        if count == 0 {
-          break
-        }
-        received += count
-        if received > InboundFrameMaxBytes {
+      match Inbound::read(message) {
+        Oversized => {
           conn.send_close(
             code=MessageTooBig,
-            reason="JSON-RPC request exceeds 1 MiB",
+            reason="JSON-RPC request exceeds 32 MiB",
           )
           return
         }
-      }
-      let text = @utf8.decode(frame.unsafe_reinterpret_as_bytes()[:received])
-      match classify(text) {
         Request(id, method_, params) =>
           if method_ == "fs.watch" || method_ == "fs.unwatch" {
             // Watch ownership is ordered by the client's request stream. Run

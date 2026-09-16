@@ -1,0 +1,8 @@
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
+  "moonbit-community/rabbita/js",
+  "moonbitlang/core/encoding/base64",
+}
+
+supported_targets = "js"

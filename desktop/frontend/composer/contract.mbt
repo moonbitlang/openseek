@@ -11,6 +11,7 @@ pub(all) struct Mention {
 pub(all) struct Draft {
   task : String
   mentions : Array[Mention]
+  images : Array[Image]
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -177,6 +178,7 @@ pub(all) struct Presentation {
   // textarea must not accept edits that can never be submitted.
   disabled : Bool
   primary_action : PrimaryAction
+  images_enabled : Bool
 } derive(Eq)
 
 ///|
