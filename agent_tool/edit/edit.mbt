@@ -202,7 +202,18 @@ async fn execute_with_workspace(
       outcome="error",
     )
   }
-  edit_file(input, path~, file_state~, write_scope?)
+  // A filesystem failure (a missing or unreadable file) is an outcome of
+  // this tool, with data, not a raise for the dispatcher to render without.
+  edit_file(input, path~, file_state~, write_scope?) catch {
+    error if @async.is_being_cancelled() => raise error
+    error =>
+      failure(
+        path,
+        "edit failed: \{error}",
+        "edit \{@agent_tool.brief_basename(path)}",
+        outcome="error",
+      )
+  }
 }
 
 ///|
@@ -589,6 +600,7 @@ async fn preview_replace_all(
       "path": path.to_json(),
       "matches": total_matches.to_json(),
       "sites": sites.length().to_json(),
+      "more": more.to_json(),
     },
   )
 }
@@ -780,7 +792,9 @@ async fn commit_edit(
               None => tally
             },
           )
-        NotApplicable => ()
+        // Every spelling here was checkable when the projects were listed;
+        // one that no longer is means the project went away under the edit.
+        NotApplicable => return NotApplicable
         other => return other
       }
     }
@@ -829,15 +843,21 @@ async fn commit_edit(
   // itself truncates first and can be cancelled between that and its data.
   async fn restore_on_unwind() -> Unit {
     if baseline is Some(_) {
-      @async.protect_from_cancel(() => {
+      let failure = @async.protect_from_cancel(() => {
         restore_content(
           path,
           original_content,
           written=new_content,
           write_scope?,
         )
-        |> ignore
       })
+      // Cancellation carries no data, so a rollback that failed while
+      // unwinding is turned into a reported failure the caller can see.
+      if failure is Some(reason) {
+        fail(
+          "edit cancelled during its check, and \{path} could not be restored (\{reason}); it may still hold the rejected edit",
+        )
+      }
     }
   }
 
@@ -903,7 +923,11 @@ async fn commit_edit(
   }
 
   match (after, baseline) {
-    (NotApplicable, _) => keep(None, Map([]))
+    (NotApplicable, None) => keep(None, Map([]))
+    // The baseline was measured, so the tree WAS checkable: a project that
+    // cannot be checked after the write is a lost verdict, not a clean one.
+    (NotApplicable, Some(_)) =>
+      unverified_after("the project could not be checked after the edit")
     // An unguarded edit keeps moon check's fail-open behavior: the write
     // stands, and the line says the check did not.
     (Unavailable(reason), None) => keep(Some("moon check: \{reason}"), Map([]))

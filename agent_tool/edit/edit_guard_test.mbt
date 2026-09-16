@@ -295,6 +295,21 @@ async test "guards are moot outside a MoonBit project and data still names the o
     })
     assert_true(missing.is_error)
     assert_true(missing.data is Some({ "outcome": "not_found", .. }))
+    // A file that cannot be read is an outcome with data, not a bare raise.
+    let unreadable = run_edit({
+      "path": "\{dir}/absent.txt",
+      "old_string": "a",
+      "new_string": "b",
+      "start_line": 1,
+    })
+    assert_true(unreadable.is_error)
+    assert_true(
+      unreadable.content.contains("edit failed"),
+      msg=unreadable.content,
+    )
+    assert_true(
+      unreadable.data is Some({ "outcome": "error", "path": String(_), .. }),
+    )
     let bad = run_edit({
       "path": path,
       "old_string": "new",
