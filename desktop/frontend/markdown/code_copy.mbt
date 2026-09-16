@@ -1,7 +1,7 @@
 ///|
 fn code_copy_button(source : String) -> @html.Html {
   @html.button(
-    class="chat-code-copy",
+    class="button secondary chat-code-copy",
     type_="button",
     title="Copy code",
     attrs=@html.Attrs::build()
@@ -19,27 +19,8 @@ fn code_copy_button(source : String) -> @html.Html {
         )
       }),
     [
-      @html.span(class="chat-code-copy-symbol", @icons.icon(code_copy_icon)),
+      @html.span(class="chat-code-copy-symbol", @icons.icon(@icons.icon_copy)),
       @html.span(class="chat-code-copy-check", @icons.icon(@icons.icon_check)),
-    ],
-  )
-}
-
-///|
-fn code_copy_icon() -> @html.Html {
-  @svg.svg(
-    width=20,
-    height=20,
-    view_box="0 0 24 24",
-    attrs=@svg.Attrs::build()
-      .fill("none")
-      .stroke("currentColor")
-      .stroke_width("1.7")
-      .stroke_linecap("round")
-      .stroke_linejoin("round"),
-    [
-      @svg.path(d="M9 9V6a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-3"),
-      @svg.rect(x=3, y=9, width=12, height=12, rx=3),
     ],
   )
 }

@@ -693,18 +693,19 @@
   justify-content: flex-end;
   margin-bottom: 4px;
 }
-.chat-code-copy {
-  --icon-size: 20px;
+.chat-code-copy.button {
+  --icon-size: var(--icon-lg);
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
   padding: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-secondary);
-  cursor: pointer;
+  line-height: 1;
+}
+/* Avoid an inline text baseline shifting either Codicon above the center. */
+.chat-code-copy-symbol,
+.chat-code-copy-check {
+  display: flex;
 }
 .chat-code-copy-check,
 .chat-code-copy[data-copy-state="copied"] .chat-code-copy-symbol {
@@ -713,16 +714,30 @@
 .chat-code-copy[data-copy-state="copied"] .chat-code-copy-check {
   display: inline-flex;
 }
-.chat-code-copy:hover {
-  background: var(--color-hover-subtle);
-  color: var(--color-text-primary);
+/* Put the control beside the first line, without adding a toolbar row. The
+   source scrolls in its own column so long lines cannot cover the button.
+   Rendered diagrams retain their own frame and controls. */
+.msg-content.markdown .chat-code-block:has(> pre) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
 }
-.chat-code-copy:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
+.msg-content.markdown .chat-code-block:has(> pre) > .chat-code-toolbar {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  margin-bottom: 0;
+  padding: 4px;
 }
 .msg-content.markdown .chat-code-block > pre {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
   margin: 0;
+  border: none;
+  background: transparent;
 }
 
 /* Mermaid, D2/Diago and UML/PlantUML use the shared Viewer renderers. Bind
