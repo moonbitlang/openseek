@@ -103,12 +103,14 @@ never depend on an unpinned latest version in generated examples.
 
 ## Warning-fix loop
 
-The host's `edit` tool accepts `revert_on_errors` and `revert_on_warnings`:
-`moon check` runs before and after the write and the file is restored when
-the edit introduced a diagnostic the tree did not have, judged by diagnostic
-identity so the edit's own line shifts never count. Every result's `data`
-names the `outcome`, so a script can fix diagnostics one at a time and keep
-what the host accepted. The script finds its targets by running `moon check
+The host's `edit` tool accepts `revert_when_errors_above` and
+`revert_when_warnings_above`: `moon check` runs before and after the write
+and the file is restored when the edit introduced more than that many
+diagnostics the tree did not have (`0` = any), counted by diagnostic identity
+so the edit's own line shifts never count. Every result's `data` names the
+`outcome` and, for a guarded edit, `introduced_count` and `removed_count` per
+severity, so a script can fix diagnostics one at a time and keep what the
+host accepted. The script finds its targets by running `moon check
 --output-json` itself (the sandbox admits `moon check`); one line per
 diagnostic, with `level`, `error_code`, `path`, `loc` (`line:col-line:col`,
 1-based, end exclusive, columns in code points) and `message`.
@@ -121,8 +123,8 @@ let result = @tools.call("edit", {
   "end_line": site.line,
   "old_string": line_prefix_through_span,
   "new_string": line_prefix_before_span + replacement,
-  "revert_on_errors": true,
-  "revert_on_warnings": true,
+  "revert_when_errors_above": 0,
+  "revert_when_warnings_above": 0,
 })
 match result.data {
   Some({ "outcome": "applied", .. }) => fixed += 1

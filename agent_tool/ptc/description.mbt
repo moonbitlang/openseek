@@ -36,9 +36,10 @@ pub fn description() -> String {
     #|
     #|edit and multi_edit data carry outcome (applied, reverted, rejected, failed,
     #|unverified, preview, not_found, error), the post-write check counts, and on a
-    #|revert the introduced sites; with revert_on_errors / revert_on_warnings the
-    #|host restores an edit that introduced a diagnostic the tree did not have, so
-    #|a script can apply one fix per diagnostic and branch on data.outcome. A
+    #|revert the introduced sites; with revert_when_errors_above /
+    #|revert_when_warnings_above (0 = any) the host restores an edit that introduced
+    #|more diagnostics than that, so a script can apply one fix per diagnostic and
+    #|branch on data.outcome, introduced_count and removed_count. A
     #|script may run moon check --output-json itself to find its targets.
     #|
     #|Up to 1024 calls per script, four in flight, 64 KiB per request, and 64K
