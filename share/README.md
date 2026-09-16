@@ -9,6 +9,8 @@ This directory is checked in and copied into the packaged toolchain's `share/`.
   moved out of the system prompt and read on demand.
 - `examples/`: verified `.mbtx` examples inlined into the system prompt by
   `md_to_mbt_string`; CI type-checks and runs them.
+- `moongrep/`: OpenSeek-maintained reference for the structural search and
+  lint tool, moved out of the system prompt and read on demand.
 - `workflow/`: OpenSeek-maintained scripts, packaged for future agent integration.
 
 The documentation comes from https://github.com/moonbitlang/moonbit-docs.
