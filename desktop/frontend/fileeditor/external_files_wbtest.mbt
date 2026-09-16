@@ -48,9 +48,12 @@ test "external documents share the document lifecycle without workspace membersh
   )
   // The external poll uses the same signatures and stale-document handling.
   let background = { ..ctx, active_file: None, }
-  let changed = StatsLoaded(owner=ctx.owner, epoch=ctx.request_epoch, stats=[
-    { path: file, signature: Present("2:0"), },
-  ])
+  let changed = StatsLoaded(
+    recheck_diagnostics=false,
+    owner=ctx.owner,
+    epoch=ctx.request_epoch,
+    stats=[{ path: file, signature: Present("2:0"), }],
+  )
   let (_, stale) = update(emit, changed, ready, background)
   let (_, same_stale) = update(emit, changed, ready, background)
   assert_true(stale == same_stale)

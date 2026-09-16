@@ -1010,7 +1010,13 @@ fn reconcile_reviews_after_changes(
   }
   if !restat_paths.is_empty() {
     cmds.push(
-      stat_files(dispatch, ctx.owner, state.request_epoch, restat_paths),
+      stat_files(
+        dispatch,
+        ctx.owner,
+        state.request_epoch,
+        restat_paths,
+        recheck_diagnostics=true,
+      ),
     )
   }
   (cmds, docs, review_generation)
@@ -2445,6 +2451,7 @@ fn update_inner(
           ctx.owner,
           ctx.request_epoch,
           ctx.open_files.filter(file => ctx.relative(file) is None),
+          recheck_diagnostics=false,
         ),
         state,
       )
@@ -3775,7 +3782,13 @@ fn update_inner(
         }
         if !stat_paths.is_empty() {
           cmds.push(
-            stat_files(dispatch, owner, state.request_epoch, stat_paths),
+            stat_files(
+              dispatch,
+              owner,
+              state.request_epoch,
+              stat_paths,
+              recheck_diagnostics=true,
+            ),
           )
         } else if moonbit_changed &&
           active_moonbit_diagnostics(
@@ -3856,7 +3869,7 @@ fn update_inner(
       } else {
         (@cmd.none, state)
       }
-    StatsLoaded(owner~, epoch~, stats~) =>
+    StatsLoaded(owner~, epoch~, stats~, recheck_diagnostics~) =>
       if state.owner != Some(owner) || state.request_epoch != epoch {
         (@cmd.none, state)
       } else {
@@ -4032,7 +4045,10 @@ fn update_inner(
         // burst covers that: the reload above brings its own request, so
         // only an active file the stats left untouched needs the explicit
         // refresh. Its check's pushes update the other open tabs too.
-        if !active_reloading &&
+        // A periodic external-file stat is not evidence of a workspace
+        // change. Unchanged polls must not repeatedly run `moon check`.
+        if recheck_diagnostics &&
+          !active_reloading &&
           active_moonbit_diagnostics(
             dispatch,
             owner,
@@ -5326,7 +5342,7 @@ test "FileLoaded settles content into its document, active or not" {
   let epoch_state = { ..state, request_epoch: 2, }
   let (_, old_epoch) = update(
     emit,
-    StatsLoaded(owner=test_ctx().owner, epoch=1, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=1, stats=[
       { path: test_file("a.mbt"), signature: Missing, },
     ]),
     epoch_state,
@@ -6720,7 +6736,7 @@ test "a settled Changes snapshot re-stats loaded reviews whose rows disappeared"
   // a committed deletion must replace the cached working source.
   let (_, deleted) = update(
     test_emit(),
-    StatsLoaded(owner=ctx.owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
       { path: file, signature: Missing, },
     ]),
     settled,
@@ -6772,7 +6788,7 @@ test "a review that becomes a symlink clears its cached regular-file source" {
   )
   let (_, missing_unavailable) = update(
     test_emit(),
-    StatsLoaded(owner=ctx.owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
       { path: file, signature: Missing, },
     ]),
     unavailable,
@@ -6783,7 +6799,7 @@ test "a review that becomes a symlink clears its cached regular-file source" {
   // source that preceded it. An explicit ordinary reopen remains the retry.
   let (_, still_unavailable) = update(
     test_emit(),
-    StatsLoaded(owner=ctx.owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
       { path: file, signature: Present("4:0"), },
     ]),
     missing_unavailable,
@@ -6872,7 +6888,7 @@ test "a disappearing review row hands an active reload to an ordinary read" {
   }
   let (_, reloading) = update(
     test_emit(),
-    StatsLoaded(owner=ctx.owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
       { path: file, signature: Present("2:1"), },
     ]),
     state,
@@ -6967,7 +6983,7 @@ test "a newer review reload fences an older working-tree reply" {
   // flight. It receives its own token without invalidating the HEAD request.
   let (_, reloading) = update(
     test_emit(),
-    StatsLoaded(owner=ctx.owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
       { path: file, signature: Present("2:0"), },
     ]),
     state,
@@ -7036,7 +7052,7 @@ test "a newer review reload fences an older working-tree reply" {
   // that captured the file just before it disappeared cannot resurrect it.
   let (_, deleted) = update(
     test_emit(),
-    StatsLoaded(owner=ctx.owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
       { path: file, signature: Missing, },
     ]),
     newest,
@@ -8370,7 +8386,7 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   }
   let (_, next) = update(
     emit,
-    StatsLoaded(owner=test_ctx().owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
       // The active file changed: reloaded eagerly, so its document stays
       // loaded (the baseline the scroll-keeping reload compares against).
       { path: test_file("a.mbt"), signature: Present("9:0"), },
@@ -8396,7 +8412,7 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   solo[test_file("b.mbt")] = loaded_doc("b.mbt")
   let (_, same) = update(
     emit,
-    StatsLoaded(owner=test_ctx().owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
       { path: test_file("b.mbt"), signature: Present("9:0"), },
     ]),
     { ..next, docs: solo, },
@@ -8424,7 +8440,7 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   }
   let (_, retryable) = update(
     emit,
-    StatsLoaded(owner=test_ctx().owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
       { path: test_file(failed_path.0), signature: Present("10:0"), },
     ]),
     { ..owned_state(), docs: failed_docs, },
@@ -8438,6 +8454,7 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   let (_, other) = update(
     emit,
     StatsLoaded(
+      recheck_diagnostics=true,
       owner={
         channel: @interop.ChannelId::Remote("other"),
         session: "desktop-test",
@@ -8515,7 +8532,7 @@ test "a stat the host could not complete reads as a failed read, never a deletio
   let failed : @protocol.FileSignature = Failed("permission denied")
   let (_, next) = update(
     emit,
-    StatsLoaded(owner=test_ctx().owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
       { path: test_file("a.mbt"), signature: failed, },
       { path: test_file("b.mbt"), signature: failed, },
       { path: test_file("c.mbt"), signature: failed, },
@@ -8590,7 +8607,7 @@ test "StatsLoaded preserves a settled HEAD preview when its active file disappea
   let docs : Map[@common.Uri, Doc] = Map([(file, doc)])
   let (_, next) = update(
     emit,
-    StatsLoaded(owner=test_ctx().owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
       { path: file, signature: Missing, },
     ]),
     { ..owned_state(), docs, },
@@ -8624,7 +8641,7 @@ test "a deleted document whose file reappears reloads on the next stats" {
   let state = { ..owned_state(), docs, }
   let (_, next) = update(
     emit,
-    StatsLoaded(owner=test_ctx().owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
       { path: test_file("a.mbt"), signature: Present("3:0"), },
     ]),
     state,
@@ -8665,7 +8682,7 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
   let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   let (_, reviewed) = update(
     emit,
-    StatsLoaded(owner=test_ctx().owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
       { path: file, signature: Present("3:0"), },
     ]),
     { ..owned_state(), docs, },
@@ -8720,7 +8737,7 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
   )
   let (_, reloading) = update(
     emit,
-    StatsLoaded(owner=ctx.owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
       { path: file, signature: Present("3:0"), },
     ]),
     ordinary,
@@ -8806,7 +8823,7 @@ test "a vanished review retries a failed ordinary read" {
   )
   let (_, reloading) = update(
     emit,
-    StatsLoaded(owner=ctx.owner, epoch=0, stats=[
+    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
       { path: file, signature: Present("4:0"), },
     ]),
     ordinary,

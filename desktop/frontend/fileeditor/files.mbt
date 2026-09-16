@@ -312,6 +312,7 @@ fn stat_files(
   owner : @interop.ConversationKey,
   epoch : Int,
   paths : Array[@common.Uri],
+  recheck_diagnostics~ : Bool,
 ) -> @cmd.Cmd {
   guard paths.all(path => @resource.belongs_to(path, owner.channel)) else {
     return @cmd.none
@@ -335,7 +336,9 @@ fn stat_files(
         }
         stats.push({ path, signature: stat.signature, })
       }
-      scheduler.add(dispatch(StatsLoaded(owner~, epoch~, stats~)))
+      scheduler.add(
+        dispatch(StatsLoaded(owner~, epoch~, stats~, recheck_diagnostics~)),
+      )
     })
   })
 }

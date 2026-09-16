@@ -1098,10 +1098,13 @@ pub(all) enum Msg {
   // A `stat_files` reply: each open tab's current mtime signature, or that
   // the file is gone or could not be inspected. Owner plus request epoch
   // fence a request that outlived either its conversation or checkout.
+  // External polls only compare file signatures; workspace changes can also
+  // invalidate diagnostics without changing the active document itself.
   StatsLoaded(
     owner~ : @interop.ConversationKey,
     epoch~ : Int,
-    stats~ : Array[FileStat]
+    stats~ : Array[FileStat],
+    recheck_diagnostics~ : Bool
   )
   // The language server's diagnostics returned by `lsp_open`. The full owner
   // fences a reply that lost a device/session switch while the request ran.

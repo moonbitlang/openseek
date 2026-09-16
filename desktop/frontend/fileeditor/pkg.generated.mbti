@@ -303,7 +303,7 @@ pub(all) enum Msg {
   FsChanged(root~ : @common.Uri, generation~ : String, changes~ : Array[FileChange]?)
   RunSettled(owner~ : @interop.ConversationKey)
   RefreshExternalFiles
-  StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, stats~ : Array[FileStat])
+  StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, stats~ : Array[FileStat], recheck_diagnostics~ : Bool)
   DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
   DiagnosticsPublished(channel~ : @interop.ChannelId, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
   LanguageRequestFailed(owner~ : @interop.ConversationKey, message~ : String)
