@@ -121,12 +121,17 @@ async fn Snapshot::send(
   let body = @json.parse(@utf8.decode(buffer.to_bytes())) catch {
     _ => return @protocol.Failed(message=fallback)
   }
-  match body {
-    { "url": String(url), .. } if accepted => @protocol.Shared(url~)
-    { "error": String(detail), .. } if !accepted && !detail.trim().is_empty() =>
-      @protocol.Failed(
-        message="Sharing failed (HTTP \{response.code}): \{detail.trim()}",
-      )
-    _ => @protocol.Failed(message=fallback)
+  guard accepted else {
+    return @protocol.Failed(
+      message=match body {
+        { "error": String(detail), .. } if !detail.trim().is_empty() =>
+          "Sharing failed (HTTP \{response.code}): \{detail.trim()}"
+        _ => fallback
+      },
+    )
   }
+  guard body is { "url": String(url), .. } else {
+    return @protocol.Failed(message=fallback)
+  }
+  @protocol.Shared(url~)
 }
