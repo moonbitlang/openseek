@@ -333,20 +333,18 @@ async fn execute(
     }
     File(filename) => {
       // Resolve once for both namespace lookup and its read-only boundary.
-      // Ordinary workspace scripts do not depend on installation resources.
-      let resources = try {
-        if is_bundled_filename(filename) {
-          @resources.directory()
-        } else {
-          None
+      // Only bundled workflows need this resource lookup and its error handling.
+      let resources = if is_bundled_filename(filename) {
+        @resources.directory() catch {
+          error if @async.is_being_cancelled() => raise error
+          error =>
+            return @agent_tool.respond(
+              "error: mbtx \{@tool_error.failure_message("\{error}")}",
+              is_error=true,
+            )
         }
-      } catch {
-        error if @async.is_being_cancelled() => raise error
-        error =>
-          return @agent_tool.respond(
-            "error: mbtx \{@tool_error.failure_message("\{error}")}",
-            is_error=true,
-          )
+      } else {
+        None
       }
       let path = resolve_filename(workspace_root, filename, resources) catch {
         error if @async.is_being_cancelled() => raise error
