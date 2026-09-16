@@ -158,6 +158,7 @@ async fn execute_with_workspace(
       return @agent_tool.respond(
         "error: multi_edit requires \{@tool_error.failure_message("\{error}")}",
         is_error=true,
+        data={ "outcome": "error" },
       )
   }
   // Concatenate the inline edits with the response file's edits (inline first).
@@ -204,6 +205,7 @@ async fn load_edits_file(
           "error: multi_edit could not read edits file \{path}: \{error}",
           is_error=true,
           brief~,
+          data={ "outcome": "error" },
         ),
       )
   }
@@ -214,6 +216,7 @@ async fn load_edits_file(
           "error: multi_edit edits file \{path} is not valid JSON: \{error}",
           is_error=true,
           brief~,
+          data={ "outcome": "error" },
         ),
       )
   }
@@ -224,6 +227,7 @@ async fn load_edits_file(
           "error: multi_edit requires \{@tool_error.failure_message("\{error}")} in edits file \{path}",
           is_error=true,
           brief~,
+          data={ "outcome": "error" },
         ),
       )
   }
@@ -390,7 +394,17 @@ async fn multi_edit_files(
   // The warning guard's baseline, measured before anything is written so a
   // rollback never has to re-measure it. A tree that cannot be checked makes
   // the guard a promise the tool cannot keep, so the batch is not written.
-  let baseline = if revert_on_warnings && writes is [first, ..] {
+  // The file the guards check from: the first one inside a MoonBit project,
+  // so a batch that starts with a README still checks the module its `.mbt`
+  // edits belong to. A batch spanning several modules checks the first.
+  let mut check_path : String? = None
+  for write in writes {
+    if @auto_check.check_cwd(write.path) is Some(_) {
+      check_path = Some(write.path)
+      break
+    }
+  }
+  let baseline = if revert_on_warnings && check_path is Some(anchor) {
     fn not_verified(reason : String) -> @agent_tool.ToolAction {
       @agent_tool.respond(
         "not applied: revert_on_warnings was requested, but moon check could not verify the tree (\{reason}); no files were changed",
@@ -400,7 +414,7 @@ async fn multi_edit_files(
       )
     }
 
-    match @auto_check.check(first.path) {
+    match @auto_check.check(anchor) {
       Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
       Checked(tally) => Some(tally)
       NotApplicable => None
@@ -411,6 +425,19 @@ async fn multi_edit_files(
   } else {
     None
   }
+  // A warning-guarded batch interrupted while being written or checked must
+  // not stay on disk unverified: put every original back before the
+  // cancellation unwinds. Registered before the first write.
+  async fn restore_on_unwind() -> Unit {
+    if revert_on_warnings && baseline is Some(_) {
+      @async.protect_from_cancel(() => {
+        write_files(writes, write => write.original_content, write_scope?)
+        |> ignore
+      })
+    }
+  }
+
+  errdefer restore_on_unwind()
   for write in writes {
     // Containment re-check at the moment of writing: the batch gate above
     // decided on filesystem state that awaits ago may have changed.
@@ -441,17 +468,18 @@ async fn multi_edit_files(
   // is acceptable for the in-project repair case. `writes` is non-empty here (a
   // non-empty batch with no failures always renders at least one write), but
   // match defensively rather than index blindly.
-  let response = match writes {
-    [first, ..] =>
+  let response = match check_path {
+    Some(anchor) =>
       revert_guarded_response(
-        first.path,
+        anchor,
         writes,
         effective_revert_threshold(revert_when_errors_above),
         baseline,
         warnings_guard=revert_on_warnings,
         write_scope?,
       )
-    [] =>
+    // No file in a MoonBit project: nothing to check, the batch stands.
+    None =>
       @agent_tool.respond(
         success_summary(writes),
         brief=success_brief(writes),
@@ -677,7 +705,24 @@ async fn revert_guarded_response(
 ) -> @agent_tool.ToolAction {
   let summary = success_summary(writes)
   let brief = success_brief(writes)
-  let after = count_errors_or_none(check_path)
+  // `count_errors` folds a run that exited non-zero without an error
+  // diagnostic (a build plan moon could not make) into a zero-error tally;
+  // the error guard has always read it that way. The warning guard promised
+  // a verified batch, so for it that run is no verdict.
+  let after : @auto_check.CheckErrors? = match @auto_check.check(check_path) {
+    Checked(tally) => Some(tally)
+    Failed(code, tally) =>
+      if warnings_guard && baseline is Some(_) {
+        return reverted_unverified(
+          writes,
+          "moon check exited \{code} without diagnostics after the batch",
+          write_scope?,
+        )
+      } else {
+        Some(tally)
+      }
+    NotApplicable | Unavailable(_) => None
+  }
   guard after is Some(after) else {
     // Not a MoonBit project, or the check could not run. An unguarded batch
     // is kept exactly as applied, as before this guardrail existed. A
