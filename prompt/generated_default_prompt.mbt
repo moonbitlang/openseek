@@ -1300,8 +1300,8 @@ fn default_prompt() -> String {
     #|│       │   ├── vscode
     #|│       │   └── wasm
     #|│       └── tutorial
-    #|│           └── for-go-programmers
     #|├── examples
+    #|├── frontend-rabbita
     #|└── workflow
     #|```
     #|

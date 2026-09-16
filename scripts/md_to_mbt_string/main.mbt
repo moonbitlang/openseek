@@ -131,11 +131,13 @@ async fn expand_resource_layout(markdown : String, root : String) -> String {
       // A `_build` tree is what `moon run` leaves beside a script it was
       // pointed at (cram runs the bundled workflows that way); it is not part
       // of the resources and must not describe them to the model. The
-      // G-machine tutorial chapters stay on disk but are not worth a line of
-      // the prompt.
+      // G-machine and Go-programmer tutorials stay on disk but are not worth a
+      // line of the prompt: they walk a human through learning the language,
+      // while the model looks facts up in `language/` and `toolchain/`.
       if !name.has_prefix(".") &&
         name != "_build" &&
         !name.has_prefix("gmachine") &&
+        name != "for-go-programmers" &&
         @fs.kind("\{directory}/\{name}", follow_symlink=false) is Directory {
         directories.push(name)
       }
@@ -472,7 +474,7 @@ async test "output match detects unchanged generated file" {
 }
 
 ///|
-async test "resource layout is sorted, directory-only, skips build output and gmachine, and refreshed on changes" {
+async test "resource layout is sorted, directory-only, skips build output and tutorials, and refreshed on changes" {
   with_tmpdir(root => {
     @fs.mkdir("\{root}/workflow")
     @fs.mkdir("\{root}/aardvark")
@@ -497,11 +499,13 @@ async test "resource layout is sorted, directory-only, skips build output and gm
         #|after
       ),
     )
-    @fs.mkdir("\{root}/doc/moonbit/tutorial")
-    assert_true(
-      expand_resource_layout(template, root).contains("└── tutorial"),
-    )
-    @fs.rmdir("\{root}/doc/moonbit/tutorial")
+    // A tutorial directory is listed, but the two tutorials that only walk a
+    // human through learning the language are not: `tutorial` stays a leaf.
+    @fs.mkdir("\{root}/doc/moonbit/tutorial/for-go-programmers", recursive=true)
+    let with_tutorial = expand_resource_layout(template, root)
+    assert_true(with_tutorial.contains("└── tutorial"))
+    assert_false(with_tutorial.contains("for-go-programmers"))
+    @fs.rmdir("\{root}/doc/moonbit/tutorial", recursive=true)
     assert_false(expand_resource_layout(template, root).contains("tutorial"))
     // Prompts without the placeholder do not depend on a resources directory.
     assert_eq(
