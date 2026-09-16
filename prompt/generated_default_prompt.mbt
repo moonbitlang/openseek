@@ -16,42 +16,6 @@ fn default_prompt() -> String {
     #|
     #|# Part 1: Working With The Tools
     #|
-    #|## Bundled reference documentation
-    #|
-    #|When the environment section provides `OPENSEEK_REFERENCES`, it names this
-    #|installation's read-only `share/` resource directory. The official MoonBit
-    #|documentation (the moonbit-docs markdown build) lives under its `doc/moonbit/`
-    #|subdirectory. Treat it as the authoritative source for language,
-    #|standard-library, toolchain, and tutorial facts; look facts up instead of guessing.
-    #|
-    #|Directory layout relative to `OPENSEEK_REFERENCES`:
-    #|
-    #|```text
-    #|.
-    #|├── doc
-    #|│   └── moonbit
-    #|│       ├── example
-    #|│       │   ├── lambda
-    #|│       │   ├── myers-diff
-    #|│       │   ├── segment-tree
-    #|│       │   └── sudoku
-    #|│       ├── language
-    #|│       │   ├── attributes
-    #|│       │   └── error_codes
-    #|│       ├── toolchain
-    #|│       │   ├── moon
-    #|│       │   ├── moonide
-    #|│       │   ├── vscode
-    #|│       │   └── wasm
-    #|│       └── tutorial
-    #|│           └── for-go-programmers
-    #|├── examples
-    #|└── workflow
-    #|```
-    #|
-    #|Read references outside the workspace on demand: locate the relevant page under
-    #|`OPENSEEK_REFERENCES/doc/moonbit/`, then read a focused excerpt as described below.
-    #|
     #|## Reading files
     #|
     #|Read known files together immediately with `mbtx` and `@builtin/read.mbtx`;
@@ -871,24 +835,12 @@ fn default_prompt() -> String {
     #|pkgtype(kind: "executable")
     #|```
     #|
-    #|## Proton CLI Workflow
+    #|## Native Desktop Applications
     #|
-    #|- For MoonBit native desktop application tasks, use Proton unless the existing
-    #|  project or the user explicitly selects another framework.
-    #|- Use `proton_cli new` to create a project, `proton_cli dev` for development,
-    #|  `proton_cli build` for native builds, `proton_cli doctor` for project and
-    #|  environment diagnostics, and `proton_cli package` for distributable
-    #|  artifacts.
-    #|- Proton CLI projects are configured by `proton.project.json`. Set the child
-    #|  process working directory to the directory containing that file, or pass the
-    #|  command's explicit `--config` option; do not use the global `-C`/`--cwd`
-    #|  options and do not assume Proton searches parent directories.
-    #|- In `proton.project.json`, `backend.path` must identify the exact MoonBit
-    #|  working directory. Do not assume Proton searches parent directories for a
-    #|  `moon.work` or `moon.mod` file.
-    #|- Let `proton_cli dev` or `proton_cli cef setup` manage the shared CEF runtime
-    #|  and helper instead of assembling project-local runtime files.
-    #|- Read `proton_cli <command> --help` before using unfamiliar options.
+    #|For MoonBit native desktop application tasks, use Proton unless the existing
+    #|project or the user explicitly selects another framework. Before running
+    #|`proton_cli`, read `OPENSEEK_REFERENCES/desktop-proton/README.md`: it carries
+    #|the commands, the `proton.project.json` rules, and the CEF runtime policy.
     #|
     #|## Syntax And API Discipline
     #|
@@ -1316,6 +1268,46 @@ fn default_prompt() -> String {
     #|live or networked CLI tests opt-in, for example under `tests/live`.
     #|
     #|Report the commands actually run and any remaining caveats.
+    #|
+    #|## Bundled Reference Documentation
+    #|
+    #|When the environment section provides `OPENSEEK_REFERENCES`, it names this
+    #|installation's read-only `share/` resource directory. The official MoonBit
+    #|documentation (the moonbit-docs markdown build) lives under its `doc/moonbit/`
+    #|subdirectory. Treat it as the authoritative source for language,
+    #|standard-library, toolchain, and tutorial facts; look facts up instead of guessing.
+    #|`desktop-proton/README.md` covers the Proton CLI workflow for native desktop
+    #|applications.
+    #|
+    #|Directory layout relative to `OPENSEEK_REFERENCES`:
+    #|
+    #|```text
+    #|.
+    #|├── desktop-proton
+    #|├── doc
+    #|│   └── moonbit
+    #|│       ├── example
+    #|│       │   ├── lambda
+    #|│       │   ├── myers-diff
+    #|│       │   ├── segment-tree
+    #|│       │   └── sudoku
+    #|│       ├── language
+    #|│       │   ├── attributes
+    #|│       │   └── error_codes
+    #|│       ├── toolchain
+    #|│       │   ├── moon
+    #|│       │   ├── moonide
+    #|│       │   ├── vscode
+    #|│       │   └── wasm
+    #|│       └── tutorial
+    #|│           └── for-go-programmers
+    #|├── examples
+    #|└── workflow
+    #|```
+    #|
+    #|Read references outside the workspace on demand: locate the relevant page under
+    #|`OPENSEEK_REFERENCES/doc/moonbit/`, then read a focused excerpt with the
+    #|reading tools from Part 1.
     #|
   )
 }
