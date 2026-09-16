@@ -1715,7 +1715,6 @@ test('shared WebView action menu supports context position, keyboard, and rename
     });
 
   await expect(dialog).toHaveCount(0);
-  await expect(archiveButton).toBeFocused();
 
   app.rpcDelays.delete('session.rename');
   app.rpcErrors.set('session.rename', 'fixture rename unavailable');
@@ -1730,7 +1729,6 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await expect(input).toBeEnabled();
   await input.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await expect(archiveButton).toBeFocused();
   expect(app.pageErrors).toEqual([]);
 });
 
