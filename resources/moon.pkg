@@ -1,5 +1,5 @@
 import {
-  "bobzhang/openseek/env" @exe,
+  "moonbitlang/openseek/env" @exe,
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",
   "moonbitlang/x/path",

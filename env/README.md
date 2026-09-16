@@ -1,10 +1,10 @@
 # Executable paths
 
-Import `bobzhang/openseek/env` to locate the running program:
+Import `moonbitlang/openseek/env` to locate the running program:
 
 ```moonbit
 import {
-  "bobzhang/openseek/env" @exe,
+  "moonbitlang/openseek/env" @exe,
 }
 ```
 

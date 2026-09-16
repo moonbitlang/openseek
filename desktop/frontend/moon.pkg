@@ -1,7 +1,7 @@
 import {
   "openseek_desktop/frontend/sidebar/messages" @sidebar_messages,
   "openseek_desktop/frontend/i18n",
-  "bobzhang/openseek_protocol" @wire,
+  "moonbitlang/openseek_protocol" @wire,
   "openseek_desktop/frontend/jobs",
   "openseek_desktop/frontend/export_dialog",
   "openseek_desktop/frontend/github",

@@ -9,7 +9,7 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/commands",
   "openseek_desktop/protocol",
-  "bobzhang/openseek_protocol" @wire,
+  "moonbitlang/openseek_protocol" @wire,
 }
 
 supported_targets = "js"

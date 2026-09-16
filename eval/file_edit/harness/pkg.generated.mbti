@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/eval/file_edit/harness"
+package "moonbitlang/openseek/eval/file_edit/harness"
 
 import {
-  "bobzhang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek",
 }
 
 // Values

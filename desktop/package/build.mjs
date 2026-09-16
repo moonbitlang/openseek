@@ -290,12 +290,12 @@ class Build {
       const expected = join(this.repo, `_build/native/${profile}/build/openseek_desktop/backend/backend.exe`);
       await mkdir(dirname(expected), { recursive: true });
       await cp(host, expected);
-      return join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/bobzhang/openseek/cmd/openseek/openseek.exe`);
+      return join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/moonbitlang/openseek/cmd/openseek/openseek.exe`);
     }
     const warning = this.command === "windows" ? ["--warn-list", "-20"] : [];
     await this.commandRun("moon", ["build", ".", "--target", "native", ...warning, ...release], { cwd: this.backend });
     await this.commandRun("moon", ["build", "cmd/openseek", "--target", "native", ...release], { cwd: this.repo });
-    return join(this.repo, `_build/native/${profile}/build/bobzhang/openseek/cmd/openseek/openseek.exe`);
+    return join(this.repo, `_build/native/${profile}/build/moonbitlang/openseek/cmd/openseek/openseek.exe`);
   }
 
   async vendors() {
@@ -347,7 +347,7 @@ class Build {
     await cp(join(this.desktop, "index.html"), join(root, "web/index.html"));
     await cp(this.frontendBundle(profile), join(root, "web/frontend.js"));
     await cp(join(this.repo, "web/index.html"), join(root, "web/viz/index.html"));
-    await cp(join(this.repo, `_build/js/${profile}/build/bobzhang/openseek-viz-app/openseek-viz-app.js`), join(root, "web/viz/viz_app.js"));
+    await cp(join(this.repo, `_build/js/${profile}/build/moonbitlang/openseek-viz-app/openseek-viz-app.js`), join(root, "web/viz/viz_app.js"));
     await this.sharedWeb(join(root, "web"));
     const suffix = this.command === "windows" ? ".exe" : "";
     await cp(engine, join(root, `bin/openseek${suffix}`));

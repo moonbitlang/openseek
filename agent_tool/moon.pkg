@@ -1,6 +1,6 @@
 import {
-  "bobzhang/openseek/agent_tool/bgjobs",
-  "bobzhang/openseek/deepseek",
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek/deepseek",
   "moonbitlang/async",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",

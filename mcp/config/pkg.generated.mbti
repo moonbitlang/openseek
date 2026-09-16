@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/mcp/config"
+package "moonbitlang/openseek/mcp/config"
 
 import {
   "moonbitlang/core/debug",

@@ -59,7 +59,7 @@ test "percent_decode leaves malformed escapes verbatim" {
 test "module_root_from_exe recovers the checkout from a moon build path" {
   @debug.debug_inspect(
     module_root_from_exe(
-      "/Users/x/git/openseek/_build/native/release/build/bobzhang/inspect/inspect.exe",
+      "/Users/x/git/openseek/_build/native/release/build/moonbitlang/inspect/inspect.exe",
     ),
     content=(
       #|Some("/Users/x/git/openseek")
@@ -68,7 +68,7 @@ test "module_root_from_exe recovers the checkout from a moon build path" {
   // moon run from a sibling directory passes a relative exe path.
   @debug.debug_inspect(
     module_root_from_exe(
-      "../openseek/_build/native/release/build/bobzhang/inspect/inspect.exe",
+      "../openseek/_build/native/release/build/moonbitlang/inspect/inspect.exe",
     ),
     content=(
       #|Some("../openseek")
@@ -77,7 +77,7 @@ test "module_root_from_exe recovers the checkout from a moon build path" {
   // Run from the checkout root itself, the relative path has no prefix.
   @debug.debug_inspect(
     module_root_from_exe(
-      "_build/native/release/build/bobzhang/inspect/inspect.exe",
+      "_build/native/release/build/moonbitlang/inspect/inspect.exe",
     ),
     content=(
       #|Some(".")
@@ -112,11 +112,11 @@ test "asset candidates search cwd first, then the derived checkout" {
       #|[
       #|  "",
       #|  "web/viz_app.js",
-      #|  "_build/js/release/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
-      #|  "_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+      #|  "_build/js/release/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
+      #|  "_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
       #|  "/repo/web/viz_app.js",
-      #|  "/repo/_build/js/release/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
-      #|  "/repo/_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+      #|  "/repo/_build/js/release/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
+      #|  "/repo/_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
       #|]
     ),
   )
@@ -127,8 +127,8 @@ test "asset candidates search cwd first, then the derived checkout" {
       #|[
       #|  "/x/app.js",
       #|  "web/viz_app.js",
-      #|  "_build/js/release/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
-      #|  "_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+      #|  "_build/js/release/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
+      #|  "_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
       #|]
     ),
   )

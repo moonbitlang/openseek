@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/ptc"
+package "moonbitlang/openseek/agent_tool/ptc"
 
 import {
-  "bobzhang/openseek/agent_tool",
   "moonbitlang/async",
+  "moonbitlang/openseek/agent_tool",
 }
 
 // Values

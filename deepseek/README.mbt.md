@@ -6,7 +6,7 @@ testing compatible chat behavior without network access. The typed model list
 also covers Kimi K2.7 Code and Z.AI GLM 5.3 models where their request policies
 differ from DeepSeek's.
 
-The HTTP client lives in `bobzhang/openseek/deepseek/client`.
+The HTTP client lives in `moonbitlang/openseek/deepseek/client`.
 
 ## API Shape
 

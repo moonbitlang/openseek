@@ -1,15 +1,15 @@
 import {
   "moonbitlang/core/encoding/base64",
   "moonbitlang/x/uuid" @x_uuid,
-  "bobzhang/openseek/agent_runtime",
-  "bobzhang/openseek/agent_tool/internal/sandbox",
-  "bobzhang/openseek/agent_tool/shell_exec",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_tool/internal/sandbox",
+  "moonbitlang/openseek/agent_tool/shell_exec",
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "bobzhang/openseek_protocol" @protocol,
+  "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/async/process",
   "moonbitlang/core/env",
-  "bobzhang/openseek/agent_tool/internal/uuid",
+  "moonbitlang/openseek/agent_tool/internal/uuid",
 }
 
 warnings = "+unnecessary_annotation"

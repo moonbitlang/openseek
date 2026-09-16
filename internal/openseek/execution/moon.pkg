@@ -1,25 +1,25 @@
 import {
-  "bobzhang/openseek/agent_review",
-  "bobzhang/openseek/agent_runtime",
-  "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_subrun",
-  "bobzhang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_review",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_subrun",
+  "moonbitlang/openseek/agent_tool",
   "moonbitlang/async/aqueue",
   "moonbitlang/core/argparse",
   "moonbitlang/async",
-  "bobzhang/openseek/deepseek",
-  "bobzhang/openseek_protocol/emit",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol/emit",
   "moonbitlang/async/fs",
-  "bobzhang/openseek/agent_subrun/host",
+  "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/core/json",
-  "bobzhang/openseek/mcp/config" @mcpconfig,
-  "bobzhang/openseek/mcp/tools" @mcptools,
-  "bobzhang/openseek/internal/openseek/setup",
-  "bobzhang/openseek/agent_tool/web_search",
+  "moonbitlang/openseek/mcp/config" @mcpconfig,
+  "moonbitlang/openseek/mcp/tools" @mcptools,
+  "moonbitlang/openseek/internal/openseek/setup",
+  "moonbitlang/openseek/agent_tool/web_search",
 }
 
 import {
-  "bobzhang/openseek/internal/openseek/testkit",
+  "moonbitlang/openseek/internal/openseek/testkit",
 } for "wbtest"
 
 warnings = "+unnecessary_annotation"

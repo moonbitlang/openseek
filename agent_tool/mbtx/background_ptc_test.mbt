@@ -26,7 +26,7 @@ async test "default PTC survives background handoff and persists job-owned edit 
         )
         let output = dispatch(definition, {
           "source": (
-            #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+            #|import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
             #|async fn main {
             #|  @async.sleep(150)
             #|  let result = @tools.call("edit", { "path": "note.txt", "start_line": 1, "old_string": "before", "new_string": "after" })
@@ -102,7 +102,7 @@ async test "stopping a background PTC job joins its active tool before reporting
         )
         let output = dispatch(definition, {
           "source": (
-            #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+            #|import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
             #|async fn main { println(@tools.call("block", {}).content) }
           ),
         })
@@ -202,7 +202,7 @@ async test "background edits after foreground edits validate stale input and kee
         )
         let output = dispatch(background, {
           "source": (
-            #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+            #|import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
             #|async fn main {
             #|  ignore(@tools.call("wait", {}))
             #|  let result = @tools.call("edit", { "path": "note.txt", "start_line": 1, "old_string": "before", "new_string": "background" })
@@ -224,7 +224,7 @@ async test "background edits after foreground edits validate stale input and kee
         )
         let output = dispatch(foreground, {
           "source": (
-            #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+            #|import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
             #|async fn main {
             #|  let result = @tools.call("edit", { "path": "note.txt", "start_line": 1, "old_string": "before", "new_string": "foreground" })
             #|  if result.is_error { fail(result.content) }
@@ -309,7 +309,7 @@ async test "successful process exit with an unfinished RPC is reported as a fail
         )
         let output = dispatch(definition, {
           "source": (
-            #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+            #|import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
             #|async fn main {
             #|  @async.with_task_group(group => {
             #|    group.spawn_bg(() => ignore(@tools.call("block", {})), no_wait=true, allow_failure=true)
@@ -382,7 +382,7 @@ async test "handoff failure retains completed mutations and interrupts pending c
           ),
           {
             "source": (
-              #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+              #|import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
               #|async fn main {
               #|  let result = @tools.call("edit", { "path": "note.txt", "start_line": 1, "old_string": "before", "new_string": "after" })
               #|  if result.is_error { fail(result.content) }

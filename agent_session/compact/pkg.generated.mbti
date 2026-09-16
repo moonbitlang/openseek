@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_session/compact"
+package "moonbitlang/openseek/agent_session/compact"
 
 import {
-  "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_session/store",
-  "bobzhang/openseek/deepseek",
-  "bobzhang/openseek/deepseek/client",
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek/client",
 }
 
 // Values

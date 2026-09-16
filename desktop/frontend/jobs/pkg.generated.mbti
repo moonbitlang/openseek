@@ -2,10 +2,10 @@
 package "openseek_desktop/frontend/jobs"
 
 import {
-  "bobzhang/openseek_protocol",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/sub",
+  "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",

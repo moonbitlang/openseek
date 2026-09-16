@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/env"
+package "moonbitlang/openseek/env"
 
 import {
   "moonbitlang/async/os_error",

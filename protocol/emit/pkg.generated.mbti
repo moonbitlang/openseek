@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek_protocol/emit"
+package "moonbitlang/openseek_protocol/emit"
 
 import {
-  "bobzhang/openseek_protocol",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values

@@ -1,6 +1,6 @@
 # Goal Argument Decoder
 
-`bobzhang/openseek/agent_tool/goal/internal/decode` converts raw JSON tool
+`moonbitlang/openseek/agent_tool/goal/internal/decode` converts raw JSON tool
 arguments into a typed `GoalStatus` consumed by the parent `goal` package.
 The parent maps it to its own public `GoalStatus`, which keeps sibling packages
 from depending on this internal implementation package.

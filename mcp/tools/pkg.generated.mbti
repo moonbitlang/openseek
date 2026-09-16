@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/mcp/tools"
+package "moonbitlang/openseek/mcp/tools"
 
 import {
-  "bobzhang/openseek/agent_runtime",
-  "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/mcp",
-  "bobzhang/openseek/mcp/config",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/mcp",
+  "moonbitlang/openseek/mcp/config",
 }
 
 // Values

@@ -1,10 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/shell_exec"
+package "moonbitlang/openseek/agent_tool/shell_exec"
 
 import {
-  "bobzhang/openseek/agent_runtime",
   "moonbitlang/async/process",
   "moonbitlang/core/debug",
+  "moonbitlang/openseek/agent_runtime",
 }
 
 // Values

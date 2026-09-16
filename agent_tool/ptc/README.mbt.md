@@ -17,7 +17,7 @@ remain available.
 For example, pass this as `source` to mbtx:
 
 ```mbtx
-import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
 
 async fn main {
   let result = @tools.call("edit", {
@@ -32,7 +32,7 @@ async fn main {
 The SDK is an ordinary version-pinned package import. The host passes only the
 run-scoped connection capability; it does not insert imports, globals, helper
 functions, or types into the source. Saved source and compiler line numbers are
-unchanged. `bobzhang/openseek_tools@0.1.0` is published on Mooncakes and the
+unchanged. `moonbitlang/openseek_tools@0.1.0` is published on Mooncakes and the
 integration tests exercise this exact registry import.
 
 ## Results and search
@@ -49,7 +49,7 @@ SDK 0.1.0 also ships `@tools.edit` and friends as thin wrappers; 0.2.0 removes
 them in favor of `call`, so new scripts should use `call` directly.
 
 ```mbtx
-import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
 
 async fn main {
   let result = @tools.call("web_search", { "query": "MoonBit async task groups" })

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/eval/report"
+package "moonbitlang/openseek/eval/report"
 
 // Values
 pub async fn write_files(String, String, Json, html? : String) -> Unit

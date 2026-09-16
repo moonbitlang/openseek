@@ -2,7 +2,7 @@
 
 ## Architecture and standalone review
 
-1. **SDK — #1518, merged and published.** `bobzhang/openseek_tools@0.1.0`
+1. **SDK — #1518, merged and published.** `moonbitlang/openseek_tools@0.1.0`
    exposes `@tools.call("edit", arguments)`, `@tools.call("multi_edit", arguments)`,
    `@tools.call("web_search", arguments)`, and `@tools.call(name, arguments)`.
    Every arguments value is the same JSON object used by the direct tool.

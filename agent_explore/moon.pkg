@@ -1,9 +1,9 @@
 import {
-  "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_kind",
-  "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/agent_tool/mbtx",
-  "bobzhang/openseek/deepseek",
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_kind",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/mbtx",
+  "moonbitlang/openseek/deepseek",
   "moonbitlang/core/json",
 }
 

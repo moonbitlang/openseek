@@ -1,6 +1,6 @@
 # Edit Decode
 
-`bobzhang/openseek/agent_tool/edit/internal/decode` converts raw JSON tool
+`moonbitlang/openseek/agent_tool/edit/internal/decode` converts raw JSON tool
 arguments into the typed `EditInput` record consumed by the `edit` tool.
 
 This package is internal to `agent_tool/edit`. It owns only argument-shape

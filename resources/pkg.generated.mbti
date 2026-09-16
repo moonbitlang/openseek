@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/resources"
+package "moonbitlang/openseek/resources"
 
 // Values
 pub async fn directory() -> String?

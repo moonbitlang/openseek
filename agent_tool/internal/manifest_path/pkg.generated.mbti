@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/internal/manifest_path"
+package "moonbitlang/openseek/agent_tool/internal/manifest_path"
 
 // Values
 pub fn is_generated_mbti_path(String) -> Bool

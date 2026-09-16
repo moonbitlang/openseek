@@ -1,6 +1,6 @@
 # OpenSeek Agent
 
-`bobzhang/openseek/agent` is the native-only OpenSeek loop. It connects four
+`moonbitlang/openseek/agent` is the native-only OpenSeek loop. It connects four
 lower-level packages:
 
 - `agent_session`: immutable conversation state and model-message projection;
