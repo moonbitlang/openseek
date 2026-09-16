@@ -90,6 +90,7 @@ fn background_id(messages : String) -> String raise {
 ///|
 async fn run_case(
   executable : String,
+  root : String,
   scenario : Scenario,
 ) -> String? {
   let directory = @fs.tmpdir(prefix="openseek-turn-finish-")
@@ -151,13 +152,14 @@ async fn run_case(
                 }
               })
               assert_true(names.contains("mbtx") && !names.contains("read"))
-              assert_true(messages.contains("Bundled resources: "))
               assert_true(messages.contains("@builtin/read.mbtx"))
               assert_true(messages.contains("path:start:end"))
               match step {
                 1 =>
                   tool_delta(step, "mbtx", {
-                    "filename": "@builtin/read.mbtx",
+                    // The raw CLI build has no installed share directory.
+                    // Exercise reading with the checked-in workflow directly.
+                    "filename": root + "/share/workflow/read.mbtx",
                     "args": ["sample.mbt:2:3", "note.txt"],
                   })
                 2 => {
@@ -491,16 +493,17 @@ async fn main {
     fail("Usage: moon run tests/integration/turn_finish.mbtx EXE")
   }
   let executable = @fs.realpath(executable)
+  let root = @fs.realpath(".")
   let ids : Array[String] = []
   for scenario in [Run, Serve, Controls] {
-    guard run_case(executable, scenario) is Some(id) else {
+    guard run_case(executable, root, scenario) is Some(id) else {
       fail("Missing background job ID")
     }
     assert_true(!ids.contains(id))
     ids.push(id)
   }
   println("PASS: independent CLI processes allocate distinct compact UUID job IDs")
-  ignore(run_case(executable, Read))
+  ignore(run_case(executable, root, Read))
 }
 
 ///|

@@ -266,10 +266,7 @@ jobs:
         if: matrix.target == 'native'
         run: |
           moon build cmd/openseek --target native
-          # The raw build has no ../share beside its executable directory.
-          # Copy bin/ and share/ together so this tests the installed resource lookup.
-          node scripts/stage-cli.mjs _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
-          moon run tests/integration/turn_finish.mbtx .tmp/openseek/bin/openseek
+          moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
 
   # cmd/viz_app is a separate MoonBit module and owns its browser test runner.
   # Keep it out of Desktop's recipe so either application can be tested alone.

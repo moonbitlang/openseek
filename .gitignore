@@ -42,6 +42,3 @@ eval/ptc_prompt/__pycache__/
 # prebuilt the runtime is assembled from; the runtime itself lives in the
 # user-level cache the manifest points at.
 .proton/
-
-# Inspectable local CLI installations and verification artifacts.
-/.tmp/

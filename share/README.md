@@ -37,6 +37,6 @@ After manually changing resource directories, run `just prompt`.
 Packaging copies this checked-in tree directly into the application, independently
 of the MoonBit toolchain cache. It does not download documentation.
 
-For local CLI development, run `just cli` and use `.tmp/openseek/bin/openseek`
-(`openseek.exe` on Windows). This stages the same `bin/` and `share/` layout.
-Evaluation runners should receive this staged executable via `--engine`.
+A raw `moon build` output has no bundled resources unless `../share` exists
+relative to its executable directory. It can still run, but bundled documentation
+and `@builtin/` workflows are unavailable.

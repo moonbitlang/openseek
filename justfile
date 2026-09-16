@@ -45,8 +45,9 @@ test-cram:
     moon cram test tests/cram --shell '{{ CRAM_SHELL }}'
 
 # Real CLI lifecycle regression with an offline scripted model.
-test-turn-finish: cli
-    moon run tests/integration/turn_finish.mbtx .tmp/openseek/bin/{{ if os() == "windows" { "openseek.exe" } else { "openseek" } }}
+test-turn-finish:
+    moon build cmd/openseek --target native
+    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
 
 test-moon:
     moon test --target native
@@ -100,8 +101,3 @@ viz-test-browser:
 # Exercise bundled agent workflows against an offline child contract.
 test-workflows:
     moon run tests/integration/workflows
-
-# Build a CLI with executable-relative docs and workflows for local use/evals.
-cli:
-    moon build cmd/openseek --target native
-    node scripts/stage-cli.mjs _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
