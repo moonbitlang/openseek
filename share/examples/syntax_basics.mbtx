@@ -1,18 +1,14 @@
 ///|
-/// Syntax that differs from other languages: bindings, negation, empty
-/// values, match arms, and lambdas. This file is verified by CI
-/// (type-checked under deny-warn and run), so what it shows is what the
-/// compiler accepts today.
-
-///|
-/// Parameters and `self` are never `mut`: a function that needs a changed
+/// Parameters including `self` are never `mut`: a function that needs a changed
 /// value rebinds a local with `let mut`.
-fn clamp(x : Int, limit : Int) -> Int {
-  let mut value = x
-  if value > limit {
-    value = limit
+fn collatz_steps(start : Int) -> Int {
+  let mut value = start
+  let mut steps = 0
+  while value != 1 {
+    value = if value % 2 == 0 { value / 2 } else { 3 * value + 1 }
+    steps += 1
   }
-  value
+  steps
 }
 
 ///|
@@ -37,7 +33,8 @@ fn main raise {
     total += n
   }
   assert_eq(total, 6)
-  assert_eq(clamp(total, 5), 5)
+  assert_eq(total.clamp(min=0, max=5), 5)
+  assert_eq(collatz_steps(6), 8)
   let counter = { count: 0, step: 2 }
   counter.bump()
   assert_eq(counter.count, 2)
