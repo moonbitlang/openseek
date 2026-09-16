@@ -14,4 +14,4 @@ license = "Apache-2.0"
 
 description = "Typed engine event stream: the openseek run/serve stdout wire contract."
 
-warnings = "+implicit_impl_as_method+test_unqualified_package+unnecessary_annotation+unnecessary_view_op"
+warnings = "+implicit_impl_as_method+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+unqualified_local_using"

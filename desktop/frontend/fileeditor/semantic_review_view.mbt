@@ -1,7 +1,4 @@
 ///|
-using @cmd {trait Scheduler}
-
-///|
 /// The working-tree document behind Token/Tree's synthetic Modified models.
 /// Historical comparisons and a deleted working file deliberately carry no
 /// live document because current-checkout IDE requests would be misleading.

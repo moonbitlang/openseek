@@ -436,7 +436,7 @@ pub fn State::page(
   if workspace is Some(workspace) {
     topbar.push(
       @html.span(class="topbar-workspace", title=workspace.path, [
-        icon(icon_folder),
+        @icons.icon(@icons.icon_folder),
         @html.text((actions.workspace_label)(workspace)),
       ]),
     )
@@ -472,7 +472,7 @@ pub fn State::page(
         "Terminal requires an available Codex task placement"
       },
       on_click=actions.toggle_terminal,
-      icon(icon_terminal),
+      @icons.icon(@icons.icon_terminal),
     ),
   )
   // An open file panel carries its close toggle in the breadcrumb, matching
@@ -489,7 +489,7 @@ pub fn State::page(
           "Files require a Codex working directory"
         },
         on_click=actions.toggle_files,
-        icon(icon_layout_sidebar_right),
+        @icons.icon(@icons.icon_layout_sidebar_right),
       ),
     )
   }

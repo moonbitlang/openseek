@@ -8,9 +8,6 @@
 // swallowed so those surfaces never also act on them.
 
 ///|
-using @cmd {trait Scheduler}
-
-///|
 /// The picker's document-level capture subscription, active only while a
 /// picker is open — same lifetime rule as the shell's dismissal listeners.
 pub fn subscriptions(state : State?, emit : @cmd.Emit[Msg]) -> @sub.Sub {
@@ -26,7 +23,7 @@ priv suberror ProjectPickerCapture {
 ///|
 fn project_picker_capture_loader(
   payload : Error,
-  scheduler : &Scheduler,
+  scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
     ProjectPickerCapture(emit) => {

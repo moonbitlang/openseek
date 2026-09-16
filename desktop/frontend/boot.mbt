@@ -11,7 +11,7 @@ priv suberror AppShortcutSubscription {
 ///|
 fn app_shortcut_sub_loader(
   payload : Error,
-  scheduler : &Scheduler,
+  scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
     AppShortcutSubscription(emit) => {

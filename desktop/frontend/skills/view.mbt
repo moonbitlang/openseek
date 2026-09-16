@@ -26,7 +26,7 @@ fn installed_row(
     ),
   )
   let children : Array[@html.Html] = [
-    @html.div(class="skill-avatar", icon(icon_extensions)),
+    @html.div(class="skill-avatar", @icons.icon(@icons.icon_extensions)),
     @html.div(
       class="skill-info skill-summary",
       on_click=emit(PreviewInstalled(skill)),
@@ -102,7 +102,7 @@ fn market_row(
     ])
   }
   let children = [
-    @html.div(class="skill-avatar", icon(icon_extensions)),
+    @html.div(class="skill-avatar", @icons.icon(@icons.icon_extensions)),
     @html.div(
       class="skill-info skill-summary",
       on_click=emit(PreviewMarket(item)),
@@ -307,7 +307,7 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
       class="skills-search",
       attrs=@html.Attrs::build().data_set("focus-owner", ""),
       [
-        icon(icon_search),
+        @icons.icon(@icons.icon_search),
         @html.input(
           input_type=Search,
           value=state.query,
@@ -339,7 +339,9 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
       ),
     )
   }
-  sections.push(@settings.group(icon_extensions, "Installed", installed_rows))
+  sections.push(
+    @settings.group(@icons.icon_extensions, "Installed", installed_rows),
+  )
   let market_rows : Array[@html.Html] = []
   match state.catalog {
     Idle | Loading(_) =>
@@ -375,7 +377,7 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
   sections.push(
     @html.div(class="settings-group", [
       @html.div(class="settings-group-head", [
-        icon(icon_package),
+        @icons.icon(@icons.icon_package),
         @html.h2("Mooncakes registry"),
         @html.button(
           class="button secondary skills-refresh",

@@ -16,7 +16,7 @@ supported_targets = "+js+native+wasm"
 
 preferred_target = "js"
 
-warnings = "+prefer_readonly_array+implicit_impl_as_method+test_unqualified_package+unnecessary_annotation+unnecessary_view_op"
+warnings = "+prefer_readonly_array+implicit_impl_as_method+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+unqualified_local_using"
 
 import {
   "moonbit-community/cmark@0.4.5",

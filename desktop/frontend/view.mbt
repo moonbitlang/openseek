@@ -777,7 +777,7 @@ fn codex_account_rows(
             href=url,
             target=Blank,
             rel="noopener noreferrer",
-            [icon(icon_link_external), @html.span("Open")],
+            [@icons.icon(@icons.icon_link_external), @html.span("Open")],
           ),
           @html.button(
             class="button secondary",
@@ -859,7 +859,7 @@ fn remote_access_rows(
                   href=url,
                   target=Blank,
                   rel="noopener noreferrer",
-                  [icon(icon_link_external), @html.span("Open")],
+                  [@icons.icon(@icons.icon_link_external), @html.span("Open")],
                 ),
               ],
               desc="\{name} — open \{url} in a signed-in browser.",
@@ -1015,7 +1015,7 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @cmd.none
         }
       }),
-      [icon(icon_link_external), @html.span(label)],
+      [@icons.icon(@icons.icon_link_external), @html.span(label)],
     )
   }
   let step = fn(index : Int, text : String) -> @html.Html {
@@ -1209,14 +1209,14 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   ]
   let api_rows : Array[@html.Html] = api_settings_rows(dispatch, model)
   let groups : Array[@html.Html] = [
-    @settings.group(icon_sparkle, "Engine", engine_rows),
-    @settings.group(icon_key, "API", api_rows),
+    @settings.group(@icons.icon_sparkle, "Engine", engine_rows),
+    @settings.group(@icons.icon_key, "API", api_rows),
     @settings.group(
-      icon_extensions,
+      @icons.icon_extensions,
       "Codex",
       codex_account_rows(dispatch, model),
     ),
-    @settings.group(icon_layout, "Interface", [
+    @settings.group(@icons.icon_layout, "Interface", [
       @settings.row(
         "Follow-up messages",
         [
@@ -1387,13 +1387,13 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
     groups.push(
       @settings.group(
-        icon_link_external,
+        @icons.icon_link_external,
         "Remote access",
         remote_access_rows(dispatch, model),
       ),
     )
     groups.push(
-      @settings.group(icon_sync, "Updates", [
+      @settings.group(@icons.icon_sync, "Updates", [
         @settings.row(
           "Check for updates",
           update_check_controls(dispatch, model),
@@ -1481,7 +1481,7 @@ fn topbar_view(
   let workspace = conv.project()
   items.push(
     @html.span(class="topbar-workspace", title=workspace.path, [
-      icon(icon_folder),
+      @icons.icon(@icons.icon_folder),
       @html.text(@resource.label(workspace)),
     ]),
   )
@@ -1505,7 +1505,7 @@ fn topbar_view(
             archived: conv.is_archived_read_only(),
           }),
         ),
-        icon(icon_chat_export),
+        @icons.icon(@icons.icon_chat_export),
       ),
     )
   }
@@ -1524,7 +1524,7 @@ fn topbar_view(
         "Show terminal (Ctrl+`)"
       },
       on_click=toggle_terminal,
-      icon(icon_terminal),
+      @icons.icon(@icons.icon_terminal),
     ),
   )
   // Rightmost: the toggle for the whole right-hand panel — only while the
@@ -1537,7 +1537,7 @@ fn topbar_view(
         class="panel-toggle",
         title="Show panel",
         on_click=toggle_right_panel,
-        icon(icon_layout_sidebar_right),
+        @icons.icon(@icons.icon_layout_sidebar_right),
       ),
     )
   }
@@ -1891,7 +1891,7 @@ fn view(
       title=sidebar_toggle_label,
       on_click=dispatch(ToggleSidebar),
       attrs=@html.Attrs::build().aria_label(sidebar_toggle_label),
-      icon(icon_layout_sidebar_left),
+      @icons.icon(@icons.icon_layout_sidebar_left),
     ),
     sidebar_html,
     @html.div(class=content_class, [

@@ -1,7 +1,4 @@
 ///|
-using @cmd {trait Scheduler}
-
-///|
 extern "js" fn open_link_in_browser(url : String) -> Unit =
   #| (url) => {
   #|   let parsed;
