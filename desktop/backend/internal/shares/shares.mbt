@@ -86,36 +86,26 @@ async fn Snapshot::send(
   server_url~ : String,
   token~ : String,
 ) -> @protocol.SessionShareReply {
-  let client = @http.Client(server_url)
-  defer client.close()
-  let response = client.post("/v1/shares", self.body, extra_headers={
+  let (response, body) = @http.post("\{server_url}/v1/shares", self.body, headers={
     "Authorization": "Bearer \{token}",
     "Idempotency-Key": self.key,
     "Content-Type": "multipart/form-data; boundary=\{self.key}",
   })
-  // Bound response memory independently from the (much larger) upload limit.
-  let buffer = Buffer()
-  while client.read_some(max_len=8192) is Some(bytes) {
-    guard buffer.length() + bytes.length() <= 64 * 1024 else {
-      return @protocol.Failed(
-        message="The share server returned an oversized response.",
-      )
-    }
-    buffer.write_bytes(bytes)
-  }
   if response.code == 401 {
     return @protocol.SignInRequired
   }
+  if response.code == 404 {
+    // A device login can still point at a deployment without share routes.
+    return @protocol.Failed(
+      message="The signed-in server does not provide sharing at \{server_url}/v1/shares (HTTP 404). Sign in to a server with sharing enabled.",
+    )
+  }
   guard response.code is (200 | 201) else {
     // The API answers every rejection with `{ "error": message }`; only a
-    // proxy or a deployment without share routes answers without one. Never
-    // display an entire HTML/proxy response as an error.
-    let fallback = if response.code == 404 {
-      "The signed-in server does not provide sharing at \{server_url}/v1/shares (HTTP 404). Sign in to a server with sharing enabled."
-    } else {
-      "Sharing failed (HTTP \{response.code})."
-    }
-    let message = try @json.parse(@utf8.decode(buffer.to_bytes())) catch {
+    // proxy answers without one. Never display an entire HTML/proxy
+    // response as an error.
+    let fallback = "Sharing failed (HTTP \{response.code})."
+    let message = try body.json() catch {
       _ => fallback
     } noraise {
       { "error": String(detail), .. } if !detail.trim().is_empty() =>
@@ -125,7 +115,7 @@ async fn Snapshot::send(
     return @protocol.Failed(message~)
   }
   let invalid = "The share server did not return a valid share link."
-  try @json.parse(@utf8.decode(buffer.to_bytes())) catch {
+  try body.json() catch {
     _ => @protocol.Failed(message=invalid)
   } noraise {
     { "url": String(url), .. } => @protocol.Shared(url~)
