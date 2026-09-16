@@ -120,6 +120,19 @@ pub fn definition(
           ),
           "examples": [false],
         },
+        "revert_on_warnings": {
+          "type": "boolean",
+          "description": (
+            #|Post-write warning guard, off by default. moon check runs before the batch is
+            #|written (the baseline) and after it; if the batch introduced a warning the
+            #|tree did not have — by diagnostic identity (path, code, message), so line
+            #|shifts never count — every file is rolled back and the call returns is_error
+            #|with the introduced sites. Costs one extra moon check. If the tree cannot be
+            #|checked, a warning-guarded batch is not written. For a warning-fix loop that
+            #|needs to know WHICH fix misfired, prefer one guarded `edit` per diagnostic.
+          ),
+          "examples": [true],
+        },
       },
     }),
     execute=Async(arguments => {
@@ -159,6 +172,7 @@ async fn execute_with_workspace(
     return @agent_tool.respond(
       "error: multi_edit requires edits and/or edits_file (no edits were provided)",
       is_error=true,
+      data={ "outcome": "error" },
     )
   }
   multi_edit_files(
@@ -166,6 +180,7 @@ async fn execute_with_workspace(
     edits,
     args.revert_when_errors_above,
     revert_on_parse_errors=args.revert_on_parse_errors,
+    revert_on_warnings=args.revert_on_warnings,
     file_state~,
     write_scope?,
   )
@@ -259,6 +274,7 @@ async fn multi_edit_files(
   edits : Array[@decode.MultiEditItem],
   revert_when_errors_above : Int?,
   revert_on_parse_errors~ : Bool,
+  revert_on_warnings~ : Bool,
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
@@ -280,7 +296,9 @@ async fn multi_edit_files(
   // A file's edits must form one contiguous block so each file is read,
   // validated, and written exactly once.
   if check_contiguity(resolved) is Some(message) {
-    return @agent_tool.respond(message, is_error=true, brief~)
+    return @agent_tool.respond(message, is_error=true, brief~, data={
+      "outcome": "error",
+    })
   }
   let groups = group_contiguous(resolved)
   let failures : Array[EditFailure] = []
@@ -309,7 +327,12 @@ async fn multi_edit_files(
     prepared.push({ file: group.file, path: group.path, content, plans, })
   }
   if failures.length() > 0 {
-    return @agent_tool.respond(failure_report(failures), is_error=true, brief~)
+    return @agent_tool.respond(
+      failure_report(failures),
+      is_error=true,
+      brief~,
+      data=failures_data(failures),
+    )
   }
   // Render each file and run the write guard before touching disk, so a guarded
   // path aborts the whole batch instead of leaving earlier files written. The
@@ -348,7 +371,12 @@ async fn multi_edit_files(
     }
   }
   if failures.length() > 0 {
-    return @agent_tool.respond(failure_report(failures), is_error=true, brief~)
+    return @agent_tool.respond(
+      failure_report(failures),
+      is_error=true,
+      brief~,
+      data=failures_data(failures),
+    )
   }
   // Pre-write syntax gate over the rendered batch (see parse_gate.mbt): if
   // any edited `.mbt` file would gain new lex/parse errors, reject the whole
@@ -359,6 +387,30 @@ async fn multi_edit_files(
     parse_gate_batch_rejection(writes) is Some(rejection) {
     return rejection
   }
+  // The warning guard's baseline, measured before anything is written so a
+  // rollback never has to re-measure it. A tree that cannot be checked makes
+  // the guard a promise the tool cannot keep, so the batch is not written.
+  let baseline = if revert_on_warnings && writes is [first, ..] {
+    fn not_verified(reason : String) -> @agent_tool.ToolAction {
+      @agent_tool.respond(
+        "not applied: revert_on_warnings was requested, but moon check could not verify the tree (\{reason}); no files were changed",
+        is_error=true,
+        brief~,
+        data=batch_data("unverified", writes, { "reason": reason.to_json() }),
+      )
+    }
+
+    match @auto_check.check(first.path) {
+      Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
+      Checked(tally) => Some(tally)
+      NotApplicable => None
+      Unavailable(reason) => return not_verified(reason)
+      Failed(code, _) =>
+        return not_verified("moon check exited \{code} without diagnostics")
+    }
+  } else {
+    None
+  }
   for write in writes {
     // Containment re-check at the moment of writing: the batch gate above
     // decided on filesystem state that awaits ago may have changed.
@@ -368,6 +420,7 @@ async fn multi_edit_files(
         "error multi_editing \{write.path}: write blocked: \{reason}; earlier files in the batch may already be written",
         is_error=true,
         brief~,
+        data={ "outcome": "error", "partial": true },
       )
     }
     @fs.write_file(write.path, write.new_content, create_mode=CreateOrTruncate) catch {
@@ -377,6 +430,7 @@ async fn multi_edit_files(
           "error multi_editing \{write.path}: error writing file: \{error}; earlier files in the batch may already be written",
           is_error=true,
           brief~,
+          data={ "outcome": "error", "partial": true },
         )
     }
   }
@@ -393,10 +447,16 @@ async fn multi_edit_files(
         first.path,
         writes,
         effective_revert_threshold(revert_when_errors_above),
+        baseline,
+        warnings_guard=revert_on_warnings,
         write_scope?,
       )
     [] =>
-      @agent_tool.respond(success_summary(writes), brief=success_brief(writes))
+      @agent_tool.respond(
+        success_summary(writes),
+        brief=success_brief(writes),
+        data=batch_data("applied", writes, Map([])),
+      )
   }
   // Record each file's provenance and content digest AFTER the auto-revert guard
   // above, which may have rewritten some files back to their pre-batch content —
@@ -441,6 +501,7 @@ priv struct FileRejection {
   introduced : Int
   truncated : Bool
   section : String
+  errors : Array[@auto_check.ParseGateError]
 }
 
 ///|
@@ -500,6 +561,7 @@ async fn parse_gate_batch_rejection(
         introduced,
         truncated: gate.truncated,
         section: "\{write.path}: would gain \{bound}\{introduced} new parse error(s)\{pre_existing}:\n\{formatted.join("\n")}",
+        errors: gate.errors,
       })
       // One rejection per file: the first kind that regresses is enough.
       break
@@ -518,6 +580,33 @@ async fn parse_gate_batch_rejection(
       batch_reject_report(rejections, total~, any_truncated~),
       is_error=true,
       brief="multi_edit rejected (\{bound}\{total} parse error(s))",
+      data={
+        "outcome": "rejected",
+        "introduced": total.to_json(),
+        "files": Json::array(
+          [
+            for rejection in rejections => {
+              {
+                "path": rejection.path.to_json(),
+                "introduced": rejection.introduced.to_json(),
+                "parse_errors": Json::array(
+                  [
+                    for
+                      error in rejection.errors[:rejection.errors
+                      .length()
+                      .min(IntroducedDisplayLimit)] => {
+                      {
+                        "loc": error.loc.to_json(),
+                        "message": error.message.to_json(),
+                      }
+                    }
+                  ],
+                ),
+              }
+            }
+          ],
+        ),
+      },
     ),
   )
 }
@@ -570,94 +659,383 @@ fn effective_revert_threshold(requested : Int?) -> Int {
 }
 
 ///|
-/// Run `moon check` over the just-written batch and decide whether to keep it
-/// or roll it back. Keeps the batch (reporting honestly when sub-threshold
-/// errors remain) unless it introduced more than `threshold` NEW errors versus
-/// the pre-batch baseline; the baseline is measured lazily — only when the
-/// after-check already breaches the threshold — by restoring the originals,
-/// re-checking, then either staying reverted or re-applying.
+/// The post-write guards over the written batch: the error threshold
+/// (`revert_when_errors_above`) and, when asked for, the warning guard, each
+/// with `moon check` feedback. With a pre-batch `baseline` in hand the error
+/// guard decides without touching the tree; without one it measures the
+/// baseline lazily — only when the after-check already breaches the threshold
+/// — by restoring the originals, re-checking, then either staying reverted or
+/// re-applying. The warning guard always has a baseline: it was measured
+/// before the write, or the batch was not written.
 async fn revert_guarded_response(
   check_path : String,
   writes : Array[PreparedWrite],
   threshold : Int,
+  baseline : @auto_check.CheckErrors?,
+  warnings_guard~ : Bool,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   let summary = success_summary(writes)
-  let kept = @agent_tool.respond(summary, brief=success_brief(writes))
+  let brief = success_brief(writes)
   let after = count_errors_or_none(check_path)
-  // Not a MoonBit project, or the check could not run: keep the batch exactly
-  // as applied, just as before this guardrail existed.
-  guard after is Some(after) else { return kept }
-  if after.error_count <= threshold {
+  guard after is Some(after) else {
+    // Not a MoonBit project, or the check could not run. An unguarded batch
+    // is kept exactly as applied, as before this guardrail existed. A
+    // warning-guarded one measured a baseline, so the tree IS checkable and a
+    // check that then fails is not a verdict: roll back rather than keep the
+    // batch unverified.
+    if warnings_guard && baseline is Some(_) {
+      return reverted_unverified(
+        writes,
+        "moon check could not verify the tree after the batch",
+        write_scope?,
+      )
+    }
     return @agent_tool.respond(
-      keep_response(summary, after, threshold),
-      brief=success_brief(writes),
+      summary,
+      brief~,
+      data=batch_data("applied", writes, Map([])),
     )
   }
-  // Suspicious: the post-batch error count is over the line. Measure the
-  // pre-batch baseline by restoring the originals and re-checking, so the guard
-  // fires on errors this batch INTRODUCED, not on ones that were already there.
+  // The error guard.
+  let mut introduced_errors : Int? = None
+  let mut baseline_note = ""
+  if after.error_count > threshold {
+    match baseline {
+      Some(before) => {
+        let introduced = after.error_count - before.error_count
+        if introduced > threshold {
+          let restore_failures = write_files(
+            writes,
+            write => write.original_content,
+            write_scope?,
+          )
+          let evidence = gather_comparability(
+            check_path,
+            Some(before),
+            after,
+            writes,
+          )
+          return reverted_by_errors(
+            writes,
+            after,
+            introduced~,
+            threshold~,
+            restore_failures~,
+            evidence~,
+          )
+        }
+        introduced_errors = Some(introduced)
+      }
+      None => {
+        // Suspicious: the post-batch error count is over the line. Measure the
+        // pre-batch baseline by restoring the originals and re-checking, so the
+        // guard fires on errors this batch INTRODUCED, not on ones that were
+        // already there.
+        let restore_failures = write_files(
+          writes,
+          write => write.original_content,
+          write_scope?,
+        )
+        let before = count_errors_or_none(check_path)
+        let before_count = before.map(b => b.error_count).unwrap_or(0)
+        let introduced = after.error_count - before_count
+        if introduced > threshold {
+          // Over the line by count. Stay reverted (the originals are already
+          // back on disk) — but the count alone cannot tell breakage from the
+          // build merely reaching further, so the report carries the
+          // identity/location evidence and, when it points at the latter, the
+          // value that admits this batch.
+          let evidence = gather_comparability(check_path, before, after, writes)
+          return reverted_by_errors(
+            writes,
+            after,
+            introduced~,
+            threshold~,
+            restore_failures~,
+            evidence~,
+          )
+        }
+        // False alarm: the errors were mostly pre-existing. Re-apply and keep
+        // — but claim success only when every file actually made it back. A
+        // failed restore skewed the baseline this decision used, and a failed
+        // re-apply (IO fault, or a path whose resolution fell out of scope
+        // mid-flight) leaves a mixed tree; both must reach the model, not
+        // vanish into a success summary.
+        let reapply_failures = write_files(
+          writes,
+          write => write.new_content,
+          write_scope?,
+        )
+        if reapply_failures.length() > 0 {
+          // Final contents are uncertain: these files may still hold their
+          // pre-batch text.
+          return @agent_tool.respond(
+            "error multi_editing: the batch was kept, but re-applying it did not fully succeed — these files may not hold the batch content: \{reapply_failures.join(", ")}; re-read them before further edits",
+            is_error=true,
+            brief="multi_edit partially re-applied",
+            data=batch_data("error", writes, {
+              "partial": true,
+              "reapply_failures": string_array(reapply_failures),
+            }),
+          )
+        }
+        if restore_failures.length() > 0 {
+          // Every final write landed, so the tree holds the batch — but the
+          // baseline this keep decision compared against was measured with
+          // these files unrestored, so the decision itself deserves the caveat.
+          baseline_note = "\nnote: the pre-batch baseline was measured with \{restore_failures.length()} file(s) unrestored (\{restore_failures.join(", ")}), so the introduced-error count may be understated"
+        }
+        introduced_errors = Some(introduced)
+      }
+    }
+  }
+  // The warning guard: identity comparison against the pre-batch baseline.
+  if warnings_guard && baseline is Some(before) {
+    if after.truncated {
+      return reverted_unverified(writes, TruncatedCapture, write_scope?)
+    }
+    let delta = @auto_check.introduced(before, after)
+    if !delta.warnings.is_empty() {
+      let restore_failures = write_files(
+        writes,
+        write => write.original_content,
+        write_scope?,
+      )
+      return reverted_by_warnings(
+        writes,
+        before,
+        after,
+        delta,
+        restore_failures~,
+      )
+    }
+  }
+  let extra : Map[String, Json] = {
+    "check": after.to_json(),
+    "threshold": threshold.to_json(),
+  }
+  if introduced_errors is Some(introduced) {
+    extra["introduced_errors"] = introduced.to_json()
+  }
+  if baseline is Some(before) {
+    extra["baseline"] = baseline_json(before)
+  }
+  @agent_tool.respond(
+    keep_response(summary, after, threshold, introduced?=introduced_errors) +
+    baseline_note,
+    brief~,
+    data=batch_data("applied", writes, extra),
+  )
+}
+
+///|
+/// Why a guard cannot compare an overflowed capture: the lists are then
+/// windows onto moon's output, and a site can enter one without being new.
+const TruncatedCapture : String = "moon check produced more output than the capture budget, so the guard cannot compare the two runs"
+
+///|
+/// How many introduced sites a warning revert lists, in text and data.
+const IntroducedDisplayLimit : Int = 20
+
+///|
+/// The batch is on disk but its post-batch check could not be trusted: roll
+/// everything back and say why.
+async fn reverted_unverified(
+  writes : Array[PreparedWrite],
+  reason : String,
+  write_scope? : @write_scope.WriteScope,
+) -> @agent_tool.ToolAction {
   let restore_failures = write_files(
     writes,
     write => write.original_content,
     write_scope?,
   )
-  let before = count_errors_or_none(check_path)
-  let before_count = before.map(b => b.error_count).unwrap_or(0)
-  let introduced = after.error_count - before_count
-  if introduced > threshold {
-    // Over the line by count. Stay reverted (the originals are already back on
-    // disk) — but the count alone cannot tell breakage from the build merely
-    // reaching further, so the report carries the identity/location evidence
-    // and, when it points at the latter, the value that admits this batch.
-    let evidence = gather_comparability(check_path, before, after, writes)
-    @agent_tool.respond(
-      revert_report(
-        writes,
-        after,
-        introduced~,
-        threshold~,
-        restore_failures~,
-        evidence~,
-      ),
-      is_error=true,
-      brief="multi_edit reverted (\{introduced} new error(s))",
-    )
-  } else {
-    // False alarm: the errors were mostly pre-existing. Re-apply and keep —
-    // but claim success only when every file actually made it back. A failed
-    // restore skewed the baseline this decision used, and a failed re-apply
-    // (IO fault, or a path whose resolution fell out of scope mid-flight)
-    // leaves a mixed tree; both must reach the model, not vanish into a
-    // success summary.
-    let reapply_failures = write_files(
+  @agent_tool.respond(
+    "reverted: \{reason} (revert_on_warnings), so all \{writes.length()} file(s) were rolled back to their pre-batch contents.\{restore_note(restore_failures)}",
+    is_error=true,
+    brief="multi_edit reverted (unverified)",
+    data=batch_data("reverted", writes, {
+      "reason": "unverified",
+      "restore_failures": string_array(restore_failures),
+    }),
+  )
+}
+
+///|
+/// The error guard fired: the existing revert report, plus the evidence as
+/// data so a script can branch on the verdict without parsing prose.
+fn reverted_by_errors(
+  writes : Array[PreparedWrite],
+  after : @auto_check.CheckErrors,
+  introduced~ : Int,
+  threshold~ : Int,
+  restore_failures~ : Array[String],
+  evidence~ : Comparability,
+) -> @agent_tool.ToolAction {
+  let verdict = evidence.verdict()
+  let extra : Map[String, Json] = {
+    "reason": "introduced_errors",
+    "check": after.to_json(),
+    "introduced_errors": introduced.to_json(),
+    "threshold": threshold.to_json(),
+    "verdict": verdict.name().to_json(),
+    "new_in_edited": string_array(evidence.new_in_edited),
+    "new_breaking": string_array(evidence.new_breaking),
+    "new_in_dependents": string_array(evidence.new_in_dependents),
+    "new_independent": evidence.new_independent.to_json(),
+    "restore_failures": string_array(restore_failures),
+  }
+  if verdict is Inconclusive(reason) {
+    extra["verdict_reason"] = reason.to_json()
+  }
+  if evidence.before_count is Some(count) {
+    extra["baseline_error_count"] = count.to_json()
+  }
+  if verdict is (CertifiedReach | PlausibleReach) &&
+    introduced <= HostMaxRevertThreshold {
+    extra["reissue_with"] = introduced.to_json()
+  }
+  @agent_tool.respond(
+    revert_report(
       writes,
-      write => write.new_content,
-      write_scope?,
-    )
-    if reapply_failures.length() > 0 {
-      // Final contents are uncertain: these files may still hold their
-      // pre-batch text.
-      @agent_tool.respond(
-        "error multi_editing: the batch was kept, but re-applying it did not fully succeed — these files may not hold the batch content: \{reapply_failures.join(", ")}; re-read them before further edits",
-        is_error=true,
-        brief="multi_edit partially re-applied",
-      )
-    } else if restore_failures.length() > 0 {
-      // Every final write landed, so the tree holds the batch — but the
-      // baseline this keep decision compared against was measured with these
-      // files unrestored, so the decision itself deserves the caveat.
-      @agent_tool.respond(
-        keep_response(summary, after, threshold, introduced~) +
-        "\nnote: the pre-batch baseline was measured with \{restore_failures.length()} file(s) unrestored (\{restore_failures.join(", ")}), so the introduced-error count may be understated",
-        brief=success_brief(writes),
-      )
-    } else {
-      @agent_tool.respond(
-        keep_response(summary, after, threshold, introduced~),
-        brief=success_brief(writes),
-      )
-    }
+      after,
+      introduced~,
+      threshold~,
+      restore_failures~,
+      evidence~,
+    ),
+    is_error=true,
+    brief="multi_edit reverted (\{introduced} new error(s))",
+    data=batch_data("reverted", writes, extra),
+  )
+}
+
+///|
+/// The warning guard fired: the batch is rolled back and the introduced
+/// warnings are listed, with the reach caveat when the baseline had errors.
+fn reverted_by_warnings(
+  writes : Array[PreparedWrite],
+  before : @auto_check.CheckErrors,
+  after : @auto_check.CheckErrors,
+  delta : @auto_check.Introduced,
+  restore_failures~ : Array[String],
+) -> @agent_tool.ToolAction {
+  let count = delta.warnings.length()
+  let shown = [
+    for site in delta.warnings[:count.min(IntroducedDisplayLimit)] => site
+  ]
+  let head = "reverted: applied \{total_edit_count(writes)} edit(s) across \{writes.length()} file(s), but moon check then reported \{count} warning(s) the tree did not have (revert_on_warnings); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
+  let listed = "\nintroduced:\n" +
+    [ for site in shown => site.line() ].join("\n")
+  let more = if count > shown.length() {
+    "\n… \{count - shown.length()} more"
+  } else {
+    ""
+  }
+  let reach_caveat = before.error_count > 0
+  let caveat = if reach_caveat {
+    "\nnote: the baseline already had \{before.error_count} error(s); moon skips the dependents of a failing package, so a batch that lets the build reach further can surface warnings that were always there."
+  } else {
+    ""
+  }
+  @agent_tool.respond(
+    "\{head}\{listed}\{more}\{caveat}\{restore_note(restore_failures)}",
+    is_error=true,
+    brief="multi_edit reverted (\{count} new warning(s))",
+    data=batch_data("reverted", writes, {
+      "reason": "introduced_warnings",
+      "check": after.to_json(),
+      "baseline": baseline_json(before),
+      "reach_caveat": reach_caveat.to_json(),
+      "introduced": {
+        "errors": [],
+        "warnings": Json::array([ for site in shown => site.to_json() ]),
+        "complete": true,
+      },
+      "restore_failures": string_array(restore_failures),
+    }),
+  )
+}
+
+///|
+fn restore_note(restore_failures : Array[String]) -> String {
+  if restore_failures.is_empty() {
+    ""
+  } else {
+    "\nWARNING: could not restore \{restore_failures.length()} file(s): \{restore_failures.join(", ")} — inspect them manually."
+  }
+}
+
+///|
+/// The result's machine-readable `data`: the outcome, the files the batch
+/// covers with their edit counts, and whatever the outcome adds.
+fn batch_data(
+  outcome : String,
+  writes : Array[PreparedWrite],
+  extra : Map[String, Json],
+) -> Json {
+  let fields : Map[String, Json] = {
+    "outcome": outcome.to_json(),
+    "files": Json::array(
+      [
+        for write in writes => {
+          { "path": write.path.to_json(), "edits": write.edit_count.to_json() }
+        }
+      ],
+    ),
+    "edit_count": total_edit_count(writes).to_json(),
+  }
+  for key, value in extra {
+    fields[key] = value
+  }
+  Json::object(fields)
+}
+
+///|
+/// Pre-write validation failed: nothing was written, and each problem names
+/// the file, the edit index (absent for a file-level problem), and the range.
+fn failures_data(failures : Array[EditFailure]) -> Json {
+  {
+    "outcome": "failed",
+    "failures": Json::array(
+      [
+        for failure in failures => {
+          let fields : Map[String, Json] = { "file": failure.file.to_json() }
+          if failure.index is Some(index) {
+            fields["index"] = index.to_json()
+          }
+          fields["range"] = failure.range.to_json()
+          fields["message"] = failure.message.to_json()
+          Json::object(fields)
+        }
+      ],
+    ),
+  }
+}
+
+///|
+fn string_array(items : Array[String]) -> Json {
+  Json::array([ for item in items => item.to_json() ])
+}
+
+///|
+fn baseline_json(before : @auto_check.CheckErrors) -> Json {
+  {
+    "error_count": before.error_count.to_json(),
+    "warning_count": before.warning_count.to_json(),
+  }
+}
+
+///|
+/// The verdict's name in `data`, one word per outcome.
+fn Verdict::name(self : Verdict) -> String {
+  match self {
+    OverMatch => "over_match"
+    Breakage => "breakage"
+    Inconclusive(_) => "inconclusive"
+    CertifiedReach => "certified_reach"
+    PlausibleReach => "plausible_reach"
   }
 }
 
@@ -2045,6 +2423,7 @@ test "batch_reject_report caps detailed files and labels lower bounds" {
           introduced: 1,
           truncated: index == 0,
           section: "lib/f\{index}.mbt: would gain 1 new parse error(s):\nlib/f\{index}.mbt:1:1: e",
+          errors: [],
         } : FileRejection)
     }
   ]

@@ -84,6 +84,7 @@ At least one of `edits` / `edits_file` must yield a non-empty batch.
 | `edits[i].new_string` | string | yes | Replacement text. It must differ from `old_string`. |
 | `edits[i].start_line` | integer | yes | 1-based first line of this edit's search range. The first match at or after this line is replaced. |
 | `edits[i].end_line` | integer | no | Optional 1-based last line of this edit's search range. Defaults to the file end. |
+| `revert_on_warnings` | boolean | no (default `false`) | Post-write warning guard. `moon check` runs before the batch is written and after it; if the batch introduced a warning the tree did not have (by diagnostic identity: path, code, message) every file is rolled back and the call returns `is_error` with the introduced sites. If the tree cannot be checked, a warning-guarded batch is not written. |
 
 ## Action
 
@@ -99,6 +100,21 @@ original edit index:
 - `"error multi_editing: edits for <file> must be contiguous; it reappears at edit[2] after another file's edits; list all edits for a file together"`
 - `"error: multi_edit requires arguments.edits[0].start_line to be an integer"` — a present field has the wrong type.
 - `"error: multi_edit requires arguments.edits[0] to include start_line (present keys: file, line, new_string, old_string)"` — a required field is absent; the present keys are listed so a misnamed key (here `line` instead of `start_line`) is obvious.
+- `"reverted: applied <n> edit(s) across <m> file(s), but moon check then reported <k> warning(s) the tree did not have (revert_on_warnings); ..."` — the warning guard rolled the batch back; the body lists the introduced sites.
+
+Every response also carries `data` (never shown to the model; returned to
+PTC scripts and kept in the transcript): `outcome` is one of `applied`,
+`reverted`, `rejected`, `failed`, `unverified`, `error`, with `files`
+(`path`, `edits`) and `edit_count` once the batch was prepared. An applied
+batch in a MoonBit project adds `check` (counts plus up to 200 error and
+warning sites) and `threshold`; a reverted one adds `reason`
+(`introduced_errors`, `introduced_warnings`, `unverified`), the post-batch
+`check`, and for the error guard the comparability `verdict`
+(`over_match`, `breakage`, `inconclusive` with `verdict_reason`,
+`certified_reach`, `plausible_reach`), its site lists, and `reissue_with`
+when a reach verdict names the value that admits the unchanged batch; a
+failed batch adds `failures` (`file`, `index`, `range`, `message`); a
+rejected one adds per-file `parse_errors`.
 
 ```moonbit check
 ///|

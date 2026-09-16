@@ -26,6 +26,9 @@ pub struct MultiEditArgs {
   // Pre-write syntax gate (default true): reject the batch when any edited
   // `.mbt` file would gain new lex/parse errors.
   revert_on_parse_errors : Bool
+  // Post-write warning guard (default false): roll the batch back when it
+  // introduced a warning the tree did not have.
+  revert_on_warnings : Bool
 } derive(Debug)
 
 ///|
@@ -68,7 +71,18 @@ pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
         { "revert_on_parse_errors": false, .. } => false
         _ => fail("arguments.revert_on_parse_errors to be a boolean")
       }
-      { inline, edits_file, revert_when_errors_above, revert_on_parse_errors, }
+      let revert_on_warnings = match fields {
+        { "revert_on_warnings"? : Some(false) | Some(Null) | None, .. } => false
+        { "revert_on_warnings": true, .. } => true
+        _ => fail("arguments.revert_on_warnings to be a boolean")
+      }
+      {
+        inline,
+        edits_file,
+        revert_when_errors_above,
+        revert_on_parse_errors,
+        revert_on_warnings,
+      }
     }
     _ => fail("object arguments")
   }
