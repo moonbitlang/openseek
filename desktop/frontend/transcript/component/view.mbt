@@ -320,7 +320,7 @@ fn tool_request_view(
       _ =>
         match fields.get("filename") {
           Some(String(filename)) if !filename.is_blank() =>
-            "\{label} · \{filename.clamped_view(end=MAX_CHIP_CHARS)}"
+            "\{label} · \{filename[:MAX_CHIP_CHARS]}"
           _ => label
         }
     }
@@ -550,7 +550,7 @@ fn result_row_view(
 ///|
 /// Clamp tool arguments or output around skip markers before constructing the
 /// transcript DOM. The code-unit bound handles huge single-line JSON payloads;
-/// the line bound keeps logs readable. `clamped_view` keeps cuts out of UTF-16
+/// the line bound keeps logs readable. Slicing keeps cuts out of UTF-16
 /// surrogate pairs. The transcript remains the only scroll area, so bounded
 /// payloads grow the page instead of adding a nested scrollbar.
 ///
@@ -565,10 +565,8 @@ fn truncate_output(content : String, line_prefix_width? : Int = 0) -> String {
     code_unit_head_limit + code_unit_tail_limit {
     content
   } else {
-    let head = content.clamped_view(end=code_unit_head_limit)
-    let tail = content.clamped_view(
-      start=content.length() - code_unit_tail_limit,
-    )
+    let head = content[:code_unit_head_limit]
+    let tail = content[content.length() - code_unit_tail_limit:]
     let retained_tail = restore_retained_tail_prefix(
       content, tail, line_prefix_width,
     )
@@ -596,7 +594,7 @@ fn truncate_output(content : String, line_prefix_width? : Int = 0) -> String {
 /// line. If the cut itself bisects the prefix, discard the retained suffix of
 /// the old prefix before prepending the whole one, so `+ text` cannot become
 /// `+  text`. `tail` is a suffix view of `content`, so its start is recovered
-/// from their lengths after `clamped_view` has made the UTF-16 boundary safe.
+/// from their lengths after slicing has made the UTF-16 boundary safe.
 fn restore_retained_tail_prefix(
   content : String,
   tail : StringView,
@@ -606,24 +604,21 @@ fn restore_retained_tail_prefix(
     return tail.to_owned()
   }
   let tail_start = content.length() - tail.length()
-  let line_start = match content.clamped_view(end=tail_start).rev_find("\n") {
+  let line_start = match content[:tail_start].rev_find("\n") {
     Some(index) => index + 1
     None => 0
   }
   if line_start == tail_start {
     return tail.to_owned()
   }
-  let prefix = content.clamped_view(
-    start=line_start,
-    end=line_start + line_prefix_width,
-  )
+  let prefix = content[line_start:line_start + line_prefix_width]
   let prefix_end = line_start + prefix.length()
   let overlap = if tail_start < prefix_end {
     prefix_end - tail_start
   } else {
     0
   }
-  prefix.to_owned() + tail.clamped_view(start=overlap).to_owned()
+  prefix.to_owned() + tail[overlap:].to_owned()
 }
 
 ///|

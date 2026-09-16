@@ -1290,7 +1290,7 @@ fn cap_build_notes(notes : String) -> String {
   if notes.length() <= BuildNotesCapChars {
     notes
   } else {
-    "\{notes.clamped_view(end=BuildNotesCapChars)}\n[mbtx: build warnings truncated at \{BuildNotesCapChars} characters]"
+    "\{notes[:BuildNotesCapChars]}\n[mbtx: build warnings truncated at \{BuildNotesCapChars} characters]"
   }
 }
 
@@ -1599,9 +1599,7 @@ async fn denial_scan_region(
       if reports_denial(carry) {
         return true
       }
-      carry = carry
-        .clamped_view(start=carry.length() - DenialScanCarryTailChars)
-        .to_owned()
+      carry = carry[carry.length() - DenialScanCarryTailChars:].to_owned()
     }
   }
   reports_denial(carry)

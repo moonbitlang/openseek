@@ -365,7 +365,7 @@ fn short_text(text : String) -> String {
   if squashed.length() <= 160 {
     squashed
   } else {
-    "\{squashed.clamped_view(end=160)}..."
+    "\{squashed[:160]}..."
   }
 }
 

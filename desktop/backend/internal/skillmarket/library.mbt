@@ -79,7 +79,7 @@ fn slugify(name : String) -> String {
   }
   let slug = builder.to_string()
   if slug.length() > 64 {
-    slug.clamped_view(end=64).to_owned()
+    slug[:64].to_owned()
   } else {
     slug
   }

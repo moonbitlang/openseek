@@ -1066,7 +1066,7 @@ fn clamp_tool_result_content(content : String) -> String {
   // the per-call figure soft_batch_fits budgets with.
   let marker = tool_result_truncation_marker
   let body_budget = max_tool_result_chars - marker.length()
-  "\{content.clamped_view(end=body_budget)}\{marker}"
+  "\{content[:body_budget]}\{marker}"
 }
 
 ///|

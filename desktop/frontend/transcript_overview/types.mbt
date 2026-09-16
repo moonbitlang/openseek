@@ -48,7 +48,7 @@ pub fn TurnKey::from_anchor(id : String) -> TurnKey? {
 ///|
 fn ordinal_after(id : String, prefix : String) -> Int? {
   guard id.has_prefix(prefix) else { return None }
-  let digits = id.clamped_view(start=prefix.length())
+  let digits = id[prefix.length():]
   let value = @string.parse_int(digits) catch { _ => return None }
   Some(value)
 }

@@ -43,9 +43,9 @@ pub fn Snapshot::Snapshot(
 ) -> Snapshot raise ShareError {
   // The API limits the title to 1024 UTF-8 bytes, and a generated title may
   // be the entire first prompt. A UTF-16 code unit encodes to at most three
-  // UTF-8 bytes, so 341 units can never exceed the limit; clamped_view keeps
+  // UTF-8 bytes, so 341 units can never exceed the limit; the slice keeps
   // surrogate pairs whole. The HTML and JSON retain the complete records.
-  let title = title.trim().clamped_view(end=1024 / 3).to_owned()
+  let title = title.trim()[:1024 / 3].to_owned()
   guard !title.is_empty() else { raise EmptyTitle }
   guard @entropy.random_hex(32) is Some(key) else { raise EntropyUnavailable }
   let body = @utf8.encode(

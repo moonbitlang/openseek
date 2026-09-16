@@ -678,7 +678,7 @@ fn preview_display_line(text : String) -> String {
   if text.length() <= PreviewLineDisplayCap {
     return text
   }
-  "\{text.clamped_view(end=PreviewLineDisplayCap)}…"
+  "\{text[:PreviewLineDisplayCap]}…"
 }
 
 ///|

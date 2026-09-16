@@ -594,7 +594,7 @@ fn summarize(text : String) -> String {
   if one_line.length() <= 240 {
     "\{one_line}"
   } else {
-    "\{one_line.clamped_view(end=240)}..."
+    "\{one_line[:240]}..."
   }
 }
 

@@ -215,7 +215,7 @@ async fn repository_context() -> (String, String?) {
       continue
     }
     let content = @fs.read_file(path).text()
-    let excerpt = content.clamped_view(end=limit).to_owned()
+    let excerpt = content[:limit].to_owned()
     if path == "justfile" {
       validation = Some(
         if excerpt.length() < content.length() {
