@@ -115,24 +115,20 @@ async fn Snapshot::send(
     } else {
       "Sharing failed (HTTP \{response.code})."
     }
-    guard (@json.parse(@utf8.decode(buffer.to_bytes())) catch {
-        _ => Json::null()
-      })
-      is { "error": String(detail), .. } &&
-      !detail.trim().is_empty() else {
-      return @protocol.Failed(message=fallback)
+    let message = try @json.parse(@utf8.decode(buffer.to_bytes())) catch {
+      _ => fallback
+    } noraise {
+      { "error": String(detail), .. } if !detail.trim().is_empty() =>
+        "Sharing failed (HTTP \{response.code}): \{detail.trim()}"
+      _ => fallback
     }
-    return @protocol.Failed(
-      message="Sharing failed (HTTP \{response.code}): \{detail.trim()}",
-    )
+    return @protocol.Failed(message~)
   }
-  guard (@json.parse(@utf8.decode(buffer.to_bytes())) catch {
-      _ => Json::null()
-    })
-    is { "url": String(url), .. } else {
-    return @protocol.Failed(
-      message="The share server did not return a valid share link.",
-    )
+  let invalid = "The share server did not return a valid share link."
+  try @json.parse(@utf8.decode(buffer.to_bytes())) catch {
+    _ => @protocol.Failed(message=invalid)
+  } noraise {
+    { "url": String(url), .. } => @protocol.Shared(url~)
+    _ => @protocol.Failed(message=invalid)
   }
-  @protocol.Shared(url~)
 }
