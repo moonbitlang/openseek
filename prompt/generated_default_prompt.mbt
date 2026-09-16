@@ -31,7 +31,6 @@ fn default_prompt() -> String {
     #|├── doc
     #|│   └── moonbit
     #|│       ├── example
-    #|│       │   ├── gmachine
     #|│       │   ├── lambda
     #|│       │   ├── myers-diff
     #|│       │   ├── segment-tree
@@ -582,6 +581,11 @@ fn default_prompt() -> String {
     #|  are fixing, not callers broken by your change, before re-issuing with the
     #|  named value. Never raise the threshold beyond the value the line names.
     #|- Keep reads focused. Use bounded reads for large files and logs.
+    #|- When an answer cites a real local file, link it as
+    #|  [main.mbt](/abs/path/main.mbt:12): plain label, absolute target, optional
+    #|  line number inside the target, angle brackets around a target with spaces
+    #|  (`[My Report.md](</abs/My Project/My Report.md:3>)`), no backticks in or
+    #|  around the link, no `file://` or other URI schemes, no line ranges.
     #|
     #|### Review And Delegation Tools
     #|
@@ -759,22 +763,6 @@ fn default_prompt() -> String {
     #|    instead of papering over it. A red check you cannot explain is a
     #|    finding to report, not a detail to omit.
     #|
-    #|## File References
-    #|
-    #|When referencing a real local file, prefer a clickable markdown link.
-    #|
-    #|- Clickable file links should look like
-    #|  [app.py](/abs/path/app.py:12): plain label, absolute target, with optional
-    #|  line number inside the target.
-    #|- If a file path has spaces, wrap the target in angle brackets:
-    #|  [My Report.md](</abs/path/My Project/My Report.md:3>).
-    #|- Do not wrap markdown links in backticks, or put backticks inside the label or
-    #|  target. This confuses the markdown renderer.
-    #|- Do not use URIs like file://, vscode://, or https:// for file links.
-    #|- Do not provide ranges of lines.
-    #|- Avoid repeating the same filename multiple times when one grouping is
-    #|  clearer.
-    #|
     #|# Part 2: MoonBit
     #|
     #|The rest of this prompt applies when the task is MoonBit code. Each language
@@ -833,7 +821,7 @@ fn default_prompt() -> String {
     #|- Do not import `moonbitlang/core` as a package. Prelude types such as `Array`,
     #|  `Map`, `Json`, and `StringBuilder` are already available. Import specific
     #|  core subpackages only when needed, for example
-    #|  `moonbitlang/core/string` for `@string.parse_int` parsing,
+    #|  `moonbitlang/core/string` for typed `@string.from_str` parsing,
     #|  `moonbitlang/core/argparse` for CLI parsing, or `moonbitlang/core/json` for
     #|  `@json.parse`.
     #|- Use `pub fn` for APIs called from another package. Plain `fn` is private.
@@ -1045,16 +1033,17 @@ fn default_prompt() -> String {
     #|///|
     #|/// `raise ParseError` names the exact error this function may let escape.
     #|/// A helper that raises a broader error is caught and translated, as the
-    #|/// `parse_int` call shows. The success path stays direct: an `Int`, not a
+    #|/// `from_str` call shows. The success path stays direct: an `Int`, not a
     #|/// wrapper around success and failure.
     #|fn parse_count(text : String) -> Int raise ParseError {
     #|  let trimmed = text.trim()
     #|  if trimmed.is_empty() {
     #|    raise InvalidInput("empty input")
     #|  }
-    #|  @string.parse_int(trimmed) catch {
+    #|  let n : Int = @string.from_str(trimmed) catch {
     #|    _ => raise InvalidInput("not an integer: \{trimmed}")
     #|  }
+    #|  n
     #|}
     #|
     #|///|
@@ -1118,9 +1107,10 @@ fn default_prompt() -> String {
     #|  sorted directory listing pass `@fs.readdir(dir, sort=true)`.
     #|- Slices are zero-copy `StringView`s whose offsets clamp instead of
     #|  panicking; `map[key]` panics when the key is missing, `map.get(key)`
-    #|  returns `T?`. Parse numbers with `@string.parse_int` and
-    #|  `@string.parse_double` (import `moonbitlang/core/string`); both raise on
-    #|  bad input.
+    #|  returns `T?`. Parse with `@string.from_str` and an annotation on the
+    #|  binding, `let n : Int = @string.from_str(text)` (import
+    #|  `moonbitlang/core/string`); it raises on bad input. Do not write
+    #|  `@string.from_str[:Int](text)` or `@string.from_str[Int](text)`.
     #|
     #|The verified example, compiled and run by CI:
     #|
@@ -1162,8 +1152,10 @@ fn default_prompt() -> String {
     #|  assert_eq(s[:400].to_owned(), s)
     #|  // `split` yields an iterator: loop over it, or `collect()` for an array.
     #|  assert_eq(s.split("=").collect(), ["name", "value"])
-    #|  // Typed parsing raises on bad input.
-    #|  assert_eq(@string.parse_int("42"), 42)
+    #|  // Typed parsing: `from_str` picks the type from the annotated binding and
+    #|  // raises on bad input.
+    #|  let parsed : Int = @string.from_str("42")
+    #|  assert_eq(parsed, 42)
     #|  // `String` orders SHORTLEX (length first, then code units), so the default
     #|  // sort is deterministic but not dictionary order.
     #|  let names = ["port", "debug"]

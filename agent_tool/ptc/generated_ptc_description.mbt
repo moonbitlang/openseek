@@ -49,9 +49,9 @@ fn ptc_description() -> String {
     #|      "usage: ptc_guarded_edit.mbtx <path> <old_string> <new_string> [<start_line>]",
     #|    )
     #|  }
-    #|  let start_line = match args {
+    #|  let start_line : Int = match args {
     #|    [_, _, _, line, ..] =>
-    #|      @string.parse_int(line) catch { _ => fail("start_line must be an integer") }
+    #|      @string.from_str(line) catch { _ => fail("start_line must be an integer") }
     #|    _ => 1
     #|  }
     #|  // `arguments` is the JSON object the direct edit tool takes, forwarded

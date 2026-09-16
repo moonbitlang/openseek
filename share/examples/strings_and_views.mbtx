@@ -35,8 +35,10 @@ fn main raise {
   assert_eq(s[:400].to_owned(), s)
   // `split` yields an iterator: loop over it, or `collect()` for an array.
   assert_eq(s.split("=").collect(), ["name", "value"])
-  // Typed parsing raises on bad input.
-  assert_eq(@string.parse_int("42"), 42)
+  // Typed parsing: `from_str` picks the type from the annotated binding and
+  // raises on bad input.
+  let parsed : Int = @string.from_str("42")
+  assert_eq(parsed, 42)
   // `String` orders SHORTLEX (length first, then code units), so the default
   // sort is deterministic but not dictionary order.
   let names = ["port", "debug"]

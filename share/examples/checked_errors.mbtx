@@ -17,16 +17,17 @@ suberror ParseError {
 ///|
 /// `raise ParseError` names the exact error this function may let escape.
 /// A helper that raises a broader error is caught and translated, as the
-/// `parse_int` call shows. The success path stays direct: an `Int`, not a
+/// `from_str` call shows. The success path stays direct: an `Int`, not a
 /// wrapper around success and failure.
 fn parse_count(text : String) -> Int raise ParseError {
   let trimmed = text.trim()
   if trimmed.is_empty() {
     raise InvalidInput("empty input")
   }
-  @string.parse_int(trimmed) catch {
+  let n : Int = @string.from_str(trimmed) catch {
     _ => raise InvalidInput("not an integer: \{trimmed}")
   }
+  n
 }
 
 ///|
