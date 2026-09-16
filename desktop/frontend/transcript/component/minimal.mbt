@@ -2,10 +2,10 @@
 /// A minimal call retains presentation text and derived edit previews, never
 /// raw parameters or output. Categories describe the operation, not its success.
 priv struct MinimalCall {
+  tool_name : String
   category : String?
   caption : String
-  pending : Bool
-  failed : Bool
+  status : ToolStatus
   changes : EditChanges?
 } derive(Eq)
 
@@ -47,10 +47,11 @@ fn MinimalCall::from_tool(
     "job_wait" | "job_output" | "job_stop" | "finish" | "sleep" => None
     _ => Some("Other tool calls")
   }
-  let (pending, failed, brief) = match call.outcome {
-    Snapshot(..) => (false, false, Some("Snapshot"))
-    Pending(..) => (true, false, None)
-    Done(is_error~, brief~, ..) => (false, is_error, brief)
+  let status = ToolStatus::from_outcome(call.outcome)
+  let brief = match call.outcome {
+    Snapshot(..) => Some("Snapshot")
+    Pending(..) => None
+    Done(brief~, ..) => brief
   }
   // Codex briefs a shell call with its command line, which is an argument,
   // not a description; the tool name stands in for it here.
@@ -78,7 +79,57 @@ fn MinimalCall::from_tool(
   } else {
     None
   }
-  { category, caption, pending, failed, changes, }
+  { tool_name: call.name, category, caption, status, changes, }
+}
+
+///|
+/// Tool identities stay independent of descriptions and success/failure status.
+/// Use the same monochrome Codicons as app controls; status stays on the right.
+fn MinimalCall::icon(self : MinimalCall) -> @html.Html {
+  match self.tool_name {
+    "read" => @icons.icon_book()
+    "edit" => @icons.icon_edit()
+    "multi_edit" => @icons.icon_diff_multiple()
+    "write" => @icons.icon_file()
+    "remove" => @icons.icon_trash()
+    "mbtx" => @icons.icon_terminal()
+    "shell" => @icons.icon_terminal()
+    "web_search" | "webSearch" => @icons.icon_search()
+    "imageView" => @icons.icon_file_media()
+    "imageGeneration" => @icons.icon_sparkle()
+    "enteredReviewMode" | "exitedReviewMode" | "submit_review" =>
+      @icons.icon_search()
+    "review" | "spawn_agent" => @icons.icon_robot()
+    "wait_agent" | "job_wait" => @icons.icon_watch()
+    "send_input" | "send_message" => @icons.icon_comment()
+    "resume_agent" => @icons.icon_play()
+    "followup_task" => @icons.icon_send()
+    "interrupt_agent" | "job_stop" => @icons.icon_debug_stop()
+    "close_agent" => @icons.icon_debug_stop()
+    "list_agents" => @icons.icon_organization()
+    "submit_result" | "submit_answer" | "submit_pattern_repair" =>
+      @icons.icon_chat_export()
+    "plan" => @icons.icon_tasklist()
+    "goal" => @icons.icon_target()
+    "job_output" => @icons.icon_arrow_down()
+    "finish" => @icons.icon_check()
+    "sleep" => @icons.icon_watch()
+    _ => @icons.icon_tools()
+  }
+}
+
+///|
+/// A folded group uses its first call's icon; individual calls keep their own.
+fn MinimalContent::icon(self : MinimalContent) -> @html.Html {
+  if self is ContextSummary(_) {
+    return @icons.icon_pin()
+  }
+  for entry in self.activities() {
+    if entry is Call(call) {
+      return call.icon()
+    }
+  }
+  @icons.icon_comment()
 }
 
 ///|
@@ -110,6 +161,56 @@ priv enum MinimalActivity {
 } derive(Eq)
 
 ///|
+/// Count pending and failed calls represented by a group, including waits.
+/// Notices are not tool rows, and successful calls need no minimal status.
+priv struct MinimalToolStatus {
+  failed : Int
+  pending : Int
+}
+
+///|
+fn MinimalToolStatus::from_activities(
+  entries : Array[MinimalActivity],
+) -> MinimalToolStatus {
+  let mut failed = 0
+  let mut pending = 0
+  for entry in entries {
+    if entry is Call(call) {
+      match call.status {
+        Pending => pending += 1
+        Failed => failed += 1
+        Succeeded | Snapshot => ()
+      }
+    }
+  }
+  { failed, pending, }
+}
+
+///|
+/// A failed call must not hide another call still running. Keep both indicators
+/// until the group settles, and use the same icons as the detailed tool rows.
+/// Successful groups stay quiet in minimal mode, without an empty status slot.
+fn MinimalToolStatus::view(self : MinimalToolStatus) -> @html.Html {
+  if self.pending == 0 && self.failed == 0 {
+    return @html.nothing
+  }
+  let children : Array[@html.Html] = []
+  if self.pending > 0 {
+    children.push(ToolStatus::Pending.view())
+  }
+  if self.failed > 0 {
+    let label = if self.failed == 1 {
+      "1 tool call failed"
+    } else {
+      "\{self.failed} tool calls failed"
+    }
+    children.push(@html.span(class="minimal-failure-count", title=label, label))
+    children.push(ToolStatus::Failed.view())
+  }
+  @html.span(class="minimal-tool-status", children)
+}
+
+///|
 priv enum MinimalContent {
   Prose(
     text~ : String,
@@ -127,6 +228,7 @@ priv enum MinimalContent {
   Note(text~ : String, error~ : Bool)
   ContextSummary(String)
   Completed(Array[MinimalPart])
+  Messages(Array[MinimalPart], active_group~ : String?)
 } derive(Eq)
 
 ///|
@@ -178,10 +280,24 @@ fn MinimalStream::push_part(
 
 ///|
 fn MinimalStream::push_block(self : MinimalStream, part : MinimalPart) -> Unit {
+  // User rows delimit outer message groups. Keep all assistant content,
+  // including live text and the final answer, inside that group's layout.
+  // These arrays belong only to this projection, never a previous render.
+  if self.blocks is [.., { content: Minimal(Messages(parts, ..)), .. }] {
+    parts.push(part)
+    return
+  }
   self.blocks.push({
     stream: self.stream,
-    key: { value: "minimal\u{0}\{part.identity}", },
-    content: Minimal(part.content),
+    // Anchor the group to its preceding user, not its first child: that child
+    // becomes a Completed disclosure at final, while sibling checkpoints and
+    // their browser-owned expansion state must survive.
+    key: if self.blocks is [.., previous] {
+      { value: "minimal-messages\u{0}\{previous.key.wire()}", }
+    } else {
+      { value: "minimal-messages", }
+    },
+    content: Minimal(Messages([part], active_group=None)),
   })
 }
 
@@ -345,6 +461,22 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
       }
     }
   }
+  // Only the group after the newest assistant prose is current. Explicit
+  // terminal events already flushed parts; streamed prose also ends that group.
+  let mut active_group : String? = None
+  if !(self.streaming_response is Some(text) && !text.is_blank()) {
+    for part in builder.parts {
+      match part.content {
+        Prose(..) => active_group = None
+        Activity(entries) =>
+          if entries.any(entry => entry is Call(_)) {
+            active_group = Some(part.identity)
+          }
+        // A background notice does not start a new assistant message.
+        _ => ()
+      }
+    }
+  }
   builder.finish(collapse=false)
   if self.streaming_response is Some(text) && !text.is_blank() {
     builder.push_block({
@@ -357,6 +489,14 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         completed_at=None,
       ),
     })
+  }
+  if active_group is Some(_) &&
+    builder.blocks is [.., last] &&
+    last.content is Minimal(Messages(parts, ..)) {
+    builder.blocks[builder.blocks.length() - 1] = {
+      ..last,
+      content: Minimal(Messages(parts, active_group~)),
+    }
   }
   if builder.blocks.is_empty() &&
     self.items.is_empty() &&
@@ -377,7 +517,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
 fn MinimalContent::activities(self : MinimalContent) -> Array[MinimalActivity] {
   match self {
     Activity(entries) => entries
-    Completed(parts) => {
+    Completed(parts) | Messages(parts, ..) => {
       let entries : Array[MinimalActivity] = []
       for part in parts {
         entries.append(part.content.activities())
@@ -393,41 +533,26 @@ fn MinimalContent::summary(self : MinimalContent) -> String {
   if self is ContextSummary(_) {
     return "Context summary"
   }
-  // While this group is working, show what is happening now rather than its
-  // accumulated history. Prefer the newest pending call; a later completed
-  // call must not hide another operation that is still running. A completed
-  // turn always summarizes all its activity, even if an old call lacks a result.
-  // This switch follows the group's pending calls, not the whole turn's end:
-  // once this group settles, it shows categories while later prose continues.
-  if self is Activity(entries) {
-    let mut current : String? = None
-    for entry in entries {
-      if entry is Call(call) && call.pending {
-        current = Some(call.caption)
-      }
-    }
-    if current is Some(caption) {
-      return caption
-    }
-  }
-  let categories : Array[String] = []
-  let mut failed = 0
+  // Preview the first three concrete operations in transcript order, including
+  // failed calls and repeated captions. Outcome does not affect preview slots.
+  // Signal omitted operations; status counts are rendered separately at the
+  // right, where truncating this preview cannot hide them.
+  let captions : Array[String] = []
+  let mut more = false
   for entry in self.activities() {
-    let category = match entry {
-      Call(call) => {
-        if call.failed {
-          failed += 1
+    if entry is Call(call) {
+      // Coordination and background notices do not consume preview slots.
+      if call.category is Some(_) {
+        if captions.length() < 3 {
+          captions.push(call.caption)
+        } else {
+          more = true
         }
-        call.category
       }
-      Notice(..) => None
-    }
-    if category is Some(label) && !categories.contains(label) {
-      categories.push(label)
     }
   }
-  if categories.is_empty() {
-    categories.push(
+  if captions.is_empty() {
+    captions.push(
       if self is Completed(_) {
         "Work completed"
       } else {
@@ -435,24 +560,95 @@ fn MinimalContent::summary(self : MinimalContent) -> String {
       },
     )
   }
-  if failed > 0 {
-    categories.push(
-      if failed == 1 {
-        "1 tool call failed"
-      } else {
-        "\{failed} tool calls failed"
-      },
-    )
+  if more {
+    captions.push("…")
   }
-  categories.join(" · ")
+  captions.join(" · ")
+}
+
+///|
+/// Render an operation identically inside a live tool group or directly inside
+/// a completed process with only one group. This preserves statuses and edits
+/// when the redundant inner disclosure is omitted.
+fn MinimalActivity::render(
+  self : MinimalActivity,
+  single? : Bool = false,
+) -> @html.Html {
+  match self {
+    Notice(text~, error~) =>
+      @html.div(
+        class=if error {
+          "minimal-note transcript-error-message"
+        } else {
+          "minimal-note"
+        },
+        text,
+      )
+    Call(call) =>
+      @html.div(
+        class=if single {
+          if call.status is Failed {
+            "minimal-call minimal-single-call failed"
+          } else {
+            "minimal-call minimal-single-call"
+          }
+        } else if call.status is Failed {
+          "minimal-call failed"
+        } else {
+          "minimal-call"
+        },
+        [
+          @html.span(
+            class="minimal-tool-icon",
+            attrs=@html.Attrs::build().aria_hidden("true").title(call.tool_name),
+            call.icon(),
+          ),
+          @html.span(
+            class="minimal-call-caption",
+            title=call.caption,
+            call.caption,
+          ),
+          if single {
+            MinimalToolStatus::from_activities([self]).view()
+          } else if call.status is (Succeeded | Snapshot) {
+            // Expanded calls follow the same quiet-success rule as summaries.
+            @html.nothing
+          } else {
+            call.status.view()
+          },
+          if call.changes is Some(changes) {
+            @html.div(
+              class="minimal-edit-changes",
+              attrs=@html.Attrs::build().aria_label("Requested changes"),
+              changes.render(),
+            )
+          } else {
+            @html.nothing
+          },
+        ],
+      )
+  }
 }
 
 ///|
 fn MinimalContent::render(
   self : MinimalContent,
   actions : Actions,
+  active? : Bool = false,
 ) -> @html.Html {
   match self {
+    Messages(parts, active_group~) => {
+      // Preserve each child's identity while tool outcomes and live prose
+      // update. Grouping must not recreate an already-open tool disclosure.
+      let children : Map[String, @html.Html] = Map([])
+      for part in parts {
+        children[part.identity] = part.content.render(
+          actions,
+          active=active_group is Some(identity) && identity == part.identity,
+        )
+      }
+      @html.div(class="minimal-messages minimal-rows", children)
+    }
     ContextSummary(text) =>
       @html.details(class="minimal-context-summary", [
         self.summary_view(),
@@ -481,71 +677,48 @@ fn MinimalContent::render(
         text,
       )
     Activity(entries) => {
-      let children : Array[@html.Html] = []
-      for entry in entries {
-        let child = match entry {
-          Notice(text~, error~) =>
-            @html.div(
-              class=if error {
-                "minimal-note transcript-error-message"
-              } else {
-                "minimal-note"
-              },
-              text,
-            )
-          Call(call) =>
-            @html.div(
-              class=if call.failed {
-                "minimal-call failed"
-              } else {
-                "minimal-call"
-              },
-              [
-                @html.span(class="minimal-call-caption", call.caption),
-                if call.failed {
-                  @html.span(class="minimal-call-status", "Failed")
-                } else if call.pending {
-                  @html.span(class="minimal-call-status", "Running…")
-                } else {
-                  @html.nothing
-                },
-                if call.changes is Some(changes) {
-                  @html.div(
-                    class="minimal-edit-changes",
-                    attrs=@html.Attrs::build().aria_label("Requested changes"),
-                    changes.render(),
-                  )
-                } else {
-                  @html.nothing
-                },
-              ],
-            )
-        }
-        children.push(child)
+      // A single call has nothing to summarize separately. Render its caption
+      // once, including running/failed status and any requested edit preview.
+      // This also applies inside a completed process that contains prose.
+      if entries is [Call(call)] {
+        return MinimalActivity::Call(call).render(single=true)
       }
-      // Show requested changes as soon as a readable edit arrives. The virtual
-      // attribute stays true on result updates, preserving a reader's manual
-      // collapse. A completed turn still hides this inside its outer disclosure.
-      let show_changes = entries.any(entry => {
-        match entry {
-          Call(call) => call.changes is Some(_)
-          Notice(..) => false
-        }
-      })
-      @html.details(class="minimal-tools", open=show_changes, [
+      if active {
+        return @html.div(
+          class="minimal-tools-live minimal-rows",
+          entries.map(entry => entry.render()),
+        )
+      }
+      // Earlier groups start folded once a new assistant message arrives.
+      @html.details(class="minimal-tools", [
         self.summary_view(),
-        @html.div(class="minimal-call-list", children),
+        @html.div(
+          class="minimal-call-list",
+          entries.map(entry => entry.render()),
+        ),
       ])
     }
     Completed(parts) => {
-      let children : Map[String, @html.Html] = Map([])
-      for part in parts {
-        children[part.identity] = part.content.render(actions)
+      // Neither the process nor its only tool group needs a disclosure when
+      // they contain just one call. Keep the same row before and after final.
+      if parts is [{ content: Activity([Call(call)]), .. }] {
+        return MinimalActivity::Call(call).render(single=true)
       }
-      @html.details(class="minimal-process", [
-        self.summary_view(),
-        @html.div(class="minimal-process-body", children),
-      ])
+      // One group needs only the outer disclosure. Mixed prose and
+      // tool groups retain their individual folds, with completed summaries.
+      let body = if parts is [{ content: Activity(entries), .. }] {
+        @html.div(
+          class="minimal-process-body minimal-rows",
+          entries.map(entry => entry.render()),
+        )
+      } else {
+        let children : Map[String, @html.Html] = Map([])
+        for part in parts {
+          children[part.identity] = part.content.render(actions)
+        }
+        @html.div(class="minimal-process-body minimal-rows", children)
+      }
+      @html.details(class="minimal-process", [self.summary_view(), body])
     }
   }
 }
@@ -554,12 +727,19 @@ fn MinimalContent::render(
 /// Keep native disclosure semantics while drawing the same chevron used by
 /// application controls. The icon is decorative; the text names the toggle.
 fn MinimalContent::summary_view(self : MinimalContent) -> @html.Html {
+  let text = self.summary()
   @html.summary(class="minimal-activity-summary", [
+    @html.span(
+      class="minimal-tool-icon",
+      attrs=@html.Attrs::build().aria_hidden("true"),
+      self.icon(),
+    ),
+    @html.span(class="minimal-summary-text", title=text, text),
     @html.span(
       class="minimal-chevron",
       attrs=@html.Attrs::build().aria_hidden("true"),
       @icons.icon(@icons.icon_chevron_down),
     ),
-    @html.span(self.summary()),
+    MinimalToolStatus::from_activities(self.activities()).view(),
   ])
 }

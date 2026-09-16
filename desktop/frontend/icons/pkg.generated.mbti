@@ -18,6 +18,8 @@ pub fn icon_arrow_down() -> @html.Html
 
 pub fn icon_arrow_up() -> @html.Html
 
+pub fn icon_book() -> @html.Html
+
 pub fn icon_chat_export() -> @html.Html
 
 pub fn icon_check() -> @html.Html
@@ -30,6 +32,8 @@ pub fn icon_close() -> @html.Html
 
 pub fn icon_close_all() -> @html.Html
 
+pub fn icon_comment() -> @html.Html
+
 pub fn icon_copy() -> @html.Html
 
 pub fn icon_debug_stop() -> @html.Html
@@ -41,6 +45,10 @@ pub fn icon_edit() -> @html.Html
 pub fn icon_error() -> @html.Html
 
 pub fn icon_extensions() -> @html.Html
+
+pub fn icon_file() -> @html.Html
+
+pub fn icon_file_media() -> @html.Html
 
 pub fn icon_fold() -> @html.Html
 
@@ -72,11 +80,19 @@ pub fn icon_organization() -> @html.Html
 
 pub fn icon_package() -> @html.Html
 
+pub fn icon_pin() -> @html.Html
+
+pub fn icon_play() -> @html.Html
+
 pub fn icon_pull_request() -> @html.Html
 
 pub fn icon_question() -> @html.Html
 
+pub fn icon_robot() -> @html.Html
+
 pub fn icon_search() -> @html.Html
+
+pub fn icon_send() -> @html.Html
 
 pub fn icon_settings_gear() -> @html.Html
 
@@ -90,7 +106,11 @@ pub fn icon_tasklist() -> @html.Html
 
 pub fn icon_terminal() -> @html.Html
 
+pub fn icon_tools() -> @html.Html
+
 pub fn icon_trash() -> @html.Html
+
+pub fn icon_watch() -> @html.Html
 
 pub fn icon_worktree() -> @html.Html
 

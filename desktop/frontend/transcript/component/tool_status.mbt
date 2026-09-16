@@ -1,14 +1,29 @@
 ///|
 /// A call's recorded outcome, rendered independently of its disclosure body.
 /// Partial output still means pending; only a completed result earns a check.
-priv struct ToolStatus(@transcript.ToolOutcome)
+priv enum ToolStatus {
+  Snapshot
+  Pending
+  Succeeded
+  Failed
+} derive(Eq)
+
+///|
+/// Share presentation state without retaining tool arguments or result output.
+fn ToolStatus::from_outcome(outcome : @transcript.ToolOutcome) -> ToolStatus {
+  match outcome {
+    Snapshot(..) => Snapshot
+    Pending(..) => Pending
+    Done(is_error=true, ..) => Failed
+    Done(..) => Succeeded
+  }
+}
 
 ///|
 fn ToolStatus::view(self : ToolStatus) -> @html.Html {
-  let (label, class, icon) = match self.0 {
-    Snapshot(..) =>
-      ("Recorded snapshot", "tool-status snapshot", @html.text("·"))
-    Pending(..) =>
+  let (label, class, icon) = match self {
+    Snapshot => ("Recorded snapshot", "tool-status snapshot", @html.text("·"))
+    Pending =>
       (
         "Tool in progress",
         "tool-status pending",
@@ -18,9 +33,9 @@ fn ToolStatus::view(self : ToolStatus) -> @html.Html {
           @html.nothing,
         ),
       )
-    Done(is_error=true, ..) =>
+    Failed =>
       ("Tool failed", "tool-status failed", @icons.icon(@icons.icon_error))
-    Done(..) =>
+    Succeeded =>
       (
         "Tool succeeded",
         "tool-status succeeded",

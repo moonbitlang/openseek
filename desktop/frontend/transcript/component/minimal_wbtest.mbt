@@ -1,4 +1,101 @@
 ///|
+test "minimal user boundaries group recorded and streaming assistant content" {
+  let input = Input(
+    minimal=true,
+    source=OpenSeek,
+    focused=@interop.ChannelId::Local,
+    active_session="messages-test",
+    current_project=None,
+    projects=[],
+    can_choose_project=false,
+    project_menu_open=false,
+    project_query="",
+    root=None,
+    items=VisibleRow::history([
+      { kind: User("First question"), ts: None, sequence: Some(1), },
+      {
+        kind: Assistant(
+          reasoning=None,
+          prose=Some("Inspecting files"),
+          calls=[
+            {
+              call_id: "read",
+              children: [],
+              name: "read",
+              arguments: None,
+              outcome: Pending(output=None),
+            },
+          ],
+          replay=false,
+          finished=false,
+        ),
+        ts: None,
+        sequence: Some(2),
+      },
+      { kind: User("Second question"), ts: None, sequence: Some(3), },
+    ]),
+    streaming_response=Some("Checking another file"),
+    streaming_identity="live",
+  )
+  let blocks = input.minimal_blocks().to_array()
+  assert_eq(blocks.length(), 4)
+  assert_true(blocks[0].content is Item(item={ kind: User(_), .. }, ..))
+  assert_true(
+    blocks[1].content
+    is Minimal(
+      Messages(
+        [{ content: Prose(..), .. }, { content: Activity(_), .. }],
+        active_group=None
+      )
+    ),
+  )
+  assert_true(blocks[2].content is Item(item={ kind: User(_), .. }, ..))
+  assert_true(
+    blocks[3].content
+    is Minimal(
+      Messages([{ content: Prose(live=true, ..), .. }], active_group=None)
+    ),
+  )
+  // Subsequent deltas replace the text inside the same keyed message group.
+  let updated = {
+      ..input,
+      streaming_response: Some("Checking another file now"),
+    }
+    .minimal_blocks()
+    .to_array()
+  assert_eq(blocks[3].key.wire(), updated[3].key.wire())
+  let active_input = {
+    ..input,
+    items: [input.items[0], input.items[1]],
+    streaming_response: None,
+  }
+  assert_true(
+    active_input.minimal_blocks().to_array()[1].content
+    is Minimal(Messages(_, active_group=Some(_))),
+  )
+  // New streamed prose and explicit terminal events both retire the group.
+  for
+    retired in [
+      { ..active_input, streaming_response: Some("Next step"), },
+      {
+        ..active_input,
+        items: [
+          ..active_input.items,
+          {
+            identity: "terminal",
+            item: { kind: TurnEnd, ts: None, sequence: Some(3), },
+          },
+        ],
+      },
+    ] {
+    assert_true(
+      retired.minimal_blocks().to_array()[1].content
+      is Minimal(Messages(_, active_group=None)),
+    )
+  }
+}
+
+///|
 test "minimal mbtx retains its description across completion and failure" {
   let call : @transcript.ToolCall = {
     children: [],
@@ -9,7 +106,7 @@ test "minimal mbtx retains its description across completion and failure" {
   }
   let pending = MinimalCall::from_tool(call)
   assert_eq(pending.caption, "Check project details")
-  assert_true(pending.pending)
+  assert_true(pending.status is Pending)
   for failed in [false, true] {
     let completed = MinimalCall::from_tool({
       ..call,
@@ -20,8 +117,8 @@ test "minimal mbtx retains its description across completion and failure" {
       ),
     })
     assert_eq(completed.caption, "Check project details")
-    assert_false(completed.pending)
-    assert_eq(completed.failed, failed)
+    assert_false(completed.status is Pending)
+    assert_eq(completed.status is Failed, failed)
   }
 }
 
@@ -97,56 +194,124 @@ test "other minimal tools still prefer their result brief" {
     arguments: Some("{\"description\":\"Read project files\"}"),
     outcome: Done(content="output", is_error=false, brief=Some("Read moon.mod")),
   }
-  assert_eq(MinimalCall::from_tool(call).caption, "Read moon.mod")
+  let completed = MinimalCall::from_tool(call)
+  assert_eq(completed.caption, "Read moon.mod")
+  assert_eq(
+    MinimalContent::Activity([Call(completed)]).summary(),
+    "Read moon.mod",
+  )
 }
 
 ///|
-test "active minimal summaries show the newest pending operation until all settle" {
+test "folded minimal summaries preview operations independent of their outcome" {
   let read : MinimalCall = {
+    tool_name: "read",
     changes: None,
     category: Some("Read files"),
     caption: "Read project files",
-    pending: true,
-    failed: false,
+    status: Pending,
   }
   let script : MinimalCall = {
+    tool_name: "mbtx",
     changes: None,
     category: Some("Execute mbtx scripts"),
     caption: "Check project details",
-    pending: true,
-    failed: false,
+    status: Pending,
   }
   assert_eq(
     MinimalContent::Activity([Call(read), Call(script)]).summary(),
-    script.caption,
+    "Read project files · Check project details",
   )
-  let settled = { ..script, pending: false, }
+  let settled = { ..script, status: Succeeded, }
+  // A later result brief replaces the script description even without its
+  // own description argument. This is still concrete work, not a category.
+  for (name, brief) in [("edit", "Edited main.mbt"), ("plan", "Updated plan")] {
+    let next = MinimalCall::from_tool({
+      children: [],
+      call_id: name,
+      name,
+      arguments: None,
+      outcome: Done(content="", is_error=false, brief=Some(brief)),
+    })
+    assert_eq(
+      MinimalContent::Activity([Call(settled), Call(next)]).summary(),
+      "Check project details · \{brief}",
+    )
+  }
   assert_eq(
     MinimalContent::Activity([Call(read), Call(settled)]).summary(),
-    read.caption,
+    "Read project files · Check project details",
   )
   assert_eq(
-    MinimalContent::Activity([Call({ ..read, pending: false, }), Call(settled)]).summary(),
-    "Read files · Execute mbtx scripts",
+    MinimalContent::Activity([
+      Call({ ..read, status: Succeeded, }),
+      Call(settled),
+    ]).summary(),
+    "Read project files · Check project details",
   )
 }
 
 ///|
-test "completed turn summaries retain activity categories and failure counts" {
+test "completed turn summaries show the first three captions and retain failure counts" {
   let pending : MinimalCall = {
+    tool_name: "read",
     changes: None,
     category: Some("Read files"),
     caption: "Read project files",
-    pending: true,
-    failed: false,
+    status: Pending,
   }
-  let failed = { ..pending, pending: false, failed: true, }
+  // A recorded snapshot is neither a pending call nor a successful outcome.
+  let snapshot = ToolStatus::from_outcome(Snapshot(content="Recorded output"))
+  assert_true(snapshot is Snapshot)
+  let snapshot_counts = MinimalToolStatus::from_activities([
+    Call({ ..pending, status: snapshot, }),
+  ])
+  assert_eq((snapshot_counts.failed, snapshot_counts.pending), (0, 0))
+  let failed = { ..pending, status: Failed, }
   let group = MinimalContent::Activity([Call(failed), Call(pending)])
-  assert_eq(group.summary(), pending.caption)
+  assert_eq(group.summary(), "Read project files · Read project files")
+  let status = MinimalToolStatus::from_activities(group.activities())
+  assert_eq((status.failed, status.pending), (1, 1))
+  assert_eq(group.summary(), "Read project files · Read project files")
   assert_eq(
     MinimalContent::Completed([{ identity: "work", content: group, }]).summary(),
-    "Read files · 1 tool call failed",
+    "Read project files · Read project files",
   )
+  // Count operations in order, including repeated captions. Failures beyond
+  // the three visible operations must still appear in the failure total.
+  for count in 0..<=4 {
+    let calls : Array[MinimalActivity] = []
+    for index in 0..<count {
+      calls.push(
+        Call({
+          ..pending,
+          caption: "Operation \{index + 1}",
+          status: if index == 3 {
+            Failed
+          } else {
+            Succeeded
+          },
+        }),
+      )
+    }
+    let status = MinimalToolStatus::from_activities(calls)
+    assert_eq(
+      (status.failed, status.pending),
+      (if count == 4 { 1 } else { 0 }, 0),
+    )
+    assert_eq(
+      MinimalContent::Completed([
+        { identity: "work", content: Activity(calls), },
+      ]).summary(),
+      match count {
+        0 => "Work completed"
+        1 => "Operation 1"
+        2 => "Operation 1 · Operation 2"
+        3 => "Operation 1 · Operation 2 · Operation 3"
+        _ => "Operation 1 · Operation 2 · Operation 3 · …"
+      },
+    )
+  }
 }
 
 ///|
@@ -156,25 +321,27 @@ test "background notices do not count as failed tools or replace pending descrip
     error=true,
   )
   assert_eq(MinimalContent::Activity([notice]).summary(), "View activity")
+  let status = MinimalToolStatus::from_activities([notice])
+  assert_eq((status.failed, status.pending), (0, 0))
   let call : MinimalCall = {
+    tool_name: "job_wait",
     changes: None,
     category: None,
     caption: "Inspect the background task output",
-    pending: true,
-    failed: false,
+    status: Pending,
   }
   assert_eq(
     MinimalContent::Activity([Call(call), notice]).summary(),
-    call.caption,
+    "View activity",
   )
   assert_eq(
-    MinimalContent::Activity([Call({ ..call, pending: false, }), notice]).summary(),
+    MinimalContent::Activity([Call({ ..call, status: Succeeded, }), notice]).summary(),
     "View activity",
   )
 }
 
 ///|
-test "job coordination does not add categories to a work summary" {
+test "job coordination does not take up captions in a work summary" {
   let entries : Array[MinimalActivity] = []
   for name in ["read", "job_wait", "job_output", "job_stop", "mbtx"] {
     let call : @transcript.ToolCall = {
@@ -188,8 +355,10 @@ test "job coordination does not add categories to a work summary" {
   }
   entries.push(Notice(text="background job finished", error=false))
   assert_eq(
-    MinimalContent::Activity(entries).summary(),
-    "Read files · Execute mbtx scripts",
+    MinimalContent::Completed([
+      { identity: "work", content: Activity(entries), },
+    ]).summary(),
+    "read · mbtx",
   )
 }
 
@@ -314,14 +483,28 @@ test "minimal prose keeps the durable completion stamp only when finished" {
     streaming_identity="r1",
   )
   guard input.minimal_blocks().to_array()
-    is [{ content: Minimal(Prose(completed_at~, ..)), .. }] else {
+    is [
+      {
+        content: Minimal(
+          Messages([{ content: Prose(completed_at~, ..), .. }], ..)
+        ),
+        ..
+      },
+    ] else {
     fail("expected one finished minimal prose block")
   }
   assert_eq(completed_at, Some(1_700_000_000_000.0))
   // A preview that has not committed yet never claims a completion instant.
   let streaming = { ..input, items: [], streaming_response: Some("partial"), }
   guard streaming.minimal_blocks().to_array()
-    is [{ content: Minimal(Prose(completed_at~, live~, ..)), .. }] else {
+    is [
+      {
+        content: Minimal(
+          Messages([{ content: Prose(completed_at~, live~, ..), .. }], ..)
+        ),
+        ..
+      },
+    ] else {
     fail("expected one live minimal prose block")
   }
   assert_eq(completed_at, None)

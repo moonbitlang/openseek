@@ -339,7 +339,7 @@ fn tool_request_view(
     line.push(@html.span(class="tool-call-failed", "failed"))
   }
   line.push(@plan.fold_progress(call))
-  line.push(ToolStatus(call.outcome).view())
+  line.push(ToolStatus::from_outcome(call.outcome).view())
   let body : Array[@html.Html] = []
   if background_job_id is Some(id) {
     body.push(
@@ -437,7 +437,7 @@ fn tool_result_view(
   // Calls without recorded arguments have no request row. Put their status
   // on the result instead, so every call has exactly one visible status.
   let status = if call.arguments is None {
-    Some(ToolStatus(call.outcome))
+    Some(ToolStatus::from_outcome(call.outcome))
   } else {
     None
   }
