@@ -191,7 +191,6 @@ fn show_tab_impl(
   reload_stale : Bool,
   sync_diagnostics : Bool,
 ) -> @cmd.Cmd {
-  let relative = ctx.relative(path)
   let show = match doc.state {
     // A review-loading document always has the paired read started by
     // `open_changed_document`; activation must not create an untagged
@@ -215,15 +214,14 @@ fn show_tab_impl(
           range=None,
         ),
       ])
-    TabLoaded(content~, absolute~, ..) => {
+    TabLoaded(content~, ..) => {
       let show = show_file_in_viewer(
         ctx.owner,
         root=ctx.root(),
         doc.name,
         content,
-        absolute~,
         document=path,
-        relative?,
+        live=true,
         restore_scroll=true,
         review_original?=doc.quick_diff_original(),
         diff?=doc.visible_diff(),
@@ -239,7 +237,7 @@ fn show_tab_impl(
             ctx.owner,
             ctx.request_epoch,
             root,
-            absolute,
+            path,
           ),
         ])
       } else {
@@ -258,7 +256,7 @@ fn show_tab_impl(
             doc.name,
             content,
             document=path,
-            relative?,
+            live=false,
             restore_scroll=true,
             diff?=doc.visible_diff(),
             search_highlights?,
@@ -1294,11 +1292,11 @@ fn active_moonbit_diagnostics(
 ) -> @cmd.Cmd? {
   guard root is Some(root) &&
     active is Some(active) &&
-    docs.get(active) is Some({ name, state: TabLoaded(absolute~, ..), .. }) &&
+    docs.get(active) is Some({ name, state: TabLoaded(..), .. }) &&
     language_id(name) == "moonbit" else {
     return None
   }
-  Some(request_diagnostics(dispatch, owner, epoch, root, absolute))
+  Some(request_diagnostics(dispatch, owner, epoch, root, active))
 }
 
 ///|
@@ -3549,15 +3547,14 @@ fn update_inner(
             // `diagnostics` events. Other files have nothing behind
             // `lsp_open` — moon has no diagnostics for a README or JSON file
             // — so only the viewer shows.
-            Content(content~, absolute~, ..) => {
+            Content(content~, ..) => {
               let show = show_file_in_viewer(
                 ctx.owner,
                 root=ctx.root(),
                 name,
                 content,
-                absolute~,
                 document=path,
-                relative?=ctx.relative(path),
+                live=true,
                 range=reveal_range,
                 annotation?=reveal_annotation,
                 // A reload of a document already on screen keeps the reading
@@ -3575,7 +3572,7 @@ fn update_inner(
                     ctx.owner,
                     ctx.request_epoch,
                     root,
-                    absolute,
+                    path,
                   ),
                 ])
               } else {

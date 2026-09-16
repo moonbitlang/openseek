@@ -121,20 +121,15 @@ priv struct ViewerHost {
   // Viewer's public handle API. They receive language-server diagnostics and
   // turn inline reviews into composer chips without requiring editor internals.
   mut services : DesktopViewerServices?
-  // The absolute path of the file the viewer currently shows, so a
-  // diagnostics push that arrives for a different file (or after the panel
-  // cleared its document) is dropped rather than drawn over the wrong
-  // document. `None` when the viewer shows a notice or nothing.
-  mut absolute : @common.Uri?
-  // The dock document identity survives deleted-file previews, which have
-  // no live file for diagnostics but still own a saved scroll position.
-  mut document : @common.Uri?
-  // The same file as the conversation names it — the workspace-relative path
-  // the panel read it by. A comment filed on the shown document takes this
-  // as its chip path, so the chip never has to reverse-engineer a relative
-  // name from the absolute one. `None` when the viewer shows a notice or
+  // The dock document the viewer currently shows: the key its scroll
+  // position is parked under, and the identity a diagnostics push or a
+  // review hunk bridge must match. `None` when the viewer shows a notice or
   // nothing.
-  mut relative : @pathx.Relative?
+  mut document : @common.Uri?
+  // Whether a live file on disk backs `document`. A deleted or unreadable
+  // review file still shows its HEAD baseline under an inert model URI, so
+  // that preview takes no diagnostics and no working-side comments.
+  mut live : Bool
   // The active host/workspace route for Definition/References targets and
   // cross-file Peek previews. Cleared together with the document so a late
   // navigation request can never reopen a previous conversation's file.
@@ -186,9 +181,8 @@ let viewer_state : ViewerHost = {
   point_range_highlight: None,
   search_match_highlights: None,
   services: None,
-  absolute: None,
   document: None,
-  relative: None,
+  live: false,
   navigation: None,
   version: 0,
   theme: "light",
@@ -435,7 +429,13 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
             )
             return
           }
-          guard viewer_state.relative is Some(file) else { return }
+          // Chips name the file the way the conversation does, relative to
+          // the navigation root; a file outside every root takes no chip.
+          guard viewer_state.document is Some(document) &&
+            viewer_state.navigation is Some(context) &&
+            context.relative_path(document) is Some(file) else {
+            return
+          }
           // The modified pane and code source use the same live URI. Rich
           // Markdown detaches that source Viewer, so resolve the modified diff
           // model as the fallback working-document owner.
@@ -743,19 +743,12 @@ pub fn request_viewer_remeasure() -> @cmd.Cmd {
 /// scheme prevents every live-checkout language selector from matching it.
 fn original_revision_model_uri(
   owner : @interop.ConversationKey,
-  absolute : @common.Uri?,
-  relative : @pathx.Relative?,
-  fallback_name : String,
+  document : @common.Uri,
 ) -> @common.Uri? {
-  let path = match (absolute, relative) {
-    (Some(absolute), _) => absolute.path
-    (None, Some(relative)) => "/" + relative.0
-    (None, None) => "/" + fallback_name
-  }
   let uri = @common.Uri::from(
     scheme=OriginalRevisionScheme,
     authority=owner.channel.uri_authority(),
-    path~,
+    path=document.path,
   ) catch {
     _ => return None
   }
@@ -799,23 +792,24 @@ fn show_diff_comparison(
   owner : @interop.ConversationKey,
   name : String,
   modified_uri : @common.Uri,
-  absolute : @common.Uri?,
-  relative : @pathx.Relative?,
+  document : @common.Uri,
   original_content : String,
   modified_content : String,
 ) -> Unit {
   guard viewer_state.diff_editor is Some(diff_editor) &&
     viewer_state.services is Some(services) &&
-    original_revision_model_uri(owner, absolute, relative, name)
-    is Some(original_uri) else {
+    original_revision_model_uri(owner, document) is Some(original_uri) else {
     return
   }
+  // The HEAD side takes comments only while the document has a workspace
+  // name for their chips.
+  let commentable = viewer_state.navigation is Some(_)
   if diff_editor.get_model() is Some(current) &&
     current.original.uri.to_string() == original_uri.to_string() &&
     current.modified.uri.to_string() == modified_uri.to_string() &&
     viewer_state.review_diff_inputs ==
     Some((original_content, modified_content)) {
-    services.feedback.set_feedback_enabled(original_uri, relative is Some(_))
+    services.feedback.set_feedback_enabled(original_uri, commentable)
     return
   }
   let current = diff_editor.get_model()
@@ -850,7 +844,7 @@ fn show_diff_comparison(
   // equality guard above deliberately keeps Source/Diff toggles and unchanged
   // review refreshes at the reviewer's existing position.
   diff_editor.reveal_first_diff()
-  services.feedback.set_feedback_enabled(original_uri, relative is Some(_))
+  services.feedback.set_feedback_enabled(original_uri, commentable)
   if previous is Some(previous) {
     dispose_diff_comparison_models(previous)
   }
@@ -944,9 +938,8 @@ fn show_history_diff_in_viewer(
     diff_editor.reveal_first_diff()
     services.feedback.set_feedback_enabled(original_uri, false)
     services.feedback.set_feedback_enabled(modified_uri, false)
-    viewer_state.absolute = None
     viewer_state.document = None
-    viewer_state.relative = None
+    viewer_state.live = false
     viewer_state.navigation = None
     if previous is Some(previous) {
       dispose_diff_comparison_models(previous)
@@ -1253,9 +1246,8 @@ fn show_file_in_viewer(
   root~ : @common.Uri?,
   name : String,
   content : String,
-  absolute? : @common.Uri,
   document~ : @common.Uri,
-  relative? : @pathx.Relative,
+  live~ : Bool,
   range? : @common.Range? = None,
   annotation? : String,
   restore_scroll? : Bool = false,
@@ -1277,18 +1269,15 @@ fn show_file_in_viewer(
     // provider pairs it with the active navigation root. A notice document
     // (withheld binary/oversized file) has no file behind it, so its inert
     // scheme never parses as a model path and hover stays off.
-    let uri = match absolute {
-      Some(absolute) => model_uri_of(absolute)
-      None =>
-        // Deleted previews have no absolute file URI. Use the full relative
-        // path when one exists so equal basenames in different directories do
-        // not alias one Viewer model and leak its view state across tabs.
-        @common.Uri::from(
-          scheme="openseek-notice",
-          path="/" + relative.map(path => path.0).unwrap_or(name),
-        ) catch {
-          _ => return
-        }
+    let uri = if live {
+      model_uri_of(document)
+    } else {
+      // A deleted preview has no file behind it. Keep the document's full
+      // path so equal basenames in different directories do not alias one
+      // Viewer model and leak its view state across tabs.
+      @common.Uri::from(scheme="openseek-notice", path=document.path) catch {
+        _ => return
+      }
     }
     if uses_mbti_presentation(name) {
       show_mbti_diagram(uri, content)
@@ -1420,17 +1409,11 @@ fn show_file_in_viewer(
         None => ()
       }
     }
-    // Gate incoming diagnostics to the file now on screen (a notice document,
-    // with no absolute path, takes no diagnostics). The relative name rides
-    // along for comments filed on this document (see `ViewerHost::relative`).
-    viewer_state.absolute = absolute
+    // Gate incoming diagnostics and navigation to the file now on screen; a
+    // deleted preview or a notice document takes neither.
     viewer_state.document = Some(document)
-    viewer_state.relative = relative
-    viewer_state.navigation = match (absolute, relative) {
-      (Some(absolute), Some(relative)) =>
-        navigation_context_for_file(owner, root, absolute, relative)
-      _ => None
-    }
+    viewer_state.live = live
+    viewer_state.navigation = navigation_context_for_file(owner, root, document)
     // Commenting (select → inline input → composer chip) is for real files;
     // a notice document has nothing behind it to comment on.
     if viewer_state.services is Some(services) {
@@ -1455,8 +1438,8 @@ fn show_file_in_viewer(
       // MarkdownViewer has no code-feedback contribution, but the same live
       // resource may be mounted in DiffEditor's modified code kernel. Keep the
       // resource enabled so review comments remain available there.
-      services.feedback.set_feedback_enabled(uri, absolute is Some(_))
-      if absolute is Some(_) && !show_markdown {
+      services.feedback.set_feedback_enabled(uri, live)
+      if live && !show_markdown {
         // A fresh document view starts with no bubbles (comments become
         // chips the moment they are filed, so anything lingering here is a
         // previous jump's re-display); an annotation chip's jump then
@@ -1482,9 +1465,7 @@ fn show_file_in_viewer(
     }
     match diff {
       Some((original, modified)) =>
-        show_diff_comparison(
-          owner, name, uri, absolute, relative, original, modified,
-        )
+        show_diff_comparison(owner, name, uri, document, original, modified)
       // The sibling comparison is intentionally parked when the source
       // surface is active or a replacement pair is still loading. CSS alone
       // selects the visible surface; keeping this bounded two-model cache
@@ -1598,9 +1579,8 @@ fn clear_viewer() -> @cmd.Cmd {
         None => ()
       }
     }
-    viewer_state.absolute = None
     viewer_state.document = None
-    viewer_state.relative = None
+    viewer_state.live = false
     viewer_state.navigation = None
     clear_mbti_diagram()
     clear_package_graph()
@@ -1638,9 +1618,8 @@ fn clear_document() -> @cmd.Cmd {
         None => ()
       }
     }
-    viewer_state.absolute = None
     viewer_state.document = None
-    viewer_state.relative = None
+    viewer_state.live = false
     viewer_state.navigation = None
     clear_mbti_diagram()
     clear_package_graph()
@@ -1671,8 +1650,8 @@ fn apply_diagnostics(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     if @resource.belongs_to(absolute, channel) &&
-      viewer_state.absolute is Some(current) &&
-      current == absolute &&
+      viewer_state.live &&
+      viewer_state.document == Some(absolute) &&
       viewer_state.services is Some(services) {
       let uri = model_uri_of(absolute)
       services.markers.set_diagnostics(

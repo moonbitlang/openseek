@@ -5,18 +5,14 @@
 // model leases.
 
 ///|
-/// The active root needed by cross-resource navigation: either the explicit
-/// checkout root supplied by `Ctx`, or the root reconstructed from the
-/// absolute/relative pair returned by `fs.read_file`.
+/// The active root needed by cross-resource navigation: the checkout root
+/// supplied by `Ctx`, accepted only while the shown document lies below it.
 priv struct NavigationContext {
   owner : @interop.ConversationKey
   root : @common.Uri
 } derive(Eq)
 
 ///|
-/// Reconstruct the request root from one file's resource URI and its
-/// root-relative name. URI paths already use slash separators. This is
-/// lexical only; both values came from the same successful read request.
 /// Bring one Viewer model URI back into this editor root. The root is the
 /// exact main checkout, linked worktree, or Codex cwd reconstructed when the
 /// file was read; a model from another host or outside that root is unrelated.
@@ -34,40 +30,18 @@ fn NavigationContext::relative_path(
 }
 
 ///|
-/// Reconstruct the request root from one file's resource URI and its
-/// root-relative name. URI paths already use slash separators. This is
-/// lexical only; both values came from the same successful read request.
-fn navigation_root_from_file(
-  absolute : @common.Uri,
-  relative : @pathx.Relative,
-) -> @common.Uri? {
-  let path = absolute.path
-  let name = relative.normalize().0
-  guard !name.is_empty() else { return None }
-  let suffix = "/" + name
-  guard path.strip_suffix(suffix) is Some(root) else { return None }
-  let root = if root.is_empty() { "/" } else { root.to_owned() }
-  let root = absolute.with_(path=root) catch { _ => return None }
-  Some(root)
-}
-
-///|
-/// Choose the root for the document now on screen. An explicit root is
-/// accepted only when it maps the absolute file back to the exact relative
-/// name; otherwise the host-returned file pair wins (important for canonical
-/// paths behind symlinked workspace hints).
+/// The navigation root for the document now on screen: the checkout root,
+/// when the document lies below it. A document outside the checkout has no
+/// module to navigate within.
 fn navigation_context_for_file(
   owner : @interop.ConversationKey,
-  root_hint : @common.Uri?,
-  absolute : @common.Uri,
-  relative : @pathx.Relative,
+  root : @common.Uri?,
+  document : @common.Uri,
 ) -> NavigationContext? {
-  let root = match root_hint {
-    Some(root) if @resource.relative_to(absolute, root) is Some(rel) &&
-      rel == relative => Some(root)
-    _ => navigation_root_from_file(absolute, relative)
+  guard root is Some(root) && @resource.relative_to(document, root) is Some(_) else {
+    return None
   }
-  root.map(root => { owner, root, })
+  Some({ owner, root, })
 }
 
 ///|
@@ -99,8 +73,8 @@ fn moon_ide_model_projection(
   guard viewer_state.navigation is Some(context) else { return None }
   match model_uri_path(model.uri) {
     Some(absolute) => {
-      guard viewer_state.absolute is Some(stored_absolute) &&
-        stored_absolute == absolute &&
+      guard viewer_state.live &&
+        viewer_state.document == Some(absolute) &&
         context.relative_path(absolute) is Some(path) else {
         return None
       }
@@ -362,27 +336,29 @@ async fn resolve_navigation_preview(
 }
 
 ///|
-test "navigation root follows resource and workspace-relative paths" {
+test "navigation context follows the checkout root and its documents" {
   guard @resource.of_path(@interop.ChannelId::Local, "/ws/project/src/main.mbt")
     is Some(file) else {
     fail("test resource path was not absolute")
   }
-  guard navigation_root_from_file(file, Relative("src/main.mbt")) is Some(root) else {
-    fail("resource root was not reconstructed")
+  guard @resource.of_path(@interop.ChannelId::Local, "/ws/project")
+    is Some(root) else {
+    fail("test root path was not absolute")
   }
-  assert_eq(root.path, "/ws/project")
-  let context : NavigationContext = {
-    owner: { channel: @interop.ChannelId::Local, session: "test", },
-    root,
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "test",
+  }
+  guard navigation_context_for_file(owner, Some(root), file) is Some(context) else {
+    fail("checkout root was not accepted for its own document")
   }
   assert_eq(context.relative_path(file), Some(Relative("src/main.mbt")))
   guard @resource.of_path(@interop.ChannelId::Local, "/other/src/main.mbt")
     is Some(outside) else {
     fail("test outside resource was not absolute")
   }
-  assert_true(
-    navigation_root_from_file(outside, Relative("lib/main.mbt")) is None,
-  )
+  assert_true(navigation_context_for_file(owner, Some(root), outside) is None)
+  assert_true(navigation_context_for_file(owner, None, file) is None)
   assert_true(context.relative_path(outside) is None)
   for
     uri in [
