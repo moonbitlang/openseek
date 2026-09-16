@@ -66,3 +66,21 @@ fn Model::sign_in(self : Model, emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
     result => SignedIn(generation~, result.map(_ => ())),
   )
 }
+
+///|
+/// Abort the waiting sign-in. Its own auth.connect reply settles the dialog
+/// that started it (already closed and ignoring that generation), so a
+/// failure here has nothing left to report to.
+fn cancel_sign_in() -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    @js.async_run(() => {
+      let _ = @interop.bridge_request(
+        Local,
+        @commands.auth_cancel,
+        @protocol.NoPayload,
+      ) catch {
+        _ => return
+      }
+    })
+  })
+}

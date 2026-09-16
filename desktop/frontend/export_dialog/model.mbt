@@ -107,7 +107,17 @@ pub fn Model::update(
   }
   let busy = content.operation.busy()
   match msg {
-    Close => (@dialog.close(DialogId), { ..self, content: None, })
+    Close => {
+      // A browser sign-in this dialog started must not outlive it: the host
+      // refuses a second auth.connect while one is still waiting.
+      let close = @dialog.close(DialogId)
+      let cmd = if content.operation is SigningIn {
+        @cmd.batch([close, cancel_sign_in()])
+      } else {
+        close
+      }
+      (cmd, { ..self, content: None, })
+    }
     Download if !busy =>
       (
         self.download(emit, content.source),

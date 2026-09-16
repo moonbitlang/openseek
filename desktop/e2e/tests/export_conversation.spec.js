@@ -12,6 +12,7 @@ class ExportHarness extends DesktopBrowserHarness {
       url: 'http://shares.example.test/v1/shares/sh_test',
     };
     this.pendingShare = null;
+    this.pendingSignIn = null;
     this.signInError = null;
   }
 
@@ -25,6 +26,7 @@ class ExportHarness extends DesktopBrowserHarness {
         return this.shareReply;
       }
       if (request.method === 'auth.connect') {
+        if (this.pendingSignIn) await this.pendingSignIn;
         if (this.signInError) throw new Error(this.signInError);
         return { connected: true };
       }
@@ -158,6 +160,25 @@ test('sign-in errors preserve their cause and offer recovery', async ({ page }) 
   await expect(dialog).not.toContainText('TLS certificate verification failed');
   expect(app.count('auth.connect')).toBe(2);
   expect(app.count('session.share')).toBe(1); // retrying sign-in does not publish
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('closing the dialog cancels a sign-in it started', async ({ page }) => {
+  const app = new ExportHarness(page);
+  app.shareReply = { status: 'sign_in_required' };
+  let finish;
+  app.pendingSignIn = new Promise(resolve => { finish = resolve; });
+  await app.openDesktop();
+  const dialog = await app.openExport();
+  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect.poll(() => app.count('auth.connect')).toBe(1);
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect.poll(() => app.count('auth.cancel')).toBe(1);
+  finish();
+  await app.openExport();
+  await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
