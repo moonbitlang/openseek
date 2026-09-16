@@ -57,6 +57,11 @@ async fn main {
   if @fs.exists("\{staged}/.gitignore") {
     @fs.remove("\{staged}/.gitignore")
   }
+  // The G-machine chapters are a long tutorial on building a lazy functional
+  // language, not reference material the agent looks facts up in.
+  if @fs.exists("\{staged}/example/gmachine") {
+    @fs.rmdir("\{staged}/example/gmachine", recursive=true)
+  }
   if !@fs.exists("share/doc") { @fs.mkdir("share/doc", recursive=true) }
   if @fs.exists("share/doc/moonbit") {
     @fs.rmdir("share/doc/moonbit", recursive=true)
