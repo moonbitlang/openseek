@@ -23,6 +23,7 @@ fn reviewed_doc(
 ///|
 test "new reviews default to the full diff" {
   let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
   let change = test_modified_change(path)
   let state = owned_state()
   assert_true(state.review_view_mode is ReviewDiff)
@@ -31,12 +32,12 @@ test "new reviews default to the full diff" {
   let (_, opened) = open_changed_document(
     test_emit(),
     state,
-    { ..test_ctx(), open_files: [path], active_file: Some(path), },
+    { ..test_ctx(), open_files: [file], active_file: Some(file), },
     change,
     had_active=false,
   )
   assert_true(
-    opened.docs.get(path)
+    opened.docs.get(file)
     is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
   )
 }
@@ -44,10 +45,11 @@ test "new reviews default to the full diff" {
 ///|
 test "full diff change navigation is enabled only after a nonempty diff" {
   let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = reviewed_doc(path, selected)
-  let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
+  docs[file] = reviewed_doc(path, selected)
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   let state = { ..owned_state(), docs, }
   let (_, available) = update(
     test_emit(),
@@ -92,9 +94,9 @@ test "full diff change navigation is enabled only after a nonempty diff" {
   assert_true(next_rejected == unavailable)
 
   let source_docs = docs.copy()
-  source_docs[path] = {
-    ..source_docs.get(path).unwrap(),
-    review: source_docs.get(path).unwrap().review.map(review => {
+  source_docs[file] = {
+    ..source_docs.get(file).unwrap(),
+    review: source_docs.get(file).unwrap().review.map(review => {
       ..review,
       view_mode: ReviewSource,
     }),
@@ -128,10 +130,11 @@ test "full diff change navigation is enabled only after a nonempty diff" {
 ///|
 test "full diff layout toggles independently and source mode preserves it" {
   let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = reviewed_doc(path, selected)
-  let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
+  docs[file] = reviewed_doc(path, selected)
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   let (_, inline) = update(
     test_emit(),
     ToggleReviewDiffLayout,
@@ -140,9 +143,9 @@ test "full diff layout toggles independently and source mode preserves it" {
   )
   assert_true(inline.review_diff_layout is ReviewInline)
   let source_docs = inline.docs.copy()
-  source_docs[path] = {
-    ..source_docs.get(path).unwrap(),
-    review: source_docs.get(path).unwrap().review.map(review => {
+  source_docs[file] = {
+    ..source_docs.get(file).unwrap(),
+    review: source_docs.get(file).unwrap().review.map(review => {
       ..review,
       view_mode: ReviewSource,
     }),
@@ -163,15 +166,15 @@ test "full diff remains selected when opening another changed file" {
   let first_change = test_modified_change(first_path)
   let second_change = test_modified_change(second_path)
   let docs = owned_state().docs.copy()
-  docs[first_path] = reviewed_doc(
+  docs[test_file(first_path.0)] = reviewed_doc(
     first_path,
     first_change,
     view_mode=ReviewSource,
   )
   let first_ctx = {
     ..test_ctx(),
-    open_files: [first_path],
-    active_file: Some(first_path),
+    open_files: [test_file(first_path.0)],
+    active_file: Some(test_file(first_path.0)),
   }
   let (_, full_diff) = update(
     test_emit(),
@@ -181,14 +184,14 @@ test "full diff remains selected when opening another changed file" {
   )
   assert_true(full_diff.review_view_mode is ReviewDiff)
   assert_true(
-    full_diff.docs.get(first_path)
+    full_diff.docs.get(test_file(first_path.0))
     is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
   )
 
   let second_ctx = {
     ..first_ctx,
-    open_files: [first_path, second_path],
-    active_file: Some(second_path),
+    open_files: [test_file(first_path.0), test_file(second_path.0)],
+    active_file: Some(test_file(second_path.0)),
   }
   let (_, switched) = open_changed_document(
     test_emit(),
@@ -198,12 +201,12 @@ test "full diff remains selected when opening another changed file" {
     had_active=true,
   )
   assert_true(
-    switched.docs.get(second_path)
+    switched.docs.get(test_file(second_path.0))
     is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
   )
 
   let loaded_docs = switched.docs.copy()
-  loaded_docs[second_path] = reviewed_doc(
+  loaded_docs[test_file(second_path.0)] = reviewed_doc(
     second_path,
     second_change,
     baseline="second old source",
@@ -218,7 +221,7 @@ test "full diff remains selected when opening another changed file" {
   assert_true(source_again.review_view_mode is ReviewSource)
   for path in [first_path, second_path] {
     assert_true(
-      source_again.docs.get(path)
+      source_again.docs.get(test_file(path.0))
       is Some({ review: Some({ view_mode: ReviewSource, .. }), .. }),
     )
   }

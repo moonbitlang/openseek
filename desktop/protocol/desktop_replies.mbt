@@ -876,13 +876,13 @@ pub impl FromJson for WorktreeCreateResult with fn from_json(json, path) {
 
 ///|
 pub(all) struct OpenPathEditorTarget {
-  // Slash-separated path relative to the conversation's resolved checkout.
+  // Absolute URI path on the device that answered the request.
   path : String
   // Absent for an ordinary file reference; present for a parsed
   // `:line[:column]` or `#Lline` suffix.
   line : Int?
   column : Int?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct OpenPathDirectoryTarget {
@@ -891,24 +891,18 @@ pub(all) struct OpenPathDirectoryTarget {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-/// Reply to `open_path`: the route one transcript-referenced path took. The
-/// variants are exhaustive — the frontend matches on them directly instead of
-/// re-deriving the route from which optional field is present. The wire
-/// contract stays shape-compatible: `Opened` is the pre-structured
-/// `{opened: true}`, and the targets and the refusal ride the same optional
-/// fields the previous struct used, so older bundled hosts and frontends keep
-/// decoding every reply.
+/// Reply to `open_path`. Text targets carry absolute URI paths; directory
+/// targets remain relative to the conversation checkout for its Files tree.
 pub(all) enum OpenPathReply {
   // The host handed a non-text path (or any path outside the checkout's
   // built-in text/directory policy) to the system opener.
   Opened
-  // A viewer-sized UTF-8 file inside the checkout, with optional position.
+  // A viewer-sized UTF-8 file, with optional position.
   Editor(OpenPathEditorTarget)
   // A literal directory inside the conversation checkout, for the built-in
   // Files tree.
   Directory(OpenPathDirectoryTarget)
-  // The open was refused: the user-facing reason (missing path, text file
-  // outside the checkout, opener failure). The frontend shows this message
+  // The open failed (missing path or opener failure). The frontend shows this message
   // instead of the bridge's generic `op … failed` text.
   Refused(String)
 } derive(Debug, Eq)
@@ -3130,3 +3124,42 @@ pub extend RevealPathReply with Eq::{equal, not_equal}
 
 ///|
 pub extend RevealPathReply with ToJson::{to_json}
+
+///|
+pub impl ToJson for OpenPathEditorTarget with fn to_json(self) {
+  let fields : Map[String, Json] = { "path": self.path }
+  if self.line is Some(line) {
+    fields["line"] = line.to_json()
+  }
+  if self.column is Some(column) {
+    fields["column"] = column.to_json()
+  }
+  fields.to_json()
+}
+
+///|
+pub impl FromJson for OpenPathEditorTarget with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected an editor target"))
+  }
+  guard fields.get("path") is Some(file) else {
+    raise JsonDecodeError((path.add_key("path"), "missing editor path"))
+  }
+  let file : String = @json.from_json(file, path=path.add_key("path"))
+  guard file is ['/', ..] && !(file is ['/', '/', ..]) else {
+    raise JsonDecodeError(
+      (path.add_key("path"), "expected an absolute URI path"),
+    )
+  }
+  let line : Int? = match fields.get("line") {
+    Some(Null) => None
+    Some(value) => Some(@json.from_json(value, path=path.add_key("line")))
+    None => None
+  }
+  let column : Int? = match fields.get("column") {
+    Some(Null) => None
+    Some(value) => Some(@json.from_json(value, path=path.add_key("column")))
+    None => None
+  }
+  { path: file, line, column, }
+}

@@ -153,10 +153,9 @@ pub(all) struct ReviewState {
 } derive(Eq)
 
 ///|
-/// One open file's document record, keyed by its workspace-relative path in
-/// `State.docs`. Which files are open — and in what order — is the dock
-/// strip's business; this table only holds what each open file's document
-/// looks like.
+/// One open document, keyed by its device-bound absolute resource URI in
+/// `State.docs`. Workspace membership is derived only for project operations;
+/// opening a file never requires a workspace-relative name.
 pub(all) struct Doc {
   name : String
   state : TabState
@@ -174,7 +173,7 @@ pub(all) struct Doc {
 /// or why the host has none — the file is missing, or it could not be
 /// inspected at all.
 pub(all) struct FileStat {
-  path : @pathx.Relative
+  path : @common.Uri
   signature : @protocol.FileSignature
 }
 
@@ -397,7 +396,8 @@ pub fn ReconciledPlacement::reconcile(
 ///|
 /// The file subsystem's state: a lazily-loaded file tree of the active
 /// conversation's workspace and the document table behind the dock's open
-/// file tabs. Keyed entirely by workspace-relative paths; `owner` records
+/// file tabs. Documents use absolute resource URIs; tree entries remain
+/// workspace-relative. `owner` records
 /// which channel's conversation the cached tree and documents belong to, so
 /// switching either channel or session swaps them rather than showing
 /// another host's files. Strip membership, order, the active tab, and the
@@ -524,7 +524,7 @@ pub(all) struct State {
   // compatibility refreshes keep a settled baseline visible while one new
   // HEAD read is in flight; recording that request by path prevents a slow
   // read from being superseded by every Changes poll.
-  background_review_requests : Map[@pathx.Relative, Int]
+  background_review_requests : Map[@common.Uri, Int]
   // Whether the explorer pane was visible on the preceding sync pass. This is
   // stricter than the enclosing dock being open: with a file active the tree
   // toggle (and narrow drill-down) can hide the explorer while the dock stays
@@ -552,20 +552,20 @@ pub(all) struct State {
   loading : Array[@pathx.Relative]
   // Listed directories' entries, keyed by the directory's relative path.
   children : Map[@pathx.Relative, Array[FileEntry]]
-  // Each open file's document, keyed by workspace-relative path. The key set
+  // Each open document, keyed by device-bound absolute URI. The key set
   // mirrors the dock strip's file tabs (`Ctx.open_files`): the root update
   // adds an entry when it opens a tab and drops it when the tab closes.
-  docs : Map[@pathx.Relative, Doc]
+  docs : Map[@common.Uri, Doc]
   // Per-tab MBTI presentation. Absence is the normal default (`MbtiDiagram`),
   // so a closed and later reopened interface starts rendered again. Special
   // source-bearing opens record `MbtiSource` while that tab remains open.
-  mbti_view_modes : Map[@pathx.Relative, MbtiViewMode]
+  mbti_view_modes : Map[@common.Uri, MbtiViewMode]
   // Per-tab moon.mod presentation and the Host-produced package graph JSON.
   // Absence from `moon_mod_view_modes` defaults to source;
   // absence from `package_graphs` means the next active rendered view starts
   // one request. The generation is page-lifetime state used to fence replies.
-  moon_mod_view_modes : Map[@pathx.Relative, MoonModViewMode]
-  package_graphs : Map[@pathx.Relative, PackageGraphState]
+  moon_mod_view_modes : Map[@common.Uri, MoonModViewMode]
+  package_graphs : Map[@common.Uri, PackageGraphState]
   package_graph_generation : Int
   // The directory whose immediate children are open in the breadcrumb's
   // VS Code-style picker. The legacy field and message names remain so this
@@ -649,7 +649,7 @@ pub fn State::empty() -> State {
 /// An open MBTI tab defaults to its rendered diagram without storing a map
 /// entry. Explicit source/diagram selections then live only for that tab's
 /// lifetime.
-fn State::mbti_view_mode(self : State, path : @pathx.Relative) -> MbtiViewMode {
+fn State::mbti_view_mode(self : State, path : @common.Uri) -> MbtiViewMode {
   self.mbti_view_modes.get(path).unwrap_or(MbtiDiagram)
 }
 
@@ -658,7 +658,7 @@ fn State::mbti_view_mode(self : State, path : @pathx.Relative) -> MbtiViewMode {
 /// entry. Explicit source/graph selections live only for that tab's lifetime.
 fn State::moon_mod_view_mode(
   self : State,
-  path : @pathx.Relative,
+  path : @common.Uri,
 ) -> MoonModViewMode {
   self.moon_mod_view_modes.get(path).unwrap_or(MoonModSource)
 }
@@ -671,13 +671,13 @@ fn State::moon_mod_view_mode(
 pub fn State::prepare_owner(
   self : State,
   owner : @interop.ConversationKey,
-  open_files : Array[@pathx.Relative],
+  open_files : Array[@common.Uri],
 ) -> State {
   guard self.owner != Some(owner) else { return self }
-  let docs : Map[@pathx.Relative, Doc] = Map([])
+  let docs : Map[@common.Uri, Doc] = Map([])
   for path in open_files {
     docs[path] = {
-      name: basename(path),
+      name: @resource.label(path),
       state: TabLoading,
       review: None,
       stale: false,
@@ -767,8 +767,8 @@ pub(all) struct Ctx {
   // run over this list), and which file tab is active (`None` while no file tab
   // is on screen).
   panel_open : Bool
-  open_files : Array[@pathx.Relative]
-  active_file : @pathx.Relative?
+  open_files : Array[@common.Uri]
+  active_file : @common.Uri?
   open_history_diffs : Array[@dock.GitHistoryDiff]
   active_history_diff : @dock.GitHistoryDiff?
 } derive(Eq)
@@ -923,7 +923,7 @@ pub(all) enum Msg {
   // Owner, path, and request generation fence timers that outlive navigation.
   DiffLoadingDue(
     owner~ : @interop.ConversationKey,
-    path~ : @pathx.Relative,
+    path~ : @common.Uri,
     generation~ : Int
   )
   // Switch the active changed-file review between its selected source
@@ -963,14 +963,14 @@ pub(all) enum Msg {
   PackageGraphRequestLoaded(
     owner~ : @interop.ConversationKey,
     epoch~ : Int,
-    path~ : @pathx.Relative,
+    path~ : @common.Uri,
     generation~ : Int,
     source~ : String
   )
   PackageGraphRequestFailed(
     owner~ : @interop.ConversationKey,
     epoch~ : Int,
-    path~ : @pathx.Relative,
+    path~ : @common.Uri,
     generation~ : Int,
     message~ : String
   )
@@ -999,14 +999,14 @@ pub(all) enum Msg {
   // source from `original_path`.
   GitOriginalLoaded(
     owner~ : @interop.ConversationKey,
-    path~ : @pathx.Relative,
+    path~ : @common.Uri,
     generation~ : Int,
     background~ : Bool,
     original~ : @protocol.GitOriginalFileReply
   )
   GitOriginalFailed(
     owner~ : @interop.ConversationKey,
-    path~ : @pathx.Relative,
+    path~ : @common.Uri,
     generation~ : Int,
     background~ : Bool,
     message~ : String
@@ -1051,7 +1051,7 @@ pub(all) enum Msg {
   FileLoaded(
     owner~ : @interop.ConversationKey,
     epoch~ : Int,
-    path~ : @pathx.Relative,
+    path~ : @common.Uri,
     name~ : String,
     file~ : FileContent,
     file_link_generation~ : Int?,
@@ -1066,7 +1066,7 @@ pub(all) enum Msg {
   FileFailed(
     owner~ : @interop.ConversationKey,
     epoch~ : Int,
-    path~ : @pathx.Relative,
+    path~ : @common.Uri,
     file_link_generation~ : Int?,
     review_generation~ : Int?,
     message~ : String
@@ -1093,6 +1093,8 @@ pub(all) enum Msg {
   // the one cheap signal that covers them. `owner` fences a background
   // conversation's finish.
   RunSettled(owner~ : @interop.ConversationKey)
+  // Files outside the checkout are not covered by its directory watcher.
+  RefreshExternalFiles
   // A `stat_files` reply: each open tab's current mtime signature, or that
   // the file is gone or could not be inspected. Owner plus request epoch
   // fence a request that outlived either its conversation or checkout.
@@ -1258,3 +1260,14 @@ pub extend TreeLayout with Eq::{equal, not_equal}
 
 ///|
 pub extend WatchedPaths with Eq::{equal, not_equal}
+
+///|
+/// Workspace membership is derived for each operation; it is not document identity.
+fn Ctx::relative(self : Ctx, file : @common.Uri) -> @pathx.Relative? {
+  self.root().bind(root => @resource.relative_to(file, root))
+}
+
+///|
+fn Ctx::resource(self : Ctx, path : @pathx.Relative) -> @common.Uri? {
+  self.root().map(root => @resource.join_relative(root, path))
+}

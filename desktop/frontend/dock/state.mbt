@@ -25,7 +25,8 @@ pub(all) struct GitHistoryDiff {
 /// is a new variant plus its body view — the strip machine itself does not
 /// change.
 pub(all) enum DockTab {
-  File(path~ : @pathx.Relative)
+  // Device-bound absolute identity; changing checkout never retargets a tab.
+  File(path~ : @common.Uri)
   GitDiff(diff~ : GitHistoryDiff)
   // A browser page, rendered by a host-owned native web contents view; the
   // id keys the `preview` package's page state and the host's view. Page
@@ -74,7 +75,7 @@ pub fn State::empty() -> State {
 ///|
 /// The strip's file paths, in strip order — the projection the root update
 /// hands to fileeditor's `Ctx` for its stat/watch/reload sweeps.
-pub fn file_paths(state : State) -> Array[@pathx.Relative] {
+pub fn file_paths(state : State) -> Array[@common.Uri] {
   [
     for tab in state.tabs if tab is File(path~) => path
   ]
@@ -82,7 +83,7 @@ pub fn file_paths(state : State) -> Array[@pathx.Relative] {
 
 ///|
 /// The active tab's file path, when the active tab is a file.
-pub fn active_file(state : State) -> @pathx.Relative? {
+pub fn active_file(state : State) -> @common.Uri? {
   match state.active {
     Some(File(path~)) => Some(path)
     _ => None

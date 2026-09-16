@@ -8,30 +8,39 @@ fn owner(session : String) -> @interop.ConversationKey {
 }
 
 ///|
-fn file_tab(path : String) -> @dock.DockTab {
-  @dock.DockTab::File(path=@pathx.Relative(path))
+/// A file below the fixture checkout, as the dock keys it.
+fn work_file(path : String) -> @common.Uri raise {
+  guard @resource.of_path(@interop.ChannelId::Local, "/work/" + path)
+    is Some(file) else {
+    fail("fixture path must be absolute")
+  }
+  file
+}
+
+///|
+fn file_tab(path : String) -> @dock.DockTab raise {
+  @dock.DockTab::File(path=work_file(path))
 }
 
 ///|
 test "open_file appends in order and activates" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_file(work_file("b.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("b.mbt")))
   assert_true(
-    @dock.file_paths(state) ==
-    [@pathx.Relative("a.mbt"), @pathx.Relative("b.mbt")],
+    @dock.file_paths(state) == [work_file("a.mbt"), work_file("b.mbt")],
   )
-  assert_true(@dock.active_file(state) == Some(@pathx.Relative("b.mbt")))
+  assert_true(@dock.active_file(state) == Some(work_file("b.mbt")))
 }
 
 ///|
 test "open_file re-activates an existing tab without duplicating it" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_file(work_file("b.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("a.mbt")))
 }
@@ -39,8 +48,8 @@ test "open_file re-activates an existing tab without duplicating it" {
 ///|
 test "TabActivated switches to a present tab and ignores an absent one" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_file(work_file("b.mbt"))
   let activated = @dock.update(@dock.TabActivated(file_tab("a.mbt")), state)
   assert_true(activated.active == Some(file_tab("a.mbt")))
   // Idempotent: activating the active tab changes nothing.
@@ -53,9 +62,9 @@ test "TabActivated switches to a present tab and ignores an absent one" {
 ///|
 test "closing the active tab activates the right neighbor, else the left" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
-    |> @dock.open_file(@pathx.Relative("c.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_file(work_file("b.mbt"))
+    |> @dock.open_file(work_file("c.mbt"))
   // Close the middle tab while it is active: the right neighbor wins.
   let state = @dock.update(@dock.TabActivated(file_tab("b.mbt")), state)
   let state = @dock.update(@dock.TabClosed(file_tab("b.mbt")), state)
@@ -74,8 +83,8 @@ test "closing the active tab activates the right neighbor, else the left" {
 ///|
 test "closing a background tab keeps the active tab" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_file(work_file("b.mbt"))
   let state = @dock.update(@dock.TabClosed(file_tab("a.mbt")), state)
   assert_true(state.tabs == [file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("b.mbt")))
@@ -89,8 +98,8 @@ test "sync parks the strip and restores it when the conversation returns" {
   let first = owner("alpha")
   let second = owner("beta")
   let state = @dock.sync(@dock.State::empty(), first)
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_file(work_file("b.mbt"))
   let state = @dock.update(@dock.TabActivated(file_tab("a.mbt")), state)
   // Switch away: the strip parks and the panel starts empty.
   let away = @dock.sync(state, second)
@@ -110,7 +119,7 @@ test "sync does not park a strip owned by an empty session" {
   let nameless = owner("")
   let real = owner("alpha")
   let state = @dock.sync(@dock.State::empty(), nameless)
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
   let moved = @dock.sync(state, real)
   assert_true(moved.tabs.is_empty())
   // Returning to the empty session restores nothing.
@@ -122,14 +131,14 @@ test "sync does not park a strip owned by an empty session" {
 ///|
 test "open_browser appends and re-activates without duplicating" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_browser(7)
   assert_true(state.tabs == [file_tab("a.mbt"), @dock.DockTab::Browser(id=7)])
   assert_true(state.active == Some(@dock.DockTab::Browser(id=7)))
   assert_true(@dock.active_browser(state) == Some(7))
   assert_true(@dock.active_file(state) is None)
   // Files projection skips non-file tabs.
-  assert_true(@dock.file_paths(state) == [@pathx.Relative("a.mbt")])
+  assert_true(@dock.file_paths(state) == [work_file("a.mbt")])
   let again = @dock.open_browser(state, 7)
   assert_true(again.tabs == state.tabs)
 }
@@ -137,9 +146,9 @@ test "open_browser appends and re-activates without duplicating" {
 ///|
 test "open_picker keeps at most one picker tab" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_picker
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
+    |> @dock.open_file(work_file("b.mbt"))
     |> @dock.open_picker
   assert_true(
     state.tabs ==
@@ -151,9 +160,9 @@ test "open_picker keeps at most one picker tab" {
 ///|
 test "resolve_pick replaces the picker in place with a fresh file" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_picker
-  let state = @dock.resolve_pick(state, @pathx.Relative("b.mbt"))
+  let state = @dock.resolve_pick(state, work_file("b.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("b.mbt")))
 }
@@ -161,18 +170,18 @@ test "resolve_pick replaces the picker in place with a fresh file" {
 ///|
 test "resolve_pick activates an already-open file and closes the picker" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
-    |> @dock.open_file(@pathx.Relative("b.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_file(work_file("b.mbt"))
     |> @dock.open_picker
-  let state = @dock.resolve_pick(state, @pathx.Relative("a.mbt"))
+  let state = @dock.resolve_pick(state, work_file("a.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("a.mbt")))
 }
 
 ///|
 test "resolve_pick without a picker is a plain open" {
-  let state = @dock.State::empty() |> @dock.open_file(@pathx.Relative("a.mbt"))
-  let state = @dock.resolve_pick(state, @pathx.Relative("b.mbt"))
+  let state = @dock.State::empty() |> @dock.open_file(work_file("a.mbt"))
+  let state = @dock.resolve_pick(state, work_file("b.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("b.mbt")))
 }
@@ -180,7 +189,7 @@ test "resolve_pick without a picker is a plain open" {
 ///|
 test "closing the picker activates a neighbor like any tab" {
   let state = @dock.State::empty()
-    |> @dock.open_file(@pathx.Relative("a.mbt"))
+    |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_picker
   let state = @dock.update(TabClosed(@dock.DockTab::FilePicker), state)
   assert_true(state.tabs == [file_tab("a.mbt")])

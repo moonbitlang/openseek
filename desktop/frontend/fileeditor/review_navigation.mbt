@@ -20,10 +20,12 @@ fn review_navigation_neighbor(
 /// use the actual generation that owns the incoming content.
 pub fn State::with_review_navigation_destination(
   self : State,
+  ctx : Ctx,
   change : ChangedFile,
   last : Bool,
 ) -> State {
-  guard self.docs.get(change.path) is Some({ review: Some(review), .. }) &&
+  guard ctx.resource(change.path).bind(file => self.docs.get(file))
+    is Some({ review: Some(review), .. }) &&
     review.selected == change else {
     return self
   }
@@ -58,8 +60,8 @@ fn sync_review_navigation_destination(
   }
   let cleared = { ..state, review_navigation_destination: None, }
   guard ctx.active_history_diff is None &&
-    ctx.active_file == Some(change.path) &&
-    state.docs.get(change.path) is Some(doc) &&
+    ctx.active_file.bind(file => ctx.relative(file)) == Some(change.path) &&
+    ctx.resource(change.path).bind(file => state.docs.get(file)) is Some(doc) &&
     doc.review is Some(review) &&
     review.selected == change &&
     review.generation == generation &&
@@ -179,10 +181,7 @@ fn review_navigation_complete(state : State, ctx : Ctx) -> Bool {
     review.view_mode is ReviewSource ||
     (
       !doc.diff_is_pending() &&
-      (
-        doc.diff_content() is None ||
-        state.review_navigation_ready(ctx.active_file)
-      )
+      (doc.diff_content() is None || state.review_navigation_ready(ctx))
     )
   )
 }
@@ -192,7 +191,7 @@ fn current_review_navigation_display(
   state : State,
   ctx : Ctx,
 ) -> ReviewNavigationDisplay {
-  let active = state.active_review_hunk(ctx.active_file)
+  let active = state.active_review_hunk(ctx)
   {
     file_position: active_review_position(state, ctx).map(position => {
       (position.1, position.2)

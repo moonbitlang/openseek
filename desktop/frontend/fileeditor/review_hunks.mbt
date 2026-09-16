@@ -331,12 +331,13 @@ fn State::set_review_file_progress(
 fn State::current_review_generation(
   self : State,
   change : ChangedFile,
-  active_file : @pathx.Relative?,
+  ctx : Ctx,
 ) -> Int? {
-  guard active_file == Some(change.path) &&
+  guard ctx.active_file.bind(file => ctx.relative(file)) == Some(change.path) &&
     self.changes is ChangeListReady(files~, ..) &&
     files.contains(change) &&
-    self.docs.get(change.path) is Some({ review: Some(review), .. }) &&
+    ctx.resource(change.path).bind(file => self.docs.get(file))
+    is Some({ review: Some(review), .. }) &&
     review.selected == change &&
     review.view_mode is ReviewDiff &&
     self.review_view_mode is ReviewDiff else {
@@ -354,11 +355,10 @@ fn State::accept_active_review_hunk(
   hunk : ReviewHunk?,
   file_changes : ReviewHunk?,
   position : ReviewHunkPosition?,
-  active_file : @pathx.Relative?,
+  ctx : Ctx,
   ready~ : Bool,
 ) -> State {
-  guard self.current_review_generation(change, active_file) ==
-    Some(review_generation) &&
+  guard self.current_review_generation(change, ctx) == Some(review_generation) &&
     self.review_hunk_surface_generation == surface_generation else {
     return self
   }
@@ -381,22 +381,16 @@ fn State::accept_active_review_hunk(
 }
 
 ///|
-fn State::review_navigation_ready(
-  self : State,
-  active_file : @pathx.Relative?,
-) -> Bool {
+fn State::review_navigation_ready(self : State, ctx : Ctx) -> Bool {
   self.review_hunk_ready is Some((change, generation, surface)) &&
-  self.current_review_generation(change, active_file) == Some(generation) &&
+  self.current_review_generation(change, ctx) == Some(generation) &&
   self.review_hunk_surface_generation == surface
 }
 
 ///|
-fn State::active_review_hunk(
-  self : State,
-  active_file : @pathx.Relative?,
-) -> ReviewActiveHunk? {
+fn State::active_review_hunk(self : State, ctx : Ctx) -> ReviewActiveHunk? {
   guard self.review_active_hunk is Some(active) &&
-    self.current_review_generation(active.change, active_file) ==
+    self.current_review_generation(active.change, ctx) ==
     Some(active.review_generation) &&
     self.review_hunk_surface_generation == active.surface_generation else {
     return None
@@ -405,12 +399,8 @@ fn State::active_review_hunk(
 }
 
 ///|
-fn State::toggle_active_review_hunk(
-  self : State,
-  active_file : @pathx.Relative?,
-) -> State {
-  guard self.active_review_hunk(active_file) is Some(active) &&
-    !active.hunk.is_empty() else {
+fn State::toggle_active_review_hunk(self : State, ctx : Ctx) -> State {
+  guard self.active_review_hunk(ctx) is Some(active) && !active.hunk.is_empty() else {
     return self
   }
   match self.review_file_progress(active.change) {

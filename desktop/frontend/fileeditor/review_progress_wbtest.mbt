@@ -3,7 +3,7 @@ fn review_progress_state() -> (State, Ctx, ChangedFile) raise {
   let path = @pathx.Relative("src/main.mbt")
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = reviewed_doc(path, selected)
+  docs[test_file(path.0)] = reviewed_doc(path, selected)
   let state = {
     ..owned_state(),
     docs,
@@ -15,7 +15,11 @@ fn review_progress_state() -> (State, Ctx, ChangedFile) raise {
       refresh_again=false,
     ),
   }
-  let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
+  let ctx = {
+    ..test_ctx(),
+    open_files: [test_file(path.0)],
+    active_file: Some(test_file(path.0)),
+  }
   (state, ctx, selected)
 }
 
@@ -200,7 +204,7 @@ test "active hunk requires exact row, diff generation, and surface generation" {
     ctx,
   )
   assert_true(stale_generation.review_active_hunk is None)
-  assert_false(stale_generation.review_navigation_ready(ctx.active_file))
+  assert_false(stale_generation.review_navigation_ready(ctx))
   let other = { ..selected, index_status: "M", worktree_status: " ", }
   let (_, stale_row) = update(
     test_emit(),
@@ -217,11 +221,8 @@ test "active hunk requires exact row, diff generation, and surface generation" {
     ctx,
   )
   assert_true(stale_row.review_active_hunk is None)
-  assert_false(stale_row.review_navigation_ready(ctx.active_file))
-  let inactive_ctx = {
-    ..ctx,
-    active_file: Some(@pathx.Relative("src/other.mbt")),
-  }
+  assert_false(stale_row.review_navigation_ready(ctx))
+  let inactive_ctx = { ..ctx, active_file: Some(test_file("src/other.mbt")), }
   let inactive = activate_review_hunk(
     state, inactive_ctx, selected, hunk, hunk, 0, 1,
   )
@@ -229,7 +230,7 @@ test "active hunk requires exact row, diff generation, and surface generation" {
   let current = activate_review_hunk(state, ctx, selected, hunk, hunk, 0, 1)
   let surface_generation = state.review_hunk_surface_generation
   assert_true(
-    current.active_review_hunk(ctx.active_file)
+    current.active_review_hunk(ctx)
     is Some(
       {
         change,
@@ -280,7 +281,7 @@ test "active hunk requires exact row, diff generation, and surface generation" {
 ///|
 test "empty review completion reveals navigation and is invalidated with its surface" {
   let (state, ctx, selected) = review_progress_state()
-  assert_false(state.review_navigation_ready(ctx.active_file))
+  assert_false(state.review_navigation_ready(ctx))
   let ready = state.accept_active_review_hunk(
     selected,
     1,
@@ -288,13 +289,13 @@ test "empty review completion reveals navigation and is invalidated with its sur
     None,
     None,
     None,
-    ctx.active_file,
+    ctx,
     ready=true,
   )
   assert_true(ready.review_active_hunk is None)
-  assert_true(ready.review_navigation_ready(ctx.active_file))
+  assert_true(ready.review_navigation_ready(ctx))
   let invalidated = ready.clear_review_active_hunk()
-  assert_false(invalidated.review_navigation_ready(ctx.active_file))
+  assert_false(invalidated.review_navigation_ready(ctx))
   let stale = invalidated.accept_active_review_hunk(
     selected,
     1,
@@ -302,10 +303,10 @@ test "empty review completion reveals navigation and is invalidated with its sur
     None,
     None,
     None,
-    ctx.active_file,
+    ctx,
     ready=true,
   )
-  assert_false(stale.review_navigation_ready(ctx.active_file))
+  assert_false(stale.review_navigation_ready(ctx))
 }
 
 ///|
@@ -314,7 +315,8 @@ test "navigation retains the completed presentation until a replacement complete
   let other_path = @pathx.Relative("src/other.mbt")
   let other = test_modified_change(other_path)
   let docs = state.docs.copy()
-  docs[other_path] = reviewed_doc(other_path, other)
+  let other_file = ctx.resource(other_path).unwrap()
+  docs[other_file] = reviewed_doc(other_path, other)
   let state = {
     ..state,
     docs,
@@ -329,7 +331,7 @@ test "navigation retains the completed presentation until a replacement complete
   let displayed = activate_review_hunk(state, ctx, selected, hunk, hunk, 0, 1).sync_review_navigation_display(
     ctx,
   )
-  let next_ctx = { ..ctx, active_file: Some(other_path), }
+  let next_ctx = { ..ctx, active_file: Some(other_file), }
   let pending = displayed
     .clear_review_active_hunk()
     .sync_review_navigation_display(next_ctx)
@@ -360,7 +362,7 @@ test "navigation retains the completed presentation until a replacement complete
       None,
       None,
       None,
-      next_ctx.active_file,
+      next_ctx,
       ready=true,
     )
     .sync_review_navigation_display(next_ctx)

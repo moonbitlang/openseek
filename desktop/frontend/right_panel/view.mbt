@@ -12,9 +12,9 @@ fn panel_view(
       File(path~) => {
         let (label, missing) = match input.file_panel.docs.get(path) {
           Some(doc) => (doc.name, doc.state is TabDeleted)
-          None => (@fileeditor.basename(path), false)
+          None => (@resource.label(path), false)
         }
-        { tab, label, title: path.0, missing, }
+        { tab, label, title: path.path, missing, }
       }
       GitDiff(diff~) => {
         let short = if diff.commit.length() <= 8 {
@@ -131,7 +131,7 @@ fn panel_view(
         input.file_ctx,
         reveal=match (input.reveal_label, input.file_ctx.active_file) {
           (Some(label), Some(path)) =>
-            Some((label, (actions.reveal_file)(path.0)))
+            Some((label, (actions.reveal_file)(path.path)))
           _ => None
         },
       ),

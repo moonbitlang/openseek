@@ -16,7 +16,7 @@ fn Model::quick_open_input(
     owner=active.owner,
     root=active.placement.bind(placement => placement.checkout_root()),
     open_files=self.live_editor_files(),
-    active_file=@dock.active_file(self.dock),
+    active_file=self.active_workspace_file(),
   )
 }
 

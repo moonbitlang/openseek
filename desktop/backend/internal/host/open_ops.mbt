@@ -1,5 +1,5 @@
-// Opening a transcript-referenced path: viewer-sized UTF-8 files inside the
-// conversation checkout go to the built-in editor, checkout-local directories
+// Opening a transcript-referenced path: viewer-sized UTF-8 files on the
+// filesystem go to the built-in editor, checkout-local directories
 // go to its Files tree, and other existing paths go to the platform opener.
 // Position suffixes apply only to built-in text files.
 
@@ -55,33 +55,13 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
   let base = reference.base
   let resolution = reference.resolution
   if resolution is EditorPath(path~, line~, column~) {
-    guard base is Some(root) else {
-      return refusal("This conversation has no working directory")
-    }
-    // The built-in editor is checkout-rooted. Return the relative path we
-    // already proved belongs to this exact cwd. Check both the lexical path
-    // and its real target so an in-checkout symlink cannot expose text outside
-    // the checkout through the editor reader.
+    // Text documents are addressed independently of the conversation checkout.
+    // Keep the protocol path in URI form, including for an external symlink.
     guard @pathx.Path(path).to_absolute() is Some(absolute) &&
-      absolute.relative_to(root~) is Some(relative) &&
-      !relative.is_root() else {
-      return refusal("Text file is outside the conversation checkout: \{path}")
+      absolute.to_uri_path() is Some(resource) else {
+      return refusal("Invalid absolute file path: \{path}")
     }
-    let real_root_text = @fs.realpath(root.to_string()) catch {
-      error if @async.is_being_cancelled() => raise error
-      error => return refusal("Could not resolve working directory: \{error}")
-    }
-    let real_path_text = @fs.realpath(path) catch {
-      error if @async.is_being_cancelled() => raise error
-      error => return refusal("Could not resolve file: \{error}")
-    }
-    guard @pathx.Path(real_root_text).to_absolute() is Some(real_root) &&
-      @pathx.Path(real_path_text).to_absolute() is Some(real_path) &&
-      real_path.relative_to(root=real_root) is Some(real_relative) &&
-      !real_relative.is_root() else {
-      return refusal("Text file is outside the conversation checkout: \{path}")
-    }
-    return Editor({ path: relative.0, line, column, })
+    return Editor({ path: resource, line, column, })
   }
   guard resolution is SystemPath(system_path) else {
     return refusal("Could not resolve path")
@@ -188,7 +168,7 @@ fn refusal(message : String) -> OpenPathReply {
 }
 
 ///|
-async test "open_path only requires a working directory for relative or editor paths" {
+async test "open_path only requires a working directory for relative paths" {
   let root = @fs.tmpdir(prefix="openseek-host-open-without-cwd-")
   let missing_path = "\{root}/missing.bin"
   // The absolute target reached the existence check (not the working-
@@ -217,7 +197,11 @@ async test "open_path only requires a working directory for relative or editor p
   })
   assert_eq(
     editor_without_cwd,
-    Refused("This conversation has no working directory"),
+    Editor({
+      path: @pathx.Path(text_path).to_absolute().unwrap().to_uri_path().unwrap(),
+      line: None,
+      column: None,
+    }),
   )
 }
 
@@ -240,7 +224,7 @@ async test "open_path returns workspace editor positions without a system open" 
   })
   assert_eq(
     reply,
-    Editor({ path: "source.mbt", line: Some(2738), column: Some(17), }),
+    Editor({ path: "\{cwd}/source.mbt", line: Some(2738), column: Some(17), }),
   )
   let fragment_reply = open_path_op({
     session: "unused-for-explicit-cwd",
@@ -249,7 +233,7 @@ async test "open_path returns workspace editor positions without a system open" 
   })
   assert_eq(
     fragment_reply,
-    Editor({ path: "source.mbt", line: Some(5), column: None, }),
+    Editor({ path: "\{cwd}/source.mbt", line: Some(5), column: None, }),
   )
   let ordinary_reply = open_path_op({
     session: "unused-for-explicit-cwd",
@@ -258,7 +242,7 @@ async test "open_path returns workspace editor positions without a system open" 
   })
   assert_eq(
     ordinary_reply,
-    Editor({ path: "source.mbt", line: None, column: None, }),
+    Editor({ path: "\{cwd}/source.mbt", line: None, column: None, }),
   )
   let literal = "\{file}:12"
   @fs.write_file(literal, "literal", create_mode=CreateOrTruncate)
@@ -269,7 +253,7 @@ async test "open_path returns workspace editor positions without a system open" 
   })
   assert_eq(
     literal_reply,
-    Editor({ path: "source.mbt:12", line: None, column: None, }),
+    Editor({ path: "\{cwd}/source.mbt:12", line: None, column: None, }),
   )
   @fs.mkdir("\{dir}/src")
   let directory_reply = open_path_op({
@@ -298,7 +282,7 @@ async test "macOS application bundles bypass the workspace Files tree" {
 }
 
 ///|
-async test "open_path rejects missing and outside text files" {
+async test "open_path rejects missing files and opens outside text files" {
   let root = @fs.tmpdir(prefix="openseek-host-open-boundary-")
   let dir = "\{root}/workspace"
   @fs.mkdir(dir)
@@ -324,8 +308,28 @@ async test "open_path rejects missing and outside text files" {
     path: outside,
   })
   assert_true(
-    escaped is Refused(message) &&
-    message.has_prefix("Text file is outside the conversation checkout:"),
+    escaped is Editor({ path, line: None, column: None, }) &&
+    path == @pathx.Path(outside).to_absolute().unwrap().to_uri_path().unwrap(),
+  )
+  let linked = "\{dir}/linked.txt"
+  @fs.symlink(target=outside, linked)
+  let linked_reply = open_path_op({
+    session: "unused-for-explicit-cwd",
+    cwd: Some(cwd),
+    path: "linked.txt:12:3",
+  })
+  assert_eq(
+    linked_reply,
+    Editor({ path: "\{cwd}/linked.txt", line: Some(12), column: Some(3), }),
+  )
+  let parent_reply = open_path_op({
+    session: "unused-for-explicit-cwd",
+    cwd: Some(cwd),
+    path: "../outside.txt#L7",
+  })
+  assert_true(
+    parent_reply is Editor({ path, line: Some(7), column: None, }) &&
+    path == @pathx.Path(outside).to_absolute().unwrap().to_uri_path().unwrap(),
   )
 }
 

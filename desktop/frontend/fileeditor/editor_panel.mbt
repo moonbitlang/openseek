@@ -126,6 +126,9 @@ priv struct ViewerHost {
   // cleared its document) is dropped rather than drawn over the wrong
   // document. `None` when the viewer shows a notice or nothing.
   mut absolute : @common.Uri?
+  // The dock document identity survives deleted-file previews, which have
+  // no live file for diagnostics but still own a saved scroll position.
+  mut document : @common.Uri?
   // The same file as the conversation names it — the workspace-relative path
   // the panel read it by. A comment filed on the shown document takes this
   // as its chip path, so the chip never has to reverse-engineer a relative
@@ -148,7 +151,7 @@ priv struct ViewerHost {
   // Desired size has the same pre-mount lifetime as the family. The Viewer
   // consumes pixels as a Double and re-measures whenever this value changes.
   mut font_size : Double
-  // Each open tab's last scroll position, keyed by workspace-relative path,
+  // Each open tab's last scroll position, keyed by absolute resource URI,
   // saved as the viewer switches away and restored when the tab returns.
   // Scroll is DOM state, so it lives here beside the viewer rather than in
   // the Rabbita model.
@@ -184,6 +187,7 @@ let viewer_state : ViewerHost = {
   search_match_highlights: None,
   services: None,
   absolute: None,
+  document: None,
   relative: None,
   navigation: None,
   version: 0,
@@ -941,6 +945,7 @@ fn show_history_diff_in_viewer(
     services.feedback.set_feedback_enabled(original_uri, false)
     services.feedback.set_feedback_enabled(modified_uri, false)
     viewer_state.absolute = None
+    viewer_state.document = None
     viewer_state.relative = None
     viewer_state.navigation = None
     if previous is Some(previous) {
@@ -1233,7 +1238,7 @@ fn after_render_effect(action : () -> Unit) -> @cmd.Cmd {
 /// `range` — the bubble the chip replaced when the comment was filed.
 ///
 /// The outgoing document's scroll position is always saved under its
-/// relative path; `restore_scroll` (a tab switch or an in-place reload)
+/// absolute resource URI; `restore_scroll` (a tab switch or an in-place reload)
 /// brings the incoming document back to its saved position instead of the
 /// top — the Monaco save/restore-view-state contract around `set_model`.
 /// `review_original`, when present, is the Git HEAD baseline used by the
@@ -1249,6 +1254,7 @@ fn show_file_in_viewer(
   name : String,
   content : String,
   absolute? : @common.Uri,
+  document~ : @common.Uri,
   relative? : @pathx.Relative,
   range? : @common.Range? = None,
   annotation? : String,
@@ -1338,13 +1344,13 @@ fn show_file_in_viewer(
       viewer.restore_view_state(current_view_state)
     } else if !same_document {
       // Park the outgoing document's view state for its tab's return.
-      if viewer_state.relative is Some(prev) {
+      if viewer_state.document is Some(prev) {
         if code_model is Some(_) && viewer.save_view_state() is Some(view_state) {
-          viewer_state.view_states[prev.0] = view_state
+          viewer_state.view_states[prev.to_string()] = view_state
         }
         if markdown_model is Some(_) &&
           markdown_viewer.save_view_state() is Some(view_state) {
-          viewer_state.markdown_view_states[prev.0] = view_state
+          viewer_state.markdown_view_states[prev.to_string()] = view_state
         }
       }
       viewer_state.version += 1
@@ -1375,8 +1381,8 @@ fn show_file_in_viewer(
           None => ()
         }
         if restore_view_state &&
-          relative is Some(rel) &&
-          viewer_state.markdown_view_states.get(rel.0) is Some(saved) {
+          viewer_state.markdown_view_states.get(document.to_string())
+          is Some(saved) {
           markdown_viewer.restore_view_state(Some(saved))
         }
       } else {
@@ -1390,8 +1396,7 @@ fn show_file_in_viewer(
         viewer.set_model(Some(text_model))
         dispose_source_model(code_model)
         let restored_code_view_state = if restore_view_state &&
-          relative is Some(rel) &&
-          viewer_state.view_states.get(rel.0) is Some(saved) {
+          viewer_state.view_states.get(document.to_string()) is Some(saved) {
           viewer.restore_view_state(Some(saved))
           true
         } else {
@@ -1419,6 +1424,7 @@ fn show_file_in_viewer(
     // with no absolute path, takes no diagnostics). The relative name rides
     // along for comments filed on this document (see `ViewerHost::relative`).
     viewer_state.absolute = absolute
+    viewer_state.document = Some(document)
     viewer_state.relative = relative
     viewer_state.navigation = match (absolute, relative) {
       (Some(absolute), Some(relative)) =>
@@ -1593,6 +1599,7 @@ fn clear_viewer() -> @cmd.Cmd {
       }
     }
     viewer_state.absolute = None
+    viewer_state.document = None
     viewer_state.relative = None
     viewer_state.navigation = None
     clear_mbti_diagram()
@@ -1632,6 +1639,7 @@ fn clear_document() -> @cmd.Cmd {
       }
     }
     viewer_state.absolute = None
+    viewer_state.document = None
     viewer_state.relative = None
     viewer_state.navigation = None
     clear_mbti_diagram()
@@ -1643,10 +1651,10 @@ fn clear_document() -> @cmd.Cmd {
 /// Forget a closed tab's parked scroll position. Batched after the
 /// neighbor's `show_file_in_viewer` (which re-parks the outgoing document,
 /// closed tab included), so the closed tab's entry does not linger.
-fn forget_view_state(path : @pathx.Relative) -> @cmd.Cmd {
+fn forget_view_state(path : @common.Uri) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    viewer_state.view_states.remove(path.0)
-    viewer_state.markdown_view_states.remove(path.0)
+    viewer_state.view_states.remove(path.to_string())
+    viewer_state.markdown_view_states.remove(path.to_string())
   })
 }
 

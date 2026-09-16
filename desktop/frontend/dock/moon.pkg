@@ -3,6 +3,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/svg",
   "openseek_desktop/frontend/pathx",
+  "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/icons",
 }
@@ -12,3 +13,7 @@ import {
 } for "wbtest"
 
 supported_targets = "js"
+
+import {
+  "openseek_desktop/frontend/resource",
+} for "test"

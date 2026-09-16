@@ -86,6 +86,10 @@ pub fn contains(root : @common.Uri, path : @common.Uri) -> Bool {
 ///|
 /// This resource relative to absolute resource `root`, or `None` when it is
 /// on another device or outside that root.
+/// The result describes membership in this particular root, not whether the
+/// file can be opened. Derive it when a workspace operation needs a relative
+/// path; retaining it as document identity would tie the file to a stale root
+/// after a workspace change. `None` is an ordinary non-member result.
 pub fn relative_to(uri : @common.Uri, root : @common.Uri) -> @pathx.Relative? {
   guard contains(root, uri) else { return None }
   @common.ext_uri

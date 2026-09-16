@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
 }
@@ -12,11 +13,11 @@ import {
 // Values
 pub fn active_browser(State) -> Int?
 
-pub fn active_file(State) -> @pathx.Relative?
+pub fn active_file(State) -> @common.Uri?
 
 pub fn active_history_diff(State) -> GitHistoryDiff?
 
-pub fn file_paths(State) -> Array[@pathx.Relative]
+pub fn file_paths(State) -> Array[@common.Uri]
 
 pub fn history_diffs(State) -> Array[GitHistoryDiff]
 
@@ -24,7 +25,7 @@ pub fn launcher_pane(LauncherActions) -> @html.Html
 
 pub fn open_browser(State, Int) -> State
 
-pub fn open_file(State, @pathx.Relative) -> State
+pub fn open_file(State, @common.Uri) -> State
 
 pub fn open_history_diff(State, GitHistoryDiff) -> State
 
@@ -34,7 +35,7 @@ pub fn open_picker(State) -> State
 
 pub fn open_workflows(State) -> State
 
-pub fn resolve_pick(State, @pathx.Relative) -> State
+pub fn resolve_pick(State, @common.Uri) -> State
 
 pub fn sync(State, @interop.ConversationKey) -> State
 
@@ -46,7 +47,7 @@ pub fn update(Msg, State) -> State
 
 // Types and methods
 pub(all) enum DockTab {
-  File(path~ : @pathx.Relative)
+  File(path~ : @common.Uri)
   GitDiff(diff~ : GitHistoryDiff)
   Browser(id~ : Int)
   FilePicker

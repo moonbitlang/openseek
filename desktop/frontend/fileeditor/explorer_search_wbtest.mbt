@@ -3,6 +3,7 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
   let ctx = test_ctx()
   guard ctx.root() is Some(root) else { fail("test checkout root expected") }
   let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
   let reply : @protocol.SearchTextReply = {
     root: root.path,
     generation: 0,
@@ -29,7 +30,7 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
     ctx.search_input(),
   )
   let visible = { ..owned_state(), explorer_mode: ExplorerSearch, search, }
-  guard visible.editor_search_highlights(path) is Some(highlights) else {
+  guard visible.editor_search_highlights(ctx, file) is Some(highlights) else {
     fail("Search inventory should expose active editor matches")
   }
   assert_eq(highlights.ranges(), [
@@ -37,7 +38,9 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
     @common.Range(3, 8, 3, 14),
   ])
   assert_true(
-    { ..visible, explorer_mode: ExplorerFiles, }.editor_search_highlights(path)
+    { ..visible, explorer_mode: ExplorerFiles, }.editor_search_highlights(
+      ctx, file,
+    )
     is None,
   )
 }

@@ -67,9 +67,10 @@ fn semantic_review_input(state : State, ctx : Ctx) -> SemanticReviewInput? {
       )
     }
     None => {
-      guard ctx.active_file is Some(path) &&
+      guard ctx.active_file is Some(file) &&
+        ctx.relative(file) is Some(path) &&
         supports_moon_diff(path.0) &&
-        state.docs.get(path) is Some(doc) &&
+        state.docs.get(file) is Some(doc) &&
         doc.visible_diff() is Some((old_source, new_source)) else {
         return None
       }
@@ -1462,7 +1463,7 @@ fn reveal_semantic_review_section_change(
 fn sync_semantic_review_editors(
   dispatch : @cmd.Emit[Msg],
   state : State,
-  active_file : @pathx.Relative?,
+  ctx : Ctx,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
@@ -1471,7 +1472,7 @@ fn sync_semantic_review_editors(
       review_hunk_bridge_target.val = None
       guard state.semantic_review_input is Some(input) else {
         clear_semantic_review_editors()
-        sync_review_hunk_bridge_target(state, active_file, msg => {
+        sync_review_hunk_bridge_target(state, ctx, msg => {
           scheduler.add(dispatch(msg))
         })
         sync_review_hunk_actions(state)
@@ -1546,7 +1547,7 @@ fn sync_semantic_review_editors(
           semantic_review_editors[key] = entry
         }
       }
-      sync_review_hunk_bridge_target(state, active_file, msg => {
+      sync_review_hunk_bridge_target(state, ctx, msg => {
         scheduler.add(dispatch(msg))
       })
       if semantic_review_active_key.val is Some(key) &&

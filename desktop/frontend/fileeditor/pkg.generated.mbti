@@ -16,7 +16,7 @@ import {
 }
 
 // Values
-pub fn activate(@cmd.Emit[Msg], State, Ctx, @pathx.Relative) -> (@cmd.Cmd, State)
+pub fn activate(@cmd.Emit[Msg], State, Ctx, @common.Uri) -> (@cmd.Cmd, State)
 
 pub fn activate_history_diff(@cmd.Emit[Msg], State, Ctx, @dock.GitHistoryDiff) -> (@cmd.Cmd, State)
 
@@ -32,7 +32,7 @@ pub fn body_view(@cmd.Emit[Msg], State, Ctx, semantic_review? : @html.Html) -> @
 
 pub fn breadcrumb_view(@cmd.Emit[Msg], State, Ctx, reveal? : (String, @cmd.Cmd)?) -> @html.Html
 
-pub fn close_document(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, next~ : @pathx.Relative?, was_active~ : Bool) -> (@cmd.Cmd, State)
+pub fn close_document(@cmd.Emit[Msg], State, Ctx, @common.Uri, next~ : @common.Uri?, was_active~ : Bool) -> (@cmd.Cmd, State)
 
 pub fn close_history_diff(State, @dock.GitHistoryDiff) -> State
 
@@ -42,9 +42,9 @@ pub fn mount_cmds(@cmd.Emit[Msg]) -> @cmd.Cmd
 
 pub fn open_changed_document(@cmd.Emit[Msg], State, Ctx, ChangedFile, had_active~ : Bool) -> (@cmd.Cmd, State)
 
-pub fn open_document(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, name~ : String, file_link_generation? : Int, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
+pub fn open_document(@cmd.Emit[Msg], State, Ctx, @common.Uri, name~ : String, file_link_generation? : Int, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
 
-pub fn open_file(@cmd.Emit[Msg], State, Ctx, @pathx.Relative, file_link_generation? : Int, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
+pub fn open_file(@cmd.Emit[Msg], State, Ctx, @common.Uri, file_link_generation? : Int, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
 
 pub fn open_history_diff(@cmd.Emit[Msg], State, Ctx, @dock.GitHistoryDiff) -> (@cmd.Cmd, State)
 
@@ -119,8 +119,8 @@ pub(all) struct Ctx {
   tree_layout : TreeLayout
   narrow : Bool
   panel_open : Bool
-  open_files : Array[@pathx.Relative]
-  active_file : @pathx.Relative?
+  open_files : Array[@common.Uri]
+  active_file : @common.Uri?
   open_history_diffs : Array[@dock.GitHistoryDiff]
   active_history_diff : @dock.GitHistoryDiff?
 } derive(Eq)
@@ -177,7 +177,7 @@ pub fn FileIndex::equal(Self, Self) -> Bool
 pub fn FileIndex::not_equal(Self, Self) -> Bool
 
 pub(all) struct FileStat {
-  path : @pathx.Relative
+  path : @common.Uri
   signature : @protocol.FileSignature
 }
 
@@ -273,7 +273,7 @@ pub(all) enum Msg {
   ChangedFileSelected(ChangedFile)
   ChangedFileNavigated(ChangedFile, Bool)
   ReviewDiffFileBoundary(Bool)
-  DiffLoadingDue(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int)
+  DiffLoadingDue(owner~ : @interop.ConversationKey, path~ : @common.Uri, generation~ : Int)
   ToggleReviewDiff
   ToggleReviewDiffLayout
   ReviewDiffModeSelected(ReviewDiffMode)
@@ -287,21 +287,22 @@ pub(all) enum Msg {
   ToggleReviewProgress
   MbtiViewModeSelected(MbtiViewMode)
   MoonModViewModeSelected(MoonModViewMode)
-  PackageGraphRequestLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, generation~ : Int, source~ : String)
-  PackageGraphRequestFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, generation~ : Int, message~ : String)
+  PackageGraphRequestLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, generation~ : Int, source~ : String)
+  PackageGraphRequestFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, generation~ : Int, message~ : String)
   ReviewActiveHunkChanged(ready~ : Bool, change~ : ChangedFile, review_generation~ : Int, surface_generation~ : Int, hunk~ : ReviewHunk?, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
   ToggleActiveReviewHunk
   ToggleReviewHunk(change~ : ChangedFile, review_generation~ : Int, surface_generation~ : Int, hunk~ : ReviewHunk, file_changes~ : ReviewHunk?, position~ : ReviewHunkPosition?)
-  GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
-  GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, generation~ : Int, background~ : Bool, message~ : String)
+  GitOriginalLoaded(owner~ : @interop.ConversationKey, path~ : @common.Uri, generation~ : Int, background~ : Bool, original~ : @protocol.GitOriginalFileReply)
+  GitOriginalFailed(owner~ : @interop.ConversationKey, path~ : @common.Uri, generation~ : Int, background~ : Bool, message~ : String)
   HistoryBlobLoaded(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int, side~ : HistoryDiffSide, blob~ : @protocol.GitOriginalFileReply)
   HistoryBlobFailed(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int, side~ : HistoryDiffSide, message~ : String)
   OpenNavigationLocation(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, range~ : @common.Range)
-  FileLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, name~ : String, file~ : FileContent, file_link_generation~ : Int?, review_generation~ : Int?, range~ : @common.Range?, annotation~ : String?)
-  FileFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, file_link_generation~ : Int?, review_generation~ : Int?, message~ : String)
+  FileLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, name~ : String, file~ : FileContent, file_link_generation~ : Int?, review_generation~ : Int?, range~ : @common.Range?, annotation~ : String?)
+  FileFailed(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, file_link_generation~ : Int?, review_generation~ : Int?, message~ : String)
   FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, generation~ : String, message~ : String)
   FsChanged(root~ : @common.Uri, generation~ : String, changes~ : Array[FileChange]?)
   RunSettled(owner~ : @interop.ConversationKey)
+  RefreshExternalFiles
   StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, stats~ : Array[FileStat])
   DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
   DiagnosticsPublished(channel~ : @interop.ChannelId, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
@@ -465,7 +466,7 @@ pub(all) struct State {
   review_generation : Int
   diff_loading_generation : Int?
   review_recovery_pending : Bool
-  background_review_requests : Map[@pathx.Relative, Int]
+  background_review_requests : Map[@common.Uri, Int]
   explorer_was_visible : Bool
   watching : WatchedPaths?
   watch_generation : Int
@@ -474,10 +475,10 @@ pub(all) struct State {
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
   children : Map[@pathx.Relative, Array[FileEntry]]
-  docs : Map[@pathx.Relative, Doc]
-  mbti_view_modes : Map[@pathx.Relative, MbtiViewMode]
-  moon_mod_view_modes : Map[@pathx.Relative, MoonModViewMode]
-  package_graphs : Map[@pathx.Relative, PackageGraphState]
+  docs : Map[@common.Uri, Doc]
+  mbti_view_modes : Map[@common.Uri, MbtiViewMode]
+  moon_mod_view_modes : Map[@common.Uri, MoonModViewMode]
+  package_graphs : Map[@common.Uri, PackageGraphState]
   package_graph_generation : Int
   highlighted : @pathx.Relative?
   index : FileIndex
@@ -486,9 +487,9 @@ pub(all) struct State {
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
-pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@pathx.Relative]) -> Self
+pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
-pub fn State::with_review_navigation_destination(Self, ChangedFile, Bool) -> Self
+pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, Bool) -> Self
 
 pub(all) enum TabState {
   TabLoading

@@ -12,11 +12,12 @@ test "selecting a Moon semantic algorithm enters Diff view and retains policy" {
   assert_true(initial.review_diff_ignore_tests)
 
   let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = reviewed_doc(path, selected, view_mode=ReviewSource)
+  docs[file] = reviewed_doc(path, selected, view_mode=ReviewSource)
   let state = { ..owned_state(), docs, review_view_mode: ReviewSource, }
-  let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   let (_, line_unchanged) = update(
     test_emit(),
     ToggleReviewDiffIgnoreTests,
@@ -33,7 +34,7 @@ test "selecting a Moon semantic algorithm enters Diff view and retains policy" {
   assert_true(tree.review_diff_mode is ReviewDiffTree)
   assert_true(tree.review_view_mode is ReviewDiff)
   assert_true(
-    tree.docs.get(path)
+    tree.docs.get(file)
     is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
   )
   let (_, include_comments) = update(
@@ -73,11 +74,12 @@ test "semantic review preferences survive owner replacement" {
 ///|
 test "non-MoonBit review parks the last semantic review preference" {
   let path = @pathx.Relative("README.md")
+  let file = test_file(path.0)
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = reviewed_doc(path, selected, baseline="old text")
+  docs[file] = reviewed_doc(path, selected, baseline="old text")
   let state = { ..owned_state(), docs, review_diff_mode: ReviewDiffTree, }
-  let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   let (_, unchanged) = update(
     test_emit(),
     ReviewDiffModeSelected(ReviewDiffToken),

@@ -120,7 +120,7 @@ fn list_changes(
 fn read_git_original(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  path : @pathx.Relative,
+  path : @common.Uri,
   source : @pathx.Relative,
   generation : Int,
   background? : Bool = false,

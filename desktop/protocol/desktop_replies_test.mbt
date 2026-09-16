@@ -421,12 +421,12 @@ test "open-path replies distinguish system, editor, and directory targets" {
   @debug.assert_eq(legacy, Opened)
   let system : @protocol.OpenPathReply = Opened
   let ordinary : @protocol.OpenPathReply = Editor({
-    path: "README.md",
+    path: "/work/README.md",
     line: None,
     column: None,
   })
   let positioned : @protocol.OpenPathReply = Editor({
-    path: "src/main.mbt",
+    path: "/work/src/main.mbt",
     line: Some(2738),
     column: Some(17),
   })
@@ -1808,4 +1808,31 @@ test "chat metadata failure remains distinct from a failed workspace snapshot" {
       })
     }),
   )
+}
+
+///|
+test "editor target codecs require absolute paths and validate optional positions" {
+  let target : @protocol.OpenPathEditorTarget = @json.from_json({
+    "path": "/outside/notes.md",
+    "line": null,
+    "column": null,
+    "future": true,
+  })
+  @debug.assert_eq(target.to_json(), { "path": "/outside/notes.md" })
+  for
+    raw in (
+      [
+        {},
+        { "path": null },
+        { "path": "" },
+        { "path": "notes.md" },
+        { "path": 7 },
+        { "path": "/outside/notes.md", "line": "2" },
+        { "path": "/outside/notes.md", "column": false },
+      ] : Array[Json]) {
+    let decoded : @protocol.OpenPathEditorTarget? = Some(@json.from_json(raw)) catch {
+      _ => None
+    }
+    assert_true(decoded is None)
+  }
 }

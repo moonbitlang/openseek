@@ -64,7 +64,7 @@ fn open_tab(state : State, tab : DockTab) -> State {
 ///|
 /// Open `path`'s file tab (appending one if it is not in the strip yet) and
 /// make it active — the strip half of a tree click or a chip jump.
-pub fn open_file(state : State, path : @pathx.Relative) -> State {
+pub fn open_file(state : State, path : @common.Uri) -> State {
   open_tab(state, DockTab::File(path~))
 }
 
@@ -102,7 +102,7 @@ pub fn open_workflows(state : State) -> State {
 /// replaced in place by that file's tab — unless the file is already open,
 /// in which case its existing tab activates and the picker closes. Without
 /// a picker this is a plain `open_file`.
-pub fn resolve_pick(state : State, path : @pathx.Relative) -> State {
+pub fn resolve_pick(state : State, path : @common.Uri) -> State {
   guard tab_index(state, FilePicker) is Some(picker_index) else {
     return open_file(state, path)
   }

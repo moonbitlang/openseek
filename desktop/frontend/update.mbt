@@ -890,9 +890,8 @@ fn Model::active_relative_path(self : Model, path : String) -> @pathx.Relative? 
 ///|
 /// Open (or refocus) the editor side-panel on `path`, revealing `range` when
 /// given — the shared tail of a composer chip's and a transcript chip's jump.
-/// The raw path comes from a chip or envelope; a legacy absolute one that
-/// cannot be brought inside the workspace surfaces as a panel error instead
-/// of a bogus host read.
+/// Absolute links already name their document; relative chips are resolved
+/// against the current checkout before entering the dock and document table.
 fn open_editor_at(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -926,28 +925,21 @@ fn open_editor_at(
   // `@fileeditor.sync`'s own re-root.
   let dock = @dock.sync(model.dock, owner)
   let panel = model.file_panel.prepare_owner(owner, @dock.file_paths(dock))
-  guard model.active_relative_path(path) is Some(relative) else {
-    return (
-      @fileeditor.mount_cmds(femit),
-      {
-        ..model,
-        dock,
-        right_panel_open: true,
-        right_panel_menu_open: false,
-        file_panel: {
-          ..panel,
-          error: Some("\{path} is outside the conversation workspace"),
-        },
-      },
-    )
+  let resource = match @resource.of_path(ctx.owner.channel, path) {
+    Some(resource) => Some(resource)
+    None =>
+      model
+      .active_relative_path(path)
+      .bind(relative => model.workspace_resource(relative))
   }
+  guard resource is Some(resource) else { return (@cmd.none, model) }
   let had_active = @dock.active_file(dock) is Some(_)
   // An explicit open while the picker is the active tab fulfills it, the
   // same as a pick from its tree.
   let dock = if dock.active is Some(FilePicker) {
-    @dock.resolve_pick(dock, relative)
+    @dock.resolve_pick(dock, resource)
   } else {
-    @dock.open_file(dock, relative)
+    @dock.open_file(dock, resource)
   }
   let model = {
     ..model,
@@ -956,11 +948,13 @@ fn open_editor_at(
     right_panel_open: true,
     right_panel_menu_open: false,
   }
+  // Owner preparation can advance the request epoch; read with the new one.
+  let ctx = file_ctx(model)
   let (cmd, panel) = @fileeditor.open_file(
     femit,
     panel,
     ctx,
-    relative,
+    resource,
     file_link_generation?,
     range~,
     annotation?,
@@ -2779,22 +2773,25 @@ fn update_msg(
       guard placement is Some(value) && value.is_ready() else {
         return (@cmd.none, model)
       }
+      guard model.workspace_resource(path) is Some(resource) else {
+        return (@cmd.none, model)
+      }
       let model = model.begin_editor_navigation()
       let had_active = @dock.active_file(model.dock) is Some(_)
       // A pick made from the active FilePicker tab fulfills it: the picker
       // is replaced in place (or the already-open tab activates and the
       // picker closes). Any other tree click opens tabs as before.
       let dock = if model.dock.active is Some(FilePicker) {
-        @dock.resolve_pick(model.dock, path)
+        @dock.resolve_pick(model.dock, resource)
       } else {
-        @dock.open_file(model.dock, path)
+        @dock.open_file(model.dock, resource)
       }
       let model = { ..model, dock, }
       let (cmd, panel) = @fileeditor.open_document(
         dispatch.map(msg => FileEditor(msg)),
         model.file_panel,
         file_ctx(model),
-        path,
+        resource,
         name~,
         range=None,
         had_active~,
@@ -2811,12 +2808,15 @@ fn update_msg(
       guard placement is Some(value) && value.is_ready() else {
         return (@cmd.none, model)
       }
+      guard model.workspace_resource(change.path) is Some(resource) else {
+        return (@cmd.none, model)
+      }
       let model = model.begin_editor_navigation()
       let had_active = @dock.active_file(model.dock) is Some(_)
       let dock = if model.dock.active is Some(FilePicker) {
-        @dock.resolve_pick(model.dock, change.path)
+        @dock.resolve_pick(model.dock, resource)
       } else {
-        @dock.open_file(model.dock, change.path)
+        @dock.open_file(model.dock, resource)
       }
       let model = { ..model, dock, }
       let (cmd, panel) = @fileeditor.open_changed_document(
@@ -2828,7 +2828,11 @@ fn update_msg(
       )
       let panel = match msg {
         FileEditor(ChangedFileNavigated(_, last)) =>
-          panel.with_review_navigation_destination(change, last)
+          panel.with_review_navigation_destination(
+            file_ctx(model),
+            change,
+            last,
+          )
         _ => panel
       }
       (cmd, { ..model, file_panel: panel, })
@@ -2864,15 +2868,18 @@ fn update_msg(
       guard placement is Some(value) && value.is_ready() else {
         return (@cmd.none, model)
       }
+      guard model.workspace_resource(path) is Some(resource) else {
+        return (@cmd.none, model)
+      }
       let model = model.begin_editor_navigation()
       let had_active = @dock.active_file(model.dock) is Some(_)
-      let dock = @dock.open_file(model.dock, path)
+      let dock = @dock.open_file(model.dock, resource)
       let model = { ..model, dock, }
       let (cmd, panel) = @fileeditor.open_file(
         dispatch.map(msg => FileEditor(msg)),
         model.file_panel,
         file_ctx(model),
-        path,
+        resource,
         range=Some(range),
         had_active~,
       )
@@ -4622,7 +4629,7 @@ fn update_msg(
     }
     OpenFile(path) => {
       // A relative path is taken against the active conversation's projected
-      // checkout root. The host keeps text editor targets inside that root;
+      // checkout root. The reply names text files by absolute resource path;
       // non-text paths may still use the system opener.
       guard model.active_checkout() is Some(active) &&
         active.placement is Some(placement) &&
@@ -8365,6 +8372,16 @@ fn test_model() -> Model {
     active_session: "desktop-test",
     conversations: [test_conversation()],
   }
+}
+
+///|
+/// A file below the active checkout, keyed the way the dock and document
+/// table hold it.
+fn Model::test_file(self : Model, path : String) -> @common.Uri raise {
+  guard self.workspace_resource(@pathx.Relative(path)) is Some(file) else {
+    fail("test model must carry a checkout root")
+  }
+  file
 }
 
 ///|
@@ -16674,7 +16691,11 @@ test "file editor context reports the file body actual visibility" {
   let file_model = {
     ..model,
     right_panel_open: true,
-    dock: { ..model.dock, tabs: [File(path~)], active: Some(File(path~)), },
+    dock: {
+      ..model.dock,
+      tabs: [File(path=model.test_file(path.0))],
+      active: Some(File(path=model.test_file(path.0))),
+    },
   }
   assert_true(file_ctx(file_model).panel_open)
   assert_false(file_ctx({ ..file_model, right_panel_open: false, }).panel_open)
@@ -16753,10 +16774,10 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_true(next.right_panel_open)
-  assert_true(@dock.active_file(next.dock) is Some(Relative("src/main.mbt")))
+  assert_true(next.active_workspace_file() is Some(Relative("src/main.mbt")))
   assert_eq(next.file_panel.file_link_generation, 1)
   // The document table follows the strip: the jumped-to file has an entry.
-  assert_true(next.file_panel.docs.contains(Relative("src/main.mbt")))
+  assert_true(next.file_panel.docs.contains(model.test_file("src/main.mbt")))
 }
 
 ///|
@@ -16780,7 +16801,7 @@ test "resolved transcript files and directories stay in the right panel" {
     file_pending,
   )
   assert_true(file.right_panel_open)
-  assert_true(@dock.active_file(file.dock) is Some(Relative("src/main.mbt")))
+  assert_true(file.active_workspace_file() is Some(Relative("src/main.mbt")))
 
   let (_, directory_pending) = update(dispatch, OpenFile("src"), model)
   let directory_msg = OpenDirectoryAt(owner~, generation=1, path="src")
@@ -16802,6 +16823,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
   let worktree = @interop.ChannelId::Local.test_resource(
     "/work/project/.worktrees/wt-4",
   )
+  let main_file = @resource.join_relative(worktree, Relative("src/main.mbt"))
   let model = test_model()
     .replace_conversation({
       ..test_conversation(),
@@ -16874,14 +16896,14 @@ test "update is pure: a resolved transcript position opens its owning file" {
   // reply cannot replace the file the user chose to bring back on screen.
   let hidden_pending = {
     ..latest_pending,
-    dock: @dock.open_file(latest_pending.dock, Relative("README.md")),
+    dock: @dock.open_file(latest_pending.dock, model.test_file("README.md")),
     right_panel_open: false,
   }
   let (_, panel_opened) = update(dispatch, ToggleRightPanel, hidden_pending)
   assert_true(panel_opened.right_panel_open)
   assert_eq(panel_opened.file_panel.file_link_generation, 3)
   assert_true(
-    @dock.active_file(panel_opened.dock) is Some(Relative("README.md")),
+    panel_opened.active_workspace_file() is Some(Relative("README.md")),
   )
   let (_, after_opened_reply) = update(
     dispatch,
@@ -16895,12 +16917,10 @@ test "update is pure: a resolved transcript position opens its owning file" {
     panel_opened,
   )
   assert_true(
-    @dock.active_file(after_opened_reply.dock) is Some(Relative("README.md")),
+    after_opened_reply.active_workspace_file() is Some(Relative("README.md")),
   )
   assert_false(
-    after_opened_reply.dock.tabs.contains(
-      @dock.DockTab::File(path=Relative("src/main.mbt")),
-    ),
+    after_opened_reply.dock.tabs.contains(@dock.DockTab::File(path=main_file)),
   )
   // The first host reply is stale as soon as the second click happens.
   let (_, old_host_reply) = update(
@@ -16924,12 +16944,11 @@ test "update is pure: a resolved transcript position opens its owning file" {
   )
   let (_, first) = update(dispatch, msg, latest_pending)
   let (_, second) = update(dispatch, msg, latest_pending)
-  assert_true(@dock.active_file(first.dock) is Some(Relative("src/main.mbt")))
+  assert_true(first.active_workspace_file() is Some(Relative("src/main.mbt")))
   assert_true(first.right_panel_open)
-  assert_true(@dock.active_file(second.dock) is Some(Relative("src/main.mbt")))
-  assert_true(first.file_panel.docs.contains(Relative("src/main.mbt")))
-  assert_true(second.file_panel.docs.contains(Relative("src/main.mbt")))
-  let target = @resource.join_relative(worktree, Relative("src/main.mbt"))
+  assert_true(second.active_workspace_file() is Some(Relative("src/main.mbt")))
+  assert_true(first.file_panel.docs.contains(main_file))
+  assert_true(second.file_panel.docs.contains(main_file))
   // A later ordinary navigation of the same loading file owns its read with
   // the same generation token. If that newer read fails first, the older
   // positioned success cannot fill the failed tab afterward.
@@ -16951,7 +16970,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       @fileeditor.FileFailed(
         owner~,
         epoch=ordinary_pending.file_panel.request_epoch,
-        path=Relative("src/main.mbt"),
+        path=main_file,
         file_link_generation=Some(3),
         review_generation=None,
         message="newer ordinary read failed",
@@ -16960,7 +16979,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     ordinary_pending,
   )
   assert_true(
-    ordinary_failed.file_panel.docs.get(Relative("src/main.mbt"))
+    ordinary_failed.file_panel.docs.get(main_file)
     is Some(
       { state: @fileeditor.TabReadFailed("newer ordinary read failed"), .. }
     ),
@@ -16971,9 +16990,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
       @fileeditor.FileLoaded(
         owner~,
         epoch=ordinary_failed.file_panel.request_epoch,
-        path=Relative("src/main.mbt"),
+        path=main_file,
         name="main.mbt",
-        file=@fileeditor.Content(content="old", absolute=target, sig="1:3"),
+        file=@fileeditor.Content(content="old", absolute=main_file, sig="1:3"),
         file_link_generation=Some(2),
         review_generation=None,
         range=Some(@common.Range(2738, 17, 2738, 17)),
@@ -16992,9 +17011,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
       @fileeditor.FileLoaded(
         owner~,
         epoch=first.file_panel.request_epoch,
-        path=Relative("src/main.mbt"),
+        path=main_file,
         name="main.mbt",
-        file=@fileeditor.Content(content="old", absolute=target, sig="1:3"),
+        file=@fileeditor.Content(content="old", absolute=main_file, sig="1:3"),
         file_link_generation=Some(1),
         review_generation=None,
         range=Some(@common.Range(1, 1, 1, 1)),
@@ -17004,7 +17023,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     first,
   )
   assert_true(
-    old_file_reply.file_panel.docs.get(Relative("src/main.mbt"))
+    old_file_reply.file_panel.docs.get(main_file)
     is Some({ state: @fileeditor.TabLoaded(content="old", ..), .. }),
   )
   // A stale failure likewise makes its loading tab retryable without raising
@@ -17015,7 +17034,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       @fileeditor.FileFailed(
         owner~,
         epoch=first.file_panel.request_epoch,
-        path=Relative("src/main.mbt"),
+        path=main_file,
         file_link_generation=Some(1),
         review_generation=None,
         message="old read failed",
@@ -17025,7 +17044,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
   )
   assert_true(old_file_failure.file_panel.error is None)
   assert_true(
-    old_file_failure.file_panel.docs.get(Relative("src/main.mbt"))
+    old_file_failure.file_panel.docs.get(main_file)
     is Some({ state: @fileeditor.TabReadFailed("old read failed"), .. }),
   )
   // The current failure is authoritative even if the stale success filled the
@@ -17036,7 +17055,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
       @fileeditor.FileFailed(
         owner~,
         epoch=first.file_panel.request_epoch,
-        path=Relative("src/main.mbt"),
+        path=main_file,
         file_link_generation=Some(2),
         review_generation=None,
         message="current read failed",
@@ -17046,7 +17065,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
   )
   assert_true(current_file_failure.file_panel.error is None)
   assert_true(
-    current_file_failure.file_panel.docs.get(Relative("src/main.mbt"))
+    current_file_failure.file_panel.docs.get(main_file)
     is Some({ state: @fileeditor.TabReadFailed("current read failed"), .. }),
   )
   let (_, current_file_reply) = update(
@@ -17055,9 +17074,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
       @fileeditor.FileLoaded(
         owner~,
         epoch=first.file_panel.request_epoch,
-        path=Relative("src/main.mbt"),
+        path=main_file,
         name="main.mbt",
-        file=@fileeditor.Content(content="new", absolute=target, sig="2:3"),
+        file=@fileeditor.Content(content="new", absolute=main_file, sig="2:3"),
         file_link_generation=Some(2),
         review_generation=None,
         range=Some(@common.Range(2738, 17, 2738, 17)),
@@ -17067,7 +17086,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     old_file_reply,
   )
   assert_true(
-    current_file_reply.file_panel.docs.get(Relative("src/main.mbt"))
+    current_file_reply.file_panel.docs.get(main_file)
     is Some({ state: @fileeditor.TabLoaded(content="new", ..), .. }),
   )
   // Closing an inactive file tab is also newer than a pending positioned
@@ -17077,7 +17096,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(FileSelected(path=Relative("README.md"), name="README.md")),
     current_file_reply,
   )
-  assert_true(@dock.active_file(other_file.dock) is Some(Relative("README.md")))
+  assert_true(other_file.active_workspace_file() is Some(Relative("README.md")))
   let (_, inactive_pending) = update(
     dispatch,
     OpenFile("src/main.mbt:40"),
@@ -17086,7 +17105,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
   let pending_generation = inactive_pending.file_panel.file_link_generation
   let (_, inactive_closed) = update(
     dispatch,
-    Dock(TabClosed(@dock.DockTab::File(path=Relative("src/main.mbt")))),
+    Dock(TabClosed(@dock.DockTab::File(path=main_file))),
     inactive_pending,
   )
   assert_eq(
@@ -17094,9 +17113,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     pending_generation + 1,
   )
   assert_false(
-    inactive_closed.dock.tabs.contains(
-      @dock.DockTab::File(path=Relative("src/main.mbt")),
-    ),
+    inactive_closed.dock.tabs.contains(@dock.DockTab::File(path=main_file)),
   )
   let (_, after_inactive_reply) = update(
     dispatch,
@@ -17110,9 +17127,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     inactive_closed,
   )
   assert_false(
-    after_inactive_reply.dock.tabs.contains(
-      @dock.DockTab::File(path=Relative("src/main.mbt")),
-    ),
+    after_inactive_reply.dock.tabs.contains(@dock.DockTab::File(path=main_file)),
   )
   // A later tree pick competes with the transcript request just like a newer
   // transcript click: it advances the same token before opening its document.
@@ -17134,12 +17149,10 @@ test "update is pure: a resolved transcript position opens its owning file" {
     tree_opened,
   )
   assert_true(
-    @dock.active_file(delayed_transcript_reply.dock)
+    delayed_transcript_reply.active_workspace_file()
     is Some(Relative("README.md")),
   )
-  assert_false(
-    delayed_transcript_reply.file_panel.docs.contains(Relative("src/main.mbt")),
-  )
+  assert_false(delayed_transcript_reply.file_panel.docs.contains(main_file))
   // A delayed reply from another conversation cannot open a tab here.
   let (_, stale) = update(
     dispatch,
@@ -17153,7 +17166,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     latest_pending,
   )
   assert_true(stale.dock.active is None)
-  assert_false(stale.file_panel.docs.contains(Relative("src/main.mbt")))
+  assert_false(stale.file_panel.docs.contains(main_file))
 }
 
 ///|
@@ -17491,7 +17504,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
-  assert_true(@dock.active_file(next.dock) is Some(Relative("src/main.mbt")))
+  assert_true(next.active_workspace_file() is Some(Relative("src/main.mbt")))
   assert_false(next.file_panel.tree_open)
   assert_true(next.file_panel.explorer_mode is @fileeditor.ExplorerChanges)
   assert_true(next.file_panel.review_view_mode is @fileeditor.ReviewDiff)
@@ -17521,9 +17534,9 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
-  assert_true(@dock.active_file(next.dock) is Some(Relative("src/main.mbt")))
-  // An absolute path outside every root cannot be opened; the panel says so
-  // instead of sending the host a bogus read.
+  assert_true(next.active_workspace_file() is Some(Relative("src/main.mbt")))
+  // Outside files share the same dock and document table, with no workspace
+  // membership and no error.
   let (_, outside) = update(
     dispatch,
     JumpToLocation(
@@ -17533,8 +17546,11 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
-  assert_true(outside.dock.active is None)
-  assert_true(outside.file_panel.error is Some(_))
+  let external = @interop.ChannelId::Local.test_resource("/elsewhere/note.md")
+  assert_true(@dock.active_file(outside.dock) == Some(external))
+  assert_true(outside.file_panel.docs.contains(external))
+  assert_true(outside.active_workspace_file() is None)
+  assert_true(outside.file_panel.error is None)
 }
 
 ///|
@@ -17546,7 +17562,7 @@ test "RevealDirectory(\"\") opens the workspace breadcrumb picker" {
     session: "desktop-test",
   }
   let dock = {
-    ..@dock.open_file(model.dock, Relative("README.md")),
+    ..@dock.open_file(model.dock, model.test_file("README.md")),
     owner: Some(owner),
   }
   let panel = {
@@ -17561,7 +17577,7 @@ test "RevealDirectory(\"\") opens the workspace breadcrumb picker" {
     { ..model, dock, file_panel: panel, right_panel_open: true, },
   )
   // The active tab and docked explorer stay put while the picker opens.
-  assert_true(@dock.active_file(next.dock) is Some(Relative("README.md")))
+  assert_true(next.active_workspace_file() is Some(Relative("README.md")))
   assert_false(next.file_panel.tree_open)
   assert_true(next.file_panel.highlighted is Some(Relative("")))
 }
@@ -19126,9 +19142,12 @@ test "a tree pick fulfills the active picker in place" {
     model,
   )
   assert_true(
-    model.dock.tabs == [@dock.DockTab::File(path=Relative("src/main.mbt"))],
+    model.dock.tabs ==
+    [@dock.DockTab::File(path=model.test_file("src/main.mbt"))],
   )
-  assert_true(@dock.active_file(model.dock) == Some(Relative("src/main.mbt")))
+  assert_true(
+    @dock.active_file(model.dock) == Some(model.test_file("src/main.mbt")),
+  )
 }
 
 ///|
@@ -19151,10 +19170,12 @@ test "a changed row opens the file tab in review mode" {
     ),
     model,
   )
-  assert_true(model.dock.tabs == [@dock.DockTab::File(path~)])
-  assert_true(@dock.active_file(model.dock) == Some(path))
   assert_true(
-    model.file_panel.docs.get(path)
+    model.dock.tabs == [@dock.DockTab::File(path=model.test_file(path.0))],
+  )
+  assert_true(@dock.active_file(model.dock) == Some(model.test_file(path.0)))
+  assert_true(
+    model.file_panel.docs.get(model.test_file(path.0))
     is Some(
       {
         state: TabLoading,
@@ -19194,13 +19215,14 @@ test "file rows and location jumps cannot open while checkout placement is missi
       ],
     })
   let path = @pathx.Relative("src/main.mbt")
+  let file = @resource.join_relative(workspace, path)
   let (_, ordinary) = update(
     dispatch,
     FileEditor(FileSelected(path~, name="main.mbt")),
     model,
   )
-  assert_false(ordinary.dock.tabs.contains(@dock.DockTab::File(path~)))
-  assert_false(ordinary.file_panel.docs.contains(path))
+  assert_false(ordinary.dock.tabs.contains(@dock.DockTab::File(path=file)))
+  assert_false(ordinary.file_panel.docs.contains(file))
   let (_, review) = update(
     dispatch,
     FileEditor(
@@ -19214,8 +19236,8 @@ test "file rows and location jumps cannot open while checkout placement is missi
     ),
     model,
   )
-  assert_false(review.dock.tabs.contains(@dock.DockTab::File(path~)))
-  assert_false(review.file_panel.docs.contains(path))
+  assert_false(review.dock.tabs.contains(@dock.DockTab::File(path=file)))
+  assert_false(review.file_panel.docs.contains(file))
   let (_, jumped) = update(
     dispatch,
     JumpToLocation(
@@ -19225,8 +19247,8 @@ test "file rows and location jumps cannot open while checkout placement is missi
     ),
     model,
   )
-  assert_false(jumped.dock.tabs.contains(@dock.DockTab::File(path~)))
-  assert_false(jumped.file_panel.docs.contains(path))
+  assert_false(jumped.dock.tabs.contains(@dock.DockTab::File(path=file)))
+  assert_false(jumped.file_panel.docs.contains(file))
   let (_, navigation) = update(
     dispatch,
     FileEditor(
@@ -19238,8 +19260,8 @@ test "file rows and location jumps cannot open while checkout placement is missi
     ),
     model,
   )
-  assert_false(navigation.dock.tabs.contains(@dock.DockTab::File(path~)))
-  assert_false(navigation.file_panel.docs.contains(path))
+  assert_false(navigation.dock.tabs.contains(@dock.DockTab::File(path=file)))
+  assert_false(navigation.file_panel.docs.contains(file))
 }
 
 ///|
@@ -19661,18 +19683,19 @@ test "a Search result fulfills the picker while preserving Search beside the fil
     opened,
   )
   let path = @pathx.Relative("src/main.mbt")
+  let file = opened.test_file(path.0)
   let range = @common.Range(4, 2, 4, 6)
   let (_, selected) = update(
     dispatch,
     FileEditor(SearchMatchSelected(path=path.0, range~)),
     edited,
   )
-  assert_true(selected.dock.tabs == [@dock.DockTab::File(path~)])
-  assert_true(@dock.active_file(selected.dock) == Some(path))
+  assert_true(selected.dock.tabs == [@dock.DockTab::File(path=file)])
+  assert_true(@dock.active_file(selected.dock) == Some(file))
   assert_true(selected.file_panel.explorer_mode is ExplorerSearch)
   assert_true(selected.file_panel.tree_open)
   assert_true(
-    selected.file_panel.docs.get(path)
+    selected.file_panel.docs.get(file)
     is Some({ review: None, state: TabLoading, .. }),
   )
 
@@ -19684,15 +19707,16 @@ test "a Search result fulfills the picker while preserving Search beside the fil
     selected,
   )
   assert_true(
-    picker.dock.tabs == [@dock.DockTab::File(path~), @dock.DockTab::FilePicker],
+    picker.dock.tabs ==
+    [@dock.DockTab::File(path=file), @dock.DockTab::FilePicker],
   )
   let (_, reused) = update(
     dispatch,
     FileEditor(SearchMatchSelected(path=path.0, range~)),
     picker,
   )
-  assert_true(reused.dock.tabs == [@dock.DockTab::File(path~)])
-  assert_true(@dock.active_file(reused.dock) == Some(path))
+  assert_true(reused.dock.tabs == [@dock.DockTab::File(path=file)])
+  assert_true(@dock.active_file(reused.dock) == Some(file))
   assert_true(reused.file_panel.explorer_mode is ExplorerSearch)
 }
 

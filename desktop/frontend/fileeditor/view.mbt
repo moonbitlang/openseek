@@ -335,7 +335,7 @@ pub fn body_view(
     (match ctx.active_file {
       Some(path) =>
         uses_markdown_presentation(
-          state.docs.get(path).map(doc => doc.name).unwrap_or(path.0),
+          state.docs.get(path).map(doc => doc.name).unwrap_or(path.path),
         )
       None => false
     })
@@ -351,7 +351,9 @@ pub fn body_view(
     (match ctx.active_history_diff {
       Some(diff) => supports_moon_diff(diff.path.0)
       None =>
-        ctx.active_file.map(path => supports_moon_diff(path.0)).unwrap_or(false)
+        ctx.active_file
+        .map(path => supports_moon_diff(path.path))
+        .unwrap_or(false)
     })
   let viewer_host = @html.div(
     attrs=@html.Attrs::build()
@@ -1711,10 +1713,11 @@ fn ChangedFile::is_selected(
   state : State,
   ctx : Ctx,
 ) -> Bool {
-  guard ctx.active_file is Some(active) && active == self.path else {
+  guard ctx.active_file is Some(active) &&
+    ctx.relative(active) == Some(self.path) else {
     return false
   }
-  match state.docs.get(self.path) {
+  match ctx.resource(self.path).bind(file => state.docs.get(file)) {
     Some({ review: Some(review), .. }) => review.selected == self
     _ => true
   }
@@ -1834,34 +1837,37 @@ pub fn breadcrumb_view(
   }
   let crumbs : Array[@html.Html] = []
   match ctx.active_file {
-    Some(path) => {
-      crumbs.push(
-        crumb_link(
-          dispatch,
-          "Workspace",
-          @pathx.Relative::root(),
-          state.highlighted is Some(highlight) &&
-          highlight == @pathx.Relative::root(),
-        ),
-      )
-      let segments = path_segments(path)
-      for index, segment in segments {
-        crumbs.push(@html.span(class="crumb-sep", "›"))
-        if index == segments.length() - 1 {
-          crumbs.push(@html.span(class="crumb crumb-file", segment))
-        } else {
-          crumbs.push(
-            crumb_link(
-              dispatch,
-              segment,
-              segments_prefix(segments, index + 1),
-              state.highlighted is Some(highlight) &&
-              highlight == segments_prefix(segments, index + 1),
-            ),
-          )
+    Some(file) =>
+      if ctx.relative(file) is Some(path) {
+        crumbs.push(
+          crumb_link(
+            dispatch,
+            "Workspace",
+            @pathx.Relative::root(),
+            state.highlighted is Some(highlight) &&
+            highlight == @pathx.Relative::root(),
+          ),
+        )
+        let segments = path_segments(path)
+        for index, segment in segments {
+          crumbs.push(@html.span(class="crumb-sep", "›"))
+          if index == segments.length() - 1 {
+            crumbs.push(@html.span(class="crumb crumb-file", segment))
+          } else {
+            crumbs.push(
+              crumb_link(
+                dispatch,
+                segment,
+                segments_prefix(segments, index + 1),
+                state.highlighted is Some(highlight) &&
+                highlight == segments_prefix(segments, index + 1),
+              ),
+            )
+          }
         }
+      } else {
+        crumbs.push(@html.span(class="crumb crumb-file", file.path))
       }
-    }
     None => crumbs.push(@html.span(class="crumb crumb-file", "Workspace"))
   }
   let review = review_toolbar_visible(state, ctx)
@@ -2001,7 +2007,9 @@ fn mbti_view_toolbar(
 /// exact basename is `moon.mod`. Reviews and historical comparisons retain
 /// their source/diff surfaces even if their path names a module manifest.
 fn moon_mod_view_available(state : State, ctx : Ctx) -> Bool {
-  guard ctx.active_history_diff is None && ctx.active_file is Some(path) else {
+  guard ctx.active_history_diff is None &&
+    ctx.active_file is Some(path) &&
+    ctx.relative(path) is Some(_) else {
     return false
   }
   state.docs.get(path) is Some({ name, state: TabLoaded(..), review: None, .. }) &&
@@ -2080,7 +2088,7 @@ fn moon_diff_controls_visible(state : State, ctx : Ctx) -> Bool {
   } else {
     review_toolbar_visible(state, ctx) &&
     ctx.active_file is Some(path) &&
-    supports_moon_diff(path.0)
+    supports_moon_diff(path.path)
   }
 }
 
@@ -2122,7 +2130,7 @@ fn full_diff_ready(state : State, ctx : Ctx) -> Bool {
 ///|
 fn moon_diff_available(state : State, ctx : Ctx) -> Bool {
   let review_available = ctx.active_file is Some(path) &&
-    supports_moon_diff(path.0) &&
+    supports_moon_diff(path.path) &&
     state.docs.get(path) is Some(doc) &&
     doc.review is Some(_) &&
     doc.diff_content() is Some(_)
@@ -2220,7 +2228,7 @@ fn review_mode_toolbar(
   }
   let diff = review.view_mode == ReviewDiff
   let enabled = doc.diff_content() is Some(_)
-  let moon = supports_moon_diff(path.0)
+  let moon = supports_moon_diff(path.path)
   let children : Array[@html.Html] = [
     @html.button(
       type_="button",
@@ -2725,7 +2733,7 @@ fn breadcrumb_picker_row(
 ) -> @html.Html {
   let selected = !entry.is_dir &&
     ctx.active_file is Some(active) &&
-    active == entry.path
+    ctx.relative(active) == Some(entry.path)
   @html.button(
     type_="button",
     class=if selected {
@@ -3020,7 +3028,8 @@ fn tree_row(
     .get(FileChange::parent(entry.path))
     .unwrap_or([])
   let position = siblings.search_by(item => item.path == entry.path)
-  let selected = ctx.active_file is Some(active) && active == entry.path
+  let selected = ctx.active_file is Some(active) &&
+    ctx.relative(active) == Some(entry.path)
   let attrs = @html.Attrs::build()
     .id("workspace-tree-" + entry.path.0)
     .role("treeitem")

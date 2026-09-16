@@ -199,7 +199,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     retirements: self.composer_entry_retirements,
     file_candidates: self.file_search().candidates,
     open_files: self.live_editor_files(),
-    active_file: @dock.active_file(self.dock),
+    active_file: self.active_workspace_file(),
     file_index,
     presentation: {
       images_enabled: false,
@@ -272,7 +272,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
       []
     },
     active_file: if workspace_ready {
-      @dock.active_file(self.dock)
+      self.active_workspace_file()
     } else {
       None
     },

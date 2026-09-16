@@ -28,21 +28,21 @@ let review_hunk_bridge_target : Ref[ReviewHunkBridgeTarget?] = Ref(None)
 ///|
 fn current_review_hunk_bridge_target(
   state : State,
-  active_file : @pathx.Relative?,
+  ctx : Ctx,
   dispatch : (Msg) -> Unit,
 ) -> ReviewHunkBridgeTarget? {
-  guard active_file is Some(path) &&
+  guard ctx.active_file is Some(path) &&
     state.docs.get(path) is Some(doc) &&
     doc.review is Some(review) &&
     doc.visible_diff() is Some((original, modified)) &&
-    viewer_state.relative == Some(path) &&
+    viewer_state.document == Some(path) &&
     viewer_state.review_diff_inputs == Some((original, modified)) &&
-    state.current_review_generation(review.selected, active_file)
+    state.current_review_generation(review.selected, ctx)
     is Some(review_generation) else {
     return None
   }
   let (active_hunk, file_changes, position) = match
-    state.active_review_hunk(active_file) {
+    state.active_review_hunk(ctx) {
     Some(active) => (Some(active.hunk), active.file_changes, active.position)
     None => (None, None, None)
   }
@@ -59,7 +59,7 @@ fn current_review_hunk_bridge_target(
     active_hunk,
     file_changes,
     position,
-    ready: state.review_navigation_ready(active_file),
+    ready: state.review_navigation_ready(ctx),
     semantic_keys: semantic_sections(state.semantic_review_plan)
     .map(section => section.key)
     .filter(key => !state.semantic_review_collapsed.contains(key)),
@@ -70,11 +70,11 @@ fn current_review_hunk_bridge_target(
 ///|
 fn sync_review_hunk_bridge_target(
   state : State,
-  active_file : @pathx.Relative?,
+  ctx : Ctx,
   dispatch : (Msg) -> Unit,
 ) -> Unit {
   review_hunk_bridge_target.val = current_review_hunk_bridge_target(
-    state, active_file, dispatch,
+    state, ctx, dispatch,
   )
   if mounted_diff_editor() is Some(editor) {
     publish_line_review_hunk_context(editor)

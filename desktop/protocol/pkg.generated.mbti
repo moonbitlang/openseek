@@ -1707,12 +1707,14 @@ pub(all) struct OpenPathEditorTarget {
   path : String
   line : Int?
   column : Int?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn OpenPathEditorTarget::equal(Self, Self) -> Bool
 pub fn OpenPathEditorTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn OpenPathEditorTarget::not_equal(Self, Self) -> Bool
 pub fn OpenPathEditorTarget::to_json(Self) -> Json
 pub fn OpenPathEditorTarget::to_repr(Self) -> @debug.Repr
+pub impl ToJson for OpenPathEditorTarget
+pub impl @json.FromJson for OpenPathEditorTarget
 
 pub(all) struct OpenPathPayload {
   session : String

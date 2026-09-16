@@ -12,8 +12,8 @@ type InstallSkillPayload = @protocol.InstallSkillPayload
 type UninstallSkillPayload = @protocol.UninstallSkillPayload
 
 ///|
-/// Open a transcript-referenced path. Viewer-sized UTF-8 text inside the
-/// checkout returns a built-in editor target; other existing paths use the
+/// Open a transcript-referenced path. Viewer-sized UTF-8 text returns an
+/// absolute built-in editor target; other existing paths use the
 /// system opener. A relative path is taken against the conversation's working
 /// directory — `cwd` when the frontend has it, otherwise derived from
 /// `session`.

@@ -24,13 +24,14 @@ fn semantic_test_section(
 ///|
 test "semantic input follows active MoonBit review and ignores layout" {
   let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[path] = {
+  docs[file] = {
     ..reviewed_doc(path, selected, baseline="fn value() { 1 }"),
     state: TabLoaded(
       content="fn value() { 2 }",
-      absolute=test_ctx().test_resource("/work/src/main.mbt"),
+      absolute=test_file("src/main.mbt"),
       sig="working",
     ),
   }
@@ -40,7 +41,7 @@ test "semantic input follows active MoonBit review and ignores layout" {
     review_diff_mode: ReviewDiffToken,
     review_diff_layout: ReviewInline,
   }
-  let ctx = { ..test_ctx(), open_files: [path], active_file: Some(path), }
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   guard semantic_review_input(state, ctx) is Some(input) else {
     fail("expected semantic review input")
   }
@@ -54,7 +55,7 @@ test "semantic input follows active MoonBit review and ignores layout" {
     live_path == path,
   )
   let deleted_docs = docs.copy()
-  deleted_docs[path] = { ..docs[path], state: TabDeleted, }
+  deleted_docs[file] = { ..docs[file], state: TabDeleted, }
   guard semantic_review_input({ ..state, docs: deleted_docs, }, ctx)
     is Some(deleted_input) else {
     fail("expected deleted semantic review input")

@@ -79,15 +79,14 @@ fn read_file(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   epoch : Int,
-  path : @pathx.Relative,
+  path : @common.Uri,
   name : String,
   file_link_generation? : Int,
   review_generation? : Int,
   range~ : @common.Range?,
   annotation? : String,
-  root~ : @common.Uri?,
 ) -> @cmd.Cmd {
-  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+  guard @resource.belongs_to(path, owner.channel) else {
     // Settle the request through the same typed failure path as an async
     // bridge rejection. Review-loading tabs deliberately do not start an
     // untagged duplicate read on activation, so a silent no-op here would
@@ -103,13 +102,12 @@ fn read_file(
       ),
     )
   }
-  let target = @resource.join_relative(root, path)
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.fs_read_file,
-        { path: target.path, root: None, },
+        { path: path.path, root: None, },
       ) catch {
         error => {
           scheduler.add(
@@ -170,11 +168,13 @@ fn read_package_graph(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   epoch : Int,
-  path : @pathx.Relative,
+  path : @common.Uri,
   generation : Int,
   root~ : @common.Uri?,
 ) -> @cmd.Cmd {
-  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+  guard root is Some(root) &&
+    @resource.belongs_to(root, owner.channel) &&
+    @resource.relative_to(path, root) is Some(relative) else {
     return dispatch(
       PackageGraphRequestFailed(
         owner~,
@@ -190,7 +190,7 @@ fn read_package_graph(
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.moon_package_graph,
-        { session: owner.session, root: root.path, path: path.0, },
+        { session: owner.session, root: root.path, path: relative.0, },
       ) catch {
         error => {
           scheduler.add(
@@ -311,10 +311,9 @@ fn stat_files(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   epoch : Int,
-  paths : Array[@pathx.Relative],
-  root~ : @common.Uri?,
+  paths : Array[@common.Uri],
 ) -> @cmd.Cmd {
-  guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
+  guard paths.all(path => @resource.belongs_to(path, owner.channel)) else {
     return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
@@ -325,14 +324,13 @@ fn stat_files(
       let reply = @interop.bridge_request_in_order(
         owner.channel,
         @commands.fs_stat_files,
-        { paths: paths.map(path => @resource.join_relative(root, path).path), },
+        { paths: paths.map(path => path.path), },
       ) catch {
         _ => return
       }
       let stats : Array[FileStat] = []
       for stat in reply.stats {
-        guard @resource.of_path(owner.channel, stat.path) is Some(absolute) &&
-          @resource.relative_to(absolute, root) is Some(path) else {
+        guard @resource.of_path(owner.channel, stat.path) is Some(path) else {
           continue
         }
         stats.push({ path, signature: stat.signature, })
@@ -403,19 +401,15 @@ test "a cross-host file read settles through its generation-fenced failure" {
     seen = Some(message)
     @cmd.none
   })
-  guard @resource.of_path(@interop.ChannelId::Local, "/work") is Some(workspace) else {
-    fail("test workspace resource was not absolute")
-  }
   ignore(
     read_file(
       dispatch,
       { channel: @interop.ChannelId::Remote("other"), session: "remote-test", },
       0,
-      @pathx.Relative("src/main.mbt"),
+      test_file("src/main.mbt"),
       "main.mbt",
       review_generation=7,
       range=None,
-      root=Some(workspace),
     ),
   )
   assert_true(
@@ -424,12 +418,13 @@ test "a cross-host file read settles through its generation-fenced failure" {
       FileFailed(
         owner={ channel: @interop.ChannelId::Remote("other"), .. },
         epoch=0,
-        path=@pathx.Relative("src/main.mbt"),
+        path~,
         file_link_generation=None,
         review_generation=Some(7),
         message="file root moved to another host before file read"
       )
-    ),
+    ) &&
+    path == test_file("src/main.mbt"),
   )
 }
 

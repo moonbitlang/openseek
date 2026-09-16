@@ -65,8 +65,8 @@ test "continuous review navigation wraps the selectable queue even with an empty
     kind: ChangeSymlink,
   }
   let docs = owned_state().docs.copy()
-  docs[first.path] = reviewed_doc(first.path, first)
-  docs[last.path] = reviewed_doc(last.path, last)
+  docs[test_file(first.path.0)] = reviewed_doc(first.path, first)
+  docs[test_file(last.path.0)] = reviewed_doc(last.path, last)
   let state = {
     ..owned_state(),
     docs,
@@ -77,8 +77,8 @@ test "continuous review navigation wraps the selectable queue even with an empty
       refresh_again=false,
     ),
   }
-  let first_ctx = { ..test_ctx(), active_file: Some(first.path), }
-  let last_ctx = { ..test_ctx(), active_file: Some(last.path), }
+  let first_ctx = { ..test_ctx(), active_file: Some(test_file(first.path.0)), }
+  let last_ctx = { ..test_ctx(), active_file: Some(test_file(last.path.0)), }
   assert_true(review_diff_navigation_enabled(state, first_ctx))
   assert_true(review_navigation_neighbor(state, first_ctx, true) == Some(last))
   assert_true(review_navigation_neighbor(state, first_ctx, false) == Some(last))
@@ -89,17 +89,18 @@ test "continuous review navigation wraps the selectable queue even with an empty
 ///|
 test "cross-file reveal waits for content and cancels when its review is superseded" {
   let path = @pathx.Relative("last.mbt")
+  let file = test_file(path.0)
   let change = test_modified_change(path)
   let doc = reviewed_doc(path, change)
   let docs = owned_state().docs.copy()
-  docs[path] = {
+  docs[file] = {
     ..doc,
     review: doc.review.map(review => { ..review, baseline: ReviewLoading, }),
   }
+  let ctx = { ..test_ctx(), active_file: Some(file), }
   let state = { ..owned_state(), docs, }.with_review_navigation_destination(
-    change, true,
+    ctx, change, true,
   )
-  let ctx = { ..test_ctx(), active_file: Some(path), }
   let (_, waiting) = sync_review_navigation_destination(test_emit(), state, ctx)
   assert_true(waiting.review_navigation_destination is Some((_, 1, true)))
   let (_, cancelled) = sync_review_navigation_destination(
@@ -109,7 +110,7 @@ test "cross-file reveal waits for content and cancels when its review is superse
   )
   assert_true(cancelled.review_navigation_destination is None)
   let replaced_docs = docs.copy()
-  replaced_docs[path] = {
+  replaced_docs[file] = {
     ..doc,
     review: doc.review.map(review => { ..review, generation: 2, }),
   }
@@ -120,7 +121,7 @@ test "cross-file reveal waits for content and cancels when its review is superse
   )
   assert_true(replaced.review_navigation_destination is None)
   let ready_docs = docs.copy()
-  ready_docs[path] = doc
+  ready_docs[file] = doc
   let (_, completed) = sync_review_navigation_destination(
     test_emit(),
     { ..waiting, docs: ready_docs, },

@@ -164,20 +164,23 @@ fn HoverProjection::range(self : HoverProjection) -> @common.Range {
 }
 
 ///|
-/// Tell the host the viewer now shows `relative` below its exact editor root,
+/// Tell the host the viewer now shows `absolute` below its exact editor root,
 /// so its language server syncs the file and starts publishing diagnostics,
 /// then apply whatever it already has. Best-effort: a failed call just leaves
 /// the file without squiggles; live re-analysis still arrives as `diagnostics`
 /// events. v1 covers MoonBit only, the only language with a server behind the
-/// op.
+/// op. A file outside `root` has no module for the server to check, so it
+/// requests nothing.
 fn request_diagnostics(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   epoch : Int,
   root : @common.Uri,
-  path : @pathx.Relative,
   absolute : @common.Uri,
 ) -> @cmd.Cmd {
+  guard @resource.relative_to(absolute, root) is Some(path) else {
+    return @cmd.none
+  }
   @cmd.custom_cmd(scheduler => {
     @js.async_run(() => {
       let reply = request_lsp_open(owner~, root~, path~) catch { _ => return }

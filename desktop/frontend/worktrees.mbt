@@ -938,6 +938,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     session: "desktop-test",
   }
   let review_path = @pathx.Relative("src/reviewed.mbt")
+  let review_file = bound.test_file(review_path.0)
   let review_change : @fileeditor.ChangedFile = {
     path: review_path,
     original_path: None,
@@ -945,8 +946,8 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     worktree_status: "M",
     kind: ChangeModified,
   }
-  let review_docs : Map[@pathx.Relative, @fileeditor.Doc] = Map([])
-  review_docs[review_path] = {
+  let review_docs : Map[@common.Uri, @fileeditor.Doc] = Map([])
+  review_docs[review_file] = {
     name: "reviewed.mbt",
     state: TabLoaded(
       content="working",
@@ -964,7 +965,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   }
   let review_dock = @dock.open_file(
     { ..bound.dock, owner: Some(owner), },
-    review_path,
+    review_file,
   )
   let bound = {
     ..bound,
@@ -1012,7 +1013,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   assert_false(gone.file_panel.review_recovery_pending)
   assert_true(gone.file_panel.placement.is_parked())
   assert_true(
-    gone.file_panel.docs.get(review_path)
+    gone.file_panel.docs.get(review_file)
     is Some(
       {
         review: Some({ generation: 4, baseline: ReviewContent("HEAD"), .. }),
@@ -1045,7 +1046,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   assert_false(restored.file_panel.placement.is_parked())
   assert_eq(restored.file_panel.request_epoch, missing_epoch)
   assert_true(
-    restored.file_panel.docs.get(review_path)
+    restored.file_panel.docs.get(review_file)
     is Some({ review: Some({ generation: 4, .. }), stale: true, .. }),
   )
   assert_true(
