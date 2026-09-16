@@ -781,6 +781,10 @@ async fn commit_edit(
   // two spellings belong to (once, when they share one), and the tallies are
   // merged.
   let check_from = check_projects(path)
+  // The file's identity, pinned: the write and any restore go to the
+  // resolved target, so a link retargeted during a check cannot redirect
+  // them, and a target that changes before the write refuses the edit.
+  let target = resolved_target(path)
   async fn check_tree() -> @auto_check.CheckOutcome {
     let mut merged : @auto_check.CheckErrors? = None
     for spelling in check_from {
@@ -828,7 +832,7 @@ async fn commit_edit(
     }
     // Likewise the file's identity: a link retargeted meanwhile would be
     // written in one module and checked in another.
-    if check_projects(path) != check_from {
+    if resolved_target(path) != target || check_projects(path) != check_from {
       return not_verified(
         "the file's target or project changed while the baseline was measured; retry",
       )
@@ -840,13 +844,17 @@ async fn commit_edit(
   // Containment re-check at the moment of writing: everything above awaited
   // (the parse gate, the baseline check), and a path component may have been
   // re-linked underneath the tool meanwhile.
-  if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
-    return failure(
-      path,
-      "write blocked: \{reason}",
-      fail_brief,
-      outcome="error",
-    )
+  if write_scope is Some(scope) {
+    for candidate in [path, target] {
+      if scope.deny_reason(candidate) is Some(reason) {
+        return failure(
+          path,
+          "write blocked: \{reason}",
+          fail_brief,
+          outcome="error",
+        )
+      }
+    }
   }
   // A guarded edit interrupted during its write or its post-write check must
   // not stay on disk unverified (or truncated): put the original back before
@@ -856,7 +864,7 @@ async fn commit_edit(
     if baseline is Some(_) {
       let failure = @async.protect_from_cancel(() => {
         restore_content(
-          path,
+          target,
           original_content,
           written=new_content,
           write_scope?,
@@ -878,10 +886,10 @@ async fn commit_edit(
   // restores only what it recognizes.
   if baseline is Some(_) {
     @async.protect_from_cancel(() => {
-      @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
+      @fs.write_file(target, new_content, create_mode=CreateOrTruncate)
     })
   } else {
-    @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
+    @fs.write_file(target, new_content, create_mode=CreateOrTruncate)
   }
   // A targeted edit preserves most of the file, so provenance depends on
   // whether the content it read (original_content) is still what the agent
@@ -922,6 +930,7 @@ async fn commit_edit(
   async fn unverified_after(reason : String) -> @agent_tool.ToolAction {
     revert_edit(
       path,
+      target~,
       original_content~,
       written=new_content,
       lines~,
@@ -954,6 +963,7 @@ async fn commit_edit(
     (Checked(tally), Some(before)) =>
       guarded_outcome(
         path,
+        target~,
         original_content~,
         new_content~,
         lines~,
@@ -1025,6 +1035,16 @@ fn merge_tallies(
 }
 
 ///|
+/// The file a path names once every link is followed, or the path itself
+/// when it cannot be resolved (a dangling link is written where it points).
+async fn resolved_target(path : String) -> String {
+  @fs.realpath(path) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => path
+  }
+}
+
+///|
 fn exited_without_diagnostics(code : Int) -> String {
   "exited \{code} without diagnostics"
 }
@@ -1052,6 +1072,7 @@ const IntroducedDisplayLimit : Int = 20
 /// there — and the result says so rather than pretending otherwise.
 async fn guarded_outcome(
   path : String,
+  target~ : String,
   original_content~ : String,
   new_content~ : String,
   lines~ : (Int, Int),
@@ -1141,6 +1162,7 @@ async fn guarded_outcome(
   }
   revert_edit(
     path,
+    target~,
     original_content~,
     written=new_content,
     lines~,
@@ -1158,6 +1180,7 @@ async fn guarded_outcome(
 /// stated first, in text and in `data.restore_failed`.
 async fn revert_edit(
   path : String,
+  target~ : String,
   original_content~ : String,
   written~ : String,
   lines~ : (Int, Int),
@@ -1168,7 +1191,7 @@ async fn revert_edit(
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   let restore_failure = restore_content(
-    path,
+    target,
     original_content,
     written~,
     write_scope?,

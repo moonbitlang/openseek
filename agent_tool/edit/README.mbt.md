@@ -149,8 +149,12 @@ still overwritten — the window is a file read, not the whole check);
 out in `errors_omitted` / `warnings_omitted`, while its `complete` refers to
 the comparison itself; a rejected one adds `parse_errors`. Guards refuse an
 overflowed check capture (`unverified`), since its lists are windows, not the
-whole. A response with no `data` at all means the call failed before the
-tool's own reporting ran (a filesystem error raised to the dispatcher).
+whole. A filesystem failure inside the edit (a missing or unreadable file)
+is `error editing <path>: edit failed: <error>` with `outcome: error`; a
+response with no `data` at all can only come from the dispatcher, before the
+tool ran. Guarded writes and restores go to the file's resolved target,
+pinned before the baseline check, so a link retargeted during a check cannot
+redirect them.
 
 ## Example
 
