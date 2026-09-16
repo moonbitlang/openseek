@@ -60,10 +60,13 @@ fn parent_dir(input : String, basename : StringView) -> String {
       _ => break view
     }
   }
-  if trimmed.is_empty() {
+  if !trimmed.is_empty() {
+    trimmed.to_owned()
+  } else if head.is_empty() {
     "."
   } else {
-    trimmed.to_owned()
+    // Only separators preceded the basename: the file sits at the root.
+    head[:1].to_owned()
   }
 }
 
@@ -74,6 +77,8 @@ fn parent_dir(input : String, basename : StringView) -> String {
 /// a link. Targets resolve relative to the Markdown file's directory.
 async fn expand_example_links(markdown : String, base_dir : String) -> String {
   let out = StringBuilder()
+  // A CRLF checkout must not turn every link line into a non-match.
+  let markdown = markdown.replace_all(old="\r\n", new="\n")
   for index, line in markdown.split("\n").collect() {
     if index > 0 {
       out.write_string("\n")
@@ -523,6 +528,8 @@ test "parent dir precedes the basename without trailing separators" {
   assert_eq(parent_dir("default_prompt.mbt.md", "default_prompt.mbt.md"), ".")
   assert_eq(parent_dir("/abs/dir//x.md", "x.md"), "/abs/dir")
   assert_eq(parent_dir("prompt\\x.md", "x.md"), "prompt")
+  assert_eq(parent_dir("/p.md", "p.md"), "/")
+  assert_eq(parent_dir("\\p.md", "p.md"), "\\")
   assert_eq(parent_dir("C:\\prompt\\x.md", "x.md"), "C:\\prompt")
 }
 
@@ -565,6 +572,26 @@ async test "an expanded example survives comment stripping and a missing final n
         #|    #|
         #|  )
         #|}
+        #|
+      ),
+    )
+  })
+}
+
+///|
+async test "CRLF markdown still expands example links" {
+  with_tmpdir(dir => {
+    @fs.write_file("\{dir}/ex.mbtx", "fn main {\n  ()\n}\n")
+    inspect(
+      expand_example_links("a\r\n[x](ex.mbtx)\r\nb\r\n", dir),
+      content=(
+        #|a
+        #|```mbtx
+        #|fn main {
+        #|  ()
+        #|}
+        #|```
+        #|b
         #|
       ),
     )
