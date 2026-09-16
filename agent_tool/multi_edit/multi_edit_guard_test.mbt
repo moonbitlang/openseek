@@ -37,7 +37,7 @@ fn shown(data : Json?) -> String {
 }
 
 ///|
-async test "revert_on_warnings keeps a batch that removes warnings and rolls back one that adds a warning" {
+async test "the warning guard keeps a batch that removes warnings and rolls back one that adds a warning" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-guard-", dir => {
     let path = write_guard_module(dir)
     let fixed = run_multi_edit({
@@ -55,7 +55,7 @@ async test "revert_on_warnings keeps a batch that removes warnings and rolls bac
           "start_line": 14,
         },
       ],
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_false(fixed.is_error, msg=fixed.content)
     assert_true(
@@ -90,12 +90,12 @@ async test "revert_on_warnings keeps a batch that removes warnings and rolls bac
           "start_line": 14,
         },
       ],
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_true(reverted.is_error)
     assert_true(
       reverted.content.contains(
-        "reverted: applied 1 edit(s) across 1 file(s), but moon check then reported 1 warning(s) the tree did not have (revert_on_warnings)",
+        "reverted: applied 1 edit(s) across 1 file(s), but moon check then reported 1 warning(s) the tree did not have (> revert_when_warnings_above=0)",
       ),
       msg=reverted.content,
     )
@@ -201,7 +201,7 @@ async test "the error guard's data names the verdict and the sites" {
         },
       ],
       "revert_when_errors_above": 0,
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_true(both.is_error)
     assert_true(
@@ -294,7 +294,7 @@ async test "failed and rejected batches report their problems in data; an unchec
           "start_line": 14,
         },
       ],
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_true(unverified.is_error)
     assert_true(
@@ -303,10 +303,15 @@ async test "failed and rejected batches report their problems in data; an unchec
     )
     assert_true(unverified.data is Some({ "outcome": "unverified", .. }))
     assert_eq(@fs.read_file(path).text(), original)
-    let bad = run_multi_edit({ "edits": [], "revert_on_warnings": "yes" })
+    let bad = run_multi_edit({
+      "edits": [],
+      "revert_when_warnings_above": "yes",
+    })
     assert_true(bad.is_error)
     assert_true(
-      bad.content.contains("arguments.revert_on_warnings to be a boolean"),
+      bad.content.contains(
+        "arguments.revert_when_warnings_above to be a non-negative integer",
+      ),
     )
   })
 }
@@ -344,7 +349,7 @@ async test "the guards cover every project a batch touches" {
           "start_line": 4,
         },
       ],
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_true(reverted.is_error, msg=reverted.content)
     guard reverted.data
@@ -382,7 +387,7 @@ async test "the guards cover every project a batch touches" {
           "start_line": 4,
         },
       ],
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_false(kept.is_error, msg=kept.content)
     assert_true(
@@ -430,7 +435,7 @@ async test "the guards cover every project a batch touches" {
         },
       ],
       "revert_when_errors_above": 0,
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_true(broken.is_error, msg=broken.content)
     assert_true(

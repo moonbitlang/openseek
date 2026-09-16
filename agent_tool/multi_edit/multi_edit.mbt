@@ -120,18 +120,20 @@ pub fn definition(
           ),
           "examples": [false],
         },
-        "revert_on_warnings": {
-          "type": "boolean",
+        "revert_when_warnings_above": {
+          "type": "integer",
           "description": (
-            #|Post-write warning guard, off by default. moon check runs before the batch is
-            #|written (the baseline) and after it; if the batch introduced a warning the
-            #|tree did not have — by diagnostic identity (path, code, message), so line
-            #|shifts never count — every file is rolled back and the call returns is_error
-            #|with the introduced sites. Costs one extra moon check. If the tree cannot be
-            #|checked, a warning-guarded batch is not written. For a warning-fix loop that
-            #|needs to know WHICH fix misfired, prefer one guarded `edit` per diagnostic.
+            #|Post-write warning guard, off unless given. moon check runs before the batch
+            #|is written (the baseline) and after it; if the batch introduced more than
+            #|this many warnings the tree did not have — counted by diagnostic identity
+            #|(path, code, message), so line shifts never count; 0 reverts on any — every
+            #|file is rolled back and the call returns is_error with the introduced sites.
+            #|Costs one extra moon check; the result's data carries introduced_count and
+            #|removed_count per severity. If the tree cannot be checked, a warning-guarded
+            #|batch is not written. For a warning-fix loop that needs to know WHICH fix
+            #|misfired, prefer one guarded `edit` per diagnostic.
           ),
-          "examples": [true],
+          "examples": [0],
         },
       },
     }),
@@ -181,7 +183,7 @@ async fn execute_with_workspace(
     edits,
     args.revert_when_errors_above,
     revert_on_parse_errors=args.revert_on_parse_errors,
-    revert_on_warnings=args.revert_on_warnings,
+    revert_when_warnings_above=args.revert_when_warnings_above,
     file_state~,
     write_scope?,
   )
@@ -278,7 +280,7 @@ async fn multi_edit_files(
   edits : Array[@decode.MultiEditItem],
   revert_when_errors_above : Int?,
   revert_on_parse_errors~ : Bool,
-  revert_on_warnings~ : Bool,
+  revert_when_warnings_above~ : Int?,
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
@@ -400,10 +402,11 @@ async fn multi_edit_files(
   // its `.mbt` edits belong to. The error guard reads the first (the
   // in-project repair case it was built for); the warning guard reads all.
   let check_paths = batch_projects(writes)
-  let baseline = if revert_on_warnings && !check_paths.is_empty() {
+  let baseline = if revert_when_warnings_above is Some(_) &&
+    !check_paths.is_empty() {
     fn not_verified(reason : String) -> @agent_tool.ToolAction {
       @agent_tool.respond(
-        "not applied: revert_on_warnings was requested, but moon check could not verify the tree (\{reason}); no files were changed",
+        "not applied: revert_when_warnings_above was requested, but moon check could not verify the tree (\{reason}); no files were changed",
         is_error=true,
         brief~,
         data=batch_data("unverified", writes, { "reason": reason.to_json() }),
@@ -422,7 +425,7 @@ async fn multi_edit_files(
   // not stay on disk unverified: put every original back before the
   // cancellation unwinds. Registered before the first write.
   async fn restore_on_unwind() -> Unit {
-    if revert_on_warnings && baseline is Some(_) {
+    if revert_when_warnings_above is Some(_) && baseline is Some(_) {
       @async.protect_from_cancel(() => {
         write_files(writes, write => write.original_content, write_scope?)
         |> ignore
@@ -436,12 +439,12 @@ async fn multi_edit_files(
   // a verified tree, so the files written so far are put back first.
   let written : Array[PreparedWrite] = []
   async fn write_failed(problem : String) -> @agent_tool.ToolAction {
-    if revert_on_warnings && baseline is Some(_) {
+    if revert_when_warnings_above is Some(_) && baseline is Some(_) {
       let restore_failures = @async.protect_from_cancel(() => {
         write_files(written, write => write.original_content, write_scope?)
       })
       return @agent_tool.respond(
-        "error multi_editing \{problem}; the \{written.length()} file(s) touched so far were restored (revert_on_warnings)\{restore_note(restore_failures)}",
+        "error multi_editing \{problem}; the \{written.length()} file(s) touched so far were restored (revert_when_warnings_above)\{restore_note(restore_failures)}",
         is_error=true,
         brief~,
         // Only a complete restore is a rollback: with a file the restore
@@ -498,7 +501,7 @@ async fn multi_edit_files(
       writes,
       effective_revert_threshold(revert_when_errors_above),
       baseline,
-      warnings_guard=revert_on_warnings,
+      warnings_guard=revert_when_warnings_above,
       write_scope?,
     )
   }
@@ -715,7 +718,7 @@ async fn revert_guarded_response(
   writes : Array[PreparedWrite],
   threshold : Int,
   baseline : Baseline?,
-  warnings_guard~ : Bool,
+  warnings_guard~ : Int?,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   let summary = success_summary(writes)
@@ -729,7 +732,7 @@ async fn revert_guarded_response(
   let after : @auto_check.CheckErrors? = match first {
     Checked(tally) => Some(tally)
     Failed(code, tally) =>
-      if warnings_guard && baseline is Some(_) {
+      if warnings_guard is Some(_) && baseline is Some(_) {
         return reverted_unverified(
           writes,
           "moon check exited \{code} without diagnostics after the batch",
@@ -746,7 +749,7 @@ async fn revert_guarded_response(
     // warning-guarded one measured a baseline, so the tree IS checkable and a
     // check that then fails is not a verdict: roll back rather than keep the
     // batch unverified.
-    if warnings_guard && baseline is Some(_) {
+    if warnings_guard is Some(_) && baseline is Some(_) {
       return reverted_unverified(
         writes,
         "moon check could not verify the tree after the batch",
@@ -860,7 +863,8 @@ async fn revert_guarded_response(
   // `after_all` is what a warning-guarded result reports, so a warning that
   // lives in a later project is not lost from the applied payload.
   let mut after_all = after
-  if warnings_guard && baseline is Some(before) {
+  let mut delta_counts : Map[String, Json]? = None
+  if warnings_guard is Some(limit) && baseline is Some(before) {
     let mut all = qualified(check_path, after)
     for path in check_paths[1:] {
       match @auto_check.check(path) {
@@ -881,7 +885,9 @@ async fn revert_guarded_response(
       return reverted_unverified(writes, TruncatedCapture, write_scope?)
     }
     let delta = @auto_check.introduced(before.all, all)
-    if !delta.warnings.is_empty() {
+    let removed = @auto_check.introduced(all, before.all)
+    delta_counts = Some(delta_json(delta, removed))
+    if delta.warnings.length() > limit {
       let restore_failures = write_files(
         writes,
         write => write.original_content,
@@ -893,6 +899,8 @@ async fn revert_guarded_response(
         after,
         all,
         delta,
+        removed,
+        limit~,
         restore_failures~,
       )
     }
@@ -906,7 +914,12 @@ async fn revert_guarded_response(
     "threshold": threshold.to_json(),
   }
   let mut all_projects_note = ""
-  if warnings_guard && check_paths.length() > 1 {
+  if delta_counts is Some(counts) {
+    for key, value in counts {
+      extra[key] = value
+    }
+  }
+  if warnings_guard is Some(_) && check_paths.length() > 1 {
     extra["check_all"] = after_all.to_json()
     all_projects_note = "\nall \{check_paths.length()} project(s): \{after_all.error_count} error(s), \{after_all.warning_count} warning(s)"
   }
@@ -1071,7 +1084,7 @@ async fn reverted_unverified(
     write_scope?,
   )
   @agent_tool.respond(
-    "reverted: \{reason} (revert_on_warnings), so all \{writes.length()} file(s) were rolled back to their pre-batch contents.\{restore_note(restore_failures)}",
+    "reverted: \{reason} (revert_when_warnings_above), so all \{writes.length()} file(s) were rolled back to their pre-batch contents.\{restore_note(restore_failures)}",
     is_error=true,
     brief="multi_edit reverted (unverified)",
     data=batch_data("reverted", writes, {
@@ -1139,6 +1152,8 @@ fn reverted_by_warnings(
   after_first : @auto_check.CheckErrors,
   after : @auto_check.CheckErrors,
   delta : @auto_check.Introduced,
+  removed : @auto_check.Introduced,
+  limit~ : Int,
   restore_failures~ : Array[String],
 ) -> @agent_tool.ToolAction {
   let before = baseline.all
@@ -1146,7 +1161,7 @@ fn reverted_by_warnings(
   let shown = [
     for site in delta.warnings[:count.min(IntroducedDisplayLimit)] => site
   ]
-  let head = "reverted: applied \{total_edit_count(writes)} edit(s) across \{writes.length()} file(s), but moon check then reported \{count} warning(s) the tree did not have (revert_on_warnings); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
+  let head = "reverted: applied \{total_edit_count(writes)} edit(s) across \{writes.length()} file(s), but moon check then reported \{count} warning(s) the tree did not have (> revert_when_warnings_above=\{limit}); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
   let listed = "\nintroduced:\n" +
     [ for site in shown => site.line() ].join("\n")
   let more = if count > shown.length() {
@@ -1170,6 +1185,8 @@ fn reverted_by_warnings(
       "check_all": after.to_json(),
       "baseline": baseline_json(baseline.first),
       "baseline_all": baseline_json(before),
+      "introduced_count": delta_json(delta, removed)["introduced_count"],
+      "removed_count": delta_json(delta, removed)["removed_count"],
       "reach_caveat": reach_caveat.to_json(),
       "introduced": {
         "errors": [],
@@ -1179,6 +1196,25 @@ fn reverted_by_warnings(
       "restore_failures": string_array(restore_failures),
     }),
   )
+}
+
+///|
+/// The delta a guard measured, quantified for `data`: how many diagnostics of
+/// each severity the batch introduced and how many it removed.
+fn delta_json(
+  introduced : @auto_check.Introduced,
+  removed : @auto_check.Introduced,
+) -> Map[String, Json] {
+  {
+    "introduced_count": {
+      "errors": introduced.errors.length().to_json(),
+      "warnings": introduced.warnings.length().to_json(),
+    },
+    "removed_count": {
+      "errors": removed.errors.length().to_json(),
+      "warnings": removed.warnings.length().to_json(),
+    },
+  }
 }
 
 ///|

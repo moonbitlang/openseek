@@ -26,9 +26,9 @@ pub struct MultiEditArgs {
   // Pre-write syntax gate (default true): reject the batch when any edited
   // `.mbt` file would gain new lex/parse errors.
   revert_on_parse_errors : Bool
-  // Post-write warning guard (default false): roll the batch back when it
-  // introduced a warning the tree did not have.
-  revert_on_warnings : Bool
+  // Post-write warning guard (absent = off): roll the batch back when it
+  // introduced more than this many warnings the tree did not have.
+  revert_when_warnings_above : Int?
 } derive(Debug)
 
 ///|
@@ -71,17 +71,28 @@ pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
         { "revert_on_parse_errors": false, .. } => false
         _ => fail("arguments.revert_on_parse_errors to be a boolean")
       }
-      let revert_on_warnings = match fields {
-        { "revert_on_warnings"? : Some(false) | Some(Null) | None, .. } => false
-        { "revert_on_warnings": true, .. } => true
-        _ => fail("arguments.revert_on_warnings to be a boolean")
+      let revert_when_warnings_above = match fields {
+        { "revert_when_warnings_above": Number(value, ..), .. } => {
+          let int_value = value.to_int()
+          if int_value.to_double() != value || int_value < 0 {
+            fail(
+              "arguments.revert_when_warnings_above to be a non-negative integer",
+            )
+          }
+          Some(int_value)
+        }
+        { "revert_when_warnings_above"? : Some(Null) | None, .. } => None
+        _ =>
+          fail(
+            "arguments.revert_when_warnings_above to be a non-negative integer",
+          )
       }
       {
         inline,
         edits_file,
         revert_when_errors_above,
         revert_on_parse_errors,
-        revert_on_warnings,
+        revert_when_warnings_above,
       }
     }
     _ => fail("object arguments")
