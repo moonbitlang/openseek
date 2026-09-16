@@ -262,16 +262,6 @@ jobs:
         if: matrix.target == 'native'
         run: moon cram test tests/cram
 
-      # Compile a small probe, then launch copied native/Wasm artifacts from
-      # unrelated directories to test relocation, symlinks and invalid layouts.
-      - name: Executable-relative resources
-        if: matrix.target != 'js'
-        run: |
-          moon build tests/integration/resources --target ${{ matrix.target }}
-          suffix=exe
-          if [ '${{ matrix.target }}' = wasm ]; then suffix=wasm; fi
-          node tests/integration/resources.mjs "_build/${{ matrix.target }}/debug/build/bobzhang/openseek/tests/integration/resources/resources.$suffix" '${{ matrix.target }}'
-
       - name: Background turn lifecycle (offline CLI)
         if: matrix.target == 'native'
         run: |

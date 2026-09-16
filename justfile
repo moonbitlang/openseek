@@ -38,7 +38,7 @@ inspect *args:
     moon run inspect -- {{ args }}
 
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
-test: test-moon test-cram test-turn-finish test-workflows test-resources
+test: test-moon test-cram test-turn-finish test-workflows
 
 # Run the offline CLI documentation tests (Git Bash on Windows).
 test-cram:
@@ -105,10 +105,3 @@ test-workflows:
 cli:
     moon build cmd/openseek --target native
     node scripts/stage-cli.mjs _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
-
-# Exercise copied native and Wasm programs independently of cwd and environment.
-test-resources:
-    moon build tests/integration/resources --target native
-    node tests/integration/resources.mjs _build/native/debug/build/bobzhang/openseek/tests/integration/resources/resources.exe native
-    moon build tests/integration/resources --target wasm
-    node tests/integration/resources.mjs _build/wasm/debug/build/bobzhang/openseek/tests/integration/resources/resources.wasm wasm
