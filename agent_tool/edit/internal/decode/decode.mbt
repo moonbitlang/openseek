@@ -17,11 +17,11 @@ pub struct EditInput {
   start_line : Int
   end_line : Int?
   revert_on_parse_errors : Bool
-  /// Post-write guards (default false): after the write, `moon check` runs and
-  /// the edit is restored if it introduced an error / a warning the tree did
-  /// not have before.
-  revert_on_errors : Bool
-  revert_on_warnings : Bool
+  /// Post-write guards (absent = off): after the write, `moon check` runs and
+  /// the edit is restored if it introduced more than this many errors /
+  /// warnings the tree did not have before; `0` reverts on any.
+  revert_when_errors_above : Int?
+  revert_when_warnings_above : Int?
 } derive(Debug)
 
 ///|
@@ -52,8 +52,12 @@ fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
   let revert_on_parse_errors = optional_bool(
     fields, "revert_on_parse_errors", true,
   )
-  let revert_on_errors = optional_bool(fields, "revert_on_errors", false)
-  let revert_on_warnings = optional_bool(fields, "revert_on_warnings", false)
+  let revert_when_errors_above = optional_threshold(
+    fields, "revert_when_errors_above",
+  )
+  let revert_when_warnings_above = optional_threshold(
+    fields, "revert_when_warnings_above",
+  )
   if end_line is Some(end) && end < start_line {
     fail(
       "arguments.end_line to be greater than or equal to arguments.start_line",
@@ -68,8 +72,25 @@ fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
     start_line,
     end_line,
     revert_on_parse_errors,
-    revert_on_errors,
-    revert_on_warnings,
+    revert_when_errors_above,
+    revert_when_warnings_above,
+  }
+}
+
+///|
+/// An optional guard threshold: a non-negative integer, or absent (`null` or
+/// missing) for a guard that is off.
+fn optional_threshold(fields : Map[String, Json], name : String) -> Int? raise {
+  match fields.get(name) {
+    Some(Number(value, ..)) => {
+      let int_value = value.to_int()
+      if int_value.to_double() != value || int_value < 0 {
+        fail("arguments.\{name} to be a non-negative integer")
+      }
+      Some(int_value)
+    }
+    Some(Null) | None => None
+    _ => fail("arguments.\{name} to be a non-negative integer")
   }
 }
 

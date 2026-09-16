@@ -17,8 +17,8 @@ test "decode valid edit input" {
       #|  start_line: 1,
       #|  end_line: None,
       #|  revert_on_parse_errors: true,
-      #|  revert_on_errors: false,
-      #|  revert_on_warnings: false,
+      #|  revert_when_errors_above: None,
+      #|  revert_when_warnings_above: None,
       #|}
     ),
   )
@@ -44,8 +44,8 @@ test "decode replace_all flag" {
       #|  start_line: 1,
       #|  end_line: None,
       #|  revert_on_parse_errors: true,
-      #|  revert_on_errors: false,
-      #|  revert_on_warnings: false,
+      #|  revert_when_errors_above: None,
+      #|  revert_when_warnings_above: None,
       #|}
     ),
   )
@@ -71,8 +71,8 @@ test "decode line range" {
       #|  start_line: 2,
       #|  end_line: Some(4),
       #|  revert_on_parse_errors: true,
-      #|  revert_on_errors: false,
-      #|  revert_on_warnings: false,
+      #|  revert_when_errors_above: None,
+      #|  revert_when_warnings_above: None,
       #|}
     ),
   )

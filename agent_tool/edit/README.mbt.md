@@ -72,8 +72,8 @@ and the edit should stay inside a tighter range:
 | `start_line`  | integer | yes | 1-based first line of the search/replace range. The first match at or after this line is replaced. |
 | `end_line`    | integer | no  | 1-based last line of the search/replace range. Defaults to the file end. |
 | `revert_on_parse_errors` | boolean | no (default `true`) | Reject an edit whose result would introduce new lex/parse errors into a syncheck input (`.mbt`, `.mbt.md`, `moon.mod`, `moon.pkg`), leaving the file untouched and returning the errors with excerpts. In `.mbt.md` only the checked fenced blocks are parsed. Set `false` only to intentionally produce non-parsing content. |
-| `revert_on_errors` | boolean | no (default `false`) | Post-write guard. `moon check` runs from the file's module before and after the write; if the edit introduced an error the tree did not have (by diagnostic identity: path, code, message — line shifts never count) the file is restored and the call returns `is_error` with the introduced sites. If the check cannot run, a guarded edit is not written. |
-| `revert_on_warnings` | boolean | no (default `false`) | The same guard for warnings. One guarded edit per diagnostic is the unit of a mechanical warning-fix script (see `share/workflow/fix-deprecations.mbtx`). |
+| `revert_when_errors_above` | integer | no (off) | Post-write guard. `moon check` runs from the file's module before and after the write; if the edit introduced more than this many errors the tree did not have (counted by diagnostic identity: path, code, message, so line shifts never count; `0` = any) the file is restored and the call returns `is_error` with the introduced sites. If the check cannot run, a guarded edit is not written. |
+| `revert_when_warnings_above` | integer | no (off) | The same guard for warnings. One guarded edit per diagnostic at `0` is the unit of a mechanical warning-fix script (see `share/workflow/fix-deprecations.mbtx`). |
 | `replace_all_preview` | boolean | no (default `false`) | Preview mode: the file is **not** modified. Every match of `old_string` in the range is listed with surrounding context lines, plus a ready-to-review `multi_edit` edits array (capped at 40 sites; several matches on one line collapse into a single whole-line entry). |
 
 Legacy calls with `replace_all=false` are tolerated, but `replace_all=true` is
@@ -114,8 +114,8 @@ has one of these shapes:
   restored to its pre-edit content."` with `is_error=true` — a post-write
   guard fired; the body lists the introduced sites and, when the baseline
   already had errors, the reach caveat.
-- `"not applied: revert_on_errors/revert_on_warnings was requested, but moon
-  check could not verify the tree (<reason>); <path> was NOT modified"` with
+- `"not applied: a revert_when_*_above guard was requested, but moon check
+  could not verify the tree (<reason>); <path> was NOT modified"` with
   `is_error=true`.
 - `"rejected: the edit would introduce <n> new parse error(s) in <path>, ..."`
   with `is_error=true` — the pre-write syntax gate refused the edit and the
@@ -136,7 +136,8 @@ PTC scripts and kept in the transcript): `outcome` is one of `applied`,
 `reverted`, `rejected`, `unverified`, `preview`, `not_found`, `error`, with
 `path` and, for writes, `lines` (`start`/`end`). A kept edit in a MoonBit
 project adds `check` (`error_count`, `warning_count`, `truncated`, first
-`errors`); a guarded edit adds `baseline` counts and `reach_caveat`; a
+`errors`); a guarded edit adds `baseline` counts, `introduced_count` and
+`removed_count` per severity, and `reach_caveat`; a
 reverted one adds `reason` (`introduced_errors`, `introduced_warnings`,
 `unverified`), `introduced` (`errors`, `warnings`, `complete`), and
 `restore_failed`; a rejected one adds `parse_errors`. Guards refuse an

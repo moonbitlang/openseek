@@ -29,7 +29,7 @@ async fn write_guard_module(dir : String) -> String {
 }
 
 ///|
-async test "revert_on_warnings keeps a fix that removes a warning and reverts one that adds a warning" {
+async test "the warning guard keeps a fix that removes a warning and reverts one that adds a warning" {
   @vfs.with_tmpdir(prefix="openseek-edit-guard-", dir => {
     let path = write_guard_module(dir)
     // The deprecation fix: one warning fewer, kept, with the counts in data.
@@ -38,7 +38,7 @@ async test "revert_on_warnings keeps a fix that removes a warning and reverts on
       "old_string": "length([1, 2, 3])",
       "new_string": "len([1, 2, 3])",
       "start_line": 14,
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_false(fixed.is_error, msg=fixed.content)
     assert_true(
@@ -75,12 +75,12 @@ async test "revert_on_warnings keeps a fix that removes a warning and reverts on
       "old_string": "  len([1, 2, 3]) + length([4])",
       "new_string": "  let unused = 0\n  len([1, 2, 3]) + len([4])",
       "start_line": 14,
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_true(reverted.is_error)
     assert_true(
       reverted.content.contains(
-        "reverted: the edit introduced 1 warning(s) the tree did not have",
+        "reverted: the edit introduced 1 warning(s) (> revert_when_warnings_above=0) the tree did not have",
       ),
       msg=reverted.content,
     )
@@ -105,16 +105,38 @@ async test "revert_on_warnings keeps a fix that removes a warning and reverts on
       fail("unexpected data: \{shown(reverted.data)}")
     }
     assert_true(loc.has_prefix("14:"))
-    // Without the guard the same edit lands, and the check line reports it.
-    let unguarded = run_edit({
+    // With a tolerance of one the same edit is kept, and the data quantifies
+    // the delta: one warning introduced, one removed.
+    let tolerated = run_edit({
       "path": path,
       "old_string": "  len([1, 2, 3]) + length([4])",
       "new_string": "  let unused = 0\n  len([1, 2, 3]) + len([4])",
       "start_line": 14,
+      "revert_when_warnings_above": 1,
+    })
+    assert_false(tolerated.is_error, msg=tolerated.content)
+    guard tolerated.data
+      is Some(
+        {
+          "outcome": "applied",
+          "introduced_count": { "warnings": Number(1, ..), .. },
+          "removed_count": { "warnings": Number(1, ..), .. },
+          ..
+        }
+      ) else {
+      fail("unexpected data: \{shown(tolerated.data)}")
+    }
+    // Without any guard an edit lands, and the check line reports the tree.
+    let unguarded = run_edit({
+      "path": path,
+      "old_string": "  let unused = 0",
+      "new_string": "  let unused = 0\n  let idle = 1",
+      "start_line": 14,
     })
     assert_false(unguarded.is_error, msg=unguarded.content)
     assert_true(
-      unguarded.content.contains("moon check: ok — 0 errors, 1 warning(s)"),
+      unguarded.content.contains("moon check: ok — 0 errors, 2 warning(s)"),
+      msg=unguarded.content,
     )
     assert_true(unguarded.content.contains("Unused variable 'unused'"))
     assert_true(
@@ -125,7 +147,7 @@ async test "revert_on_warnings keeps a fix that removes a warning and reverts on
 }
 
 ///|
-async test "revert_on_errors reverts a type-breaking edit and reports the site" {
+async test "the error guard reverts a type-breaking edit and reports the site" {
   @vfs.with_tmpdir(prefix="openseek-edit-guard-err-", dir => {
     let path = write_guard_module(dir)
     let original = @fs.read_file(path).text()
@@ -134,12 +156,12 @@ async test "revert_on_errors reverts a type-breaking edit and reports the site" 
       "old_string": "  xs.length()",
       "new_string": "  \"not an int\"",
       "start_line": 9,
-      "revert_on_errors": true,
+      "revert_when_errors_above": 0,
     })
     assert_true(reverted.is_error)
     assert_true(
       reverted.content.contains(
-        "reverted: the edit introduced 1 error(s) the tree did not have",
+        "reverted: the edit introduced 1 error(s) (> revert_when_errors_above=0) the tree did not have",
       ),
       msg=reverted.content,
     )
@@ -201,7 +223,7 @@ async test "a guarded edit is not written when moon check cannot verify the tree
       "old_string": "length([1, 2, 3])",
       "new_string": "len([1, 2, 3])",
       "start_line": 14,
-      "revert_on_warnings": true,
+      "revert_when_warnings_above": 0,
     })
     assert_true(out.is_error)
     assert_true(out.content.contains("not applied:"), msg=out.content)
@@ -238,8 +260,8 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "old_string": "old",
       "new_string": "new",
       "start_line": 1,
-      "revert_on_errors": true,
-      "revert_on_warnings": true,
+      "revert_when_errors_above": 0,
+      "revert_when_warnings_above": 0,
     })
     assert_false(out.is_error, msg=out.content)
     assert_false(out.content.contains("moon check"))
@@ -260,11 +282,13 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "old_string": "new",
       "new_string": "x",
       "start_line": 1,
-      "revert_on_warnings": "yes",
+      "revert_when_warnings_above": "yes",
     })
     assert_true(bad.is_error)
     assert_true(
-      bad.content.contains("arguments.revert_on_warnings to be a boolean"),
+      bad.content.contains(
+        "arguments.revert_when_warnings_above to be a non-negative integer",
+      ),
     )
     assert_true(bad.data is Some({ "outcome": "error", .. }))
   })
@@ -324,7 +348,7 @@ async test "guards reach a MoonBit target through a link with another name" {
       "old_string": "  xs.length()",
       "new_string": "  \"not an int\"",
       "start_line": 9,
-      "revert_on_errors": true,
+      "revert_when_errors_above": 0,
     })
     assert_true(reverted.is_error, msg=reverted.content)
     assert_true(
@@ -361,7 +385,7 @@ async test "guards check the module of a link's target as well as the link's own
       "old_string": "pub fn f() -> Int {\n  1",
       "new_string": "pub fn f(x : Int) -> Int {\n  x",
       "start_line": 2,
-      "revert_on_errors": true,
+      "revert_when_errors_above": 0,
     })
     assert_true(reverted.is_error, msg=reverted.content)
     guard reverted.data
