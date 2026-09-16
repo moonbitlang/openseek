@@ -179,6 +179,7 @@ async fn execute_with_workspace(
       return @agent_tool.respond(
         "error: edit requires \{message}",
         is_error=true,
+        data={ "outcome": "error" },
       )
     }
   }
@@ -189,10 +190,11 @@ async fn execute_with_workspace(
   if !input.replace_all_preview &&
     write_scope is Some(scope) &&
     scope.deny_reason(path) is Some(reason) {
-    return @agent_tool.respond(
-      "error editing \{path}: write blocked: \{reason}",
-      is_error=true,
-      brief="edit \{@agent_tool.brief_basename(path)}",
+    return failure(
+      path,
+      "write blocked: \{reason}",
+      "edit \{@agent_tool.brief_basename(path)}",
+      outcome="error",
     )
   }
   edit_file(input, path~, file_state~, write_scope?)
@@ -738,17 +740,6 @@ async fn commit_edit(
     is Some(rejection) {
     return rejection
   }
-  // Containment re-check at the moment of writing: the early gate decided on
-  // filesystem state that awaits ago may have changed (a path component
-  // re-linked underneath the tool).
-  if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
-    return failure(
-      path,
-      "write blocked: \{reason}",
-      fail_brief,
-      outcome="error",
-    )
-  }
   let guards : Guards = {
     errors: input.revert_on_errors,
     warnings: input.revert_on_warnings,
@@ -768,6 +759,7 @@ async fn commit_edit(
 
   let baseline = if guards.errors || guards.warnings {
     match @auto_check.check(path) {
+      Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
       Checked(tally) => Some(tally)
       NotApplicable => None
       Unavailable(reason) => return not_verified(reason)
@@ -776,7 +768,30 @@ async fn commit_edit(
   } else {
     None
   }
+  // Containment re-check at the moment of writing: everything above awaited
+  // (the parse gate, the baseline check), and a path component may have been
+  // re-linked underneath the tool meanwhile.
+  if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
+    return failure(
+      path,
+      "write blocked: \{reason}",
+      fail_brief,
+      outcome="error",
+    )
+  }
   @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
+  // A guarded edit interrupted during its post-write check must not stay on
+  // disk unverified: put the original back before the cancellation unwinds.
+  // `check` raises only for cancellation; every other failure is an outcome.
+  async fn restore_on_unwind() -> Unit {
+    if baseline is Some(_) {
+      @async.protect_from_cancel(() => {
+        restore_content(path, original_content, write_scope?) |> ignore
+      })
+    }
+  }
+
+  errdefer restore_on_unwind()
   let after = @auto_check.check(path)
   fn keep(
     check_line : String?,
@@ -811,6 +826,7 @@ async fn commit_edit(
       { "reason": "unverified", "check": Json::null() },
       head="moon check could not verify the tree after the edit (\{reason})",
       detail="",
+      write_scope?,
     )
   }
 
@@ -826,6 +842,8 @@ async fn commit_edit(
       unverified_after(exited_without_diagnostics(code))
     (Checked(tally), None) =>
       keep(Some(check_report(tally)), { "check": tally.summary_json() })
+    (Checked(tally), Some(_)) if tally.truncated =>
+      unverified_after(TruncatedCapture)
     (Checked(tally), Some(before)) =>
       guarded_outcome(
         path,
@@ -836,9 +854,15 @@ async fn commit_edit(
         before,
         tally,
         keep,
+        write_scope?,
       )
   }
 }
+
+///|
+/// Why a guard cannot compare an overflowed capture: the lists are then
+/// windows onto moon's output, and a site can enter one without being new.
+const TruncatedCapture : String = "moon check produced more output than the capture budget, so the guard cannot compare the two runs"
 
 ///|
 fn exited_without_diagnostics(code : Int) -> String {
@@ -873,20 +897,13 @@ async fn guarded_outcome(
   before : @auto_check.CheckErrors,
   after : @auto_check.CheckErrors,
   keep : (String?, Map[String, Json]) -> @agent_tool.ToolAction,
+  write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
+  // Both captures are complete here (an overflowed one is refused before this
+  // point), so identity comparison is exact.
   let delta = @auto_check.introduced(before, after)
-  let errors_hit = guards.errors &&
-    (if delta.complete {
-      !delta.errors.is_empty()
-    } else {
-      after.error_count > before.error_count
-    })
-  let warnings_hit = guards.warnings &&
-    (if delta.complete {
-      !delta.warnings.is_empty()
-    } else {
-      after.warning_count > before.warning_count
-    })
+  let errors_hit = guards.errors && !delta.errors.is_empty()
+  let warnings_hit = guards.warnings && !delta.warnings.is_empty()
   let reach_caveat = before.error_count > 0
   let common : Map[String, Json] = {
     "check": after.summary_json(),
@@ -911,12 +928,6 @@ async fn guarded_outcome(
       "\{delta.errors.length()} error(s) and \{delta.warnings.length()} warning(s)"
     (true, false) => "\{delta.errors.length()} error(s)"
     (false, _) => "\{delta.warnings.length()} warning(s)"
-  }
-  let what = if delta.complete {
-    what
-  } else {
-    // By count: the capture overflowed, so the identity lists are partial.
-    "more diagnostics than before (\{before.error_count}→\{after.error_count} error(s), \{before.warning_count}→\{after.warning_count} warning(s); the capture was truncated, so sites below may be incomplete)"
   }
   let listed = [
     ..[
@@ -950,6 +961,7 @@ async fn guarded_outcome(
     common,
     head="the edit introduced \{what} the tree did not have",
     detail="\{detail}\{caveat}",
+    write_scope?,
   )
 }
 
@@ -965,12 +977,9 @@ async fn revert_edit(
   extra : Map[String, Json],
   head~ : String,
   detail~ : String,
+  write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
-  let mut restore_failure : String? = None
-  @fs.write_file(path, original_content, create_mode=CreateOrTruncate) catch {
-    error if @async.is_being_cancelled() => raise error
-    error => restore_failure = Some("\{error}")
-  }
+  let restore_failure = restore_content(path, original_content, write_scope?)
   let content = match restore_failure {
     None =>
       "reverted: \{head}, so \{path} was restored to its pre-edit content.\{detail}"
@@ -984,6 +993,25 @@ async fn revert_edit(
     brief="\{fail_brief} (reverted)",
     data=edit_data("reverted", path, lines, extra),
   )
+}
+
+///|
+/// Put the pre-edit content back, under the same containment rule as the
+/// write it undoes (a path re-linked during the check must not redirect the
+/// restore either). Returns why it could not, or `None` when it did.
+async fn restore_content(
+  path : String,
+  original_content : String,
+  write_scope? : @write_scope.WriteScope,
+) -> String? {
+  if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
+    return Some("write blocked: \{reason}")
+  }
+  @fs.write_file(path, original_content, create_mode=CreateOrTruncate) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => return Some("\{error}")
+  }
+  None
 }
 
 ///|
@@ -1013,6 +1041,11 @@ fn edit_data(
 /// concrete diagnostic without a second check.
 fn check_report(tally : @auto_check.CheckErrors) -> String {
   let bound = if tally.truncated { "≥" } else { "" }
+  if tally.truncated && tally.error_count == 0 {
+    // The collector stops moon at the capture budget, so no error captured
+    // does not mean no error exists.
+    return "moon check: incomplete — output truncated after ≥\{tally.warning_count} warning(s) with no error captured; the result is unknown"
+  }
   if tally.error_count == 0 {
     let head = "moon check: ok — 0 errors, \{bound}\{tally.warning_count} warning(s)"
     match tally.warnings {
