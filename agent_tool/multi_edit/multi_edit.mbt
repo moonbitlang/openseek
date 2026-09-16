@@ -444,9 +444,11 @@ async fn multi_edit_files(
         "error multi_editing \{problem}; the \{written.length()} file(s) touched so far were restored (revert_on_warnings)\{restore_note(restore_failures)}",
         is_error=true,
         brief~,
+        // Only a complete restore is a rollback: with a file the restore
+        // could not put back, the tree is partially modified and says so.
         data=batch_data("error", writes, {
-          "partial": false,
-          "rolled_back": true,
+          "partial": (!restore_failures.is_empty()).to_json(),
+          "rolled_back": restore_failures.is_empty().to_json(),
           "restore_failures": string_array(restore_failures),
         }),
       )
