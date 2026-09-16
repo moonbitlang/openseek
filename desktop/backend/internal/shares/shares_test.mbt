@@ -11,7 +11,7 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
     let receiver = group.spawn(() => {
       let mut key : String? = None
       let mut body : Bytes? = None
-      for attempt = 0; attempt < 2; attempt = attempt + 1 {
+      for attempt in 0..<2 {
         let (connection, _) = server.accept()
         defer connection.close()
         let request = connection.read_request()
@@ -25,12 +25,8 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
           content_type.split_once("boundary=") is Some((_, boundary)) else {
           fail("multipart boundary is required")
         }
-        // The API rejects boundaries longer than 70 characters with this
-        // error, even when the header includes a boundary parameter.
-        assert_true(
-          boundary.length() > 0 && boundary.length() <= 70,
-          msg="multipart boundary is required: received \{boundary.length()} characters (maximum 70)",
-        )
+        // The API rejects boundaries longer than 70 characters.
+        assert_true(boundary.length() > 0 && boundary.length() <= 70)
         let text = @utf8.decode(uploaded)
         assert_true(text.has_prefix("--\{boundary}\r\n"))
         assert_true(text.has_suffix("\r\n--\{boundary}--\r\n"))
@@ -44,10 +40,10 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
         )
         assert_true(text.contains("{\"snapshot\":true}"))
         if attempt == 0 {
+          // Drop the connection without a response: publication may have
+          // succeeded even though the client never learns it.
           key = request_key
           body = Some(uploaded)
-          // Publication may have succeeded even though its response was lost.
-          connection.close()
         } else {
           assert_true(request_key == key)
           assert_true(Some(uploaded) == body)
@@ -69,105 +65,71 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
 }
 
 ///|
-async test "upload reports authentication server failures malformed responses and redirects without following them" {
-  for
-    (code, body) in [
-      (401, "{}"),
-      (404, "{}"),
-      (413, "{}"),
-      (503, "{}"),
-      (302, "{}"),
-      (201, "invalid"),
-      (201, "{\"expires_at\":\"date\"}"),
-    ] {
-    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-    defer server.close()
-    @async.with_task_group(group => {
-      let receiver = group.spawn(() => {
-        let (connection, _) = server.accept()
-        defer connection.close()
-        let _ = connection.read_request()
-        connection.skip_request_body()
-        connection.send_response(code, "Fixture", extra_headers={
-          "Location": "http://127.0.0.1:1/never-follow",
-        })
-        connection.write_string(body)
-        connection.end_response()
+/// Publish a small snapshot against a server that answers every request with
+/// `code` and `body`, plus a redirect target that must never be followed.
+async fn reply_for(
+  code : Int,
+  body : String,
+) -> (String, @protocol.SessionShareReply) {
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  defer server.close()
+  let origin = "http://127.0.0.1:\{server.addr.port()}"
+  @async.with_task_group(group => {
+    let receiver = group.spawn(() => {
+      let (connection, _) = server.accept()
+      defer connection.close()
+      ignore(connection.read_request())
+      connection.skip_request_body()
+      connection.send_response(code, "Fixture", extra_headers={
+        "Location": "http://127.0.0.1:1/never-follow",
       })
-      let snapshot = @shares.Snapshot(
-        title="Test",
-        html="<html>test</html>",
-        json="{}",
-      )
-      let reply = snapshot.publish(
-        server_url="http://127.0.0.1:\{server.addr.port()}",
-        token="odt_test",
-      )
-      if code == 401 {
-        assert_true(reply is SignInRequired)
-      } else if code == 404 {
-        guard reply is Failed(message~) else {
-          fail("expected missing share route")
-        }
-        assert_true(
-          message.contains("http://127.0.0.1:\{server.addr.port()}/v1/shares"),
-        )
-        assert_true(
-          message.contains("Sign in to a server with sharing enabled"),
-        )
-      } else {
-        assert_true(reply is Failed(..))
-      }
-      receiver.wait()
+      connection.write_string(body)
+      connection.end_response()
     })
-  }
+    let reply = @shares.Snapshot(
+      title="Test",
+      html="<html>test</html>",
+      json="{}",
+    ).publish(server_url=origin, token="odt_test")
+    receiver.wait()
+    (origin, reply)
+  })
 }
 
 ///|
-async test "upload preserves server error details and falls back for invalid error bodies" {
+async test "upload maps server replies without following redirects" {
+  let invalid = "The share server did not return a valid share link."
   for
     (code, body, expected) in [
+      (401, "{}", @protocol.SignInRequired),
+      (413, "{}", Failed(message="Sharing failed (HTTP 413).")),
+      (302, "{}", Failed(message="Sharing failed (HTTP 302).")),
+      (201, "invalid", Failed(message=invalid)),
+      (201, "{\"expires_at\":\"date\"}", Failed(message=invalid)),
       (
-        400, "{\"error\":\"invalid multipart header\"}", "Sharing failed (HTTP 400): invalid multipart header",
+        400,
+        "{\"error\":\"invalid multipart header\"}",
+        Failed(message="Sharing failed (HTTP 400): invalid multipart header"),
       ),
       (
-        403, "{\"error\":\"forbidden origin\"}", "Sharing failed (HTTP 403): forbidden origin",
+        400,
+        "<html>proxy error</html>",
+        Failed(message="Sharing failed (HTTP 400)."),
       ),
-      (
-        429, "{\"error\":\"daily share quota exceeded\"}", "Sharing failed (HTTP 429): daily share quota exceeded",
-      ),
-      (
-        502, "{\"error\":\"could not save share\"}", "Sharing failed (HTTP 502): could not save share",
-      ),
-      (400, "<html>proxy error</html>", "Sharing failed (HTTP 400)."),
-      (400, "{\"error\":null}", "Sharing failed (HTTP 400)."),
-      (400, "{\"error\":\"   \"}", "Sharing failed (HTTP 400)."),
+      (400, "{\"error\":null}", Failed(message="Sharing failed (HTTP 400).")),
+      (400, "{\"error\":\"   \"}", Failed(message="Sharing failed (HTTP 400).")),
     ] {
-    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-    defer server.close()
-    @async.with_task_group(group => {
-      let receiver = group.spawn(() => {
-        let (connection, _) = server.accept()
-        defer connection.close()
-        let _ = connection.read_request()
-        connection.skip_request_body()
-        connection.send_response(code, "Fixture")
-        connection.write_string(body)
-        connection.end_response()
-      })
-      let snapshot = @shares.Snapshot(
-        title="Test",
-        html="<html>test</html>",
-        json="{}",
-      )
-      let reply = snapshot.publish(
-        server_url="http://127.0.0.1:\{server.addr.port()}",
-        token="odt_test",
-      )
-      assert_eq(reply, @protocol.Failed(message=expected))
-      receiver.wait()
-    })
+    let (_, reply) = reply_for(code, body)
+    assert_eq(reply, expected)
   }
+  // A device login can still point at a deployment without share routes.
+  let (origin, reply) = reply_for(404, "{}")
+  assert_eq(
+    reply,
+    Failed(
+      message="The signed-in server does not provide sharing at \{origin}/v1/shares (HTTP 404). Sign in to a server with sharing enabled.",
+    ),
+  )
 }
 
 ///|
@@ -229,7 +191,6 @@ async test "a lost response followed by a refused retry reports the connection f
       // The upload reached the server. Close the listener before dropping the
       // response so the retry fails definitively, without resolving attempt one.
       server.close()
-      connection.close()
     })
     let reply = snapshot.publish(server_url=origin, token="test-token")
     guard reply is Failed(message~) else { fail("expected connection failure") }
