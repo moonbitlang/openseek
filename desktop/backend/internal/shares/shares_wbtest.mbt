@@ -33,14 +33,14 @@ async test "upload timeouts are actionable and external cancellation propagates"
 }
 
 ///|
-test "long metadata titles are byte bounded without truncating conversation files" {
+test "long metadata titles are bounded on character boundaries without truncating conversation files" {
   for
     (title, expected) in [
-      ("a".repeat(1024), "a".repeat(1024)),
-      ("a".repeat(1025), "a".repeat(1024)),
+      ("a".repeat(341), "a".repeat(341)),
+      ("a".repeat(1025), "a".repeat(341)),
       ("中".repeat(342), "中".repeat(341)),
-      ("😀".repeat(257), "😀".repeat(256)),
-      ("a".repeat(1023) + "😀", "a".repeat(1023)),
+      ("😀".repeat(257), "😀".repeat(170)),
+      ("a".repeat(340) + "😀", "a".repeat(340)),
     ] {
     let snapshot = Snapshot(
       title~,

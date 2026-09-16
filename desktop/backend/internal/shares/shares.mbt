@@ -14,33 +14,6 @@ pub(all) suberror ShareError {
 }
 
 ///|
-/// The API limits the title to 1024 UTF-8 bytes, and a generated title may be
-/// the entire first prompt. Bound only this metadata, on a Unicode character
-/// boundary so neither CJK text nor emoji is split; the HTML and JSON retain
-/// the complete records.
-fn bounded_title(title : String) -> String {
-  let bounded = StringBuilder()
-  let mut size = 0
-  for c in title.iter() {
-    let code = c.to_int()
-    size += if code < 0x80 {
-      1
-    } else if code < 0x800 {
-      2
-    } else if code < 0x10000 {
-      3
-    } else {
-      4
-    }
-    if size > 1024 {
-      break
-    }
-    bounded.write_char(c)
-  }
-  bounded.to_string()
-}
-
-///|
 /// All fields are UTF-8 multipart bodies, never interpolated into headers.
 /// The limit includes framing, matching POST /v1/shares on openseek-api.
 pub fn Snapshot::Snapshot(
@@ -48,7 +21,11 @@ pub fn Snapshot::Snapshot(
   html~ : String,
   json~ : String,
 ) -> Snapshot raise ShareError {
-  let title = bounded_title(title.trim().to_owned())
+  // The API limits the title to 1024 UTF-8 bytes, and a generated title may
+  // be the entire first prompt. A UTF-16 code unit encodes to at most three
+  // UTF-8 bytes, so 341 units can never exceed the limit; clamped_view keeps
+  // surrogate pairs whole. The HTML and JSON retain the complete records.
+  let title = title.trim().clamped_view(end=1024 / 3).to_owned()
   guard !title.is_empty() else {
     raise ShareError("The conversation title must not be empty.")
   }
