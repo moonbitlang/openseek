@@ -43,11 +43,19 @@ struct Skipped {
 
 ///|
 /// The replacement a deprecation message names, when it is a bare identifier
-/// the diagnosed span can be swapped for: "use `len` instead" → `len`.
-/// Anything else (a path like `@pkg.f`, a method like `Array::len`, prose,
-/// no replacement at all) is a human's call.
+/// the diagnosed span can be swapped for: "use `len` instead" → `len`, and
+/// "Use `compare` instead" (the core library's spelling) alike. Anything else
+/// (a path like `@pkg.f`, a method like `Array::len`, prose, no replacement
+/// at all) is a human's call.
 fn replacement_in(message : String) -> String? {
-  guard message.find("use `") is Some(start) else { return None }
+  let start = match message.find("use `") {
+    Some(start) => start
+    None =>
+      match message.find("Use `") {
+        Some(start) => start
+        None => return None
+      }
+  }
   let rest = message[start + 5:]
   guard rest.find("`") is Some(end) else { return None }
   let name = rest[:end].to_owned()
