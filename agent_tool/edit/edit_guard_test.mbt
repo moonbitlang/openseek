@@ -266,6 +266,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
     assert_true(
       bad.content.contains("arguments.revert_on_warnings to be a boolean"),
     )
+    assert_true(bad.data is Some({ "outcome": "error", .. }))
   })
 }
 
@@ -306,4 +307,30 @@ fn shown(data : Json?) -> String {
     Some(data) => data.stringify()
     None => "none"
   }
+}
+
+///|
+/// `alias.txt -> lib/lib.mbt`: the written spelling is not a MoonBit path,
+/// but the target is, so the guard checks the module through the link.
+#cfg(all(target="native", not(platform="windows")))
+async test "guards reach a MoonBit target through a link with another name" {
+  @vfs.with_tmpdir(prefix="openseek-edit-guard-link-", dir => {
+    let target = write_guard_module(dir)
+    let link = "\{dir}/alias.txt"
+    @fs.symlink(target~, link)
+    let original = @fs.read_file(target).text()
+    let reverted = run_edit({
+      "path": link,
+      "old_string": "  xs.length()",
+      "new_string": "  \"not an int\"",
+      "start_line": 9,
+      "revert_on_errors": true,
+    })
+    assert_true(reverted.is_error, msg=reverted.content)
+    assert_true(
+      reverted.data
+      is Some({ "outcome": "reverted", "reason": "introduced_errors", .. }),
+    )
+    assert_eq(@fs.read_file(target).text(), original)
+  })
 }

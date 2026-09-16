@@ -757,8 +757,29 @@ async fn commit_edit(
     )
   }
 
-  let baseline = if guards.errors || guards.warnings {
+  // The check classifies its path by name, and a link may carry a different
+  // name from its target (`alias.txt -> lib.mbt`, or the reverse): try the
+  // written spelling first, then the target, so a MoonBit file reached
+  // through either spelling is checked from its module.
+  async fn check_tree() -> @auto_check.CheckOutcome {
     match @auto_check.check(path) {
+      NotApplicable => {
+        let target = @fs.realpath(path) catch {
+          error if @async.is_being_cancelled() => raise error
+          _ => path
+        }
+        if target == path {
+          NotApplicable
+        } else {
+          @auto_check.check(target)
+        }
+      }
+      outcome => outcome
+    }
+  }
+
+  let baseline = if guards.errors || guards.warnings {
+    match check_tree() {
       Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
       Checked(tally) => Some(tally)
       NotApplicable => None
@@ -792,7 +813,7 @@ async fn commit_edit(
   }
 
   errdefer restore_on_unwind()
-  let after = @auto_check.check(path)
+  let after = check_tree()
   fn keep(
     check_line : String?,
     extra : Map[String, Json],
@@ -913,8 +934,13 @@ async fn guarded_outcome(
     },
     "reach_caveat": reach_caveat.to_json(),
   }
+  let caveat = if reach_caveat {
+    "\nnote: the baseline already had \{before.error_count} error(s); moon skips the dependents of a failing package, so the guard compared only what the build reached. If this edit fixed an error, the next check reaches further."
+  } else {
+    ""
+  }
   if !errors_hit && !warnings_hit {
-    return keep(Some(check_report(after)), common)
+    return keep(Some("\{check_report(after)}\{caveat}"), common)
   }
   fn sites(all : Array[@auto_check.ErrorSite]) -> Array[@auto_check.ErrorSite] {
     [
@@ -939,7 +965,7 @@ async fn guarded_outcome(
   ]
   let detail = if listed.is_empty() { "" } else { "\n\{listed.join("\n")}" }
   let caveat = if reach_caveat {
-    "\nnote: the baseline already had \{before.error_count} error(s); moon skips the dependents of a failing package, so a fix that lets the build reach further can surface diagnostics that were always there. If this edit fixed an error, re-issue it without the guard and read the check line."
+    "\{caveat} If this edit fixed an error, re-issue it without the guard and read the check line."
   } else {
     ""
   }
