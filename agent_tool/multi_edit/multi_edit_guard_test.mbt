@@ -311,3 +311,83 @@ async test "failed and rejected batches report their problems in data; an unchec
     )
   })
 }
+
+///|
+/// The warning guard covers every project a batch touches: the edit in
+/// module `a` is clean, the one in module `b` leaves an unused binding, and
+/// both files come back.
+async test "the warning guard checks every project a batch touches" {
+  @vfs.with_tmpdir(prefix="openseek-multi-edit-guard-projects-", dir => {
+    let a = "///|\npub fn f() -> Int {\n  1\n}\n"
+    let b = "///|\npub fn g() -> Int {\n  2\n}\n"
+    @vfs.FileSystem::from_pairs([
+      ("a/moon.mod", "name = \"tmp/pa\"\n"),
+      ("a/lib/moon.pkg", ""),
+      ("a/lib/lib.mbt", a),
+      ("b/moon.mod", "name = \"tmp/pb\"\n"),
+      ("b/lib/moon.pkg", ""),
+      ("b/lib/lib.mbt", b),
+    ]).write_to(dir)
+    let reverted = run_multi_edit({
+      "edits": [
+        {
+          "file": "\{dir}/a/lib/lib.mbt",
+          "old_string": "  1",
+          "new_string": "  3",
+          "start_line": 3,
+        },
+        {
+          "file": "\{dir}/b/lib/lib.mbt",
+          "old_string": "  2",
+          "new_string": "  let unused = 0\n  2",
+          "start_line": 3,
+        },
+      ],
+      "revert_on_warnings": true,
+    })
+    assert_true(reverted.is_error, msg=reverted.content)
+    guard reverted.data
+      is Some(
+        {
+          "outcome": "reverted",
+          "reason": "introduced_warnings",
+          "introduced": { "warnings": [{ "path": String(site), .. }], .. },
+          ..
+        }
+      ) else {
+      fail("unexpected data: \{shown(reverted.data)}")
+    }
+    assert_true(site.contains("b/lib/lib.mbt"), msg=site)
+    assert_eq(@fs.read_file("\{dir}/a/lib/lib.mbt").text(), a)
+    assert_eq(@fs.read_file("\{dir}/b/lib/lib.mbt").text(), b)
+    // Clean in both: kept, with a merged baseline count.
+    let kept = run_multi_edit({
+      "edits": [
+        {
+          "file": "\{dir}/a/lib/lib.mbt",
+          "old_string": "  1",
+          "new_string": "  3",
+          "start_line": 3,
+        },
+        {
+          "file": "\{dir}/b/lib/lib.mbt",
+          "old_string": "  2",
+          "new_string": "  4",
+          "start_line": 3,
+        },
+      ],
+      "revert_on_warnings": true,
+    })
+    assert_false(kept.is_error, msg=kept.content)
+    assert_true(
+      kept.data
+      is Some(
+        {
+          "outcome": "applied",
+          "baseline": { "warning_count": Number(0, ..), .. },
+          ..
+        }
+      ),
+    )
+  })
+}

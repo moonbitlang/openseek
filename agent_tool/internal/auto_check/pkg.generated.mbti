@@ -35,6 +35,7 @@ pub(all) struct CheckErrors {
   truncated : Bool
 } derive(@debug.Debug)
 pub fn CheckErrors::first_errors(Self) -> Array[String]
+pub fn CheckErrors::merged(Self, Self) -> Self
 pub fn CheckErrors::summary_json(Self) -> Json
 pub fn CheckErrors::to_json(Self) -> Json
 

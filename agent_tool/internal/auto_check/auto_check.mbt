@@ -185,6 +185,22 @@ pub fn CheckErrors::summary_json(self : CheckErrors) -> Json {
 }
 
 ///|
+/// Two projects' tallies as one: counts add, sites concatenate, and an
+/// overflow on either side overflows the sum.
+pub fn CheckErrors::merged(
+  self : CheckErrors,
+  other : CheckErrors,
+) -> CheckErrors {
+  {
+    error_count: self.error_count + other.error_count,
+    warning_count: self.warning_count + other.warning_count,
+    errors: [..self.errors, ..other.errors],
+    warnings: [..self.warnings, ..other.warnings],
+    truncated: self.truncated || other.truncated,
+  }
+}
+
+///|
 /// What a change introduced, judged by diagnostic identity rather than
 /// position: the sites of the later run whose `(path, code, message)` occurs
 /// more often than in the earlier one. Ignoring `loc` keeps an edit's own line

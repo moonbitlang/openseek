@@ -394,17 +394,13 @@ async fn multi_edit_files(
   // The warning guard's baseline, measured before anything is written so a
   // rollback never has to re-measure it. A tree that cannot be checked makes
   // the guard a promise the tool cannot keep, so the batch is not written.
-  // The file the guards check from: the first one inside a MoonBit project,
-  // so a batch that starts with a README still checks the module its `.mbt`
-  // edits belong to. A batch spanning several modules checks the first.
-  let mut check_path : String? = None
-  for write in writes {
-    if @auto_check.check_cwd(write.path) is Some(_) {
-      check_path = Some(write.path)
-      break
-    }
-  }
-  let baseline = if revert_on_warnings && check_path is Some(anchor) {
+  // The projects the guards check from: one representative path per distinct
+  // project any written file — or, for a link, its target — belongs to, in
+  // batch order, so a batch that starts with a README still checks the module
+  // its `.mbt` edits belong to. The error guard reads the first (the
+  // in-project repair case it was built for); the warning guard reads all.
+  let check_paths = batch_projects(writes)
+  let baseline = if revert_on_warnings && !check_paths.is_empty() {
     fn not_verified(reason : String) -> @agent_tool.ToolAction {
       @agent_tool.respond(
         "not applied: revert_on_warnings was requested, but moon check could not verify the tree (\{reason}); no files were changed",
@@ -414,7 +410,7 @@ async fn multi_edit_files(
       )
     }
 
-    match @auto_check.check(anchor) {
+    match check_all(check_paths) {
       Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
       Checked(tally) => Some(tally)
       NotApplicable => None
@@ -438,28 +434,47 @@ async fn multi_edit_files(
   }
 
   errdefer restore_on_unwind()
+  // A write that fails mid-batch leaves the earlier files written. Unguarded,
+  // that is reported and left (as before); a warning-guarded batch promised
+  // a verified tree, so the files written so far are put back first.
+  let written : Array[PreparedWrite] = []
+  async fn write_failed(problem : String) -> @agent_tool.ToolAction {
+    if revert_on_warnings && baseline is Some(_) {
+      let restore_failures = @async.protect_from_cancel(() => {
+        write_files(written, write => write.original_content, write_scope?)
+      })
+      return @agent_tool.respond(
+        "error multi_editing \{problem}; the \{written.length()} file(s) written before it were restored (revert_on_warnings)\{restore_note(restore_failures)}",
+        is_error=true,
+        brief~,
+        data=batch_data("error", writes, {
+          "partial": false,
+          "rolled_back": true,
+          "restore_failures": string_array(restore_failures),
+        }),
+      )
+    }
+    @agent_tool.respond(
+      "error multi_editing \{problem}; earlier files in the batch may already be written",
+      is_error=true,
+      brief~,
+      data={ "outcome": "error", "partial": true },
+    )
+  }
+
   for write in writes {
     // Containment re-check at the moment of writing: the batch gate above
     // decided on filesystem state that awaits ago may have changed.
     if write_scope is Some(scope) &&
       scope.deny_reason(write.path) is Some(reason) {
-      return @agent_tool.respond(
-        "error multi_editing \{write.path}: write blocked: \{reason}; earlier files in the batch may already be written",
-        is_error=true,
-        brief~,
-        data={ "outcome": "error", "partial": true },
-      )
+      return write_failed("\{write.path}: write blocked: \{reason}")
     }
     @fs.write_file(write.path, write.new_content, create_mode=CreateOrTruncate) catch {
       error if @async.is_being_cancelled() => raise error
       error =>
-        return @agent_tool.respond(
-          "error multi_editing \{write.path}: error writing file: \{error}; earlier files in the batch may already be written",
-          is_error=true,
-          brief~,
-          data={ "outcome": "error", "partial": true },
-        )
+        return write_failed("\{write.path}: error writing file: \{error}")
     }
+    written.push(write)
   }
   // The batch is on disk. Run the auto-revert guard from the first written
   // file's module: it appends `moon check` feedback and, if this batch
@@ -468,23 +483,22 @@ async fn multi_edit_files(
   // is acceptable for the in-project repair case. `writes` is non-empty here (a
   // non-empty batch with no failures always renders at least one write), but
   // match defensively rather than index blindly.
-  let response = match check_path {
-    Some(anchor) =>
-      revert_guarded_response(
-        anchor,
-        writes,
-        effective_revert_threshold(revert_when_errors_above),
-        baseline,
-        warnings_guard=revert_on_warnings,
-        write_scope?,
-      )
+  let response = if check_paths.is_empty() {
     // No file in a MoonBit project: nothing to check, the batch stands.
-    None =>
-      @agent_tool.respond(
-        success_summary(writes),
-        brief=success_brief(writes),
-        data=batch_data("applied", writes, Map([])),
-      )
+    @agent_tool.respond(
+      success_summary(writes),
+      brief=success_brief(writes),
+      data=batch_data("applied", writes, Map([])),
+    )
+  } else {
+    revert_guarded_response(
+      check_paths,
+      writes,
+      effective_revert_threshold(revert_when_errors_above),
+      baseline,
+      warnings_guard=revert_on_warnings,
+      write_scope?,
+    )
   }
   // Record each file's provenance and content digest AFTER the auto-revert guard
   // above, which may have rewritten some files back to their pre-batch content —
@@ -696,7 +710,7 @@ fn effective_revert_threshold(requested : Int?) -> Int {
 /// re-applying. The warning guard always has a baseline: it was measured
 /// before the write, or the batch was not written.
 async fn revert_guarded_response(
-  check_path : String,
+  check_paths : Array[String],
   writes : Array[PreparedWrite],
   threshold : Int,
   baseline : @auto_check.CheckErrors?,
@@ -705,11 +719,13 @@ async fn revert_guarded_response(
 ) -> @agent_tool.ToolAction {
   let summary = success_summary(writes)
   let brief = success_brief(writes)
+  let check_path = check_paths[0]
   // `count_errors` folds a run that exited non-zero without an error
   // diagnostic (a build plan moon could not make) into a zero-error tally;
   // the error guard has always read it that way. The warning guard promised
   // a verified batch, so for it that run is no verdict.
-  let after : @auto_check.CheckErrors? = match @auto_check.check(check_path) {
+  let first = @auto_check.check(check_path)
+  let after : @auto_check.CheckErrors? = match first {
     Checked(tally) => Some(tally)
     Failed(code, tally) =>
       if warnings_guard && baseline is Some(_) {
@@ -745,6 +761,7 @@ async fn revert_guarded_response(
   // The error guard.
   let mut introduced_errors : Int? = None
   let mut baseline_note = ""
+  let mut baseline_restore_failures : Array[String] = []
   if after.error_count > threshold {
     match baseline {
       Some(before) => {
@@ -822,6 +839,7 @@ async fn revert_guarded_response(
             data=batch_data("error", writes, {
               "partial": true,
               "reapply_failures": string_array(reapply_failures),
+              "restore_failures": string_array(restore_failures),
             }),
           )
         }
@@ -830,13 +848,31 @@ async fn revert_guarded_response(
           // baseline this keep decision compared against was measured with
           // these files unrestored, so the decision itself deserves the caveat.
           baseline_note = "\nnote: the pre-batch baseline was measured with \{restore_failures.length()} file(s) unrestored (\{restore_failures.join(", ")}), so the introduced-error count may be understated"
+          baseline_restore_failures = restore_failures
         }
         introduced_errors = Some(introduced)
       }
     }
   }
-  // The warning guard: identity comparison against the pre-batch baseline.
+  // The warning guard: identity comparison against the pre-batch baseline,
+  // over every project the batch touched (the first is already checked).
   if warnings_guard && baseline is Some(before) {
+    let mut all = after
+    for path in check_paths[1:] {
+      match @auto_check.check(path) {
+        Checked(tally) => all = all.merged(tally)
+        NotApplicable => ()
+        Unavailable(reason) =>
+          return reverted_unverified(writes, reason, write_scope?)
+        Failed(code, _) =>
+          return reverted_unverified(
+            writes,
+            "moon check exited \{code} without diagnostics after the batch",
+            write_scope?,
+          )
+      }
+    }
+    let after = all
     if after.truncated {
       return reverted_unverified(writes, TruncatedCapture, write_scope?)
     }
@@ -863,6 +899,9 @@ async fn revert_guarded_response(
   if introduced_errors is Some(introduced) {
     extra["introduced_errors"] = introduced.to_json()
   }
+  if !baseline_restore_failures.is_empty() {
+    extra["restore_failures"] = string_array(baseline_restore_failures)
+  }
   if baseline is Some(before) {
     extra["baseline"] = baseline_json(before)
   }
@@ -872,6 +911,63 @@ async fn revert_guarded_response(
     brief~,
     data=batch_data("applied", writes, extra),
   )
+}
+
+///|
+/// One representative path per distinct project the batch touches, in batch
+/// order: each written path and, for a link, its resolved target, keyed by
+/// the canonical project directory so `/tmp/x` and `/private/tmp/x` are one.
+/// Paths outside any MoonBit project are dropped.
+async fn batch_projects(writes : Array[PreparedWrite]) -> Array[String] {
+  let seen : Map[String, Bool] = Map([])
+  let representatives : Array[String] = []
+  async fn consider(path : String) -> Unit {
+    guard @auto_check.check_cwd(path) is Some(dir) else { return }
+    let key = @fs.realpath(dir) catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => dir
+    }
+    if !seen.contains(key) {
+      seen[key] = true
+      representatives.push(path)
+    }
+  }
+
+  for write in writes {
+    consider(write.path)
+    let target = @fs.realpath(write.path) catch {
+      error if @async.is_being_cancelled() => raise error
+      _ => write.path
+    }
+    if target != write.path {
+      consider(target)
+    }
+  }
+  representatives
+}
+
+///|
+/// Every project checked and the tallies merged; the first check that could
+/// not run is the outcome, since a partial view is no verdict.
+async fn check_all(paths : Array[String]) -> @auto_check.CheckOutcome {
+  let mut merged : @auto_check.CheckErrors? = None
+  for path in paths {
+    match @auto_check.check(path) {
+      Checked(tally) =>
+        merged = Some(
+          match merged {
+            Some(sum) => sum.merged(tally)
+            None => tally
+          },
+        )
+      NotApplicable => ()
+      other => return other
+    }
+  }
+  match merged {
+    Some(tally) => Checked(tally)
+    None => NotApplicable
+  }
 }
 
 ///|
