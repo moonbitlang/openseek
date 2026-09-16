@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/internal/uuid"
+package "moonbitlang/openseek/agent_tool/internal/uuid"
 
 // Values
 pub fn mint(UInt64, UInt64?, Bytes?) -> (@moonbitlang/x/uuid.UUID, UInt64) raise

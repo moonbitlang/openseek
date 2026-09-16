@@ -1,6 +1,6 @@
 # OpenSeek Inspect
 
-`inspect` (module `bobzhang/inspect`) is the HTTP server for browsing recorded
+`inspect` (module `moonbitlang/inspect`) is the HTTP server for browsing recorded
 OpenSeek sessions. It serves `web/index.html`, the compiled `cmd/viz_app`
 JavaScript bundle, and read-only session JSONL APIs. It builds for the wasm
 backend (the default — it compiles noticeably faster, since native also pays
@@ -18,7 +18,7 @@ This builds both the server and the JavaScript visualizer app. The server
 auto-locates the frontend bundle from Moon's build output (freshest artifact by mtime wins, so a stale release build never shadows a fresh debug one; an explicit --bundle overrides), normally:
 
 ```text
-_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js
+_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js
 ```
 
 ## Run
@@ -98,5 +98,5 @@ live view.
 If the server cannot find the generated JavaScript bundle, pass it explicitly:
 
 ```sh
-moon run inspect -- --bundle _build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js
+moon run inspect -- --bundle _build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js
 ```

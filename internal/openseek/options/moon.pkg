@@ -1,12 +1,12 @@
 import {
   "moonbitlang/core/argparse",
-  "bobzhang/openseek/cli",
-  "bobzhang/openseek/deepseek",
+  "moonbitlang/openseek/cli",
+  "moonbitlang/openseek/deepseek",
   "moonbitlang/core/env",
 }
 
 import {
-  "bobzhang/openseek/internal/openseek/testkit",
+  "moonbitlang/openseek/internal/openseek/testkit",
 } for "wbtest"
 
 warnings = "+unnecessary_annotation"

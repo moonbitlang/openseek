@@ -40,7 +40,7 @@ test: test-moon
 # Real CLI lifecycle regression with an offline scripted model.
 test-turn-finish:
     moon build cmd/openseek --target native
-    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/cmd/openseek/openseek.exe
 
 test-moon:
     moon test --target native
@@ -98,7 +98,7 @@ Surveying architecture and one extension point with two read-only scouts…
 ## architecture
 ## Module boundaries (from manifests + README)
 
-**Observed.** The root module `bobzhang/openseek` (moon.mod, `preferred_target = "native"`, version 0.3.1) depends on `moonbitlang/async`, `moonbitlang/x`, `moonbitlang/jsonl`, `bobzhang/openseek_protocol`, `rabbita`, `moonbitlang/editor`, `moonbitlang/workflow` (moon.mod:5). The workspace `moon.work:1` holds seven members: root `.`, `./protocol`, `./cmd/viz_app`, `./inspect`, `./editor`, `./editor/server`, `./desktop` — so `cmd/openseek`, `agent*`, `mcp`, `deepseek` are all packages of the *root* module, not separate workspace members.
+**Observed.** The root module `moonbitlang/openseek` (moon.mod, `preferred_target = "native"`, version 0.3.1) depends on `moonbitlang/async`, `moonbitlang/x`, `moonbitlang/jsonl`, `moonbitlang/openseek_protocol`, `rabbita`, `moonbitlang/editor`, `moonbitlang/workflow` (moon.mod:5). The workspace `moon.work:1` holds seven members: root `.`, `./protocol`, `./cmd/viz_app`, `./inspect`, `./editor`, `./editor/server`, `./desktop` — so `cmd/openseek`, `agent*`, `mcp`, `deepseek` are all packages of the *root* module, not separate workspace members.
 
 README packages the split as: pure chat data (`deepseek`), HTTP transport (`deepseek/client`), orchestration (`agent_runtime`, `agent_session`), tools (`agent_tool` + one subpackage per built-in), entry point (`cmd/openseek`) (README.md:74).
 

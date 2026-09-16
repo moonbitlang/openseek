@@ -1,5 +1,5 @@
 import {
-  "bobzhang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
   "moonbitlang/x/time",

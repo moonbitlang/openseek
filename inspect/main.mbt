@@ -955,7 +955,7 @@ fn join_path(parent : String, child : String) -> String {
 /// user serving another project's sessions (`moon run ../openseek/cmd/...`)
 /// ends up with CWD-relative asset defaults pointing at the wrong tree. But
 /// the binary itself always sits at
-/// `<root>/_build/<target>/<profile>/build/bobzhang/inspect/...`, so everything
+/// `<root>/_build/<target>/<profile>/build/moonbitlang/inspect/...`, so everything
 /// before the `_build` component locates the checkout and its assets,
 /// wherever the server was started from.
 fn module_root_from_exe(exe : String) -> String? {
@@ -998,7 +998,7 @@ fn bundle_candidates(
   module_root : String?,
 ) -> Array[String] {
   let build_outputs = [
-    "_build/js/release/build/bobzhang/openseek-viz-app/openseek-viz-app.js", "_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js",
+    "_build/js/release/build/moonbitlang/openseek-viz-app/openseek-viz-app.js", "_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
   ]
   let candidates = [bundle, "\{web_dir}/viz_app.js", ..build_outputs]
   if module_root is Some(root) {
@@ -1255,7 +1255,9 @@ async test "locate_bundle prefers the freshest artifact; explicit wins" {
   let old_path = "\{root}/old.js"
   let new_path = "\{root}/new.js"
   @fs.write_file(old_path, "old", create_mode=CreateOrTruncate)
-  // Written after, so strictly newer (APFS nanosecond mtimes).
+  // Written after a settling delay, so strictly newer even on filesystems with
+  // coarse timestamp granularity (CI containers are not always APFS).
+  @async.sleep(20)
   @fs.write_file(new_path, "new", create_mode=CreateOrTruncate)
   // No explicit bundle: recency beats candidate order.
   assert_eq(locate_bundle(["", old_path, new_path]), Some(new_path))

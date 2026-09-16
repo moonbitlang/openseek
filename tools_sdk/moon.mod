@@ -1,4 +1,4 @@
-name = "bobzhang/openseek_tools"
+name = "moonbitlang/openseek_tools"
 
 version = "0.2.0"
 

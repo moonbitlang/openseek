@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/prompt"
+package "moonbitlang/openseek/prompt"
 
 import {
-  "bobzhang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek",
 }
 
 // Values

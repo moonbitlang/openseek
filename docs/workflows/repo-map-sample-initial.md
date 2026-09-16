@@ -42,7 +42,7 @@ test: test-moon
 # Real CLI lifecycle regression with an offline scripted model.
 test-turn-finish:
     moon build cmd/openseek --target native
-    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/cmd/openseek/openseek.exe
 
 test-moon:
     moon test --target native
@@ -100,7 +100,7 @@ Surveying architecture and one extension point with two read-only scouts…
 ## architecture
 ## Module boundaries
 
-**Workspace layout.** `moon.work` (moon.work:1-9) develops one main module plus siblings: `bobzhang/openseek` (root, `moon.mod:1`, v0.3.1, native-preferred, `moon.mod:25`) and standalone modules `protocol`, `cmd/viz_app`, `inspect`, `editor` (+`editor/server`), `desktop`. The root module imports `moonbitlang/async@0.21.1`, `x`, `jsonl`, `bobzhang/openseek_protocol@0.1.1`, `rabbita`, `editor`, `workflow` (moon.mod:5-13).
+**Workspace layout.** `moon.work` (moon.work:1-9) develops one main module plus siblings: `moonbitlang/openseek` (root, `moon.mod:1`, v0.3.1, native-preferred, `moon.mod:25`) and standalone modules `protocol`, `cmd/viz_app`, `inspect`, `editor` (+`editor/server`), `desktop`. The root module imports `moonbitlang/async@0.21.1`, `x`, `jsonl`, `moonbitlang/openseek_protocol@0.1.1`, `rabbita`, `editor`, `workflow` (moon.mod:5-13).
 
 **Layering (README.md:74-107).** Reading from the bottom up:
 - `deepseek` is pure chat data/JSON (no HTTP) (README.md:75, 108-116); `deepseek/client` adds HTTP transport (README.md:76, 118-123).

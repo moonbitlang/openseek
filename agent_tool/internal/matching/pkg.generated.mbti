@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/internal/matching"
+package "moonbitlang/openseek/agent_tool/internal/matching"
 
 // Values
 pub fn find_quote_normalized_match(String, String) -> Int?

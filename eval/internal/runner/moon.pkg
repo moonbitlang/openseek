@@ -6,7 +6,7 @@ import {
 import {
   "moonbitlang/async" @async_test,
   "moonbitlang/async/fs" @fs_test,
-  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
 } for "test"
 
 warnings = "+unnecessary_annotation"

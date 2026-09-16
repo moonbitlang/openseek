@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek_protocol"
+package "moonbitlang/openseek_protocol"
 
 import {
   "moonbitlang/core/debug",

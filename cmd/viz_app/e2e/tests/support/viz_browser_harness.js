@@ -175,7 +175,7 @@ export class VizBrowserHarness {
       contentType: 'text/javascript',
       path: path.resolve(
         '../../..',
-        '_build/js/debug/build/bobzhang/openseek-viz-app/openseek-viz-app.js',
+        '_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js',
       ),
     }));
     if (standalone) {

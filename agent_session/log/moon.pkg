@@ -1,5 +1,5 @@
 import {
-  "bobzhang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
 }

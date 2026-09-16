@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/mcp"
+package "moonbitlang/openseek/mcp"
 
 import {
-  "bobzhang/openseek/jsonrpc",
   "moonbitlang/core/debug",
+  "moonbitlang/openseek/jsonrpc",
 }
 
 // Values

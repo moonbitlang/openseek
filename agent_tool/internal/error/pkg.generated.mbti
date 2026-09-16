@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/internal/error"
+package "moonbitlang/openseek/agent_tool/internal/error"
 
 // Values
 pub fn failure_message(String) -> String

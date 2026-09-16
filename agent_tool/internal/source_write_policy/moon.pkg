@@ -1,5 +1,5 @@
 import {
-  "bobzhang/openseek/internal/workspace_path",
+  "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/x/path",
 }
 

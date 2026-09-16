@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/internal/openseek/commands"
+package "moonbitlang/openseek/internal/openseek/commands"
 
 import {
   "moonbitlang/core/argparse",

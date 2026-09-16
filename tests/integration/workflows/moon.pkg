@@ -5,7 +5,7 @@ import {
   "moonbitlang/async/shell",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
-  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
 }
 
 supported_targets = "+native"

@@ -1,6 +1,6 @@
 import {
-  "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_session/log" @session_log,
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/log" @session_log,
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",
   "moonbitlang/core/env",
@@ -9,7 +9,7 @@ import {
 }
 
 import {
-  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/async",
   "moonbitlang/async/fs",
 } for "test"

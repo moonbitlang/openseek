@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/testkit/filesystem"
+package "moonbitlang/openseek/testkit/filesystem"
 
 // Values
 pub async fn[T] with_tmpdir(async (String) -> T, prefix? : String) -> T

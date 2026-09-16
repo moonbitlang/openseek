@@ -1,6 +1,6 @@
 # Testkit Filesystem
 
-`bobzhang/openseek/testkit/filesystem` provides a small JSON-backed virtual
+`moonbitlang/openseek/testkit/filesystem` provides a small JSON-backed virtual
 filesystem for tests, evals, and mock fixtures. It is intentionally not a
 general filesystem abstraction: it is a compact way to declare text files,
 materialize them under a temporary root, and compare the listed files against
