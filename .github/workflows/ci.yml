@@ -265,7 +265,7 @@ jobs:
         if: matrix.target == 'native'
         run: |
           moon build cmd/openseek --target native
-          moon run tests/integration/turn_finish.mbtx _build/native/debug/build/bobzhang/openseek/cmd/openseek/openseek.exe
+          moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/cmd/openseek/openseek.exe
 
   # cmd/viz_app is a separate MoonBit module and owns its browser test runner.
   # Keep it out of Desktop's recipe so either application can be tested alone.
