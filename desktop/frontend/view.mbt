@@ -1000,7 +1000,28 @@ fn provider_hint(provider : ApiProvider) -> String {
 /// request goes straight from this machine to the user's own model
 /// provider, so a key (official) or an endpoint URL (custom) must be
 /// configured first. The steps follow the selected provider.
-fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
+fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let provider = model.api_provider
+  // Account setup belongs in the user's system browser, even while this
+  // guide is displayed over Chat. Bypass Rabbita's dock URL routing.
+  let provider_link = (url, label) => {
+    @html.a(
+      class="button secondary setting-link",
+      href=url,
+      target=Blank,
+      rel="noopener noreferrer",
+      escape=true,
+      attrs=@html.Attrs::build().on_click(event => {
+        if model.is_desktop {
+          event.prevent_default()
+          open_external_link(dispatch, url)
+        } else {
+          @cmd.none
+        }
+      }),
+      [icon(icon_link_external), @html.span(label)],
+    )
+  }
   let step = fn(index : Int, text : String) -> @html.Html {
     @html.div(class="setup-guide-step", [
       @html.span(class="setup-guide-index", index.to_string()),
@@ -1043,26 +1064,15 @@ fn byok_setup_guide(provider : ApiProvider) -> @html.Html {
       @html.div(class="setup-guide-steps", steps),
       ..if provider is Deepseek {
         [
-          @html.a(
-            class="button secondary setting-link",
-            href="https://platform.deepseek.com/api_keys",
-            target=Blank,
-            rel="noopener noreferrer",
-            [
-              icon(icon_link_external),
-              @html.span("platform.deepseek.com → API Keys"),
-            ],
+          provider_link(
+            "https://platform.deepseek.com/api_keys", "platform.deepseek.com → API Keys",
           ),
         ]
       },
       ..if provider is Glm {
         [
-          @html.a(
-            class="button secondary setting-link",
-            href="https://z.ai/manage-apikey/apikey-list",
-            target=Blank,
-            rel="noopener noreferrer",
-            [icon(icon_link_external), @html.span("z.ai → API Keys")],
+          provider_link(
+            "https://z.ai/manage-apikey/apikey-list", "z.ai → API Keys",
           ),
         ]
       },
@@ -1084,7 +1094,7 @@ fn api_settings_rows(
   let ready = model.api_ready()
   let rows : Array[@html.Html] = [
     ..if !ready {
-      [byok_setup_guide(model.api_provider)]
+      [byok_setup_guide(dispatch, model)]
     },
     @settings.row(
       "API endpoint",
