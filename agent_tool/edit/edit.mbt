@@ -791,13 +791,24 @@ async fn commit_edit(
   }
 
   let baseline = if guards.errors is Some(_) || guards.warnings is Some(_) {
-    match check_tree() {
+    let measured = match check_tree() {
       Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
       Checked(tally) => Some(tally)
       NotApplicable => None
       Unavailable(reason) => return not_verified(reason)
       Failed(code, _) => return not_verified(exited_without_diagnostics(code))
     }
+    // The check took time; the candidate was rendered from the content read
+    // before it. If the file changed meanwhile (an editor save), the
+    // candidate would overwrite that change and a rollback would restore a
+    // stale original, so the edit is refused instead.
+    let current = @fs.read_file(path).text()
+    if current != original_content {
+      return not_verified(
+        "the file changed while the baseline was measured; re-read it and retry",
+      )
+    }
+    measured
   } else {
     None
   }
@@ -841,20 +852,31 @@ async fn commit_edit(
   } else {
     @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
   }
-  let after = check_tree()
-  fn keep(
-    check_line : String?,
-    extra : Map[String, Json],
-  ) -> @agent_tool.ToolAction {
-    // A targeted edit preserves most of the file, so provenance depends on
-    // whether the content it read (original_content) is still what the agent
-    // last wrote: record_edited keeps a stronger `Created` only then, and
-    // otherwise downgrades (the file was rebound before this edit).
+  // A targeted edit preserves most of the file, so provenance depends on
+  // whether the content it read (original_content) is still what the agent
+  // last wrote: record_edited keeps a stronger `Created` only then, and
+  // otherwise downgrades (the file was rebound before this edit). An
+  // unguarded write stands whatever the check says, so it is recorded now,
+  // before the check can be cancelled; a guarded one is recorded once kept.
+  fn record() -> Unit {
     file_state.record_edited(
       path,
       @agent_tool.content_digest(original_content),
       @agent_tool.content_digest(new_content),
     )
+  }
+
+  if baseline is None {
+    record()
+  }
+  let after = check_tree()
+  fn keep(
+    check_line : String?,
+    extra : Map[String, Json],
+  ) -> @agent_tool.ToolAction {
+    if baseline is Some(_) {
+      record()
+    }
     let content = match check_line {
       Some(line) => "\{summary}\n\{line}"
       None => summary
