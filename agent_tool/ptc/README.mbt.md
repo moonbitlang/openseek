@@ -104,7 +104,7 @@ in the host. No RPC traffic uses stdout or stderr.
 Version 1 accepts `{version: 1, name, arguments}` and returns
 `{version: 1, content, is_error, data?, brief?}`. Limits per run:
 
-- 64 tool requests and four active calls per script; 16 connections per session
+- 1024 tool requests and four active calls per script; 16 connections per session
   and at most 64 active script registrations.
 - 8 KiB aggregate request line and headers, 64 KiB decoded request body,
   and 128 KiB total HTTP framing, read within five seconds of acceptance.

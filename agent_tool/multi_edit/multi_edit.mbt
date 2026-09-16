@@ -1493,7 +1493,13 @@ fn check_result(
   errors : Array[@auto_check.ErrorSite],
   truncated? : Bool = false,
 ) -> @auto_check.CheckErrors {
-  { error_count: errors.length(), warning_count: 0, errors, truncated, }
+  {
+    error_count: errors.length(),
+    warning_count: 0,
+    errors,
+    warnings: [],
+    truncated,
+  }
 }
 
 ///|
@@ -1568,6 +1574,7 @@ test "keep_response is clean at zero errors and honest below threshold" {
     error_count: 0,
     warning_count: 12,
     errors: [],
+    warnings: [],
     truncated: false,
   }
   assert_eq(
@@ -1578,6 +1585,7 @@ test "keep_response is clean at zero errors and honest below threshold" {
     error_count: 2,
     warning_count: 12,
     errors: [site("a.mbt", "1:1-1:2", "boom"), site("a.mbt", "4:1-4:2", "bang")],
+    warnings: [],
     truncated: false,
   }
   assert_eq(
@@ -1596,6 +1604,7 @@ test "keep_response on the false-alarm path makes the introduced split explicit"
     error_count: 8,
     warning_count: 0,
     errors: [site("a.mbt", "1:1-1:2", "boom")],
+    warnings: [],
     truncated: false,
   }
   assert_eq(
@@ -1610,6 +1619,7 @@ test "revert_report names the introduced count and the first errors" {
     error_count: 9,
     warning_count: 3,
     errors: [site("a.mbt", "1:1-1:2", "boom"), site("b.mbt", "2:1-2:2", "bang")],
+    warnings: [],
     truncated: false,
   }
   let report = revert_report(
@@ -1638,6 +1648,7 @@ test "revert_report marks a truncated count and a failed restore" {
     error_count: 400,
     warning_count: 0,
     errors: [site("a.mbt", "1:1-1:2", "boom")],
+    warnings: [],
     truncated: true,
   }
   let report = revert_report(

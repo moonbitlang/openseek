@@ -7,7 +7,7 @@ const MaxPrograms : Int = 64
 const MaxConnections : Int = 16
 
 ///|
-const MaxCallsPerProgram : Int = 64
+const MaxCallsPerProgram : Int = 1024
 
 ///|
 const MaxActiveCallsPerProgram : Int = 4
@@ -172,7 +172,7 @@ pub async fn[X] Service::start(
         send(
           conn,
           error_result(
-            "PTC program exhausted its 64-call or four-active-call budget",
+            "PTC program exhausted its 1024-call or four-active-call budget",
           ),
         )
         return

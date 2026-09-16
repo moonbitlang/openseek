@@ -239,7 +239,7 @@ async test "PTC rejects malformed requests and enforces execution and result bud
       assert_true(body.json() is { "is_error": true, .. })
     }
     assert_eq(executions.val, 0)
-    for _ in 0..<64 {
+    for _ in 0..<1024 {
       assert_true(
         request(env, "probe", {})
         is { "is_error": true, "content": String(message), .. } &&
@@ -249,16 +249,16 @@ async test "PTC rejects malformed requests and enforces execution and result bud
     assert_true(
       request(env, "probe", {})
       is { "is_error": true, "content": String(message), .. } &&
-      message.contains("64-call or four-active-call budget"),
+      message.contains("1024-call or four-active-call budget"),
     )
     @agent_tool.respond("done")
   })
   assert_true(action is Respond({ is_error: false, .. }))
-  assert_eq(executions.val, 64)
+  assert_eq(executions.val, 1024)
   guard action is Respond({ data: Some({ "ptc_calls": Array(calls), .. }), .. }) else {
     fail("missing trace")
   }
-  assert_eq(calls.length(), 64)
+  assert_eq(calls.length(), 1024)
 }
 
 ///|

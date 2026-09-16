@@ -85,6 +85,23 @@ pub fn ErrorSite::identity(self : ErrorSite) -> String {
 }
 
 ///|
+/// The site as a JSON object for a tool's machine-readable `data`: `path` and
+/// `code` are present only when moon supplied them, so a consumer never
+/// mistakes an unknown file or a codeless diagnostic for a known one.
+pub fn ErrorSite::to_json(self : ErrorSite) -> Json {
+  let fields : Map[String, Json] = Map([])
+  if self.path is Some(path) {
+    fields["path"] = path.to_json()
+  }
+  fields["loc"] = self.loc.to_json()
+  if self.code is Some(code) {
+    fields["code"] = code.to_json()
+  }
+  fields["message"] = self.message.to_json()
+  Json::object(fields)
+}
+
+///|
 /// Render the site as `path:loc: message`, the same shape the human
 /// `moon check` output uses, so a report points the model straight at the
 /// offending line.
@@ -102,10 +119,10 @@ pub fn ErrorSite::line(self : ErrorSite) -> String {
 }
 
 ///|
-/// A tally of `moon check` diagnostics by severity, with every error site
-/// kept so a caller can compare two runs by identity and location, not just by
-/// count. `truncated` means moon check produced more output than the capture
-/// budget, so `error_count`, `warning_count` and `errors` are lower bounds.
+/// A tally of `moon check` diagnostics by severity, with every error and
+/// warning site kept so a caller can compare two runs by identity and
+/// location, not just by count. `truncated` means moon check produced more
+/// output than the capture budget, so every count and list is a lower bound.
 ///
 /// Not representable here: whether the BUILD stopped early. moon skips the
 /// dependents of a failing package, so a run's error list covers only the
@@ -116,8 +133,100 @@ pub(all) struct CheckErrors {
   error_count : Int
   warning_count : Int
   errors : Array[ErrorSite]
+  warnings : Array[ErrorSite]
   truncated : Bool
 } derive(Debug)
+
+///|
+/// How many sites of each severity `to_json` carries. A tally keeps every
+/// site for identity comparison; a tool result that travels to a script (and
+/// is retained in its trace) does not need thousands of them.
+const JsonSiteLimit : Int = 200
+
+///|
+/// The tally as machine-readable tool `data`: counts, the first
+/// `JsonSiteLimit` sites of each severity, and whether either list was cut,
+/// by that limit or by the capture budget.
+pub fn CheckErrors::to_json(self : CheckErrors) -> Json {
+  fn sites(all : Array[ErrorSite]) -> Json {
+    let shown = all.length().min(JsonSiteLimit)
+    Json::array([ for site in all[:shown] => site.to_json() ])
+  }
+
+  {
+    "error_count": self.error_count.to_json(),
+    "warning_count": self.warning_count.to_json(),
+    "truncated": self.truncated.to_json(),
+    "errors": sites(self.errors),
+    "errors_truncated": (self.truncated || self.errors.length() > JsonSiteLimit).to_json(),
+    "warnings": sites(self.warnings),
+    "warnings_truncated": (self.truncated ||
+    self.warnings.length() > JsonSiteLimit).to_json(),
+  }
+}
+
+///|
+/// What a change introduced, judged by diagnostic identity rather than
+/// position: the sites of the later run whose `(path, code, message)` occurs
+/// more often than in the earlier one. Ignoring `loc` keeps an edit's own line
+/// shifts from turning every diagnostic below it into a "new" one, and still
+/// catches a fix that removes one diagnostic and adds another kind. The blind
+/// spot is a change that replaces a diagnostic with an identical one
+/// elsewhere, which no count can see either.
+///
+/// `complete` is false when either capture overflowed its budget: the lists
+/// are then windows onto the output rather than the whole of it, so a site can
+/// enter the window without being new. Callers decide by count in that case.
+pub(all) struct Introduced {
+  errors : Array[ErrorSite]
+  warnings : Array[ErrorSite]
+  complete : Bool
+}
+
+///|
+/// The diagnostics `after` carries that `before` did not, by identity (see
+/// `Introduced`).
+pub fn introduced(before : CheckErrors, after : CheckErrors) -> Introduced {
+  {
+    errors: new_sites(before.errors, after.errors),
+    warnings: new_sites(before.warnings, after.warnings),
+    complete: !before.truncated && !after.truncated,
+  }
+}
+
+///|
+/// The sites of `after` left over once each `before` site of the same
+/// identity has been matched off, in `after`'s order.
+fn new_sites(
+  before : Array[ErrorSite],
+  after : Array[ErrorSite],
+) -> Array[ErrorSite] {
+  let budget : Map[String, Int] = Map([])
+  for site in before {
+    let key = site.kind()
+    budget[key] = budget.get(key).unwrap_or(0) + 1
+  }
+  let fresh : Array[ErrorSite] = []
+  for site in after {
+    let key = site.kind()
+    match budget.get(key) {
+      Some(left) if left > 0 => budget[key] = left - 1
+      _ => fresh.push(site)
+    }
+  }
+  fresh
+}
+
+///|
+/// The position-free identity `introduced` compares by. `\u{0}` separates the
+/// parts so a path and a message can never concatenate into another pair.
+fn ErrorSite::kind(self : ErrorSite) -> String {
+  let code = match self.code {
+    Some(code) => code.to_string()
+    None => ""
+  }
+  "\{self.path.unwrap_or("")}\u{0}\{code}\u{0}\{self.message}"
+}
 
 ///|
 /// The first few error lines for display: enough to show the shape of an
@@ -140,7 +249,29 @@ pub fn CheckErrors::first_errors(self : CheckErrors) -> Array[String] {
 /// (timed out / failed to spawn) — in every `None` case the caller keeps the
 /// batch unguarded, matching `append_summary`'s fail-open behavior.
 pub async fn count_errors(path : String) -> CheckErrors? {
-  guard moon_check_cwd(path) is Some(cwd) else { return None }
+  match check(path) {
+    Checked(tally) => Some(tally)
+    NotApplicable | Unavailable(_) => None
+  }
+}
+
+///|
+/// `count_errors` with its `None` cases told apart, for a caller that reports
+/// them differently: a non-MoonBit path gets no check line at all, while a
+/// check that could not run deserves a sentence.
+pub(all) enum CheckOutcome {
+  /// `path` is not a MoonBit source or manifest inside a MoonBit project.
+  NotApplicable
+  /// The check could not run; carries the reason, e.g. `timed out`.
+  Unavailable(String)
+  Checked(CheckErrors)
+}
+
+///|
+/// Run `moon check --output-json` for the project containing `path` and tally
+/// its diagnostics, or say why that was not possible.
+pub async fn check(path : String) -> CheckOutcome {
+  guard moon_check_cwd(path) is Some(cwd) else { return NotApplicable }
   let result = @async.with_timeout_opt(@moon_check.TimeoutMs, () => {
     collect_process_output(
       "moon",
@@ -150,11 +281,26 @@ pub async fn count_errors(path : String) -> CheckErrors? {
     )
   }) catch {
     error if @async.is_being_cancelled() => raise error
-    _ => return None
+    _ => return Unavailable("failed to run")
   }
-  result.map(output => {
-    tally_diagnostics(output.text, truncated=output.output_limit_reached)
-  })
+  match result {
+    Some(output) => {
+      let tally = tally_diagnostics(
+        output.text,
+        truncated=output.output_limit_reached,
+      )
+      // moon exits non-zero for errors it reported as diagnostics — and also
+      // for a build plan it could not make at all (a broken manifest, a
+      // missing dependency), which produces no diagnostic object. An empty
+      // tally from a failed run is not a clean tree.
+      match output.exit_code {
+        Some(code) if code != 0 && tally.error_count == 0 && !tally.truncated =>
+          Unavailable("moon check exited \{code} without diagnostics")
+        _ => Checked(tally)
+      }
+    }
+    None => Unavailable("timed out")
+  }
 }
 
 ///|
@@ -165,6 +311,7 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
   let mut error_count = 0
   let mut warning_count = 0
   let errors : Array[ErrorSite] = []
+  let warnings : Array[ErrorSite] = []
   for raw in text.split("\n") {
     // Cheap pre-filter: only diagnostic lines carry a `level` field, so a
     // blank line or a human summary never reaches the JSON parser.
@@ -174,7 +321,7 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
     let json = @json.parse(raw) catch { _ => continue }
     match json {
       {
-        "level": String("error"),
+        "level": String(level),
         "path"? : path_json,
         "error_code"? : code_json,
         "loc"? : Some(String(loc))
@@ -183,7 +330,6 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
         | (_ with message = ""),
         ..
       } => {
-        error_count += 1
         let path = match path_json {
           Some(String(path)) => Some(path)
           _ => None
@@ -192,13 +338,22 @@ fn tally_diagnostics(text : String, truncated~ : Bool) -> CheckErrors {
           Some(Number(code, ..)) => Some(code.to_int())
           _ => None
         }
-        errors.push({ path, loc, code, message, })
+        match level {
+          "error" => {
+            error_count += 1
+            errors.push({ path, loc, code, message, })
+          }
+          "warning" => {
+            warning_count += 1
+            warnings.push({ path, loc, code, message, })
+          }
+          _ => ()
+        }
       }
-      { "level": String("warning"), .. } => warning_count += 1
       _ => ()
     }
   }
-  { error_count, warning_count, errors, truncated, }
+  { error_count, warning_count, errors, warnings, truncated, }
 }
 
 ///|
@@ -278,6 +433,13 @@ test "tally counts errors and warnings from output-json lines" {
   let tally = tally_diagnostics(text, truncated=false)
   assert_eq(tally.error_count, 1)
   assert_eq(tally.warning_count, 2)
+  assert_eq(tally.warnings.length(), 2)
+  assert_eq(tally.warnings[1], {
+    path: Some("argparse/help.mbt"),
+    loc: "152:42-152:48",
+    code: Some(20),
+    message: "Warning (deprecated): `length` is deprecated, use `len` instead",
+  })
   assert_eq(tally.truncated, false)
   assert_eq(tally.errors, [
     {
@@ -373,3 +535,98 @@ pub extend ErrorSite with Debug::{to_repr}
 #doc(hidden)
 #deprecated
 pub extend ErrorSite with Eq::{equal, not_equal}
+
+///|
+test "to_json carries both severities, caps each list, and marks the cut" {
+  let tally = tally_diagnostics(
+    (
+      #|{"$message_type":"diagnostic","level":"warning","error_code":20,"path":"a.mbt","loc":"1:1-1:2","message":"old"}
+      #|{"$message_type":"diagnostic","level":"error","path":"a.mbt","message":"module-level boom"}
+    ),
+    truncated=false,
+  )
+  json_inspect(tally.to_json(), content={
+    "error_count": 1,
+    "warning_count": 1,
+    "truncated": false,
+    "errors": [{ "path": "a.mbt", "loc": "", "message": "module-level boom" }],
+    "errors_truncated": false,
+    "warnings": [
+      { "path": "a.mbt", "loc": "1:1-1:2", "code": 20, "message": "old" },
+    ],
+    "warnings_truncated": false,
+  })
+  let many = tally_diagnostics(
+    [
+      for index in 0..<(JsonSiteLimit + 1) => {
+        "{\"$message_type\":\"diagnostic\",\"level\":\"warning\",\"path\":\"f\{index}.mbt\",\"loc\":\"1:1-1:2\",\"message\":\"w\"}"
+      }
+    ].join("\n"),
+    truncated=false,
+  )
+  guard many.to_json()
+    is {
+      "warning_count": Number(count, ..),
+      "warnings": Array(shown),
+      "warnings_truncated": true,
+      ..
+    } else {
+    fail("unexpected shape: \{many.to_json().stringify()}")
+  }
+  assert_eq(count.to_int(), JsonSiteLimit + 1)
+  assert_eq(shown.length(), JsonSiteLimit)
+}
+
+///|
+test "introduced compares identities, not positions" {
+  fn diag(
+    level : String,
+    path : String,
+    loc : String,
+    code : Int,
+    message : String,
+  ) -> String {
+    "{\"$message_type\":\"diagnostic\",\"level\":\"\{level}\",\"error_code\":\{code},\"path\":\"\{path}\",\"loc\":\"\{loc}\",\"message\":\"\{message}\"}"
+  }
+
+  // Before: two deprecations and an unused value. After a fix that removed the
+  // first deprecation, everything below it moved up a line — and the fix left
+  // an unused binding behind.
+  let before = tally_diagnostics(
+    [
+      diag("warning", "a.mbt", "3:3-3:9", 20, "use `len` instead"),
+      diag("warning", "a.mbt", "9:3-9:9", 20, "use `len` instead"),
+      diag("warning", "b.mbt", "2:7-2:8", 2, "Unused variable 'x'"),
+    ].join("\n"),
+    truncated=false,
+  )
+  let after = tally_diagnostics(
+    [
+      diag("warning", "a.mbt", "8:3-8:9", 20, "use `len` instead"),
+      diag("warning", "b.mbt", "2:7-2:8", 2, "Unused variable 'x'"),
+      diag("warning", "a.mbt", "3:7-3:8", 2, "Unused variable 'tmp'"),
+      diag("error", "a.mbt", "4:1-4:2", 1, "Type mismatch"),
+    ].join("\n"),
+    truncated=false,
+  )
+  let delta = introduced(before, after)
+  assert_true(delta.complete)
+  assert_eq([ for site in delta.warnings => site.line() ], [
+    "a.mbt:3:7-3:8: Unused variable 'tmp'",
+  ])
+  assert_eq([ for site in delta.errors => site.line() ], [
+    "a.mbt:4:1-4:2: Type mismatch",
+  ])
+  // The same identity in another file is a different diagnostic.
+  let moved = tally_diagnostics(
+    diag("warning", "c.mbt", "1:1-1:2", 20, "use `len` instead"),
+    truncated=false,
+  )
+  assert_eq(introduced(before, moved).warnings.length(), 1)
+  // Nothing introduced when the runs match, whatever the positions.
+  assert_eq(introduced(after, after).warnings.length(), 0)
+  assert_eq(introduced(after, after).errors.length(), 0)
+  // A truncated capture makes the comparison a window, not a whole.
+  let cut = tally_diagnostics("", truncated=true)
+  assert_false(introduced(before, cut).complete)
+}
