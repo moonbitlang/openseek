@@ -28,18 +28,19 @@ for (const minimal of [false, true]) {
     await app.openSession();
     for (let pass = 0; pass < 2; pass++) {
       if (minimal) {
-        const group = page.locator('#transcript .minimal-tools');
+        // No newer assistant prose follows these calls, so the latest group
+        // is directly expanded both on initial load and after reload.
+        const group = page.locator('#transcript .minimal-tools-live');
         await expect(group).toBeVisible();
-        if (await group.getAttribute('open') === null) {
-          await group.locator(':scope > summary').click();
-        }
+        await expect(group.locator(':scope > summary')).toHaveCount(0);
         const calls = group.locator('.minimal-call');
         await expect(calls).toHaveCount(3);
         await expect(calls.nth(0).locator('.minimal-call-caption')).toHaveText('Update note');
         await expect(calls.nth(1)).toContainText('before');
         await expect(calls.nth(1)).toContainText('after');
-        await expect(calls.nth(1).locator('.minimal-call-status')).toHaveCount(0);
-        await expect(calls.nth(2).locator('.minimal-call-status')).toHaveText('Failed');
+        await expect(calls.nth(1).locator('.tool-status, .minimal-tool-status')).toHaveCount(0);
+        await expect(calls.nth(0).getByRole('img', { name: 'Tool failed' })).toBeVisible();
+        await expect(calls.nth(2).getByRole('img', { name: 'Tool failed' })).toBeVisible();
         await expect(group.locator('details.tool-params, details.tool-result')).toHaveCount(0);
       } else {
       const outer = page.locator('#transcript details.tool-call').first();
@@ -87,11 +88,14 @@ for (const minimal of [false, true]) {
     await app.openSession();
     for (let pass = 0; pass < 2; pass++) {
       if (minimal) {
-        const group = page.locator('#transcript .minimal-tools');
-        if (await group.getAttribute('open') === null) await group.locator(':scope > summary').click();
+        // No newer assistant prose follows these calls, so the latest group
+        // is directly expanded both on initial load and after reload.
+        const group = page.locator('#transcript .minimal-tools-live');
+        await expect(group).toBeVisible();
+        await expect(group.locator(':scope > summary')).toHaveCount(0);
         const nested = group.locator('.minimal-call').nth(1);
         await expect(nested.locator('.minimal-call-caption')).toHaveText('Snapshot');
-        await expect(nested.locator('.minimal-call-status')).toHaveCount(0);
+        await expect(nested.locator('.tool-status, .minimal-tool-status')).toHaveCount(0);
       } else {
         const outer = page.locator('#transcript details.tool-call').first();
         await outer.locator(':scope > summary').click();
