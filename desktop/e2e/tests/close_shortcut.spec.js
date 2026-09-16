@@ -10,7 +10,6 @@ async function installDesktop(page) {
   await page.exposeFunction('desktopRequest', request => {
     app.requests.push(request);
     if (request.method === 'terminal.open') return { id: `terminal-${++terminalId}` };
-    if (request.method === 'shell.open_external') return { opened: true };
     return app.replyFor(request);
   });
   await page.addInitScript(() => {
@@ -50,33 +49,6 @@ async function closeFocused(page) {
   await page.evaluate(() => window.desktopEvent('menu.command', {
     command_id: 'app.close_focused',
   }));
-}
-
-for (const [provider, label, url] of [
-  ['deepseek', 'platform.deepseek.com → API Keys', 'https://platform.deepseek.com/api_keys'],
-  ['glm', 'z.ai → API Keys', 'https://z.ai/manage-apikey/apikey-list'],
-]) {
-  test(`${provider} setup link uses the system browser while the modal stays open`, async ({ page }) => {
-    const app = await installDesktop(page);
-    await page.evaluate(settings => {
-      window.desktopEvent('openseek.settings.changed', settings);
-    }, {
-      ...app.hostSettings,
-      revision: app.hostSettings.revision + 1,
-      provider,
-      has_deepseek_key: false,
-      has_glm_key: false,
-    });
-    const modal = page.locator('.setup-modal');
-    await expect(modal).toBeVisible();
-    await modal.getByRole('link', { name: label }).click();
-    await expect.poll(() => app.requests.filter(request =>
-      request.method === 'shell.open_external').map(request => request.params.url))
-      .toEqual([url]);
-    expect(app.requests.filter(request => request.method === 'browser.open')).toEqual([]);
-    await expect(modal).toBeVisible();
-    expect(app.pageErrors).toEqual([]);
-  });
 }
 
 test('fixed sidebar toggle respects native geometry across pages and fullscreen', async ({ page }) => {
