@@ -262,6 +262,8 @@ jobs:
         if: matrix.target == 'native'
         run: moon cram test tests/cram
 
+      # Compile a small probe, then launch copied native/Wasm artifacts from
+      # unrelated directories to test relocation, symlinks and invalid layouts.
       - name: Executable-relative resources
         if: matrix.target != 'js'
         run: |
