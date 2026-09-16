@@ -1,0 +1,19 @@
+import {
+  "moonbitlang/async/os_error",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/path",
+}
+
+import {
+  "moonbitlang/core/env" @sys,
+} for "test"
+
+supported_targets = "+native+wasm"
+
+options(
+  targets: {
+    "env_native.mbt": [ "native" ],
+    "env_wasm.mbt": [ "wasm" ],
+    "env_wasm_wbtest.mbt": [ "wasm" ],
+  },
+)
