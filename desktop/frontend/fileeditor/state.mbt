@@ -18,15 +18,14 @@ pub(all) struct FileEntry {
 
 ///|
 /// A decoded `read_file` reply. Withheld files are their own cases — the
-/// wording of their notices is this side's business — and only a real file
-/// carries an address for path-routed ops (hover on a notice document has
-/// nothing to ask about).
+/// wording of their notices is this side's business. The file's address is
+/// the document key the read was issued for, so the reply carries none.
 pub(all) enum FileContent {
   Binary
   Oversized
   // `sig` is the file's mtime signature, stat'ed by the host from the same
   // handle it read — the baseline `stat_files` results are compared against.
-  Content(content~ : String, absolute~ : @common.Uri, sig~ : String)
+  Content(content~ : String, sig~ : String)
 }
 
 ///|
@@ -42,7 +41,7 @@ pub(all) enum TabState {
   // (their replies have none), so they only refresh on an explicit re-open —
   // but deletion still shows, since that compares against `""`, not a
   // baseline.
-  TabLoaded(content~ : String, absolute~ : @common.Uri, sig~ : String)
+  TabLoaded(content~ : String, sig~ : String)
   TabBinary
   TabOversized
   // The host could not read this file. Unlike `TabDeleted`, this keeps the

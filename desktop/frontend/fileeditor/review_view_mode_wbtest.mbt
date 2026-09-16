@@ -7,7 +7,7 @@ fn reviewed_doc(
   baseline? : String = "old source",
   view_mode? : ReviewViewMode = ReviewDiff,
   generation? : Int = 1,
-) -> Doc raise {
+) -> Doc {
   {
     ..loaded_doc(path.0),
     review: Some({

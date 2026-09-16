@@ -33,7 +33,7 @@ test "external documents share the document lifecycle without workspace membersh
     epoch=ctx.request_epoch,
     path=file,
     name="notes.md",
-    file=Content(content="outside", absolute=file, sig="1:0"),
+    file=Content(content="outside", sig="1:0"),
     file_link_generation=None,
     review_generation=None,
     range=None,

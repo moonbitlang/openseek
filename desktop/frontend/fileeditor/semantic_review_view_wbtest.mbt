@@ -29,11 +29,7 @@ test "semantic input follows active MoonBit review and ignores layout" {
   let docs = owned_state().docs.copy()
   docs[file] = {
     ..reviewed_doc(path, selected, baseline="fn value() { 1 }"),
-    state: TabLoaded(
-      content="fn value() { 2 }",
-      absolute=test_file("src/main.mbt"),
-      sig="working",
-    ),
+    state: TabLoaded(content="fn value() { 2 }", sig="working"),
   }
   let state = {
     ..owned_state(),

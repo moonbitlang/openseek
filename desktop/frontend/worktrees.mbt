@@ -949,11 +949,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
   let review_docs : Map[@common.Uri, @fileeditor.Doc] = Map([])
   review_docs[review_file] = {
     name: "reviewed.mbt",
-    state: TabLoaded(
-      content="working",
-      absolute=@interop.ChannelId::Local.test_resource("/proj/src/reviewed.mbt"),
-      sig="7:1",
-    ),
+    state: TabLoaded(content="working", sig="7:1"),
     review: Some({
       generation: 3,
       working_generation: 3,

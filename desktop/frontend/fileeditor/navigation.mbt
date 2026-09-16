@@ -313,10 +313,7 @@ async fn resolve_navigation_preview(
     viewer_state.navigation != Some(context) {
     return None
   }
-  guard file is Some(Content(content~, absolute=loaded, sig~)) &&
-    loaded == absolute else {
-    return None
-  }
+  guard file is Some(Content(content~, sig~)) else { return None }
   let name = basename(relative)
   let model = @model.TextModel(
     resource,

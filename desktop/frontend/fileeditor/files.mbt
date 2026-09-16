@@ -125,37 +125,21 @@ fn read_file(
           return
         }
       }
-      match FileContent::from_reply(reply, owner.channel) {
-        Some(file) =>
-          scheduler.add(
-            dispatch(
-              FileLoaded(
-                owner~,
-                epoch~,
-                path~,
-                name~,
-                file~,
-                file_link_generation~,
-                review_generation~,
-                range~,
-                annotation~,
-              ),
-            ),
-          )
-        None =>
-          scheduler.add(
-            dispatch(
-              FileFailed(
-                owner~,
-                epoch~,
-                path~,
-                file_link_generation~,
-                review_generation~,
-                message="could not read file",
-              ),
-            ),
-          )
-      }
+      scheduler.add(
+        dispatch(
+          FileLoaded(
+            owner~,
+            epoch~,
+            path~,
+            name~,
+            file=FileContent::from_reply(reply),
+            file_link_generation~,
+            review_generation~,
+            range~,
+            annotation~,
+          ),
+        ),
+      )
     })
   })
 }
@@ -260,23 +244,16 @@ fn FileEntry::from_reply(
 }
 
 ///|
-fn FileContent::from_reply(
-  reply : @protocol.ReadFileReply,
-  channel : @interop.ChannelId,
-) -> FileContent? {
+fn FileContent::from_reply(reply : @protocol.ReadFileReply) -> FileContent {
   match reply {
-    @protocol.Binary => Some(Binary)
-    @protocol.Oversized => Some(Oversized)
+    @protocol.Binary => Binary
+    @protocol.Oversized => Oversized
     // Supported raster files carry display bytes for transcript rendering.
     // The text editor still presents them through its ordinary binary notice.
-    @protocol.BinaryContent(..) => Some(Binary)
-    @protocol.Content(content~, absolute~, sig~) => {
-      // Bind the backend resource path to the device that produced the reply.
-      guard @resource.of_path(channel, absolute) is Some(absolute) else {
-        return None
-      }
-      Some(Content(content~, absolute~, sig~))
-    }
+    @protocol.BinaryContent(..) => Binary
+    // The host echoes the requested path as `absolute`; the document key
+    // already names it, so the echo is not read.
+    @protocol.Content(content~, sig~, ..) => Content(content~, sig~)
   }
 }
 
@@ -301,7 +278,7 @@ async fn read_file_snapshot(
   }) catch {
     _ => return None
   }
-  FileContent::from_reply(reply, owner.channel)
+  Some(FileContent::from_reply(reply))
 }
 
 ///|
@@ -478,37 +455,12 @@ test "typed directory rows build full relative paths" {
 
 ///|
 test "typed file replies map to viewer content" {
-  guard FileContent::from_reply(
+  assert_true(
+    FileContent::from_reply(
       @protocol.Content(content="hello", absolute="/ws/a.mbt", sig="12:34"),
-      @interop.ChannelId::Local,
     )
-    is Some(Content(content~, absolute~, sig~)) else {
-    fail("valid text reply was rejected")
-  }
-  assert_eq(content, "hello")
-  assert_eq(absolute.path, "/ws/a.mbt")
-  assert_eq(@resource.channel(absolute), Some(@interop.ChannelId::Local))
-  assert_eq(sig, "12:34")
-  assert_true(
-    FileContent::from_reply(@protocol.Binary, @interop.ChannelId::Local)
-    is Some(Binary),
+    is Content(content="hello", sig="12:34"),
   )
-  assert_true(
-    FileContent::from_reply(@protocol.Oversized, @interop.ChannelId::Local)
-    is Some(Oversized),
-  )
-  assert_true(
-    FileContent::from_reply(
-      @protocol.Content(content="x", absolute="", sig="1:2"),
-      @interop.ChannelId::Local,
-    )
-    is None,
-  )
-  assert_true(
-    FileContent::from_reply(
-      @protocol.Content(content="x", absolute="relative.mbt", sig="1:2"),
-      @interop.ChannelId::Local,
-    )
-    is None,
-  )
+  assert_true(FileContent::from_reply(@protocol.Binary) is Binary)
+  assert_true(FileContent::from_reply(@protocol.Oversized) is Oversized)
 }

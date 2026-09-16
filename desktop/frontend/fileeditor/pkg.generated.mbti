@@ -163,7 +163,7 @@ pub fn FileChange::not_equal(Self, Self) -> Bool
 pub(all) enum FileContent {
   Binary
   Oversized
-  Content(content~ : String, absolute~ : @common.Uri, sig~ : String)
+  Content(content~ : String, sig~ : String)
 }
 
 pub(all) struct FileEntry {
@@ -505,7 +505,7 @@ pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, Bool) -
 
 pub(all) enum TabState {
   TabLoading
-  TabLoaded(content~ : String, absolute~ : @common.Uri, sig~ : String)
+  TabLoaded(content~ : String, sig~ : String)
   TabBinary
   TabOversized
   TabReadFailed(String)

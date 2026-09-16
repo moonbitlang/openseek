@@ -649,8 +649,8 @@ pub fn open_changed_document(
     // and restores the tab's scroll position. Other states need the fresh
     // read before they can become a working document.
     match docs.get(path) {
-      Some({ state: TabLoaded(content~, absolute~, sig~), .. }) =>
-        TabLoaded(content~, absolute~, sig~)
+      Some({ state: TabLoaded(content~, sig~), .. }) =>
+        TabLoaded(content~, sig~)
       _ => TabLoading
     }
   } else {
@@ -3619,8 +3619,7 @@ fn update_inner(
         }
         let previous = doc.state
         let doc_state = match file {
-          Content(content~, absolute~, sig~) =>
-            TabState::TabLoaded(content~, absolute~, sig~)
+          Content(content~, sig~) => TabState::TabLoaded(content~, sig~)
           Binary => TabBinary
           Oversized => TabOversized
         }
@@ -4373,14 +4372,10 @@ fn owned_state_at(ctx : Ctx) -> State {
 }
 
 ///|
-fn loaded_doc(path : String) -> Doc raise {
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/" + path)
-    is Some(absolute) else {
-    fail("test document resource was not absolute")
-  }
+fn loaded_doc(path : String) -> Doc {
   {
     name: basename(Relative(path)),
-    state: TabLoaded(content="", absolute~, sig="1:0"),
+    state: TabLoaded(content="", sig="1:0"),
     review: None,
     stale: false,
   }
@@ -4748,10 +4743,6 @@ test "changed-file review fences paired replies and Content opens retain compari
     different_row,
     had_active=true,
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/a.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   // An ordinary read that began before the first review click carries no
   // token. It must not inherit the newer baseline if it settles afterward.
   let (_, pre_review_working) = update(
@@ -4761,7 +4752,7 @@ test "changed-file review fences paired replies and Content opens retain compari
       epoch=0,
       path=file,
       name="a.mbt",
-      file=Content(content="pre-review working", absolute~, sig="0:18"),
+      file=Content(content="pre-review working", sig="0:18"),
       file_link_generation=None,
       review_generation=None,
       range=None,
@@ -4787,7 +4778,7 @@ test "changed-file review fences paired replies and Content opens retain compari
       epoch=0,
       path=file,
       name="a.mbt",
-      file=Content(content="stale working", absolute~, sig="1:13"),
+      file=Content(content="stale working", sig="1:13"),
       file_link_generation=None,
       review_generation=Some(1),
       range=None,
@@ -4917,7 +4908,7 @@ test "changed-file review fences paired replies and Content opens retain compari
       epoch=0,
       path=file,
       name="a.mbt",
-      file=Content(content="late review", absolute~, sig="3:11"),
+      file=Content(content="late review", sig="3:11"),
       file_link_generation=None,
       review_generation=Some(2),
       range=None,
@@ -5281,10 +5272,6 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
     live_loading,
     live_ctx,
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/live.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   let (_, loaded) = update(
     emit,
     FileLoaded(
@@ -5292,7 +5279,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
       epoch=0,
       path=test_file(live_path.0),
       name="live.mbt",
-      file=Content(content="new", absolute~, sig="2:3"),
+      file=Content(content="new", sig="2:3"),
       file_link_generation=None,
       review_generation=Some(1),
       range=None,
@@ -5416,10 +5403,6 @@ test "close_document drops the entry and forces the tree open on the last one" {
 ///|
 test "FileLoaded settles content into its document, active or not" {
   let emit = test_emit()
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/a.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   let docs : Map[@common.Uri, Doc] = Map([])
   docs[test_file("a.mbt")] = {
     name: "a.mbt",
@@ -5441,7 +5424,7 @@ test "FileLoaded settles content into its document, active or not" {
       epoch=0,
       path=test_file("a.mbt"),
       name="a.mbt",
-      file=Content(content="fn main {}", absolute~, sig="2:0"),
+      file=Content(content="fn main {}", sig="2:0"),
       file_link_generation=None,
       review_generation=None,
       range=None,
@@ -5455,10 +5438,6 @@ test "FileLoaded settles content into its document, active or not" {
     is Some({ state: TabLoaded(content="fn main {}", ..), .. }),
   )
   // A reply for a closed document (or another conversation) is dropped.
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/gone.mbt")
-    is Some(gone_absolute) else {
-    fail("test closed file resource was not absolute")
-  }
   let (_, stray) = update(
     emit,
     FileLoaded(
@@ -5466,7 +5445,7 @@ test "FileLoaded settles content into its document, active or not" {
       epoch=0,
       path=test_file("gone.mbt"),
       name="gone.mbt",
-      file=Content(content="", absolute=gone_absolute, sig="2:0"),
+      file=Content(content="", sig="2:0"),
       file_link_generation=None,
       review_generation=None,
       range=None,
@@ -5510,10 +5489,6 @@ test "FileLoaded settles content into its document, active or not" {
     ctx,
   )
   assert_true(old_epoch == epoch_state)
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/a.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   let (_, old_read) = update(
     emit,
     FileLoaded(
@@ -5521,7 +5496,7 @@ test "FileLoaded settles content into its document, active or not" {
       epoch=1,
       path=test_file("a.mbt"),
       name="a.mbt",
-      file=Content(content="stale", absolute~, sig="9:0"),
+      file=Content(content="stale", sig="9:0"),
       file_link_generation=None,
       review_generation=None,
       range=None,
@@ -5761,10 +5736,6 @@ test "a placement change retains absolute document identities and fences old rep
       }
     ),
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/project-a/reviewed.mbt")
-    is Some(old_absolute) else {
-    fail("test file resource was not absolute")
-  }
   let (_, after_old_reply) = update(
     emit,
     FileLoaded(
@@ -5772,7 +5743,7 @@ test "a placement change retains absolute document identities and fences old rep
       epoch=state.request_epoch,
       path=@resource.join_relative(old_workspace, path),
       name="reviewed.mbt",
-      file=Content(content="old root reply", absolute=old_absolute, sig="1:1"),
+      file=Content(content="old root reply", sig="1:1"),
       file_link_generation=None,
       review_generation=Some(4),
       range=None,
@@ -6967,16 +6938,12 @@ test "a review that becomes a symlink clears its cached regular-file source" {
     ctx,
   )
   assert_true(still_unavailable == unavailable)
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/src/replaced.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   let stale_reply = FileLoaded(
     owner=ctx.owner,
     epoch=0,
     path=file,
     name="replaced.mbt",
-    file=Content(content="stale regular source", absolute~, sig="4:0"),
+    file=Content(content="stale regular source", sig="4:0"),
     file_link_generation=None,
     review_generation=None,
     range=None,
@@ -7016,7 +6983,7 @@ test "a review that becomes a symlink clears its cached regular-file source" {
     reopened.docs.get(file)
     is Some(
       {
-        state: TabLoaded(content="stale regular source", sig="4:0", ..),
+        state: TabLoaded(content="stale regular source", sig="4:0"),
         review: None,
         stale: false,
         ..
@@ -7073,10 +7040,6 @@ test "a disappearing review row hands an active reload to an ordinary read" {
     settled.docs.get(file)
     is Some({ state: TabLoaded(..), review: None, stale: true, .. }),
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/src/committed.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   let (_, fenced) = update(
     test_emit(),
     FileLoaded(
@@ -7084,7 +7047,7 @@ test "a disappearing review row hands an active reload to an ordinary read" {
       epoch=0,
       path=file,
       name="committed.mbt",
-      file=Content(content="stale review read", absolute~, sig="2:7"),
+      file=Content(content="stale review read", sig="2:7"),
       file_link_generation=None,
       review_generation=Some(3),
       range=None,
@@ -7101,7 +7064,7 @@ test "a disappearing review row hands an active reload to an ordinary read" {
       epoch=0,
       path=file,
       name="committed.mbt",
-      file=Content(content="current working", absolute~, sig="2:7"),
+      file=Content(content="current working", sig="2:7"),
       file_link_generation=None,
       review_generation=None,
       range=None,
@@ -7114,7 +7077,7 @@ test "a disappearing review row hands an active reload to an ordinary read" {
     current.docs.get(file)
     is Some(
       {
-        state: TabLoaded(content="current working", sig="2:7", ..),
+        state: TabLoaded(content="current working", sig="2:7"),
         review: None,
         stale: false,
         ..
@@ -7161,10 +7124,6 @@ test "a newer review reload fences an older working-tree reply" {
       }
     ),
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/src/racing.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   let (_, newest) = update(
     test_emit(),
     FileLoaded(
@@ -7172,7 +7131,7 @@ test "a newer review reload fences an older working-tree reply" {
       epoch=0,
       path=file,
       name="racing.mbt",
-      file=Content(content="newest working", absolute~, sig="2:0"),
+      file=Content(content="newest working", sig="2:0"),
       file_link_generation=None,
       review_generation=Some(4),
       range=None,
@@ -7185,7 +7144,7 @@ test "a newer review reload fences an older working-tree reply" {
     newest.docs.get(file)
     is Some(
       {
-        state: TabLoaded(content="newest working", sig="2:0", ..),
+        state: TabLoaded(content="newest working", sig="2:0"),
         review: Some({ generation: 3, working_generation: 4, .. }),
         stale: false,
         ..
@@ -7199,7 +7158,7 @@ test "a newer review reload fences an older working-tree reply" {
       epoch=0,
       path=file,
       name="racing.mbt",
-      file=Content(content="older working", absolute~, sig="1:0"),
+      file=Content(content="older working", sig="1:0"),
       file_link_generation=None,
       review_generation=Some(3),
       range=None,
@@ -7237,7 +7196,7 @@ test "a newer review reload fences an older working-tree reply" {
       epoch=0,
       path=file,
       name="racing.mbt",
-      file=Content(content="pre-deletion working", absolute~, sig="2:0"),
+      file=Content(content="pre-deletion working", sig="2:0"),
       file_link_generation=None,
       review_generation=Some(4),
       range=None,
@@ -7410,10 +7369,6 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
       }
     ),
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/src/paired.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   let (_, ignored_old_working) = update(
     test_emit(),
     FileLoaded(
@@ -7421,7 +7376,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
       epoch=0,
       path=file,
       name="paired.mbt",
-      file=Content(content="stale working", absolute~, sig="2:13"),
+      file=Content(content="stale working", sig="2:13"),
       file_link_generation=None,
       review_generation=Some(3),
       range=None,
@@ -7460,7 +7415,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
       epoch=0,
       path=file,
       name="paired.mbt",
-      file=Content(content="current working", absolute~, sig="3:15"),
+      file=Content(content="current working", sig="3:15"),
       file_link_generation=None,
       review_generation=Some(4),
       range=None,
@@ -8904,10 +8859,6 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
     ordinary,
     ctx,
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/recreated.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   let (_, restored) = update(
     emit,
     FileLoaded(
@@ -8915,7 +8866,7 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
       epoch=0,
       path=file,
       name="recreated.mbt",
-      file=Content(content="HEAD source", absolute~, sig="3:0"),
+      file=Content(content="HEAD source", sig="3:0"),
       file_link_generation=None,
       review_generation=None,
       range=None,
@@ -8928,7 +8879,7 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
     restored.docs.get(file)
     is Some(
       {
-        state: TabLoaded(content="HEAD source", sig="3:0", ..),
+        state: TabLoaded(content="HEAD source", sig="3:0"),
         review: None,
         stale: false,
         ..
@@ -8990,10 +8941,6 @@ test "a vanished review retries a failed ordinary read" {
     ordinary,
     ctx,
   )
-  guard @resource.of_path(@interop.ChannelId::Local, "/work/committed.mbt")
-    is Some(absolute) else {
-    fail("test file resource was not absolute")
-  }
   let (_, restored) = update(
     emit,
     FileLoaded(
@@ -9001,7 +8948,7 @@ test "a vanished review retries a failed ordinary read" {
       epoch=0,
       path=file,
       name="committed.mbt",
-      file=Content(content="committed source", absolute~, sig="4:0"),
+      file=Content(content="committed source", sig="4:0"),
       file_link_generation=None,
       review_generation=None,
       range=None,
@@ -9014,7 +8961,7 @@ test "a vanished review retries a failed ordinary read" {
     restored.docs.get(file)
     is Some(
       {
-        state: TabLoaded(content="committed source", sig="4:0", ..),
+        state: TabLoaded(content="committed source", sig="4:0"),
         review: None,
         stale: false,
         ..
