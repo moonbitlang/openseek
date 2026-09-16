@@ -1,0 +1,32 @@
+# Packaging ignore list for `moonbitlang/openseek`.
+#
+# `.moonignore` overrides `.gitignore` in this directory, so the build and
+# dependency directories from `.gitignore` are repeated here. The rest excludes
+# what does not belong in the published archive: nested member modules (each is
+# published separately or not published to mooncakes at all) and developer-only
+# tooling, docs and tests.
+
+_build/
+.mooncakes/
+node_modules/
+target/
+
+# Nested workspace-member modules and apps, published separately.
+/desktop
+/editor
+/protocol
+/tools_sdk
+/cmd/viz_app
+/inspect
+/scripts
+
+# Developer tooling, docs and tests that do not ship in the published module.
+/tests
+/justfile
+/AGENTS.md
+/agent-improvement-guide.md
+/improvement.md
+/shrink_package.md
+/desktop-dev.html
+/docs/plans
+/moon.work
