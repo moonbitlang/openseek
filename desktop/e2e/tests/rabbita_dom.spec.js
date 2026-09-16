@@ -1080,10 +1080,12 @@ test('runtime notices keep the compact result-row presentation', async ({ page }
   await app.goto();
   await app.openSession();
 
-  const notice = page.locator('.activity-row', { hasText: 'runtime notice' });
+  // The caption is the engine-notice glyph; the notice's own text stays in
+  // the row's body.
+  const notice = page.locator('.activity-row', { hasText: '🔔' });
   const result = notice.locator('details.tool-result');
   await expect(notice.locator('.summary-card')).toHaveCount(0);
-  await expect(result.locator('.tool-result-text')).toHaveText('runtime notice');
+  await expect(result.locator('.tool-result-text')).toHaveText('🔔');
   await expect(result).not.toHaveAttribute('open', '');
   await result.locator('.tool-result-summary').click();
   await expect(result).toContainText('background job bg-1 finished (exit=0)');
