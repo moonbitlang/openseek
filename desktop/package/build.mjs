@@ -203,9 +203,12 @@ class Build {
     await this.commandRun("tar", ["-xf", esbuildArchive, "-C", esbuildRoot, "--strip-components=1"]);
     const esbuildBinary = join(esbuildRoot, esbuild.binary);
     if (process.platform !== "win32") await chmod(esbuildBinary, 0o755);
+    // web() minifies the browser bundle with the same verified binary.
+    this.esbuildBinary = esbuildBinary;
 
-    // esbuild remains the authority for CSS imports, URL handling, and the
-    // xterm module graph. It is a verified standalone tool, not an npm install.
+    // esbuild remains the authority for CSS imports, URL handling, the xterm
+    // module graph, and the minification of the browser bundle in web(). It is
+    // a verified standalone tool, not an npm install.
     for (const [entry, name] of [
       [join(this.desktop, "app.css"), "app.css"],
       [join(this.desktop, "frontend/build/viewer.css"), "viewer.css"],
@@ -239,7 +242,20 @@ class Build {
       await rm(output, { recursive: true, force: true });
       await mkdir(output, { recursive: true });
       await cp(join(this.desktop, "frontend/browser/index.html"), join(output, "index.html"));
-      await cp(join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/browser/browser.js`), join(output, "browser.js"));
+      // A release console bundle is minified with the pinned esbuild; a debug
+      // one is copied verbatim, so local runs and the e2e suite read the MoonBit
+      // output as written. --format stays iife to match the package's link
+      // option, and there is no --bundle, so the bundle is only minified, never
+      // re-scoped or tree-shaken.
+      const bundle = join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/browser/browser.js`);
+      if (profile === "release") {
+        await this.commandRun(this.esbuildBinary, [
+          bundle, "--minify", "--format=iife", "--platform=browser",
+          `--outfile=${join(output, "browser.js")}`,
+        ]);
+      } else {
+        await cp(bundle, join(output, "browser.js"));
+      }
       await this.sharedWeb(output);
       return;
     }
