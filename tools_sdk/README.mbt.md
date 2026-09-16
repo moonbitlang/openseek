@@ -100,3 +100,40 @@ moon -C tools_sdk publish
 SDK and wire protocol versions are distinct. A future host must reject an
 unsupported wire version explicitly. Publish a new SDK version for API changes;
 never depend on an unpinned latest version in generated examples.
+
+## Warning-fix loop
+
+The host's `edit` tool accepts `revert_on_errors` and `revert_on_warnings`:
+`moon check` runs before and after the write and the file is restored when
+the edit introduced a diagnostic the tree did not have, judged by diagnostic
+identity so the edit's own line shifts never count. Every result's `data`
+names the `outcome`, so a script can fix diagnostics one at a time and keep
+what the host accepted. The script finds its targets by running `moon check
+--output-json` itself (the sandbox admits `moon check`); one line per
+diagnostic, with `level`, `error_code`, `path`, `loc` (`line:col-line:col`,
+1-based, end exclusive, columns in code points) and `message`.
+
+```mbt nocheck
+///|
+let result = @tools.call("edit", {
+  "path": site.path,
+  "start_line": site.line,
+  "end_line": site.line,
+  "old_string": line_prefix_through_span,
+  "new_string": line_prefix_before_span + replacement,
+  "revert_on_errors": true,
+  "revert_on_warnings": true,
+})
+match result.data {
+  Some({ "outcome": "applied", .. }) => fixed += 1
+  Some({ "outcome": "reverted", "reason": String(reason), .. }) =>
+    leftovers.push("\{site.path}:\{site.line}: \{reason}")
+  _ => leftovers.push(result.content)
+}
+```
+
+Anchoring `old_string` on the whole line prefix through the diagnosed span
+makes the first match at `start_line` exactly that occurrence, and working
+bottom-up per file and right to left per line keeps every remaining span
+valid without a second check. `share/workflow/fix-deprecations.mbtx` is this
+loop for deprecation warnings that name a bare replacement.

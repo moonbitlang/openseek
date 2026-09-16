@@ -1,0 +1,355 @@
+///|
+/// Fix deprecation warnings mechanically, one guarded edit per site.
+///
+/// Runs `moon check --output-json` in the current directory, keeps the
+/// deprecation warnings whose message names a plain replacement identifier
+/// ("use `len` instead"), and for each site — bottom-up per file, right to
+/// left per line, so an earlier edit never shifts a later span — asks the
+/// host to replace exactly the diagnosed span through `edit` with
+/// revert_on_errors and revert_on_warnings. Then it reports what was fixed,
+/// what the host reverted (and why), and what needs a human, and checks once
+/// more for the remaining counts.
+///
+/// Run through the mbtx tool with ptc on, from the module to fix:
+///   {"filename":"@builtin/fix-deprecations.mbtx","cwd":"<module>"}
+/// Arguments: --dry-run   plan only, write nothing
+///            --limit N   stop after N fixes (default 500)
+import {
+  "bobzhang/openseek_tools@0.1.0" @tools,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+/// One deprecation site the script knows how to fix.
+struct Site {
+  path : String
+  line : Int
+  // 1-based, end exclusive, in Unicode code points — moon's column unit.
+  start_col : Int
+  end_col : Int
+  replacement : String
+}
+
+///|
+/// A diagnostic the script leaves to a human, with why.
+struct Skipped {
+  where_ : String
+  why : String
+}
+
+///|
+/// The replacement a deprecation message names, when it is a bare identifier
+/// the diagnosed span can be swapped for: "use `len` instead" → `len`.
+/// Anything else (a path like `@pkg.f`, a method like `Array::len`, prose,
+/// no replacement at all) is a human's call.
+fn replacement_in(message : String) -> String? {
+  guard message.find("use `") is Some(start) else { return None }
+  let rest = message[start + 5:]
+  guard rest.find("`") is Some(end) else { return None }
+  let name = rest[:end].to_string()
+  if name.is_empty() || !is_identifier(name) {
+    return None
+  }
+  Some(name)
+}
+
+///|
+fn is_identifier(text : String) -> Bool {
+  let mut first = true
+  for ch in text {
+    let ok = if first {
+      ch.is_ascii_alphabetic() || ch == '_'
+    } else {
+      ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '_'
+    }
+    if !ok {
+      return false
+    }
+    first = false
+  }
+  true
+}
+
+///|
+/// "14:3-14:9" → (14, 3, 14, 9); `None` for a shape the script does not
+/// handle (a module-level diagnostic has no span at all).
+fn parse_loc(loc : String) -> (Int, Int, Int, Int)? {
+  guard loc.split("-").collect() is [start, end] else { return None }
+  guard start.split(":").collect() is [l1, c1] &&
+    end.split(":").collect() is [l2, c2] else {
+    return None
+  }
+  guard parse_int(l1) is Some(a) &&
+    parse_int(c1) is Some(b) &&
+    parse_int(l2) is Some(c) &&
+    parse_int(c2) is Some(d) else {
+    return None
+  }
+  Some((a, b, c, d))
+}
+
+///|
+/// A positive decimal integer, or `None` for anything else.
+fn parse_int(text : StringView) -> Int? {
+  guard !text.is_empty() else { return None }
+  let mut value = 0
+  for ch in text {
+    let digit = ch.to_int() - '0'.to_int()
+    guard digit >= 0 && digit <= 9 && value <= (2_147_483_647 - digit) / 10 else {
+      return None
+    }
+    value = value * 10 + digit
+  }
+  Some(value)
+}
+
+///|
+/// A span split at its last `.` or `::`: (`@a.`, `length`), (`Pile::`, `size`),
+/// or (``, `len`) for a bare name.
+fn split_qualified(span : String) -> (String, String) {
+  let by_dot = span.rev_find(".")
+  let by_path = span.rev_find("::")
+  match (by_dot, by_path) {
+    (Some(dot), Some(path)) =>
+      if dot > path {
+        (span[:dot + 1].to_string(), span[dot + 1:].to_string())
+      } else {
+        (span[:path + 2].to_string(), span[path + 2:].to_string())
+      }
+    (Some(dot), None) => (span[:dot + 1].to_string(), span[dot + 1:].to_string())
+    (None, Some(path)) =>
+      (span[:path + 2].to_string(), span[path + 2:].to_string())
+    (None, None) => ("", span)
+  }
+}
+
+///|
+/// UTF-16 offset of the 1-based code-point column `col` in `line`, clamped
+/// to the line's end.
+fn utf16_offset(line : String, col : Int) -> Int {
+  let mut units = 0
+  let mut points = 1
+  for ch in line {
+    if points >= col {
+      break
+    }
+    units += if ch.to_int() > 0xFFFF { 2 } else { 1 }
+    points += 1
+  }
+  units
+}
+
+///|
+async fn main {
+  let mut dry_run = false
+  let mut limit = 500
+  let args = @env.args()[1:]
+  let mut index = 0
+  while index < args.length() {
+    match args[index] {
+      "--dry-run" => dry_run = true
+      "--limit" => {
+        index += 1
+        guard index < args.length() &&
+          parse_int(args[index]) is Some(value) &&
+          value > 0 else {
+          fail("--limit needs a positive integer")
+        }
+        limit = value
+      }
+      other => fail("unknown argument \{other}; accepted: --dry-run, --limit N")
+    }
+    index += 1
+  }
+  let base = @env.current_dir().unwrap_or(".")
+  fn absolute(path : String) -> String {
+    if path.has_prefix("/") {
+      path
+    } else {
+      "\{base}/\{path}"
+    }
+  }
+
+  // 1. The diagnostics, from the script's own check.
+  let lines : Array[String] = []
+  let code = @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => lines.push(
+    line,
+  ))
+  let sites : Array[Site] = []
+  let skipped : Array[Skipped] = []
+  let mut errors = 0
+  let mut warnings = 0
+  for raw in lines {
+    if !raw.contains("\"level\"") {
+      continue
+    }
+    let json = @json.parse(raw) catch { _ => continue }
+    match json {
+      { "level": "error", .. } => errors += 1
+      {
+        "level": "warning",
+        "error_code": Number(20, ..),
+        "path": String(path),
+        "loc": String(loc),
+        "message": String(message),
+        ..
+      } => {
+        warnings += 1
+        let where_ = "\{path}:\{loc}"
+        match (parse_loc(loc), replacement_in(message)) {
+          (Some((l1, c1, l2, c2)), Some(replacement)) if l1 == l2 =>
+            sites.push({
+              path: absolute(path),
+              line: l1,
+              start_col: c1,
+              end_col: c2,
+              replacement,
+            })
+          (Some(_), Some(_)) =>
+            skipped.push({ where_, why: "multi-line span: \{message}" })
+          (None, _) => skipped.push({ where_, why: "no span: \{message}" })
+          (_, None) =>
+            skipped.push({ where_, why: "no bare replacement named: \{message}" })
+        }
+      }
+      { "level": "warning", .. } => warnings += 1
+      _ => ()
+    }
+  }
+  if code != 0 && errors == 0 {
+    fail("moon check exited \{code} without diagnostics; fix the build first")
+  }
+  println(
+    "fix-deprecations: \{errors} error(s), \{warnings} warning(s); \{sites.length()} deprecation site(s) with a bare replacement, \{skipped.length()} left to a human",
+  )
+  if errors > 0 {
+    println(
+      "note: the tree has errors, so moon may have skipped dependents; the list above covers what the build reached",
+    )
+  }
+  // 2. Bottom-up per file, right to left per line: an edit never moves a
+  // span the script has yet to touch.
+  sites.sort_by((a, b) => if a.path != b.path {
+    a.path.compare(b.path)
+  } else if a.line != b.line {
+    b.line.compare(a.line)
+  } else {
+    b.start_col.compare(a.start_col)
+  })
+  let cache : Map[String, Array[String]] = Map([])
+  let mut fixed = 0
+  let reverted : Array[String] = []
+  let mut planned = 0
+  for site in sites {
+    if fixed + reverted.length() >= limit {
+      println("limit reached: \{limit} attempted; run again for the rest")
+      break
+    }
+    let file_lines = match cache.get(site.path) {
+      Some(file_lines) => file_lines
+      None => {
+        let text = @fs.read_file(site.path).text() catch {
+          error => {
+            skipped.push({ where_: site.path, why: "cannot read: \{error}" })
+            continue
+          }
+        }
+        let file_lines = text.split("\n").map(view => view.to_string()).collect()
+        cache[site.path] = file_lines
+        file_lines
+      }
+    }
+    guard site.line >= 1 && site.line <= file_lines.length() else {
+      skipped.push({ where_: "\{site.path}:\{site.line}", why: "line out of range" })
+      continue
+    }
+    let line = file_lines[site.line - 1]
+    let start = utf16_offset(line, site.start_col)
+    let end = utf16_offset(line, site.end_col)
+    let span = line[start:end].to_string()
+    // The span may carry a qualifier — `@a.length` for a call into another
+    // package, `Pile::size` for a method by path — and only the name after
+    // it is deprecated, so the qualifier is kept and the name swapped.
+    let (qualifier, old_name) = split_qualified(span)
+    guard is_identifier(old_name) && old_name != site.replacement else {
+      skipped.push({
+        where_: "\{site.path}:\{site.line}:\{site.start_col}",
+        why: "span `\{span}` is not a name to swap for `\{site.replacement}`",
+      })
+      continue
+    }
+    // The whole line prefix through the span, so the first match at this line
+    // is exactly this occurrence and no earlier same-named text on the line.
+    let old_string = line[:end].to_string()
+    let new_string = line[:start].to_string() + qualifier + site.replacement
+    planned += 1
+    if dry_run {
+      println(
+        "plan: \{site.path}:\{site.line}:\{site.start_col} `\{old_name}` → `\{site.replacement}`",
+      )
+      continue
+    }
+    let result = @tools.call("edit", {
+      "path": site.path,
+      "start_line": site.line,
+      "end_line": site.line,
+      "old_string": old_string,
+      "new_string": new_string,
+      "revert_on_errors": true,
+      "revert_on_warnings": true,
+    })
+    match result.data {
+      Some({ "outcome": "applied", .. }) => {
+        fixed += 1
+        // Keep the cached line current for a second site on the same line
+        // (which sits to the LEFT, so its columns are unchanged).
+        file_lines[site.line - 1] = new_string + line[end:].to_string()
+      }
+      Some({ "outcome": "reverted", "reason": String(reason), .. }) =>
+        reverted.push(
+          "\{site.path}:\{site.line}:\{site.start_col} `\{old_name}` → `\{site.replacement}`: \{reason}",
+        )
+      _ =>
+        reverted.push(
+          "\{site.path}:\{site.line}:\{site.start_col} `\{old_name}` → `\{site.replacement}`: \{result.content}",
+        )
+    }
+  }
+  // 3. The report.
+  if dry_run {
+    println("dry run: \{planned} edit(s) planned, none written")
+  } else {
+    println("fixed: \{fixed}")
+  }
+  if !reverted.is_empty() {
+    println("reverted by the host: \{reverted.length()}")
+    for entry in reverted[:reverted.length().min(50)] {
+      println("  \{entry}")
+    }
+  }
+  if !skipped.is_empty() {
+    println("left to a human: \{skipped.length()}")
+    for entry in skipped[:skipped.length().min(50)] {
+      println("  \{entry.where_}: \{entry.why}")
+    }
+  }
+  if !dry_run && fixed > 0 {
+    let mut errors_after = 0
+    let mut warnings_after = 0
+    @shell.Cmd("moon", ["check", "--output-json"]).each_line(line => {
+      if line.contains("\"level\":\"error\"") {
+        errors_after += 1
+      } else if line.contains("\"level\":\"warning\"") {
+        warnings_after += 1
+      }
+    })
+    |> ignore
+    println(
+      "after: \{errors_after} error(s), \{warnings_after} warning(s) (was \{errors}/\{warnings})",
+    )
+  }
+}

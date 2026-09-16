@@ -34,6 +34,13 @@ pub fn description() -> String {
     #|fields are absent, not empty strings. Keep selected URLs when printing
     #|sources so the final answer can cite them.
     #|
+    #|edit and multi_edit data carry outcome (applied, reverted, rejected, failed,
+    #|unverified, preview, not_found, error), the post-write check counts, and on a
+    #|revert the introduced sites; with revert_on_errors / revert_on_warnings the
+    #|host restores an edit that introduced a diagnostic the tree did not have, so
+    #|a script can apply one fix per diagnostic and branch on data.outcome. A
+    #|script may run moon check --output-json itself to find its targets.
+    #|
     #|Up to 1024 calls per script, four in flight, 64 KiB per request, and 64K
     #|characters per result; a larger edit batch goes through edits_file.
     #|Stateful calls serialize; independent searches can overlap using a MoonBit

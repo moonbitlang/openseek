@@ -11,6 +11,10 @@ this resource root's absolute path.
 - `check-test.mbtx` runs check then test, stopping on the first failure.
 - `info-fmt.mbtx` runs info then fmt, modifying generated interfaces and formatting.
 - `check-json.mbtx` relays `moon check --output-json` diagnostics without filtering.
+- `fix-deprecations.mbtx` (needs `ptc=true`) fixes deprecation warnings whose
+  message names a bare replacement (`use \`len\` instead`), one guarded `edit`
+  per site, and lists what it left to a human; `--dry-run` plans only,
+  `--limit N` stops after N fixes.
 
 See [Checking, testing, and formatting](../../tests/cram/validation-workflows.md)
 for executable examples of these validation scripts against a small project.
