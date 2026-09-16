@@ -1,0 +1,73 @@
+///|
+/// One guarded edit from a script. The host checks the tree before and
+/// after the write and restores the file if the edit introduced more
+/// diagnostics than the thresholds allow (0 = any); the script reads the
+/// outcome from `result.data` instead of parsing prose. Arguments:
+/// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
+/// a host-backed test that runs it through the real sandbox and host.
+import {
+  "bobzhang/openseek_tools@0.1.0" @tools,
+  "moonbitlang/async",
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+}
+
+///|
+async fn main {
+  let args = @env.args()[1:]
+  guard args is [path, old_string, new_string, ..] else {
+    fail(
+      "usage: ptc_guarded_edit.mbtx <path> <old_string> <new_string> [<start_line>]",
+    )
+  }
+  let start_line = match args {
+    [_, _, _, line, ..] =>
+      @string.parse_int(line) catch { _ => fail("start_line must be an integer") }
+    _ => 1
+  }
+  // `arguments` is the JSON object the direct edit tool takes, forwarded
+  // unchanged; the host validates it. The guards are integer thresholds on
+  // the diagnostics the edit introduced, counted by identity so the edit's
+  // own line shifts never count: 0 reverts on any, absent means no guard.
+  let result = @tools.call("edit", {
+    "path": path,
+    "start_line": start_line,
+    "old_string": old_string,
+    "new_string": new_string,
+    "revert_when_errors_above": 0,
+    "revert_when_warnings_above": 0,
+  })
+  // A tool error is a result (`is_error` set, `content` explains). Only a
+  // transport failure raises, and a mutation may already have happened
+  // then, so a script never retries one blindly.
+  match result.data {
+    Some(
+      {
+        "outcome": "applied",
+        "check": { "warning_count": Number(warnings, ..), .. },
+        ..
+      }
+    ) => println("applied; \{warnings.to_int()} warning(s) remain")
+    Some({ "outcome": "applied", .. }) => println("applied")
+    Some(
+      {
+        "outcome": "reverted",
+        "reason": String(reason),
+        "introduced_count": {
+          "errors": Number(errors, ..),
+          "warnings": Number(warnings, ..),
+          ..
+        },
+        ..
+      }
+    ) =>
+      println(
+        "reverted: \{reason} (\{errors.to_int()} error(s), \{warnings.to_int()} warning(s) introduced)",
+      )
+    Some({ "outcome": String(outcome), .. }) =>
+      println("\{outcome}: \{result.content}")
+    _ => println("no data: \{result.content}")
+  }
+  // Only what the script prints reaches the model; the nested call itself is
+  // kept in the transcript. Every call finishes before main returns.
+}

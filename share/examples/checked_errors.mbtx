@@ -1,0 +1,73 @@
+///|
+/// Checked errors are an effect on a function, not a value it returns: a
+/// parser returns its result directly and failures travel in `raise`. This
+/// file is verified by CI (type-checked under deny-warn and run), so what it
+/// shows is what the compiler accepts today.
+import {
+  "moonbitlang/core/string",
+}
+
+///|
+/// A custom error is a `suberror`, never `type Error` or a trait. Match its
+/// constructors when callers need to tell cases apart.
+suberror ParseError {
+  InvalidInput(String)
+} derive(Debug)
+
+///|
+/// `raise ParseError` names the exact error this function may let escape.
+/// A helper that raises a broader error is caught and translated, as the
+/// `parse_int` call shows. The success path stays direct: an `Int`, not a
+/// wrapper around success and failure.
+fn parse_count(text : String) -> Int raise ParseError {
+  let trimmed = text.trim()
+  if trimmed.is_empty() {
+    raise InvalidInput("empty input")
+  }
+  @string.parse_int(trimmed) catch {
+    _ => raise InvalidInput("not an integer: \{trimmed}")
+  }
+}
+
+///|
+/// Plain `raise` is enough for an ordinary failing helper, and `fail` raises
+/// a one-off failure with a message.
+fn require_positive(n : Int) -> Int raise {
+  if n <= 0 {
+    fail("expected a positive count, got \{n}")
+  }
+  n
+}
+
+///|
+/// A function marked `raise` calls raising helpers directly; nothing is
+/// wrapped or unwrapped between the layers.
+fn count_from(text : String) -> Int raise {
+  require_positive(parse_count(text))
+}
+
+///|
+/// Handle errors only at a real boundary, such as a CLI path that needs its
+/// own message. Constructor patterns pick the cases you care about; the
+/// last arm covers the rest. Never encode failure as a success sentinel
+/// (`Json::null`, `()`, `-1`): return early with the message instead.
+fn describe(text : String) -> String {
+  let n = count_from(text) catch {
+    InvalidInput(reason) => return "invalid: \{reason}"
+    other => return "rejected: \{other}"
+  }
+  "count = \{n}"
+}
+
+///|
+/// A sync `main` that calls raising functions is `fn main raise`. An
+/// `async fn main` raises by default and must not be written with `raise`;
+/// an async helper that must not raise is marked `noraise`.
+fn main raise {
+  assert_eq(parse_count(" 42 "), 42)
+  assert_eq(describe("7"), "count = 7")
+  assert_eq(describe(""), "invalid: empty input")
+  assert_eq(describe("x"), "invalid: not an integer: x")
+  assert_true(describe("-3").has_prefix("rejected: "))
+  println("checked errors: ok")
+}

@@ -7,22 +7,27 @@ import {
 }
 
 ///|
-/// Type-check bundled workflows without executing their main functions.
-/// Run from the repository root, as with the other maintenance scripts.
+/// Type-check bundled workflows and the verified examples without executing
+/// their main functions. Run from the repository root, as with the other
+/// maintenance scripts.
 async fn main {
-  let scripts = @fs.readdir("share/workflow", sort=true).filter(name => {
-    name.has_suffix(".mbtx")
-  })
-  guard !scripts.is_empty() else { fail("No bundled workflow scripts found") }
-  for script in scripts {
-    let relative = "share/workflow/\{script}"
-    println("Checking \{relative}")
-    let code = @shell.Cmd("moon", [
-      "check", "--target", "wasm", "--deny-warn", relative,
-    ]).status()
-    if code != 0 {
-      @sys.exit(code)
+  let mut checked = 0
+  for directory in ["share/workflow", "share/examples"] {
+    let scripts = @fs.readdir(directory, sort=true).filter(name => {
+      name.has_suffix(".mbtx")
+    })
+    guard !scripts.is_empty() else { fail("No scripts found under \{directory}") }
+    for script in scripts {
+      let relative = "\{directory}/\{script}"
+      println("Checking \{relative}")
+      let code = @shell.Cmd("moon", [
+        "check", "--target", "wasm", "--deny-warn", relative,
+      ]).status()
+      if code != 0 {
+        @sys.exit(code)
+      }
+      checked += 1
     }
   }
-  println("Checked \{scripts.length()} bundled workflows")
+  println("Checked \{checked} bundled scripts")
 }

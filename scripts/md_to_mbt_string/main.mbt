@@ -29,7 +29,14 @@ async fn main {
   }
   let base = @path.Path(input).basename()
   let function_name = function_name_from_base(base)
-  let markdown = expand_resource_layout(@fs.read_file(input).text(), "share")
+  let base_dir = match input.rev_find("/") {
+    Some(slash) => input[:slash].to_owned()
+    None => "."
+  }
+  let markdown = expand_resource_layout(
+    expand_example_links(@fs.read_file(input).text(), base_dir),
+    "share",
+  )
   let source = generated_source(base~, function_name~, markdown~)
   if output_matches(output, source) {
     return
@@ -42,6 +49,46 @@ async fn main {
   let tmp = "\{output}.tmp"
   @fs.write_file(tmp, source, create_mode=CreateOrTruncate)
   @fs.rename(tmp, output, replace=true)
+}
+
+///|
+/// A Markdown link that is a whole line and points at a `.mbtx` file is
+/// replaced by that file's text in a fenced `mbtx` block, so a verified
+/// example is written once and shown inline. A link inside a sentence stays
+/// a link. Targets resolve relative to the Markdown file's directory.
+async fn expand_example_links(markdown : String, base_dir : String) -> String {
+  let out = StringBuilder()
+  for index, line in markdown.split("\n").collect() {
+    if index > 0 {
+      out.write_string("\n")
+    }
+    match example_link_target(line) {
+      Some(target) => {
+        let path = if target.has_prefix("/") {
+          target
+        } else {
+          "\{base_dir}/\{target}"
+        }
+        let text = @fs.read_file(path).text()
+        let body = if text.has_suffix("\n") { text[:text.length() - 1] } else { text[:] }
+        out.write_string("```mbtx\n\{body}\n```")
+      }
+      None => out.write_string(line.to_owned())
+    }
+  }
+  out.to_string()
+}
+
+///|
+/// `[label](target.mbtx)` as the entire line, or `None`.
+fn example_link_target(line : StringView) -> String? {
+  guard line.has_prefix("[") && line.has_suffix(")") else { return None }
+  guard line.find("](") is Some(split) else { return None }
+  let label = line[1:split]
+  guard !label.contains("]") else { return None }
+  let target = line[split + 2:line.length() - 1]
+  guard target.has_suffix(".mbtx") && !target.contains(")") else { return None }
+  Some(target.to_owned())
 }
 
 ///|
@@ -431,6 +478,39 @@ async test "resource layout is sorted, directory-only, skips build output, and r
     assert_eq(
       expand_resource_layout("unchanged", "\{root}/missing"),
       "unchanged",
+    )
+  })
+}
+
+///|
+test "example link targets are whole-line .mbtx links only" {
+  assert_eq(example_link_target("[x](ex.mbtx)"), Some("ex.mbtx"))
+  assert_eq(
+    example_link_target("[share/examples/a.mbtx](../share/examples/a.mbtx)"),
+    Some("../share/examples/a.mbtx"),
+  )
+  assert_eq(example_link_target("see [x](ex.mbtx) inline"), None)
+  assert_eq(example_link_target("[x](ex.md)"), None)
+  assert_eq(example_link_target("[x](ex.mbtx) trailing"), None)
+}
+
+///|
+async test "whole-line example links expand into fenced blocks" {
+  with_tmpdir(dir => {
+    @fs.write_file("\{dir}/ex.mbtx", "fn main {\n  ()\n}\n")
+    let markdown = "a\n[x](ex.mbtx)\nsee [y](ex.mbtx) inline\n"
+    inspect(
+      expand_example_links(markdown, dir),
+      content=(
+        #|a
+        #|```mbtx
+        #|fn main {
+        #|  ()
+        #|}
+        #|```
+        #|see [y](ex.mbtx) inline
+        #|
+      ),
     )
   })
 }

@@ -942,88 +942,18 @@ test {
 
 ## Checked Error Handling
 
-- MoonBit uses checked raising functions.
-- Declare ordinary failing helpers with plain `raise`. Use a concrete error
-  type such as `raise ParseError` only when callers need to match exact error
-  variants.
-- Use checked errors for ordinary parser and CLI control flow. Keep the normal
-  return type as the successful value, for example `Json raise`, not a wrapper
-  around both success and failure.
-- Think of `raise` as a checked effect on the function, not as a value returned
-  by the function. This keeps success-path code direct: a parser returns `Json`
-  when it succeeds, while parse failures travel in the checked effect. A raising
-  helper can call other raising helpers normally, and its caller can do the same
-  if the caller is also marked `raise`.
-- This is different from unchecked exceptions and different from ordinary error
-  return values. The possible failure is visible in the function signature, but
-  the success value is still written as the direct return value. Callers either
-  stay in the checked-error world by being marked `raise`, or handle the error
-  at a boundary.
-- The benefit is less plumbing: parser layers do not need to allocate or unwrap
-  success/failure containers at every step, and tests for successful behavior
-  remain focused on the returned value.
-- Let errors travel through internal parser layers. Handle them only at a real
-  boundary, such as a CLI path that needs custom stderr text.
-- For custom errors, use `suberror`, not `type Error`, `trait Error`, or
-  `type TomlError`.
-- For rare typed-error APIs, declare a `suberror` and mark the function with
-  that exact effect, for example `raise ParseError`. A function marked
-  `raise ParseError` may only let `ParseError` escape; if it calls a broader
-  raising function, catch that error and translate it.
-- To propagate an error from a raising call, call it normally from a function
-  marked with `raise`.
-- In success tests, call raising functions directly; if they raise, the test
-  fails with the error and the message is usually enough. Do not wrap successful
-  parser tests in extra error plumbing.
-- For Flash, keep tests mostly on successful behavior and CLI probes. Do not
-  wrap raising calls in a manual success/failure container just to test or
-  branch on them.
-- For invalid-input behavior, prefer a CLI acceptance probe or a simple public
-  behavior check unless the task specifically asks for exact error values.
-- If `fn main` calls a raising function, write `fn main raise { ... }`.
-- `async fn` can raise by default. Do not write `async fn main raise`.
-- If an async helper must not raise, mark it `noraise`, for example
-  `async fn helper() -> Unit noraise { ... }`.
-- In `async fn main`, prefer calling raising functions directly and let the
-  top-level report errors. If you catch for custom user-facing text, print the
-  message and return immediately; do not encode failure as `Json::null`, `()`,
-  or another success sentinel.
-- Use `catch` only when you need custom user-facing error text. Avoid abort
-  helpers in user-facing CLI code because they can print panic/debug stacks.
-- For one-off internal failures use `fail("message")`; for clean user-facing
-  parser errors, use a small `suberror`.
-- Use `suberror` for custom errors. Pattern matching error constructors is
-  valid. When matching errors from another package, qualify constructors, for
-  example `catch { @pkga.A => ...; @pkga.B => ... }`. If another package needs
-  stable classification or display, decide whether constructor patterns are
-  part of the public API or expose helper functions.
+Errors are a checked effect on the function, not a value it returns: a parser
+returns `Json` on success and its failures travel in `raise`. Call raising
+functions directly from functions marked `raise` and handle errors only at a
+real boundary, such as a CLI path that needs its own stderr text. Use
+`fail("message")` for a one-off internal failure and a small `suberror` for
+user-facing errors; never encode failure as `Json::null`, `()`, or another
+success sentinel. `async fn` raises by default, so never write
+`async fn main raise`; mark an async helper `noraise` when it must not raise.
+In tests, call raising functions directly and let a raise fail the test. The
+verified example, compiled and run by CI:
 
-Checked-error pattern:
-
-```mbtx
-///|
-suberror ParseError {
-  InvalidInput(String)
-} derive(Debug)
-
-///|
-fn parse_count(text : String) -> Int raise ParseError {
-  if text.trim().is_empty() {
-    raise ParseError::InvalidInput("empty input")
-  }
-  let n : Int = @string.from_str(text) catch {
-    _ => raise ParseError::InvalidInput("not an integer")
-  }
-  n
-}
-
-///|
-fn main raise {
-  // parse_count raise so `fn main raise`
-  println(parse_count("123"))
-}
-
-```
+[share/examples/checked_errors.mbtx](../share/examples/checked_errors.mbtx)
 
 ## Strings, Maps, JSON, And Tests
 

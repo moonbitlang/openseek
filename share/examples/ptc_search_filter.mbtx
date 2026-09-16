@@ -1,0 +1,54 @@
+///|
+/// A search from a script, filtered before anything reaches the model: only
+/// printed output enters the context, so the script prints the selected
+/// evidence with its URL and keeps whatever affects the answer, such as a
+/// truncated result set. Arguments: <query> [<domain>]; a source is kept
+/// when its URL contains <domain>. Verified by a host-backed test with a
+/// stub search tool.
+import {
+  "bobzhang/openseek_tools@0.1.0" @tools,
+  "moonbitlang/async",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn main {
+  let args = @env.args()[1:]
+  guard args is [query, ..] else {
+    fail("usage: ptc_search_filter.mbtx <query> [<domain>]")
+  }
+  let domain = match args {
+    [_, domain, ..] => domain
+    _ => ""
+  }
+  let result = @tools.call("web_search", { "query": query })
+  if result.is_error {
+    println("search failed: \{result.content}")
+    return
+  }
+  // Search data is {sources: [{url, title?, snippet?, published_at?}],
+  // truncated: Bool}. Optional fields are absent, never empty strings, so a
+  // pattern with `..` reads what is there and falls back for the rest.
+  guard result.data
+    is Some({ "sources": Array(sources), "truncated": truncated, .. }) else {
+    println("no structured sources: \{result.content}")
+    return
+  }
+  let mut shown = 0
+  for source in sources {
+    guard source is { "url": String(url), .. } else { continue }
+    if domain != "" && !url.contains(domain) {
+      continue
+    }
+    let title = match source {
+      { "title": String(title), .. } => title
+      _ => url
+    }
+    println("- \{title} — \{url}")
+    shown += 1
+  }
+  println("\{shown} of \{sources.length()} source(s) shown for \{query}")
+  if truncated is true {
+    println("note: the search results were truncated")
+  }
+}
