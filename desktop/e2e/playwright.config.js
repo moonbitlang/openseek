@@ -18,7 +18,8 @@ export default defineConfig({
   timeout: 30_000,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
-  workers: 1,
+  // Run independent test files in parallel while preserving in-file ordering.
+  workers: 2,
   reporter: [
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
