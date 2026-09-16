@@ -27,6 +27,9 @@ test('file tree keeps compact aligned rows and continuous ancestor guides', asyn
   const production = tree.locator('[data-path="production"]');
   const staging = tree.locator('[data-path="staging"]');
   await production.click();
+  // Loading the first directory inserts a row above staging. Wait for that
+  // layout change before clicking staging, or the click can hit production/.env.
+  await expect(tree.locator('[data-path="production/.env"]')).toBeVisible();
   await staging.click();
   const deploy = tree.locator('[data-path="staging/deploy"]');
   await deploy.click();

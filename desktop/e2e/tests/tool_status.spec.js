@@ -13,7 +13,9 @@ test('Codex partial output and result-only calls retain pending status until com
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
   await expect.poll(() => app.requests.some(request => request.method === 'codex.draft.open')).toBe(true);
-  await page.locator('#task').fill('Check tool status');
+  // The model chip updates before the Codex composer replaces SeekMoon's.
+  // Wait for the destination textbox rather than filling the shared old #task.
+  await page.getByRole('textbox', { name: 'Ask Codex to inspect, edit, or explain this workspace.', exact: true }).fill('Check tool status');
   await page.getByTitle('Send', { exact: true }).click();
   await expect.poll(() => app.requests.some(request => request.method === 'codex.turn.start')).toBe(true);
   const turn = { threadId: 'codex-thread-e2e', turnId: 'codex-turn-e2e' };

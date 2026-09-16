@@ -434,6 +434,8 @@ async test "guards reach a MoonBit target through a link with another name" {
     assert_true(
       reverted.data
       is Some({ "outcome": "reverted", "reason": "introduced_errors", .. }),
+      // Distinguish guard failures from check unavailability in CI.
+      msg=reverted.content,
     )
     assert_eq(@fs.read_file(target).text(), original)
   })

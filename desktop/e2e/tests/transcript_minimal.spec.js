@@ -725,7 +725,9 @@ test('minimal transcript also collapses Codex final replies and recognizes subag
   await app.goto();
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
-  await page.locator('#task').fill('Explain the project');
+  // The model chip updates before the Codex composer replaces SeekMoon's.
+  // Wait for the destination textbox rather than filling the shared old #task.
+  await page.getByRole('textbox', { name: 'Ask Codex to inspect, edit, or explain this workspace.', exact: true }).fill('Explain the project');
   await page.getByTitle('Send', { exact: true }).click();
   const stream = page.locator('#stream');
   const process = stream.locator('.minimal-process');
@@ -957,7 +959,9 @@ test('minimal Codex activities render recorded patches without classifying forei
   await app.goto();
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
-  await page.locator('#task').fill('Explain the project');
+  // The model chip updates before the Codex composer replaces SeekMoon's.
+  // Wait for the destination textbox rather than filling the shared old #task.
+  await page.getByRole('textbox', { name: 'Ask Codex to inspect, edit, or explain this workspace.', exact: true }).fill('Explain the project');
   await page.getByTitle('Send', { exact: true }).click();
   const process = page.locator('#stream .minimal-process');
   await expect(process.locator(':scope > summary > .minimal-summary-text')).toHaveText('shell · Create subagent · Changed files · …');
