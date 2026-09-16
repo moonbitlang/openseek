@@ -29,10 +29,7 @@ async fn main {
   }
   let base = @path.Path(input).basename()
   let function_name = function_name_from_base(base)
-  let base_dir = match input.rev_find("/") {
-    Some(slash) => input[:slash].to_owned()
-    None => "."
-  }
+  let base_dir = parent_dir(input, base)
   let markdown = expand_resource_layout(
     expand_example_links(@fs.read_file(input).text(), base_dir),
     "share",
@@ -49,6 +46,25 @@ async fn main {
   let tmp = "\{output}.tmp"
   @fs.write_file(tmp, source, create_mode=CreateOrTruncate)
   @fs.rename(tmp, output, replace=true)
+}
+
+///|
+/// The directory holding `input`, derived from its platform-aware basename:
+/// what precedes the basename without trailing separators, or `.`.
+fn parent_dir(input : String, basename : StringView) -> String {
+  guard input.has_suffix(basename) else { return "." }
+  let head = input[:input.length() - basename.length()]
+  let trimmed = for view = head {
+    match view {
+      [.. rest, '/' | '\\'] => continue rest
+      _ => break view
+    }
+  }
+  if trimmed.is_empty() {
+    "."
+  } else {
+    trimmed.to_owned()
+  }
 }
 
 ///|
@@ -70,7 +86,11 @@ async fn expand_example_links(markdown : String, base_dir : String) -> String {
           "\{base_dir}/\{target}"
         }
         let text = @fs.read_file(path).text()
-        let body = if text.has_suffix("\n") { text[:text.length() - 1] } else { text[:] }
+        let body = if text.has_suffix("\n") {
+          text[:text.length() - 1]
+        } else {
+          text[:]
+        }
         out.write_string("```mbtx\n\{body}\n```")
       }
       None => out.write_string(line.to_owned())
@@ -492,6 +512,63 @@ test "example link targets are whole-line .mbtx links only" {
   assert_eq(example_link_target("see [x](ex.mbtx) inline"), None)
   assert_eq(example_link_target("[x](ex.md)"), None)
   assert_eq(example_link_target("[x](ex.mbtx) trailing"), None)
+}
+
+///|
+test "parent dir precedes the basename without trailing separators" {
+  assert_eq(
+    parent_dir("prompt/default_prompt.mbt.md", "default_prompt.mbt.md"),
+    "prompt",
+  )
+  assert_eq(parent_dir("default_prompt.mbt.md", "default_prompt.mbt.md"), ".")
+  assert_eq(parent_dir("/abs/dir//x.md", "x.md"), "/abs/dir")
+  assert_eq(parent_dir("prompt\\x.md", "x.md"), "prompt")
+  assert_eq(parent_dir("C:\\prompt\\x.md", "x.md"), "C:\\prompt")
+}
+
+///|
+#cfg(platform="windows")
+test "parent dir follows the Windows basename" {
+  let input = "prompt\\default_prompt.mbt.md"
+  assert_eq(parent_dir(input, @path.Path(input).basename()), "prompt")
+  let mixed = ".\\prompt/default_prompt.mbt.md"
+  assert_eq(parent_dir(mixed, @path.Path(mixed).basename()), ".\\prompt")
+}
+
+///|
+async test "an expanded example survives comment stripping and a missing final newline" {
+  with_tmpdir(dir => {
+    @fs.write_file(
+      "\{dir}/ex.mbtx",
+      "fn main {\n  println(\"<!-- kept: code -->\")\n}",
+    )
+    let markdown = "a<!-- dropped -->\n[x](ex.mbtx)\n"
+    let source = generated_source(
+      base="p.md",
+      function_name="p",
+      markdown=expand_example_links(markdown, dir),
+    )
+    inspect(
+      source,
+      content=(
+        #|// Generated from p.md by moon dev_build. DO NOT EDIT.
+        #|
+        #|///|
+        #|fn p() -> String {
+        #|  (
+        #|    #|a
+        #|    #|```mbtx
+        #|    #|fn main {
+        #|    #|  println("<!-- kept: code -->")
+        #|    #|}
+        #|    #|```
+        #|    #|
+        #|  )
+        #|}
+        #|
+      ),
+    )
+  })
 }
 
 ///|

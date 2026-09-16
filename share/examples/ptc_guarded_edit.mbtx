@@ -49,6 +49,11 @@ async fn main {
       }
     ) => println("applied; \{warnings.to_int()} warning(s) remain")
     Some({ "outcome": "applied", .. }) => println("applied")
+    // A revert whose restore failed (a concurrent save, an IO error) leaves
+    // the file in an unknown state: report that first, with the host's
+    // explanation, never as an ordinary revert.
+    Some({ "outcome": "reverted", "restore_failed": true, .. }) =>
+      println("reverted but NOT restored: \{result.content}")
     Some(
       {
         "outcome": "reverted",

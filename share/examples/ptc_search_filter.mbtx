@@ -17,9 +17,10 @@ async fn main {
   guard args is [query, ..] else {
     fail("usage: ptc_search_filter.mbtx <query> [<domain>]")
   }
-  let domain = match args {
-    [_, domain, ..] => domain
-    _ => ""
+  // An absent option is `None`, not an empty string.
+  let domain : String? = match args {
+    [_, domain, ..] => Some(domain)
+    _ => None
   }
   let result = @tools.call("web_search", { "query": query })
   if result.is_error {
@@ -37,7 +38,7 @@ async fn main {
   let mut shown = 0
   for source in sources {
     guard source is { "url": String(url), .. } else { continue }
-    if domain != "" && !url.contains(domain) {
+    if domain is Some(domain) && !url.contains(domain) {
       continue
     }
     let title = match source {

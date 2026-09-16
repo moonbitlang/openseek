@@ -78,6 +78,11 @@ fn ptc_description() -> String {
     #|      }
     #|    ) => println("applied; \{warnings.to_int()} warning(s) remain")
     #|    Some({ "outcome": "applied", .. }) => println("applied")
+    #|    // A revert whose restore failed (a concurrent save, an IO error) leaves
+    #|    // the file in an unknown state: report that first, with the host's
+    #|    // explanation, never as an ordinary revert.
+    #|    Some({ "outcome": "reverted", "restore_failed": true, .. }) =>
+    #|      println("reverted but NOT restored: \{result.content}")
     #|    Some(
     #|      {
     #|        "outcome": "reverted",
@@ -126,9 +131,10 @@ fn ptc_description() -> String {
     #|  guard args is [query, ..] else {
     #|    fail("usage: ptc_search_filter.mbtx <query> [<domain>]")
     #|  }
-    #|  let domain = match args {
-    #|    [_, domain, ..] => domain
-    #|    _ => ""
+    #|  // An absent option is `None`, not an empty string.
+    #|  let domain : String? = match args {
+    #|    [_, domain, ..] => Some(domain)
+    #|    _ => None
     #|  }
     #|  let result = @tools.call("web_search", { "query": query })
     #|  if result.is_error {
@@ -146,7 +152,7 @@ fn ptc_description() -> String {
     #|  let mut shown = 0
     #|  for source in sources {
     #|    guard source is { "url": String(url), .. } else { continue }
-    #|    if domain != "" && !url.contains(domain) {
+    #|    if domain is Some(domain) && !url.contains(domain) {
     #|      continue
     #|    }
     #|    let title = match source {
