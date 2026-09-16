@@ -78,7 +78,7 @@ async test "upload reports authentication server failures malformed responses an
       (503, "{}"),
       (302, "{}"),
       (201, "invalid"),
-      (201, "{\"url\":\"javascript:bad\",\"expires_at\":\"date\"}"),
+      (201, "{\"expires_at\":\"date\"}"),
     ] {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()

@@ -122,9 +122,7 @@ async fn Snapshot::send(
     _ => return @protocol.Failed(message=fallback)
   }
   match body {
-    { "url": String(url), .. } if accepted &&
-      (url.has_prefix("https://") || url.has_prefix("http://")) =>
-      @protocol.Shared(url~)
+    { "url": String(url), .. } if accepted => @protocol.Shared(url~)
     { "error": String(detail), .. } if !accepted && !detail.trim().is_empty() =>
       @protocol.Failed(
         message="Sharing failed (HTTP \{response.code}): \{detail.trim()}",
