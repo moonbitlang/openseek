@@ -154,7 +154,11 @@ is `error editing <path>: edit failed: <error>` with `outcome: error`; a
 response with no `data` at all can only come from the dispatcher, before the
 tool ran. Guarded writes and restores go to the file's resolved target,
 pinned before the baseline check, so a link retargeted during a check cannot
-redirect them.
+redirect them. Known residual: if the session is cancelled during the
+post-write check and the restore then fails (the file became unwritable),
+the cancellation carries no result, so the file may hold the rejected edit
+with only the raised failure's text to say so; the next guarded edit's
+baseline sees the tree as it is.
 
 ## Example
 

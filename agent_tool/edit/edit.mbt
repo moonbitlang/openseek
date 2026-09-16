@@ -522,7 +522,12 @@ async fn preview_replace_all(
   }
   finalize_last_site()
   guard sites.length() > 0 else {
-    return err("old_string not found\{range_detail(input)}")
+    return failure(
+      path,
+      "old_string not found\{range_detail(input)}",
+      "edit \{@agent_tool.brief_basename(path)}",
+      outcome="not_found",
+    )
   }
   let total_lines = total_line_count(content)
   let report = StringBuilder()
@@ -785,6 +790,7 @@ async fn commit_edit(
   // resolved target, so a link retargeted during a check cannot redirect
   // them, and a target that changes before the write refuses the edit.
   let target = resolved_target(path)
+  let roots_from = project_roots(check_from)
   async fn check_tree() -> @auto_check.CheckOutcome {
     let mut merged : @auto_check.CheckErrors? = None
     for spelling in check_from {
@@ -832,7 +838,9 @@ async fn commit_edit(
     }
     // Likewise the file's identity: a link retargeted meanwhile would be
     // written in one module and checked in another.
-    if resolved_target(path) != target || check_projects(path) != check_from {
+    if resolved_target(path) != target ||
+      check_projects(path) != check_from ||
+      project_roots(check_from) != roots_from {
       return not_verified(
         "the file's target or project changed while the baseline was measured; retry",
       )
@@ -1032,6 +1040,22 @@ fn merge_tallies(
     warnings: [..a.warnings, ..b.warnings],
     truncated: a.truncated || b.truncated,
   }
+}
+
+///|
+/// The canonical project directory each spelling is checked from, so a
+/// project that vanishes or is replaced under an edit (a manifest removed,
+/// discovery falling back to a parent module) is a visible change.
+async fn project_roots(spellings : Array[String]) -> Array[String] {
+  let roots = []
+  for spelling in spellings {
+    let root = match @auto_check.check_cwd(spelling) {
+      Some(dir) => resolved_target(dir)
+      None => ""
+    }
+    roots.push(root)
+  }
+  roots
 }
 
 ///|
