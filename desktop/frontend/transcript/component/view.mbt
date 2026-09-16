@@ -618,7 +618,7 @@ fn restore_retained_tail_prefix(
   } else {
     0
   }
-  prefix.to_owned() + tail[overlap:].to_owned()
+  "\{prefix}\{tail[overlap:]}"
 }
 
 ///|
