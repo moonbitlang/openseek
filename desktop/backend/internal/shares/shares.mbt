@@ -56,32 +56,17 @@ pub async fn Snapshot::publish(
   token~ : String,
   timeout_ms? : Int = 240_000,
 ) -> @protocol.SessionShareReply {
-  let mut outcome = self.attempt(server_url~, token~, timeout_ms~)
-  if outcome is Err(_) {
-    outcome = self.attempt(server_url~, token~, timeout_ms~)
-  }
-  match outcome {
-    Ok(reply) => reply
-    Err(message) => @protocol.Failed(message~)
-  }
-}
-
-///|
-async fn Snapshot::attempt(
-  self : Snapshot,
-  server_url~ : String,
-  token~ : String,
-  timeout_ms~ : Int,
-) -> Result[@protocol.SessionShareReply, String] {
-  let reply = @async.with_timeout_opt(timeout_ms, () => {
-    self.send(server_url~, token~)
-  }) catch {
+  @async.with_timeout(timeout_ms, () => self.send(server_url~, token~)) catch {
     error if @async.is_being_cancelled() => raise error
-    error => return Err("The share request failed: \{error}")
-  }
-  match reply {
-    Some(reply) => Ok(reply)
-    None => Err("The share request timed out. Please try again.")
+    _ =>
+      @async.with_timeout(timeout_ms, () => self.send(server_url~, token~)) catch {
+        error if @async.is_being_cancelled() => raise error
+        @async.TimeoutError =>
+          @protocol.Failed(
+            message="The share request timed out. Please try again.",
+          )
+        error => @protocol.Failed(message="The share request failed: \{error}")
+      }
   }
 }
 
