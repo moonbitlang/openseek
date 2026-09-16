@@ -6025,6 +6025,13 @@ fn update_device_msg(
       }
       (@cmd.none, model.replace_conversation(next))
     }
+    QueueChanged(session~, run_id~, queued~) => {
+      guard model.find_conversation(channel, session) is Some(conv) &&
+        conv.adopt_host_queue(run_id, queued) is Some(next) else {
+        return (@cmd.none, model)
+      }
+      (@cmd.none, model.replace_conversation(next))
+    }
     QueueAddRejected(session~, submission_id~, run_id~) =>
       if model.find_conversation(channel, session) is Some(conv) {
         let (next, removed) = conv.reject_steer(submission_id, Some(run_id))
@@ -7463,6 +7470,7 @@ fn update_device_msg(
       runs~,
       settled~,
       approvals~,
+      queues~,
       live~,
       frontier~,
       connection_generation~
@@ -7660,6 +7668,26 @@ fn update_device_msg(
             ..conv,
             pending_approval: None,
           })
+        }
+      }
+      // Queues last, on the run phase the snapshot settled: every open run
+      // on this channel takes the host's queue for it, and an open run the
+      // reply lists no queue for has none — whatever this page was showing
+      // was withdrawn, or promoted, while it was away. A page's own adds
+      // still awaiting their reply survive either way (`adopt_host_queue`).
+      for conv in seeded.conversations {
+        guard conv.device == channel && conv.run is Open(run_id~, ..) else {
+          continue
+        }
+        let queued = match
+          queues.search_by(queue => {
+            queue.session == conv.session_id && queue.run_id == run_id
+          }) {
+          Some(index) => queues[index].queued
+          None => []
+        }
+        if conv.adopt_host_queue(run_id, queued) is Some(adopted) {
+          seeded = seeded.replace_conversation(adopted)
         }
       }
       (@cmd.batch(commands), seeded)
@@ -12092,6 +12120,7 @@ test "reconnect recovers a Finished notification dropped behind a slow page" {
         },
       ],
       approvals=[],
+      queues=[],
       live=[],
       frontier~,
       connection_generation=bridged.dev().connection_generation,
@@ -12213,6 +12242,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
     ],
     settled=[],
     approvals=[],
+    queues=[],
     live=["old-run"],
     frontier=generation_one.run_snapshot_frontier(@interop.ChannelId::Local),
     connection_generation=generation_one.dev().connection_generation,
@@ -12226,6 +12256,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
       runs=[],
       settled=[],
       approvals=[],
+      queues=[],
       live=[],
       frontier=generation_two.run_snapshot_frontier(@interop.ChannelId::Local),
       connection_generation=generation_two.dev().connection_generation,
@@ -12274,6 +12305,7 @@ test "a settlement captured for an older Starting owner cannot close its success
         },
       ],
       approvals=[],
+      queues=[],
       live=[],
       frontier~,
       connection_generation=model.dev().connection_generation,
@@ -12321,6 +12353,7 @@ test "an older positive runs row cannot replace a newer Started" {
       ],
       settled=[],
       approvals=[],
+      queues=[],
       live=["r7"],
       frontier~,
       connection_generation=0,
@@ -12356,6 +12389,7 @@ test "an older positive runs row cannot resurrect a finished run" {
       ],
       settled=[],
       approvals=[],
+      queues=[],
       live=["r7"],
       frontier~,
       connection_generation=0,
@@ -20179,4 +20213,109 @@ test "file context inherits the conversation model and its reasoning family" {
       },
     )
   }
+}
+
+///|
+/// The host's queue announcement is authoritative for everything it has
+/// accepted, from this page or any other; the one thing it cannot know is an
+/// add of this page whose reply has not landed yet.
+test "a follow-up queue announcement replaces the queue behind the run it names" {
+  let dispatch = test_dispatch()
+  let home = running_model()
+  let local_add = home
+    .active()
+    .enqueue_steer("q-local", Some("r7"), "mine", "mine", [], FollowupQueue)
+  let model = home.replace_conversation(local_add)
+  // Another client queued q-1 and q-2; the host has not answered this page's
+  // add yet, so it is unknown to the announcement but must not vanish.
+  let (_, announced) = update_dev(
+    dispatch,
+    QueueChanged(session="desktop-test", run_id="r7", queued=[
+      { id: "q-1", content: "theirs first", },
+      { id: "q-2", content: "theirs second", },
+    ]),
+    model,
+  )
+  assert_eq(announced.active().queued_inputs.map(item => item.id), [
+    "q-1", "q-2", "q-local",
+  ])
+  // Once the host accepts the add, its next announcement places it.
+  let (_, accepted) = update_dev(
+    dispatch,
+    QueueAccepted(
+      session="desktop-test",
+      action=@protocol.QueueAdd(id="q-local", text="mine"),
+      run_id="r7",
+    ),
+    announced,
+  )
+  let (_, placed) = update_dev(
+    dispatch,
+    QueueChanged(session="desktop-test", run_id="r7", queued=[
+      { id: "q-local", content: "mine", },
+      { id: "q-2", content: "theirs second", },
+    ]),
+    accepted,
+  )
+  assert_eq(placed.active().queued_inputs.map(item => item.id), [
+    "q-local", "q-2",
+  ])
+  // An announcement about a run this conversation does not have open is
+  // about a turn this page already left or has not yet seen.
+  let (_, ignored) = update_dev(
+    dispatch,
+    QueueChanged(session="desktop-test", run_id="r8", queued=[]),
+    placed,
+  )
+  assert_eq(ignored.active().queued_inputs.map(item => item.id), [
+    "q-local", "q-2",
+  ])
+}
+
+///|
+/// A page that reloaded, or joined from another device, learns the queue
+/// behind an open run from the runs snapshot — and an open run the snapshot
+/// lists no queue for has none.
+test "a runs snapshot seeds and retires the follow-up queue of an open run" {
+  let dispatch = test_dispatch()
+  let (_, bridged) = update_dev(dispatch, BridgeReady, running_model())
+  let frontier = bridged.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, seeded) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      approvals=[],
+      queues=[
+        {
+          session: "desktop-test",
+          run_id: "r7",
+          queued: [{ id: "q-1", content: "then run the tests", }],
+        },
+      ],
+      live=["r7"],
+      frontier~,
+      connection_generation=bridged.dev().connection_generation,
+    ),
+    bridged,
+  )
+  assert_true(seeded.active().run is Open(run_id="r7", ..))
+  assert_eq(seeded.active().queued_inputs.map(item => item.id), ["q-1"])
+  // Withdrawn by another client while this page was away: the reply carries
+  // no queue for the run, and nothing else will ever take the row down.
+  let frontier = seeded.run_snapshot_frontier(@interop.ChannelId::Local)
+  let (_, retired) = update_dev(
+    dispatch,
+    RunsLoaded(
+      runs=[],
+      settled=[],
+      approvals=[],
+      queues=[],
+      live=["r7"],
+      frontier~,
+      connection_generation=seeded.dev().connection_generation,
+    ),
+    seeded,
+  )
+  assert_true(retired.active().queued_inputs.is_empty())
 }

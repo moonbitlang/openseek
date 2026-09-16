@@ -619,6 +619,16 @@ priv struct RecoveredApproval {
 }
 
 ///|
+/// The follow-up queue the host holds behind one open run, routed back to
+/// its conversation. Live host state the record never carries, so — like a
+/// standing question — a rejoining client is handed it by `agent.runs`.
+priv struct RecoveredQueue {
+  session : String
+  run_id : String
+  queued : Array[QueuedInput]
+}
+
+///|
 /// The exact per-session lifecycle state at the instant an `agent.runs`
 /// request starts. An unversioned positive row is safe to replay only while
 /// the session still has this state; a live Started or Finished received
@@ -2192,6 +2202,15 @@ priv enum DeviceMsg {
     run_id~ : String,
     message~ : String
   )
+  // The host's whole follow-up queue behind `run_id`, after it changed —
+  // by this client, another client, or the engine promoting its head. The
+  // list is authoritative for everything the host has accepted; only this
+  // page's adds still awaiting their reply are kept beside it.
+  QueueChanged(
+    session~ : String,
+    run_id~ : String,
+    queued~ : Array[QueuedInput]
+  )
   // The addressed run was already absent when Stop reached the host. This is
   // success for the user's intent, but no future Finished notification can
   // retire a stale local Cancelling phase, so the reply itself must do it.
@@ -2412,6 +2431,10 @@ priv enum DeviceMsg {
     // handed the standing question rather than watching a run that never
     // moves.
     approvals~ : Array[RecoveredApproval],
+    // The follow-up queue behind every open run that has one. A page that
+    // reloaded, or joined from another device, has no other way to learn
+    // what the host will run next.
+    queues~ : Array[RecoveredQueue],
     live~ : Array[String],
     frontier~ : Array[RunSnapshotFrontier],
     connection_generation~ : Int
@@ -3864,6 +3887,35 @@ fn Conversation::enqueue_steer(
     self.queued_inputs
   }
   { ..self, pending_steers, queued_inputs, }
+}
+
+///|
+/// Take the host's announced queue for the open run as this conversation's
+/// queue. The host list is authoritative for every add it has accepted —
+/// including, in host order, the ones this page made — so it replaces the
+/// local list wholesale; the one thing it cannot know is an add of this page
+/// still awaiting its reply, which stays at the end until that reply lands.
+/// `None` when the announcement names a run this conversation does not have
+/// open: it is about a turn this page already left or has not yet seen.
+fn Conversation::adopt_host_queue(
+  self : Conversation,
+  run_id : String,
+  queued : Array[QueuedInput],
+) -> Conversation? {
+  guard self.run is Open(run_id=open, ..) && open == run_id else { return None }
+  let queued_inputs = queued.copy()
+  for item in self.queued_inputs {
+    let unconfirmed = self.pending_steers.any(input => {
+      input.submission_id == item.id && input.behavior is FollowupQueue
+    })
+    if unconfirmed && !queued_inputs.any(known => known.id == item.id) {
+      queued_inputs.push(item)
+    }
+  }
+  let queue_edit_id = self.queue_edit_id.filter(id => {
+    queued_inputs.any(item => item.id == id)
+  })
+  Some({ ..self, queued_inputs, queue_edit_id, })
 }
 
 ///|
