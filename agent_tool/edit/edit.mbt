@@ -935,19 +935,30 @@ async fn commit_edit(
   // still holds it. A foreign save during the check (an editor writing an
   // older buffer) is left alone, and the edit's effect is reported unknown.
   if baseline is Some(_) {
-    let current = @fs.read_file(target).text() catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ""
-    }
-    if current != new_content {
-      return @agent_tool.respond(
-        "unverified: \{path} changed during the post-write check (another writer?), so the edit's effect is unknown; the file was left as it is — re-read it and retry",
+    fn unknown_effect(reason : String) -> @agent_tool.ToolAction {
+      @agent_tool.respond(
+        "unverified: \{path} \{reason}, so the edit's effect is unknown; the file was left as it is — re-read it and retry",
         is_error=true,
         brief="\{fail_brief} (unverified)",
         data=edit_data("unverified", path, lines, {
-          "reason": "the file changed during the post-write check".to_json(),
+          "reason": reason.to_json(),
           "restore_failed": false,
         }),
+      )
+    }
+
+    // A read that fails is its own outcome, never a value to compare: an
+    // empty candidate must not match a file that is gone.
+    let current = @fs.read_file(target).text() catch {
+      error if @async.is_being_cancelled() => raise error
+      error =>
+        return unknown_effect(
+          "could not be read after the post-write check (\{error})",
+        )
+    }
+    if current != new_content {
+      return unknown_effect(
+        "changed during the post-write check (another writer?)",
       )
     }
   }
