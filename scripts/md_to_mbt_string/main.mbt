@@ -130,9 +130,12 @@ async fn expand_resource_layout(markdown : String, root : String) -> String {
     for name in @fs.readdir(directory) {
       // A `_build` tree is what `moon run` leaves beside a script it was
       // pointed at (cram runs the bundled workflows that way); it is not part
-      // of the resources and must not describe them to the model.
+      // of the resources and must not describe them to the model. The
+      // G-machine tutorial chapters stay on disk but are not worth a line of
+      // the prompt.
       if !name.has_prefix(".") &&
         name != "_build" &&
+        !name.has_prefix("gmachine") &&
         @fs.kind("\{directory}/\{name}", follow_symlink=false) is Directory {
         directories.push(name)
       }
@@ -469,7 +472,7 @@ async test "output match detects unchanged generated file" {
 }
 
 ///|
-async test "resource layout is sorted, directory-only, skips build output, and refreshed on changes" {
+async test "resource layout is sorted, directory-only, skips build output and gmachine, and refreshed on changes" {
   with_tmpdir(root => {
     @fs.mkdir("\{root}/workflow")
     @fs.mkdir("\{root}/aardvark")
@@ -477,6 +480,7 @@ async test "resource layout is sorted, directory-only, skips build output, and r
     @fs.mkdir("\{root}/doc/moonbit/language", recursive=true)
     @fs.mkdir("\{root}/.hidden")
     @fs.mkdir("\{root}/workflow/_build/wasm", recursive=true)
+    @fs.mkdir("\{root}/doc/moonbit/gmachine-tutorial")
     @fs.write_file("\{root}/doc/moonbit/index.md", "docs")
     let template = "before\n{{OPENSEEK_REFERENCES_LAYOUT}}\nafter"
     inspect(
