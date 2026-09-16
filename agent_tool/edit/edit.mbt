@@ -37,6 +37,15 @@
 ///   (possibly clamped) insertion point is end of file.
 /// - `Respond(ToolOutput("rejected: the edit would introduce ...", is_error=true))`
 ///   when the parse gate refused an edit whose result does not parse.
+/// - `Respond(ToolOutput("reverted: the edit introduced ...", is_error=true))`
+///   when a post-write guard (`revert_on_errors` / `revert_on_warnings`)
+///   restored the file.
+/// - `Respond(ToolOutput("not applied: ... moon check could not verify ...", is_error=true))`
+///   when a guard was requested but the tree could not be checked.
+///
+/// Every response also carries machine-readable `data` with an `outcome`
+/// (`applied`, `reverted`, `rejected`, `unverified`, `preview`, `not_found`,
+/// `error`) for scripts that drive the tool programmatically.
 /// - `Respond(ToolOutput("error editing <path>: ...", is_error=true))` for
 ///   filesystem failures, empty/no-op edits, or missing matches.
 /// - `Respond(ToolOutput("error: edit requires ...", is_error=true))` for
@@ -65,7 +74,11 @@ pub fn definition(
       #|appending at end of file — an append cannot mismatch an anchor; reserve mid-file
       #|insertion for grouping related code. An edit that would introduce lex/parse errors
       #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
-      #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors. For
+      #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
+      #|revert_on_errors / revert_on_warnings (off by default) add a post-write guard:
+      #|moon check runs before and after the write and the file is restored if the edit
+      #|introduced a diagnostic the tree did not have — one guarded edit per diagnostic
+      #|is the unit of a mechanical warning-fix script. For
       #|multiple compiler-feedback fixes in one file, use multi_edit with explicit
       #|line-anchored edits. To change EVERY occurrence of a string, pass
       #|replace_all_preview=true: the file is not modified; instead every match site is
@@ -98,6 +111,31 @@ pub fn definition(
             #|content that does not parse (e.g. a fixture).
           ),
           "examples": [false],
+        },
+        "revert_on_errors": {
+          "type": "boolean",
+          "description": (
+            #|Post-write guard, off by default. moon check runs from the file's module
+            #|before and after the write; if the edit INTRODUCED an error the tree did not
+            #|have — judged by diagnostic identity (path, code, message), so line shifts
+            #|never count — the file is restored and the call returns is_error with the
+            #|introduced sites. A baseline that already has errors makes the comparison
+            #|approximate: moon skips the dependents of a failing package, so a fix that
+            #|lets the build reach further can read as introducing errors; the result
+            #|says when that caveat applies. If moon check cannot run, a guarded edit is
+            #|not written at all.
+          ),
+          "examples": [true],
+        },
+        "revert_on_warnings": {
+          "type": "boolean",
+          "description": (
+            #|Post-write guard, off by default: same mechanism as revert_on_errors, for
+            #|warnings — the edit is restored if it introduced a warning the tree did not
+            #|have. One guarded edit per diagnostic is the unit of a mechanical warning-fix
+            #|script; read the machine-readable outcome from the result's data.
+          ),
+          "examples": [true],
         },
         "replace_all_preview": {
           "type": "boolean",
@@ -171,11 +209,7 @@ async fn edit_file(
   // `→ edit · edit <file> 🚩` on the folded call line.
   let fail_brief = "edit \{@agent_tool.brief_basename(path)}"
   fn err(message : String) -> @agent_tool.ToolAction {
-    @agent_tool.respond(
-      "error editing \{path}: \{message}",
-      is_error=true,
-      brief=fail_brief,
-    )
+    failure(path, message, fail_brief, outcome="error")
   }
 
   if input.replace_all {
@@ -235,7 +269,8 @@ async fn edit_file(
       path,
       original_content=content,
       new_content~,
-      revert_on_parse_errors=input.revert_on_parse_errors,
+      lines=(first_line, last_line),
+      input~,
       fail_brief~,
       summary~,
       ok_brief~,
@@ -254,10 +289,13 @@ async fn edit_file(
       match @matching.find_quote_normalized_match(region.body, norm_old) {
         Some(start) => (start, true)
         None =>
-          return err(
+          return failure(
+            path,
             "old_string not found" +
             range_detail(input) +
             old_string_context(content, input.start_line, input.end_line),
+            fail_brief,
+            outcome="not_found",
           )
       }
   }
@@ -279,12 +317,31 @@ async fn edit_file(
     path,
     original_content=content,
     new_content~,
-    revert_on_parse_errors=input.revert_on_parse_errors,
+    lines=(match_line, match_line + inserted_line_span(input.new_string) - 1),
+    input~,
     fail_brief~,
     summary~,
     ok_brief="edited \{@agent_tool.brief_basename(path)}:\{match_line} (1×)",
     file_state~,
     write_scope?,
+  )
+}
+
+///|
+/// A failed edit: the message under the `error editing <path>:` prefix, the
+/// folded-line brief, and `data.outcome` naming the failure class for a
+/// script.
+fn failure(
+  path : String,
+  message : String,
+  brief : String,
+  outcome~ : String,
+) -> @agent_tool.ToolAction {
+  @agent_tool.respond(
+    "error editing \{path}: \{message}",
+    is_error=true,
+    brief~,
+    data={ "outcome": outcome.to_json(), "path": path.to_json() },
   )
 }
 
@@ -520,6 +577,12 @@ async fn preview_replace_all(
   @agent_tool.respond(
     report.to_string(),
     brief="edit preview \{@agent_tool.brief_basename(path)} (\{sites.length()} site(s))",
+    data={
+      "outcome": "preview",
+      "path": path.to_json(),
+      "matches": total_matches.to_json(),
+      "sites": sites.length().to_json(),
+    },
   )
 }
 
@@ -644,12 +707,19 @@ fn total_line_count(content : String) -> Int {
 /// and parse-gate guards against the candidate content, then write it and
 /// report success — or return the matching error `ToolAction`. `summary` and
 /// `ok_brief` describe the specific edit that was made; `fail_brief` folds
-/// every failure onto the same `→ edit · edit <file> 🚩` viz line.
+/// every failure onto the same `→ edit · edit <file> 🚩` viz line. `lines` is
+/// the inclusive line range the new content occupies, for the result's data.
+///
+/// With `revert_on_errors` / `revert_on_warnings` the tree is checked before
+/// the write (the baseline) and after it, and the file is restored when the
+/// edit introduced a diagnostic the baseline did not have — see
+/// `guarded_outcome`. Without them the post-write check only reports.
 async fn commit_edit(
   path : String,
   original_content~ : String,
   new_content~ : String,
-  revert_on_parse_errors~ : Bool,
+  lines~ : (Int, Int),
+  input~ : @decode.EditInput,
   fail_brief~ : String,
   summary~ : String,
   ok_brief~ : String,
@@ -657,17 +727,13 @@ async fn commit_edit(
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   if @manifest_error.write_error(path, new_content) is Some(message) {
-    return @agent_tool.respond(
-      "error editing \{path}: \{message}",
-      is_error=true,
-      brief=fail_brief,
-    )
+    return failure(path, message, fail_brief, outcome="error")
   }
   if parse_gate_rejection(
       path,
       original_content~,
       new_content~,
-      revert_on_parse_errors~,
+      revert_on_parse_errors=input.revert_on_parse_errors,
     )
     is Some(rejection) {
     return rejection
@@ -676,24 +742,287 @@ async fn commit_edit(
   // filesystem state that awaits ago may have changed (a path component
   // re-linked underneath the tool).
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
-    return @agent_tool.respond(
-      "error editing \{path}: write blocked: \{reason}",
-      is_error=true,
-      brief=fail_brief,
+    return failure(
+      path,
+      "write blocked: \{reason}",
+      fail_brief,
+      outcome="error",
     )
   }
+  let guards : Guards = {
+    errors: input.revert_on_errors,
+    warnings: input.revert_on_warnings,
+  }
+  // The guards' baseline is measured before the write, so nothing has to be
+  // restored just to know what the tree looked like. A guard on a tree that
+  // cannot be checked is a promise the tool cannot keep, so the edit is not
+  // written at all rather than written unverified.
+  fn not_verified(reason : String) -> @agent_tool.ToolAction {
+    @agent_tool.respond(
+      "not applied: revert_on_errors/revert_on_warnings was requested, but moon check could not verify the tree (\{reason}); \{path} was NOT modified",
+      is_error=true,
+      brief=fail_brief,
+      data=edit_data("unverified", path, lines, { "reason": reason.to_json() }),
+    )
+  }
+
+  let baseline = if guards.errors || guards.warnings {
+    match @auto_check.check(path) {
+      Checked(tally) => Some(tally)
+      NotApplicable => None
+      Unavailable(reason) => return not_verified(reason)
+      Failed(code, _) => return not_verified(exited_without_diagnostics(code))
+    }
+  } else {
+    None
+  }
   @fs.write_file(path, new_content, create_mode=CreateOrTruncate)
-  // A targeted edit preserves most of the file, so provenance depends on
-  // whether the content it read (original_content) is still what the agent last
-  // wrote: record_edited keeps a stronger `Created` only then, and otherwise
-  // downgrades (the file was rebound to different content before this edit).
-  file_state.record_edited(
+  let after = @auto_check.check(path)
+  fn keep(
+    check_line : String?,
+    extra : Map[String, Json],
+  ) -> @agent_tool.ToolAction {
+    // A targeted edit preserves most of the file, so provenance depends on
+    // whether the content it read (original_content) is still what the agent
+    // last wrote: record_edited keeps a stronger `Created` only then, and
+    // otherwise downgrades (the file was rebound before this edit).
+    file_state.record_edited(
+      path,
+      @agent_tool.content_digest(original_content),
+      @agent_tool.content_digest(new_content),
+    )
+    let content = match check_line {
+      Some(line) => "\{summary}\n\{line}"
+      None => summary
+    }
+    @agent_tool.respond(
+      content,
+      brief=ok_brief,
+      data=edit_data("applied", path, lines, extra),
+    )
+  }
+
+  async fn unverified_after(reason : String) -> @agent_tool.ToolAction {
+    revert_edit(
+      path,
+      original_content~,
+      lines~,
+      fail_brief~,
+      { "reason": "unverified", "check": Json::null() },
+      head="moon check could not verify the tree after the edit (\{reason})",
+      detail="",
+    )
+  }
+
+  match (after, baseline) {
+    (NotApplicable, _) => keep(None, Map([]))
+    // An unguarded edit keeps moon check's fail-open behavior: the write
+    // stands, and the line says the check did not.
+    (Unavailable(reason), None) => keep(Some("moon check: \{reason}"), Map([]))
+    (Failed(code, _), None) =>
+      keep(Some("moon check: \{exited_without_diagnostics(code)}"), Map([]))
+    (Unavailable(reason), Some(_)) => unverified_after(reason)
+    (Failed(code, _), Some(_)) =>
+      unverified_after(exited_without_diagnostics(code))
+    (Checked(tally), None) =>
+      keep(Some(check_report(tally)), { "check": tally.summary_json() })
+    (Checked(tally), Some(before)) =>
+      guarded_outcome(
+        path,
+        original_content~,
+        lines~,
+        fail_brief~,
+        guards,
+        before,
+        tally,
+        keep,
+      )
+  }
+}
+
+///|
+fn exited_without_diagnostics(code : Int) -> String {
+  "exited \{code} without diagnostics"
+}
+
+///|
+/// Which post-write guards an edit asked for.
+priv struct Guards {
+  errors : Bool
+  warnings : Bool
+}
+
+///|
+/// How many introduced sites a revert carries in text and data.
+const IntroducedDisplayLimit : Int = 20
+
+///|
+/// Decide a guarded edit from its two checks. "Introduced" is judged by
+/// diagnostic identity when both captures are complete, and by count when
+/// either overflowed (the lists are then windows, and a site can enter one
+/// without being new). A baseline with errors makes either reading
+/// approximate — moon skips the dependents of a failing package, so a fix
+/// that lets the build reach further surfaces diagnostics that were always
+/// there — and the result says so rather than pretending otherwise.
+async fn guarded_outcome(
+  path : String,
+  original_content~ : String,
+  lines~ : (Int, Int),
+  fail_brief~ : String,
+  guards : Guards,
+  before : @auto_check.CheckErrors,
+  after : @auto_check.CheckErrors,
+  keep : (String?, Map[String, Json]) -> @agent_tool.ToolAction,
+) -> @agent_tool.ToolAction {
+  let delta = @auto_check.introduced(before, after)
+  let errors_hit = guards.errors &&
+    (if delta.complete {
+      !delta.errors.is_empty()
+    } else {
+      after.error_count > before.error_count
+    })
+  let warnings_hit = guards.warnings &&
+    (if delta.complete {
+      !delta.warnings.is_empty()
+    } else {
+      after.warning_count > before.warning_count
+    })
+  let reach_caveat = before.error_count > 0
+  let common : Map[String, Json] = {
+    "check": after.summary_json(),
+    "baseline": {
+      "error_count": before.error_count.to_json(),
+      "warning_count": before.warning_count.to_json(),
+    },
+    "reach_caveat": reach_caveat.to_json(),
+  }
+  if !errors_hit && !warnings_hit {
+    return keep(Some(check_report(after)), common)
+  }
+  fn sites(all : Array[@auto_check.ErrorSite]) -> Array[@auto_check.ErrorSite] {
+    [
+      for site in all[:all.length().min(IntroducedDisplayLimit)] => site
+    ]
+  }
+  let shown_errors = if errors_hit { sites(delta.errors) } else { [] }
+  let shown_warnings = if warnings_hit { sites(delta.warnings) } else { [] }
+  let what = match (errors_hit, warnings_hit) {
+    (true, true) =>
+      "\{delta.errors.length()} error(s) and \{delta.warnings.length()} warning(s)"
+    (true, false) => "\{delta.errors.length()} error(s)"
+    (false, _) => "\{delta.warnings.length()} warning(s)"
+  }
+  let what = if delta.complete {
+    what
+  } else {
+    // By count: the capture overflowed, so the identity lists are partial.
+    "more diagnostics than before (\{before.error_count}→\{after.error_count} error(s), \{before.warning_count}→\{after.warning_count} warning(s); the capture was truncated, so sites below may be incomplete)"
+  }
+  let listed = [
+    ..[
+      for site in shown_errors => "error: \{site.line()}"
+    ],
+    ..[
+      for site in shown_warnings => "warning: \{site.line()}"
+    ],
+  ]
+  let detail = if listed.is_empty() { "" } else { "\n\{listed.join("\n")}" }
+  let caveat = if reach_caveat {
+    "\nnote: the baseline already had \{before.error_count} error(s); moon skips the dependents of a failing package, so a fix that lets the build reach further can surface diagnostics that were always there. If this edit fixed an error, re-issue it without the guard and read the check line."
+  } else {
+    ""
+  }
+  common["reason"] = if errors_hit {
+    "introduced_errors"
+  } else {
+    "introduced_warnings"
+  }
+  common["introduced"] = {
+    "errors": Json::array([ for site in shown_errors => site.to_json() ]),
+    "warnings": Json::array([ for site in shown_warnings => site.to_json() ]),
+    "complete": delta.complete.to_json(),
+  }
+  revert_edit(
     path,
-    @agent_tool.content_digest(original_content),
-    @agent_tool.content_digest(new_content),
+    original_content~,
+    lines~,
+    fail_brief~,
+    common,
+    head="the edit introduced \{what} the tree did not have",
+    detail="\{detail}\{caveat}",
   )
-  let response = @auto_check.append_summary(path, summary)
-  @agent_tool.respond(response, brief=ok_brief)
+}
+
+///|
+/// Restore the pre-edit content and report the revert. A failed restore is
+/// the worst outcome of all — the file holds the rejected content — so it is
+/// stated first, in text and in `data.restore_failed`.
+async fn revert_edit(
+  path : String,
+  original_content~ : String,
+  lines~ : (Int, Int),
+  fail_brief~ : String,
+  extra : Map[String, Json],
+  head~ : String,
+  detail~ : String,
+) -> @agent_tool.ToolAction {
+  let mut restore_failure : String? = None
+  @fs.write_file(path, original_content, create_mode=CreateOrTruncate) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => restore_failure = Some("\{error}")
+  }
+  let content = match restore_failure {
+    None =>
+      "reverted: \{head}, so \{path} was restored to its pre-edit content.\{detail}"
+    Some(error) =>
+      "reverted: \{head}, but \{path} could NOT be restored (\{error}) — the file still holds the rejected edit; inspect it manually.\{detail}"
+  }
+  extra["restore_failed"] = (restore_failure is Some(_)).to_json()
+  @agent_tool.respond(
+    content,
+    is_error=true,
+    brief="\{fail_brief} (reverted)",
+    data=edit_data("reverted", path, lines, extra),
+  )
+}
+
+///|
+/// The result's machine-readable `data`: the outcome, the file, the
+/// inclusive line range the edit touched, and whatever the outcome adds.
+fn edit_data(
+  outcome : String,
+  path : String,
+  lines : (Int, Int),
+  extra : Map[String, Json],
+) -> Json {
+  let (start, end) = lines
+  let fields : Map[String, Json] = {
+    "outcome": outcome.to_json(),
+    "path": path.to_json(),
+    "lines": { "start": start.to_json(), "end": end.to_json() },
+  }
+  for key, value in extra {
+    fields[key] = value
+  }
+  Json::object(fields)
+}
+
+///|
+/// The check line under a kept edit: the counts, then the first error sites
+/// or — on a clean tree — the first warning, so the model still sees one
+/// concrete diagnostic without a second check.
+fn check_report(tally : @auto_check.CheckErrors) -> String {
+  let bound = if tally.truncated { "≥" } else { "" }
+  if tally.error_count == 0 {
+    let head = "moon check: ok — 0 errors, \{bound}\{tally.warning_count} warning(s)"
+    match tally.warnings {
+      [first, ..] => "\{head}\nfirst warning: \{first.line()}"
+      [] => head
+    }
+  } else {
+    let head = "moon check: \{bound}\{tally.error_count} error(s), \{bound}\{tally.warning_count} warning(s)"
+    "\{head}\n\{tally.first_errors().join("\n")}"
+  }
 }
 
 ///|
@@ -767,11 +1096,27 @@ async fn parse_gate_rejection(
       continue
     }
     let bound = if gate.truncated { "≥" } else { "" }
+    let shown = gate.errors.length().min(IntroducedDisplayLimit)
     return Some(
       @agent_tool.respond(
         edit_reject_report(path, new_content, gate, introduced~, before_count~),
         is_error=true,
         brief="edit rejected (\{bound}\{introduced} parse error(s))",
+        data={
+          "outcome": "rejected",
+          "path": path.to_json(),
+          "introduced": introduced.to_json(),
+          "parse_errors": Json::array(
+            [
+              for error in gate.errors[:shown] => {
+                {
+                  "loc": error.loc.to_json(),
+                  "message": error.message.to_json(),
+                }
+              }
+            ],
+          ),
+        },
       ),
     )
   }

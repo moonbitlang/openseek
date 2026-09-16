@@ -17,6 +17,11 @@ pub struct EditInput {
   start_line : Int
   end_line : Int?
   revert_on_parse_errors : Bool
+  /// Post-write guards (default false): after the write, `moon check` runs and
+  /// the edit is restored if it introduced an error / a warning the tree did
+  /// not have before.
+  revert_on_errors : Bool
+  revert_on_warnings : Bool
 } derive(Debug)
 
 ///|
@@ -47,6 +52,8 @@ fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
   let revert_on_parse_errors = optional_bool(
     fields, "revert_on_parse_errors", true,
   )
+  let revert_on_errors = optional_bool(fields, "revert_on_errors", false)
+  let revert_on_warnings = optional_bool(fields, "revert_on_warnings", false)
   if end_line is Some(end) && end < start_line {
     fail(
       "arguments.end_line to be greater than or equal to arguments.start_line",
@@ -61,6 +68,8 @@ fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
     start_line,
     end_line,
     revert_on_parse_errors,
+    revert_on_errors,
+    revert_on_warnings,
   }
 }
 
