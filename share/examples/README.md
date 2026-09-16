@@ -16,6 +16,12 @@ teach something stale.
 
 - `checked_errors.mbtx`: checked errors as an effect, `suberror`, translation
   at a boundary, `fn main raise`.
+- `syntax_basics.mbtx`: bindings, negation, `Map([])`, match arms, lambdas.
+- `strings_and_views.mbtx`: interpolation, multi-line literals, code units,
+  clamping views, shortlex ordering, in-place sort, map lookup, JSON
+  patterns.
+- `cli_count_input.mbtx`: an `argparse` CLI reading a file or stdin through
+  async IO.
 - `ptc_guarded_edit.mbtx`: one guarded `edit` from a script and reading
   `result.data`.
 - `ptc_search_filter.mbtx`: a `web_search` filtered before it reaches the

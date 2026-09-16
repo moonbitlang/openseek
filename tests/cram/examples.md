@@ -14,3 +14,20 @@ moon cram test tests/cram/examples.md --shell bash
 $ moonx "$TESTDIR/../../share/examples/checked_errors.mbtx"
 checked errors: ok
 ```
+
+```mooncram
+$ moonx "$TESTDIR/../../share/examples/syntax_basics.mbtx"
+syntax: ok
+```
+
+```mooncram
+$ moonx "$TESTDIR/../../share/examples/strings_and_views.mbtx"
+strings and views: ok
+```
+
+The CLI example counts what it reads; here stdin is six bytes:
+
+```mooncram
+$ printf 'hello\n' | moonx "$TESTDIR/../../share/examples/cli_count_input.mbtx" --stdin
+6
+```

@@ -2,10 +2,6 @@ import {
   "bobzhang/openseek/deepseek",
 }
 
-import {
-  "moonbitlang/core/string",
-} for "test"
-
 dev_build(
   rule: "md_to_mbt_string",
   input: "default_prompt.mbt.md",

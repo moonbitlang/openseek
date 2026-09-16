@@ -17,7 +17,13 @@ but do not track directory-only changes under `share/`.
 ## Prompt Sources
 
 - `default_prompt.mbt.md`: the built-in prompt used by every supported
-  DeepSeek, Kimi, and GLM model name.
+  DeepSeek, Kimi, and GLM model name. It has two parts: Part 1 is how the
+  agent works on any task (reading, running commands, the tool protocol,
+  delegation, shipping) and Part 2 is MoonBit (the compiler-driven loop,
+  project layout, and language rules). Language material is carried by
+  verified examples under `share/examples/`: a whole-line markdown link to a
+  `.mbtx` file is expanded into a fenced block by `md_to_mbt_string`, so the
+  prompt shows code that CI type-checks and runs.
 
 ## API Shape
 

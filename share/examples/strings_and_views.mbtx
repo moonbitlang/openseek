@@ -1,0 +1,63 @@
+///|
+/// Strings, views, collections, and JSON values as the compiler accepts them
+/// today: this file is verified by CI (type-checked under deny-warn and run).
+import {
+  "moonbitlang/core/string",
+}
+
+///|
+fn main raise {
+  // Interpolation is `\{expr}` and takes any `Show` value; `"n: " + n` needs
+  // a `String` on both sides, so with an `Int` it is a type error.
+  let n = 3
+  assert_eq("n: \{n}", "n: 3")
+  // Multi-line literals: `#|` lines keep text literally, `$|` lines interpolate.
+  let raw =
+    #|first line
+    #|second line
+  let rendered =
+    $|count: \{n}
+    $|lines: \{raw.split("\n").count()}
+  assert_eq(raw, "first line\nsecond line")
+  assert_eq(rendered, "count: 3\nlines: 2")
+  // `re"..."` is a regex literal; classes are POSIX-style, `\d` is deprecated.
+  assert_true(rendered =~ re"^count: [[:digit:]]+")
+  // `s[i]` is a UTF-16 code unit, not a `Char`; a char literal adapts to it.
+  let s = "name=value"
+  assert_true(s[4] == '=')
+  // `s[a:b]` is a zero-copy `StringView` and offsets clamp, so truncation
+  // needs no length guard. Pass views to string APIs; `.to_owned()` only
+  // where an owned `String` is stored or required.
+  let key : StringView = s[:4]
+  guard s.split_once("=") is Some((prefix, value)) else { fail("missing =") }
+  assert_eq(prefix, key)
+  assert_eq(value.to_owned(), "value")
+  assert_eq(s[:400].to_owned(), s)
+  // `split` yields an iterator: loop over it, or `collect()` for an array.
+  assert_eq(s.split("=").collect(), ["name", "value"])
+  // Typed parsing raises on bad input.
+  assert_eq(@string.parse_int("42"), 42)
+  // `String` orders SHORTLEX (length first, then code units), so the default
+  // sort is deterministic but not dictionary order.
+  let names = ["port", "debug"]
+  names.sort() // in place, returns Unit: `names.sort()[0]` does not compile
+  assert_eq(names, ["port", "debug"])
+  // The cascade `..sort()` runs the call and yields the array; `rev()`
+  // returns a new array (`rev_in_place` mutates; there is no `reverse`).
+  assert_eq([3, 1, 2]..sort(), [1, 2, 3])
+  assert_eq([1, 2].rev(), [2, 1])
+  // `m[k]` panics on a missing key; `m.get(k)` returns `T?`.
+  let counts = { "a": 1 }
+  assert_eq(counts.get("b"), None)
+  assert_eq(counts["a"], 1)
+  // JSON literals are `Json`; read them with patterns, where numbers are
+  // `Number(d, ..)` doubles, and print them with `stringify()`.
+  let json : Json = { "n": 1, "tags": ["x"] }
+  guard json is { "n": Number(one, ..), "tags": [String(tag), ..], .. } else {
+    fail("unexpected shape")
+  }
+  assert_eq(one.to_int(), 1)
+  assert_eq(tag, "x")
+  assert_eq(json.stringify(), "{\"n\":1,\"tags\":[\"x\"]}")
+  println("strings and views: ok")
+}

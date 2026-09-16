@@ -1,0 +1,61 @@
+///|
+/// A CLI in a script: `argparse` declares the options, the matches become a
+/// small config record, and IO goes through `moonbitlang/async/fs` and
+/// `stdio`, never C FFI. Arguments: [--stdin] [<input>]. Verified by CI
+/// (type-checked under deny-warn and run under cram with stdin).
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/argparse",
+}
+
+///|
+struct Config {
+  input : String
+  stdin : Bool
+}
+
+///|
+/// Reading a path or stdin is async IO, so `main` is `async fn main`.
+async fn main {
+  let config = @argparse.parse(
+      Command(
+        "count-input",
+        about="Print the length of a file or stdin.",
+        flags=[
+          // `long` omits the dashes: `long="stdin"`, not `long="--stdin"`.
+          FlagArg("stdin", long="stdin", about="Read stdin instead of a file."),
+        ],
+        positionals=[
+          PositionArg("input", default_values=["-"], about="Input file path."),
+        ],
+      ),
+    )
+    |> config_from_matches
+  let input = if config.stdin {
+    @stdio.stdin.read_all().text()
+  } else {
+    @fs.read_file(config.input).text()
+  }
+  println(input.length())
+}
+
+///|
+/// Convert `Matches` into typed values once, with validation next to it,
+/// before doing real work.
+fn config_from_matches(matches : @argparse.Matches) -> Config raise {
+  match matches {
+    {
+      values: { "input"? : Some([input, ..]), .. },
+      flags: { "stdin"? : Some(stdin), .. },
+      ..
+    } => { input, stdin, }
+    {
+      values: { "input"? : Some([input, ..]), .. },
+      flags: { "stdin"? : None, .. },
+      ..
+    } => { input, stdin: false, }
+    _ => fail("missing parsed argument: input")
+  }
+}

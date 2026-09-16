@@ -1,0 +1,59 @@
+///|
+/// Syntax that differs from other languages: bindings, negation, empty
+/// values, match arms, and lambdas. This file is verified by CI
+/// (type-checked under deny-warn and run), so what it shows is what the
+/// compiler accepts today.
+
+///|
+/// Parameters and `self` are never `mut`: a function that needs a changed
+/// value rebinds a local with `let mut`.
+fn clamp(x : Int, limit : Int) -> Int {
+  let mut value = x
+  if value > limit {
+    value = limit
+  }
+  value
+}
+
+///|
+fn main raise {
+  // A mutable local is `let mut`; there is no `var`. Mutable maps and arrays
+  // are updated in place without `mut`.
+  let mut total = 0
+  for n in [1, 2, 3] {
+    total += n
+  }
+  assert_eq(total, 6)
+  assert_eq(clamp(total, 5), 5)
+  // Negation is the `!` prefix; `Bool` has no `not` method.
+  let pending = false
+  assert_true(!pending)
+  // A bare `{}` is ambiguous (empty map, block, struct, or JSON object) and
+  // an error under deny-warn: an empty map is `Map([])`, and the no-op
+  // expression is `()`.
+  let empty : Map[String, Int] = Map([])
+  assert_eq(empty.length(), 0)
+  if pending {
+    ()
+  }
+  // Match arms are separated by newlines (or `;`), never by `|`, which joins
+  // alternatives inside one pattern.
+  let label = match total {
+    0 => "none"
+    1 | 2 => "few"
+    _ => "many"
+  }
+  assert_eq(label, "many")
+  // Lambdas are arrows: `x => expr` or `(a, b) => { ... }`, not `fn(x) { ... }`.
+  // A lambda that must be async is spelled `async fn(x) { ... }`.
+  let words = ["moon", "bit", "shell"]
+  assert_eq(words.map(w => w.length()), [4, 3, 5])
+  let pairs = words.map(w => (w, w.length()))
+  pairs.sort_by((a, b) => a.1.compare(b.1))
+  assert_eq(pairs[0], ("bit", 3))
+  // Keywords (`test`, `type`, `method`, `ref`, ...) cannot name a binding:
+  // `let test = ...` is a parse error, so write `test_count`.
+  let test_count = pairs.length()
+  assert_eq(test_count, 3)
+  println("syntax: ok")
+}
