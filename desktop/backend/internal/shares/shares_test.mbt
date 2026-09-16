@@ -172,21 +172,31 @@ async test "upload preserves server error details and falls back for invalid err
 
 ///|
 test "upload limits count UTF-8 bytes and multipart overhead" {
-  let combined = Ok(
+  try
     @shares.Snapshot(
       title="Test",
       html="x".repeat(11 * 1024 * 1024),
       json="x".repeat(10 * 1024 * 1024),
-    ),
-  ) catch {
-    error => Err(error)
+    )
+  catch {
+    @shares.Oversized => ()
+    error => raise error
+  } noraise {
+    _ => fail("files that only together exceed the limit must be refused")
   }
-  assert_true(combined is Err(_))
-  for (title, html) in [("  ", "html"), ("Test", "x".repeat(20 * 1024 * 1024))] {
-    let result = Ok(@shares.Snapshot(title~, html~, json="{}")) catch {
-      e => Err(e)
-    }
-    assert_true(result is Err(_))
+  try
+    @shares.Snapshot(title="Test", html="x".repeat(20 * 1024 * 1024), json="{}")
+  catch {
+    @shares.Oversized => ()
+    error => raise error
+  } noraise {
+    _ => fail("multipart framing must count toward the limit")
+  }
+  try @shares.Snapshot(title="  ", html="html", json="{}") catch {
+    @shares.EmptyTitle => ()
+    error => raise error
+  } noraise {
+    _ => fail("a blank title must be refused")
   }
 }
 

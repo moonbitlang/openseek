@@ -9,9 +9,29 @@ struct Snapshot {
 }
 
 ///|
+/// Why a conversation cannot become a share request at all; no upload starts.
 pub(all) suberror ShareError {
-  ShareError(String)
+  EmptyTitle
+  EntropyUnavailable
+  Oversized
 }
+
+///|
+/// The text the export dialog shows for each refusal.
+pub impl Show for ShareError with fn output(self, logger) {
+  logger.write_string(
+    match self {
+      EmptyTitle => "The conversation title must not be empty."
+      EntropyUnavailable =>
+        "Could not create a secure share request. Please try again."
+      Oversized =>
+        "This export exceeds the 20 MiB share limit. Use Download instead."
+    },
+  )
+}
+
+///|
+pub extend ShareError with Show::{to_string, output}
 
 ///|
 /// All fields are UTF-8 multipart bodies, never interpolated into headers.
@@ -26,22 +46,12 @@ pub fn Snapshot::Snapshot(
   // UTF-8 bytes, so 341 units can never exceed the limit; clamped_view keeps
   // surrogate pairs whole. The HTML and JSON retain the complete records.
   let title = title.trim().clamped_view(end=1024 / 3).to_owned()
-  guard !title.is_empty() else {
-    raise ShareError("The conversation title must not be empty.")
-  }
-  guard @entropy.random_hex(32) is Some(key) else {
-    raise ShareError(
-      "Could not create a secure share request. Please try again.",
-    )
-  }
+  guard !title.is_empty() else { raise EmptyTitle }
+  guard @entropy.random_hex(32) is Some(key) else { raise EntropyUnavailable }
   let body = @utf8.encode(
     "--\{key}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\n\{title}\r\n--\{key}\r\nContent-Disposition: form-data; name=\"html\"; filename=\"conversation.html\"\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\{html}\r\n--\{key}\r\nContent-Disposition: form-data; name=\"json\"; filename=\"conversation.json\"\r\nContent-Type: application/json; charset=utf-8\r\n\r\n\{json}\r\n--\{key}--\r\n",
   )
-  guard body.length() <= 20 * 1024 * 1024 else {
-    raise ShareError(
-      "This export exceeds the 20 MiB share limit. Use Download instead.",
-    )
-  }
+  guard body.length() <= 20 * 1024 * 1024 else { raise Oversized }
   { key, body, }
 }
 
@@ -96,28 +106,29 @@ async fn Snapshot::send(
   if response.code == 401 {
     return @protocol.SignInRequired
   }
-  let body : Json? = Some(@json.parse(@utf8.decode(buffer.to_bytes()))) catch {
-    _ => None
+  let accepted = response.code is (200 | 201)
+  // Shown when the body carries no usable JSON. The API answers every
+  // rejection with `{ "error": message }`; only a proxy or a deployment
+  // without share routes answers without one. Never display an entire
+  // HTML/proxy response as an error.
+  let fallback = if accepted {
+    "The share server did not return a valid share link."
+  } else if response.code == 404 {
+    "The signed-in server does not provide sharing at \{server_url}/v1/shares (HTTP 404). Sign in to a server with sharing enabled."
+  } else {
+    "Sharing failed (HTTP \{response.code})."
   }
-  guard response.code is (200 | 201) else {
-    // The API answers every rejection with `{ "error": message }`; only a
-    // proxy or a deployment without share routes answers without one. Never
-    // display an entire HTML/proxy response as an error.
-    let message = match body {
-      Some({ "error": String(detail), .. }) if !detail.trim().is_empty() =>
-        "Sharing failed (HTTP \{response.code}): \{detail.trim()}"
-      _ if response.code == 404 =>
-        "The signed-in server does not provide sharing at \{server_url}/v1/shares (HTTP 404). Sign in to a server with sharing enabled."
-      _ => "Sharing failed (HTTP \{response.code})."
-    }
-    return @protocol.Failed(message~)
+  let body = @json.parse(@utf8.decode(buffer.to_bytes())) catch {
+    _ => return @protocol.Failed(message=fallback)
   }
   match body {
-    Some({ "url": String(url), .. }) if url.has_prefix("https://") ||
-      url.has_prefix("http://") => @protocol.Shared(url~)
-    _ =>
+    { "url": String(url), .. } if accepted &&
+      (url.has_prefix("https://") || url.has_prefix("http://")) =>
+      @protocol.Shared(url~)
+    { "error": String(detail), .. } if !accepted && !detail.trim().is_empty() =>
       @protocol.Failed(
-        message="The share server did not return a valid share link.",
+        message="Sharing failed (HTTP \{response.code}): \{detail.trim()}",
       )
+    _ => @protocol.Failed(message=fallback)
   }
 }

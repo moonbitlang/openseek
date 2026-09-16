@@ -9,8 +9,13 @@ import {
 
 // Errors
 pub(all) suberror ShareError {
-  ShareError(String)
+  EmptyTitle
+  EntropyUnavailable
+  Oversized
 }
+pub fn ShareError::output(Self, &Logger) -> Unit
+pub fn ShareError::to_string(Self) -> String
+pub impl Show for ShareError
 
 // Types and methods
 type Snapshot

@@ -18,11 +18,10 @@ test "share reply requires tagged and typed outcomes" {
       { "status": "failed", "message": 1 },
       { "status": "uploading" },
     ] {
-    let decoded : Result[@protocol.SessionShareReply, Error] = Ok(
-      @json.from_json(invalid),
-    ) catch {
-      e => Err(e)
+    try (@json.from_json(invalid) : @protocol.SessionShareReply) catch {
+      JsonDecodeError(_) => ()
+    } noraise {
+      _ => fail("\{invalid.stringify()} must not decode")
     }
-    assert_true(decoded is Err(_))
   }
 }

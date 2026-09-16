@@ -1,10 +1,12 @@
 ///|
 async test "upload timeouts are actionable and external cancellation propagates" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
-  defer server.close()
   let snapshot = Snapshot(title="Test", html="<html/>", json="{}")
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, () => {
+      // The accept loop owns the listener: closing it here, when the group
+      // cancels this task, is what lets the loop terminate.
+      defer server.close()
       for ;; {
         let (connection, _) = server.accept()
         group.spawn_bg(no_wait=true, () => {

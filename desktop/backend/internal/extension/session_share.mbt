@@ -36,7 +36,9 @@ async fn SessionShare::publish(
     self.upload(snapshot, config)
   } catch {
     error if @async.is_being_cancelled() => raise error
-    @shares.ShareError(message) => Failed(message~)
+    @shares.EmptyTitle
+    | @shares.EntropyUnavailable
+    | @shares.Oversized as refusal => Failed(message="\{refusal}")
     error => {
       // This scope includes capture, upload and rejected-login cleanup. Do not
       // mislabel an unrelated failure as a missing conversation.
