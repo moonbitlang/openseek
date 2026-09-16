@@ -335,7 +335,12 @@ async fn edit_file(
     path,
     original_content=content,
     new_content~,
-    lines=(match_line, match_line + inserted_line_span(input.new_string) - 1),
+    // A replacement's range is the lines the new text occupies; a deletion
+    // (empty new_string) occupies none, and still touched its line.
+    lines=(
+      match_line,
+      match_line + (inserted_line_span(input.new_string) - 1).max(0),
+    ),
     input~,
     fail_brief~,
     summary~,
@@ -1045,12 +1050,12 @@ fn merge_tallies(
 /// The canonical project directory each spelling is checked from, so a
 /// project that vanishes or is replaced under an edit (a manifest removed,
 /// discovery falling back to a parent module) is a visible change.
-async fn project_roots(spellings : Array[String]) -> Array[String] {
+async fn project_roots(spellings : Array[String]) -> Array[String?] {
   let roots = []
   for spelling in spellings {
     let root = match @auto_check.check_cwd(spelling) {
-      Some(dir) => resolved_target(dir)
-      None => ""
+      Some(dir) => Some(resolved_target(dir))
+      None => None
     }
     roots.push(root)
   }

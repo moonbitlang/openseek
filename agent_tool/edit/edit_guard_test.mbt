@@ -354,6 +354,23 @@ async test "guards are moot outside a MoonBit project and data still names the o
     assert_true(
       off.data is Some({ "outcome": "applied", "baseline"? : None, .. }),
     )
+    // A deletion occupies no lines but still touched its line: the range is
+    // that line, never an inverted one.
+    let deleted = run_edit({
+      "path": path,
+      "old_string": "er",
+      "new_string": "",
+      "start_line": 1,
+    })
+    assert_false(deleted.is_error, msg=deleted.content)
+    assert_true(
+      deleted.data
+      is Some(
+        { "lines": { "start": Number(1, ..), "end": Number(1, ..), .. }, .. }
+      ),
+      msg=shown(deleted.data),
+    )
+    assert_eq(@fs.read_file(path).text(), "new\n")
   })
 }
 
