@@ -622,16 +622,15 @@ async fn parse_gate_batch_rejection(
       batch_reject_report(rejections, total~, any_truncated~),
       is_error=true,
       brief="multi_edit rejected (\{bound}\{total} parse error(s))",
-      data={
-        "outcome": "rejected",
+      data=batch_data("rejected", writes, {
         "introduced": total.to_json(),
-        "files": Json::array(
+        "parse_errors": Json::array(
           [
             for rejection in rejections => {
               {
                 "path": rejection.path.to_json(),
                 "introduced": rejection.introduced.to_json(),
-                "parse_errors": Json::array(
+                "errors": Json::array(
                   [
                     for
                       error in rejection.errors[:rejection.errors
@@ -648,7 +647,7 @@ async fn parse_gate_batch_rejection(
             }
           ],
         ),
-      },
+      }),
     ),
   )
 }
@@ -860,10 +859,10 @@ async fn revert_guarded_response(
   // lives in a later project is not lost from the applied payload.
   let mut after_all = after
   if warnings_guard && baseline is Some(before) {
-    let mut all = after
+    let mut all = qualified(check_path, after)
     for path in check_paths[1:] {
       match @auto_check.check(path) {
-        Checked(tally) => all = all.merged(tally)
+        Checked(tally) => all = all.merged(qualified(path, tally))
         NotApplicable => ()
         Unavailable(reason) =>
           return reverted_unverified(writes, reason, write_scope?)
@@ -886,18 +885,21 @@ async fn revert_guarded_response(
         write => write.original_content,
         write_scope?,
       )
-      return reverted_by_warnings(
-        writes,
-        before.all,
-        all,
-        delta,
-        restore_failures~,
-      )
+      return reverted_by_warnings(writes, before, all, delta, restore_failures~)
     }
   }
+  // `check` and the check line describe the first project, the one the
+  // error guard's threshold arithmetic is about; a warning-guarded batch
+  // adds the merged view under its own keys so a later project's
+  // diagnostics are neither dropped nor misread as the first project's.
   let extra : Map[String, Json] = {
-    "check": after_all.to_json(),
+    "check": after.to_json(),
     "threshold": threshold.to_json(),
+  }
+  let mut all_projects_note = ""
+  if warnings_guard && check_paths.length() > 1 {
+    extra["check_all"] = after_all.to_json()
+    all_projects_note = "\nall \{check_paths.length()} project(s): \{after_all.error_count} error(s), \{after_all.warning_count} warning(s)"
   }
   if introduced_errors is Some(introduced) {
     extra["introduced_errors"] = introduced.to_json()
@@ -906,10 +908,14 @@ async fn revert_guarded_response(
     extra["restore_failures"] = string_array(baseline_restore_failures)
   }
   if baseline is Some(before) {
-    extra["baseline"] = baseline_json(before.all)
+    extra["baseline"] = baseline_json(before.first)
+    if check_paths.length() > 1 {
+      extra["baseline_all"] = baseline_json(before.all)
+    }
   }
   @agent_tool.respond(
-    keep_response(summary, after_all, threshold, introduced?=introduced_errors) +
+    keep_response(summary, after, threshold, introduced?=introduced_errors) +
+    all_projects_note +
     baseline_note,
     brief~,
     data=batch_data("applied", writes, extra),
@@ -970,6 +976,37 @@ priv enum BaselineOutcome {
 }
 
 ///|
+/// moon names a diagnostic's file relative to the project it checked (or
+/// absolutely), so two projects can each report a `lib/lib.mbt`. Before two
+/// tallies are merged, each relative path is prefixed with its project's
+/// directory, so a warning that moves between projects is not the same
+/// identity in both. The first project's raw tally is kept as is for the
+/// error guard and its comparability evidence, which absolutize themselves.
+async fn qualified(
+  path : String,
+  tally : @auto_check.CheckErrors,
+) -> @auto_check.CheckErrors {
+  guard @auto_check.check_cwd(path) is Some(project) else { return tally }
+  fn place(site : @auto_check.ErrorSite) -> @auto_check.ErrorSite {
+    match site.path {
+      Some(file) if !file.has_prefix("/") && !file.has_prefix("\\") =>
+        { ..site, path: Some("\{project}/\{file}"), }
+      _ => site
+    }
+  }
+
+  {
+    ..tally,
+    errors: [
+      for site in tally.errors => place(site)
+    ],
+    warnings: [
+      for site in tally.warnings => place(site)
+    ],
+  }
+}
+
+///|
 async fn measure_baseline(paths : Array[String]) -> BaselineOutcome {
   let mut first : @auto_check.CheckErrors? = None
   let mut all : @auto_check.CheckErrors? = None
@@ -980,10 +1017,11 @@ async fn measure_baseline(paths : Array[String]) -> BaselineOutcome {
         if first is None {
           first = Some(tally)
         }
+        let placed = qualified(path, tally)
         all = Some(
           match all {
-            Some(sum) => sum.merged(tally)
-            None => tally
+            Some(sum) => sum.merged(placed)
+            None => placed
           },
         )
       }
@@ -1086,11 +1124,12 @@ fn reverted_by_errors(
 /// warnings are listed, with the reach caveat when the baseline had errors.
 fn reverted_by_warnings(
   writes : Array[PreparedWrite],
-  before : @auto_check.CheckErrors,
+  baseline : Baseline,
   after : @auto_check.CheckErrors,
   delta : @auto_check.Introduced,
   restore_failures~ : Array[String],
 ) -> @agent_tool.ToolAction {
+  let before = baseline.all
   let count = delta.warnings.length()
   let shown = [
     for site in delta.warnings[:count.min(IntroducedDisplayLimit)] => site
@@ -1116,7 +1155,8 @@ fn reverted_by_warnings(
     data=batch_data("reverted", writes, {
       "reason": "introduced_warnings",
       "check": after.to_json(),
-      "baseline": baseline_json(before),
+      "baseline": baseline_json(baseline.first),
+      "baseline_all": baseline_json(before),
       "reach_caveat": reach_caveat.to_json(),
       "introduced": {
         "errors": [],

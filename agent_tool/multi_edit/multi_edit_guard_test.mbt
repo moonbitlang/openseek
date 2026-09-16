@@ -267,13 +267,12 @@ async test "failed and rejected batches report their problems in data; an unchec
       is Some(
         {
           "outcome": "rejected",
-          "files": [
+          "files": [{ "path": String(_), "edits": Number(1, ..), .. }],
+          "edit_count": Number(1, ..),
+          "parse_errors": [
             {
               "path": String(_),
-              "parse_errors": [
-                { "loc": String(_), "message": String(_), .. },
-                ..,
-              ],
+              "errors": [{ "loc": String(_), "message": String(_), .. }, ..],
               ..
             },
           ],
@@ -354,7 +353,8 @@ async test "the guards cover every project a batch touches" {
           "outcome": "reverted",
           "reason": "introduced_warnings",
           "introduced": { "warnings": [{ "path": String(site), .. }], .. },
-          "baseline": { "warning_count": Number(1, ..), .. },
+          "baseline": { "warning_count": Number(0, ..), .. },
+          "baseline_all": { "warning_count": Number(1, ..), .. },
           ..
         }
       ) else {
@@ -384,15 +384,21 @@ async test "the guards cover every project a batch touches" {
     })
     assert_false(kept.is_error, msg=kept.content)
     assert_true(
-      kept.content.contains("moon check: ok — 0 errors, 1 warning(s)"),
+      kept.content.contains("moon check: ok — 0 errors, 0 warning(s)"),
+      msg=kept.content,
+    )
+    assert_true(
+      kept.content.contains("all 2 project(s): 0 error(s), 1 warning(s)"),
       msg=kept.content,
     )
     guard kept.data
       is Some(
         {
           "outcome": "applied",
-          "check": { "warning_count": Number(1, ..), .. },
-          "baseline": { "warning_count": Number(1, ..), .. },
+          "check": { "warning_count": Number(0, ..), .. },
+          "check_all": { "warning_count": Number(1, ..), .. },
+          "baseline": { "warning_count": Number(0, ..), .. },
+          "baseline_all": { "warning_count": Number(1, ..), .. },
           ..
         }
       ) else {

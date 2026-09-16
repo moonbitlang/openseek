@@ -114,7 +114,11 @@ warning sites) and `threshold`; a reverted one adds `reason`
 `certified_reach`, `plausible_reach`), its site lists, and `reissue_with`
 when a reach verdict names the value that admits the unchanged batch; a
 failed batch adds `failures` (`file`, `index`, `range`, `message`); a
-rejected one adds per-file `parse_errors`.
+rejected one adds `parse_errors` (per file: `path`, `introduced`, `errors`).
+`check`, `threshold`, and `baseline` describe the first project the batch
+touches (the error guard's scope); a warning-guarded batch over several
+projects adds `check_all` and `baseline_all`, the merged view its guard
+compared.
 
 ```moonbit check
 ///|
