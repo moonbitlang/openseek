@@ -1,14 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/internal/openseek/execution"
+package "moonbitlang/openseek/internal/openseek/execution"
 
 import {
-  "bobzhang/openseek/agent_runtime",
-  "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_subrun",
-  "bobzhang/openseek/agent_subrun/host",
-  "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/deepseek",
   "moonbitlang/core/argparse",
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_subrun",
+  "moonbitlang/openseek/agent_subrun/host",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/deepseek",
 }
 
 // Values

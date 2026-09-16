@@ -1,11 +1,11 @@
 import {
-  "bobzhang/openseek/agent_session",
-  "bobzhang/openseek/agent_session/log" @session_log,
-  "bobzhang/openseek/deepseek",
-  "bobzhang/openseek/eval/internal/metrics",
-  "bobzhang/openseek/eval/internal/runner",
-  "bobzhang/openseek/eval/report",
-  "bobzhang/openseek/eval/session_analyzer",
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/log" @session_log,
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/eval/internal/metrics",
+  "moonbitlang/openseek/eval/internal/runner",
+  "moonbitlang/openseek/eval/report",
+  "moonbitlang/openseek/eval/session_analyzer",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/core/env",
@@ -13,7 +13,7 @@ import {
 }
 
 import {
-  "bobzhang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/async",
 } for "wbtest"
 

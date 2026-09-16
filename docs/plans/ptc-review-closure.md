@@ -6,7 +6,7 @@ This is the review record of the whole feature as it was reviewed on
 slice found and fixed three more defects: a handoff after revocation that kept
 the foreground observer, a cancelled gate waiter that failed its task group,
 and an ending hook skipped on the session-cancellation path.
-The published SDK remains `bobzhang/openseek_tools@0.1.0`; wire v1 and its public
+The published SDK remains `moonbitlang/openseek_tools@0.1.0`; wire v1 and its public
 JSON arguments are unchanged.
 
 ## Commit review order

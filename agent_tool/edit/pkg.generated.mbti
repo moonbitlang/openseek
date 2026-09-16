@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/edit"
+package "moonbitlang/openseek/agent_tool/edit"
 
 import {
-  "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek/agent_tool/write_scope",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/write_scope",
 }
 
 // Values

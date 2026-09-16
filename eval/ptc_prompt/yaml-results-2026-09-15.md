@@ -85,7 +85,7 @@ pair. Including review children, the model-step counts were nearly identical
 ## Observed PTC use
 
 The first candidate used a script importing the published
-`bobzhang/openseek_tools@0.1.0` SDK to read three test files, calculate 42
+`moonbitlang/openseek_tools@0.1.0` SDK to read three test files, calculate 42
 line-anchored helper renames, and call `@tools.multi_edit(Json::object(args))`.
 The mbtx call omitted the `ptc` flag, exercising default activation. The nested
 call completed without error; the parent journal records 745 ms for the

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/internal/openseek"
+package "moonbitlang/openseek/internal/openseek"
 
 // Values
 pub async fn dispatch() -> Unit

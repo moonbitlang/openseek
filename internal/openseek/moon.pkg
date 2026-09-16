@@ -1,10 +1,10 @@
 import {
   "moonbitlang/core/argparse",
-  "bobzhang/openseek/internal/openseek/commands",
+  "moonbitlang/openseek/internal/openseek/commands",
   "moonbitlang/core/env",
-  "bobzhang/openseek/internal/openseek/options",
-  "bobzhang/openseek/internal/openseek/run",
-  "bobzhang/openseek/internal/openseek/serve",
+  "moonbitlang/openseek/internal/openseek/options",
+  "moonbitlang/openseek/internal/openseek/run",
+  "moonbitlang/openseek/internal/openseek/serve",
 }
 
 warnings = "+unnecessary_annotation"

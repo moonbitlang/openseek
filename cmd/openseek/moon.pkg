@@ -1,6 +1,6 @@
 import {
-  "bobzhang/openseek/internal/openseek" @app,
-  "bobzhang/openseek/cli",
+  "moonbitlang/openseek/internal/openseek" @app,
+  "moonbitlang/openseek/cli",
   "moonbitlang/async",
   "moonbitlang/async/stdio",
   "moonbitlang/x/sys",

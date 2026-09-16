@@ -21,7 +21,7 @@ pub async fn engine_command() -> String {
   }
   let engine_dir = resource_dir
     .dirname()
-    .join("_build/native/debug/build/bobzhang/openseek/cmd/openseek")
+    .join("_build/native/debug/build/moonbitlang/openseek/cmd/openseek")
   for candidate in ["openseek.exe", "openseek"] {
     let path = engine_dir.join(candidate).normalize().to_string()
     if @fs.exists(path) {
@@ -36,7 +36,7 @@ async test "development layout cannot be shadowed by packaged resources" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-engine-")
   defer @fs.rmdir(root.to_string(), recursive=true)
   let build = root.join("_build/native/debug/build")
-  let engine_dir = build.join("bobzhang/openseek/cmd/openseek")
+  let engine_dir = build.join("moonbitlang/openseek/cmd/openseek")
   let development = engine_dir.join("openseek.exe").to_string()
   @fs.mkdir(engine_dir.to_string(), recursive=true)
   @fs.write_file(development, "development", create_mode=CreateOrTruncate)

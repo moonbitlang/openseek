@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/edit_diff"
+package "moonbitlang/openseek/agent_tool/edit_diff"
 
 // Values
 pub fn generate(String, String) -> String

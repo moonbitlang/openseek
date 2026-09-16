@@ -1,6 +1,6 @@
 import {
-  "bobzhang/openseek/jsonrpc",
-  "bobzhang/openseek/mcp",
+  "moonbitlang/openseek/jsonrpc",
+  "moonbitlang/openseek/mcp",
   "moonbitlang/async",
   "moonbitlang/async/process",
   "moonbitlang/async/io",

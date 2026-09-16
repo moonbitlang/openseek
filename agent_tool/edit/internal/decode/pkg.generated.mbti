@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/edit/internal/decode"
+package "moonbitlang/openseek/agent_tool/edit/internal/decode"
 
 import {
   "moonbitlang/core/debug",

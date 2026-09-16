@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/internal/openseek/options"
+package "moonbitlang/openseek/internal/openseek/options"
 
 import {
-  "bobzhang/openseek/deepseek",
   "moonbitlang/core/argparse",
+  "moonbitlang/openseek/deepseek",
 }
 
 // Values

@@ -13,7 +13,7 @@ pub fn description() -> String {
     #|Import the SDK and async runtime explicitly; the host does not rewrite
     #|source. Use ordinary MoonBit async functions, with no await keyword:
     #|
-    #|  import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+    #|  import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
     #|
     #|  let result = @tools.call("edit", {
     #|    "path": "note.txt", "start_line": 1,

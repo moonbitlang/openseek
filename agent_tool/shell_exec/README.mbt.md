@@ -1,6 +1,6 @@
 # Shell Execution Model
 
-`bobzhang/openseek/agent_tool/shell_exec` is the shared execution model behind
+`moonbitlang/openseek/agent_tool/shell_exec` is the shared execution model behind
 the agent's `mbtx` runs and background jobs: one process, one output owner, one
 status flag. `mbtx` starts a program directly; `job_output`, `job_stop`, and
 `job_wait` observe it through the `bgjobs` registry.

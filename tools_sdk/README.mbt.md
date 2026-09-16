@@ -9,7 +9,7 @@ that version until 0.2.0 is released:
 
 ```mbtx
 import {
-  "bobzhang/openseek_tools@0.1.0" @tools,
+  "moonbitlang/openseek_tools@0.1.0" @tools,
   "moonbitlang/async",
 }
 

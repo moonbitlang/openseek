@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/agent_tool/internal/line_offset"
+package "moonbitlang/openseek/agent_tool/internal/line_offset"
 
 // Values
 pub fn line_end_offset(String, Int) -> Int

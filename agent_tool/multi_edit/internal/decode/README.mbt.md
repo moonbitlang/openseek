@@ -1,6 +1,6 @@
 # Multi Edit Decode
 
-`bobzhang/openseek/agent_tool/multi_edit/internal/decode` converts raw JSON
+`moonbitlang/openseek/agent_tool/multi_edit/internal/decode` converts raw JSON
 tool arguments into the typed `MultiEditArgs` consumed by `multi_edit`.
 
 ## API Shape

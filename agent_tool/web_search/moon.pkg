@@ -1,5 +1,5 @@
 import {
-  "bobzhang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool",
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/core/json",

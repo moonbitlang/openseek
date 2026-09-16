@@ -1,5 +1,5 @@
 import {
-  "bobzhang/openseek/agent_tool/internal/error" @tool_error,
+  "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
 } for "test"
 
 warnings = "+unnecessary_annotation"

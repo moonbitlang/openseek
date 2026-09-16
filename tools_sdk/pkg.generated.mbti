@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek_tools"
+package "moonbitlang/openseek_tools"
 
 // Values
 pub async fn call(String, Json) -> CallResult

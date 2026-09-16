@@ -25,7 +25,7 @@ async test "PTC real script edits and receives reply without deadlock" {
         dispatch(tool, {
           "ptc": true,
           "source": (
-            #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
+            #|import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" }
             #|async fn main {
             #|  let result = @tools.call("edit", { "path": "note.txt", "start_line": 1, "old_string": "old", "new_string": "new" })
             #|  if result.is_error { fail(result.content) }
@@ -96,7 +96,7 @@ async test "PTC real script preserves imports and structured results" {
         "ptc": true,
         "source": (
           #|///|
-          #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async", "moonbitlang/async/fs" @files, }
+          #|import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async", "moonbitlang/async/fs" @files, }
           #|async fn main {
           #|  let result = @tools.call("web_search", { "query": "query" })
           #|  guard result.data is Some({ "sources": [{ "url": String(url), .. }], .. }) else { fail("missing data") }
@@ -125,7 +125,7 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
         program_service=service,
       )
       let source =
-        #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async" @a, "moonbitlang/async/http" @h, "moonbitlang/core/json" @j, "moonbitlang/core/env" @e }
+        #|import { "moonbitlang/openseek_tools@0.1.0" @tools, "moonbitlang/async" @a, "moonbitlang/async/http" @h, "moonbitlang/core/json" @j, "moonbitlang/core/env" @e }
         #|async fn main {
         #|  @a.sleep(50)
         #|  let denied = @tools.call("mbtx", {})
@@ -185,7 +185,7 @@ async test "PTC foreground timeout stops the active host call before returning" 
           ),
           {
             "ptc": true,
-            "source": "import { \"bobzhang/openseek_tools@0.1.0\" @tools, \"moonbitlang/async\" }\nasync fn main { @tools.call(\"block\", {}).content |> println }",
+            "source": "import { \"moonbitlang/openseek_tools@0.1.0\" @tools, \"moonbitlang/async\" }\nasync fn main { @tools.call(\"block\", {}).content |> println }",
           },
         )
       })

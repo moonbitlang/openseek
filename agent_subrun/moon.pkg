@@ -1,14 +1,14 @@
 import {
-  "bobzhang/openseek/agent_subrun/host",
-  "bobzhang/openseek/agent_tool",
-  "bobzhang/openseek_protocol" @protocol,
-  "bobzhang/openseek_protocol/emit",
+  "moonbitlang/openseek/agent_subrun/host",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/openseek_protocol/emit",
   "moonbitlang/core/json",
   "moonbitlang/workflow/spawn",
 }
 
 import {
-  "bobzhang/openseek_protocol" @protocol,
+  "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/async",
 } for "test"
 

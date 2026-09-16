@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/deepseek/client"
+package "moonbitlang/openseek/deepseek/client"
 
 import {
-  "bobzhang/openseek/deepseek",
   "moonbitlang/core/debug",
+  "moonbitlang/openseek/deepseek",
 }
 
 // Values
