@@ -241,13 +241,23 @@ async fn main {
     b.start_col.compare(a.start_col)
   })
   let cache : Map[String, Array[String]] = Map([])
+  // Files the host could not restore after a revert: their content on disk
+  // is no longer what the cache says, so no further edit goes there.
+  let poisoned : Map[String, Bool] = Map([])
   let mut fixed = 0
   let reverted : Array[String] = []
   let mut planned = 0
   for site in sites {
-    if fixed + reverted.length() >= limit {
+    if fixed + reverted.length() + planned >= limit {
       println("limit reached: \{limit} attempted; run again for the rest")
       break
+    }
+    if poisoned.contains(site.path) {
+      skipped.push({
+        where_: "\{site.path}:\{site.line}",
+        why: "skipped: an earlier revert in this file could not be restored",
+      })
+      continue
     }
     let file_lines = match cache.get(site.path) {
       Some(file_lines) => file_lines
@@ -286,8 +296,8 @@ async fn main {
     // is exactly this occurrence and no earlier same-named text on the line.
     let old_string = line[:end].to_string()
     let new_string = line[:start].to_string() + qualifier + site.replacement
-    planned += 1
     if dry_run {
+      planned += 1
       println(
         "plan: \{site.path}:\{site.line}:\{site.start_col} `\{old_name}` → `\{site.replacement}`",
       )
@@ -308,6 +318,14 @@ async fn main {
         // Keep the cached line current for a second site on the same line
         // (which sits to the LEFT, so its columns are unchanged).
         file_lines[site.line - 1] = new_string + line[end:].to_string()
+      }
+      Some({ "outcome": "reverted", "restore_failed": true, .. }) => {
+        // The rejected edit is still on disk: say so with the host's own
+        // words, and leave the rest of this file alone.
+        poisoned[site.path] = true
+        reverted.push(
+          "\{site.path}:\{site.line}:\{site.start_col} `\{old_name}` → `\{site.replacement}`: RESTORE FAILED — \{result.content}",
+        )
       }
       Some({ "outcome": "reverted", "reason": String(reason), .. }) =>
         reverted.push(

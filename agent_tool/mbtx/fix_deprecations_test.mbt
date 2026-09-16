@@ -102,6 +102,22 @@ async test "fix-deprecations fixes deprecation sites through guarded edits" {
         msg=planned.content,
       )
       assert_eq(@fs.read_file("\{ws}/lib/lib.mbt").text(), lib)
+      // The limit applies to a dry run too.
+      let limited = @async.with_timeout(120000, () => {
+        dispatch(tool, {
+          "description": "plan one deprecation fix",
+          "ptc": true,
+          "source": source,
+          "cwd": ws,
+          "args": ["--dry-run", "--limit", "1"],
+        })
+      })
+      assert_false(limited.is_error, msg=limited.content)
+      assert_true(
+        limited.content.contains("dry run: 1 edit(s) planned, none written"),
+        msg=limited.content,
+      )
+      assert_true(limited.content.contains("limit reached: 1 attempted"))
     })
   })
 }
