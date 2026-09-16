@@ -106,22 +106,18 @@ async fn Snapshot::send(
   if response.code == 401 {
     return @protocol.SignInRequired
   }
-  let accepted = response.code is (200 | 201)
-  // Shown when the body carries no usable JSON. The API answers every
-  // rejection with `{ "error": message }`; only a proxy or a deployment
-  // without share routes answers without one. Never display an entire
-  // HTML/proxy response as an error.
-  let fallback = if accepted {
-    "The share server did not return a valid share link."
-  } else if response.code == 404 {
-    "The signed-in server does not provide sharing at \{server_url}/v1/shares (HTTP 404). Sign in to a server with sharing enabled."
-  } else {
-    "Sharing failed (HTTP \{response.code})."
-  }
-  let body = @json.parse(@utf8.decode(buffer.to_bytes())) catch {
-    _ => return @protocol.Failed(message=fallback)
-  }
-  guard accepted else {
+  guard response.code is (200 | 201) else {
+    // The API answers every rejection with `{ "error": message }`; only a
+    // proxy or a deployment without share routes answers without one. Never
+    // display an entire HTML/proxy response as an error.
+    let fallback = if response.code == 404 {
+      "The signed-in server does not provide sharing at \{server_url}/v1/shares (HTTP 404). Sign in to a server with sharing enabled."
+    } else {
+      "Sharing failed (HTTP \{response.code})."
+    }
+    let body = @json.parse(@utf8.decode(buffer.to_bytes())) catch {
+      _ => return @protocol.Failed(message=fallback)
+    }
     return @protocol.Failed(
       message=match body {
         { "error": String(detail), .. } if !detail.trim().is_empty() =>
@@ -130,8 +126,12 @@ async fn Snapshot::send(
       },
     )
   }
-  guard body is { "url": String(url), .. } else {
-    return @protocol.Failed(message=fallback)
+  let invalid = @protocol.SessionShareReply::Failed(
+    message="The share server did not return a valid share link.",
+  )
+  let body = @json.parse(@utf8.decode(buffer.to_bytes())) catch {
+    _ => return invalid
   }
+  guard body is { "url": String(url), .. } else { return invalid }
   @protocol.Shared(url~)
 }
