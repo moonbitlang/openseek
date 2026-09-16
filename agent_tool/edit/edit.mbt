@@ -808,7 +808,11 @@ async fn commit_edit(
     let measured = match check_tree() {
       Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
       Checked(tally) => Some(tally)
-      NotApplicable => None
+      // Guards are moot only when the file belongs to no project at all; a
+      // listed project that could not be checked is a lost verdict.
+      NotApplicable if check_from.is_empty() => None
+      NotApplicable =>
+        return not_verified("a project the check covers could not be checked")
       Unavailable(reason) => return not_verified(reason)
       Failed(code, _) => return not_verified(exited_without_diagnostics(code))
     }
@@ -820,6 +824,13 @@ async fn commit_edit(
     if current != original_content {
       return not_verified(
         "the file changed while the baseline was measured; re-read it and retry",
+      )
+    }
+    // Likewise the file's identity: a link retargeted meanwhile would be
+    // written in one module and checked in another.
+    if check_projects(path) != check_from {
+      return not_verified(
+        "the file's target or project changed while the baseline was measured; retry",
       )
     }
     measured
