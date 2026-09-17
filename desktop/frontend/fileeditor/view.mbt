@@ -1946,10 +1946,7 @@ pub fn breadcrumb_view(
   }
   let review = review_toolbar_visible(state, ctx)
   let path_row : Array[@html.Html] = [@html.div(class="crumb-path", crumbs)]
-  // Keep the file's view choice visible while replacement diff inputs load.
-  if review {
-    path_row.push(review_mode_toolbar(dispatch, state, ctx))
-  } else {
+  if !review {
     path_row.push(review_diff_navigation(dispatch, state, ctx))
   }
   if !full_diff_available(state, ctx) {
@@ -1986,7 +1983,7 @@ pub fn breadcrumb_view(
     let children : Array[@html.Html] = [
       @html.div(class="viewer-breadcrumb-row", path_row),
       @html.div(class="review-command-row", [
-        review_diff_mode_toolbar(dispatch, state, ctx),
+        review_mode_toolbar(dispatch, state, ctx),
         @html.span(
           class="review-control-divider",
           attrs=@html.Attrs::build().aria_hidden("true"),
@@ -2304,52 +2301,75 @@ fn review_mode_toolbar(
     return @html.span(class="review-mode-toolbar hidden", "")
   }
   let diff = review.view_mode == ReviewDiff
+  let enabled = doc.diff_content() is Some(_)
+  let moon = supports_moon_diff(path.path)
+  let children : Array[@html.Html] = [
+    @html.button(
+      type_="button",
+      class=if diff {
+        "review-mode-button"
+      } else {
+        "review-mode-button active"
+      },
+      title="Show file",
+      disabled=!enabled,
+      on_click=if diff { dispatch(ToggleReviewDiff) } else { @cmd.none },
+      attrs=@html.Attrs::build()
+        .data_set("review-mode", "file")
+        .aria_label("File view")
+        .aria_pressed((!diff).to_string()),
+      "File",
+    ),
+    @html.span(
+      class="review-mode-divider",
+      attrs=@html.Attrs::build().aria_hidden("true"),
+      "",
+    ),
+    review_diff_mode_button(
+      enabled~,
+      ReviewDiffLine,
+      diff && (!moon || state.review_diff_mode == ReviewDiffLine),
+      if moon {
+        dispatch(ReviewDiffModeSelected(ReviewDiffLine))
+      } else if diff {
+        @cmd.none
+      } else {
+        dispatch(ToggleReviewDiff)
+      },
+    ),
+  ]
+  if moon {
+    children.push(
+      review_diff_mode_button(
+        enabled~,
+        ReviewDiffToken,
+        diff && state.review_diff_mode == ReviewDiffToken,
+        dispatch(ReviewDiffModeSelected(ReviewDiffToken)),
+      ),
+    )
+    children.push(
+      review_diff_mode_button(
+        enabled~,
+        ReviewDiffTree,
+        diff && state.review_diff_mode == ReviewDiffTree,
+        dispatch(ReviewDiffModeSelected(ReviewDiffTree)),
+      ),
+    )
+  }
   @html.div(
-    class="review-mode-toolbar file-view-toggle",
-    attrs=@html.Attrs::build().role("group").aria_label("File view"),
-    [
-      @html.button(
-        type_="button",
-        class=if diff {
-          "review-mode-button"
-        } else {
-          "review-mode-button active"
-        },
-        title=if review.selected.has_working_tree_file() {
-          "Show this file's current content"
-        } else {
-          "No working file exists"
-        },
-        disabled=!review.selected.has_working_tree_file(),
-        on_click=if diff { dispatch(ToggleReviewDiff) } else { @cmd.none },
-        attrs=@html.Attrs::build()
-          .data_set("review-mode", "content")
-          .aria_label("Content view")
-          .aria_pressed((!diff).to_string()),
-        "Content",
-      ),
-      @html.button(
-        type_="button",
-        class=if diff {
-          "review-mode-button active"
-        } else {
-          "review-mode-button"
-        },
-        title="Compare this file's changes",
-        on_click=if diff { @cmd.none } else { dispatch(ToggleReviewDiff) },
-        attrs=@html.Attrs::build()
-          .data_set("review-mode", "diff")
-          .aria_label("Diff view")
-          .aria_pressed(diff.to_string()),
-        "Diff",
-      ),
-    ],
+    class=if review_controls_pending(state, ctx) {
+      "review-mode-toolbar pending"
+    } else {
+      "review-mode-toolbar"
+    },
+    attrs=@html.Attrs::build().role("toolbar").aria_label("Review mode"),
+    children,
   )
 }
 
 ///|
-/// Comparison algorithms are independent of each file's Content/Diff choice.
-/// Historical comparisons reuse these controls without a Content switch.
+/// Historical comparisons have no File surface, but retain the same explicit
+/// MoonBit comparison algorithms as changed-file reviews.
 fn review_diff_mode_toolbar(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -2359,16 +2379,11 @@ fn review_diff_mode_toolbar(
     return @html.span(class="review-mode-toolbar hidden", "")
   }
   @html.div(
-    class=if review_controls_pending(state, ctx) {
-      "review-mode-toolbar comparison-algorithm pending"
-    } else {
-      "review-mode-toolbar comparison-algorithm"
-    },
+    class="review-mode-toolbar review-history-mode-toolbar",
     attrs=@html.Attrs::build()
       .role("toolbar")
       .aria_label("Comparison algorithm"),
     [
-      @html.span(class="review-option-label", "Compare by"),
       review_diff_mode_button(
         enabled=moon_diff_ready(state, ctx),
         ReviewDiffLine,

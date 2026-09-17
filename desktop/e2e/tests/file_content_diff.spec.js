@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('one file tab retains its identity across Content, Diff, and repeated opens', async ({ page }) => {
+test('one file tab retains its identity across File, diff modes, and repeated opens', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -15,13 +15,14 @@ test('one file tab retains its identity across Content, Diff, and repeated opens
 
   await app.openReview();
   await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-  const view = page.getByRole('group', { name: 'File view' });
+  const view = page.getByRole('toolbar', { name: 'Review mode' });
+  await expect(view.getByRole('button')).toHaveText(['File', 'Line', 'Token', 'Tree']);
   await expect(tabs).toHaveCount(1);
-  await expect(view.getByRole('button', { name: 'Diff view' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(view.getByRole('button', { name: 'Token diff' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.semantic-review[data-mode="token"]')).toBeVisible();
   const baselineReads = app.requests.filter(request => request.method === 'git.original_file').length;
 
-  for (const name of ['Content view', 'Diff view', 'Content view']) {
+  for (const name of ['File view', 'Line diff', 'File view', 'Tree diff', 'File view', 'Token diff', 'File view']) {
     await view.getByRole('button', { name }).click();
     await expect(view.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
     await expect(tabs).toHaveCount(1);
@@ -32,18 +33,18 @@ test('one file tab retains its identity across Content, Diff, and repeated opens
   // Opening another review must not replace the first file's chosen surface.
   await page.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
   await expect(tabs).toHaveCount(2);
-  await expect(view.getByRole('button', { name: 'Diff view' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(view.getByRole('button', { name: 'Token diff' })).toHaveAttribute('aria-pressed', 'true');
   await main.click();
-  await expect(view.getByRole('button', { name: 'Content view' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(view.getByRole('button', { name: 'File view' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText(/fn\s+main/);
 
-  await view.getByRole('button', { name: 'Diff view' }).click();
+  await view.getByRole('button', { name: 'Token diff' }).click();
   await app.openQuickOpen();
   await page.getByRole('option', { name: /main\.mbt/ }).click();
   await expect(tabs).toHaveCount(2);
-  await expect(view.getByRole('button', { name: 'Content view' })).toHaveAttribute('aria-pressed', 'true');
-  await view.getByRole('button', { name: 'Diff view' }).click();
+  await expect(view.getByRole('button', { name: 'File view' })).toHaveAttribute('aria-pressed', 'true');
+  await view.getByRole('button', { name: 'Token diff' }).click();
   await expect(page.locator('.semantic-review[data-mode="token"]')).toBeVisible();
   expect(await originalTab.evaluate(node => node.isConnected)).toBe(true);
   expect(app.pageErrors).toEqual([]);
@@ -76,8 +77,8 @@ test('Search read failures retain the same file comparison and can retry', async
   await result.click();
   await expect(page.getByText('Working unavailable · baseline', { exact: true })).toBeHidden();
   await expect(page.locator('#viewer-host')).toContainText('working tree');
-  await expect(page.getByRole('button', { name: 'Content view' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Diff view' }).click();
+  await expect(page.getByRole('button', { name: 'File view' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   await expect(page.locator('#diff-editor-host')).toBeVisible();
   await expect(page.locator('.editor-tab')).toHaveCount(1);
   expect(app.pageErrors).toEqual([]);
