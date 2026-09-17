@@ -1,6 +1,6 @@
 # Bundled workflows
 
-These OpenSeek scripts ship in the toolchain payload's `share/workflow/`,
+These OpenSeek scripts ship in the application's `share/workflow/`,
 alongside the official documentation in `share/doc/moonbit/`.
 `Bundled resources` points to `share/`; the engine's environment prompt gives
 this resource root's absolute path.

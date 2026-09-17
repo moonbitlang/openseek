@@ -349,7 +349,7 @@ fn default_prompt() -> String {
     #|`@shell.Cmd("moonx", [...])` — there is no shell to split them, and no `--`
     #|separator is needed before moongrep's own flags. The pattern language, output
     #|fields, scan-root exclusions, and exit codes are in
-    #|`OPENSEEK_REFERENCES/moongrep/README.md`; read it before going beyond this
+    #|`<bundled-resources>/moongrep/README.md`; read it before going beyond this
     #|example rather than guessing the flags.
     #|
     #|### Programmatic tool calls
