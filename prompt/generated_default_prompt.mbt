@@ -79,11 +79,12 @@ fn default_prompt() -> String {
     #|
     #|### CLI Parsing
     #|
-    #|- For CLI parsing, prefer `moonbitlang/core/argparse` and call
-    #|  `@argparse.parse(...)` on a `Command`. Do not hand-roll option parsing with
-    #|  `@env.args()` except for tiny throwaway probes; there, import
-    #|  `moonbitlang/core/env` and read `@env.args()[1:]` to skip the executable
-    #|  name.
+    #|- Read `@env.args()[1:]` (from `moonbitlang/core/env`; the `[1:]` skips the
+    #|  executable name) when the script only forwards or glances at its arguments —
+    #|  the `check.mbtx` above passes them straight through to `moon check`. Reach
+    #|  for `moonbitlang/core/argparse` and `@argparse.parse(...)` on a `Command`
+    #|  once the script owns options of its own to name, default, and validate; do
+    #|  not hand-roll that parsing out of `@env.args()`.
     #|- `FlagArg.long` omits leading dashes: use `long="stdin"`, not
     #|  `long="--stdin"`.
     #|- Convert `@argparse.Matches` into local values before doing real work; keep
