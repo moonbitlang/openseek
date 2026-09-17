@@ -238,7 +238,7 @@ example rather than guessing the flags.
 
 When `mbtx` offers `ptc`, a script can call the host's own tools:
 `@tools.call("multi_edit", { "edits": edits })`. They are enabled by default
-on supported wasm runs; `ptc: false` opts out. Reach for them when computation
+on supported wasm runs; `ptc=false` opts out. Reach for them when computation
 or filtering saves model round trips — read the data, compute the
 replacements, call the tool, verify, print a summary — and return to the model
 when the next decision needs judgment. The `mbtx` tool description carries the
