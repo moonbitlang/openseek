@@ -16,12 +16,7 @@ test "selecting a Moon semantic algorithm enters Diff view and retains policy" {
   let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
   docs[file] = reviewed_doc(path, selected, view_mode=ReviewSource)
-  let state = {
-    ..owned_state(),
-    docs,
-    review_view_mode: ReviewSource,
-    review_diff_mode: ReviewDiffLine,
-  }
+  let state = { ..owned_state(), docs, review_diff_mode: ReviewDiffLine, }
   let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   let (_, line_unchanged) = update(
     test_emit(),
@@ -37,7 +32,6 @@ test "selecting a Moon semantic algorithm enters Diff view and retains policy" {
     ctx,
   )
   assert_true(tree.review_diff_mode is ReviewDiffTree)
-  assert_true(tree.review_view_mode is ReviewDiff)
   assert_true(
     tree.docs.get(file)
     is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),

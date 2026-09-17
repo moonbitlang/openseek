@@ -3041,3 +3041,10 @@ button.git-history-file.selected {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
+
+/* Keep comparison settings distinct from each file's Content/Diff choice. */
+.review-option-label {
+  padding-inline: 5px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}

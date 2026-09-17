@@ -144,6 +144,7 @@ pub(all) struct ReviewState {
   // order without invalidating an in-flight baseline.
   working_generation : Int
   baseline : ReviewBaseline
+  // Presentation belongs to this file; switching another tab cannot change it.
   view_mode : ReviewViewMode
   // Preserve the exact Changes row that the user selected. Porcelain can
   // legitimately report two rows for one path (for example, a staged
@@ -155,11 +156,13 @@ pub(all) struct ReviewState {
 ///|
 /// One open document, keyed by its device-bound absolute resource URI in
 /// `State.docs`. Workspace membership is derived only for project operations;
-/// opening a file never requires a workspace-relative name.
+/// opening a file never requires a workspace-relative name. Content and Diff
+/// are presentations of this same document, never separate document identities.
 pub(all) struct Doc {
   name : String
   state : TabState
-  // `Some` means this tab was explicitly opened from Changes. Content and a
+  // `Some` retains the comparison selected from Changes, including while the
+  // same file is viewed as Content or reopened through Files/Search. Content and a
   // missing HEAD become Viewer quick-diff baselines; the other cases remain
   // visible as precise review-status chrome.
   review : ReviewState?
@@ -422,11 +425,7 @@ pub(all) struct State {
   // reducer/request/view remain in grep_search, while this State supplies the
   // same owner/root lifecycle already used by Files and Changes.
   search : @grep_search.State
-  // Source/full-diff is a reviewer preference, not a per-file decision. New
-  // changed-file reviews inherit it so next/previous and tree navigation do
-  // not force the reviewer to request the full diff again.
-  review_view_mode : ReviewViewMode
-  // Side-by-side/inline is likewise a reviewer preference rather than
+  // Side-by-side/inline remains a reviewer preference rather than
   // document state. Line applies it to its retained models; Token/Tree update
   // the DiffEditor mounted inside every semantic section.
   review_diff_layout : ReviewDiffLayout
@@ -589,7 +588,6 @@ pub fn State::empty() -> State {
     tree_open: true,
     explorer_mode: ExplorerFiles,
     search: @grep_search.State::empty(),
-    review_view_mode: ReviewDiff,
     review_diff_layout: ReviewSideBySide,
     review_diff_mode: ReviewDiffToken,
     // Token/Tree starts from semantic production changes. Both explicit
@@ -694,7 +692,6 @@ pub fn State::prepare_owner(
     tree_open: self.tree_open,
     explorer_mode: self.explorer_mode,
     search: self.search.reset_checkout(),
-    review_view_mode: self.review_view_mode,
     review_diff_layout: self.review_diff_layout,
     review_diff_mode: self.review_diff_mode,
     review_diff_ignore_comments: self.review_diff_ignore_comments,

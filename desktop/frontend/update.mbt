@@ -17451,7 +17451,6 @@ test "chip jumps relativize legacy absolute paths against the roots" {
       }),
       tree_open: false,
       explorer_mode: @fileeditor.ExplorerChanges,
-      review_view_mode: @fileeditor.ReviewDiff,
       changes_generation: 7,
       watch_generation: 11,
     },
@@ -17468,7 +17467,6 @@ test "chip jumps relativize legacy absolute paths against the roots" {
   assert_true(next.active_workspace_file() is Some(Relative("src/main.mbt")))
   assert_false(next.file_panel.tree_open)
   assert_true(next.file_panel.explorer_mode is @fileeditor.ExplorerChanges)
-  assert_true(next.file_panel.review_view_mode is @fileeditor.ReviewDiff)
   // The eager re-root retains 7. The jump keeps the explorer hidden while the
   // file is active, so Changes waits until the pane is shown before refreshing.
   assert_true(next.file_panel.changes_generation == 7)
