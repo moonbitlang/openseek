@@ -18,12 +18,8 @@ example fails before the prompt can teach something stale.
 
 Part 1 of the prompt teaches the tooling:
 
-- `script_args.mbtx`: a saved script streaming `moon check`, with `args`
-  passed through from the caller.
 - `cli_greet.mbtx`: `argparse` with a defaulted option, the smallest form of
   the `args` contract.
-- `paths_and_env.mbtx`: `@shell.glob`, `@fs.readdir`, and the `String?`
-  environment accessors.
 - `command_output.mbtx`: `@shell.Cmd(...).output()` and its three accessors,
   including a non-zero exit that is not a failure.
 - `check_diagnostics.mbtx`: streaming line-delimited `moon check` JSON with
@@ -31,6 +27,11 @@ Part 1 of the prompt teaches the tooling:
 - `workflow_scouts.mbtx`: the `moonbitlang/workflow` handoff a `subrun: true`
   snippet gets — fan out scouts, keep the answers that arrived, report the
   spend.
+
+The reusable-script form is taught from `share/workflow/check.mbtx`, the
+bundled workflow itself, so the prompt shows the same file `@builtin/` runs.
+`paths_and_env.mbtx` is verified here but not currently linked from the
+prompt.
 
 Part 2 teaches the language:
 

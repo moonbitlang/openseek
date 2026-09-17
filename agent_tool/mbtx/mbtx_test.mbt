@@ -53,8 +53,21 @@ async fn prompt_example(name : String) -> String {
 }
 
 ///|
+/// The same guarantee for a `share/workflow` script the prompt shows inline:
+/// the bundled workflows are linked the same way, so the reusable-script
+/// contract is verified against the very file `@builtin/` runs.
+async fn prompt_workflow(name : String) -> String {
+  let prompt = @fs.read_file("prompt/default_prompt.mbt.md").text()
+  assert_true(
+    prompt.contains("[share/workflow/\{name}](../share/workflow/\{name})"),
+    msg="the default prompt no longer links share/workflow/\{name}",
+  )
+  @fs.read_file("share/workflow/\{name}").text()
+}
+
+///|
 async test "default prompt reusable check script forwards arguments" {
-  let source = prompt_example("script_args.mbtx")
+  let source = prompt_workflow("check.mbtx")
   @vfs.with_tmpdir(ws => {
     @fs.write_file(
       "\{ws}/moon.mod",
