@@ -39,13 +39,22 @@ async test "runs a pure-core program and returns its output" {
 }
 
 ///|
-async test "default prompt reusable check script forwards arguments" {
+/// The text of a `share/examples` script, asserting first that the system
+/// prompt still links it. `scripts/md_to_mbt_string` inlines that link into
+/// the generated prompt, so the file is what the model is shown: the example
+/// is verified here by running it, not by scraping the markdown for a fence.
+async fn prompt_example(name : String) -> String {
   let prompt = @fs.read_file("prompt/default_prompt.mbt.md").text()
-  let example = prompt
-    .split("For example, save this source as `scripts/check.mbtx`")
-    .collect()
-  assert_eq(example.length(), 2)
-  let source = example[1].split("```mbtx\n").collect()[1].split("```").collect()[0]
+  assert_true(
+    prompt.contains("[share/examples/\{name}](../share/examples/\{name})"),
+    msg="the default prompt no longer links share/examples/\{name}",
+  )
+  @fs.read_file("share/examples/\{name}").text()
+}
+
+///|
+async test "default prompt reusable check script forwards arguments" {
+  let source = prompt_example("script_args.mbtx")
   @vfs.with_tmpdir(ws => {
     @fs.write_file(
       "\{ws}/moon.mod",
@@ -77,12 +86,7 @@ async test "default prompt reusable check script forwards arguments" {
 
 ///|
 async test "default prompt argparse example reads process arguments implicitly" {
-  let prompt = @fs.read_file("prompt/default_prompt.mbt.md").text()
-  let example = prompt
-    .split("save this source as `scripts/greet.mbtx`")
-    .collect()
-  assert_eq(example.length(), 2)
-  let source = example[1].split("```mbtx\n").collect()[1].split("```").collect()[0]
+  let source = prompt_example("cli_greet.mbtx")
   @vfs.with_tmpdir(ws => {
     let saved = run_in(ws, {
       "source": source,
