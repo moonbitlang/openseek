@@ -18,20 +18,22 @@ example fails before the prompt can teach something stale.
 
 Part 1 of the prompt teaches the tooling:
 
-- `cli_greet.mbtx`: `argparse` with a defaulted option, the smallest form of
-  the `args` contract.
 - `command_output.mbtx`: `@shell.Cmd(...).output()` and its three accessors,
   including a non-zero exit that is not a failure.
 - `check_diagnostics.mbtx`: streaming line-delimited `moon check` JSON with
   `each_line` and matching it as `@json.parse` output.
-- `workflow_scouts.mbtx`: the `moonbitlang/workflow` handoff a `subrun: true`
+- `cli_count_input.mbtx`: an `argparse` CLI reading a file or stdin through
+  async IO.
+- `workflow_scouts.mbtx`: the `moonbitlang/workflow` handoff a `subrun=true`
   snippet gets — fan out scouts, keep the answers that arrived, report the
   spend.
 
 The reusable-script form is taught from `share/workflow/check.mbtx`, the
 bundled workflow itself, so the prompt shows the same file `@builtin/` runs.
-`paths_and_env.mbtx` is verified here but not currently linked from the
-prompt.
+`paths_and_env.mbtx` and `cli_greet.mbtx` are verified here but not linked
+from the prompt; `cli_greet.mbtx` is the fixture
+`agent_tool/mbtx/mbtx_test.mbt` drives through the real tool to pin the `args`
+contract.
 
 Part 2 teaches the language:
 
@@ -41,9 +43,6 @@ Part 2 teaches the language:
 - `strings_and_views.mbtx`: interpolation, multi-line literals, code units,
   clamping views, shortlex ordering, in-place sort, map lookup, JSON
   patterns.
-- `cli_count_input.mbtx`: an `argparse` CLI reading a file or stdin through
-  async IO.
-
 The PTC tool description teaches host calls:
 
 - `ptc_guarded_edit.mbtx`: one guarded `edit` from a script and reading

@@ -66,34 +66,10 @@ fn default_prompt() -> String {
     #|`mbtx(description="...", source="...", filename="workflow/check.mbtx", args=["--deny-warn"])`
     #|
     #|Afterwards `mbtx(description="...", filename="workflow/check.mbtx", args=["--output-json"])`
-    #|reruns it with different arguments; dropping `args` reruns it with none.
+    #|reruns it with different arguments; dropping `args` reruns it with empty args.
     #|Ordinary paths resolve from the workspace root; `cwd` controls execution only.
     #|Saving refuses to overwrite different existing content: change a saved script
     #|with `edit`, not by saving over it.
-    #|
-    #|An example with parsed options:
-    #|
-    #|```mbtx
-    #|import { "moonbitlang/core/argparse" }
-    #|
-    #|fn main raise {
-    #|  let matches = @argparse.parse(
-    #|    Command(
-    #|      "greet",
-    #|      options=[
-    #|        OptionArg("name", long="name", default_values=["world"], about="Who to greet."),
-    #|      ],
-    #|    ),
-    #|  )
-    #|  guard matches.values.get("name") is Some([name]) else {
-    #|    fail("expected one value for --name")
-    #|  }
-    #|  println("Hello, \{name}!")
-    #|}
-    #|```
-    #|
-    #|`mbtx(description="...", filename="scripts/greet.mbtx", args=["--name", "Ada Lovelace"])`
-    #|prints `Hello, Ada Lovelace!`; omitting `args` prints `Hello, world!`.
     #|
     #|`mbtx(description="...", filename="@builtin/check.mbtx")` runs a workflow
     #|shipped under `<bundled-resources>/workflow/`. Namespaced
@@ -101,7 +77,7 @@ fn default_prompt() -> String {
     #|`@builtin/` is supported today; other namespaces are reserved. Use
     #|`./path/check.mbtx` for a literal workspace path.
     #|
-    #|### CLI Parsing And Native IO
+    #|### CLI Parsing
     #|
     #|- For CLI parsing, prefer `moonbitlang/core/argparse` and call
     #|  `@argparse.parse(...)` on a `Command`. Do not hand-roll option parsing with

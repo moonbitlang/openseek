@@ -32,8 +32,10 @@ $ printf 'hello\n' | moonx "$TESTDIR/../../share/examples/cli_count_input.mbtx" 
 6
 ```
 
-The greeting example is what the prompt promises about `args`: an option
-declared with a default, and the same script reading it from the caller.
+The greeting example pins the `args` contract: an option declared with a
+default, and the same script reading it from the caller. The prompt no longer
+inlines it; `agent_tool/mbtx/mbtx_test.mbt` drives the same file through the
+real tool, and these two cases pin what it prints.
 
 ```mooncram
 $ moonx "$TESTDIR/../../share/examples/cli_greet.mbtx"

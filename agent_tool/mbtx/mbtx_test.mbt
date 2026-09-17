@@ -39,16 +39,13 @@ async test "runs a pure-core program and returns its output" {
 }
 
 ///|
-/// The text of a `share/examples` script, asserting first that the system
-/// prompt still links it. `scripts/md_to_mbt_string` inlines that link into
-/// the generated prompt, so the file is what the model is shown: the example
-/// is verified here by running it, not by scraping the markdown for a fence.
-async fn prompt_example(name : String) -> String {
-  let prompt = @fs.read_file("prompt/default_prompt.mbt.md").text()
-  assert_true(
-    prompt.contains("[share/examples/\{name}](../share/examples/\{name})"),
-    msg="the default prompt no longer links share/examples/\{name}",
-  )
+/// The text of a `share/examples` script the prompt deliberately does not
+/// link. `cli_greet.mbtx` is not shown to the model — `share/workflow/
+/// check.mbtx` already teaches the `args` contract inline, four lines above
+/// where it used to sit — but it stays the fixture driven through the real
+/// tool below, being the smallest script whose whole behavior is its
+/// arguments.
+async fn unlinked_example(name : String) -> String {
   @fs.read_file("share/examples/\{name}").text()
 }
 
@@ -98,8 +95,8 @@ async test "default prompt reusable check script forwards arguments" {
 }
 
 ///|
-async test "default prompt argparse example reads process arguments implicitly" {
-  let source = prompt_example("cli_greet.mbtx")
+async test "cli_greet example reads process arguments implicitly" {
+  let source = unlinked_example("cli_greet.mbtx")
   @vfs.with_tmpdir(ws => {
     let saved = run_in(ws, {
       "source": source,
