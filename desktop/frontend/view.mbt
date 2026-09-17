@@ -1,6 +1,6 @@
 ///|
 fn can_stop(conv : Conversation) -> Bool {
-  conv.run is Open(..)
+  conv.run is Open(stage~, ..) && !(stage is Cancelling(..))
 }
 
 ///|

@@ -31,7 +31,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       queue_available=true,
       steer_available=root_ready &&
         conv.run is Open(stage~, ..) &&
-        !(stage is Cancelling),
+        !(stage is Cancelling(..)),
       can_stop=can_stop(conv),
       submit=if conv.queue_edit_id is Some(_) {
         @composer.SaveQueue
@@ -116,7 +116,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     )
   }
   let queued_items : Array[@composer.QueuedInput] = []
-  let interactive = conv.run is Open(stage~, ..) && !(stage is Cancelling)
+  let interactive = conv.run is Open(stage~, ..) && !(stage is Cancelling(..))
   for item in conv.queued_inputs {
     if steering.any(input => input.submission_id == item.id) {
       continue
