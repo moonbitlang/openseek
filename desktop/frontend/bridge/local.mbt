@@ -1,6 +1,9 @@
-// The desktop window's injected Proton connection. The request API and event
-// actors appear independently, so installation waits for the complete surface
-// before registering listeners or attaching to the host notification actor.
+// The desktop window's injected Proton connection. Proton installs the whole
+// `__MoonBit__` runtime — the request API, the extension events, and the
+// application events — synchronously when the page's V8 context is created,
+// before any page script runs. Installation therefore checks the surface
+// exactly once: a page that lacks it was never granted the bridge, and no
+// amount of waiting would change that.
 
 ///|
 priv struct LocalBridgeSub {
@@ -20,10 +23,9 @@ fn LocalBridgeSub::LocalBridgeSub(
 const LocalBridgeKey = "host-bridge:local"
 
 ///|
-/// Wait for Proton to inject the bridge, wire this connection's events, and
-/// attach to the host. The 25ms retries add up to roughly three seconds.
-/// Unloading makes every already queued retry harmless.
-fn LocalBridgeSub::install(self : LocalBridgeSub, attempt : Int) -> @cmd.Cmd {
+/// Wire this connection's events and attach to the host, or report the
+/// bridge unavailable right away when the page has no complete runtime.
+fn LocalBridgeSub::install(self : LocalBridgeSub) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard self.active else { return }
     guard @interop.openseek_api() is Some(request_api) &&
@@ -34,18 +36,14 @@ fn LocalBridgeSub::install(self : LocalBridgeSub, attempt : Int) -> @cmd.Cmd {
       @interop.js_prop(request_api, "agent.start") is Some(_) &&
       @interop.js_prop(extension_events, "on") is Some(_) &&
       @interop.js_prop(application_events, "on") is Some(_) else {
-      if attempt > 120 {
-        scheduler.add(
-          (self.dispatch)(
-            Unavailable(
-              channel=@interop.ChannelId::Local,
-              message="Bridge unavailable",
-            ),
+      scheduler.add(
+        (self.dispatch)(
+          Unavailable(
+            channel=@interop.ChannelId::Local,
+            message="Bridge unavailable",
           ),
-        )
-      } else {
-        scheduler.add(@cmd.delay(self.install(attempt + 1), 25))
-      }
+        ),
+      )
       return
     }
     self.wire(scheduler, extension_events, application_events)
@@ -171,7 +169,7 @@ fn LocalBridgeSub::update_dispatch(
 }
 
 ///|
-/// Retire every Proton listener and make queued injection retries inert.
+/// Retire every Proton listener and make a still-pending attach harmless.
 fn LocalBridgeSub::unload(self : LocalBridgeSub) -> Unit {
   self.active = false
   for unsubscribe in self.unsubscribers {
