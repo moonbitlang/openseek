@@ -109,6 +109,7 @@ fn default_prompt_zh() -> String {
     #|没有 shell 工具。所有命令，包括 `moon`、`git`，都由 `mbtx` 代码通过不经过 shell 的 `moonbitlang/async/shell` API 启动。`source` 参数是一份完整的 `.mbtx` 程序（导入语句加普通 MoonBit 代码）：
     #|
     #|- 每个用到的包都要单独导入，core 包也一样，并使用真实路径：例如 `moonbitlang/core/encoding/base64`，不是 `moonbitlang/core/base64`；`moon ide doc "@base64"` 会显示路径。
+    #|- 其中一个包可以写成 `"moonbitlang/async/shell" *` 导入，同时绑定非限定名称：`Cmd(...)` 与 `@shell.Cmd(...)` 都可用。每个脚本最多一个 `*`，且仅限 `.mbtx`。
     #|- 异步 IO 使用 `async fn main`。
     #|- 调用异步命令或 IO 的辅助函数也必须是 `async fn`；普通 `fn` 不能调用它们，因此异步会沿调用链传播。
     #|- 没有 `await`：正常书写异步调用，并用 `async` 标记异步函数和测试。
@@ -178,12 +179,12 @@ fn default_prompt_zh() -> String {
     #|///|
     #|import {
     #|  "moonbitlang/async",
-    #|  "moonbitlang/async/shell",
+    #|  "moonbitlang/async/shell" *,
     #|}
     #|
     #|///|
     #|async fn main {
-    #|  let out = @shell.Cmd("rg", [
+    #|  let out = Cmd("rg", [
     #|    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
     #|  ]).output()
     #|  println(out.stdout())
