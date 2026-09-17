@@ -8,6 +8,10 @@ fn current_exe_dir_ffi() -> UInt64 = "moonbitlang/core" "env/current_exe_dir"
 
 ///|
 #unsafe_skip_stub_check
+fn buffer_is_null(buffer : UInt64) -> Bool = "moonbitlang/async" "c_buffer/is_null"
+
+///|
+#unsafe_skip_stub_check
 fn os_string_decode_len(buffer : UInt64, offset : Int, len : Int) -> Int = "moonbitlang/async" "os_string/decode_len"
 
 ///|
@@ -31,7 +35,8 @@ fn executable_path_from_buffer(
   context : String,
 ) -> String raise @os_error.OSError {
   let errno = @os_error.get_errno()
-  if buffer == 0 {
+  // Host buffer handles are opaque; the ABI defines which handles are null.
+  if buffer_is_null(buffer) {
     raise OSError(errno, context~)
   }
   // Each successful import transfers one NUL-terminated native path buffer.

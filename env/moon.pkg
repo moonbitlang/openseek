@@ -11,9 +11,5 @@ import {
 supported_targets = "+native+wasm"
 
 options(
-  targets: {
-    "env_native.mbt": [ "native" ],
-    "env_wasm.mbt": [ "wasm" ],
-    "env_wasm_wbtest.mbt": [ "wasm" ],
-  },
+  targets: { "env_native.mbt": [ "native" ], "env_wasm.mbt": [ "wasm" ] },
 )
