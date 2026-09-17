@@ -2,7 +2,7 @@
 <!-- Development palette sketch; not bundled with the application.
      Current presets read ../styles/palette-{light,dark}.css on page load.
      The preview is illustrative, not the production frontend. -->
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -505,22 +505,22 @@
             SeekMoon
             <span style="color: #8994a5; font-weight: 400">/ Theme Lab</span>
           </h1>
-          <div class="subtitle">挑选一个起点，把明暗配色调成你喜欢的样子。</div>
+          <div class="subtitle">Choose a starting point and customize your light and dark palettes.</div>
         </div>
       </div>
       <div class="actions">
-        <button id="reset">重置此预设</button
-        ><button class="primary" id="copy">复制 CSS</button>
+        <button id="reset">Reset preset</button
+        ><button class="primary" id="copy">Copy CSS</button>
       </div>
     </header>
     <main>
-      <section class="controls" aria-label="调色板">
+      <section class="controls" aria-label="Palette">
         <div class="label">PALETTE EDITOR</div>
-        <div class="mode-switch" role="group" aria-label="配色模式">
-          <button type="button" data-mode="light">浅色 Light</button
-          ><button type="button" data-mode="dark">深色 Dark</button>
+        <div class="mode-switch" role="group" aria-label="Color mode">
+          <button type="button" data-mode="light">Light</button
+          ><button type="button" data-mode="dark">Dark</button>
         </div>
-        <label class="preset-label" for="preset">默认配色方案</label
+        <label class="preset-label" for="preset">Color presets</label
         ><select id="preset"></select>
         <p class="description" id="description"></p>
         <div class="status">
@@ -528,31 +528,31 @@
         </div>
         <div id="fields"></div>
       </section>
-      <section class="stage" aria-label="实时预览">
+      <section class="stage" aria-label="Live preview">
         <div class="stage-top">
           <div>
             <div class="label">LIVE PREVIEW</div>
             <h2 id="theme-name"></h2>
           </div>
           <label class="compare"
-            ><input id="compare" type="checkbox" />对照 SeekMoon 原配色</label
+            ><input id="compare" type="checkbox" />Compare with current SeekMoon colors</label
           >
         </div>
         <div class="preview-frame">
-          <iframe id="preview" title="SeekMoon 配色实时示意图"></iframe>
+          <iframe id="preview" title="SeekMoon live palette preview"></iframe>
         </div>
         <div class="preview-caption">
-          <span>相同布局与内容 · 颜色修改实时生效</span
-          ><span>应用代码不会被修改</span>
+          <span>Same layout and content · Colors update live</span
+          ><span>Application code stays unchanged</span>
         </div>
-        <div class="samples" id="samples" aria-label="组件颜色样例">
-          <span class="strong-sample">强强调色</span
-          ><span class="soft-sample">选中项</span
-          ><span class="error-sample">错误提示</span
-          ><span class="faint-sample">最弱文字</span
-          ><span class="selection-sample">拖选这段文字，查看选区颜色</span>
+        <div class="samples" id="samples" aria-label="Component color samples">
+          <span class="strong-sample">Strong accent</span
+          ><span class="soft-sample">Selected item</span
+          ><span class="error-sample">Error message</span
+          ><span class="faint-sample">Faint text</span
+          ><span class="selection-sample">Select this text to preview the selection color</span>
         </div>
-        <div class="section-heading">选择一个预设，或在左侧自由调整</div>
+        <div class="section-heading">Choose a preset or adjust the colors on the left</div>
         <div class="preset-grid" id="presets"></div>
         <div class="metrics" id="metrics"></div>
         <div class="source" id="source"></div>
@@ -563,9 +563,9 @@
       const PRESETS = [
         {
           id: "current",
-          name: "SeekMoon 当前",
+          name: "Current SeekMoon",
           description:
-            "直接读取 palette-dark.css。替换文件后刷新，查看新的原始配色。",
+            "Loaded from palette-dark.css. Replace the file and refresh to see the updated baseline.",
           colors: {},
           source: null,
         },
@@ -573,7 +573,7 @@
           id: "dracula",
           name: "Dracula",
           description:
-            "经典紫灰背景，紫色强调。基于 Dracula 色板适配 SeekMoon。",
+            "Classic purple-gray surfaces with purple accents, adapted from Dracula for SeekMoon.",
           colors: {
             "bg-canvas": "#282a36",
             "bg-surface": "#21222c",
@@ -603,7 +603,7 @@
         {
           id: "onedark",
           name: "One Dark Pro",
-          description: "蓝灰背景与柔和前景。基于 One Dark Pro 色板适配。",
+          description: "Blue-gray surfaces and soft foreground colors, adapted from One Dark Pro.",
           colors: {
             "bg-canvas": "#282c34",
             "bg-surface": "#21252b",
@@ -634,7 +634,7 @@
         {
           id: "flat",
           name: "Flat Dark",
-          description: "自定义扁平深色：接近的表面亮度、安静的边框。",
+          description: "A custom flat dark palette with similar surface brightness and subtle borders.",
           colors: {
             "bg-canvas": "#1e1e1e",
             "bg-surface": "#202020",
@@ -664,7 +664,7 @@
         {
           id: "github",
           name: "GitHub Dark",
-          description: "近黑背景、清晰蓝色。参考 GitHub Dark 的颜色语言适配。",
+          description: "Near-black surfaces and crisp blues, inspired by GitHub Dark.",
           colors: {
             "bg-canvas": "#0d1117",
             "bg-surface": "#161b22",
@@ -695,7 +695,7 @@
           id: "darcula",
           name: "Darcula",
           description:
-            "参考 Darcula 的中性灰与低饱和蓝；应用表面为自定义适配。",
+            "Neutral grays and muted blues inspired by Darcula, with custom application surfaces.",
           colors: {
             "bg-canvas": "#2b2b2b",
             "bg-surface": "#313335",
@@ -725,7 +725,7 @@
         {
           id: "graphite",
           name: "Graphite",
-          description: "自定义石墨灰：中性背景，均衡层次。",
+          description: "A custom graphite palette with neutral backgrounds and balanced layers.",
           colors: {
             "bg-canvas": "#151515",
             "bg-surface": "#1e1e1e",
@@ -755,7 +755,7 @@
         {
           id: "black",
           name: "Almost Black",
-          description: "自定义近纯黑：更深的主背景与更明显的层次。",
+          description: "A custom near-black palette with a deeper canvas and more distinct layers.",
           colors: {
             "bg-canvas": "#080808",
             "bg-surface": "#111111",
@@ -789,9 +789,9 @@
           {
             id: "light-current",
             mode: "light",
-            name: "SeekMoon 当前 · Light",
+            name: "Current SeekMoon · Light",
             description:
-              "直接读取 palette-light.css。替换文件后刷新，查看新的原始配色。",
+              "Loaded from palette-light.css. Replace the file and refresh to see the updated baseline.",
             colors: {},
             source: null,
           },
@@ -799,7 +799,7 @@
             id: "light-paper",
             mode: "light",
             name: "Paper Light",
-            description: "自定义浅色预设。柔和白纸底，保留清晰的蓝色强调。",
+            description: "A custom light palette with soft paper-white backgrounds and clear blue accents.",
             colors: {
               "bg-canvas": "#f7f8fa",
               "bg-surface": "#ffffff",
@@ -830,7 +830,7 @@
             id: "light-flat",
             mode: "light",
             name: "Flat Light",
-            description: "自定义浅色预设。接近的表面亮度，减弱分区和边框。",
+            description: "A custom light palette with similar surface brightness and subtle divisions and borders.",
             colors: {
               "bg-canvas": "#f5f5f5",
               "bg-surface": "#f8f8f8",
@@ -861,7 +861,7 @@
             id: "light-cool",
             mode: "light",
             name: "Cool Light",
-            description: "自定义浅色预设。略带冷灰的底色，更明确的面板层次。",
+            description: "A custom light palette with cool gray backgrounds and distinct panel layers.",
             colors: {
               "bg-canvas": "#edf1f6",
               "bg-surface": "#ffffff",
@@ -893,7 +893,7 @@
             mode: "light",
             name: "Warm Light",
             description:
-              "自定义浅色预设。浅米白背景与温和灰文字，强调色仍为蓝色。",
+              "A custom light palette with warm ivory backgrounds, soft gray text, and blue accents.",
             colors: {
               "bg-canvas": "#faf8f3",
               "bg-surface": "#fffefa",
@@ -924,7 +924,7 @@
             id: "light-contrast",
             mode: "light",
             name: "Clear Light",
-            description: "自定义浅色预设。纯白背景、较深文字，突出信息对比。",
+            description: "A custom light palette with pure white backgrounds and darker text for stronger contrast.",
             colors: {
               "bg-canvas": "#ffffff",
               "bg-surface": "#f2f3f5",
@@ -955,50 +955,50 @@
       );
       const FIELDS = [
         [
-          "背景与层次",
+          "Backgrounds and layers",
           [
-            ["bg-canvas", "主背景"],
-            ["bg-surface", "侧栏 / 卡片"],
-            ["bg-subtle", "次级表面"],
-            ["border", "边框"],
-            ["border-subtle", "弱分隔线"],
+            ["bg-canvas", "Canvas"],
+            ["bg-surface", "Sidebar / cards"],
+            ["bg-subtle", "Subtle surface"],
+            ["border", "Border"],
+            ["border-subtle", "Subtle border"],
           ],
         ],
         [
-          "文字",
+          "Text",
           [
-            ["text-primary", "正文"],
-            ["text-secondary", "次要文字"],
-            ["text-muted", "辅助文字"],
-            ["text-faint", "最弱文字"],
-            ["code", "代码正文"],
+            ["text-primary", "Body text"],
+            ["text-secondary", "Secondary text"],
+            ["text-muted", "Muted text"],
+            ["text-faint", "Faint text"],
+            ["code", "Code text"],
           ],
         ],
         [
-          "强调与选中",
+          "Accents and selection",
           [
-            ["accent", "强调色"],
-            ["accent-strong", "链接 / 强调文字"],
-            ["on-accent", "按钮文字"],
-            ["on-accent-strong", "强强调色上的文字"],
-            ["accent-soft", "选中背景"],
-            ["accent-border", "强调边框"],
-            ["text-selection", "文本选区"],
+            ["accent", "Accent"],
+            ["accent-strong", "Links / accent text"],
+            ["on-accent", "Button text"],
+            ["on-accent-strong", "Text on strong accent"],
+            ["accent-soft", "Selection background"],
+            ["accent-border", "Accent border"],
+            ["text-selection", "Text selection"],
           ],
         ],
         [
-          "状态",
+          "Status",
           [
-            ["success", "成功"],
-            ["warning", "警告"],
-            ["danger", "错误"],
-            ["danger-soft", "错误背景"],
-            ["danger-border", "错误边框"],
+            ["success", "Success"],
+            ["warning", "Warning"],
+            ["danger", "Error"],
+            ["danger-soft", "Error background"],
+            ["danger-border", "Error border"],
           ],
         ],
       ];
       const PREVIEW =
-        '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;background:#101114;color:#ededf0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;-webkit-font-smoothing:antialiased}.page{padding:34px 40px;width:1280px}.eyebrow{font-size:11px;letter-spacing:2.5px;color:#8e919a;margin-bottom:10px}.heading{display:flex;align-items:baseline;gap:18px;margin-bottom:24px}h1{font-size:28px;font-weight:600;margin:0}.caption{color:#a0a2ac;font-size:14px}.window{height:650px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg-canvas);color:var(--text-primary);display:grid;grid-template-columns:220px 1fr 250px;font-size:13px;line-height:1.6;box-shadow:0 18px 60px #0004}.sidebar{background:var(--bg-surface);border-right:1px solid var(--border);display:flex;flex-direction:column}.bar{height:48px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 17px;gap:9px}.dot{height:11px;width:11px;border-radius:50%;display:inline-block}.tools{margin-left:auto;color:var(--text-secondary)}.sidebody{padding:22px 12px}.sect{font-size:11px;letter-spacing:1px;color:var(--text-muted);margin:0 10px 8px}.row{padding:7px 10px;border-radius:6px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row.active{color:var(--accent-strong);background:var(--accent-soft)}.gap{height:22px}.footer{margin-top:auto;padding:14px 22px;border-top:1px solid var(--border);color:var(--text-secondary)}.chat{display:flex;flex-direction:column;min-width:0}.chat .bar{justify-content:space-between}.small{font-size:11px;color:var(--text-muted)}.conversation{padding:27px 32px;flex:1}.who{font-size:11px;color:var(--text-secondary);margin-bottom:9px;font-weight:600}.user{margin-bottom:27px}.answer{margin-bottom:16px}.tool{font:12px SFMono-Regular,Menlo,monospace;padding:11px 13px;border:1px solid var(--border);border-radius:6px;margin:13px 0;color:var(--text-secondary);background:var(--bg-surface)}.ok{color:var(--success)}.link{color:var(--accent-strong)}.code{background:var(--bg-surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}.codehead{padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-muted)}pre{font:12px/1.8 SFMono-Regular,Menlo,monospace;margin:10px 13px;color:var(--text-primary)}.kw{color:var(--accent-strong)}.str{color:var(--success)}.note{font-size:11px;color:var(--text-muted);margin-top:12px}.compose{padding:15px 22px 18px;border-top:1px solid var(--border)}.input{background:var(--bg-surface);border:1px solid var(--border);border-radius:9px;padding:13px}.placeholder{color:var(--text-muted);margin-bottom:26px}.inputbar{display:flex;gap:14px;align-items:center;color:var(--text-secondary);font-size:11px}.send{margin-left:auto;background:var(--accent);color:var(--on-accent);border-radius:6px;width:27px;height:27px;text-align:center;line-height:27px;font-size:17px}.files{background:var(--bg-surface);border-left:1px solid var(--border)}.filetabs{display:flex;gap:19px;padding:14px 16px;border-bottom:1px solid var(--border);height:48px}.selected{color:var(--accent-strong)}.tree{padding:16px 9px}.tree .row{font-size:12px}.indent{padding-left:26px}.diff{margin:9px 15px;border-top:1px solid var(--border);padding-top:14px;color:var(--text-secondary);font-size:11px}.stat{float:right;color:var(--success)}.danger{color:var(--danger)}.swatches{display:flex;gap:22px;margin-top:24px}.swatch{display:flex;gap:9px;align-items:center;font-size:11px;color:#a0a2ac}.chip{width:32px;height:32px;border-radius:7px;border:1px solid #ffffff20}.hex{display:block;color:#e1e2e7;font:11px/1.8 Menlo,monospace}.nav{display:flex;gap:9px;padding:18px 40px 0}.nav button{border:1px solid #444;background:#25262d;color:#eee;padding:9px 16px;border-radius:7px;cursor:pointer}.nav button.active{background:#e3e4eb;color:#18191d}body{background:var(--bg-canvas)}.window{width:1200px;height:680px;border-radius:0;border:0;box-shadow:none}.kw{color:var(--accent-strong)}.code pre{color:var(--code)}.send{background:var(--accent);color:var(--on-accent)}.str{color:var(--success)}.row:hover{background:var(--bg-subtle)}::selection{background:var(--text-selection)}</style><div class="window"><aside class="sidebar"><div class="bar"><i class="dot" style="background:#ff5f57"></i><i class="dot" style="background:#febc2e"></i><i class="dot" style="background:#28c840"></i><span class="tools">◫</span></div><div class="sidebody"><div class="sect">CHATS <span style="float:right">＋</span></div><div class="row">新会话</div><div class="gap"></div><div class="sect">PROJECTS</div><div class="row">⌄ &nbsp; SeekMoon</div><div class="row active">修复窗口布局问题</div><div class="row">会话导出与分享</div><div class="row">文件树无障碍支持</div><div class="row">Review 路径筛选</div><div class="gap"></div><div class="row">› &nbsp; Proton</div><div class="row">› &nbsp; MoonBit</div></div><div class="footer">⚙ &nbsp; Settings</div></aside><main class="chat"><div class="bar"><span>修复窗口布局问题 <span class="small"> &nbsp; SeekMoon</span></span><span class="tools">⇧ &nbsp; ◫</span></div><div class="conversation"><div class="user"><div class="who">YOU</div>请检查保存对话框打开时的窗口布局。</div><div class="who">SEEKMOON</div><div class="answer">已定位到红绿灯按钮的重复布局。<br>现在只在最终位置发生变化时更新窗口。</div><div class="tool"><span class="ok">✓</span> &nbsp; moon test --target native <span style="float:right" class="ok">passed</span></div><div class="code"><div class="codehead">MoonBit <span style="float:right">Copy</span></div><pre><span class="kw">let</span> appearance = @proton.system_appearance()\n<span class="kw">let</span> title = <span class="str">"SeekMoon"</span>\n\n<span class="kw">// Keep the window appearance consistent.</span></pre></div><div style="margin-top:16px">修改集中在 <span class="link">窗口布局实现</span>，可以继续验证导出。</div><div class="note"><span class="ok">✓</span> Completed &nbsp; · &nbsp; 3 files changed &nbsp; · &nbsp; 24s</div></div><div class="compose"><div class="input"><div class="placeholder">继续提问，或输入 / 查看命令…</div><div class="inputbar"><span>＋</span><span>SeekMoon ▾</span><span>DS Flash ▾</span><span>◐ High</span><span class="send">↑</span></div></div></div></main><aside class="files"><div class="filetabs"><span class="selected">Files</span><span>Review</span><span>Terminal</span></div><div class="tree"><div class="row">⌄ &nbsp; desktop</div><div class="row indent">⌄ &nbsp; frontend</div><div class="row indent">&nbsp; &nbsp; ◇ view.mbt</div><div class="row indent">&nbsp; &nbsp; ◇ update.mbt</div><div class="row indent">⌄ &nbsp; styles</div><div class="row active indent">&nbsp; &nbsp; # tokens.css</div><div class="row indent">&nbsp; &nbsp; # sidebar.css</div><div class="row">› &nbsp; backend</div><div class="row">◇ moon.work</div></div><div class="diff">CHANGES <span class="stat">+18 <span class="danger">−9</span></span><p>3 files changed</p><p><span class="ok">●</span> &nbsp; Tests passed</p><p style="color:var(--warning)">△ &nbsp; Native review pending</p></div></aside></div></html>';
+        '<!doctype html><html lang="en"><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;background:#101114;color:#ededf0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;-webkit-font-smoothing:antialiased}.page{padding:34px 40px;width:1280px}.eyebrow{font-size:11px;letter-spacing:2.5px;color:#8e919a;margin-bottom:10px}.heading{display:flex;align-items:baseline;gap:18px;margin-bottom:24px}h1{font-size:28px;font-weight:600;margin:0}.caption{color:#a0a2ac;font-size:14px}.window{height:650px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg-canvas);color:var(--text-primary);display:grid;grid-template-columns:220px 1fr 250px;font-size:13px;line-height:1.6;box-shadow:0 18px 60px #0004}.sidebar{background:var(--bg-surface);border-right:1px solid var(--border);display:flex;flex-direction:column}.bar{height:48px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 17px;gap:9px}.dot{height:11px;width:11px;border-radius:50%;display:inline-block}.tools{margin-left:auto;color:var(--text-secondary)}.sidebody{padding:22px 12px}.sect{font-size:11px;letter-spacing:1px;color:var(--text-muted);margin:0 10px 8px}.row{padding:7px 10px;border-radius:6px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row.active{color:var(--accent-strong);background:var(--accent-soft)}.gap{height:22px}.footer{margin-top:auto;padding:14px 22px;border-top:1px solid var(--border);color:var(--text-secondary)}.chat{display:flex;flex-direction:column;min-width:0}.chat .bar{justify-content:space-between}.small{font-size:11px;color:var(--text-muted)}.conversation{padding:27px 32px;flex:1}.who{font-size:11px;color:var(--text-secondary);margin-bottom:9px;font-weight:600}.user{margin-bottom:27px}.answer{margin-bottom:16px}.tool{font:12px SFMono-Regular,Menlo,monospace;padding:11px 13px;border:1px solid var(--border);border-radius:6px;margin:13px 0;color:var(--text-secondary);background:var(--bg-surface)}.ok{color:var(--success)}.link{color:var(--accent-strong)}.code{background:var(--bg-surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}.codehead{padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-muted)}pre{font:12px/1.8 SFMono-Regular,Menlo,monospace;margin:10px 13px;color:var(--text-primary)}.kw{color:var(--accent-strong)}.str{color:var(--success)}.note{font-size:11px;color:var(--text-muted);margin-top:12px}.compose{padding:15px 22px 18px;border-top:1px solid var(--border)}.input{background:var(--bg-surface);border:1px solid var(--border);border-radius:9px;padding:13px}.placeholder{color:var(--text-muted);margin-bottom:26px}.inputbar{display:flex;gap:14px;align-items:center;color:var(--text-secondary);font-size:11px}.send{margin-left:auto;background:var(--accent);color:var(--on-accent);border-radius:6px;width:27px;height:27px;text-align:center;line-height:27px;font-size:17px}.files{background:var(--bg-surface);border-left:1px solid var(--border)}.filetabs{display:flex;gap:19px;padding:14px 16px;border-bottom:1px solid var(--border);height:48px}.selected{color:var(--accent-strong)}.tree{padding:16px 9px}.tree .row{font-size:12px}.indent{padding-left:26px}.diff{margin:9px 15px;border-top:1px solid var(--border);padding-top:14px;color:var(--text-secondary);font-size:11px}.stat{float:right;color:var(--success)}.danger{color:var(--danger)}.swatches{display:flex;gap:22px;margin-top:24px}.swatch{display:flex;gap:9px;align-items:center;font-size:11px;color:#a0a2ac}.chip{width:32px;height:32px;border-radius:7px;border:1px solid #ffffff20}.hex{display:block;color:#e1e2e7;font:11px/1.8 Menlo,monospace}.nav{display:flex;gap:9px;padding:18px 40px 0}.nav button{border:1px solid #444;background:#25262d;color:#eee;padding:9px 16px;border-radius:7px;cursor:pointer}.nav button.active{background:#e3e4eb;color:#18191d}body{background:var(--bg-canvas)}.window{width:1200px;height:680px;border-radius:0;border:0;box-shadow:none}.kw{color:var(--accent-strong)}.code pre{color:var(--code)}.send{background:var(--accent);color:var(--on-accent)}.str{color:var(--success)}.row:hover{background:var(--bg-subtle)}::selection{background:var(--text-selection)}</style><div class="window"><aside class="sidebar"><div class="bar"><i class="dot" style="background:#ff5f57"></i><i class="dot" style="background:#febc2e"></i><i class="dot" style="background:#28c840"></i><span class="tools">◫</span></div><div class="sidebody"><div class="sect">CHATS <span style="float:right">＋</span></div><div class="row">New chat</div><div class="gap"></div><div class="sect">PROJECTS</div><div class="row">⌄ &nbsp; SeekMoon</div><div class="row active">Fix window layout</div><div class="row">Export and share chats</div><div class="row">File tree accessibility</div><div class="row">Review path filters</div><div class="gap"></div><div class="row">› &nbsp; Proton</div><div class="row">› &nbsp; MoonBit</div></div><div class="footer">⚙ &nbsp; Settings</div></aside><main class="chat"><div class="bar"><span>Fix window layout <span class="small"> &nbsp; SeekMoon</span></span><span class="tools">⇧ &nbsp; ◫</span></div><div class="conversation"><div class="user"><div class="who">YOU</div>Check the window layout when the save dialog opens.</div><div class="who">SEEKMOON</div><div class="answer">The traffic light buttons were being laid out repeatedly.<br>The window now updates only when their final positions change.</div><div class="tool"><span class="ok">✓</span> &nbsp; moon test --target native <span style="float:right" class="ok">passed</span></div><div class="code"><div class="codehead">MoonBit <span style="float:right">Copy</span></div><pre><span class="kw">let</span> appearance = @proton.system_appearance()\n<span class="kw">let</span> title = <span class="str">"SeekMoon"</span>\n\n<span class="kw">// Keep the window appearance consistent.</span></pre></div><div style="margin-top:16px">The changes are in the <span class="link">window layout code</span>. Export is ready to test.</div><div class="note"><span class="ok">✓</span> Completed &nbsp; · &nbsp; 3 files changed &nbsp; · &nbsp; 24s</div></div><div class="compose"><div class="input"><div class="placeholder">Ask a follow-up, or type / for commands…</div><div class="inputbar"><span>＋</span><span>SeekMoon ▾</span><span>DS Flash ▾</span><span>◐ High</span><span class="send">↑</span></div></div></div></main><aside class="files"><div class="filetabs"><span class="selected">Files</span><span>Review</span><span>Terminal</span></div><div class="tree"><div class="row">⌄ &nbsp; desktop</div><div class="row indent">⌄ &nbsp; frontend</div><div class="row indent">&nbsp; &nbsp; ◇ view.mbt</div><div class="row indent">&nbsp; &nbsp; ◇ update.mbt</div><div class="row indent">⌄ &nbsp; styles</div><div class="row active indent">&nbsp; &nbsp; # tokens.css</div><div class="row indent">&nbsp; &nbsp; # sidebar.css</div><div class="row">› &nbsp; backend</div><div class="row">◇ moon.work</div></div><div class="diff">CHANGES <span class="stat">+18 <span class="danger">−9</span></span><p>3 files changed</p><p><span class="ok">●</span> &nbsp; Tests passed</p><p style="color:var(--warning)">△ &nbsp; Native review pending</p></div></aside></div></html>';
       const $ = (s) => document.querySelector(s),
         storageKey = "seekmoon-theme-lab-v1";
       let selected = "current",
@@ -1054,8 +1054,8 @@
           storageOK = false;
         }
         $("#save-state").textContent = storageOK
-          ? "自动保存在此浏览器"
-          : "当前浏览器无法保存，请复制 CSS";
+          ? "Saved automatically in this browser"
+          : "Storage is unavailable in this browser. Copy the CSS to save your changes.";
       }
       let noticeTimer;
       function notify(message) {
@@ -1073,7 +1073,7 @@
           button.type = "button";
           button.className = "preset-card";
           button.dataset.preset = p.id;
-          button.setAttribute("aria-label", `应用 ${p.name}`);
+          button.setAttribute("aria-label", `Apply ${p.name}`);
           const colors = [
             "bg-canvas",
             "bg-surface",
@@ -1111,7 +1111,7 @@
         for (const [key, label] of fields) {
           const row = document.createElement("div");
           row.className = "field";
-          row.innerHTML = `<label for="hex-${key}">${label}</label><input type="color" id="color-${key}" aria-label="${label}取色器"><input type="text" id="hex-${key}" aria-label="${label} HEX" spellcheck="false" maxlength="7">`;
+          row.innerHTML = `<label for="hex-${key}">${label}</label><input type="color" id="color-${key}" aria-label="${label} color picker"><input type="text" id="hex-${key}" aria-label="${label} HEX" spellcheck="false" maxlength="7">`;
           const picker = row.querySelector("input[type=color]"),
             hex = row.querySelector("input[type=text]");
           picker.addEventListener("input", () => edit(key, picker.value));
@@ -1182,13 +1182,13 @@
           );
         $("#preset").value = selected;
         $("#theme-name").textContent = compare
-          ? original().name + " · 对照"
+          ? original().name + " · Comparison"
           : p.name;
         $("#description").textContent = p.description;
         $("#modified").textContent =
           JSON.stringify(current()) === JSON.stringify(p.colors)
-            ? "预设原始值"
-            : "已自定义";
+            ? "Preset defaults"
+            : "Customized";
         for (const b of document.querySelectorAll("[data-preset]"))
           b.setAttribute("aria-pressed", String(b.dataset.preset === selected));
         for (const [k, v] of Object.entries(c))
@@ -1200,9 +1200,9 @@
             doc.documentElement.style.setProperty("--" + k, v);
         }
         const pairs = [
-          ["正文 / 主背景", "text-primary", "bg-canvas"],
-          ["次要文字 / 卡片", "text-secondary", "bg-surface"],
-          ["按钮文字 / 强调色", "on-accent", "accent"],
+          ["Body text / canvas", "text-primary", "bg-canvas"],
+          ["Secondary text / cards", "text-secondary", "bg-surface"],
+          ["Button text / accent", "on-accent", "accent"],
         ];
         $("#metrics").replaceChildren();
         for (const [label, fg, bg] of pairs) {
@@ -1215,17 +1215,17 @@
         const source = $("#source");
         source.replaceChildren();
         source.append(
-          "这是配色示意，不是运行中的 SeekMoon。经典主题按应用角色适配。",
+          "This is a palette preview, not the running SeekMoon app. Classic themes are adapted to application color roles.",
         );
         if (p.source) {
           const a = document.createElement("a");
           a.href = p.source;
           a.target = "_blank";
           a.rel = "noreferrer";
-          a.textContent = " 查看预设参考来源 ↗";
+          a.textContent = " View preset source ↗";
           source.append(a);
         }
-        source.append(" 对比度仅列出以上三组颜色。");
+        source.append(" Contrast ratios cover only the three color pairs above.");
       }
       $("#preview").addEventListener("load", render);
       $("#preview").srcdoc = PREVIEW;
@@ -1243,7 +1243,7 @@
       $("#reset").onclick = () => {
         delete drafts[selected];
         choose(selected);
-        notify("已恢复当前预设");
+        notify("Current preset restored");
       };
       function cssExport() {
         return (
@@ -1264,9 +1264,9 @@
       $("#copy").onclick = async () => {
         try {
           await navigator.clipboard.writeText(cssExport());
-          notify(`CSS 已复制，可直接替换 palette-${mode()}.css 的内容`);
+          notify(`CSS copied. Replace the contents of palette-${mode()}.css with it.`);
         } catch {
-          notify("复制失败，请允许此页面访问剪贴板后重试");
+          notify("Copy failed. Allow clipboard access for this page and try again.");
         }
       };
       syncInputs();
