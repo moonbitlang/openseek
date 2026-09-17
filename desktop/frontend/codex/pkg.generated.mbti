@@ -65,6 +65,7 @@ pub(all) struct PageActions {
   workspace_label : (@common.Uri) -> String
   transcript : @html.Html
   composer : @html.Html
+  detail_toggle : @html.Html
 }
 
 pub(all) struct SidebarContext {

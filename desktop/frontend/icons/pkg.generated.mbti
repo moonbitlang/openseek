@@ -104,6 +104,8 @@ pub fn icon_target() -> @html.Html
 
 pub fn icon_tasklist() -> @html.Html
 
+pub fn icon_telescope() -> @html.Html
+
 pub fn icon_terminal() -> @html.Html
 
 pub fn icon_tools() -> @html.Html
