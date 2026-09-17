@@ -21,7 +21,7 @@ pub fn ChatMessageError::to_repr(Self) -> @debug.Repr
 // Types and methods
 pub struct ChatMessage {
   role : Role
-  content : Array[ContentPart]
+  content : Content
   tool_calls : Array[ToolCall]
   reasoning_content : String?
 } derive(@debug.Debug)
@@ -34,6 +34,13 @@ pub struct ChatResponse {
   usage : Usage
 } derive(@debug.Debug)
 pub impl @json.FromJson for ChatResponse
+
+type Content derive(@debug.Debug)
+pub fn Content::Content(Array[ContentPart]) -> Self
+pub fn Content::is_text_only(Self) -> Bool
+pub fn Content::iter(Self) -> Iter[ContentPart]
+pub fn Content::text(Self) -> String
+pub fn Content::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ContentPart {
   Text(text~ : String)

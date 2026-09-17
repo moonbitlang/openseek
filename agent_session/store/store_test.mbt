@@ -293,13 +293,8 @@ async test "generic append persists summary events the projection honors" {
   assert_eq(messages.length(), 2)
   assert_true(messages[0].role is System)
   assert_true(messages[1].role is User)
-  assert_true(
-    messages[1].content is [Text(text~)] &&
-    text.contains("[conversation summary]"),
-  )
-  assert_true(
-    messages[1].content is [Text(text~)] && text.contains("handoff summary"),
-  )
+  assert_true(messages[1].content.text().contains("[conversation summary]"))
+  assert_true(messages[1].content.text().contains("handoff summary"))
 }
 
 ///|

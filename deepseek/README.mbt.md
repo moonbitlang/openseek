@@ -32,6 +32,10 @@ The HTTP client lives in `moonbitlang/openseek/deepseek/client`.
   Request encoders reject invalid content with `ChatMessageError`.
   Use `Assistant` with `tool_calls` for the assistant
   message that must be sent back after DeepSeek requests native tool calls.
+- `Content`: wraps the message's ordered parts. `content.text()` concatenates
+  every text fragment without separators and skips files; `content.iter()`
+  visits every part. `content.is_text_only()` distinguishes pure text from
+  content with files when text equality alone would lose information.
 - `ResponseFormat`: optional assistant content constraint. Leave absent for
   normal text; pass `JsonObject` only when the assistant content must be a JSON
   object.
@@ -125,7 +129,7 @@ classDiagram
 
   class ChatMessage {
     +Role role
-    +ContentPart[] content
+    +Content content
     +ToolCall[] tool_calls
     +String? reasoning_content
     +ChatMessage(Role, content, tool_calls, reasoning_content)

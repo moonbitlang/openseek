@@ -84,9 +84,8 @@ async test "goal met defers the tombstone to a batch-safe boundary" {
     // The goal is durably gone and replay synthesizes nothing.
     assert_true(result.current_goal() is None)
     for message in result.chat_messages() {
-      assert_true(
-        message.content is [Text(text~)] &&
-        !text.contains("previous agent process exited"),
+      assert_false(
+        message.content.text().contains("previous agent process exited"),
       )
     }
   }
