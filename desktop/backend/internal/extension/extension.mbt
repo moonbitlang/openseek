@@ -354,42 +354,39 @@ pub fn openseek_capability(
   views : BrowserViews,
 ) -> @proton_extension.RendererCapability {
   let endpoints = @api.endpoints(state, bridge.host_connection)
-  endpoints.push(
-    @endpoint.Endpoint::window(@commands.host_connect, (context, _) => {
+  let window_only = [
+    @endpoint.WindowEndpoint(@commands.host_connect, (context, _) => {
       // A reloaded page allocates browser ids from scratch; the previous
       // page's native views must not survive its attachment.
       views.close_all()
       bridge.connect(context)
     }),
-  )
-  endpoints.push(
-    @endpoint.Endpoint::window(@commands.shell_open_external, (_, payload) => {
+    WindowEndpoint(@commands.shell_open_external, (_, payload) => {
       open_external(payload)
     }),
-  )
-  endpoints.push(
-    @endpoint.Endpoint::window(@commands.session_export, (context, payload) => {
+    WindowEndpoint(@commands.session_export, (context, payload) => {
       export_session(context, state, payload)
     }),
-  )
-  endpoints.push(
-    @endpoint.Endpoint::window(@commands.session_share, (_, payload) => {
+    WindowEndpoint(@commands.session_share, (_, payload) => {
       SessionShare::{ state, payload, }.publish()
     }),
-  )
+  ]
   for endpoint in window_endpoints(views) {
-    endpoints.push(endpoint)
+    window_only.push(endpoint)
+  }
+  let routes = endpoints.map(endpoint => endpoint.route())
+  for endpoint in window_only {
+    routes.push(endpoint.route())
   }
   @proton_extension.capability(
-    @proton_extension.typed(
-      @commands.extension_contract,
-      endpoints.map(endpoint => endpoint.route()),
-      registrar => {
-        for endpoint in endpoints {
-          endpoint.bind(registrar)
-        }
-      },
-    ),
+    @proton_extension.typed(@commands.extension_contract, routes, registrar => {
+      for endpoint in endpoints {
+        endpoint.bind(registrar)
+      }
+      for endpoint in window_only {
+        endpoint.bind(registrar)
+      }
+    }),
   )
 }
 

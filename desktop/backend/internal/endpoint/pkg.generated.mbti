@@ -13,21 +13,23 @@ import {
 // Values
 
 // Errors
-pub(all) suberror InvalidEndpointPayload {
-  InvalidEndpointPayload(String)
-}
 
 // Types and methods
 type Endpoint
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::Endpoint(@commands.Command[Payload, Reply], async (Payload) -> Reply) -> Self
 pub fn Endpoint::bind(Self, @command.CommandRegistrar) -> Unit raise
 pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex(@commands.Command[Payload, @protocol.CodexCommandReply[Reply]], async (Payload) -> Reply) -> Self
 pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex_sync(@commands.Command[Payload, @protocol.CodexCommandReply[Reply]], (Payload) -> Reply raise) -> Self
-pub async fn Endpoint::invoke_remote(Self, Json) -> Json
+pub async fn Endpoint::invoke(Self, Json) -> Json
 pub fn Endpoint::name(Self) -> String
-pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::remote(@commands.Command[Payload, Reply], async (Payload) -> Reply) -> Self
-pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::remote_sync(@commands.Command[Payload, Reply], (Payload) -> Reply raise) -> Self
 pub fn Endpoint::route(Self) -> @proton_contract.ContractRoute
-pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::window(@commands.Command[Payload, Reply], async (@core.AppCommandRequestContext, Payload) -> Reply) -> Self
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::sync(@commands.Command[Payload, Reply], (Payload) -> Reply raise) -> Self
+
+type WindowEndpoint
+pub fn[Payload : @json.FromJson, Reply : ToJson] WindowEndpoint::WindowEndpoint(@commands.Command[Payload, Reply], async (@core.AppCommandRequestContext, Payload) -> Reply) -> Self
+pub fn WindowEndpoint::bind(Self, @command.CommandRegistrar) -> Unit raise
+pub fn WindowEndpoint::name(Self) -> String
+pub fn WindowEndpoint::route(Self) -> @proton_contract.ContractRoute
 
 // Type aliases
 

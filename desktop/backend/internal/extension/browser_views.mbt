@@ -386,54 +386,48 @@ fn BrowserViews::focused_browser(
 /// handlers they use. A relay browser owns neither, so none of these commands
 /// enters the shared remote catalog. `browser.navigate` deliberately binds
 /// the same create-if-missing handler as `browser.open`.
-fn window_endpoints(views : BrowserViews) -> Array[@endpoint.Endpoint] {
+fn window_endpoints(views : BrowserViews) -> Array[@endpoint.WindowEndpoint] {
   [
-    @endpoint.Endpoint::window(@commands.app_system_appearance, (_, _) => {
+    WindowEndpoint(@commands.app_system_appearance, (_, _) => {
       dark: @proton.system_appearance().color_scheme == Dark,
     }),
-    @endpoint.Endpoint::window(@commands.app_close_window, (_, _) => {
+    WindowEndpoint(@commands.app_close_window, (_, _) => {
       views.attached_window().close()
       Acknowledged
     }),
-    @endpoint.Endpoint::window(@commands.app_focused_browser, (_, _) => {
+    WindowEndpoint(@commands.app_focused_browser, (_, _) => {
       views.focused_browser()
     }),
-    @endpoint.Endpoint::window(@commands.browser_open, (_, payload) => {
+    WindowEndpoint(@commands.browser_open, (_, payload) => views.open(payload)),
+    WindowEndpoint(@commands.browser_navigate, (_, payload) => {
       views.open(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_navigate, (_, payload) => {
-      views.open(payload)
-    }),
-    @endpoint.Endpoint::window(@commands.browser_back, (_, payload) => {
-      views.back(payload)
-    }),
-    @endpoint.Endpoint::window(@commands.browser_forward, (_, payload) => {
+    WindowEndpoint(@commands.browser_back, (_, payload) => views.back(payload)),
+    WindowEndpoint(@commands.browser_forward, (_, payload) => {
       views.forward(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_reload, (_, payload) => {
+    WindowEndpoint(@commands.browser_reload, (_, payload) => {
       views.reload(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_set_theme, (_, payload) => {
+    WindowEndpoint(@commands.browser_set_theme, (_, payload) => {
       views.set_theme(payload)
     }),
-    @endpoint.Endpoint::window(@commands.app_open_devtools, (_, _) => {
+    WindowEndpoint(@commands.app_open_devtools, (_, _) => {
       views.open_app_devtools()
     }),
-    @endpoint.Endpoint::window(@commands.app_set_titlebar_theme, (_, payload) => {
+    WindowEndpoint(@commands.app_set_titlebar_theme, (_, payload) => {
       views.set_app_titlebar_theme(payload)
     }),
-    @endpoint.Endpoint::window(@commands.app_toggle_maximized, (_, _) => {
+    WindowEndpoint(@commands.app_toggle_maximized, (_, _) => {
       views.toggle_app_maximized()
     }),
-    @endpoint.Endpoint::window(@commands.browser_set_bounds, (_, payload) => {
+    WindowEndpoint(@commands.browser_set_bounds, (_, payload) => {
       views.set_bounds(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_set_visible, (_, payload) => {
+    WindowEndpoint(@commands.browser_set_visible, (_, payload) => {
       views.set_visible(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_close, (_, payload) => {
-      views.close(payload)
-    }),
+    WindowEndpoint(@commands.browser_close, (_, payload) => views.close(payload)),
   ]
 }
 

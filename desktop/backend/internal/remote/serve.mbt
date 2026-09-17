@@ -389,10 +389,10 @@ async fn run_request(
     is Some(endpoint) else {
     return error_envelope(id, CodeMethodNotFound, "unknown method '\{method_}'")
   }
-  let result = endpoint.invoke_remote(params) catch {
+  let result = endpoint.invoke(params) catch {
     error if @async.is_being_cancelled() => raise error
-    @endpoint.InvalidEndpointPayload(message) =>
-      return error_envelope(id, CodeInvalidParams, message)
+    @json.JsonDecodeError(_) as error =>
+      return error_envelope(id, CodeInvalidParams, "\{error}")
     @host.PayloadError(message) =>
       return error_envelope(id, CodeInvalidParams, message)
     @engine.EngineError(message) =>
