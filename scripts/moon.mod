@@ -8,4 +8,6 @@ import {
   "moonbit-community/cmark@0.4.5",
 }
 
+warnings = "+unqualified_local_using"
+
 preferred_target = "native"
