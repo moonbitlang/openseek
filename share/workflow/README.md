@@ -81,7 +81,7 @@ other colons. Paths with spaces are single args without shell quoting.
 Run these with the hosted child-agent handoff:
 
 ```json
-{"description":"Audit the parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling."],"subrun":true}
+{"description":"Audit the parser","filename":"@builtin/review.mbtx","args":["--","Check the CSV parser's CRLF and escaped-quote handling."],"subrun":true}
 ```
 
 ```json
@@ -101,7 +101,8 @@ when no goal stands. It prints the full report JSON, then a
 `findings=N blockers=M` line, and exits unsuccessfully when any finding is a
 blocker so the caller cannot read past it. `--sha COMMIT` (with `--dirty`
 when the worktree was already dirty at that commit) overrides the engine's
-baseline; `--help` prints usage.
+baseline; `--help` prints usage. Put free-text criteria after `--` so leading
+hyphens remain literal, and put baseline options before `--`.
 
 The other two use `moonbitlang/workflow`'s `fan_out` and `attempt` with
 read-only `explore` children. Change review runs three scouts, allowing 16 steps each.
