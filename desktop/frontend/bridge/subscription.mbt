@@ -50,7 +50,7 @@ fn bridge_sub_loader(
   match payload {
     LocalBridge(dispatch~) => {
       let running = LocalBridgeSub(dispatch)
-      scheduler.add(running.install(0))
+      scheduler.add(running.install())
       Some({
         unload: _ => running.unload(),
         update_tagger: payload => {

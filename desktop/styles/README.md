@@ -7,7 +7,7 @@ targeted through global element selectors.
 
 ## Browser baseline
 
-The Desktop's pinned Proton 0.2.11 runtime bundles CEF 150.0.19, based on
+The Desktop's pinned Proton 0.3.0 runtime bundles CEF 150.0.19, based on
 Chromium 150.0.7871.252. The canonical version comes from the resolved
 `proton_cefsetup` package's `requirements.json`; update this section when the
 Proton dependencies change. `.proton/runtime.json` describes only the locally

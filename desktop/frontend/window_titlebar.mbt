@@ -36,7 +36,6 @@ extern "js" fn install_window_titlebar_geometry() -> @js.Value =
   #|   let revision = 0;
   #|   let inFlight = false;
   #|   let frame = null;
-  #|   let retry = null;
   #|   let unsubscribe = null;
   #|   const publish = (area) => {
   #|     // null means no overlay (including native fullscreen). A rejected or
@@ -75,26 +74,21 @@ extern "js" fn install_window_titlebar_geometry() -> @js.Value =
   #|     }
   #|   };
   #|   const refresh = () => { revision++; schedule(); };
-  #|   const connect = (attempt) => {
-  #|     if (!active) return;
-  #|     const bridge = globalThis.__MoonBit__;
-  #|     // Wait for injection, not for compatibility with an older host.
-  #|     if (!bridge?.getTitlebarArea || !bridge?.events?.on) {
-  #|       if (attempt < 120) retry = setTimeout(() => connect(attempt + 1), 25);
-  #|       else console.error("Proton titlebar bridge unavailable");
-  #|       return;
-  #|     }
+  #|   // Proton installs the runtime before any page script runs; a page
+  #|   // without it was never granted the bridge, so there is nothing to wait for.
+  #|   const bridge = globalThis.__MoonBit__;
+  #|   if (!bridge?.getTitlebarArea || !bridge?.events?.on) {
+  #|     console.error("Proton titlebar bridge unavailable");
+  #|   } else {
   #|     unsubscribe = bridge.events.on("openseek.window.chrome_changed", refresh);
   #|     window.addEventListener("resize", refresh);
   #|     window.addEventListener("focus", refresh);
   #|     document.addEventListener("visibilitychange", refresh);
   #|     refresh();
-  #|   };
-  #|   connect(0);
+  #|   }
   #|   return {
   #|     dispose() {
   #|       active = false;
-  #|       clearTimeout(retry);
   #|       if (frame !== null) cancelAnimationFrame(frame);
   #|       if (unsubscribe !== null) unsubscribe();
   #|       window.removeEventListener("resize", refresh);
