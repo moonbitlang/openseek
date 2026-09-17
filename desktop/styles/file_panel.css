@@ -126,8 +126,9 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-text-primary);
 }
 .editor-tab.active {
+  /* Match the selected conversation in the left sidebar. */
   background: var(--color-accent-soft);
-  color: var(--color-text-secondary);
+  color: var(--color-accent-strong);
 }
 /* A tab whose file vanished from disk keeps its place, struck through
    until the file reappears or the tab is closed. */
