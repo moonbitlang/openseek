@@ -55,16 +55,14 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   const app = await installDesktop(page);
   const toggle = page.getByRole('button', { name: /^(Hide|Show) sidebar$/ });
   await page.evaluate(() => {
-    // The configured macOS buttons sit at y=16 with a 14pt height. Proton
-    // reserves equal space above and below them: 16 + 14 + 16 = 46.
-    window.titlebarArea = { x: 88, y: 0, width: innerWidth - 88, height: 46 };
+    window.titlebarArea = { x: 88, y: 0, width: innerWidth - 88, height: 32 };
     window.desktopEvent('openseek.window.chrome_changed', {});
   });
   await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
   await expect.poll(async () => {
     const box = await toggle.boundingBox();
     return box.y + box.height / 2;
-  }).toBe(23);
+  }).toBe(16);
   const original = await toggle.elementHandle();
   for (const name of ['Hide sidebar', 'Show sidebar']) {
     await expect(toggle).toHaveAccessibleName(name);
