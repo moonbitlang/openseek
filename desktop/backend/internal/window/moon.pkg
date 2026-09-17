@@ -5,7 +5,6 @@ import {
   "openseek_desktop/backend/internal/api",
   "openseek_desktop/backend/internal/auth",
   "openseek_desktop/backend/internal/shares",
-  "openseek_desktop/backend/internal/broadcast",
   "openseek_desktop/commands",
   "openseek_desktop/backend/internal/engine",
   "openseek_desktop/backend/internal/endpoint",

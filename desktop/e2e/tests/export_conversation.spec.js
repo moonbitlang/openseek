@@ -1,11 +1,17 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-// Substitute only the native transport. The production dialog, modal focus,
-// typed codecs, clipboard effect and update loop run unchanged in Chromium.
+// Substitute only the host's transport and Proton's injected runtime: the
+// mocked loopback WebSocket answers the wire methods, and the stubbed
+// `openseek_window` namespace stands in for the native save dialog the page
+// opens before `session.export`. The production dialog, modal focus, typed
+// codecs, clipboard effect and update loop run unchanged in Chromium.
 class ExportHarness extends DesktopBrowserHarness {
   constructor(page) {
     super(page);
+    // The destination the stubbed native save dialog returns; null is the
+    // user dismissing it, which never reaches the host.
+    this.savePath = null;
     this.downloadReply = { opened: false };
     this.shareReply = {
       status: 'shared',
@@ -13,13 +19,23 @@ class ExportHarness extends DesktopBrowserHarness {
     };
     this.pendingShare = null;
     this.pendingSignIn = null;
-    this.signInError = null;
+  }
+
+  // A refused `auth.connect` is the host's own JSON-RPC error, which the
+  // page must surface verbatim.
+  get signInError() {
+    return this.rpcErrors.get('auth.connect') ?? null;
+  }
+
+  set signInError(message) {
+    if (message) this.rpcErrors.set('auth.connect', message);
+    else this.rpcErrors.delete('auth.connect');
   }
 
   async openDesktop() {
-    await this.install();
-    await this.page.exposeFunction('desktopRequest', async request => {
-      this.requests.push(request);
+    await this.install({ desktop: true });
+    const replyFor = this.replyFor.bind(this);
+    this.replyFor = async request => {
       if (request.method === 'session.export') return this.downloadReply;
       if (request.method === 'session.share') {
         if (this.pendingShare) await this.pendingShare;
@@ -27,11 +43,11 @@ class ExportHarness extends DesktopBrowserHarness {
       }
       if (request.method === 'auth.connect') {
         if (this.pendingSignIn) await this.pendingSignIn;
-        if (this.signInError) throw new Error(this.signInError);
         return { connected: true };
       }
-      return this.replyFor(request);
-    });
+      return replyFor(request);
+    };
+    await this.page.exposeFunction('desktopSaveFile', () => ({ path: this.savePath }));
     await this.page.addInitScript(() => {
       const listeners = new Map();
       const events = {
@@ -46,19 +62,12 @@ class ExportHarness extends DesktopBrowserHarness {
         getTitlebarArea: async () => null,
         app: events,
         events,
-        openseek: new Proxy({}, {
-          get: (_, method) => async params => {
-            if (method === 'host.connect') {
-              for (const callback of listeners.get('openseek.agent.connected') || []) {
-                callback({ payload: { stage: 'serving' } });
-              }
-            }
-            return window.desktopRequest({ method, params });
-          },
-        }),
+        openseek_window: {
+          'dialog.save_file': async () => window.desktopSaveFile(),
+        },
       };
     });
-    await this.page.goto('/dist/browser/index.html');
+    await this.goto();
     await this.openSession();
   }
 
@@ -79,15 +88,19 @@ test('export opens choices, downloads locally and restores focus on Escape', asy
   expect(app.count('session.export')).toBe(0);
   expect(app.count('session.share')).toBe(0);
   await expect(dialog).toContainText('Anyone with the link can view it for 7 days');
+  // Dismissing the native save dialog asks the host for nothing.
   await dialog.getByRole('button', { name: 'Download', exact: true }).click();
-  await expect.poll(() => app.count('session.export')).toBe(1);
   await expect(dialog.getByRole('button', { name: 'Download', exact: true })).toBeEnabled();
   await expect(dialog).toBeVisible(); // cancelling the native save is not an error
+  expect(app.count('session.export')).toBe(0);
+  app.savePath = '/exports/conversation.html';
   app.downloadReply = { path: '/exports/conversation.html', opened: false };
   await dialog.getByRole('button', { name: 'Download', exact: true }).click();
   await expect(dialog).toContainText("couldn't open it automatically");
+  await expect.poll(() => app.count('session.export')).toBe(1);
   expect(app.requests.find(request => request.method === 'session.export').params).toMatchObject({
     session: 'session-1', workspace: '/workspace', archived: false,
+    destination: '/exports/conversation.html',
   });
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();

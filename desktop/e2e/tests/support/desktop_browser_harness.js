@@ -462,9 +462,18 @@ export class DesktopBrowserHarness {
     };
   }
 
-  async install() {
+  // Both shells talk to their host over one JSON-RPC WebSocket on the page's
+  // own origin: the console dials the relay's `/v1/devices/<id>/ws`, the
+  // desktop window dials its host's `/ws?token=…`. `desktop` selects which
+  // page and which socket route this harness stands in for.
+  async install({ desktop = false } = {}) {
+    this.desktop = desktop;
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
 
+    if (desktop) {
+      await this.page.routeWebSocket('**/ws?token=*', socket => this.attachSocket(socket));
+      return;
+    }
     await this.page.route('**/v1/auth/me', route => route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ login: 'octocat', avatar_url: '' }),
@@ -486,39 +495,42 @@ export class DesktopBrowserHarness {
     // The product browser bundle normally talks to a selected Desktop host.
     // This route replaces only that transport and leaves Rabbita, the views,
     // browser layout, DOM events, and focus behavior running unchanged.
-    await this.page.routeWebSocket('**/v1/devices/device-a/ws', socket => {
-      this.socket = socket;
-      socket.onMessage(async message => {
-        const request = JSON.parse(message.toString());
-        this.requests.push(request);
-        if (request.id === undefined) {
-          return;
-        }
-        const errorMessage = this.rpcErrors.get(request.method);
-        const response = errorMessage === undefined
-          ? {
-              jsonrpc: '2.0',
-              id: request.id,
-              result: await this.replyFor(request),
-            }
-          : {
-              jsonrpc: '2.0',
-              id: request.id,
-              error: { code: -32000, message: errorMessage },
-            };
-        const delay = this.rpcDelays.get(request.method) || 0;
-        if (delay > 0) {
-          setTimeout(() => socket.send(JSON.stringify(response)), delay);
-        } else {
-          socket.send(JSON.stringify(response));
-        }
-      });
-      socket.send(JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'agent.connected',
-        params: { stage: 'serving' },
-      }));
+    await this.page.routeWebSocket('**/v1/devices/device-a/ws', socket => this.attachSocket(socket));
+  }
+
+  attachSocket(socket) {
+    this.socket = socket;
+    socket.onMessage(async message => {
+      const request = JSON.parse(message.toString());
+      this.requests.push(request);
+      if (request.id === undefined) {
+        return;
+      }
+      const errorMessage = this.rpcErrors.get(request.method);
+      const response = errorMessage === undefined
+        ? {
+            jsonrpc: '2.0',
+            id: request.id,
+            result: await this.replyFor(request),
+          }
+        : {
+            jsonrpc: '2.0',
+            id: request.id,
+            error: { code: -32000, message: errorMessage },
+          };
+      const delay = this.rpcDelays.get(request.method) || 0;
+      if (delay > 0) {
+        setTimeout(() => socket.send(JSON.stringify(response)), delay);
+      } else {
+        socket.send(JSON.stringify(response));
+      }
     });
+    this.notify('agent.connected', { stage: 'serving' });
+  }
+
+  // Push one host notification to the page, as the host would.
+  notify(method, params = {}) {
+    this.socket.send(JSON.stringify({ jsonrpc: '2.0', method, params }));
   }
 
   replyFor(request) {
@@ -857,7 +869,9 @@ export class DesktopBrowserHarness {
   }
 
   async goto() {
-    await this.page.goto('/dist/browser/index.html?device=device-a');
+    await this.page.goto(this.desktop
+      ? '/dist/desktop/index.html?token=test-token'
+      : '/dist/browser/index.html?device=device-a');
     await this.page.getByRole('main').waitFor();
   }
 

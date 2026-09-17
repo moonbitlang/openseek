@@ -5,7 +5,6 @@ version = "0.1.5"
 import {
   "bobzhang/openseek_protocol@0.1.2",
   "moonbit-community/fuzzy_match@0.2.6",
-  "moonbit-community/proton_contract@0.2.11",
   "moonbitlang/async@0.21.0",
 }
 

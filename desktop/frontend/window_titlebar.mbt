@@ -29,15 +29,16 @@ fn is_window_titlebar_double_click_target(element : @dom.Element) -> Bool {
 /// fullscreen events); resize also covers page zoom. Only the latest query may
 /// publish geometry. Drag regions are declared in CSS, so message callback
 /// updates do not need to scan the DOM or rewrite element styles.
-extern "js" fn install_window_titlebar_geometry() -> @js.Value =
-  #| () => {
+extern "js" fn install_window_titlebar_geometry(
+  chrome_changed_event : String,
+) -> @js.Value =
+  #| (chromeChangedEvent) => {
   #|   const html = document.documentElement;
   #|   let active = true;
   #|   let revision = 0;
   #|   let inFlight = false;
   #|   let frame = null;
   #|   let retry = null;
-  #|   let unsubscribe = null;
   #|   const publish = (area) => {
   #|     // null means no overlay (including native fullscreen). A rejected or
   #|     // malformed query must not be mistaken for that successful answer.
@@ -79,12 +80,14 @@ extern "js" fn install_window_titlebar_geometry() -> @js.Value =
   #|     if (!active) return;
   #|     const bridge = globalThis.__MoonBit__;
   #|     // Wait for injection, not for compatibility with an older host.
-  #|     if (!bridge?.getTitlebarArea || !bridge?.events?.on) {
+  #|     if (!bridge?.getTitlebarArea) {
   #|       if (attempt < 120) retry = setTimeout(() => connect(attempt + 1), 25);
   #|       else console.error("Proton titlebar bridge unavailable");
   #|       return;
   #|     }
-  #|     unsubscribe = bridge.events.on("openseek.window.chrome_changed", refresh);
+  #|     // The host's `window.chrome_changed` notification is re-dispatched
+  #|     // on the window as a DOM event by `notify_window_chrome_changed`.
+  #|     window.addEventListener(chromeChangedEvent, refresh);
   #|     window.addEventListener("resize", refresh);
   #|     window.addEventListener("focus", refresh);
   #|     document.addEventListener("visibilitychange", refresh);
@@ -96,7 +99,7 @@ extern "js" fn install_window_titlebar_geometry() -> @js.Value =
   #|       active = false;
   #|       clearTimeout(retry);
   #|       if (frame !== null) cancelAnimationFrame(frame);
-  #|       if (unsubscribe !== null) unsubscribe();
+  #|       window.removeEventListener(chromeChangedEvent, refresh);
   #|       window.removeEventListener("resize", refresh);
   #|       window.removeEventListener("focus", refresh);
   #|       document.removeEventListener("visibilitychange", refresh);
@@ -104,6 +107,21 @@ extern "js" fn install_window_titlebar_geometry() -> @js.Value =
   #|     }
   #|   };
   #| }
+
+///|
+/// The window-local `window.chrome_changed` notification, re-dispatched on
+/// the page's window as this DOM event so the geometry subscription above
+/// re-queries Proton without a Msg round trip through the model.
+const WindowChromeChangedEvent = "openseek:window-chrome-changed"
+
+///|
+extern "js" fn dispatch_window_event(name : String) -> Unit =
+  #| (name) => { window.dispatchEvent(new Event(name)); }
+
+///|
+fn notify_window_chrome_changed() -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => dispatch_window_event(WindowChromeChangedEvent))
+}
 
 ///|
 extern "js" fn window_titlebar_overlay_visible() -> Bool =
@@ -123,7 +141,7 @@ fn window_titlebar_sub_loader(
     WindowTitlebarSubscription(emit) => {
       let mut emit = emit
       let target = @dom.document().as_event_target()
-      let geometry = install_window_titlebar_geometry()
+      let geometry = install_window_titlebar_geometry(WindowChromeChangedEvent)
       let listener : @dom.Listener = event => {
         guard window_titlebar_overlay_visible() &&
           event.to_mouse_event() is Some(mouse) &&

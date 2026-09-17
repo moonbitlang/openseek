@@ -63,6 +63,80 @@ test "session export payload rejects missing null and malformed fields" {
 }
 
 ///|
+test "session save payload flattens the export identity beside its destination" {
+  let payload : @protocol.SessionSavePayload = @json.from_json({
+    "session": "desktop-1",
+    "workspace": "/work/project",
+    "title": "Export me",
+    "archived": false,
+    "destination": "/tmp/conversation.html",
+  })
+  assert_eq(payload.source.session, "desktop-1")
+  assert_eq(payload.destination, "/tmp/conversation.html")
+  @debug.assert_eq(payload.to_json(), {
+    "session": "desktop-1",
+    "workspace": "/work/project",
+    "title": "Export me",
+    "archived": false,
+    "destination": "/tmp/conversation.html",
+  })
+  for
+    raw in (
+      [
+        {
+          "session": "desktop-1",
+          "workspace": "/work/project",
+          "title": "No destination",
+          "archived": false,
+        },
+        {
+          "session": "desktop-1",
+          "workspace": "/work/project",
+          "title": "Null destination",
+          "archived": false,
+          "destination": null,
+        },
+        { "destination": "/tmp/conversation.html" },
+      ] : Array[Json]) {
+    let decoded : @protocol.SessionSavePayload? = Some(@json.from_json(raw)) catch {
+      _ => None
+    }
+    assert_true(decoded is None)
+  }
+}
+
+///|
+test "save file dialog payload and reply codecs" {
+  let payload : @protocol.SaveFileDialogPayload = @json.from_json({
+    "title": "Export conversation",
+    "suggested_name": "desktop-1.html",
+  })
+  assert_eq(payload.suggested_name, "desktop-1.html")
+  @debug.assert_eq(payload.to_json(), {
+    "title": "Export conversation",
+    "suggested_name": "desktop-1.html",
+  })
+  let missing : @protocol.SaveFileDialogPayload? = Some(
+    @json.from_json({ "title": "Export conversation" }),
+  ) catch {
+    _ => None
+  }
+  assert_true(missing is None)
+  let dismissed : @protocol.SaveFileDialogReply = @json.from_json({})
+  assert_eq(dismissed.path, None)
+  @debug.assert_eq(dismissed.to_json(), {})
+  let null_path : @protocol.SaveFileDialogReply = @json.from_json({
+    "path": null,
+  })
+  assert_eq(null_path.path, None)
+  let chosen : @protocol.SaveFileDialogReply = @json.from_json({
+    "path": "/tmp/conversation.html",
+  })
+  assert_eq(chosen.path, Some("/tmp/conversation.html"))
+  @debug.assert_eq(chosen.to_json(), { "path": "/tmp/conversation.html" })
+}
+
+///|
 test "session export reply omits an absent path and ignores unknown fields" {
   let missing : @protocol.SessionExportReply = @json.from_json({
     "opened": false,

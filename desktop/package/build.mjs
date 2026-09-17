@@ -232,15 +232,26 @@ class Build {
     await this.webAssets();
     const release = profile === "release" ? ["--release"] : [];
     if (browser) {
-      await this.commandRun("moon", ["build", "browser", "--target", "js", ...release], {
-        cwd: join(this.desktop, "frontend"),
-      });
-      const output = join(this.desktop, "dist/browser");
-      await rm(output, { recursive: true, force: true });
-      await mkdir(output, { recursive: true });
-      await cp(join(this.desktop, "frontend/browser/index.html"), join(output, "index.html"));
-      await cp(join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/browser/browser.js`), join(output, "browser.js"));
-      await this.sharedWeb(output);
+      // Both shells: the console bundle openseek-api serves, and the desktop
+      // window's bundle exactly as the host's loopback origin serves it. The
+      // E2E suite drives each against a mocked host WebSocket.
+      for (const shell of ["browser", "desktop"]) {
+        await this.commandRun("moon", ["build", shell, "--target", "js", ...release], {
+          cwd: join(this.desktop, "frontend"),
+        });
+      }
+      const browserOutput = join(this.desktop, "dist/browser");
+      await rm(browserOutput, { recursive: true, force: true });
+      await mkdir(browserOutput, { recursive: true });
+      await cp(join(this.desktop, "frontend/browser/index.html"), join(browserOutput, "index.html"));
+      await cp(join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/browser/browser.js`), join(browserOutput, "browser.js"));
+      await this.sharedWeb(browserOutput);
+      const desktopOutput = join(this.desktop, "dist/desktop");
+      await rm(desktopOutput, { recursive: true, force: true });
+      await mkdir(desktopOutput, { recursive: true });
+      await cp(join(this.desktop, "index.html"), join(desktopOutput, "index.html"));
+      await cp(join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/desktop/desktop.js`), join(desktopOutput, "frontend.js"));
+      await this.sharedWeb(desktopOutput);
       return;
     }
     await this.commandRun("moon", ["build", "desktop", "--target", "js", ...release], {

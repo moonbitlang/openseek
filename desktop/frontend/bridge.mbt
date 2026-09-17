@@ -1,9 +1,9 @@
 // The engine-host bridge: typed access to the host's methods and
 // notifications (docs/remote-protocol.md). Methods go through
-// `@interop.bridge_request`; notifications arrive either as `openseek.*`
-// proton events (the desktop window) or as JSON-RPC notifications on the
-// page's WebSocket (a browser through the relay). `frontend/bridge` owns both
-// transports; both feed the same decoders below.
+// `@interop.bridge_request`; notifications arrive as JSON-RPC notifications
+// on the page's WebSockets — the desktop window's own loopback origin, or a
+// relay device through the console's. `frontend/bridge` owns the
+// connections; every channel feeds the same decoders below.
 
 ///|
 /// Purely decode one non-terminal host notification, retaining the channel it
@@ -298,6 +298,19 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
           @terminal.SessionExited(channel~, id=payload.id, code=payload.code)
           |> Terminal
           |> dispatch
+        // Native browser-view events are window-local: the host delivers
+        // them only on the desktop window's own connection, and the preview
+        // subsystem owns their decode.
+        BrowserEvent(Object(payload)) =>
+          if browser_event_msg(payload) is Some(msg) {
+            dispatch(msg)
+          } else {
+            @cmd.none
+          }
+        BrowserEvent(_) => @cmd.none
+        // A window-local invalidation, not host state: the page re-queries
+        // Proton's titlebar geometry.
+        WindowChromeChanged => notify_window_chrome_changed()
         _ =>
           if notification_msg(channel, notification) is Some(msg) {
             dispatch(msg)
@@ -305,16 +318,8 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
             @cmd.none
           }
       }
-    @bridge.Event::Unavailable(channel~, message~) =>
-      dispatch(FromDevice(channel, BridgeUnavailable(message)))
     @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
       dispatch(FromDevice(channel, ChannelDown(websocket_epoch~)))
-    @bridge.Event::BrowserEvent(payload~) =>
-      if browser_event_msg(payload) is Some(msg) {
-        dispatch(msg)
-      } else {
-        @cmd.none
-      }
     @bridge.Event::MenuCommand(command_id~) =>
       if command_id == @commands.app_open_devtools.name() {
         dispatch(AppDeveloperToolsRequested)
@@ -337,7 +342,12 @@ fn DeviceState::bridge_subscription(
     bridge_event(dispatch, event)
   }
   match self.channel {
-    Local => @bridge.local_connection(bridge_dispatch)
+    Local =>
+      @bridge.local_connection(
+        websocket_epoch=self.websocket_epoch,
+        reconnect_attempt=self.reconnect_attempt,
+        dispatch=bridge_dispatch,
+      )
     Remote(device) =>
       @bridge.remote_connection(
         device_id=device,
@@ -1558,19 +1568,6 @@ fn apply_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       )
       scheduler.add(dispatch(UpdateApplied))
     })
-  })
-}
-
-///|
-/// Close the window through the normal close path — the same teardown as
-/// the user clicking the close button, so engines and the host unwind
-/// before `main` relaunches the swapped bundle.
-fn close_window() -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => {
-    let _ : @js.Value = @js.globalThis.apply_with_string(
-      "close",
-      ([] : FixedArray[@js.Value]),
-    )
   })
 }
 

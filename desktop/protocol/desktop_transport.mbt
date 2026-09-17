@@ -33,6 +33,11 @@ pub(all) enum NotificationKind {
   TerminalOutput
   TerminalExit
   SemanticSearchProgress
+  // Window-local: the desktop window's native browser views and titlebar
+  // geometry. The host delivers these only on the window's own loopback
+  // connection; a relay client has no native views to observe.
+  BrowserEvent
+  WindowChromeChanged
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -66,6 +71,8 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
     TerminalOutput => "terminal.output"
     TerminalExit => "terminal.exit"
     SemanticSearchProgress => "semantic.search_progress"
+    BrowserEvent => "browser.event"
+    WindowChromeChanged => "window.chrome_changed"
   }
 }
 
@@ -100,6 +107,8 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
     TerminalOutput,
     TerminalExit,
     SemanticSearchProgress,
+    BrowserEvent,
+    WindowChromeChanged,
   ]
 }
 
@@ -138,6 +147,13 @@ pub(all) enum Notification {
   TerminalOutput(TerminalOutputPayload)
   TerminalExit(TerminalExitPayload)
   SemanticSearchProgress(SemanticSearchProgressPayload)
+  // A native browser view's navigation, title, load, or find state. The
+  // frontend's preview package owns the kind-specific decoding, so the
+  // payload crosses this boundary as JSON like the Codex events above.
+  BrowserEvent(Json)
+  // The native titlebar area may have changed (native fullscreen, display
+  // scaling, zoom); the page re-queries Proton's geometry.
+  WindowChromeChanged
 } derive(Debug, Eq)
 
 ///|
@@ -217,6 +233,8 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
           },
         ),
       )
+    "browser.event" => Some(BrowserEvent(params))
+    "window.chrome_changed" => Some(WindowChromeChanged)
     _ => None
   }
 }
@@ -252,6 +270,8 @@ pub fn Notification::kind(self : Notification) -> NotificationKind {
     TerminalOutput(_) => TerminalOutput
     TerminalExit(_) => TerminalExit
     SemanticSearchProgress(_) => SemanticSearchProgress
+    BrowserEvent(_) => BrowserEvent
+    WindowChromeChanged => WindowChromeChanged
   }
 }
 
@@ -292,6 +312,8 @@ pub fn Notification::params(self : Notification) -> Json {
     TerminalOutput(payload) => ToJson::to_json(payload)
     TerminalExit(payload) => ToJson::to_json(payload)
     SemanticSearchProgress(payload) => ToJson::to_json(payload)
+    BrowserEvent(payload) => payload
+    WindowChromeChanged => Json::empty_object()
   }
 }
 

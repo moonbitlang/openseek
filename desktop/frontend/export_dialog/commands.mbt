@@ -38,19 +38,39 @@ fn Model::share(
 }
 
 ///|
+/// Ask the window's native save dialog for a destination, then have the host
+/// render and write there. A dismissed dialog reports a path-less success —
+/// the same shape as before the host owned the dialog — so the dialog simply
+/// returns to Ready.
 fn Model::download(
   self : Model,
   emit : @cmd.Emit[Msg],
   source : @protocol.SessionExportPayload,
 ) -> @cmd.Cmd {
   let generation = self.generation
-  request(
-    emit,
-    @commands.session_export,
-    source,
-    failure="Could not download",
-    result => Downloaded(generation~, result),
-  )
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let result : Result[@protocol.SessionExportReply, String] = try {
+        match
+          @interop.save_file_dialog(
+            title="Export conversation",
+            suggested_name="\{source.session}.html",
+          ) {
+          None => Ok({ path: None, opened: false, })
+          Some(destination) =>
+            Ok(
+              @interop.bridge_request(Local, @commands.session_export, {
+                source,
+                destination,
+              }),
+            )
+        }
+      } catch {
+        error => Err("Could not download: \{@interop.bridge_error_text(error)}")
+      }
+      scheduler.add(emit(Downloaded(generation~, result)))
+    })
+  })
 }
 
 ///|

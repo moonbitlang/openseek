@@ -3464,7 +3464,19 @@ fn update_msg(
       }
       (cmd, { ..next, update_ux, })
     }
-    UpdateApplied => (close_window(), model)
+    // Close the window through the normal native close path — the same
+    // teardown as the user clicking the close button, so engines and the
+    // host unwind before `main` relaunches the swapped bundle.
+    UpdateApplied =>
+      (
+        browser_op(
+          dispatch,
+          @commands.app_close_window,
+          @protocol.NoPayload,
+          quiet=false,
+        ),
+        model,
+      )
     OpenSetup =>
       (
         @cmd.none,
@@ -5842,8 +5854,6 @@ fn update_device_msg(
         },
       )
     }
-    BridgeUnavailable(message) =>
-      (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message), }))
     ChannelDown(websocket_epoch~) => {
       // A close callback may already be queued when sign-out retires a
       // device. If the same relay id is later re-added, it owns a new epoch
@@ -8346,7 +8356,7 @@ fn running_conversation() -> Conversation {
 ///|
 fn test_model() -> Model {
   {
-    ..initial_model()
+    ..initial_model(desktop=false)
     // The headless test runtime has no page location, so `initial_model()`
     // seeds no devices (and, looking like a browser, a console); every test
     // here runs desktop-shaped, on an explicit Local channel.
@@ -10482,7 +10492,7 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
   let dispatch = test_dispatch()
   let channel : @interop.ChannelId = Remote("d1")
   let model = {
-    ..initial_model(),
+    ..initial_model(desktop=false),
     devices: [{ ..empty_device_state(channel), bridge: Connected, }],
     focused: channel,
   }
@@ -10519,7 +10529,7 @@ test "BridgeReady resets the reconnect failure count" {
   let dispatch = test_dispatch()
   let channel : @interop.ChannelId = Remote("d1")
   let model = {
-    ..initial_model(),
+    ..initial_model(desktop=false),
     devices: [
       {
         ..empty_device_state(channel),
@@ -14928,14 +14938,18 @@ test "custom select menus switch and dismiss deterministically" {
 ///|
 test "a covering overlay dismisses an open custom select" {
   let dispatch = test_dispatch()
-  let base = { ..test_model(), select_menu: Some(OpenSeekModelMenu), }
-  let (_, lost) = update(
-    dispatch,
-    FromDevice(Local, BridgeUnavailable("bridge stopped")),
-    base,
-  )
-  assert_true(lost.bridge_state() is BridgeLost(_))
-  assert_true(lost.select_menu is None)
+  let mut model = { ..test_model(), select_menu: Some(OpenSeekModelMenu), }
+  // The third consecutive socket loss is what declares the host lost.
+  for _ in 0..<WsLostAfter {
+    let (_, next) = update(
+      dispatch,
+      FromDevice(Local, ChannelDown(websocket_epoch=0)),
+      model,
+    )
+    model = next
+  }
+  assert_true(model.bridge_state() is BridgeLost(_))
+  assert_true(model.select_menu is None)
 }
 
 ///|

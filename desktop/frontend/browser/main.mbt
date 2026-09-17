@@ -5,5 +5,5 @@
 
 ///|
 fn main {
-  @frontend.boot()
+  @frontend.boot(desktop=false)
 }

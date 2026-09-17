@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn boot() -> Unit
+pub fn boot(desktop~ : Bool) -> Unit
 
 pub fn request_sidebar_resize_mount() -> @cmd.Cmd
 

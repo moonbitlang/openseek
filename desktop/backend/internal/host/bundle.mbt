@@ -1,5 +1,5 @@
 ///|
-const PackagedFrontendEntryPath = "seekmoon/web/index.html"
+const PackagedFrontendDir = "seekmoon/web"
 
 ///|
 const PackagedRipgrepPath = "seekmoon/bin/rg"
@@ -42,7 +42,7 @@ pub struct VizAssets {
 /// Locate the visualizer assets belonging to this exact host build.
 ///
 /// Both branches read Proton's resource directory, exactly like
-/// `frontend_entry_path`: an installed application resolves the canonical
+/// `frontend_bundle`: an installed application resolves the canonical
 /// `seekmoon/` tree, while the development launcher declares `desktop/` and
 /// the checkout above it holds the shell and the bundle. Resolving both
 /// entries the same way keeps them from disagreeing about which layout is
@@ -145,29 +145,46 @@ fn PackagedTools::path_with_precedence(
 }
 
 ///|
+/// The frontend files the host's loopback server publishes: the directory
+/// they are served from, and the document inside it that `/` resolves to.
+pub(all) struct FrontendBundle {
+  root : String
+  entry : String
+}
+
+///|
+pub fn FrontendBundle::entry_path(self : FrontendBundle) -> String {
+  "\{self.root}/\{self.entry}"
+}
+
+///|
 /// Locate the frontend from Proton's resource directory. The supported
-/// development launcher exposes `desktop/` as that directory, while every
-/// installed app exposes the package root containing canonical `seekmoon/`.
-pub async fn frontend_entry_path() -> String {
-  if !@proton.is_packaged() {
-    let path = @pathx.Path(@proton.resource_dir())
+/// development launcher exposes `desktop/` as that directory and the
+/// checkout above it is served whole, so `desktop-dev.html` can reference
+/// source CSS and Moon's `_build` artifact in place; every installed app
+/// exposes the package root, whose canonical `seekmoon/web` is self-contained.
+pub async fn frontend_bundle() -> FrontendBundle {
+  let bundle : FrontendBundle = if !@proton.is_packaged() {
+    {
+      root: @pathx.Path(@proton.resource_dir())
       .dirname()
-      .join("desktop-dev.html")
       .normalize()
-      .to_string()
-    guard @fs.exists(path) else {
-      raise HostError("development frontend does not exist: \{path}")
+      .to_string(),
+      entry: "desktop-dev.html",
     }
-    return path
+  } else {
+    {
+      root: @pathx.Path(@proton.resource_dir())
+      .join(PackagedFrontendDir)
+      .normalize()
+      .to_string(),
+      entry: "index.html",
+    }
   }
-  let path = @pathx.Path(@proton.resource_dir())
-    .join(PackagedFrontendEntryPath)
-    .normalize()
-    .to_string()
-  guard @fs.exists(path) else {
-    raise HostError("packaged frontend does not exist: \{path}")
+  guard @fs.exists(bundle.entry_path()) else {
+    raise HostError("frontend does not exist: \{bundle.entry_path()}")
   }
-  path
+  bundle
 }
 
 ///|
@@ -268,13 +285,15 @@ async test "development frontend comes from Proton's declared resource root" {
     None => @sys.unset_env_var("PROTON_RESOURCE_DIR")
   })
   @sys.set_env_var("PROTON_RESOURCE_DIR", resource_dir)
-  let packaged = resources.join(PackagedFrontendEntryPath)
+  let packaged = resources.join(PackagedFrontendDir).join("index.html")
   @fs.mkdir(packaged.dirname().to_string(), recursive=true)
   @fs.write_file(packaged.to_string(), "packaged", create_mode=CreateOrTruncate)
   // Development must never consume generated package inputs left in the
   // checkout; the launcher's declared resource root identifies the source
   // checkout without threading the host executable through this API.
-  assert_eq(frontend_entry_path(), development)
+  let bundle = frontend_bundle()
+  assert_eq(bundle.entry_path(), development)
+  assert_eq(bundle.root, root.normalize().to_string())
 }
 
 ///|

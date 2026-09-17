@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub fn local_connection(@cmd.Emit[Event]) -> @sub.Sub
+pub fn local_connection(websocket_epoch~ : Int, reconnect_attempt~ : Int, dispatch~ : @cmd.Emit[Event]) -> @sub.Sub
 
 pub fn remote_connection(device_id~ : String, websocket_epoch~ : Int, reconnect_attempt~ : Int, dispatch~ : @cmd.Emit[Event]) -> @sub.Sub
 
@@ -18,9 +18,7 @@ pub fn remote_connection(device_id~ : String, websocket_epoch~ : Int, reconnect_
 // Types and methods
 pub enum Event {
   Notification(channel~ : @interop.ChannelId, notification~ : @protocol.Notification)
-  Unavailable(channel~ : @interop.ChannelId, message~ : String)
   ChannelDown(channel~ : @interop.ChannelId, websocket_epoch~ : Int)
-  BrowserEvent(payload~ : Map[String, Json])
   MenuCommand(command_id~ : String)
   NotificationClicked(run_id~ : String)
 }

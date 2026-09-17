@@ -1,7 +1,8 @@
 // The relay connector: the host's only outward face. It keeps one control
 // WebSocket registered with the relay and dials one data WebSocket back per
 // browser client the relay announces; each data connection is served by the
-// same dispatcher the desktop bridge feeds (docs/remote-protocol.md).
+// same dispatcher the desktop window's loopback connection feeds
+// (docs/remote-protocol.md).
 
 ///|
 priv suberror ConnectorError {
@@ -92,10 +93,9 @@ async fn RelayActor::connect_once(
         // clients.
         Open(stream~) =>
           group.spawn_bg(allow_failure=true, () => {
-            WsClientActor::WsClientActor(
-              self.state,
+            WsClientActor::relay(self.state).run(
               data_url(config.relay_url, stream),
-            ).run()
+            )
           })
         // A mid-session fail is the relay revoking this registration —
         // terminal like a refused one.

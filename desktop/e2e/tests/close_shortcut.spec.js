@@ -1,17 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-// Replace only Proton's transport. The real shell, DOM focus, and xterm run
-// in Chromium; macOS menu key-equivalent handling still needs a native test.
+// Replace only the host's transport: the desktop bundle runs against the
+// mocked loopback WebSocket, and Proton's injected runtime — which only
+// carries the titlebar geometry query and application events here — is a
+// stub. The real shell, DOM focus, and xterm run in Chromium; macOS menu
+// key-equivalent handling still needs a native test.
 async function installDesktop(page) {
   const app = new DesktopBrowserHarness(page);
-  await app.install();
+  await app.install({ desktop: true });
   let terminalId = 0;
-  await page.exposeFunction('desktopRequest', request => {
-    app.requests.push(request);
+  const replyFor = app.replyFor.bind(app);
+  app.replyFor = request => {
     if (request.method === 'terminal.open') return { id: `terminal-${++terminalId}` };
-    return app.replyFor(request);
-  });
+    return replyFor(request);
+  };
   await page.addInitScript(() => {
     const listeners = new Map();
     const events = {
@@ -30,17 +33,9 @@ async function installDesktop(page) {
       getTitlebarArea: async () => window.titlebarArea,
       app: events,
       events,
-      openseek: new Proxy({}, {
-        get: (_, method) => async params => {
-          if (method === 'host.connect') {
-            window.desktopEvent('openseek.agent.connected', { stage: 'serving' });
-          }
-          return window.desktopRequest({ method, params });
-        },
-      }),
     };
   });
-  await page.goto('/dist/browser/index.html');
+  await app.goto();
   await app.openSession();
   return app;
 }
@@ -58,8 +53,8 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
     // The configured macOS buttons sit at y=16 with a 14pt height. Proton
     // reserves equal space above and below them: 16 + 14 + 16 = 46.
     window.titlebarArea = { x: 88, y: 0, width: innerWidth - 88, height: 46 };
-    window.desktopEvent('openseek.window.chrome_changed', {});
   });
+  app.notify('window.chrome_changed');
   await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
   await expect.poll(async () => {
     const box = await toggle.boundingBox();
@@ -97,8 +92,8 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
   await page.evaluate(() => {
     window.titlebarArea = null;
-    window.desktopEvent('openseek.window.chrome_changed', {});
   });
+  app.notify('window.chrome_changed');
   await expect.poll(async () => (await toggle.boundingBox()).x).toBe(8);
   await expect.poll(async () => {
     const box = await toggle.boundingBox();

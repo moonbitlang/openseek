@@ -1639,6 +1639,8 @@ pub(all) enum Notification {
   TerminalOutput(TerminalOutputPayload)
   TerminalExit(TerminalExitPayload)
   SemanticSearchProgress(SemanticSearchProgressPayload)
+  BrowserEvent(Json)
+  WindowChromeChanged
 } derive(Eq, @debug.Debug)
 pub fn Notification::equal(Self, Self) -> Bool
 pub fn Notification::from_wire(String, Json) -> Self?
@@ -1676,6 +1678,8 @@ pub(all) enum NotificationKind {
   TerminalOutput
   TerminalExit
   SemanticSearchProgress
+  BrowserEvent
+  WindowChromeChanged
 } derive(Eq, Hash, @debug.Debug)
 pub fn NotificationKind::all() -> Array[Self]
 pub fn NotificationKind::equal(Self, Self) -> Bool
@@ -1927,6 +1931,29 @@ pub fn RunsReply::to_json(Self) -> Json
 pub fn RunsReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for RunsReply
 pub impl @json.FromJson for RunsReply
+
+pub(all) struct SaveFileDialogPayload {
+  title : String
+  suggested_name : String
+} derive(Eq, @debug.Debug)
+pub fn SaveFileDialogPayload::equal(Self, Self) -> Bool
+pub fn SaveFileDialogPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SaveFileDialogPayload::not_equal(Self, Self) -> Bool
+pub fn SaveFileDialogPayload::to_json(Self) -> Json
+pub fn SaveFileDialogPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SaveFileDialogPayload
+pub impl @json.FromJson for SaveFileDialogPayload
+
+pub(all) struct SaveFileDialogReply {
+  path : String?
+} derive(Eq, @debug.Debug)
+pub fn SaveFileDialogReply::equal(Self, Self) -> Bool
+pub fn SaveFileDialogReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SaveFileDialogReply::not_equal(Self, Self) -> Bool
+pub fn SaveFileDialogReply::to_json(Self) -> Json
+pub fn SaveFileDialogReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SaveFileDialogReply
+pub impl @json.FromJson for SaveFileDialogReply
 
 pub(all) struct ScheduleActionPayload {
   id : String
@@ -2360,6 +2387,18 @@ pub fn SessionRuntimeNotice::from_json(Json, @json.JsonPath) -> Self raise @json
 pub fn SessionRuntimeNotice::not_equal(Self, Self) -> Bool
 pub fn SessionRuntimeNotice::to_json(Self) -> Json
 pub fn SessionRuntimeNotice::to_repr(Self) -> @debug.Repr
+
+pub(all) struct SessionSavePayload {
+  source : SessionExportPayload
+  destination : String
+} derive(Eq, @debug.Debug)
+pub fn SessionSavePayload::equal(Self, Self) -> Bool
+pub fn SessionSavePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSavePayload::not_equal(Self, Self) -> Bool
+pub fn SessionSavePayload::to_json(Self) -> Json
+pub fn SessionSavePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionSavePayload
+pub impl @json.FromJson for SessionSavePayload
 
 pub(all) enum SessionShareReply {
   Shared(url~ : String)

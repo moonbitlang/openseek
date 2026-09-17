@@ -554,13 +554,13 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
     fail("agent.runs endpoint missing")
   }
   let legacy : @protocol.RunsReply = @json.from_json(
-    runs_endpoint.invoke_remote(Json::empty_object()),
+    runs_endpoint.invoke(Json::empty_object()),
   )
   guard legacy is { runs: [], settled: [], approvals: [], } else {
     fail("legacy agent.runs request changed shape")
   }
   let replay : @protocol.RunsReply = @json.from_json(
-    runs_endpoint.invoke_remote({
+    runs_endpoint.invoke({
       "known": [
         { "session": "s-api", "run_id": "r-api", "submission_id": "sub-api" },
       ],

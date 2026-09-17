@@ -727,6 +727,28 @@ pub impl ToJson for SessionExportReply with fn to_json(self) {
 }
 
 ///|
+/// The destination the native save dialog returned; `None` means the user
+/// dismissed the dialog without choosing one.
+pub(all) struct SaveFileDialogReply {
+  path : String?
+} derive(Debug, Eq)
+
+///|
+/// A missing or null path both read as a dismissed dialog.
+pub impl FromJson for SaveFileDialogReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "save file dialog reply")
+  { path: object.optional_string("path"), }
+}
+
+///|
+pub impl ToJson for SaveFileDialogReply with fn to_json(self) {
+  match self.path {
+    Some(path) => { "path": path }
+    None => Json::empty_object()
+  }
+}
+
+///|
 /// A workspace list, or a mutation's refusal reason with the registry left
 /// unchanged. Success keeps the legacy `{workspaces:[...]}` shape; the
 /// refusal rides in the reply body as `{error:"..."}` because the local
@@ -2410,6 +2432,18 @@ pub extend SessionExportReply with Eq::{equal, not_equal}
 
 ///|
 pub extend SessionExportReply with ToJson::{to_json}
+
+///|
+pub extend SaveFileDialogReply with Debug::{to_repr}
+
+///|
+pub extend SaveFileDialogReply with FromJson::{from_json}
+
+///|
+pub extend SaveFileDialogReply with Eq::{equal, not_equal}
+
+///|
+pub extend SaveFileDialogReply with ToJson::{to_json}
 
 ///|
 pub extend LspDiagnostic with Debug::{to_repr}

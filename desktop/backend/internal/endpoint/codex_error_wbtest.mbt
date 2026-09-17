@@ -6,7 +6,7 @@ async test "Codex endpoints return original handler errors as replies" {
       "Codex app-server request account/read failed: token unavailable",
     )
   })
-  let asynchronous_reply = asynchronous.invoke_remote({})
+  let asynchronous_reply = asynchronous.invoke({})
   @debug.assert_eq(asynchronous_reply, {
     "error": "Codex app-server request account/read failed: token unavailable",
   })
@@ -15,7 +15,7 @@ async test "Codex endpoints return original handler errors as replies" {
       "Codex app-server request config/read failed: invalid TOML",
     )
   })
-  let synchronous_reply = synchronous.invoke_remote({})
+  let synchronous_reply = synchronous.invoke({})
   @debug.assert_eq(synchronous_reply, {
     "error": "Codex app-server request config/read failed: invalid TOML",
   })

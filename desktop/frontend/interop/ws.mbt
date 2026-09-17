@@ -1,7 +1,8 @@
-// The browser transport: JSON-RPC 2.0 over one WebSocket per device
-// channel (docs/remote-protocol.md). Requests are correlated by a
-// client-scoped id against the session's pending map; notifications go to
-// the handler installed with that connection. Sockets are JS objects, so
+// The one transport: JSON-RPC 2.0 over one WebSocket per channel
+// (docs/remote-protocol.md). `Local` is the desktop window dialing its own
+// loopback origin; `Remote(id)` is a relay device. Requests are correlated
+// by a client-scoped id against the session's pending map; notifications go
+// to the handler installed with that connection. Sockets are JS objects, so
 // the registry lives here as module state rather than in the Elm model.
 
 ///|
@@ -15,9 +16,8 @@ priv struct RpcSession {
 }
 
 ///|
-/// Every live (or connecting) WebSocket session, one per device channel.
-/// Empty before `ws_connect` (and forever on a proton page, which never
-/// calls it).
+/// Every live (or connecting) WebSocket session, one per channel. Empty
+/// before the first `ws_connect`.
 let channels : Map[ChannelId, RpcSession] = Map([])
 
 ///|
@@ -56,32 +56,38 @@ pub fn page_ws_origin() -> String? {
 }
 
 ///|
-/// A device's protocol WebSocket URL: same origin, the relay's
-/// `/v1/devices/<device>/ws` route.
-fn ws_url(device : String) -> String? {
+/// A channel's protocol WebSocket URL, always on the page's own origin: the
+/// local host's `/ws` route presenting the launch token that rode the entry
+/// URL, or the relay's `/v1/devices/<device>/ws` route.
+fn ws_url(channel : ChannelId) -> String? {
   guard page_ws_origin() is Some(origin) else { return None }
-  Some("\{origin}/v1/devices/\{device}/ws")
+  match channel {
+    Local => {
+      guard page_query_param("token") is Some(token) else { return None }
+      Some("\{origin}/ws?token=\{token}")
+    }
+    Remote(device) => Some("\{origin}/v1/devices/\{device}/ws")
+  }
 }
 
 ///|
-/// Open (or replace) the connection to one device. `on_notification`
+/// Open (or replace) the connection to one channel. `on_notification`
 /// receives every notification this host pushes; `on_down` fires once when
 /// the socket closes for any reason — the caller owns backoff and calls
 /// `ws_connect` again. Requests issued while down fail fast with a
 /// user-facing message.
 pub fn ws_connect(
-  device : String,
+  channel : ChannelId,
   on_notification~ : (@protocol.Notification) -> Unit,
   on_down~ : () -> Unit,
 ) -> Unit {
-  guard ws_url(device) is Some(url) else {
+  guard ws_url(channel) is Some(url) else {
     on_down()
     return
   }
-  let channel = Remote(device)
   // Replacing the registry entry alone leaves the previous socket's
   // `onmessage` callback alive. Retire it first so at most one connection can
-  // forward notifications or hold pending requests for this device.
+  // forward notifications or hold pending requests for this channel.
   ws_close(channel)
   let ctor : @js.Value = @js.globalThis.get_with_string("WebSocket")
   let socket : @js.Value = ctor.new([url])
@@ -340,21 +346,9 @@ fn js_raised(value : @js.Value) -> Error {
 
 ///|
 test "a socket that dies under a sent request is not a refusal" {
-  // `reject_all` rejects with an unmarked error, and the classifier's "this
-  // page has an embedded host" shortcut would otherwise read that as the
-  // host's own answer — a proton page drives remote channels too, and under
-  // that reading a lost socket would hand a goal's draft back while the
-  // remote host still commits its marker.
-  //
-  // The shortcut only fires on a page that *has* an embedded host, so stand
-  // one up: without it this passes whether or not the transport names its own
-  // failures, and proves nothing.
-  let previous : @js.Value = @js.globalThis.get_with_string("__MoonBit__")
-  let root = @js.Object::new()
-  root["openseek"] = @js.Object::new().to_value()
-  @js.globalThis.set_with_string("__MoonBit__", root.to_value())
-  defer @js.globalThis.set_with_string("__MoonBit__", previous)
-  assert_true(openseek_api() is Some(_))
+  // `reject_all` rejects with an unmarked error. Reading that as the host's
+  // own answer would hand a goal's draft back while the host still commits
+  // its marker.
   let lost = ws_reply_failure(
     js_raised(js_error("SeekMoon connection lost", rpc_rejection=false)),
   )

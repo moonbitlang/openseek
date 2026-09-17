@@ -2,14 +2,15 @@
 package "openseek_desktop/commands"
 
 import {
-  "moonbit-community/proton_contract",
   "openseek_desktop/protocol",
 }
 
 // Values
 pub const CloseFocusedMenuCommand : String = "app.close_focused"
 
-pub const ExtensionId : String = "openseek-desktop"
+pub const SaveFileDialogCommand : String = "dialog.save_file"
+
+pub const WindowDialogNamespace : String = "openseek_window"
 
 pub let agent_approval : Command[@protocol.ApprovalPayload, @protocol.ApprovalReply]
 
@@ -117,8 +118,6 @@ pub let codex_turn_start : Command[@protocol.CodexTurnStartPayload, @protocol.Co
 
 pub let codex_turn_steer : Command[@protocol.CodexTurnSteerPayload, @protocol.CodexCommandReply[@protocol.CodexTurnReply]]
 
-pub let extension_contract : @proton_contract.ExtensionContract
-
 pub let fs_browse : Command[@protocol.BrowseDirectoryPayload, @protocol.BrowseDirectoryReply]
 
 pub let fs_cancel_search_files : Command[@protocol.CancelSearchFilesPayload, @protocol.EmptyReply]
@@ -161,8 +160,6 @@ pub let git_original_file : Command[@protocol.GitOriginalFilePayload, @protocol.
 
 pub let git_pull_request : Command[@protocol.GitPullRequestPayload, @protocol.GitPullRequestReply]
 
-pub let host_connect : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
-
 pub let host_open_path : Command[@protocol.OpenPathPayload, @protocol.OpenPathReply]
 
 pub let host_reveal_path : Command[@protocol.OpenPathPayload, @protocol.RevealPathReply]
@@ -199,7 +196,7 @@ pub let session_archive : Command[@protocol.SessionPayload, @protocol.ArchiveRep
 
 pub let session_delete_archived : Command[@protocol.ArchivedSessionPayload, @protocol.SessionsReply]
 
-pub let session_export : Command[@protocol.SessionExportPayload, @protocol.SessionExportReply]
+pub let session_export : Command[@protocol.SessionSavePayload, @protocol.SessionExportReply]
 
 pub let session_list : Command[@protocol.EmptyPayload, @protocol.SessionsReply]
 
@@ -269,7 +266,6 @@ pub let worktree_remove : Command[@protocol.WorktreeRemovePayload, @protocol.Wor
 
 // Types and methods
 type Command[Payload, Reply]
-pub fn[Payload, Reply] Command::descriptor(Self[Payload, Reply]) -> @proton_contract.Command[Payload, Reply]
 pub fn[Payload, Reply] Command::name(Self[Payload, Reply]) -> String
 
 // Type aliases

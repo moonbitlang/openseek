@@ -1,8 +1,10 @@
-// One remote client's connection: JSON-RPC 2.0 over a WebSocket the host
-// dialed out through the relay (docs/remote-protocol.md). Requests fan out
-// to the shared dispatcher concurrently; notifications flow back from the
-// hub. The bridge and this file are the only two transports, and everything
-// below the envelope is the typed Endpoint selected from `@api.endpoints`.
+// One client's connection: JSON-RPC 2.0 over a WebSocket, either dialed out
+// through the relay for a browser or accepted on the loopback origin for the
+// desktop window itself (docs/remote-protocol.md). Requests fan out to the
+// shared dispatcher concurrently; notifications flow back from the hub. This
+// is the only transport, and everything below the envelope is the typed
+// Endpoint selected from `@api.endpoints` — plus, on the window's own
+// connection, the window-only extras.
 
 ///|
 /// Everything the single writer task sends, encoded only at the writer so
@@ -27,21 +29,54 @@ priv struct ClientSubscription {
 }
 
 ///|
-/// One remote data WebSocket actor. It creates and closes the socket inside
-/// `run`; its subscription, outbound queue, writer, notification forwarder,
-/// pinger, and request tasks cannot outlive that run.
-priv struct WsClientActor {
-  state : @api.ApiState
-  host_connection : @host.HostConnection
-  url : String
+/// Which notifications a connection is handed. The desktop window's own
+/// loopback connection gets the hub's complete stream, exactly as the
+/// in-process bridge did; a relayed browser gets the trimmed remote profile
+/// (`remote_delivery`) and never the window-local events.
+priv enum DeliveryProfile {
+  Loopback
+  Remote
 }
 
 ///|
-fn WsClientActor::WsClientActor(
+/// One client WebSocket actor. Its subscription, outbound queue, writer,
+/// notification forwarder, pinger, and request tasks cannot outlive the
+/// `serve` call that owns the socket.
+priv struct WsClientActor {
+  state : @api.ApiState
+  host_connection : @host.HostConnection
+  // The method catalog this connection may call. Endpoint closures capture
+  // the connection's watch and PTY ownership once; every request only
+  // performs a name lookup in this stable list.
+  endpoints : Array[@endpoint.Endpoint]
+  profile : DeliveryProfile
+}
+
+///|
+/// A relayed browser's connection: the shared catalog, trimmed delivery.
+fn WsClientActor::relay(state : @api.ApiState) -> WsClientActor {
+  let host_connection = @host.HostConnection()
+  {
+    state,
+    host_connection,
+    endpoints: @api.endpoints(state, host_connection),
+    profile: Remote,
+  }
+}
+
+///|
+/// The desktop window's loopback connection: the shared catalog plus the
+/// window-only methods, and the hub's complete stream.
+fn WsClientActor::loopback(
   state : @api.ApiState,
-  url : String,
+  window_endpoints : Array[@endpoint.Endpoint],
 ) -> WsClientActor {
-  { state, host_connection: HostConnection(), url, }
+  let host_connection = @host.HostConnection()
+  let endpoints = @api.endpoints(state, host_connection)
+  for endpoint in window_endpoints {
+    endpoints.push(endpoint)
+  }
+  { state, host_connection, endpoints, profile: Loopback, }
 }
 
 ///|
@@ -145,8 +180,8 @@ const CodeHostError = -32001
 /// Dial and serve one announced remote client. A client hanging up mid-run
 /// is routine and only retires this actor; cancelling the parent relay actor
 /// still propagates so every owned resource is closed immediately.
-async fn WsClientActor::run(self : WsClientActor) -> Unit {
-  let conn = @websocket.Conn::connect(self.url)
+async fn WsClientActor::run(self : WsClientActor, url : String) -> Unit {
+  let conn = @websocket.Conn::connect(url)
   defer conn.close()
   self.serve(conn) catch {
     error if @async.is_being_cancelled() => raise error
@@ -168,9 +203,7 @@ async fn WsClientActor::serve(
     InflightRequestCapacity,
     initial_value=InflightRequestCapacity,
   )
-  // Endpoint closures capture this connection's watch and PTY ownership once;
-  // every request only performs a name lookup in the stable catalog.
-  let endpoints = @api.endpoints(self.state, self.host_connection)
+  let endpoints = self.endpoints
   @async.with_task_group(group => {
     group.spawn_bg(() => {
       for ;; {
@@ -205,7 +238,7 @@ async fn WsClientActor::serve(
           }
           error => raise error
         }
-        guard notification_for_client(notification) is Some(notification) else {
+        guard self.profile.deliver(notification) is Some(notification) else {
           continue
         }
         enqueue_outgoing(out, Notify(notification))
@@ -354,7 +387,7 @@ fn classify(text : String) -> Inbound {
 /// through. Lifecycle frames carrying large durable text are copied and
 /// trimmed so the hub's original notification stays untouched for local
 /// transports.
-fn notification_for_client(
+fn remote_delivery(
   notification : @protocol.Notification,
 ) -> @protocol.Notification? {
   match notification {
@@ -372,7 +405,21 @@ fn notification_for_client(
     AgentStarted(payload) if !payload.session.is_empty() =>
       Some(AgentStarted(payload))
     AgentStarted(_) => None
+    // The desktop window's native views and titlebar are nobody else's.
+    BrowserEvent(_) | WindowChromeChanged => None
     _ => Some(notification)
+  }
+}
+
+///|
+/// Apply this connection's delivery profile to one hub notification.
+fn DeliveryProfile::deliver(
+  self : DeliveryProfile,
+  notification : @protocol.Notification,
+) -> @protocol.Notification? {
+  match self {
+    Loopback => Some(notification)
+    Remote => remote_delivery(notification)
   }
 }
 
@@ -389,7 +436,7 @@ async fn run_request(
     is Some(endpoint) else {
     return error_envelope(id, CodeMethodNotFound, "unknown method '\{method_}'")
   }
-  let result = endpoint.invoke_remote(params) catch {
+  let result = endpoint.invoke(params) catch {
     error if @async.is_being_cancelled() => raise error
     @endpoint.InvalidEndpointPayload(message) =>
       return error_envelope(id, CodeInvalidParams, message)
@@ -417,7 +464,7 @@ fn error_envelope(id : Json, code : Int, message : String) -> Json {
 ///|
 async test "readiness precedes the first forwarded hub notification" {
   let state = @api.ApiState(engine="unused")
-  let subscription = WsClientActor::WsClientActor(state, "unused").open_subscription()
+  let subscription = WsClientActor::relay(state).open_subscription()
   state.publish(
     SessionEvent({
       session: "session-1",
@@ -529,7 +576,7 @@ fn expect_notification(
 ///|
 /// One run-scoped agent event as `notification_for_client` sees it.
 fn client_frame(event : @wire.Event) -> @protocol.Notification? {
-  notification_for_client(
+  remote_delivery(
     AgentEvent({
       run_id: None,
       session: "session-1",
@@ -590,7 +637,7 @@ test "remote delivery retains streaming runtime and error events" {
     assert_true(client_frame(event) is Some(_))
   }
   assert_true(
-    notification_for_client(
+    remote_delivery(
       SessionEvent({
         session: "session-1",
         sequence: 1,
@@ -609,7 +656,7 @@ test "remote delivery retains streaming runtime and error events" {
 ///|
 test "remote lifecycle frames keep state without transcript text" {
   let started = expect_notification(
-    notification_for_client(
+    remote_delivery(
       AgentStarted({
         run_id: "run-1",
         submission_id: None,
@@ -623,7 +670,7 @@ test "remote lifecycle frames keep state without transcript text" {
   )
   assert_eq(started.params(), { "run_id": "run-1", "session": "session-1" })
   let finished = expect_notification(
-    notification_for_client(
+    remote_delivery(
       AgentFinished({
         run_id: "run-1",
         status: "finished",
@@ -684,7 +731,7 @@ test "remote delivery drops notifications without a session" {
     session: "",
     session_root: None,
   })
-  assert_true(notification_for_client(started_notification) is None)
+  assert_true(remote_delivery(started_notification) is None)
   let event : @protocol.AgentEventPayload = {
     run_id: None,
     session: "",
@@ -700,5 +747,5 @@ test "remote delivery drops notifications without a session" {
     },
   }
   let notification : @protocol.Notification = AgentEvent({ ..event, })
-  assert_true(notification_for_client(notification) is None)
+  assert_true(remote_delivery(notification) is None)
 }

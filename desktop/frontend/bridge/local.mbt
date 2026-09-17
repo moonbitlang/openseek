@@ -1,9 +1,13 @@
-// The desktop window's injected Proton connection. The request API and event
-// actors appear independently, so installation waits for the complete surface
-// before registering listeners or attaching to the host notification actor.
+// The desktop window's connection to its own host: the page's loopback
+// origin's `/ws`, one JSON-RPC WebSocket exactly like a remote device's
+// (docs/remote-protocol.md), with the same reconnect generations. On top of
+// it ride the two things only Proton's injected runtime carries — application
+// menu commands and system-notification clicks — as best-effort listeners: a
+// page without the runtime (a test browser) still gets its host connection.
 
 ///|
 priv struct LocalBridgeSub {
+  websocket_epoch : Int
   mut dispatch : @cmd.Emit[Event]
   mut active : Bool
   unsubscribers : Array[@js.Value]
@@ -11,75 +15,82 @@ priv struct LocalBridgeSub {
 
 ///|
 fn LocalBridgeSub::LocalBridgeSub(
+  websocket_epoch : Int,
   dispatch : @cmd.Emit[Event],
 ) -> LocalBridgeSub {
-  { dispatch, active: true, unsubscribers: [], }
+  { websocket_epoch, dispatch, active: true, unsubscribers: [], }
 }
 
 ///|
-const LocalBridgeKey = "host-bridge:local"
+fn LocalBridgeSub::subscription_key(
+  websocket_epoch : Int,
+  reconnect_attempt : Int,
+) -> String {
+  let channel : @interop.ChannelId = @interop.ChannelId::Local
+  "host-bridge:\{channel.uri_authority()}:\{websocket_epoch}:\{reconnect_attempt}"
+}
 
 ///|
-/// Wait for Proton to inject the bridge, wire this connection's events, and
-/// attach to the host. The 25ms retries add up to roughly three seconds.
+fn LocalBridgeSub::install(
+  self : LocalBridgeSub,
+  scheduler : &@cmd.Scheduler,
+) -> Unit {
+  let channel : @interop.ChannelId = @interop.ChannelId::Local
+  @interop.ws_connect(
+    channel,
+    on_notification=notification => {
+      scheduler.add((self.dispatch)(Notification(channel~, notification~)))
+    },
+    on_down=() => {
+      scheduler.add(
+        (self.dispatch)(
+          ChannelDown(channel~, websocket_epoch=self.websocket_epoch),
+        ),
+      )
+    },
+  )
+  scheduler.add(self.wire_runtime_events(0))
+}
+
+///|
+/// Wait for Proton to inject its runtime, then listen for the events only it
+/// carries. The 25ms retries add up to roughly three seconds; a page that
+/// never gets the runtime simply has no menu bar or system notifications.
 /// Unloading makes every already queued retry harmless.
-fn LocalBridgeSub::install(self : LocalBridgeSub, attempt : Int) -> @cmd.Cmd {
+fn LocalBridgeSub::wire_runtime_events(
+  self : LocalBridgeSub,
+  attempt : Int,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard self.active else { return }
-    guard @interop.openseek_api() is Some(request_api) &&
-      @interop.moonbit_bridge_root() is Some(root) &&
+    guard @interop.moonbit_bridge_root() is Some(root) &&
       @interop.js_prop(root, "events") is Some(extension_events) &&
       @interop.js_prop(root, "app") is Some(application_events) &&
-      @interop.js_prop(request_api, "host.connect") is Some(_) &&
-      @interop.js_prop(request_api, "agent.start") is Some(_) &&
       @interop.js_prop(extension_events, "on") is Some(_) &&
       @interop.js_prop(application_events, "on") is Some(_) else {
-      if attempt > 120 {
-        scheduler.add(
-          (self.dispatch)(
-            Unavailable(
-              channel=@interop.ChannelId::Local,
-              message="Bridge unavailable",
-            ),
-          ),
-        )
-      } else {
-        scheduler.add(@cmd.delay(self.install(attempt + 1), 25))
+      if attempt <= 120 {
+        scheduler.add(@cmd.delay(self.wire_runtime_events(attempt + 1), 25))
       }
       return
     }
-    self.wire(scheduler, extension_events, application_events)
-    self.open_host_connection(scheduler, request_api)
-  })
-}
-
-///|
-/// Attach this page to the host's app-lifetime notification actor. The call
-/// resolves after the actor emits its readiness event.
-fn LocalBridgeSub::open_host_connection(
-  self : LocalBridgeSub,
-  scheduler : &@cmd.Scheduler,
-  api : @js.Value,
-) -> Unit {
-  @js.async_run(() => {
-    let _ : @js.Value = @interop.js_method_promise(
-      api,
-      "host.connect",
-      @js.Object::new().to_value(),
-    ).wait() catch {
-      error => {
-        guard self.active else { return }
-        scheduler.add(
-          (self.dispatch)(
-            Unavailable(
-              channel=@interop.ChannelId::Local,
-              message=@interop.bridge_error_text(error),
-            ),
-          ),
-        )
+    // Application events use `__MoonBit__.app.on`; keep their command id
+    // typed while leaving command policy to the parent frontend.
+    self.subscribe(application_events, "menu.command", event => {
+      guard event_payload(event) is Some(payload) &&
+        payload.get("command_id") is Some(String(command_id)) else {
         return
       }
-    }
+      scheduler.add((self.dispatch)(MenuCommand(command_id~)))
+    })
+    // The notification extension stamps the owning run id in `payload`.
+    self.subscribe(extension_events, "notification.click", event => {
+      guard event_payload(event) is Some(payload) &&
+        payload.get("payload") is Some(String(run_id)) &&
+        !run_id.is_empty() else {
+        return
+      }
+      scheduler.add((self.dispatch)(NotificationClicked(run_id~)))
+    })
   })
 }
 
@@ -112,57 +123,6 @@ fn event_payload(event : @js.Value) -> Map[String, Json]? {
 }
 
 ///|
-fn LocalBridgeSub::wire(
-  self : LocalBridgeSub,
-  scheduler : &@cmd.Scheduler,
-  extension_events : @js.Value,
-  application_events : @js.Value,
-) -> Unit {
-  // Proton needs one listener per notification kind, so the listeners derive
-  // directly from the shared catalog.
-  for kind_ in @protocol.NotificationKind::all() {
-    let method_ = kind_.wire_name()
-    let handler = (event : @js.Value) => {
-      guard event_payload(event) is Some(payload) &&
-        @protocol.Notification::from_wire(method_, Json(payload))
-        is Some(notification) else {
-        return
-      }
-      scheduler.add(
-        (self.dispatch)(
-          Notification(channel=@interop.ChannelId::Local, notification~),
-        ),
-      )
-    }
-    self.subscribe(extension_events, "openseek." + method_, handler)
-  }
-  // Native browser-view events are intentionally window-local rather than
-  // shared protocol notifications. The parent frontend owns their UI decode.
-  self.subscribe(extension_events, "openseek.browser.event", event => {
-    guard event_payload(event) is Some(payload) else { return }
-    scheduler.add((self.dispatch)(BrowserEvent(payload~)))
-  })
-  // Application events use `__MoonBit__.app.on`; keep their command id typed
-  // while leaving command policy to the parent frontend.
-  self.subscribe(application_events, "menu.command", event => {
-    guard event_payload(event) is Some(payload) &&
-      payload.get("command_id") is Some(String(command_id)) else {
-      return
-    }
-    scheduler.add((self.dispatch)(MenuCommand(command_id~)))
-  })
-  // The notification extension stamps the owning run id in `payload`.
-  self.subscribe(extension_events, "notification.click", event => {
-    guard event_payload(event) is Some(payload) &&
-      payload.get("payload") is Some(String(run_id)) &&
-      !run_id.is_empty() else {
-      return
-    }
-    scheduler.add((self.dispatch)(NotificationClicked(run_id~)))
-  })
-}
-
-///|
 fn LocalBridgeSub::update_dispatch(
   self : LocalBridgeSub,
   dispatch : @cmd.Emit[Event],
@@ -171,9 +131,11 @@ fn LocalBridgeSub::update_dispatch(
 }
 
 ///|
-/// Retire every Proton listener and make queued injection retries inert.
+/// Close the socket without emitting a down event (replacing the generation
+/// must not start another retry) and retire every runtime listener.
 fn LocalBridgeSub::unload(self : LocalBridgeSub) -> Unit {
   self.active = false
+  @interop.ws_close(@interop.ChannelId::Local)
   for unsubscribe in self.unsubscribers {
     let _ : @js.Value = unsubscribe.apply(([] : FixedArray[@js.Value]))
   }

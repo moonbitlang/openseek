@@ -7,17 +7,19 @@
       content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
     />
     <title>SeekMoon Development</title>
-    <!-- Proton uses this file's directory as its asset root. Keeping the file
-         at the repository root lets CEF serve source CSS, cached vendor files,
-         and Moon's _build artifact without copying them into a data_dir. -->
+    <!-- The host's loopback server uses this file's directory — the
+         checkout — as its root. Keeping the file at the repository root lets
+         it serve source CSS, cached vendor files, and Moon's _build artifact
+         without copying them into a data_dir. -->
     <link rel="stylesheet" href="/desktop/dev/viewer.css" />
     <link rel="stylesheet" href="/desktop/app.css" />
     <link rel="stylesheet" href="/desktop/target/web/xterm.css" />
-    <!-- The build program stages Mermaid's pinned browser distribution here. -->
+    <!-- The build program stages Mermaid's pinned browser distribution here.
+         The viewer imports it relative to the page (`mermaid/…`). -->
     <script type="importmap">
       {
         "imports": {
-          "https://proton.localhost/mermaid/": "/desktop/target/web/mermaid/"
+          "/mermaid/": "/desktop/target/web/mermaid/"
         }
       }
     </script>

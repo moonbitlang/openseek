@@ -4,7 +4,6 @@
 
 ///|
 priv struct RemoteBridgeSub {
-  device_id : String
   channel : @interop.ChannelId
   websocket_epoch : Int
   mut dispatch : @cmd.Emit[Event]
@@ -16,12 +15,7 @@ fn RemoteBridgeSub::RemoteBridgeSub(
   websocket_epoch : Int,
   dispatch : @cmd.Emit[Event],
 ) -> RemoteBridgeSub {
-  {
-    device_id,
-    channel: @interop.ChannelId::Remote(device_id),
-    websocket_epoch,
-    dispatch,
-  }
+  { channel: @interop.ChannelId::Remote(device_id), websocket_epoch, dispatch, }
 }
 
 ///|
@@ -40,7 +34,7 @@ fn RemoteBridgeSub::install(
   scheduler : &@cmd.Scheduler,
 ) -> Unit {
   @interop.ws_connect(
-    self.device_id,
+    self.channel,
     on_notification=notification => {
       scheduler.add(
         (self.dispatch)(Notification(channel=self.channel, notification~)),

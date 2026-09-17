@@ -1,8 +1,9 @@
 // The native half of the dock's Browser tabs: one web contents view per
-// page, owned by the window and driven by bridge-local ops. Like
-// `shell.open_external`, none of these commands join the shared API catalog
-// — a relay browser has no native views to command. View events flow back
-// to the page as `browser.event` notifications through the bridge actor.
+// page, owned by the window and driven by window-only methods served on the
+// desktop window's loopback connection. Like `shell.open_external`, none of
+// these commands join the shared API catalog — a relay browser has no native
+// views to command. View events flow back to the page as `browser.event`
+// notifications, which the loopback delivery profile alone forwards.
 
 ///|
 /// The registry of native browser views. The window handle arrives with
@@ -32,8 +33,8 @@ pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
 
 ///|
 /// Drop every browser view. A reloaded page allocates ids from scratch, so
-/// views of the previous page must not survive its `host.connect`.
-fn BrowserViews::close_all(self : BrowserViews) -> Unit {
+/// views of the previous page must not survive its new loopback connection.
+pub fn BrowserViews::close_all(self : BrowserViews) -> Unit {
   guard self.window is Some(window) else { return }
   for view in window.views() {
     if browser_view_id(view.id()) is Some(_) {
@@ -388,47 +389,47 @@ fn BrowserViews::focused_browser(
 /// the same create-if-missing handler as `browser.open`.
 fn window_endpoints(views : BrowserViews) -> Array[@endpoint.Endpoint] {
   [
-    @endpoint.Endpoint::window(@commands.app_close_window, (_, _) => {
+    @endpoint.Endpoint::sync(@commands.app_close_window, _ => {
       views.attached_window().close()
       Acknowledged
     }),
-    @endpoint.Endpoint::window(@commands.app_focused_browser, (_, _) => {
+    @endpoint.Endpoint::sync(@commands.app_focused_browser, _ => {
       views.focused_browser()
     }),
-    @endpoint.Endpoint::window(@commands.browser_open, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.browser_open, payload => {
       views.open(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_navigate, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.browser_navigate, payload => {
       views.open(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_back, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.browser_back, payload => {
       views.back(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_forward, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.browser_forward, payload => {
       views.forward(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_reload, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.browser_reload, payload => {
       views.reload(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_set_theme, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.browser_set_theme, payload => {
       views.set_theme(payload)
     }),
-    @endpoint.Endpoint::window(@commands.app_open_devtools, (_, _) => {
+    @endpoint.Endpoint::sync(@commands.app_open_devtools, _ => {
       views.open_app_devtools()
     }),
-    @endpoint.Endpoint::window(@commands.app_set_titlebar_theme, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.app_set_titlebar_theme, payload => {
       views.set_app_titlebar_theme(payload)
     }),
-    @endpoint.Endpoint::window(@commands.app_toggle_maximized, (_, _) => {
+    @endpoint.Endpoint::sync(@commands.app_toggle_maximized, _ => {
       views.toggle_app_maximized()
     }),
-    @endpoint.Endpoint::window(@commands.browser_set_bounds, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.browser_set_bounds, payload => {
       views.set_bounds(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_set_visible, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.browser_set_visible, payload => {
       views.set_visible(payload)
     }),
-    @endpoint.Endpoint::window(@commands.browser_close, (_, payload) => {
+    @endpoint.Endpoint::sync(@commands.browser_close, payload => {
       views.close(payload)
     }),
   ]

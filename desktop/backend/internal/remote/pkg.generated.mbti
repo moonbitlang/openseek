@@ -3,6 +3,7 @@ package "openseek_desktop/backend/internal/remote"
 
 import {
   "openseek_desktop/backend/internal/api",
+  "openseek_desktop/backend/internal/endpoint",
 }
 
 // Values
@@ -10,6 +11,13 @@ import {
 // Errors
 
 // Types and methods
+type LocalServer
+pub fn LocalServer::entry_url(Self) -> String
+pub fn LocalServer::origin(Self) -> String
+pub fn LocalServer::port(Self) -> Int
+pub async fn LocalServer::run(Self) -> Unit
+pub async fn LocalServer::start(@api.ApiState, root~ : String, entry~ : String, token~ : String, window_endpoints~ : Array[@endpoint.Endpoint], on_page_attached~ : () -> Unit, port~ : Int) -> Self
+
 type RelayActor
 pub fn RelayActor::RelayActor(@api.ApiState, announce~ : (String) -> Unit) -> Self
 pub async fn RelayActor::run(Self) -> Unit

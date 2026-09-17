@@ -91,6 +91,21 @@ Package commands perform these steps:
 `proton_cli dev --no-frontend --setup`. Proton supplies the CEF environment and
 runs the Desktop package; there is no second development launcher.
 
+## Window origin and port
+
+The desktop window is an ordinary page on the host's own loopback origin: the
+host serves the frontend over `http://127.0.0.1:<port>/` and the page talks to
+it over the same JSON-RPC WebSocket a relayed browser uses
+(`docs/remote-protocol.md`). The port is fixed because the origin is the key to
+the page's `localStorage` — UI preferences would reset on every launch if it
+changed. A release build (`--release`) defaults to `27182` and a development build —
+anything running under the `.dev` identity, a `package/macos` build without
+`--release` as much as `package/dev` — to `27183`, so both can run side by
+side; `--port <n>` on the command line or
+`OPENSEEK_PORT=<n>` in the environment overrides either. When the port is taken
+the host falls back to an ephemeral one and logs `loopback_port_unavailable`:
+that launch works, but its preferences do not carry over.
+
 ## Resource tree
 
 All installed platforms receive the same application-owned tree:

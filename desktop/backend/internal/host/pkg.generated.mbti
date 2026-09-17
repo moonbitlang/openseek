@@ -19,7 +19,7 @@ pub fn endpoints(HostState, HostConnection, @engine.EngineManager, () -> Unit) -
 
 pub async fn ensure_codex_config(@pathx.Path?) -> String
 
-pub async fn frontend_entry_path() -> String
+pub async fn frontend_bundle() -> FrontendBundle
 
 pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, app_version? : String) -> HostState
 
@@ -43,6 +43,12 @@ pub(all) suberror PayloadError {
 pub fn PayloadError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+pub(all) struct FrontendBundle {
+  root : String
+  entry : String
+}
+pub fn FrontendBundle::entry_path(Self) -> String
+
 type HostConnection
 pub fn HostConnection::HostConnection() -> Self
 pub fn HostConnection::close_terminals(Self) -> Unit

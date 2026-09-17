@@ -185,6 +185,61 @@ pub impl ToJson for SessionExportPayload with fn to_json(self) {
 }
 
 ///|
+/// Save one conversation export to a file. The window chooses `destination`
+/// through Proton's native save dialog before it sends this, so the host
+/// only renders and writes; the export identity rides flattened beside the
+/// path on the wire.
+pub(all) struct SessionSavePayload {
+  source : SessionExportPayload
+  destination : String
+} derive(Debug, Eq)
+
+///|
+/// `destination` is required and must be a string; the export identity is
+/// decoded by the same rules as `SessionExportPayload`.
+pub impl FromJson for SessionSavePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session save payload")
+  {
+    source: SessionExportPayload::from_json(json, path),
+    destination: object.required_string("destination"),
+  }
+}
+
+///|
+pub impl ToJson for SessionSavePayload with fn to_json(self) {
+  {
+    "session": self.source.session,
+    "workspace": self.source.workspace,
+    "title": self.source.title,
+    "archived": self.source.archived,
+    "destination": self.destination,
+  }
+}
+
+///|
+/// The native save dialog the desktop window opens through Proton's injected
+/// runtime (`dialog.save_file`, not a wire method): the dialog title and the
+/// file name to suggest.
+pub(all) struct SaveFileDialogPayload {
+  title : String
+  suggested_name : String
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for SaveFileDialogPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "save file dialog payload")
+  {
+    title: object.required_string("title"),
+    suggested_name: object.required_string("suggested_name"),
+  }
+}
+
+///|
+pub impl ToJson for SaveFileDialogPayload with fn to_json(self) {
+  { "title": self.title, "suggested_name": self.suggested_name }
+}
+
+///|
 /// `session.archive` / `session.unarchive` address a conversation by its
 /// durable session id. Archiving takes the conversation's worktree with
 /// it; `force` (archive only) discards that checkout's uncommitted
@@ -1834,6 +1889,30 @@ pub extend SessionExportPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend SessionExportPayload with ToJson::{to_json}
+
+///|
+pub extend SessionSavePayload with Debug::{to_repr}
+
+///|
+pub extend SessionSavePayload with FromJson::{from_json}
+
+///|
+pub extend SessionSavePayload with Eq::{equal, not_equal}
+
+///|
+pub extend SessionSavePayload with ToJson::{to_json}
+
+///|
+pub extend SaveFileDialogPayload with Debug::{to_repr}
+
+///|
+pub extend SaveFileDialogPayload with FromJson::{from_json}
+
+///|
+pub extend SaveFileDialogPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SaveFileDialogPayload with ToJson::{to_json}
 
 ///|
 pub extend LspHoverPayload with Debug::{to_repr}

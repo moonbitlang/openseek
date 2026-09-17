@@ -36,15 +36,13 @@ pub fn moonbit_bridge_root() -> @js.Value?
 
 pub fn now_ms() -> Double
 
-pub fn openseek_api() -> @js.Value?
-
-pub fn page_channel() -> ChannelId?
-
 pub fn page_has_focus() -> Bool
 
 pub fn page_query_param(String) -> String?
 
 pub fn page_ws_origin() -> String?
+
+pub async fn save_file_dialog(title~ : String, suggested_name~ : String) -> String?
 
 pub fn session_command_lane(ChannelId, String) -> String
 
@@ -52,7 +50,7 @@ pub fn viewport_width() -> Int?
 
 pub fn ws_close(ChannelId) -> Unit
 
-pub fn ws_connect(String, on_notification~ : (@protocol.Notification) -> Unit, on_down~ : () -> Unit) -> Unit
+pub fn ws_connect(ChannelId, on_notification~ : (@protocol.Notification) -> Unit, on_down~ : () -> Unit) -> Unit
 
 // Errors
 

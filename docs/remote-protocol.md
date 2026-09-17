@@ -1,15 +1,17 @@
 # OpenSeek Remote Protocol (v2)
 
-The wire protocol between a browser client and an OpenSeek **host process**
+The wire protocol between a client page and an OpenSeek **host process**
 — the desktop app's native process, which owns the engine and the host ops.
-The host runs no server: at startup it dials out to a **relay** and
-registers; browsers reach it through the relay, which serves the frontend
-bundle and splices WebSockets without understanding a byte of the protocol.
+Remote browsers reach the host through a **relay**: at startup the host dials
+out and registers, and the relay serves the console bundle and splices
+WebSockets without understanding a byte of the protocol.
 
-The desktop window itself does not use this protocol. It talks to the host
-over proton's in-process `__MoonBit__` bridge — same method catalog, same
-payloads, no wire. The frontend picks its transport by origin: a `proton://`
-page uses the bridge, anything else opens the WebSocket below.
+The desktop window is a client of this same protocol. The host serves the
+window's page from its own loopback origin, `http://127.0.0.1:<port>/`, and
+the page opens one WebSocket back to it (see *Desktop window* under
+Transport). Same method catalog, same envelope, same client code; only the
+socket URL differs, and the window's connection additionally serves the
+window-only methods listed at the end of the catalog.
 
 This document is the contract. The implementation follows it, not the other
 way around.
@@ -25,12 +27,13 @@ it:
 - `LspPoolActor` owns the language-server actors shared by the host.
 - `RelayActor` owns the control connection and creates one `WsClientActor`
   for each relayed client.
-- Every Proton or WebSocket client owns a separate `HostConnection`, whose
-  `FsWatchActor` serves only that client's `fs.watch` state and whose
-  terminal state owns only that client's PTYs; filesystem and terminal
-  notifications return only to the owning client.
-- `DesktopBridgeActor` owns the current Proton page attachment and forwards
-  the shared catalog notifications to it.
+- `LocalServer` owns the window's loopback listener and creates one
+  `WsClientActor` for each connection the window's page opens (a reload is a
+  new connection).
+- Every WebSocket client — the window's included — owns a separate
+  `HostConnection`, whose `FsWatchActor` serves only that client's `fs.watch`
+  state and whose terminal state owns only that client's PTYs; filesystem
+  and terminal notifications return only to the owning client.
 
 Closing the Proton application cancels these owners together. A request may
 post work to them, but cancelling or reloading that request cannot orphan a
@@ -38,7 +41,8 @@ socket, subprocess, or watcher.
 
 ## Transport
 
-All HTTP lives at the relay. Browser releases are versioned alongside Desktop
+The relay's HTTP routes (the desktop window's own loopback origin is described
+under *Desktop window* below). Browser releases are versioned alongside Desktop
 releases; JSON/WS APIs live under `/v1`:
 
 | Route | What |
@@ -99,8 +103,34 @@ Before publishing a new `agent_step` or a successful terminal lifecycle event,
 the Desktop host drains that session's serialized follower. Consequently every
 durable commit preceding the boundary reaches both local and remote clients
 first; live reasoning can hand off without a follower race.
-The desktop's in-process bridge continues to receive the hub's complete stream;
-this trimming is specific to remote WebSocket delivery.
+The desktop window's own loopback connection receives the hub's complete
+stream; this trimming is specific to relayed delivery.
+
+### Desktop window
+
+The window's page is served by the host itself on a **fixed loopback
+origin**: `http://127.0.0.1:<port>/`, port `27182` for a release build
+and `27183` for a development build (the `.dev` identity),
+overridable with `--port` or `OPENSEEK_PORT`. The port is fixed because the
+origin is the key to the
+page's `localStorage`; an ephemeral port would reset every UI preference on
+each launch. If the port is taken the host binds an ephemeral one and logs it
+— that launch works on a fresh origin.
+
+| Route | What |
+|---|---|
+| `GET /` and plain asset paths | The frontend bundle. Only visible, dot-free path segments resolve; everything else is 404 |
+| `GET /ws?token=<launch token>` (upgrade) | The window's protocol WebSocket — the JSON-RPC connection below, plus the window-only methods |
+
+The launch token is minted per process from OS entropy and rides the entry
+URL's query string; the page hands it back on its `/ws` dial. A present
+`Origin` header must equal the page's own origin. Together these keep a
+foreign web page, which can reach loopback but cannot read the token and
+always sends its own `Origin`, out of the host. A loopback connection is
+also the only one that receives `browser.event` and `window.chrome_changed`.
+
+The page's reconnect and resync rules are the ones below; the host process
+outliving a page reload is exactly a "reconnect".
 
 ### Filesystem path encoding
 
@@ -238,10 +268,9 @@ Slow clients are disconnected, not throttled and not silently dropped
 frame-by-frame: when a connection's outbound queue overflows, the host
 closes it, and the client reconnects into the resync path above.
 
-The in-process bridge does not use WebSocket reconnect or capability
-negotiation. It can still be recreated across a host restart: each
-`BridgeReady` transition makes the desktop rebuild host-derived state, so that
-readiness resync follows the same idempotent, race-tolerant rules.
+The desktop window follows the same rules on its loopback connection: a page
+reload or a dropped socket reconnects with the same backoff, and each
+`BridgeReady` transition makes it rebuild host-derived state.
 
 ## Method catalog
 
@@ -682,9 +711,9 @@ Notification:
 
 Desktop-window-only by client convention: applying an update swaps the
 bundle under the running process and relaunches through the window's close
-path, which only exists on the in-process bridge. The host serves these on
-both transports (it cannot tell clients apart), but the browser frontend
-never calls them and shows no update UI.
+path (the window-only `app.close_window`). The host serves these on every
+connection (it cannot tell clients apart), but the browser frontend never
+calls them and shows no update UI.
 
 | method | params | result |
 |---|---|---|
@@ -709,8 +738,43 @@ Notification:
 
 Reserved notification (not yet emitted over the wire):
 `host.notification_clicked` `{session}` — a system notification was clicked.
-On the desktop this arrives through the proton bridge; it appears here once
-remote clients need it.
+On the desktop this arrives through Proton's injected runtime
+(`notification.click`); it appears here once remote clients need it.
+
+### Window-only methods
+
+Served only on the desktop window's loopback connection; a relay client gets
+`-32601` for every one of them. They command this machine's window, native
+web contents views, opener, and disk, which a remote page has no business
+operating.
+
+| method | params | result |
+|---|---|---|
+| `shell.open_external` | `{url}` — `http(s)` or `mailto` only | `{opened}` |
+| `session.export` | `{session, workspace, title, archived, destination}` — `destination` is the absolute path the page chose through Proton's native save dialog (`dialog.save_file` on the injected runtime, not a wire method) | `{path, opened}` |
+| `session.share` | `{session, workspace, title, archived}` | `{status: "shared", url}` \| `{status: "sign_in_required"}` \| `{status: "failed", message}` |
+| `app.close_window` | `{}` | `{}` — the window's ordinary native close |
+| `app.open_devtools`, `app.toggle_maximized` | `{}` | `{}` |
+| `app.set_titlebar_theme` | `{dark}` | `{}` |
+| `app.focused_browser` | `{}` | `{id?}` — the focused native Browser tab |
+| `browser.open` / `browser.navigate` | `{id, url, dark}` | `{}` |
+| `browser.back` / `browser.forward` / `browser.reload` / `browser.close` | `{id}` | `{}` |
+| `browser.set_theme` | `{id, dark}` | `{}` |
+| `browser.set_bounds` | `{id, x, y, width, height}` | `{}` |
+| `browser.set_visible` | `{id, visible}` | `{}` |
+
+Window-only notifications, delivered to loopback connections alone:
+
+| method | params |
+|---|---|
+| `browser.event` | `{id, kind, …}` — a native browser view navigated, changed title or loading state, failed a load, or reported find-in-page results |
+| `window.chrome_changed` | `{}` — the native titlebar area may have changed; the page re-queries Proton's geometry |
+
+What stays on Proton's injected runtime, because only it can do these for
+the page: system notifications (`__MoonBit__.notification`, with
+`notification.click` back), the titlebar geometry query
+(`__MoonBit__.getTitlebarArea`), application menu commands
+(`__MoonBit__.app`), and the native save dialog above.
 
 ## Relay tunnel
 
@@ -744,7 +808,8 @@ Control-channel frames (JSON text over the `/v1/tunnel` WebSocket):
 
 The data WebSocket (④) carries client protocol frames untouched. On the
 host side each data connection is served by the same JSON-RPC dispatch the
-bridge feeds — the host has no tunnel-specific protocol handling beyond the
+desktop window's loopback connection feeds — the host has no tunnel-specific
+protocol handling beyond the
 four control frames. Either side closing a spliced socket closes its twin;
 a dropped control connection closes every stream of that device.
 
@@ -753,18 +818,39 @@ multi-device console; the bundle never crosses the tunnel). Nothing else
 is tunneled: the client protocol has exactly one entry point, the
 WebSocket.
 
+## Changes in v2.2
+
+- **The desktop window is a client of the wire.** v2 kept the window on
+  Proton's asset origin with an in-process `__MoonBit__` bridge carrying the
+  same catalog in a different envelope. v2.2 deletes the bridge: the host
+  serves the window's page on a fixed loopback origin and the page opens the
+  same JSON-RPC WebSocket a relayed browser does. One transport, one client
+  code path, one server-side actor per connection.
+- **Fixed port.** The origin is `http://127.0.0.1:27182` (development builds
+  `27183`), overridable with `--port` / `OPENSEEK_PORT`, so the page's
+  `localStorage` survives relaunches — the objection that parked the first
+  attempt at this design.
+- **Window-only methods** moved from bridge-registered ops to a second
+  endpoint list the loopback connection serves beside the shared catalog;
+  `browser.event` and `window.chrome_changed` became notifications delivered
+  by the loopback profile alone. `session.export` takes the destination the
+  page chose through Proton's native save dialog, which is the one thing
+  still reached through the injected runtime as a command.
+- **Known cost:** the asset origin's `localStorage` is unreachable from the
+  new origin, so UI preferences reset once.
+
 ## Changes from v1
 
 The retired v1 design embedded an HTTP + SSE gateway in the desktop. What
 changed and why:
 
 - **The host process runs no server.** v1 embedded an HTTP gateway in the
-  desktop and pointed the window at `http://127.0.0.1:<port>/`. v2 keeps
-  the original desktop architecture — window on `proton://app/`, in-process
-  bridge — and adds remote access as a pure outbound feature: dial the
-  relay, register, serve each spliced WebSocket. No port, no static file
-  server, no CORS, and the window regains bridge-only capabilities
-  (notification-click focus).
+  desktop and pointed the window at `http://127.0.0.1:<port>/`. v2 kept
+  the original desktop architecture — window on Proton's asset origin,
+  in-process bridge — and added remote access as a pure outbound feature:
+  dial the relay, register, serve each spliced WebSocket. (v2.2 brought the
+  loopback server back for the window alone, on a fixed port and speaking
+  the v2 wire — see above.)
 - **One transport for the wire instead of three.** v1 ran fetch for
   commands, SSE for events, and a bespoke HTTP-over-WebSocket frame
   protocol (`req`/`resp`/`chunk`/`end`/`abort`) inside the tunnel. v2 is

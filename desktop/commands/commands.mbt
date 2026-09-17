@@ -1,42 +1,42 @@
-// The Desktop command catalog. Each value binds one stable wire name to one
-// payload type and one reply type. Native endpoint registration supplies the
-// handler; no dynamic request or response union sits between them.
+// The Desktop command catalog. Each value binds one stable JSON-RPC method
+// name (docs/remote-protocol.md) to one payload type and one reply type.
+// Native endpoint registration supplies the handler; no dynamic request or
+// response union sits between them. The desktop window and a relay browser
+// call these over the same WebSocket wire; only the window's loopback
+// connection also serves the window-only entries at the end of this file.
 
 ///|
-pub const ExtensionId = "openseek-desktop"
-
-///|
-/// Application menu event, not a bridge endpoint.
+/// Application menu event delivered by Proton's `menu.command` application
+/// event, not a wire method.
 pub const CloseFocusedMenuCommand = "app.close_focused"
 
 ///|
-pub let extension_contract : @proton_contract.ExtensionContract = @proton_contract.extension(
-  id=ExtensionId,
-  js_namespace="openseek",
-)
+/// The desktop window's native dialogs are the one thing Proton only exposes
+/// to a command handler holding the window's context, so they stay a Proton
+/// command on the injected runtime — `__MoonBit__.<namespace>[<command>]` —
+/// rather than a wire method. The page calls it before `session.export`.
+pub const WindowDialogNamespace = "openseek_window"
 
 ///|
-/// A target-neutral command identity. The type parameters prevent a caller
-/// from pairing a command name with an unrelated payload or reply.
+pub const SaveFileDialogCommand = "dialog.save_file"
+
+///|
+/// A transport-neutral command identity. The type parameters are phantom:
+/// they prevent a caller from pairing a method name with an unrelated
+/// payload or reply, while the value itself is only the name.
+#warnings("-unused_type_variable")
 struct Command[Payload, Reply] {
-  descriptor : @proton_contract.Command[Payload, Reply]
+  name : String
 }
 
 ///|
 fn[Payload, Reply] Command::Command(name : String) -> Command[Payload, Reply] {
-  { descriptor: extension_contract.command(name), }
-}
-
-///|
-pub fn[Payload, Reply] Command::descriptor(
-  self : Command[Payload, Reply],
-) -> @proton_contract.Command[Payload, Reply] {
-  self.descriptor
+  { name, }
 }
 
 ///|
 pub fn[Payload, Reply] Command::name(self : Command[Payload, Reply]) -> String {
-  self.descriptor.name()
+  self.name
 }
 
 ///|
@@ -99,8 +99,11 @@ pub let session_load_archived : Command[
 ] = Command("session.load_archived")
 
 ///|
+/// Write one conversation export to the destination the window's native
+/// save dialog chose. Window-only: the host writes to this machine's disk
+/// and hands the file to its opener.
 pub let session_export : Command[
-  @protocol.SessionExportPayload,
+  @protocol.SessionSavePayload,
   @protocol.SessionExportReply,
 ] = Command("session.export")
 
@@ -669,20 +672,20 @@ pub let host_reveal_path : Command[
   @protocol.RevealPathReply,
 ] = Command("host.reveal_path")
 
-///|
-pub let host_connect : Command[@protocol.EmptyPayload, @protocol.EmptyReply] = Command(
-  "host.connect",
-)
+// Window-only methods. The host serves them on the desktop window's own
+// loopback connection and nowhere else: a relay browser has no native window,
+// web contents views, or system opener on this machine to command, so it
+// gets method-not-found for every one of these.
 
 ///|
 pub let shell_open_external : Command[
   @protocol.ExternalLinkPayload,
   @protocol.OpenExternalReply,
 ] = Command("shell.open_external")
-// The dock's browser-tab commands. Like `host.connect` and
-// `shell.open_external`, they are bound window-only: the native web
-// contents views live in the desktop window, so a relay browser has
-// nothing to command.
+
+///|
+/// The dock's browser-tab commands drive native web contents views that live
+/// in the desktop window.
 
 ///|
 pub let browser_open : Command[

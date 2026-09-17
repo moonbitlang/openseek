@@ -1,9 +1,13 @@
 ///|
 async fn main {
+  // A command line this host does not understand is a usage error like any
+  // CLI's, and it ends the launch — Proton itself starts the binary with no
+  // arguments, so only a person can get here.
+  let matches = command.parse(argv=@env.args()[1:], env=@env.get_env_vars())
   // Hidden probe target: the login-shell environment probe re-execs this
   // binary through the user's shell; print the marker-wrapped JSON
   // environment and quit before any logging or CEF setup.
-  if @env.args() is [_, "--print-env-json", mark, ..] {
+  if matches.values.get("print-env-json") is Some([mark, ..]) {
     @shellenv.print_env_json(mark)
     return
   }
@@ -34,15 +38,29 @@ async fn main {
   if @host.PackagedTools::resolve() is Some(tools) {
     tools.apply_to_process_env()
   }
-  let frontend_entry = @host.frontend_entry_path()
+  let frontend = @host.frontend_bundle()
   let engine = @engine.engine_command()
-  let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
-  let app_version = app.version() catch { _ => "development" }
+  // The window is an ordinary page against the host's own loopback origin:
+  // the frontend bundle over `http://127.0.0.1:<port>/` and one JSON-RPC
+  // WebSocket — the same catalog, envelope, and client path a relay browser
+  // gets (docs/remote-protocol.md). The port is fixed so the origin, and with
+  // it the page's localStorage, survives relaunches; `--port` and
+  // OPENSEEK_PORT override it. The launch token minted here is the
+  // WebSocket's capability; it rides the entry URL's query string.
+  let port = get_port(matches, app)
+  guard @entropy.random_hex(32) is Some(token) else {
+    // No OS entropy is a hard failure, never weak randomness.
+    abort("no OS entropy available for the desktop transport token")
+  }
   @xlog.info() <? { "message": "host process start" }
-  @xlog.info() <? { "message": "frontend entry", "path": frontend_entry }
+  @xlog.info() <?
+    {
+      "message": "frontend bundle",
+      "root": frontend.root,
+      "entry": frontend.entry,
+    }
   @xlog.info() <? { "message": "engine", "path": engine }
   @xlog.info() <? { "message": "codex", "path": @codex.command() }
-  @xlog.info() <? { "message": "app version", "version": app_version }
   let runtime_dir = @host.prepared_runtime_dir(executable)
   let codex_home = match runtime_dir {
     Some(dir) => @codex.prepared_home(dir)
@@ -56,11 +74,13 @@ async fn main {
       .map(p => p.to_string())
       .unwrap_or("(inherited environment)"),
     }
+  let app_version = app.version() catch { _ => "development" }
+  @xlog.info() <? { "message": "app version", "version": app_version }
   // The relay sign-in store: a persisted session from auth.json, unless the
   // environment override pins the connector config directly (development).
   let auth = @auth.AuthStore::load(
     runtime_dir?,
-    env_override?=relay_settings(),
+    env_override?=relay_settings(matches),
     app_version~,
   )
   let state = @api.ApiState(
@@ -71,27 +91,36 @@ async fn main {
     auth~,
     app_version~,
   )
-  let bridge = @extension.DesktopBridgeActor(state)
   // The dock's browser tabs: native web contents views, owned by the
-  // window and commanded over bridge-local `browser.*` ops.
-  let views = @extension.BrowserViews()
+  // window and commanded over window-only `browser.*` methods.
+  let views = @window.BrowserViews()
   let relay = @remote.RelayActor(state, announce=device => {
     @xlog.info() <? { "message": "relay registered", "device": device }
   })
-  // Proton exposes the `__MoonBit__` bridge — both the ops and the event
-  // channel the frontend listens on — only to the local origin its asset
-  // entry serves from. The window is bridge-only: it makes no HTTP requests
-  // at all. Remote browsers use the same method catalog over the relay
-  // WebSocket instead (docs/remote-protocol.md).
-  // The identity this process answers to. A development build never answers
-  // to the shipped one: `package/build.mjs` generates a project config
-  // carrying its own, and `proton dev` hands that config on to the host
-  // through PROTON_PROJECT_CONFIG, so this call picks it up either way.
-  let app = app.load_config()
+  // Bind before the window can navigate: the listener's backlog holds the
+  // page's first requests until the accept loop starts with the actors.
+  let local_server = @remote.LocalServer::start(
+    state,
+    root=frontend.root,
+    entry=frontend.entry,
+    token~,
+    window_endpoints=@window.endpoints(state, views),
+    // A reloaded page allocates browser ids from scratch; the previous
+    // page's native views must not survive its attachment.
+    on_page_attached=() => views.close_all(),
+    port~,
+  )
+  @xlog.info() <?
+    {
+      "message": "loopback origin",
+      "origin": local_server.origin(),
+      "configured_port": port,
+    }
+  let app = app.entry_url(local_server.entry_url())
   // One host per identity: `single_instance` hands a later launch to the
   // process already holding that identity's lock, and that process brings its
   // window to the front. Off by default for now; see `single_instance_wanted`.
-  let single_instance = single_instance_wanted(app)
+  let single_instance = single_instance_wanted(matches, app)
   let app = if single_instance { app.single_instance() } else { app }
   let app = app
     // Let the page palette paint the native titlebar area. The default macOS
@@ -112,7 +141,7 @@ async fn main {
     // the system opener until Proton exposes the disposition.
     .on_new_window_request(async fn(_, request) noraise {
       if request.user_gesture {
-        ignore(@extension.open_external({ url: request.url, })) catch {
+        ignore(@window.open_external({ url: request.url, })) catch {
           error =>
             @xlog.error() <?
               {
@@ -158,48 +187,33 @@ async fn main {
     )
   }
   let app = app
-    // Both command extensions are deliberately granted to the configured
-    // entry page; registering backend handlers alone does not grant renderer
-    // access.
-    .capability(@extension.openseek_capability(state, bridge, views))
-    // System notifications are an ordinary generated extension now: the
-    // frontend posts them and receives `notification.click` with the run id.
+    // What stays on Proton's injected runtime are the things only it can do
+    // for the page — both granted to the configured entry page, which is the
+    // loopback origin now. System notifications: the frontend posts them and
+    // receives `notification.click` with the run id. Native dialogs: the save
+    // dialog `session.export` needs a window context for.
     .capability(@notification.capability())
-    // The connect request proves the page can issue commands; this paired
-    // lifecycle supplies the window-owned event destination that remains
-    // valid after that request returns — and the window handle the browser
-    // views hang off.
+    .capability(@window.dialogs_capability())
+    // The window handle the browser views hang off.
     .window_lifecycle(
-      on_ready=async fn(context) {
-        views.window_ready(context.handle())
-        bridge.window_ready(context.events())
-      },
-      on_close=async fn(_) {
-        views.window_closed()
-        bridge.window_closed()
-      },
+      on_ready=fn(context) { views.window_ready(context.handle()) },
+      on_close=fn(_) { views.window_closed() },
     )
     // Geometry can change without a DOM fullscreen event (native fullscreen,
-    // display scaling, or page zoom). Only this window's page is notified.
-    .on_window_event(async fn(_, event) noraise {
+    // display scaling, or page zoom). The loopback delivery profile alone
+    // forwards this to the page; a relay client never sees it.
+    .on_window_event(fn(_, event) noraise {
       if event is StateChanged(_) {
-        bridge.notify_window_chrome_changed() catch {
-          // Cancellation during shutdown leaves no page to notify.
-          _ => ()
-        }
+        state.publish(WindowChromeChanged)
       }
     })
     // Browser view events reach the page as `browser.event` notifications;
     // views that are not browser tabs are not the frontend's business.
-    .on_view_event(async fn(view, event) noraise {
-      match @extension.browser_view_id(view.id()) {
+    .on_view_event(fn(view, event) noraise {
+      match @window.browser_view_id(view.id()) {
         Some(id) =>
-          if @extension.view_event_json(id, event) is Some(payload) {
-            bridge.notify_browser_event(payload) catch {
-              // Only cancellation can interrupt the queue put — the app is
-              // shutting down, so the event has nowhere to go anyway.
-              _ => ()
-            }
+          if @window.view_event_json(id, event) is Some(payload) {
+            state.publish(BrowserEvent(payload))
           }
         None => ()
       }
@@ -218,13 +232,14 @@ async fn main {
     // registers with the relay under the running host's device identity.
     //
     // The actors run for the app's lifetime on this group — they feed every
-    // page/client rather than borrowing a `host.connect` request task as
-    // their owner — and stop when the run loop returns.
+    // page/client rather than borrowing a request task as their owner — and
+    // stop when the run loop returns. The loopback server owns the window's
+    // origin for the same span.
     let app = app.app_lifecycle(
       on_start=async fn(_) {
         is_primary = true
         prepare_workspaces()
-        group.spawn_bg(allow_failure=true, () => bridge.run())
+        group.spawn_bg(allow_failure=true, () => local_server.run())
         group.spawn_bg(allow_failure=true, () => {
           state
           .codex_actor()
@@ -268,7 +283,7 @@ async fn main {
         // the forwarding in its own log, the running instance's window comes
         // to the front, and this process ends.
         println(
-          "SeekMoon is already running; its window was brought to the front. Quit it first, or unset OPENSEEK_DESKTOP_SINGLE_INSTANCE to start another instance.",
+          "SeekMoon is already running; its window was brought to the front. Quit it first, or start this one without --single-instance.",
         )
       }
       @xlog.info() <?
@@ -325,39 +340,141 @@ async fn main {
 }
 
 ///|
+/// The application as the project config describes it: identity, product
+/// name, and package version. A development build never answers to the
+/// shipped identity: `package/build.mjs` generates a project config carrying
+/// its own, and `proton dev` hands that config on to the host through
+/// PROTON_PROJECT_CONFIG, so `load_config` picks it up either way. The entry
+/// URL is a placeholder until `main` knows the loopback port.
+let app : @proton.App = @proton.url(
+  "SeekMoon",
+  "http://127.0.0.1/",
+  width=1120,
+  height=760,
+).load_config()
+
+///|
+/// The host's command line. Proton launches the binary with no arguments, so
+/// every option also reads an environment variable — the way a packaged app
+/// is usually configured. The functions below each pull one setting out of
+/// the parsed `Matches`.
+let command : @argparse.Command = Command(
+  "seekmoon",
+  about="The SeekMoon desktop host.",
+  options=[
+    OptionArg(
+      "port",
+      long="port",
+      env="OPENSEEK_PORT",
+      about="The loopback port the window's origin uses. Release builds default to 27182, development builds to 27183.",
+    ),
+    OptionArg(
+      "relay-url",
+      long="relay-url",
+      env="OPENSEEK_RELAY_URL",
+      about="Development override: the relay's /v1/tunnel WebSocket URL. Together with --device-token it bypasses sign-in.",
+    ),
+    OptionArg(
+      "device-token",
+      long="device-token",
+      env="OPENSEEK_DEVICE_TOKEN",
+      about="Development override: the secret that keeps this machine's device id stable at the relay.",
+    ),
+    OptionArg(
+      "device-name",
+      long="device-name",
+      env="OPENSEEK_DEVICE_NAME",
+      default_values=["desktop"],
+      about="How the relay's status page labels this device under the development override.",
+    ),
+    // The login-shell environment probe re-execs this binary through the
+    // user's shell and reads the marker-wrapped JSON environment back.
+    OptionArg("print-env-json", long="print-env-json", hidden=true),
+  ],
+  flags=[
+    FlagArg(
+      "single-instance",
+      long="single-instance",
+      env="OPENSEEK_DESKTOP_SINGLE_INSTANCE",
+      about="Hand this launch to a release build already running under the same identity, bringing its window to the front. Off by default: a host Proton leaves stuck in cef_shutdown would otherwise capture every later launch.",
+    ),
+  ],
+)
+
+///|
+/// The loopback port this launch listens on: `--port` / OPENSEEK_PORT when
+/// given, otherwise the build's fixed default — the release port, or the
+/// development port under the `.dev` identity. A value that is not a number
+/// is logged, never refused: a stray OPENSEEK_PORT in someone's shell must
+/// not keep the app from starting.
+fn get_port(
+  matches : @argparse.Matches,
+  app : @proton.App,
+) -> Int raise @proton.AppPathError {
+  let default = if is_development_build(app) {
+    DevelopmentPort
+  } else {
+    ReleasePort
+  }
+  guard matches.values.get("port") is Some([value, ..]) else { return default }
+  @string.parse_int(value, base=10) catch {
+    _ => {
+      @xlog.warn() <?
+        {
+          "event": "desktop_port_ignored",
+          "value": value,
+          "port": default,
+          "message": "--port / OPENSEEK_PORT is not a number; using the default port",
+        }
+      default
+    }
+  }
+}
+
+///|
+/// The fixed loopback port behind the window's origin. A release build
+/// and a development build both run on this machine and must
+/// not fight over one port — a development build that lost that fight would
+/// land on an ephemeral origin and lose its preferences on every launch —
+/// so each has its own default. `--port` / OPENSEEK_PORT override either.
+const ReleasePort = 27182
+
+///|
+const DevelopmentPort = 27183
+
+///|
 /// The identity suffix `package/build.mjs` appends when it generates the
 /// project config a development build runs under. Spelled there too; this is
 /// the shared half of that convention.
 const DevelopmentSuffix = ".dev"
 
 ///|
+/// Whether the loaded project config carries the development identity — a
+/// `package/macos` build without `--release` as much as an unbundled
+/// `package/dev` run. Proton offers no getter for the identifier it loaded;
+/// it comes back through `data_dir`, whose last segment it is, and a path
+/// separator cannot appear inside an identity, so a data directory ending in
+/// the suffix is one whose identity does. An identity that cannot be
+/// resolved fails the launch: the port and single instance both hang off it,
+/// and guessing would move a real install's origin.
+fn is_development_build(app : @proton.App) -> Bool raise @proton.AppPathError {
+  app.data_dir().has_suffix(DevelopmentSuffix)
+}
+
+///|
 /// Whether this launch takes part in single instance.
 ///
-/// Off unless `OPENSEEK_DESKTOP_SINGLE_INSTANCE` is set: a host that Proton
+/// Off unless `--single-instance` (OPENSEEK_DESKTOP_SINGLE_INSTANCE=1) says
+/// so: a host that Proton
 /// leaves stuck in `cef_shutdown` keeps the identity's lock, and every later
 /// launch would hand itself to it. Even then only the shipped application
 /// takes part; a development build must start beside the binary it replaced.
-/// The identity comes back through `data_dir`, whose last segment it is.
-fn single_instance_wanted(app : @proton.App) -> Bool {
-  if @envx.get("OPENSEEK_DESKTOP_SINGLE_INSTANCE") is None {
-    return false
-  }
-  let identity = app.data_dir() catch {
-    error => {
-      // Without an identity there is nothing to lock on, and guessing one
-      // could silence a launch that belongs to the installed application.
-      @xlog.warn() <?
-        {
-          "event": "desktop_instance_identity_unknown",
-          "message": "could not resolve this application's identity; starting beside any running host",
-          "error": @debug.render(Repr(error)),
-        }
-      return false
-    }
-  }
-  // A path separator cannot appear inside an identity, so a data directory
-  // ending in the suffix is one whose identity does.
-  !identity.has_suffix(DevelopmentSuffix)
+fn single_instance_wanted(
+  matches : @argparse.Matches,
+  app : @proton.App,
+) -> Bool raise @proton.AppPathError {
+  matches.flags.get("single-instance") is Some(true) &&
+  !is_development_build(app)
 }
 
 ///|
@@ -413,14 +530,11 @@ async fn prepare_workspaces() -> Unit {
 /// `OPENSEEK_DEVICE_TOKEN` (the secret that keeps this machine's device id
 /// stable); `OPENSEEK_DEVICE_NAME` labels the device on the relay's status
 /// page and defaults to "desktop". When set it bypasses sign-in entirely.
-fn relay_settings() -> @auth.ConnectorConfig? {
-  guard @envx.get("OPENSEEK_RELAY_URL") is Some(relay_url) &&
-    @envx.get("OPENSEEK_DEVICE_TOKEN") is Some(device_token) else {
+fn relay_settings(matches : @argparse.Matches) -> @auth.ConnectorConfig? {
+  guard matches.values.get("relay-url") is Some([relay_url, ..]) &&
+    matches.values.get("device-token") is Some([device_token, ..]) &&
+    matches.values.get("device-name") is Some([device_name, ..]) else {
     return None
-  }
-  let device_name = match @envx.get("OPENSEEK_DEVICE_NAME") {
-    Some(name) => name
-    None => "desktop"
   }
   Some({ relay_url, device_token, device_name, })
 }

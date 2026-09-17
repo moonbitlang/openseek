@@ -204,164 +204,136 @@ pub fn endpoints(
   on_skills_changed : () -> Unit,
 ) -> Array[@endpoint.Endpoint] {
   [
-    @endpoint.Endpoint::remote(@commands.fs_read_file, async fn(payload) {
-      read_file_op(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.fs_read_directory, async fn(payload) {
+    Endpoint(@commands.fs_read_file, async fn(payload) { read_file_op(payload) }),
+    Endpoint(@commands.fs_read_directory, async fn(payload) {
       read_directory_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_search_files, async fn(payload) {
+    Endpoint(@commands.fs_search_files, async fn(payload) {
       search_files_op(connection.file_search, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_cancel_search_files, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.fs_cancel_search_files, async fn(payload) {
       cancel_search_files_op(connection.file_search, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_search_text, async fn(payload) {
+    Endpoint(@commands.fs_search_text, async fn(payload) {
       search_text_op(connection.text_search, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_cancel_search_text, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.fs_cancel_search_text, async fn(payload) {
       cancel_search_text_op(connection.text_search, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_search_semantic, async fn(payload) {
+    Endpoint(@commands.fs_search_semantic, async fn(payload) {
       search_semantic_op(connection.semantic_search, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_cancel_search_semantic, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.fs_cancel_search_semantic, async fn(payload) {
       cancel_search_semantic_op(connection.semantic_search, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.pattern_repair, async fn(payload) {
+    Endpoint(@commands.pattern_repair, async fn(payload) {
       let env = @engine.pattern_repair_environment(manager, model=payload.model) catch {
         _ => raise HostError("Pattern Repair settings are unavailable")
       }
       pattern_repair_op(state, env, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_clear_file_search_cache, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.fs_clear_file_search_cache, async fn(payload) {
       clear_file_search_cache_op(connection.file_search, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_stat_files, async fn(payload) {
+    Endpoint(@commands.fs_stat_files, async fn(payload) {
       stat_files_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_watch, async fn(payload) {
+    Endpoint(@commands.fs_watch, async fn(payload) {
       connection.fs_watch.watch(payload)
       Acknowledged
     }),
-    @endpoint.Endpoint::remote(@commands.fs_unwatch, async fn(_) {
+    Endpoint(@commands.fs_unwatch, async fn(_) {
       connection.fs_watch.unwatch()
       Acknowledged
     }),
-    @endpoint.Endpoint::remote(@commands.fs_browse, async fn(payload) {
+    Endpoint(@commands.fs_browse, async fn(payload) {
       browse_directory_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.fs_create_unnamed_workspace, async fn(
-      _,
-    ) {
+    Endpoint(@commands.fs_create_unnamed_workspace, async fn(_) {
       create_unnamed_workspace_op()
     }),
-    @endpoint.Endpoint::remote(@commands.fs_create_directory, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.fs_create_directory, async fn(payload) {
       create_directory_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.terminal_open, async fn(payload) {
+    Endpoint(@commands.terminal_open, async fn(payload) {
       terminal_open_op(state, connection.terminal, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.terminal_input, async fn(payload) {
+    Endpoint(@commands.terminal_input, async fn(payload) {
       terminal_input_op(connection.terminal, payload)
       Acknowledged
     }),
-    @endpoint.Endpoint::remote_sync(@commands.terminal_resize, payload => {
+    @endpoint.Endpoint::sync(@commands.terminal_resize, payload => {
       terminal_resize_op(connection.terminal, payload)
       Acknowledged
     }),
-    @endpoint.Endpoint::remote_sync(@commands.terminal_ack, payload => {
+    @endpoint.Endpoint::sync(@commands.terminal_ack, payload => {
       terminal_ack_op(connection.terminal, payload)
       Acknowledged
     }),
-    @endpoint.Endpoint::remote_sync(@commands.terminal_close, payload => {
+    @endpoint.Endpoint::sync(@commands.terminal_close, payload => {
       terminal_close_op(connection.terminal, payload)
       Acknowledged
     }),
-    @endpoint.Endpoint::remote(@commands.moon_package_graph, async fn(payload) {
+    Endpoint(@commands.moon_package_graph, async fn(payload) {
       moon_package_graph_op(state.moon, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.lsp_open, async fn(payload) {
+    Endpoint(@commands.lsp_open, async fn(payload) {
       lsp_open_op(state.moon, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.lsp_hover, async fn(payload) {
+    Endpoint(@commands.lsp_hover, async fn(payload) {
       lsp_hover_op(state.moon, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.lsp_workspace_symbols, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.lsp_workspace_symbols, async fn(payload) {
       workspace_symbols_op(state.moon, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.moonide_definition, async fn(payload) {
+    Endpoint(@commands.moonide_definition, async fn(payload) {
       moonide_definition_op(state, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.moonide_references, async fn(payload) {
+    Endpoint(@commands.moonide_references, async fn(payload) {
       moonide_references_op(state, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.moonide_codelens, async fn(payload) {
+    Endpoint(@commands.moonide_codelens, async fn(payload) {
       moonide_codelens_op(state, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.skills_catalog, async fn(_) {
-      skills_catalog_op()
-    }),
-    @endpoint.Endpoint::remote(@commands.skills_content, async fn(payload) {
+    Endpoint(@commands.skills_catalog, async fn(_) { skills_catalog_op() }),
+    Endpoint(@commands.skills_content, async fn(payload) {
       skills_content_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.skills_installed_content, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.skills_installed_content, async fn(payload) {
       installed_skill_content_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.skills_installed, async fn(_) {
-      installed_skills_op()
-    }),
-    @endpoint.Endpoint::remote(@commands.skills_install, async fn(payload) {
+    Endpoint(@commands.skills_installed, async fn(_) { installed_skills_op() }),
+    Endpoint(@commands.skills_install, async fn(payload) {
       install_skill_op(payload, on_skills_changed)
     }),
-    @endpoint.Endpoint::remote(@commands.skills_uninstall, async fn(payload) {
+    Endpoint(@commands.skills_uninstall, async fn(payload) {
       uninstall_skill_op(payload, on_skills_changed)
     }),
-    @endpoint.Endpoint::remote(@commands.update_check, async fn(_) {
-      state.updates.check()
-    }),
-    @endpoint.Endpoint::remote_sync(@commands.update_download, _ => {
+    Endpoint(@commands.update_check, async fn(_) { state.updates.check() }),
+    @endpoint.Endpoint::sync(@commands.update_download, _ => {
       state.updates.start_download()
     }),
-    @endpoint.Endpoint::remote(@commands.update_apply, async fn(_) {
-      state.updates.apply()
-    }),
-    @endpoint.Endpoint::remote(@commands.git_branch, async fn(payload) {
-      git_branch_op(payload)
-    }),
-    @endpoint.Endpoint::remote(@commands.git_pull_request, async fn(payload) {
+    Endpoint(@commands.update_apply, async fn(_) { state.updates.apply() }),
+    Endpoint(@commands.git_branch, async fn(payload) { git_branch_op(payload) }),
+    Endpoint(@commands.git_pull_request, async fn(payload) {
       git_pull_request_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.git_changes, async fn(payload) {
+    Endpoint(@commands.git_changes, async fn(payload) {
       git_changes_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.git_history, async fn(payload) {
+    Endpoint(@commands.git_history, async fn(payload) {
       git_history_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.git_commit_changes, async fn(payload) {
+    Endpoint(@commands.git_commit_changes, async fn(payload) {
       git_commit_changes_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.git_original_file, async fn(payload) {
+    Endpoint(@commands.git_original_file, async fn(payload) {
       git_original_file_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.host_open_path, async fn(payload) {
+    Endpoint(@commands.host_open_path, async fn(payload) {
       open_path_op(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.host_reveal_path, async fn(payload) {
+    Endpoint(@commands.host_reveal_path, async fn(payload) {
       reveal_path_op(payload)
     }),
   ]

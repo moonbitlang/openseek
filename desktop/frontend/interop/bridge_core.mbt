@@ -1,9 +1,10 @@
 // The engine-host calling core: one `bridge_request` for every frontend
-// package that talks to a host, routed by channel. `Local` is the desktop
-// window's injected `__MoonBit__.openseek` op; `Remote(id)` is currently a
-// relay device reached over its WebSocket (docs/remote-protocol.md). The method
-// names and payloads are identical either way — callers and reply decoders
-// cannot tell the transports apart.
+// package that talks to a host, routed by channel. Every channel is one
+// JSON-RPC WebSocket (docs/remote-protocol.md): `Local` is the desktop
+// window dialing its own loopback origin; `Remote(id)` is a relay device
+// reached through the console's origin. The method names and payloads are
+// identical either way — callers and reply decoders cannot tell the channels
+// apart, and only the URL differs at the socket.
 
 ///|
 priv suberror BridgeError {
@@ -13,9 +14,9 @@ priv suberror BridgeError {
   // The call left this client and something went wrong after that: a reply
   // arrived that could not be read.
   BridgeError(String)
-  // The call never left: no bridge, no such method, no open socket. Raised
-  // strictly before anything is written to the transport, which is what lets
-  // callers treat it as "nothing landed" rather than "unknown".
+  // The call never left: no open socket, or `send` threw before queueing.
+  // Raised strictly before anything is written to the transport, which is
+  // what lets callers treat it as "nothing landed" rather than "unknown".
   BridgeUnsent(String)
 }
 
@@ -25,13 +26,6 @@ impl Show for BridgeError with fn output(self, logger) {
     BridgeRefused(message) | BridgeError(message) | BridgeUnsent(message) =>
       logger.write_string(message)
   }
-}
-
-///|
-/// `globalThis.__MoonBit__.openseek`, once the proton bridge is injected.
-pub fn openseek_api() -> @js.Value? {
-  guard moonbit_bridge_root() is Some(root) else { return None }
-  js_prop(root, "openseek")
 }
 
 ///|
@@ -45,15 +39,16 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
 ) -> Reply {
   let op = command.name()
   let payload = @js.Value::from_json(payload.to_json())
-  let reply = match channel {
-    Local => {
-      guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
-        raise BridgeUnsent("SeekMoon bridge unavailable")
-      }
-      js_method_promise(api, op, payload).wait()
-    }
-    Remote(_) => ws_request(channel, op, payload)
-  }
+  decode_reply(op, ws_request(channel, op, payload))
+}
+
+///|
+/// A result-less success settles as an empty object, which the typed
+/// adapters decode for acknowledgement-only methods.
+fn[Reply : @json.FromJson] decode_reply(
+  op : String,
+  reply : @js.Value,
+) -> Reply raise {
   let json = if reply.is_undefined() || reply.is_null() {
     Json::empty_object()
   } else {
@@ -82,33 +77,12 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] codex_request(
 }
 
 ///|
-/// Keep local Proton method entry ordered even though its bridge dispatches
-/// requests in separate native tasks. The per-channel lane below already
-/// serializes callers; this promise tail also keeps ordering at the JS/native
-/// handoff if that implementation detail changes.
-extern "js" fn js_ordered_method_promise(
-  target : @js.Value,
-  name : String,
-  payload : @js.Value,
-) -> @js.Promise =
-  #| (() => {
-  #|   let tail = Promise.resolve();
-  #|   return (target, name, payload) => {
-  #|     const request = tail
-  #|       .catch(() => undefined)
-  #|       .then(() => target[name](payload));
-  #|     tail = request.catch(() => undefined);
-  #|     return request;
-  #|   };
-  #| })()
-
-///|
 /// The ordered-request lanes, keyed by the scope the ordering is about. This
-/// transport-independent boundary is what makes the contract hold for remote
-/// hosts: the wire protocol states that "responses may arrive out of order
-/// relative to other requests — the `id` is the correlation", and the server
-/// runs each request in its own task accordingly, so ordering can only be
-/// established on the issuing side.
+/// boundary is what makes the contract hold on every channel: the wire
+/// protocol states that "responses may arrive out of order relative to other
+/// requests — the `id` is the correlation", and the server runs each request
+/// in its own task accordingly, so ordering can only be established on the
+/// issuing side.
 ///
 /// Most callers share one lane per host. A caller may name a narrower one
 /// when its ordering is per-something-else and it would otherwise both wait
@@ -162,9 +136,9 @@ pub async fn[T] in_ordered_lane(lane : String, work : async () -> T) -> T {
 /// are desired state or ordered observations rather than independent queries:
 /// the file-panel watcher (`watch(A)` then `unwatch`), file-stat snapshots,
 /// and browser view ops (create-then-place, bounds-before-visibility).
-/// Deliberately do not put a caller-side timeout around this lane: neither the
-/// Proton promise nor an older remote RPC is cancelable, so releasing the lane
-/// early would allow its successor to overtake an operation still applying.
+/// Deliberately do not put a caller-side timeout around this lane: an RPC in
+/// flight is not cancelable on the host, so releasing the lane early would
+/// allow its successor to overtake an operation still applying.
 pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
   channel : ChannelId,
   command : @commands.Command[Payload, Reply],
@@ -174,25 +148,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
   ordered_request_lane(lane.unwrap_or(host_lane(channel))).run(() => {
     let op = command.name()
     let payload = @js.Value::from_json(payload.to_json())
-    let reply = match channel {
-      Local => {
-        guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
-          raise BridgeUnsent("SeekMoon bridge unavailable")
-        }
-        js_ordered_method_promise(api, op, payload).wait()
-      }
-      Remote(_) => ws_request(channel, op, payload)
-    }
-    let json = if reply.is_undefined() || reply.is_null() {
-      Json::empty_object()
-    } else {
-      reply.to_json() catch {
-        _ => raise BridgeError("Malformed reply from \{op}")
-      }
-    }
-    @json.from_json(json) catch {
-      _ => raise BridgeError("Malformed reply from \{op}")
-    }
+    decode_reply(op, ws_request(channel, op, payload))
   })
 }
 
@@ -223,8 +179,8 @@ test "a lane key separates what must not share a lane" {
 
 ///|
 test "an ordered request failure releases its channel lane" {
-  // No bridge is injected under test, so both calls fail at the same point.
-  // The second one only reaches it if the first released the lane on its way
+  // No socket is open under test, so both calls fail at the same point. The
+  // second one only reaches it if the first released the lane on its way
   // out; before, a lane still held would have parked it forever.
   let failures = []
   for _ in 0..<2 {
@@ -297,16 +253,10 @@ pub(all) enum BridgeFailure {
 }
 
 ///|
-/// Classify a failed bridge call. Browser JSON-RPC errors carry a marker set
-/// by the response decoder; socket close / down errors do not. In the
-/// embedded proton bridge, a present method's rejected promise is the direct
-/// host answer.
-///
-/// The `openseek_api()` test is about *this* page having an embedded host,
-/// which on its own says nothing about a request that went out over a socket
-/// — a proton page drives remote channels too. It is sound only because
-/// `ws_request` names its own failures before they get here, so a bare
-/// `@js.Error_` reaching this point came from the local path.
+/// Classify a failed bridge call. A peer's JSON-RPC error carries a marker
+/// set by the response decoder and is the host's own answer; socket close /
+/// down errors do not carry it, because a socket that dies under a request
+/// already sent is not an answer to it.
 pub fn bridge_failure(error : Error) -> BridgeFailure {
   match error {
     BridgeRefused(_) => Refused
@@ -316,7 +266,7 @@ pub fn bridge_failure(error : Error) -> BridgeFailure {
     // lost.
     BridgeError(_) => Unknown
     @js.Error_(value) =>
-      if openseek_api() is Some(_) || browser_rpc_error_is_definite(value) {
+      if browser_rpc_error_is_definite(value) {
         Refused
       } else {
         Unknown

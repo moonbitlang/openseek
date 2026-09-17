@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/window"
+
+import {
+  "moonbit-community/proton",
+  "moonbit-community/proton/extension",
+  "openseek_desktop/backend/internal/api",
+  "openseek_desktop/backend/internal/endpoint",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn browser_view_id(String) -> Int?
+
+pub fn dialogs_capability() -> @extension.RendererCapability
+
+pub fn endpoints(@api.ApiState, BrowserViews) -> Array[@endpoint.Endpoint]
+
+pub async fn open_external(@protocol.ExternalLinkPayload) -> @protocol.OpenExternalReply
+
+pub fn view_event_json(Int, @proton.ViewEvent) -> Json?
+
+// Errors
+
+// Types and methods
+type BrowserViews
+pub fn BrowserViews::BrowserViews() -> Self
+pub fn BrowserViews::close_all(Self) -> Unit
+pub fn BrowserViews::window_closed(Self) -> Unit
+pub fn BrowserViews::window_ready(Self, @proton.WindowHandle) -> Unit
+
+// Type aliases
+
+// Traits

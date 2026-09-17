@@ -1,10 +1,11 @@
-// Rabbita resource declarations for local Proton and remote WebSocket host
-// connections. The payload carries only transport identity and an Event
-// emitter, never parent-frontend model or message types.
+// Rabbita resource declarations for the desktop window's local host
+// connection and remote device connections. The payload carries only
+// transport identity and an Event emitter, never parent-frontend model or
+// message types.
 
 ///|
 priv suberror BridgeSubscription {
-  LocalBridge(dispatch~ : @cmd.Emit[Event])
+  LocalBridge(dispatch~ : @cmd.Emit[Event], websocket_epoch~ : Int)
   RemoteBridge(
     dispatch~ : @cmd.Emit[Event],
     device_id~ : String,
@@ -13,12 +14,17 @@ priv suberror BridgeSubscription {
 }
 
 ///|
-/// Declare the desktop window's injected Proton connection.
-pub fn local_connection(dispatch : @cmd.Emit[Event]) -> @sub.Sub {
+/// Declare the desktop window's connection to its own host. Advancing either
+/// generation replaces the socket, exactly as for a remote device.
+pub fn local_connection(
+  websocket_epoch~ : Int,
+  reconnect_attempt~ : Int,
+  dispatch~ : @cmd.Emit[Event],
+) -> @sub.Sub {
   @sub.custom_sub(
-    LocalBridgeKey,
+    LocalBridgeSub::subscription_key(websocket_epoch, reconnect_attempt),
     @sub.Global,
-    LocalBridge(dispatch~),
+    LocalBridge(dispatch~, websocket_epoch~),
     bridge_sub_loader,
   )
 }
@@ -48,14 +54,14 @@ fn bridge_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    LocalBridge(dispatch~) => {
-      let running = LocalBridgeSub(dispatch)
-      scheduler.add(running.install(0))
+    LocalBridge(dispatch~, websocket_epoch~) => {
+      let running = LocalBridgeSub(websocket_epoch, dispatch)
+      running.install(scheduler)
       Some({
         unload: _ => running.unload(),
         update_tagger: payload => {
           match payload {
-            LocalBridge(dispatch=next) => running.update_dispatch(next)
+            LocalBridge(dispatch=next, ..) => running.update_dispatch(next)
             _ => ()
           }
         },
@@ -84,4 +90,9 @@ test "bridge identity changes only when its resource must restart" {
   assert_eq(RemoteBridgeSub::subscription_key("device-a", 0, 0), remote)
   assert_not_eq(RemoteBridgeSub::subscription_key("device-a", 0, 1), remote)
   assert_not_eq(RemoteBridgeSub::subscription_key("device-a", 1, 0), remote)
+  let here = LocalBridgeSub::subscription_key(0, 0)
+  assert_eq(LocalBridgeSub::subscription_key(0, 0), here)
+  assert_not_eq(LocalBridgeSub::subscription_key(0, 1), here)
+  assert_not_eq(LocalBridgeSub::subscription_key(1, 0), here)
+  assert_not_eq(here, remote)
 }

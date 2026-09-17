@@ -430,58 +430,56 @@ pub fn endpoints(
     }),
     state.codex_endpoint(@commands.codex_turn_steer),
     state.codex_endpoint(@commands.codex_turn_interrupt),
-    @endpoint.Endpoint::remote(@commands.agent_start, async fn(payload) {
+    Endpoint(@commands.agent_start, async fn(payload) {
       @engine.start_run(state.sink(), state.manager, payload)
     }),
-    @endpoint.Endpoint::remote_sync(@commands.agent_cancel, payload => {
+    @endpoint.Endpoint::sync(@commands.agent_cancel, payload => {
       @engine.cancel_run(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_steer, fn(payload) {
+    Endpoint(@commands.agent_steer, fn(payload) {
       @engine.steer_run(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_queue, payload => {
+    Endpoint(@commands.agent_queue, payload => {
       @engine.queue_run(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_compact, async fn(payload) {
+    Endpoint(@commands.agent_compact, async fn(payload) {
       @engine.compact_run(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.jobs_list, payload => {
+    Endpoint(@commands.jobs_list, payload => {
       @engine.list_jobs(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.jobs_read, payload => {
+    Endpoint(@commands.jobs_read, payload => {
       @engine.read_job(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.jobs_stop, payload => {
+    Endpoint(@commands.jobs_stop, payload => {
       @engine.stop_job(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_goal, async fn(payload) {
+    Endpoint(@commands.agent_goal, async fn(payload) {
       @engine.goal_run(state.manager, payload)
     }),
     // Synchronous like cancel: it hands one line to the engine's writer and
     // reports whether there was still a question to answer. Nothing here waits
     // on the engine — what the decision releases is reported by the run's own
     // events.
-    @endpoint.Endpoint::remote_sync(@commands.agent_approval, payload => {
+    @endpoint.Endpoint::sync(@commands.agent_approval, payload => {
       @engine.approve_run(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote_sync(@commands.agent_runs, payload => {
+    @endpoint.Endpoint::sync(@commands.agent_runs, payload => {
       state.hub.runs(known?=payload.known)
     }),
-    @endpoint.Endpoint::remote(@commands.session_list, async fn(_) {
+    Endpoint(@commands.session_list, async fn(_) {
       @engine.list_sessions(state.manager)
     }),
-    @endpoint.Endpoint::remote(@commands.session_load, async fn(payload) {
+    Endpoint(@commands.session_load, async fn(payload) {
       @engine.load_session(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.session_load_archived, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.session_load_archived, async fn(payload) {
       @engine.load_archived_session(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.session_list_archived, async fn(_) {
+    Endpoint(@commands.session_list_archived, async fn(_) {
       @engine.archived_sessions(state.manager)
     }),
-    @endpoint.Endpoint::remote(@commands.session_archive, async fn(payload) {
+    Endpoint(@commands.session_archive, async fn(payload) {
       let session = payload.canonical_session()
       // The callback runs inside the rename's cancellation shield. Every
       // other client learns the canonical id before any cancellable list
@@ -500,7 +498,7 @@ pub fn endpoints(
         },
       )
     }),
-    @endpoint.Endpoint::remote(@commands.session_rename, async fn(payload) {
+    Endpoint(@commands.session_rename, async fn(payload) {
       @engine.rename_session(state.manager, payload)
       publish_session_changed(
         state,
@@ -510,15 +508,13 @@ pub fn endpoints(
       )
       Acknowledged
     }),
-    @endpoint.Endpoint::remote(@commands.session_unarchive, async fn(payload) {
+    Endpoint(@commands.session_unarchive, async fn(payload) {
       let session = payload.canonical_session()
       @engine.unarchive_session(state.manager, session, (moved, workspace) => {
         publish_session_changed(state, "unarchived", moved, workspace)
       })
     }),
-    @endpoint.Endpoint::remote(@commands.session_delete_archived, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.session_delete_archived, async fn(payload) {
       let session = payload.canonical_session()
       @engine.delete_archived_session(
         state.manager,
@@ -532,22 +528,20 @@ pub fn endpoints(
         },
       )
     }),
-    @endpoint.Endpoint::remote(@commands.schedules_list, async fn(_) {
-      state.schedules.list()
-    }),
-    @endpoint.Endpoint::remote(@commands.schedules_save, async fn(payload) {
+    Endpoint(@commands.schedules_list, async fn(_) { state.schedules.list() }),
+    Endpoint(@commands.schedules_save, async fn(payload) {
       state.schedules.save(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.schedules_action, async fn(payload) {
+    Endpoint(@commands.schedules_action, async fn(payload) {
       state.schedules.action(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.settings_get, async fn(_) {
+    Endpoint(@commands.settings_get, async fn(_) {
       @engine.settings_status(state.manager)
     }),
-    @endpoint.Endpoint::remote_sync(@commands.app_info, _ => {
+    @endpoint.Endpoint::sync(@commands.app_info, _ => {
       version: state.app_version,
     }),
-    @endpoint.Endpoint::remote(@commands.settings_set, async fn(payload) {
+    Endpoint(@commands.settings_set, async fn(payload) {
       // The store commit and its broadcast are one finite cancellation-
       // shielded linearization point. `update_settings` invokes the callback
       // while its manager-owned lock is still held, preserving revision order
@@ -569,14 +563,14 @@ pub fn endpoints(
         status
       })
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_list, async fn(_) {
+    Endpoint(@commands.workspace_list, async fn(_) {
       let chat_root = Some(@host.chat_workspace_root())
       match @engine.list_workspaces() {
         Workspaces(paths, ..) => Workspaces(paths, chat_root~)
         WorkspaceError(message) => WorkspaceError(message)
       }
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_add, async fn(payload) {
+    Endpoint(@commands.workspace_add, async fn(payload) {
       // A refusal travels inside the reply: the local bridge would flatten
       // a raised error to "op ext:openseek/workspace.add failed".
       let chat_root = Some(@host.chat_workspace_root())
@@ -589,7 +583,7 @@ pub fn endpoints(
         error => raise error
       }
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_remove, async fn(payload) {
+    Endpoint(@commands.workspace_remove, async fn(payload) {
       let chat_root = Some(@host.chat_workspace_root())
       @engine.detach_workspace(state.manager, payload.path, workspaces => {
         state.hub.publish(WorkspaceChanged({ workspaces, chat_root, }))
@@ -600,14 +594,10 @@ pub fn endpoints(
         error => raise error
       }
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_settings_get, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.workspace_settings_get, async fn(payload) {
       @workspaces.settings(payload.workspace)
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_settings_set, async fn(
-      payload,
-    ) {
+    Endpoint(@commands.workspace_settings_set, async fn(payload) {
       // The store commit and its broadcast are one shielded linearization
       // point inside the engine, the `workspace.add` pattern.
       let worktree_mode = payload.worktree_mode
@@ -621,10 +611,10 @@ pub fn endpoints(
         submodule_checkout_timeout_seconds?,
       )
     }),
-    @endpoint.Endpoint::remote(@commands.worktree_list, async fn(payload) {
+    Endpoint(@commands.worktree_list, async fn(payload) {
       @worktree.list(payload.workspace)
     }),
-    @endpoint.Endpoint::remote(@commands.worktree_create, async fn(payload) {
+    Endpoint(@commands.worktree_create, async fn(payload) {
       let owner = match (payload.session, payload.codex_thread) {
         (Some(session), None) => @worktree.WorktreeOwner::openseek(session)
         (None, Some(thread_id)) => {
@@ -681,7 +671,7 @@ pub fn endpoints(
       }
       WorktreeCreatedReply(reply)
     }),
-    @endpoint.Endpoint::remote(@commands.worktree_remove, async fn(payload) {
+    Endpoint(@commands.worktree_remove, async fn(payload) {
       @worktree.remove(
         state.manager.worktree_host(),
         payload.workspace,
@@ -692,18 +682,10 @@ pub fn endpoints(
         },
       )
     }),
-    @endpoint.Endpoint::remote(@commands.auth_status, async fn(_) {
-      auth_status(state)
-    }),
-    @endpoint.Endpoint::remote(@commands.auth_connect, async fn(_) {
-      auth_connect(state)
-    }),
-    @endpoint.Endpoint::remote(@commands.auth_disconnect, async fn(_) {
-      auth_disconnect(state)
-    }),
-    @endpoint.Endpoint::remote(@commands.auth_cancel, async fn(_) {
-      auth_cancel(state)
-    }),
+    Endpoint(@commands.auth_status, async fn(_) { auth_status(state) }),
+    Endpoint(@commands.auth_connect, async fn(_) { auth_connect(state) }),
+    Endpoint(@commands.auth_disconnect, async fn(_) { auth_disconnect(state) }),
+    Endpoint(@commands.auth_cancel, async fn(_) { auth_cancel(state) }),
   ]
   for
     endpoint in @host.endpoints(state.host, connection, state.manager, () => {

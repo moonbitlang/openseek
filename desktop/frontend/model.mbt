@@ -1223,14 +1223,14 @@ priv struct DeviceState {
   // Page-unique identity of this remote device connection lifecycle. A
   // removed device may later return with the same relay id; delayed socket
   // callbacks and reconnect timers carry the old value and are ignored.
-  // The desktop's non-WebSocket Local channel always uses 0.
+  // The desktop window's Local channel is a WebSocket too and uses the
+  // same generations.
   websocket_epoch : Int
   // Advances when reconnect backoff expires. The terminal component observes
   // this transport input and opens exactly one socket for each attempt.
   reconnect_attempt : Int
   // Consecutive WebSocket losses since the last successful connection.
-  // Drives the reconnect backoff and the BridgeLost threshold; always 0 for
-  // the proton channel, whose bridge never reconnects.
+  // Drives the reconnect backoff and the BridgeLost threshold.
   reconnect_failures : Int
   // Incremented at every BridgeReady. Session-list replies carry the value
   // captured when their request was issued, so a reply from a dead connection
@@ -2135,7 +2135,6 @@ priv enum Msg {
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
   BridgeReady
-  BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list
   // the single authority over which reconnect loops keep running. The epoch
@@ -2562,7 +2561,11 @@ fn empty_conversation(
 }
 
 ///|
-fn initial_model() -> Model {
+/// `desktop` is the shell's own declaration (`frontend/desktop` passes true,
+/// `frontend/browser` false): the desktop window and the browser console are
+/// the same bundle behind two entry points, and nothing about the page they
+/// run in is sniffed to tell them apart.
+fn initial_model(desktop~ : Bool) -> Model {
   // Read once here (main runs before the first render); afterwards the
   // resize subscription keeps the flag current through `ViewportResized`.
   // No window (a headless test runtime) reads as the wide layout.
@@ -2570,10 +2573,16 @@ fn initial_model() -> Model {
     Some(width) => width <= NarrowBreakpoint
     None => false
   }
-  // A browser console requires `?device=` (minted by the relay's redirect off
-  // retired `/d/<id>/` routes) as its page-lifetime device identity. An
-  // optional `?workspace=` places that device's first conversation.
-  let page_channel = @interop.page_channel()
+  // The desktop window is born with its one channel, its own host over the
+  // page's loopback WebSocket. A browser console requires `?device=` (minted
+  // by the relay's redirect off retired `/d/<id>/` routes) as its
+  // page-lifetime device identity. An optional `?workspace=` places that
+  // device's first conversation.
+  let page_channel : @interop.ChannelId? = if desktop {
+    Some(@interop.ChannelId::Local)
+  } else {
+    None
+  }
   let page_device = @interop.page_query_param("device")
   // Capture the browser's exact local path once before the first render.
   // Packaged release pages must return to their versioned bundle after OAuth;
@@ -2605,7 +2614,6 @@ fn initial_model() -> Model {
     (Some(path), Some(channel)) => @resource.of_path(channel, path)
     _ => None
   }
-  let is_desktop = @interop.openseek_api() is Some(_)
   {
     // The desktop window's one channel; a browser page starts empty and
     // fills `devices` from the fetched roster (`apply_roster`).
@@ -2632,12 +2640,12 @@ fn initial_model() -> Model {
     settings_saves: 0,
     host_settings_revision: -1,
     deferred_host_settings: None,
-    is_desktop,
-    window_focused: !is_desktop || @interop.page_has_focus(),
+    is_desktop: desktop,
+    window_focused: !desktop || @interop.page_has_focus(),
     app_version: "development",
     // Every browser page is the console: it signs in against the relay and
     // verifies its required query-selected device before that channel opens.
-    console: if is_desktop {
+    console: if desktop {
       None
     } else {
       Some(
