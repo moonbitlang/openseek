@@ -306,8 +306,20 @@ Run the package tests with:
 moon test deepseek/client
 ```
 
-The blackbox test suite includes a real DeepSeek API smoke test when `DEEPSEEK`
-is set. Kimi smoke tests are opt-in: set `KIMI` to a Kimi API key. The normal
+The blackbox test suite includes real text and image DeepSeek API smoke tests
+when `DEEPSEEK` is set. The image smoke uploads an embedded PNG with a one-hour
+expiry, sends its returned file ID to `deepseek-flash`, and checks that the
+model identifies the two colored halves. The filename and prompt do not reveal
+the expected colors. It uses real API quota and has a two-minute timeout.
+Multipart and error-path tests continue to use a local mock HTTP server.
+
+To run only the real image smoke after loading `DEEPSEEK` into the environment:
+
+```bash
+moon test deepseek/client --target native --filter 'realworld DeepSeek image upload and recognition'
+```
+
+Kimi smoke tests are opt-in: set `KIMI` to a Kimi API key. The normal
 Kimi smoke also uses `OPENSEEK_MODEL` to choose the Kimi model; streaming,
 tool-call, and multi-turn reasoning-content smokes use `kimi-k2.7-code`.
 The GLM streaming tool-call smoke test runs when `GLM` is set.
