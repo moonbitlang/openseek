@@ -19,7 +19,7 @@ For reproducing and assessing UX issues with real components, follow
 - `backend/internal/home/` — the user's home directory and `~` expansion.
 - `backend/internal/userdirs/` — platform-specific Documents directory lookup.
 - `backend/internal/broadcast/` — native event fan-out to connected windows.
-- `frontend/` — the standalone JS (Rabbita) UI module: the Elm-style model/update/view. Two thin shells bundle it: `frontend/desktop/` (the app's `frontend.js`) and `frontend/browser/` (the `browser.js` console bundle openseek-api serves).
+- `frontend/` — the standalone JS (Rabbita) UI module: the Elm-style model/update/view. It is itself the executable, shipped as `frontend.js` both inside the app and as the console bundle openseek-api serves.
 - `protocol/`, `commands/`, `uri/`, and `file_search_*` — target-neutral
   packages owned directly by the root `desktop` module.
 - `frontend/transcript/` — pure decoders from the engine's wire data to display items: engine events, session-list and session-replay replies, runtime updates.

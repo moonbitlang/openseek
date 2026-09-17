@@ -11,12 +11,14 @@
       content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
     />
     <title>SeekMoon</title>
+    <!-- The one document for both the proton window and the console page
+         openseek-api serves; package/build.mjs ships it, frontend.js, and
+         these sidecars to each place unchanged. -->
     <!-- The embedded code viewer's styles, assembled from the editor dependency
          by package/build.mjs. -->
     <link rel="stylesheet" href="viewer.css" />
-    <!-- The app's own stylesheet, shared with the browser console page
-         (frontend/browser/index.html). -->
     <link rel="stylesheet" href="app.css" />
+    <!-- Generated from the pinned xterm sources alongside xterm.js below. -->
     <link rel="stylesheet" href="xterm.css" />
   </head>
   <body>

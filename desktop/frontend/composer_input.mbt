@@ -63,8 +63,9 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   // the component's child ordering.
   let context : Array[@composer.ContextComponent] = [
     @composer.ConnectionBanner(
-      device_name=if self.console is Some(_) &&
-        self.bridge_state() is BridgeLost(_) {
+      // A browser console names the remote device it lost; the desktop
+      // window's own host needs no name.
+      device_name=if !self.is_desktop && self.bridge_state() is BridgeLost(_) {
         Some(self.focused_device_name())
       } else {
         None

@@ -642,21 +642,17 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
       self.sidebar_component_sections(dev)
     }
     None => {
-      match self.console {
-        Some(console) =>
-          match console.roster_sync {
-            RosterLoading => notices.push("Loading device…")
-            RosterFailed(message) => notices.push(message)
-            RosterReady =>
-              if console.roster.is_empty() {
-                notices.push(
-                  "No devices yet — open SeekMoon and sign in under Settings → Remote access.",
-                )
-              } else {
-                notices.push("No online device — reconnecting…")
-              }
+      match self.console.roster_sync {
+        RosterLoading => notices.push("Loading device…")
+        RosterFailed(message) => notices.push(message)
+        RosterReady =>
+          if self.console.roster.is_empty() {
+            notices.push(
+              "No devices yet — open SeekMoon and sign in under Settings → Remote access.",
+            )
+          } else {
+            notices.push("No online device — reconnecting…")
           }
-        None => ()
       }
       []
     }
@@ -670,11 +666,18 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     RestartingForUpdate(..) => Some("Restarting…")
     _ => None
   }
-  // The console's account row: who is signed in, a roster refresh, and the
-  // sign-out — with the last account-level failure inline beneath it.
-  let account : @sidebar.Account? = match self.console {
-    Some(console) if console.auth is AuthSignedIn(login~, avatar~) =>
-      Some({ login, avatar, busy: console.busy, notice: console.notice, })
+  // The browser console's account row: who is signed in, a roster refresh,
+  // and the sign-out — with the last account-level failure inline beneath
+  // it. The desktop window's session is its own host's, with nothing to sign
+  // out of, so it shows no account.
+  let account : @sidebar.Account? = match self.console.auth {
+    AuthSignedIn(login~, avatar~) if !self.is_desktop =>
+      Some({
+        login,
+        avatar,
+        busy: self.console.busy,
+        notice: self.console.notice,
+      })
     _ => None
   }
   {
@@ -1779,8 +1782,8 @@ fn view(
   // Until the relay session and its device exist, the console frame —
   // sidebar, composer, overlays — stays unbuilt and inert Local cannot
   // receive UI work.
-  if model.console_gate() is Some(console) {
-    return console_gate_view(dispatch, console)
+  if model.is_console_gated() {
+    return console_gate_view(dispatch, model.console)
   }
   let file_panel_visible = model.file_panel_visible()
   let terminal_panel_visible = model.terminal_panel_visible()

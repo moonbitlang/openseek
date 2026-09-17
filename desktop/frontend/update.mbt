@@ -55,7 +55,10 @@ fn focus_channel(
       // the request method against the old state would reuse an old token.
       dispatch(Codex(channel~, @codex.Msg::refresh())),
     ])
-  } else if channel == @interop.ChannelId::Local && model.console is Some(_) {
+  } else if channel == @interop.ChannelId::Local {
+    // Inert Local: a browser console whose required device is unavailable
+    // (the desktop window always holds its Local channel, so it never gets
+    // here). Focus returns to the default with nothing to fetch.
     @cmd.none
   } else {
     return (@cmd.none, model)
@@ -2001,35 +2004,30 @@ fn update_msg(
   model : Model,
 ) -> (@cmd.Cmd, Model) {
   match msg {
-    Init =>
-      // A browser console boots by asking the relay who is signed in; the
-      // bridge and session rotation wait for the first roster (`apply_roster`)
-      // because there is no channel to install before sign-in. Component
+    Init => {
+      // Both pages boot the same console; they differ only in where its
+      // device comes from. A browser console asks the relay who is signed
+      // in, and its connection and session rotation wait for the first
+      // roster (`apply_roster`) because there is no channel to install before
+      // sign-in. The desktop window owns its host outright, so its device is
+      // already in place and it rotates the session at once. Component
       // subscriptions own their transcript and terminal DOM lifetimes.
-      match model.console {
-        Some(_) =>
-          (
-            @cmd.batch([
-              fetch_console_me(dispatch),
-              load_saved_settings(dispatch),
-              watch_color_scheme(dispatch, model.is_desktop),
-              request_sidebar_resize_mount(),
-              measure_scrollbar_lane(),
-            ]),
-            model,
-          )
-        None =>
-          (
-            @cmd.batch([
-              load_saved_settings(dispatch),
-              watch_color_scheme(dispatch, model.is_desktop),
-              rotate_session(dispatch, model.focused),
-              request_sidebar_resize_mount(),
-              measure_scrollbar_lane(),
-            ]),
-            model,
-          )
+      let device = if model.is_desktop {
+        rotate_session(dispatch, model.focused)
+      } else {
+        fetch_console_me(dispatch)
       }
+      (
+        @cmd.batch([
+          device,
+          load_saved_settings(dispatch),
+          watch_color_scheme(dispatch, model.is_desktop),
+          request_sidebar_resize_mount(),
+          measure_scrollbar_lane(),
+        ]),
+        model,
+      )
+    }
     Console(msg) => update_console_msg(dispatch, msg, model)
     SettingsLoaded(
       notification_corner~,
@@ -8331,10 +8329,10 @@ fn running_conversation() -> Conversation {
 ///|
 fn test_model() -> Model {
   {
-    ..initial_model()
-    // The headless test runtime has no page location, so `initial_model()`
-    // seeds no devices (and, looking like a browser, a console); every test
-    // here runs desktop-shaped, on an explicit Local channel.
+    ..initial_model(desktop=false)
+    // The headless test runtime has no window to ask about focus, so the
+    // model boots browser-shaped and every test here then runs
+    // desktop-shaped: on an explicit Local channel, signed in to its own host.
     ,
     devices: [
       {
@@ -8345,7 +8343,7 @@ fn test_model() -> Model {
       },
     ],
     focused: @interop.ChannelId::Local,
-    console: None,
+    console: local_console_state(login_return_to="/console/"),
     // The shared fixture represents a connected desktop after its initial
     // settings snapshot. Loading-state tests opt back into revision -1.
     host_settings_revision: 0,
@@ -10467,7 +10465,7 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
   let dispatch = test_dispatch()
   let channel : @interop.ChannelId = Remote("d1")
   let model = {
-    ..initial_model(),
+    ..initial_model(desktop=false),
     devices: [{ ..empty_device_state(channel), bridge: Connected, }],
     focused: channel,
   }
@@ -10504,7 +10502,7 @@ test "BridgeReady resets the reconnect failure count" {
   let dispatch = test_dispatch()
   let channel : @interop.ChannelId = Remote("d1")
   let model = {
-    ..initial_model(),
+    ..initial_model(desktop=false),
     devices: [
       {
         ..empty_device_state(channel),
@@ -10539,7 +10537,7 @@ test "late reconnect ticks cannot act on removed or re-added devices" {
   ]
   let console_model = {
     ..console_test_model(),
-    console: Some(empty_console_state(Some("same"), None)),
+    console: empty_console_state(Some("same"), None),
   }
   let (_, signed) = update(
     dispatch,

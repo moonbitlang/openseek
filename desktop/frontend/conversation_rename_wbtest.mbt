@@ -15,7 +15,7 @@ test "WebView menu request enters controlled rename and blank cannot submit" {
   let (_, model) = update_msg(
     dispatch,
     ConversationRenameRequested(id~, label="Original"),
-    initial_model(),
+    initial_model(desktop=false),
   )
   guard model.conversation_rename is Some(rename) else {
     fail("rename editor did not open")

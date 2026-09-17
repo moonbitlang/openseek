@@ -22,19 +22,14 @@ fn TranscriptSlot::key(self : TranscriptSlot) -> String {
 }
 
 ///|
-/// A browser page is gated on both its relay session and its required
-/// query-selected device. Until both exist the view shows the gate instead of
-/// the console frame, so no transcript is on screen either.
-fn Model::console_gate(self : Model) -> ConsoleState? {
-  guard self.console is Some(console) &&
-    (
-      console.page_device is None ||
-      !(console.auth is AuthSignedIn(..)) ||
-      self.focused_device() is None
-    ) else {
-    return None
-  }
-  Some(console)
+/// A page is gated on both its account session and its page device. Until
+/// both exist the view shows the gate instead of the console frame, so no
+/// transcript is on screen either. The desktop window has both from the
+/// first render and is never gated.
+fn Model::is_console_gated(self : Model) -> Bool {
+  self.console.page_device is None ||
+  !(self.console.auth is AuthSignedIn(..)) ||
+  self.focused_device() is None
 }
 
 ///|
@@ -77,7 +72,7 @@ fn Model::chat_column(self : Model) -> ChatColumn {
 
 ///|
 fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
-  guard self.console_gate() is None else { return None }
+  guard !self.is_console_gated() else { return None }
   match self.screen {
     Codex =>
       Some({

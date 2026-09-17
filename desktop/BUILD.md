@@ -69,10 +69,10 @@ for local portable builds.
 Browser inputs and the standalone esbuild executable are fixed-version
 upstream distributions with checked-in SHA-256 digests. Builds cache only
 their downloaded archives; extraction and generated files are recreated on
-every run. The same esbuild minifies the MoonBit-built `browser.js` for a
-release package; a debug package copies the unminified bundle, and the
+every run. The same esbuild minifies the MoonBit-built `frontend.js` for a
+release console bundle; a debug bundle copies the unminified output, and the
 unminified MoonBit output is always in
-`_build/js/<profile>/build/openseek_desktop/frontend/browser/browser.js`.
+`_build/js/<profile>/build/openseek_desktop/frontend/frontend.js`.
 
 `--notarize` requires `--sign` and `--target dmg`. `--sign` requires a
 distribution target (`dmg` or `zip`). A failed ripgrep SHA-256 check deletes

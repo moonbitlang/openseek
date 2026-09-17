@@ -42,7 +42,7 @@ let sidebar_resizing : Ref[Bool] = Ref(false)
 /// on the handle starts a drag, and document-level `mousemove` / `mouseup`
 /// (capture, so they fire even while the cursor is over the conversation's
 /// own DOM) carry and end it. Idempotent — a no-op once installed.
-pub fn request_sidebar_resize_mount() -> @cmd.Cmd {
+fn request_sidebar_resize_mount() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _after => {
       if sidebar_resize_installed.val {

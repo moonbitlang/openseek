@@ -7,7 +7,7 @@
 /// One engine host the page can talk to. `Local` is the page's own host —
 /// the injected proton bridge in the desktop window; `Remote(id)` is a
 /// stable named target. Today browser remotes are relay devices reached over
-/// WebSocket; the identity deliberately does not encode that transport so a
+/// WebSocket; the identity deliberately does not encode that transport so
 /// another remote target can use the same channel shape.
 pub(all) enum ChannelId {
   Local
@@ -134,6 +134,33 @@ pub fn ChannelId::uri_authority(self : ChannelId) -> String {
 }
 
 ///|
+/// The roster id under which the desktop window lists its own host: its
+/// roster holds exactly this one device. The relay mints `d_…` ids, so it
+/// never collides.
+pub const LocalDeviceId = "local"
+
+///|
+/// The channel a roster entry stands for. The page's own host is `Local`;
+/// everything else is a relay device.
+pub fn ChannelId::of_device(id : String) -> ChannelId {
+  if id == LocalDeviceId {
+    Local
+  } else {
+    Remote(id)
+  }
+}
+
+///|
+/// The roster id of this channel — the inverse of `of_device`. For a relay
+/// device it is also the `/v1/devices/<id>/ws` route segment.
+pub fn ChannelId::device_id(self : ChannelId) -> String {
+  match self {
+    Local => LocalDeviceId
+    Remote(id) => id
+  }
+}
+
+///|
 /// Decode an app-owned URI authority. Unknown authorities and an empty remote
 /// id are rejected so a foreign URI can never fall back to the local host.
 pub fn ChannelId::from_uri_authority(authority : String) -> ChannelId? {
@@ -141,18 +168,6 @@ pub fn ChannelId::from_uri_authority(authority : String) -> ChannelId? {
     Some(Local)
   } else if authority.strip_prefix("remote.") is Some(id) && !id.is_empty() {
     Some(Remote(id.to_owned()))
-  } else {
-    None
-  }
-}
-
-///|
-/// The channel this page is born with: the desktop webview talks to its
-/// local host. `None` in a browser — the console at `/` holds no channel
-/// until it fetches the device roster and connects each device.
-pub fn page_channel() -> ChannelId? {
-  if openseek_api() is Some(_) {
-    Some(Local)
   } else {
     None
   }

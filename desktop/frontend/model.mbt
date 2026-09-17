@@ -1414,10 +1414,11 @@ priv struct Model {
   window_focused : Bool
   // Installed package version supplied by the native host's `app.info` op.
   app_version : String
-  // A browser page's account layer: the relay session and the device
-  // roster (see `ConsoleState`). None in the desktop window, whose one
-  // Local channel needs no account and no roster.
-  console : ConsoleState?
+  // The page's account layer: the relay session and the device roster (see
+  // `ConsoleState`). The desktop window carries it too, settled from the
+  // start on its own host as the one device `local`, so both pages boot and
+  // gate alike.
+  console : ConsoleState
   // The latest host preference is retained even while a fixed theme is
   // selected, so switching Settings back to System applies the current value.
   system_dark : Bool
@@ -2509,7 +2510,10 @@ fn empty_conversation(
 }
 
 ///|
-fn initial_model() -> Model {
+/// `desktop` is whether this page runs inside the proton window rather than
+/// as a browser console: one bundle serves both, and `main` reads the
+/// difference once from the bridge the host installs before any page script.
+fn initial_model(desktop~ : Bool) -> Model {
   // Read once here (main runs before the first render); afterwards the
   // resize subscription keeps the flag current through `ViewportResized`.
   // No window (a headless test runtime) reads as the wide layout.
@@ -2517,11 +2521,15 @@ fn initial_model() -> Model {
     Some(width) => width <= NarrowBreakpoint
     None => false
   }
-  // A browser console requires `?device=` (minted by the relay's redirect off
-  // retired `/d/<id>/` routes) as its page-lifetime device identity. An
-  // optional `?workspace=` places that device's first conversation.
-  let page_channel = @interop.page_channel()
-  let page_device = @interop.page_query_param("device")
+  // Every page has one page-lifetime device. The desktop window's is its own
+  // host, `local`; a browser console requires `?device=` (minted by the
+  // relay's redirect off retired `/d/<id>/` routes). An optional
+  // `?workspace=` places that device's first conversation.
+  let page_device = if desktop {
+    Some(@interop.LocalDeviceId)
+  } else {
+    @interop.page_query_param("device")
+  }
   // Capture the browser's exact local path once before the first render.
   // Packaged release pages must return to their versioned bundle after OAuth;
   // reading `window.location` later from `view` would make rendering impure.
@@ -2543,26 +2551,28 @@ fn initial_model() -> Model {
   } else {
     "/console/"
   }
-  let preselect_owner = match page_channel {
-    Some(channel) => Some(channel)
-    None => page_device.map(id => @interop.ChannelId::Remote(id))
-  }
   let preselect_project = match
-    (@interop.page_query_param("workspace"), preselect_owner) {
-    (Some(path), Some(channel)) => @resource.of_path(channel, path)
+    (@interop.page_query_param("workspace"), page_device) {
+    (Some(path), Some(id)) =>
+      @resource.of_path(@interop.ChannelId::of_device(id), path)
     _ => None
   }
-  let is_desktop = @interop.openseek_api() is Some(_)
   {
-    // The desktop window's one channel; a browser page starts empty and
-    // fills `devices` from the fetched roster (`apply_roster`).
-    devices: match page_channel {
-      Some(channel) =>
-        [{ ..empty_device_state(channel), active_project: preselect_project, }]
-      None => []
+    // The desktop window owns its host outright, so its one channel is in
+    // place from the start; a browser page starts empty and fills `devices`
+    // from the fetched roster (`apply_roster`).
+    devices: if desktop {
+      [
+        {
+          ..empty_device_state(@interop.ChannelId::Local),
+          active_project: preselect_project,
+        },
+      ]
+    } else {
+      []
     },
     websocket_epoch: 0,
-    focused: page_channel.unwrap_or(@interop.ChannelId::Local),
+    focused: @interop.ChannelId::Local,
     default_model: DsFlash,
     default_agent: OpenSeekAgent,
     conversation_models: [],
@@ -2579,19 +2589,19 @@ fn initial_model() -> Model {
     settings_saves: 0,
     host_settings_revision: -1,
     deferred_host_settings: None,
-    is_desktop,
-    window_focused: !is_desktop || @interop.page_has_focus(),
+    is_desktop: desktop,
+    window_focused: !desktop || @interop.page_has_focus(),
     app_version: "development",
-    // Every browser page is the console: it signs in against the relay and
-    // verifies its required query-selected device before that channel opens.
-    console: if is_desktop {
-      None
+    // Every page is the console. A browser page signs in against the relay
+    // and verifies its required query-selected device before that channel
+    // opens; the desktop window starts where that ends, signed in to its own
+    // host with its one device already listed.
+    console: if desktop {
+      local_console_state(login_return_to~)
     } else {
-      Some(
-        empty_console_state(page_device, preselect_project, login_return_to~),
-      )
+      empty_console_state(page_device, preselect_project, login_return_to~)
     },
-    system_dark: host_prefers_dark(is_desktop),
+    system_dark: host_prefers_dark(desktop),
     theme: System,
     app_font_size: AppFontSize(14),
     fps_overlay_enabled: false,
@@ -2716,14 +2726,12 @@ fn DeviceState::target_project(self : DeviceState) -> @common.Uri? {
 }
 
 ///|
-/// The focused device's roster name — the console banner's subject. The
-/// desktop window (no roster) is always its own local host.
+/// The focused device's roster name — the console banner's subject.
 fn Model::focused_device_name(self : Model) -> String {
-  if self.console is Some(console) && self.focused is Remote(id) {
-    for meta in console.roster {
-      if meta.id == id {
-        return meta.name
-      }
+  let id = self.focused.device_id()
+  for meta in self.console.roster {
+    if meta.id == id {
+      return meta.name
     }
   }
   "SeekMoon"

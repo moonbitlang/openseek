@@ -368,7 +368,7 @@ export class Release {
     if (new URL(location, this.apiOrigin()).pathname !== consolePath) {
       throw new Error(`/console/ did not select ${consolePath}: HTTP ${redirect.status} ${location}`);
     }
-    for (const file of ["index.html", "browser.js"]) {
+    for (const file of ["index.html", "frontend.js"]) {
       const response = await this.fetch(`/console/releases/${version}/${file}`, { auth: false });
       if (!response.ok) throw new Error(`GET /console/releases/${version}/${file} failed: HTTP ${response.status}`);
       const served = createHash("sha256").update(Buffer.from(await response.arrayBuffer())).digest("hex");

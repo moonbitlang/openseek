@@ -234,35 +234,40 @@ class Build {
   async web(profile, browser = false) {
     await this.webAssets();
     const release = profile === "release" ? ["--release"] : [];
+    await this.commandRun("moon", ["build", "frontend", "--target", "js", ...release], {
+      cwd: this.desktop,
+    });
     if (browser) {
-      await this.commandRun("moon", ["build", "browser", "--target", "js", ...release], {
-        cwd: join(this.desktop, "frontend"),
-      });
+      // The console bundle openseek-api serves: the same document and
+      // frontend.js the packaged app loads, so the e2e suite can drive one
+      // staging directory either as a browser console against a mocked relay
+      // WebSocket or as the window against a stubbed proton bridge.
       const output = join(this.desktop, "dist/browser");
       await rm(output, { recursive: true, force: true });
       await mkdir(output, { recursive: true });
-      await cp(join(this.desktop, "frontend/browser/index.html"), join(output, "index.html"));
+      await cp(join(this.desktop, "index.html"), join(output, "index.html"));
       // A release console bundle is minified with the pinned esbuild; a debug
       // one is copied verbatim, so local runs and the e2e suite read the MoonBit
       // output as written. --format stays iife to match the package's link
       // option, and there is no --bundle, so the bundle is only minified, never
       // re-scoped or tree-shaken.
-      const bundle = join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/browser/browser.js`);
       if (profile === "release") {
         await this.commandRun(this.esbuildBinary, [
-          bundle, "--minify", "--format=iife", "--platform=browser",
-          `--outfile=${join(output, "browser.js")}`,
+          this.frontendBundle(profile), "--minify", "--format=iife", "--platform=browser",
+          `--outfile=${join(output, "frontend.js")}`,
         ]);
       } else {
-        await cp(bundle, join(output, "browser.js"));
+        await cp(this.frontendBundle(profile), join(output, "frontend.js"));
       }
       await this.sharedWeb(output);
       return;
     }
-    await this.commandRun("moon", ["build", "desktop", "--target", "js", ...release], {
-      cwd: join(this.desktop, "frontend"),
-    });
     await this.commandRun("moon", ["build", "cmd/viz_app", "--target", "js", ...release], { cwd: this.repo });
+  }
+
+  // The unminified MoonBit output of the frontend executable.
+  frontendBundle(profile) {
+    return join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/frontend.js`);
   }
 
   async sharedWeb(output) {
@@ -340,7 +345,7 @@ class Build {
     await mkdir(join(root, "bin"), { recursive: true });
     await mkdir(join(root, "licenses/ripgrep"), { recursive: true });
     await cp(join(this.desktop, "index.html"), join(root, "web/index.html"));
-    await cp(join(this.repo, `_build/js/${profile}/build/openseek_desktop/frontend/desktop/desktop.js`), join(root, "web/frontend.js"));
+    await cp(this.frontendBundle(profile), join(root, "web/frontend.js"));
     await cp(join(this.repo, "web/index.html"), join(root, "web/viz/index.html"));
     await cp(join(this.repo, `_build/js/${profile}/build/bobzhang/openseek-viz-app/openseek-viz-app.js`), join(root, "web/viz/viz_app.js"));
     await this.sharedWeb(join(root, "web"));

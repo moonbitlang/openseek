@@ -255,7 +255,7 @@ jobs:
           set -euo pipefail
           moon -C desktop run package/browser --target native -- --release
           test -f desktop/dist/browser/index.html
-          test -f desktop/dist/browser/browser.js
+          test -f desktop/dist/browser/frontend.js
           COPYFILE_DISABLE=1 tar \
             -C desktop/dist \
             -czf desktop/dist/SeekMoon.browser.tar.gz \

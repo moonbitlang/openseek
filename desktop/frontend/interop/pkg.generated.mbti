@@ -12,6 +12,8 @@ import {
 }
 
 // Values
+pub const LocalDeviceId : String = "local"
+
 pub fn add_capture_listener(@js.Value, String, (@dom.Event) -> Unit) -> Unit
 
 pub fn bridge_error_is_definite(Error) -> Bool
@@ -37,8 +39,6 @@ pub fn moonbit_bridge_root() -> @js.Value?
 pub fn now_ms() -> Double
 
 pub fn openseek_api() -> @js.Value?
-
-pub fn page_channel() -> ChannelId?
 
 pub fn page_has_focus() -> Bool
 
@@ -67,11 +67,13 @@ pub(all) enum ChannelId {
   Local
   Remote(String)
 } derive(Eq, Hash, @debug.Debug)
+pub fn ChannelId::device_id(Self) -> String
 pub fn ChannelId::equal(Self, Self) -> Bool
 pub fn ChannelId::from_uri_authority(String) -> Self?
 pub fn ChannelId::hash(Self) -> Int
 pub fn ChannelId::hash_combine(Self, Hasher) -> Unit
 pub fn ChannelId::not_equal(Self, Self) -> Bool
+pub fn ChannelId::of_device(String) -> Self
 pub fn ChannelId::to_repr(Self) -> @debug.Repr
 pub fn ChannelId::uri_authority(Self) -> String
 
