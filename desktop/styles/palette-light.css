@@ -1,0 +1,26 @@
+/* SeekMoon light palette. Replace this file with Theme Lab's CSS copy.
+ * Semantic mappings stay in tokens.css. */
+:root {
+  --light-bg-canvas: #fbfbf9;
+  --light-bg-surface: #ffffff;
+  --light-bg-subtle: #f6f6f3;
+  --light-text-primary: #121418;
+  --light-text-secondary: #5c5f66;
+  --light-text-muted: #9a9da4;
+  --light-text-faint: #a8aab0;
+  --light-border: #e9e8e3;
+  --light-border-subtle: #f0efea;
+  --light-accent: #3b6ef5;
+  --light-accent-strong: #2a55cc;
+  --light-on-accent: #ffffff;
+  --light-on-accent-strong: #ffffff;
+  --light-accent-soft: #eef2fe;
+  --light-accent-border: #d6e0fd;
+  --light-text-selection: #eef2fe;
+  --light-success: #1f8a5b;
+  --light-danger: #c0453b;
+  --light-danger-soft: #fcefed;
+  --light-danger-border: #f2d4cf;
+  --light-warning: #b7791f;
+  --light-code: #20242b;
+}

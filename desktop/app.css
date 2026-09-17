@@ -3,6 +3,8 @@
  * The verified standalone esbuild follows these imports into packaged
  * app.css; development serves them in place so CSS edits need only a refresh.
  */
+@import url("./styles/palette-light.css");
+@import url("./styles/palette-dark.css");
 @import url("./styles/tokens.css");
 @import url("./styles/base.css");
 @import url("./styles/terminal.css");

@@ -1,0 +1,1277 @@
+<!doctype html>
+<!-- Development palette sketch; not bundled with the application.
+     Current presets read ../styles/palette-{light,dark}.css on page load.
+     The preview is illustrative, not the production frontend. -->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SeekMoon · Theme Lab</title>
+    <link rel="stylesheet" href="../styles/palette-light.css" />
+    <link rel="stylesheet" href="../styles/palette-dark.css" />
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+        background: #111214;
+        color: #e9eaec;
+        font-size: 13px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button,
+      select {
+        cursor: pointer;
+      }
+      button {
+        color: inherit;
+        background: #24262b;
+        border: 1px solid #3a3d45;
+        border-radius: 7px;
+        padding: 8px 12px;
+      }
+      button:hover {
+        background: #30333a;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      a:focus-visible {
+        outline: 2px solid #94b9ff;
+        outline-offset: 3px;
+      }
+      button.primary {
+        background: #d9e6ff;
+        color: #142139;
+        border-color: #d9e6ff;
+      }
+      header {
+        height: 78px;
+        border-bottom: 1px solid #2a2c32;
+        padding: 0 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+      }
+      .logo {
+        height: 36px;
+        width: 36px;
+        background: #e2e8f4;
+        color: #182031;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        font-size: 20px;
+      }
+      h1 {
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: -0.4px;
+      }
+      .subtitle {
+        font-size: 11px;
+        color: #9298a3;
+        margin-top: 5px;
+      }
+      .actions {
+        display: flex;
+        gap: 9px;
+      }
+      main {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        height: calc(100dvh - 78px);
+      }
+      .controls {
+        border-right: 1px solid #2a2c32;
+        overflow: auto;
+        padding: 24px 20px;
+      }
+      .label {
+        font-size: 10px;
+        letter-spacing: 1.5px;
+        color: #9298a3;
+        margin-bottom: 9px;
+      }
+      .preset-label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+      select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #414550;
+        background: #202228;
+        color: #f0f1f3;
+        border-radius: 7px;
+      }
+      .description {
+        font-size: 11px;
+        line-height: 1.7;
+        color: #a0a5ae;
+        min-height: 38px;
+        margin: 10px 0 17px;
+      }
+      .status {
+        font-size: 11px;
+        color: #afbdd4;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+      .status button {
+        font-size: 11px;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        text-decoration: underline;
+      }
+      .group {
+        border: 0;
+        padding: 0;
+        margin: 0 0 22px;
+      }
+      .group legend {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 12px 0;
+        width: 100%;
+        border-top: 1px solid #2d3037;
+        color: #b7bdc7;
+      }
+      .field {
+        display: grid;
+        grid-template-columns: 1fr 29px 76px;
+        gap: 8px;
+        align-items: center;
+        margin: 0 0 10px;
+        min-height: 30px;
+      }
+      .field label {
+        font-size: 12px;
+        color: #c8cdd5;
+      }
+      .field input[type="color"] {
+        appearance: none;
+        padding: 0;
+        border: 1px solid #545861;
+        width: 29px;
+        height: 29px;
+        border-radius: 6px;
+        background: none;
+        cursor: pointer;
+        overflow: hidden;
+      }
+      .field input[type="color"]::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+      .field input[type="color"]::-webkit-color-swatch {
+        border: 0;
+        border-radius: 4px;
+      }
+      .field input[type="text"] {
+        width: 76px;
+        border: 1px solid #363940;
+        border-radius: 5px;
+        background: #191b1f;
+        color: #b6c0d0;
+        padding: 6px 5px;
+        text-transform: uppercase;
+        font:
+          11px ui-monospace,
+          Menlo,
+          monospace;
+      }
+      .field input[aria-invalid="true"] {
+        border-color: #ff9999;
+      }
+      .stage {
+        overflow: auto;
+        padding: 25px 30px 35px;
+        background: radial-gradient(ellipse at 50% 15%, #202329, #151619 70%);
+      }
+      .stage-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .stage h2 {
+        font-size: 20px;
+        margin: 4px 0 0;
+        font-weight: 550;
+      }
+      .compare {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #bcc4d1;
+        cursor: pointer;
+      }
+      .compare input {
+        accent-color: #97b8ef;
+        width: 16px;
+        height: 16px;
+      }
+      .preview-frame {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+        border: 1px solid #383c45;
+        border-radius: 11px;
+        box-shadow: 0 25px 65px #0006;
+        background: #151619;
+      }
+      iframe {
+        display: block;
+        width: 1200px;
+        height: 680px;
+        border: 0;
+        transform-origin: top left;
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+      .preview-caption {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: #858e9d;
+        font-size: 11px;
+        margin: 13px 0 26px;
+      }
+      .section-heading {
+        font-size: 11px;
+        color: #8e98a8;
+        letter-spacing: 1px;
+        margin-bottom: 12px;
+      }
+      .preset-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .preset-card {
+        padding: 11px;
+        text-align: left;
+        background: #191c21;
+        border: 1px solid #343840;
+        min-width: 0;
+      }
+      .preset-card[aria-pressed="true"] {
+        border-color: #adc6f5;
+        box-shadow: 0 0 0 1px #adc6f530;
+      }
+      .stripes {
+        display: flex;
+        gap: 0;
+        height: 24px;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 9px;
+      }
+      .stripes i {
+        flex: 1;
+      }
+      .preset-name {
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .metrics {
+        display: flex;
+        gap: 10px;
+        margin-top: 22px;
+        flex-wrap: wrap;
+      }
+      .metric {
+        flex: 1;
+        min-width: 135px;
+        background: #1b1e23;
+        border: 1px solid #30343c;
+        padding: 11px 14px;
+        border-radius: 7px;
+      }
+      .metric span {
+        font-size: 10px;
+        color: #9aa4b4;
+      }
+      .metric strong {
+        display: block;
+        font:
+          17px ui-monospace,
+          Menlo,
+          monospace;
+        margin-top: 5px;
+        font-weight: 500;
+      }
+      .metric small {
+        font-size: 10px;
+        color: #adb8cb;
+        margin-left: 7px;
+      }
+      .source {
+        margin-top: 18px;
+        line-height: 1.8;
+        font-size: 11px;
+        color: #8994a5;
+      }
+      .source a {
+        color: #adc6f5;
+      }
+      #notice {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 18px;
+        border: 1px solid #5c6b82;
+        border-radius: 8px;
+        background: #283446;
+        color: #f0f5ff;
+        z-index: 9;
+        box-shadow: 0 5px 25px #0006;
+        pointer-events: none;
+      }
+      #notice:empty {
+        display: none;
+      }
+      @media (max-width: 1100px) {
+        main {
+          grid-template-columns: 270px minmax(0, 1fr);
+        }
+        .stage {
+          padding: 22px 18px;
+        }
+        .preset-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .stage-top {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+      @media (max-width: 700px) {
+        header {
+          height: auto;
+          min-height: 100px;
+          padding: 16px;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+        .subtitle {
+          max-width: 240px;
+        }
+        main {
+          height: auto;
+          display: flex;
+          flex-direction: column;
+        }
+        .controls {
+          order: 2;
+          border: 0;
+          padding: 22px;
+        }
+        .stage {
+          order: 1;
+          padding: 20px 14px;
+        }
+        .stage-top {
+          flex-direction: row;
+        }
+        .stage h2 {
+          font-size: 16px;
+        }
+        .metrics {
+          gap: 7px;
+        }
+        .metric {
+          min-width: 110px;
+          padding: 8px;
+        }
+        .preset-grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 5px;
+        }
+        .preset-card {
+          padding: 7px;
+        }
+        .preset-name {
+          font-size: 9px;
+        }
+        .preview-caption {
+          font-size: 10px;
+        }
+        .group {
+          max-width: 500px;
+        }
+        header .actions button {
+          padding: 7px 10px;
+        }
+        .source {
+          font-size: 10px;
+        }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        button {
+          transition:
+            background 0.12s,
+            border-color 0.12s;
+        }
+      }
+
+      .samples {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 13px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 8px;
+        background: var(--bg-subtle);
+        margin-bottom: 24px;
+        color: var(--text-primary);
+        font-size: 11px;
+      }
+      .samples .strong-sample {
+        background: var(--accent-strong);
+        color: var(--on-accent-strong);
+        padding: 6px 10px;
+        border-radius: 5px;
+      }
+      .samples .soft-sample {
+        background: var(--accent-soft);
+        color: var(--accent-strong);
+        border: 1px solid var(--accent-border);
+        padding: 6px 10px;
+        border-radius: 5px;
+      }
+      .samples .error-sample {
+        background: var(--danger-soft);
+        color: var(--danger);
+        border: 1px solid var(--danger-border);
+        padding: 6px 10px;
+        border-radius: 5px;
+      }
+      .samples .faint-sample {
+        color: var(--text-faint);
+      }
+      .samples .selection-sample::selection {
+        background: var(--text-selection);
+        color: var(--text-primary);
+      }
+      .mode-switch {
+        display: flex;
+        gap: 6px;
+        margin: 12px 0 20px;
+      }
+      .mode-switch button {
+        flex: 1;
+      }
+      .mode-switch button[aria-pressed="true"] {
+        background: #d9e6ff;
+        color: #142139;
+        border-color: #d9e6ff;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden="true">◐</div>
+        <div>
+          <h1>
+            SeekMoon
+            <span style="color: #8994a5; font-weight: 400">/ Theme Lab</span>
+          </h1>
+          <div class="subtitle">挑选一个起点，把明暗配色调成你喜欢的样子。</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="reset">重置此预设</button
+        ><button class="primary" id="copy">复制 CSS</button>
+      </div>
+    </header>
+    <main>
+      <section class="controls" aria-label="调色板">
+        <div class="label">PALETTE EDITOR</div>
+        <div class="mode-switch" role="group" aria-label="配色模式">
+          <button type="button" data-mode="light">浅色 Light</button
+          ><button type="button" data-mode="dark">深色 Dark</button>
+        </div>
+        <label class="preset-label" for="preset">默认配色方案</label
+        ><select id="preset"></select>
+        <p class="description" id="description"></p>
+        <div class="status">
+          <span id="modified"></span><span id="save-state"></span>
+        </div>
+        <div id="fields"></div>
+      </section>
+      <section class="stage" aria-label="实时预览">
+        <div class="stage-top">
+          <div>
+            <div class="label">LIVE PREVIEW</div>
+            <h2 id="theme-name"></h2>
+          </div>
+          <label class="compare"
+            ><input id="compare" type="checkbox" />对照 SeekMoon 原配色</label
+          >
+        </div>
+        <div class="preview-frame">
+          <iframe id="preview" title="SeekMoon 配色实时示意图"></iframe>
+        </div>
+        <div class="preview-caption">
+          <span>相同布局与内容 · 颜色修改实时生效</span
+          ><span>应用代码不会被修改</span>
+        </div>
+        <div class="samples" id="samples" aria-label="组件颜色样例">
+          <span class="strong-sample">强强调色</span
+          ><span class="soft-sample">选中项</span
+          ><span class="error-sample">错误提示</span
+          ><span class="faint-sample">最弱文字</span
+          ><span class="selection-sample">拖选这段文字，查看选区颜色</span>
+        </div>
+        <div class="section-heading">选择一个预设，或在左侧自由调整</div>
+        <div class="preset-grid" id="presets"></div>
+        <div class="metrics" id="metrics"></div>
+        <div class="source" id="source"></div>
+      </section>
+    </main>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <script>
+      const PRESETS = [
+        {
+          id: "current",
+          name: "SeekMoon 当前",
+          description:
+            "直接读取 palette-dark.css。替换文件后刷新，查看新的原始配色。",
+          colors: {},
+          source: null,
+        },
+        {
+          id: "dracula",
+          name: "Dracula",
+          description:
+            "经典紫灰背景，紫色强调。基于 Dracula 色板适配 SeekMoon。",
+          colors: {
+            "bg-canvas": "#282a36",
+            "bg-surface": "#21222c",
+            "bg-subtle": "#343746",
+            "text-primary": "#f8f8f2",
+            "text-secondary": "#c4c5d3",
+            "text-muted": "#8792b5",
+            "text-faint": "#8792b5",
+            border: "#44475a",
+            "border-subtle": "#44475a",
+            accent: "#bd93f9",
+            "accent-strong": "#d6b8ff",
+            "on-accent-strong": "#15151b",
+            "accent-soft": "#44475a",
+            "accent-border": "#44475a",
+            "text-selection": "#44475a",
+            success: "#50fa7b",
+            danger: "#ff5555",
+            "danger-soft": "#422f3a",
+            "danger-border": "#733941",
+            warning: "#f1fa8c",
+            code: "#f8f8f2",
+            "on-accent": "#15151b",
+          },
+          source: "https://draculatheme.com/spec",
+        },
+        {
+          id: "onedark",
+          name: "One Dark Pro",
+          description: "蓝灰背景与柔和前景。基于 One Dark Pro 色板适配。",
+          colors: {
+            "bg-canvas": "#282c34",
+            "bg-surface": "#21252b",
+            "bg-subtle": "#2c313a",
+            "text-primary": "#abb2bf",
+            "text-secondary": "#9da5b4",
+            "text-muted": "#7f8899",
+            "text-faint": "#7f8899",
+            border: "#3e4451",
+            "border-subtle": "#3e4451",
+            accent: "#61afef",
+            "accent-strong": "#8ec8f5",
+            "on-accent-strong": "#15151b",
+            "accent-soft": "#323d4e",
+            "accent-border": "#3e4451",
+            "text-selection": "#323d4e",
+            success: "#98c379",
+            danger: "#e06c75",
+            "danger-soft": "#3e343c",
+            "danger-border": "#68424b",
+            warning: "#e5c07b",
+            code: "#abb2bf",
+            "on-accent": "#15151b",
+          },
+          source:
+            "https://github.com/Binaryify/OneDark-Pro/blob/master/themes/OneDark-Pro.json",
+        },
+        {
+          id: "flat",
+          name: "Flat Dark",
+          description: "自定义扁平深色：接近的表面亮度、安静的边框。",
+          colors: {
+            "bg-canvas": "#1e1e1e",
+            "bg-surface": "#202020",
+            "bg-subtle": "#292929",
+            "text-primary": "#e0e0e0",
+            "text-secondary": "#adadad",
+            "text-muted": "#858585",
+            "text-faint": "#858585",
+            border: "#2c2c2c",
+            "border-subtle": "#2c2c2c",
+            accent: "#80aaff",
+            "accent-strong": "#adc8ff",
+            "on-accent-strong": "#15151b",
+            "accent-soft": "#2a3548",
+            "accent-border": "#2c2c2c",
+            "text-selection": "#2a3548",
+            success: "#83c99e",
+            danger: "#ef9292",
+            "danger-soft": "#372c2c",
+            "danger-border": "#674747",
+            warning: "#d8ba7d",
+            code: "#e0e0e0",
+            "on-accent": "#15151b",
+          },
+          source: null,
+        },
+        {
+          id: "github",
+          name: "GitHub Dark",
+          description: "近黑背景、清晰蓝色。参考 GitHub Dark 的颜色语言适配。",
+          colors: {
+            "bg-canvas": "#0d1117",
+            "bg-surface": "#161b22",
+            "bg-subtle": "#21262d",
+            "text-primary": "#e6edf3",
+            "text-secondary": "#9da7b3",
+            "text-muted": "#7d8590",
+            "text-faint": "#7d8590",
+            border: "#30363d",
+            "border-subtle": "#30363d",
+            accent: "#58a6ff",
+            "accent-strong": "#a5d6ff",
+            "on-accent-strong": "#15151b",
+            "accent-soft": "#162b46",
+            "accent-border": "#30363d",
+            "text-selection": "#162b46",
+            success: "#3fb950",
+            danger: "#f85149",
+            "danger-soft": "#29191d",
+            "danger-border": "#5f2728",
+            warning: "#d29922",
+            code: "#e6edf3",
+            "on-accent": "#15151b",
+          },
+          source: "https://github.com/primer/github-vscode-theme",
+        },
+        {
+          id: "darcula",
+          name: "Darcula",
+          description:
+            "参考 Darcula 的中性灰与低饱和蓝；应用表面为自定义适配。",
+          colors: {
+            "bg-canvas": "#2b2b2b",
+            "bg-surface": "#313335",
+            "bg-subtle": "#3c3f41",
+            "text-primary": "#a9b7c6",
+            "text-secondary": "#a0a7af",
+            "text-muted": "#80888f",
+            "text-faint": "#80888f",
+            border: "#4b4d4f",
+            "border-subtle": "#4b4d4f",
+            accent: "#6897bb",
+            "accent-strong": "#a6c5e9",
+            "on-accent-strong": "#15151b",
+            "accent-soft": "#364451",
+            "accent-border": "#4b4d4f",
+            "text-selection": "#364451",
+            success: "#a5c261",
+            danger: "#e78b83",
+            "danger-soft": "#423736",
+            "danger-border": "#6d4d4a",
+            warning: "#cc9c6c",
+            code: "#a9b7c6",
+            "on-accent": "#15151b",
+          },
+          source: null,
+        },
+        {
+          id: "graphite",
+          name: "Graphite",
+          description: "自定义石墨灰：中性背景，均衡层次。",
+          colors: {
+            "bg-canvas": "#151515",
+            "bg-surface": "#1e1e1e",
+            "bg-subtle": "#282828",
+            "text-primary": "#e8e8e8",
+            "text-secondary": "#adadad",
+            "text-muted": "#858585",
+            "text-faint": "#858585",
+            border: "#343434",
+            "border-subtle": "#343434",
+            accent: "#7fa9ff",
+            "accent-strong": "#aec9ff",
+            "on-accent-strong": "#15151b",
+            "accent-soft": "#25334b",
+            "accent-border": "#343434",
+            "text-selection": "#25334b",
+            success: "#78c99c",
+            danger: "#f08c91",
+            "danger-soft": "#2f2324",
+            "danger-border": "#623f40",
+            warning: "#dcb877",
+            code: "#e8e8e8",
+            "on-accent": "#15151b",
+          },
+          source: null,
+        },
+        {
+          id: "black",
+          name: "Almost Black",
+          description: "自定义近纯黑：更深的主背景与更明显的层次。",
+          colors: {
+            "bg-canvas": "#080808",
+            "bg-surface": "#111111",
+            "bg-subtle": "#1b1b1b",
+            "text-primary": "#e8e8e8",
+            "text-secondary": "#a8a8a8",
+            "text-muted": "#808080",
+            "text-faint": "#808080",
+            border: "#292929",
+            "border-subtle": "#292929",
+            accent: "#7fa9ff",
+            "accent-strong": "#aec9ff",
+            "on-accent-strong": "#15151b",
+            "accent-soft": "#25334b",
+            "accent-border": "#292929",
+            "text-selection": "#25334b",
+            success: "#78c99c",
+            danger: "#f08c91",
+            "danger-soft": "#241818",
+            "danger-border": "#593638",
+            warning: "#dcb877",
+            code: "#e8e8e8",
+            "on-accent": "#15151b",
+          },
+          source: null,
+        },
+      ];
+      for (const p of PRESETS) p.mode = "dark";
+      PRESETS.push(
+        ...[
+          {
+            id: "light-current",
+            mode: "light",
+            name: "SeekMoon 当前 · Light",
+            description:
+              "直接读取 palette-light.css。替换文件后刷新，查看新的原始配色。",
+            colors: {},
+            source: null,
+          },
+          {
+            id: "light-paper",
+            mode: "light",
+            name: "Paper Light",
+            description: "自定义浅色预设。柔和白纸底，保留清晰的蓝色强调。",
+            colors: {
+              "bg-canvas": "#f7f8fa",
+              "bg-surface": "#ffffff",
+              "bg-subtle": "#eef1f5",
+              "text-primary": "#242830",
+              "text-secondary": "#565e6c",
+              "text-muted": "#78818f",
+              "text-faint": "#78818f",
+              border: "#dde2e9",
+              "border-subtle": "#dde2e9",
+              accent: "#3269d9",
+              "accent-strong": "#2351b0",
+              "on-accent": "#ffffff",
+              "on-accent-strong": "#ffffff",
+              "accent-soft": "#eaf0ff",
+              "accent-border": "#dde2e9",
+              "text-selection": "#eaf0ff",
+              success: "#237a50",
+              danger: "#bd423d",
+              "danger-soft": "#fbeceb",
+              "danger-border": "#e8c3c0",
+              warning: "#946515",
+              code: "#242830",
+            },
+            source: null,
+          },
+          {
+            id: "light-flat",
+            mode: "light",
+            name: "Flat Light",
+            description: "自定义浅色预设。接近的表面亮度，减弱分区和边框。",
+            colors: {
+              "bg-canvas": "#f5f5f5",
+              "bg-surface": "#f8f8f8",
+              "bg-subtle": "#eeeeee",
+              "text-primary": "#292929",
+              "text-secondary": "#626262",
+              "text-muted": "#808080",
+              "text-faint": "#808080",
+              border: "#e3e3e3",
+              "border-subtle": "#e3e3e3",
+              accent: "#356dcc",
+              "accent-strong": "#2854a1",
+              "on-accent": "#ffffff",
+              "on-accent-strong": "#ffffff",
+              "accent-soft": "#e7eefb",
+              "accent-border": "#e3e3e3",
+              "text-selection": "#e7eefb",
+              success: "#347d53",
+              danger: "#b84d49",
+              "danger-soft": "#fbeceb",
+              "danger-border": "#e8c3c0",
+              warning: "#916714",
+              code: "#292929",
+            },
+            source: null,
+          },
+          {
+            id: "light-cool",
+            mode: "light",
+            name: "Cool Light",
+            description: "自定义浅色预设。略带冷灰的底色，更明确的面板层次。",
+            colors: {
+              "bg-canvas": "#edf1f6",
+              "bg-surface": "#ffffff",
+              "bg-subtle": "#e3e9f1",
+              "text-primary": "#202c3a",
+              "text-secondary": "#506176",
+              "text-muted": "#758397",
+              "text-faint": "#758397",
+              border: "#ced8e4",
+              "border-subtle": "#ced8e4",
+              accent: "#2869ca",
+              "accent-strong": "#2057a6",
+              "on-accent": "#ffffff",
+              "on-accent-strong": "#ffffff",
+              "accent-soft": "#dfeafa",
+              "accent-border": "#ced8e4",
+              "text-selection": "#dfeafa",
+              success: "#217a60",
+              danger: "#bd454d",
+              "danger-soft": "#fbeceb",
+              "danger-border": "#e8c3c0",
+              warning: "#91650e",
+              code: "#202c3a",
+            },
+            source: null,
+          },
+          {
+            id: "light-warm",
+            mode: "light",
+            name: "Warm Light",
+            description:
+              "自定义浅色预设。浅米白背景与温和灰文字，强调色仍为蓝色。",
+            colors: {
+              "bg-canvas": "#faf8f3",
+              "bg-surface": "#fffefa",
+              "bg-subtle": "#f1eee6",
+              "text-primary": "#302e29",
+              "text-secondary": "#676259",
+              "text-muted": "#8b8376",
+              "text-faint": "#8b8376",
+              border: "#e5dfd3",
+              "border-subtle": "#e5dfd3",
+              accent: "#4268bc",
+              "accent-strong": "#315294",
+              "on-accent": "#ffffff",
+              "on-accent-strong": "#ffffff",
+              "accent-soft": "#e8edf8",
+              "accent-border": "#e5dfd3",
+              "text-selection": "#e8edf8",
+              success: "#527a4b",
+              danger: "#b44d41",
+              "danger-soft": "#fbeceb",
+              "danger-border": "#e8c3c0",
+              warning: "#946617",
+              code: "#302e29",
+            },
+            source: null,
+          },
+          {
+            id: "light-contrast",
+            mode: "light",
+            name: "Clear Light",
+            description: "自定义浅色预设。纯白背景、较深文字，突出信息对比。",
+            colors: {
+              "bg-canvas": "#ffffff",
+              "bg-surface": "#f2f3f5",
+              "bg-subtle": "#e7e9ed",
+              "text-primary": "#111820",
+              "text-secondary": "#3d4855",
+              "text-muted": "#606c79",
+              "text-faint": "#606c79",
+              border: "#c7ced7",
+              "border-subtle": "#c7ced7",
+              accent: "#175ecb",
+              "accent-strong": "#104999",
+              "on-accent": "#ffffff",
+              "on-accent-strong": "#ffffff",
+              "accent-soft": "#e2ecfd",
+              "accent-border": "#c7ced7",
+              "text-selection": "#e2ecfd",
+              success: "#146c43",
+              danger: "#b42b34",
+              "danger-soft": "#fbeceb",
+              "danger-border": "#e8c3c0",
+              warning: "#805700",
+              code: "#111820",
+            },
+            source: null,
+          },
+        ],
+      );
+      const FIELDS = [
+        [
+          "背景与层次",
+          [
+            ["bg-canvas", "主背景"],
+            ["bg-surface", "侧栏 / 卡片"],
+            ["bg-subtle", "次级表面"],
+            ["border", "边框"],
+            ["border-subtle", "弱分隔线"],
+          ],
+        ],
+        [
+          "文字",
+          [
+            ["text-primary", "正文"],
+            ["text-secondary", "次要文字"],
+            ["text-muted", "辅助文字"],
+            ["text-faint", "最弱文字"],
+            ["code", "代码正文"],
+          ],
+        ],
+        [
+          "强调与选中",
+          [
+            ["accent", "强调色"],
+            ["accent-strong", "链接 / 强调文字"],
+            ["on-accent", "按钮文字"],
+            ["on-accent-strong", "强强调色上的文字"],
+            ["accent-soft", "选中背景"],
+            ["accent-border", "强调边框"],
+            ["text-selection", "文本选区"],
+          ],
+        ],
+        [
+          "状态",
+          [
+            ["success", "成功"],
+            ["warning", "警告"],
+            ["danger", "错误"],
+            ["danger-soft", "错误背景"],
+            ["danger-border", "错误边框"],
+          ],
+        ],
+      ];
+      const PREVIEW =
+        '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><style>*{box-sizing:border-box}body{margin:0;background:#101114;color:#ededf0;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;-webkit-font-smoothing:antialiased}.page{padding:34px 40px;width:1280px}.eyebrow{font-size:11px;letter-spacing:2.5px;color:#8e919a;margin-bottom:10px}.heading{display:flex;align-items:baseline;gap:18px;margin-bottom:24px}h1{font-size:28px;font-weight:600;margin:0}.caption{color:#a0a2ac;font-size:14px}.window{height:650px;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--bg-canvas);color:var(--text-primary);display:grid;grid-template-columns:220px 1fr 250px;font-size:13px;line-height:1.6;box-shadow:0 18px 60px #0004}.sidebar{background:var(--bg-surface);border-right:1px solid var(--border);display:flex;flex-direction:column}.bar{height:48px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 17px;gap:9px}.dot{height:11px;width:11px;border-radius:50%;display:inline-block}.tools{margin-left:auto;color:var(--text-secondary)}.sidebody{padding:22px 12px}.sect{font-size:11px;letter-spacing:1px;color:var(--text-muted);margin:0 10px 8px}.row{padding:7px 10px;border-radius:6px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row.active{color:var(--accent-strong);background:var(--accent-soft)}.gap{height:22px}.footer{margin-top:auto;padding:14px 22px;border-top:1px solid var(--border);color:var(--text-secondary)}.chat{display:flex;flex-direction:column;min-width:0}.chat .bar{justify-content:space-between}.small{font-size:11px;color:var(--text-muted)}.conversation{padding:27px 32px;flex:1}.who{font-size:11px;color:var(--text-secondary);margin-bottom:9px;font-weight:600}.user{margin-bottom:27px}.answer{margin-bottom:16px}.tool{font:12px SFMono-Regular,Menlo,monospace;padding:11px 13px;border:1px solid var(--border);border-radius:6px;margin:13px 0;color:var(--text-secondary);background:var(--bg-surface)}.ok{color:var(--success)}.link{color:var(--accent-strong)}.code{background:var(--bg-surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}.codehead{padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-muted)}pre{font:12px/1.8 SFMono-Regular,Menlo,monospace;margin:10px 13px;color:var(--text-primary)}.kw{color:var(--accent-strong)}.str{color:var(--success)}.note{font-size:11px;color:var(--text-muted);margin-top:12px}.compose{padding:15px 22px 18px;border-top:1px solid var(--border)}.input{background:var(--bg-surface);border:1px solid var(--border);border-radius:9px;padding:13px}.placeholder{color:var(--text-muted);margin-bottom:26px}.inputbar{display:flex;gap:14px;align-items:center;color:var(--text-secondary);font-size:11px}.send{margin-left:auto;background:var(--accent);color:var(--on-accent);border-radius:6px;width:27px;height:27px;text-align:center;line-height:27px;font-size:17px}.files{background:var(--bg-surface);border-left:1px solid var(--border)}.filetabs{display:flex;gap:19px;padding:14px 16px;border-bottom:1px solid var(--border);height:48px}.selected{color:var(--accent-strong)}.tree{padding:16px 9px}.tree .row{font-size:12px}.indent{padding-left:26px}.diff{margin:9px 15px;border-top:1px solid var(--border);padding-top:14px;color:var(--text-secondary);font-size:11px}.stat{float:right;color:var(--success)}.danger{color:var(--danger)}.swatches{display:flex;gap:22px;margin-top:24px}.swatch{display:flex;gap:9px;align-items:center;font-size:11px;color:#a0a2ac}.chip{width:32px;height:32px;border-radius:7px;border:1px solid #ffffff20}.hex{display:block;color:#e1e2e7;font:11px/1.8 Menlo,monospace}.nav{display:flex;gap:9px;padding:18px 40px 0}.nav button{border:1px solid #444;background:#25262d;color:#eee;padding:9px 16px;border-radius:7px;cursor:pointer}.nav button.active{background:#e3e4eb;color:#18191d}body{background:var(--bg-canvas)}.window{width:1200px;height:680px;border-radius:0;border:0;box-shadow:none}.kw{color:var(--accent-strong)}.code pre{color:var(--code)}.send{background:var(--accent);color:var(--on-accent)}.str{color:var(--success)}.row:hover{background:var(--bg-subtle)}::selection{background:var(--text-selection)}</style><div class="window"><aside class="sidebar"><div class="bar"><i class="dot" style="background:#ff5f57"></i><i class="dot" style="background:#febc2e"></i><i class="dot" style="background:#28c840"></i><span class="tools">◫</span></div><div class="sidebody"><div class="sect">CHATS <span style="float:right">＋</span></div><div class="row">新会话</div><div class="gap"></div><div class="sect">PROJECTS</div><div class="row">⌄ &nbsp; SeekMoon</div><div class="row active">修复窗口布局问题</div><div class="row">会话导出与分享</div><div class="row">文件树无障碍支持</div><div class="row">Review 路径筛选</div><div class="gap"></div><div class="row">› &nbsp; Proton</div><div class="row">› &nbsp; MoonBit</div></div><div class="footer">⚙ &nbsp; Settings</div></aside><main class="chat"><div class="bar"><span>修复窗口布局问题 <span class="small"> &nbsp; SeekMoon</span></span><span class="tools">⇧ &nbsp; ◫</span></div><div class="conversation"><div class="user"><div class="who">YOU</div>请检查保存对话框打开时的窗口布局。</div><div class="who">SEEKMOON</div><div class="answer">已定位到红绿灯按钮的重复布局。<br>现在只在最终位置发生变化时更新窗口。</div><div class="tool"><span class="ok">✓</span> &nbsp; moon test --target native <span style="float:right" class="ok">passed</span></div><div class="code"><div class="codehead">MoonBit <span style="float:right">Copy</span></div><pre><span class="kw">let</span> appearance = @proton.system_appearance()\n<span class="kw">let</span> title = <span class="str">"SeekMoon"</span>\n\n<span class="kw">// Keep the window appearance consistent.</span></pre></div><div style="margin-top:16px">修改集中在 <span class="link">窗口布局实现</span>，可以继续验证导出。</div><div class="note"><span class="ok">✓</span> Completed &nbsp; · &nbsp; 3 files changed &nbsp; · &nbsp; 24s</div></div><div class="compose"><div class="input"><div class="placeholder">继续提问，或输入 / 查看命令…</div><div class="inputbar"><span>＋</span><span>SeekMoon ▾</span><span>DS Flash ▾</span><span>◐ High</span><span class="send">↑</span></div></div></div></main><aside class="files"><div class="filetabs"><span class="selected">Files</span><span>Review</span><span>Terminal</span></div><div class="tree"><div class="row">⌄ &nbsp; desktop</div><div class="row indent">⌄ &nbsp; frontend</div><div class="row indent">&nbsp; &nbsp; ◇ view.mbt</div><div class="row indent">&nbsp; &nbsp; ◇ update.mbt</div><div class="row indent">⌄ &nbsp; styles</div><div class="row active indent">&nbsp; &nbsp; # tokens.css</div><div class="row indent">&nbsp; &nbsp; # sidebar.css</div><div class="row">› &nbsp; backend</div><div class="row">◇ moon.work</div></div><div class="diff">CHANGES <span class="stat">+18 <span class="danger">−9</span></span><p>3 files changed</p><p><span class="ok">●</span> &nbsp; Tests passed</p><p style="color:var(--warning)">△ &nbsp; Native review pending</p></div></aside></div></html>';
+      const $ = (s) => document.querySelector(s),
+        storageKey = "seekmoon-theme-lab-v1";
+      let selected = "current",
+        drafts = {},
+        compare = false,
+        storageOK = true;
+      const validHex = (x) => typeof x === "string" && /^#[\da-f]{6}$/i.test(x);
+      const paletteStyle = getComputedStyle(document.documentElement);
+      for (const mode of ["light", "dark"]) {
+        const target = PRESETS.find(
+          (p) => p.id === (mode === "dark" ? "current" : "light-current"),
+        );
+        for (const [key] of FIELDS.flatMap((group) => group[1])) {
+          const value = paletteStyle
+            .getPropertyValue(`--${mode}-${key}`)
+            .trim();
+          if (!validHex(value))
+            throw new Error(
+              `Missing or invalid palette color: --${mode}-${key}`,
+            );
+          target.colors[key] = value;
+        }
+      }
+      const validColors = (c) =>
+        c && FIELDS.flatMap((g) => g[1]).every(([k]) => validHex(c[k]));
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
+        if (saved && PRESETS.some((p) => p.id === saved.selected)) {
+          selected = saved.selected;
+          for (const p of PRESETS)
+            if (validColors(saved.drafts?.[p.id]))
+              drafts[p.id] = { ...p.colors, ...saved.drafts[p.id] };
+        }
+      } catch {
+        storageOK = false;
+      }
+      const preset = () => PRESETS.find((p) => p.id === selected);
+      const current = () => drafts[selected] || preset().colors;
+      const mode = () => preset().mode;
+      const selectedByMode = { light: "light-current", dark: "current" };
+      selectedByMode[mode()] = selected;
+      const original = () =>
+        PRESETS.find(
+          (p) => p.id === (mode() === "dark" ? "current" : "light-current"),
+        );
+      function persist() {
+        try {
+          localStorage.setItem(
+            storageKey,
+            JSON.stringify({ selected, drafts }),
+          );
+        } catch {
+          storageOK = false;
+        }
+        $("#save-state").textContent = storageOK
+          ? "自动保存在此浏览器"
+          : "当前浏览器无法保存，请复制 CSS";
+      }
+      let noticeTimer;
+      function notify(message) {
+        $("#notice").textContent = message;
+        clearTimeout(noticeTimer);
+        noticeTimer = setTimeout(() => ($("#notice").textContent = ""), 3200);
+      }
+      function buildPresetControls() {
+        $("#preset").replaceChildren();
+        $("#presets").replaceChildren();
+        for (const p of PRESETS.filter((p) => p.mode === mode())) {
+          const option = new Option(p.name, p.id);
+          $("#preset").add(option);
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "preset-card";
+          button.dataset.preset = p.id;
+          button.setAttribute("aria-label", `应用 ${p.name}`);
+          const colors = [
+            "bg-canvas",
+            "bg-surface",
+            "text-primary",
+            "accent",
+            "success",
+          ];
+          button.innerHTML =
+            '<span class="stripes">' +
+            colors
+              .map((k) => `<i style="background:${p.colors[k]}"></i>`)
+              .join("") +
+            '</span><span class="preset-name">' +
+            p.name +
+            "</span>";
+          button.onclick = () => choose(p.id);
+          $("#presets").append(button);
+        }
+      }
+      buildPresetControls();
+      for (const button of document.querySelectorAll("[data-mode]")) {
+        button.onclick = () => {
+          selectedByMode[mode()] = selected;
+          selected = selectedByMode[button.dataset.mode];
+          buildPresetControls();
+          choose(selected);
+        };
+      }
+      for (const [name, fields] of FIELDS) {
+        const group = document.createElement("fieldset");
+        group.className = "group";
+        const legend = document.createElement("legend");
+        legend.textContent = name;
+        group.append(legend);
+        for (const [key, label] of fields) {
+          const row = document.createElement("div");
+          row.className = "field";
+          row.innerHTML = `<label for="hex-${key}">${label}</label><input type="color" id="color-${key}" aria-label="${label}取色器"><input type="text" id="hex-${key}" aria-label="${label} HEX" spellcheck="false" maxlength="7">`;
+          const picker = row.querySelector("input[type=color]"),
+            hex = row.querySelector("input[type=text]");
+          picker.addEventListener("input", () => edit(key, picker.value));
+          hex.addEventListener("input", () => {
+            let value = hex.value.trim();
+            if (/^#?[\da-f]{6}$/i.test(value)) {
+              if (!value.startsWith("#")) value = "#" + value;
+              hex.removeAttribute("aria-invalid");
+              edit(key, value, false);
+            } else hex.setAttribute("aria-invalid", "true");
+          });
+          hex.addEventListener("blur", () => {
+            hex.value = current()[key].toUpperCase();
+            hex.removeAttribute("aria-invalid");
+          });
+          group.append(row);
+        }
+        $("#fields").append(group);
+      }
+      function syncInputs() {
+        for (const [, fields] of FIELDS)
+          for (const [k] of fields) {
+            $("#color-" + k).value = current()[k];
+            $("#hex-" + k).value = current()[k].toUpperCase();
+            $("#hex-" + k).removeAttribute("aria-invalid");
+          }
+      }
+      function edit(key, value, sync = true) {
+        drafts[selected] = { ...current(), [key]: value.toLowerCase() };
+        if (compare) {
+          compare = false;
+          $("#compare").checked = false;
+        }
+        if (sync) syncInputs();
+        else $("#color-" + key).value = value;
+        render();
+        persist();
+      }
+      function choose(id) {
+        selected = id;
+        selectedByMode[mode()] = id;
+        compare = false;
+        $("#compare").checked = false;
+        syncInputs();
+        render();
+        persist();
+      }
+      function luminance(hex) {
+        let a = [1, 3, 5]
+          .map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+          .map((x) =>
+            x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4,
+          );
+        return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722;
+      }
+      function contrast(a, b) {
+        let x = luminance(a),
+          y = luminance(b);
+        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+      }
+      function render() {
+        const p = preset(),
+          c = compare ? original().colors : current();
+        for (const button of document.querySelectorAll("[data-mode]"))
+          button.setAttribute(
+            "aria-pressed",
+            String(button.dataset.mode === mode()),
+          );
+        $("#preset").value = selected;
+        $("#theme-name").textContent = compare
+          ? original().name + " · 对照"
+          : p.name;
+        $("#description").textContent = p.description;
+        $("#modified").textContent =
+          JSON.stringify(current()) === JSON.stringify(p.colors)
+            ? "预设原始值"
+            : "已自定义";
+        for (const b of document.querySelectorAll("[data-preset]"))
+          b.setAttribute("aria-pressed", String(b.dataset.preset === selected));
+        for (const [k, v] of Object.entries(c))
+          $("#samples").style.setProperty("--" + k, v);
+        const doc = $("#preview").contentDocument;
+        if (doc) {
+          doc.documentElement.style.colorScheme = mode();
+          for (const [k, v] of Object.entries(c))
+            doc.documentElement.style.setProperty("--" + k, v);
+        }
+        const pairs = [
+          ["正文 / 主背景", "text-primary", "bg-canvas"],
+          ["次要文字 / 卡片", "text-secondary", "bg-surface"],
+          ["按钮文字 / 强调色", "on-accent", "accent"],
+        ];
+        $("#metrics").replaceChildren();
+        for (const [label, fg, bg] of pairs) {
+          let n = contrast(c[fg], c[bg]);
+          const el = document.createElement("div");
+          el.className = "metric";
+          el.innerHTML = `<span>${label}</span><strong>${n.toFixed(2)}:1 <small>${n >= 4.5 ? "≥ 4.5" : "< 4.5"}</small></strong>`;
+          $("#metrics").append(el);
+        }
+        const source = $("#source");
+        source.replaceChildren();
+        source.append(
+          "这是配色示意，不是运行中的 SeekMoon。经典主题按应用角色适配。",
+        );
+        if (p.source) {
+          const a = document.createElement("a");
+          a.href = p.source;
+          a.target = "_blank";
+          a.rel = "noreferrer";
+          a.textContent = " 查看预设参考来源 ↗";
+          source.append(a);
+        }
+        source.append(" 对比度仅列出以上三组颜色。");
+      }
+      $("#preview").addEventListener("load", render);
+      $("#preview").srcdoc = PREVIEW;
+      new ResizeObserver(() => {
+        const width = $(".preview-frame").clientWidth,
+          scale = width / 1200;
+        $("#preview").style.transform = `scale(${scale})`;
+        $(".preview-frame").style.height = `${680 * scale}px`;
+      }).observe($(".preview-frame"));
+      $("#preset").onchange = (e) => choose(e.target.value);
+      $("#compare").onchange = (e) => {
+        compare = e.target.checked;
+        render();
+      };
+      $("#reset").onclick = () => {
+        delete drafts[selected];
+        choose(selected);
+        notify("已恢复当前预设");
+      };
+      function cssExport() {
+        return (
+          "/* SeekMoon " +
+          mode() +
+          " palette: " +
+          preset().name +
+          " */\n:root {\n" +
+          FIELDS.flatMap((group) => group[1])
+            .map(
+              ([key]) =>
+                "  --" + mode() + "-" + key + ": " + current()[key] + ";",
+            )
+            .join("\n") +
+          "\n}\n"
+        );
+      }
+      $("#copy").onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(cssExport());
+          notify(`CSS 已复制，可直接替换 palette-${mode()}.css 的内容`);
+        } catch {
+          notify("复制失败，请允许此页面访问剪贴板后重试");
+        }
+      };
+      syncInputs();
+      render();
+      persist();
+    </script>
+  </body>
+</html>

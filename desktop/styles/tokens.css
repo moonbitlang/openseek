@@ -65,15 +65,21 @@
   --icon-lg: 16px;
 
   /* Surfaces and text */
-  --color-bg-canvas: light-dark(#fbfbf9, #16181d);
-  --color-bg-surface: light-dark(#ffffff, #1c1f26);
-  --color-bg-subtle: light-dark(#f6f6f3, #23272f);
-  --color-text-primary: light-dark(#121418, #f1f3f7);
-  --color-text-secondary: light-dark(#5c5f66, #a3a8b4);
-  --color-text-muted: light-dark(#9a9da4, #6f7480);
-  --color-text-faint: light-dark(#a8aab0, #656b76);
-  --color-border: light-dark(#e9e8e3, #2c313b);
-  --color-border-subtle: light-dark(#f0efea, #262b33);
+  --color-bg-canvas: light-dark(var(--light-bg-canvas), var(--dark-bg-canvas));
+  --color-bg-surface: light-dark(var(--light-bg-surface), var(--dark-bg-surface));
+  --color-bg-subtle: light-dark(var(--light-bg-subtle), var(--dark-bg-subtle));
+  --color-text-primary: light-dark(var(--light-text-primary), var(--dark-text-primary));
+  --color-text-secondary: light-dark(
+    var(--light-text-secondary),
+    var(--dark-text-secondary)
+  );
+  --color-text-muted: light-dark(var(--light-text-muted), var(--dark-text-muted));
+  --color-text-faint: light-dark(var(--light-text-faint), var(--dark-text-faint));
+  --color-border: light-dark(var(--light-border), var(--dark-border));
+  --color-border-subtle: light-dark(
+    var(--light-border-subtle),
+    var(--dark-border-subtle)
+  );
 
   /* Structural seams should recede behind content. Persistent control
      grouping comes from a quiet fill; the stronger border remains available
@@ -89,24 +95,39 @@
     transparent
   );
 
-  --color-accent: light-dark(#3b6ef5, #5b8cff);
-  --color-accent-strong: light-dark(#2a55cc, #9db8ff);
-  --color-on-accent: #fff;
-  --color-on-accent-strong: light-dark(#fff, #10131a);
-  --color-accent-soft: light-dark(#eef2fe, #1e2740);
-  --color-accent-border: light-dark(#d6e0fd, #2f3e63);
+  --color-accent: light-dark(var(--light-accent), var(--dark-accent));
+  --color-accent-strong: light-dark(
+    var(--light-accent-strong),
+    var(--dark-accent-strong)
+  );
+  --color-on-accent: light-dark(var(--light-on-accent), var(--dark-on-accent));
+  --color-on-accent-strong: light-dark(
+    var(--light-on-accent-strong),
+    var(--dark-on-accent-strong)
+  );
+  --color-accent-soft: light-dark(var(--light-accent-soft), var(--dark-accent-soft));
+  --color-accent-border: light-dark(
+    var(--light-accent-border),
+    var(--dark-accent-border)
+  );
   /* Text selection is shared by normal DOM text, the editor, and xterm.
      xterm paints it on a canvas, so keep this opaque in both themes. */
-  --color-text-selection: light-dark(#eef2fe, #344a78);
+  --color-text-selection: light-dark(
+    var(--light-text-selection),
+    var(--dark-text-selection)
+  );
 
   /* Status colors */
-  --color-success: light-dark(#1f8a5b, #3fd089);
-  --color-danger: light-dark(#c0453b, #ff8a80);
-  --color-danger-soft: light-dark(#fcefed, #2a1b1b);
-  --color-danger-border: light-dark(#f2d4cf, #4a2f2f);
-  --color-warning: light-dark(#b7791f, #e3b341);
+  --color-success: light-dark(var(--light-success), var(--dark-success));
+  --color-danger: light-dark(var(--light-danger), var(--dark-danger));
+  --color-danger-soft: light-dark(var(--light-danger-soft), var(--dark-danger-soft));
+  --color-danger-border: light-dark(
+    var(--light-danger-border),
+    var(--dark-danger-border)
+  );
+  --color-warning: light-dark(var(--light-warning), var(--dark-warning));
 
-  --color-code: light-dark(#20242b, #edf0f5);
+  --color-code: light-dark(var(--light-code), var(--dark-code));
 
   /* Keyboard focus must be obvious without turning every interactive surface
      into another accent claim. Blue remains for selection and primary action. */

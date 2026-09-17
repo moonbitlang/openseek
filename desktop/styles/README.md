@@ -25,7 +25,37 @@ visual treatment merely because the engine supports it.
 
 ## Tokens
 
-Define shared semantic values in `tokens.css`: palette roles, the small type
+### Palette playground
+
+Open [`../dev/theme-lab.html`](../dev/theme-lab.html) directly in a browser
+to compare light and dark presets, edit colors, and copy a replacement
+[`palette-light.css`](palette-light.css) or
+[`palette-dark.css`](palette-dark.css). No build step or network is needed;
+keep the HTML inside the checkout so its relative stylesheet link resolves.
+Drafts are saved in the browser's local storage; copy CSS to share a palette.
+
+The preview is an illustrative layout, not the production frontend. Its
+current presets read both palette files when the page loads. Other presets
+adapt their reference palettes to SeekMoon's semantic roles. Reset the current
+preset to discard a saved browser draft and see the file's colors.
+
+Copying does not modify the application. Replace the entire contents of
+the matching `palette-light.css` or `palette-dark.css` with the copied CSS,
+then refresh the development app or rebuild the packaged app. The copy
+notification names the destination file. Light and dark drafts are independent;
+the original-color comparison follows the selected mode. Verify the editor,
+terminal, overlays, and interaction states.
+
+### Shared values
+
+`palette-light.css` owns the `--light-*` color inputs; `palette-dark.css` owns
+the matching `--dark-*` inputs. `tokens.css` maps each semantic role through
+`light-dark(var(--light-role), var(--dark-role))`, preserving both explicit
+theme overrides and the system preference. Replacing one palette does not
+change the other or force the app into a particular mode. Theme Lab copies
+six-digit hex colors; preserve that format for its color controls.
+
+Define shared semantic values in `tokens.css`: palette mappings, the small type
 scale, radii, and the few values that genuinely recur across components. A
 one-off measurement stays beside its component; a CSS variable is not useful
 merely because a literal exists.
