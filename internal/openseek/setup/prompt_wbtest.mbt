@@ -210,18 +210,16 @@ async test "configured system prompt uses the selected workspace root" {
 }
 
 ///|
-async test "configured system prompt defaults to the flash prompt" {
+async test "configured system prompt uses the selected built-in prompt" {
   let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
   })
-  assert_true(
-    configured_system_prompt(parsed, Deepseek(V4Flash)).contains(
-      "an agent focused on implementing user tasks",
-    ),
-  )
-  assert_true(
-    configured_system_prompt(parsed, Deepseek(V4Pro)).contains(
-      "an agent focused on implementing user tasks",
-    ),
-  )
+  // Check prompt selection and composition, not the prompt's prose.
+  let models : Array[@deepseek.Model] = [Deepseek(V4Flash), Deepseek(V4Pro)]
+  for model in models {
+    let (prefix, _) = split_composed_prompt(
+      configured_system_prompt(parsed, model),
+    )
+    assert_eq(prefix, "\{@prompt.system_prompt_for_model(model)}\n\n")
+  }
 }

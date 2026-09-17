@@ -48,7 +48,7 @@ fn default_prompt() -> String {
     #|Import `moonbitlang/core/env` and read `@env.args()[1:]` to skip
     #|the executable name, use `moonbitlang/core/argparse` for pretty cli parsing.
     #|
-    #|A minimal script do the `moon check` looks like this:
+    #|A minimal `moon check` script:
     #|
     #|```mbtx
     #|import {
@@ -63,7 +63,7 @@ fn default_prompt() -> String {
     #|}
     #|```
     #|
-    #|If it is called often, save it as `workflow/check.mbtx`, then do the named mbtx call with such args:
+    #|Save frequently used scripts with a filename:
     #|
     #|`{"source":"...","filename":"workflow/check.mbtx","args":["--deny-warn"]}`
     #|
@@ -73,10 +73,7 @@ fn default_prompt() -> String {
     #|execution only. Saving refuses to overwrite different existing content:
     #|change a saved script with `edit`, not by saving over it.
     #|
-    #|For a script with options of its own, declare them with `argparse` rather
-    #|than slicing `@env.args()`. `@argparse.parse(...)` takes no `argv`: it reads
-    #|the process arguments itself and handles the executable prefix, defaults, and
-    #|validation.
+    #|An example with parsed options:
     #|
     #|```mbtx
     #|import { "moonbitlang/core/argparse" }
@@ -99,8 +96,6 @@ fn default_prompt() -> String {
     #|
     #|`{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}` prints
     #|`Hello, Ada Lovelace!`; omitting `args` prints `Hello, world!`.
-    #|
-    #|There are some bundled scripts to avoid repeated work:
     #|
     #|`{"filename":"@builtin/check.mbtx"}` runs a workflow shipped under
     #|`<bundled-resources>/workflow/`. Namespaced scripts are read-only: never
