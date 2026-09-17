@@ -388,6 +388,9 @@ fn BrowserViews::focused_browser(
 /// the same create-if-missing handler as `browser.open`.
 fn window_endpoints(views : BrowserViews) -> Array[@endpoint.Endpoint] {
   [
+    @endpoint.Endpoint::window(@commands.app_system_appearance, (_, _) => {
+      dark: @proton.system_appearance().color_scheme == Dark,
+    }),
     @endpoint.Endpoint::window(@commands.app_close_window, (_, _) => {
       views.attached_window().close()
       Acknowledged

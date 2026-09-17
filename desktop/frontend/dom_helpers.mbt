@@ -30,12 +30,10 @@ fn color_scheme_query() -> @js.Value? {
 }
 
 ///|
-/// Whether the host prefers a dark color scheme, read once at startup
-/// (`initial_model`) and kept fresh by `watch_color_scheme`. The app's own
-/// palette flips via the `prefers-color-scheme` media query in CSS; this
-/// mirror of it drives the embedded viewer's `data-theme`, which CSS cannot
-/// reach.
-fn host_prefers_dark() -> Bool {
+/// Initial browser preference. The native host supplies its own preference
+/// over the bridge instead of using CEF's window-dependent media query.
+fn host_prefers_dark(is_desktop : Bool) -> Bool {
+  guard !is_desktop else { return false }
   guard color_scheme_query() is Some(query) else { return false }
   (@js.Cast::into(query.get_with_string("matches")) : Bool?) is Some(true)
 }
@@ -90,7 +88,8 @@ let color_scheme_watched : Ref[Bool] = Ref(false)
 /// Follow the host's dark-mode preference, feeding changes back as
 /// `ColorSchemeChanged`. Update retains every report and applies it immediately
 /// only while Settings remains on System.
-fn watch_color_scheme(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+fn watch_color_scheme(dispatch : @cmd.Emit[Msg], is_desktop : Bool) -> @cmd.Cmd {
+  guard !is_desktop else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     guard !color_scheme_watched.val else { return }
     guard color_scheme_query() is Some(query) else { return }
@@ -156,5 +155,28 @@ fn measure_scrollbar_lane() -> @cmd.Cmd {
     let lane = (ScrollbarProbeSide.to_double() - probe.get_client_width()).to_int()
     body.remove_child(node)
     set_root_custom_property(ScrollbarLaneProperty, "\{lane}px")
+  })
+}
+
+///|
+/// Serialize reads so a later OS notification cannot be overwritten by an
+/// older startup reply. Query failures preserve the last known preference.
+fn fetch_system_appearance(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.async_run(() => {
+      let appearance = @interop.bridge_request_in_order(
+        @interop.ChannelId::Local,
+        @commands.app_system_appearance,
+        @protocol.NoPayload,
+      ) catch {
+        error => {
+          scheduler.add(
+            dispatch(HostActionFailed(@interop.bridge_error_text(error))),
+          )
+          return
+        }
+      }
+      scheduler.add(dispatch(ColorSchemeChanged(appearance.dark)))
+    })
   })
 }

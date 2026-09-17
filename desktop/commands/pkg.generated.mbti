@@ -37,6 +37,8 @@ pub let app_open_devtools : Command[@protocol.EmptyPayload, @protocol.EmptyReply
 
 pub let app_set_titlebar_theme : Command[@protocol.AppTitlebarThemePayload, @protocol.EmptyReply]
 
+pub let app_system_appearance : Command[@protocol.EmptyPayload, @protocol.AppSystemAppearanceReply]
+
 pub let app_toggle_maximized : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
 pub let auth_cancel : Command[@protocol.EmptyPayload, @protocol.AuthStatusPayload]

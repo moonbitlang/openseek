@@ -3,12 +3,16 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // Replace only Proton's transport. The real shell, DOM focus, and xterm run
 // in Chromium; macOS menu key-equivalent handling still needs a native test.
-async function installDesktop(page) {
+async function installDesktop(page, systemDark = false) {
   const app = new DesktopBrowserHarness(page);
   await app.install();
+  app.systemDark = systemDark;
   let terminalId = 0;
   await page.exposeFunction('desktopRequest', request => {
     app.requests.push(request);
+    if (request.method === 'app.system_appearance') {
+      return { dark: app.systemDark };
+    }
     if (request.method === 'terminal.open') return { id: `terminal-${++terminalId}` };
     return app.replyFor(request);
   });
@@ -251,5 +255,48 @@ test('new terminals and existing terminals use the current font size', async ({ 
   await app.openSession();
   await page.getByTitle('New terminal in this workspace', { exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([11, 11]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+// A native dialog can change CEF's media query without changing OS appearance.
+test('desktop theme follows Proton and ignores browser color-scheme changes', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  const app = await installDesktop(page, true);
+  const root = page.locator('html');
+  await expect(root).toHaveAttribute('data-theme', 'dark');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(root).toHaveAttribute('data-theme', 'dark');
+  app.systemDark = false;
+  await page.evaluate(() => window.desktopEvent('openseek.app.system_appearance_changed', {}));
+  await expect(root).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Theme', exact: true }).click();
+  await page.getByRole('option', { name: 'Dark', exact: true }).click();
+  await expect(root).toHaveAttribute('data-theme', 'dark');
+  const queries = () => app.requests.filter(r => r.method === 'app.system_appearance').length;
+  const before = queries();
+  await page.evaluate(() => window.desktopEvent('openseek.app.system_appearance_changed', {}));
+  await expect.poll(queries).toBe(before + 1);
+  await expect(root).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: 'Theme', exact: true }).click();
+  await page.getByRole('option', { name: 'System', exact: true }).click();
+  await expect(root).toHaveAttribute('data-theme', 'light');
+  await page.reload();
+  await expect.poll(queries).toBe(before + 2);
+  await expect(root).toHaveAttribute('data-theme', 'light');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('web theme follows the browser without querying native appearance', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await app.goto();
+  await app.openSession();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  expect(app.requests.some(r => r.method === 'app.system_appearance')).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });

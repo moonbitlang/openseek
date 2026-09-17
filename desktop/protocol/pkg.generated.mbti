@@ -82,6 +82,17 @@ pub fn AppInfoReply::not_equal(Self, Self) -> Bool
 pub fn AppInfoReply::to_json(Self) -> Json
 pub fn AppInfoReply::to_repr(Self) -> @debug.Repr
 
+pub(all) struct AppSystemAppearanceReply {
+  dark : Bool
+} derive(Eq, @debug.Debug)
+pub fn AppSystemAppearanceReply::equal(Self, Self) -> Bool
+pub fn AppSystemAppearanceReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AppSystemAppearanceReply::not_equal(Self, Self) -> Bool
+pub fn AppSystemAppearanceReply::to_json(Self) -> Json
+pub fn AppSystemAppearanceReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for AppSystemAppearanceReply
+pub impl @json.FromJson for AppSystemAppearanceReply
+
 pub(all) struct AppTitlebarThemePayload {
   dark : Bool
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

@@ -2012,7 +2012,7 @@ fn update_msg(
             @cmd.batch([
               fetch_console_me(dispatch),
               load_saved_settings(dispatch),
-              watch_color_scheme(dispatch),
+              watch_color_scheme(dispatch, model.is_desktop),
               request_sidebar_resize_mount(),
               measure_scrollbar_lane(),
             ]),
@@ -2022,7 +2022,7 @@ fn update_msg(
           (
             @cmd.batch([
               load_saved_settings(dispatch),
-              watch_color_scheme(dispatch),
+              watch_color_scheme(dispatch, model.is_desktop),
               rotate_session(dispatch, model.focused),
               request_sidebar_resize_mount(),
               measure_scrollbar_lane(),
@@ -5717,6 +5717,7 @@ fn update_device_msg(
         // materializes there. The startup update check rides here so it
         // only runs once the bridge can carry it.
         if model.is_desktop {
+          commands.push(fetch_system_appearance(dispatch))
           commands.push(model.fetch_app_info(dispatch))
           commands.push(check_for_updates(dispatch, explicit=false))
           commands.push(fetch_remote_status(dispatch))

@@ -2588,7 +2588,7 @@ fn initial_model() -> Model {
         empty_console_state(page_device, preselect_project, login_return_to~),
       )
     },
-    system_dark: host_prefers_dark(),
+    system_dark: host_prefers_dark(is_desktop),
     theme: System,
     app_font_size: AppFontSize(14),
     fps_overlay_enabled: false,

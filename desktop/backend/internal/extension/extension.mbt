@@ -190,11 +190,18 @@ let window_chrome_changed : @proton_contract.Event[@protocol.EmptyPayload] = @co
 const PendingNotificationCapacity = 64
 
 ///|
+/// Invalidate only the local page's system preference, never a relay client.
+let system_appearance_changed : @proton_contract.Event[@protocol.EmptyPayload] = @commands.extension_contract.event(
+  "app.system_appearance_changed",
+)
+
+///|
 priv enum BridgeControl {
   PageConnected(@proton.CommandContext, @async.Queue[Unit])
   WindowReady(@proton.WindowEventEmitter)
   WindowClosed
   WindowChromeChanged
+  SystemAppearanceChanged
 }
 
 ///|
@@ -205,6 +212,7 @@ priv enum PageNotification {
   Hub(@protocol.Notification)
   BrowserEvent(Json)
   WindowChromeChanged
+  SystemAppearanceChanged
 }
 
 ///|
@@ -263,6 +271,8 @@ async fn PageEventTarget::emit(
       self.events.emit(semantic_search_progress_event, payload)
     BrowserEvent(payload) => self.events.emit(browser_event, payload)
     WindowChromeChanged => self.events.emit(window_chrome_changed, NoPayload)
+    SystemAppearanceChanged =>
+      self.events.emit(system_appearance_changed, NoPayload)
   }
 }
 
@@ -328,6 +338,13 @@ pub async fn DesktopBridgeActor::notify_window_chrome_changed(
   self : DesktopBridgeActor,
 ) -> Unit {
   self.controls.put(WindowChromeChanged)
+}
+
+///|
+pub async fn DesktopBridgeActor::notify_system_appearance_changed(
+  self : DesktopBridgeActor,
+) -> Unit {
+  self.controls.put(SystemAppearanceChanged)
 }
 
 ///|
@@ -514,6 +531,13 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
             }
             WindowChromeChanged =>
               deliver_to_page(connected, target, pending, WindowChromeChanged)
+            SystemAppearanceChanged =>
+              deliver_to_page(
+                connected,
+                target,
+                pending,
+                SystemAppearanceChanged,
+              )
           }
         Deliver(notification) =>
           deliver_to_page(connected, target, pending, notification)

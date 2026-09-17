@@ -134,6 +134,9 @@ fn LocalBridgeSub::wire(
     }
     self.subscribe(extension_events, "openseek." + method_, handler)
   }
+  self.subscribe(extension_events, "openseek.app.system_appearance_changed", _ => {
+    scheduler.add((self.dispatch)(SystemAppearanceChanged))
+  })
   // Native browser-view events are intentionally window-local rather than
   // shared protocol notifications. The parent frontend owns their UI decode.
   self.subscribe(extension_events, "openseek.browser.event", event => {

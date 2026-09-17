@@ -12,6 +12,7 @@ pub enum Event {
   )
   Unavailable(channel~ : @interop.ChannelId, message~ : String)
   ChannelDown(channel~ : @interop.ChannelId, websocket_epoch~ : Int)
+  SystemAppearanceChanged
   BrowserEvent(payload~ : Map[String, Json])
   MenuCommand(command_id~ : String)
   NotificationClicked(run_id~ : String)

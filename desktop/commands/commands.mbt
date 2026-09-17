@@ -739,8 +739,15 @@ pub let app_focused_browser : Command[
 ] = Command("app.focused_browser")
 
 ///|
-/// Match this native desktop window's caption controls to the effective app
-/// palette. Window-only: a relay browser has no local application window.
+/// Query the local OS preference independently of the window appearance.
+/// Window-only: a relay browser follows its own media query.
+pub let app_system_appearance : Command[
+  @protocol.EmptyPayload,
+  @protocol.AppSystemAppearanceReply,
+] = Command("app.system_appearance")
+
+///|
+/// Set the native window theme without changing the system preference.
 pub let app_set_titlebar_theme : Command[
   @protocol.AppTitlebarThemePayload,
   @protocol.EmptyReply,

@@ -27,6 +27,7 @@ pub fn BrowserViews::window_ready(Self, @proton.WindowHandle) -> Unit
 type DesktopBridgeActor
 pub fn DesktopBridgeActor::DesktopBridgeActor(@api.ApiState) -> Self
 pub async fn DesktopBridgeActor::notify_browser_event(Self, Json) -> Unit
+pub async fn DesktopBridgeActor::notify_system_appearance_changed(Self) -> Unit
 pub async fn DesktopBridgeActor::notify_window_chrome_changed(Self) -> Unit
 pub async fn DesktopBridgeActor::run(Self) -> Unit
 pub async fn DesktopBridgeActor::window_closed(Self) -> Unit

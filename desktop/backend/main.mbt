@@ -179,6 +179,13 @@ async fn main {
         bridge.window_closed()
       },
     )
+    // The OS preference is independent of CEF and the explicit window theme.
+    .on_system_appearance_change(async fn(_) noraise {
+      bridge.notify_system_appearance_changed() catch {
+        // Cancellation during shutdown leaves no page to notify.
+        _ => ()
+      }
+    })
     // Geometry can change without a DOM fullscreen event (native fullscreen,
     // display scaling, or page zoom). Only this window's page is notified.
     .on_window_event(async fn(_, event) noraise {
