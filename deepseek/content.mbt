@@ -1,15 +1,7 @@
 ///|
-/// Ordered message content. Text extraction and structural inspection are
-/// separate operations: extracting text does not imply the content is text-only.
-struct Content {
-  parts : Array[ContentPart]
-} derive(Debug)
-
-///|
-/// Wraps content parts in their original order.
-pub fn Content::Content(parts : Array[ContentPart]) -> Content {
-  { parts, }
-}
+/// Wraps an ordered array of message parts. Text extraction and structural
+/// inspection are separate: extracting text does not imply text-only content.
+pub(all) struct Content(Array[ContentPart]) derive(Debug)
 
 ///|
 pub extend Content with Debug::{to_repr}
@@ -19,7 +11,7 @@ pub extend Content with Debug::{to_repr}
 /// references contribute no text. Empty and file-only content yield "" because
 /// they contain zero text characters; this method does not describe images.
 pub fn Content::text(self : Content) -> String {
-  self.parts
+  self.0
   .iter()
   .filter_map(part => {
     match part {
@@ -34,13 +26,13 @@ pub fn Content::text(self : Content) -> String {
 /// Whether every part is text. Empty content is text-only. Use this alongside
 /// `text()` when a comparison must not discard file references.
 pub fn Content::is_text_only(self : Content) -> Bool {
-  self.parts.all(part => part is Text(_))
+  self.0.all(part => part is Text(_))
 }
 
 ///|
 /// Visits all text and file parts in their original order.
 pub fn Content::iter(self : Content) -> Iter[ContentPart] {
-  self.parts.iter()
+  self.0.iter()
 }
 
 ///|

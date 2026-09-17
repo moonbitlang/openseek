@@ -48,7 +48,7 @@ impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
   // only text. Those roles require a string: concatenate without separators.
   // A single text part keeps the existing string encoding for every role;
   // user/tool messages otherwise retain the original array and part order.
-  let content = match (message.role, message.content.parts) {
+  let content = match (message.role, message.content.0) {
     (_, [Text(text~)]) => Json(text)
     (System | Assistant, _) => Json(message.content.text())
     (_, parts) => Json(parts)
