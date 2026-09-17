@@ -1,9 +1,13 @@
 ///|
 async fn main {
+  // A command line this host does not understand is a usage error like any
+  // CLI's, and it ends the launch — Proton itself starts the binary with no
+  // arguments, so only a person can get here.
+  let matches = command.parse(argv=@env.args()[1:], env=@env.get_env_vars())
   // Hidden probe target: the login-shell environment probe re-execs this
   // binary through the user's shell; print the marker-wrapped JSON
   // environment and quit before any logging or CEF setup.
-  if @env.args() is [_, "--print-env-json", mark, ..] {
+  if matches.values.get("print-env-json") is Some([mark, ..]) {
     @shellenv.print_env_json(mark)
     return
   }
@@ -60,7 +64,7 @@ async fn main {
   // environment override pins the connector config directly (development).
   let auth = @auth.AuthStore::load(
     runtime_dir?,
-    env_override?=relay_settings(),
+    env_override?=relay_settings(matches),
     app_version~,
   )
   let state = @api.ApiState(
@@ -91,7 +95,7 @@ async fn main {
   // One host per identity: `single_instance` hands a later launch to the
   // process already holding that identity's lock, and that process brings its
   // window to the front. Off by default for now; see `single_instance_wanted`.
-  let single_instance = single_instance_wanted(app)
+  let single_instance = single_instance_wanted(matches, app)
   let app = if single_instance { app.single_instance() } else { app }
   let app = app
     // Let the page palette paint the native titlebar area. The default macOS
@@ -264,7 +268,7 @@ async fn main {
         // the forwarding in its own log, the running instance's window comes
         // to the front, and this process ends.
         println(
-          "SeekMoon is already running; its window was brought to the front. Quit it first, or unset OPENSEEK_DESKTOP_SINGLE_INSTANCE to start another instance.",
+          "SeekMoon is already running; its window was brought to the front. Quit it first, or start this one without --single-instance.",
         )
       }
       @xlog.info() <?
@@ -321,6 +325,48 @@ async fn main {
 }
 
 ///|
+/// The host's command line. Proton launches the binary with no arguments, so
+/// every option also reads an environment variable — the way a packaged app
+/// is usually configured. The functions below each pull one setting out of
+/// the parsed `Matches`.
+let command : @argparse.Command = Command(
+  "seekmoon",
+  about="The SeekMoon desktop host.",
+  options=[
+    OptionArg(
+      "relay-url",
+      long="relay-url",
+      env="OPENSEEK_RELAY_URL",
+      about="Development override: the relay's /v1/tunnel WebSocket URL. Together with --device-token it bypasses sign-in.",
+    ),
+    OptionArg(
+      "device-token",
+      long="device-token",
+      env="OPENSEEK_DEVICE_TOKEN",
+      about="Development override: the secret that keeps this machine's device id stable at the relay.",
+    ),
+    OptionArg(
+      "device-name",
+      long="device-name",
+      env="OPENSEEK_DEVICE_NAME",
+      default_values=["desktop"],
+      about="How the relay's status page labels this device under the development override.",
+    ),
+    // The login-shell environment probe re-execs this binary through the
+    // user's shell and reads the marker-wrapped JSON environment back.
+    OptionArg("print-env-json", long="print-env-json", hidden=true),
+  ],
+  flags=[
+    FlagArg(
+      "single-instance",
+      long="single-instance",
+      env="OPENSEEK_DESKTOP_SINGLE_INSTANCE",
+      about="Hand this launch to a release build already running under the same identity, bringing its window to the front. Off by default: a host Proton leaves stuck in cef_shutdown would otherwise capture every later launch.",
+    ),
+  ],
+)
+
+///|
 /// The identity suffix `package/build.mjs` appends when it generates the
 /// project config a development build runs under. Spelled there too; this is
 /// the shared half of that convention.
@@ -329,15 +375,17 @@ const DevelopmentSuffix = ".dev"
 ///|
 /// Whether this launch takes part in single instance.
 ///
-/// Off unless `OPENSEEK_DESKTOP_SINGLE_INSTANCE` is set: a host that Proton
-/// leaves stuck in `cef_shutdown` keeps the identity's lock, and every later
-/// launch would hand itself to it. Even then only the shipped application
-/// takes part; a development build must start beside the binary it replaced.
-/// The identity comes back through `data_dir`, whose last segment it is.
-fn single_instance_wanted(app : @proton.App) -> Bool {
-  if @envx.get("OPENSEEK_DESKTOP_SINGLE_INSTANCE") is None {
-    return false
-  }
+/// Off unless `--single-instance` (OPENSEEK_DESKTOP_SINGLE_INSTANCE=1) says
+/// so: a host that Proton leaves stuck in `cef_shutdown` keeps the identity's
+/// lock, and every later launch would hand itself to it. Even then only the
+/// shipped application takes part; a development build must start beside the
+/// binary it replaced. The identity comes back through `data_dir`, whose last
+/// segment it is.
+fn single_instance_wanted(
+  matches : @argparse.Matches,
+  app : @proton.App,
+) -> Bool {
+  guard matches.flags.get("single-instance") is Some(true) else { return false }
   let identity = app.data_dir() catch {
     error => {
       // Without an identity there is nothing to lock on, and guessing one
@@ -404,19 +452,17 @@ async fn prepare_workspaces() -> Unit {
 }
 
 ///|
-/// The development relay override, all-or-nothing from the environment:
-/// `OPENSEEK_RELAY_URL` (the relay's `/v1/tunnel` WebSocket URL) and
-/// `OPENSEEK_DEVICE_TOKEN` (the secret that keeps this machine's device id
-/// stable); `OPENSEEK_DEVICE_NAME` labels the device on the relay's status
-/// page and defaults to "desktop". When set it bypasses sign-in entirely.
-fn relay_settings() -> @auth.ConnectorConfig? {
-  guard @envx.get("OPENSEEK_RELAY_URL") is Some(relay_url) &&
-    @envx.get("OPENSEEK_DEVICE_TOKEN") is Some(device_token) else {
+/// The development relay override, all-or-nothing: `--relay-url`
+/// (OPENSEEK_RELAY_URL, the relay's `/v1/tunnel` WebSocket URL) and
+/// `--device-token` (OPENSEEK_DEVICE_TOKEN, the secret that keeps this
+/// machine's device id stable); `--device-name` (OPENSEEK_DEVICE_NAME) labels
+/// the device on the relay's status page. When set it bypasses sign-in
+/// entirely.
+fn relay_settings(matches : @argparse.Matches) -> @auth.ConnectorConfig? {
+  guard matches.values.get("relay-url") is Some([relay_url, ..]) &&
+    matches.values.get("device-token") is Some([device_token, ..]) &&
+    matches.values.get("device-name") is Some([device_name, ..]) else {
     return None
-  }
-  let device_name = match @envx.get("OPENSEEK_DEVICE_NAME") {
-    Some(name) => name
-    None => "desktop"
   }
   Some({ relay_url, device_token, device_name, })
 }
