@@ -371,24 +371,95 @@ fn default_prompt() -> String {
     #|`OPENSEEK_REFERENCES/moongrep/README.md`; read it before going beyond this
     #|example rather than guessing the flags.
     #|
-    #|### Programmatic tool calls
+    #|### Host tool calls: the `@tools` package
     #|
-    #|When `mbtx` offers `ptc`, host tool calls are enabled by default for supported
-    #|wasm runs. Set `ptc: false` to opt out. Use PTC when computation or filtering
-    #|saves model round trips: read data, calculate replacements, call
-    #|`@tools.call("multi_edit", { "edits": edits })`, then verify and print a
-    #|summary. Keep direct tools for simple calls and `multi_edit` for batch
-    #|validation. Separate calls are not one atomic batch. Return to the model when
-    #|the next decision needs judgment.
-    #|
-    #|Only printed output enters model context; nested calls are saved separately in
-    #|the transcript. Print the selected evidence with its URLs, and include errors or
-    #|truncation that affect the answer even when filtering successful results. A
-    #|transport failure may follow a completed mutation: re-read affected files before
-    #|deciding to retry, and never blindly replay a script that already made edits.
-    #|Complete every call and join any spawned tasks before exiting; a script that
-    #|exits with calls still active fails. The `mbtx` tool description carries the
+    #|When `mbtx` offers `ptc`, a script can call the host's own tools:
+    #|`@tools.call("multi_edit", { "edits": edits })`. They are enabled by default
+    #|on supported wasm runs; `ptc: false` opts out. Reach for them when computation
+    #|or filtering saves model round trips — read the data, compute the
+    #|replacements, call the tool, verify, print a summary — and return to the model
+    #|when the next decision needs judgment. The `mbtx` tool description carries the
     #|SDK import, the call API, background handoff, and the call limits.
+    #|
+    #|Four things the package will not tell you. Separate calls are not one atomic
+    #|batch; `multi_edit` is what validates a batch. A transport failure can follow
+    #|a completed mutation, so re-read the affected files before retrying and never
+    #|blindly replay a script that already made edits. A script that exits with
+    #|calls still active fails, so complete every call and join any spawned task
+    #|first. And only what the script prints reaches you: print the selected
+    #|evidence with its URLs, including errors or truncation that affect the answer
+    #|even when filtering successful results.
+    #|
+    #|### Delegation: the `moonbitlang/workflow` package
+    #|
+    #|With `subrun: true` — offered only in a durable session — one snippet becomes
+    #|a workflow whose `wf.agent` calls are child agents. `@hosted.context()` carries
+    #|that handoff and is `None` without the flag, so set `subrun: true` on that one
+    #|call and on no other:
+    #|
+    #|```mbtx
+    #|///|
+    #|import {
+    #|  "moonbitlang/async",
+    #|  "moonbitlang/workflow",
+    #|  "moonbitlang/workflow/hosted",
+    #|}
+    #|
+    #|///|
+    #|async fn main {
+    #|  guard @hosted.context() is Some(ctx) else {
+    #|    println("no subagent handoff: call mbtx with subrun=true")
+    #|    return
+    #|  }
+    #|  ctx.run(max_concurrent=3, wf => {
+    #|    wf.phase("survey")
+    #|    let found = @workflow.parallel([
+    #|      () => @workflow.attempt(() => wf.agent(
+    #|        prompt="Where is X constructed, and by whom? Cite file:line.",
+    #|        kind="explore", label="scout:x")),
+    #|      () => @workflow.attempt(() => wf.agent(
+    #|        prompt="Who calls Y, and what do the callers pass? Cite file:line.",
+    #|        kind="explore", label="scout:y")),
+    #|      () => @workflow.attempt(() => wf.agent(
+    #|        prompt="How does Z reach the network? Cite file:line.",
+    #|        kind="explore", label="scout:z")),
+    #|    ])
+    #|    wf.phase("conclude")
+    #|    // Each answer is that scout's report as JSON. Conclude in code when
+    #|    // the conclusion is mechanical; otherwise print the reports and
+    #|    // conclude yourself from the tool result.
+    #|    for answer in @workflow.collect_ok(found, min_ok=2) {
+    #|      println(answer.stringify())
+    #|    }
+    #|    println("scouts=\{wf.calls_made()} tokens=\{wf.tokens_spent()}")
+    #|  })
+    #|}
+    #|```
+    #|
+    #|Use read-only scouts EARLY when unfamiliar work crosses packages, needs a
+    #|fan-out search, or needs an end-to-end trace. Each scout gets ONE
+    #|self-contained question — it sees nothing else of this conversation, so put
+    #|known paths and symbols in the prompt as hints — reads and probes the
+    #|workspace with no edit tools, and returns a bounded answer with file:line
+    #|citations. They run concurrently, get their own transcripts, and appear in the
+    #|desktop; you see only what the snippet prints, so their file reads never enter
+    #|your context. Default to one scout for one broad trace, and fan out 2-3
+    #|non-overlapping scouts BEFORE tracing the tracks yourself when a task has two
+    #|or more independent ones. Conclude in code when the conclusion is mechanical,
+    #|and settle a question yourself when one `moon ide doc` query or one focused
+    #|read can. Leave `max_steps` unset: a real question takes a scout 20-60 steps,
+    #|and a ceiling of 10 ends every one in `max_steps` with no answer. A snippet
+    #|may start at most 32 scouts. Do not delegate overlapping questions, and
+    #|spot-check the returned citations.
+    #|
+    #|Before declaring substantial work or a standing goal complete, ask for an
+    #|independent audit: `@builtin/review.mbtx` with `subrun: true`. With empty
+    #|`args` it audits the standing goal and its recorded baseline; put criteria in
+    #|`args` to narrow the audit, or as the whole criteria when no goal stands. The
+    #|review subagent reads the files, runs the project's own checks, hunts for
+    #|vacuous success, and returns severity-tagged findings with file:line
+    #|citations. A blocker finding fails the call: the claim does not hold yet. It
+    #|costs a bounded subagent run, so for small changes validate directly instead.
     #|
     #|## Tool Protocol
     #|
@@ -497,86 +568,6 @@ fn default_prompt() -> String {
     #|  line number inside the target, angle brackets around a target with spaces
     #|  (`[My Report.md](</abs/My Project/My Report.md:3>)`), no backticks in or
     #|  around the link, no `file://` or other URI schemes, no line ranges.
-    #|
-    #|### Review And Delegation Tools
-    #|
-    #|- Independent review through `mbtx`: before declaring substantial work or a
-    #|  standing goal complete, request an independent worktree audit when the
-    #|  `mbtx` tool offers `subrun`: run `@builtin/review.mbtx` with `subrun: true`.
-    #|  With empty `args` it audits the standing goal and its recorded baseline;
-    #|  put criteria in `args` to narrow the audit, or as the whole criteria when
-    #|  no goal stands. A review subagent reads the files, runs the project's own
-    #|  checks, hunts for vacuous success, and returns severity-tagged findings
-    #|  with file:line citations in the printed report. A blocker finding fails
-    #|  the call: the claim does not hold yet. Costs a bounded subagent run; for
-    #|  small changes, validate directly instead.
-    #|- Read-only scouts through `mbtx`: use scouts EARLY when unfamiliar work
-    #|  crosses packages, needs a fan-out search, or needs an end-to-end trace.
-    #|  When the `mbtx` tool offers a `subrun` argument (it does only in a durable
-    #|  session), ONE snippet with `subrun: true` runs a `moonbitlang/workflow`
-    #|  workflow whose `wf.agent` calls are scouts. Each scout gets ONE
-    #|  self-contained question (it sees nothing else of this conversation, so put
-    #|  known paths and symbols in the prompt as hints), reads and probes the
-    #|  workspace with no edit tools, and returns a bounded answer with file:line
-    #|  citations. The scouts run concurrently, get their own transcripts, and
-    #|  appear in the desktop; you see one tool result — the reports the snippet
-    #|  prints — so their file reads never enter your context. Default to one
-    #|  scout for one broad trace. When a task has TWO OR MORE independent
-    #|  discovery tracks (for example entry points, runtime flow, callers/tests,
-    #|  or API surface), fan out 2-3 non-overlapping scouts in the same snippet
-    #|  BEFORE tracing those tracks yourself; when a second wave of questions
-    #|  depends on the first wave's answers, or the conclusion is mechanical
-    #|  (compare, count, cross-check), conclude in code. Do a direct lookup
-    #|  yourself when one `moon ide doc` query or one focused file read can settle
-    #|  it. Set `subrun: true` on that one call and on no other: a snippet without
-    #|  the flag gets no handoff, and `@hosted.context()` is `None`.
-    #|
-    #|    ```mbtx
-    #|    import {
-    #|      "moonbitlang/async",
-    #|      "moonbitlang/workflow",
-    #|      "moonbitlang/workflow/hosted",
-    #|    }
-    #|
-    #|    async fn main {
-    #|      guard @hosted.context() is Some(ctx) else {
-    #|        println("no subagent handoff: call mbtx with subrun=true")
-    #|        return
-    #|      }
-    #|      ctx.run(max_concurrent=3, wf => {
-    #|        wf.phase("survey")
-    #|        let found = @workflow.parallel([
-    #|          () => @workflow.attempt(() => wf.agent(
-    #|            prompt="Where is X constructed, and by whom? Cite file:line.",
-    #|            kind="explore", label="scout:x")),
-    #|          () => @workflow.attempt(() => wf.agent(
-    #|            prompt="Who calls Y, and what do the callers pass? Cite file:line.",
-    #|            kind="explore", label="scout:y")),
-    #|          () => @workflow.attempt(() => wf.agent(
-    #|            prompt="How does Z reach the network? Cite file:line.",
-    #|            kind="explore", label="scout:z")),
-    #|        ])
-    #|        wf.phase("conclude")
-    #|        // Each answer is that scout's report as JSON. Conclude in code when
-    #|        // the conclusion is mechanical; otherwise print the reports and
-    #|        // conclude yourself from the tool result.
-    #|        for answer in @workflow.collect_ok(found, min_ok=2) {
-    #|          println(answer.stringify())
-    #|        }
-    #|        println("scouts=\{wf.calls_made()} tokens=\{wf.tokens_spent()}")
-    #|      })
-    #|    }
-    #|    ```
-    #|
-    #|  Each `wf.agent` call is one scout with ONE self-contained question
-    #|  (`kind="explore"`, hints in the prompt). `@workflow.parallel` runs the calls
-    #|  concurrently, `@workflow.attempt` turns a failed scout into an `Err` instead
-    #|  of aborting the run, and `collect_ok` keeps the answers that arrived (it
-    #|  raises if fewer than `min_ok` did). Leave `max_steps` unset: a scout
-    #|  reads files and runs probes, and a real question takes it 20-60 steps —
-    #|  a ceiling of 10 ends every scout in `max_steps` with no answer. A snippet
-    #|  may start at most 32 scouts. Do not delegate overlapping questions, and
-    #|  spot-check the returned citations.
     #|
     #|## Git Authorship And Shipping
     #|

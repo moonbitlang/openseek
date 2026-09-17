@@ -28,6 +28,9 @@ Part 1 of the prompt teaches the tooling:
   including a non-zero exit that is not a failure.
 - `check_diagnostics.mbtx`: streaming line-delimited `moon check` JSON with
   `each_line` and matching it as `@json.parse` output.
+- `workflow_scouts.mbtx`: the `moonbitlang/workflow` handoff a `subrun: true`
+  snippet gets — fan out scouts, keep the answers that arrived, report the
+  spend.
 
 Part 2 teaches the language:
 

@@ -1,0 +1,36 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/workflow",
+  "moonbitlang/workflow/hosted",
+}
+
+///|
+async fn main {
+  guard @hosted.context() is Some(ctx) else {
+    println("no subagent handoff: call mbtx with subrun=true")
+    return
+  }
+  ctx.run(max_concurrent=3, wf => {
+    wf.phase("survey")
+    let found = @workflow.parallel([
+      () => @workflow.attempt(() => wf.agent(
+        prompt="Where is X constructed, and by whom? Cite file:line.",
+        kind="explore", label="scout:x")),
+      () => @workflow.attempt(() => wf.agent(
+        prompt="Who calls Y, and what do the callers pass? Cite file:line.",
+        kind="explore", label="scout:y")),
+      () => @workflow.attempt(() => wf.agent(
+        prompt="How does Z reach the network? Cite file:line.",
+        kind="explore", label="scout:z")),
+    ])
+    wf.phase("conclude")
+    // Each answer is that scout's report as JSON. Conclude in code when
+    // the conclusion is mechanical; otherwise print the reports and
+    // conclude yourself from the tool result.
+    for answer in @workflow.collect_ok(found, min_ok=2) {
+      println(answer.stringify())
+    }
+    println("scouts=\{wf.calls_made()} tokens=\{wf.tokens_spent()}")
+  })
+}
