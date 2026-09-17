@@ -29,6 +29,14 @@ call deliberately stay outside: `edit`, `multi_edit`, `write`, and `remove`
 change files as calls of their own, so every change to the workspace is a
 reviewable record rather than a side effect inside a script, and `plan`, the
 `job_*` tools, and `finish` steer the turn rather than do work in it.
+Everything else is a script, in one of three forms:
+
+| Arguments | Form | Behavior |
+| --- | --- | --- |
+| `source` | one-shot | Run once; nothing is saved. |
+| `source` and `filename` | named script | Save under that path and run it. |
+| `filename` | named script | Run the saved script again. |
+| `filename="@builtin/..."` | bundled | Run a workflow shipped with the installation. |
 
 A script is a whole program — imports plus vanilla MoonBit, never a fragment
 — and it runs on wasm:
@@ -42,15 +50,6 @@ A script is a whole program — imports plus vanilla MoonBit, never a fragment
 - There is no `await`: async calls are written normally, and async functions
   and tests are marked `async`.
 - Use `println` (no `print`).
-
-Three forms:
-
-| Arguments | Form | Behavior |
-| --- | --- | --- |
-| `source` | one-shot | Run once; nothing is saved. |
-| `source` and `filename` | named script | Save under that path and run it. |
-| `filename` | named script | Run the saved script again. |
-| `filename="@builtin/..."` | bundled | Run a workflow shipped with the installation. |
 
 Every form takes `args`, an array of strings (default `[]`), as the script's
 inputs: arguments keep spaces and empty strings, and there is no shell
