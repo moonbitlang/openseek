@@ -40,9 +40,6 @@ A script is a whole program — imports plus vanilla MoonBit
   and tests are marked `async`.
 - Use `println` (no `print`).
 
-Import `moonbitlang/core/env` and read `@env.args()[1:]` to skip
-the executable name, use `moonbitlang/core/argparse` for pretty cli parsing.
-
 A minimal `moon check` script:
 
 [share/workflow/check.mbtx](../share/workflow/check.mbtx)
@@ -70,6 +67,39 @@ shipped under `<bundled-resources>/workflow/`. Namespaced
 scripts are read-only: never supply `source` with `@builtin/`. Only
 `@builtin/` is supported today; other namespaces are reserved. Use
 `./path/check.mbtx` for a literal workspace path.
+
+### CLI Parsing And Native IO
+
+- For CLI parsing, prefer `moonbitlang/core/argparse` and call
+  `@argparse.parse(...)` on a `Command`. Do not hand-roll option parsing with
+  `@env.args()` except for tiny throwaway probes; there, import
+  `moonbitlang/core/env` and read `@env.args()[1:]` to skip the executable
+  name.
+- `FlagArg.long` omits leading dashes: use `long="stdin"`, not
+  `long="--stdin"`.
+- Convert `@argparse.Matches` into a small config record or local values before
+  doing real work; keep validation near that conversion.
+- Do not implement ordinary file/stdin IO with C FFI. Use `moonbitlang/async/fs`
+  and `moonbitlang/async/stdio`.
+- A native CLI that reads either a path or stdin usually needs `async fn main`.
+- For custom CLI diagnostics, write to stderr with `@stdio.stderr.write(...)`.
+  For a nonzero exit, add the `moonbitlang/x` module, import
+  `"moonbitlang/x/sys"` in `moon.pkg`, and call `@sys.exit(1)`.
+
+Pattern, verified by CI (type-checked and run under cram):
+
+[share/examples/cli_count_input.mbtx](../share/examples/cli_count_input.mbtx)
+
+- In `moon run`, the package path goes before `--`; program arguments go after
+  `--`. Example file probe:
+  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
+  put in the workspace).
+- Example stdin probe (no pipes — feed stdin directly):
+  `@shell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
+  "--stdin"], stdin=Text("a.b = 1\n"))`.
+- Implement stdin mode with `@stdio.stdin.read_all().text()`, not
+  `/dev/stdin` or C FFI.
+- Validate both file input and stdin input when promised.
 
 ### Reading files: `@builtin/read.mbtx`
 The builtin call you will make most. Read known files together immediately;
@@ -695,37 +725,6 @@ The verified example, compiled and run by CI:
   `json.stringify()`; do not rely on `println(json)` or Debug/Show snapshots.
 - In black-box tests for a library returning `Json`, match `Json::Object(...)`,
   not `@library.Json::Object(...)`.
-
-## CLI Parsing And Native IO
-
-- For CLI parsing, prefer `moonbitlang/core/argparse` and call
-  `@argparse.parse(...)` on a `Command`. Do not hand-roll option parsing with
-  `@env.args()` except for tiny throwaway probes.
-- `FlagArg.long` omits leading dashes: use `long="stdin"`, not
-  `long="--stdin"`.
-- Convert `@argparse.Matches` into a small config record or local values before
-  doing real work; keep validation near that conversion.
-- Do not implement ordinary file/stdin IO with C FFI. Use `moonbitlang/async/fs`
-  and `moonbitlang/async/stdio`.
-- A native CLI that reads either a path or stdin usually needs `async fn main`.
-- For custom CLI diagnostics, write to stderr with `@stdio.stderr.write(...)`.
-  For a nonzero exit, add the `moonbitlang/x` module, import
-  `"moonbitlang/x/sys"` in `moon.pkg`, and call `@sys.exit(1)`.
-
-Pattern, verified by CI (type-checked and run under cram):
-
-[share/examples/cli_count_input.mbtx](../share/examples/cli_count_input.mbtx)
-
-- In `moon run`, the package path goes before `--`; program arguments go after
-  `--`. Example file probe:
-  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
-  put in the workspace).
-- Example stdin probe (no pipes — feed stdin directly):
-  `@shell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
-  "--stdin"], stdin=Text("a.b = 1\n"))`.
-- Implement stdin mode with `@stdio.stdin.read_all().text()`, not
-  `/dev/stdin` or C FFI.
-- Validate both file input and stdin input when promised.
 
 ## Validation Before Finish
 

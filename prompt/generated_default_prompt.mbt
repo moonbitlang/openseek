@@ -45,9 +45,6 @@ fn default_prompt() -> String {
     #|  and tests are marked `async`.
     #|- Use `println` (no `print`).
     #|
-    #|Import `moonbitlang/core/env` and read `@env.args()[1:]` to skip
-    #|the executable name, use `moonbitlang/core/argparse` for pretty cli parsing.
-    #|
     #|A minimal `moon check` script:
     #|
     #|```mbtx
@@ -103,6 +100,101 @@ fn default_prompt() -> String {
     #|scripts are read-only: never supply `source` with `@builtin/`. Only
     #|`@builtin/` is supported today; other namespaces are reserved. Use
     #|`./path/check.mbtx` for a literal workspace path.
+    #|
+    #|### CLI Parsing And Native IO
+    #|
+    #|- For CLI parsing, prefer `moonbitlang/core/argparse` and call
+    #|  `@argparse.parse(...)` on a `Command`. Do not hand-roll option parsing with
+    #|  `@env.args()` except for tiny throwaway probes; there, import
+    #|  `moonbitlang/core/env` and read `@env.args()[1:]` to skip the executable
+    #|  name.
+    #|- `FlagArg.long` omits leading dashes: use `long="stdin"`, not
+    #|  `long="--stdin"`.
+    #|- Convert `@argparse.Matches` into a small config record or local values before
+    #|  doing real work; keep validation near that conversion.
+    #|- Do not implement ordinary file/stdin IO with C FFI. Use `moonbitlang/async/fs`
+    #|  and `moonbitlang/async/stdio`.
+    #|- A native CLI that reads either a path or stdin usually needs `async fn main`.
+    #|- For custom CLI diagnostics, write to stderr with `@stdio.stderr.write(...)`.
+    #|  For a nonzero exit, add the `moonbitlang/x` module, import
+    #|  `"moonbitlang/x/sys"` in `moon.pkg`, and call `@sys.exit(1)`.
+    #|
+    #|Pattern, verified by CI (type-checked and run under cram):
+    #|
+    #|```mbtx
+    #|///|
+    #|/// A CLI in a script: `argparse` declares the options, the matches become a
+    #|/// small config record, and IO goes through `moonbitlang/async/fs` and
+    #|/// `stdio`, never C FFI. Arguments: [--stdin] [<input>]. Verified by CI
+    #|/// (type-checked under deny-warn and run under cram with stdin).
+    #|import {
+    #|  "moonbitlang/async",
+    #|  "moonbitlang/async/fs",
+    #|  "moonbitlang/async/stdio",
+    #|  "moonbitlang/core/argparse",
+    #|}
+    #|
+    #|///|
+    #|struct Config {
+    #|  input : String
+    #|  stdin : Bool
+    #|}
+    #|
+    #|///|
+    #|/// Reading a path or stdin is async IO, so `main` is `async fn main`.
+    #|async fn main {
+    #|  let config = @argparse.parse(
+    #|      Command(
+    #|        "count-input",
+    #|        about="Print the length of a file or stdin.",
+    #|        flags=[
+    #|          // `long` omits the dashes: `long="stdin"`, not `long="--stdin"`.
+    #|          FlagArg("stdin", long="stdin", about="Read stdin instead of a file."),
+    #|        ],
+    #|        positionals=[
+    #|          PositionArg("input", default_values=["-"], about="Input file path."),
+    #|        ],
+    #|      ),
+    #|    )
+    #|    |> config_from_matches
+    #|  let input = if config.stdin {
+    #|    @stdio.stdin.read_all().text()
+    #|  } else {
+    #|    @fs.read_file(config.input).text()
+    #|  }
+    #|  println(input.length())
+    #|}
+    #|
+    #|///|
+    #|/// Convert `Matches` into typed values once, with validation next to it,
+    #|/// before doing real work.
+    #|fn config_from_matches(matches : @argparse.Matches) -> Config raise {
+    #|  match matches {
+    #|    {
+    #|      values: { "input"? : Some([input, ..]), .. },
+    #|      flags: { "stdin"? : Some(stdin), .. },
+    #|      ..
+    #|    } => { input, stdin, }
+    #|    {
+    #|      values: { "input"? : Some([input, ..]), .. },
+    #|      flags: { "stdin"? : None, .. },
+    #|      ..
+    #|    } => { input, stdin: false, }
+    #|    _ => fail("missing parsed argument: input")
+    #|  }
+    #|}
+    #|```
+    #|
+    #|- In `moon run`, the package path goes before `--`; program arguments go after
+    #|  `--`. Example file probe:
+    #|  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
+    #|  put in the workspace).
+    #|- Example stdin probe (no pipes — feed stdin directly):
+    #|  `@shell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
+    #|  "--stdin"], stdin=Text("a.b = 1\n"))`.
+    #|- Implement stdin mode with `@stdio.stdin.read_all().text()`, not
+    #|  `/dev/stdin` or C FFI.
+    #|- Validate both file input and stdin input when promised.
     #|
     #|### Reading files: `@builtin/read.mbtx`
     #|The builtin call you will make most. Read known files together immediately;
@@ -1026,99 +1118,6 @@ fn default_prompt() -> String {
     #|  `json.stringify()`; do not rely on `println(json)` or Debug/Show snapshots.
     #|- In black-box tests for a library returning `Json`, match `Json::Object(...)`,
     #|  not `@library.Json::Object(...)`.
-    #|
-    #|## CLI Parsing And Native IO
-    #|
-    #|- For CLI parsing, prefer `moonbitlang/core/argparse` and call
-    #|  `@argparse.parse(...)` on a `Command`. Do not hand-roll option parsing with
-    #|  `@env.args()` except for tiny throwaway probes.
-    #|- `FlagArg.long` omits leading dashes: use `long="stdin"`, not
-    #|  `long="--stdin"`.
-    #|- Convert `@argparse.Matches` into a small config record or local values before
-    #|  doing real work; keep validation near that conversion.
-    #|- Do not implement ordinary file/stdin IO with C FFI. Use `moonbitlang/async/fs`
-    #|  and `moonbitlang/async/stdio`.
-    #|- A native CLI that reads either a path or stdin usually needs `async fn main`.
-    #|- For custom CLI diagnostics, write to stderr with `@stdio.stderr.write(...)`.
-    #|  For a nonzero exit, add the `moonbitlang/x` module, import
-    #|  `"moonbitlang/x/sys"` in `moon.pkg`, and call `@sys.exit(1)`.
-    #|
-    #|Pattern, verified by CI (type-checked and run under cram):
-    #|
-    #|```mbtx
-    #|///|
-    #|/// A CLI in a script: `argparse` declares the options, the matches become a
-    #|/// small config record, and IO goes through `moonbitlang/async/fs` and
-    #|/// `stdio`, never C FFI. Arguments: [--stdin] [<input>]. Verified by CI
-    #|/// (type-checked under deny-warn and run under cram with stdin).
-    #|import {
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/async/fs",
-    #|  "moonbitlang/async/stdio",
-    #|  "moonbitlang/core/argparse",
-    #|}
-    #|
-    #|///|
-    #|struct Config {
-    #|  input : String
-    #|  stdin : Bool
-    #|}
-    #|
-    #|///|
-    #|/// Reading a path or stdin is async IO, so `main` is `async fn main`.
-    #|async fn main {
-    #|  let config = @argparse.parse(
-    #|      Command(
-    #|        "count-input",
-    #|        about="Print the length of a file or stdin.",
-    #|        flags=[
-    #|          // `long` omits the dashes: `long="stdin"`, not `long="--stdin"`.
-    #|          FlagArg("stdin", long="stdin", about="Read stdin instead of a file."),
-    #|        ],
-    #|        positionals=[
-    #|          PositionArg("input", default_values=["-"], about="Input file path."),
-    #|        ],
-    #|      ),
-    #|    )
-    #|    |> config_from_matches
-    #|  let input = if config.stdin {
-    #|    @stdio.stdin.read_all().text()
-    #|  } else {
-    #|    @fs.read_file(config.input).text()
-    #|  }
-    #|  println(input.length())
-    #|}
-    #|
-    #|///|
-    #|/// Convert `Matches` into typed values once, with validation next to it,
-    #|/// before doing real work.
-    #|fn config_from_matches(matches : @argparse.Matches) -> Config raise {
-    #|  match matches {
-    #|    {
-    #|      values: { "input"? : Some([input, ..]), .. },
-    #|      flags: { "stdin"? : Some(stdin), .. },
-    #|      ..
-    #|    } => { input, stdin, }
-    #|    {
-    #|      values: { "input"? : Some([input, ..]), .. },
-    #|      flags: { "stdin"? : None, .. },
-    #|      ..
-    #|    } => { input, stdin: false, }
-    #|    _ => fail("missing parsed argument: input")
-    #|  }
-    #|}
-    #|```
-    #|
-    #|- In `moon run`, the package path goes before `--`; program arguments go after
-    #|  `--`. Example file probe:
-    #|  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
-    #|  put in the workspace).
-    #|- Example stdin probe (no pipes — feed stdin directly):
-    #|  `@shell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
-    #|  "--stdin"], stdin=Text("a.b = 1\n"))`.
-    #|- Implement stdin mode with `@stdio.stdin.read_all().text()`, not
-    #|  `/dev/stdin` or C FFI.
-    #|- Validate both file input and stdin input when promised.
     #|
     #|## Validation Before Finish
     #|
