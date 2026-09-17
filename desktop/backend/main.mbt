@@ -102,6 +102,10 @@ async fn main {
     // titlebar follows the system appearance, so an explicit in-app dark theme
     // otherwise leaves a bright strip above the dark application shell.
     .titlebar_style(Overlay)
+    // Give the macOS buttons a 16pt left inset and center their 14pt height in
+    // the 46px app header (base.css). Proton reports the reserved titlebar area
+    // so the sidebar toggle follows their position, including after zoom.
+    .traffic_light_position(x=16, y=16)
     .debug_level(1)
     // Rabbita consumes ordinary left-click navigation for the dock Browser,
     // but deliberately leaves Ctrl/Cmd-click and middle-click to Chromium.
