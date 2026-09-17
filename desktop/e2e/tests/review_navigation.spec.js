@@ -15,8 +15,8 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     await app.openSession();
     await app.openReview();
     const changes = page.locator('#review-changes-body');
-    const main = changes.getByRole('button', { name: /View diff: src\/main\.mbt/ });
-    const lib = changes.getByRole('button', { name: /View diff: src\/lib\.mbt/ });
+    const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
+    const lib = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
     await main.click();
     await page.getByRole('button', { name: `${mode} diff`, exact: true }).click();
     const navigation = page.getByRole('group', { name: 'Diff change navigation' });
@@ -57,10 +57,10 @@ for (const mode of ['Line', 'Tree']) {
     await app.openSession();
     await app.openReview();
     const changes = page.locator('#review-changes-body');
-    await changes.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
     await page.getByRole('button', { name: `${mode} diff`, exact: true }).click();
     await page.getByRole('button', { name: 'Next change', exact: true }).click();
-    await expect(changes.getByRole('button', { name: /View diff: src\/lib\.mbt/ })).toHaveAttribute('aria-current', 'page');
+    await expect(changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ })).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
     expect(app.pageErrors).toEqual([]);
   });

@@ -13,7 +13,7 @@ for (const mode of ['Token', 'Tree']) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
     await page.getByRole('button', { name: `${mode} diff`, exact: true }).click();
     await page.getByRole('button', { name: 'Split diff layout', exact: true }).click();
 

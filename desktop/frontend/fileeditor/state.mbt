@@ -455,6 +455,9 @@ pub(all) struct State {
   change_extensions : Array[String?]?
   change_path_filter : String
   changes : ChangeList
+  // Review directories start expanded; keep user folds across Git refreshes.
+  change_tree_collapsed : Array[@pathx.Relative]
+  change_tree_focus : ChangeTreeItem?
   // Git graph state is conversation/workspace scoped like Changes, but is
   // refreshed only at meaningful repository boundaries rather than on the
   // three-second working-tree poll.
@@ -601,6 +604,8 @@ pub fn State::empty() -> State {
     change_extensions: None,
     change_path_filter: "",
     changes: ChangeListIdle,
+    change_tree_collapsed: [],
+    change_tree_focus: None,
     git_graph: GitGraphIdle,
     git_graph_generation: 0,
     git_graph_selected: None,
@@ -910,6 +915,9 @@ pub(all) enum Msg {
   GitCommitChangesRetry(String)
   HistoricalFileSelected(@dock.GitHistoryDiff)
   ToggleChangesSection
+  ChangeDirectoryExpanded(@pathx.Relative, Bool)
+  ChangeTreeFocused(ChangeTreeItem)
+  ChangeTreeReviewToggled(ChangeTreeItem)
   ToggleGitGraphSection
   // A file row was clicked: read it and show it in the viewer. `name` is the
   // entry's display name, kept for the viewer's title and language guess.

@@ -80,10 +80,10 @@ test('Review loads changed files and preserves its interactive diff workflow', a
     });
   const changes = page.locator('#review-changes-body');
   await expect(changes.locator('.review-progress-summary')).toHaveText(
-    '0 of 2 reviewable files reviewed',
+    '0 / 2 reviewed',
   );
-  const main = changes.getByRole('button', { name: /View diff: src\/main\.mbt/ });
-  const library = changes.getByRole('button', { name: /View diff: src\/lib\.mbt/ });
+  const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
+  const library = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
   await expect(main).toHaveAttribute('aria-current', 'false');
   await main.click();
 
@@ -225,7 +225,7 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   await expect(page.getByRole('button', { name: 'Mark file unreviewed' }))
     .toHaveAttribute('aria-pressed', 'true');
   await expect(changes.locator('.review-progress-summary')).toHaveText(
-    '1 of 2 reviewable files reviewed',
+    '1 / 2 reviewed',
   );
   await page.getByRole('button', { name: 'Next change' }).click();
   await expect(library).toHaveAttribute('aria-current', 'page');
@@ -262,7 +262,7 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
     await app.openSession();
     await app.openReview();
     const changes = page.locator('#review-changes-body');
-    await changes.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
     const mode = page.getByRole('toolbar', { name: 'Review mode' });
     const line = mode.getByRole('button', { name: 'Line diff' });
     const layout = page.getByRole('group', { name: 'Diff layout' });
@@ -305,7 +305,7 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
       requestAnimationFrame(sample);
     });
     try {
-      await changes.getByRole('button', { name: /View diff: src\/lib\.mbt/ }).click();
+      await changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
       await expect(page.locator('.crumb-file')).toHaveText('lib.mbt');
       await expect.poll(() => app.requests.some(request =>
         request.method === pendingMethod && request.params?.path?.endsWith('/lib.mbt')))
@@ -397,7 +397,7 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   await app.openSession();
   await app.openReview();
   const changes = page.locator('#review-changes-body');
-  await changes.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+  await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
 
   await page.getByRole('toolbar', { name: 'Review mode' })
     .getByRole('button', { name: 'Line diff' }).click();
@@ -416,7 +416,7 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   await expect(page.getByRole('button', { name: 'Mark file unreviewed' }))
     .toHaveAttribute('aria-pressed', 'true');
   await expect(changes.locator('.review-progress-summary')).toHaveText(
-    '1 of 2 reviewable files reviewed',
+    '1 / 2 reviewed',
   );
 
   // Clearing the file clears every hunk; marking it again projects Viewed back
@@ -461,10 +461,10 @@ for (const mode of ['Token', 'Tree']) {
     await app.openSession();
     await app.openReview();
     const changes = page.locator('#review-changes-body');
-    await changes.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
     const modeButton = page.getByRole('button', { name: `${mode} diff`, exact: true });
     await modeButton.click();
-    await changes.getByRole('button', { name: /View diff: src\/lib\.mbt/ }).click();
+    await changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
     await expect(modeButton).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
 
@@ -500,7 +500,7 @@ test('Review routes Markdown source and keeps non-MoonBit comparisons on Line di
   await app.openSession();
   await app.openReview();
 
-  await page.getByRole('button', { name: /View diff: docs\/Guide\.MD/ }).click();
+  await page.getByRole('treeitem', { name: /View diff: docs\/Guide\.MD/ }).click();
   const toolbar = page.getByRole('toolbar', { name: 'Review mode' });
   await expect(toolbar.getByRole('button')).toHaveText(['File', 'Line']);
   await expect(toolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
@@ -591,7 +591,7 @@ test('ordinary MBTI files render as UML and reviews keep source surfaces', async
   await expect(diagram.locator('svg')).toBeVisible();
 
   await app.openReview();
-  await page.getByRole('button', { name: /View diff: api\/pkg\.generated\.mbti/ }).click();
+  await page.getByRole('treeitem', { name: /View diff: api\/pkg\.generated\.mbti/ }).click();
   await expect(page.getByRole('group', { name: 'MBTI view' })).toHaveCount(0);
   await expect(diagram).toBeHidden();
   const review = page.getByRole('toolbar', { name: 'Review mode' });
@@ -2368,7 +2368,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.locator('#review-changes-body').getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
     const toolbar = page.getByRole('toolbar', { name: 'Review mode' });
     await toolbar.getByRole('button', { name: `${mode} diff` }).click();
     const position = page.locator('.review-hunk-position');
@@ -2407,7 +2407,7 @@ for (const mode of ['Token', 'Tree']) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.locator('#review-changes-body').getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
     await page.getByRole('toolbar', { name: 'Review mode' }).getByRole('button', { name: `${mode} diff` }).click();
     const sections = page.locator('.semantic-diff-entry');
     const headers = sections.locator('.semantic-entry-header-content');
@@ -2447,7 +2447,7 @@ for (const layout of ['Split', 'Unified']) {
     await app.goto();
     await app.openSession();
     await app.openReview();
-    await page.locator('#review-changes-body').getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
     await page.getByRole('button', { name: 'Line diff', exact: true }).click();
     await page.getByRole('button', { name: `${layout} diff layout`, exact: true }).click();
     const action = page.locator('.moonbit-diff-hunk-action:visible button');

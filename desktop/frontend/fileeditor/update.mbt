@@ -549,6 +549,9 @@ pub fn open_changed_document(
       state.invalidate_review_hunk_surface()
     }),
     highlighted: None,
+    change_tree_collapsed: state.change_tree_collapsed.filter(dir => {
+      !change.path.0.has_prefix(dir.0 + "/")
+    }),
   }
   // Selecting a Changes row is activation, not a manual reload. Reuse the
   // exact cached review (including one whose paired reads are still pending)
@@ -2352,6 +2355,7 @@ pub fn update(
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
   let had_focus = tree_has_dom_focus()
+  let had_change_focus = change_tree_has_dom_focus()
   let (cmd, next) = update_inner(dispatch, msg, state, ctx)
   let focus = tree_focus_target(next)
   let restore = if had_focus &&
@@ -2368,7 +2372,26 @@ pub fn update(
   } else {
     @cmd.none
   }
-  (@cmd.batch([cmd, restore, bind_filter]), { ..next, tree_focus: focus, })
+  let change_focus = if ctx.checkout_ready() &&
+    next.change_tree_focus is Some(_) {
+    change_tree_focus_target(next, change_tree_rows(next))
+  } else {
+    next.change_tree_focus
+  }
+  let restore_changes = if had_change_focus &&
+    (
+      change_focus != state.change_tree_focus ||
+      change_tree_rows(state).map(row => row.node.item) !=
+      change_tree_rows(next).map(row => row.node.item)
+    ) {
+    focus_change_tree_after_render(next, change_focus)
+  } else {
+    @cmd.none
+  }
+  (
+    @cmd.batch([cmd, restore, restore_changes, bind_filter]),
+    { ..next, tree_focus: focus, change_tree_focus: change_focus, },
+  )
 }
 
 ///|
@@ -2398,6 +2421,20 @@ fn update_inner(
     }
   }
   match msg {
+    ChangeDirectoryExpanded(path, expanded) => {
+      let collapsed = if expanded {
+        state.change_tree_collapsed.filter(dir => dir != path)
+      } else if state.change_tree_collapsed.contains(path) {
+        state.change_tree_collapsed
+      } else {
+        [..state.change_tree_collapsed, path]
+      }
+      (@cmd.none, { ..state, change_tree_collapsed: collapsed, })
+    }
+    ChangeTreeFocused(item) =>
+      (@cmd.none, { ..state, change_tree_focus: Some(item), })
+    ChangeTreeReviewToggled(item) =>
+      (@cmd.none, state.toggle_change_tree_review(item))
     ChangeExtensionToggled(extension) => {
       let selected = match state.change_extensions {
         None => change_extension_options(state).map(option => option.0)
@@ -2420,6 +2457,7 @@ fn update_inner(
           } else {
             Some(selected)
           },
+          change_tree_collapsed: [],
           review_navigation_destination: None,
         },
       )
@@ -2440,6 +2478,7 @@ fn update_inner(
         {
           ..state,
           change_path_filter: value,
+          change_tree_collapsed: [],
           review_navigation_destination: None,
         },
       )

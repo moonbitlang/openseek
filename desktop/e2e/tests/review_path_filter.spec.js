@@ -21,10 +21,12 @@ test('Review filters changed paths live, clears, and preserves the open diff', a
   await expect(input).toBeFocused();
   await changes.locator('[data-path="src/main.mbt"]').press('ArrowDown');
   await expect(changes.locator('[data-path="src/lib.mbt"]')).toBeFocused();
+  await expect(activeTab).toContainText('main.mbt');
+  await page.keyboard.press('Enter');
   await expect(activeTab).toContainText('lib.mbt');
   await input.fill('docs/');
   await expect(rows).toHaveCount(1);
-  await expect(rows).toContainText('docs/guide.md');
+  await expect(rows).toContainText('guide.md');
   await expect(activeTab).toContainText('lib.mbt');
   await input.fill('does-not-exist');
   await expect(rows).toHaveCount(0);
@@ -81,7 +83,7 @@ test('Review combines extension checkboxes with paths and clears both filters', 
   await trigger.click();
   await menu.getByRole('checkbox', { name: '.md', exact: true }).check();
   await expect(rows).toHaveCount(1);
-  await expect(rows).toContainText('docs/guide.md');
+  await expect(rows).toContainText('guide.md');
   await trigger.click();
   await expect(menu).toBeHidden();
   await trigger.click();

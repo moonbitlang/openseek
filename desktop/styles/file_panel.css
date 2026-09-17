@@ -1850,48 +1850,47 @@ button.git-history-file.selected {
   color: var(--color-accent-strong);
 }
 
-.change-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  padding: 4px 10px 4px 12px;
-  border: 0;
-  border-radius: 0;
-  color: var(--color-text-secondary);
-  background: transparent;
-  font: inherit;
-  font-size: var(--font-size-sm);
-  text-align: left;
-  cursor: pointer;
+.change-tree {
+  --tree-step: 14px;
+  --tree-guide-color: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+  padding: 2px 4px 8px;
 }
 
-.change-row:hover {
-  background: var(--color-bg-subtle);
+.change-tree .tree-row {
+  min-height: 24px;
+  gap: 4px;
+  padding-right: 6px;
 }
 
 .change-row.disabled {
   cursor: default;
+  color: var(--color-text-muted);
 }
 
-.change-row.disabled:hover {
-  background: transparent;
+.change-row.added .change-path,
+.change-status.added {
+  color: var(--color-success);
 }
 
-.change-row.selected {
+.change-row.deleted .change-path,
+.change-row.unmerged .change-path,
+.change-status.deleted,
+.change-status.unmerged {
+  color: var(--color-danger);
+}
+
+.change-row.renamed .change-path,
+.change-status.renamed {
   color: var(--color-accent-strong);
-  background: var(--color-accent-soft);
+}
+
+.change-row.modified .change-path,
+.change-status.modified {
+  color: var(--color-warning);
 }
 
 .change-row.reviewed .change-path {
   color: var(--color-text-secondary);
-}
-
-.change-row.reviewed .change-action {
-  border-color: transparent;
-  color: var(--color-success);
-  background: color-mix(in srgb, var(--color-success) 8%, transparent);
 }
 
 .review-progress-summary {
@@ -1909,51 +1908,58 @@ button.git-history-file.selected {
 }
 
 .change-status {
-  flex: 0 0 auto;
-  width: 16px;
-  font-weight: 700;
+  flex: 0 0 16px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
   text-align: center;
 }
 
-.change-status.added {
-  color: var(--color-success);
-}
-
-.change-status.deleted,
-.change-status.unmerged {
-  color: var(--color-danger);
-}
-
-.change-status.renamed {
-  color: var(--color-accent-strong);
-}
-
-.change-status.modified {
-  color: var(--color-warning);
-}
-
-.change-action {
-  flex: 0 0 auto;
-  padding: 1px 6px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  color: var(--color-text-secondary);
-  background: var(--color-control-surface);
-  font-size: var(--font-size-xs);
-  line-height: 16px;
-}
-
-.change-row:hover .change-action:not(.unavailable),
-.change-row:focus-visible .change-action:not(.unavailable) {
-  border-color: transparent;
-  color: var(--color-text-primary);
-  background: var(--color-bg-subtle);
-}
-
-.change-action.unavailable {
-  border-color: transparent;
+.change-file-icon {
+  display: flex;
+  flex: 0 0 16px;
   color: var(--color-text-muted);
+}
+
+.change-review-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  margin: 0 2px 0 0;
+  border: 1px solid color-mix(in srgb, var(--color-text-primary) 30%, transparent);
+  border-radius: 3px;
+  color: var(--color-accent-strong);
   background: transparent;
+  cursor: pointer;
+}
+
+.change-review-checkbox[aria-checked="true"],
+.change-review-checkbox[aria-checked="mixed"] {
+  border-color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+}
+
+.change-review-checkbox:hover:not(:disabled) {
+  border-color: var(--color-accent-strong);
+}
+
+.change-review-checkbox:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.change-review-checkbox svg {
+  width: 12px;
+  height: 12px;
+}
+
+.change-review-partial {
+  width: 8px;
+  height: 2px;
+  background: currentColor;
 }
 
 .tree-twistie {

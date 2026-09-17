@@ -230,24 +230,6 @@ fn changed_file_row_id(index : Int) -> String {
 }
 
 ///|
-fn focus_changed_file_after_render(index : Int) -> @cmd.Cmd {
-  @cmd.custom_cmd(
-    _ => {
-      if @dom.document()
-        .get_element_by_id(changed_file_row_id(index))
-        .to_option()
-        is Some(row) {
-        let _ : @js.Value = @js.Value::cast_from(row).apply_with_string(
-          "focus",
-          ([] : FixedArray[@js.Value]),
-        )
-      }
-    },
-    kind=@cmd.after_render,
-  )
-}
-
-///|
 /// An icon in a fixed-size span. Icons are functions, not shared constants:
 /// each render site gets its own virtual-DOM value, so no Props instance is
 /// ever aliased between two mounted elements.
@@ -1521,7 +1503,7 @@ fn change_inventory_rows(
             if reviewable.is_empty() {
               "No reviewable text files"
             } else {
-              "\{reviewed} of \{reviewable.length()} reviewable files reviewed"
+              "\{reviewed} / \{reviewable.length()} reviewed"
             },
           ),
         ]
@@ -1531,9 +1513,25 @@ fn change_inventory_rows(
             @html.div(class="file-panel-empty", "No files match these filters."),
           )
         }
-        for index, change in visible {
-          rows.push(changed_file_row(dispatch, state, ctx, change, index))
-        }
+        let tree_rows = change_tree_rows(state)
+        let focus = change_tree_focus_target(state, tree_rows)
+        rows.push(
+          @html.div(
+            class="change-tree",
+            attrs=@html.Attrs::build()
+              .id("review-file-tree")
+              .role("tree")
+              .aria_label("Changed files")
+              .tabindex(if tree_rows.is_empty() { 0 } else { -1 }),
+            [
+              for index, row in tree_rows => {
+                change_tree_row(
+                  dispatch, state, ctx, tree_rows, row, index, focus,
+                )
+              }
+            ],
+          ),
+        )
         rows
       }
   }
@@ -1558,96 +1556,172 @@ fn ChangedFile::kind_class(self : ChangedFile) -> String {
 }
 
 ///|
-fn changed_file_row(
+fn change_tree_row(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
-  change : ChangedFile,
+  rows : Array[ChangeTreeRow],
+  row : ChangeTreeRow,
   index : Int,
+  focus : ChangeTreeItem?,
 ) -> @html.Html {
-  let selected = change.is_selected(state, ctx)
-  let progress = state.changed_file_review_state(change)
-  let mut class = if selected { "change-row selected" } else { "change-row" }
+  let item = row.node.item
+  let selected = item is ChangeFile(change) && change.is_selected(state, ctx)
+  let reviewable = row.node.changes.any(change => change.selectable())
+  let progress = change_tree_review_state(state, row.node.changes)
+  let mut class = match item {
+    ChangeDirectory(_) => "tree-row change-directory"
+    ChangeFile(change) => "tree-row change-row " + change.kind_class()
+  }
+  if selected {
+    class += " selected"
+  }
   if progress is ReviewComplete {
     class += " reviewed"
   }
-  if !change.selectable() {
+  if !reviewable {
     class += " disabled"
   }
-  let children = [
-    @html.span(class="change-path", change.path.0),
-    @html.span(
-      class="change-status " + change.kind_class(),
-      change.status_label(),
-    ),
-    @html.span(
-      class=if change.selectable() {
-        "change-action"
-      } else {
-        "change-action unavailable"
-      },
-      if change.selectable() {
-        match progress {
-          ReviewComplete => "✓ Reviewed"
-          ReviewInProgress => "◐ In progress"
-          ReviewUnviewed => "View diff"
-        }
-      } else {
-        "Unavailable"
-      },
-    ),
-  ]
-  if change.selectable() {
-    // A native button supplies keyboard activation (Enter/Space) and focus
-    // semantics without duplicating the tab strip's custom key handling.
-    @html.button(
-      class~,
-      title="Open diff — " + change.status_title(),
-      on_click=dispatch(ChangedFileSelected(change)),
-      attrs=@html.Attrs::build()
-        .id(changed_file_row_id(index))
-        .data_set("path", change.path.0)
-        .aria_label("View diff: " + change.status_title())
-        .aria_current(if selected { "page" } else { "false" })
-        .on_keydown(event => {
-          let destination = match event.key() {
-            "ArrowUp" => review_neighbor(state, change, -1)
-            "ArrowDown" => review_neighbor(state, change, 1)
-            "Home" => review_edge(state, change, first=true)
-            "End" => review_edge(state, change, first=false)
-            _ => None
-          }
-          match destination {
-            Some(destination) => {
-              event.prevent_default()
-              @cmd.batch([
-                dispatch(ChangedFileSelected(destination)),
-                match change_row_index(state, destination) {
-                  Some(index) => focus_changed_file_after_render(index)
-                  None => @cmd.none
-                },
-              ])
-            }
-            None => @cmd.none
-          }
-        }),
-      children,
-    )
-  } else {
-    @html.div(
-      class~,
-      title=change.unselectable_title(),
-      attrs=@html.Attrs::build()
-        .id(changed_file_row_id(index))
-        .data_set("path", change.path.0)
-        .role("button")
-        .aria_disabled("true")
-        .tabindex(0)
-        .aria_label(change.unselectable_title())
-        .aria_current(if selected { "page" } else { "false" }),
-      children,
-    )
+  let label = match item {
+    ChangeDirectory(path) => path.0
+    ChangeFile(change) => "View diff: " + change.status_title()
   }
+  let title = match item {
+    ChangeDirectory(path) => path.0
+    ChangeFile(change) if change.selectable() =>
+      "Open diff — " + change.status_title()
+    ChangeFile(change) => change.unselectable_title()
+  }
+  let attrs = @html.Attrs::build()
+    .role("treeitem")
+    .aria_label(label)
+    .aria_level((row.depth + 1).to_string())
+    .aria_posinset((row.position + 1).to_string())
+    .aria_setsize(row.siblings.to_string())
+    .aria_selected(selected.to_string())
+    .aria_current(if selected { "page" } else { "false" })
+    .data_set("path", item.path().0)
+    .tabindex(if focus == Some(item) { 0 } else { -1 })
+    .on_focus(_ => dispatch(ChangeTreeFocused(item)))
+    .on_keydown(event => {
+      if event.alt_key() || event.ctrl_key() || event.meta_key() {
+        return @cmd.none
+      }
+      if [
+          "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "Enter",
+          " ",
+        ].contains(event.key()) {
+        event.prevent_default()
+        event.stop_propagation()
+        change_tree_key(dispatch, state, rows, index, event.key())
+      } else {
+        @cmd.none
+      }
+    })
+  let attrs = match change_tree_row_id(state, item) {
+    Some(id) => attrs.id(id)
+    None => attrs
+  }
+  let attrs = match item {
+    ChangeDirectory(_) => attrs.aria_expanded(row.expanded.to_string())
+    ChangeFile(_) => attrs.aria_disabled((!reviewable).to_string())
+  }
+  @html.div(
+    class~,
+    title~,
+    style=["--tree-depth: \{row.depth}"],
+    attrs~,
+    on_click=@cmd.batch([
+      focus_change_tree_after_render(state, Some(item)),
+      match item {
+        ChangeDirectory(path) =>
+          dispatch(ChangeDirectoryExpanded(path, !row.expanded))
+        ChangeFile(change) if change.selectable() =>
+          dispatch(ChangedFileSelected(change))
+        _ => @cmd.none
+      },
+    ]),
+    [
+      @html.span(
+        class=if row.expanded {
+          "tree-twistie expanded"
+        } else {
+          "tree-twistie"
+        },
+        attrs=@html.Attrs::build().aria_hidden("true"),
+        if item is ChangeDirectory(_) {
+          @icons.icon_chevron_down()
+        } else {
+          @html.nothing
+        },
+      ),
+      @html.button(
+        class="change-review-checkbox",
+        type_="button",
+        disabled=!reviewable,
+        title=if progress is ReviewComplete {
+          "Mark unreviewed"
+        } else {
+          "Mark reviewed"
+        },
+        attrs=@html.Attrs::build()
+          .role("checkbox")
+          .tabindex(-1)
+          .aria_label("Reviewed: " + item.path().0)
+          .aria_checked(
+            match progress {
+              ReviewComplete => "true"
+              ReviewInProgress => "mixed"
+              ReviewUnviewed => "false"
+            },
+          )
+          .on_click(event => {
+            event.stop_propagation()
+            @cmd.batch([
+              dispatch(ChangeTreeReviewToggled(item)),
+              focus_change_tree_after_render(state, Some(item)),
+            ])
+          })
+          .on_keydown(event => {
+            event.stop_propagation()
+            @cmd.none
+          }),
+        match progress {
+          ReviewComplete => @icons.icon_check()
+          ReviewInProgress => @html.span(class="change-review-partial", "")
+          ReviewUnviewed => @html.nothing
+        },
+      ),
+      if item is ChangeFile(_) {
+        @html.span(
+          class="change-file-icon",
+          attrs=@html.Attrs::build().aria_hidden("true"),
+          @svg.svg(width=16, height=16, view_box="0 0 16 16", [
+            @svg.path(
+              d="M3 3.5h10M3 6.5h7M3 9.5h10M3 12.5h7",
+              attrs=@svg.Attrs::build().stroke("currentColor").fill("none"),
+            ),
+          ]),
+        )
+      } else {
+        @html.nothing
+      },
+      @html.span(class="change-path", row.node.label),
+      match item {
+        ChangeFile(change) =>
+          @html.span(
+            class="change-status " + change.kind_class(),
+            change.status_label(),
+          )
+        ChangeDirectory(_) => @html.nothing
+      },
+      @html.span(
+        class="tree-indent-guides",
+        attrs=@html.Attrs::build().aria_hidden("true"),
+        @html.nothing,
+      ),
+    ],
+  )
 }
 
 ///|

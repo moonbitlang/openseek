@@ -92,6 +92,13 @@ pub(all) enum ChangeList {
 pub fn ChangeList::equal(Self, Self) -> Bool
 pub fn ChangeList::not_equal(Self, Self) -> Bool
 
+pub(all) enum ChangeTreeItem {
+  ChangeDirectory(@pathx.Relative)
+  ChangeFile(ChangedFile)
+} derive(Eq)
+pub fn ChangeTreeItem::equal(Self, Self) -> Bool
+pub fn ChangeTreeItem::not_equal(Self, Self) -> Bool
+
 pub(all) struct ChangedFile {
   path : @pathx.Relative
   original_path : @pathx.Relative?
@@ -268,6 +275,9 @@ pub(all) enum Msg {
   GitCommitChangesRetry(String)
   HistoricalFileSelected(@dock.GitHistoryDiff)
   ToggleChangesSection
+  ChangeDirectoryExpanded(@pathx.Relative, Bool)
+  ChangeTreeFocused(ChangeTreeItem)
+  ChangeTreeReviewToggled(ChangeTreeItem)
   ToggleGitGraphSection
   FileSelected(path~ : @pathx.Relative, name~ : String)
   ChangedFileSelected(ChangedFile)
@@ -442,6 +452,8 @@ pub(all) struct State {
   change_extensions : Array[String?]?
   change_path_filter : String
   changes : ChangeList
+  change_tree_collapsed : Array[@pathx.Relative]
+  change_tree_focus : ChangeTreeItem?
   git_graph : GitGraphState
   git_graph_generation : Int
   git_graph_selected : String?
