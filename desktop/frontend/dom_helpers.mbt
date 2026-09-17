@@ -66,24 +66,6 @@ fn Theme::apply(
 }
 
 ///|
-/// Apply one monospace choice to CSS code surfaces and both imperative text
-/// widgets. The editor and terminal commands also update their measured font
-/// state and existing DOM.
-fn AppFont::apply(self : AppFont) -> @cmd.Cmd {
-  let wire = self.wire()
-  let family = self.css_family()
-  @cmd.batch([
-    @cmd.custom_cmd(_ => {
-      if @dom.document().get_document_element() is Some(root) {
-        root.set_attribute("data-font", wire)
-      }
-    }),
-    @fileeditor.apply_font_family(family),
-    @terminal.apply_font_family(family),
-  ])
-}
-
-///|
 /// Apply one type scale to CSS and both measured text widgets. The root token
 /// changes ordinary app text; editor and terminal commands apply the visually
 /// matched monospace size and recompute glyph geometry immediately.

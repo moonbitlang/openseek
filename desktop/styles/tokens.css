@@ -174,23 +174,6 @@
   --z-connection-lost: 80;
 }
 
-/* Font choices affect code, the editor, and the terminal. The system stack is
-   the default; Geist remains available as an offline bundled alternative. */
-:root[data-font="geist-mono"] {
-  --font-family-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
-    Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
-:root[data-font="system-mono"] {
-  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
-}
-
-:root[data-font="menlo"] {
-  --font-family-mono: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-    monospace;
-}
-
 /* Settings moves the base from 12px through 18px. The derived tokens shift as
    one scale, preserving the hierarchy between labels, body text, and headings. */
 :root[data-font-size="12"] {

@@ -2035,7 +2035,6 @@ fn update_msg(
       notification_corner~,
       tree_layout~,
       theme~,
-      font~,
       font_size~,
       fps_overlay_enabled~,
       minimal_transcript~,
@@ -2048,7 +2047,6 @@ fn update_msg(
       glm_effort~
     ) => {
       let theme = Theme::parse(theme, model.theme)
-      let app_font = AppFont::parse(font, model.app_font)
       let app_font_size = AppFontSize::parse(font_size, model.app_font_size)
       // Startup runs before any conversation exists, so adopting the stored
       // tiers here is enough — every conversation minted afterwards reads
@@ -2096,7 +2094,6 @@ fn update_msg(
         notification_corner: NotificationCorner::parse(notification_corner),
         tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
         theme,
-        app_font,
         app_font_size,
         fps_overlay_enabled,
         minimal_transcript,
@@ -2118,7 +2115,6 @@ fn update_msg(
       (
         @cmd.batch([
           theme.apply(model.system_dark, model.is_desktop, dispatch),
-          app_font.apply(),
           app_font_size.apply(),
           codex_cmd,
           codex_effort_cmd,
@@ -4600,18 +4596,6 @@ fn update_msg(
             theme.save(),
           ]),
           { ..model, theme, },
-        )
-      }
-    }
-    FontChanged(value) => {
-      let app_font = AppFont::parse(value, model.app_font)
-      let model = { ..model, select_menu: None, }
-      if app_font == model.app_font {
-        (@cmd.none, model)
-      } else {
-        (
-          @cmd.batch([app_font.apply(), app_font.save()]),
-          { ..model, app_font, },
         )
       }
     }
@@ -13240,7 +13224,6 @@ test "loaded UI preferences parse their wire names" {
       notification_corner="top-left",
       tree_layout="",
       theme="dark",
-      font="menlo",
       font_size="15",
       fps_overlay_enabled=true,
       minimal_transcript=false,
@@ -13256,7 +13239,6 @@ test "loaded UI preferences parse their wire names" {
   )
   assert_true(restored.notification_corner is TopLeft)
   assert_true(restored.theme is Dark)
-  assert_true(restored.app_font is Menlo)
   assert_eq(restored.app_font_size, AppFontSize(15))
   assert_true(restored.default_model is DsFlash)
   assert_true(restored.default_agent is CodexAgent)
@@ -13271,7 +13253,6 @@ test "loaded UI preferences parse their wire names" {
       notification_corner="",
       tree_layout="",
       theme="broken",
-      font="broken",
       font_size="broken",
       fps_overlay_enabled=false,
       minimal_transcript=false,
@@ -13287,7 +13268,6 @@ test "loaded UI preferences parse their wire names" {
   )
   assert_true(unknown.notification_corner is BottomRight)
   assert_true(unknown.theme is System)
-  assert_true(unknown.app_font is SystemMono)
   assert_eq(unknown.app_font_size, AppFontSize(14))
   assert_true(unknown.default_model is DsFlash)
   assert_true(unknown.openseek_reasoning is ReasoningHigh)
@@ -13962,7 +13942,6 @@ test "the GLM provider aligns only a fresh chat to its model family" {
       notification_corner="",
       tree_layout="",
       theme="",
-      font="",
       font_size="",
       fps_overlay_enabled=false,
       minimal_transcript=false,
@@ -16425,24 +16404,6 @@ test "theme settings switch fixed palettes and are idempotent" {
   assert_true(light.theme is Light)
   let (_, unchanged) = update(dispatch, ThemeChanged("unknown"), system)
   assert_true(unchanged.theme is System)
-}
-
-///|
-test "monospace settings switch code surfaces and are idempotent" {
-  let dispatch = test_dispatch()
-  let model = test_model()
-  let (_, first) = update(dispatch, FontChanged("geist-mono"), model)
-  let (_, second) = update(dispatch, FontChanged("geist-mono"), first)
-  assert_true(first.app_font is GeistMono)
-  assert_true(second.app_font is GeistMono)
-  let (_, system) = update(dispatch, FontChanged("system-mono"), first)
-  assert_true(system.app_font is SystemMono)
-  let (_, menlo) = update(dispatch, FontChanged("menlo"), system)
-  assert_true(menlo.app_font is Menlo)
-  let (_, bundled) = update(dispatch, FontChanged("geist-mono"), menlo)
-  assert_true(bundled.app_font is GeistMono)
-  let (_, unchanged) = update(dispatch, FontChanged("unknown"), model)
-  assert_true(unchanged.app_font is SystemMono)
 }
 
 ///|

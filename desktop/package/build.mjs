@@ -255,7 +255,6 @@ class Build {
       await cp(join(generated, name), join(output, name));
     }
     await cp(join(this.repo, "editor/viewer/browser/view/codicon/codicon.ttf"), join(output, "codicon.ttf"));
-    await cp(join(this.desktop, "fonts"), join(output, "fonts"), { recursive: true });
     await cp(join(generated, "mermaid"), join(output, "mermaid"), { recursive: true });
   }
 

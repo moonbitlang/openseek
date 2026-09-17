@@ -106,7 +106,6 @@ seekmoon/
     xterm.js
     xterm.css
     mermaid/
-    fonts/
     viz/
   bin/
     openseek[.exe]

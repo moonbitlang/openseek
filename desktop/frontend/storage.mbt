@@ -19,7 +19,6 @@ fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           notification_corner=load_setting(NotificationCornerStorageKey),
           tree_layout=load_setting(TreeLayoutStorageKey),
           theme=load_setting(ThemeStorageKey),
-          font=load_setting(AppFontStorageKey),
           font_size=load_setting(AppFontSizeStorageKey),
           minimal_transcript=load_setting(MinimalTranscriptStorageKey) == "true",
           fps_overlay_enabled=load_setting(FpsOverlayStorageKey) == "true",
@@ -143,12 +142,6 @@ fn parse_conversation_models(text : String) -> Array[StoredConversationModel] {
 /// System state, while an explicit System choice survives subsequent reloads.
 fn Theme::save(self : Theme) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(ThemeStorageKey, self.wire()))
-}
-
-///|
-/// Persist the monospace family used by code, the editor, and the terminal.
-fn AppFont::save(self : AppFont) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => save_setting(AppFontStorageKey, self.wire()))
 }
 
 ///|

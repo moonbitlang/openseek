@@ -391,7 +391,7 @@ test('history-only sessions wait for explicit selection before loading a log', a
   expect(app.pageErrors).toEqual([]);
 });
 
-test('font settings scale Jobs with the transcript and persist code font choices', async ({ page }, testInfo) => {
+test('font size settings scale Jobs with the transcript', async ({ page }, testInfo) => {
   await mount(page);
   const jobs = page.locator('.jobs-panel');
   const prose = page.locator('.transcript .msg-content').first();
@@ -408,8 +408,6 @@ test('font settings scale Jobs with the transcript and persist code font choices
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Font size', exact: true }).click();
   await page.getByRole('option', { name: '18px', exact: true }).click();
-  await page.getByRole('button', { name: 'Monospace font', exact: true }).click();
-  await page.getByRole('option', { name: 'Menlo', exact: true }).click();
   await app.openSession();
   await expect(prose).toHaveCSS('font-size', '18px');
   await expect(command).toHaveCSS('font-size', '18px');
@@ -418,7 +416,7 @@ test('font settings scale Jobs with the transcript and persist code font choices
   await expect(jobs.locator('.jobs-row-meta').first()).toHaveCSS('font-size', '16px');
   await expect(jobs.locator('.jobs-action').first()).toHaveCSS('font-size', '17px');
   await expect(output).toHaveCSS('font-size', '17px');
-  await expect(output).toHaveCSS('font-family', /^Menlo,/);
+  await expect(output).toHaveCSS('font-family', /ui-monospace/);
   await expect(jobs.locator('.jobs-full-command')).toHaveCSS('font-family', await output.evaluate(el => getComputedStyle(el).fontFamily));
   await expect(prose).not.toHaveCSS('font-family', /Menlo/);
 
@@ -427,7 +425,7 @@ test('font settings scale Jobs with the transcript and persist code font choices
   await app.openJobs();
   await expect(command).toHaveCSS('font-size', '18px');
   await expect(output).toHaveCSS('font-size', '17px');
-  await expect(output).toHaveCSS('font-family', /^Menlo,/);
+  await expect(output).toHaveCSS('font-family', /ui-monospace/);
   await page.setViewportSize({ width: 1000, height: 850 });
   await expect.poll(() => jobs.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('jobs-font-large-light.png'), fullPage: true });

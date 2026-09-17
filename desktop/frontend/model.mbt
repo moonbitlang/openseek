@@ -239,12 +239,6 @@ const FpsOverlayStorageKey : String = "openseek.fps_overlay"
 const MinimalTranscriptStorageKey : String = "openseek.minimal_transcript"
 
 ///|
-/// The page-local monospace family shared by code content, the editor, and the
-/// terminal. The value is a fixed choice rather than arbitrary CSS so stored
-/// input can never become a style injection surface.
-const AppFontStorageKey : String = "openseek.font"
-
-///|
 /// The page-local type scale shared by the app chrome, editor, and terminal.
 const AppFontSizeStorageKey : String = "openseek.font_size"
 
@@ -331,50 +325,6 @@ fn Theme::wire(self : Theme) -> String {
     System => "system"
     Light => "light"
     Dark => "dark"
-  }
-}
-
-///|
-/// The monospace family selected in Settings. The system stack is the default;
-/// Geist remains available as an offline bundled alternative.
-priv enum AppFont {
-  GeistMono
-  SystemMono
-  Menlo
-} derive(Eq)
-
-///|
-/// Unknown or absent stored values retain the current choice, so a stale
-/// localStorage value cannot silently replace the active system default.
-fn AppFont::parse(value : String, fallback : AppFont) -> AppFont {
-  match value {
-    "geist-mono" => GeistMono
-    "system-mono" => SystemMono
-    "menlo" => Menlo
-    _ => fallback
-  }
-}
-
-///|
-fn AppFont::wire(self : AppFont) -> String {
-  match self {
-    GeistMono => "geist-mono"
-    SystemMono => "system-mono"
-    Menlo => "menlo"
-  }
-}
-
-///|
-/// The concrete CSS family list also feeds xterm and the editor's measured
-/// font option, whose imperative widgets cannot inherit the app variable.
-fn AppFont::css_family(self : AppFont) -> String {
-  match self {
-    GeistMono =>
-      "\"Geist Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
-    SystemMono =>
-      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
-    Menlo =>
-      "Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
   }
 }
 
@@ -1321,7 +1271,6 @@ priv enum SelectMenu {
   ApiProviderMenu
   FollowupBehaviorMenu
   ThemeMenu
-  FontMenu
   FontSizeMenu
   NotificationCornerMenu
   TreeLayoutMenu
@@ -1472,8 +1421,6 @@ priv struct Model {
   // The Settings selection. Its effective palette drives the app root,
   // embedded viewer, and terminal together.
   theme : Theme
-  // The Settings selection shared by code content, editor text, and terminals.
-  app_font : AppFont
   // The Settings type scale shared by app chrome, editor text, and terminals.
   app_font_size : AppFontSize
   // One local display preference shared by OpenSeek and Codex transcripts.
@@ -1734,7 +1681,6 @@ priv enum Msg {
     notification_corner~ : String,
     tree_layout~ : String,
     theme~ : String,
-    font~ : String,
     font_size~ : String,
     fps_overlay_enabled~ : Bool,
     minimal_transcript~ : Bool,
@@ -1875,8 +1821,6 @@ priv enum Msg {
   ThemeChanged(String)
   FpsOverlayChanged(Bool)
   MinimalTranscriptChanged(Bool)
-  // A Settings selection changes code/editor/terminal monospace text and persists it.
-  FontChanged(String)
   // A Settings selection changes the shared app/editor/terminal type scale.
   FontSizeChanged(String)
   // The window was resized; `width` decides the narrow (phone) layout.
@@ -2646,7 +2590,6 @@ fn initial_model() -> Model {
     },
     system_dark: host_prefers_dark(),
     theme: System,
-    app_font: SystemMono,
     app_font_size: AppFontSize(14),
     fps_overlay_enabled: false,
     minimal_transcript: false,

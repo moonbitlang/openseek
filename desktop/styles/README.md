@@ -56,19 +56,23 @@ the app (400), with antialiased font smoothing on macOS. Markdown emphasis
 uses 600 rather than the browser's default bold weight. Chat prose and
 composer input use normal letter spacing for mixed Chinese and Latin text.
 Code blocks, commands, logs, and paths displayed as code use
-`--font-family-mono`, which follows the `Monospace font` setting. Avoid
-independent font stacks or misspelled fallback tokens that bypass that
-setting. Task names may use weight 500 and headings 600 to express hierarchy.
+`--font-family-mono`, the one monospace stack the CSS code surfaces, the editor,
+and the terminal share. Avoid independent font stacks or misspelled fallback
+tokens that bypass it. Task names may use weight 500 and headings 600 to
+express hierarchy.
 
 The code editor and terminal also need their measured options updated:
-`AppFont::apply` and `AppFontSize::apply` do that alongside the root settings.
-New terminals read `--font-size-sm` through CSSOM, so its registered `<length>`
-type must keep resolving to pixels. The Viewer theme's standalone defaults
-are overridden for every embedded app code surface in `tokens.css`.
+`AppFontSize::apply` writes the root type scale and both widgets' measured
+sizes. Both resolve the monospace stack themselves — the editor's default is
+that stack, and a new terminal reads `--font-family-mono` through CSSOM when it
+mounts. New terminals read `--font-size-sm` through CSSOM too, so its
+registered `<length>` type must keep resolving to pixels. The Viewer theme's
+standalone defaults are overridden for every embedded app code surface in
+`tokens.css`.
 
 Verify changed typography at the minimum and maximum font settings, after
-reload, and with a different monospace font. Include narrow panels and both
-light and dark themes; let content wrap or reduce columns as text grows.
+reload, and in both light and dark themes; let content wrap or reduce columns
+as text grows.
 
 ## Form-field focus ownership
 

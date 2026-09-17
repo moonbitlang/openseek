@@ -222,7 +222,7 @@ test('Close respects dialogs and closes successive dock tabs without closing the
 });
 
 
-test('new terminals and existing terminals use the current font settings', async ({ page }) => {
+test('new terminals and existing terminals use the current font size', async ({ page }) => {
   const app = await installDesktop(page);
   // Observe the real xterm instance; rendering and options remain production code.
   await page.evaluate(() => {
@@ -239,13 +239,10 @@ test('new terminals and existing terminals use the current font settings', async
   const fontSize = page.getByRole('button', { name: 'Font size', exact: true });
   await fontSize.click();
   await page.getByRole('option', { name: '18px', exact: true }).click();
-  await page.getByRole('button', { name: 'Monospace font', exact: true }).click();
-  await page.getByRole('option', { name: 'Menlo', exact: true }).click();
   await app.openSession();
   await page.keyboard.press('Control+Backquote');
   await expect(page.locator('.terminal-instance:visible .xterm-helper-textarea')).toBeFocused();
   await expect.poll(() => page.evaluate(() => window.fontTestTerminals.map(t => t.options.fontSize))).toEqual([17]);
-  await expect.poll(() => page.evaluate(() => window.fontTestTerminals[0].options.fontFamily)).toMatch(/^Menlo/);
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await fontSize.click();

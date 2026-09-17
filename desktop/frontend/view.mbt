@@ -1285,25 +1285,6 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         desc="Used by the app, editor, and terminal. System follows the OS appearance.",
       ),
       @settings.row(
-        "Monospace font",
-        [
-          FontMenu.setting_control(
-            dispatch,
-            model,
-            id="font-select",
-            options=[
-              { value: "system-mono", label: "System monospace", },
-              { value: "geist-mono", label: "Geist Mono", },
-              { value: "menlo", label: "Menlo", },
-            ],
-            selected=model.app_font.wire(),
-            aria_label="Monospace font",
-            change=dispatch.map(value => FontChanged(value)),
-          ),
-        ],
-        desc="Used by code, the editor, and the terminal.",
-      ),
-      @settings.row(
         "Font size",
         [
           FontSizeMenu.setting_control(
