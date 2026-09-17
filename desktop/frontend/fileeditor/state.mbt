@@ -547,9 +547,12 @@ pub(all) struct State {
   // successful listing does not hide the loss of live updates. The root app
   // owns its toast presentation; this state only prevents a retry loop.
   watch_error : String?
+  // The file tree's keyboard entry, independent of the editor's DOM focus.
+  tree_focus : @pathx.Relative?
+  // Follow editor changes once, then leave manual folding/scrolling alone.
+  tree_reveal : TreeReveal
   // Directory paths the user has expanded, and those with a `read_directory`
   // in flight; plain arrays since a workspace tree is small.
-  tree_focus : @pathx.Relative?
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
   // Listed directories' entries, keyed by the directory's relative path.
@@ -634,6 +637,7 @@ pub fn State::empty() -> State {
     watch_generation: 0,
     watch_error: None,
     tree_focus: None,
+    tree_reveal: TreeRevealInactive,
     expanded: [],
     loading: [],
     children: Map([]),

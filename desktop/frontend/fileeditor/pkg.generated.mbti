@@ -483,6 +483,7 @@ pub(all) struct State {
   watch_generation : Int
   watch_error : String?
   tree_focus : @pathx.Relative?
+  tree_reveal : TreeReveal
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
   children : Map[@pathx.Relative, Array[FileEntry]]
@@ -522,6 +523,10 @@ pub fn TreeLayout::equal(Self, Self) -> Bool
 pub fn TreeLayout::not_equal(Self, Self) -> Bool
 pub fn TreeLayout::parse(String) -> Self
 pub fn TreeLayout::wire(Self) -> String
+
+type TreeReveal derive(Eq)
+pub fn TreeReveal::equal(Self, Self) -> Bool
+pub fn TreeReveal::not_equal(Self, Self) -> Bool
 
 pub(all) struct WatchedPaths {
   owner : @interop.ConversationKey

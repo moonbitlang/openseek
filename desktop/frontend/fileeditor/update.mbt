@@ -2319,6 +2319,10 @@ pub fn sync(
     sync_semantic_review_editors(dispatch, state, ctx),
     navigation_cmd,
   ])
+  // The dock has already reconciled its active editor. Reveal from this shared
+  // projection rather than duplicating behavior at every file-opening action.
+  let (state, reveal_cmd) = state.sync_tree_reveal(dispatch, ctx)
+  let pending_cmd = @cmd.batch([pending_cmd, reveal_cmd])
   // A closed panel re-roots (above) and keeps the watcher placed, but the tree
   // itself can wait for the reopen. Unresolved placement takes the same early
   // exit even if the dock is visible: no host path may fall back to root.
@@ -2932,7 +2936,11 @@ fn update_inner(
       if state.expanded.contains(path) {
         (
           @cmd.none,
-          { ..state, expanded: state.expanded.filter(entry => entry != path), },
+          {
+            ..state,
+            expanded: state.expanded.filter(entry => entry != path),
+            tree_reveal: state.tree_reveal.settle(),
+          },
         )
       } else {
         let expanded = state.expanded.copy()
@@ -3017,6 +3025,11 @@ fn update_inner(
             ..state,
             loading: state.loading.filter(entry => entry != path),
             error: Some(message),
+            tree_reveal: match state.tree_reveal {
+              TreeRevealPending(target) if path.is_root() ||
+                target.0.has_prefix(path.0 + "/") => TreeRevealSettled(target)
+              _ => state.tree_reveal
+            },
           },
         )
       }
