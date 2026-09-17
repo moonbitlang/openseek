@@ -76,7 +76,8 @@ fn append_item_message(
         // same answer a second time.
         if !(messages.last() is Some(last) &&
           last.role is Assistant &&
-          last.content == [Text(text=content)]) {
+          last.content.is_text_only() &&
+          last.content.text() == content) {
           messages.push(ChatMessage(Assistant, content=[Text(text=content)]))
         }
       }

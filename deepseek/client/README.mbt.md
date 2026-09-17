@@ -76,7 +76,11 @@ let message = @deepseek.ChatMessage(User, content=[
 let response = client.chat([message])
 ```
 
-`ChatMessage.content` is always an `Array[ContentPart]`. A single text part
+`ChatMessage` accepts an array of parts and wraps it in `Content`. Use
+`message.content.text()` to concatenate all text fragments without separators,
+skipping files, and `message.content.iter()` to inspect the ordered parts.
+Text-only comparisons can additionally require `content.is_text_only()` so
+file references are not silently discarded. A single text part
 encodes as a plain string for compatibility with existing requests. Other
 user/tool content encodes as an array of content parts. Each `Text(text=...)`
 part produces `{"type":"text","text":...}`; each `File(file_id=...)` produces

@@ -1,8 +1,53 @@
 ///|
+/// Ordered message content. Text extraction and structural inspection are
+/// separate operations: extracting text does not imply the content is text-only.
+struct Content {
+  parts : Array[ContentPart]
+} derive(Debug)
+
+///|
+/// Wraps content parts in their original order.
+pub fn Content::Content(parts : Array[ContentPart]) -> Content {
+  { parts, }
+}
+
+///|
+pub extend Content with Debug::{to_repr}
+
+///|
+/// Concatenates every text part in order, without adding separators. File
+/// references contribute no text. Empty and file-only content yield "" because
+/// they contain zero text characters; this method does not describe images.
+pub fn Content::text(self : Content) -> String {
+  self.parts
+  .iter()
+  .filter_map(part => {
+    match part {
+      Text(text~) => Some(text)
+      File(_) => None
+    }
+  })
+  .join("")
+}
+
+///|
+/// Whether every part is text. Empty content is text-only. Use this alongside
+/// `text()` when a comparison must not discard file references.
+pub fn Content::is_text_only(self : Content) -> Bool {
+  self.parts.all(part => part is Text(_))
+}
+
+///|
+/// Visits all text and file parts in their original order.
+pub fn Content::iter(self : Content) -> Iter[ContentPart] {
+  self.parts.iter()
+}
+
+///|
 /// Supported Chat Completions content parts. `File` encodes directly as
 /// {"type":"file","file_id":...}; IDs must belong to the sending API key.
 /// Text and file parts retain their order, including interleaved text.
-/// `ChatMessage.content` always holds an array of these parts. The encoder
+/// `ChatMessage.content` wraps an array of these parts. The encoder
 /// handles the API's string alternative; callers do not choose a wire shape.
 /// This package currently exposes uploaded-file references; the API's URL and
 /// inline file-data alternatives are not yet represented here.

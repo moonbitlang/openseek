@@ -191,7 +191,7 @@ impl Show for Role with fn to_string(self : Role) -> String {
 /// a tool-call message encodes JSON `content: null`.
 pub struct ChatMessage {
   role : Role
-  content : Array[ContentPart]
+  content : Content
   tool_calls : Array[ToolCall]
   reasoning_content : String?
 } derive(Debug)
@@ -200,6 +200,7 @@ pub struct ChatMessage {
 /// Constructs a typed chat message with an ordered array of content parts.
 /// Even plain text uses one `Text` part; string-versus-array JSON is an encoding
 /// detail. System and assistant messages accept text parts only.
+/// The supplied array is wrapped in `Content`, providing `text()` and `iter()`.
 /// Request encoders validate role restrictions and file IDs before sending.
 pub fn ChatMessage::ChatMessage(
   role : Role,
@@ -207,7 +208,7 @@ pub fn ChatMessage::ChatMessage(
   tool_calls? : Array[ToolCall] = [],
   reasoning_content? : String,
 ) -> ChatMessage {
-  { role, content, tool_calls, reasoning_content, }
+  { role, content: Content(content), tool_calls, reasoning_content, }
 }
 
 ///|
@@ -240,13 +241,13 @@ pub struct ChatResponse {
 test "chat message constructor" {
   let user = ChatMessage(User, content=[Text(text="hello")])
   assert_eq("\{user.role}", "user")
-  assert_eq(user.content, [Text(text="hello")])
+  assert_eq(user.content.text(), "hello")
   let assistant = ChatMessage(Assistant, content=[Text(text="done")])
   assert_eq("\{assistant.role}", "assistant")
-  assert_eq(assistant.content, [Text(text="done")])
+  assert_eq(assistant.content.text(), "done")
   let tool = ChatMessage(Tool("call_123"), content=[Text(text="tool result")])
   assert_eq("\{tool.role}", "tool")
-  assert_eq(tool.content, [Text(text="tool result")])
+  assert_eq(tool.content.text(), "tool result")
 }
 
 ///|

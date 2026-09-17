@@ -1,4 +1,40 @@
 ///|
+test "text extraction joins all fragments while iteration preserves files" {
+  let parts : Array[@deepseek.ContentPart] = [
+    File(file_id="file-api-before"),
+    Text(text="previous agent"),
+    File(file_id="file-api-middle"),
+    Text(text=" process"),
+    Text(text=" exited"),
+    File(file_id="file-api-after"),
+  ]
+  let message = @deepseek.ChatMessage(User, content=parts)
+  assert_eq(message.content.text(), "previous agent process exited")
+  assert_true(message.content.text().contains("previous agent process exited"))
+  assert_false(message.content.is_text_only())
+  assert_eq(message.content.iter().collect(), parts)
+}
+
+///|
+test "empty and file-only content contribute no text" {
+  let empty = @deepseek.Content([])
+  assert_eq(empty.text(), "")
+  assert_true(empty.is_text_only())
+  let file_only = @deepseek.Content([File(file_id="file-api-only")])
+  assert_eq(file_only.text(), "")
+  assert_false(file_only.text().contains("previous agent process exited"))
+  assert_false(file_only.is_text_only())
+  let text_only = @deepseek.Content([
+    Text(text=""),
+    Text(text="hello"),
+    Text(text="\nworld"),
+    Text(text=""),
+  ])
+  assert_eq(text_only.text(), "hello\nworld")
+  assert_true(text_only.is_text_only())
+}
+
+///|
 test "content parts preserve interleaved text and uploaded files" {
   let user = @deepseek.ChatMessage(User, content=[
     Text(text="first image"),
