@@ -21,7 +21,7 @@
 @property --color-text-selection {
   syntax: "<color>";
   inherits: true;
-  initial-value: #eef2fe;
+  initial-value: #a3c4f5;
 }
 
 /* xterm reads this size through CSSOM when a terminal opens. Register the
