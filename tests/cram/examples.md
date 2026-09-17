@@ -31,3 +31,16 @@ The CLI example counts what it reads; here stdin is six bytes:
 $ printf 'hello\n' | moonx "$TESTDIR/../../share/examples/cli_count_input.mbtx" --stdin
 6
 ```
+
+The greeting example is what the prompt promises about `args`: an option
+declared with a default, and the same script reading it from the caller.
+
+```mooncram
+$ moonx "$TESTDIR/../../share/examples/cli_greet.mbtx"
+Hello, world!
+```
+
+```mooncram
+$ moonx "$TESTDIR/../../share/examples/cli_greet.mbtx" --name "Ada Lovelace"
+Hello, Ada Lovelace!
+```

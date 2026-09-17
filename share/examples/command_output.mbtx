@@ -1,0 +1,15 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+}
+
+///|
+async fn main {
+  let out = @shell.Cmd("rg", [
+    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
+  ]).output()
+  println(out.stdout())
+  println(out.stderr())
+  println("exit=\{out.exit_code()}")
+}

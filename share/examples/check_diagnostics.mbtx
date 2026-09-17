@@ -1,0 +1,30 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/json",
+}
+
+///|
+async fn main {
+  let mut errors = 0
+  let exit_code = @shell.Cmd(
+    "moon",
+    ["check", "--output-json", "--diagnostic-limit", "5"],
+    env={ "NO_COLOR": "1" },
+  ).each_line() <| line => {
+    let diagnostic = @json.parse(line) catch { _ => return }
+    if diagnostic
+      is {
+        "level": String("error"),
+        "path": String(path),
+        "loc": String(loc),
+        "message": String(message),
+        ..
+      } {
+      errors += 1
+      println("\{path}:\{loc}  \{message}")
+    }
+  }
+  println("exit=\{exit_code} errors=\{errors}")
+}

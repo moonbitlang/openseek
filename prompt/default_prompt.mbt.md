@@ -45,18 +45,7 @@ strings; there is no shell expansion. The script runs on wasm. Import
 For example, save this source as `scripts/check.mbtx` by calling `mbtx` with
 both `source` and `filename`, and `args=["--deny-warn"]`:
 
-```mbtx
-import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
-  "moonbitlang/core/env",
-}
-
-async fn main {
-  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
-  if code != 0 { fail("moon check failed (exit=\{code})") }
-}
-```
+[share/examples/script_args.mbtx](../share/examples/script_args.mbtx)
 
 Reuse it with `{"filename":"scripts/check.mbtx","args":["--output-json"]}`,
 or `{"filename":"scripts/check.mbtx"}` for `moon check` with no extra arguments.
@@ -66,24 +55,7 @@ explicitly. Call `@argparse.parse(...)` without `argv`: it reads the process
 arguments and handles the executable prefix, so no `@env.args()` slicing is
 needed. For example, save this source as `scripts/greet.mbtx`:
 
-```mbtx
-import { "moonbitlang/core/argparse" }
-
-fn main raise {
-  let matches = @argparse.parse(
-    Command(
-      "greet",
-      options=[
-        OptionArg("name", long="name", default_values=["world"], about="Who to greet."),
-      ],
-    ),
-  )
-  guard matches.values.get("name") is Some([name]) else {
-    fail("expected one value for --name")
-  }
-  println("Hello, \{name}!")
-}
-```
+[share/examples/cli_greet.mbtx](../share/examples/cli_greet.mbtx)
 
 Call `{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}`
 to print `Hello, Ada Lovelace!`. Omitting `args` prints `Hello, world!`.
@@ -107,38 +79,7 @@ program (MoonBit script is imports + vanilla MoonBit code):
 
 A minimal script can inspect paths without spawning a process:
 
-```mbtx
-///|
-import {
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/shell",
-  "moonbitlang/core/env",
-}
-
-///|
-async fn main {
-  // `@shell.glob` expands `*`, `?`, character sets, and `**` without shell
-  // parsing; it is `async`, and its sorted matches are ordinary `Array[String]`
-  // values. A pattern that matches nothing returns an empty array. Spread them
-  // into a command's arguments — `@shell.Cmd("rg", ["-c", "TODO", ..files])`;
-  // a bare `@shell.glob(...)` in an argument array is an `Array[String]` where
-  // a `String` is wanted and does not compile.
-  for path in @shell.glob("*.mbt") {
-    println(path)
-  }
-  for name in @fs.readdir(".") {
-    println(name)
-  }
-  // `@env.get_env_var` and `@env.current_dir` return `String?`: unwrap before
-  // interpolating, or `"\{home}/.moon"` renders as `Some(/Users/me)/.moon`.
-  guard @env.get_env_var("HOME") is Some(home) else {
-    println("HOME is not set")
-    return
-  }
-  println("\{home}/.moon exists: \{@fs.exists("\{home}/.moon")}")
-}
-```
+[share/examples/paths_and_env.mbtx](../share/examples/paths_and_env.mbtx)
 
 Use `@shell.Cmd` to run an external program and capture its output. Which
 programs a snippet may start is listed in the `mbtx` tool description, under
@@ -185,23 +126,7 @@ The plain command shape captures both streams and reads them back through
 `Output`'s accessor methods — `out.stdout()`, `out.stderr()`, and
 `out.exit_code()`:
 
-```mbtx
-///|
-import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
-}
-
-///|
-async fn main {
-  let out = @shell.Cmd("rg", [
-    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
-  ]).output()
-  println(out.stdout())
-  println(out.stderr())
-  println("exit=\{out.exit_code()}")
-}
-```
+[share/examples/command_output.mbtx](../share/examples/command_output.mbtx)
 
 `.output()` reports the program's exit code instead of raising on it; `rg`
 exits 1 when nothing matched, so read `exit_code()` rather than treating the
@@ -227,38 +152,7 @@ clamps instead of panicking.
 For compiler feedback, stream the line-delimited JSON from one `moon check`
 rather than collecting it and parsing it afterward:
 
-```mbtx
-///|
-import {
-  "moonbitlang/async",
-  "moonbitlang/async/shell",
-  "moonbitlang/core/json",
-}
-
-///|
-async fn main {
-  let mut errors = 0
-  let exit_code = @shell.Cmd(
-    "moon",
-    ["check", "--output-json", "--diagnostic-limit", "5"],
-    env={ "NO_COLOR": "1" },
-  ).each_line() <| line => {
-    let diagnostic = @json.parse(line) catch { _ => return }
-    if diagnostic
-      is {
-        "level": String("error"),
-        "path": String(path),
-        "loc": String(loc),
-        "message": String(message),
-        ..
-      } {
-      errors += 1
-      println("\{path}:\{loc}  \{message}")
-    }
-  }
-  println("exit=\{exit_code} errors=\{errors}")
-}
-```
+[share/examples/check_diagnostics.mbtx](../share/examples/check_diagnostics.mbtx)
 
 `each_line` hands each stdout line to an async callback as it arrives and
 returns the exit code, so bind that `Int` (or `ignore` it): a bare statement

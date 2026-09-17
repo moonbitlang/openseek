@@ -8,11 +8,28 @@ markdown link to one of these files is expanded into a fenced block by
 written once and shown inline.
 
 Every example is verified: `scripts/check-workflows.mbtx` type-checks each
-one under `--deny-warn` on wasm in CI, the language examples run under
-`tests/cram/examples.md` with their output pinned, and the PTC examples run
-through the real host in `agent_tool/mbtx/examples_test.mbt`. When the
-toolchain changes what it accepts, the example fails before the prompt can
-teach something stale.
+one under `--deny-warn` on wasm in CI, the examples with deterministic output
+run under `tests/cram/examples.md` with their output pinned, and the PTC
+examples run through the real host in `agent_tool/mbtx/examples_test.mbt`.
+The rest — the ones that spawn `moon` or `rg`, glob the working directory, or
+read the environment — are type-checked only, since what they print depends
+on the checkout they run in. When the toolchain changes what it accepts, the
+example fails before the prompt can teach something stale.
+
+Part 1 of the prompt teaches the tooling:
+
+- `script_args.mbtx`: a saved script streaming `moon check`, with `args`
+  passed through from the caller.
+- `cli_greet.mbtx`: `argparse` with a defaulted option, the smallest form of
+  the `args` contract.
+- `paths_and_env.mbtx`: `@shell.glob`, `@fs.readdir`, and the `String?`
+  environment accessors.
+- `command_output.mbtx`: `@shell.Cmd(...).output()` and its three accessors,
+  including a non-zero exit that is not a failure.
+- `check_diagnostics.mbtx`: streaming line-delimited `moon check` JSON with
+  `each_line` and matching it as `@json.parse` output.
+
+Part 2 teaches the language:
 
 - `checked_errors.mbtx`: checked errors as an effect, `suberror`, translation
   at a boundary, `fn main raise`.
@@ -22,6 +39,9 @@ teach something stale.
   patterns.
 - `cli_count_input.mbtx`: an `argparse` CLI reading a file or stdin through
   async IO.
+
+The PTC tool description teaches host calls:
+
 - `ptc_guarded_edit.mbtx`: one guarded `edit` from a script and reading
   `result.data`.
 - `ptc_search_filter.mbtx`: a `web_search` filtered before it reaches the

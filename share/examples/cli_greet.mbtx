@@ -1,0 +1,16 @@
+import { "moonbitlang/core/argparse" }
+
+fn main raise {
+  let matches = @argparse.parse(
+    Command(
+      "greet",
+      options=[
+        OptionArg("name", long="name", default_values=["world"], about="Who to greet."),
+      ],
+    ),
+  )
+  guard matches.values.get("name") is Some([name]) else {
+    fail("expected one value for --name")
+  }
+  println("Hello, \{name}!")
+}

@@ -1,0 +1,30 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+}
+
+///|
+async fn main {
+  // `@shell.glob` expands `*`, `?`, character sets, and `**` without shell
+  // parsing; it is `async`, and its sorted matches are ordinary `Array[String]`
+  // values. A pattern that matches nothing returns an empty array. Spread them
+  // into a command's arguments — `@shell.Cmd("rg", ["-c", "TODO", ..files])`;
+  // a bare `@shell.glob(...)` in an argument array is an `Array[String]` where
+  // a `String` is wanted and does not compile.
+  for path in @shell.glob("*.mbt") {
+    println(path)
+  }
+  for name in @fs.readdir(".") {
+    println(name)
+  }
+  // `@env.get_env_var` and `@env.current_dir` return `String?`: unwrap before
+  // interpolating, or `"\{home}/.moon"` renders as `Some(/Users/me)/.moon`.
+  guard @env.get_env_var("HOME") is Some(home) else {
+    println("HOME is not set")
+    return
+  }
+  println("\{home}/.moon exists: \{@fs.exists("\{home}/.moon")}")
+}
