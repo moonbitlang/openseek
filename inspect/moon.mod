@@ -9,4 +9,4 @@ import {
 
 preferred_target = "wasm"
 
-warnings = "+missing_doc+unnecessary_view_op+test_unqualified_package+unused_default_value+implicit_impl_as_method+unnecessary_annotation+unqualified_local_using"
+warnings = "+missing_doc+unnecessary_view_op+test_unqualified_package+unused_default_value+implicit_impl_as_method+unnecessary_annotation+unqualified_local_using+declaration_implemented"

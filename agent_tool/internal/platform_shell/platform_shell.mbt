@@ -28,11 +28,6 @@ pub let program : String = "powershell.exe"
 pub let program : String = "sh"
 
 ///|
-/// Build arguments that make `program` interpret `cmd` as shell text:
-/// `-NoProfile -Command` for PowerShell, `-c` for `sh`.
-declare pub fn args(cmd : String) -> Array[String]
-
-///|
 /// Build arguments that make `program` interpret `cmd` as shell text
 /// (`-NoProfile -Command` for PowerShell). Sets UTF-8 output encoding so
 /// commands with non-ASCII text (e.g. Chinese characters) produce valid

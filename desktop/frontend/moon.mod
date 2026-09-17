@@ -17,7 +17,7 @@ license = "Apache-2.0"
 
 description = "SeekMoon browser frontend for the OpenSeek desktop client."
 
-warnings = "+implicit_impl_as_method+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+unqualified_local_using"
+warnings = "+implicit_impl_as_method+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+unqualified_local_using+declaration_implemented"
 
 preferred_target = "js"
 
