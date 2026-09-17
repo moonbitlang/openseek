@@ -43,11 +43,11 @@ A script is a whole program — imports plus vanilla MoonBit
 Import `moonbitlang/core/env` and read `@env.args()[1:]` to skip
 the executable name, use `moonbitlang/core/argparse` for pretty cli parsing.
 
-A minimal script do the `moon check` looks like this:
+A minimal `moon check` script:
 
 [share/workflow/check.mbtx](../share/workflow/check.mbtx)
 
-If it is called often, save it as `workflow/check.mbtx`, then do the named mbtx call with such args:
+Save frequently used scripts with a filename:
 
 `{"source":"...","filename":"workflow/check.mbtx","args":["--deny-warn"]}`
 
@@ -57,17 +57,12 @@ none. Ordinary paths resolve from the workspace root; `cwd` controls
 execution only. Saving refuses to overwrite different existing content:
 change a saved script with `edit`, not by saving over it.
 
-For a script with options of its own, declare them with `argparse` rather
-than slicing `@env.args()`. `@argparse.parse(...)` takes no `argv`: it reads
-the process arguments itself and handles the executable prefix, defaults, and
-validation.
+An example with parsed options:
 
 [share/examples/cli_greet.mbtx](../share/examples/cli_greet.mbtx)
 
 `{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}` prints
 `Hello, Ada Lovelace!`; omitting `args` prints `Hello, world!`.
-
-There are some bundled scripts to avoid repeated work:
 
 `{"filename":"@builtin/check.mbtx"}` runs a workflow shipped under
 `<bundled-resources>/workflow/`. Namespaced scripts are read-only: never
