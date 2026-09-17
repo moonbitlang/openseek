@@ -49,11 +49,11 @@ A minimal `moon check` script:
 
 Save frequently used scripts with a filename:
 
-`{"source":"...","filename":"workflow/check.mbtx","args":["--deny-warn"]}`
+`mbtx(source="...", filename="workflow/check.mbtx", args=["--deny-warn"])`
 
-Afterwards `{"filename":"workflow/check.mbtx","args":["--output-json"]}` reruns
-it with different arguments, and `{"filename":"workflow/check.mbtx"}` with
-none. Ordinary paths resolve from the workspace root; `cwd` controls
+Afterwards `mbtx(filename="workflow/check.mbtx", args=["--output-json"])`
+reruns it with different arguments, and `mbtx(filename="workflow/check.mbtx")`
+with none. Ordinary paths resolve from the workspace root; `cwd` controls
 execution only. Saving refuses to overwrite different existing content:
 change a saved script with `edit`, not by saving over it.
 
@@ -61,10 +61,10 @@ An example with parsed options:
 
 [share/examples/cli_greet.mbtx](../share/examples/cli_greet.mbtx)
 
-`{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}` prints
+`mbtx(filename="scripts/greet.mbtx", args=["--name", "Ada Lovelace"])` prints
 `Hello, Ada Lovelace!`; omitting `args` prints `Hello, world!`.
 
-`{"filename":"@builtin/check.mbtx"}` runs a workflow shipped under
+`mbtx(filename="@builtin/check.mbtx")` runs a workflow shipped under
 `<bundled-resources>/workflow/`. Namespaced scripts are read-only: never
 supply `source` with `@builtin/`. Only `@builtin/` is supported today; other
 namespaces are reserved. Use `./path/check.mbtx` for a literal workspace path.
@@ -255,9 +255,9 @@ even when filtering successful results.
 
 ### Delegation: the `moonbitlang/workflow` package
 
-With `subrun: true` — offered only in a durable session — one snippet becomes
+With `subrun=true` — offered only in a durable session — one snippet becomes
 a workflow whose `wf.agent` calls are child agents. `@hosted.context()` carries
-that handoff and is `None` without the flag, so set `subrun: true` on that one
+that handoff and is `None` without the flag, so set `subrun=true` on that one
 call and on no other:
 
 [share/examples/workflow_scouts.mbtx](../share/examples/workflow_scouts.mbtx)
@@ -279,11 +279,11 @@ may start at most 32 scouts. Do not delegate overlapping questions, and
 spot-check the returned citations.
 
 Before declaring substantial work or a standing goal complete, ask for an
-independent audit: `@builtin/review.mbtx` with `subrun: true`. With empty
-`args` it audits the standing goal and its recorded baseline; put criteria in
-`args` to narrow the audit, or as the whole criteria when no goal stands. The
-review subagent reads the files, runs the project's own checks, hunts for
-vacuous success, and returns severity-tagged findings with file:line
+independent audit: `mbtx(filename="@builtin/review.mbtx", subrun=true)`.
+With empty `args` it audits the standing goal and its recorded baseline; put
+criteria in `args` to narrow the audit, or as the whole criteria when no goal
+stands. The review subagent reads the files, runs the project's own checks,
+hunts for vacuous success, and returns severity-tagged findings with file:line
 citations. A blocker finding fails the call: the claim does not hold yet. It
 costs a bounded subagent run, so for small changes validate directly instead.
 
@@ -295,7 +295,7 @@ costs a bounded subagent run, so for small changes validate directly instead.
   record the plan with the `plan` tool (the complete step list each call, at
   most one step `"in_progress"`) and update it as steps finish: mark steps
   `"completed"` immediately — never while their checks still fail — and clear
-  a plan that no longer applies with `"steps": []`. Skip planning for
+  a plan that no longer applies with `steps=[]`. Skip planning for
   single-step tasks. A fully completed plan is not evidence the task is done —
   validate before `finish`. A `[plan reminder]` message is an automated
   notice, not user input: act on it (update, replace, or clear the plan) or
