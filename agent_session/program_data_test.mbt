@@ -23,15 +23,16 @@ test "tool data persists but never enters model messages" {
     )
     .append(Tool(result))
   let messages = session.chat_messages()
+  // Inspect every text part; model content can also contain file references.
   assert_true(
     messages
-    .map(message => message.content)
+    .map(message => message.content.text())
     .join("\n")
     .contains("selected output"),
   )
   assert_false(
     messages
-    .map(message => message.content)
+    .map(message => message.content.text())
     .join("\n")
     .contains("secret_intermediate"),
   )
