@@ -7,7 +7,10 @@ pub fn openrouter_encode_chat_request(
   stream? : Bool = false,
   response_format? : ResponseFormat,
   messages : Array[ChatMessage],
-) -> Json {
+) -> Json raise ChatMessageError {
+  for message in messages {
+    message.validate_content()
+  }
   let model = match model {
     V4Flash => "deepseek/deepseek-v4.1-flash"
     V4Pro => "deepseek/deepseek-v4-pro"

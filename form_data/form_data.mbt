@@ -1,0 +1,147 @@
+///|
+/// One multipart field. Order and duplicate names are preserved. File bytes
+/// are sent unchanged; the caller supplies their MIME type.
+pub(all) enum Part {
+  Text(name~ : String, value~ : String)
+  File(
+    name~ : String,
+    filename~ : String,
+    content_type~ : String,
+    data~ : Bytes
+  )
+}
+
+///|
+/// Invalid multipart metadata. Header values cannot contain control characters;
+/// field names and file content types must also be nonempty.
+pub(all) suberror FormDataError {
+  EmptyForm
+  InvalidFieldName
+  InvalidFilename
+  InvalidContentType
+} derive(Debug)
+
+///|
+pub extend FormDataError with Debug::{to_repr}
+
+///|
+impl Show for FormDataError with fn output(self, logger) {
+  match self {
+    EmptyForm =>
+      logger.write_string("multipart form must contain at least one field")
+    InvalidFieldName =>
+      logger.write_string(
+        "multipart field name must be nonempty and contain no control characters",
+      )
+    InvalidFilename =>
+      logger.write_string(
+        "multipart filename must contain no control characters",
+      )
+    InvalidContentType =>
+      logger.write_string(
+        "multipart file content type must be nonempty ASCII without control characters",
+      )
+  }
+}
+
+///|
+/// Prepared headers and immutable payloads keep multipart encoding separate
+/// from image policy, HTTP connection ownership, authentication, and retries.
+priv struct EncodedPart {
+  headers : Bytes
+  data : Bytes
+}
+
+///|
+struct FormData {
+  boundary : String
+  parts : Array[EncodedPart]
+}
+
+///|
+fn Part::encode(self : Part) -> EncodedPart raise FormDataError {
+  let (name, filename, content_type, data) = match self {
+    Text(name~, value~) => (name, None, None, @utf8.encode(value))
+    File(name~, filename~, content_type~, data~) =>
+      (name, Some(filename), Some(content_type), data)
+  }
+  if name.is_empty() || name.iter().any(ch => ch < ' ' || ch == '\u007f') {
+    raise InvalidFieldName
+  }
+  // Quoted-string parameters escape quotes and backslashes. Reject controls
+  // before encoding so values cannot inject a new multipart header or part.
+  let quoted_name = name
+    .replace_all(old="\\", new="\\\\")
+    .replace_all(old="\"", new="\\\"")
+  let headers = StringBuilder()
+  headers.write_string(
+    "Content-Disposition: form-data; name=\"\{quoted_name}\"",
+  )
+  if filename is Some(filename) {
+    if filename.iter().any(ch => ch < ' ' || ch == '\u007f') {
+      raise InvalidFilename
+    }
+    let quoted_filename = filename
+      .replace_all(old="\\", new="\\\\")
+      .replace_all(old="\"", new="\\\"")
+    headers.write_string("; filename=\"\{quoted_filename}\"")
+  }
+  headers.write_string("\r\n")
+  if content_type is Some(content_type) {
+    if content_type.is_blank() ||
+      content_type.iter().any(ch => ch < ' ' || ch >= '\u007f') {
+      raise InvalidContentType
+    }
+    headers.write_string("Content-Type: \{content_type}\r\n")
+  }
+  headers.write_string("\r\n")
+  { headers: @utf8.encode(headers.to_string()), data, }
+}
+
+///|
+/// Prepare an immutable multipart/form-data body. Validates headers and chooses
+/// its boundary before any network IO. Later edits to `parts` do not affect the
+/// form; immutable file Bytes are retained without copying their contents.
+///
+/// RFC 7578 section 4.1 requires noncolliding delimiters. We conservatively
+/// scan all encoded headers and payloads, trying numbered suffixes on collision.
+/// The resulting boundary stays fixed for both content_type() and write_to().
+pub fn FormData::FormData(parts : Array[Part]) -> FormData raise FormDataError {
+  if parts.is_empty() {
+    raise EmptyForm
+  }
+  let encoded = parts.map(part => part.encode())
+  let mut boundary = "openseek-form-data"
+  let mut candidate = 0
+  for ;; {
+    let token = @utf8.encode(boundary)
+    if !encoded.any(part => {
+        part.headers.find(token) is Some(_) || part.data.find(token) is Some(_)
+      }) {
+      break
+    }
+    candidate += 1
+    boundary = "openseek-form-data-\{candidate}"
+  }
+  { boundary, parts: encoded, }
+}
+
+///|
+/// The complete HTTP Content-Type value matching this form's body.
+pub fn FormData::content_type(self : FormData) -> String {
+  "multipart/form-data; boundary=\{self.boundary}"
+}
+
+///|
+/// Write headers, raw payloads, and the closing delimiter without assembling
+/// another full copy of the body. Does not close or flush the supplied writer;
+/// the caller owns request completion. Write failures and cancellation propagate.
+pub async fn FormData::write_to(self : FormData, writer : &@io.Writer) -> Unit {
+  for part in self.parts {
+    writer.write("--\{self.boundary}\r\n")
+    writer.write(part.headers)
+    writer.write(part.data)
+    writer.write("\r\n")
+  }
+  writer.write("--\{self.boundary}--\r\n")
+}

@@ -13,7 +13,7 @@ async test "stream failure diagnostics preserve HTTP error payload after exhaust
     )
     try
       client.chat(
-        [ChatMessage(User, content="private prompt")],
+        [ChatMessage(User, content=[Text(text="private prompt")])],
         stream=StreamHandler(on_content_delta=_ => ()),
       )
     catch {
@@ -35,7 +35,7 @@ async test "stream never retries a non-retryable HTTP error" {
     }
     try
       @client.Client(api_key="test", api_url=url).chat(
-        [ChatMessage(User, content="hello")],
+        [ChatMessage(User, content=[Text(text="hello")])],
         stream=StreamHandler(on_content_delta=_ => ()),
       )
     catch {
@@ -75,7 +75,7 @@ async test "idle stream delivers partial output once without retrying" {
         api_url="http://127.0.0.1:\{server.addr.port()}/",
         idle_timeout_ms=100,
       ).chat(
-        [ChatMessage(User, content="hello")],
+        [ChatMessage(User, content=[Text(text="hello")])],
         stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
       )
     catch {
@@ -119,7 +119,7 @@ async test "a thrown body read after a buffered data line cannot replay the requ
         api_url="http://127.0.0.1:\{server.addr.port()}/",
         retry_backoff_ms=1,
       ).chat(
-        [ChatMessage(User, content="hello")],
+        [ChatMessage(User, content=[Text(text="hello")])],
         stream=StreamHandler(on_content_delta=_ => ()),
       )
     catch {
@@ -148,7 +148,7 @@ async test "cancellation is not wrapped as a request failure" {
         api_key="test",
         api_url="http://127.0.0.1:\{server.addr.port()}/",
       ).chat(
-        [ChatMessage(User, content="hello")],
+        [ChatMessage(User, content=[Text(text="hello")])],
         stream=StreamHandler(on_content_delta=_ => ()),
       )
     })
@@ -182,7 +182,7 @@ async test "idle flush preserves malformed response payload without retrying" {
         api_url="http://127.0.0.1:\{server.addr.port()}/",
         idle_timeout_ms=100,
       ).chat(
-        [ChatMessage(User, content="hello")],
+        [ChatMessage(User, content=[Text(text="hello")])],
         stream=StreamHandler(on_content_delta=_ => ()),
       )
     catch {
@@ -209,7 +209,7 @@ async test "fallback diagnostics preserve the original error payload" {
     }
     try
       @client.Client(api_key="test", api_url=url).chat(
-        [ChatMessage(User, content="hello")],
+        [ChatMessage(User, content=[Text(text="hello")])],
         stream=StreamHandler(on_content_delta=_ => {
           raise StreamCallbackError("callback error payload")
         }),

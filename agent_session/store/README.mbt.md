@@ -127,9 +127,12 @@ async test "create and load a complete session" {
 running. It returns the new in-memory session value, so callers should keep using
 the returned session for the next append.
 
-The store stamps appended events with the current wall clock. For documentation,
-the example snapshots the model projection rather than raw events, keeping the
-example stable while still showing the resumed conversation shape.
+The store stamps appended events with the current wall clock. To keep the
+example stable, these snapshots show projected `ChatMessage` values rather than
+stored events, while still showing the resumed conversation shape.
+`content` is always an array of parts: plain text has one `Text` element, while
+multimodal requests interleave text and file references in the same array.
+String-versus-array JSON encoding belongs to the provider request encoder.
 
 ```mbt check
 ///|
@@ -152,19 +155,19 @@ async test "append saves progress and load resumes it" {
         #|[
         #|  {
         #|    role: System,
-        #|    content: "system",
+        #|    content: [Text(text="system")],
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },
         #|  {
         #|    role: User,
-        #|    content: "inspect README",
+        #|    content: [Text(text="inspect README")],
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },
         #|  {
         #|    role: Assistant,
-        #|    content: "done",
+        #|    content: [Text(text="done")],
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },
@@ -242,13 +245,13 @@ async test "compact appends a durable summary" {
         #|[
         #|  {
         #|    role: System,
-        #|    content: "system",
+        #|    content: [Text(text="system")],
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },
         #|  {
         #|    role: User,
-        #|    content: "[conversation summary]\nsource_events=1..2\nold user and assistant discussed README",
+        #|    content: [Text(text="[conversation summary]\nsource_events=1..2\nold user and assistant discussed README")],
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },

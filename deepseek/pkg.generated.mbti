@@ -7,20 +7,25 @@ import {
 }
 
 // Values
-pub fn encode_chat_request(tools? : Array[ToolDefinition], thinking? : ThinkingMode, stream? : Bool, response_format? : ResponseFormat, model? : Model, Array[ChatMessage]) -> Json
+pub fn encode_chat_request(tools? : Array[ToolDefinition], thinking? : ThinkingMode, stream? : Bool, response_format? : ResponseFormat, model? : Model, Array[ChatMessage]) -> Json raise ChatMessageError
 
-pub fn openrouter_encode_chat_request(model~ : DsVariant, thinking~ : ThinkingMode, tools? : Array[ToolDefinition], stream? : Bool, response_format? : ResponseFormat, Array[ChatMessage]) -> Json
+pub fn openrouter_encode_chat_request(model~ : DsVariant, thinking~ : ThinkingMode, tools? : Array[ToolDefinition], stream? : Bool, response_format? : ResponseFormat, Array[ChatMessage]) -> Json raise ChatMessageError
 
 // Errors
+pub(all) suberror ChatMessageError {
+  FileContentNotAllowed(Role)
+  EmptyFileId
+} derive(@debug.Debug)
+pub fn ChatMessageError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub struct ChatMessage {
   role : Role
-  content : String
+  content : Array[ContentPart]
   tool_calls : Array[ToolCall]
   reasoning_content : String?
 } derive(@debug.Debug)
-pub fn ChatMessage::ChatMessage(Role, content~ : String, tool_calls? : Array[ToolCall], reasoning_content? : String) -> Self
+pub fn ChatMessage::ChatMessage(Role, content~ : Array[ContentPart], tool_calls? : Array[ToolCall], reasoning_content? : String) -> Self
 
 pub struct ChatResponse {
   content : String
@@ -29,6 +34,14 @@ pub struct ChatResponse {
   usage : Usage
 } derive(@debug.Debug)
 pub impl @json.FromJson for ChatResponse
+
+pub(all) enum ContentPart {
+  Text(text~ : String)
+  File(file_id~ : String)
+} derive(Eq, @debug.Debug)
+pub fn ContentPart::equal(Self, Self) -> Bool
+pub fn ContentPart::not_equal(Self, Self) -> Bool
+pub fn ContentPart::to_repr(Self) -> @debug.Repr
 
 pub(all) enum DsVariant {
   V4Flash

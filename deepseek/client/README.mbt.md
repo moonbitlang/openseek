@@ -28,6 +28,74 @@ The package depends on `moonbitlang/async/http` and is native-only.
 
 `Client` implements `Debug` with the API key redacted.
 
+## Image Uploads
+
+`Client::upload_image(data, filename~, expires_after_seconds?, timeout_ms?)`
+uploads PNG, JPEG, GIF, or WebP file bytes unchanged using multipart form data.
+It returns `UploadedFile`, including the opaque `id`, byte count, creation time,
+filename, and optional expiration time. The server performs full image
+validation; the client checks signatures, the 64 MiB size limit, and metadata.
+The filename is a display name, not a path, and must not contain quotes, path
+separators, or ASCII control characters. Multipart framing and boundary
+selection are handled by `bobzhang/openseek/form_data`.
+
+The upload uses the same API key and replaces the trailing `/chat/completions`
+in `api_url` with `/files`, preserving prefixes such as `/v1`. The configured
+endpoint must implement the DeepSeek Files API. It never redirects uploads to
+a different configured provider. Files belong to the uploading API key.
+
+Omitting `expires_after_seconds` requests permanent storage. Setting it to
+3600..2592000 requests a lifetime from one hour through thirty days. The default
+timeout is ten minutes for the complete operation. Upload POSTs are not retried
+automatically because a lost response may already have created a remote file.
+`FileUploadError` exposes concrete variants such as `UnsupportedImageFormat`,
+`ImageTooLarge(bytes~, limit~)`, `InvalidExpirySeconds(Int)`, and
+`FileByteCountMismatch(expected~, actual~)`. Match these variants rather than
+parsing display messages. `MalformedResponseJson` and `InvalidResponseShape`
+retain typed JSON errors; `HttpStatus(code, body)` retains the raw HTTP response,
+including non-JSON error pages. Cancellation and transport errors propagate.
+
+```mbt nocheck
+///|
+let client = @client.Client(api_key~, model=Deepseek(V41Flash))
+
+///|
+let uploaded = client.upload_image(
+  image_bytes,
+  filename="screenshot.png",
+  expires_after_seconds=7 * 24 * 60 * 60,
+)
+
+///|
+let message = @deepseek.ChatMessage(User, content=[
+  Text(text="Describe this screenshot."),
+  File(file_id=uploaded.id),
+])
+
+///|
+let response = client.chat([message])
+```
+
+`ChatMessage.content` is always an `Array[ContentPart]`. A single text part
+encodes as a plain string for compatibility with existing requests. Other
+user/tool content encodes as an array of content parts. Each `Text(text=...)`
+part produces `{"type":"text","text":...}`; each `File(file_id=...)` produces
+`{"type":"file","file_id":...}`. Parts retain their order, so text and images
+can be interleaved. File-only arrays are supported, and tool messages retain
+`tool_call_id`. System/assistant messages concatenate their text parts without
+separators, since those roles require a string. Empty text with assistant tool
+calls still encodes as `null`. Request encoding rejects files on system/assistant
+messages and blank file IDs with `ChatMessageError` before network IO.
+This matches the [Chat Completions content schema](https://api-docs.deepseek.com/api/create-chat-completion/).
+The supported parts currently cover text and uploaded-file references; URL and
+inline file-data parts are not exposed by this package yet.
+
+The caller must select an image-capable model and an endpoint accepting file
+references; file IDs are scoped to the uploading API key.
+This package does not resize images, cache file IDs, delete uploads, or fall
+back to base64. Callers own local image retention and remote file lifetimes.
+Limits follow the [DeepSeek Files API documentation](https://api-docs.deepseek.com/zh-cn/guides/files_api/).
+
 ## Configuration
 
 The default endpoint is `https://api.deepseek.com/chat/completions`, the default
@@ -106,7 +174,7 @@ let client = @client.Client(api_key~, thinking=Max)
 
 ///|
 let response = client.chat(
-  [@deepseek.ChatMessage(User, content="Return {\"ok\":true}.")],
+  [@deepseek.ChatMessage(User, content=[Text(text="Return {\"ok\":true}.")])],
   response_format=JsonObject,
 )
 ```
@@ -132,7 +200,7 @@ test "Client::chat request body shape" {
     tools=[tool],
     response_format=JsonObject,
   ) <| [
-    ChatMessage(User, content="read README.mbt.md"),
+    ChatMessage(User, content=[Text(text="read README.mbt.md")]),
   ]
   json_inspect(body, content={
     "model": "deepseek-flash",
@@ -194,7 +262,7 @@ let stream = @client.StreamHandler(on_content_delta=delta => print(delta), on_re
 
 ///|
 let response = client.chat(
-  [@deepseek.ChatMessage(User, content="Explain this briefly.")],
+  [@deepseek.ChatMessage(User, content=[Text(text="Explain this briefly.")])],
   stream~,
 )
 ```
@@ -210,7 +278,7 @@ test "Client::chat streaming request body shape" {
     thinking=client.thinking,
     stream=true,
   ) <| [
-    ChatMessage(User, content="stream this"),
+    ChatMessage(User, content=[Text(text="stream this")]),
   ]
   json_inspect(body, content={
     "model": "deepseek-v4-pro",

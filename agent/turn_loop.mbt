@@ -334,7 +334,7 @@ async fn AgentLoop::append_runtime_notice(
   content : String,
 ) -> @agent_session.Session {
   let next = self.append(session, Runtime(RuntimeNotice(content)))
-  self.messages.push(ChatMessage(User, content~))
+  self.messages.push(ChatMessage(User, content=[Text(text=content)]))
   next
 }
 
@@ -357,7 +357,7 @@ async fn AgentLoop::record_assistant(
   self.messages.push(
     ChatMessage(
       Assistant,
-      content=response.content,
+      content=[Text(text=response.content)],
       tool_calls?,
       reasoning_content?,
     ),
@@ -368,7 +368,7 @@ async fn AgentLoop::record_assistant(
 ///|
 fn AgentLoop::push_finished_message(self : Self, answer : String) -> Unit {
   if !answer.is_blank() {
-    self.messages.push(ChatMessage(Assistant, content=answer))
+    self.messages.push(ChatMessage(Assistant, content=[Text(text=answer)]))
   }
 }
 
@@ -400,7 +400,7 @@ async fn AgentLoop::apply_steer_inputs(
       @agent_session.parse_goal_baseline(text) is Some(_) {
       continue next
     }
-    self.messages.push(ChatMessage(User, content=text))
+    self.messages.push(ChatMessage(User, content=[Text(text~)]))
     @emit.emit(SteerApplied(kind~, content=text))
     if input is Notice(text) {
       self.goal_cadence.observe_notice(text)
@@ -1102,7 +1102,9 @@ async fn AgentLoop::record_tool_result(
       ToolResult(tool_call_id~, tool_name~, content~, is_error~, brief?, data?),
     ),
   )
-  self.messages.push(ChatMessage(Tool(tool_call_id), content~))
+  self.messages.push(
+    ChatMessage(Tool(tool_call_id), content=[Text(text=content)]),
+  )
   session
 }
 
@@ -1222,7 +1224,11 @@ async fn AgentLoop::continue_into_goal_check(
       ),
     )
     self.messages.push(
-      ChatMessage(Assistant, content=kept_answer, reasoning_content?),
+      ChatMessage(
+        Assistant,
+        content=[Text(text=kept_answer)],
+        reasoning_content?,
+      ),
     )
     session
   } else {
