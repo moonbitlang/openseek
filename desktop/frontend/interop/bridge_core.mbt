@@ -54,6 +54,18 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
     }
     Remote(_) => ws_request(channel, op, payload)
   }
+  decode_reply(op, reply)
+}
+
+///|
+/// Read a host reply as the command's concrete reply type. A missing reply
+/// (`undefined` or `null`) stands for an empty object, so a command with a
+/// field-less reply decodes like any other; anything unreadable is the
+/// host's fault, named by the operation it answered.
+fn[Reply : @json.FromJson] decode_reply(
+  op : String,
+  reply : @js.Value,
+) -> Reply raise BridgeError {
   let json = if reply.is_undefined() || reply.is_null() {
     Json::empty_object()
   } else {
@@ -183,16 +195,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
       }
       Remote(_) => ws_request(channel, op, payload)
     }
-    let json = if reply.is_undefined() || reply.is_null() {
-      Json::empty_object()
-    } else {
-      reply.to_json() catch {
-        _ => raise BridgeError("Malformed reply from \{op}")
-      }
-    }
-    @json.from_json(json) catch {
-      _ => raise BridgeError("Malformed reply from \{op}")
-    }
+    decode_reply(op, reply)
   })
 }
 
