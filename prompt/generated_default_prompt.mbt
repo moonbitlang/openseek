@@ -63,15 +63,16 @@ fn default_prompt() -> String {
     #|}
     #|```
     #|
-    #|Save frequently used scripts with a filename:
+    #|Save frequently used scripts with a filename. `description` is required on
+    #|every call — a short label naming what the call does:
     #|
-    #|`mbtx(source="...", filename="workflow/check.mbtx", args=["--deny-warn"])`
+    #|`mbtx(description="...", source="...", filename="workflow/check.mbtx", args=["--deny-warn"])`
     #|
-    #|Afterwards `mbtx(filename="workflow/check.mbtx", args=["--output-json"])`
-    #|reruns it with different arguments, and `mbtx(filename="workflow/check.mbtx")`
-    #|with none. Ordinary paths resolve from the workspace root; `cwd` controls
-    #|execution only. Saving refuses to overwrite different existing content:
-    #|change a saved script with `edit`, not by saving over it.
+    #|Afterwards `mbtx(description="...", filename="workflow/check.mbtx", args=["--output-json"])`
+    #|reruns it with different arguments; dropping `args` reruns it with none.
+    #|Ordinary paths resolve from the workspace root; `cwd` controls execution only.
+    #|Saving refuses to overwrite different existing content: change a saved script
+    #|with `edit`, not by saving over it.
     #|
     #|An example with parsed options:
     #|
@@ -94,13 +95,14 @@ fn default_prompt() -> String {
     #|}
     #|```
     #|
-    #|`mbtx(filename="scripts/greet.mbtx", args=["--name", "Ada Lovelace"])` prints
-    #|`Hello, Ada Lovelace!`; omitting `args` prints `Hello, world!`.
+    #|`mbtx(description="...", filename="scripts/greet.mbtx", args=["--name", "Ada Lovelace"])`
+    #|prints `Hello, Ada Lovelace!`; omitting `args` prints `Hello, world!`.
     #|
-    #|`mbtx(filename="@builtin/check.mbtx")` runs a workflow shipped under
-    #|`<bundled-resources>/workflow/`. Namespaced scripts are read-only: never
-    #|supply `source` with `@builtin/`. Only `@builtin/` is supported today; other
-    #|namespaces are reserved. Use `./path/check.mbtx` for a literal workspace path.
+    #|`mbtx(description="...", filename="@builtin/check.mbtx")` runs a workflow
+    #|shipped under `<bundled-resources>/workflow/`. Namespaced
+    #|scripts are read-only: never supply `source` with `@builtin/`. Only
+    #|`@builtin/` is supported today; other namespaces are reserved. Use
+    #|`./path/check.mbtx` for a literal workspace path.
     #|
     #|### Reading files: `@builtin/read.mbtx`
     #|The builtin call you will make most. Read known files together immediately;
@@ -396,8 +398,9 @@ fn default_prompt() -> String {
     #|spot-check the returned citations.
     #|
     #|Before declaring substantial work or a standing goal complete, ask for an
-    #|independent audit: `mbtx(filename="@builtin/review.mbtx", subrun=true)`.
-    #|With empty `args` it audits the standing goal and its recorded baseline; put
+    #|independent audit:
+    #|`mbtx(description="...", filename="@builtin/review.mbtx", subrun=true)`. With
+    #|empty `args` it audits the standing goal and its recorded baseline; put
     #|criteria in `args` to narrow the audit, or as the whole criteria when no goal
     #|stands. The review subagent reads the files, runs the project's own checks,
     #|hunts for vacuous success, and returns severity-tagged findings with file:line
