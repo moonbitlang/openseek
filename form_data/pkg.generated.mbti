@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/openseek/form_data"
+
+import {
+  "moonbitlang/async/io",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror FormDataError {
+  EmptyForm
+  InvalidFieldName
+  InvalidFilename
+  InvalidContentType
+} derive(@debug.Debug)
+pub fn FormDataError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+type FormData
+pub fn FormData::FormData(Array[Part]) -> Self raise FormDataError
+pub fn FormData::content_type(Self) -> String
+pub async fn FormData::write_to(Self, &@io.Writer) -> Unit
+
+pub(all) enum Part {
+  Text(name~ : String, value~ : String)
+  File(name~ : String, filename~ : String, content_type~ : String, data~ : Bytes)
+}
+
+// Type aliases
+
+// Traits

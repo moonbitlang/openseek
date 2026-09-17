@@ -266,31 +266,31 @@ test "project a session into DeepSeek messages" {
       #|[
       #|  {
       #|    role: System,
-      #|    content: "system",
+      #|    content: [Text(text="system")],
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },
       #|  {
       #|    role: User,
-      #|    content: "inspect",
+      #|    content: [Text(text="inspect")],
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },
       #|  {
       #|    role: Assistant,
-      #|    content: "",
+      #|    content: [Text(text="")],
       #|    tool_calls: [{ id: "call_1", name: "read", arguments: "{\"path\":\"README.md\"}" }],
       #|    reasoning_content: None,
       #|  },
       #|  {
       #|    role: Tool("call_1"),
-      #|    content: "README",
+      #|    content: [Text(text="README")],
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },
       #|  {
       #|    role: Assistant,
-      #|    content: "done",
+      #|    content: [Text(text="done")],
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },
@@ -373,13 +373,13 @@ test "summary replaces covered events in model projection only" {
       #|[
       #|  {
       #|    role: System,
-      #|    content: "system",
+      #|    content: [Text(text="system")],
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },
       #|  {
       #|    role: User,
-      #|    content: "[conversation summary]\nsource_events=1..2\nold user and assistant discussed README",
+      #|    content: [Text(text="[conversation summary]\nsource_events=1..2\nold user and assistant discussed README")],
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },

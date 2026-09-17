@@ -2053,8 +2053,11 @@ test "model-view user cards keep the caption of the event behind them" {
   let captions : Array[String] = []
   for index, message in messages {
     guard message.role is User else { continue }
+    guard message.content is [Text(text=content)] else {
+      fail("expected a plain-text session projection")
+    }
     let (_, label) = user_role_card_style(
-      message.content,
+      content,
       origin=origins[index],
       delegated=false,
     )
@@ -2416,6 +2419,20 @@ fn model_failed_call_ids(
 }
 
 ///|
+/// Renders the provider's ordered content without treating a file ID as a URL.
+priv struct ModelContent(Array[@deepseek.ContentPart])
+
+///|
+fn ModelContent::view(self : ModelContent) -> Array[@html.Html] {
+  self.0.filter_map(part => {
+    match part {
+      Text(text~) => if text.is_blank() { None } else { Some(text_block(text)) }
+      File(file_id~) => Some(text_block("Image file: \{file_id}"))
+    }
+  })
+}
+
+///|
 fn message_card(
   message : @deepseek.ChatMessage,
   tool_results : Map[String, @agent_session.ToolResult],
@@ -2438,15 +2455,25 @@ fn message_card(
             "System prompt",
             time~,
           ),
-          text_block(message.content),
+          ..ModelContent(message.content).view(),
         ],
       ]
     User => {
-      let (kind, label) = user_role_card_style(
-        message.content,
-        origin~,
-        delegated=subrun.delegated,
-      )
+      let (kind, label) = match message.content {
+        [Text(text=content)] =>
+          user_role_card_style(content, origin~, delegated=subrun.delegated)
+        _ =>
+          match origin {
+            FromRuntime => ("runtime", "Runtime notice")
+            FromSummary(from~, to~) => ("summary", summary_label(from~, to~))
+            FromUser | Other =>
+              if subrun.delegated {
+                UserInput::Delegated.card_style()
+              } else {
+                UserInput::Typed.card_style()
+              }
+          }
+      }
       model_card(
         kind,
         label,
@@ -2500,7 +2527,8 @@ fn model_shown_result(
 ) -> @agent_session.ToolResult? {
   guard message.role is Tool(id) else { return None }
   match tool_results.get(id) {
-    Some(result) if result.content() == message.content => Some(result)
+    Some(result) if message.content == [Text(text=result.content())] =>
+      Some(result)
     _ => None
   }
 }
@@ -2686,7 +2714,10 @@ fn model_tool_card(
   @html.details(id?=anchor, class="card \{kind}") <| [
     @html.summary(class="card-label") <| summary,
     @html.div(class="card-body") <| [
-      tool_result_content(shown, message.content),
+      ..match message.content {
+        [Text(text=content)] => [tool_result_content(shown, content)]
+        _ => ModelContent(message.content).view()
+      },
     ],
   ]
 }
@@ -2713,9 +2744,7 @@ fn model_card(
         ],
       ]
     },
-    ..if !message.content.is_blank() {
-      [text_block(message.content)]
-    },
+    ..ModelContent(message.content).view(),
     ..if !message.tool_calls.is_empty() {
       [
         @html.div(class="tool-calls") <| [
