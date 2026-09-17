@@ -159,7 +159,7 @@ fn default_prompt() -> String {
     #|discover unknown paths. Reread only when needed content is missing,
     #|truncated, or changed.
     #|
-    #|### Spawning external programs
+    #|### Shell EDSL
     #|
     #|Use `@shell.Cmd` to run an external program and capture its output. Which
     #|programs a snippet may start is listed in the `mbtx` tool description, under
