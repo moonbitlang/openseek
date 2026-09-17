@@ -398,6 +398,19 @@ pub fn open_document(
   had_active~ : Bool,
 ) -> (@cmd.Cmd, State) {
   guard ctx.placement_ready() else { return (@cmd.none, state) }
+  // A deletion has no working file to read or position a link in. Reuse its
+  // review activation so both pending and loaded baselines stay in Diff;
+  // reading the missing path would replace TabDeleted with TabReadFailed.
+  if state.docs.get(path) is Some({ review: Some(review), .. }) &&
+    !review.selected.has_working_tree_file() {
+    return open_changed_document(
+      dispatch,
+      state,
+      ctx,
+      review.selected,
+      had_active~,
+    )
+  }
   let state = { ..state.invalidate_review_hunk_surface(), highlighted: None, }
   // Files and Search select Content on this document. Retain a known
   // comparison so its Diff control remains an explicit return path.
@@ -5199,6 +5212,28 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
     full_diff_again.docs.get(test_file(deleted_path.0))
     is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
   )
+
+  // Ordinary and positioned reopens keep deletion reviews, even while HEAD
+  // is pending or after the user explicitly selected the baseline File view.
+  for prior in [loading, preview, source] {
+    for range in [None, Some(@common.Range(1, 1, 1, 4))] {
+      let (_, reopened) = open_document(
+        emit,
+        prior,
+        ctx,
+        test_file(deleted_path.0),
+        name="gone.mbt",
+        range~,
+        had_active=true,
+      )
+      assert_true(
+        reopened.docs.get(test_file(deleted_path.0))
+        is Some({ state: TabDeleted, review: Some(review), .. }) &&
+        review.view_mode is ReviewDiff,
+      )
+      assert_eq(reopened.review_generation, prior.review_generation)
+    }
+  }
 
   // The HEAD request may beat the ordinary filesystem read. Its result stays
   // on the loading document and is preserved when `FileLoaded` settles it.

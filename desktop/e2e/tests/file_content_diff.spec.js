@@ -1,6 +1,33 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+test('reopening a deleted review keeps Diff without reading the missing file', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.gitChanges = [{ path: 'src/main.mbt', index_status: ' ', worktree_status: 'D', kind: 'deleted' }];
+  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = 'fn main { println("deleted baseline") }\n';
+  delete app.workingFiles['src/main.mbt'];
+  app.rpcErrors.set('fs.read_file', 'file not found');
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  const line = page.getByRole('button', { name: 'Line diff', exact: true });
+  await line.click();
+  const diff = page.locator('#diff-editor-host');
+  await expect(diff).toBeVisible();
+  await expect(diff).toContainText('deleted baseline');
+
+  await app.openQuickOpen();
+  await page.getByRole('option', { name: /main\.mbt/ }).click();
+  await expect(line).toHaveAttribute('aria-pressed', 'true');
+  await expect(diff).toBeVisible();
+  await expect(diff).toContainText('deleted baseline');
+  await expect(page.locator('.editor-tab')).toHaveCount(1);
+  expect(app.requests.filter(request => request.method === 'fs.read_file')).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('one file tab retains its identity across File, diff modes, and repeated opens', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
