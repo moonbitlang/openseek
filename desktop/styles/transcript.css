@@ -685,22 +685,34 @@
 }
 
 .msg-content.markdown .chat-code-block {
+  position: relative;
   min-width: 0;
   margin: 0.55em 0;
 }
 .chat-code-toolbar {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 4px;
+  pointer-events: none;
 }
 .chat-code-copy.button {
   --icon-size: var(--icon-lg);
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.chat-code-block:hover > .chat-code-toolbar .chat-code-copy,
+.chat-code-copy:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 /* Avoid an inline text baseline shifting either Codicon above the center. */
 .chat-code-copy-symbol,
@@ -725,6 +737,7 @@
   background: var(--color-bg-surface);
 }
 .msg-content.markdown .chat-code-block:has(> pre) > .chat-code-toolbar {
+  position: static;
   grid-column: 2;
   grid-row: 1;
   align-self: start;
@@ -738,6 +751,14 @@
   margin: 0;
   border: none;
   background: transparent;
+}
+.msg-content.markdown :is(.chat-mermaid, .chat-diago) > pre {
+  margin: 0;
+  min-height: 38px;
+  padding-right: 42px;
+}
+.msg-content.markdown .chat-code-block .moonbit-viewer-markdown-diagram-controls {
+  right: 40px;
 }
 
 /* Mermaid, D2/Diago and UML/PlantUML use the shared Viewer renderers. Bind
