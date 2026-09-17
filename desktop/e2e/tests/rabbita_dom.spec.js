@@ -96,13 +96,15 @@ test('Review loads changed files and preserves its interactive diff workflow', a
     request.params?.revision === app.gitBaseline))
     .toBeTruthy();
   const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
-  await expect(reviewToolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+  await expect(reviewToolbar.getByRole('button', { name: 'Token diff' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
+  await expect(page.locator('.semantic-review[data-mode="token"]')).toBeVisible();
 
   // Line diff keeps semantic-only filters inert. Token and Tree make those
   // user controls available.
+  await reviewToolbar.getByRole('button', { name: 'Line diff' }).click();
   const ignoreComments = page.getByRole('button', { name: 'Ignore comments' });
   const ignoreTests = page.getByRole('button', { name: 'Ignore tests' });
   await expect(ignoreComments).toBeDisabled();
@@ -266,6 +268,8 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
     const layout = page.getByRole('group', { name: 'Diff layout' });
     const split = layout.getByRole('button', { name: 'Split diff layout' });
     await expect(line).toBeEnabled();
+    await line.click();
+    await changes.hover();
     await expect(split).toBeEnabled();
     await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
 
@@ -395,6 +399,8 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   const changes = page.locator('#review-changes-body');
   await changes.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
 
+  await page.getByRole('toolbar', { name: 'Review mode' })
+    .getByRole('button', { name: 'Line diff' }).click();
   const navigation = page.getByRole('group', { name: 'Diff change navigation' });
   const position = navigation.locator('.review-hunk-position');
   await expect(position).toHaveText('Change 1 of 2');
@@ -729,13 +735,13 @@ test('Git history expands commits and opens an immutable historical diff', async
   await expect(breadcrumb.locator('.history-commit-crumb')).toHaveText('cccccccc');
   await expect(breadcrumb.locator('.crumb-file')).toHaveText('src/main.mbt');
   const algorithms = page.getByRole('toolbar', { name: 'Comparison algorithm' });
-  await expect(algorithms.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+  await expect(algorithms.getByRole('button', { name: 'Token diff' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
   await expect(algorithms.getByRole('button')).toHaveText(['Line', 'Token', 'Tree']);
-  await expect(page.getByRole('button', { name: 'Ignore comments' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Ignore tests' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Ignore comments' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Ignore tests' })).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -2442,6 +2448,7 @@ for (const layout of ['Split', 'Unified']) {
     await app.openSession();
     await app.openReview();
     await page.locator('#review-changes-body').getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.getByRole('button', { name: 'Line diff', exact: true }).click();
     await page.getByRole('button', { name: `${layout} diff layout`, exact: true }).click();
     const action = page.locator('.moonbit-diff-hunk-action:visible button');
     await expect(action).toBeVisible();

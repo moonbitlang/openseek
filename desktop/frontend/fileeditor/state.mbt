@@ -588,7 +588,7 @@ pub fn State::empty() -> State {
     search: @grep_search.State::empty(),
     review_view_mode: ReviewDiff,
     review_diff_layout: ReviewSideBySide,
-    review_diff_mode: ReviewDiffLine,
+    review_diff_mode: ReviewDiffToken,
     // Token/Tree starts from semantic production changes. Both explicit
     // toggles can restore comments/blank lines or test blocks when needed.
     review_diff_ignore_comments: true,
