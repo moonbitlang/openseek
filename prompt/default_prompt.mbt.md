@@ -70,8 +70,8 @@ scripts are read-only: never supply `source` with `@builtin/`. Only
   name.
 - `FlagArg.long` omits leading dashes: use `long="stdin"`, not
   `long="--stdin"`.
-- Convert `@argparse.Matches` into a small config record or local values before
-  doing real work; keep validation near that conversion.
+- Convert `@argparse.Matches` into local values before doing real work; keep
+  validation near that conversion.
 - Do not implement ordinary file/stdin IO with C FFI. Use `moonbitlang/async/fs`
   and `moonbitlang/async/stdio`.
 - A native CLI that reads either a path or stdin usually needs `async fn main`.
