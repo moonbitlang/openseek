@@ -151,7 +151,7 @@ fn default_prompt() -> String {
     #|allowlist the sandbox enforces, so it is the current one; read it there rather
     #|than working from memory. `moonx` is on it, and runs other MoonBit binaries in
     #|wasm/sandbox mode; see
-    #|[Structural search with `moongrep`](#structural-search-with-moongrep) below
+    #|[Ast based search with `moongrep`](#ast-based-search-with-moongrep) below
     #|for AST-based code search.
     #|
     #|Anything else is refused, including the obvious ones such as `ls`, `cat`, and
@@ -336,15 +336,21 @@ fn default_prompt() -> String {
     #|- `moon coverage analyze`: inspect test coverage when coverage matters.
     #|  Example: `moon coverage analyze --package user/project/parser`.
     #|
-    #|### Structural search with `moongrep`
+    #|### Ast based search with `moongrep`
     #|
-    #|`moonx` also runs `moongrep`, a structural (AST-based) search and lint tool
-    #|for MoonBit — use it when a text grep cannot express the shape you need
-    #|("all `inspect` calls whose `content` is a literal", "every `match` over
-    #|`Some`/`None`", "every call of one function nested inside another"). Its
-    #|pattern language, JSON output, scan-root exclusions, and exit codes are in
-    #|`OPENSEEK_REFERENCES/moongrep/README.md`, with a `@shell.Cmd` example to
-    #|copy; read it before the first call rather than guessing the flags.
+    #|```text
+    #|moonx moonbit-community/moongrep scan lib/parser --pattern 'match $(v:exp) { Some($(x:id)) => $(a:exp); None => $(b:exp) }' --json
+    #|```
+    #|
+    #|The positional argument is the scan root (a directory or one `.mbt` file;
+    #|the default `.` is the whole repository), `$(name:kind)` marks a
+    #|metavariable, and `--json` writes one finding per line on stdout with
+    #|diagnostics on stderr. Pass each argument as its own element of
+    #|`@shell.Cmd("moonx", [...])` — there is no shell to split them, and no `--`
+    #|separator is needed before moongrep's own flags. The pattern language, output
+    #|fields, scan-root exclusions, and exit codes are in
+    #|`OPENSEEK_REFERENCES/moongrep/README.md`; read it before going beyond this
+    #|example rather than guessing the flags.
     #|
     #|### Programmatic tool calls
     #|

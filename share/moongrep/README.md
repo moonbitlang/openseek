@@ -6,6 +6,20 @@ MoonBit. Use it when a text grep cannot express the shape you need ("all
 `Some`/`None`", "every call of one function nested inside another"). No `--`
 separator is needed: the arguments after the coordinate are moongrep's own.
 
+The system prompt carries the simplest shape — one `match` over `Some`/`None`.
+This one covers more of the language in a single call: a nested application,
+two `id` captures, `$_` for the arguments nobody cares about, `--guard` to
+keep only the inner callees whose name matches a regex, and `--exclude` for
+the one directory the defaults miss here.
+
+```text
+moonx moonbit-community/moongrep scan . --exclude editor/codemirror/demo --pattern '$(outer:id)($_, $(inner:id)($_))' --guard '{$inner: "^error_result$"}' --json
+```
+
+The same call from a snippet — each argument is its own array element, because
+`@shell.Cmd` starts the program directly and no shell is there to split a
+string:
+
 ```mbtx
 ///|
 import {
@@ -15,16 +29,25 @@ import {
 
 ///|
 async fn main {
-  let out = @shell.Cmd("moonx", [
-    "moonbit-community/moongrep", "scan",
-    "--pattern",
-    "match $(value:exp) { Some($(some:id)) => $(some_body:exp); None => $(none_body:exp) }",
-    "--output-json",
-  ]).output()
-  println("exit=\{out.exit_code()}")
-  // Whole-repo scans can match many nodes; keep the printed excerpt bounded.
-  // Slicing clamps, so a shorter output needs no length guard.
-  println(out.stdout()[:2000])
+  // A whole-repo scan can match more than `.output()` is able to capture, so
+  // stream the records instead. `each_line` receives stdout only: the child's
+  // stderr, where the skip warnings go, passes through to this program's own
+  // stderr.
+  let mut findings = 0
+  let code = @shell.Cmd("moonx", [
+    "moonbit-community/moongrep", "scan", ".",
+    "--exclude", "editor/codemirror/demo",
+    "--pattern", "$(outer:id)($_, $(inner:id)($_))",
+    "--guard", "{$inner: \"^error_result$\"}",
+    "--json",
+  ]).each_line(line => {
+    findings += 1
+    // Keep the printed excerpt bounded; count the rest.
+    if findings <= 20 {
+      println(line)
+    }
+  })
+  println("exit=\{code} findings=\{findings}")
 }
 ```
 
@@ -48,10 +71,13 @@ leading-dot rule; exclude the rest up front — in this checkout:
 
 ## Output
 
-Use `--output-json` for agent-friendly output: one JSON object per finding
-with `file` (relative to the scan root, often `./`-prefixed), `rule_id`,
-`description`, `range` (1-based `line`/`column`), `matched_source`, and
-`source_context`; a scan with zero findings writes nothing and still exits 0.
+Use `--json` (not `--output-json`, which is `moon check`'s spelling) for
+agent-friendly output: one JSON object per line on stdout,
+`{"type": "finding", ...}`, carrying `file` (relative to the scan root, often
+`./`-prefixed), `rule_id`, `description`, `range` (1-based `line`/`column`),
+`matched_source`, and `source_context`. Diagnostics such as skipped blocks go
+to stderr as `{"type": "warning", ...}` lines. A scan with zero findings
+writes nothing and still exits 0.
 When parsing records with `@json.parse`, integer fields such as
 `range.start.line` pattern-match as `Number(value)` (a `Double`; call
 `.to_int()` on it), not `Int`.
@@ -59,8 +85,12 @@ When parsing records with `@json.parse`, integer fields such as
 A whole-repo scan can match many nodes — `@shell.Cmd(...).output()` cannot
 capture unbounded output, so a large scan hits the shell's output-limit error
 — stream with `.each_line()` (one record per callback line) to count or
-aggregate findings, and redirect stderr with `stderr=ToFile(...)` so skip
-warnings do not flood the merged output.
+aggregate findings. The two streams stay separate either way: `.output()`
+keeps them apart as `out.stdout()` and `out.stderr()` (sharing one capture
+budget), and `.each_line()` streams stdout alone, leaving the warnings to the
+snippet's own stderr. To read the warnings back inside the snippet, use
+`.output()` and inspect `out.stderr()`, or redirect them with
+`stderr=ToFile(...)`.
 
 `--rules <dir>` and `--rule <file>` load YAML rule files, `--disable
 <rule-id>` drops a loaded rule, and `--verbose` traces traversal on stderr.
@@ -75,6 +105,11 @@ and comments do not matter, but syntax shape does (`Some(1)` does not match
 pattern). A metavariable used twice must capture equal structure. `--guard
 '{$name: "regex"}'` filters `id` and `const` captures (substring match unless
 anchored with `^...$`).
+
+Labeled arguments match by label — `inspect($_, content=$(c:const))` finds
+the `inspect` calls whose expectation is a literal. `const` covers ordinary
+literals only: a multi-line `#|` string is not one, so the snapshot tests
+written that way need `content=$_`.
 
 When a pattern surprises you,
 `moonx moonbit-community/moongrep dump --expr '...'` or

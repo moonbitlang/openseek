@@ -251,7 +251,7 @@ async fn main {
     "moonbit-community/moongrep", "scan",
     "--pattern",
     "match $(value:exp) { Some($(some:id)) => $(some_body:exp); None => $(none_body:exp) }",
-    "--output-json",
+    "--json",
   ]).output()
   println("exit=\{out.exit_code()}")
   // Whole-repo scans can match many nodes; keep the printed excerpt bounded.
@@ -262,7 +262,7 @@ async fn main {
 
 `scan` 从指定根路径递归扫描目录或单个 `.mbt` 文件；`lint` 同样如此，但会先加入内置规则。默认根路径 `.` 表示整个仓库，也是常见用法。默认跳过以 `.` 开头的隐藏子项（不区分大小写）以及 `_build`、`node_modules`、`target`；用 `--exclude <name-or-path>` 增加排除项。这些排除规则只作用于遍历中的子项：显式指定的扫描根路径即便末段名称匹配规则，仍会被扫描。
 
-用 `--output-json` 获取适合智能体处理的输出：每项发现一个 JSON 对象，包含 `file`（相对于扫描根路径，常以 `./` 开头）、`rule_id`、`description`、`range`（从 1 开始的 `line`/`column`）、`matched_source` 和 `source_context`。没有发现时不输出内容，退出码仍为 0。用 `@json.parse` 解析时，`range.start.line` 等整数字段应匹配 `Number(value)`，其中 `value` 是 `Double`，需调用 `.to_int()`，不能匹配 `Int`。
+用 `--json` 获取适合智能体处理的输出：每项发现一个 JSON 对象，包含 `file`（相对于扫描根路径，常以 `./` 开头）、`rule_id`、`description`、`range`（从 1 开始的 `line`/`column`）、`matched_source` 和 `source_context`。没有发现时不输出内容，退出码仍为 0。用 `@json.parse` 解析时，`range.start.line` 等整数字段应匹配 `Number(value)`，其中 `value` 是 `Double`，需调用 `.to_int()`，不能匹配 `Int`。
 
 全仓扫描可能匹配大量节点；`@shell.Cmd(...).output()` 无法捕获无限输出，大规模扫描会触发输出上限错误。用 `.each_line()` 流式计数或汇总，每行回调处理一条记录，参考上文 `moon check` 示例；用 `stderr=ToFile(...)` 重定向 stderr，避免跳过警告淹没合并输出。`--rules <dir>` 和 `--rule <file>` 加载 YAML 规则文件，`--disable <rule-id>` 移除已加载规则，`--verbose` 将遍历过程输出到 stderr。
 
