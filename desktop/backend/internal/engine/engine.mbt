@@ -2284,7 +2284,7 @@ fn test_serve_engine(
 async test "a failed pump closes its open run and retires the slot" {
   let manager = new_engine_manager("/bin/sh")
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     let (child_stdin, writer) = @process.write_to_process()
     let (reader, child_stdout) = @process.read_from_process()
@@ -2344,7 +2344,7 @@ async test "a failed pump closes its open run and retires the slot" {
 async test "an engine that dies between turns still reports why" {
   let manager = new_engine_manager("/bin/sh")
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     let (child_stdin, writer) = @process.write_to_process()
     let (reader, child_stdout) = @process.read_from_process()
@@ -2401,7 +2401,7 @@ async test "an engine that dies between turns still reports why" {
 async test "a failed turn reports its own reason exactly once" {
   let manager = new_engine_manager("/bin/sh")
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     let (child_stdin, writer) = @process.write_to_process()
     let (reader, child_stdout) = @process.read_from_process()
@@ -2462,7 +2462,7 @@ async test "a failed turn reports its own reason exactly once" {
 async test "a failed command leaves settlement to the EOF retirement" {
   let manager = new_engine_manager("/bin/sh")
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     let (child_stdin, writer) = @process.write_to_process()
     let (reader, child_stdout) = @process.read_from_process()
@@ -2558,7 +2558,7 @@ test "terminal failures are normalized by the host" {
 #cfg(not(platform="windows"))
 async test "a run's close spares the commands queued to outlive its turn" {
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     let (child_stdin, writer) = @process.write_to_process()
     let process = @process.spawn(
@@ -2635,7 +2635,7 @@ test "a turn that died stops accepting commands for that child" {
 test "a terminal stream event closes its run with the event's outcome" {
   fn closed(event : @wire.Event) -> (Bool, Array[EngineEvent]) {
     let emitted : Array[EngineEvent] = []
-    let sink = EventSink(fn(event) { emitted.push(event) })
+    let sink = EventSink(event => emitted.push(event))
     (close_run_from_stream(sink, "r17", event), emitted)
   }
 
@@ -3008,7 +3008,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
   )
   assert_eq(@process.run("chmod", ["+x", baseline_engine]), 0)
   let manager = new_engine_manager(baseline_engine)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   let slot : SessionSlot = { pending: None, engine: None, }
   let config : RunConfig = {
     task: "test",

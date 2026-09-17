@@ -110,7 +110,7 @@ async fn main {
     // signal. This also includes a page calling `window.open` during a click;
     // deny the embedded window in every case, and send user-initiated URLs to
     // the system opener until Proton exposes the disposition.
-    .on_new_window_request(async fn(_, request) noraise {
+    .on_new_window_request((_, request) => {
       if request.user_gesture {
         ignore(@extension.open_external({ url: request.url, })) catch {
           error =>
@@ -170,18 +170,18 @@ async fn main {
     // valid after that request returns — and the window handle the browser
     // views hang off.
     .window_lifecycle(
-      on_ready=async fn(context) {
+      on_ready=context => {
         views.window_ready(context.handle())
         bridge.window_ready(context.events())
       },
-      on_close=async fn(_) {
+      on_close=_ => {
         views.window_closed()
         bridge.window_closed()
       },
     )
     // Geometry can change without a DOM fullscreen event (native fullscreen,
     // display scaling, or page zoom). Only this window's page is notified.
-    .on_window_event(async fn(_, event) noraise {
+    .on_window_event((_, event) => {
       if event is StateChanged(_) {
         bridge.notify_window_chrome_changed() catch {
           // Cancellation during shutdown leaves no page to notify.
@@ -191,7 +191,7 @@ async fn main {
     })
     // Browser view events reach the page as `browser.event` notifications;
     // views that are not browser tabs are not the frontend's business.
-    .on_view_event(async fn(view, event) noraise {
+    .on_view_event((view, event) => {
       match @extension.browser_view_id(view.id()) {
         Some(id) =>
           if @extension.view_event_json(id, event) is Some(payload) {
@@ -221,7 +221,7 @@ async fn main {
     // page/client rather than borrowing a `host.connect` request task as
     // their owner — and stop when the run loop returns.
     let app = app.app_lifecycle(
-      on_start=async fn(_) {
+      on_start=_ => {
         is_primary = true
         prepare_workspaces()
         group.spawn_bg(allow_failure=true, () => bridge.run())
@@ -257,7 +257,7 @@ async fn main {
         // environment override) says so, and idles otherwise.
         group.spawn_bg(allow_failure=true, () => relay.run())
       },
-      on_shutdown=fn(_) {  },
+      on_shutdown=_ => (),
     )
     @xlog.info() <?
       { "event": "desktop_app_run_start", "single_instance": single_instance }

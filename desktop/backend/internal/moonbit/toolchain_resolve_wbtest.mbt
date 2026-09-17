@@ -32,7 +32,7 @@ async fn touch_fake_toolchain(bin_dir : @pathx.Absolute) -> Unit {
 ///|
 #cfg(not(platform="windows"))
 async test "a non-executable moon file does not count" {
-  with_toolchain_test_tree(async fn(root) {
+  with_toolchain_test_tree(root => {
     let path_bin = root.join("pathdir")
     let home_bin = root.join("home").join(".moon").join("bin")
     @fs.mkdir(path_bin.to_string(), recursive=true)
@@ -53,7 +53,7 @@ async test "a non-executable moon file does not count" {
 
 ///|
 async test "a directory named moon does not count" {
-  with_toolchain_test_tree(async fn(root) {
+  with_toolchain_test_tree(root => {
     let path_bin = root.join("pathdir")
     let home_bin = root.join("home").join(".moon").join("bin")
     @fs.mkdir(
@@ -72,7 +72,7 @@ async test "a directory named moon does not count" {
 
 ///|
 async test "an executable moon is a usable toolchain" {
-  with_toolchain_test_tree(async fn(root) {
+  with_toolchain_test_tree(root => {
     let bin_dir = root.join("bin")
     @fs.mkdir(bin_dir.to_string(), recursive=true)
     @fs.write_file(
@@ -87,7 +87,7 @@ async test "an executable moon is a usable toolchain" {
 
 ///|
 async test "a file-shaped path entry does not abort the scan" {
-  with_toolchain_test_tree(async fn(root) {
+  with_toolchain_test_tree(root => {
     let not_a_dir = root.join("notdir")
     let home_bin = root.join("home").join(".moon").join("bin")
     @fs.write_file(not_a_dir.to_string(), "", create_mode=CreateOrTruncate)
@@ -103,7 +103,7 @@ async test "a file-shaped path entry does not abort the scan" {
 
 ///|
 async test "path scan wins over the default install" {
-  with_toolchain_test_tree(async fn(root) {
+  with_toolchain_test_tree(root => {
     let home_bin = root.join("home").join(".moon").join("bin")
     let path_bin = root.join("pathdir")
     @fs.mkdir(home_bin.to_string(), recursive=true)
@@ -120,7 +120,7 @@ async test "path scan wins over the default install" {
 
 ///|
 async test "no toolchain anywhere raises ToolchainUnavailable" {
-  with_toolchain_test_tree(async fn(root) {
+  with_toolchain_test_tree(root => {
     let bare_bin = root.join("bare")
     @fs.mkdir(bare_bin.to_string(), recursive=true)
     try

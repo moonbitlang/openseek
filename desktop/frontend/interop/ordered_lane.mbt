@@ -33,9 +33,7 @@ fn Lane::Lane() -> Lane {
 /// reached on `op`'s error path too.
 async fn[T] Lane::run(self : Lane, op : async () -> T) -> T {
   if self.held {
-    @js.suspend(fn(wake, _fail : (Error) -> Unit) {
-      self.waiters.push_back(wake)
-    })
+    @js.suspend((wake, _fail : (Error) -> Unit) => self.waiters.push_back(wake))
   } else {
     self.held = true
   }
@@ -90,7 +88,7 @@ test "a contended lane serves its callers in arrival order" {
   for index in 0..<3 {
     lane_task(lane, failures, () => {
       entered.push(index)
-      @js.suspend(fn(wake, _fail : (Error) -> Unit) { parked.push(wake) })
+      @js.suspend((wake, _fail : (Error) -> Unit) => parked.push(wake))
     })
   }
   // Only the first caller is inside. This is the point at which the page used
@@ -126,7 +124,7 @@ test "a caller arriving mid-queue waits behind it" {
   for index in 0..<2 {
     lane_task(lane, failures, () => {
       entered.push(index)
-      @js.suspend(fn(wake, _fail : (Error) -> Unit) { parked.push(wake) })
+      @js.suspend((wake, _fail : (Error) -> Unit) => parked.push(wake))
     })
   }
   parked[0](())

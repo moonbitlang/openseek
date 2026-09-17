@@ -1,6 +1,6 @@
 ///|
 async test "Codex endpoints return original handler errors as replies" {
-  let asynchronous = Endpoint::codex(@commands.codex_status, async fn(_) {
+  let asynchronous = Endpoint::codex(@commands.codex_status, _ => {
     @async.sleep(0)
     raise InvalidEndpointPayload(
       "Codex app-server request account/read failed: token unavailable",

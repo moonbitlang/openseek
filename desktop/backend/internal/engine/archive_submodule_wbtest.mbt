@@ -35,7 +35,7 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
       "commit", "-q", "-am", "add submodule",
     ]),
   )
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let manager = new_engine_manager("openseek")
   manager.pump = Serving(sessions=Map([]))
   // A dirty checkout still confirms first, and the confirmed force retry
@@ -46,7 +46,7 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
       manager.worktree_host(),
       repo.to_string(),
       @worktree.WorktreeOwner::openseek("s-sub-dirty"),
-      fn(_) {  },
+      _ => (),
     ),
   )
   @fsx.ensure_dir(
@@ -77,7 +77,7 @@ async test "archive deletes a submodule checkout that git worktree remove refuse
       manager.worktree_host(),
       repo.to_string(),
       @worktree.WorktreeOwner::openseek("s-sub-clean"),
-      fn(_) {  },
+      _ => (),
     ),
   )
   @fsx.ensure_dir(
@@ -123,7 +123,7 @@ async test "worktree deletion refuses a replaced checkout" {
   @fsx.ensure_dir(root.join("global").to_path())
   let repo = root.join("repo")
   prepare_git_repo(repo)
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let manager = new_engine_manager("openseek")
   manager.pump = Serving(sessions=Map([]))
   ignore(
@@ -131,7 +131,7 @@ async test "worktree deletion refuses a replaced checkout" {
       manager.worktree_host(),
       repo.to_string(),
       @worktree.WorktreeOwner::openseek("s-replaced"),
-      fn(_) {  },
+      _ => (),
     ),
   )
   @fsx.ensure_dir(
@@ -162,7 +162,7 @@ async test "worktree deletion refuses a replaced checkout" {
         repo.to_string(),
         "wt-1",
         true,
-        fn(_) {  },
+        _ => (),
       ),
     )
     "no error"

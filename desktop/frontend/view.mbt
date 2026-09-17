@@ -1026,7 +1026,7 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       [icon(icon_link_external), @html.span(label)],
     )
   }
-  let step = fn(index : Int, text : String) -> @html.Html {
+  let step : (Int, String) -> @html.Html = (index, text) => {
     @html.div(class="setup-guide-step", [
       @html.span(class="setup-guide-index", index.to_string()),
       @html.span(class="setup-guide-text", text),

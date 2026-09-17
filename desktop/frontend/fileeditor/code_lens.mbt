@@ -114,7 +114,7 @@ impl @language.CodeLensProvider for MoonIdeCodeLensProvider with fn provide_code
       range,
       title: lens.title,
       tooltip: None,
-      execute: async fn() noraise {
+      execute: () => {
         guard is_current() else { return }
         let locations = match lens.action {
           @protocol.Local(locations~, ..) =>

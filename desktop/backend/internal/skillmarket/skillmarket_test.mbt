@@ -467,9 +467,9 @@ async test "uninstall removes registry installs and nothing else" {
       package_path="",
       registry=base,
       library_dir=lib,
-      on_committed=fn() { changes += 1 },
+      on_committed=() => changes += 1,
     )
-    @skillmarket.uninstall_skill("acme-widget", library_dir=lib, on_committed=fn() {
+    @skillmarket.uninstall_skill("acme-widget", library_dir=lib, on_committed=() => {
       changes += 1
     })
     assert_eq(changes, 2)

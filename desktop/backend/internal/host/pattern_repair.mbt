@@ -100,19 +100,17 @@ async fn pattern_repair_op(
   agent_env : Map[String, String],
   payload : @protocol.PatternRepairPayload,
 ) -> @protocol.PatternRepairReply {
-  let failure = fn(
-    candidate_pattern : String,
-    validation_status : String,
-    message : String,
-  ) -> @protocol.PatternRepairReply {
-    {
-      root: payload.root,
-      generation: payload.generation,
-      candidate_pattern,
-      valid: false,
-      validation_status,
-      message,
-    }
+  let failure : (String, String, String) -> @protocol.PatternRepairReply = (
+    candidate_pattern,
+    validation_status,
+    message,
+  ) => {
+    root: payload.root,
+    generation: payload.generation,
+    candidate_pattern,
+    valid: false,
+    validation_status,
+    message,
   }
   guard state.engine != "" else {
     return failure(

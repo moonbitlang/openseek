@@ -94,7 +94,7 @@ fn State::committed_child_path(self : State, raw : String) -> String? {
   // DriveList proves Windows semantics. A directory shaped like `/c:/...`
   // may instead be a legal POSIX path, so its identity stays case-sensitive.
   let case_insensitive = self.location is Some(DriveList)
-  let key = fn(path : String) -> String {
+  let key : (String) -> String = path => {
     if case_insensitive {
       path.to_lower()
     } else {

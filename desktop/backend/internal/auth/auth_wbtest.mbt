@@ -114,7 +114,7 @@ test "auth.json codec round-trips and reads corruption as signed out" {
 ///|
 async test "auth.json persists 0600 and deletes cleanly" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-auth-"))
-  let body = async fn() {
+  let body = () => {
     let session = sample_session(avatar="")
     save_session_file(dir, session)
     guard load_session_file(dir) is Some(reloaded) else {

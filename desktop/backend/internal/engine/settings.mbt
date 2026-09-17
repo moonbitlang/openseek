@@ -426,7 +426,7 @@ async fn with_settings_dir(
 
 ///|
 async test "missing settings read as the BYOK defaults" {
-  with_settings_dir(async fn(_dir, manager) {
+  with_settings_dir((_dir, manager) => {
     let settings = load_engine_settings(manager.runtime_dir)
     assert_true(settings.provider is Deepseek)
     assert_true(settings.deepseek_api_key is None)
@@ -443,7 +443,7 @@ async test "missing settings read as the BYOK defaults" {
 
 ///|
 async test "the DEEPSEEK env fallback reads as a usable key" {
-  with_settings_dir(async fn(_dir, manager) {
+  with_settings_dir((_dir, manager) => {
     // The engine resolves DEEPSEEK when no key is stored; the status must
     // agree, or the frontend blocks Send on an endpoint that runs fine.
     @sys.set_env_var("DEEPSEEK", "sk-env")
@@ -461,7 +461,7 @@ async test "the DEEPSEEK env fallback reads as a usable key" {
 
 ///|
 async test "a saved key round-trips as presence, never as text" {
-  with_settings_dir(async fn(dir, manager) {
+  with_settings_dir((dir, manager) => {
     let status = update_settings(manager, {
       provider: Some("deepseek"),
       custom_api_url: None,
@@ -489,7 +489,7 @@ async test "a saved key round-trips as presence, never as text" {
 
 ///|
 async test "retired hosted providers converge on the DeepSeek default" {
-  with_settings_dir(async fn(dir, manager) {
+  with_settings_dir((dir, manager) => {
     // A store left behind by a hosted-API build must not wedge: it reads
     // as the BYOK default, which needs a key and therefore routes to
     // Settings.
@@ -525,7 +525,7 @@ async test "retired hosted providers converge on the DeepSeek default" {
 
 ///|
 async test "a present-but-blank field clears the stored value" {
-  with_settings_dir(async fn(_dir, manager) {
+  with_settings_dir((_dir, manager) => {
     let _ = update_settings(manager, {
       provider: Some("custom"),
       custom_api_url: Some("https://proxy.example/chat/completions"),
@@ -553,7 +553,7 @@ async test "a present-but-blank field clears the stored value" {
 
 ///|
 async test "a save removes the retired WSL settings group" {
-  with_settings_dir(async fn(dir, manager) {
+  with_settings_dir((dir, manager) => {
     @fsx.write_text(
       settings_file(dir),
       "{\"version\": 1, \"provider\": \"deepseek\", \"wsl\": {\"enabled\": true, \"distro\": \"Ubuntu\"}}",
@@ -578,7 +578,7 @@ async test "a save removes the retired WSL settings group" {
 
 ///|
 async test "concurrent disjoint settings patches merge and publish in revision order" {
-  with_settings_dir(async fn(dir, manager) {
+  with_settings_dir((dir, manager) => {
     let committed : Array[Int] = []
     let ready : @async.Queue[Unit] = Queue(kind=Blocking(2))
     // Queue both callers behind the manager lock so the test exercises the
@@ -597,7 +597,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             glm_api_key: None,
             custom_api_key: None,
           },
-          on_committed=fn(status) { committed.push(status.revision) },
+          on_committed=status => committed.push(status.revision),
         )
       })
       let custom = group.spawn(() => {
@@ -611,7 +611,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             glm_api_key: None,
             custom_api_key: Some("sk-custom"),
           },
-          on_committed=fn(status) { committed.push(status.revision) },
+          on_committed=status => committed.push(status.revision),
         )
       })
       ready.get()
@@ -643,7 +643,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
 
 ///|
 async test "saves preserve fields a newer build added" {
-  with_settings_dir(async fn(dir, manager) {
+  with_settings_dir((dir, manager) => {
     @fsx.write_text(
       settings_file(dir),
       "{\"version\": 1, \"future_field\": \"kept\", \"provider\": \"deepseek\"}",
@@ -667,7 +667,7 @@ async test "saves preserve fields a newer build added" {
 
 ///|
 async test "a newer-version file is read best-effort but never rewritten" {
-  with_settings_dir(async fn(dir, manager) {
+  with_settings_dir((dir, manager) => {
     @fsx.write_text(
       settings_file(dir),
       "{\"version\": 99, \"provider\": \"deepseek\", \"deepseek_api_key\": \"sk-kept\"}",
@@ -699,7 +699,7 @@ async test "a newer-version file is read best-effort but never rewritten" {
 
 ///|
 async test "an unknown provider is refused on write, defaulted on read" {
-  with_settings_dir(async fn(dir, manager) {
+  with_settings_dir((dir, manager) => {
     let refused = try
       update_settings(manager, {
         provider: Some("acme"),
@@ -723,7 +723,7 @@ async test "an unknown provider is refused on write, defaulted on read" {
 
 ///|
 async test "a corrupt file reads as defaults and survives until a save" {
-  with_settings_dir(async fn(dir, manager) {
+  with_settings_dir((dir, manager) => {
     @fsx.write_text(settings_file(dir), "{ not json")
     let settings = load_engine_settings(manager.runtime_dir)
     assert_true(settings.provider is Deepseek)
@@ -734,7 +734,7 @@ async test "a corrupt file reads as defaults and survives until a save" {
 
 ///|
 async test "run config resolves the endpoint from the stored provider" {
-  with_settings_dir(async fn(dir, manager) {
+  with_settings_dir((dir, manager) => {
     // A run needs a workspace before it can resolve anything else. This test
     // is about the endpoint the stored provider yields, so any attached
     // directory serves; HOME locates the registry. Save and restore inside
@@ -820,7 +820,7 @@ async test "run config resolves the endpoint from the stored provider" {
 
 ///|
 async test "the GLM provider stores its own key and reports presence" {
-  with_settings_dir(async fn(_dir, manager) {
+  with_settings_dir((_dir, manager) => {
     let status = update_settings(manager, {
       provider: Some("glm"),
       custom_api_url: None,
@@ -848,7 +848,7 @@ async test "the GLM provider stores its own key and reports presence" {
 
 ///|
 async test "the GLM env fallback reads as a usable key" {
-  with_settings_dir(async fn(_dir, manager) {
+  with_settings_dir((_dir, manager) => {
     // The engine resolves GLM when no key is stored; the status must agree,
     // or the frontend blocks Send on an endpoint that runs fine.
     @sys.set_env_var("GLM", "glm-env")
@@ -866,7 +866,7 @@ async test "the GLM env fallback reads as a usable key" {
 
 ///|
 async test "a custom provider without a URL refuses to start" {
-  with_settings_dir(async fn(_dir, manager) {
+  with_settings_dir((_dir, manager) => {
     let _ = update_settings(manager, {
       provider: Some("custom"),
       custom_api_url: None,
@@ -896,7 +896,7 @@ async test "a custom provider without a URL refuses to start" {
 
 ///|
 async test "pattern repair uses provider credentials and leaves run options to argv" {
-  with_settings_dir(async fn(_dir, manager) {
+  with_settings_dir((_dir, manager) => {
     let _ = update_settings(manager, {
       provider: Some("custom"),
       custom_api_url: Some("https://proxy.example/chat/completions"),

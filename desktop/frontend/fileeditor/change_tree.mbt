@@ -185,7 +185,7 @@ fn change_tree_key(
   key : String,
 ) -> @cmd.Cmd {
   let row = rows[index]
-  let move_to = fn(item) {
+  let move_to = item => {
     if item is Some(_) {
       focus_change_tree_after_render(state, item)
     } else {

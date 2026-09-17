@@ -59,7 +59,7 @@ async test "terminal session round-trips output and reports exit" {
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
     })
     let id = @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
       "/bin/cat",
@@ -80,7 +80,7 @@ async test "terminal session runs in the requested directory" {
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
     })
     ignore(
       @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
@@ -102,7 +102,7 @@ async test "a missing program fails while opening the session" {
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
     })
     let missing = ["openseek-terminal-test-program-that-does-not-exist"]
     let failed = open_refusal(state, command=missing) is Some(_)
@@ -126,7 +126,7 @@ async test "shutdown wakes an idle terminal pump" {
       let state = @terminal.new_terminal_state()
       let pushes = new_push_queue()
       group.spawn_bg(allow_failure=true, () => {
-        @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+        @terminal.run_terminal_pump(state, push => pushes.put(push))
       })
       @async.pause()
       state.shutdown()
@@ -164,7 +164,7 @@ async test "close_all_terminals retires every live session" {
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
     })
     let first = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
     let second = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
@@ -204,7 +204,7 @@ async test "close_all_terminals cancels queued opens from an older page" {
     @async.pause()
     @terminal.close_all_terminals(state)
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
     })
     let was_cancelled = @async.with_timeout(5000, () => cancelled.get())
     assert_true(was_cancelled)
@@ -243,7 +243,7 @@ async test "a cumulative acknowledgement resumes terminal output" {
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
     })
     let id = @terminal.open_terminal(state, cwd=".", cols=80, rows=24, command=[
       "/usr/bin/yes", "flow-control",

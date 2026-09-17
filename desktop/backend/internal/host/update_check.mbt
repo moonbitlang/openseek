@@ -149,12 +149,10 @@ async fn SelfUpdate::download_package(
   guard info is Some(info) else {
     raise HostError("no newer release is published")
   }
-  let staged = @update.stage_update(info, work_dir=dir, bundle_path=bundle, on_progress=async fn(
+  let staged = @update.stage_update(info, work_dir=dir, bundle_path=bundle, on_progress=(
     downloaded_bytes,
     total_bytes,
-  ) {
-    emit(UpdateDownloadProgress({ downloaded_bytes, total_bytes, }))
-  }) catch {
+  ) => emit(UpdateDownloadProgress({ downloaded_bytes, total_bytes, }))) catch {
     error if @async.is_being_cancelled() => raise error
     error => {
       @xlog.warn(category="update") <?
@@ -286,7 +284,7 @@ async test "self-update pump reports download failures" {
   let events : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(1))
   @async.with_task_group(group => {
     group.spawn_bg(allow_failure=true, () => {
-      updates.run(async fn(notification) { events.put(notification) })
+      updates.run(notification => events.put(notification))
     })
     // Bypass `start_download` so even this unsupported build reaches the
     // pump's failure path deterministically, with no network involved.

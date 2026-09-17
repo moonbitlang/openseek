@@ -710,7 +710,7 @@ async test "a follower barrier broadcasts the durable tail before returning" {
   write_session_record(root, session, [])
   let manager = new_engine_manager(engine)
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     install_test_follower(engine, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
@@ -739,7 +739,7 @@ async test "an unreadable existing record refuses the spawn baseline" {
   let engine = dir + "/engine.sh"
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   let manager = new_engine_manager(engine)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     // No record file: absence is proof, so the follower installs at the
     // proven-empty watermark and the first turn can run.
@@ -779,7 +779,7 @@ async test "failed final scan keeps the follower active and propagates" {
   // this test is about: a record that goes bad under a live follower.
   write_session_record(root, "s-fail", [])
   let manager = new_engine_manager(engine)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     install_test_follower(engine, "s-fail", root, sink~, group~, manager~)
     guard manager.followers.get("s-fail") is Some(follower) else {
@@ -818,7 +818,7 @@ async test "an absent record retires as an empty drain" {
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   // No record at all: the writer was cancelled before creating one.
   let manager = new_engine_manager(engine)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     install_test_follower(engine, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
@@ -842,7 +842,7 @@ async test "the drain that finally succeeds broadcasts what it could not read" {
   write_session_record(root, session, [])
   let manager = new_engine_manager(engine)
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     install_test_follower(engine, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(_) else {
@@ -884,7 +884,7 @@ async test "a committed terminal does not settle a run the stream never ended" {
   write_session_record(root, session, [])
   let manager = new_engine_manager(dir + "/engine.sh")
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     install_test_follower(
       dir + "/engine.sh",
@@ -958,7 +958,7 @@ async test "abrupt EOF leaves a failed drain for a later caller to retry" {
   write_session_record(root, session, [])
   let manager = new_engine_manager(engine_path)
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     install_test_follower(engine_path, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
@@ -1034,13 +1034,13 @@ async test "workspace detach drains an orphaned pending follower before commit" 
   @sys.set_env_var("HOME", global_root.to_string())
   defer restore_home_env(previous)
   @fsx.ensure_dir(workspace.to_path())
-  ignore(attach_workspace(workspace.to_string(), fn(_) { () }))
+  ignore(attach_workspace(workspace.to_string(), _ => ()))
   write_session_record(root, session, [])
   let manager = new_engine_manager(engine_path)
   let sessions : Map[String, SessionSlot] = Map([])
   manager.pump = Serving(sessions~)
   let emitted : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     install_test_follower(engine_path, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
@@ -1060,7 +1060,7 @@ async test "workspace detach drains an orphaned pending follower before commit" 
     // The drain has to finish before the workspace's removal is committed:
     // once the store is gone, nothing could read what the writer left.
     let mut drained_before_commit : Bool = false
-    let detached = detach_workspace(manager, workspace.to_string(), fn(_) {
+    let detached = detach_workspace(manager, workspace.to_string(), _ => {
       drained_before_commit = follower.retired &&
         emitted.any(event => event is SessionCommit({ sequence: 1, .. }))
     })
@@ -1084,7 +1084,7 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
   // over an unreadable record is refused before it gets this far.
   write_session_record(root, session, [])
   let manager = new_engine_manager(engine_path)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     install_test_follower(engine_path, session, root, sink~, group~, manager~)
     guard manager.followers.get(session) is Some(follower) else {
@@ -1151,7 +1151,7 @@ async test "record stat failure is not mistaken for an empty final drain" {
   // a record it cannot read — and the directory turns into a file after.
   write_session_record(root, "s-stat", [])
   let manager = new_engine_manager(engine)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     install_test_follower(engine, "s-stat", root, sink~, group~, manager~)
     guard manager.followers.get("s-stat") is Some(follower) else {
@@ -1194,7 +1194,7 @@ async test "root change retires the old follower before installing another" {
   defer @fs.rmdir(dir, recursive=true)
   let engine = dir + "/engine.sh"
   let manager = new_engine_manager(engine)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   let root_a : @pathx.Absolute = @pathx.Path(dir + "/a").resolve()
   let root_b : @pathx.Absolute = @pathx.Path(dir + "/b").resolve()
   // The same session id under two stores: installing the second follower
@@ -1225,7 +1225,7 @@ async test "one Load control message answers a bounded request batch" {
   let root : @pathx.Absolute = @pathx.Path(dir + "/root").resolve()
   write_session_record(root, "s-load", [session_user_event(1, "hello")])
   let manager = new_engine_manager(engine)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     install_test_follower(engine, "s-load", root, sink~, group~, manager~)
     guard manager.followers.get("s-load") is Some(follower) else {
@@ -1347,7 +1347,7 @@ async test "cancelling follower baseline removes its startup identity" {
     Array::makei(12_000, index => session_user_event(index + 1, "line")),
   )
   let manager = new_engine_manager(engine)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     let startup = group.spawn(() => {
       install_test_follower(engine, "s-cancel", root, sink~, group~, manager~)

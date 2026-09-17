@@ -35,17 +35,17 @@ async test "worktree creation reads settings using a resource path" {
       "commit", "--allow-empty", "-q", "-m", "init",
     ]),
   )
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host : WorktreeHost = {
     lifecycle_lock: Mutex(),
     session_is_live: _ => false,
-    drain_sessions: fn(_) {  },
+    drain_sessions: _ => (),
   }
   let reply = create(
     host,
     resource_path(repo),
     WorktreeOwner::openseek("windows-session"),
-    fn(_) {  },
+    _ => (),
   )
   assert_eq(reply.name, "wt-1")
   assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
@@ -53,7 +53,7 @@ async test "worktree creation reads settings using a resource path" {
     host,
     resource_path(repo),
     WorktreeOwner::openseek("windows-session"),
-    fn(_) {  },
+    _ => (),
   )
   assert_eq(replay.name, reply.name)
   assert_eq(replay.worktrees.length(), 1)

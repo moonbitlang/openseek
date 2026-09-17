@@ -76,7 +76,7 @@ async test "session workspace dir follows the worktree mapping while it exists" 
   let ws = root.join("ws")
   @fsx.ensure_dir(ws.join(".openseek/sessions/s-wt").to_path())
   @fsx.ensure_dir(ws.join(".openseek/sessions/s-plain").to_path())
-  ignore(@workspaces.add(ws.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(ws.to_string(), _ => ()))
   guard ws.to_uri_path() is Some(ws_resource) else {
     fail("workspace fixture could not be represented as a frontend resource")
   }
@@ -142,7 +142,7 @@ async test "attached workspace dir resolves registered worktree paths" {
   defer restore_home_env(previous)
   let ws = root.join("ws")
   @fsx.ensure_dir(ws.to_path())
-  ignore(@workspaces.add(ws.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(ws.to_string(), _ => ()))
   stage_worktree_placements(ws, [("wt", "openseek/wt", None, None)])
   @fsx.ensure_dir(ws.join(".worktrees/wt/src").to_path())
   @fsx.ensure_dir(ws.join(".worktrees/stray").to_path())
@@ -206,7 +206,7 @@ async test "a bound session routes every start through its checkout" {
   })
   let ws = root.join("ws")
   @fsx.ensure_dir(ws.join(".worktrees/wt").to_path())
-  ignore(@workspaces.add(ws.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(ws.to_string(), _ => ()))
   // Creation is the binding; the start path only READS the registry.
   stage_worktree_placements(ws, [("wt", "openseek/wt", Some("s-bind"), None)])
   let manager = new_engine_manager("openseek")
@@ -283,10 +283,10 @@ async test "worktree remove refuses a running conversation without unmapping it"
   )
   let manager = actor.manager()
   configure_custom_provider(manager)
-  let sink = EventSink(fn(_) {  })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
-    ignore(@workspaces.add(ws.to_string(), fn(_) {  }))
+    ignore(@workspaces.add(ws.to_string(), _ => ()))
     stage_worktree_placements(ws, [
       ("wt", "openseek/wt", Some("s-wt-run"), None),
     ])
@@ -303,9 +303,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
     let committed : Ref[Bool] = Ref(false)
     let detail = try {
       ignore(
-        @worktree.remove(manager.worktree_host(), ws.to_string(), "wt", false, fn(
-          _,
-        ) {
+        @worktree.remove(manager.worktree_host(), ws.to_string(), "wt", false, _ => {
           committed.val = true
         }),
       )
@@ -348,13 +346,13 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   })
   let repo = root.join("repo")
   prepare_git_repo(repo)
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let manager = new_engine_manager("openseek")
   let created = @worktree.create(
     manager.worktree_host(),
     repo.to_string(),
     @worktree.WorktreeOwner::openseek("s-vanish"),
-    fn(_) {  },
+    _ => (),
     name="wt",
   )
   let checkout = repo.join(".worktrees/wt")
@@ -446,7 +444,7 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
     manager.worktree_host(),
     repo.to_string(),
     @worktree.WorktreeOwner::openseek("s-vanish"),
-    fn(_) {  },
+    _ => (),
   )
   assert_eq(repaired.name, created.name)
   assert_true(@fsx.is_dir(checkout.to_path()))
@@ -504,7 +502,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   @fsx.ensure_dir(root.join("global").to_path())
   let repo = root.join("repo")
   prepare_git_repo(repo)
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let manager = new_engine_manager("openseek")
   manager.pump = Serving(sessions=Map([]))
   ignore(
@@ -512,7 +510,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
       manager.worktree_host(),
       repo.to_string(),
       @worktree.WorktreeOwner::openseek("s-arc"),
-      fn(_) {  },
+      _ => (),
     ),
   )
   // The first turn has landed: the durable record now exists in the
@@ -599,7 +597,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
     manager.worktree_host(),
     repo.to_string(),
     @worktree.WorktreeOwner::openseek("s-arc"),
-    fn(_) {  },
+    _ => (),
   )
   assert_eq(repaired.name, "wt-1")
   assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
@@ -609,7 +607,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
       manager.worktree_host(),
       repo.to_string(),
       @worktree.WorktreeOwner::openseek("s-arc2"),
-      fn(_) {  },
+      _ => (),
     ),
   )
   @fsx.ensure_dir(
@@ -630,7 +628,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
     manager.worktree_host(),
     repo.to_string(),
     codex_owner,
-    fn(_) {  },
+    _ => (),
   )
   @fs.write_file(
     repo.join(".worktrees/\{codex.name}/local.txt").to_string(),
@@ -665,7 +663,7 @@ async test "permanent archived deletion drops placement but keeps files and bran
   @sys.set_env_var("HOME", global.to_string())
   prepare_git_repo(workspace)
   ignore(@gitx.run(workspace, ["branch", "openseek/chat"]))
-  ignore(@workspaces.add(workspace.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(workspace.to_string(), _ => ()))
   @fs.write_file(
     workspace.join("project-note.txt").to_string(),
     b"keep me",

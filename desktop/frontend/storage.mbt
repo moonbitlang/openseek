@@ -153,7 +153,7 @@ fn AppFontSize::save(self : AppFontSize) -> @cmd.Cmd {
 ///|
 fn load_setting(storage_key : String) -> String {
   @js.Error_::wrap(
-    fn() {
+    () => {
       guard @interop.js_prop(@js.globalThis, "localStorage") is Some(storage) else {
         return @js.Value::cast_from("")
       }
@@ -169,7 +169,7 @@ fn load_setting(storage_key : String) -> String {
 ///|
 fn save_setting(storage_key : String, value : String) -> Unit {
   @js.Error_::wrap(
-    fn() {
+    () => {
       guard @interop.js_prop(@js.globalThis, "localStorage") is Some(storage) else {
         return @js.Value::cast_from(())
       }

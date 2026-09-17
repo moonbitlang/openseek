@@ -981,7 +981,7 @@ async test "selected archived store is revalidated after detachment" {
   manager.pump = Serving(sessions=Map([]))
   let workspace_token = workspace.resource_path()
   let selected = @session_store.ArchivedStore::for_workspace(workspace_token)
-  ignore(detach_workspace(manager, workspace_token, fn(_) { () }))
+  ignore(detach_workspace(manager, workspace_token, _ => ()))
   let detail = try {
     let family = manager.claim_session_family_move(
       "chat",

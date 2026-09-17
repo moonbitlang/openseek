@@ -44,7 +44,7 @@ async test "the default workspace is attached once and never re-attached" {
   assert_eq(registered(), [attached])
   // The user detaches it. `initialized` is rewritten untouched by the
   // removal, so setup still declines to bring it back.
-  ignore(remove(attached.0, fn(_) {  }))
+  ignore(remove(attached.0, _ => ()))
   assert_eq(registered(), [])
   assert_true(initialize() is None)
   assert_eq(registered(), [])

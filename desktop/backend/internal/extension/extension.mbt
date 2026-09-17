@@ -338,7 +338,7 @@ pub fn openseek_capability(
 ) -> @proton_extension.RendererCapability {
   let endpoints = @api.endpoints(state, bridge.host_connection)
   endpoints.push(
-    @endpoint.Endpoint::window(@commands.host_connect, async fn(context, _) {
+    @endpoint.Endpoint::window(@commands.host_connect, (context, _) => {
       // A reloaded page allocates browser ids from scratch; the previous
       // page's native views must not survive its attachment.
       views.close_all()
@@ -346,23 +346,17 @@ pub fn openseek_capability(
     }),
   )
   endpoints.push(
-    @endpoint.Endpoint::window(@commands.shell_open_external, async fn(
-      _,
-      payload,
-    ) {
+    @endpoint.Endpoint::window(@commands.shell_open_external, (_, payload) => {
       open_external(payload)
     }),
   )
   endpoints.push(
-    @endpoint.Endpoint::window(@commands.session_export, async fn(
-      context,
-      payload,
-    ) {
+    @endpoint.Endpoint::window(@commands.session_export, (context, payload) => {
       export_session(context, state, payload)
     }),
   )
   endpoints.push(
-    @endpoint.Endpoint::window(@commands.session_share, async fn(_, payload) {
+    @endpoint.Endpoint::window(@commands.session_share, (_, payload) => {
       SessionShare::{ state, payload, }.publish()
     }),
   )

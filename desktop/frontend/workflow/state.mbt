@@ -263,27 +263,25 @@ pub fn entry(runs : Array[Run], entry : Entry) -> Array[Run] {
     guard run.id == entry.workflow && run.session == entry.session else {
       return run
     }
-    let refined = fn(row : Row) -> Row {
-      {
-        ..row,
-        kind: if row.kind.is_empty() {
-          entry.kind
-        } else {
-          row.kind
-        },
-        label: if row.label.is_empty() {
-          entry.label
-        } else {
-          row.label
-        },
-        phase: entry.phase,
-        status: Some(entry.status),
-        steps: entry.steps,
-        tokens: entry.prompt_tokens + entry.completion_tokens,
-        cost_usd: entry.cost_usd,
-        started_at: entry.started_at,
-        finished_at: entry.finished_at,
-      }
+    let refined : (Row) -> Row = row => {
+      ..row,
+      kind: if row.kind.is_empty() {
+        entry.kind
+      } else {
+        row.kind
+      },
+      label: if row.label.is_empty() {
+        entry.label
+      } else {
+        row.label
+      },
+      phase: entry.phase,
+      status: Some(entry.status),
+      steps: entry.steps,
+      tokens: entry.prompt_tokens + entry.completion_tokens,
+      cost_usd: entry.cost_usd,
+      started_at: entry.started_at,
+      finished_at: entry.finished_at,
     }
     match run.rows.search_by(row => row.child == entry.child) {
       Some(index) => {
@@ -328,7 +326,7 @@ pub fn entry(runs : Array[Run], entry : Entry) -> Array[Run] {
 /// which is the order a reader follows.
 pub fn Run::ordered_rows(self : Run) -> Array[Row] {
   let rows = self.rows.copy()
-  rows.sort_by(fn(a, b) { a.ordinal - b.ordinal })
+  rows.sort_by((a, b) => a.ordinal - b.ordinal)
   rows
 }
 

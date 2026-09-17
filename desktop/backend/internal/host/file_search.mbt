@@ -684,7 +684,7 @@ async test "file scan uses one ordered coordinator" {
   let root = @pathx.Path("/virtual-sequential").resolve()
   let mut active = 0
   let mut maximum = 0
-  let snapshot = scan_directory_tree(root, async fn(dir) {
+  let snapshot = scan_directory_tree(root, dir => {
     active += 1
     maximum = maximum.max(active)
     @async.pause()
@@ -787,7 +787,7 @@ async test "query cancellation keeps the cache-populating scan alive" {
   @async.with_task_group(group => {
     let starts : @async.Queue[Unit] = Queue(kind=Blocking(1))
     let release : @async.Queue[Unit] = Queue(kind=Blocking(1))
-    let service = FileSearchService::new_with_scan(async fn(_) {
+    let service = FileSearchService::new_with_scan(_ => {
       starts.put(())
       release.get()
       { files: ["target.mbt"], }
@@ -813,7 +813,7 @@ async test "cache keys coalesce scans and clearCache retires one session" {
   @async.with_task_group(group => {
     let starts : @async.Queue[Unit] = Queue(kind=Blocking(2))
     let outcomes : @async.Queue[FileIndexSnapshot] = Queue(kind=Blocking(2))
-    let service = FileSearchService::new_with_scan(async fn(_) {
+    let service = FileSearchService::new_with_scan(_ => {
       starts.put(())
       outcomes.get()
     })
@@ -850,7 +850,7 @@ async test "one connection serializes discovery across cache sessions" {
   @async.with_task_group(group => {
     let starts : @async.Queue[String] = Queue(kind=Blocking(2))
     let releases : @async.Queue[Unit] = Queue(kind=Blocking(2))
-    let service = FileSearchService::new_with_scan(async fn(root) {
+    let service = FileSearchService::new_with_scan(root => {
       starts.put(root.to_string())
       releases.get()
       { files: ["file.mbt"], }
@@ -912,9 +912,7 @@ async test "a failed cache population is not installed and can retry" {
 ///|
 async test "a cache key cannot cross workspace roots" {
   @async.with_task_group(group => {
-    let service = FileSearchService::new_with_scan(fn(_) {
-      { files: ["one.mbt"], }
-    })
+    let service = FileSearchService::new_with_scan(_ => { files: ["one.mbt"], })
     group.spawn_bg(() => service.run())
     let first = @pathx.Path("/workspace-one").resolve()
     let second = @pathx.Path("/workspace-two").resolve()

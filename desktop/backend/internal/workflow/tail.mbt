@@ -219,7 +219,7 @@ fn parse_journal(
         _ => "failed"
       }
   }
-  let int_at = fn(fields : Map[String, Json], name : String) -> Int {
+  let int_at : (Map[String, Json], String) -> Int = (fields, name) => {
     match fields.get(name) {
       Some(Number(n, ..)) => n.to_int()
       _ => 0
@@ -228,7 +228,7 @@ fn parse_journal(
   // Milliseconds since the epoch, as the plain JSON numbers the journal
   // writes them as. `Double` carries them exactly and crosses the wire as a
   // number; core's `Int64` codec would want a string.
-  let time_at = fn(fields : Map[String, Json], name : String) -> Double? {
+  let time_at : (Map[String, Json], String) -> Double? = (fields, name) => {
     match fields.get(name) {
       Some(Number(n, ..)) => Some(n)
       _ => None

@@ -364,14 +364,14 @@ pub fn endpoints(
       )
       reply
     }),
-    @endpoint.Endpoint::codex(@commands.codex_config_open, async fn(_) {
+    @endpoint.Endpoint::codex(@commands.codex_config_open, _ => {
       @host.open_codex_config(state.codex.config_home())
       Acknowledged
     }),
-    @endpoint.Endpoint::codex(@commands.codex_draft_open, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_draft_open, payload => {
       state.open_codex_draft(payload)
     }),
-    @endpoint.Endpoint::codex(@commands.codex_draft_close, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_draft_close, payload => {
       guard payload.validated_id() is Some(draft_id) else {
         raise @host.PayloadError("invalid Codex draft id")
       }
@@ -379,15 +379,13 @@ pub fn endpoints(
       state.codex_draft_threads.forget(draft_id)
       Acknowledged
     }),
-    @endpoint.Endpoint::codex(@commands.codex_server_request_list, async fn(_) {
+    @endpoint.Endpoint::codex(@commands.codex_server_request_list, _ => {
       let reply : @protocol.CodexServerRequestsReply = @json.from_json(
         state.codex.requests(),
       )
       reply
     }),
-    @endpoint.Endpoint::codex(@commands.codex_server_request_respond, async fn(
-      payload,
-    ) {
+    @endpoint.Endpoint::codex(@commands.codex_server_request_respond, payload => {
       ignore(
         state.codex.respond(
           request_id=payload.request_id,
@@ -396,10 +394,10 @@ pub fn endpoints(
       )
       Acknowledged
     }),
-    @endpoint.Endpoint::codex(@commands.codex_file_search, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_file_search, payload => {
       state.codex_file_search(payload)
     }),
-    @endpoint.Endpoint::codex(@commands.codex_skills_list, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_skills_list, payload => {
       state.codex_skills_list(payload)
     }),
     state.codex_endpoint(@commands.codex_account_read),
@@ -407,16 +405,14 @@ pub fn endpoints(
     state.codex_endpoint(@commands.codex_account_login_cancel),
     state.codex_endpoint(@commands.codex_account_logout),
     state.codex_endpoint(@commands.codex_model_list),
-    @endpoint.Endpoint::codex(@commands.codex_thread_start, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_thread_start, payload => {
       state.codex_thread_start(payload)
     }),
-    @endpoint.Endpoint::codex(@commands.codex_thread_resume, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_thread_resume, payload => {
       state.codex_thread_resume(payload)
     }),
     state.codex_endpoint(@commands.codex_thread_read),
-    @endpoint.Endpoint::codex(@commands.codex_thread_history_read, async fn(
-      payload,
-    ) {
+    @endpoint.Endpoint::codex(@commands.codex_thread_history_read, payload => {
       state.codex_thread_history(payload)
     }),
     state.codex_endpoint(@commands.codex_thread_list),
@@ -425,24 +421,24 @@ pub fn endpoints(
     state.codex_endpoint(@commands.codex_thread_rename),
     state.codex_endpoint(@commands.codex_thread_compact),
     state.codex_endpoint(@commands.codex_review_start),
-    @endpoint.Endpoint::codex(@commands.codex_turn_start, async fn(payload) {
+    @endpoint.Endpoint::codex(@commands.codex_turn_start, payload => {
       state.codex_turn_start(payload)
     }),
     state.codex_endpoint(@commands.codex_turn_steer),
     state.codex_endpoint(@commands.codex_turn_interrupt),
-    @endpoint.Endpoint::remote(@commands.agent_start, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.agent_start, payload => {
       @engine.start_run(state.sink(), state.manager, payload)
     }),
     @endpoint.Endpoint::remote_sync(@commands.agent_cancel, payload => {
       @engine.cancel_run(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_steer, fn(payload) {
+    @endpoint.Endpoint::remote(@commands.agent_steer, payload => {
       @engine.steer_run(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.agent_queue, payload => {
       @engine.queue_run(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_compact, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.agent_compact, payload => {
       @engine.compact_run(state.manager, payload)
     }),
     @endpoint.Endpoint::remote(@commands.jobs_list, payload => {
@@ -454,7 +450,7 @@ pub fn endpoints(
     @endpoint.Endpoint::remote(@commands.jobs_stop, payload => {
       @engine.stop_job(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.agent_goal, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.agent_goal, payload => {
       @engine.goal_run(state.manager, payload)
     }),
     // Synchronous like cancel: it hands one line to the engine's writer and
@@ -467,21 +463,19 @@ pub fn endpoints(
     @endpoint.Endpoint::remote_sync(@commands.agent_runs, payload => {
       state.hub.runs(known?=payload.known)
     }),
-    @endpoint.Endpoint::remote(@commands.session_list, async fn(_) {
+    @endpoint.Endpoint::remote(@commands.session_list, _ => {
       @engine.list_sessions(state.manager)
     }),
-    @endpoint.Endpoint::remote(@commands.session_load, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.session_load, payload => {
       @engine.load_session(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.session_load_archived, async fn(
-      payload,
-    ) {
+    @endpoint.Endpoint::remote(@commands.session_load_archived, payload => {
       @engine.load_archived_session(state.manager, payload)
     }),
-    @endpoint.Endpoint::remote(@commands.session_list_archived, async fn(_) {
+    @endpoint.Endpoint::remote(@commands.session_list_archived, _ => {
       @engine.archived_sessions(state.manager)
     }),
-    @endpoint.Endpoint::remote(@commands.session_archive, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.session_archive, payload => {
       let session = payload.canonical_session()
       // The callback runs inside the rename's cancellation shield. Every
       // other client learns the canonical id before any cancellable list
@@ -500,7 +494,7 @@ pub fn endpoints(
         },
       )
     }),
-    @endpoint.Endpoint::remote(@commands.session_rename, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.session_rename, payload => {
       @engine.rename_session(state.manager, payload)
       publish_session_changed(
         state,
@@ -510,15 +504,13 @@ pub fn endpoints(
       )
       Acknowledged
     }),
-    @endpoint.Endpoint::remote(@commands.session_unarchive, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.session_unarchive, payload => {
       let session = payload.canonical_session()
       @engine.unarchive_session(state.manager, session, (moved, workspace) => {
         publish_session_changed(state, "unarchived", moved, workspace)
       })
     }),
-    @endpoint.Endpoint::remote(@commands.session_delete_archived, async fn(
-      payload,
-    ) {
+    @endpoint.Endpoint::remote(@commands.session_delete_archived, payload => {
       let session = payload.canonical_session()
       @engine.delete_archived_session(
         state.manager,
@@ -532,22 +524,22 @@ pub fn endpoints(
         },
       )
     }),
-    @endpoint.Endpoint::remote(@commands.schedules_list, async fn(_) {
+    @endpoint.Endpoint::remote(@commands.schedules_list, _ => {
       state.schedules.list()
     }),
-    @endpoint.Endpoint::remote(@commands.schedules_save, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.schedules_save, payload => {
       state.schedules.save(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.schedules_action, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.schedules_action, payload => {
       state.schedules.action(payload)
     }),
-    @endpoint.Endpoint::remote(@commands.settings_get, async fn(_) {
+    @endpoint.Endpoint::remote(@commands.settings_get, _ => {
       @engine.settings_status(state.manager)
     }),
     @endpoint.Endpoint::remote_sync(@commands.app_info, _ => {
       version: state.app_version,
     }),
-    @endpoint.Endpoint::remote(@commands.settings_set, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.settings_set, payload => {
       // The store commit and its broadcast are one finite cancellation-
       // shielded linearization point. `update_settings` invokes the callback
       // while its manager-owned lock is still held, preserving revision order
@@ -557,11 +549,9 @@ pub fn endpoints(
           state.manager,
           payload.to_patch(),
           followup_behavior?=payload.followup_behavior,
-          on_committed=fn(status) {
-            // Every client renders these settings; clients that did not ask
-            // must learn about the committed revision too.
-            state.hub.publish(SettingsChanged(status))
-          },
+          // Every client renders these settings; clients that did not ask
+          // must learn about the committed revision too.
+          on_committed=status => state.hub.publish(SettingsChanged(status)),
         )
         // Credentials belong to the server that issued them. Clear stale
         // credentials before this request can complete or be cancelled.
@@ -569,14 +559,14 @@ pub fn endpoints(
         status
       })
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_list, async fn(_) {
+    @endpoint.Endpoint::remote(@commands.workspace_list, _ => {
       let chat_root = Some(@host.chat_workspace_root())
       match @engine.list_workspaces() {
         Workspaces(paths, ..) => Workspaces(paths, chat_root~)
         WorkspaceError(message) => WorkspaceError(message)
       }
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_add, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.workspace_add, payload => {
       // A refusal travels inside the reply: the local bridge would flatten
       // a raised error to "op ext:openseek/workspace.add failed".
       let chat_root = Some(@host.chat_workspace_root())
@@ -589,7 +579,7 @@ pub fn endpoints(
         error => raise error
       }
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_remove, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.workspace_remove, payload => {
       let chat_root = Some(@host.chat_workspace_root())
       @engine.detach_workspace(state.manager, payload.path, workspaces => {
         state.hub.publish(WorkspaceChanged({ workspaces, chat_root, }))
@@ -600,14 +590,10 @@ pub fn endpoints(
         error => raise error
       }
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_settings_get, async fn(
-      payload,
-    ) {
+    @endpoint.Endpoint::remote(@commands.workspace_settings_get, payload => {
       @workspaces.settings(payload.workspace)
     }),
-    @endpoint.Endpoint::remote(@commands.workspace_settings_set, async fn(
-      payload,
-    ) {
+    @endpoint.Endpoint::remote(@commands.workspace_settings_set, payload => {
       // The store commit and its broadcast are one shielded linearization
       // point inside the engine, the `workspace.add` pattern.
       let worktree_mode = payload.worktree_mode
@@ -621,10 +607,10 @@ pub fn endpoints(
         submodule_checkout_timeout_seconds?,
       )
     }),
-    @endpoint.Endpoint::remote(@commands.worktree_list, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.worktree_list, payload => {
       @worktree.list(payload.workspace)
     }),
-    @endpoint.Endpoint::remote(@commands.worktree_create, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.worktree_create, payload => {
       let owner = match (payload.session, payload.codex_thread) {
         (Some(session), None) => @worktree.WorktreeOwner::openseek(session)
         (None, Some(thread_id)) => {
@@ -681,7 +667,7 @@ pub fn endpoints(
       }
       WorktreeCreatedReply(reply)
     }),
-    @endpoint.Endpoint::remote(@commands.worktree_remove, async fn(payload) {
+    @endpoint.Endpoint::remote(@commands.worktree_remove, payload => {
       @worktree.remove(
         state.manager.worktree_host(),
         payload.workspace,
@@ -692,18 +678,12 @@ pub fn endpoints(
         },
       )
     }),
-    @endpoint.Endpoint::remote(@commands.auth_status, async fn(_) {
-      auth_status(state)
-    }),
-    @endpoint.Endpoint::remote(@commands.auth_connect, async fn(_) {
-      auth_connect(state)
-    }),
-    @endpoint.Endpoint::remote(@commands.auth_disconnect, async fn(_) {
+    @endpoint.Endpoint::remote(@commands.auth_status, _ => auth_status(state)),
+    @endpoint.Endpoint::remote(@commands.auth_connect, _ => auth_connect(state)),
+    @endpoint.Endpoint::remote(@commands.auth_disconnect, _ => {
       auth_disconnect(state)
     }),
-    @endpoint.Endpoint::remote(@commands.auth_cancel, async fn(_) {
-      auth_cancel(state)
-    }),
+    @endpoint.Endpoint::remote(@commands.auth_cancel, _ => auth_cancel(state)),
   ]
   for
     endpoint in @host.endpoints(state.host, connection, state.manager, () => {
@@ -723,7 +703,7 @@ fn[Payload : FromJson + ToJson, Reply : FromJson + ToJson] ApiState::codex_endpo
   command : @commands.Command[Payload, @protocol.CodexCommandReply[Reply]],
 ) -> @endpoint.Endpoint {
   let desktop_method = command.name()
-  @endpoint.Endpoint::codex(command, async fn(payload) {
+  @endpoint.Endpoint::codex(command, payload => {
     let value = self.codex_request(desktop_method, ToJson::to_json(payload))
     @json.from_json(value)
   })

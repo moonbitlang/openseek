@@ -43,11 +43,9 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::remote(
     name: command.name(),
     route: command.descriptor().contract_route(),
     bind: registrar => {
-      registrar.bind(command.descriptor(), async fn(_, payload) {
-        handler(payload)
-      })
+      registrar.bind(command.descriptor(), (_, payload) => handler(payload))
     },
-    invoke_remote: Async(async fn(params) {
+    invoke_remote: Async(params => {
       let payload : Payload = @json.from_json(params) catch {
         _ => raise InvalidEndpointPayload("malformed request payload")
       }
@@ -64,7 +62,7 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex(
   command : @commands.Command[Payload, @protocol.CodexCommandReply[Reply]],
   handler : async (Payload) -> Reply,
 ) -> Endpoint {
-  Endpoint::remote(command, async fn(payload) {
+  Endpoint::remote(command, payload => {
     let reply = handler(payload) catch {
       error if @async.is_being_cancelled() => raise error
       error => return CodexCommandError("\{error}")
@@ -81,7 +79,7 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex_sync(
   command : @commands.Command[Payload, @protocol.CodexCommandReply[Reply]],
   handler : (Payload) -> Reply raise,
 ) -> Endpoint {
-  Endpoint::remote_sync(command, fn(payload) {
+  Endpoint::remote_sync(command, payload => {
     let reply = handler(payload) catch {
       error => return CodexCommandError("\{error}")
     }

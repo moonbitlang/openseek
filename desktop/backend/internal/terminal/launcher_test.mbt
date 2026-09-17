@@ -10,7 +10,7 @@ async test "a default session launches a live platform shell" {
     defer state.shutdown()
     let pushes : @async.Queue[@terminal.TerminalPush] = Queue(kind=Unbounded)
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
     })
     let id = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
     // "Still running after its first output" is the property under test. The
@@ -57,7 +57,7 @@ async test "a session whose cwd does not exist fails while opening" {
     defer state.shutdown()
     let pushes : @async.Queue[@terminal.TerminalPush] = Queue(kind=Unbounded)
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, async fn(push) { pushes.put(push) })
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
     })
     let failed = try {
       let _ = @terminal.open_terminal(

@@ -1341,7 +1341,7 @@ async test "attach refuses a linked worktree, keeps main and non-git attachable"
     @gitx.run(repo, ["worktree", "add", "-q", root.join("linked").to_string()]),
   )
   let detail = try {
-    ignore(@workspaces.add(root.join("linked").to_string(), fn(_) {  }))
+    ignore(@workspaces.add(root.join("linked").to_string(), _ => ()))
     "no error"
   } catch {
     WorktreeError(detail) => detail
@@ -1352,13 +1352,13 @@ async test "attach refuses a linked worktree, keeps main and non-git attachable"
   // The main checkout, one of its subdirectories, and a plain directory all
   // stay attachable — in particular the guard must not misfire on paths whose
   // `.git` is elsewhere for other reasons.
-  assert_true(@workspaces.add(repo.to_string(), fn(_) {  }).contains(repo))
+  assert_true(@workspaces.add(repo.to_string(), _ => ()).contains(repo))
   let sub = repo.join("sub")
   @fsx.ensure_dir(sub.to_path())
-  assert_true(@workspaces.add(sub.to_string(), fn(_) {  }).contains(sub))
+  assert_true(@workspaces.add(sub.to_string(), _ => ()).contains(sub))
   let plain = root.join("plain")
   @fsx.ensure_dir(plain.to_path())
-  assert_true(@workspaces.add(plain.to_string(), fn(_) {  }).contains(plain))
+  assert_true(@workspaces.add(plain.to_string(), _ => ()).contains(plain))
 }
 
 ///|
@@ -1373,7 +1373,7 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
   defer restore_home_env(previous)
   let repo = root.join("repo")
   prepare_git_repo(repo)
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
   let committed : Ref[Int] = Ref(-1)
   let reply = create(
@@ -1436,14 +1436,14 @@ async test "explicit registry removal can prune a vanished worktree" {
   defer restore_home_env(previous)
   let repo = root.join("repo")
   prepare_git_repo(repo)
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
   ignore(
     create(
       host,
       repo.to_string(),
       WorktreeOwner::openseek("s-release"),
-      fn(_) {  },
+      _ => (),
       name="wt",
     ),
   )
@@ -1451,7 +1451,7 @@ async test "explicit registry removal can prune a vanished worktree" {
   // The low-level protocol operation remains available for orphan cleanup.
   // The bundled UI does not expose it for a conversation; Archive retains the
   // row so a later Unarchive still requires explicit Repair.
-  let reply = remove(host, repo.to_string(), "wt", false, fn(_) {  })
+  let reply = remove(host, repo.to_string(), "wt", false, _ => ())
   assert_eq(reply.worktrees.length(), 0)
   // Unbound, the conversation runs in the workspace again — no refusal.
   assert_eq(run_dir(repo, "s-release").to_string(), repo.to_string())
@@ -1469,36 +1469,28 @@ async test "worktree names are host-generated and skip surviving branches" {
   defer restore_home_env(previous)
   let repo = root.join("repo")
   prepare_git_repo(repo)
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
-  let first = create(host, repo.to_string(), WorktreeOwner::openseek("s-1"), fn(
-    _,
-  ) {
-
+  let first = create(host, repo.to_string(), WorktreeOwner::openseek("s-1"), _ => {
+    ()
   })
   assert_eq(first.name, "wt-1")
   // The session is the idempotency key: a replay (a retry after a lost
   // reply) gets the existing binding back, never a second checkout.
-  let replay = create(host, repo.to_string(), WorktreeOwner::openseek("s-1"), fn(
-    _,
-  ) {
-
+  let replay = create(host, repo.to_string(), WorktreeOwner::openseek("s-1"), _ => {
+    ()
   })
   assert_eq(replay.name, "wt-1")
   assert_eq(replay.worktrees.length(), 1)
-  let second = create(host, repo.to_string(), WorktreeOwner::openseek("s-2"), fn(
-    _,
-  ) {
-
+  let second = create(host, repo.to_string(), WorktreeOwner::openseek("s-2"), _ => {
+    ()
   })
   assert_eq(second.name, "wt-2")
   // Removal keeps the branch, so a fresh name never resurrects wt-1: the
   // counter moves past every holder, branches included.
-  ignore(remove(host, repo.to_string(), "wt-1", false, fn(_) {  }))
-  let third = create(host, repo.to_string(), WorktreeOwner::openseek("s-3"), fn(
-    _,
-  ) {
-
+  ignore(remove(host, repo.to_string(), "wt-1", false, _ => ()))
+  let third = create(host, repo.to_string(), WorktreeOwner::openseek("s-3"), _ => {
+    ()
   })
   assert_eq(third.name, "wt-3")
   guard list(repo.to_string()).worktrees is [a, b] else {
@@ -1512,17 +1504,15 @@ async test "worktree names are host-generated and skip surviving branches" {
   ignore(@gitx.run(repo, ["branch", "openseek/wt-4"]))
   // Codex uses the same registry, name allocator, and idempotency contract,
   // but its owner remains in a distinct field from OpenSeek sessions.
-  let codex = create(host, repo.to_string(), WorktreeOwner::codex("thread-1"), fn(
-    _,
-  ) {
-
+  let codex = create(host, repo.to_string(), WorktreeOwner::codex("thread-1"), _ => {
+    ()
   })
   assert_eq(codex.name, "wt-5")
   let codex_replay = create(
     host,
     repo.to_string(),
     WorktreeOwner::codex("thread-1"),
-    fn(_) {  },
+    _ => (),
   )
   assert_eq(codex_replay.name, "wt-5")
   guard codex_replay.worktrees.iter().find_first(info => info.name == "wt-5")
@@ -1543,13 +1533,7 @@ async fn create_refusal(
 ) -> String {
   try {
     ignore(
-      create(
-        host,
-        workspace,
-        WorktreeOwner::openseek(session),
-        fn(_) {  },
-        name~,
-      ),
+      create(host, workspace, WorktreeOwner::openseek(session), _ => (), name~),
     )
     "no error"
   } catch {
@@ -1571,7 +1555,7 @@ async test "worktree create names the holder in every refusal" {
   defer restore_home_env(previous)
   let repo = root.join("repo")
   prepare_git_repo(repo)
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
   assert_true(
     create_refusal(host, root.join("unregistered").to_string(), "s", "x").contains(
@@ -1610,7 +1594,7 @@ async test "worktree create names the holder in every refusal" {
   )
   let elsewhere = root.join("elsewhere")
   @fsx.ensure_dir(elsewhere.to_path())
-  ignore(@workspaces.add(elsewhere.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(elsewhere.to_string(), _ => ()))
   write_worktrees(elsewhere, [
     {
       name: "wt-e",
@@ -1637,7 +1621,7 @@ async test "worktree create names the holder in every refusal" {
       host,
       repo.to_string(),
       WorktreeOwner::openseek("s-dup"),
-      fn(_) {  },
+      _ => (),
       name="dup",
     ),
   )
@@ -1656,7 +1640,7 @@ async test "worktree create names the holder in every refusal" {
   // worktree registered before the attach guard existed is refused too.
   let plain = root.join("plain")
   @fsx.ensure_dir(plain.to_path())
-  ignore(@workspaces.add(plain.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(plain.to_string(), _ => ()))
   assert_true(
     create_refusal(host, plain.to_string(), "s", "x").contains(
       "not a git repository",
@@ -1666,7 +1650,7 @@ async test "worktree create names the holder in every refusal" {
   // the checkout would land inside it as untracked noise at the wrong depth.
   let sub = repo.join("sub")
   @fsx.ensure_dir(sub.to_path())
-  ignore(@workspaces.add(sub.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(sub.to_string(), _ => ()))
   assert_true(
     create_refusal(host, sub.to_string(), "s-sub", "x").contains(
       "repository subdirectory",
@@ -1683,7 +1667,7 @@ async fn remove_refusal(
   force : Bool,
 ) -> String {
   try {
-    ignore(remove(host, workspace, name, force, fn(_) {  }))
+    ignore(remove(host, workspace, name, force, _ => ()))
     "no error"
   } catch {
     WorktreeError(detail) => detail
@@ -1704,7 +1688,7 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
   defer restore_home_env(previous)
   let repo = root.join("repo")
   prepare_git_repo(repo)
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
   assert_true(
     remove_refusal(host, repo.to_string(), "nope", false).contains(
@@ -1715,7 +1699,7 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
     host,
     repo.to_string(),
     WorktreeOwner::openseek("s-w1"),
-    fn(_) {  },
+    _ => (),
     name="w1",
   )
   @fs.write_file(
@@ -1751,10 +1735,10 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
     host,
     repo.to_string(),
     WorktreeOwner::openseek("s-w2"),
-    fn(_) {  },
+    _ => (),
     name="w2",
   )
-  ignore(remove(host, repo.to_string(), "w2", false, fn(_) {  }))
+  ignore(remove(host, repo.to_string(), "w2", false, _ => ()))
   assert_eq(list(repo.to_string()).worktrees.length(), 0)
   guard w2.worktrees is [w2_info] else { fail("expected one worktree") }
   assert_true(
@@ -1780,14 +1764,14 @@ async test "worktree remove prunes an externally deleted checkout" {
   defer restore_home_env(previous)
   let repo = root.join("repo")
   prepare_git_repo(repo)
-  ignore(@workspaces.add(repo.to_string(), fn(_) {  }))
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
   ignore(
     create(
       host,
       repo.to_string(),
       WorktreeOwner::openseek("s-gone"),
-      fn(_) {  },
+      _ => (),
       name="gone",
     ),
   )
@@ -1796,7 +1780,7 @@ async test "worktree remove prunes an externally deleted checkout" {
     fail("expected the deleted worktree to stay listed")
   }
   assert_false(listed.present)
-  ignore(remove(host, repo.to_string(), "gone", false, fn(_) {  }))
+  ignore(remove(host, repo.to_string(), "gone", false, _ => ()))
   assert_eq(list(repo.to_string()).worktrees.length(), 0)
   assert_false(
     @gitx.run(repo, ["worktree", "list", "--porcelain"]).contains(

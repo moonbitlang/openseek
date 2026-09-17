@@ -109,7 +109,7 @@ fn Selection::read(self : Selection, emit : @cmd.Emit[Event]) -> @cmd.Cmd {
   }
   @cmd.custom_cmd(scheduler => {
     scheduler.add(emit(Reading))
-    @js.async_run(async fn() noraise {
+    @js.async_run(() => {
       let result = self.load() catch {
         error => {
           scheduler.add(emit(Failed("Could not read images: \{error}")))

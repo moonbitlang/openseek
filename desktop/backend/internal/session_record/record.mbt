@@ -232,7 +232,7 @@ pub async fn read_document(
 pub async fn read_text(root : @pathx.Absolute, session : String) -> String {
   let path = record_path(root, session)
   let lock = lock_path(root, session)
-  with_shared_record_lock(lock, async fn() {
+  with_shared_record_lock(lock, () => {
     @fs.read_file(path.to_string()).text() catch {
       error if @async.is_being_cancelled() => raise error
       @os_error.OSError(_) as error if error.is_ENOENT() =>

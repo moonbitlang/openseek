@@ -960,7 +960,7 @@ async fn[G] serve_until_pumping(
   group~ : @async.TaskGroup[G],
 ) -> Unit {
   group.spawn_bg(no_wait=true, allow_failure=true, () => {
-    actor.run(sink, fn(_) { () })
+    actor.run(sink, _ => ())
   })
   while manager.pump is Stopped {
     @async.sleep(1)
@@ -1024,7 +1024,7 @@ async test "start echoes the client submission id in Started" {
   // Starts are durable now, so each test owns a fresh conversation record
   // instead of sharing a fixed id across test processes.
   let session = "s-" + mint_run_id()
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
     ignore(
@@ -1089,7 +1089,7 @@ async test "a goal is delivered only once its command is on the wire" {
   let manager = actor.manager()
   configure_custom_provider(manager)
   let session = "s-" + mint_run_id()
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
     let delivered = goal_run(manager, {
@@ -1142,7 +1142,7 @@ async test "a discarded command answers its sender" {
       "s-discard",
       writer,
       process,
-      EventSink(fn(_) { () }),
+      EventSink(_ => ()),
       phase=Idle(last_run=None),
     )
     let ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
@@ -1203,7 +1203,7 @@ async test "setup failure retires the writer before an immediate next start" {
   configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
   let session = "s-" + mint_run_id()
-  let sink = EventSink(fn(event) { emitted.push(event) })
+  let sink = EventSink(event => emitted.push(event))
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
     let first = start_run(
@@ -1298,7 +1298,7 @@ async test "a prompt bigger than the pipe still settles exactly once" {
   let emitted : Array[EngineEvent] = []
   let session = "s-" + mint_run_id()
   let started : Ref[String?] = Ref(None)
-  let sink = EventSink(fn(event) {
+  let sink = EventSink(event => {
     if event is Started(payload) {
       started.val = Some(payload.run_id)
     }
@@ -1379,7 +1379,7 @@ async test "named session retries after its first prompt creates no record" {
   configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
   let started : Ref[String?] = Ref(None)
-  let sink = EventSink(fn(event) {
+  let sink = EventSink(event => {
     if event is Started(payload) {
       started.val = Some(payload.run_id)
     }
@@ -1590,10 +1590,10 @@ async test "workspace detach refuses a running conversation without hiding it" {
   let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
   let manager = actor.manager()
   configure_custom_provider(manager)
-  let sink = EventSink(fn(_) { () })
+  let sink = EventSink(_ => ())
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
-    ignore(attach_workspace(workspace.to_string(), fn(_) { () }))
+    ignore(attach_workspace(workspace.to_string(), _ => ()))
     let reply = start_run(
       sink,
       manager,
@@ -1607,7 +1607,7 @@ async test "workspace detach refuses a running conversation without hiding it" {
     let committed : Ref[Bool] = Ref(false)
     let detail = try {
       ignore(
-        detach_workspace(manager, workspace.to_string(), fn(_) {
+        detach_workspace(manager, workspace.to_string(), _ => {
           committed.val = true
         }),
       )
@@ -1665,10 +1665,10 @@ async test "workspace detach drains an idle writer and its follower first" {
   let manager = actor.manager()
   configure_custom_provider(manager)
   let events : Array[EngineEvent] = []
-  let sink = EventSink(fn(event) { events.push(event) })
+  let sink = EventSink(event => events.push(event))
   @async.with_task_group(group => {
     serve_until_pumping(actor, manager, sink, group~)
-    ignore(attach_workspace(workspace.to_string(), fn(_) { () }))
+    ignore(attach_workspace(workspace.to_string(), _ => ()))
     let reply = start_run(
       sink,
       manager,
@@ -1688,7 +1688,7 @@ async test "workspace detach drains an idle writer and its follower first" {
       is Some(_),
     )
     let committed : Ref[Bool] = Ref(false)
-    let detached = detach_workspace(manager, workspace.to_string(), fn(_) {
+    let detached = detach_workspace(manager, workspace.to_string(), _ => {
       committed.val = true
     })
     assert_true(committed.val)
