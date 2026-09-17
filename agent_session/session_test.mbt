@@ -112,31 +112,31 @@ test "session projects to DeepSeek chat messages" {
       #|[
       #|  {
       #|    role: System,
-      #|    content: { parts: [Text(text="system")] },
+      #|    content: Content([Text(text="system")]),
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },
       #|  {
       #|    role: User,
-      #|    content: { parts: [Text(text="inspect")] },
+      #|    content: Content([Text(text="inspect")]),
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },
       #|  {
       #|    role: Assistant,
-      #|    content: { parts: [Text(text="")] },
+      #|    content: Content([Text(text="")]),
       #|    tool_calls: [{ id: "call_1", name: "read", arguments: "{\"path\":\"README.md\"}" }],
       #|    reasoning_content: Some("need file"),
       #|  },
       #|  {
       #|    role: Tool("call_1"),
-      #|    content: { parts: [Text(text="README")] },
+      #|    content: Content([Text(text="README")]),
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },
       #|  {
       #|    role: Assistant,
-      #|    content: { parts: [Text(text="done")] },
+      #|    content: Content([Text(text="done")]),
       #|    tool_calls: [],
       #|    reasoning_content: None,
       #|  },
