@@ -43,6 +43,7 @@ Part 2 teaches the language:
 - `strings_and_views.mbtx`: interpolation, multi-line literals, code units,
   clamping views, shortlex ordering, in-place sort, map lookup, JSON
   patterns.
+
 The PTC tool description teaches host calls:
 
 - `ptc_guarded_edit.mbtx`: one guarded `edit` from a script and reading

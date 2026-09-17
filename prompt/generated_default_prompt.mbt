@@ -137,7 +137,6 @@ fn default_prompt() -> String {
     #|  }
     #|  println(input.length())
     #|}
-    #|
     #|```
     #|
     #|- In `moon run`, the package path goes before `--`; program arguments go after
