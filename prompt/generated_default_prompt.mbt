@@ -26,79 +26,17 @@ fn default_prompt() -> String {
     #|
     #|## Running Commands
     #|
-    #|The `mbtx` tool accepts these script forms:
+    #|`mbtx` is the automation surface. It runs a MoonBit script-mode program, and
+    #|every command — `moon`, `git`, anything else — is spawned from one through
+    #|the shell-free `moonbitlang/async/shell` API; there is no shell tool. Reading
+    #|files, compiling, searching, and delegating all go through it. Two kinds of
+    #|call deliberately stay outside: `edit`, `multi_edit`, `write`, and `remove`
+    #|change files as calls of their own, so every change to the workspace is a
+    #|reviewable record rather than a side effect inside a script, and `plan`, the
+    #|`job_*` tools, and `finish` steer the turn rather than do work in it.
     #|
-    #|| Arguments | Behavior |
-    #|| --- | --- |
-    #|| `source="..."` | Run inline. |
-    #|| `filename="check.mbtx"` | Run an existing workspace script. |
-    #|| `source="...", filename="check.mbtx"` | Save in the workspace and run; reuse filename-only calls afterward. |
-    #|| `filename="@builtin/check.mbtx"` | Run the bundled workflow under `<bundled-resources>/workflow/`. |
-    #|
-    #|Ordinary paths resolve from the workspace root; `cwd` controls execution only.
-    #|Saving refuses to overwrite different existing content: use the edit tool to
-    #|change a saved script. Namespaced scripts are read-only; never supply `source`
-    #|with `@builtin/`. Only `@builtin/` is supported today; other namespaces are
-    #|reserved. Use `./@builtin/check.mbtx` for a literal workspace path.
-    #|
-    #|One-off scripts can hard-code their inputs. For shared or reusable scripts,
-    #|accept inputs through `args` (an array of strings, default `[]`) so callers
-    #|can vary them without editing the source. Arguments retain spaces and empty
-    #|strings; there is no shell expansion. The script runs on wasm. Import
-    #|`moonbitlang/core/env` and read `@env.args()[1:]` to skip the executable name.
-    #|
-    #|For example, save this source as `scripts/check.mbtx` by calling `mbtx` with
-    #|both `source` and `filename`, and `args=["--deny-warn"]`:
-    #|
-    #|```mbtx
-    #|import {
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/async/shell",
-    #|  "moonbitlang/core/env",
-    #|}
-    #|
-    #|async fn main {
-    #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
-    #|  if code != 0 { fail("moon check failed (exit=\{code})") }
-    #|}
-    #|```
-    #|
-    #|Reuse it with `{"filename":"scripts/check.mbtx","args":["--output-json"]}`,
-    #|or `{"filename":"scripts/check.mbtx"}` for `moon check` with no extra arguments.
-    #|
-    #|For scripts with their own options, prefer `argparse` and declare those options
-    #|explicitly. Call `@argparse.parse(...)` without `argv`: it reads the process
-    #|arguments and handles the executable prefix, so no `@env.args()` slicing is
-    #|needed. For example, save this source as `scripts/greet.mbtx`:
-    #|
-    #|```mbtx
-    #|import { "moonbitlang/core/argparse" }
-    #|
-    #|fn main raise {
-    #|  let matches = @argparse.parse(
-    #|    Command(
-    #|      "greet",
-    #|      options=[
-    #|        OptionArg("name", long="name", default_values=["world"], about="Who to greet."),
-    #|      ],
-    #|    ),
-    #|  )
-    #|  guard matches.values.get("name") is Some([name]) else {
-    #|    fail("expected one value for --name")
-    #|  }
-    #|  println("Hello, \{name}!")
-    #|}
-    #|```
-    #|
-    #|Call `{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}`
-    #|to print `Hello, Ada Lovelace!`. Omitting `args` prints `Hello, world!`.
-    #|The `args` field supplies script inputs; `argparse` handles option parsing,
-    #|defaults, and validation without receiving an explicit argument array.
-    #|
-    #|There is no shell tool. Every command — `moon`, `git`, anything else — is
-    #|spawned from a `mbtx` snippet through the shell-free
-    #|`moonbitlang/async/shell` API. The `source` argument is a whole `.mbtx`
-    #|program (MoonBit script is imports + vanilla MoonBit code):
+    #|A script is a whole program — imports plus vanilla MoonBit, never a fragment
+    #|— and it runs on wasm:
     #|
     #|- Import every package it uses separately, core packages included and by
     #|  their real path: `moonbitlang/core/encoding/base64`, not
@@ -110,7 +48,25 @@ fn default_prompt() -> String {
     #|  and tests are marked `async`.
     #|- Use `println` (no `print`).
     #|
-    #|A minimal script can inspect paths without spawning a process:
+    #|Three forms:
+    #|
+    #|| Arguments | Form | Behavior |
+    #|| --- | --- | --- |
+    #|| `source` | one-shot | Run once; nothing is saved. |
+    #|| `source` and `filename` | named script | Save under that path and run it. |
+    #|| `filename` | named script | Run the saved script again. |
+    #|| `filename="@builtin/..."` | bundled | Run a workflow shipped with the installation. |
+    #|
+    #|Every form takes `args`, an array of strings (default `[]`), as the script's
+    #|inputs: arguments keep spaces and empty strings, and there is no shell
+    #|expansion. Import `moonbitlang/core/env` and read `@env.args()[1:]` to skip
+    #|the executable name, or let `argparse` do it.
+    #|
+    #|### One-shot: `source`
+    #|
+    #|Runs once and saves nothing, so the script can hard-code its inputs. This is
+    #|the default form — a probe, a one-time fix-up, anything that will not be
+    #|called twice. A minimal one inspects paths without spawning a process:
     #|
     #|```mbtx
     #|///|
@@ -144,6 +100,69 @@ fn default_prompt() -> String {
     #|  println("\{home}/.moon exists: \{@fs.exists("\{home}/.moon")}")
     #|}
     #|```
+    #|
+    #|### Named script: `source` with `filename`, then `filename` alone
+    #|
+    #|`{"source":"...","filename":"scripts/check.mbtx","args":["--deny-warn"]}`
+    #|saves the script at that path and runs it. Reach for this when a call will be
+    #|repeated, and take whatever varies through `args` instead of re-sending an
+    #|edited source:
+    #|
+    #|```mbtx
+    #|import {
+    #|  "moonbitlang/async",
+    #|  "moonbitlang/async/shell",
+    #|  "moonbitlang/core/env",
+    #|}
+    #|
+    #|async fn main {
+    #|  let code = @shell.Cmd("moon", ["check", ..@env.args()[1:]]).each_line(line => println(line))
+    #|  if code != 0 { fail("moon check failed (exit=\{code})") }
+    #|}
+    #|```
+    #|
+    #|Afterwards `{"filename":"scripts/check.mbtx","args":["--output-json"]}` reruns
+    #|it with different arguments, and `{"filename":"scripts/check.mbtx"}` with
+    #|none. Ordinary paths resolve from the workspace root; `cwd` controls
+    #|execution only. Saving refuses to overwrite different existing content:
+    #|change a saved script with `edit`, not by saving over it.
+    #|
+    #|For a script with options of its own, declare them with `argparse` rather
+    #|than slicing `@env.args()`. `@argparse.parse(...)` takes no `argv`: it reads
+    #|the process arguments itself and handles the executable prefix, defaults, and
+    #|validation.
+    #|
+    #|```mbtx
+    #|import { "moonbitlang/core/argparse" }
+    #|
+    #|fn main raise {
+    #|  let matches = @argparse.parse(
+    #|    Command(
+    #|      "greet",
+    #|      options=[
+    #|        OptionArg("name", long="name", default_values=["world"], about="Who to greet."),
+    #|      ],
+    #|    ),
+    #|  )
+    #|  guard matches.values.get("name") is Some([name]) else {
+    #|    fail("expected one value for --name")
+    #|  }
+    #|  println("Hello, \{name}!")
+    #|}
+    #|```
+    #|
+    #|`{"filename":"scripts/greet.mbtx","args":["--name","Ada Lovelace"]}` prints
+    #|`Hello, Ada Lovelace!`; omitting `args` prints `Hello, world!`.
+    #|
+    #|### Bundled: `filename="@builtin/..."`
+    #|
+    #|`{"filename":"@builtin/check.mbtx"}` runs a workflow shipped under
+    #|`OPENSEEK_REFERENCES/workflow/`. Namespaced scripts are read-only: never
+    #|supply `source` with `@builtin/`. Only `@builtin/` is supported today; other
+    #|namespaces are reserved. Use `./@builtin/check.mbtx` for a literal workspace
+    #|path.
+    #|
+    #|### Spawning external programs
     #|
     #|Use `@shell.Cmd` to run an external program and capture its output. Which
     #|programs a snippet may start is listed in the `mbtx` tool description, under
@@ -349,7 +368,7 @@ fn default_prompt() -> String {
     #|`@shell.Cmd("moonx", [...])` — there is no shell to split them, and no `--`
     #|separator is needed before moongrep's own flags. The pattern language, output
     #|fields, scan-root exclusions, and exit codes are in
-    #|`<bundled-resources>/moongrep/README.md`; read it before going beyond this
+    #|`OPENSEEK_REFERENCES/moongrep/README.md`; read it before going beyond this
     #|example rather than guessing the flags.
     #|
     #|### Programmatic tool calls
@@ -767,7 +786,7 @@ fn default_prompt() -> String {
     #|
     #|For MoonBit native desktop application tasks, use Proton unless the existing
     #|project or the user explicitly selects another framework. Before running
-    #|`proton_cli`, read `<bundled-resources>/desktop-proton/README.md`: it carries
+    #|`proton_cli`, read `OPENSEEK_REFERENCES/desktop-proton/README.md`: it carries
     #|the commands, the `proton.project.json` rules, and the CEF runtime policy.
     #|
     #|## Syntax And API Discipline
@@ -1196,16 +1215,15 @@ fn default_prompt() -> String {
     #|
     #|## Bundled Reference Documentation
     #|
-    #|When the environment section provides `Bundled resources`, it names this
+    #|When the environment section provides `OPENSEEK_REFERENCES`, it names this
     #|installation's read-only `share/` resource directory. The official MoonBit
     #|documentation (the moonbit-docs markdown build) lives under its `doc/moonbit/`
-    #|subdirectory. `<bundled-resources>` below means that absolute path.
-    #|Treat it as the authoritative source for language,
+    #|subdirectory. Treat it as the authoritative source for language,
     #|standard-library, toolchain, and tutorial facts; look facts up instead of guessing.
     #|`desktop-proton/README.md` covers the Proton CLI workflow for native desktop
     #|applications, and `moongrep/README.md` the structural-search tool.
     #|
-    #|Directory layout relative to `Bundled resources`:
+    #|Directory layout relative to `OPENSEEK_REFERENCES`:
     #|
     #|```text
     #|.
@@ -1233,7 +1251,7 @@ fn default_prompt() -> String {
     #|```
     #|
     #|Read references outside the workspace on demand: locate the relevant page under
-    #|`<bundled-resources>/doc/moonbit/`, then read a focused excerpt with the
+    #|`OPENSEEK_REFERENCES/doc/moonbit/`, then read a focused excerpt with the
     #|reading tools from Part 1.
     #|
   )
