@@ -12,6 +12,7 @@ priv enum ReferenceResultsTreeRow {
 /// later virtualized renderer can replace this implementation without changing
 /// the root Viewer API.
 priv struct ReferenceResultsTree {
+  localization : @localization.Localization
   node : @rdom.Element
   callbacks : ReferencesPeekWidgetCallbacks
   resource_path_label : (@base_common.Uri) -> String?
@@ -31,6 +32,7 @@ priv struct ReferenceResultsTree {
 
 ///|
 fn ReferenceResultsTree::ReferenceResultsTree(
+  localization? : @localization.Localization = @localization.Localization(),
   node : @rdom.Element,
   callbacks : ReferencesPeekWidgetCallbacks,
   layout_changed : () -> Unit,
@@ -39,8 +41,9 @@ fn ReferenceResultsTree::ReferenceResultsTree(
   node.set_attribute("class", "moonbit-viewer-reference-results-tree")
   node.set_attribute("role", "tree")
   node.set_attribute("tabindex", "-1")
-  node.set_attribute("aria-label", "No results found")
+  node.set_attribute("aria-label", localization.text(NoResults))
   let tree : ReferenceResultsTree = {
+    localization,
     node,
     callbacks,
     resource_path_label,
@@ -74,7 +77,7 @@ fn ReferenceResultsTree::clear(self : ReferenceResultsTree) -> Unit {
     return
   }
   self.node.set_inner_html("")
-  self.node.set_attribute("aria-label", "No results found")
+  self.node.set_attribute("aria-label", self.localization.text(NoResults))
   self.model = None
   self.previews = []
   self.expanded_groups = []
@@ -135,6 +138,7 @@ fn ReferenceResultsTree::set_results(
   self.node.set_attribute(
     "aria-label",
     reference_results_summary(
+      localization=self.localization,
       model,
       resource_path_label=self.resource_path_label,
     ),
@@ -296,7 +300,12 @@ fn ReferenceResultsTree::render_group(
   }
   row.set_attribute(
     "aria-label",
-    reference_group_accessible_label(group, basename, parent),
+    reference_group_accessible_label(
+      localization=self.localization,
+      group,
+      basename,
+      parent,
+    ),
   )
   row.set_attribute("title", relative_label.unwrap_or(group.uri_string))
   let twistie = document.create_element("span")
@@ -371,7 +380,7 @@ fn ReferenceResultsTree::render_group_references(
 
 ///|
 fn ReferenceResultsTree::render_reference_row(
-  _self : ReferenceResultsTree,
+  self : ReferenceResultsTree,
   reference : @references.ReferenceItem,
   preview : @references.ReferenceRowPreview,
   level : Int,
@@ -396,7 +405,11 @@ fn ReferenceResultsTree::render_reference_row(
   let display = reference_row_preview_text(preview)
   row.set_attribute(
     "aria-label",
-    reference_accessible_label(reference, display),
+    reference_accessible_label(
+      localization=self.localization,
+      reference,
+      display,
+    ),
   )
   row.set_attribute("title", reference.fallback_label())
   match preview {
@@ -996,9 +1009,13 @@ fn reference_row_preview_text(
 
 ///|
 fn reference_accessible_label(
+  localization? : @localization.Localization = @localization.Localization(),
   reference : @references.ReferenceItem,
   display : String,
 ) -> String {
+  if localization.language() is SimplifiedChinese {
+    return "\{display}，位于 \{@base_common.basename_or_authority(reference.uri)} 的第 \{reference.range.start_line_number} 行、第 \{reference.range.start_column} 列"
+  }
   display +
   " in " +
   @base_common.basename_or_authority(reference.uri) +
@@ -1010,11 +1027,19 @@ fn reference_accessible_label(
 
 ///|
 fn reference_group_accessible_label(
+  localization? : @localization.Localization = @localization.Localization(),
   group : @references.ReferenceGroup,
   basename : String,
   parent : String?,
 ) -> String {
   let count = group.references.length()
+  if localization.language() is SimplifiedChinese {
+    let result = "\{basename} 中的 \{count} 个结果"
+    return match parent {
+      None => result
+      Some(parent) => result + "，完整路径：" + parent
+    }
+  }
   let result = if count == 1 {
     "1 result in " + basename
   } else {
@@ -1028,13 +1053,21 @@ fn reference_group_accessible_label(
 
 ///|
 fn reference_results_summary(
+  localization? : @localization.Localization = @localization.Localization(),
   model : @references.ReferencesModel,
   resource_path_label? : (@base_common.Uri) -> String? = _ => None,
 ) -> String {
   let reference_count = model.references.length()
   let group_count = model.groups.length()
+  if localization.language() is SimplifiedChinese && reference_count > 0 {
+    return if group_count == 1 {
+      "在 \{resource_path_label(model.groups[0].uri).unwrap_or(model.groups[0].uri_string)} 中找到 \{reference_count} 个结果"
+    } else {
+      "在 \{group_count} 个文件中找到 \{reference_count} 个结果"
+    }
+  }
   if reference_count == 0 {
-    "No results found"
+    localization.text(NoResults)
   } else if reference_count == 1 {
     "Found 1 result in " +
     resource_path_label(model.references[0].uri).unwrap_or(

@@ -388,6 +388,14 @@ fn BrowserViews::focused_browser(
 /// the same create-if-missing handler as `browser.open`.
 fn window_endpoints(views : BrowserViews) -> Array[@endpoint.WindowEndpoint] {
   [
+    WindowEndpoint(@commands.app_language_apply, (_, payload) => {
+      if !(@sys.win32 || @sys.win64) {
+        views
+        .attached_window()
+        .set_menu(Some(localized_menu(payload.language.unwrap_or("en"))))
+      }
+      Acknowledged
+    }),
     WindowEndpoint(@commands.app_system_appearance, (_, _) => {
       dark: @proton.system_appearance().color_scheme == Dark,
     }),

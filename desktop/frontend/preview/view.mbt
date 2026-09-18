@@ -62,17 +62,21 @@ pub(all) struct ToolbarActions {
 ///|
 /// The active page's toolbar. Always rendered (the panel's child order is
 /// structural); CSS hides it while the active tab is not a Browser tab.
-pub fn toolbar_view(page : PageState, actions : ToolbarActions) -> @html.Html {
+pub fn toolbar_view(
+  locale? : @i18n.Locale = English,
+  page : PageState,
+  actions : ToolbarActions,
+) -> @html.Html {
   let children : Array[@html.Html] = [
     @html.button(
       class="browser-nav-button",
-      title="Back",
+      title=ui(locale, BackLabel),
       on_click=actions.back,
       icon(icon_arrow_up, rotate="left"),
     ),
     @html.button(
       class="browser-nav-button",
-      title="Forward",
+      title=ui(locale, ForwardLabel),
       on_click=actions.forward,
       icon(icon_arrow_up, rotate="right"),
     ),
@@ -82,14 +86,14 @@ pub fn toolbar_view(page : PageState, actions : ToolbarActions) -> @html.Html {
       } else {
         "browser-nav-button"
       },
-      title="Reload",
+      title=ui(locale, ReloadLabel),
       on_click=actions.reload,
       icon(icon_sync),
     ),
     @html.input(
       input_type=@html.InputType::Text,
       value=page.input,
-      placeholder="Enter a URL",
+      placeholder=ui(locale, EnterUrl),
       on_input=actions.input,
       attrs=@html.Attrs::build()
         .id(AddressInputId)
@@ -104,7 +108,7 @@ pub fn toolbar_view(page : PageState, actions : ToolbarActions) -> @html.Html {
     ),
     @html.button(
       class="browser-nav-button",
-      title="Open in system browser",
+      title=ui(locale, OpenBrowser),
       on_click=actions.open_external,
       icon(icon_link_external),
     ),

@@ -83,13 +83,13 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   // explanation and no way back to the form.
   if self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {
-      "No endpoint URL configured — Send is disabled."
+      shell_text(self.locale, NoEndpoint)
     } else if self.api_provider is Glm {
-      "No GLM API key configured — Send is disabled."
+      shell_text(self.locale, NoGlmKey)
     } else if self.api_provider is OpenRouter {
-      "No OpenRouter API key configured — Send is disabled."
+      shell_text(self.locale, NoOpenRouterKey)
     } else {
-      "No DeepSeek API key configured — Send is disabled."
+      shell_text(self.locale, NoDeepSeekKey)
     }
     context.push(@composer.ApiSetupNotice(text~))
   }
@@ -180,12 +180,12 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     slash_commands: [
       {
         label: "/compact",
-        detail: "Summarize and shrink this conversation's context",
+        detail: shell_text(self.locale, CompactContext),
         command: "compact",
       },
       {
         label: "/goal",
-        detail: "Set or clear this conversation's standing goal",
+        detail: shell_text(self.locale, SetGoal),
         command: "goal",
       },
     ],
@@ -207,17 +207,17 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       context,
       status,
       placeholder: if conv.goal_edit is Some(_) {
-        "Describe the standing goal for this conversation — Enter sets it, Esc cancels."
+        shell_text(self.locale, GoalPlaceholder)
       } else if conv.queue_edit_id is Some(_) {
-        "Edit the queued message — Enter saves it."
+        shell_text(self.locale, EditQueuePlaceholder)
       } else if conv.is_running() {
         if self.followup_behavior is FollowupQueue {
-          "Queue a follow-up for the next turn."
+          shell_text(self.locale, QueuePlaceholder)
         } else {
-          "Steer the running task — your message joins it at the next step."
+          shell_text(self.locale, SteerPlaceholder)
         }
       } else {
-        "Ask SeekMoon to inspect, edit, or explain this workspace."
+        shell_text(self.locale, AskPlaceholder)
       },
       disabled: false,
       primary_action,
@@ -257,13 +257,14 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
   } else {
     @files.Search([], [], None)
   }
-  self.codex.composer_input({
+  self.codex.composer_input(locale=self.locale, {
     channel: self.focused,
     // The model state is root-built because a cross-agent pick on a
     // composing draft leaves the Codex package entirely. The resulting
     // action still returns through the shared composer's typed route.
     model_control: self.codex_model_chip(),
     reasoning_control: self.codex.reasoning_effort_chip(
+      locale=self.locale,
       self.select_menu is Some(CodexReasoningMenu),
     ),
     file_candidates: search.candidates,

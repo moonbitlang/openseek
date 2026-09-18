@@ -1054,6 +1054,7 @@ fn Model::editing_subscriptions(
 /// Create the package-owned composer component. The root provides only
 /// `Input` values and receives only deliberate `Action`s.
 pub fn component(
+  locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   action_emit : @cmd.Emit[Action],
 ) -> @rabbita.Val[@html.Html] {
@@ -1065,7 +1066,9 @@ pub fn component(
     },
     subscriptions=(state, input, emit) => state.subscriptions(input, emit),
   )
-  state.view2(input, (state, input) => {
-    state.active(input).view(emit, action_emit, input, clock_ms=state.clock_ms)
+  state.view3(input, locale, (state, input, locale) => {
+    state
+    .active(input)
+    .view(locale~, emit, action_emit, input, clock_ms=state.clock_ms)
   })
 }

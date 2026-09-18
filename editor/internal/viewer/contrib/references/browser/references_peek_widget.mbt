@@ -22,6 +22,7 @@ pub let references_peek_height_in_lines : Int = 18
 /// The root owns the presentation mount and nested readonly Viewer; this type
 /// owns only its DOM, result-tree state, and event-listener lifetime.
 struct ReferencesPeekWidget {
+  localization : @localization.Localization
   mode : @references.ReferencesPeekMode
   root : @rdom.Element
   title_meta : @rdom.Element
@@ -39,6 +40,7 @@ struct ReferencesPeekWidget {
 /// Constructs a detached, mode-labelled shell in its loading state.
 #alias(new, deprecated)
 pub fn ReferencesPeekWidget::ReferencesPeekWidget(
+  localization? : @localization.Localization = @localization.Localization(),
   mode : @references.ReferencesPeekMode,
   callbacks : ReferencesPeekWidgetCallbacks,
   resource_path_label? : (@base_common.Uri) -> String? = _ => None,
@@ -47,7 +49,10 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
   let root = document.create_element("section")
   root.set_attribute("class", "moonbit-viewer-references-peek")
   root.set_attribute("role", "dialog")
-  root.set_attribute("aria-label", references_peek_dialog_label(mode))
+  root.set_attribute(
+    "aria-label",
+    references_peek_dialog_label(localization~, mode),
+  )
   root.set_attribute("tabindex", "-1")
 
   let header = document.create_element("header")
@@ -57,7 +62,9 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
   let title = document.create_element("span")
   title.set_attribute("class", "moonbit-viewer-references-peek-title-filename")
   title.append_child(
-    document.create_text_node(references_peek_title(mode)).as_node(),
+    document
+    .create_text_node(references_peek_title(localization~, mode))
+    .as_node(),
   )
   let title_meta = document.create_element("span")
   title_meta.set_attribute("class", "moonbit-viewer-references-peek-title-meta")
@@ -69,7 +76,12 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
   close.set_attribute("type", "button")
   close.set_attribute(
     "aria-label",
-    "Close " + references_peek_dialog_label(mode),
+    (if localization.language() is SimplifiedChinese {
+      "关闭"
+    } else {
+      "Close "
+    }) +
+    references_peek_dialog_label(localization~, mode),
   )
   close.append_child(document.create_text_node("\u{00d7}").as_node())
   header.append_child(close.as_node())
@@ -79,7 +91,10 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
   body.set_attribute("class", "moonbit-viewer-references-peek-body")
   let preview_host = document.create_element("div")
   preview_host.set_attribute("class", "moonbit-viewer-references-peek-preview")
-  preview_host.set_attribute("aria-label", references_peek_preview_label(mode))
+  preview_host.set_attribute(
+    "aria-label",
+    references_peek_preview_label(localization~, mode),
+  )
   let tree_node = document.create_element("div")
   let results_scrollable = @scrollbar.ScrollableElementDom(
     "moonbit-viewer-reference-results-tree",
@@ -92,6 +107,7 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
     results_scrollable,
   )
   let tree = ReferenceResultsTree(
+    localization~,
     tree_node,
     callbacks,
     () => results_scrollbar_input.refresh(),
@@ -107,6 +123,7 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
   root.append_child(body.as_node())
 
   let widget : ReferencesPeekWidget = {
+    localization,
     mode,
     root,
     title_meta,
@@ -162,7 +179,7 @@ fn ReferencesPeekWidget::show_loading(self : ReferencesPeekWidget) -> Unit {
   self.hide_results()
   self.show_status(
     "moonbit-viewer-references-peek-loading",
-    references_peek_loading_message(self.mode),
+    references_peek_loading_message(localization=self.localization, self.mode),
   )
   self.preview_host.set_attribute("aria-busy", "true")
   self.set_result_count(0)
@@ -178,7 +195,7 @@ pub fn ReferencesPeekWidget::show_empty(self : ReferencesPeekWidget) -> Unit {
   self.hide_results()
   self.show_status(
     "moonbit-viewer-references-peek-empty",
-    references_peek_empty_message(self.mode),
+    references_peek_empty_message(localization=self.localization, self.mode),
   )
   self.preview_host.remove_attribute("aria-busy")
   self.set_result_count(0)
@@ -249,7 +266,8 @@ pub fn ReferencesPeekWidget::show_preview_loading(
     return
   }
   self.show_status(
-    "moonbit-viewer-references-peek-loading", "Loading preview\u{2026}",
+    "moonbit-viewer-references-peek-loading",
+    self.localization.text(LoadingPreview),
   )
   self.preview_host.set_attribute("aria-busy", "true")
 }
@@ -401,9 +419,18 @@ fn ReferencesPeekWidget::set_result_count(
       @rdom.document()
       .create_text_node(
         if count == 1 {
-          "1 result"
+          if self.localization.language() is SimplifiedChinese {
+            "1 个结果"
+          } else {
+            "1 result"
+          }
         } else {
-          count.to_string() + " results"
+          count.to_string() +
+          (if self.localization.language() is SimplifiedChinese {
+            " 个结果"
+          } else {
+            " results"
+          })
         },
       )
       .as_node(),
@@ -412,49 +439,56 @@ fn ReferencesPeekWidget::set_result_count(
 }
 
 ///|
-fn references_peek_title(mode : @references.ReferencesPeekMode) -> String {
+fn references_peek_title(
+  localization? : @localization.Localization = @localization.Localization(),
+  mode : @references.ReferencesPeekMode,
+) -> String {
   match mode {
-    Definitions => "Definitions"
-    References => "References"
+    Definitions => localization.text(DefinitionsLabel)
+    References => localization.text(ReferencesLabel)
   }
 }
 
 ///|
 fn references_peek_dialog_label(
+  localization? : @localization.Localization = @localization.Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
-    Definitions => "Peek Definition"
-    References => "Peek References"
+    Definitions => localization.text(PeekDefinition)
+    References => localization.text(PeekReferences)
   }
 }
 
 ///|
 fn references_peek_preview_label(
+  localization? : @localization.Localization = @localization.Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
-    Definitions => "Definition preview"
-    References => "Reference preview"
+    Definitions => localization.text(DefinitionPreview)
+    References => localization.text(ReferencePreview)
   }
 }
 
 ///|
 fn references_peek_loading_message(
+  localization? : @localization.Localization = @localization.Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
-    Definitions => "Loading definitions\u{2026}"
-    References => "Loading references\u{2026}"
+    Definitions => localization.text(LoadingDefinitions)
+    References => localization.text(LoadingReferences)
   }
 }
 
 ///|
 fn references_peek_empty_message(
+  localization? : @localization.Localization = @localization.Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
-    Definitions => "No definitions found"
-    References => "No references found"
+    Definitions => localization.text(NoDefinitions)
+    References => localization.text(NoReferences)
   }
 }

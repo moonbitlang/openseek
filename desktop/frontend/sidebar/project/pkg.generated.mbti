@@ -7,11 +7,12 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "openseek_desktop/frontend/action_menu",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/sidebar/conversation",
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[Array[(String, @html.Html)]]
+pub fn component(@rabbita.Val[Input], Actions, @rabbita.Val[@i18n.Locale]) -> @rabbita.Val[Array[(String, @html.Html)]]
 
 // Errors
 
@@ -51,7 +52,7 @@ pub(all) struct Input {
 } derive(Eq, @debug.Debug)
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::id(Self) -> Id
-pub fn Input::menu_entries(Self, Actions) -> Array[@action_menu.Entry]
+pub fn Input::menu_entries(Self, Actions, locale? : @i18n.Locale) -> Array[@action_menu.Entry]
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::to_repr(Self) -> @debug.Repr
 

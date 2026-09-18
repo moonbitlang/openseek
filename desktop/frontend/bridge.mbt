@@ -1201,6 +1201,7 @@ async fn steer_delivered(
 
 ///|
 fn queue_openseek(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
@@ -1254,12 +1255,22 @@ fn queue_openseek(
                   session~,
                   submission_id=id,
                   run_id~,
-                  message="The queued message is no longer available.",
+                  message=if locale is SimplifiedChinese {
+                    "队列中的消息已不可用。"
+                  } else {
+                    "The queued message is no longer available."
+                  },
                 ),
               )
             QueueEdit(..) | QueueWithdraw(..) =>
               root_dispatch(
-                HostActionFailed("The queued message is no longer available."),
+                HostActionFailed(
+                  if locale is SimplifiedChinese {
+                    "队列中的消息已不可用。"
+                  } else {
+                    "The queued message is no longer available."
+                  },
+                ),
               )
           },
         )
@@ -1440,6 +1451,7 @@ async fn request_agent_goal(
 /// may be the very notification this page missed. Failures are likewise tied
 /// to the exact run so the optimistic Cancelling phase can be made retryable.
 fn cancel_openseek(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   run_id : String,
@@ -1458,7 +1470,11 @@ fn cancel_openseek(
                 channel,
                 CancelFailed(
                   run_id~,
-                  message="Failed to cancel the run: " +
+                  message=(if locale is SimplifiedChinese {
+                      "无法取消运行："
+                    } else {
+                      "Failed to cancel the run: "
+                    }) +
                     @interop.bridge_error_text(error),
                 ),
               ),
@@ -1489,6 +1505,7 @@ fn cancel_openseek(
 /// marked answered would strand it reading "Sending…" forever with the engine
 /// still blocked, and cancelling the run would be the only way out.
 fn approve_openseek(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
@@ -1508,7 +1525,11 @@ fn approve_openseek(
           scheduler.add(
             dispatch(
               HostActionFailed(
-                "Failed to answer the approval request: " +
+                (if locale is SimplifiedChinese {
+                  "无法回复审批请求："
+                } else {
+                  "Failed to answer the approval request: "
+                }) +
                 @interop.bridge_error_text(error),
               ),
             ),
@@ -1524,7 +1545,11 @@ fn approve_openseek(
         scheduler.add(
           dispatch(
             HostActionFailed(
-              "That approval request is no longer waiting — the turn it belonged to has ended.",
+              if locale is SimplifiedChinese {
+                "该审批请求所属的任务轮次已结束，无需继续审批。"
+              } else {
+                "That approval request is no longer waiting — the turn it belonged to has ended."
+              },
             ),
           ),
         )
@@ -1580,6 +1605,7 @@ fn close_window() -> @cmd.Cmd {
 /// platform opener. Success needs no reply handling; a failure surfaces as
 /// an error toast.
 fn open_codex_config(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
@@ -1594,7 +1620,12 @@ fn open_codex_config(
           scheduler.add(
             dispatch(
               CodexConfigOpenFailed(
-                "Codex config: " + @interop.bridge_error_text(error),
+                (if locale is SimplifiedChinese {
+                  "Codex 配置："
+                } else {
+                  "Codex config: "
+                }) +
+                @interop.bridge_error_text(error),
               ),
             ),
           )

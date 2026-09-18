@@ -219,6 +219,7 @@ fn Input::direct_actions(self : Input) -> Array[TrailingAction] {
 
 ///|
 fn Input::menu_entries_for_kind(
+  locale? : @i18n.Locale = English,
   self : Input,
   actions : Actions,
   kind : MenuKind,
@@ -228,8 +229,8 @@ fn Input::menu_entries_for_kind(
     LiveMenu =>
       [
         Action({
-          label: "Rename…",
-          title: "Rename conversation",
+          label: ui(locale, RenameLabel),
+          title: ui(locale, RenameConversation),
           icon: None,
           enabled: true,
           destructive: false,
@@ -237,11 +238,11 @@ fn Input::menu_entries_for_kind(
         }),
         Separator,
         Action({
-          label: "Archive",
+          label: ui(locale, ArchiveLabel),
           title: if archive_enabled {
-            "Archive conversation"
+            ui(locale, ArchiveConversation)
           } else {
-            "Stop this conversation before archiving it"
+            ui(locale, StopBeforeArchive)
           },
           icon: Some(@icons.icon(@icons.icon_archive)),
           enabled: archive_enabled,
@@ -252,8 +253,8 @@ fn Input::menu_entries_for_kind(
     OpenSeekArchivedMenu =>
       [
         Action({
-          label: "Restore",
-          title: "Restore conversation",
+          label: ui(locale, RestoreLabel),
+          title: ui(locale, RestoreConversation),
           icon: Some(@icons.icon(@icons.icon_arrow_up)),
           enabled: true,
           destructive: false,
@@ -261,11 +262,11 @@ fn Input::menu_entries_for_kind(
         }),
         Separator,
         Action({
-          label: "Delete…",
+          label: ui(locale, DeleteLabel),
           title: if delete_enabled {
-            "Permanently delete conversation"
+            ui(locale, DeletePermanently)
           } else {
-            "Permanent deletion is unavailable for this conversation source"
+            ui(locale, DeleteUnavailable)
           },
           icon: Some(@icons.icon(@icons.icon_close)),
           enabled: delete_enabled,
@@ -276,8 +277,8 @@ fn Input::menu_entries_for_kind(
     CodexArchivedMenu =>
       [
         Action({
-          label: "Restore",
-          title: "Restore conversation",
+          label: ui(locale, RestoreLabel),
+          title: ui(locale, RestoreConversation),
           icon: Some(@icons.icon(@icons.icon_arrow_up)),
           enabled: true,
           destructive: false,
@@ -292,11 +293,12 @@ fn Input::menu_entries_for_kind(
 /// no contextual actions, independent of whether it has visible direct
 /// buttons.
 pub fn Input::menu_entries(
+  locale? : @i18n.Locale = English,
   self : Input,
   actions : Actions,
 ) -> Array[@action_menu.Entry]? {
   match self.menu_kind() {
-    Some(kind) => Some(self.menu_entries_for_kind(actions, kind))
+    Some(kind) => Some(self.menu_entries_for_kind(locale~, actions, kind))
     None => None
   }
 }
@@ -304,10 +306,11 @@ pub fn Input::menu_entries(
 ///|
 fn Actions::child_component(
   self : Actions,
+  locale : @rabbita.Val[@i18n.Locale],
   _id : Id,
   input : @rabbita.Val[Input],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
-  component(input, self)
+  component(locale, input, self)
 }
 
 ///|
@@ -316,6 +319,7 @@ fn Actions::child_component(
 /// an incremental DOM value. Rows are (key, node) pairs for the sidebar's one
 /// keyed container.
 pub fn component(
+  locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
@@ -328,12 +332,20 @@ pub fn component(
       }
     },
   )
-  let child_inputs = input.map(input => @vector.from_array(input.children))
+  let child_inputs = input.map2(locale, (input, locale) => {
+    @vector.from_array(input.children.map(child => (locale, child)))
+  })
   let child_rows = child_inputs.assoc_by(
-    (id, child) => actions.child_component(id, child),
-    by=child => child.id(),
+    (id, child) => {
+      actions.child_component(
+        child.map(pair => pair.0),
+        id,
+        child.map(pair => pair.1),
+      )
+    },
+    by=child => child.1.id(),
   )
-  state.map3(input, child_rows, (state, input, child_rows) => {
+  state.map4(input, child_rows, locale, (state, input, child_rows, locale) => {
     // Opening a workflow child must keep its selected row visible under the parent.
     let children_open = state.children_open ||
       input.children.any(child => child.active || child.loading)
@@ -364,11 +376,7 @@ pub fn component(
         @html.button(
           class=if children_open { "row-twisty expanded" } else { "row-twisty" },
           type_="button",
-          title=if input.children.length() == 1 {
-            "1 subagent run"
-          } else {
-            "\{input.children.length()} subagent runs"
-          },
+          title=ui(locale, SubagentRuns(input.children.length())),
           attrs=@html.Attrs::build().on_click(event => {
             event.stop_propagation()
             emit(ToggleChildren)
@@ -404,7 +412,7 @@ pub fn component(
           class="conversation-load-spinner",
           attrs=@html.Attrs::build()
             .role("status")
-            .aria_label("Loading conversation"),
+            .aria_label(ui(locale, LoadingConversation)),
           "",
         ),
       )
@@ -412,7 +420,9 @@ pub fn component(
       status.push(
         @html.span(
           class="conversation-load-failed",
-          attrs=@html.Attrs::build().aria_label("Conversation failed to load"),
+          attrs=@html.Attrs::build().aria_label(
+            ui(locale, ConversationLoadFailed),
+          ),
           "!",
         ),
       )
@@ -421,7 +431,13 @@ pub fn component(
       status.push(
         @html.span(
           class="worktree-mark",
-          attrs=@html.Attrs::build().aria_label("Runs in worktree \{name}"),
+          attrs=@html.Attrs::build().aria_label(
+            if locale is SimplifiedChinese {
+              "在工作树 \{name} 中运行"
+            } else {
+              "Runs in worktree \{name}"
+            },
+          ),
           @icons.icon(@icons.icon_worktree),
         ),
       )
@@ -436,26 +452,40 @@ pub fn component(
       | EndedMark => {
         let (label, image, class_name) = match input.run_mark {
           RunningMark =>
-            ("Running", @icons.icon_loading, "sidebar-run-status running")
+            (
+              ui(locale, RunningLabel),
+              @icons.icon_loading,
+              "sidebar-run-status running",
+            )
           NeedsInputMark =>
             (
-              "Needs your input", @icons.icon_question, "sidebar-run-status needs-input",
+              ui(locale, NeedsInput),
+              @icons.icon_question,
+              "sidebar-run-status needs-input",
             )
           CompletedMark =>
             (
-              "Completed — unread", @icons.icon_check, "sidebar-run-status completed",
+              ui(locale, CompletedUnread),
+              @icons.icon_check,
+              "sidebar-run-status completed",
             )
           FailedMark =>
             (
-              "Failed — unread", @icons.icon_error, "sidebar-run-status failed",
+              ui(locale, FailedUnread),
+              @icons.icon_error,
+              "sidebar-run-status failed",
             )
           StoppedMark =>
             (
-              "Stopped — unread", @icons.icon_debug_stop, "sidebar-run-status completed",
+              ui(locale, StoppedUnread),
+              @icons.icon_debug_stop,
+              "sidebar-run-status completed",
             )
           _ =>
             (
-              "Ended — unread", @icons.icon_circle, "sidebar-run-status completed",
+              ui(locale, EndedUnread),
+              @icons.icon_circle,
+              "sidebar-run-status completed",
             )
         }
         status.push(
@@ -505,11 +535,7 @@ pub fn component(
               button_class + " disabled"
             },
             type_="button",
-            title=if enabled {
-              title
-            } else {
-              "Stop this conversation before archiving it"
-            },
+            title=if enabled { title } else { ui(locale, StopBeforeArchive) },
             attrs=@html.Attrs::build()
               .aria_disabled((!enabled).to_string())
               .on_click(event => {

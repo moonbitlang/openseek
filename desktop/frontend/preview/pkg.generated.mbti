@@ -4,6 +4,7 @@ package "openseek_desktop/frontend/preview"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
 }
 
 // Values
@@ -27,9 +28,9 @@ pub fn open_page(State, url? : String) -> (State, Int)
 
 pub fn page(State, Int) -> PageState?
 
-pub fn page_label(PageState) -> String
+pub fn page_label(PageState, locale? : @i18n.Locale) -> String
 
-pub fn toolbar_view(PageState, ToolbarActions) -> @html.Html
+pub fn toolbar_view(locale? : @i18n.Locale, PageState, ToolbarActions) -> @html.Html
 
 pub fn update(Msg, State) -> State
 

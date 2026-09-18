@@ -4,14 +4,15 @@ package "openseek_desktop/frontend/markdown"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
 }
 
 // Values
-pub fn copy_button(String, class~ : String, title~ : String, label~ : String) -> @html.Html
+pub fn copy_button(locale? : @i18n.Locale, String, class~ : String, title~ : String, label~ : String) -> @html.Html
 
 pub fn linkified_text_nodes(String) -> Array[@html.Html]
 
-pub fn markdown_nodes(String, open_file? : (String) -> @cmd.Cmd) -> Array[@html.Html]
+pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd) -> Array[@html.Html]
 
 // Errors
 

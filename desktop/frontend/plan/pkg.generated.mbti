@@ -4,17 +4,18 @@ package "openseek_desktop/frontend/plan"
 import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/transcript",
 }
 
 // Values
-pub fn card(Array[Step]) -> @html.Html
+pub fn card(locale? : @i18n.Locale, Array[Step]) -> @html.Html
 
 pub fn classify(@transcript.ToolCall) -> Call?
 
 pub fn decode(String) -> Array[Step]?
 
-pub fn fold_progress(@transcript.ToolCall) -> @html.Html
+pub fn fold_progress(locale? : @i18n.Locale, @transcript.ToolCall) -> @html.Html
 
 pub fn latest(Array[@transcript.ToolCall]) -> Array[Step]?
 

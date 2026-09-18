@@ -102,12 +102,15 @@ pub fn SymbolNavigationCommand::id(self : SymbolNavigationCommand) -> String {
 }
 
 ///|
-pub fn SymbolNavigationCommand::title(self : SymbolNavigationCommand) -> String {
+pub fn SymbolNavigationCommand::title(
+  self : SymbolNavigationCommand,
+  localization? : @localization.Localization = @localization.Localization(),
+) -> String {
   match self {
-    RevealDefinition => "Go to Definition"
-    PeekDefinition => "Peek Definition"
-    GoToReferences => "Go to References"
-    PeekReferences => "Peek References"
+    RevealDefinition => localization.text(GoDefinition)
+    PeekDefinition => localization.text(PeekDefinition)
+    GoToReferences => localization.text(GoReferences)
+    PeekReferences => localization.text(PeekReferences)
   }
 }
 
@@ -218,6 +221,7 @@ priv enum SymbolNavigationQueryKind {
 /// owner. DefinitionAction and ReferencesAction are typed views over this one
 /// mutually-cancelling request stream.
 struct SymbolNavigationAction {
+  localization : @localization.Localization
   languages : @languages.LanguageHandle
   host : SymbolNavigationActionHost
   run_provider_tasks : async (Array[async () -> Unit]) -> Unit
@@ -228,11 +232,13 @@ struct SymbolNavigationAction {
 
 ///|
 pub fn SymbolNavigationAction::SymbolNavigationAction(
+  localization? : @localization.Localization = @localization.Localization(),
   languages : @languages.LanguageHandle,
   host : SymbolNavigationActionHost,
   run_provider_tasks : async (Array[async () -> Unit]) -> Unit,
 ) -> SymbolNavigationAction {
   {
+    localization,
     languages,
     host,
     run_provider_tasks,
@@ -455,27 +461,37 @@ pub fn DefinitionLinkResolver::dispose(self : DefinitionLinkResolver) -> Unit {
 
 ///|
 fn symbol_navigation_no_result_message(
+  localization? : @localization.Localization = @localization.Localization(),
   kind : SymbolNavigationQueryKind,
   anchor : SymbolNavigationAnchor,
 ) -> String {
   let word = anchor.model().get_word_at_position(anchor.position())
   match (kind, word) {
     (DefinitionQuery, Some(word)) if !word.word.is_empty() =>
-      "No definition found for '\{word.word}'"
+      if localization.language() is SimplifiedChinese {
+        "未找到“\{word.word}”的定义"
+      } else {
+        "No definition found for '\{word.word}'"
+      }
     (ReferencesQuery, Some(word)) if !word.word.is_empty() =>
-      "No references found for '\{word.word}'"
-    (DefinitionQuery, _) => "No definition found"
-    (ReferencesQuery, _) => "No references found"
+      if localization.language() is SimplifiedChinese {
+        "未找到“\{word.word}”的引用"
+      } else {
+        "No references found for '\{word.word}'"
+      }
+    (DefinitionQuery, _) => localization.text(NoDefinition)
+    (ReferencesQuery, _) => localization.text(NoReferences)
   }
 }
 
 ///|
 fn symbol_navigation_open_failure_message(
+  localization? : @localization.Localization = @localization.Localization(),
   kind : SymbolNavigationQueryKind,
 ) -> String {
   match kind {
-    DefinitionQuery => "Unable to open definition"
-    ReferencesQuery => "Unable to open reference"
+    DefinitionQuery => localization.text(CannotOpenDefinition)
+    ReferencesQuery => localization.text(CannotOpenReference)
   }
 }
 
@@ -537,7 +553,11 @@ async fn SymbolNavigationAction::run_reserved(
     if !config.mute_message && self.result_is_current(generation, anchor) {
       (self.host.show_message)(
         anchor,
-        symbol_navigation_no_result_message(kind, anchor),
+        symbol_navigation_no_result_message(
+          localization=self.localization,
+          kind,
+          anchor,
+        ),
       )
     }
     return
@@ -554,7 +574,7 @@ async fn SymbolNavigationAction::run_reserved(
     }
     if config.open_in_peek {
       if !config.mute_message && self.result_is_current(generation, anchor) {
-        (self.host.show_message)(anchor, "No preview available")
+        (self.host.show_message)(anchor, self.localization.text(NoPreview))
       }
       return
     }
@@ -575,7 +595,10 @@ async fn SymbolNavigationAction::run_reserved(
     self.result_is_current(generation, anchor) {
     (self.host.show_message)(
       anchor,
-      symbol_navigation_open_failure_message(kind),
+      symbol_navigation_open_failure_message(
+        localization=self.localization,
+        kind,
+      ),
     )
   }
 }

@@ -61,3 +61,10 @@ pub fn CodeEditorServices::resource_path_label(
 ) -> (@base_common.Uri) -> String? {
   self.resource_path_label
 }
+
+///|
+pub fn CodeEditorServices::localization(
+  self : CodeEditorServices,
+) -> @localization.Localization {
+  self.localization
+}

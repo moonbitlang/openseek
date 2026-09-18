@@ -6,6 +6,7 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/internal/viewer/markdown",
+  "moonbitlang/editor/viewer/common/localization",
 }
 
 // Values
@@ -14,7 +15,7 @@ import {
 
 // Types and methods
 type MarkdownDocumentView
-pub fn MarkdownDocumentView::MarkdownDocumentView(String, Int, String, @common.Uri, @markdown.MarkdownResourceKind, String, () -> Unit, (Bool) -> Unit, () -> Unit, show_unused? : Bool) -> Self
+pub fn MarkdownDocumentView::MarkdownDocumentView(localization? : @localization.Localization, String, Int, String, @common.Uri, @markdown.MarkdownResourceKind, String, () -> Unit, (Bool) -> Unit, () -> Unit, show_unused? : Bool) -> Self
 pub fn MarkdownDocumentView::append_projected_range_spans(Self, @common.OffsetRange, String) -> Array[@dom.Element]
 pub fn MarkdownDocumentView::apply_marker_unused_visibility(Self, Bool) -> Unit
 pub fn MarkdownDocumentView::apply_theme(Self, String) -> Unit

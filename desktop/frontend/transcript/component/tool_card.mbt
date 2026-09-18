@@ -12,12 +12,23 @@
 /// hides, with the section label it goes under. `None` for every other tool
 /// and for a payload the card cannot read — both keep the generic rendering,
 /// so a card never has to invent a reading of a call it does not understand.
-fn custom_card(name : String, arguments : String) -> (String, @html.Html)? {
+fn custom_card(
+  locale? : @i18n.Locale = English,
+  name : String,
+  arguments : String,
+) -> (String, @html.Html)? {
   match name {
-    "mbtx" => mbtx_card(arguments)
+    "mbtx" => mbtx_card(locale~, arguments)
     "edit" | "multi_edit" =>
       EditChanges::from_arguments(name, arguments).map(changes => {
-        (if name == "edit" { "Change" } else { "Changes" }, changes.render())
+        (
+          if name == "edit" {
+            ui(locale, ChangeLabel)
+          } else {
+            ui(locale, ChangesLabel)
+          },
+          changes.render(),
+        )
       })
     _ => None
   }

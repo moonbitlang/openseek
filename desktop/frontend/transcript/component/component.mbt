@@ -67,6 +67,7 @@ pub(all) enum ScrollPosition {
 /// durable chronology and active-run ownership; this package owns only the
 /// transcript subtree and its scroll behavior.
 struct Input {
+  locale : @i18n.Locale
   dark_mode : Bool
   minimal : Bool
   source : Source
@@ -105,6 +106,7 @@ struct Input {
 
 ///|
 pub fn Input::Input(
+  locale? : @i18n.Locale = English,
   dark_mode? : Bool = false,
   minimal? : Bool = false,
   source~ : Source,
@@ -125,6 +127,7 @@ pub fn Input::Input(
   streaming_identity~ : String,
 ) -> Input {
   {
+    locale,
     dark_mode,
     minimal,
     source,
@@ -317,27 +320,31 @@ pub fn component(
   // branch renders only when its block changes (blocks compare by value), so
   // an unchanged key means an unchanged subtree, and the diff skips it. Stream
   // children are keyed, so a counter never meets another branch's counter.
-  let blocks = input.map(stream_blocks)
+  let blocks = input.map(input => {
+    stream_blocks(input).map(block => (input.locale, block))
+  })
   let rendered = blocks.assoc_by(
     (_, block) => {
       let renders = Ref(0)
-      let (changes, changes_emit) = message_changes_state(block, actions)
-      changes.map2(block, (changes, block) => {
+      let (changes, changes_emit) = message_changes_state(block.map(pair => pair.1), actions)
+      changes.map2(block, (changes, pair) => {
+        let (locale, block) = pair
         renders.val += 1
         let html = @html.memo_by(
           block,
           block => {
-            block.render(actions, changes?=changes.control(block, changes_emit))
+            block.render(locale~, actions, changes?=changes.control(block, changes_emit))
           },
           by=_ => renders.val,
         )
         (block.key.wire(), html)
       })
     },
-    by=block => block.branch_key(),
+    by=pair => pair.1.branch_key(),
   )
   state.view3(input, rendered, (state, input, rendered) => {
     transcript_view(
+      locale=input.locale,
       input,
       pinned=state.pinned,
       overview=state.overview,

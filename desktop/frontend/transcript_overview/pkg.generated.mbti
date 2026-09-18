@@ -5,13 +5,14 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/transcript",
 }
 
 // Values
 pub fn entries(Array[@transcript.TranscriptItem], display~ : (String) -> String) -> Array[Entry]
 
-pub fn rail(Array[Entry], State, @cmd.Emit[Msg], clock~ : (Double) -> String) -> @html.Html
+pub fn rail(locale? : @i18n.Locale, Array[Entry], State, @cmd.Emit[Msg], clock~ : (Double) -> String) -> @html.Html
 
 pub fn update(Msg, State) -> State
 

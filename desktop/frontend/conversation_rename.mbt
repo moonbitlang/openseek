@@ -78,6 +78,7 @@ fn focus_conversation_rename() -> @cmd.Cmd {
 
 ///|
 fn rename_conversation(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   rename : ConversationRename,
 ) -> @cmd.Cmd {
@@ -89,7 +90,11 @@ fn rename_conversation(
           dispatch(
             ConversationRenameFailed(
               id=rename.id,
-              message="Conversation channel is unavailable",
+              message=if locale is SimplifiedChinese {
+                "对话连接不可用"
+              } else {
+                "Conversation channel is unavailable"
+              },
             ),
           ),
         )
@@ -103,7 +108,11 @@ fn rename_conversation(
               dispatch(
                 ConversationRenameFailed(
                   id=rename.id,
-                  message="Conversation workspace is unavailable",
+                  message=if locale is SimplifiedChinese {
+                    "对话工作区不可用"
+                  } else {
+                    "Conversation workspace is unavailable"
+                  },
                 ),
               ),
             )
@@ -151,7 +160,11 @@ fn rename_conversation(
             dispatch(
               ConversationRenameFailed(
                 id=rename.id,
-                message="This conversation cannot be renamed",
+                message=if locale is SimplifiedChinese {
+                  "无法重命名此对话"
+                } else {
+                  "This conversation cannot be renamed"
+                },
               ),
             ),
           )
@@ -234,6 +247,7 @@ fn close_conversation_rename() -> @cmd.Cmd {
 
 ///|
 fn conversation_rename_dialog(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   rename : ConversationRename,
 ) -> @html.Html {
@@ -243,7 +257,7 @@ fn conversation_rename_dialog(
     class="modal conversation-rename-dialog",
     on_cancel=dispatch(ConversationRenameCancelled(rename.id)),
     attrs=@html.Attrs::build()
-      .aria_label("Rename conversation")
+      .aria_label(shell_text(locale, RenameConversation))
       .on_keydown(event => {
         event.stop_propagation()
         if event.is_composing() || event.key() != "Tab" {
@@ -253,7 +267,7 @@ fn conversation_rename_dialog(
         move_conversation_rename_focus(if event.shift_key() { -1 } else { 1 })
       }),
     [
-      @html.div(class="modal-title", "Rename conversation"),
+      @html.div(class="modal-title", shell_text(locale, RenameConversation)),
       @html.input(
         id="conversation-rename-input",
         input_type=@html.InputType::Text,
@@ -263,7 +277,7 @@ fn conversation_rename_dialog(
           dispatch(ConversationRenameChanged(id=rename.id, value~))
         },
         attrs=@html.Attrs::build()
-          .aria_label("Rename conversation")
+          .aria_label(shell_text(locale, RenameConversation))
           .readonly_(rename.saving)
           .on_keydown(event => {
             guard !event.is_composing() && event.key() == "Enter" else {
@@ -292,7 +306,7 @@ fn conversation_rename_dialog(
           type_="button",
           disabled=rename.saving,
           on_click=dispatch(ConversationRenameCancelled(rename.id)),
-          "Cancel",
+          shell_text(locale, CancelLabel),
         ),
         @html.button(
           class="button primary",
@@ -300,9 +314,9 @@ fn conversation_rename_dialog(
           disabled=!valid,
           on_click=dispatch(ConversationRenameSubmitted(rename.id)),
           if rename.saving {
-            "Saving…"
+            shell_text(locale, SavingLabel)
           } else {
-            "Save"
+            shell_text(locale, SaveLabel)
           },
         ),
       ]),

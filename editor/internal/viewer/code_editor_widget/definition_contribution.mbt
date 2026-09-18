@@ -25,6 +25,7 @@ fn DefinitionContributionState::DefinitionContributionState(
   viewer : CodeEditorWidget,
 ) -> DefinitionContributionState {
   let navigation_action = @goto_symbol.SymbolNavigationAction(
+    localization=viewer.services.localization,
     viewer.services.languages,
     {
       prepare_navigation: () => viewer.prepare_symbol_navigation_intent(),

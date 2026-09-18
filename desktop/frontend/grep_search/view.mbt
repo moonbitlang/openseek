@@ -143,10 +143,13 @@ fn whole_word_toggle_button(
 }
 
 ///|
-fn query_key_attrs(emit : @cmd.Emit[Msg]) -> @html.Attrs {
+fn query_key_attrs(
+  locale? : @i18n.Locale = English,
+  emit : @cmd.Emit[Msg],
+) -> @html.Attrs {
   @html.Attrs::build()
   .id(SearchInputId)
-  .aria_label("Search")
+  .aria_label(ui(locale, SearchLabel))
   .aria_keyshortcuts("Meta+Shift+F Control+Shift+F")
   .data_set("focus-owner", "")
   .on_keydown(event => {
@@ -163,7 +166,11 @@ fn query_key_attrs(emit : @cmd.Emit[Msg]) -> @html.Attrs {
 /// The mode selector, modeled on semgrep's two search engines: plain text/grep
 /// matching versus structural MoonBit code patterns. Switching modes retires
 /// the armed query and its results via the generation fence.
-fn mode_control(mode : Mode, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn mode_control(
+  locale? : @i18n.Locale = English,
+  mode : Mode,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   @html.div(class="search-mode", [
     @html.button(
       class=if mode is Text {
@@ -172,10 +179,10 @@ fn mode_control(mode : Mode, emit : @cmd.Emit[Msg]) -> @html.Html {
         "search-mode-button"
       },
       attrs=@html.Attrs::build()
-        .aria_label("Text search")
+        .aria_label(ui(locale, TextSearch))
         .aria_pressed((mode is Text).to_string())
         .on_click(_ => emit(ModeChanged(Text))),
-      "Text",
+      ui(locale, TextLabel),
     ),
     @html.button(
       class=if mode is Semantic {
@@ -184,33 +191,37 @@ fn mode_control(mode : Mode, emit : @cmd.Emit[Msg]) -> @html.Html {
         "search-mode-button"
       },
       attrs=@html.Attrs::build()
-        .aria_label("Code search")
+        .aria_label(ui(locale, CodeSearch))
         .aria_pressed((mode is Semantic).to_string())
         .on_click(_ => emit(ModeChanged(Semantic))),
-      "Code",
+      ui(locale, CodeLabel),
     ),
   ])
 }
 
 ///|
 /// The mode-specific query options.
-fn mode_options(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn mode_options(
+  locale? : @i18n.Locale = English,
+  page : Page,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   if page.mode is Text {
     @html.div(class="search-mode-options", [
       toggle_button(
         "Aa",
-        "Match Case",
+        ui(locale, MatchCase),
         page.text.case_sensitive,
         emit(ToggleCaseSensitive),
       ),
       whole_word_toggle_button(
-        "Match Whole Word",
+        ui(locale, WholeWord),
         page.text.whole_word,
         emit(ToggleWholeWord),
       ),
       toggle_button(
         ".*",
-        "Use Regular Expression",
+        ui(locale, RegularExpression),
         page.text.regex,
         emit(ToggleRegex),
       ),
@@ -221,15 +232,19 @@ fn mode_options(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn pattern_repair_control(
+  locale? : @i18n.Locale = English,
+  page : Page,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   let requested = page.pattern_repair_phase is PatternRepairRequested
   let settled = page.pattern_repair_phase
     is (PatternRepairPreview | PatternRepairFailed)
   let composing = page.pattern_repair_phase is PatternRepairComposer
   let label = if requested {
-    "Pattern Repair in progress"
+    ui(locale, RepairingPattern)
   } else {
-    "Fix Pattern"
+    ui(locale, FixPattern)
   }
   @html.button(
     class=if requested || settled {
@@ -255,29 +270,33 @@ fn pattern_repair_control(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
 }
 
 ///|
-fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn pattern_repair_notice(
+  locale? : @i18n.Locale = English,
+  page : Page,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   if page.pattern_repair_phase is PatternRepairComposer {
     @html.div(class="search-pattern-repair-composer", [
       @html.div(class="search-pattern-repair-composer-header", [
-        @html.span(class="search-pattern-repair-kicker", "PATTERN REPAIR"),
         @html.span(
-          class="search-pattern-repair-caption",
-          "One request, no history",
+          class="search-pattern-repair-kicker",
+          ui(locale, PatternRepair),
         ),
+        @html.span(class="search-pattern-repair-caption", ui(locale, NoHistory)),
       ]),
       @html.div(class="search-pattern-repair-composer-row", [
         @html.textarea(
           value=page.pattern_repair_instruction,
-          placeholder="What should this pattern match? e.g. allow labelled arguments",
+          placeholder=ui(locale, PatternInstruction),
           on_input=emit.map(value => PatternRepairInstructionChanged(value)),
-          attrs=@html.Attrs::build().aria_label("Pattern repair instruction"),
+          attrs=@html.Attrs::build().aria_label(ui(locale, RepairInstruction)),
           "",
         ),
         @html.button(
           class="search-pattern-repair-submit",
-          attrs=@html.Attrs::build().aria_label("Submit pattern repair"),
+          attrs=@html.Attrs::build().aria_label(ui(locale, SubmitRepair)),
           on_click=emit(SubmitPatternRepair),
-          "Submit",
+          ui(locale, SubmitLabel),
         ),
       ]),
     ])
@@ -287,7 +306,7 @@ fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
       attrs=@html.Attrs::build().role("status").aria_live("polite"),
       [
         @html.span(class="search-pattern-repair-orbit", "✦"),
-        @html.span("Thinking"),
+        @html.span(ui(locale, ThinkingLabel)),
         @html.span(class="search-pattern-repair-dots", "···"),
       ],
     )
@@ -298,10 +317,10 @@ fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
     page.pattern_repair_candidate is Some(candidate) {
     let failed = page.pattern_repair_phase is PatternRepairFailed
     let validation = match page.pattern_repair_validation_status {
-      Some("passed") => "Validation passed"
-      Some("unavailable") => "Validation unavailable"
-      Some("failed") => "Validation failed"
-      _ => "Validation status unknown"
+      Some("passed") => ui(locale, ValidationPassed)
+      Some("unavailable") => ui(locale, ValidationUnavailable)
+      Some("failed") => ui(locale, ValidationFailed)
+      _ => ui(locale, ValidationUnknown)
     }
     @html.div(
       class=if failed {
@@ -311,7 +330,10 @@ fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
       },
       [
         @html.div(class="search-pattern-repair-title", [
-          @html.span(class="search-pattern-repair-kicker", "SUGGESTED PATTERN"),
+          @html.span(
+            class="search-pattern-repair-kicker",
+            ui(locale, SuggestedPattern),
+          ),
           @html.span(class="search-pattern-repair-caption", validation),
         ]),
         @html.pre(class="search-pattern-repair-candidate", candidate),
@@ -323,7 +345,7 @@ fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
         if failed {
           @html.div(
             class="search-pattern-repair-message",
-            "This candidate cannot be applied until validation passes.",
+            ui(locale, RequiresValidation),
           )
         } else {
           @html.nothing
@@ -333,12 +355,12 @@ fn pattern_repair_notice(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html {
             class="search-pattern-repair-accept",
             attrs=@html.Attrs::build().disabled(failed),
             on_click=emit(AcceptPatternRepair),
-            "Use pattern",
+            ui(locale, UsePattern),
           ),
           @html.button(
             class="search-pattern-repair-discard",
             on_click=emit(RejectPatternRepair),
-            "Discard",
+            ui(locale, DiscardLabel),
           ),
         ]),
       ],
@@ -392,6 +414,7 @@ fn highlighted_preview(
 
 ///|
 fn result_row(
+  locale? : @i18n.Locale = English,
   result : SearchResultItem,
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -401,7 +424,13 @@ fn result_row(
     let target = result.target_for_line(line.line)
     children.push(
       @html.button(
-        title="Open \{result.path}:\{target.start_line_number}",
+        title=dynamic_text(
+          locale,
+          DOpenMatch(
+            result.path.to_string(),
+            target.start_line_number.to_string(),
+          ),
+        ),
         on_click=open_match(result.path, target),
         class=if slices.is_empty() {
           "search-preview-line context"
@@ -423,6 +452,7 @@ fn result_row(
 
 ///|
 fn file_group_view(
+  locale? : @i18n.Locale = English,
   page : Page,
   group : FileGroup,
   emit : @cmd.Emit[Msg],
@@ -433,7 +463,7 @@ fn file_group_view(
   let rows = if collapsed {
     ([] : Array[@html.Html])
   } else {
-    group.matches.map(result => result_row(result, open_match))
+    group.matches.map(result => result_row(locale~, result, open_match))
   }
   @html.div(class="search-file-group", [
     @html.button(
@@ -473,18 +503,22 @@ fn file_group_view(
 }
 
 ///|
-fn search_message(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html? {
+fn search_message(
+  locale? : @i18n.Locale = English,
+  page : Page,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html? {
   match page.phase {
     Failed(code~, message~) => {
       let heading = match code {
-        "invalid_regex" => "Invalid regular expression"
-        "invalid_glob" => "Invalid file pattern"
-        "permission_denied" => "Workspace is not readable"
-        "rg_unavailable" => "Bundled ripgrep is unavailable"
-        "invalid_pattern" => "Invalid code pattern"
-        "moongrep_unavailable" => "Semantic search is unavailable"
-        "invalid_request" => "Nothing to search"
-        _ => "Search failed"
+        "invalid_regex" => ui(locale, InvalidRegex)
+        "invalid_glob" => ui(locale, InvalidGlob)
+        "permission_denied" => ui(locale, UnreadableWorkspace)
+        "rg_unavailable" => ui(locale, RipgrepUnavailable)
+        "invalid_pattern" => ui(locale, InvalidPattern)
+        "moongrep_unavailable" => ui(locale, SemanticUnavailable)
+        "invalid_request" => ui(locale, NothingToSearch)
+        _ => ui(locale, SearchFailed)
       }
       Some(
         @html.div(
@@ -500,10 +534,13 @@ fn search_message(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html? {
                   class="search-fix-pattern-link",
                   on_click=emit(
                     OpenPatternRepair(
-                      "The current pattern is invalid. Fix it using this diagnostic: \{message}",
+                      dynamic_text(
+                        locale,
+                        DRepairDiagnostic(message.to_string()),
+                      ),
                     ),
                   ),
-                  "Fix Pattern",
+                  ui(locale, FixPattern),
                 )
               } else {
                 @html.nothing
@@ -518,7 +555,7 @@ fn search_message(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html? {
         @html.div(
           class="search-empty",
           attrs=@html.Attrs::build().role("status").aria_live("polite"),
-          "No matches found.",
+          ui(locale, NoMatches),
         ),
       )
     Idle if page.text.query.is_empty() =>
@@ -526,24 +563,20 @@ fn search_message(page : Page, emit : @cmd.Emit[Msg]) -> @html.Html? {
         @html.div(
           class="search-empty",
           match page.mode {
-            Text => "Search across files in the current checkout."
-            Semantic => "Search MoonBit code patterns in the current checkout."
+            Text => ui(locale, TextSearchDescription)
+            Semantic => ui(locale, CodeSearchDescription)
           },
         ),
       )
     Idle if page.active_result_count() == 0 =>
-      Some(
-        @html.div(
-          class="search-empty",
-          "Search results cleared. Press Enter to search again.",
-        ),
-      )
+      Some(@html.div(class="search-empty", ui(locale, ResultsCleared)))
     _ => None
   }
 }
 
 ///|
 fn search_body(
+  locale? : @i18n.Locale = English,
   page : Page,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
@@ -564,7 +597,7 @@ fn search_body(
         if page.mode is Semantic && !items.is_empty() {
           summary_text + " so far…"
         } else {
-          "Searching…"
+          ui(locale, SearchingLabel)
         }
       } else {
         summary_text
@@ -576,7 +609,7 @@ fn search_body(
       @html.div(
         class="search-truncated",
         attrs=@html.Attrs::build().role("status"),
-        "Only the first 20,000 matches are shown. Narrow the search to see more.",
+        ui(locale, ResultLimit),
       ),
     )
   }
@@ -585,24 +618,27 @@ fn search_body(
       @html.div(
         class="search-truncated",
         attrs=@html.Attrs::build().role("status"),
-        "Results may be incomplete — some files could not be searched.",
+        ui(locale, IncompleteResults),
       ),
     )
   }
-  if search_message(page, emit) is Some(message) {
+  if search_message(locale~, page, emit) is Some(message) {
     children.push(message)
   }
   // A diagnostic and retained results are independent: both engines can
   // return useful matches before reporting a scan failure.
   for group in visible_file_groups(items, page.visible_lines) {
-    children.push(file_group_view(page, group, emit, open_match))
+    children.push(file_group_view(locale~, page, group, emit, open_match))
   }
   let shown = page.visible_lines.min(items.length())
   if shown < items.length() {
     let next = VisibleSearchLineStep.min(items.length() - shown)
     children.push(
       @html.div(class="search-show-more", [
-        @html.button(on_click=emit(ShowMore), "Show \{next} more results"),
+        @html.button(
+          on_click=emit(ShowMore),
+          dynamic_text(locale, DMoreResults(next.to_string())),
+        ),
         @html.div(
           class="search-show-more-detail",
           "\{shown} of \{items.length()} results displayed",
@@ -615,6 +651,7 @@ fn search_body(
 
 ///|
 fn page_view(
+  locale? : @i18n.Locale = English,
   page : Page,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
@@ -622,26 +659,26 @@ fn page_view(
   let details = if page.details_open {
     let details : Array[@html.Html] = [
       @html.label([
-        @html.span("files to include"),
+        @html.span(ui(locale, IncludeFiles)),
         @html.input(
           input_type=@html.InputType::Text,
           value=page.include_glob,
-          placeholder="e.g. src/**, tests/**",
+          placeholder=ui(locale, IncludeExample),
           on_input=emit.map(value => IncludeChanged(value)),
           attrs=@html.Attrs::build()
-            .aria_label("files to include")
+            .aria_label(ui(locale, IncludeFiles))
             .data_set("focus-owner", ""),
         ),
       ]),
       @html.label([
-        @html.span("files to exclude"),
+        @html.span(ui(locale, ExcludeFiles)),
         @html.input(
           input_type=@html.InputType::Text,
           value=page.exclude_glob,
-          placeholder="e.g. **/*.snap, generated/**",
+          placeholder=ui(locale, ExcludeExample),
           on_input=emit.map(value => ExcludeChanged(value)),
           attrs=@html.Attrs::build()
-            .aria_label("files to exclude")
+            .aria_label(ui(locale, ExcludeFiles))
             .data_set("focus-owner", ""),
         ),
       ]),
@@ -652,14 +689,14 @@ fn page_view(
   }
   @html.div(class="workspace-search", [
     @html.div(class="search-query-row", [
-      mode_control(page.mode, emit),
+      mode_control(locale~, page.mode, emit),
       if page.mode is Text {
         @html.input(
           input_type=@html.InputType::Text,
           value=page.text.query,
-          placeholder="Search",
+          placeholder=ui(locale, SearchLabel),
           on_input=emit.map(value => QueryChanged(value)),
-          attrs=query_key_attrs(emit),
+          attrs=query_key_attrs(locale~, emit),
         )
       } else {
         @html.input(
@@ -668,23 +705,23 @@ fn page_view(
           placeholder="inspect($(x:arg))",
           on_input=emit.map(value => PatternChanged(0, value)),
           attrs=@html.Attrs::build()
-            .aria_label("pattern")
+            .aria_label(ui(locale, PatternLabel))
             .data_set("focus-owner", ""),
         )
       },
       if page.mode is Semantic {
-        pattern_repair_control(page, emit)
+        pattern_repair_control(locale~, page, emit)
       } else {
         @html.nothing
       },
-      mode_options(page, emit),
+      mode_options(locale~, page, emit),
       @html.button(
         class=if page.details_open {
           "search-option pressed search-details-toggle"
         } else {
           "search-option search-details-toggle"
         },
-        title="Toggle Search Details",
+        title=ui(locale, ToggleDetails),
         attrs=@html.Attrs::build()
           .aria_expanded(page.details_open.to_string())
           .on_click(_ => emit(ToggleDetails)),
@@ -703,7 +740,7 @@ fn page_view(
                 placeholder="inspect($(x:arg))",
                 on_input=emit.map(value => PatternChanged(index, value)),
                 attrs=@html.Attrs::build()
-                  .aria_label("pattern")
+                  .aria_label(ui(locale, PatternLabel))
                   .data_set("focus-owner", ""),
               ),
               @html.button(on_click=emit(RemovePattern(index)), "−"),
@@ -716,25 +753,29 @@ fn page_view(
       @html.nothing
     },
     if page.mode is Semantic {
-      pattern_repair_notice(page, emit)
+      pattern_repair_notice(locale~, page, emit)
     } else {
       @html.nothing
     },
     details,
     @html.div(class="search-toolbar", [
-      @html.button(title="Refresh", on_click=emit(Refresh), "Refresh"),
       @html.button(
-        title="Clear Search Results",
-        on_click=emit(ClearResults),
-        "Clear",
+        title=ui(locale, RefreshLabel),
+        on_click=emit(Refresh),
+        ui(locale, RefreshLabel),
       ),
       @html.button(
-        title="Collapse All",
+        title=ui(locale, ClearResults),
+        on_click=emit(ClearResults),
+        ui(locale, ClearLabel),
+      ),
+      @html.button(
+        title=ui(locale, CollapseAll),
         on_click=emit(CollapseAll),
-        "Collapse All",
+        ui(locale, CollapseAll),
       ),
     ]),
-    search_body(page, emit, open_match),
+    search_body(locale~, page, emit, open_match),
   ])
 }
 
@@ -742,19 +783,20 @@ fn page_view(
 /// Search is composed into the file explorer beside its Files and Changes
 /// inventories. Fileeditor supplies the one active checkout projection.
 pub fn State::explorer_view(
+  locale? : @i18n.Locale = English,
   self : State,
   input : Input,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
   match input.root {
-    Some(_) => page_view(self.page, emit, open_match)
+    Some(_) => page_view(locale~, self.page, emit, open_match)
     None =>
       @html.div(class="workspace-search search-no-workspace", [
-        @html.div(class="search-empty-title", "No checkout available"),
+        @html.div(class="search-empty-title", ui(locale, NoCheckout)),
         @html.div(
           class="search-empty-detail",
-          "Open a conversation or task with a checkout to search its files.",
+          ui(locale, OpenCheckoutDescription),
         ),
       ])
   }

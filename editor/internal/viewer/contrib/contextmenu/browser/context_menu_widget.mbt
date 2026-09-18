@@ -33,6 +33,7 @@ priv struct ContextMenuSubmenuView {
 /// One reusable browser menu owned for a Viewer's entire contribution
 /// lifetime. Each `show` replaces the transient entry DOM and listeners.
 struct ContextMenuWidget {
+  localization : @localization.Localization
   container : @rdom.Element
   mut menu : @rdom.Element
   callbacks : ContextMenuWidgetCallbacks
@@ -51,6 +52,7 @@ struct ContextMenuWidget {
 
 ///|
 pub fn ContextMenuWidget::ContextMenuWidget(
+  localization? : @localization.Localization = @localization.Localization(),
   callbacks : ContextMenuWidgetCallbacks,
 ) -> ContextMenuWidget {
   let document = @rdom.document()
@@ -66,7 +68,7 @@ pub fn ContextMenuWidget::ContextMenuWidget(
   let action_bar = document.create_element("div")
   action_bar.set_attribute("class", "monaco-action-bar vertical")
   action_bar.set_attribute("role", "menu")
-  action_bar.set_attribute("aria-label", "Editor Context Menu")
+  action_bar.set_attribute("aria-label", localization.text(EditorContextMenu))
   action_bar.set_attribute("tabindex", "-1")
   let actions = document.create_element("div")
   actions.set_attribute("class", "actions-container")
@@ -74,6 +76,7 @@ pub fn ContextMenuWidget::ContextMenuWidget(
   menu.append_child(action_bar.as_node())
   container.append_child(menu.as_node())
   {
+    localization,
     container,
     menu,
     callbacks,
@@ -211,7 +214,10 @@ fn ContextMenuWidget::rebuild_menu_shell(self : ContextMenuWidget) -> Unit {
   let action_bar = document.create_element("div")
   action_bar.set_attribute("class", "monaco-action-bar vertical")
   action_bar.set_attribute("role", "menu")
-  action_bar.set_attribute("aria-label", "Editor Context Menu")
+  action_bar.set_attribute(
+    "aria-label",
+    self.localization.text(EditorContextMenu),
+  )
   action_bar.set_attribute("tabindex", "-1")
   let actions = document.create_element("div")
   actions.set_attribute("class", "actions-container")
@@ -472,7 +478,11 @@ fn ContextMenuWidget::open_submenu(
   }
   guard self.item_nodes[index] is Some(parent_node) else { return }
   parent_node.action.set_attribute("aria-expanded", "true")
-  let submenu = build_context_submenu(entries, index)
+  let submenu = build_context_submenu(
+    localization=self.localization,
+    entries,
+    index,
+  )
   submenu.container.set_attribute("data-theme", self.theme)
   copy_context_menu_theme(submenu.container, self.container)
   self.submenu = Some(submenu)
@@ -755,6 +765,7 @@ fn ContextMenuWidget::clear_show_state(self : ContextMenuWidget) -> Unit {
 
 ///|
 fn build_context_submenu(
+  localization? : @localization.Localization = @localization.Localization(),
   entries : Array[ContextMenuEntry],
   parent_entry_index : Int,
 ) -> ContextMenuSubmenuView {
@@ -769,7 +780,7 @@ fn build_context_submenu(
   let action_bar = document.create_element("div")
   action_bar.set_attribute("class", "monaco-action-bar vertical")
   action_bar.set_attribute("role", "menu")
-  action_bar.set_attribute("aria-label", "Peek")
+  action_bar.set_attribute("aria-label", localization.text(PeekLabel))
   action_bar.set_attribute("tabindex", "-1")
   let actions = document.create_element("div")
   actions.set_attribute("class", "actions-container")

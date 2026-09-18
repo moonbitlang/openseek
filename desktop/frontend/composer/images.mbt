@@ -38,6 +38,7 @@ fn Draft::without_image(self : Draft, index : Int) -> Draft {
 
 ///|
 fn Draft::image_previews(
+  locale? : @i18n.Locale = English,
   self : Draft,
   emit : @cmd.Emit[Msg],
 ) -> Array[@html.Html] {
@@ -47,9 +48,11 @@ fn Draft::image_previews(
       @html.button(
         type_="button",
         class="composer-image-remove",
-        title="Remove image",
+        title=ui(locale, RemoveImage),
         on_click=emit(ImageRemoved(index)),
-        attrs=@html.Attrs::build().aria_label("Remove " + image.name),
+        attrs=@html.Attrs::build().aria_label(
+          ui(locale, RemovePrefix) + image.name,
+        ),
         @icons.icon(@icons.icon_close),
       ),
     ])

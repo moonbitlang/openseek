@@ -2,6 +2,7 @@
 /// Keep the selected jobs visible even when the arguments disclosure is shut.
 /// Pending is already part of the normal tool lifecycle; no new run state.
 fn pending_job_wait_label(
+  locale? : @i18n.Locale = English,
   call : @transcript.ToolCall,
   descriptions? : Map[String, String] = Map([]),
 ) -> String? {
@@ -32,7 +33,13 @@ fn pending_job_wait_label(
   })
   Some(
     if targets.length() == 1 {
-      "Wait for job \{targets[0]} to complete"
+      if locale is SimplifiedChinese {
+        "等待任务 \{targets[0]} 完成"
+      } else {
+        "Wait for job \{targets[0]} to complete"
+      }
+    } else if locale is SimplifiedChinese {
+      "等待以下任一任务完成：\{targets.join("、")}"
     } else {
       "Wait for any of these jobs to complete: \{targets.join(", ")}"
     },
@@ -75,6 +82,7 @@ fn collect_job_description(
 
 ///|
 fn job_wait_labels(
+  locale? : @i18n.Locale = English,
   item : @transcript.TranscriptItem,
   descriptions : Map[String, String],
 ) -> Map[Int, String] {
@@ -84,7 +92,7 @@ fn job_wait_labels(
       collect_job_description(call, descriptions)
     }
     for index, call in calls {
-      if pending_job_wait_label(call, descriptions~) is Some(label) {
+      if pending_job_wait_label(locale~, call, descriptions~) is Some(label) {
         labels[index] = label
       }
     }

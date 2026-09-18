@@ -17,6 +17,7 @@ pub const ResizeHandleId : String = "sidebar-resize-handle"
 /// in `Actions`, so this value remains comparable and can drive incremental
 /// Rabbita branches without embedding emitters in application data.
 pub(all) struct Input {
+  locale : @i18n.Locale
   notices : Array[String]
   sections : Array[@section.Input]
   update_label : String?
@@ -94,15 +95,16 @@ fn Input::menu_definition(
 ) -> @action_menu.Definition? {
   if self.find_project(target) is Some(project) {
     return Some({
-      label: "Workspace actions",
-      entries: project.menu_entries(actions.section.project),
+      label: @messages.text(self.locale, WorkspaceActions),
+      entries: project.menu_entries(actions.section.project, locale=self.locale),
     })
   }
   guard self.find_conversation(target) is Some(row) &&
-    row.menu_entries(actions.section.conversation) is Some(entries) else {
+    row.menu_entries(locale=self.locale, actions.section.conversation)
+    is Some(entries) else {
     return None
   }
-  Some({ label: "Conversation actions", entries, })
+  Some({ label: @messages.text(self.locale, ConversationActions), entries, })
 }
 
 ///|
@@ -110,8 +112,9 @@ fn Actions::section_component(
   self : Actions,
   _id : @section.Id,
   input : @rabbita.Val[@section.Input],
+  locale : @rabbita.Val[@i18n.Locale],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
-  @section.component(input, self.section)
+  @section.component(input, self.section, locale)
 }
 
 ///|
@@ -122,10 +125,20 @@ pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
-  let section_inputs = input.map(input => @vector.from_array(input.sections))
+  // Locale travels through the same keyed input as section data. A separate
+  // global locale dependency can render a keyed child before its input updates.
+  let section_inputs = input.map(input => {
+    @vector.from_array(input.sections.map(section => (input.locale, section)))
+  })
   let section_rows = section_inputs.assoc_by(
-    (id, section) => actions.section_component(id, section),
-    by=section => section.id(),
+    (id, section) => {
+      actions.section_component(
+        id,
+        section.map(pair => pair.1),
+        section.map(pair => pair.0),
+      )
+    },
+    by=section => section.1.id(),
   )
   let overlay = @action_menu.component(input, (input, target) => {
     input.menu_definition(target, actions)
@@ -171,7 +184,10 @@ pub fn component(
         on_click=actions.open_skills,
         [
           @html.span(class="sidebar-icon", @icons.icon(@icons.icon_extensions)),
-          @html.span(class="sidebar-label", "Skills"),
+          @html.span(
+            class="sidebar-label",
+            @messages.text(input.locale, Skills),
+          ),
         ],
       ),
     )
@@ -189,7 +205,10 @@ pub fn component(
             attrs=@html.Attrs::build().aria_hidden("true"),
             "◷",
           ),
-          @html.span(class="sidebar-label", "Scheduled"),
+          @html.span(
+            class="sidebar-label",
+            @messages.text(input.locale, Scheduled),
+          ),
         ],
       ),
     )
@@ -206,7 +225,10 @@ pub fn component(
             class="sidebar-icon",
             @icons.icon(@icons.icon_settings_gear),
           ),
-          @html.span(class="sidebar-label", "Settings"),
+          @html.span(
+            class="sidebar-label",
+            @messages.text(input.locale, Settings),
+          ),
         ],
       ),
     )
@@ -226,9 +248,9 @@ pub fn component(
         @html.button(
           class="console-account-action",
           disabled=account.busy,
-          title="Refresh the device list",
+          title=@messages.text(input.locale, RefreshDevices),
           on_click=actions.refresh_account,
-          "Refresh",
+          @messages.text(input.locale, Refresh),
         ),
       )
       account_row.push(
@@ -236,7 +258,7 @@ pub fn component(
           class="console-account-action",
           disabled=account.busy,
           on_click=actions.sign_out,
-          "Sign out",
+          @messages.text(input.locale, SignOut),
         ),
       )
       footer.push(@html.div(class="console-account", account_row))

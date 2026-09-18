@@ -1,0 +1,45 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/sidebar/messages"
+
+import {
+  "openseek_desktop/frontend/i18n",
+}
+
+// Values
+pub fn text(@i18n.Locale, Message) -> String
+
+// Errors
+
+// Types and methods
+pub(all) enum Message {
+  Chats
+  Projects
+  NoChats
+  NewChat
+  CreatingChat
+  AddProject
+  ArchivedChats(Int)
+  ShowMore
+  ShowMoreIn(String)
+  ShowMoreChats
+  MoreActions
+  NewProjectConversation
+  WorkspaceSettings
+  WorkspaceDefaults
+  DetachProject
+  DetachDescription
+  HideSidebar
+  ShowSidebar
+  WorkspaceActions
+  ConversationActions
+  Skills
+  Scheduled
+  Settings
+  RefreshDevices
+  Refresh
+  SignOut
+}
+
+// Type aliases
+
+// Traits

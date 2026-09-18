@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
 }
@@ -12,7 +13,7 @@ import {
 // Values
 pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketItem]
 
-pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @rabbita.Val[@i18n.Locale], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
 
 pub fn installed_from_reply(@protocol.InstalledSkillsReply) -> Array[InstalledItem]
 

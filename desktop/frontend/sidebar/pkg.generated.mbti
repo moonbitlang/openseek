@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/sidebar/section",
 }
 
@@ -38,6 +39,7 @@ pub(all) struct Actions {
 }
 
 pub(all) struct Input {
+  locale : @i18n.Locale
   notices : Array[String]
   sections : Array[@section.Input]
   update_label : String?

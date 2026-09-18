@@ -12,6 +12,7 @@ priv struct WorkbenchDocumentView {
 
 ///|
 priv struct WorkbenchModel {
+  ui_language : @localization.Language
   status : String
   status_message : String
   theme : String
@@ -55,6 +56,7 @@ priv enum WorkbenchMsg {
   ViewerEvent(WorkbenchViewerEvent)
   ToggleExplorer
   ToggleTheme
+  ToggleUiLanguage
   WindowResized
   OpenRepoPicker
   CloseRepoPicker
@@ -160,6 +162,7 @@ fn workbench_services() -> WorkbenchServices {
       let location_opener = workbench_location_opener()
       let text_model_resolver = workbench_text_model_resolver()
       let viewer = @viewer.ViewerServices(
+        localization=workbench_localization,
         languages=languages.language_handle(log_service.log_handle()),
         markers=MarkerStore(markers.marker_service_handle()),
         agent_feedback=agent_feedback_handle,
@@ -528,6 +531,7 @@ fn initial_workbench_model() -> WorkbenchModel {
   {
     status: "loading",
     status_message: "",
+    ui_language: English,
     theme: stored_theme(),
     explorer_visible: true,
     document: None,
@@ -616,6 +620,16 @@ fn workbench_update(
         ),
         { ..model, explorer_visible: !model.explorer_visible, },
       )
+    ToggleUiLanguage => {
+      let ui_language : @localization.Language = match model.ui_language {
+        English => SimplifiedChinese
+        SimplifiedChinese => English
+      }
+      (
+        @cmd.custom_cmd(_ => workbench_localization.set_language(ui_language)),
+        { ..model, ui_language, },
+      )
+    }
     ToggleTheme => {
       let theme = if model.theme == "light" { "dark" } else { "light" }
       (
@@ -1245,6 +1259,17 @@ fn view_sidebar(
       @html.div(class="workspace-title", [
         @html.span(class="workspace-title-label", "Explorer"),
         @html.span(class="workspace-title-actions", [
+          @html.button(
+            type_="button",
+            class="sidebar-action",
+            title="Editor UI language / 编辑器语言",
+            on_click=emit(ToggleUiLanguage),
+            attrs=@html.Attrs::build().data_set("action", "toggle-ui-language"),
+            match model.ui_language {
+              English => "中"
+              SimplifiedChinese => "EN"
+            },
+          ),
           @html.button(
             type_="button",
             class="sidebar-action",

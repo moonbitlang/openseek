@@ -309,6 +309,7 @@ fn MarkdownViewerWidget::attach_model(
     None => (None, None, None)
     Some(host) => {
       let view = @markdown_document.MarkdownDocumentView(
+        localization=self.services.localization,
         model.model.get_value(),
         model.model.get_version_id(),
         model.model.get_language_id(),

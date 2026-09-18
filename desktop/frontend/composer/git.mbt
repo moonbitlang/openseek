@@ -30,19 +30,22 @@ pub fn GitChecks::tone(self : GitChecks) -> String {
 }
 
 ///|
-pub fn GitChecks::summary(self : GitChecks) -> String {
+pub fn GitChecks::summary(
+  locale? : @i18n.Locale = English,
+  self : GitChecks,
+) -> String {
   let parts : Array[String] = []
   if self.failed > 0 {
-    parts.push("\{self.failed} failed")
+    parts.push(dynamic_text(locale, DFailedChecks(self.failed.to_string())))
   }
   if self.pending > 0 {
-    parts.push("\{self.pending} running")
+    parts.push(dynamic_text(locale, DPendingChecks(self.pending.to_string())))
   }
   if self.passed > 0 {
-    parts.push("\{self.passed} passed")
+    parts.push(dynamic_text(locale, DPassedChecks(self.passed.to_string())))
   }
   if parts.is_empty() {
-    "no checks"
+    ui(locale, NoChecks)
   } else {
     parts.join(" · ")
   }
@@ -102,11 +105,14 @@ pub fn GitChanges::GitChanges(
 }
 
 ///|
-fn GitChanges::file_count(self : GitChanges) -> String {
+fn GitChanges::file_count(
+  locale? : @i18n.Locale = English,
+  self : GitChanges,
+) -> String {
   if self.files == 1 {
-    "1 file"
+    ui(locale, OneFile)
   } else {
-    "\{self.files} files"
+    dynamic_text(locale, DFileCount(self.files.to_string()))
   }
 }
 
@@ -146,13 +152,16 @@ pub fn GitPresentation::label(self : GitPresentation) -> String {
 }
 
 ///|
-pub fn GitPresentation::summary(self : GitPresentation) -> String {
+pub fn GitPresentation::summary(
+  locale? : @i18n.Locale = English,
+  self : GitPresentation,
+) -> String {
   if self.pull_request is Some(pull_request) {
     pull_request.checks
-    .map(checks => pull_request.title + " — CI " + checks.summary())
+    .map(checks => pull_request.title + " — CI " + checks.summary(locale~))
     .unwrap_or(pull_request.title)
   } else {
-    "On branch \{self.branch}"
+    dynamic_text(locale, DOnBranch(self.branch.to_string()))
   }
 }
 
@@ -161,16 +170,18 @@ pub fn GitPresentation::summary(self : GitPresentation) -> String {
 /// after the stable button so opening it never replaces the node under the
 /// pointer in Rabbita's positional renderer.
 fn GitPresentation::render(
+  locale? : @i18n.Locale = English,
   self : GitPresentation,
   open~ : Bool,
   toggle~ : @cmd.Cmd,
 ) -> @html.Html {
+  ignore(locale)
   let opened = if open { " open" } else { "" }
   let children : Array[@html.Html] = [
     @html.button(
       class="composer-git-button \{self.tone()}\{opened}",
       type_="button",
-      title=self.summary(),
+      title=self.summary(locale~),
       on_click=toggle,
       [
         @html.span(
@@ -182,24 +193,30 @@ fn GitPresentation::render(
     ),
   ]
   if open {
-    children.push(self.render_details())
+    children.push(self.render_details(locale~))
   }
   @html.div(class="composer-git", children)
 }
 
 ///|
-fn GitPresentation::render_details(self : GitPresentation) -> @html.Html {
+fn GitPresentation::render_details(
+  locale? : @i18n.Locale = English,
+  self : GitPresentation,
+) -> @html.Html {
+  ignore(locale)
   let rows : Array[@html.Html] = [
     GitPopoverRow::{
-      key: "Branch",
+      key: ui(locale, BranchLabel),
       value: @html.span(class="composer-git-value", self.branch),
       note: self.changes.bind(changes => {
-        changes.base.map(base => "from \{base}")
+        changes.base.map(base => {
+          dynamic_text(locale, DFromBranch(base.to_string()))
+        })
       }),
-    }.render(),
+    }.render(locale~),
   ]
   if self.changes is Some(changes) {
-    rows.push(changes.render())
+    rows.push(changes.render(locale~))
   }
   if self.pull_request is Some(pull_request) {
     rows.push(@html.div(class="composer-git-rule", @html.nothing))
@@ -209,27 +226,27 @@ fn GitPresentation::render_details(self : GitPresentation) -> @html.Html {
         note: Some(pull_request.title),
         href: pull_request.url,
         tone: "none",
-      }.render(),
+      }.render(locale~),
     )
     if pull_request.checks is Some(checks) {
       rows.push(
         GitPopoverLink::{
           label: "CI",
-          note: Some(checks.summary()),
+          note: Some(checks.summary(locale~)),
           href: "\{pull_request.url}/checks",
           tone: checks.tone(),
-        }.render(),
+        }.render(locale~),
       )
     }
   } else if self.compare_url is Some(url) {
     rows.push(@html.div(class="composer-git-rule", @html.nothing))
     rows.push(
       GitPopoverLink::{
-        label: "Create pull request",
+        label: ui(locale, CreatePullRequest),
         note: None,
         href: url,
         tone: "none",
-      }.render(),
+      }.render(locale~),
     )
   } else if self.missing_pull_request is Some(label) {
     rows.push(
@@ -237,33 +254,53 @@ fn GitPresentation::render_details(self : GitPresentation) -> @html.Html {
         key: "PR",
         value: @html.span(class="composer-git-value", label),
         note: None,
-      }.render(),
+      }.render(locale~),
     )
   }
   @html.div(class="composer-git-menu", rows)
 }
 
 ///|
-fn GitChanges::render(self : GitChanges) -> @html.Html {
+fn GitChanges::render(
+  locale? : @i18n.Locale = English,
+  self : GitChanges,
+) -> @html.Html {
+  ignore(locale)
   let value = if self.files > 0 {
     @html.span(class="composer-git-diff", [
       @html.span(class="composer-diff-added", "+\{self.added}"),
       @html.span(class="composer-diff-removed", "−\{self.removed}"),
     ])
   } else if self.partial {
-    @html.span(class="composer-git-clean", "Not counted")
+    @html.span(class="composer-git-clean", ui(locale, NotCounted))
   } else {
-    @html.span(class="composer-git-clean", "No changes")
+    @html.span(class="composer-git-clean", ui(locale, NoChanges))
   }
-  let counted = if self.files == 0 { None } else { Some(self.file_count()) }
+  let counted = if self.files == 0 {
+    None
+  } else {
+    Some(self.file_count(locale~))
+  }
   let note = if !self.partial {
     counted
   } else if counted is Some(counted) {
-    Some("\{counted}, untracked tail uncounted")
+    Some(
+      if locale is SimplifiedChinese {
+        "\{counted}，其余未跟踪文件未计入"
+      } else {
+        "\{counted}, untracked tail uncounted"
+      },
+    )
   } else {
-    Some("untracked tail uncounted")
+    Some(
+      if locale is SimplifiedChinese {
+        "其余未跟踪文件未计入"
+      } else {
+        "untracked tail uncounted"
+      },
+    )
   }
-  GitPopoverRow::{ key: "Changes", value, note, }.render()
+  GitPopoverRow::{ key: ui(locale, ChangesLabel), value, note, }.render(locale~)
 }
 
 ///|
@@ -274,7 +311,11 @@ priv struct GitPopoverRow {
 }
 
 ///|
-fn GitPopoverRow::render(self : GitPopoverRow) -> @html.Html {
+fn GitPopoverRow::render(
+  locale? : @i18n.Locale = English,
+  self : GitPopoverRow,
+) -> @html.Html {
+  ignore(locale)
   let children : Array[@html.Html] = [
     @html.span(class="composer-git-key", self.key),
     self.value,
@@ -294,7 +335,11 @@ priv struct GitPopoverLink {
 }
 
 ///|
-fn GitPopoverLink::render(self : GitPopoverLink) -> @html.Html {
+fn GitPopoverLink::render(
+  locale? : @i18n.Locale = English,
+  self : GitPopoverLink,
+) -> @html.Html {
+  ignore(locale)
   let children : Array[@html.Html] = [
     @html.span(
       class="composer-git-glyph \{self.tone}",

@@ -2,6 +2,8 @@ import {
   "openseek_desktop/frontend/mention_context",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/x/crypto",
+  "moonbitlang/editor/viewer/common/localization",
+  "openseek_desktop/frontend/i18n",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",

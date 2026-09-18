@@ -12,6 +12,7 @@ import {
   "moonbitlang/editor/viewer/common/core",
   "moonbitlang/editor/viewer/common/editor_api",
   "moonbitlang/editor/viewer/common/languages",
+  "moonbitlang/editor/viewer/common/localization",
   "moonbitlang/editor/viewer/common/markers",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/navigation_api",
@@ -176,10 +177,11 @@ pub fn CodeEditorScrollContentFacts::not_equal(Self, Self) -> Bool
 pub fn CodeEditorScrollContentFacts::to_repr(Self) -> @debug.Repr
 
 type CodeEditorServices
-pub fn CodeEditorServices::CodeEditorServices(languages? : @languages.LanguageHandle, markers? : @markers.MarkerDecorationsSource, agent_feedback? : @agent_feedback_api.AgentFeedbackHandle, location_opener? : @navigation_api.LocationOpenerHandle, text_model_resolver? : @navigation_api.TextModelResolverHandle, resource_path_label? : (@common.Uri) -> String?, quick_diff? : @quick_diff_api.QuickDiffHandle, log_service? : @log.LogHandle) -> Self
+pub fn CodeEditorServices::CodeEditorServices(localization? : @localization.Localization, languages? : @languages.LanguageHandle, markers? : @markers.MarkerDecorationsSource, agent_feedback? : @agent_feedback_api.AgentFeedbackHandle, location_opener? : @navigation_api.LocationOpenerHandle, text_model_resolver? : @navigation_api.TextModelResolverHandle, resource_path_label? : (@common.Uri) -> String?, quick_diff? : @quick_diff_api.QuickDiffHandle, log_service? : @log.LogHandle) -> Self
 pub fn CodeEditorServices::agent_feedback(Self) -> @agent_feedback_api.AgentFeedbackHandle
 pub fn CodeEditorServices::dispose(Self) -> Unit
 pub fn CodeEditorServices::languages(Self) -> @languages.LanguageHandle
+pub fn CodeEditorServices::localization(Self) -> @localization.Localization
 pub fn CodeEditorServices::location_opener(Self) -> @navigation_api.LocationOpenerHandle?
 pub fn CodeEditorServices::log_service(Self) -> @log.LogHandle
 pub fn CodeEditorServices::marker_decorations(Self) -> @markers.MarkerDecorationsHandle

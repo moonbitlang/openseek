@@ -2761,6 +2761,17 @@ pub fn TextSearchRange::to_repr(Self) -> @debug.Repr
 pub impl ToJson for TextSearchRange
 pub impl @json.FromJson for TextSearchRange
 
+pub(all) struct UiLanguagePreference {
+  language : String?
+} derive(Eq, @debug.Debug)
+pub fn UiLanguagePreference::equal(Self, Self) -> Bool
+pub fn UiLanguagePreference::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn UiLanguagePreference::not_equal(Self, Self) -> Bool
+pub fn UiLanguagePreference::to_json(Self) -> Json
+pub fn UiLanguagePreference::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UiLanguagePreference
+pub impl @json.FromJson for UiLanguagePreference
+
 pub(all) struct UninstallSkillPayload {
   id : String
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

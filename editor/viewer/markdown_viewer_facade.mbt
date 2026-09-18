@@ -101,6 +101,7 @@ fn ViewerServices::markdown_services(
   options : MarkdownViewerOptions,
 ) -> @markdown_viewer.MarkdownViewerServices {
   MarkdownViewerServices(
+    localization=self.code_services().localization(),
     languages=self.languages(),
     markers=Decorations(self.marker_decorations()),
     location_opener?=self.location_opener(),

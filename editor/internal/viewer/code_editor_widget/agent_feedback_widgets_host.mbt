@@ -142,6 +142,7 @@ fn CodeEditorWidget::rebuild_agent_feedback_widgets(
     let widget_id = "agent-feedback-widget-\{wc.widget_id_pool.to_string()}"
     wc.widget_id_pool += 1
     let widget = @agent_feedback_browser.AgentFeedbackEditorWidget(
+      localization=self.services.localization,
       self.agent_feedback_widget_host(),
       widget_id,
       group,

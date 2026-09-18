@@ -17,19 +17,34 @@
 /// and titles the model may repeat — so which step of one call *is* which
 /// step of the next is a correspondence the protocol never records. Marking
 /// what changed meant guessing it.
-pub fn card(steps : Array[Step]) -> @html.Html {
+pub fn card(
+  locale? : @i18n.Locale = English,
+  steps : Array[Step],
+) -> @html.Html {
   if steps.is_empty() {
     return @html.div(class="plan-args", [
-      @html.span(class="plan-cleared", "plan cleared"),
+      @html.span(
+        class="plan-cleared",
+        if locale is SimplifiedChinese {
+          "计划已清空"
+        } else {
+          "plan cleared"
+        },
+      ),
     ])
   }
   let rows : Array[@html.Html] = [
     for index, step in steps => {
-      step_row(status=step.status, number="\{index + 1}.", title=step.title)
+      step_row(
+        locale~,
+        status=step.status,
+        number="\{index + 1}.",
+        title=step.title,
+      )
     }
   ]
   @html.div(class="plan-args", [
-    progress_view(steps),
+    progress_view(locale~, steps),
     @html.ul(class="plan-steps", rows),
   ])
 }
@@ -38,9 +53,12 @@ pub fn card(steps : Array[Step]) -> @html.Html {
 /// The meter riding a `plan` call's own row, showing the plan as that call
 /// left it, so the checklist reads as it fills up without unfolding anything.
 /// `nothing` for every other call, and for a plan call that did not apply.
-pub fn fold_progress(call : @transcript.ToolCall) -> @html.Html {
+pub fn fold_progress(
+  locale? : @i18n.Locale = English,
+  call : @transcript.ToolCall,
+) -> @html.Html {
   guard latest([call]) is Some(steps) else { return @html.nothing }
-  progress_view(steps, mini=true)
+  progress_view(locale~, steps, mini=true)
 }
 
 ///|
@@ -50,7 +68,11 @@ pub fn fold_progress(call : @transcript.ToolCall) -> @html.Html {
 /// plan reads differently from one merely underway. `mini` is the compact form
 /// that rides a one-line row, where its width must not grow with the step
 /// count.
-fn progress_view(steps : Array[Step], mini? : Bool = false) -> @html.Html {
+fn progress_view(
+  locale? : @i18n.Locale = English,
+  steps : Array[Step],
+  mini? : Bool = false,
+) -> @html.Html {
   let total = steps.length()
   let completed = completed_count(steps)
   let fills : Array[@html.Html] = []
@@ -75,7 +97,7 @@ fn progress_view(steps : Array[Step], mini? : Bool = false) -> @html.Html {
   }
   @html.div(
     class=if mini { "plan-progress mini" } else { "plan-progress" },
-    title=summary_line(steps),
+    title=summary_line(locale~, steps),
     [
       @html.div(class="plan-progress-track", fills),
       @html.span(class="plan-progress-count", "\{completed}/\{total}"),
@@ -103,9 +125,14 @@ fn fill_width(part : Int, total : Int) -> String {
 /// One checklist row, used by the card so both altitudes cannot drift:
 /// a status cell, the step number, and the title. The status doubles as the
 /// row's CSS class.
-fn step_row(status~ : Status, number~ : String, title~ : String) -> @html.Html {
+fn step_row(
+  locale? : @i18n.Locale = English,
+  status~ : Status,
+  number~ : String,
+  title~ : String,
+) -> @html.Html {
   @html.li(class="plan-step \{status_class(status)}", [
-    status_cell(status),
+    status_cell(locale~, status),
     @html.span(class="step-num", number),
     @html.span(class="step-title", title),
   ])
@@ -115,11 +142,34 @@ fn step_row(status~ : Status, number~ : String, title~ : String) -> @html.Html {
 /// The leading cell of a row: a glyph for the statuses this build knows, or
 /// the literal word for anything else. Disguising an unknown status as a
 /// pending ring would misread e.g. a blocked step as untouched.
-fn status_cell(status : Status) -> @html.Html {
+fn status_cell(locale? : @i18n.Locale = English, status : Status) -> @html.Html {
   match status {
-    Pending => @html.span(class="step-icon", title="pending", "○")
-    InProgress => @html.span(class="step-icon", title="in_progress", "◐")
-    Completed => @html.span(class="step-icon", title="completed", "✓")
+    Pending =>
+      @html.span(
+        class="step-icon",
+        title=if locale is SimplifiedChinese { "待处理" } else { "pending" },
+        "○",
+      )
+    InProgress =>
+      @html.span(
+        class="step-icon",
+        title=if locale is SimplifiedChinese {
+          "进行中"
+        } else {
+          "in_progress"
+        },
+        "◐",
+      )
+    Completed =>
+      @html.span(
+        class="step-icon",
+        title=if locale is SimplifiedChinese {
+          "已完成"
+        } else {
+          "completed"
+        },
+        "✓",
+      )
     Other(word) => @html.span(class="step-status", word)
   }
 }

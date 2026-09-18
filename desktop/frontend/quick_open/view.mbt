@@ -115,15 +115,18 @@ fn key_attrs(emit : @cmd.Emit[Msg], selected : Int?) -> @html.Attrs {
 }
 
 ///|
-fn empty_view(open : Open) -> @html.Html {
+fn empty_view(open : Open, locale : @i18n.Locale) -> @html.Html {
   let (class, message) = match (open.phase, open.provider()) {
-    (Debouncing | Loading, Files) => ("quick-open-empty", "Indexing files…")
+    (Debouncing | Loading, Files) =>
+      ("quick-open-empty", text(locale, IndexingFiles))
     (Debouncing | Loading, Symbols) =>
-      ("quick-open-empty", "Searching symbols…")
-    (Failed, Files) => ("quick-open-empty error", "File search failed")
-    (Failed, Symbols) => ("quick-open-empty error", "Symbol search failed")
-    (Ready, Files) => ("quick-open-empty", "No files found")
-    (Ready, Symbols) => ("quick-open-empty", "No symbols found")
+      ("quick-open-empty", text(locale, SearchingSymbols))
+    (Failed, Files) =>
+      ("quick-open-empty error", text(locale, FileSearchFailed))
+    (Failed, Symbols) =>
+      ("quick-open-empty error", text(locale, SymbolSearchFailed))
+    (Ready, Files) => ("quick-open-empty", text(locale, NoFiles))
+    (Ready, Symbols) => ("quick-open-empty", text(locale, NoSymbols))
   }
   @html.div(
     class~,
@@ -136,13 +139,21 @@ fn empty_view(open : Open) -> @html.Html {
 /// The palette, or nothing at all while it is closed. Rendering a placeholder
 /// rather than dropping the node keeps the shell's overlay child indices
 /// stable across open and close.
-fn State::view(self : State, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn State::view(
+  self : State,
+  emit : @cmd.Emit[Msg],
+  locale : @i18n.Locale,
+) -> @html.Html {
   guard self.open is Some(open) else { return @html.nothing }
-  dialog_view(emit, open)
+  dialog_view(emit, open, locale)
 }
 
 ///|
-fn dialog_view(emit : @cmd.Emit[Msg], open : Open) -> @html.Html {
+fn dialog_view(
+  emit : @cmd.Emit[Msg],
+  open : Open,
+  locale : @i18n.Locale,
+) -> @html.Html {
   let selected = if open.current() is Some(_) {
     Some(open.selected)
   } else {
@@ -150,9 +161,17 @@ fn dialog_view(emit : @cmd.Emit[Msg], open : Open) -> @html.Html {
   }
   let active_id = selected.map(index => row_id(index)).unwrap_or("")
   let (dialog_label, placeholder, group_label) = if open.provider() is Files {
-    ("Search workspace files", "Search files", "Files")
+    (
+      text(locale, SearchWorkspaceFiles),
+      text(locale, SearchFiles),
+      text(locale, Files),
+    )
   } else {
-    ("Search workspace symbols", "Search symbols", "Symbols")
+    (
+      text(locale, SearchWorkspaceSymbols),
+      text(locale, SearchSymbols),
+      text(locale, Symbols),
+    )
   }
   let base_input_attrs = key_attrs(emit, selected)
     .id(InputId)
@@ -200,7 +219,11 @@ fn dialog_view(emit : @cmd.Emit[Msg], open : Open) -> @html.Html {
       )
     }
   ]
-  let list_children = if rows.is_empty() { [empty_view(open)] } else { rows }
+  let list_children = if rows.is_empty() {
+    [empty_view(open, locale)]
+  } else {
+    rows
+  }
   let list_busy = match open.phase {
     Debouncing | Loading => "true"
     _ => "false"

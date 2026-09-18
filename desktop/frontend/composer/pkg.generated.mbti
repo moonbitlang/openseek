@@ -7,6 +7,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/pathx",
@@ -17,7 +18,7 @@ import {
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], @cmd.Emit[Action]) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Action]) -> @rabbita.Val[@html.Html]
 
 // Errors
 
@@ -86,7 +87,7 @@ pub(all) enum ContextComponent {
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
 } derive(Eq)
-pub fn ContextComponent::render(Self, Identity, @cmd.Emit[Action]) -> @html.Html
+pub fn ContextComponent::render(locale? : @i18n.Locale, Self, Identity, @cmd.Emit[Action]) -> @html.Html
 
 pub(all) struct Draft {
   task : String
@@ -129,7 +130,7 @@ type GitChecks derive(Eq)
 pub fn GitChecks::GitChecks(passed~ : Int, failed~ : Int, pending~ : Int) -> Self
 pub fn GitChecks::equal(Self, Self) -> Bool
 pub fn GitChecks::not_equal(Self, Self) -> Bool
-pub fn GitChecks::summary(Self) -> String
+pub fn GitChecks::summary(locale? : @i18n.Locale, Self) -> String
 pub fn GitChecks::tone(Self) -> String
 
 pub(all) struct GitControl {
@@ -142,7 +143,7 @@ pub fn GitPresentation::GitPresentation(branch~ : String, changes? : GitChanges,
 pub fn GitPresentation::equal(Self, Self) -> Bool
 pub fn GitPresentation::label(Self) -> String
 pub fn GitPresentation::not_equal(Self, Self) -> Bool
-pub fn GitPresentation::summary(Self) -> String
+pub fn GitPresentation::summary(locale? : @i18n.Locale, Self) -> String
 pub fn GitPresentation::tone(Self) -> String
 
 type GitPullRequest derive(Eq)
@@ -355,8 +356,8 @@ pub(all) struct WorktreeArchiveDialog {
   cancel : @cmd.Cmd
   confirm : @cmd.Cmd
 }
-pub fn WorktreeArchiveDialog::message(Self) -> String
-pub fn WorktreeArchiveDialog::render(Self) -> @html.Html
+pub fn WorktreeArchiveDialog::message(locale? : @i18n.Locale, Self) -> String
+pub fn WorktreeArchiveDialog::render(locale? : @i18n.Locale, Self) -> @html.Html
 
 pub(all) enum WorktreeChoice {
   LocalCheckout

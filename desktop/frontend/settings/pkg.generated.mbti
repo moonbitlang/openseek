@@ -3,6 +3,7 @@ package "openseek_desktop/frontend/settings"
 
 import {
   "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
 }
 
 // Values
@@ -10,9 +11,126 @@ pub fn group(() -> @html.Html, String, Array[@html.Html]) -> @html.Html
 
 pub fn row(String, Array[@html.Html], desc? : String, stack? : Bool) -> @html.Html
 
+pub fn text(@i18n.Locale, Message) -> String
+
 // Errors
 
 // Types and methods
+pub(all) enum Message {
+  DevicePageDescription(String, String)
+  RegisterServer(String)
+  UpdateTo(String)
+  CannotInstallUpdate(String)
+  RestartingVersion(String)
+  DownloadProgress(String, Int, Int, Int)
+  DownloadBytes(String, Int)
+  DownloadVersion(String)
+  Status
+  Account
+  SignOut
+  SignOutDescription
+  SignIn
+  SignInChatGPT
+  CodexAccountDescription
+  SignInPage
+  Open
+  CancelSignIn
+  FinishSignIn
+  Configuration
+  OpenConfig
+  ConfigDescription
+  RemoteControl
+  CheckingSignIn
+  EnvironmentRelay
+  OnlineRelay
+  ConnectingRelay
+  SignedInAs
+  Disconnect
+  ThisMachine
+  DevicePage
+  RegisterRelay
+  WaitingBrowser
+  ConnectGitHub
+  Cancel
+  Problem
+  CheckingUpdate
+  UpToDate
+  DeepseekHint
+  GlmHint
+  OpenRouterHint
+  CustomHint
+  DeepseekStepOne
+  CreateKey
+  DeepseekPasteKey
+  GlmStepOne
+  GlmPasteKey
+  OpenRouterStepOne
+  OpenRouterPasteKey
+  StartEndpoint
+  EnterEndpoint
+  OptionalEndpointKey
+  OwnProviderDescription
+  DeepseekKeysLink
+  GlmKeysLink
+  ApiEndpoint
+  DeepseekOfficial
+  GlmOfficial
+  CustomUrl
+  EndpointUrl
+  DeepseekApiKey
+  GlmApiKey
+  OpenRouterApiKey
+  CustomApiKey
+  SavedKey
+  ApiKey
+  SaveApiKey
+  KeyStorageDescription
+  Language
+  LanguageDescription
+  System
+  Settings
+  Preferences
+  Interface
+  Engine
+  MaxSteps
+  MaxStepsDescription
+  Followup
+  Steer
+  Queue
+  FollowupDescription
+  Theme
+  Light
+  Dark
+  ThemeDescription
+  FontSize
+  FontSizeDescription
+  NotificationCorner
+  BottomRight
+  BottomLeft
+  TopRight
+  TopLeft
+  NotificationDescription
+  FileTreeLayout
+  RightSidebar
+  BottomPanel
+  FileTreeDescription
+  Diagnostics
+  FpsOverlay
+  On
+  Off
+  FpsDescription
+  RemoteAccess
+  Updates
+  CheckUpdates
+  LoadingSettings
+  RuntimeSettings
+  DeepseekKey
+  GlmKey
+  OpenRouterKey
+  CustomEndpoint
+  CurrentVersion(String)
+  LanguageStorageFailed(String)
+}
 
 // Type aliases
 

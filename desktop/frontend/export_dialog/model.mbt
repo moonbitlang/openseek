@@ -97,6 +97,7 @@ fn Model::showing(self : Model, content : Content) -> Model {
 
 ///|
 pub fn Model::update(
+  locale? : @i18n.Locale = English,
   self : Model,
   emit : @cmd.Emit[Msg],
   msg : Msg,
@@ -120,16 +121,19 @@ pub fn Model::update(
     }
     Download if !busy =>
       (
-        self.download(emit, content.source),
+        self.download(locale~, emit, content.source),
         self.showing({ ..content, operation: Downloading, }),
       )
     Share if !busy && content.publication is None =>
       (
-        self.share(emit, content.source),
+        self.share(locale~, emit, content.source),
         self.showing({ ..content, operation: Sharing, }),
       )
     SignIn if content.operation is (SignInRequired | SignInFailed(_)) =>
-      (self.sign_in(emit), self.showing({ ..content, operation: SigningIn, }))
+      (
+        self.sign_in(locale~, emit),
+        self.showing({ ..content, operation: SigningIn, }),
+      )
     Downloaded(result, ..) if content.operation is Downloading => {
       let operation = match result {
         Ok({ path: Some(path), opened, }) => Saved(path~, opened~)

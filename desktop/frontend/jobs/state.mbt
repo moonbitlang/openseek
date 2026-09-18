@@ -219,6 +219,7 @@ pub fn subscriptions(state : State, emit : @cmd.Emit[Msg]) -> @sub.Sub {
 
 ///|
 pub fn update(
+  locale? : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   msg : Msg,
   state : State,
@@ -477,11 +478,19 @@ pub fn update(
         Ok({ outcome: Stopped | AlreadyTerminal, }) => None
         Ok({ outcome: NotFound, }) =>
           Some(
-            "This job no longer belongs to the live engine. Refresh its history.",
+            if locale is SimplifiedChinese {
+              "此任务已不属于当前引擎，请刷新其历史记录。"
+            } else {
+              "This job no longer belongs to the live engine. Refresh its history."
+            },
           )
         Ok({ outcome: WrongRuntime, }) =>
           Some(
-            "The engine restarted; this old job cannot be stopped from the new runtime.",
+            if locale is SimplifiedChinese {
+              "引擎已重启，无法从新的运行环境停止此旧任务。"
+            } else {
+              "The engine restarted; this old job cannot be stopped from the new runtime."
+            },
           )
       }
       let (cmd, state) = request_list(emit, { ..state, stopping: false, }, 0)

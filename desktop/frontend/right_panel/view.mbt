@@ -3,6 +3,7 @@
 /// Child order is structural because Rabbita diffs by index; the viewer and
 /// browser placeholders must not be re-keyed when the active tab changes.
 fn panel_view(
+  locale? : @i18n.Locale = English,
   input : Input,
   actions : Actions,
   semantic_review? : @html.Html = @html.nothing,
@@ -32,33 +33,32 @@ fn panel_view(
       Browser(id~) => {
         let (label, title) = match @preview.page(input.preview, id) {
           Some(page) => {
-            let label = @preview.page_label(page)
+            let label = @preview.page_label(page, locale~)
             (label, page.url.unwrap_or(label))
           }
-          None => ("New Tab", "New Tab")
+          None => (ui(locale, NewTab), ui(locale, NewTab))
         }
         { tab, label, title, missing: false, }
       }
       Jobs =>
         {
           tab,
-          label: "Jobs",
-          title: "Background jobs and retained output",
+          label: ui(locale, JobsLabel),
+          title: ui(locale, JobsHint),
           missing: false,
         }
       Workflows =>
         {
           tab,
-          label: "Workflows",
-          title: "Subagents this conversation delegated to",
+          label: ui(locale, WorkflowsLabel),
+          title: ui(locale, WorkflowsHint),
           missing: false,
         }
       FilePicker => {
         let (label, title) = match input.file_panel.explorer_mode {
-          ExplorerChanges =>
-            ("Review Changes", "Review changed files and diffs")
-          ExplorerSearch => ("Search", "Search across files")
-          ExplorerFiles => ("Open File", "Open a workspace file")
+          ExplorerChanges => (ui(locale, ReviewChanges), ui(locale, ReviewHint))
+          ExplorerSearch => (ui(locale, SearchLabel), ui(locale, SearchHint))
+          ExplorerFiles => (ui(locale, OpenFile), ui(locale, OpenFileHint))
         }
         { tab, label, title, missing: false, }
       }
@@ -113,6 +113,7 @@ fn panel_view(
     [
       @fileeditor.resize_handle_view(),
       @dock.tabs_bar(
+        locale~,
         actions.dock,
         input.dock,
         chips,
@@ -127,6 +128,7 @@ fn panel_view(
         toggle_panel=actions.toggle_panel,
       ),
       @fileeditor.breadcrumb_view(
+        locale~,
         actions.file_editor,
         input.file_panel,
         input.file_ctx,
@@ -137,13 +139,14 @@ fn panel_view(
         },
       ),
       @fileeditor.body_view(
+        locale~,
         actions.file_editor,
         input.file_panel,
         input.file_ctx,
         semantic_review~,
       ),
       @html.div(class="browser-chrome", [
-        @preview.toolbar_view(active_page, toolbar),
+        @preview.toolbar_view(locale~, active_page, toolbar),
         @preview.failure_view(active_page),
         // A native page overlays this measured rectangle after navigation.
         @html.div(
@@ -151,9 +154,11 @@ fn panel_view(
           ([] : Array[@html.Html]),
         ),
       ]),
-      @jobs.panel(input.jobs, actions.job_events),
-      @workflow.panel(input.workflows, { open_child: actions.open_child, }),
-      @dock.launcher_pane(launcher),
+      @jobs.panel(locale~, input.jobs, actions.job_events),
+      @workflow.panel(locale~, input.workflows, {
+        open_child: actions.open_child,
+      }),
+      @dock.launcher_pane(locale~, launcher),
     ],
   )
 }

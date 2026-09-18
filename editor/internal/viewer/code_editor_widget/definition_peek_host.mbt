@@ -253,6 +253,7 @@ fn CodeEditorWidget::create_references_controller(
   self : CodeEditorWidget,
 ) -> @references_browser.ReferencesController {
   ReferencesController(
+    localization=self.services.localization,
     {
       is_anchor_current: anchor => {
         self.symbol_navigation_anchor_is_current(anchor)

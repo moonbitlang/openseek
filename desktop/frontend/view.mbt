@@ -4,8 +4,8 @@ fn can_stop(conv : Conversation) -> Bool {
 }
 
 ///|
-fn token_label(tokens : Int) -> String {
-  "\{@labels.compact_count(tokens)} tokens"
+fn token_label(locale? : @i18n.Locale = English, tokens : Int) -> String {
+  dynamic_text(locale, DTokens(@labels.compact_count(tokens).to_string()))
 }
 
 ///|
@@ -39,7 +39,10 @@ fn SelectMenu::setting_control(
 }
 
 ///|
-fn conversation_title(conv : Conversation) -> String {
+fn conversation_title(
+  locale? : @i18n.Locale = English,
+  conv : Conversation,
+) -> String {
   // Titles follow the committed user transcript.
   for item in conv.messages {
     if item.kind is User(text=prompt, ..) {
@@ -75,7 +78,7 @@ fn conversation_title(conv : Conversation) -> String {
     // exists. Keep the row's pre-submit label truthful without mirroring the
     // text on every key; the durable User item supplies the real title.
     if conv.composer_draft_present {
-      "New chat"
+      shell_text(locale, NewChatLabel)
     } else {
       "SeekMoon"
     }
@@ -135,7 +138,10 @@ fn session_component_input(
   // registry (or the local binding while the first turn is still on its way
   // to the store).
   let title = if worktree is Some(name) {
-    "\{session_id}\nRuns in worktree \{name}; archiving removes its checkout but keeps the branch for Repair"
+    dynamic_text(
+      model.locale,
+      DWorktreeArchiveHint(session_id.to_string(), name.to_string()),
+    )
   } else {
     session_id
   }
@@ -163,11 +169,7 @@ fn session_component_input(
     // presents Archive disabled, while the browser fallback hides it.
     run_mark,
     trailing: if archivable {
-      [
-        @conversation.Archive(
-          title="Archive — tuck this chat away; its files stay where they are",
-        ),
-      ]
+      [@conversation.Archive(title=shell_text(model.locale, ArchiveHint))]
     } else {
       []
     },
@@ -244,9 +246,9 @@ fn Model::push_group_component_inputs(
           !conv.has_begun() &&
           conv.task.is_empty() &&
           conv.pending_prompt is None {
-          "New chat"
+          shell_text(self.locale, NewChatLabel)
         } else {
-          conversation_title(conv)
+          conversation_title(locale=self.locale, conv)
         },
       ),
       workspace,
@@ -274,7 +276,7 @@ fn Model::push_group_component_inputs(
     } else if self.find_conversation(dev.channel, tree.item.id) is Some(conv) &&
       dev.channel == self.focused &&
       tree.item.id == self.active_session {
-      conversation_title(conv)
+      conversation_title(locale=self.locale, conv)
     } else {
       session_item_label(tree.item)
     }
@@ -447,11 +449,21 @@ fn Model::sidebar_component_sections(
       // The selected Codex draft is the project's new-chat page, not a child
       // conversation yet. `project_draft` returns only an off-screen draft
       // that needs a recovery row.
-      if self.codex.project_draft(context, root, include_selected=standalone)
+      if self.codex.project_draft(
+          locale=self.locale,
+          context,
+          root,
+          include_selected=standalone,
+        )
         is Some(draft) {
         stamped.push((ComposingNow, draft))
       }
-      for row in self.codex.project_conversations(context, root) {
+      for
+        row in self.codex.project_conversations(
+          locale=self.locale,
+          context,
+          root,
+        ) {
         let stamp = match row.updated_at_ms {
           Some(ms) => ActiveAt(ms)
           None => Unstamped
@@ -491,14 +503,14 @@ fn Model::sidebar_component_sections(
         can_start: true,
         managed: true,
         conversations,
-        empty_label: Some("No chats yet"),
+        empty_label: Some(@sidebar_messages.text(self.locale, NoChats)),
       }),
     )
   }
   if codex_context is Some(context) {
     // Codex threads in unregistered roots keep top-level rows at the end of
     // the section, as they did in the retired Codex section.
-    for entry in self.codex.loose_entries(context) {
+    for entry in self.codex.loose_entries(locale=self.locale, context) {
       projects.push(
         match entry {
           @section.Conversation(input) =>
@@ -513,15 +525,15 @@ fn Model::sidebar_component_sections(
   )
   sections.push({
     id: @section.Id(source="openseek.chats", channel~),
-    label: "Chats",
+    label: @sidebar_messages.text(self.locale, Chats),
     initially_collapsed: false,
     preview_limit: Some(3),
     activation: chats_activation,
     action: Some({
       title: if self.chat_creation_pending() {
-        "Creating chat…"
+        @sidebar_messages.text(self.locale, CreatingChat)
       } else {
-        "New chat"
+        @sidebar_messages.text(self.locale, NewChat)
       },
       disabled: self.chat_creation_pending() ||
       self.pending_project_adoption is Some(_) ||
@@ -531,7 +543,7 @@ fn Model::sidebar_component_sections(
   })
   sections.push({
     id: @section.Id(source="openseek.projects", channel~),
-    label: "Projects",
+    label: @sidebar_messages.text(self.locale, Projects),
     initially_collapsed: false,
     preview_limit: None,
     activation: if openseek_section_activation is Some(_) {
@@ -543,7 +555,10 @@ fn Model::sidebar_component_sections(
     } else {
       None
     },
-    action: Some({ title: "Add a project", disabled: false, }),
+    action: Some({
+      title: @sidebar_messages.text(self.locale, AddProject),
+      disabled: false,
+    }),
     entries: projects,
   })
   // Archived conversations fold behind a collapsed section at the end of the
@@ -581,11 +596,9 @@ fn Model::sidebar_component_sections(
           worktree: None,
           run_mark: @conversation.NoRunMark,
           trailing: [
-            @conversation.Restore(
-              title="Restore this conversation to the sidebar",
-            ),
+            @conversation.Restore(title=shell_text(self.locale, RestoreHint)),
             @conversation.Delete(
-              title="Permanently delete this archived conversation",
+              title=shell_text(self.locale, DeleteArchivedHint),
             ),
           ],
           children: [],
@@ -594,7 +607,11 @@ fn Model::sidebar_component_sections(
     )
   }
   if dev.channel == self.focused {
-    for entry in self.codex.archived_sidebar_entries(dev.channel) {
+    for
+      entry in self.codex.archived_sidebar_entries(
+        locale=self.locale,
+        dev.channel,
+      ) {
       archived_entries.push(
         match entry {
           @section.Conversation(input) =>
@@ -606,11 +623,10 @@ fn Model::sidebar_component_sections(
   }
   sections.push({
     id: @section.Id(source="archived", channel~),
-    label: if archived_entries.is_empty() {
-      "Archived chats"
-    } else {
-      "Archived chats (\{archived_entries.length()})"
-    },
+    label: @sidebar_messages.text(
+      self.locale,
+      ArchivedChats(archived_entries.length()),
+    ),
     initially_collapsed: true,
     preview_limit: None,
     // Opening an archived transcript never force-reveals the section; its
@@ -637,21 +653,21 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   let sections = match self.focused_device() {
     Some(dev) => {
       if dev.chat_root is Some(Err(message)) {
-        notices.push("Chats storage unavailable: \{message}")
+        notices.push(
+          dynamic_text(self.locale, DStorageUnavailable(message.to_string())),
+        )
       }
       self.sidebar_component_sections(dev)
     }
     None => {
       match self.console.roster_sync {
-        RosterLoading => notices.push("Loading device…")
+        RosterLoading => notices.push(shell_text(self.locale, LoadingDevice))
         RosterFailed(message) => notices.push(message)
         RosterReady =>
           if self.console.roster.is_empty() {
-            notices.push(
-              "No devices yet — open SeekMoon and sign in under Settings → Remote access.",
-            )
+            notices.push(shell_text(self.locale, NoDevices))
           } else {
-            notices.push("No online device — reconnecting…")
+            notices.push(shell_text(self.locale, NoOnlineDevice))
           }
       }
       []
@@ -661,9 +677,10 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   // visible from any screen.
   let update_label : String? = match self.update_ux {
     UpdateAvailable(installable=true, ..) | ConfirmingRestart(..) =>
-      Some("Update")
-    DownloadingUpdate(progress~, ..) => Some(progress.sidebar_label())
-    RestartingForUpdate(..) => Some("Restarting…")
+      Some(shell_text(self.locale, UpdateLabel))
+    DownloadingUpdate(progress~, ..) =>
+      Some(progress.sidebar_label(locale=self.locale))
+    RestartingForUpdate(..) => Some(shell_text(self.locale, RestartingLabel))
     _ => None
   }
   // The browser console's account row: who is signed in, a roster refresh,
@@ -682,6 +699,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   }
   {
     notices,
+    locale: self.locale,
     sections,
     update_label,
     update_enabled: self.update_ux is UpdateAvailable(..),
@@ -707,6 +725,7 @@ fn user_display_text(text : String) -> String {
 /// the live composer means there is no textarea, model selector, goal editor,
 /// Send, or Stop control for an archived durable record.
 fn Conversation::archived_read_only_view(
+  locale? : @i18n.Locale = English,
   self : Conversation,
   dispatch : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -714,14 +733,14 @@ fn Conversation::archived_read_only_view(
     @html.div(class="archived-read-only-bar", [
       @html.span(
         class="archived-read-only-text",
-        "Archived conversation · Read only",
+        shell_text(locale, ArchivedReadOnly),
       ),
       @html.button(
         class="archived-read-only-restore",
         type_="button",
-        title="Restore this conversation before continuing it",
+        title=shell_text(locale, RestoreBeforeContinue),
         on_click=dispatch(UnarchiveSession(self.device, self.session_id)),
-        "Restore",
+        shell_text(locale, RestoreLabel),
       ),
     ]),
   ])
@@ -740,46 +759,46 @@ fn codex_account_rows(
   let channel = model.focused
   let rows : Array[@html.Html] = [
     @settings.row(
-      "Status",
+      @settings.text(model.locale, Status),
       [],
-      desc="\{codex.connection_label()} · \{codex.account_label()}",
+      desc="\{codex.connection_label(locale=model.locale)} · \{codex.account_label(locale=model.locale)}",
     ),
   ]
   if codex.signed_in() {
     rows.push(
       @settings.row(
-        "Account",
+        @settings.text(model.locale, Account),
         [
           @html.button(
             class="button secondary",
             disabled=codex.is_busy(),
             on_click=dispatch(Codex(channel~, @codex.Msg::logout())),
-            "Sign out",
+            @settings.text(model.locale, SignOut),
           ),
         ],
-        desc="Signing out removes the ChatGPT credentials this desktop's Codex uses.",
+        desc=@settings.text(model.locale, SignOutDescription),
       ),
     )
   } else if codex.sign_in_required() {
     rows.push(
       @settings.row(
-        "Sign in",
+        @settings.text(model.locale, SignIn),
         [
           @html.button(
             class="button primary",
             disabled=codex.is_busy(),
             on_click=dispatch(Codex(channel~, @codex.Msg::login())),
-            "Sign in with ChatGPT",
+            @settings.text(model.locale, SignInChatGPT),
           ),
         ],
-        desc="Codex conversations run with your ChatGPT account.",
+        desc=@settings.text(model.locale, CodexAccountDescription),
       ),
     )
   }
   if codex.pending_auth_url() is Some(url) {
     rows.push(
       @settings.row(
-        "Sign-in page",
+        @settings.text(model.locale, SignInPage),
         [
           // The shared external-link listener keeps the desktop webview in
           // place and hands this URL to the system browser.
@@ -788,30 +807,33 @@ fn codex_account_rows(
             href=url,
             target=Blank,
             rel="noopener noreferrer",
-            [icon(icon_link_external), @html.span("Open")],
+            [
+              icon(icon_link_external),
+              @html.span(@settings.text(model.locale, Open)),
+            ],
           ),
           @html.button(
             class="button secondary",
             disabled=codex.is_busy(),
             on_click=dispatch(Codex(channel~, @codex.Msg::cancel_login())),
-            "Cancel sign-in",
+            @settings.text(model.locale, CancelSignIn),
           ),
         ],
-        desc="Finish signing in on the browser page, or cancel the attempt.",
+        desc=@settings.text(model.locale, FinishSignIn),
       ),
     )
   }
   rows.push(
     @settings.row(
-      "Configuration",
+      @settings.text(model.locale, Configuration),
       [
         @html.button(
           class="button secondary",
           on_click=dispatch(OpenCodexConfig),
-          "Open config.toml",
+          @settings.text(model.locale, OpenConfig),
         ),
       ],
-      desc="config.toml in this desktop's Codex home, created empty if missing. The app-server reads it at startup, so edits apply after the desktop restarts.",
+      desc=@settings.text(model.locale, ConfigDescription),
     ),
   )
   rows
@@ -828,40 +850,48 @@ fn remote_access_rows(
   let rows : Array[@html.Html] = []
   match model.remote_access {
     None =>
-      rows.push(@settings.row("Remote control", [], desc="Checking sign-in…"))
+      rows.push(
+        @settings.row(
+          @settings.text(model.locale, RemoteControl),
+          [],
+          desc=@settings.text(model.locale, CheckingSignIn),
+        ),
+      )
     Some(status) =>
       if status.managed_by_env {
         rows.push(
           @settings.row(
-            "Remote control",
+            @settings.text(model.locale, RemoteControl),
             [],
-            desc="Configured through the environment (OPENSEEK_RELAY_URL); sign-in is disabled.",
+            desc=@settings.text(model.locale, EnvironmentRelay),
           ),
         )
       } else if status.user_login is Some(login) {
         let state = if status.connected {
-          "online — reachable from your browser"
+          @settings.text(model.locale, OnlineRelay)
         } else {
-          "connecting to the relay…"
+          @settings.text(model.locale, ConnectingRelay)
         }
         rows.push(
           @settings.row(
-            "Signed in as",
+            @settings.text(model.locale, SignedInAs),
             [
               @html.button(
                 class="button secondary",
                 on_click=dispatch(RemoteDisconnectClicked),
-                "Disconnect",
+                @settings.text(model.locale, Disconnect),
               ),
             ],
             desc="@\{login} — \{state}",
           ),
         )
         if status.device_url is Some(url) {
-          let name = status.device_name.unwrap_or("this machine")
+          let name = status.device_name.unwrap_or(
+            @settings.text(model.locale, ThisMachine),
+          )
           rows.push(
             @settings.row(
-              "Device page",
+              @settings.text(model.locale, DevicePage),
               [
                 // The shared external-link listener keeps the desktop webview
                 // in place and hands this URL to the system browser.
@@ -870,19 +900,23 @@ fn remote_access_rows(
                   href=url,
                   target=Blank,
                   rel="noopener noreferrer",
-                  [icon(icon_link_external), @html.span("Open")],
+                  [
+                    icon(icon_link_external),
+                    @html.span(@settings.text(model.locale, Open)),
+                  ],
                 ),
               ],
-              desc="\{name} — open \{url} in a signed-in browser.",
+              desc=@settings.text(
+                model.locale,
+                DevicePageDescription(name, url),
+              ),
             ),
           )
         }
       } else {
         let target = match status.server_url {
-          Some(server) =>
-            "Registers this machine at \{server} so your browser can drive it."
-          None =>
-            "Registers this machine so your browser can drive it through the relay."
+          Some(server) => @settings.text(model.locale, RegisterServer(server))
+          None => @settings.text(model.locale, RegisterRelay)
         }
         let controls : Array[@html.Html] = [
           // Once the sign-in completes this same slot becomes the Disconnect
@@ -895,9 +929,9 @@ fn remote_access_rows(
             attrs=@html.Attrs::build().disabled(model.remote_connecting),
             on_click=dispatch(RemoteConnectClicked),
             if model.remote_connecting {
-              "Waiting for the browser…"
+              @settings.text(model.locale, WaitingBrowser)
             } else {
-              "Connect with GitHub"
+              @settings.text(model.locale, ConnectGitHub)
             },
           ),
         ]
@@ -908,15 +942,23 @@ fn remote_access_rows(
             @html.button(
               class="button secondary",
               on_click=dispatch(RemoteCancelClicked),
-              "Cancel",
+              @settings.text(model.locale, Cancel),
             ),
           )
         }
-        rows.push(@settings.row("Sign in", controls, desc=target))
+        rows.push(
+          @settings.row(
+            @settings.text(model.locale, SignIn),
+            controls,
+            desc=target,
+          ),
+        )
       }
   }
   if model.remote_error is Some(message) {
-    rows.push(@settings.row("Problem", [], desc=message))
+    rows.push(
+      @settings.row(@settings.text(model.locale, Problem), [], desc=message),
+    )
   }
   rows
 }
@@ -933,23 +975,33 @@ fn update_check_controls(
   match model.update_ux {
     UpdateUnknown => ()
     CheckingForUpdate =>
-      controls.push(@html.span(class="update-status", "Checking…"))
+      controls.push(
+        @html.span(
+          class="update-status",
+          @settings.text(model.locale, CheckingUpdate),
+        ),
+      )
     UpToDate =>
-      controls.push(@html.span(class="update-status", "You are up to date."))
+      controls.push(
+        @html.span(
+          class="update-status",
+          @settings.text(model.locale, UpToDate),
+        ),
+      )
     UpdateAvailable(version~, installable~) =>
       if installable {
         controls.push(
           @html.button(
             class="button primary",
             on_click=dispatch(UpdateClicked),
-            "Update to \{version}",
+            @settings.text(model.locale, UpdateTo(version)),
           ),
         )
       } else {
         controls.push(
           @html.span(
             class="update-status",
-            "\{version} is available, but this build cannot install updates.",
+            @settings.text(model.locale, CannotInstallUpdate(version)),
           ),
         )
       }
@@ -957,7 +1009,10 @@ fn update_check_controls(
       // The interrupt modal is up over this row; keep the button visible
       // behind it so the row does not blink while the user decides.
       controls.push(
-        @html.button(class="button primary", "Update to \{version}"),
+        @html.button(
+          class="button primary",
+          @settings.text(model.locale, UpdateTo(version)),
+        ),
       )
     DownloadingUpdate(version~, progress~) => {
       let (fill_class, fill_style) = match progress.percentage() {
@@ -967,7 +1022,10 @@ fn update_check_controls(
       }
       controls.push(
         @html.div(class="update-progress", [
-          @html.span(class="update-status", progress.status_text(version)),
+          @html.span(
+            class="update-status",
+            progress.status_text(version, locale=model.locale),
+          ),
           // The runtime supplies only the measured percentage. CSS owns the
           // width property and appearance; the adjacent text is the
           // accessible progress value.
@@ -979,7 +1037,10 @@ fn update_check_controls(
     }
     RestartingForUpdate(version~) =>
       controls.push(
-        @html.span(class="update-status", "Restarting into \{version}…"),
+        @html.span(
+          class="update-status",
+          @settings.text(model.locale, RestartingVersion(version)),
+        ),
       )
     UpdateCheckFailed(message~) =>
       controls.push(@html.span(class="update-status update-error", message))
@@ -990,19 +1051,19 @@ fn update_check_controls(
       disabled=model.update_ux
         is (CheckingForUpdate | DownloadingUpdate(..) | RestartingForUpdate(..)),
       on_click=dispatch(CheckForUpdates),
-      "Check for updates",
+      @settings.text(model.locale, CheckUpdates),
     ),
   )
   controls
 }
 
 ///|
-fn provider_hint(provider : ApiProvider) -> String {
+fn provider_hint(model : Model, provider : ApiProvider) -> String {
   match provider {
-    Deepseek => "Requests go straight to api.deepseek.com with your key."
-    Glm => "Requests go straight to api.z.ai with your key."
-    OpenRouter => "DeepSeek requests go through OpenRouter with your key."
-    Custom => "Any OpenAI-compatible chat-completions URL; key optional."
+    Deepseek => @settings.text(model.locale, DeepseekHint)
+    Glm => @settings.text(model.locale, GlmHint)
+    OpenRouter => @settings.text(model.locale, OpenRouterHint)
+    Custom => @settings.text(model.locale, CustomHint)
   }
 }
 
@@ -1043,48 +1104,46 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let steps : Array[@html.Html] = match provider {
     Deepseek =>
       [
-        step(1, "Open platform.deepseek.com and sign in."),
-        step(2, "Create an API key under API Keys."),
-        step(3, "Paste it into the DeepSeek API key field below and save."),
+        step(1, @settings.text(model.locale, DeepseekStepOne)),
+        step(2, @settings.text(model.locale, CreateKey)),
+        step(3, @settings.text(model.locale, DeepseekPasteKey)),
       ]
     Glm =>
       [
-        step(1, "Open z.ai and sign in."),
-        step(2, "Create an API key under API Keys."),
-        step(3, "Paste it into the GLM API key field below and save."),
+        step(1, @settings.text(model.locale, GlmStepOne)),
+        step(2, @settings.text(model.locale, CreateKey)),
+        step(3, @settings.text(model.locale, GlmPasteKey)),
       ]
     OpenRouter =>
       [
-        step(1, "Open openrouter.ai and create an API key."),
-        step(2, "Paste the OpenRouter API key and save."),
+        step(1, @settings.text(model.locale, OpenRouterStepOne)),
+        step(2, @settings.text(model.locale, OpenRouterPasteKey)),
       ]
     Custom =>
       [
-        step(
-          1, "Start an OpenAI-compatible endpoint (Ollama, LM Studio, a proxy…).",
-        ),
-        step(2, "Enter its chat-completions URL below."),
-        step(3, "Add the endpoint's key if it requires one."),
+        step(1, @settings.text(model.locale, StartEndpoint)),
+        step(2, @settings.text(model.locale, EnterEndpoint)),
+        step(3, @settings.text(model.locale, OptionalEndpointKey)),
       ]
   }
   @html.div(
     class="setup-guide",
     [
-      @html.p(
-        "SeekMoon does not provide a hosted API. Requests go straight from this machine to your own model provider, billed to your account. Your API key is stored only on this machine — SeekMoon never reads it.",
-      ),
+      @html.p(@settings.text(model.locale, OwnProviderDescription)),
       @html.div(class="setup-guide-steps", steps),
       ..if provider is Deepseek {
         [
           provider_link(
-            "https://platform.deepseek.com/api_keys", "platform.deepseek.com → API Keys",
+            "https://platform.deepseek.com/api_keys",
+            @settings.text(model.locale, DeepseekKeysLink),
           ),
         ]
       },
       ..if provider is Glm {
         [
           provider_link(
-            "https://z.ai/manage-apikey/apikey-list", "z.ai → API Keys",
+            "https://z.ai/manage-apikey/apikey-list",
+            @settings.text(model.locale, GlmKeysLink),
           ),
         ]
       },
@@ -1109,31 +1168,34 @@ fn api_settings_rows(
       [byok_setup_guide(dispatch, model)]
     },
     @settings.row(
-      "API endpoint",
+      @settings.text(model.locale, ApiEndpoint),
       [
         ApiProviderMenu.setting_control(
           dispatch,
           model,
           id="api-provider-select",
           options=[
-            { value: "deepseek", label: "DeepSeek official (your API key)", },
-            { value: "glm", label: "Z.AI GLM (your API key)", },
+            {
+              value: "deepseek",
+              label: @settings.text(model.locale, DeepseekOfficial),
+            },
+            { value: "glm", label: @settings.text(model.locale, GlmOfficial), },
             { value: "openrouter", label: "OpenRouter", },
-            { value: "custom", label: "Custom URL", },
+            { value: "custom", label: @settings.text(model.locale, CustomUrl), },
           ],
           selected=model.api_provider.wire(),
-          aria_label="API endpoint",
+          aria_label=@settings.text(model.locale, ApiEndpoint),
           change=dispatch.map(value => ProviderChanged(value)),
           disabled=!settings_loaded,
         ),
       ],
-      desc=provider_hint(model.api_provider),
+      desc=provider_hint(model, model.api_provider),
     ),
   ]
   if model.api_provider is Custom {
     rows.push(
       @settings.row(
-        "Endpoint URL",
+        @settings.text(model.locale, EndpointUrl),
         [
           @html.input(
             input_type=@html.InputType::Text,
@@ -1141,7 +1203,7 @@ fn api_settings_rows(
             placeholder="https://host/chat/completions",
             on_input=dispatch.map(value => CustomApiUrlChanged(value)),
             attrs=@html.Attrs::build()
-              .aria_label("Endpoint URL")
+              .aria_label(@settings.text(model.locale, EndpointUrl))
               .data_set("focus-owner", "")
               .disabled(!settings_loaded),
           ),
@@ -1154,10 +1216,13 @@ fn api_settings_rows(
   // knows one is saved; saving a new one overwrites it.
   {
     let (key_label, key_saved) = match model.api_provider {
-      Deepseek => ("DeepSeek API key", model.deepseek_key_saved)
-      Glm => ("GLM API key", model.glm_key_saved)
-      OpenRouter => ("OpenRouter API key", model.custom_key_saved)
-      Custom => ("Custom API key", model.custom_key_saved)
+      Deepseek =>
+        (@settings.text(model.locale, DeepseekApiKey), model.deepseek_key_saved)
+      Glm => (@settings.text(model.locale, GlmApiKey), model.glm_key_saved)
+      OpenRouter =>
+        (@settings.text(model.locale, OpenRouterApiKey), model.custom_key_saved)
+      Custom =>
+        (@settings.text(model.locale, CustomApiKey), model.custom_key_saved)
     }
     rows.push(
       @settings.row(
@@ -1167,13 +1232,13 @@ fn api_settings_rows(
             input_type=@html.InputType::Password,
             value=model.setup_api_key,
             placeholder=if key_saved {
-              "saved — enter to replace"
+              @settings.text(model.locale, SavedKey)
             } else {
               "sk-..."
             },
             on_input=dispatch.map(value => SetupApiKeyChanged(value)),
             attrs=@html.Attrs::build()
-              .aria_label("API key")
+              .aria_label(@settings.text(model.locale, ApiKey))
               .data_set("focus-owner", "")
               .disabled(!settings_loaded),
           ),
@@ -1184,10 +1249,10 @@ fn api_settings_rows(
             class="button primary",
             disabled=!settings_loaded || model.setup_api_key.is_blank(),
             on_click=dispatch(SaveApiKey),
-            "Save API key",
+            @settings.text(model.locale, SaveApiKey),
           ),
         ],
-        desc="Stored on this machine and sent only with API requests. SeekMoon never reads it.",
+        desc=@settings.text(model.locale, KeyStorageDescription),
         stack=true,
       ),
     )
@@ -1202,13 +1267,14 @@ fn api_settings_rows(
 /// group, and the composer keeps Send disabled until a usable endpoint is
 /// saved.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let locale = model.locale
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
   // All providers use the composer's model selector; API setup only chooses
   // the endpoint and credentials.
   let engine_rows : Array[@html.Html] = [
     @settings.row(
-      "Max steps",
+      @settings.text(locale, MaxSteps),
       [
         @html.input(
           input_type=@html.InputType::Number,
@@ -1216,63 +1282,84 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           placeholder="1000",
           on_input=dispatch.map(value => MaxStepsChanged(value)),
           attrs=@html.Attrs::build()
-            .aria_label("Max steps")
+            .aria_label(@settings.text(locale, MaxSteps))
             .data_set("focus-owner", ""),
         ),
       ],
-      desc="How many agent steps one turn may take.",
+      desc=@settings.text(locale, MaxStepsDescription),
     ),
   ]
   let api_rows : Array[@html.Html] = api_settings_rows(dispatch, model)
   let groups : Array[@html.Html] = [
-    @settings.group(icon_sparkle, "Engine", engine_rows),
+    @settings.group(icon_sparkle, @settings.text(locale, Engine), engine_rows),
     @settings.group(icon_key, "API", api_rows),
     @settings.group(
       icon_extensions,
       "Codex",
       codex_account_rows(dispatch, model),
     ),
-    @settings.group(icon_layout, "Interface", [
+    @settings.group(icon_layout, @settings.text(locale, Interface), [
       @settings.row(
-        "Follow-up messages",
+        @settings.text(locale, Language),
+        [
+          LanguageMenu.setting_control(
+            dispatch,
+            model,
+            id="language-select",
+            options=[
+              { value: "system", label: @settings.text(locale, System), },
+              { value: "en", label: "English", },
+              { value: "zh-Hans", label: "简体中文", },
+            ],
+            selected=model.language.wire(),
+            aria_label=@settings.text(locale, Language),
+            change=@cmd.Emit(value => {
+              dispatch(LanguageChanged(value, browser_languages()))
+            }),
+          ),
+        ],
+        desc=@settings.text(locale, LanguageDescription),
+      ),
+      @settings.row(
+        @settings.text(locale, Followup),
         [
           FollowupBehaviorMenu.setting_control(
             dispatch,
             model,
             id="followup-behavior-select",
             options=[
-              { value: "steer", label: "Steer", },
-              { value: "queue", label: "Queue", },
+              { value: "steer", label: @settings.text(locale, Steer), },
+              { value: "queue", label: @settings.text(locale, Queue), },
             ],
             selected=model.followup_behavior.wire(),
-            aria_label="Follow-up messages",
+            aria_label=@settings.text(locale, Followup),
             change=dispatch.map(value => FollowupBehaviorChanged(value)),
             disabled=!settings_loaded,
           ),
         ],
-        desc="Default for messages sent while a task is running. Change it for one message beside the send button.",
+        desc=@settings.text(locale, FollowupDescription),
       ),
       @settings.row(
-        "Theme",
+        @settings.text(locale, Theme),
         [
           ThemeMenu.setting_control(
             dispatch,
             model,
             id="theme-select",
             options=[
-              { value: "system", label: "System", },
-              { value: "light", label: "Light", },
-              { value: "dark", label: "Dark", },
+              { value: "system", label: @settings.text(locale, System), },
+              { value: "light", label: @settings.text(locale, Light), },
+              { value: "dark", label: @settings.text(locale, Dark), },
             ],
             selected=model.theme.wire(),
-            aria_label="Theme",
+            aria_label=@settings.text(locale, Theme),
             change=dispatch.map(value => ThemeChanged(value)),
           ),
         ],
-        desc="Used by the app, editor, and terminal. System follows the OS appearance.",
+        desc=@settings.text(locale, ThemeDescription),
       ),
       @settings.row(
-        "Font size",
+        @settings.text(locale, FontSize),
         [
           FontSizeMenu.setting_control(
             dispatch,
@@ -1288,49 +1375,61 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               { value: "18", label: "18px", },
             ],
             selected=model.app_font_size.wire(),
-            aria_label="Font size",
+            aria_label=@settings.text(locale, FontSize),
             change=dispatch.map(value => FontSizeChanged(value)),
           ),
         ],
-        desc="Scales app text; code uses a visually matched monospace size.",
+        desc=@settings.text(locale, FontSizeDescription),
       ),
       @settings.row(
-        "Notification corner",
+        @settings.text(locale, NotificationCorner),
         [
           NotificationCornerMenu.setting_control(
             dispatch,
             model,
             id="notification-corner-select",
             options=[
-              { value: "bottom-right", label: "Bottom right", },
-              { value: "bottom-left", label: "Bottom left", },
-              { value: "top-right", label: "Top right", },
-              { value: "top-left", label: "Top left", },
+              {
+                value: "bottom-right",
+                label: @settings.text(locale, BottomRight),
+              },
+              {
+                value: "bottom-left",
+                label: @settings.text(locale, BottomLeft),
+              },
+              { value: "top-right", label: @settings.text(locale, TopRight), },
+              { value: "top-left", label: @settings.text(locale, TopLeft), },
             ],
             selected=model.notification_corner.wire(),
-            aria_label="Notification corner",
+            aria_label=@settings.text(locale, NotificationCorner),
             change=dispatch.map(value => NotificationCornerChanged(value)),
           ),
         ],
-        desc="Where error notifications pop up.",
+        desc=@settings.text(locale, NotificationDescription),
       ),
       @settings.row(
-        "File tree layout",
+        @settings.text(locale, FileTreeLayout),
         [
           TreeLayoutMenu.setting_control(
             dispatch,
             model,
             id="tree-layout-select",
             options=[
-              { value: "right-sidebar", label: "Right sidebar", },
-              { value: "bottom-panel", label: "Bottom panel", },
+              {
+                value: "right-sidebar",
+                label: @settings.text(locale, RightSidebar),
+              },
+              {
+                value: "bottom-panel",
+                label: @settings.text(locale, BottomPanel),
+              },
             ],
             selected=model.tree_layout.wire(),
-            aria_label="File tree layout",
+            aria_label=@settings.text(locale, FileTreeLayout),
             change=dispatch.map(value => TreeLayoutChanged(value)),
           ),
         ],
-        desc="Where the editor panel docks its file tree.",
+        desc=@settings.text(locale, FileTreeDescription),
       ),
     ]),
   ]
@@ -1339,41 +1438,45 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   // sections could only break things for whoever is at the machine.
   if model.is_desktop {
     groups.push(
-      @settings.group(@icons.icon_settings_gear, "Diagnostics", [
-        @settings.row(
-          "FPS overlay",
-          [
-            @html.button(
-              class="button secondary",
-              attrs=@html.Attrs::build()
-                .role("switch")
-                .aria_label("FPS overlay")
-                .aria_checked(model.fps_overlay_enabled.to_string()),
-              on_click=dispatch(FpsOverlayChanged(!model.fps_overlay_enabled)),
-              if model.fps_overlay_enabled {
-                "On"
-              } else {
-                "Off"
-              },
-            ),
-          ],
-          desc="Show FPS and frame intervals at the top of the window. Off by default.",
-        ),
-      ]),
+      @settings.group(
+        @icons.icon_settings_gear,
+        @settings.text(locale, Diagnostics),
+        [
+          @settings.row(
+            @settings.text(locale, FpsOverlay),
+            [
+              @html.button(
+                class="button secondary",
+                attrs=@html.Attrs::build()
+                  .role("switch")
+                  .aria_label(@settings.text(locale, FpsOverlay))
+                  .aria_checked(model.fps_overlay_enabled.to_string()),
+                on_click=dispatch(FpsOverlayChanged(!model.fps_overlay_enabled)),
+                if model.fps_overlay_enabled {
+                  @settings.text(locale, On)
+                } else {
+                  @settings.text(locale, Off)
+                },
+              ),
+            ],
+            desc=@settings.text(locale, FpsDescription),
+          ),
+        ],
+      ),
     )
     groups.push(
       @settings.group(
         icon_link_external,
-        "Remote access",
+        @settings.text(locale, RemoteAccess),
         remote_access_rows(dispatch, model),
       ),
     )
     groups.push(
-      @settings.group(icon_sync, "Updates", [
+      @settings.group(icon_sync, @settings.text(locale, Updates), [
         @settings.row(
-          "Check for updates",
+          @settings.text(locale, CheckUpdates),
           update_check_controls(dispatch, model),
-          desc="Current version: \{model.app_version}.",
+          desc=@settings.text(locale, CurrentVersion(model.app_version)),
         ),
       ]),
     )
@@ -1381,20 +1484,20 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   @html.section(class="settings-page", [
     @html.div(class="settings-page-inner", [
       @html.div(class="settings-header", [
-        @html.div(class="page-eyebrow", "Preferences"),
-        @html.h1("Settings"),
+        @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
+        @html.h1(@settings.text(locale, Settings)),
         @html.div(
           class="settings-subtitle",
           if !settings_loaded {
-            "Loading runtime settings…"
+            @settings.text(locale, LoadingSettings)
           } else if ready {
-            "Runtime settings for the SeekMoon engine."
+            @settings.text(locale, RuntimeSettings)
           } else {
             match model.api_provider {
-              Deepseek => "Enter a DeepSeek API key to start."
-              Glm => "Enter a GLM API key to start."
-              OpenRouter => "Enter an OpenRouter API key to start."
-              Custom => "Enter a chat-completions endpoint URL to start."
+              Deepseek => @settings.text(locale, DeepseekKey)
+              Glm => @settings.text(locale, GlmKey)
+              OpenRouter => @settings.text(locale, OpenRouterKey)
+              Custom => @settings.text(locale, CustomEndpoint)
             }
           },
         ),
@@ -1407,7 +1510,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 ///|
 fn run_indicator(model : Model, conv : Conversation) -> @html.Html {
   let status = model.display_status()
-  let label = status.label()
+  let label = status.label(locale=model.locale)
   if conv.is_running() {
     @html.div(class="run-status accent", [
       @html.span(class="run-dot accent pulse", ""),
@@ -1426,9 +1529,12 @@ fn run_indicator(model : Model, conv : Conversation) -> @html.Html {
 /// before the conversation's first run only the session id is known.
 fn session_tooltip(model : Model, conv : Conversation) -> String {
   if model.conversation_root(conv) is Some(cwd) {
-    "session \{conv.session_id}\nworkspace \{cwd.path}"
+    dynamic_text(
+      model.locale,
+      DSessionWorkspace(conv.session_id.to_string(), cwd.path.to_string()),
+    )
   } else {
-    "session \{conv.session_id}"
+    dynamic_text(model.locale, DSession(conv.session_id.to_string()))
   }
 }
 
@@ -1443,12 +1549,12 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
       "panel-toggle active"
     },
     title=if self.minimal_transcript {
-      "Show detailed conversation"
+      shell_text(self.locale, ShowDetailed)
     } else {
-      "Show minimal conversation"
+      shell_text(self.locale, ShowMinimal)
     },
     attrs=@html.Attrs::build()
-      .aria_label("Detailed mode")
+      .aria_label(shell_text(self.locale, DetailedMode))
       .aria_pressed((!self.minimal_transcript).to_string()),
     on_click=dispatch(MinimalTranscriptChanged(!self.minimal_transcript)),
     icon(@icons.icon_telescope),
@@ -1470,7 +1576,7 @@ fn topbar_view(
     @html.span(
       class="topbar-title",
       title=session_tooltip(model, conv),
-      conversation_title(conv),
+      conversation_title(locale=model.locale, conv),
     ),
   )
   // The project this conversation works in. The git branch is not shown here
@@ -1484,7 +1590,12 @@ fn topbar_view(
   )
   items.push(run_indicator(model, conv))
   if conv.turn.usage_tokens > 0 {
-    items.push(@html.span(class="pill", token_label(conv.turn.usage_tokens)))
+    items.push(
+      @html.span(
+        class="pill",
+        token_label(locale=model.locale, conv.turn.usage_tokens),
+      ),
+    )
   }
   items.push(model.detail_toggle(dispatch))
   // Export is a native-window operation and the visualizer consumes durable
@@ -1494,12 +1605,12 @@ fn topbar_view(
     items.push(
       @html.button(
         class="panel-toggle",
-        title="Export conversation",
+        title=shell_text(model.locale, ExportConversation),
         on_click=dispatch(
           OpenExport({
             session: conv.session_id,
             workspace: workspace.path,
-            title: conversation_title(conv),
+            title: conversation_title(locale=model.locale, conv),
             archived: conv.is_archived_read_only(),
           }),
         ),
@@ -1517,9 +1628,9 @@ fn topbar_view(
         "panel-toggle"
       },
       title=if model.terminal.is_open() {
-        "Hide terminal (Ctrl+`)"
+        shell_text(model.locale, HideTerminal)
       } else {
-        "Show terminal (Ctrl+`)"
+        shell_text(model.locale, ShowTerminal)
       },
       on_click=toggle_terminal,
       icon(icon_terminal),
@@ -1533,7 +1644,7 @@ fn topbar_view(
     items.push(
       @html.button(
         class="panel-toggle",
-        title="Show panel",
+        title=shell_text(model.locale, ShowPanel),
         on_click=toggle_right_panel,
         icon(icon_layout_sidebar_right),
       ),
@@ -1547,32 +1658,31 @@ fn topbar_view(
 /// inside a project, so this is what the app shows before it knows of one:
 /// while the host's registry is still in flight, and when no project is
 /// attached at all. Attaching one is the only way out, so it is the only
-/// action offered — the sidebar's own "Add a project" opens the same picker.
+/// action offered — the sidebar's own shell_text(model.locale, AddProject) opens the same picker.
 fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let card : Array[@html.Html] = [@html.h2("Open a project")]
+  let card : Array[@html.Html] = [
+    @html.h2(shell_text(model.locale, OpenProject)),
+  ]
   match (model.bridge_state(), model.focused_device()) {
     (Connected, Some(dev)) if dev.projects.is_empty() => {
-      card.push(
-        @html.p(
-          "SeekMoon works inside a project directory. Add one and its first chat opens here.",
-        ),
-      )
+      card.push(@html.p(shell_text(model.locale, ProjectOnboarding)))
       card.push(
         @html.button(
           class="button primary",
           type_="button",
           on_click=dispatch(PickProject(dev.channel)),
-          "Add a project",
+          shell_text(model.locale, AddProject),
         ),
       )
     }
     // A connected device with projects is between conversations: the session
     // rotation that opens one is a message away.
-    (Connected, Some(_)) => card.push(@html.p("Opening a chat…"))
+    (Connected, Some(_)) =>
+      card.push(@html.p(shell_text(model.locale, OpeningChat)))
     // Until the bridge answers, this page knows nothing about the host's
     // projects. Offering to add one here would be a guess that the very next
     // message contradicts.
-    _ => card.push(@html.p("Connecting to this device…"))
+    _ => card.push(@html.p(shell_text(model.locale, ConnectingDevice)))
   }
   @html.section(class="onboarding", [@html.div(class="onboarding-card", card)])
 }
@@ -1582,6 +1692,7 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 /// authentication gets its own progress/retry states, and a signed-in page
 /// stays here until its one query-selected device is available.
 fn console_gate_view(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   console : ConsoleState,
 ) -> @html.Html {
@@ -1593,7 +1704,7 @@ fn console_gate_view(
           @html.p(
             match console.notice {
               Some(notice) => notice
-              None => "Checking sign-in…"
+              None => shell_text(locale, CheckingSignIn)
             },
           ),
         )
@@ -1602,33 +1713,34 @@ fn console_gate_view(
             @html.button(
               class="button primary",
               on_click=dispatch(Console(RefreshClicked)),
-              "Try again",
+              shell_text(locale, TryAgain),
             ),
           )
         }
       }
       AuthSignedOut => {
-        card.push(@html.h2("Sign in"))
-        card.push(@html.p("Access this SeekMoon device from your browser."))
+        card.push(@html.h2(shell_text(locale, SignInLabel)))
+        card.push(@html.p(shell_text(locale, BrowserAccess)))
         card.push(
           @html.a(
             class="portal-button-link",
             href=console.login_url(),
-            "Sign in with GitHub",
+            shell_text(locale, SignInGitHub),
           ),
         )
       }
       AuthSignedIn(..) =>
         match console.roster_sync {
-          RosterLoading => card.push(@html.p("Checking device…"))
+          RosterLoading =>
+            card.push(@html.p(shell_text(locale, CheckingDevice)))
           RosterFailed(message) => {
-            card.push(@html.h2("Can't load device"))
+            card.push(@html.h2(shell_text(locale, CannotLoadDevice)))
             card.push(@html.p(message))
             card.push(
               @html.button(
                 class="button primary",
                 on_click=dispatch(Console(RefreshClicked)),
-                "Try again",
+                shell_text(locale, TryAgain),
               ),
             )
           }
@@ -1638,37 +1750,33 @@ fn console_gate_view(
               .find_first(meta => meta.id == id)
             if selected is Some(meta) {
               if meta.online {
-                card.push(@html.h2("Connecting to \{meta.name}…"))
-                card.push(@html.p("Waiting for this device's connection."))
+                card.push(
+                  @html.h2(
+                    dynamic_text(locale, DConnecting(meta.name.to_string())),
+                  ),
+                )
+                card.push(@html.p(shell_text(locale, WaitingConnection)))
               } else {
                 card.push(@html.h2("\{meta.name} is offline"))
-                card.push(@html.p("Bring this device online, then refresh."))
+                card.push(@html.p(shell_text(locale, BringOnline)))
               }
             } else {
-              card.push(@html.h2("Device unavailable"))
-              card.push(
-                @html.p(
-                  "This device is not available to the signed-in account.",
-                ),
-              )
+              card.push(@html.h2(shell_text(locale, DeviceUnavailable)))
+              card.push(@html.p(shell_text(locale, DeviceNotInAccount)))
             }
             card.push(
               @html.button(
                 class="button primary",
                 on_click=dispatch(Console(RefreshClicked)),
-                "Refresh",
+                shell_text(locale, RefreshLabel),
               ),
             )
           }
         }
     }
   } else {
-    card.push(@html.h2("Device link required"))
-    card.push(
-      @html.p(
-        "Open this page from Remote access in SeekMoon so the URL identifies one device.",
-      ),
-    )
+    card.push(@html.h2(shell_text(locale, DeviceLinkRequired)))
+    card.push(@html.p(shell_text(locale, DeviceLinkDescription)))
   }
   // Every signed-in gate hides the sidebar's account controls. Keep the
   // account escape hatch here once, independent of why device access is gated.
@@ -1679,9 +1787,9 @@ fn console_gate_view(
         disabled=console.busy,
         on_click=dispatch(Console(SignOutClicked)),
         if console.busy {
-          "Signing out…"
+          shell_text(locale, SigningOut)
         } else {
-          "Sign out"
+          shell_text(locale, SignOutLabel)
         },
       ),
     )
@@ -1741,23 +1849,27 @@ fn Model::selected_conversation_loaded(self : Model) -> Bool {
 }
 
 ///|
-fn conversation_loading_view() -> @html.Html {
-  @html.div(class="conversation-load-state", "Loading conversation…")
+fn conversation_loading_view(locale? : @i18n.Locale = English) -> @html.Html {
+  @html.div(
+    class="conversation-load-state",
+    shell_text(locale, LoadingConversation),
+  )
 }
 
 ///|
 fn conversation_load_failed_view(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   message : String,
 ) -> @html.Html {
   @html.div(class="conversation-load-state failed", [
-    @html.strong("Could not load conversation"),
+    @html.strong(shell_text(locale, CannotLoadConversation)),
     @html.span(class="conversation-load-state-message", message),
     @html.button(
       class="button secondary",
       type_="button",
       on_click=dispatch(RetrySelectedConversation),
-      "Retry",
+      shell_text(locale, RetryLabel),
     ),
   ])
 }
@@ -1783,7 +1895,7 @@ fn view(
   // sidebar, composer, overlays — stays unbuilt and inert Local cannot
   // receive UI work.
   if model.is_console_gated() {
-    return console_gate_view(dispatch, model.console)
+    return console_gate_view(locale=model.locale, dispatch, model.console)
   }
   let file_panel_visible = model.file_panel_visible()
   let terminal_panel_visible = model.terminal_panel_visible()
@@ -1805,8 +1917,14 @@ fn view(
     Chat =>
       match model.chat_column() {
         LoadFailed(message~) =>
-          [conversation_load_failed_view(dispatch, message)]
-        Loading => [conversation_loading_view()]
+          [
+            conversation_load_failed_view(
+              locale=model.locale,
+              dispatch,
+              message,
+            ),
+          ]
+        Loading => [conversation_loading_view(locale=model.locale)]
         Onboarding => [onboarding_view(dispatch, model)]
         Transcript(conversation=conv, ..) =>
           [
@@ -1815,18 +1933,18 @@ fn view(
             ),
             transcript_html,
             if conv.is_archived_read_only() {
-              conv.archived_read_only_view(dispatch)
+              conv.archived_read_only_view(locale=model.locale, dispatch)
             } else if model.scheduled_session_read_only(conv) {
               @html.div(class="composer archived-read-only", [
                 @html.div(class="archived-read-only-bar", [
                   @html.span(
                     class="archived-read-only-text",
-                    "Scheduled task · Read only while running",
+                    shell_text(model.locale, ScheduleReadOnly),
                   ),
                   @html.button(
                     class="archived-read-only-restore",
                     on_click=dispatch(OpenSchedules),
-                    "View task",
+                    shell_text(model.locale, ViewTask),
                   ),
                 ]),
               ])
@@ -1837,6 +1955,7 @@ fn view(
       }
     Codex =>
       model.codex.page(
+        locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         model.focused,
         terminal_panel_visible,
@@ -1878,9 +1997,9 @@ fn view(
     content
   }
   let sidebar_toggle_label = if model.sidebar_open {
-    "Hide sidebar"
+    @sidebar_messages.text(model.locale, HideSidebar)
   } else {
-    "Show sidebar"
+    @sidebar_messages.text(model.locale, ShowSidebar)
   }
   let children : Array[@html.Html] = [
     // Keep reading order aligned with the control's top-left position,
@@ -1907,7 +2026,10 @@ fn view(
     ]),
     // Keep the dialog before conditional overlays: replacing its DOM node
     // would lose showModal state during resize or a notification.
-    model.export_dialog.view(dispatch.map(msg => ExportDialog(msg))),
+    model.export_dialog.view(
+      locale=model.locale,
+      dispatch.map(msg => ExportDialog(msg)),
+    ),
   ]
   // On the narrow layout the sidebar's stable backdrop fades with the drawer;
   // keeping it mounted lets the closing transition finish before it becomes
@@ -1934,7 +2056,7 @@ fn view(
   }
   // The interrupt-confirmation modal floats the same way, above the toasts.
   if model.update_ux is ConfirmingRestart(version~) {
-    children.push(update_confirm_modal(dispatch, version))
+    children.push(update_confirm_modal(locale=model.locale, dispatch, version))
   }
   // The API-setup modal floats above the toasts like the other modals: it
   // owns the screen until the user answers it or a usable endpoint arrives.
@@ -1943,7 +2065,11 @@ fn view(
   }
   if model.project_picker is Some(picker) {
     children.push(
-      @project_picker.view(dispatch.map(msg => ProjectPicker(msg)), picker),
+      @project_picker.view(
+        locale=model.locale,
+        dispatch.map(msg => ProjectPicker(msg)),
+        picker,
+      ),
     )
   }
   if model.archive_confirm is Some(confirm) {
@@ -1953,14 +2079,16 @@ fn view(
         conversation_noun: "chat",
         cancel: dispatch(CancelArchiveDiscard),
         confirm: dispatch(ConfirmArchiveDiscard),
-      }.render(),
+      }.render(locale=model.locale),
     )
   }
   if model.archived_delete_confirm is Some(confirm) {
-    children.push(archived_delete_modal(dispatch, confirm))
+    children.push(archived_delete_modal(locale=model.locale, dispatch, confirm))
   }
   if model.conversation_rename is Some(rename) {
-    children.push(conversation_rename_dialog(dispatch, rename))
+    children.push(
+      conversation_rename_dialog(locale=model.locale, dispatch, rename),
+    )
   }
   // Rendered whether or not the palette is open — closed it is an empty
   // placeholder — so opening it never shifts the overlay children around it.
@@ -1971,7 +2099,7 @@ fn view(
   // so an honest dead-end beats a half-broken UI. The console keeps its last
   // rendered device readable while its topbar and composer show reconnecting.
   if model.is_desktop && model.bridge_state() is BridgeLost(message) {
-    children.push(bridge_lost_overlay(message))
+    children.push(bridge_lost_overlay(locale=model.locale, message))
   }
   @html.div(class=app_shell_class(model.sidebar_open), children)
 }
@@ -1979,10 +2107,16 @@ fn view(
 ///|
 /// The full-screen card shown when the bridge is lost: a plain explanation
 /// and what to do; the only action here is the instruction itself.
-fn bridge_lost_overlay(message : String) -> @html.Html {
+fn bridge_lost_overlay(
+  locale? : @i18n.Locale = English,
+  message : String,
+) -> @html.Html {
   @html.div(class="bridge-lost-backdrop", [
     @html.div(class="bridge-lost-card", [
-      @html.div(class="bridge-lost-title", "Disconnected"),
+      @html.div(
+        class="bridge-lost-title",
+        shell_text(locale, DisconnectedLabel),
+      ),
       @html.div(class="bridge-lost-body", message),
     ]),
   ])
@@ -1993,26 +2127,27 @@ fn bridge_lost_overlay(message : String) -> @html.Html {
 /// restarting tears the engine processes down mid-run. The backdrop and the
 /// Cancel button both keep the current version running.
 fn update_confirm_modal(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   version : String,
 ) -> @html.Html {
   @html.div(class="modal-backdrop", on_click=dispatch(CancelUpdateRestart), [
     @html.div(class="modal", [
-      @html.div(class="modal-title", "Update to \{version}?"),
       @html.div(
-        class="modal-body",
-        "A conversation is still running. Updating restarts the app and interrupts it; the transcript so far is saved.",
+        class="modal-title",
+        dynamic_text(locale, DUpdateQuestion(version.to_string())),
       ),
+      @html.div(class="modal-body", shell_text(locale, InterruptForUpdate)),
       @html.div(class="modal-actions", [
         @html.button(
           class="button secondary",
           on_click=dispatch(CancelUpdateRestart),
-          "Keep working",
+          shell_text(locale, KeepWorking),
         ),
         @html.button(
           class="button primary",
           on_click=dispatch(ConfirmUpdateRestart),
-          "Update and restart",
+          shell_text(locale, UpdateRestart),
         ),
       ]),
     ]),
@@ -2025,16 +2160,16 @@ fn update_confirm_modal(
 /// It is the API settings section lifted out of the page — provider, URL,
 /// and key are configured right here — so it opens over the chat, never
 /// over the Settings form (which already shows the same section), and
-/// disappears the moment a usable endpoint arrives. "Not now" dismisses for
+/// disappears the moment a usable endpoint arrives. shell_text(model.locale, NotNow) dismisses for
 /// the session; the composer's BYOK notice keeps the reminder — and the way
 /// back here — visible. Clicks inside must not bubble to the backdrop, whose
 /// click dismisses.
 fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let title = match model.api_provider {
-    Deepseek => "Set up your DeepSeek API key"
-    Glm => "Set up your GLM API key"
-    OpenRouter => "Set up OpenRouter"
-    Custom => "Set your endpoint URL"
+    Deepseek => shell_text(model.locale, SetupDeepSeek)
+    Glm => shell_text(model.locale, SetupGlm)
+    OpenRouter => shell_text(model.locale, SetupOpenRouter)
+    Custom => shell_text(model.locale, SetupEndpoint)
   }
   @html.div(class="modal-backdrop", on_click=dispatch(DismissApiSetup), [
     @html.div(
@@ -2050,7 +2185,7 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.button(
             class="button secondary",
             on_click=dispatch(DismissApiSetup),
-            "Not now",
+            shell_text(model.locale, NotNow),
           ),
         ]),
       ],
@@ -2067,7 +2202,7 @@ fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     toasts.push(
       @html.div(
         class="notification",
-        title="Dismiss",
+        title=shell_text(model.locale, DismissLabel),
         on_click=dispatch(DismissNotification(toast.id)),
         toast.message,
       ),

@@ -12,6 +12,7 @@
 /// parity), so that chevron stays mouse-only while `toggle` carries keyboard
 /// and screen-reader access from inside the exposed content zone.
 pub struct MarkdownCommentDom {
+  priv localization : @localization.Localization
   outer : @rdom.Element
   priv content : @rdom.Element
   full : @rdom.Element
@@ -28,6 +29,7 @@ pub struct MarkdownCommentDom {
 /// Creates the required outer/content shape for one normalized half-open line
 /// range. Projection and ViewZone registration remain root responsibilities.
 pub fn MarkdownCommentDom::MarkdownCommentDom(
+  localization? : @localization.Localization = @localization.Localization(),
   start_line_number : Int,
   end_line_number_exclusive : Int,
 ) -> MarkdownCommentDom {
@@ -59,8 +61,8 @@ pub fn MarkdownCommentDom::MarkdownCommentDom(
   )
   source_toggle.set_attribute("type", "button")
   source_toggle.set_attribute("aria-pressed", "false")
-  source_toggle.set_attribute("aria-label", "Original source")
-  source_toggle.set_attribute("title", "Show original source")
+  source_toggle.set_attribute("aria-label", localization.text(OriginalSource))
+  source_toggle.set_attribute("title", localization.text(ShowSource))
   // A textual code mark remains legible if the optional codicon font is not
   // installed by an embedder.
   source_toggle.set_inner_html("{ }")
@@ -91,6 +93,7 @@ pub fn MarkdownCommentDom::MarkdownCommentDom(
   outer.append_child(toggle.as_node())
   outer.append_child(content.as_node())
   {
+    localization,
     outer,
     content,
     full,
@@ -118,16 +121,20 @@ pub fn MarkdownCommentDom::enable_source_toggle(
   let apply_state = () => {
     let visible = source_visible.val
     let label = if visible {
-      "Show rendered documentation"
+      self.localization.text(ShowDocumentation)
     } else {
-      "Show original source"
+      self.localization.text(ShowSource)
     }
     self.outer.set_attribute("data-source-visible", visible.to_string())
     self.margin.set_attribute("data-source-visible", visible.to_string())
     self.source_toggle.set_attribute("aria-pressed", visible.to_string())
     self.source_toggle.set_attribute("title", label)
+    self.source_toggle.set_attribute(
+      "aria-label",
+      self.localization.text(OriginalSource),
+    )
   }
-  apply_state()
+  let language_binding = self.localization.bind(_ => apply_state())
   let stop_mouse_down : @rdom.Listener = event => event.stop_propagation()
   let toggle_source : @rdom.Listener = event => {
     event.prevent_default()
@@ -139,6 +146,7 @@ pub fn MarkdownCommentDom::enable_source_toggle(
   self.source_toggle.add_event_listener("mousedown", stop_mouse_down)
   self.source_toggle.add_event_listener("click", toggle_source)
   @base_common.Disposable::from(() => {
+    language_binding.dispose()
     self.source_toggle.remove_event_listener("mousedown", stop_mouse_down)
     self.source_toggle.remove_event_listener("click", toggle_source)
   })
@@ -174,9 +182,9 @@ pub fn MarkdownCommentDom::enable_folding(
   let apply_state = () => {
     let is_expanded = expanded.val
     let label = if is_expanded {
-      "Collapse API documentation"
+      self.localization.text(CollapseDocumentation)
     } else {
-      "Expand API documentation"
+      self.localization.text(ExpandDocumentation)
     }
     self.outer.set_attribute(
       "data-documentation-expanded",
@@ -199,7 +207,7 @@ pub fn MarkdownCommentDom::enable_folding(
     )
     self.margin_toggle.set_attribute("title", label)
   }
-  apply_state()
+  let language_binding = self.localization.bind(_ => apply_state())
   let stop_mouse_down : @rdom.Listener = event => event.stop_propagation()
   let toggle_documentation : @rdom.Listener = event => {
     event.prevent_default()
@@ -213,6 +221,7 @@ pub fn MarkdownCommentDom::enable_folding(
   self.margin_toggle.add_event_listener("mousedown", stop_mouse_down)
   self.margin_toggle.add_event_listener("click", toggle_documentation)
   @base_common.Disposable::from(() => {
+    language_binding.dispose()
     self.toggle.remove_event_listener("mousedown", stop_mouse_down)
     self.toggle.remove_event_listener("click", toggle_documentation)
     self.margin_toggle.remove_event_listener("mousedown", stop_mouse_down)

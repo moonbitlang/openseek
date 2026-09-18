@@ -43,23 +43,50 @@ fn truncate_notification_body(body : String) -> String {
 /// Cancellation is user-initiated and stays quiet. Other terminal statuses
 /// preserve the titles used by the former direct native notification path.
 fn FinishedSystemNotification::title(
+  locale? : @i18n.Locale = English,
   self : FinishedSystemNotification,
 ) -> String? {
   match self.status {
-    "finished" => Some("Task finished")
+    "finished" =>
+      Some(
+        if locale is SimplifiedChinese {
+          "任务已完成"
+        } else {
+          "Task finished"
+        },
+      )
     "cancelled" => None
-    "max_steps_exhausted" => Some("Task stopped at the step limit")
-    _ => Some("Task failed")
+    "max_steps_exhausted" =>
+      Some(
+        if locale is SimplifiedChinese {
+          "任务达到步数上限，已停止"
+        } else {
+          "Task stopped at the step limit"
+        },
+      )
+    _ =>
+      Some(
+        if locale is SimplifiedChinese {
+          "任务失败"
+        } else {
+          "Task failed"
+        },
+      )
   }
 }
 
 ///|
 /// Use the final answer when present and keep the existing fallback otherwise.
 fn FinishedSystemNotification::body(
+  locale? : @i18n.Locale = English,
   self : FinishedSystemNotification,
 ) -> String {
   guard self.answer is Some(answer) && !answer.is_blank() else {
-    return "The conversation is ready for you."
+    return if locale is SimplifiedChinese {
+      "对话已就绪，请查看。"
+    } else {
+      "The conversation is ready for you."
+    }
   }
   truncate_notification_body(answer)
 }
@@ -155,33 +182,45 @@ fn notification_badge_command(
 
 ///|
 fn FinishedSystemNotification::command(
+  locale? : @i18n.Locale = English,
   self : FinishedSystemNotification,
 ) -> @cmd.Cmd {
-  guard self.title() is Some(title) else { return @cmd.none }
-  show_system_notification(title, self.body(), self.run_id)
+  guard self.title(locale~) is Some(title) else { return @cmd.none }
+  show_system_notification(title, self.body(locale~), self.run_id)
 }
 
 ///|
 fn ApprovalSystemNotification::title(
+  locale? : @i18n.Locale = English,
   _self : ApprovalSystemNotification,
 ) -> String {
-  "Permission required"
+  if locale is SimplifiedChinese {
+    "需要授权"
+  } else {
+    "Permission required"
+  }
 }
 
 ///|
 fn ApprovalSystemNotification::body(
+  locale? : @i18n.Locale = English,
   self : ApprovalSystemNotification,
 ) -> String {
   truncate_notification_body(
-    "\{self.tool_name} is asking permission to \{self.detail}",
+    if locale is SimplifiedChinese {
+      "\{self.tool_name} 请求授权：\{self.detail}"
+    } else {
+      "\{self.tool_name} is asking permission to \{self.detail}"
+    },
   )
 }
 
 ///|
 fn ApprovalSystemNotification::command(
+  locale? : @i18n.Locale = English,
   self : ApprovalSystemNotification,
 ) -> @cmd.Cmd {
-  show_system_notification(self.title(), self.body(), self.run_id)
+  show_system_notification(self.title(locale~), self.body(locale~), self.run_id)
 }
 
 ///|

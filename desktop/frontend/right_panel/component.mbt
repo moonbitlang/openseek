@@ -79,14 +79,19 @@ pub(all) struct Actions {
 /// document listeners: app shortcuts, menu dismissal, and URL requests belong
 /// to the root application because their messages all change root state.
 pub fn component(
+  locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
-  let semantic_review = input.map(input => {
-    @fileeditor.semantic_review_view(actions.file_editor, input.file_panel)
+  let semantic_review = input.map2(locale, (input, locale) => {
+    @fileeditor.semantic_review_view(
+      locale~,
+      actions.file_editor,
+      input.file_panel,
+    )
   })
-  input.view2(semantic_review, (input, semantic_review) => {
-    panel_view(input, actions, semantic_review~)
+  input.view3(semantic_review, locale, (input, semantic_review, locale) => {
+    panel_view(locale~, input, actions, semantic_review~)
   })
 }
 

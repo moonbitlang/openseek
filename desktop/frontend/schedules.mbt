@@ -166,27 +166,28 @@ fn schedule_client_now() -> Int64 {
 }
 
 ///|
-fn schedule_time(at : Int64) -> String {
+fn schedule_time(locale? : @i18n.Locale = English, at : Int64) -> String {
   let ctor : @js.Value = @js.globalThis.get_with_string("Date")
   let date : @js.Value = ctor.new([@js.Value::cast_from(at.to_double())])
-  date.apply_with_string("toLocaleString", ([] : FixedArray[@js.Value]))
+  date.apply_with_string("toLocaleString", [@js.Value::cast_from(locale.tag())])
 }
 
 ///|
 fn schedule_form_spec(
+  locale? : @i18n.Locale = English,
   form : ScheduleForm,
 ) -> Result[@protocol.ScheduleSpec, String] {
   let minutes = @string.parse_int(form.minutes) catch {
-    _ => return Err("Enter a whole number of minutes")
+    _ => return Err(ui(locale, MinutesInteger))
   }
   let timeout = @string.parse_int(form.timeout) catch {
-    _ => return Err("Enter a whole number for the timeout")
+    _ => return Err(ui(locale, TimeoutInteger))
   }
   guard minutes >= 1 && minutes <= 525600 && timeout >= 1 && timeout <= 1440 else {
-    return Err("Interval: 1–525600 minutes. Timeout: 1–1440 minutes.")
+    return Err(ui(locale, ScheduleRange))
   }
   guard !form.name.trim().is_empty() && !form.task.trim().is_empty() else {
-    return Err("Enter a name and task")
+    return Err(ui(locale, ScheduleRequired))
   }
   Ok({
     name: form.name.trim().to_owned(),
@@ -258,9 +259,7 @@ fn update_schedules(
             ..model,
             schedules: {
               ..page,
-              error: Some(
-                "The session record is not available yet, or it has been archived. Check the run status and log.",
-              ),
+              error: Some(ui(model.locale, SessionUnavailable)),
             },
           },
         )
@@ -363,7 +362,7 @@ fn update_schedules(
       guard !page.busy && page.form is Some(form) else {
         return (@cmd.none, model)
       }
-      match schedule_form_spec(form) {
+      match schedule_form_spec(locale=model.locale, form) {
         Err(error) =>
           (@cmd.none, { ..model, schedules: { ..page, error: Some(error), }, })
         Ok(spec) =>
@@ -390,11 +389,8 @@ fn update_schedules(
               )
               match reply {
                 Content(content~, ..) => Ok(content)
-                Oversized =>
-                  Err(
-                    "This log is too large to display. Open its saved path with an external viewer.",
-                  )
-                _ => Err("This log is not a text file")
+                Oversized => Err(ui(model.locale, LogTooLarge))
+                _ => Err(ui(model.locale, LogNotText))
               }
             } catch {
               error => Err(@interop.bridge_error_text(error))
@@ -431,9 +427,17 @@ fn update_schedules(
                   log: Some(
                     (
                       path,
-                      "Recorded failure:\n" +
+                      (if model.locale is SimplifiedChinese {
+                        "已记录的失败：\n"
+                      } else {
+                        "Recorded failure:\n"
+                      }) +
                       message +
-                      "\n\nLog could not be read:\n" +
+                      (if model.locale is SimplifiedChinese {
+                        "\n\n无法读取日志：\n"
+                      } else {
+                        "\n\nLog could not be read:\n"
+                      }) +
                       error,
                     ),
                   ),

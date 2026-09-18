@@ -19,23 +19,31 @@ pub(all) struct Actions {
 ///|
 /// The panel body. Always rendered — CSS shows it only while its tab is
 /// active — so the right panel's child order stays structural.
-pub fn panel(runs : Array[Run], actions : Actions) -> @html.Html {
+pub fn panel(
+  locale? : @i18n.Locale = English,
+  runs : Array[Run],
+  actions : Actions,
+) -> @html.Html {
   if runs.is_empty() {
     return @html.div(class="workflow-panel workflow-panel-empty", [
-      @html.p(
-        class="workflow-empty",
-        "No workflows in this conversation yet. A snippet that sets `subrun: true` and runs a workflow will appear here, with a row per subagent.",
-      ),
+      @html.p(class="workflow-empty", ui(locale, EmptyWorkflows)),
     ])
   }
   // Newest run first: the one a reader is most likely watching.
   let ordered = runs.copy()
   ordered.rev_in_place()
-  @html.div(class="workflow-panel", ordered.map(run => run_view(run, actions)))
+  @html.div(
+    class="workflow-panel",
+    ordered.map(run => run_view(locale~, run, actions)),
+  )
 }
 
 ///|
-fn run_view(run : Run, actions : Actions) -> @html.Html {
+fn run_view(
+  locale? : @i18n.Locale = English,
+  run : Run,
+  actions : Actions,
+) -> @html.Html {
   let rows = run.ordered_rows()
   let running = run.running()
   let state = if run.closed {
@@ -47,10 +55,27 @@ fn run_view(run : Run, actions : Actions) -> @html.Html {
   }
   let summary : Array[@html.Html] = [
     @html.span(class="workflow-run-id", run.id),
-    @html.span(class="workflow-run-state workflow-run-state-\{state}", state),
+    @html.span(
+      class="workflow-run-state workflow-run-state-\{state}",
+      if locale is SimplifiedChinese {
+        if run.closed {
+          "已结束"
+        } else if running > 0 {
+          "运行中"
+        } else {
+          "未结束"
+        }
+      } else {
+        state
+      },
+    ),
     @html.span(
       class="workflow-run-count",
-      "\{rows.length()} of \{run.child_count} subagent\{plural(rows.length())}",
+      if locale is SimplifiedChinese {
+        "子智能体 \{rows.length()}/\{run.child_count}"
+      } else {
+        "\{rows.length()} of \{run.child_count} subagent\{plural(rows.length())}"
+      },
     ),
   ]
   if run.tokens() > 0 {
@@ -68,14 +93,19 @@ fn run_view(run : Run, actions : Actions) -> @html.Html {
     @html.header(class="workflow-run-head", summary),
     @html.div(
       class="workflow-rows",
-      rows.map(row => row_view(row, closed=run.closed, actions)),
+      rows.map(row => row_view(locale~, row, closed=run.closed, actions)),
     ),
   ])
 }
 
 ///|
-fn row_view(row : Row, closed~ : Bool, actions : Actions) -> @html.Html {
-  let (status, status_class) = row_status(row, closed~)
+fn row_view(
+  locale? : @i18n.Locale = English,
+  row : Row,
+  closed~ : Bool,
+  actions : Actions,
+) -> @html.Html {
+  let (status, status_class) = row_status(locale~, row, closed~)
   let detail : Array[@html.Html] = []
   if row.phase is Some(phase) {
     detail.push(@html.span(class="workflow-row-phase", phase))
@@ -84,7 +114,11 @@ fn row_view(row : Row, closed~ : Bool, actions : Actions) -> @html.Html {
     detail.push(
       @html.span(
         class="workflow-row-steps",
-        "\{row.steps} step\{plural(row.steps)}",
+        if locale is SimplifiedChinese {
+          "\{row.steps} 步"
+        } else {
+          "\{row.steps} step\{plural(row.steps)}"
+        },
       ),
     )
   }
@@ -107,7 +141,11 @@ fn row_view(row : Row, closed~ : Bool, actions : Actions) -> @html.Html {
   let label = if row.label.is_empty() { row.child } else { row.label }
   @html.button(
     class="workflow-row workflow-row-\{status_class}",
-    title="Open \{row.child}",
+    title=if locale is SimplifiedChinese {
+      "打开 \{row.child}"
+    } else {
+      "Open \{row.child}"
+    },
     on_click=(actions.open_child)(row.child),
     [
       @html.span(class="workflow-row-mark", ""),

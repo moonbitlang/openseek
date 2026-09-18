@@ -24,6 +24,7 @@ pub extend DiffEditorRevealEvent with Debug::{to_repr}
 /// diff ViewModel. Product-specific algorithm controls and document
 /// presentation routing are intentionally outside this package.
 pub struct DiffEditorWidget {
+  priv localization : @localization.Localization
   host : @rdom.Element
   root : @rdom.Element
   panes : @rdom.Element
@@ -138,11 +139,14 @@ pub fn DiffEditorWidget::create(
   options? : DiffEditorOptions = DiffEditorOptions::default(),
   provider : &@diff.DocumentDiffProvider,
 ) -> DiffEditorWidget {
+  let localization = services
+    .map(s => s.localization())
+    .unwrap_or(@localization.Localization())
   let document = @rdom.document()
   let root = document.create_element("section")
   root.set_attribute("class", "moonbit-diff-editor")
   root.set_attribute("role", "region")
-  root.set_attribute("aria-label", "File comparison")
+  root.set_attribute("aria-label", localization.text(FileComparison))
   let panes = document.create_element("div")
   panes.set_attribute("class", "moonbit-diff-editor-panes")
   let original_host = document.create_element("div")
@@ -150,11 +154,11 @@ pub fn DiffEditorWidget::create(
     "class", "moonbit-diff-editor-pane moonbit-diff-editor-original",
   )
   original_host.set_attribute("role", "group")
-  original_host.set_attribute("aria-label", "Original file")
+  original_host.set_attribute("aria-label", localization.text(OriginalFile))
   let sash = document.create_element("div")
   sash.set_attribute("class", "moonbit-diff-editor-sash")
   sash.set_attribute("role", "separator")
-  sash.set_attribute("aria-label", "Resize diff panes")
+  sash.set_attribute("aria-label", localization.text(ResizeDiffPanes))
   sash.set_attribute("aria-orientation", "vertical")
   sash.set_attribute("aria-valuemin", "10")
   sash.set_attribute("aria-valuemax", "90")
@@ -164,7 +168,7 @@ pub fn DiffEditorWidget::create(
     "class", "moonbit-diff-editor-pane moonbit-diff-editor-modified",
   )
   modified_host.set_attribute("role", "group")
-  modified_host.set_attribute("aria-label", "Modified file")
+  modified_host.set_attribute("aria-label", localization.text(ModifiedFile))
   panes.append_child(original_host.as_node())
   panes.append_child(sash.as_node())
   panes.append_child(modified_host.as_node())
@@ -204,6 +208,7 @@ pub fn DiffEditorWidget::create(
     ignore_trim_whitespace: options.ignore_trim_whitespace,
   })
   let widget : DiffEditorWidget = {
+    localization,
     host,
     root,
     panes,
@@ -256,6 +261,14 @@ pub fn DiffEditorWidget::create(
     pending_modified_scroll_left_echo: None,
     disposed: false,
   }
+  widget.lifetime.push(
+    localization.bind(_ => {
+      root.set_attribute("aria-label", localization.text(FileComparison))
+      original_host.set_attribute("aria-label", localization.text(OriginalFile))
+      modified_host.set_attribute("aria-label", localization.text(ModifiedFile))
+      sash.set_attribute("aria-label", localization.text(ResizeDiffPanes))
+    }),
+  )
   widget.install_event_bridges()
   // Establish accessibility/visibility attributes even when the initial host
   // is display:none and therefore has no valid layout transaction yet.
@@ -1116,9 +1129,9 @@ fn DiffEditorWidget::sync_failure_diagnostic(self : DiffEditorWidget) -> Unit {
   match self.view_model.get_failure_diagnostic() {
     Some(diagnostic) => {
       let message = if diagnostic == "provider error" {
-        "Unable to compute this diff."
+        self.localization.text(CannotComputeDiff)
       } else {
-        "The diff provider returned an invalid result."
+        self.localization.text(InvalidDiff)
       }
       self.root.set_attribute("data-diff-failure", diagnostic)
       self.status.remove_attribute("hidden")
@@ -1653,10 +1666,24 @@ fn diff_navigation_reveal_plan(
 
 ///|
 fn navigation_range_announcement(
+  language? : @localization.Language = English,
   side : String,
   empty_kind : String,
   range : @base_common.LineRange,
 ) -> String {
+  if language is SimplifiedChinese {
+    let side = if side == "original" {
+      "原始内容"
+    } else {
+      "修改后内容"
+    }
+    return if range.is_empty() {
+      let kind = if empty_kind == "insertion" { "插入" } else { "删除" }
+      "\{side}的\{kind}位置在第 \{range.start_line_number} 行"
+    } else {
+      "\{side}第 \{range.start_line_number} 至 \{range.end_line_number_exclusive - 1} 行"
+    }
+  }
   if range.is_empty() {
     "\{side} \{empty_kind} anchor at line \{range.start_line_number}"
   } else {
@@ -1666,12 +1693,29 @@ fn navigation_range_announcement(
 }
 
 ///|
-fn diff_navigation_announcement(target : DiffNavigationTarget) -> String {
+fn diff_navigation_announcement(
+  language? : @localization.Language = English,
+  target : DiffNavigationTarget,
+) -> String {
   let change = target.change
-  "Change \{target.change_index + 1} of \{target.change_count}; " +
-  navigation_range_announcement("original", "insertion", change.original) +
+  (if language is SimplifiedChinese {
+    "第 \{target.change_index + 1} 处更改，共 \{target.change_count} 处；"
+  } else {
+    "Change \{target.change_index + 1} of \{target.change_count}; "
+  }) +
+  navigation_range_announcement(
+    language~,
+    "original",
+    "insertion",
+    change.original,
+  ) +
   "; " +
-  navigation_range_announcement("modified", "deletion", change.modified)
+  navigation_range_announcement(
+    language~,
+    "modified",
+    "deletion",
+    change.modified,
+  )
 }
 
 ///|
@@ -1679,7 +1723,9 @@ fn DiffEditorWidget::announce_navigation_target(
   self : DiffEditorWidget,
   target : DiffNavigationTarget,
 ) -> Unit {
-  self.live_region.set_inner_html(diff_navigation_announcement(target))
+  self.live_region.set_inner_html(
+    diff_navigation_announcement(language=self.localization.language(), target),
+  )
 }
 
 ///|
@@ -1935,7 +1981,10 @@ fn DiffEditorWidget::apply_layout_dom(self : DiffEditorWidget) -> Unit {
         self.sash.set_attribute("aria-hidden", "true")
         self.sash.remove_attribute("tabindex")
       }
-      self.modified_host.set_attribute("aria-label", "Modified file")
+      self.modified_host.set_attribute(
+        "aria-label",
+        self.localization.text(ModifiedFile),
+      )
       self.original_host.set_attribute(
         "style",
         "flex-basis: \{ratio * 100.0}%;",
@@ -1955,7 +2004,10 @@ fn DiffEditorWidget::apply_layout_dom(self : DiffEditorWidget) -> Unit {
       self.sash.set_attribute("hidden", "")
       self.sash.set_attribute("aria-hidden", "true")
       self.sash.remove_attribute("tabindex")
-      self.modified_host.set_attribute("aria-label", "Modified file")
+      self.modified_host.set_attribute(
+        "aria-label",
+        self.localization.text(ModifiedFile),
+      )
       let overview_width = if self.options.overview_ruler { 30.0 } else { 0.0 }
       let panes_width = (self.layout_state.width -
       overview_width -

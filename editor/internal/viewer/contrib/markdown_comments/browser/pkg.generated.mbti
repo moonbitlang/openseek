@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/dom",
   "moonbitlang/core/ref",
   "moonbitlang/editor/base/common",
+  "moonbitlang/editor/viewer/common/localization",
 }
 
 // Values
@@ -20,7 +21,7 @@ pub struct MarkdownCommentDom {
   margin : @dom.Element
   // private fields
 }
-pub fn MarkdownCommentDom::MarkdownCommentDom(Int, Int) -> Self
+pub fn MarkdownCommentDom::MarkdownCommentDom(localization? : @localization.Localization, Int, Int) -> Self
 pub fn MarkdownCommentDom::disable_folding(Self) -> Unit
 pub fn MarkdownCommentDom::enable_folding(Self, @ref.Ref[Bool], () -> Unit) -> @common.Disposable
 pub fn MarkdownCommentDom::enable_source_toggle(Self, @ref.Ref[Bool], () -> Unit) -> @common.Disposable

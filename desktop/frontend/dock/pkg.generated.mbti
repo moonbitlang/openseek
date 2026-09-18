@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
 }
@@ -21,7 +22,7 @@ pub fn file_paths(State) -> Array[@common.Uri]
 
 pub fn history_diffs(State) -> Array[GitHistoryDiff]
 
-pub fn launcher_pane(LauncherActions) -> @html.Html
+pub fn launcher_pane(locale? : @i18n.Locale, LauncherActions) -> @html.Html
 
 pub fn open_browser(State, Int) -> State
 
@@ -39,7 +40,7 @@ pub fn resolve_pick(State, @common.Uri) -> State
 
 pub fn sync(State, @interop.ConversationKey) -> State
 
-pub fn tabs_bar(@cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, close_menu~ : @cmd.Cmd, close_all_tabs~ : @cmd.Cmd, close_all_tabs_disabled~ : Bool, toggle_expanded~ : @cmd.Cmd, toggle_panel~ : @cmd.Cmd) -> @html.Html
+pub fn tabs_bar(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, close_menu~ : @cmd.Cmd, close_all_tabs~ : @cmd.Cmd, close_all_tabs_disabled~ : Bool, toggle_expanded~ : @cmd.Cmd, toggle_panel~ : @cmd.Cmd) -> @html.Html
 
 pub fn update(Msg, State) -> State
 

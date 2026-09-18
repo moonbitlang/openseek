@@ -1,0 +1,5 @@
+import {
+  "openseek_desktop/frontend/i18n",
+}
+
+supported_targets = "js"

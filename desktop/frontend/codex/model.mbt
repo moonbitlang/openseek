@@ -122,7 +122,7 @@ priv struct CodexReasoningEffort {
 ///|
 priv struct CodexThreadRow {
   id : String
-  title : String
+  title : String?
   cwd : String?
   project_root : String?
   worktree : CodexWorktree?
@@ -202,7 +202,7 @@ fn CodexTurn::items_authoritative(self : CodexTurn) -> Bool {
 ///|
 priv struct CodexThread {
   id : String
-  title : String
+  title : String?
   cwd : String?
   project_root : String?
   worktree : CodexWorktree?
@@ -795,7 +795,10 @@ pub enum CodexModelListing {
 }
 
 ///|
-pub fn State::model_listing(self : State) -> CodexModelListing {
+pub fn State::model_listing(
+  locale? : @i18n.Locale = English,
+  self : State,
+) -> CodexModelListing {
   if !self.models.is_empty() {
     let options = self.models.map(model => @composer.ModelOption::{
       value: model.id,
@@ -806,13 +809,14 @@ pub fn State::model_listing(self : State) -> CodexModelListing {
     return CodexModels(options, selected=self.selected_model)
   }
   match self.connection {
-    CodexStarting => CodexModelsUnavailable("Codex — connecting…")
-    CodexUnavailable(_) => CodexModelsUnavailable("Codex unavailable")
+    CodexStarting => CodexModelsUnavailable(model_text(locale, Connecting))
+    CodexUnavailable(_) =>
+      CodexModelsUnavailable(model_text(locale, Unavailable))
     CodexReady =>
       if self.account is CodexSignedOut(_) {
-        CodexModelsUnavailable("Sign in to Codex…")
+        CodexModelsUnavailable(model_text(locale, SignIn))
       } else {
-        CodexModelsUnavailable("Codex — loading models…")
+        CodexModelsUnavailable(model_text(locale, LoadingModels))
       }
   }
 }
@@ -1401,19 +1405,19 @@ fn CodexThread::placement(
 }
 
 ///|
-fn CodexThreadRow::title(fields : Map[String, Json]) -> String {
+fn CodexThreadRow::title(fields : Map[String, Json]) -> String? {
   let title = @jsonx.json_text(fields, "name").unwrap_or("").trim().to_owned()
   if !title.is_empty() {
-    return title
+    return Some(title)
   }
   let preview = @jsonx.json_text(fields, "preview")
     .unwrap_or("")
     .trim()
     .to_owned()
   if preview.is_empty() {
-    "New chat"
+    None
   } else {
-    preview
+    Some(preview)
   }
 }
 
@@ -2229,7 +2233,10 @@ fn State::with_notification(
   let next = match method_ {
     "thread/name/updated" =>
       if @jsonx.json_text(fields, "name") is Some(title) {
-        { ..observed, selection: CodexStoredTask({ ..active, title, }), }
+        {
+          ..observed,
+          selection: CodexStoredTask({ ..active, title: Some(title), }),
+        }
       } else {
         observed
       }
@@ -2425,7 +2432,10 @@ fn CodexPendingRequest::response(
 }
 
 ///|
-fn CodexItem::text(self : CodexItem) -> String {
+fn CodexItem::text(
+  locale? : @i18n.Locale = English,
+  self : CodexItem,
+) -> String {
   let streamed = self.streamed
   guard self.value is Object(fields) else { return self.value.stringify() }
   match self.kind {
@@ -2497,7 +2507,9 @@ fn CodexItem::text(self : CodexItem) -> String {
         }
       }
     "commandExecution" => {
-      let command = @jsonx.json_text(fields, "command").unwrap_or("Command")
+      let command = @jsonx.json_text(fields, "command").unwrap_or(
+        model_text(locale, CommandLabel),
+      )
       let output = @jsonx.json_text(fields, "aggregatedOutput").unwrap_or(
         streamed,
       )
@@ -2511,14 +2523,16 @@ fn CodexItem::text(self : CodexItem) -> String {
       fields
       .get("changes")
       .map(value => value.stringify())
-      .unwrap_or("File changes")
+      .unwrap_or(model_text(locale, FileChanges))
     "webSearch" =>
-      "Web search: " + @jsonx.json_text(fields, "query").unwrap_or("")
+      model_text(locale, WebSearch) +
+      @jsonx.json_text(fields, "query").unwrap_or("")
     "imageView" =>
-      "Viewed image: " + @jsonx.json_text(fields, "path").unwrap_or("")
+      model_text(locale, ViewedImagePrefix) +
+      @jsonx.json_text(fields, "path").unwrap_or("")
     "enteredReviewMode" | "exitedReviewMode" =>
       @jsonx.json_text(fields, "review").unwrap_or(self.kind)
-    "contextCompaction" => "Compacted conversation context"
+    "contextCompaction" => model_text(locale, Compacted)
     _ => self.value.stringify()
   }
 }
@@ -2527,7 +2541,10 @@ fn CodexItem::text(self : CodexItem) -> String {
 /// Convert one app-server semantic item into the display model consumed by
 /// OpenSeek's transcript renderer. This is the only place that knows both
 /// vocabularies; the shared view never switches on Codex JSON item names.
-fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
+fn CodexItem::transcript_item(
+  locale? : @i18n.Locale = English,
+  self : CodexItem,
+) -> @transcript.TranscriptItem {
   // Every app-server item is one response-shaped item: prose, a thought, or
   // one tool call, each with the other two parts empty. Codex commits them
   // separately, so they are never folded into one numbered step.
@@ -2557,11 +2574,11 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
           }
         }
       }
-      @transcript.User(text=self.text(), images~)
+      @transcript.User(text=self.text(locale~), images~)
     }
-    "agentMessage" | "plan" => response(None, Some(self.text()), [])
-    "reasoning" => response(Some(self.text()), None, [])
-    "contextCompaction" => @transcript.Summary(self.text())
+    "agentMessage" | "plan" => response(None, Some(self.text(locale~)), [])
+    "reasoning" => response(Some(self.text(locale~)), None, [])
+    "contextCompaction" => @transcript.Summary(self.text(locale~))
     _ => {
       // A command still running may have streamed part of its output; the
       // app-server reports nothing at all as an empty string.
@@ -2570,7 +2587,7 @@ fn CodexItem::transcript_item(self : CodexItem) -> @transcript.TranscriptItem {
         Done(
           content=output,
           is_error=self.tool_failed(),
-          brief=self.tool_brief(),
+          brief=self.tool_brief(locale~),
         )
       } else if output.is_empty() {
         Pending(output=None)
@@ -2722,29 +2739,34 @@ fn CodexItem::tool_output(self : CodexItem) -> String {
 ///|
 /// The activity summary owns the count (for example "Ran 2 commands"); this
 /// brief labels the individual expandable row underneath it.
-fn CodexItem::tool_brief(self : CodexItem) -> String? {
+fn CodexItem::tool_brief(
+  locale? : @i18n.Locale = English,
+  self : CodexItem,
+) -> String? {
   guard self.value is Object(fields) else { return Some(self.kind) }
   Some(
     match self.kind {
       "commandExecution" =>
-        @jsonx.json_text(fields, "command").unwrap_or("Command")
-      "fileChange" => "Changed files"
-      "webSearch" => "Searched the web"
-      "imageView" => "Viewed image"
-      "imageGeneration" => "Generate image"
-      "sleep" => "Wait"
-      "enteredReviewMode" => "Entered review mode"
-      "exitedReviewMode" => "Exited review mode"
+        @jsonx.json_text(fields, "command").unwrap_or(
+          model_text(locale, CommandLabel),
+        )
+      "fileChange" => model_text(locale, ChangedFiles)
+      "webSearch" => model_text(locale, SearchedWeb)
+      "imageView" => model_text(locale, ViewedImage)
+      "imageGeneration" => model_text(locale, GenerateImage)
+      "sleep" => model_text(locale, WaitLabel)
+      "enteredReviewMode" => model_text(locale, EnteredReview)
+      "exitedReviewMode" => model_text(locale, ExitedReview)
       "collabAgentToolCall" =>
         match self.tool_name() {
-          "spawn_agent" => "Create subagent"
-          "wait_agent" => "Wait for subagents"
-          "send_input" | "send_message" => "Send message to subagent"
-          "resume_agent" => "Resume subagent"
-          "followup_task" => "Assign subagent task"
-          "interrupt_agent" => "Stop subagent"
-          "close_agent" => "Close subagent"
-          "list_agents" => "List subagents"
+          "spawn_agent" => model_text(locale, CreateSubagent)
+          "wait_agent" => model_text(locale, WaitSubagents)
+          "send_input" | "send_message" => model_text(locale, SendSubagent)
+          "resume_agent" => model_text(locale, ResumeSubagent)
+          "followup_task" => model_text(locale, AssignSubagent)
+          "interrupt_agent" => model_text(locale, StopSubagent)
+          "close_agent" => model_text(locale, CloseSubagent)
+          "list_agents" => model_text(locale, ListSubagents)
           name => name
         }
       _ => self.tool_name()
@@ -2757,6 +2779,7 @@ fn CodexItem::tool_brief(self : CodexItem) -> String? {
 /// view used for OpenSeek. Notices and per-turn failures become ordinary
 /// danger messages, so Codex does not need a parallel banner/message layout.
 pub fn State::transcript_items(
+  locale? : @i18n.Locale = English,
   self : State,
 ) -> Array[@transcript.TranscriptItem] {
   let items : Array[@transcript.TranscriptItem] = []
@@ -2789,7 +2812,7 @@ pub fn State::transcript_items(
         }
       }
       for item in turn.items {
-        let transcript_item = item.transcript_item()
+        let transcript_item = item.transcript_item(locale~)
         let transcript_item = if final_id == Some(item.id) &&
           transcript_item.kind
           is @transcript.Assistant(reasoning~, prose~, calls~, replay~, ..) {
@@ -3157,7 +3180,7 @@ test "Codex thread replies are visible before catalog refresh" {
   )
   assert_eq(state.threads.length(), 1)
   assert_eq(state.threads[0].id, "thread-1")
-  assert_eq(state.threads[0].title, "Smoke test")
+  assert_eq(state.threads[0].title, Some("Smoke test"))
   assert_eq(state.threads[0].project_root, Some("/project"))
   assert_eq(state.worktree_launch_workspace(@interop.ChannelId::Local), None)
   let external_worktree = State().with_thread_reply(
@@ -3245,7 +3268,7 @@ test "opening a Codex conversation preserves its catalog position" {
   assert_eq(opened.threads.map(thread => thread.id), [
     "thread-new", "thread-middle", "thread-old",
   ])
-  assert_eq(opened.threads[1].title, "Middle refreshed")
+  assert_eq(opened.threads[1].title, Some("Middle refreshed"))
 }
 
 ///|

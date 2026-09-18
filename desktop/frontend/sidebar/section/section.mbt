@@ -164,6 +164,7 @@ fn Actions::entry_component(
   self : Actions,
   _key : String,
   input : @rabbita.Val[Entry],
+  locale : @rabbita.Val[@i18n.Locale],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   input.switch_by(
     entry => {
@@ -175,7 +176,7 @@ fn Actions::entry_component(
               _ => initial
             }
           })
-          @project.component(project_input, self.project)
+          @project.component(project_input, self.project, locale)
         }
         Conversation(initial) => {
           let conversation_input = input.map(entry => {
@@ -184,7 +185,7 @@ fn Actions::entry_component(
               _ => initial
             }
           })
-          @conversation.component(conversation_input, self.conversation)
+          @conversation.component(locale, conversation_input, self.conversation)
         }
         Placeholder(initial) => {
           let placeholder_input = input.map(entry => {
@@ -208,6 +209,7 @@ fn Actions::entry_component(
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
+  locale : @rabbita.Val[@i18n.Locale],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
@@ -247,12 +249,20 @@ pub fn component(
       }
     },
   )
-  let entry_inputs = input.map(input => @vector.from_array(input.entries))
+  let entry_inputs = input.map2(locale, (input, locale) => {
+    @vector.from_array(input.entries.map(entry => (locale, entry)))
+  })
   let entry_rows = entry_inputs.assoc_by(
-    (key, entry) => actions.entry_component(key, entry),
-    by=entry => entry.key(),
+    (key, entry) => {
+      actions.entry_component(
+        key,
+        entry.map(pair => pair.1),
+        entry.map(pair => pair.0),
+      )
+    },
+    by=entry => entry.1.key(),
   )
-  state.map3(input, entry_rows, (state, input, entry_rows) => {
+  state.map4(input, entry_rows, locale, (state, input, entry_rows, locale) => {
     let collapsed = state.folded(input)
     let mut class = if collapsed {
       "sidebar-heading section-heading collapsible collapsed"
@@ -320,9 +330,9 @@ pub fn component(
             @html.button(
               class="project-show-more",
               type_="button",
-              title="Show more in \{input.label}",
+              title=@messages.text(locale, ShowMoreIn(input.label)),
               on_click=emit(ShowMore),
-              "Show more",
+              @messages.text(locale, ShowMore),
             ),
           ),
         )

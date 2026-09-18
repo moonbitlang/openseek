@@ -726,6 +726,25 @@ pub let app_open_devtools : Command[
 ] = Command("app.open_devtools")
 
 ///|
+pub let app_language_get : Command[
+  @protocol.EmptyPayload,
+  @protocol.UiLanguagePreference,
+] = Command("app.language_get")
+
+///|
+pub let app_language_set : Command[
+  @protocol.UiLanguagePreference,
+  @protocol.EmptyReply,
+] = Command("app.language_set")
+
+///|
+/// Apply the resolved window language without changing its saved preference.
+pub let app_language_apply : Command[
+  @protocol.UiLanguagePreference,
+  @protocol.EmptyReply,
+] = Command("app.language_apply")
+
+///|
 /// Close this desktop window through its ordinary native close lifecycle.
 pub let app_close_window : Command[@protocol.EmptyPayload, @protocol.EmptyReply] = Command(
   "app.close_window",

@@ -247,13 +247,30 @@ fn ChangedFile::selectable(self : ChangedFile) -> Bool {
 
 ///|
 /// Explain why an informative row cannot use the ordinary file reader.
-fn ChangedFile::unselectable_title(self : ChangedFile) -> String {
+fn ChangedFile::unselectable_title(
+  locale? : @i18n.Locale = English,
+  self : ChangedFile,
+) -> String {
   let reason = if self.kind is ChangeSubmodule {
-    "Git submodule; open its nested checkout separately"
+    if locale is SimplifiedChinese {
+      "Git 子模块；请单独打开其检出目录"
+    } else {
+      "Git submodule; open its nested checkout separately"
+    }
   } else if self.kind is ChangeSymlink {
-    "Git symlink; opening its target is disabled"
+    if locale is SimplifiedChinese {
+      "Git 符号链接；无法打开其目标"
+    } else {
+      "Git symlink; opening its target is disabled"
+    }
   } else if self.path.0.has_suffix("/") {
-    "untracked directory; open its nested checkout separately"
+    if locale is SimplifiedChinese {
+      "未跟踪的目录；请单独打开其检出目录"
+    } else {
+      "untracked directory; open its nested checkout separately"
+    }
+  } else if locale is SimplifiedChinese {
+    "无法预览此更改"
   } else {
     "change cannot be previewed"
   }

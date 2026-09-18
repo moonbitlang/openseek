@@ -4,6 +4,7 @@
 
 ///|
 pub fn update(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
   state : State,
@@ -364,7 +365,7 @@ pub fn update(
               _ => {
                 next = {
                   ..next,
-                  notice: "Codex archive: malformed dirty-worktree reply",
+                  notice: notice_text(locale, ArchiveMalformed),
                 }
                 return (@cmd.none, next)
               }
@@ -378,10 +379,7 @@ pub fn update(
               is Some("archived_worktree_retained")
             next = next.without_thread(thread_id)
             if retained {
-              next = {
-                ..next,
-                notice: "Codex task archived, but its worktree was retained because new local changes appeared during archiving.",
-              }
+              next = { ..next, notice: notice_text(locale, ArchiveRetained), }
             }
             let (refresh, refreshed) = next.refresh_catalog(dispatch, channel)
             cmd = refresh
@@ -413,32 +411,33 @@ pub fn update(
         return (@cmd.none, state)
       }
       let subject = match kind {
-        CodexStatusReply => "Codex status"
-        CodexRequestsReply => "Codex requests"
-        CodexAccountReply => "Codex account"
-        CodexModelsReply => "Codex models"
+        CodexStatusReply => notice_text(locale, StatusNotice)
+        CodexRequestsReply => notice_text(locale, RequestsNotice)
+        CodexAccountReply => notice_text(locale, AccountNotice)
+        CodexModelsReply => notice_text(locale, ModelsNotice)
         CodexThreadsReply(context) =>
           if context.archived {
-            "Archived Codex threads"
+            notice_text(locale, ArchivedNotice)
           } else {
-            "Codex threads"
+            notice_text(locale, ThreadsNotice)
           }
-        CodexDraftOpenReply(_) => "Codex draft"
-        CodexThreadReply(_, _) | CodexDraftThreadReply(_) => "Codex thread"
+        CodexDraftOpenReply(_) => notice_text(locale, DraftNotice)
+        CodexThreadReply(_, _) | CodexDraftThreadReply(_) =>
+          notice_text(locale, ThreadNotice)
         CodexTurnStartReply(_)
         | CodexTurnSteerReply(_)
-        | CodexWorktreeTurnReply(_, _) => "Codex turn"
-        CodexWorktreeRepairReply(_, _) => "Codex worktree rebuild"
-        CodexLoginReply => "Codex sign-in"
-        CodexArchiveReply(_) => "Codex archive"
-        CodexUnarchiveReply(_) => "Codex restore"
-        CodexCompactReply(_, _) => "Codex compact"
-        CodexReviewReply(_, _) => "Codex review"
-        CodexResumeReply(_) => "Codex resume"
-        CodexInterruptReply => "Codex interrupt"
-        CodexCancelLoginReply(_) => "Codex sign-in cancellation"
-        CodexLogoutReply => "Codex sign-out"
-        CodexApprovalReply => "Codex response"
+        | CodexWorktreeTurnReply(_, _) => notice_text(locale, TurnNotice)
+        CodexWorktreeRepairReply(_, _) => notice_text(locale, RepairNotice)
+        CodexLoginReply => notice_text(locale, LoginNotice)
+        CodexArchiveReply(_) => notice_text(locale, ArchiveNotice)
+        CodexUnarchiveReply(_) => notice_text(locale, RestoreNotice)
+        CodexCompactReply(_, _) => notice_text(locale, CompactNotice)
+        CodexReviewReply(_, _) => notice_text(locale, ReviewNotice)
+        CodexResumeReply(_) => notice_text(locale, ResumeNotice)
+        CodexInterruptReply => notice_text(locale, InterruptNotice)
+        CodexCancelLoginReply(_) => notice_text(locale, CancelLoginNotice)
+        CodexLogoutReply => notice_text(locale, LogoutNotice)
+        CodexApprovalReply => notice_text(locale, ApprovalNotice)
       }
       let owns_foreground = state.owns_foreground(kind)
       let settled = if owns_foreground {

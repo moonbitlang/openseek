@@ -45,6 +45,7 @@ fn MarkdownSemanticDomLifetime::dispose(
 /// root Viewer; this value owns only presentation DOM, the retained same-parse
 /// projection, and listeners whose lifetime is one model attachment.
 struct MarkdownDocumentView {
+  localization : @localization.Localization
   root : @rdom.Element
   viewport : @rdom.Element
   article : @rdom.Element
@@ -76,6 +77,7 @@ fn markdown_document_root_class(show_unused : Bool) -> String {
 
 ///|
 pub fn MarkdownDocumentView::MarkdownDocumentView(
+  localization? : @localization.Localization = @localization.Localization(),
   source : String,
   source_model_version : Int,
   language_id : String,
@@ -126,6 +128,7 @@ pub fn MarkdownDocumentView::MarkdownDocumentView(
     source, language_id, base_uri, resource_kind, theme, article, on_size_changed,
   )
   let view : MarkdownDocumentView = {
+    localization,
     root,
     viewport,
     article,
@@ -149,6 +152,7 @@ pub fn MarkdownDocumentView::MarkdownDocumentView(
     on_toc_navigate: _ => (),
     disposed: false,
   }
+  view.listeners.push(localization.bind(_ => view.refresh_localized_labels()))
   view.post_render()
   // One delegated listener owns every fold-toggle click for the view's whole
   // lifetime: the article element survives projection replacements even
@@ -441,6 +445,7 @@ fn MarkdownDocumentView::listen(
 /// every article replacement; later semantic listeners and registries attach
 /// here without creating a second parse or a parallel replacement path.
 fn MarkdownDocumentView::post_render(self : MarkdownDocumentView) -> Unit {
+  self.refresh_localized_labels()
   self.semantic_dom.dispose()
   let semantic_dom = MarkdownSemanticDomLifetime::empty()
   let children = self.article.get_children()
@@ -753,9 +758,9 @@ pub fn MarkdownDocumentView::install_section_fold_controls(
           }
         }
         let (collapsed, expanded, label) = if control.collapsed {
-          ("true", "false", "Expand section")
+          ("true", "false", self.localization.text(ExpandSection))
         } else {
-          ("false", "true", "Collapse section")
+          ("false", "true", self.localization.text(CollapseSection))
         }
         button.set_attribute(
           "data-markdown-fold-section",
@@ -1148,17 +1153,49 @@ pub fn MarkdownDocumentView::set_toc_entries(
   }
   if entries.length() >= 3 {
     self.toc_nav.set_attribute("data-toc-visible", "true")
-    self.toc_toggle.set_attribute(
-      "aria-label",
-      "Contents, \{entries.length()} sections",
-    )
-    // textContent assignment already replaces every child.
-    self.toc_toggle.set_property(
-      "textContent",
-      @js.Value::cast_from("Contents \u{00b7} \{entries.length()}"),
-    )
+    self.refresh_localized_labels()
   } else {
     self.toc_nav.set_attribute("data-toc-visible", "false")
+  }
+}
+
+///|
+fn MarkdownDocumentView::refresh_localized_labels(
+  self : MarkdownDocumentView,
+) -> Unit {
+  self.root.set_attribute(
+    "aria-label",
+    self.localization.text(ReadonlyMarkdown),
+  )
+  self.toc_nav.set_attribute(
+    "aria-label",
+    self.localization.text(TableOfContents),
+  )
+  let count = self.toc_list.get_children().length()
+  let (label, title) = match self.localization.language() {
+    English => ("Contents, \{count} sections", "Contents · \{count}")
+    SimplifiedChinese => ("目录，共 \{count} 节", "目录 · \{count}")
+  }
+  self.toc_toggle.set_attribute("aria-label", label)
+  self.toc_toggle.set_property("textContent", @js.Value::cast_from(title))
+  let children = self.article.get_children()
+  for index in 0..<children.length() {
+    let child = children.item(index.to_double()).unwrap()
+    if child.query_selector(markdown_fold_toggle_selector) is Some(button) {
+      button.set_attribute(
+        "aria-label",
+        self.localization.text(
+          if button.get_attribute("data-collapsed") == Some("true") {
+            ExpandSection
+          } else {
+            CollapseSection
+          },
+        ),
+      )
+    }
+    if child.get_attribute("data-markdown-phrase-divider") is Some(_) {
+      child.set_attribute("aria-label", self.localization.text(ItemSeparator))
+    }
   }
 }
 

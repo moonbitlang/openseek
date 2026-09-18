@@ -10,6 +10,7 @@ import {
   "moonbitlang/editor/viewer/diff_provider/moondiff",
   "openseek_desktop/frontend/dock",
   "openseek_desktop/frontend/grep_search",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/pathx",
@@ -25,13 +26,15 @@ pub fn apply_font_family(String) -> @cmd.Cmd
 
 pub fn apply_font_size(Double) -> @cmd.Cmd
 
+pub fn apply_language(@i18n.Locale) -> @cmd.Cmd
+
 pub fn apply_theme(String) -> @cmd.Cmd
 
 pub fn basename(@pathx.Relative) -> String
 
-pub fn body_view(@cmd.Emit[Msg], State, Ctx, semantic_review? : @html.Html) -> @html.Html
+pub fn body_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, semantic_review? : @html.Html) -> @html.Html
 
-pub fn breadcrumb_view(@cmd.Emit[Msg], State, Ctx, reveal? : (String, @cmd.Cmd)?) -> @html.Html
+pub fn breadcrumb_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, reveal? : (String, @cmd.Cmd)?) -> @html.Html
 
 pub fn close_document(@cmd.Emit[Msg], State, Ctx, @common.Uri, next~ : @common.Uri?, was_active~ : Bool) -> (@cmd.Cmd, State)
 
@@ -57,7 +60,7 @@ pub fn request_viewer_remeasure() -> @cmd.Cmd
 
 pub fn resize_handle_view() -> @html.Html
 
-pub fn semantic_review_view(@cmd.Emit[Msg], State) -> @html.Html
+pub fn semantic_review_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State) -> @html.Html
 
 pub fn subscriptions(State, Ctx, @cmd.Emit[Msg]) -> @sub.Sub
 

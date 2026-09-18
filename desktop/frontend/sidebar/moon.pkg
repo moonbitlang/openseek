@@ -1,4 +1,6 @@
 import {
+  "openseek_desktop/frontend/sidebar/messages",
+  "openseek_desktop/frontend/i18n",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",

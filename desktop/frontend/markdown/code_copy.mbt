@@ -1,16 +1,21 @@
 ///|
-fn code_copy_button(source : String) -> @html.Html {
+fn code_copy_button(
+  locale? : @i18n.Locale = English,
+  source : String,
+) -> @html.Html {
   copy_button(
+    locale~,
     source,
     class="button secondary chat-code-copy",
-    title="Copy code",
-    label="Copy code",
+    title=if locale is SimplifiedChinese { "复制代码" } else { "Copy code" },
+    label=if locale is SimplifiedChinese { "复制代码" } else { "Copy code" },
   )
 }
 
 ///|
 /// Copies source text and briefly acknowledges successful clipboard writes.
 pub fn copy_button(
+  locale? : @i18n.Locale = English,
   source : String,
   class~ : String,
   title~ : String,
@@ -31,11 +36,31 @@ pub fn copy_button(
         @clipboard.copy(
           @clipboard.Text(source),
           copied=@cmd.custom_cmd(_ => {
-            copy_button_feedback(button, true, title, label)
+            copy_button_feedback(
+              button,
+              true,
+              title,
+              label,
+              if locale is SimplifiedChinese {
+                "已复制"
+              } else {
+                "Copied"
+              },
+            )
           }),
           failed=_ => {
             @cmd.custom_cmd(_ => {
-              copy_button_feedback(button, false, title, label)
+              copy_button_feedback(
+                button,
+                false,
+                title,
+                label,
+                if locale is SimplifiedChinese {
+                  "复制失败，请重试。"
+                } else {
+                  "Copy failed. Try again."
+                },
+              )
             })
           },
         )
@@ -56,15 +81,15 @@ extern "js" fn copy_button_feedback(
   copied : Bool,
   title : String,
   label : String,
+  feedback : String,
 ) -> Unit =
   #| (() => {
   #|   const timers = new WeakMap();
-  #|   return (button, copied, title, label) => {
+  #|   return (button, copied, title, label, feedback) => {
   #|     if (!button.isConnected) return;
   #|     const previous = timers.get(button);
   #|     if (previous !== undefined) clearTimeout(previous);
   #|     button.setAttribute("data-copy-state", copied ? "copied" : "failed");
-  #|     const feedback = copied ? "Copied" : "Copy failed. Try again.";
   #|     button.setAttribute("title", feedback);
   #|     button.setAttribute("aria-label", feedback);
   #|     timers.set(button, setTimeout(() => {

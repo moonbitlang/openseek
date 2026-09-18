@@ -20,6 +20,7 @@
 /// carries its own literal `failed` marker. Its potentially large arguments
 /// and output stay folded by default, like every other call.
 fn assistant_view(
+  locale? : @i18n.Locale = English,
   on_open : (String) -> @cmd.Cmd,
   wait_labels? : Map[Int, String] = Map([]),
   prose? : String,
@@ -41,7 +42,7 @@ fn assistant_view(
   // above and below, and comparing a column is the eye's job only when
   // nothing variable-width sits between its entries and their anchor.
   let header : Array[@html.Html] = []
-  let stamp = step_stamp(ts?)
+  let stamp = step_stamp(locale~, ts?)
   if step_label is Some(label) {
     header.push(@html.span(class="activity-step", label))
     // A real space, not a CSS margin, and only when the instant follows it: the
@@ -61,7 +62,11 @@ fn assistant_view(
   let lead : Array[@html.Html] = []
   if reasoning is Some(text) {
     let thinking = live && !reasoning_complete
-    let label = if thinking { "Thinking…" } else { "Thought" }
+    let label = if thinking {
+      ui(locale, ThinkingLabel)
+    } else {
+      ui(locale, ThoughtLabel)
+    }
     let summary : Array[@html.Html] = []
     if header.is_empty() {
       // The separator introduces the label only when something precedes it:
@@ -81,7 +86,7 @@ fn assistant_view(
     } else {
       @html.div(
         class="msg-content markdown activity-thinking",
-        @markdown.markdown_nodes(text, open_file=on_open),
+        @markdown.markdown_nodes(locale~, text, open_file=on_open),
       )
     }
     lead.push(
@@ -101,7 +106,7 @@ fn assistant_view(
     Some(
       @html.div(
         class="activity-work",
-        tool_run_views(calls, sequence?, subrun?, wait_labels~),
+        tool_run_views(locale~, calls, sequence?, subrun?, wait_labels~),
       ),
     )
   }
@@ -114,6 +119,7 @@ fn assistant_view(
     }
     parts.push(
       assistant_message_view(
+        locale~,
         text,
         on_open,
         assistant_name,
@@ -143,6 +149,7 @@ fn assistant_view(
 /// under the instant it committed. Never a numbered step: nothing in it is
 /// the model's work.
 fn notice_view(
+  locale? : @i18n.Locale = English,
   label : String,
   brief : String?,
   is_error : Bool,
@@ -151,10 +158,11 @@ fn notice_view(
   sequence? : Int,
 ) -> @html.Html {
   let rows : Array[@html.Html] = []
-  if step_stamp(ts?) is Some(stamp) {
+  if step_stamp(locale~, ts?) is Some(stamp) {
     rows.push(@html.div(class="activity-heading", [stamp]))
   }
   let row = result_row_view(
+    locale~,
     label,
     None,
     pending=false,
@@ -174,6 +182,7 @@ fn notice_view(
 /// makes a burst readable. A lone call — every Codex item, and a notice —
 /// keeps its request beside its own result instead of implying concurrency.
 fn tool_run_views(
+  locale? : @i18n.Locale = English,
   calls : Array[@transcript.ToolCall],
   sequence? : Int,
   subrun? : SubrunLink,
@@ -184,6 +193,7 @@ fn tool_run_views(
   if burst {
     for index, call in calls {
       rows[tool_run_row_key(call, index, "request")] = tool_request_view(
+        locale~,
         call,
         sequence?,
         wait_label?=wait_labels.get(index),
@@ -192,6 +202,7 @@ fn tool_run_views(
     for index, call in calls {
       if tool_result_row_is_visible(call) {
         rows[tool_run_row_key(call, index, "result")] = tool_result_view(
+          locale~,
           call,
           sequence?,
           subrun?,
@@ -202,6 +213,7 @@ fn tool_run_views(
     for index, call in calls {
       if call.arguments is Some(_) {
         rows[tool_run_row_key(call, index, "request")] = tool_request_view(
+          locale~,
           call,
           sequence?,
           wait_label?=wait_labels.get(index),
@@ -209,6 +221,7 @@ fn tool_run_views(
       }
       if tool_result_row_is_visible(call) {
         rows[tool_run_row_key(call, index, "result")] = tool_result_view(
+          locale~,
           call,
           sequence?,
           subrun?,
@@ -252,12 +265,16 @@ priv struct SubrunLink {
 /// It leads the card body rather than sitting in the summary: a button
 /// inside a `<summary>` would have to fight that element's toggle activation,
 /// and the body keeps it beside the report it explains.
-fn subrun_chip(child : String, open : (String) -> @cmd.Cmd) -> @html.Html {
+fn subrun_chip(
+  locale? : @i18n.Locale = English,
+  child : String,
+  open : (String) -> @cmd.Cmd,
+) -> @html.Html {
   @html.div(class="tool-call-section", [
     @html.button(
       class="subrun-chip",
       type_="button",
-      title="Open this subagent's own transcript (\{child})",
+      title=dynamic_text(locale, DOpenSubagent(child.to_string())),
       on_click=open(child),
       "↳ subagent transcript",
     ),
@@ -282,6 +299,7 @@ fn tool_result_row_is_visible(call : @transcript.ToolCall) -> Bool {
 /// expanding reveals the arguments and background job identity. Failed calls carry a status
 /// icon, while their separate result row owns the output and failure stage.
 fn tool_request_view(
+  locale? : @i18n.Locale = English,
   call : @transcript.ToolCall,
   sequence? : Int,
   wait_label? : String,
@@ -292,7 +310,7 @@ fn tool_request_view(
   let (is_error, brief) = match call.outcome {
     Done(is_error~, brief~, ..) => (is_error, brief)
     Pending(..) => (false, None)
-    Snapshot(..) => (false, Some("Snapshot"))
+    Snapshot(..) => (false, Some(ui(locale, SnapshotLabel)))
   }
   let background_job_id = match (name, is_error, brief) {
     ("mbtx", false, Some(brief)) =>
@@ -303,15 +321,19 @@ fn tool_request_view(
     _ => None
   }
   let label = if background_job_id is Some(_) {
-    "🐇 → background"
+    if locale is SimplifiedChinese {
+      "🐇 → 后台"
+    } else {
+      "🐇 → background"
+    }
   } else if brief is Some(brief) && !brief.is_blank() {
-    tool_display_label(name, brief)
+    tool_display_label(locale~, name, brief)
   } else if wait_label is Some(label) {
     label
-  } else if pending_job_wait_label(call) is Some(label) {
+  } else if pending_job_wait_label(locale~, call) is Some(label) {
     label
   } else {
-    tool_display_label(name, name)
+    tool_display_label(locale~, name, name)
   }
   let label = if name == "mbtx" && card_fields(arguments) is Some(fields) {
     match fields.get("description") {
@@ -336,20 +358,29 @@ fn tool_request_view(
     @html.span(class="tool-call-text", label),
   ]
   if is_error && name != "mbtx" {
-    line.push(@html.span(class="tool-call-failed", "failed"))
+    line.push(
+      @html.span(
+        class="tool-call-failed",
+        if locale is SimplifiedChinese {
+          "失败"
+        } else {
+          "failed"
+        },
+      ),
+    )
   }
-  line.push(@plan.fold_progress(call))
-  line.push(ToolStatus::from_outcome(call.outcome).view())
+  line.push(@plan.fold_progress(locale~, call))
+  line.push(ToolStatus::from_outcome(call.outcome).view(locale~))
   let body : Array[@html.Html] = []
   if background_job_id is Some(id) {
     body.push(
       @html.div(class="tool-call-section", [
-        @html.div(class="tool-call-section-label", "Job ID"),
+        @html.div(class="tool-call-section-label", ui(locale, JobId)),
         @html.code(id),
         @html.button(
-          title="Copy job ID",
+          title=ui(locale, CopyJobId),
           type_="button",
-          attrs=@html.Attrs::build().aria_label("Copy job ID"),
+          attrs=@html.Attrs::build().aria_label(ui(locale, CopyJobId)),
           on_click=@clipboard.copy(@clipboard.Text(id)),
           @icons.icon(@icons.icon_copy),
         ),
@@ -363,15 +394,18 @@ fn tool_request_view(
   // malformed arguments are what the reader needs, and dressing them up as a
   // checklist would report a plan that never took effect.
   if @plan.classify(call) is Some(Applied(steps) | Pending(steps)) {
-    body.push(@html.div(class="tool-call-section", [@plan.card(steps)]))
+    body.push(
+      @html.div(class="tool-call-section", [@plan.card(locale~, steps)]),
+    )
   } else if tool_arguments_tabbed_view(
+      locale~,
       tool_call_tabs_key(call.call_id, sequence),
       name,
       Some(arguments),
     )
     is Some(tabs) {
     body.push(@html.div(class="tool-call-section", [tabs]))
-  } else if custom_card(name, arguments) is Some((label, card)) {
+  } else if custom_card(locale~, name, arguments) is Some((label, card)) {
     // Some tools' arguments have a shape JSON hides, such as an `edit` split
     // across two blobs whose difference is the whole point. Those get a card.
     // A payload the card cannot read falls through to the generic rendering
@@ -387,7 +421,7 @@ fn tool_request_view(
     if !trimmed.is_empty() && trimmed != "{}" {
       body.push(
         @html.div(class="tool-call-section", [
-          @html.div(class="tool-call-section-label", "Arguments"),
+          @html.div(class="tool-call-section-label", ui(locale, ArgumentsLabel)),
           json_arguments_content(arguments).body,
         ]),
       )
@@ -397,12 +431,12 @@ fn tool_request_view(
     let nested : Array[@html.Html] = [
       @html.div(
         class="tool-call-section-label",
-        "Program tool calls (\{call.children.length()})",
+        dynamic_text(locale, DProgramCalls(call.children.length().to_string())),
       ),
     ]
     for child in call.children {
-      nested.push(tool_request_view(child, sequence?))
-      nested.push(tool_result_view(child, sequence?))
+      nested.push(tool_request_view(locale~, child, sequence?))
+      nested.push(tool_result_view(locale~, child, sequence?))
     }
     body.push(@html.div(class="tool-call-section", nested))
   }
@@ -429,6 +463,7 @@ fn tool_request_view(
 /// Codex command gets a row only after it has streamed output, and its label
 /// deliberately says "output" rather than claiming completion.
 fn tool_result_view(
+  locale? : @i18n.Locale = English,
   call : @transcript.ToolCall,
   sequence? : Int,
   subrun? : SubrunLink,
@@ -442,7 +477,8 @@ fn tool_result_view(
     None
   }
   let (pending, is_error, brief, output) = match call.outcome {
-    Snapshot(content~) => (false, false, Some("Snapshot"), Some(content))
+    Snapshot(content~) =>
+      (false, false, Some(ui(locale, SnapshotLabel)), Some(content))
     Pending(output~) => (true, false, None, output)
     // An empty result still gets its row; it just has nothing to expand.
     Done(content~, is_error~, brief~) =>
@@ -458,6 +494,7 @@ fn tool_result_view(
       )
   }
   result_row_view(
+    locale~,
     call.name,
     call.arguments,
     pending~,
@@ -475,6 +512,7 @@ fn tool_result_view(
 /// the same compact completed-result shape. `output` is the body the row
 /// expands to, when there is one.
 fn result_row_view(
+  locale? : @i18n.Locale = English,
   name : String,
   arguments : String?,
   pending~ : Bool,
@@ -485,13 +523,13 @@ fn result_row_view(
   subrun? : SubrunLink,
   status? : ToolStatus,
 ) -> @html.Html {
-  let display_name = tool_display_label(name, name)
+  let display_name = tool_display_label(locale~, name, name)
   let label = match (arguments, brief, pending) {
     (None, Some(brief), _) if !brief.is_blank() =>
-      tool_display_label(name, brief)
+      tool_display_label(locale~, name, brief)
     (None, _, _) => display_name
-    (_, _, true) => "Tool output · \{display_name}"
-    _ if is_error => "Tool error · \{display_name}"
+    (_, _, true) => dynamic_text(locale, DToolOutput(display_name.to_string()))
+    _ if is_error => dynamic_text(locale, DToolError(display_name.to_string()))
     _ => display_name
   }
   let error_class = (if is_error { " error" } else { "" }) +
@@ -501,11 +539,11 @@ fn result_row_view(
     @html.span(class="tool-flow", "←"),
     @html.span(class="tool-result-text", label),
   ]
-  if failure_marker(name, brief, is_error, arguments) is Some(marker) {
+  if failure_marker(locale~, name, brief, is_error, arguments) is Some(marker) {
     line.push(marker)
   }
   if status is Some(status) {
-    line.push(status.view())
+    line.push(status.view(locale~))
   }
   let body : Array[@html.Html] = []
   // A sub-run result names the child session it spawned in its brief. The
@@ -517,11 +555,11 @@ fn result_row_view(
         brief,
         parent=link.parent,
       ) {
-      body.push(subrun_chip(child, link.open))
+      body.push(subrun_chip(locale~, child, link.open))
     }
   }
   if output is Some(text) {
-    let output = tool_output_tabs(name, text)
+    let output = tool_output_tabs(locale~, name, text)
     if output is [tab] {
       body.push(
         @html.div(class="tool-call-section", [
@@ -532,7 +570,7 @@ fn result_row_view(
     } else if output.length() > 1 {
       body.push(
         @html.div(class="tool-call-section", [
-          tool_call_tabs("\{key}-result", output),
+          tool_call_tabs(locale~, "\{key}-result", output),
         ]),
       )
     }
@@ -678,6 +716,7 @@ fn speaker_label(name : String) -> @html.Html {
 /// resolved location jumps the editor panel there via `on_jump`, when the
 /// caller wires one.
 fn user_message_view(
+  locale? : @i18n.Locale = English,
   content : String,
   images? : Array[String] = [],
   sent_at? : Double,
@@ -685,7 +724,7 @@ fn user_message_view(
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
   changes? : @review_changes.Control,
 ) -> @html.Html {
-  let body : Array[@html.Html] = [speaker_label("You")]
+  let body : Array[@html.Html] = [speaker_label(ui(locale, YouLabel))]
   match @mention_context.parse(content) {
     Some(parsed) => {
       let chips : Array[@html.Html] = []
@@ -704,9 +743,15 @@ fn user_message_view(
           comment
         } else if target is Some(target) {
           if target.range is Some(range) {
-            "Jump to \{target.file}:\{range.start_line_number}"
+            dynamic_text(
+              locale,
+              DJumpLine(
+                target.file.to_string(),
+                range.start_line_number.to_string(),
+              ),
+            )
           } else {
-            "Jump to \{target.file}"
+            dynamic_text(locale, DJumpFile(target.file.to_string()))
           }
         } else {
           label_text
@@ -752,7 +797,7 @@ fn user_message_view(
       pictures.push(
         @html.img(
           src=url,
-          alt="Attached image",
+          alt=ui(locale, AttachedImage),
           loading="lazy",
           class="user-image",
         ),
@@ -764,11 +809,11 @@ fn user_message_view(
   }
   let actions : Array[@html.Html] = []
   if sent_at is Some(ts) {
-    let label = clock_label(ts)
+    let label = clock_label(locale~, ts)
     if !label.is_empty() {
       actions.push(
         @html.span(class="turn-time", [
-          speaker_label("Sent "),
+          speaker_label(ui(locale, SentPrefix)),
           @html.text(label),
         ]),
       )
@@ -777,10 +822,11 @@ fn user_message_view(
   if !content.is_empty() {
     actions.push(
       @markdown.copy_button(
+        locale~,
         content,
         class="message-copy",
-        title="Copy message",
-        label="Copy user message",
+        title=ui(locale, CopyMessage),
+        label=ui(locale, CopyUserMessage),
       ),
     )
   }
@@ -802,7 +848,7 @@ fn user_message_view(
 /// something sent today, the date in front of it for anything older, and
 /// nothing at all for the zero/absent stamps old stores wrote. Local time and
 /// locale order come from the viewer's own environment.
-fn clock_label(unix_ms : Double) -> String {
+fn clock_label(locale? : @i18n.Locale = English, unix_ms : Double) -> String {
   guard !unix_ms.is_nan() && !unix_ms.is_inf() && unix_ms > 0.0 else {
     return ""
   }
@@ -811,7 +857,7 @@ fn clock_label(unix_ms : Double) -> String {
   }
   let at : @js.Value = date_constructor.new([@js.Value::cast_from(unix_ms)])
   let now : @js.Value = date_constructor.new(([] : FixedArray[@js.Value]))
-  let locales = @js.Value::cast_from(([] : Array[String]))
+  let locales = @js.Value::cast_from([locale.tag()])
   let time_options = @js.Object::new()
   time_options["hour"] = "2-digit"
   time_options["minute"] = "2-digit"
@@ -855,13 +901,13 @@ fn clock_label(unix_ms : Double) -> String {
 /// later step at an earlier clock time. The dated form rides along as the
 /// title rather than in the column, since the ambiguity is rare and checking
 /// it is deliberate.
-fn step_stamp(ts? : Double) -> @html.Html? {
+fn step_stamp(locale? : @i18n.Locale = English, ts? : Double) -> @html.Html? {
   guard ts is Some(ts) else { return None }
-  let label = step_time_label(ts)
+  let label = step_time_label(locale~, ts)
   guard !label.is_empty() else { return None }
   Some(
-    @html.span(class="activity-time", title=clock_label(ts), [
-      speaker_label("Committed "),
+    @html.span(class="activity-time", title=clock_label(locale~, ts), [
+      speaker_label(ui(locale, CommittedPrefix)),
       @html.text(label),
     ]),
   )
@@ -875,7 +921,10 @@ fn step_stamp(ts? : Double) -> @html.Html? {
 /// seconds apart, so at `hh:mm` a whole turn would read as the same label
 /// repeated. The date is the user message's job — a step is always inside the
 /// turn already dated above it.
-fn step_time_label(unix_ms : Double) -> String {
+fn step_time_label(
+  locale? : @i18n.Locale = English,
+  unix_ms : Double,
+) -> String {
   guard !unix_ms.is_nan() && !unix_ms.is_inf() && unix_ms > 0.0 else {
     return ""
   }
@@ -888,7 +937,7 @@ fn step_time_label(unix_ms : Double) -> String {
   options["minute"] = "2-digit"
   options["second"] = "2-digit"
   at.apply_with_string("toLocaleTimeString", [
-    @js.Value::cast_from(([] : Array[String])),
+    @js.Value::cast_from([locale.tag()]),
     options.to_value(),
   ])
 }
@@ -898,6 +947,7 @@ fn step_time_label(unix_ms : Double) -> String {
 /// OpenSeek provider response carries ("#3"); every other source and kind
 /// has none.
 fn transcript_item_view(
+  locale? : @i18n.Locale = English,
   item : @transcript.TranscriptItem,
   on_open : (String) -> @cmd.Cmd,
   wait_labels? : Map[Int, String] = Map([]),
@@ -911,6 +961,7 @@ fn transcript_item_view(
   match item.kind {
     User(text=prompt, images~) =>
       user_message_view(
+        locale~,
         prompt,
         images~,
         sent_at?=item.ts,
@@ -920,6 +971,7 @@ fn transcript_item_view(
       )
     Assistant(reasoning~, prose~, calls~, replay=_, finished~) =>
       assistant_view(
+        locale~,
         on_open,
         prose?,
         reasoning?,
@@ -934,6 +986,7 @@ fn transcript_item_view(
       )
     Answer(text) =>
       assistant_message_view(
+        locale~,
         text,
         on_open,
         assistant_name,
@@ -942,9 +995,16 @@ fn transcript_item_view(
         show_actions=true,
       )
     Failure(text) =>
-      assistant_message_view(text, on_open, assistant_name, is_danger=true)
+      assistant_message_view(
+        locale~,
+        text,
+        on_open,
+        assistant_name,
+        is_danger=true,
+      )
     Notice(label~, brief~, is_error~, body~) =>
       notice_view(
+        locale~,
         label,
         brief,
         is_error,
@@ -952,7 +1012,7 @@ fn transcript_item_view(
         ts?=item.ts,
         sequence?=item.sequence,
       )
-    Summary(text) => summary_card_view(text, on_open)
+    Summary(text) => summary_card_view(locale~, text, on_open)
     TurnEnd => @html.nothing
   }
 }
@@ -963,6 +1023,7 @@ fn transcript_item_view(
 /// markdown on every delta. Diagram fences render only after their closing
 /// marker arrives; unclosed fences remain source in completed messages too.
 fn assistant_message_view(
+  locale? : @i18n.Locale = English,
   content : String,
   on_open : (String) -> @cmd.Cmd,
   assistant_name : String,
@@ -986,7 +1047,7 @@ fn assistant_message_view(
   } else {
     @html.div(
       class="msg-content markdown",
-      @markdown.markdown_nodes(content, open_file=on_open),
+      @markdown.markdown_nodes(locale~, content, open_file=on_open),
     )
   }
   let children = [speaker_label(assistant_name), body]
@@ -996,21 +1057,22 @@ fn assistant_message_view(
   if show_actions {
     let actions = [
       @markdown.copy_button(
+        locale~,
         content,
         class="message-copy",
-        title="Copy Markdown",
-        label="Copy assistant message as Markdown",
+        title=ui(locale, CopyMarkdown),
+        label=ui(locale, CopyAssistantMarkdown),
       ),
     ]
     // The durable row is committed only after its complete message becomes
     // available. Its store timestamp is therefore the completion instant; old
     // or client-local rows without a usable stamp simply omit the label.
     if completed_at is Some(ts) {
-      let label = clock_label(ts)
+      let label = clock_label(locale~, ts)
       if !label.is_empty() {
         actions.push(
           @html.span(class="assistant-message-time", [
-            speaker_label("Completed "),
+            speaker_label(ui(locale, CompletedPrefix)),
             @html.text(label),
           ]),
         )
@@ -1035,6 +1097,7 @@ fn assistant_message_view(
 /// stands alone between turns, labeled for what it is, with the summary prose
 /// behind the fold.
 fn summary_card_view(
+  locale? : @i18n.Locale = English,
   content : String,
   on_open : (String) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -1042,11 +1105,11 @@ fn summary_card_view(
     @html.details(class="summary-card", [
       @html.summary(class="summary-card-label", [
         @html.span(class="summary-card-icon", @icons.icon(@icons.icon_fold)),
-        @html.span(class="summary-card-text", "Context compacted"),
+        @html.span(class="summary-card-text", ui(locale, ContextCompacted)),
       ]),
       @html.div(
         class="msg-content markdown summary-card-body",
-        @markdown.markdown_nodes(content, open_file=on_open),
+        @markdown.markdown_nodes(locale~, content, open_file=on_open),
       ),
     ]),
   ])
@@ -1057,6 +1120,7 @@ fn summary_card_view(
 /// `stream_blocks`): the component memoizes those per block, so this view
 /// only assembles them.
 fn transcript_view(
+  locale? : @i18n.Locale = English,
   input : Input,
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
@@ -1065,6 +1129,7 @@ fn transcript_view(
   on_jump_latest~ : @cmd.Cmd,
 ) -> @html.Html {
   let children = section_children(
+    locale~,
     input,
     stream~,
     pinned~,
@@ -1096,6 +1161,7 @@ fn transcript_view(
 ///|
 /// Reuse the ordinary tool cards for live and retained background-job traces.
 pub fn program_calls_view(
+  locale? : @i18n.Locale = English,
   data : Json?,
   parent : String,
   origin? : @transcript.TraceOrigin = Live,
@@ -1104,14 +1170,22 @@ pub fn program_calls_view(
   guard !calls.is_empty() else { return None }
   let rows : Map[String, @html.Html] = Map([])
   for index, call in calls {
-    rows[tool_run_row_key(call, index, "request")] = tool_request_view(call)
+    rows[tool_run_row_key(call, index, "request")] = tool_request_view(
+      locale~,
+      call,
+    )
     if tool_result_row_is_visible(call) {
-      rows[tool_run_row_key(call, index, "result")] = tool_result_view(call)
+      rows[tool_run_row_key(call, index, "result")] = tool_result_view(
+        locale~,
+        call,
+      )
     }
   }
   Some(
     @html.details(class="job-program-calls", [
-      @html.summary("Program tool calls (\{calls.length()})"),
+      @html.summary(
+        dynamic_text(locale, DProgramCallsArray(calls.length().to_string())),
+      ),
       @html.div(class="tool-call-section", rows),
     ]),
   )

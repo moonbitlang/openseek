@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/dom",
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/internal/viewer/contrib/agent_feedback",
+  "moonbitlang/editor/viewer/common/localization",
 }
 
 // Values
@@ -28,7 +29,7 @@ pub fn AgentFeedbackEditorInputContribution::AgentFeedbackEditorInputContributio
 pub fn AgentFeedbackEditorInputContribution::reset_model_state(Self) -> Unit
 
 type AgentFeedbackEditorWidget
-pub fn AgentFeedbackEditorWidget::AgentFeedbackEditorWidget(AgentFeedbackEditorWidgetHost, String, Array[@agent_feedback.SessionEditorComment], Map[String, String], focused_reply? : String) -> Self
+pub fn AgentFeedbackEditorWidget::AgentFeedbackEditorWidget(localization? : @localization.Localization, AgentFeedbackEditorWidgetHost, String, Array[@agent_feedback.SessionEditorComment], Map[String, String], focused_reply? : String) -> Self
 pub fn AgentFeedbackEditorWidget::anchor_line(Self) -> Int
 pub fn AgentFeedbackEditorWidget::collapse(Self) -> Unit
 pub fn AgentFeedbackEditorWidget::comment_ids(Self) -> Array[String]
@@ -68,7 +69,7 @@ pub(all) struct AgentFeedbackEditorWidgetHost {
 }
 
 type AgentFeedbackInputWidget
-pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(AgentFeedbackInputWidgetHost) -> Self
+pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(localization? : @localization.Localization, AgentFeedbackInputWidgetHost) -> Self
 pub fn AgentFeedbackInputWidget::clear_input(Self) -> Unit
 pub fn AgentFeedbackInputWidget::focus_input(Self) -> Unit
 pub fn AgentFeedbackInputWidget::get_dom_node(Self) -> @dom.Element
@@ -76,6 +77,7 @@ pub fn AgentFeedbackInputWidget::has_text(Self) -> Bool
 pub fn AgentFeedbackInputWidget::hide(Self) -> Unit
 pub fn AgentFeedbackInputWidget::measured_height(Self) -> Double
 pub fn AgentFeedbackInputWidget::measured_width(Self) -> Double
+pub fn AgentFeedbackInputWidget::refresh_labels(Self) -> Unit
 pub fn AgentFeedbackInputWidget::set_placeholder(Self, String) -> Unit
 pub fn AgentFeedbackInputWidget::set_position(Self, Double, Double) -> Unit
 pub fn AgentFeedbackInputWidget::show(Self) -> Unit

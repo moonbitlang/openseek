@@ -128,6 +128,7 @@ pub(all) struct ContentHoverWidgetHost {
 /// `containerDomNode` (`.monaco-hover.fade-in`), `scrollable` wraps its
 /// `contentsDomNode` (`.monaco-hover-content`).
 pub struct ContentHoverWidget {
+  priv localization : @localization.Localization
   wrapper : @rdom.Element
   priv hover : @rdom.Element
   scrollable : @scrollbar.ScrollableElementDom
@@ -181,6 +182,7 @@ pub fn ContentHoverWidget::content_widget_handle(
 /// `HoverWidget(fadeIn: true)`); starts hidden (`_setRenderedHover(undefined)`).
 /// The caller mounts it exactly once through the editor's content-widget seam.
 pub fn ContentHoverWidget::ContentHoverWidget(
+  localization? : @localization.Localization = @localization.Localization(),
   host : ContentHoverWidgetHost,
 ) -> ContentHoverWidget {
   let document = @rdom.document()
@@ -194,6 +196,7 @@ pub fn ContentHoverWidget::ContentHoverWidget(
   hover.append_child(scrollable.wrapper().as_node())
   wrapper.append_child(hover.as_node())
   let widget : ContentHoverWidget = {
+    localization,
     wrapper,
     hover,
     scrollable,
@@ -292,6 +295,7 @@ fn ContentHoverWidget::set_rendered_hover(
 /// touching the currently displayed hover. Each row receives the source's
 /// `_registerListenersOnRenderedParts` `tabIndex = 0`.
 fn render_hover_rows(
+  localization? : @localization.Localization = @localization.Localization(),
   parts : Array[@hover.HoverPart],
   language_id : String,
 ) -> HoverRowsRender {
@@ -301,8 +305,16 @@ fn render_hover_rows(
     let row = match part {
       MarkdownHover(contents~, ..) =>
         render_markdown_hover_row(disposables, contents, language_id)
-      MarkerHover(marker~, ..) => marker_hover_row(marker.message)
-      LoadingHover(message~, ..) => standard_hover_row(message)
+      MarkerHover(marker~, ..) =>
+        marker_hover_row(localization~, marker.message)
+      LoadingHover(message~, ..) =>
+        standard_hover_row(
+          if message == "Loading..." {
+            localization.text(LoadingLabel)
+          } else {
+            message
+          },
+        )
     }
     row.set_attribute("tabindex", "0")
     fragment.append_child(row.as_node())
@@ -406,7 +418,10 @@ fn standard_hover_row(text : String) -> @rdom.Element {
 ///|
 /// Marker rows remain ordinary retained DOM and keep the existing diagnostic
 /// copy affordance. Text nodes and attribute writes replace manual escaping.
-fn marker_hover_row(text : String) -> @rdom.Element {
+fn marker_hover_row(
+  localization? : @localization.Localization = @localization.Localization(),
+  text : String,
+) -> @rdom.Element {
   let document = @rdom.document()
   let row = document.create_element("div")
   row.set_attribute("class", "hover-row hover-row-with-copy")
@@ -416,7 +431,7 @@ fn marker_hover_row(text : String) -> @rdom.Element {
   let copy = document.create_element("button")
   copy.set_attribute("type", "button")
   copy.set_attribute("class", "hover-copy-button")
-  copy.set_attribute("aria-label", "Copy")
+  copy.set_attribute("aria-label", localization.text(CopyLabel))
   copy.set_attribute("data-hover-copy", text)
   let icon = document.create_element("span")
   icon.set_attribute("class", "codicon codicon-copy")
@@ -437,6 +452,7 @@ fn ContentHoverWidget::render_rendered_hover(
   rendered_hover : RenderedContentHover,
 ) -> Unit {
   let hover_rows = render_hover_rows(
+    localization=self.localization,
     rendered_hover.parts,
     rendered_hover.language_id,
   )

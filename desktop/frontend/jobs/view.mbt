@@ -1,22 +1,27 @@
 ///|
 /// A job's status text and CSS class, decided together: a cleanup failure
 /// overrides the process state in both.
-fn job_status(job : @wire.JobRecord) -> (String, String) {
+fn job_status(
+  locale? : @i18n.Locale = English,
+  job : @wire.JobRecord,
+) -> (String, String) {
   if job.cleanup_error is Some(_) {
-    return ("Failed · cleanup incomplete", "failed")
+    return (ui(locale, CleanupFailed), "failed")
   }
   match job.state {
-    Running => ("Running", "running")
-    Stopping => ("Stopping…", "stopping")
-    Exited(0) => ("Completed", "completed")
-    Exited(code) => ("Failed · exit \{code}", "failed")
-    Stopped("user") => ("Stopped", "stopped")
-    Stopped("session_ended") => ("Session ended", "stopped")
-    Stopped("output_limit") => ("Stopped · output limit reached", "failed")
-    Stopped("time_limit") => ("Stopped · time limit reached", "failed")
-    Stopped("capture_failed") => ("Stopped · output capture failed", "failed")
-    Stopped(reason) => ("Stopped · \{reason}", "stopped")
-    Interrupted => ("Interrupted", "stopped")
+    Running => (ui(locale, RunningLabel), "running")
+    Stopping => (ui(locale, StoppingLabel), "stopping")
+    Exited(0) => (ui(locale, CompletedLabel), "completed")
+    Exited(code) =>
+      (dynamic_text(locale, DFailedExit(code.to_string())), "failed")
+    Stopped("user") => (ui(locale, StoppedLabel), "stopped")
+    Stopped("session_ended") => (ui(locale, SessionEnded), "stopped")
+    Stopped("output_limit") => (ui(locale, OutputLimit), "failed")
+    Stopped("time_limit") => (ui(locale, TimeLimit), "failed")
+    Stopped("capture_failed") => (ui(locale, CaptureFailed), "failed")
+    Stopped(reason) =>
+      (dynamic_text(locale, DStopped(reason.to_string())), "stopped")
+    Interrupted => (ui(locale, InterruptedLabel), "stopped")
   }
 }
 
@@ -41,23 +46,32 @@ fn tail_command(path : String, follow? : Bool = true) -> String {
 }
 
 ///|
-extern "js" fn timestamp(value : Double) -> String =
-  #| value => new Date(value).toLocaleString()
+extern "js" fn timestamp(value : Double, locale : String) -> String =
+  #| (value, locale) => new Date(value).toLocaleString(locale)
 
 ///|
-fn job_timing(job : @wire.JobRecord) -> String {
+fn job_timing(
+  locale? : @i18n.Locale = English,
+  job : @wire.JobRecord,
+) -> String {
   if job.state.is_terminal() {
     match job.finished_at_ms {
       Some(end) => {
         let seconds = ((end - job.started_at_ms).to_double().max(0) / 1000).to_int()
-        "Ended \{timestamp(end.to_double())} · Total \{seconds}s"
+        dynamic_text(
+          locale,
+          DEnded(
+            timestamp(end.to_double(), locale.tag()).to_string(),
+            seconds.to_string(),
+          ),
+        )
       }
-      None => "End time unavailable"
+      None => ui(locale, EndTimeUnavailable)
     }
   } else {
     let seconds = ((@interop.now_ms() - job.started_at_ms.to_double()).max(0) /
     1000).to_int()
-    "Running for \{seconds}s"
+    dynamic_text(locale, DRunningTime(seconds.to_string()))
   }
 }
 
@@ -74,13 +88,17 @@ fn away_from_end() -> Bool {
 }
 
 ///|
-pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
+pub fn panel(
+  locale? : @i18n.Locale = English,
+  state : State,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   let running = state.jobs
     .filter(view => !view.job.state.is_terminal())
     .length()
   let header = @html.div(class="jobs-heading", [
     @html.div([
-      @html.h3("Background jobs"),
+      @html.h3(ui(locale, BackgroundJobs)),
       @html.div(class="jobs-summary", [
         @html.span(
           class=if running > 0 {
@@ -97,7 +115,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
       class="jobs-action",
       on_click=emit(Poll),
       disabled=state.listing,
-      "Refresh",
+      ui(locale, RefreshLabel),
     ),
   ])
   let body : Array[@html.Html] = [header]
@@ -105,16 +123,19 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
     body.push(
       @html.div(
         class="jobs-host",
-        "Host: \{owner.channel.uri_authority()} · \{owner.scope.session}",
+        dynamic_text(
+          locale,
+          DHost(
+            owner.channel.uri_authority().to_string(),
+            owner.scope.session.to_string(),
+          ),
+        ),
       ),
     )
   }
   if state.owner is Some(_) && !state.active {
     body.push(
-      @html.div(
-        class="jobs-error",
-        "Disconnected. Output remains on the host; reconnect to refresh.",
-      ),
+      @html.div(class="jobs-error", ui(locale, DisconnectedDescription)),
     )
   }
   if state.error is Some(error) {
@@ -134,14 +155,12 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
       @html.div(class="jobs-empty", [
         @html.h3(
           if state.listing {
-            "Loading jobs…"
+            ui(locale, LoadingJobs)
           } else {
-            "No background jobs yet"
+            ui(locale, NoJobs)
           },
         ),
-        @html.p(
-          "Commands appear here when they move to the background. Their output files stay with this conversation.",
-        ),
+        @html.p(ui(locale, JobsDescription)),
       ]),
     )
   } else {
@@ -153,11 +172,15 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
       if group.is_empty() && (!terminal || state.next_offset is None) {
         continue
       }
-      let title = if terminal { "History" } else { "In progress" }
+      let title = if terminal {
+        ui(locale, HistoryLabel)
+      } else {
+        ui(locale, InProgress)
+      }
       let cards = group.map(view => {
         let job = view.job
         let selected = state.selected == Some((job.generation, job.id))
-        let (status_label, status_class) = job_status(job)
+        let (status_label, status_class) = job_status(locale~, job)
         @html.button(
           class="jobs-row jobs-row-\{status_class}" +
             (if selected { " selected" } else { "" }),
@@ -182,7 +205,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
             ),
             @html.div(
               class="jobs-row-meta",
-              "\{job_timing(job)} · \{job.output_bytes} B",
+              "\{job_timing(locale~, job)} · \{job.output_bytes} B",
             ),
           ],
         )
@@ -198,7 +221,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
             class="jobs-action jobs-more",
             disabled=state.listing,
             on_click=emit(More),
-            "Load older jobs",
+            ui(locale, LoadOlder),
           ),
         )
       }
@@ -231,13 +254,13 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
     body.push(
       @html.div(
         class="jobs-list",
-        attrs=@html.Attrs::build().aria_label("Background jobs"),
+        attrs=@html.Attrs::build().aria_label(ui(locale, BackgroundJobs)),
         rows,
       ),
     )
     if selected_job(state) is Some(view) {
       let job = view.job
-      let (status_label, status_class) = job_status(job)
+      let (status_label, status_class) = job_status(locale~, job)
       let details : Array[@html.Html] = [
         @html.div(class="jobs-detail-title", [
           @html.strong(title=job.id, short_job_id(job.id, state.jobs)),
@@ -249,20 +272,37 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         @html.pre(class="jobs-full-command", job.command),
         @html.div(
           class="jobs-detail-meta",
-          "Started \{timestamp(job.started_at_ms.to_double())}",
+          dynamic_text(
+            locale,
+            DStarted(
+              timestamp(job.started_at_ms.to_double(), locale.tag()).to_string(),
+            ),
+          ),
         ),
       ]
       if job.cwd is Some(cwd) {
         details.push(
-          @html.div(class="jobs-detail-meta", "Working directory: \{cwd}"),
+          @html.div(
+            class="jobs-detail-meta",
+            dynamic_text(locale, DWorkingDirectory(cwd.to_string())),
+          ),
         )
       }
-      details.push(@html.div(class="jobs-detail-meta", job_timing(job)))
+      details.push(
+        @html.div(class="jobs-detail-meta", job_timing(locale~, job)),
+      )
       if !job.state.is_terminal() {
         let activity = match job.last_output_at_ms {
           Some(last) =>
-            "Last output \{((@interop.now_ms() - last.to_double()).max(0) / 1000).to_int()}s ago"
-          None => "No output yet"
+            dynamic_text(
+              locale,
+              DLastOutput(
+                ((@interop.now_ms() - last.to_double()).max(0) / 1000)
+                .to_int()
+                .to_string(),
+              ),
+            )
+          None => ui(locale, NoOutputLabel)
         }
         details.push(@html.div(class="jobs-detail-meta", activity))
       }
@@ -270,7 +310,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         @html.button(
           class="jobs-action",
           on_click=@clipboard.copy(Text(job.id)),
-          "Copy job ID",
+          ui(locale, CopyId),
         ),
       ]
       if view.output_path is Some(path) {
@@ -281,19 +321,19 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
           @html.button(
             class="jobs-action",
             on_click=@clipboard.copy(Text(path)),
-            "Copy path",
+            ui(locale, CopyPath),
           ),
           @html.button(
             class="jobs-action",
             on_click=@clipboard.copy(
               Text(tail_command(path, follow=!job.state.is_terminal())),
             ),
-            "Copy tail command",
+            ui(locale, CopyTail),
           ),
           @html.button(
             class="jobs-action",
             on_click=emit(Reload),
-            "Reload tail",
+            ui(locale, ReloadTail),
           ),
         ])
       }
@@ -304,9 +344,9 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
             on_click=emit(ToggleFollow),
             attrs=@html.Attrs::build().aria_pressed(state.follow.to_string()),
             if state.follow {
-              "Pause"
+              ui(locale, PauseLabel)
             } else {
-              "Follow output"
+              ui(locale, FollowOutput)
             },
           ),
         )
@@ -320,15 +360,16 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
               job.state is Stopping,
             on_click=emit(Stop),
             if state.stopping || job.state is Stopping {
-              "Stopping…"
+              ui(locale, StoppingLabel)
             } else {
-              "Stop job"
+              ui(locale, StopJob)
             },
           ),
         )
       }
       details.push(@html.div(class="jobs-toolbar", actions))
       if @transcript_component.program_calls_view(
+          locale~,
           job.data,
           "job/\{job.generation}/\{job.id}",
           origin=if job.state.is_terminal() { Terminal } else { Live },
@@ -356,39 +397,29 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         }
       }
       if job.output_truncated {
-        details.push(
-          @html.div(
-            class="jobs-error",
-            "Output capture reached its limit; the retained log is truncated.",
-          ),
-        )
+        details.push(@html.div(class="jobs-error", ui(locale, TruncatedOutput)))
       }
       if job.invalid_utf8 {
-        details.push(
-          @html.div(
-            class="jobs-error",
-            "Output contained invalid UTF-8; replacement characters were saved.",
-          ),
-        )
+        details.push(@html.div(class="jobs-error", ui(locale, InvalidUtf8)))
       }
       let note = if view.output_path is None {
-        "No retained log file for this job."
+        ui(locale, NoLogFile)
       } else if state.read_error is Some(_) {
-        "Output unavailable · reload to retry."
+        ui(locale, OutputUnavailable)
       } else if job.state.is_terminal() {
         if output_complete(state, job) && !state.reading {
-          "Output ended"
+          ui(locale, OutputEnded)
         } else {
-          "Loading remaining output…"
+          ui(locale, LoadingRemaining)
         }
       } else if state.follow {
         if state.catching_up {
-          "Catching up with output…"
+          ui(locale, CatchingUp)
         } else {
-          "Following output"
+          ui(locale, FollowingOutput)
         }
       } else {
-        "Paused · output continues to the file"
+        ui(locale, PausedOutput)
       }
       let note = if state.clipped &&
         view.output_path is Some(_) &&
@@ -407,7 +438,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
             attrs=@html.Attrs::build()
               .tabindex(0)
               .role("region")
-              .aria_label("Job output")
+              .aria_label(ui(locale, JobOutput))
               .on_scroll(_ => {
                 if state.follow && away_from_end() {
                   emit(Pause)
@@ -419,11 +450,11 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
               @html.pre(
                 if state.text.is_empty() {
                   if state.reading {
-                    "Loading output…"
+                    ui(locale, LoadingOutput)
                   } else if job.state.is_terminal() {
-                    "No retained output."
+                    ui(locale, NoRetainedOutput)
                   } else {
-                    "No output yet."
+                    ui(locale, NoOutputYet)
                   }
                 } else {
                   state.text
@@ -434,10 +465,7 @@ pub fn panel(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         )
       }
       details.push(
-        @html.div(
-          class="jobs-footnote",
-          "Stop controls the direct process. Logs are retained with the session.",
-        ),
+        @html.div(class="jobs-footnote", ui(locale, StopDescription)),
       )
       body.push(@html.div(class="jobs-detail", details))
     }

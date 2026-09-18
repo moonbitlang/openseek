@@ -30,10 +30,13 @@ fn TranscriptRenderKey::empty() -> TranscriptRenderKey {
 /// Give an unstarted conversation enough location context to distinguish two
 /// otherwise identical new-chat pages. A scratch or onboarding transcript has
 /// no registered project and keeps the generic question.
-fn empty_title(project_label : String?) -> String {
+fn empty_title(
+  locale? : @i18n.Locale = English,
+  project_label : String?,
+) -> String {
   match project_label {
-    Some(project) => "What should we build in \{project}?"
-    None => "What should we build?"
+    Some(project) => dynamic_text(locale, DWhatBuild(project.to_string()))
+    None => ui(locale, WhatBuild)
   }
 }
 
@@ -109,6 +112,7 @@ fn EmptyProjectControl::keydown(
 
 ///|
 fn EmptyProjectControl::render(
+  locale? : @i18n.Locale = English,
   self : EmptyProjectControl,
   current : @common.Uri,
   label : String,
@@ -122,11 +126,11 @@ fn EmptyProjectControl::render(
         "empty-project-trigger"
       },
       type_="button",
-      title="Choose a project",
+      title=ui(locale, ChooseProject),
       on_click=self.toggle,
       attrs=@html.Attrs::build()
         .id(EmptyProjectTriggerId)
-        .aria_label("Choose project, current project \{label}")
+        .aria_label(dynamic_text(locale, DChooseProject(label.to_string())))
         .aria_haspopup("dialog")
         .aria_controls(EmptyProjectMenuId)
         .aria_expanded(self.open.to_string())
@@ -195,7 +199,7 @@ fn EmptyProjectControl::render(
         @html.div(
           class="empty-project-no-results",
           attrs=@html.Attrs::build().role("status"),
-          "No projects found",
+          ui(locale, NoProjects),
         ),
       )
     }
@@ -205,7 +209,7 @@ fn EmptyProjectControl::render(
         attrs=@html.Attrs::build()
           .id(EmptyProjectMenuId)
           .role("dialog")
-          .aria_label("Choose a project")
+          .aria_label(ui(locale, ChooseProject))
           .popover("manual"),
         [
           @html.div(
@@ -220,11 +224,11 @@ fn EmptyProjectControl::render(
                 input_type=@html.InputType::Text,
                 value=self.query,
                 autofocus=true,
-                placeholder="Search projects",
+                placeholder=ui(locale, SearchProjects),
                 on_input=self.query_changed,
                 attrs=@html.Attrs::build()
                   .id(EmptyProjectSearchId)
-                  .aria_label("Search projects")
+                  .aria_label(ui(locale, SearchProjects))
                   .data_set("focus-target", "")
                   .on_blur(event => self.dismiss_on_blur(event))
                   .on_keydown(event => self.keydown(event)),
@@ -233,7 +237,9 @@ fn EmptyProjectControl::render(
           ),
           @html.div(
             class="empty-project-options",
-            attrs=@html.Attrs::build().role("group").aria_label("Projects"),
+            attrs=@html.Attrs::build()
+              .role("group")
+              .aria_label(ui(locale, ProjectsLabel)),
             rows,
           ),
           @html.button(
@@ -243,7 +249,7 @@ fn EmptyProjectControl::render(
             attrs=@html.Attrs::build()
               .on_blur(event => self.dismiss_on_blur(event))
               .on_keydown(event => self.keydown(event)),
-            [@icons.icon(@icons.icon_add), @html.span("New project")],
+            [@icons.icon(@icons.icon_add), @html.span(ui(locale, NewProject))],
           ),
         ],
       ),
@@ -258,6 +264,7 @@ fn EmptyProjectControl::render(
 
 ///|
 fn empty_transcript_view(
+  locale? : @i18n.Locale = English,
   input : EmptyContent,
   project_menu : EmptyProjectControl,
 ) -> @html.Html {
@@ -275,25 +282,21 @@ fn empty_transcript_view(
     (Some(label), Some(project)) if input.can_choose_project &&
       !input.projects.is_empty() =>
       @html.div(class="empty-title", [
-        @html.span("What should we build in "),
+        @html.span(ui(locale, BuildInPrefix)),
         @html.div(class="empty-title-project", [
-          project_menu.render(project, label, input.projects),
+          project_menu.render(locale~, project, label, input.projects),
           @html.span("?"),
         ]),
       ])
-    _ => @html.div(class="empty-title", empty_title(input.project_label))
+    _ =>
+      @html.div(class="empty-title", empty_title(locale~, input.project_label))
   }
   children.push(title)
   // OpenSeek's explanatory sentence duplicated what the composer and product
   // already make clear. Codex retains its source-specific account/sandbox
   // context because that distinguishes the alternate backend.
   if input.source is Codex {
-    children.push(
-      @html.div(
-        class="empty-sub",
-        "Codex inspects, edits, and runs this workspace with its own account, sandbox, and approvals.",
-      ),
-    )
+    children.push(@html.div(class="empty-sub", ui(locale, CodexDescription)))
   }
   @html.div(class="empty", children)
 }
@@ -302,7 +305,11 @@ fn empty_transcript_view(
 /// Bind the parent-owned effects only while rendering. The empty block itself
 /// remains pure and comparable, so changing the picker state updates this one
 /// stable branch without remounting its input.
-fn EmptyContent::render(self : EmptyContent, actions : Actions) -> @html.Html {
+fn EmptyContent::render(
+  locale? : @i18n.Locale = English,
+  self : EmptyContent,
+  actions : Actions,
+) -> @html.Html {
   let project_menu : EmptyProjectControl = {
     open: self.project_menu_open,
     query: self.project_query,
@@ -319,7 +326,7 @@ fn EmptyContent::render(self : EmptyContent, actions : Actions) -> @html.Html {
     choose: actions.choose_project,
     new_project: actions.new_project,
   }
-  empty_transcript_view(self, project_menu)
+  empty_transcript_view(locale~, self, project_menu)
 }
 
 ///|
@@ -498,7 +505,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
         step_label~,
         assistant_name~,
         subrun_parent~,
-        wait_labels=job_wait_labels(item, descriptions),
+        wait_labels=job_wait_labels(locale=input.locale, item, descriptions),
       ),
     })
   }
@@ -532,14 +539,15 @@ fn Block::branch_key(self : Block) -> String {
 /// The block's Html. The parent's actions are captured by the component and
 /// passed through here; a block never stores them.
 fn Block::render(
+  locale? : @i18n.Locale = English,
   self : Block,
   actions : Actions,
   changes? : @review_changes.Control,
 ) -> @html.Html {
   let on_open = path => (actions.open)(path)
   match self.content {
-    Empty(empty) => empty.render(actions)
-    Minimal(content) => content.render(actions)
+    Empty(empty) => empty.render(locale~, actions)
+    Minimal(content) => content.render(locale~, actions)
     Item(
       item~,
       anchor~,
@@ -549,6 +557,7 @@ fn Block::render(
       wait_labels~
     ) =>
       transcript_item_view(
+        locale~,
         item,
         on_open,
         wait_labels~,
@@ -564,6 +573,7 @@ fn Block::render(
       )
     Live(prose~, reasoning~, reasoning_complete~, step_label~, assistant_name~) =>
       assistant_view(
+        locale~,
         on_open,
         prose?,
         reasoning?,
@@ -594,6 +604,7 @@ fn keyed_stream(
 /// and session, so switching conversations replaces the entire stream instead
 /// of reusing rows whose durable sequence numbers happen to match.
 fn section_children(
+  locale? : @i18n.Locale = English,
   input : Input,
   stream~ : Map[String, @html.Html],
   pinned~ : Bool,
@@ -609,6 +620,7 @@ fn section_children(
   children.set(
     TranscriptSectionKey::overview().wire(),
     @transcript_overview.rail(
+      locale~,
       @transcript_overview.entries(visible_items, display=text => {
         match @mention_context.parse(text) {
           Some(message) => message.display_text()
@@ -617,7 +629,7 @@ fn section_children(
       }),
       overview,
       overview_emit,
-      clock=ms => clock_label(ms),
+      clock=ms => clock_label(locale~, ms),
     ),
   )
   children.set(
@@ -634,7 +646,7 @@ fn section_children(
         @html.button(
           class="jump-latest",
           type_="button",
-          title="Jump to latest",
+          title=ui(locale, JumpLatest),
           on_click=on_jump_latest,
           @icons.icon(@icons.icon_arrow_down),
         ),

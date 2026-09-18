@@ -32,26 +32,44 @@ fn UpdateDownloadProgress::percentage(self : UpdateDownloadProgress) -> Int? {
 fn UpdateDownloadProgress::status_text(
   self : UpdateDownloadProgress,
   version : String,
+  locale? : @i18n.Locale = English,
 ) -> String {
   match (self.percentage(), self.total_bytes) {
     (Some(percent), Some(total)) => {
       let downloaded_mb = self.downloaded_bytes / (1024 * 1024)
       let total_mb = @cmp.maximum(1, total / (1024 * 1024))
-      "Downloading \{version}… \{percent}% (\{downloaded_mb} / \{total_mb} MB)"
+      @settings.text(
+        locale,
+        DownloadProgress(version, percent, downloaded_mb, total_mb),
+      )
     }
     _ if self.downloaded_bytes > 0 =>
-      "Downloading \{version}… \{self.downloaded_bytes / (1024 * 1024)} MB"
-    _ => "Downloading \{version}…"
+      @settings.text(
+        locale,
+        DownloadBytes(version, self.downloaded_bytes / (1024 * 1024)),
+      )
+    _ => @settings.text(locale, DownloadVersion(version))
   }
 }
 
 ///|
 fn UpdateDownloadProgress::sidebar_label(
+  locale? : @i18n.Locale = English,
   self : UpdateDownloadProgress,
 ) -> String {
   match self.percentage() {
-    Some(percent) => "Downloading \{percent}%"
-    None => "Downloading…"
+    Some(percent) =>
+      if locale is SimplifiedChinese {
+        "正在下载 \{percent}%"
+      } else {
+        "Downloading \{percent}%"
+      }
+    None =>
+      if locale is SimplifiedChinese {
+        "正在下载…"
+      } else {
+        "Downloading…"
+      }
   }
 }
 

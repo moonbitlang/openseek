@@ -221,6 +221,18 @@ fn CodeEditorWidget::CodeEditorWidget(
   // (`codeEditorWidget.ts:344` `this._contributions.initialize(...)`);
   // they live until `dispose` — `set_model` does not re-create them.
   editor_registry().instantiate_enabled(viewer, contributions)
+  viewer.add_lifetime_disposable(
+    services.localization.bind(_ => {
+      viewer.hide_context_menu()
+      viewer.hide_content_hover()
+      viewer.close_references_peek(restore_focus=false)
+      if viewer.agent_feedback_input_contribution().bind(c => c.widget)
+        is Some(widget) {
+        widget.refresh_labels()
+      }
+      viewer.rebuild_agent_feedback_widgets()
+    }),
+  )
   viewer.testing_registration = Some(
     @viewer_testing.register_viewer(viewer.get_id(), set_hidden_areas=(
       ranges,

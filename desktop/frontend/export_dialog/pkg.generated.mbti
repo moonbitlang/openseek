@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/protocol",
 }
 
@@ -20,8 +21,8 @@ pub fn Model::is_open(Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(Self, @protocol.SessionExportPayload) -> (@cmd.Cmd, Self)
 pub fn Model::to_repr(Self) -> @debug.Repr
-pub fn Model::update(Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self)
-pub fn Model::view(Self, @cmd.Emit[Msg]) -> @html.Html
+pub fn Model::update(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self)
+pub fn Model::view(locale? : @i18n.Locale, Self, @cmd.Emit[Msg]) -> @html.Html
 
 pub(all) enum Msg {
   Close

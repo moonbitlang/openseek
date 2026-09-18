@@ -20,12 +20,16 @@ fn ToolStatus::from_outcome(outcome : @transcript.ToolOutcome) -> ToolStatus {
 }
 
 ///|
-fn ToolStatus::view(self : ToolStatus) -> @html.Html {
+fn ToolStatus::view(
+  locale? : @i18n.Locale = English,
+  self : ToolStatus,
+) -> @html.Html {
   let (label, class, icon) = match self {
-    Snapshot => ("Recorded snapshot", "tool-status snapshot", @html.text("·"))
+    Snapshot =>
+      (ui(locale, RecordedSnapshot), "tool-status snapshot", @html.text("·"))
     Pending =>
       (
-        "Tool in progress",
+        ui(locale, ToolInProgress),
         "tool-status pending",
         @html.span(
           class="tool-status-spinner",
@@ -34,10 +38,14 @@ fn ToolStatus::view(self : ToolStatus) -> @html.Html {
         ),
       )
     Failed =>
-      ("Tool failed", "tool-status failed", @icons.icon(@icons.icon_error))
+      (
+        ui(locale, ToolFailed),
+        "tool-status failed",
+        @icons.icon(@icons.icon_error),
+      )
     Succeeded =>
       (
-        "Tool succeeded",
+        ui(locale, ToolSucceeded),
         "tool-status succeeded",
         @icons.icon(@icons.icon_check),
       )

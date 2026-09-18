@@ -3,6 +3,7 @@ package "moonbitlang/editor/internal/viewer/contrib/contextmenu/browser"
 
 import {
   "moonbit-community/rabbita/dom",
+  "moonbitlang/editor/viewer/common/localization",
 }
 
 // Values
@@ -17,7 +18,7 @@ pub(all) enum ContextMenuEntry {
 }
 
 type ContextMenuWidget
-pub fn ContextMenuWidget::ContextMenuWidget(ContextMenuWidgetCallbacks) -> Self
+pub fn ContextMenuWidget::ContextMenuWidget(localization? : @localization.Localization, ContextMenuWidgetCallbacks) -> Self
 pub fn ContextMenuWidget::dispose(Self) -> Unit
 pub fn ContextMenuWidget::hide(Self, was_cancelled? : Bool) -> Unit
 pub fn ContextMenuWidget::is_visible(Self) -> Bool

@@ -198,13 +198,26 @@ fn active_step(steps : Array[Step]) -> Step? {
 /// The one-line reading of a plan, in the same shape the tool's own brief
 /// uses (`plan 3/5 · fix the parser`). The progress meter carries it as a
 /// tooltip, so a collapsed run names its active step on hover.
-fn summary_line(steps : Array[Step]) -> String {
+fn summary_line(
+  locale? : @i18n.Locale = English,
+  steps : Array[Step],
+) -> String {
   let completed = completed_count(steps)
   let total = steps.length()
   if active_step(steps) is Some(step) {
-    "plan \{completed}/\{total} · \{step.title}"
+    if locale is SimplifiedChinese {
+      "计划 \{completed}/\{total} · \{step.title}"
+    } else {
+      "plan \{completed}/\{total} · \{step.title}"
+    }
   } else if completed == total {
-    "plan \{completed}/\{total} · all steps done"
+    if locale is SimplifiedChinese {
+      "计划 \{completed}/\{total} · 全部完成"
+    } else {
+      "plan \{completed}/\{total} · all steps done"
+    }
+  } else if locale is SimplifiedChinese {
+    "计划 \{completed}/\{total}"
   } else {
     "plan \{completed}/\{total}"
   }

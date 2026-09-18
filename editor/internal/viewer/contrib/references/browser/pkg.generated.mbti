@@ -7,6 +7,7 @@ import {
   "moonbitlang/editor/internal/viewer/contrib/goto_symbol",
   "moonbitlang/editor/internal/viewer/contrib/references",
   "moonbitlang/editor/language",
+  "moonbitlang/editor/viewer/common/localization",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/navigation_api",
 }
@@ -18,7 +19,7 @@ pub let references_peek_height_in_lines : Int
 
 // Types and methods
 type ReferencesController
-pub fn ReferencesController::ReferencesController(ReferencesPeekHost, ReferencesPeekPreviewFactory, resolver? : @navigation_api.TextModelResolverHandle, resource_path_label? : (@common.Uri) -> String?, (async () -> Unit noraise) -> Unit) -> Self
+pub fn ReferencesController::ReferencesController(localization? : @localization.Localization, ReferencesPeekHost, ReferencesPeekPreviewFactory, resolver? : @navigation_api.TextModelResolverHandle, resource_path_label? : (@common.Uri) -> String?, (async () -> Unit noraise) -> Unit) -> Self
 pub fn ReferencesController::close(Self, restore_focus~ : Bool) -> Unit
 pub fn ReferencesController::contains_focus(Self) -> Bool
 pub fn ReferencesController::dispose(Self) -> Unit
@@ -52,7 +53,7 @@ pub(all) struct ReferencesPeekPreviewFactory {
 
 type ReferencesPeekWidget
 #alias(new, deprecated)
-pub fn ReferencesPeekWidget::ReferencesPeekWidget(@references.ReferencesPeekMode, ReferencesPeekWidgetCallbacks, resource_path_label? : (@common.Uri) -> String?) -> Self
+pub fn ReferencesPeekWidget::ReferencesPeekWidget(localization? : @localization.Localization, @references.ReferencesPeekMode, ReferencesPeekWidgetCallbacks, resource_path_label? : (@common.Uri) -> String?) -> Self
 pub fn ReferencesPeekWidget::dispose(Self) -> Unit
 pub fn ReferencesPeekWidget::focus(Self) -> Unit
 pub fn ReferencesPeekWidget::get_dom_node(Self) -> @dom.Element

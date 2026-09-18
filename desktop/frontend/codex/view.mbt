@@ -5,23 +5,34 @@
 ///|
 /// Display strings for the topbar status and the Settings page's Codex
 /// account group; both render the same connection and account facts.
-pub fn State::connection_label(self : State) -> String {
+pub fn State::connection_label(
+  self : State,
+  locale? : @i18n.Locale = English,
+) -> String {
   match self.connection {
-    CodexStarting => "Starting Codex…"
-    CodexReady => if self.is_running() { "Running" } else { "Connected" }
+    CodexStarting => status_text(locale, Starting)
+    CodexReady =>
+      if self.is_running() {
+        status_text(locale, Running)
+      } else {
+        status_text(locale, Connected)
+      }
     CodexUnavailable(message) => message
   }
 }
 
 ///|
-pub fn State::account_label(self : State) -> String {
+pub fn State::account_label(
+  self : State,
+  locale? : @i18n.Locale = English,
+) -> String {
   match self.account {
-    CodexAccountUnknown => "Checking account…"
+    CodexAccountUnknown => status_text(locale, CheckingAccount)
     CodexSignedOut(requires_auth) =>
       if requires_auth {
-        "Sign in required"
+        status_text(locale, SignInRequired)
       } else {
-        "No account required"
+        status_text(locale, NoAccountRequired)
       }
     CodexSignedIn(kind~, plan~) =>
       match plan {
@@ -36,6 +47,7 @@ pub fn State::account_label(self : State) -> String {
 /// catalogs omit effort metadata; in that case there is no honest selector to
 /// render and ordinary turns keep inheriting Codex's own configuration.
 pub fn State::reasoning_effort_chip(
+  locale? : @i18n.Locale = English,
   self : State,
   open : Bool,
 ) -> @composer.ReasoningSelect? {
@@ -47,7 +59,7 @@ pub fn State::reasoning_effort_chip(
   guard !selected.is_empty() else { return None }
   let options = model.reasoning_efforts.map(option => @composer.ModelOption::{
     value: option.value,
-    label: option.value,
+    label: reasoning_label(locale, option.value),
   })
   let description = model.reasoning_efforts
     .iter()
@@ -61,11 +73,33 @@ pub fn State::reasoning_effort_chip(
     disabled: options.length() <= 1,
     open,
     title: if description.is_empty() {
-      "Reasoning effort: " + selected
+      ui(locale, ReasoningPrefix) + reasoning_label(locale, selected)
     } else {
-      "Reasoning effort: \{selected} — \{description}"
+      ui(locale, ReasoningPrefix) +
+      reasoning_label(locale, selected) +
+      " — " +
+      description
     },
   })
+}
+
+///|
+fn reasoning_label(locale : @i18n.Locale, value : String) -> String {
+  match locale {
+    English => value
+    SimplifiedChinese =>
+      match value {
+        "none" => "无"
+        "minimal" => "最低"
+        "low" => "低"
+        "medium" => "中"
+        "high" => "高"
+        "xhigh" => "极高"
+        "max" => "最高"
+        "ultra" => "超高"
+        _ => value
+      }
+  }
 }
 
 ///|
@@ -88,6 +122,7 @@ fn SidebarContext::project_registered(
 
 ///|
 fn SidebarContext::draft_input(
+  locale? : @i18n.Locale = English,
   self : SidebarContext,
   draft : CodexDraftTask,
   nested : Bool,
@@ -104,7 +139,7 @@ fn SidebarContext::draft_input(
     // The same label an unsent OpenSeek chat's row carries: the two agents'
     // composing rows are one concept in the shared sidebar, and the model
     // chip already names which agent the chat will start with.
-    label: "New chat",
+    label: ui(locale, NewChat),
     nested,
     subrun: false,
     active: self.selected,
@@ -142,10 +177,11 @@ pub(all) struct CodexProjectRow {
 ///|
 /// A recoverable composing draft's row when it belongs to this registered
 /// project but the Codex page is not on screen. While selected, the draft is
-/// represented by the project's activation instead of a redundant "New chat"
+/// represented by the project's activation instead of a redundant ui(locale, NewChat)
 /// child row. The root pins an off-screen draft with the other this-session
 /// rows instead of ranking it by a stamp it cannot have yet.
 pub fn State::project_draft(
+  locale? : @i18n.Locale = English,
   self : State,
   context : SidebarContext,
   root : String,
@@ -157,7 +193,7 @@ pub fn State::project_draft(
     CodexProject(draft.grouping_root()) == CodexProject(root) else {
     return None
   }
-  Some(context.draft_input(draft, true))
+  Some(context.draft_input(locale~, draft, true))
 }
 
 ///|
@@ -165,6 +201,7 @@ pub fn State::project_draft(
 /// longer owns a sidebar section — its conversations live beside OpenSeek's
 /// in the shared Projects section, distinguished only by their row identity.
 pub fn State::project_conversations(
+  locale? : @i18n.Locale = English,
   self : State,
   context : SidebarContext,
   root : String,
@@ -178,7 +215,7 @@ pub fn State::project_conversations(
     for thread in self.threads if thread.project_key() is Some(thread_project) &&
     thread_project == project => {
       CodexProjectRow::{
-        input: thread.sidebar_input(self, context, true),
+        input: thread.sidebar_input(locale~, self, context, true),
         updated_at_ms: thread.updated_at_ms,
       }
     }
@@ -217,6 +254,7 @@ pub fn State::project_activation(
 /// project. They keep top-level rows at the end of the shared Projects
 /// section, exactly as they did in the retired Codex section.
 pub fn State::loose_entries(
+  locale? : @i18n.Locale = English,
   self : State,
   context : SidebarContext,
 ) -> Array[@section.Entry] {
@@ -228,7 +266,9 @@ pub fn State::loose_entries(
       root.is_empty() || !context.project_registered(root)
     })
   if loose_draft is Some(draft) {
-    entries.push(@section.Conversation(context.draft_input(draft, false)))
+    entries.push(
+      @section.Conversation(context.draft_input(locale~, draft, false)),
+    )
   }
   for thread in self.threads {
     if thread
@@ -236,7 +276,9 @@ pub fn State::loose_entries(
       .map(project => !context.project_registered(project.0))
       .unwrap_or(true) {
       entries.push(
-        @section.Conversation(thread.sidebar_input(self, context, false)),
+        @section.Conversation(
+          thread.sidebar_input(locale~, self, context, false),
+        ),
       )
     }
   }
@@ -248,16 +290,18 @@ pub fn State::loose_entries(
 /// stay non-selectable until restored because the live Codex page owns writer
 /// and composer state only for active app-server threads.
 pub fn State::archived_sidebar_entries(
+  locale? : @i18n.Locale = English,
   self : State,
   channel : @interop.ChannelId,
 ) -> Array[@section.Entry] {
   self.archived_threads.map(thread => {
-    @section.Conversation(thread.archived_sidebar_input(channel))
+    @section.Conversation(thread.archived_sidebar_input(locale~, channel))
   })
 }
 
 ///|
 fn CodexThreadRow::archived_sidebar_input(
+  locale? : @i18n.Locale = English,
   self : CodexThreadRow,
   channel : @interop.ChannelId,
 ) -> @conversation.Input {
@@ -268,8 +312,8 @@ fn CodexThreadRow::archived_sidebar_input(
       conversation=self.id,
       root?=self.project_root,
     ),
-    title: self.cwd.unwrap_or(self.title),
-    label: self.title,
+    title: self.cwd.unwrap_or(self.title.unwrap_or(ui(locale, NewChat))),
+    label: self.title.unwrap_or(ui(locale, NewChat)),
     nested: false,
     subrun: false,
     active: false,
@@ -279,11 +323,7 @@ fn CodexThreadRow::archived_sidebar_input(
     openable: false,
     worktree: None,
     run_mark: @conversation.NoRunMark,
-    trailing: [
-      @conversation.Restore(
-        title="Restore this Codex conversation to the sidebar",
-      ),
-    ],
+    trailing: [@conversation.Restore(title=ui(locale, RestoreCodex))],
     children: [],
   }
 }
@@ -304,6 +344,7 @@ fn CodexThreadRow::project_key(self : CodexThreadRow) -> CodexProject? {
 /// root dispatcher translates the stable id into open/archive messages; this
 /// adapter contains no commands and keeps the component input comparable.
 fn CodexThreadRow::sidebar_input(
+  locale? : @i18n.Locale = English,
   self : CodexThreadRow,
   state : State,
   context : SidebarContext,
@@ -328,8 +369,8 @@ fn CodexThreadRow::sidebar_input(
       conversation=self.id,
       root?=self.project_root,
     ),
-    title: self.cwd.unwrap_or(self.title),
-    label: self.title,
+    title: self.cwd.unwrap_or(self.title.unwrap_or(ui(locale, NewChat))),
+    label: self.title.unwrap_or(ui(locale, NewChat)),
     nested,
     subrun: false,
     active: selected,
@@ -341,7 +382,7 @@ fn CodexThreadRow::sidebar_input(
     .filter(worktree => worktree.present)
     .map(worktree => worktree.name),
     run_mark,
-    trailing: [@conversation.Archive(title="Archive Codex conversation")],
+    trailing: [@conversation.Archive(title=ui(locale, ArchiveCodex))],
     children: [],
   }
 }
@@ -350,6 +391,7 @@ fn CodexThreadRow::sidebar_input(
 /// Translate app-server Git data once at the package boundary. The shared
 /// presentation owns every label, tone, tooltip, row, and link after this.
 fn CodexGitStatus::presentation(
+  locale? : @i18n.Locale = English,
   self : CodexGitStatus,
 ) -> @composer.GitPresentation? {
   // App-server normally returns the branch beside a pull request. Preserve
@@ -357,7 +399,7 @@ fn CodexGitStatus::presentation(
   // still useful, and its details can name the branch as unknown.
   let branch = match self.branch {
     Some(branch) if !branch.is_empty() => branch
-    _ if self.pull_request is Some(_) => "Unknown"
+    _ if self.pull_request is Some(_) => ui(locale, UnknownLabel)
     _ => return None
   }
   Some(
@@ -382,7 +424,7 @@ fn CodexGitStatus::presentation(
       compare_url?=self.compare_url,
       missing_pull_request?=if self.pull_request is None &&
         self.compare_url is None {
-        Some("No matching pull request")
+        Some(ui(locale, NoMatchingPr))
       } else {
         None
       },
@@ -412,6 +454,7 @@ pub(all) struct PageActions {
 /// OpenSeek conversation: one compact topbar, one transcript, one composer.
 /// Conversation switching belongs to the global sidebar, not inside here.
 pub fn State::page(
+  locale? : @i18n.Locale = English,
   self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
@@ -423,8 +466,8 @@ pub fn State::page(
   // Settings page's Codex group; the topbar keeps only the status label.
   let topbar : Array[@html.Html] = []
   let title = match self.selection {
-    CodexDraftTask(_) => "New chat"
-    CodexStoredTask(thread) => thread.title
+    CodexDraftTask(_) => ui(locale, NewChat)
+    CodexStoredTask(thread) => thread.title.unwrap_or(ui(locale, NewChat))
     CodexNoTask => "Codex"
   }
   let placement = self.active_placement(channel)
@@ -459,7 +502,7 @@ pub fn State::page(
           @html.span(class="run-dot", "")
         },
         @html.span(class="run-text", [
-          @html.span(class="codex-connection", self.connection_label()),
+          @html.span(class="codex-connection", self.connection_label(locale~)),
           @html.span(class="codex-account-label", " · " + self.account_label()),
         ]),
       ],
@@ -474,11 +517,11 @@ pub fn State::page(
       class=if terminal_open { "panel-toggle active" } else { "panel-toggle" },
       disabled=!terminal_available,
       title=if terminal_open {
-        "Hide terminal"
+        ui(locale, HideTerminal)
       } else if terminal_available {
-        "Show terminal"
+        ui(locale, ShowTerminal)
       } else {
-        "Terminal requires an available Codex task placement"
+        ui(locale, TerminalPlacement)
       },
       on_click=actions.toggle_terminal,
       icon(icon_terminal),
@@ -493,9 +536,9 @@ pub fn State::page(
         class="panel-toggle",
         disabled=workspace is None,
         title=if workspace is Some(_) {
-          "Show files"
+          ui(locale, ShowFiles)
         } else {
-          "Files require a Codex working directory"
+          ui(locale, FilesDirectory)
         },
         on_click=actions.toggle_files,
         icon(icon_layout_sidebar_right),
@@ -517,7 +560,8 @@ pub fn State::page(
       }.render(),
     )
   }
-  if self.permission_picker.confirmation_dialog(dispatch) is Some(dialog) {
+  if self.permission_picker.confirmation_dialog(locale~, dispatch)
+    is Some(dialog) {
     page.push(dialog)
   }
   page

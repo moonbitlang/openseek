@@ -10,6 +10,7 @@ import {
   "moonbitlang/editor/viewer/browser",
   "moonbitlang/editor/viewer/common/core",
   "moonbitlang/editor/viewer/common/editor_api",
+  "moonbitlang/editor/viewer/common/localization",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/view_layout",
   "moonbitlang/editor/viewer/common/view_model",
@@ -94,7 +95,7 @@ pub struct View {
   editor_scrollbar : EditorScrollbar
   // private fields
 }
-pub fn View::View(view_zones_configuration_reader? : () -> (Int, Double, Double)) -> Self
+pub fn View::View(localization? : @localization.Localization, view_zones_configuration_reader? : () -> (Int, Double, Double)) -> Self
 pub fn View::add_disposable(Self, @common.Disposable) -> Unit
 pub fn View::apply_squiggly_theme(Self) -> Unit
 pub fn View::begin_view_event_batch(Self) -> Unit

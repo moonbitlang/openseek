@@ -30,12 +30,15 @@ fn ContextMenuContributionState::get_or_create_widget(
   match self.widget {
     Some(widget) => Some(widget)
     None => {
-      let widget = @contextmenu_browser.ContextMenuWidget({
-        on_action: command_id => {
-          editor_registry().run_editor_command(viewer, command_id) |> ignore
+      let widget = @contextmenu_browser.ContextMenuWidget(
+        localization=viewer.services.localization,
+        {
+          on_action: command_id => {
+            editor_registry().run_editor_command(viewer, command_id) |> ignore
+          },
+          on_hide: _was_cancelled => (),
         },
-        on_hide: _was_cancelled => (),
-      })
+      )
       self.widget = Some(widget)
       Some(widget)
     }

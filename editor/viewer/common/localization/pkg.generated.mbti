@@ -1,0 +1,94 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/editor/viewer/common/localization"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/editor/base/common",
+}
+
+// Values
+pub fn text(Language, Message) -> String
+
+// Errors
+
+// Types and methods
+pub(all) enum Language {
+  English
+  SimplifiedChinese
+} derive(Eq, @debug.Debug)
+pub fn Language::equal(Self, Self) -> Bool
+pub fn Language::not_equal(Self, Self) -> Bool
+pub fn Language::to_repr(Self) -> @debug.Repr
+
+type Localization
+pub fn Localization::Localization(language? : Language) -> Self
+pub fn Localization::bind(Self, (Language) -> Unit) -> @common.Disposable
+pub fn Localization::dispose(Self) -> Unit
+pub fn Localization::language(Self) -> Language
+pub fn Localization::set_language(Self, Language) -> Unit
+pub fn Localization::text(Self, Message) -> String
+
+pub(all) enum Message {
+  ReadonlyCode
+  ReadonlyMarkdown
+  TableOfContents
+  ItemSeparator
+  ExpandSection
+  CollapseSection
+  FileComparison
+  OriginalFile
+  ModifiedFile
+  ResizeDiffPanes
+  CannotComputeDiff
+  InvalidDiff
+  EditorContextMenu
+  ShowContextMenu
+  PeekLabel
+  GoDefinition
+  PeekDefinition
+  GoReferences
+  PeekReferences
+  NoDefinition
+  NoDefinitions
+  NoReferences
+  CannotOpenDefinition
+  CannotOpenReference
+  NoPreview
+  OriginalSource
+  ShowSource
+  ShowDocumentation
+  CollapseDocumentation
+  ExpandDocumentation
+  LoadingLabel
+  LoadingPreview
+  DefinitionsLabel
+  ReferencesLabel
+  DefinitionPreview
+  ReferencePreview
+  LoadingDefinitions
+  LoadingReferences
+  CopyLabel
+  NoResults
+  AddFeedback
+  FeedbackLabel
+  CancelFeedback
+  CancelLabel
+  AddFeedbackBatch
+  ApplyFeedbackShortcut
+  ApplyFeedback
+  CollapseLabel
+  ExpandLabel
+  AgentReview
+  AddToComment
+  EditLabel
+  RemoveLabel
+  ShareComment
+  AcceptLabel
+  RemoveComment
+  DeleteLabel
+  AddComment
+}
+
+// Type aliases
+
+// Traits

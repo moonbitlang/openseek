@@ -222,6 +222,7 @@ pub fn State::accepts_composer_identity(
 
 ///|
 fn CodexPermissionPicker::confirmation_dialog(
+  locale? : @i18n.Locale = English,
   self : CodexPermissionPicker,
   dispatch : @cmd.Emit[Msg],
 ) -> @html.Html? {
@@ -234,23 +235,24 @@ fn CodexPermissionPicker::confirmation_dialog(
         attrs=@html.Attrs::build()
           .role("dialog")
           .aria_modal("true")
-          .aria_label("Enable full Codex access")
+          .aria_label(ui(locale, EnableFullCodex))
           .on_click(event => {
             event.stop_propagation()
             @cmd.none
           }),
         [
-          @html.div(class="modal-title", "Enable full access?"),
-          @html.div(
-            class="modal-body",
-            "Codex will be able to access the internet and read or modify any file on this computer without asking. Approve for me is safer because it keeps the workspace sandbox in place.",
-          ),
+          @html.div(class="modal-title", ui(locale, EnableFullQuestion)),
+          @html.div(class="modal-body", ui(locale, FullAccessWarning)),
           @html.div(class="modal-actions", [
-            @html.button(class="button secondary", on_click=cancel, "Cancel"),
+            @html.button(
+              class="button secondary",
+              on_click=cancel,
+              ui(locale, CancelLabel),
+            ),
             @html.button(
               class="button danger",
               on_click=dispatch(ConfirmFullAccess),
-              "Enable full access",
+              ui(locale, EnableFullAccess),
             ),
           ]),
         ],
@@ -264,6 +266,7 @@ fn CodexPermissionPicker::confirmation_dialog(
 /// the shared composer component. No editable or completion state is retained
 /// in this view projection.
 pub fn State::composer_input(
+  locale? : @i18n.Locale = English,
   self : State,
   context : ComposerContext,
 ) -> @composer.Input {
@@ -317,7 +320,8 @@ pub fn State::composer_input(
       }),
     )
   }
-  if self.git_status is Some(git) && git.presentation() is Some(presentation) {
+  if self.git_status is Some(git) &&
+    git.presentation(locale~) is Some(presentation) {
     status.push(
       @composer.GitStatus({ presentation, open: self.git_details_open, }),
     )
@@ -352,12 +356,12 @@ pub fn State::composer_input(
     slash_commands: [
       {
         label: "/compact",
-        detail: "Summarize and shrink this conversation's context",
+        detail: ui(locale, CompactContext),
         command: "compact",
       },
       {
         label: "/review",
-        detail: "Review staged, unstaged, and untracked changes",
+        detail: ui(locale, ReviewChanges),
         command: "review",
       },
     ],
@@ -377,11 +381,11 @@ pub fn State::composer_input(
       context: before,
       status,
       placeholder: if active_turn is Some(_) {
-        "Steer the running task — your message joins it at the next step."
+        ui(locale, SteerPlaceholder)
       } else if missing_worktree {
-        "Rebuild this task's worktree before continuing."
+        ui(locale, RebuildWorktree)
       } else {
-        "Ask Codex to inspect, edit, or explain this workspace."
+        ui(locale, AskCodex)
       },
       disabled: !can_edit,
       images_enabled: !self.loading,

@@ -21,24 +21,36 @@ fn[Payload : ToJson, Reply : @json.FromJson] request(
 
 ///|
 fn Model::share(
+  locale? : @i18n.Locale = English,
   self : Model,
   emit : @cmd.Emit[Msg],
   source : @protocol.SessionExportPayload,
 ) -> @cmd.Cmd {
   let generation = self.generation
-  request(emit, @commands.session_share, source, failure="Could not share", result => {
-    Published(
-      generation~,
-      match result {
-        Ok(reply) => reply
-        Err(message) => @protocol.Failed(message~)
-      },
-    )
-  })
+  request(
+    emit,
+    @commands.session_share,
+    source,
+    failure=if locale is SimplifiedChinese {
+      "分享失败"
+    } else {
+      "Could not share"
+    },
+    result => {
+      Published(
+        generation~,
+        match result {
+          Ok(reply) => reply
+          Err(message) => @protocol.Failed(message~)
+        },
+      )
+    },
+  )
 }
 
 ///|
 fn Model::download(
+  locale? : @i18n.Locale = English,
   self : Model,
   emit : @cmd.Emit[Msg],
   source : @protocol.SessionExportPayload,
@@ -48,7 +60,11 @@ fn Model::download(
     emit,
     @commands.session_export,
     source,
-    failure="Could not download",
+    failure=if locale is SimplifiedChinese {
+      "下载失败"
+    } else {
+      "Could not download"
+    },
     result => Downloaded(generation~, result),
   )
 }
@@ -56,13 +72,21 @@ fn Model::download(
 ///|
 /// Sign in to the selected OpenSeek server using the existing browser flow.
 /// Returning to Ready requires another explicit Share click before upload.
-fn Model::sign_in(self : Model, emit : @cmd.Emit[Msg]) -> @cmd.Cmd {
+fn Model::sign_in(
+  locale? : @i18n.Locale = English,
+  self : Model,
+  emit : @cmd.Emit[Msg],
+) -> @cmd.Cmd {
   let generation = self.generation
   request(
     emit,
     @commands.auth_connect,
     @protocol.NoPayload,
-    failure="Could not sign in",
+    failure=if locale is SimplifiedChinese {
+      "登录失败"
+    } else {
+      "Could not sign in"
+    },
     result => SignedIn(generation~, result.map(_ => ())),
   )
 }

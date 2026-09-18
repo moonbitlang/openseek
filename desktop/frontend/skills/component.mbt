@@ -12,7 +12,10 @@
 pub fn component(
   input : @rabbita.Val[Input],
   state : @rabbita.Val[State],
+  locale : @rabbita.Val[@i18n.Locale],
   emit : @cmd.Emit[Msg],
 ) -> @rabbita.Val[@html.Html] {
-  state.view2(input, (state, input) => page(state, input, emit))
+  state.view3(input, locale, (state, input, locale) => {
+    page(locale~, state, input, emit)
+  })
 }

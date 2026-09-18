@@ -165,7 +165,14 @@ async fn main {
     // Both command extensions are deliberately granted to the configured
     // entry page; registering backend handlers alone does not grant renderer
     // access.
-    .capability(@extension.openseek_capability(state, bridge, views))
+    .capability(
+      @extension.openseek_capability(
+        state,
+        bridge,
+        views,
+        runtime_dir?=runtime_dir.map(dir => dir.to_string()),
+      ),
+    )
     // System notifications are an ordinary generated extension now: the
     // frontend posts them and receives `notification.click` with the run id.
     .capability(@notification.capability())

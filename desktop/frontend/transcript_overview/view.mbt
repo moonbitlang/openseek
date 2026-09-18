@@ -10,6 +10,7 @@
 /// is noise. `clock` formats an entry's send stamp; the caller owns the
 /// locale format, and an empty label drops the time row.
 pub fn rail(
+  locale? : @i18n.Locale = English,
   entries : Array[Entry],
   state : State,
   emit : @cmd.Emit[Msg],
@@ -31,7 +32,11 @@ pub fn rail(
     // reader who cannot see the difference between two 7px dashes still hears
     // which turns hit errors while arrowing the rail.
     let label = if entry.failed {
-      "\{entry.text} (had errors)"
+      if locale is SimplifiedChinese {
+        "\{entry.text}（发生过错误）"
+      } else {
+        "\{entry.text} (had errors)"
+      }
     } else {
       entry.text
     }
@@ -59,13 +64,21 @@ pub fn rail(
   let children : Array[@html.Html] = [@html.div(class="overview-rail", ticks)]
   if state.hover is Some(hover) &&
     entries.iter().find_first(entry => entry.key == hover.key) is Some(entry) {
-    children.push(preview(entry, clock, flip=hover.flip, anchor=hover.anchor))
+    children.push(
+      preview(locale~, entry, clock, flip=hover.flip, anchor=hover.anchor),
+    )
   }
   @html.nav(
     class="transcript-overview",
     hidden=entries.length() < 2,
     attrs=@html.Attrs::build()
-      .aria_label("Conversation overview")
+      .aria_label(
+        if locale is SimplifiedChinese {
+          "对话概览"
+        } else {
+          "Conversation overview"
+        },
+      )
       .on_mouseleave(_ => emit(Left)),
     children,
   )
@@ -116,6 +129,7 @@ fn preview_measure(event : @dom.MouseEvent) -> (Bool, Double) {
 
 ///|
 fn preview(
+  locale? : @i18n.Locale = English,
   entry : Entry,
   clock : (Double) -> String,
   flip~ : Bool,
@@ -133,7 +147,16 @@ fn preview(
   if entry.failed {
     // The popover is where a reader checks what a mark meant, so it carries
     // the fact in words rather than leaving the tick's color to be decoded.
-    children.push(@html.div(class="overview-preview-failed", "had errors"))
+    children.push(
+      @html.div(
+        class="overview-preview-failed",
+        if locale is SimplifiedChinese {
+          "发生过错误"
+        } else {
+          "had errors"
+        },
+      ),
+    )
   }
   if entry.reply is Some(reply) {
     children.push(

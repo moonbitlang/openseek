@@ -16,10 +16,14 @@ priv struct ToolCallTab {
 /// Render a radio-backed tab set. `key` is stable for the owning transcript
 /// event, so a later render patches the same controls and preserves the tab
 /// the reader selected. The first view is the useful default on first mount.
-fn tool_call_tabs(key : String, tabs : Array[ToolCallTab]) -> @html.Html {
+fn tool_call_tabs(
+  locale? : @i18n.Locale = English,
+  key : String,
+  tabs : Array[ToolCallTab],
+) -> @html.Html {
   let group = "tool-call-tabs-\{key}"
   let children : Array[@html.Html] = [
-    @html.legend(class="visually-hidden", "Tool call details"),
+    @html.legend(class="visually-hidden", ui(locale, ToolDetails)),
   ]
   for index, tab in tabs {
     let id = "\{group}-\{index}"
@@ -77,6 +81,7 @@ fn tool_call_tabs_key(call_id : String, sequence : Int?) -> String {
 /// `None` when there is only one useful view: the existing labeled fallback is
 /// clearer than a one-entry tab strip.
 fn tool_arguments_tabbed_view(
+  locale? : @i18n.Locale = English,
   key : String,
   name : String,
   arguments : String?,
@@ -85,20 +90,20 @@ fn tool_arguments_tabbed_view(
   let trimmed = arguments.trim()
   guard !trimmed.is_empty() && trimmed != "{}" else { return None }
   let tabs : Array[ToolCallTab] = []
-  match custom_card(name, arguments) {
+  match custom_card(locale~, name, arguments) {
     Some((label, card)) => {
       tabs.push({ label, body: card, })
       tabs.push({
-        label: "Original JSON",
+        label: ui(locale, OriginalJson),
         body: original_json_content(arguments),
       })
     }
     None => {
       let content = json_arguments_content(arguments)
-      tabs.push({ label: "Arguments", body: content.body, })
+      tabs.push({ label: ui(locale, ArgumentsLabel), body: content.body, })
       if content.has_distinct_original {
         tabs.push({
-          label: "Original JSON",
+          label: ui(locale, OriginalJson),
           body: original_json_content(arguments),
         })
       }
@@ -107,32 +112,36 @@ fn tool_arguments_tabbed_view(
   if tabs.length() < 2 {
     return None
   }
-  Some(tool_call_tabs(key, tabs))
+  Some(tool_call_tabs(locale~, key, tabs))
 }
 
 ///|
 /// Result views for a tool call. A numbered MoonBit read workflow result gets
 /// highlighted Output plus the exact numbered protocol in Original output;
 /// every other result is already its own faithful display.
-fn tool_output_tabs(name : String, output : String) -> Array[ToolCallTab] {
+fn tool_output_tabs(
+  locale? : @i18n.Locale = English,
+  name : String,
+  output : String,
+) -> Array[ToolCallTab] {
   if output.is_blank() {
     return []
   }
   if name == "mbtx" && @read_html.read_workflow_output(output) is Some(rendered) {
     return [
       {
-        label: "Output",
+        label: ui(locale, OutputLabel),
         body: @html.pre(class="tool-call-output", [rendered]),
       },
       {
-        label: "Original output",
+        label: ui(locale, OriginalOutput),
         body: @html.pre(class="tool-card-original-json", output),
       },
     ]
   }
   [
     {
-      label: "Output",
+      label: ui(locale, OutputLabel),
       body: @html.pre(class="tool-call-output", truncate_output(output)),
     },
   ]

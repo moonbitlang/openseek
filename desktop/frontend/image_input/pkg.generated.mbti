@@ -4,16 +4,17 @@ package "openseek_desktop/frontend/image_input"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
+  "openseek_desktop/frontend/i18n",
 }
 
 // Values
 pub fn dragged(@dom.DragEvent) -> @cmd.Cmd
 
-pub fn dropped(@dom.DragEvent, @cmd.Emit[Event]) -> @cmd.Cmd
+pub fn dropped(locale? : @i18n.Locale, @dom.DragEvent, @cmd.Emit[Event]) -> @cmd.Cmd
 
-pub fn pasted(@dom.ClipboardEvent, @cmd.Emit[Event]) -> @cmd.Cmd
+pub fn pasted(locale? : @i18n.Locale, @dom.ClipboardEvent, @cmd.Emit[Event]) -> @cmd.Cmd
 
-pub fn pick(@cmd.Emit[Event]) -> @cmd.Cmd
+pub fn pick(locale? : @i18n.Locale, @cmd.Emit[Event]) -> @cmd.Cmd
 
 // Errors
 

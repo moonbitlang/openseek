@@ -287,6 +287,7 @@ pub fn resize_handle_view() -> @html.Html {
 /// order is structural — rabbita diffs by index, so every part renders
 /// unconditionally.
 pub fn body_view(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -434,9 +435,9 @@ pub fn body_view(
       package_diagram_host,
       diff_editor_host,
       semantic_review_host,
-      viewer_notice(state, ctx),
+      viewer_notice(locale~, state, ctx),
     ]),
-    tree_pane(dispatch, state, ctx),
+    tree_pane(locale~, dispatch, state, ctx),
   ])
 }
 
@@ -445,9 +446,13 @@ pub fn body_view(
 /// show — a deleted, unavailable, binary, or oversized file. Plain panel
 /// chrome laid over the (cleared) viewer, so a notice never renders as a
 /// highlighted source document. Always in the DOM; blank and hidden otherwise.
-fn viewer_notice(state : State, ctx : Ctx) -> @html.Html {
+fn viewer_notice(
+  locale? : @i18n.Locale = English,
+  state : State,
+  ctx : Ctx,
+) -> @html.Html {
   if ctx.active_history_diff is Some(diff) {
-    let text = history_diff_notice(state, diff)
+    let text = history_diff_notice(locale~, state, diff)
     return @html.div(
       class=if text.is_empty() {
         "viewer-notice hidden"
@@ -466,23 +471,26 @@ fn viewer_notice(state : State, ctx : Ctx) -> @html.Html {
     Some(path) =>
       match state.docs.get(path) {
         Some(doc) if state.shows_delayed_diff_loading(doc) =>
-          "Loading diff for \{doc.name}…"
+          dynamic_text(locale, DLoadingDiff(doc.name.to_string()))
         Some(doc) if doc.diff_is_pending() => ""
         Some(doc) =>
           match doc.state {
             TabDeleted =>
               match doc.review {
                 Some({ baseline: ReviewLoading, .. }) =>
-                  "Loading the review baseline for \{doc.name}…"
+                  dynamic_text(locale, DLoadingBaseline(doc.name.to_string()))
                 Some({ baseline: ReviewContent(_), .. }) => ""
                 Some({ baseline: ReviewMissing, .. }) =>
                   "\{doc.name} was deleted and has no review baseline to preview."
                 Some({ baseline: ReviewBinary, .. }) =>
-                  "The review baseline for \{doc.name} is binary and cannot be previewed."
+                  dynamic_text(locale, DBinaryBaseline(doc.name.to_string()))
                 Some({ baseline: ReviewOversized, .. }) =>
-                  "The review baseline for \{doc.name} is too large to preview."
+                  dynamic_text(locale, DLargeBaseline(doc.name.to_string()))
                 Some({ baseline: ReviewFailed(message), .. }) =>
-                  "Could not load the review baseline for \{doc.name}: \{message}."
+                  dynamic_text(
+                    locale,
+                    DBaselineFailed(doc.name.to_string(), message.to_string()),
+                  )
                 None => "\{doc.name} was deleted on disk."
               }
             TabBinary => "\{doc.name} is a binary file and cannot be previewed."
@@ -491,7 +499,10 @@ fn viewer_notice(state : State, ctx : Ctx) -> @html.Html {
               if doc.review is Some({ baseline: ReviewContent(_), .. }) {
                 ""
               } else {
-                "Could not read \{doc.name}: \{message}."
+                dynamic_text(
+                  locale,
+                  DReadFailed(doc.name.to_string(), message.to_string()),
+                )
               }
             TabUnavailable(message) => message
             TabLoading | TabLoaded(..) => ""
@@ -516,21 +527,30 @@ fn viewer_notice(state : State, ctx : Ctx) -> @html.Html {
 }
 
 ///|
-fn history_diff_notice(state : State, diff : @dock.GitHistoryDiff) -> String {
+fn history_diff_notice(
+  locale? : @i18n.Locale = English,
+  state : State,
+  diff : @dock.GitHistoryDiff,
+) -> String {
   guard state.history_docs.get(history_diff_key(diff)) is Some(doc) else {
-    return "Loading historical diff for \{basename(diff.path)}…"
+    return dynamic_text(
+      locale,
+      DLoadingHistoryDiff(basename(diff.path).to_string()),
+    )
   }
   match (doc.original, doc.modified) {
     (HistoryBlobLoading, _) | (_, HistoryBlobLoading) =>
-      "Loading historical diff for \{basename(diff.path)}…"
+      dynamic_text(locale, DLoadingHistoryDiff(basename(diff.path).to_string()))
     (HistoryBlobError(message), _) | (_, HistoryBlobError(message)) =>
-      "Could not load historical diff for \{basename(diff.path)}: \{message}."
+      dynamic_text(
+        locale,
+        DHistoryDiffFailed(basename(diff.path).to_string(), message.to_string()),
+      )
     (HistoryBlobBinary, _) | (_, HistoryBlobBinary) =>
       "\{basename(diff.path)} is binary at this revision and cannot be previewed."
     (HistoryBlobOversized, _) | (_, HistoryBlobOversized) =>
       "\{basename(diff.path)} is too large at this revision to preview."
-    (HistoryBlobMissing, HistoryBlobMissing) =>
-      "No file content exists on either side of this commit."
+    (HistoryBlobMissing, HistoryBlobMissing) => ui(locale, NoCommitContent)
     _ => ""
   }
 }
@@ -539,25 +559,31 @@ fn history_diff_notice(state : State, diff : @dock.GitHistoryDiff) -> String {
 /// The toggleable file-tree panel, docked flat under the viewer like an Emacs
 /// bottom window. Request-local listing failures remain beside the inventory;
 /// watcher failures use the root app's transient toast rail instead.
-fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html {
+fn tree_pane(
+  locale? : @i18n.Locale = English,
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
+) -> @html.Html {
   let visible_error = if state.explorer_mode is ExplorerSearch {
     None
   } else {
     state.error
   }
   let inventory = if ctx.placement is None {
-    [@html.div(class="file-panel-empty", "Waiting for workspace placement…")]
+    [@html.div(class="file-panel-empty", ui(locale, WaitingPlacement))]
   } else if ctx.placement is Some(@interop.MissingWorktree(..)) {
-    [@html.div(class="file-panel-empty", "Worktree checkout is missing.")]
+    [@html.div(class="file-panel-empty", ui(locale, MissingCheckout))]
   } else if ctx.owner.session.is_empty() {
-    [@html.div(class="file-panel-empty", "No conversation selected.")]
+    [@html.div(class="file-panel-empty", ui(locale, NoConversation))]
   } else {
     match state.explorer_mode {
-      ExplorerFiles => file_inventory(dispatch, state, ctx)
-      ExplorerChanges => [review_git_layout(dispatch, state, ctx)]
+      ExplorerFiles => file_inventory(locale~, dispatch, state, ctx)
+      ExplorerChanges => [review_git_layout(locale~, dispatch, state, ctx)]
       ExplorerSearch =>
         [
           state.search.explorer_view(
+            locale~,
             ctx.search_input(),
             dispatch.map(msg => Search(msg)),
             (path, range) => dispatch(SearchMatchSelected(path~, range~)),
@@ -576,27 +602,29 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
     ),
     @html.div(
       class="explorer-tabs",
-      attrs=@html.Attrs::build().role("tablist").aria_label("Explorer views"),
+      attrs=@html.Attrs::build()
+        .role("tablist")
+        .aria_label(ui(locale, ExplorerViews)),
       [
         explorer_tab(
           dispatch,
           state.explorer_mode,
           ExplorerFiles,
-          "Workspace files",
+          ui(locale, WorkspaceFiles),
           [
             @icons.icon(@icons.icon_folder),
-            @html.span(class="visually-hidden", "Files"),
+            @html.span(class="visually-hidden", ui(locale, FilesLabel)),
           ],
         ),
         explorer_tab(
           dispatch,
           state.explorer_mode,
           ExplorerChanges,
-          "Changed files (click again to refresh)",
+          ui(locale, ChangedFilesHint),
           // Keep the name and count in the accessibility tree, as before.
           [
             @icons.icon(@icons.icon_diff_multiple),
-            @html.span(class="visually-hidden", "Changes"),
+            @html.span(class="visually-hidden", ui(locale, ChangesLabel)),
             change_count(state.changes),
           ],
         ),
@@ -604,10 +632,10 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
           dispatch,
           state.explorer_mode,
           ExplorerSearch,
-          "Search across the workspace",
+          ui(locale, SearchWorkspace),
           [
             @icons.icon(@icons.icon_search),
-            @html.span(class="visually-hidden", "Search"),
+            @html.span(class="visually-hidden", ui(locale, SearchLabel)),
           ],
         ),
       ],
@@ -652,6 +680,7 @@ fn change_count(changes : ChangeList) -> @html.Html {
 
 ///|
 fn review_git_sections(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -683,14 +712,14 @@ fn review_git_sections(
               .aria_controls("review-changes-body"),
             [
               @html.span(class="review-section-chevron", "›"),
-              @html.span(class="review-section-title", "Changes"),
+              @html.span(class="review-section-title", ui(locale, ChangesLabel)),
               change_count(state.changes),
             ],
           ),
           @html.div(
             class="review-section-body",
             attrs=@html.Attrs::build().id("review-changes-body"),
-            change_inventory_rows(dispatch, state, ctx),
+            change_inventory_rows(locale~, dispatch, state, ctx),
           ),
         ],
       ),
@@ -700,12 +729,12 @@ fn review_git_sections(
         } else {
           "review-split-handle"
         },
-        title="Resize Changes and Git Graph",
+        title=ui(locale, ResizeGraph),
         attrs=@html.Attrs::build()
           .id(GitGraphResizeHandleId)
           .role("separator")
           .tabindex(0)
-          .aria_label("Resize Changes and Git Graph")
+          .aria_label(ui(locale, ResizeGraph))
           .aria_orientation("horizontal")
           .on_keydown(event => {
             match event.key() {
@@ -741,14 +770,14 @@ fn review_git_sections(
                 @html.span(class="git-graph-chevron", icon_git_chevron_right()),
                 @html.span(
                   class="review-section-title git-graph-title",
-                  "Graph",
+                  ui(locale, GraphLabel),
                 ),
               ],
             ),
             @html.div(class="git-graph-toolbar", [
               @html.span(
                 class="git-graph-context git-graph-repository",
-                title=git_graph_repository_label(ctx),
+                title=git_graph_repository_label(locale~, ctx),
                 [
                   @html.span(
                     class="git-graph-context-icon",
@@ -756,26 +785,26 @@ fn review_git_sections(
                   ),
                   @html.span(
                     class="git-graph-context-label",
-                    git_graph_repository_label(ctx),
+                    git_graph_repository_label(locale~, ctx),
                   ),
                 ],
               ),
               @html.span(
                 class="git-graph-context git-graph-branch",
-                title=git_graph_branch_label(state),
+                title=git_graph_branch_label(locale~, state),
                 [
                   @html.span(class="git-graph-context-icon", icon_git_branch()),
                   @html.span(
                     class="git-graph-context-label",
-                    git_graph_branch_label(state),
+                    git_graph_branch_label(locale~, state),
                   ),
                 ],
               ),
               @html.button(
                 class="git-graph-refresh",
-                title="Refresh Git Graph",
+                title=ui(locale, RefreshGraph),
                 on_click=dispatch(GitHistoryRefreshRequested),
-                attrs=@html.Attrs::build().aria_label("Refresh Git Graph"),
+                attrs=@html.Attrs::build().aria_label(ui(locale, RefreshGraph)),
                 @html.span(class="git-graph-refresh-icon", icon_git_sync()),
               ),
             ]),
@@ -794,7 +823,7 @@ fn review_git_sections(
                 }
                 dispatch(GitHistoryLoadMoreRequested)
               }),
-            git_graph_inventory(dispatch, state, ctx),
+            git_graph_inventory(locale~, dispatch, state, ctx),
           ),
         ],
       ),
@@ -803,19 +832,25 @@ fn review_git_sections(
 }
 
 ///|
-fn git_graph_repository_label(ctx : Ctx) -> String {
+fn git_graph_repository_label(
+  locale? : @i18n.Locale = English,
+  ctx : Ctx,
+) -> String {
   ctx
   .workspace()
   .map(resource => @resource.label(resource))
-  .unwrap_or("Repository")
+  .unwrap_or(ui(locale, RepositoryLabel))
 }
 
 ///|
-fn git_graph_branch_label(state : State) -> String {
+fn git_graph_branch_label(
+  locale? : @i18n.Locale = English,
+  state : State,
+) -> String {
   match state.git_graph {
     GitGraphReady(snapshot~, ..) =>
       snapshot.branch.unwrap_or(
-        snapshot.head.map(short_commit).unwrap_or("No commits"),
+        snapshot.head.map(short_commit).unwrap_or(ui(locale, NoCommits)),
       )
     _ => ""
   }
@@ -844,31 +879,27 @@ fn focus_git_commit_after_render(index : Int) -> @cmd.Cmd {
 
 ///|
 fn git_graph_inventory(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> Array[@html.Html] {
   match state.git_graph {
     GitGraphIdle | GitGraphLoading =>
-      [@html.div(class="file-panel-empty", "Loading Git history…")]
+      [@html.div(class="file-panel-empty", ui(locale, LoadingHistory))]
     GitGraphFailed(message) =>
       [
         @html.div(class="git-graph-message", [
-          @html.span("Could not load Git history: \{message}."),
+          @html.span(dynamic_text(locale, DHistoryFailed(message.to_string()))),
           @html.button(
             class="git-graph-retry",
             on_click=dispatch(GitHistoryRefreshRequested),
-            "Retry",
+            ui(locale, RetryLabel),
           ),
         ]),
       ]
     GitGraphReady(repository=false, ..) =>
-      [
-        @html.div(
-          class="file-panel-empty",
-          "Git is unavailable or this workspace is not a Git repository.",
-        ),
-      ]
+      [@html.div(class="file-panel-empty", ui(locale, GitUnavailable))]
     GitGraphReady(
       snapshot~,
       commits~,
@@ -878,15 +909,14 @@ fn git_graph_inventory(
       ..
     ) => {
       if commits.is_empty() {
-        return [
-          @html.div(class="file-panel-empty", "This branch has no commits."),
-        ]
+        return [@html.div(class="file-panel-empty", ui(locale, EmptyBranch))]
       }
       let layouts = graph_rows(commits, snapshot)
       let children : Array[@html.Html] = []
       for index, commit in commits {
         children.push(
           git_commit_row(
+            locale~,
             dispatch,
             state,
             ctx,
@@ -901,7 +931,7 @@ fn git_graph_inventory(
         children.push(
           @html.div(
             class="git-graph-load-error",
-            "Could not load more: \{message}",
+            dynamic_text(locale, DLoadMoreFailed(message.to_string())),
           ),
         )
       }
@@ -917,9 +947,9 @@ fn git_graph_inventory(
               @html.span(
                 class="git-graph-load-more-label",
                 if loading_more {
-                  "Loading…"
+                  ui(locale, LoadingLabel)
                 } else {
-                  "Load more"
+                  ui(locale, LoadMore)
                 },
               ),
             ],
@@ -931,7 +961,7 @@ fn git_graph_inventory(
           class="git-graph-list",
           attrs=@html.Attrs::build()
             .role("tree")
-            .aria_label("Git commit history"),
+            .aria_label(ui(locale, CommitHistory)),
           children,
         ),
       ]
@@ -1220,6 +1250,7 @@ fn git_commit_refs(
 
 ///|
 fn git_commit_row(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -1300,7 +1331,9 @@ fn git_commit_row(
     ),
   ]
   if expanded {
-    children.push(git_commit_files(dispatch, state, ctx, commit, layout))
+    children.push(
+      git_commit_files(locale~, dispatch, state, ctx, commit, layout),
+    )
   }
   @html.div(class="git-commit-entry", children)
 }
@@ -1319,6 +1352,7 @@ fn historical_status_label(status : String) -> String {
 
 ///|
 fn git_commit_files(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -1332,7 +1366,7 @@ fn git_commit_files(
       [
         @html.div(class="git-commit-files-message", [
           git_graph_placeholder(columns, highlight_index),
-          @html.span("Loading changed files…"),
+          @html.span(ui(locale, LoadingChangedFiles)),
         ]),
       ]
     GitCommitFilesFailed(commit=id, message~) if id == commit.id =>
@@ -1340,11 +1374,11 @@ fn git_commit_files(
         @html.div(class="git-commit-files-message error", [
           git_graph_placeholder(columns, highlight_index),
           @html.span(class="git-commit-files-message-content", [
-            @html.span("Could not load this commit: \{message}."),
+            @html.span(dynamic_text(locale, DCommitFailed(message.to_string()))),
             @html.button(
               class="git-history-retry",
               on_click=dispatch(GitCommitChangesRetry(commit.id)),
-              "Retry",
+              ui(locale, RetryLabel),
             ),
           ]),
         ]),
@@ -1354,7 +1388,7 @@ fn git_commit_files(
         [
           @html.div(class="git-commit-files-message", [
             git_graph_placeholder(columns, highlight_index),
-            @html.span("No changes in this workspace."),
+            @html.span(ui(locale, NoWorkspaceChanges)),
           ]),
         ]
       } else {
@@ -1363,7 +1397,7 @@ fn git_commit_files(
           [
             @html.div(
               class="git-commit-files-message",
-              "No files match these filters.",
+              ui(locale, NoFilterMatches),
             ),
           ]
         } else {
@@ -1398,7 +1432,10 @@ fn git_commit_files(
                 } else {
                   "git-history-file"
                 },
-                title="Open historical diff for \{file.path}",
+                title=dynamic_text(
+                  locale,
+                  DOpenHistoryDiff(file.path.to_string()),
+                ),
                 on_click=dispatch(HistoricalFileSelected(diff)),
                 attrs=@html.Attrs::build()
                   .role("treeitem")
@@ -1409,11 +1446,11 @@ fn git_commit_files(
               @html.div(
                 class="git-history-file unavailable",
                 title=if file.kind == "submodule" {
-                  "Git submodule cannot be shown as a text diff"
+                  ui(locale, SubmoduleDiff)
                 } else if file.kind == "symlink" {
-                  "Git symlink cannot be shown as a text diff"
+                  ui(locale, SymlinkDiff)
                 } else {
-                  "Original path is outside this workspace"
+                  ui(locale, PathOutsideWorkspace)
                 },
                 attrs=@html.Attrs::build()
                   .role("treeitem")
@@ -1428,7 +1465,7 @@ fn git_commit_files(
       [
         @html.div(class="git-commit-files-message", [
           git_graph_placeholder(columns, highlight_index),
-          @html.span("Loading changed files…"),
+          @html.span(ui(locale, LoadingChangedFiles)),
         ]),
       ]
   }
@@ -1441,6 +1478,7 @@ fn git_commit_files(
 
 ///|
 fn file_inventory(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -1448,9 +1486,9 @@ fn file_inventory(
   let entries = visible_entries(state)
   let focus = tree_focus_target(state)
   let children = if !state.children.contains("") {
-    [@html.div(class="file-panel-empty", "Loading…")]
+    [@html.div(class="file-panel-empty", ui(locale, LoadingLabel))]
   } else if entries.is_empty() {
-    [@html.div(class="file-panel-empty", "This workspace is empty.")]
+    [@html.div(class="file-panel-empty", ui(locale, EmptyWorkspace))]
   } else {
     entries.map(pair => tree_row(dispatch, state, ctx, pair.0, pair.1, focus))
   }
@@ -1459,7 +1497,7 @@ fn file_inventory(
       attrs=@html.Attrs::build()
         .id("workspace-file-tree")
         .role("tree")
-        .aria_label("Workspace files")
+        .aria_label(ui(locale, WorkspaceFiles))
         .tabindex(if entries.is_empty() { 0 } else { -1 }),
       children,
     ),
@@ -1468,30 +1506,26 @@ fn file_inventory(
 
 ///|
 fn change_inventory_rows(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> Array[@html.Html] {
   match state.changes {
     ChangeListIdle | ChangeListLoading(_) =>
-      [@html.div(class="file-panel-empty", "Loading changes…")]
+      [@html.div(class="file-panel-empty", ui(locale, LoadingChanges))]
     ChangeListFailed(message) =>
       [
         @html.div(
           class="file-panel-empty",
-          "Could not load changed files: \{message}. Click Changes to retry.",
+          dynamic_text(locale, DChangesFailed(message.to_string())),
         ),
       ]
     ChangeListReady(repository=false, ..) =>
-      [
-        @html.div(
-          class="file-panel-empty",
-          "Git is unavailable or this workspace is not a Git repository.",
-        ),
-      ]
+      [@html.div(class="file-panel-empty", ui(locale, GitUnavailable))]
     ChangeListReady(files~, ..) =>
       if files.is_empty() {
-        [@html.div(class="file-panel-empty", "No changed files.")]
+        [@html.div(class="file-panel-empty", ui(locale, NoChangedFiles))]
       } else {
         let reviewable = files.filter(change => change.selectable())
         let reviewed = reviewable
@@ -1501,7 +1535,7 @@ fn change_inventory_rows(
           @html.div(
             class="review-progress-summary",
             if reviewable.is_empty() {
-              "No reviewable text files"
+              ui(locale, NoReviewableFiles)
             } else {
               "\{reviewed} / \{reviewable.length()} reviewed"
             },
@@ -1510,7 +1544,7 @@ fn change_inventory_rows(
         let visible = filtered_changes(state)
         if visible.is_empty() {
           rows.push(
-            @html.div(class="file-panel-empty", "No files match these filters."),
+            @html.div(class="file-panel-empty", ui(locale, NoFilterMatches)),
           )
         }
         let tree_rows = change_tree_rows(state)
@@ -1521,12 +1555,19 @@ fn change_inventory_rows(
             attrs=@html.Attrs::build()
               .id("review-file-tree")
               .role("tree")
-              .aria_label("Changed files")
+              .aria_label(ui(locale, ChangedFiles))
               .tabindex(if tree_rows.is_empty() { 0 } else { -1 }),
             [
               for index, row in tree_rows => {
                 change_tree_row(
-                  dispatch, state, ctx, tree_rows, row, index, focus,
+                  locale~,
+                  dispatch,
+                  state,
+                  ctx,
+                  tree_rows,
+                  row,
+                  index,
+                  focus,
                 )
               }
             ],
@@ -1557,6 +1598,7 @@ fn ChangedFile::kind_class(self : ChangedFile) -> String {
 
 ///|
 fn change_tree_row(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -1584,13 +1626,13 @@ fn change_tree_row(
   }
   let label = match item {
     ChangeDirectory(path) => path.0
-    ChangeFile(change) => "View diff: " + change.status_title()
+    ChangeFile(change) => ui(locale, ViewDiffPrefix) + change.status_title()
   }
   let title = match item {
     ChangeDirectory(path) => path.0
     ChangeFile(change) if change.selectable() =>
-      "Open diff — " + change.status_title()
-    ChangeFile(change) => change.unselectable_title()
+      ui(locale, OpenDiffPrefix) + change.status_title()
+    ChangeFile(change) => change.unselectable_title(locale~)
   }
   let attrs = @html.Attrs::build()
     .role("treeitem")
@@ -1660,14 +1702,14 @@ fn change_tree_row(
         type_="button",
         disabled=!reviewable,
         title=if progress is ReviewComplete {
-          "Mark unreviewed"
+          ui(locale, MarkUnreviewed)
         } else {
-          "Mark reviewed"
+          ui(locale, MarkReviewed)
         },
         attrs=@html.Attrs::build()
           .role("checkbox")
           .tabindex(-1)
-          .aria_label("Reviewed: " + item.path().0)
+          .aria_label(ui(locale, ReviewedPrefix) + item.path().0)
           .aria_checked(
             match progress {
               ReviewComplete => "true"
@@ -1825,6 +1867,7 @@ fn segments_prefix(segments : Array[String], count : Int) -> @pathx.Relative {
 /// A breadcrumb segment that opens `path`'s immediate children in the
 /// anchored picker below the breadcrumb.
 fn crumb_link(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   label : String,
   path : @pathx.Relative,
@@ -1833,7 +1876,7 @@ fn crumb_link(
   @html.button(
     type_="button",
     class="crumb crumb-directory",
-    title="Show files in \{label}",
+    title=dynamic_text(locale, DShowFiles(label.to_string())),
     on_click=dispatch(RevealDirectory(path)),
     attrs=@html.Attrs::build()
       .aria_controls(BreadcrumbPickerId)
@@ -1853,7 +1896,7 @@ fn crumb_link(
 ///|
 /// The breadcrumb under the tab bar: the active file's path as
 /// `dir › dir › file` (the file segment emphasized) behind a leading
-/// "Workspace" crumb. Every crumb but the last opens a VS Code-style picker
+/// ui(locale, WorkspaceLabel) crumb. Every crumb but the last opens a VS Code-style picker
 /// of that directory's immediate children, without moving or hiding the
 /// source viewer behind it.
 /// Reviews add a second, horizontally scrolling command row so the path,
@@ -1861,6 +1904,7 @@ fn crumb_link(
 /// With no file open the whole breadcrumb hides; it stays in the DOM so the
 /// editor's child order, and thus the viewer host, is never re-keyed.
 pub fn breadcrumb_view(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -1882,16 +1926,16 @@ pub fn breadcrumb_view(
           @html.button(
             class="panel-toggle",
             title=if state.tree_open {
-              "Hide file tree"
+              ui(locale, HideFileTree)
             } else {
-              "Show file tree"
+              ui(locale, ShowFileTree)
             },
             on_click=dispatch(ToggleTree),
             icon(icon_folder),
           ),
         ]),
         @html.div(class="review-command-row", [
-          review_diff_mode_toolbar(dispatch, state, ctx),
+          review_diff_mode_toolbar(locale~, dispatch, state, ctx),
           @html.span(
             class=if moon_diff_controls_visible(state, ctx) {
               "review-control-divider"
@@ -1901,10 +1945,10 @@ pub fn breadcrumb_view(
             attrs=@html.Attrs::build().aria_hidden("true"),
             "",
           ),
-          review_diff_layout_toggle(dispatch, state, ctx),
-          review_comments_control(dispatch, state, ctx),
-          review_tests_control(dispatch, state, ctx),
-          review_diff_navigation(dispatch, state, ctx),
+          review_diff_layout_toggle(locale~, dispatch, state, ctx),
+          review_comments_control(locale~, dispatch, state, ctx),
+          review_tests_control(locale~, dispatch, state, ctx),
+          review_diff_navigation(locale~, dispatch, state, ctx),
         ]),
       ],
     )
@@ -1915,8 +1959,9 @@ pub fn breadcrumb_view(
       if ctx.relative(file) is Some(path) {
         crumbs.push(
           crumb_link(
+            locale~,
             dispatch,
-            "Workspace",
+            ui(locale, WorkspaceLabel),
             @pathx.Relative::root(),
             state.highlighted is Some(highlight) &&
             highlight == @pathx.Relative::root(),
@@ -1930,6 +1975,7 @@ pub fn breadcrumb_view(
           } else {
             crumbs.push(
               crumb_link(
+                locale~,
                 dispatch,
                 segment,
                 segments_prefix(segments, index + 1),
@@ -1942,22 +1988,25 @@ pub fn breadcrumb_view(
       } else {
         crumbs.push(@html.span(class="crumb crumb-file", file.path))
       }
-    None => crumbs.push(@html.span(class="crumb crumb-file", "Workspace"))
+    None =>
+      crumbs.push(
+        @html.span(class="crumb crumb-file", ui(locale, WorkspaceLabel)),
+      )
   }
   let review = review_toolbar_visible(state, ctx)
   let path_row : Array[@html.Html] = [@html.div(class="crumb-path", crumbs)]
   if !review {
-    path_row.push(review_diff_navigation(dispatch, state, ctx))
+    path_row.push(review_diff_navigation(locale~, dispatch, state, ctx))
   }
   if !full_diff_available(state, ctx) {
-    path_row.push(review_badge(dispatch, state, ctx))
+    path_row.push(review_badge(locale~, dispatch, state, ctx))
   }
-  path_row.push(review_progress(dispatch, state, ctx))
+  path_row.push(review_progress(locale~, dispatch, state, ctx))
   if mbti_view_available(state, ctx) {
-    path_row.push(mbti_view_toolbar(dispatch, state, ctx))
+    path_row.push(mbti_view_toolbar(locale~, dispatch, state, ctx))
   }
   if moon_mod_view_available(state, ctx) {
-    path_row.push(moon_mod_view_toolbar(dispatch, state, ctx))
+    path_row.push(moon_mod_view_toolbar(locale~, dispatch, state, ctx))
   }
   if reveal is Some((label, command)) {
     path_row.push(
@@ -1974,7 +2023,11 @@ pub fn breadcrumb_view(
   path_row.push(
     @html.button(
       class="panel-toggle",
-      title=if state.tree_open { "Hide file tree" } else { "Show file tree" },
+      title=if state.tree_open {
+        ui(locale, HideFileTree)
+      } else {
+        ui(locale, ShowFileTree)
+      },
       on_click=dispatch(ToggleTree),
       icon(icon_folder),
     ),
@@ -1983,25 +2036,25 @@ pub fn breadcrumb_view(
     let children : Array[@html.Html] = [
       @html.div(class="viewer-breadcrumb-row", path_row),
       @html.div(class="review-command-row", [
-        review_mode_toolbar(dispatch, state, ctx),
+        review_mode_toolbar(locale~, dispatch, state, ctx),
         @html.span(
           class="review-control-divider",
           attrs=@html.Attrs::build().aria_hidden("true"),
           "",
         ),
-        review_diff_layout_toggle(dispatch, state, ctx),
-        review_comments_control(dispatch, state, ctx),
-        review_tests_control(dispatch, state, ctx),
-        review_navigation_controls(dispatch, state, ctx),
+        review_diff_layout_toggle(locale~, dispatch, state, ctx),
+        review_comments_control(locale~, dispatch, state, ctx),
+        review_tests_control(locale~, dispatch, state, ctx),
+        review_navigation_controls(locale~, dispatch, state, ctx),
       ]),
     ]
     if state.highlighted is Some(directory) {
-      children.push(breadcrumb_picker(dispatch, state, ctx, directory))
+      children.push(breadcrumb_picker(locale~, dispatch, state, ctx, directory))
     }
     @html.div(class="viewer-breadcrumb review-toolbar", children)
   } else {
     if state.highlighted is Some(directory) {
-      path_row.push(breadcrumb_picker(dispatch, state, ctx, directory))
+      path_row.push(breadcrumb_picker(locale~, dispatch, state, ctx, directory))
     }
     @html.div(
       class=if ctx.active_file is None {
@@ -2060,6 +2113,7 @@ fn mbti_view_button(
 
 ///|
 fn mbti_view_toolbar(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2068,10 +2122,23 @@ fn mbti_view_toolbar(
   let selected = state.mbti_view_mode(path)
   @html.div(
     class="review-mode-toolbar mbti-view-toolbar",
-    attrs=@html.Attrs::build().role("group").aria_label("MBTI view"),
+    attrs=@html.Attrs::build()
+      .role("group")
+      .aria_label(
+        if locale is SimplifiedChinese {
+          "MBTI 视图"
+        } else {
+          "MBTI view"
+        },
+      ),
     [
-      mbti_view_button(dispatch, selected, MbtiDiagram, "Diagram"),
-      mbti_view_button(dispatch, selected, MbtiSource, "Source"),
+      mbti_view_button(
+        dispatch,
+        selected,
+        MbtiDiagram,
+        ui(locale, DiagramLabel),
+      ),
+      mbti_view_button(dispatch, selected, MbtiSource, ui(locale, SourceLabel)),
     ],
   )
 }
@@ -2123,6 +2190,7 @@ fn moon_mod_view_button(
 
 ///|
 fn moon_mod_view_toolbar(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2131,15 +2199,22 @@ fn moon_mod_view_toolbar(
   let selected = state.moon_mod_view_mode(path)
   @html.div(
     class="review-mode-toolbar moon-mod-view-toolbar",
-    attrs=@html.Attrs::build().role("group").aria_label("Moon module view"),
+    attrs=@html.Attrs::build()
+      .role("group")
+      .aria_label(ui(locale, MoonModuleView)),
     [
       moon_mod_view_button(
         dispatch,
         selected,
         MoonModDependencies,
-        "Dependency graph",
+        ui(locale, DependencyGraph),
       ),
-      moon_mod_view_button(dispatch, selected, MoonModSource, "Source"),
+      moon_mod_view_button(
+        dispatch,
+        selected,
+        MoonModSource,
+        ui(locale, SourceLabel),
+      ),
     ],
   )
 }
@@ -2247,11 +2322,14 @@ fn review_diff_navigation_enabled(state : State, ctx : Ctx) -> Bool {
 }
 
 ///|
-fn ReviewDiffMode::label(self : ReviewDiffMode) -> String {
+fn ReviewDiffMode::label(
+  locale? : @i18n.Locale = English,
+  self : ReviewDiffMode,
+) -> String {
   match self {
-    ReviewDiffLine => "Line"
-    ReviewDiffToken => "Token"
-    ReviewDiffTree => "Tree"
+    ReviewDiffLine => ui(locale, LineLabel)
+    ReviewDiffToken => ui(locale, TokenLabel)
+    ReviewDiffTree => ui(locale, TreeLabel)
   }
 }
 
@@ -2266,6 +2344,7 @@ fn ReviewDiffMode::attribute(self : ReviewDiffMode) -> String {
 
 ///|
 fn review_diff_mode_button(
+  locale? : @i18n.Locale = English,
   mode : ReviewDiffMode,
   active : Bool,
   on_click : @cmd.Cmd,
@@ -2278,19 +2357,27 @@ fn review_diff_mode_button(
     } else {
       "review-mode-button"
     },
-    title="Use " + mode.label() + " diff",
+    title=if locale is SimplifiedChinese {
+      "使用" + mode.label(locale~) + "差异"
+    } else {
+      "Use " + mode.label(locale~) + " diff"
+    },
     disabled=!enabled,
     on_click~,
     attrs=@html.Attrs::build()
       .data_set("diff-mode", mode.attribute())
-      .aria_label(mode.label() + " diff")
+      .aria_label(
+        mode.label(locale~) +
+        (if locale is SimplifiedChinese { "差异" } else { " diff" }),
+      )
       .aria_pressed(active.to_string()),
-    mode.label(),
+    mode.label(locale~),
   )
 }
 
 ///|
 fn review_mode_toolbar(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2311,14 +2398,14 @@ fn review_mode_toolbar(
       } else {
         "review-mode-button active"
       },
-      title="Show file",
+      title=ui(locale, ShowFile),
       disabled=!enabled,
       on_click=if diff { dispatch(ToggleReviewDiff) } else { @cmd.none },
       attrs=@html.Attrs::build()
         .data_set("review-mode", "file")
-        .aria_label("File view")
+        .aria_label(ui(locale, FileView))
         .aria_pressed((!diff).to_string()),
-      "File",
+      ui(locale, FileLabel),
     ),
     @html.span(
       class="review-mode-divider",
@@ -2326,6 +2413,7 @@ fn review_mode_toolbar(
       "",
     ),
     review_diff_mode_button(
+      locale~,
       enabled~,
       ReviewDiffLine,
       diff && (!moon || state.review_diff_mode == ReviewDiffLine),
@@ -2341,6 +2429,7 @@ fn review_mode_toolbar(
   if moon {
     children.push(
       review_diff_mode_button(
+        locale~,
         enabled~,
         ReviewDiffToken,
         diff && state.review_diff_mode == ReviewDiffToken,
@@ -2349,6 +2438,7 @@ fn review_mode_toolbar(
     )
     children.push(
       review_diff_mode_button(
+        locale~,
         enabled~,
         ReviewDiffTree,
         diff && state.review_diff_mode == ReviewDiffTree,
@@ -2362,7 +2452,9 @@ fn review_mode_toolbar(
     } else {
       "review-mode-toolbar"
     },
-    attrs=@html.Attrs::build().role("toolbar").aria_label("Review mode"),
+    attrs=@html.Attrs::build()
+      .role("toolbar")
+      .aria_label(ui(locale, ReviewMode)),
     children,
   )
 }
@@ -2371,6 +2463,7 @@ fn review_mode_toolbar(
 /// Historical comparisons have no File surface, but retain the same explicit
 /// MoonBit comparison algorithms as changed-file reviews.
 fn review_diff_mode_toolbar(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2382,21 +2475,24 @@ fn review_diff_mode_toolbar(
     class="review-mode-toolbar review-history-mode-toolbar",
     attrs=@html.Attrs::build()
       .role("toolbar")
-      .aria_label("Comparison algorithm"),
+      .aria_label(ui(locale, ComparisonAlgorithm)),
     [
       review_diff_mode_button(
+        locale~,
         enabled=moon_diff_ready(state, ctx),
         ReviewDiffLine,
         state.review_diff_mode == ReviewDiffLine,
         dispatch(ReviewDiffModeSelected(ReviewDiffLine)),
       ),
       review_diff_mode_button(
+        locale~,
         enabled=moon_diff_ready(state, ctx),
         ReviewDiffToken,
         state.review_diff_mode == ReviewDiffToken,
         dispatch(ReviewDiffModeSelected(ReviewDiffToken)),
       ),
       review_diff_mode_button(
+        locale~,
         enabled=moon_diff_ready(state, ctx),
         ReviewDiffTree,
         state.review_diff_mode == ReviewDiffTree,
@@ -2408,6 +2504,7 @@ fn review_diff_mode_toolbar(
 
 ///|
 fn review_comments_control(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2429,31 +2526,32 @@ fn review_comments_control(
       }) +
       (if pending { " pending" } else { "" }),
     title=if !full_diff_ready(state, ctx) {
-      "Available in diff view"
+      ui(locale, AvailableDiff)
     } else if state.review_diff_mode == ReviewDiffLine {
-      "Available in Token and Tree diff"
+      ui(locale, AvailableTokenTree)
     } else if state.review_diff_ignore_comments {
-      "Include comments in the comparison"
+      ui(locale, IncludeComments)
     } else {
-      "Ignore comment-only changes"
+      ui(locale, IgnoreCommentChanges)
     },
     disabled=!enabled,
     on_click=dispatch(ToggleReviewDiffIgnoreComments),
     attrs=@html.Attrs::build()
-      .aria_label("Ignore comments")
+      .aria_label(ui(locale, IgnoreComments))
       .aria_pressed(
         ((enabled || pending) && state.review_diff_ignore_comments).to_string(),
       ),
     if state.review_diff_ignore_comments {
-      "Comments: ignored"
+      ui(locale, CommentsIgnored)
     } else {
-      "Comments: included"
+      ui(locale, CommentsIncluded)
     },
   )
 }
 
 ///|
 fn review_tests_control(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2475,25 +2573,25 @@ fn review_tests_control(
       }) +
       (if pending { " pending" } else { "" }),
     title=if !full_diff_ready(state, ctx) {
-      "Available in diff view"
+      ui(locale, AvailableDiff)
     } else if state.review_diff_mode == ReviewDiffLine {
-      "Available in Token and Tree diff"
+      ui(locale, AvailableTokenTree)
     } else if state.review_diff_ignore_tests {
-      "Include tests in the comparison"
+      ui(locale, IncludeTests)
     } else {
-      "Ignore MoonBit test blocks"
+      ui(locale, IgnoreTestBlocks)
     },
     disabled=!enabled,
     on_click=dispatch(ToggleReviewDiffIgnoreTests),
     attrs=@html.Attrs::build()
-      .aria_label("Ignore tests")
+      .aria_label(ui(locale, IgnoreTests))
       .aria_pressed(
         ((enabled || pending) && state.review_diff_ignore_tests).to_string(),
       ),
     if state.review_diff_ignore_tests {
-      "Tests: ignored"
+      ui(locale, TestsIgnored)
     } else {
-      "Tests: included"
+      ui(locale, TestsIncluded)
     },
   )
 }
@@ -2501,6 +2599,7 @@ fn review_tests_control(
 ///|
 /// Retain the last complete navigation while a replacement is preparing.
 fn review_navigation_controls(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2513,10 +2612,10 @@ fn review_navigation_controls(
     class="review-navigation-controls",
     attrs=@html.Attrs::build().aria_busy(pending.to_string()).inert(pending),
     [
-      review_navigation_view(dispatch, display),
+      review_navigation_view(locale~, dispatch, display),
       match display.hunk_toggle {
         Some((hunk_state, disabled)) =>
-          review_hunk_toggle_button(dispatch, hunk_state, disabled)
+          review_hunk_toggle_button(locale~, dispatch, hunk_state, disabled)
         None => @html.nothing
       },
     ],
@@ -2526,6 +2625,7 @@ fn review_navigation_controls(
 ///|
 /// One navigation group walks changes, then files, and wraps the review queue.
 fn review_diff_navigation(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2534,11 +2634,12 @@ fn review_diff_navigation(
   guard full_diff_available(state, ctx) || display.file_position is Some(_) else {
     return @html.span(class="review-diff-navigation hidden", "")
   }
-  review_navigation_view(dispatch, display)
+  review_navigation_view(locale~, dispatch, display)
 }
 
 ///|
 fn review_navigation_view(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   display : ReviewNavigationDisplay,
 ) -> @html.Html {
@@ -2548,7 +2649,13 @@ fn review_navigation_view(
   let controls : Array[@html.Html] = []
   if file_position is Some((index, total)) {
     controls.push(
-      @html.span(class="review-nav-position", "File \{index + 1} of \{total}"),
+      @html.span(
+        class="review-nav-position",
+        dynamic_text(
+          locale,
+          DFilePosition((index + 1).to_string(), total.to_string()),
+        ),
+      ),
     )
   }
   if position is Some(position) {
@@ -2556,9 +2663,23 @@ fn review_navigation_view(
       @html.span(
         class="review-hunk-position",
         attrs=@html.Attrs::build()
-          .aria_label("Hunk \{position.current} of \{position.total}")
+          .aria_label(
+            dynamic_text(
+              locale,
+              DHunkPosition(
+                position.current.to_string(),
+                position.total.to_string(),
+              ),
+            ),
+          )
           .aria_live("polite"),
-        "Change \{position.current} of \{position.total}",
+        dynamic_text(
+          locale,
+          DChangePosition(
+            position.current.to_string(),
+            position.total.to_string(),
+          ),
+        ),
       ),
     )
   }
@@ -2566,12 +2687,12 @@ fn review_navigation_view(
     @html.button(
       type_="button",
       class="review-nav-button",
-      title="Previous change (Shift+F7)",
+      title=ui(locale, PreviousChangeShortcut),
       disabled=!enabled,
       on_click=dispatch(RevealPreviousReviewDiffChange),
       attrs=@html.Attrs::build()
         .data_set("action", "previous-diff-change")
-        .aria_label("Previous change")
+        .aria_label(ui(locale, PreviousChange))
         .aria_keyshortcuts("Shift+F7"),
       @icons.icon(@icons.icon_arrow_up),
     ),
@@ -2580,12 +2701,12 @@ fn review_navigation_view(
     @html.button(
       type_="button",
       class="review-nav-button",
-      title="Next change (F7)",
+      title=ui(locale, NextChangeShortcut),
       disabled=!enabled,
       on_click=dispatch(RevealNextReviewDiffChange),
       attrs=@html.Attrs::build()
         .data_set("action", "next-diff-change")
-        .aria_label("Next change")
+        .aria_label(ui(locale, NextChange))
         .aria_keyshortcuts("F7"),
       @icons.icon(@icons.icon_arrow_down),
     ),
@@ -2595,13 +2716,14 @@ fn review_navigation_view(
     attrs=@html.Attrs::build()
       .id("review-change-navigation")
       .role("group")
-      .aria_label("Diff change navigation"),
+      .aria_label(ui(locale, DiffNavigation)),
     controls,
   )
 }
 
 ///|
 fn review_hunk_toggle_button(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   hunk_state : ReviewHunkState,
   disabled : Bool,
@@ -2615,22 +2737,22 @@ fn review_hunk_toggle_button(
       "review-badge review-progress"
     },
     title=if disabled {
-      "File is marked reviewed"
+      ui(locale, FileReviewed)
     } else if viewed {
-      "Mark this hunk unviewed"
+      ui(locale, MarkHunkUnviewed)
     } else {
-      "Mark this hunk viewed"
+      ui(locale, MarkHunkViewed)
     },
     disabled~,
     on_click=dispatch(ToggleActiveReviewHunk),
     attrs=@html.Attrs::build()
       .aria_label(
         if disabled {
-          "Hunk viewed"
+          ui(locale, HunkViewed)
         } else if viewed {
-          "Unmark hunk viewed"
+          ui(locale, UnmarkHunkViewed)
         } else {
-          "Mark hunk viewed"
+          ui(locale, MarkHunkViewedLabel)
         },
       )
       .aria_pressed(
@@ -2641,7 +2763,7 @@ fn review_hunk_toggle_button(
         },
       ),
     match hunk_state {
-      ReviewHunkUnviewed => "Mark viewed"
+      ReviewHunkUnviewed => ui(locale, MarkViewed)
       ReviewHunkPartial => "◐ Mark viewed"
       ReviewHunkViewed => "✓ Viewed"
     },
@@ -2653,6 +2775,7 @@ fn review_hunk_toggle_button(
 /// this explicit pair changes either presentation. File mode preserves the
 /// preference but disables both choices until the next review reveal.
 fn review_diff_layout_toggle(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2672,7 +2795,7 @@ fn review_diff_layout_toggle(
     } else {
       "review-layout-control disabled"
     },
-    attrs=@html.Attrs::build().role("group").aria_label("Diff layout"),
+    attrs=@html.Attrs::build().role("group").aria_label(ui(locale, DiffLayout)),
     [
       @html.button(
         type_="button",
@@ -2681,7 +2804,7 @@ fn review_diff_layout_toggle(
         } else {
           "review-layout-button"
         },
-        title="Use side-by-side diff layout",
+        title=ui(locale, SideBySideHint),
         disabled=!ready,
         on_click=if ready && inline {
           dispatch(ToggleReviewDiffLayout)
@@ -2690,9 +2813,9 @@ fn review_diff_layout_toggle(
         },
         attrs=@html.Attrs::build()
           .data_set("layout", "side-by-side")
-          .aria_label("Split diff layout")
+          .aria_label(ui(locale, SplitDiffLayout))
           .aria_pressed((shown_ready && !inline).to_string()),
-        "Split",
+        ui(locale, SplitLabel),
       ),
       @html.button(
         type_="button",
@@ -2701,7 +2824,7 @@ fn review_diff_layout_toggle(
         } else {
           "review-layout-button"
         },
-        title="Use unified diff layout",
+        title=ui(locale, UnifiedDiffHint),
         disabled=!ready,
         on_click=if ready && !inline {
           dispatch(ToggleReviewDiffLayout)
@@ -2710,9 +2833,9 @@ fn review_diff_layout_toggle(
         },
         attrs=@html.Attrs::build()
           .data_set("layout", "inline")
-          .aria_label("Unified diff layout")
+          .aria_label(ui(locale, UnifiedDiffLayout))
           .aria_pressed((shown_ready && inline).to_string()),
-        "Unified",
+        ui(locale, UnifiedLabel),
       ),
     ],
   )
@@ -2723,20 +2846,21 @@ fn review_diff_layout_toggle(
 /// explorer's cache and filesystem messages, but not its expanded/collapsed
 /// presentation, so it can stay compact over the source viewer.
 fn breadcrumb_picker(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
   directory : @pathx.Relative,
 ) -> @html.Html {
   let label = if directory.is_root() {
-    "Workspace"
+    ui(locale, WorkspaceLabel)
   } else {
     basename(directory)
   }
   let listed = state.children.get(directory)
   let rows : Array[@html.Html] = match listed {
     Some(entries) if entries.is_empty() =>
-      [@html.div(class="breadcrumb-picker-empty", "This folder is empty.")]
+      [@html.div(class="breadcrumb-picker-empty", ui(locale, EmptyFolder))]
     Some(entries) => {
       let rows : Array[@html.Html] = []
       for index, entry in entries {
@@ -2754,14 +2878,15 @@ fn breadcrumb_picker(
       rows
     }
     None if state.loading.contains(directory) =>
-      [@html.div(class="breadcrumb-picker-empty", "Loading…")]
+      [@html.div(class="breadcrumb-picker-empty", ui(locale, LoadingLabel))]
     None =>
       [
         @html.div(
           class="breadcrumb-picker-empty breadcrumb-picker-failed",
           match state.error {
-            Some(message) => "Could not load this folder: \{message}"
-            None => "Could not load this folder."
+            Some(message) =>
+              dynamic_text(locale, DFolderFailed(message.to_string()))
+            None => ui(locale, CannotLoadFolder)
           },
         ),
       ]
@@ -2784,12 +2909,14 @@ fn breadcrumb_picker(
           } else {
             "breadcrumb-picker-loading hidden"
           },
-          "Refreshing…",
+          ui(locale, RefreshingLabel),
         ),
       ]),
       @html.div(
         class="breadcrumb-picker-list",
-        attrs=@html.Attrs::build().role("menu").aria_label("Files in \{label}"),
+        attrs=@html.Attrs::build()
+          .role("menu")
+          .aria_label(dynamic_text(locale, DFilesIn(label.to_string()))),
         rows,
       ),
     ],
@@ -2886,6 +3013,7 @@ fn breadcrumb_picker_row(
 /// Keeping it beside the diff-mode badge makes completion explicit without
 /// turning an ordinary file open into review state.
 fn review_progress(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2906,17 +3034,17 @@ fn review_progress(
       ReviewUnviewed => "review-badge review-progress"
     },
     title=if reviewed {
-      "Return this changed file to the review queue"
+      ui(locale, ReturnReviewQueue)
     } else {
-      "Mark this changed file as reviewed"
+      ui(locale, MarkChangedReviewed)
     },
     on_click=dispatch(ToggleReviewProgress),
     attrs=@html.Attrs::build()
       .aria_label(
         if reviewed {
-          "Mark file unreviewed"
+          ui(locale, MarkFileUnreviewed)
         } else {
-          "Mark file reviewed"
+          ui(locale, MarkFileReviewed)
         },
       )
       .aria_pressed(
@@ -2929,7 +3057,7 @@ fn review_progress(
     match progress {
       ReviewComplete => "✓ Reviewed"
       ReviewInProgress => "◐ In progress"
-      ReviewUnviewed => "Mark reviewed"
+      ReviewUnviewed => ui(locale, MarkReviewed)
     },
   )
 }
@@ -2939,6 +3067,7 @@ fn review_progress(
 /// full diff; unavailable reviews retain a non-interactive status. Loading uses
 /// the delayed overlay so it cannot change the breadcrumb layout.
 fn review_badge(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -2950,14 +3079,13 @@ fn review_badge(
           match doc.review {
             Some({ view_mode: ReviewDiff, .. }) =>
               (
-                "View file", "Return to the source preview and quick-diff gutter",
-                true, true,
+                ui(locale, ViewFile),
+                ui(locale, ReturnSourcePreview),
+                true,
+                true,
               )
             Some({ view_mode: ReviewSource, .. }) =>
-              (
-                "View full diff", "Open the full diff against the review baseline",
-                true, false,
-              )
+              (ui(locale, ViewFullDiff), ui(locale, FullDiffHint), true, false)
             None => return @html.nothing
           }
         Some(
@@ -2968,8 +3096,10 @@ fn review_badge(
           }
         ) =>
           (
-            "Deleted · baseline", "Deleted in the working tree; showing the review baseline",
-            false, false,
+            ui(locale, DeletedBaseline),
+            ui(locale, DeletedBaselineHint),
+            false,
+            false,
           )
         Some(
           {
@@ -2979,15 +3109,19 @@ fn review_badge(
           }
         ) =>
           (
-            "Working unavailable · baseline", "The working-tree file could not be read; showing the review baseline",
-            false, false,
+            ui(locale, WorkingUnavailable),
+            ui(locale, WorkingUnavailableHint),
+            false,
+            false,
           )
         Some({ state: TabBinary, review: Some(_), .. })
         | Some({ state: TabOversized, review: Some(_), .. })
         | Some({ state: TabReadFailed(_), review: Some(_), .. }) =>
           (
-            "Diff unavailable", "The working-tree file cannot be previewed as text",
-            false, false,
+            ui(locale, DiffUnavailable),
+            ui(locale, NotTextPreview),
+            false,
+            false,
           )
         // Loading is presented only by the delayed, non-layout overlay.
         Some({ review: Some({ baseline: ReviewLoading, .. }), .. }) =>
@@ -2999,42 +3133,47 @@ fn review_badge(
             ..
           }
         ) =>
-          (
-            "Deleted · no baseline", "No review baseline is available to preview",
-            false, false,
-          )
+          (ui(locale, DeletedNoBaseline), ui(locale, NoBaseline), false, false)
         Some({ name, review: Some({ baseline: ReviewContent(_), .. }), .. }) if name.has_suffix(
             ".md",
           ) =>
           (
-            "Rendered · no gutter", "Rendered Markdown does not expose source diff decorations",
-            false, false,
+            ui(locale, RenderedNoGutter),
+            ui(locale, MarkdownGutterHint),
+            false,
+            false,
           )
         Some({ name, review: Some({ baseline: ReviewMissing, .. }), .. }) if name.has_suffix(
             ".md",
           ) =>
           (
-            "Rendered · no gutter", "New Markdown has no review baseline; its rendered preview does not expose diff decorations",
-            false, false,
+            ui(locale, RenderedNoGutter),
+            ui(locale, NewMarkdownHint),
+            false,
+            false,
           )
         Some({ review: Some({ baseline: ReviewContent(_), .. }), .. }) =>
           (
-            "Diff vs baseline", "Quick diff against the review baseline", false,
+            ui(locale, DiffBaseline),
+            ui(locale, QuickDiffBaseline),
+            false,
             false,
           )
         Some({ review: Some({ baseline: ReviewMissing, .. }), .. }) =>
-          (
-            "New · no baseline", "New file compared with an empty review baseline",
-            false, false,
-          )
+          (ui(locale, NewNoBaseline), ui(locale, NewBaselineHint), false, false)
         Some({ review: Some({ baseline: ReviewBinary, .. }), .. }) =>
-          ("Diff unavailable", "The review baseline is binary", false, false)
+          (
+            ui(locale, DiffUnavailable),
+            ui(locale, BinaryBaseline),
+            false,
+            false,
+          )
         Some({ review: Some({ baseline: ReviewOversized, .. }), .. }) =>
-          ("Diff unavailable", "The review baseline is too large", false, false)
+          (ui(locale, DiffUnavailable), ui(locale, LargeBaseline), false, false)
         Some({ review: Some({ baseline: ReviewFailed(message), .. }), .. }) =>
           (
-            "Diff unavailable",
-            "Could not load review baseline: " + message,
+            ui(locale, DiffUnavailable),
+            ui(locale, BaselineFailedPrefix) + message,
             false,
             false,
           )
@@ -3049,7 +3188,7 @@ fn review_badge(
       title~,
       on_click=dispatch(ToggleReviewDiff),
       attrs=@html.Attrs::build()
-        .aria_label("Full diff")
+        .aria_label(ui(locale, FullDiff))
         .aria_pressed(pressed.to_string()),
       text,
     )
@@ -3165,6 +3304,7 @@ fn tree_row(
 
 ///|
 fn review_filter_controls(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
 ) -> @html.Html {
@@ -3173,21 +3313,21 @@ fn review_filter_controls(
       class="review-filter-scope",
       attrs=@html.Attrs::build().id("review-filter-scope"),
       match state.git_graph_selected {
-        Some(commit) => "Filtering commit " + short_commit(commit)
-        None => "Filtering working tree"
+        Some(commit) => ui(locale, FilteringCommit) + short_commit(commit)
+        None => ui(locale, FilteringWorkingTree)
       },
     ),
     @html.div(class="review-path-filter", [
       @html.input(
         input_type=@html.InputType::Text,
         value=state.change_path_filter,
-        placeholder="Filter files by path",
+        placeholder=ui(locale, FilterFilesPath),
         on_input=dispatch.map(value => ChangePathFilterChanged(value)),
         attrs=@html.Attrs::build()
           .id("review-path-filter-input")
           .data_set("focus-owner", "")
           .aria_describedby("review-filter-scope")
-          .aria_label("Filter changed files by path")
+          .aria_label(ui(locale, FilterChangedPath))
           .on_keydown(event => {
             if event.key() == "Escape" && !state.change_path_filter.is_empty() {
               event.prevent_default()
@@ -3198,7 +3338,7 @@ fn review_filter_controls(
             }
           }),
       ),
-      change_extension_filter(dispatch, state),
+      change_extension_filter(locale~, dispatch, state),
       @html.button(
         class="button secondary small",
         disabled=state.change_path_filter.is_empty() &&
@@ -3207,8 +3347,8 @@ fn review_filter_controls(
           dispatch(ChangeFiltersCleared),
           focus_change_filter_after_render(),
         ]),
-        attrs=@html.Attrs::build().aria_label("Clear file filters"),
-        "Clear",
+        attrs=@html.Attrs::build().aria_label(ui(locale, ClearFilters)),
+        ui(locale, ClearLabel),
       ),
     ]),
     match review_filter_inventory(state) {
@@ -3221,7 +3361,10 @@ fn review_filter_controls(
         @html.div(
           class="review-filter-count",
           attrs=@html.Attrs::build().role("status"),
-          "Showing \{count} of \{files.length()} files",
+          dynamic_text(
+            locale,
+            DShowingFiles(count.to_string(), files.length().to_string()),
+          ),
         )
       }
       _ => @html.nothing
@@ -3249,14 +3392,16 @@ fn focus_change_filter_after_render() -> @cmd.Cmd {
 
 ///|
 fn change_extension_filter(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
 ) -> @html.Html {
   let options = change_extension_options(state)
   let label = match state.change_extensions {
-    None => "File types"
-    Some(selected) if selected.is_empty() => "File types: none"
-    Some(selected) => selected.map(extension_label).join(", ")
+    None => ui(locale, FileTypes)
+    Some(selected) if selected.is_empty() => ui(locale, NoFileTypes)
+    Some(selected) =>
+      selected.map(value => extension_label(locale~, value)).join(", ")
   }
   @html.div(class="review-type-filter", [
     @html.button(
@@ -3266,9 +3411,9 @@ fn change_extension_filter(
       attrs=@html.Attrs::build()
         .id("review-file-types-trigger")
         .aria_label(
-          "Filter by file extension, " +
+          ui(locale, FilterExtensionPrefix) +
           (if state.change_extensions is None {
-            "all file types"
+            ui(locale, AllFileTypes)
           } else {
             label
           }),
@@ -3287,9 +3432,9 @@ fn change_extension_filter(
         .id("review-file-types")
         .popover("auto")
         .role("dialog")
-        .aria_label("File types"),
+        .aria_label(ui(locale, FileTypes)),
       [
-        @html.div(class="review-type-heading", "File types"),
+        @html.div(class="review-type-heading", ui(locale, FileTypes)),
         ..options.map(option => {
           @html.label(class="review-type-option", [
             @html.input(
@@ -3300,14 +3445,16 @@ fn change_extension_filter(
                   selected.contains(option.0)
                 ),
               on_change=dispatch.map(_ => ChangeExtensionToggled(option.0)),
-              attrs=@html.Attrs::build().aria_label(extension_label(option.0)),
+              attrs=@html.Attrs::build().aria_label(
+                extension_label(locale~, option.0),
+              ),
             ),
-            @html.span(extension_label(option.0)),
+            @html.span(extension_label(locale~, option.0)),
             @html.span(class="review-type-count", option.1.to_string()),
           ])
         }),
         if options.is_empty() {
-          @html.div("No changed file types")
+          @html.div(ui(locale, NoChangedTypes))
         } else {
           @html.nothing
         },
@@ -3329,12 +3476,13 @@ extern "js" fn bind_change_types() -> Unit =
 
 ///|
 fn review_git_layout(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
   @html.div(class="review-filter-layout", [
-    review_filter_controls(dispatch, state),
-    review_git_sections(dispatch, state, ctx),
+    review_filter_controls(locale~, dispatch, state),
+    review_git_sections(locale~, dispatch, state, ctx),
   ])
 }

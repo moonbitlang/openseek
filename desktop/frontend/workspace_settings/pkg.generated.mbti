@@ -6,11 +6,12 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
 
 // Errors
 

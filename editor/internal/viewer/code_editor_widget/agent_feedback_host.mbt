@@ -499,7 +499,7 @@ fn CodeEditorWidget::show_agent_feedback_input(
   ic.pinned_range = Some(range)
   ic.anchor_position = Some(anchor)
   ic.prefer_below = prefer_below
-  widget.set_placeholder("Add feedback")
+  widget.set_placeholder(self.services.localization.text(AddFeedback))
   widget.clear_input()
   widget.show()
   self.update_agent_feedback_input_position()
@@ -519,17 +519,22 @@ fn CodeEditorWidget::ensure_agent_feedback_input(
   match existing {
     Some(widget) => widget
     None => {
-      let widget = @agent_feedback_browser.AgentFeedbackInputWidget({
-        on_add: () => self.add_agent_feedback_from_input(submit=false),
-        on_add_and_submit: () => self.add_agent_feedback_from_input(submit=true),
-        on_cancel: () => self.hide_agent_feedback_input(refocus_editor=true),
-        on_layout: () => self.update_agent_feedback_input_position(),
-        on_blur_empty: () => self.auto_hide_agent_feedback_input(),
-        content_width: () => {
-          let layout = self.get_layout_info()
-          (layout.width - layout.content_left).max(0.0)
+      let widget = @agent_feedback_browser.AgentFeedbackInputWidget(
+        localization=self.services.localization,
+        {
+          on_add: () => self.add_agent_feedback_from_input(submit=false),
+          on_add_and_submit: () => {
+            self.add_agent_feedback_from_input(submit=true)
+          },
+          on_cancel: () => self.hide_agent_feedback_input(refocus_editor=true),
+          on_layout: () => self.update_agent_feedback_input_position(),
+          on_blur_empty: () => self.auto_hide_agent_feedback_input(),
+          content_width: () => {
+            let layout = self.get_layout_info()
+            (layout.width - layout.content_left).max(0.0)
+          },
         },
-      })
+      )
       match ic {
         Some(ic) => ic.widget = Some(widget)
         None => ()

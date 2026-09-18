@@ -598,6 +598,7 @@ fn CodeEditorWidget::refresh_markdown_comments(
         }
         None => {
           let dom = @markdown_comments_browser.MarkdownCommentDom(
+            localization=self.services.localization,
             block.line_range.start_line_number,
             block.line_range.end_line_number_exclusive,
           )

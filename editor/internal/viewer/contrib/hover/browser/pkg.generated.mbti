@@ -9,6 +9,7 @@ import {
   "moonbitlang/editor/internal/viewer/contrib/hover",
   "moonbitlang/editor/internal/viewer/ui/scrollbar",
   "moonbitlang/editor/language",
+  "moonbitlang/editor/viewer/common/localization",
   "moonbitlang/editor/viewer/common/markers",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/view_model",
@@ -61,7 +62,7 @@ pub struct ContentHoverWidget {
   mut rendered_hover : RenderedContentHover?
   // private fields
 }
-pub fn ContentHoverWidget::ContentHoverWidget(ContentHoverWidgetHost) -> Self
+pub fn ContentHoverWidget::ContentHoverWidget(localization? : @localization.Localization, ContentHoverWidgetHost) -> Self
 pub fn ContentHoverWidget::content_widget_handle(Self) -> @view.ContentWidgetHandle
 pub fn ContentHoverWidget::dispose(Self) -> Unit
 pub fn ContentHoverWidget::go_to_bottom(Self) -> Unit

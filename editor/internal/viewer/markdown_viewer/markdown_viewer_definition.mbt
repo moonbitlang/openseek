@@ -58,6 +58,7 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
     bridge_slot.map_or(false, bridge => bridge.anchor_is_current(anchor))
   }
   let navigation_action = @goto_symbol.SymbolNavigationAction(
+    localization=viewer.services.localization,
     viewer.services.languages(),
     {
       prepare_navigation: () => {
@@ -96,6 +97,7 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
     .preview_factory()
     .map(preview_factory => {
       @references_browser.ReferencesController(
+        localization=viewer.services.localization,
         {
           is_anchor_current: anchor_is_current,
           mount: (root, anchor) => {
@@ -400,7 +402,7 @@ fn MarkdownViewerWidgetDefinitionBridge::context_menu_entries(
   ).map(command => {
     ContextMenuAction(
       id=command.id(),
-      label=command.title(),
+      label=command.title(localization=self.viewer.services.localization),
       keybinding_label=command.keybinding_label(),
     )
   })
@@ -416,10 +418,13 @@ fn MarkdownViewerWidgetDefinitionBridge::get_or_create_context_menu(
   match self.context_menu {
     Some(widget) => Some(widget)
     None => {
-      let widget = @contextmenu_browser.ContextMenuWidget({
-        on_action: command_id => self.run_command(command_id),
-        on_hide: _cancelled => (),
-      })
+      let widget = @contextmenu_browser.ContextMenuWidget(
+        localization=self.viewer.services.localization,
+        {
+          on_action: command_id => self.run_command(command_id),
+          on_hide: _cancelled => (),
+        },
+      )
       self.context_menu = Some(widget)
       Some(widget)
     }

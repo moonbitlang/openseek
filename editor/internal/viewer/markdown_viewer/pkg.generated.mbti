@@ -9,6 +9,7 @@ import {
   "moonbitlang/editor/platform/log",
   "moonbitlang/editor/viewer/common/editor_api",
   "moonbitlang/editor/viewer/common/languages",
+  "moonbitlang/editor/viewer/common/localization",
   "moonbitlang/editor/viewer/common/markers",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/navigation_api",
@@ -28,7 +29,7 @@ pub fn MarkdownResourceKind::not_equal(Self, Self) -> Bool
 pub fn MarkdownResourceKind::to_repr(Self) -> @debug.Repr
 
 type MarkdownViewerServices
-pub fn MarkdownViewerServices::MarkdownViewerServices(languages? : @languages.LanguageHandle, markers? : @markers.MarkerDecorationsSource, location_opener? : @navigation_api.LocationOpenerHandle, text_model_resolver? : @navigation_api.TextModelResolverHandle, resource_path_label? : (@common.Uri) -> String?, preview_factory? : @browser.ReferencesPeekPreviewFactory, launch_async_task? : (async () -> Unit noraise) -> Unit, log_service? : @log.LogHandle) -> Self
+pub fn MarkdownViewerServices::MarkdownViewerServices(localization? : @localization.Localization, languages? : @languages.LanguageHandle, markers? : @markers.MarkerDecorationsSource, location_opener? : @navigation_api.LocationOpenerHandle, text_model_resolver? : @navigation_api.TextModelResolverHandle, resource_path_label? : (@common.Uri) -> String?, preview_factory? : @browser.ReferencesPeekPreviewFactory, launch_async_task? : (async () -> Unit noraise) -> Unit, log_service? : @log.LogHandle) -> Self
 pub fn MarkdownViewerServices::dispose(Self) -> Unit
 pub fn MarkdownViewerServices::languages(Self) -> @languages.LanguageHandle
 pub fn MarkdownViewerServices::launch_async_task(Self, async () -> Unit noraise) -> Unit

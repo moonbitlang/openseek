@@ -98,6 +98,7 @@ fn fetch_worktrees(
 /// settles through the ordinary start-rejection path and restores the
 /// draft.
 fn start_in_new_worktree(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   task : String,
@@ -138,7 +139,11 @@ fn start_in_new_worktree(
                   WorktreeSetupFailed(
                     session~,
                     submission_id~,
-                    message="Couldn’t create the worktree because the desktop host did not respond. Retry, or switch this chat to Local.",
+                    message=if locale is SimplifiedChinese {
+                      "桌面主机未响应，无法创建工作树。请重试，或将此对话切换为本地模式。"
+                    } else {
+                      "Couldn’t create the worktree because the desktop host did not respond. Retry, or switch this chat to Local."
+                    },
                   ),
                 ),
               )
@@ -153,7 +158,12 @@ fn start_in_new_worktree(
                   WorktreeSetupFailed(
                     session~,
                     submission_id~,
-                    message="Couldn’t create the worktree. " + message,
+                    message=(if locale is SimplifiedChinese {
+                        "无法创建工作树。"
+                      } else {
+                        "Couldn’t create the worktree. "
+                      }) +
+                      message,
                   ),
                 ),
               )
@@ -168,7 +178,11 @@ fn start_in_new_worktree(
                 WorktreeSetupFailed(
                   session~,
                   submission_id~,
-                  message="Couldn’t create the worktree because the host returned an incomplete reply. Retry, or switch this chat to Local.",
+                  message=if locale is SimplifiedChinese {
+                    "主机返回了不完整的响应，无法创建工作树。请重试，或将此对话切换为本地模式。"
+                  } else {
+                    "Couldn’t create the worktree because the host returned an incomplete reply. Retry, or switch this chat to Local."
+                  },
                 ),
               ),
             )
@@ -236,6 +250,7 @@ fn Conversation::goal_creates_worktree(self : Conversation) -> @common.Uri? {
 /// discarded. A goal is not a turn, but it is the first thing that pins the
 /// session's placement, so it has to establish the environment too.
 fn set_goal_in_new_worktree(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
@@ -285,7 +300,11 @@ fn set_goal_in_new_worktree(
                     session~,
                     command~,
                     draft=text,
-                    message="Couldn’t confirm worktree creation because the desktop host did not respond. This chat may already be bound to the new worktree; the goal was not sent.",
+                    message=if locale is SimplifiedChinese {
+                      "桌面主机未响应，无法确认工作树是否已创建。此对话可能已绑定到新工作树；目标尚未发送。"
+                    } else {
+                      "Couldn’t confirm worktree creation because the desktop host did not respond. This chat may already be bound to the new worktree; the goal was not sent."
+                    },
                   ),
                 ),
               )
@@ -301,7 +320,12 @@ fn set_goal_in_new_worktree(
                     session~,
                     command~,
                     draft=text,
-                    message="Couldn’t create the worktree. " + message,
+                    message=(if locale is SimplifiedChinese {
+                        "无法创建工作树。"
+                      } else {
+                        "Couldn’t create the worktree. "
+                      }) +
+                      message,
                   ),
                 ),
               )
@@ -315,7 +339,11 @@ fn set_goal_in_new_worktree(
                   session~,
                   command~,
                   draft=text,
-                  message="Couldn’t create the worktree because the host returned an incomplete reply. The goal was not sent.",
+                  message=if locale is SimplifiedChinese {
+                    "主机返回了不完整的响应，无法创建工作树。目标尚未发送。"
+                  } else {
+                    "Couldn’t create the worktree because the host returned an incomplete reply. The goal was not sent."
+                  },
                 ),
               ),
             )
@@ -352,6 +380,7 @@ fn set_goal_in_new_worktree(
 /// conversation's real environment; the canonical rows arrive as
 /// `worktree.changed` from the commit seam.
 fn repair_worktree_cmd(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   workspace : String,
@@ -369,7 +398,11 @@ fn repair_worktree_cmd(
           scheduler.add(
             dispatch(
               WorktreeFailed(
-                "Couldn’t repair the worktree because the desktop host did not respond. Retry, or archive this chat.",
+                if locale is SimplifiedChinese {
+                  "桌面主机未响应，无法修复工作树。请重试，或归档此对话。"
+                } else {
+                  "Couldn’t repair the worktree because the desktop host did not respond. Retry, or archive this chat."
+                },
               ),
             ),
           )
@@ -378,7 +411,16 @@ fn repair_worktree_cmd(
       }
       if result is @protocol.WorktreeCreateError(message) {
         scheduler.add(
-          dispatch(WorktreeFailed("Couldn’t repair the worktree. " + message)),
+          dispatch(
+            WorktreeFailed(
+              (if locale is SimplifiedChinese {
+                "无法修复工作树。"
+              } else {
+                "Couldn’t repair the worktree. "
+              }) +
+              message,
+            ),
+          ),
         )
       }
     })

@@ -33,6 +33,12 @@ pub let app_focused_browser : Command[@protocol.EmptyPayload, @protocol.AppFocus
 
 pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply]
 
+pub let app_language_apply : Command[@protocol.UiLanguagePreference, @protocol.EmptyReply]
+
+pub let app_language_get : Command[@protocol.EmptyPayload, @protocol.UiLanguagePreference]
+
+pub let app_language_set : Command[@protocol.UiLanguagePreference, @protocol.EmptyReply]
+
 pub let app_open_devtools : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
 pub let app_set_titlebar_theme : Command[@protocol.AppTitlebarThemePayload, @protocol.EmptyReply]

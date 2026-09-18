@@ -159,11 +159,12 @@ fn State::has_hidden_conversation(self : State, input : Input) -> Bool {
 pub fn Input::menu_entries(
   self : Input,
   actions : Actions,
+  locale? : @i18n.Locale = English,
 ) -> Array[@action_menu.Entry] {
   [
     Action({
-      label: "Workspace settings",
-      title: "Defaults for new chats in this workspace",
+      label: @messages.text(locale, WorkspaceSettings),
+      title: @messages.text(locale, WorkspaceDefaults),
       icon: Some(@icons.icon(@icons.icon_settings_gear)),
       enabled: true,
       destructive: false,
@@ -171,8 +172,8 @@ pub fn Input::menu_entries(
     }),
     Separator,
     Action({
-      label: "Detach project",
-      title: "Detach this project — its files and sessions stay",
+      label: @messages.text(locale, DetachProject),
+      title: @messages.text(locale, DetachDescription),
       icon: Some(@icons.icon(@icons.icon_close)),
       enabled: true,
       destructive: false,
@@ -184,10 +185,11 @@ pub fn Input::menu_entries(
 ///|
 fn Actions::conversation_component(
   self : Actions,
+  locale : @rabbita.Val[@i18n.Locale],
   _id : @conversation.Id,
   input : @rabbita.Val[@conversation.Input],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
-  @conversation.component(input, self.conversation)
+  @conversation.component(locale, input, self.conversation)
 }
 
 ///|
@@ -199,20 +201,32 @@ fn Actions::conversation_component(
 pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
+  locale : @rabbita.Val[@i18n.Locale],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, _) => ({ fold: Open, preview_limit: PreviewLimit, }, @cmd.none),
     update=(state, input, msg, _) => (state.update(input, msg), @cmd.none),
   )
-  let conversation_inputs = input.map(input => {
-    @vector.from_array(input.conversations)
+  let conversation_inputs = input.map2(locale, (input, locale) => {
+    @vector.from_array(input.conversations.map(row => (locale, row)))
   })
   let conversation_rows = conversation_inputs.assoc_by(
-    (id, conversation) => actions.conversation_component(id, conversation),
-    by=conversation => conversation.id(),
+    (id, conversation) => {
+      actions.conversation_component(
+        conversation.map(pair => pair.0),
+        id,
+        conversation.map(pair => pair.1),
+      )
+    },
+    by=conversation => conversation.1.id(),
   )
-  state.map3(input, conversation_rows, (state, input, conversation_rows) => {
+  state.map4(input, conversation_rows, locale, (
+    state,
+    input,
+    conversation_rows,
+    locale,
+  ) => {
     let collapsed = state.folded(input)
     let mut class = if collapsed {
       "workspace-row collapsible collapsed"
@@ -250,9 +264,9 @@ pub fn component(
         @html.button(
           class="row-archive workspace-menu-button",
           type_="button",
-          title="More actions",
+          title=@messages.text(locale, MoreActions),
           attrs=@action_menu.button_attrs(input.id.key()).aria_label(
-            "Workspace actions",
+            @messages.text(locale, WorkspaceActions),
           ),
           @icons.icon(@icons.icon_more),
         ),
@@ -263,13 +277,13 @@ pub fn component(
         @html.button(
           class="row-archive",
           type_="button",
-          title="New conversation in this project",
+          title=@messages.text(locale, NewProjectConversation),
           attrs=@html.Attrs::build()
             .on_click(event => {
               event.stop_propagation()
               (actions.new_conversation)(input.id)
             })
-            .aria_label("New conversation in this project"),
+            .aria_label(@messages.text(locale, NewProjectConversation)),
           @icons.icon(@icons.icon_new_chat),
         ),
       )
@@ -315,9 +329,9 @@ pub fn component(
           @html.button(
             class="project-show-more",
             type_="button",
-            title="Show more chats in this project",
+            title=@messages.text(locale, ShowMoreChats),
             on_click=emit(ShowMore),
-            "Show more",
+            @messages.text(locale, ShowMore),
           ),
         ),
       )

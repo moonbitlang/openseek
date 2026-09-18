@@ -349,13 +349,20 @@ pub async fn DesktopBridgeActor::notify_system_appearance_changed(
 
 ///|
 pub fn openseek_capability(
+  runtime_dir? : String,
   state : @api.ApiState,
   bridge : DesktopBridgeActor,
   views : BrowserViews,
 ) -> @proton_extension.RendererCapability {
   let endpoints = @api.endpoints(state, bridge.host_connection)
   let window_only = [
-    @endpoint.WindowEndpoint(@commands.host_connect, (context, _) => {
+    @endpoint.WindowEndpoint(@commands.app_language_get, (_, _) => {
+      @host.read_ui_language(runtime_dir)
+    }),
+    WindowEndpoint(@commands.app_language_set, (_, payload) => {
+      @host.write_ui_language(runtime_dir, payload)
+    }),
+    WindowEndpoint(@commands.host_connect, (context, _) => {
       // A reloaded page allocates browser ids from scratch; the previous
       // page's native views must not survive its attachment.
       views.close_all()

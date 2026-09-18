@@ -128,6 +128,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         .bind(value => value.project_root())
         .bind(project => self.project_display_label(project))
       @transcript_component.Input(
+        locale=self.locale,
         dark_mode=self.theme.is_dark(self.system_dark),
         minimal=self.minimal_transcript,
         source=@transcript_component.Codex,
@@ -142,7 +143,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         project_query="",
         root=placement.bind(value => value.checkout_root()),
         items=@transcript_component.VisibleRow::history(
-          self.codex.transcript_items(),
+          self.codex.transcript_items(locale=self.locale),
         ),
         streaming_response=None,
         streaming_identity="idle",
@@ -152,6 +153,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       match self.active_conversation() {
         None =>
           @transcript_component.Input(
+            locale=self.locale,
             dark_mode=self.theme.is_dark(self.system_dark),
             minimal=self.minimal_transcript,
             source=@transcript_component.OpenSeek,
@@ -171,6 +173,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
           let (streaming_reasoning, reasoning_complete) = conversation.reasoning_for_render()
           let can_choose_project = self.can_choose_new_chat_project()
           @transcript_component.Input(
+            locale=self.locale,
             dark_mode=self.theme.is_dark(self.system_dark),
             minimal=self.minimal_transcript,
             source=@transcript_component.OpenSeek,

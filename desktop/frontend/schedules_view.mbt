@@ -1,40 +1,41 @@
 ///|
-fn schedule_status(status : @protocol.ScheduleRunStatus) -> String {
+fn schedule_status(
+  locale? : @i18n.Locale = English,
+  status : @protocol.ScheduleRunStatus,
+) -> String {
   match status {
-    Running => "Running"
-    Succeeded => "Completed"
-    Failed(message) => "Failed · " + message
-    Stopped => "Stopped"
-    TimedOut => "Timed out"
-    Interrupted => "Interrupted · host stopped; not retried"
+    Running => ui(locale, RunningLabel)
+    Succeeded => ui(locale, CompletedLabel)
+    Failed(message) => ui(locale, FailedLabel) + message
+    Stopped => ui(locale, StoppedLabel)
+    TimedOut => ui(locale, TimedOutLabel)
+    Interrupted => ui(locale, InterruptedLabel)
   }
 }
 
 ///|
 fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  let locale = model.locale
   let page = model.schedules
   let emit = dispatch.map(msg => SchedulePage(msg))
   let content : Array[@html.Html] = [
     @html.div(class="settings-header", [
       @html.div(class="page-eyebrow", model.focused_device_name()),
-      @html.h1("Scheduled tasks"),
-      @html.p(
-        class="settings-subtitle",
-        "Run independent OpenSeek tasks while this host is open. Missed times are skipped. Up to 4 tasks can run together; each plan runs one task at a time.",
-      ),
+      @html.h1(ui(locale, ScheduledTasks)),
+      @html.p(class="settings-subtitle", ui(locale, ScheduleDescription)),
     ]),
     @html.div(class="schedule-toolbar", [
       @html.button(
         class="button",
         disabled=page.busy,
         on_click=emit(New),
-        "New schedule",
+        ui(locale, NewSchedule),
       ),
       @html.button(
         class="button secondary",
         disabled=page.busy,
         on_click=emit(Poll),
-        "Refresh",
+        ui(locale, RefreshLabel),
       ),
     ]),
   ]
@@ -51,11 +52,11 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     content.push(
       @html.div(class="schedule-card", [
         @html.div(class="schedule-toolbar", [
-          @html.h2("Run log"),
+          @html.h2(ui(locale, RunLog)),
           @html.button(
             class="button secondary",
             on_click=emit(CloseLog),
-            "Close log",
+            ui(locale, CloseLog),
           ),
         ]),
         @html.p(class="schedule-log", path),
@@ -64,7 +65,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   if page.form is Some(form) {
-    let options = [@html.option(value="auto", "Automatically create")]
+    let options = [@html.option(value="auto", ui(locale, AutomaticallyCreate))]
     if model.focused_device() is Some(dev) {
       for project in dev.projects {
         options.push(@html.option(value=project.path, project.path))
@@ -80,17 +81,17 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.div(class="schedule-form", [
         @html.h2(
           if form.id is Some(_) {
-            "Edit schedule"
+            ui(locale, EditSchedule)
           } else {
-            "New schedule"
+            ui(locale, NewSchedule)
           },
         ),
-        field("Name", "name", form.name),
+        field(ui(locale, NameLabel), "name", form.name),
         @html.label(class="schedule-field", [
-          @html.span("Working directory"),
+          @html.span(ui(locale, WorkingDirectory)),
           @html.select(
             attrs=@html.Attrs::build()
-              .aria_label("Working directory")
+              .aria_label(ui(locale, WorkingDirectory))
               .value_prop(form.workspace.unwrap_or("auto")),
             on_change=emit.map(value => Field("workspace", value)),
             options,
@@ -99,13 +100,13 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.p(
           class="settings-subtitle",
           if form.workspace is None {
-            "OpenSeek creates a dedicated folder on the first run and reuses it to save this task's files and results."
+            ui(locale, AutomaticDirectoryDescription)
           } else {
-            "This task runs in the selected project folder and can read and update its files."
+            ui(locale, ProjectDirectoryDescription)
           },
         ),
         @html.label(class="schedule-field", [
-          @html.span("Task"),
+          @html.span(ui(locale, TaskLabel)),
           @html.textarea(
             value=form.task,
             on_input=emit.map(value => Field("task", value)),
@@ -114,84 +115,83 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ]),
         @html.div(class="schedule-form-grid", [
           @html.label(class="schedule-field", [
-            @html.span("Schedule"),
+            @html.span(ui(locale, ScheduleLabel)),
             @html.select(
               attrs=@html.Attrs::build()
-                .aria_label("Schedule")
+                .aria_label(ui(locale, ScheduleLabel))
                 .value_prop(if form.once { "once" } else { "every" }),
               on_change=emit.map(value => Field("timing", value)),
               [
-                @html.option(value="every", "Every"),
-                @html.option(value="once", "Once, in"),
+                @html.option(value="every", ui(locale, EveryLabel)),
+                @html.option(value="once", ui(locale, OnceIn)),
               ],
             ),
           ]),
-          field("Minutes", "minutes", form.minutes),
-          field("Timeout (minutes)", "timeout", form.timeout),
+          field(ui(locale, MinutesLabel), "minutes", form.minutes),
+          field(ui(locale, TimeoutMinutes), "timeout", form.timeout),
         ]),
-        field("Model (blank uses host default)", "model", form.model),
-        @html.p(
-          class="settings-subtitle",
-          "Uses this host's API settings. Permission escalation is refused in unattended runs.",
-        ),
-        @html.p(
-          class="settings-subtitle",
-          "Save and run now executes once immediately without changing the schedule.",
-        ),
+        field(ui(locale, ModelDefault), "model", form.model),
+        @html.p(class="settings-subtitle", ui(locale, SchedulePermissions)),
+        @html.p(class="settings-subtitle", ui(locale, RunNowDescription)),
         @html.div(class="schedule-toolbar", [
           @html.button(
             class="button",
             disabled=page.busy,
             on_click=emit(Save(true)),
-            "Save and run now",
+            ui(locale, SaveRunNow),
           ),
           @html.button(
             class="button secondary",
             disabled=page.busy,
             on_click=emit(Save(false)),
-            "Save schedule",
+            ui(locale, SaveSchedule),
           ),
           @html.button(
             class="button secondary",
             on_click=emit(CloseForm),
-            "Cancel",
+            ui(locale, CancelLabel),
           ),
         ]),
       ]),
     )
   }
   if page.snapshot.entries.is_empty() {
-    content.push(
-      @html.p(
-        class="schedule-empty",
-        "No schedules yet. Create one to run a task later or at a fixed interval.",
-      ),
-    )
+    content.push(@html.p(class="schedule-empty", ui(locale, EmptySchedules)))
   }
   for entry in page.snapshot.entries {
     let running = page.snapshot.runs.any(run => {
       run.schedule_id == entry.id && run.status is Running
     })
     let timing = match entry.spec.timing {
-      Every(n) => "Every \{n} min"
-      Once(at) => "Once · " + schedule_time(at)
+      Every(n) =>
+        if locale is SimplifiedChinese {
+          "每 \{n} 分钟"
+        } else {
+          "Every \{n} min"
+        }
+      Once(at) => ui(locale, OnceLabel) + schedule_time(locale~, at)
     }
     let next = match entry.next_at {
-      Some(at) => "Next: " + schedule_time(at)
-      None => if entry.enabled { "Waiting" } else { "Paused / finished" }
+      Some(at) => ui(locale, NextLabel) + schedule_time(locale~, at)
+      None =>
+        if entry.enabled {
+          ui(locale, WaitingLabel)
+        } else {
+          ui(locale, PausedFinished)
+        }
     }
     content.push(
       @html.div(class="schedule-card", [
         @html.h2(entry.spec.name),
         @html.p(
           class="schedule-meta",
-          timing + " · " + (if entry.run_requested { "Queued" } else { next }),
+          timing +
+          " · " +
+          (if entry.run_requested { ui(locale, QueuedLabel) } else { next }),
         ),
         @html.p(
           class="schedule-meta",
-          entry.spec.workspace.unwrap_or(
-            "Automatically created working directory",
-          ),
+          entry.spec.workspace.unwrap_or(ui(locale, AutomaticDirectory)),
         ),
         @html.p(class="schedule-task", entry.spec.task),
         match entry.notice {
@@ -203,7 +203,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             class="button secondary",
             disabled=page.busy || running || entry.run_requested,
             on_click=emit(Action(entry.id, "run")),
-            "Run now",
+            ui(locale, RunNow),
           ),
           @html.button(
             class="button secondary",
@@ -212,30 +212,30 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               Action(entry.id, if entry.enabled { "pause" } else { "resume" }),
             ),
             if entry.enabled {
-              "Pause"
+              ui(locale, PauseLabel)
             } else {
-              "Resume"
+              ui(locale, ResumeLabel)
             },
           ),
           @html.button(
             class="button secondary",
             disabled=page.busy,
             on_click=emit(Edit(entry.id)),
-            "Edit",
+            ui(locale, EditLabel),
           ),
           if running {
             @html.button(
               class="button secondary",
               disabled=page.busy,
               on_click=emit(Action(entry.id, "stop")),
-              "Stop run",
+              ui(locale, StopRun),
             )
           } else {
             @html.button(
               class="button secondary",
               disabled=page.busy,
               on_click=emit(Action(entry.id, "delete")),
-              "Delete",
+              ui(locale, DeleteLabel),
             )
           },
         ]),
@@ -243,7 +243,11 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     )
   }
   for running in [true, false] {
-    let title = if running { "Running" } else { "Run history" }
+    let title = if running {
+      ui(locale, RunningLabel)
+    } else {
+      ui(locale, RunHistory)
+    }
     let runs = page.snapshot.runs.filter(run => {
       (run.status is Running) == running
     })
@@ -255,9 +259,9 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         @html.p(
           class="schedule-empty",
           if running {
-            "No tasks are running."
+            ui(locale, NoRunningTasks)
           } else {
-            "No finished runs yet."
+            ui(locale, NoFinishedRuns)
           },
         ),
       )
@@ -268,14 +272,16 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.h3(run.name),
           @html.p(
             class="schedule-meta",
-            schedule_time(run.started_at) + " · " + schedule_status(run.status),
+            schedule_time(locale~, run.started_at) +
+            " · " +
+            schedule_status(locale~, run.status),
           ),
           if run.status is Running {
             @html.button(
               class="button secondary",
               disabled=page.busy,
               on_click=emit(Action(run.schedule_id, "stop")),
-              "Stop run",
+              ui(locale, StopRun),
             )
           } else {
             @html.nothing
@@ -283,14 +289,14 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.button(
             class="button secondary",
             on_click=emit(Open(run)),
-            "Open session",
+            ui(locale, OpenSession),
           ),
           @html.button(
             class="button secondary",
             on_click=emit(Log(run.log_path)),
-            "View log",
+            ui(locale, ViewLog),
           ),
-          @html.p(class="schedule-log", "Log: " + run.log_path),
+          @html.p(class="schedule-log", ui(locale, LogLabel) + run.log_path),
         ]),
       )
     }

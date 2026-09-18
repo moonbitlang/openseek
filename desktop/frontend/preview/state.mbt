@@ -106,13 +106,13 @@ pub fn navigate(state : State, id : Int, url : String) -> State {
 ///|
 /// The tab chip's label: the page title once one arrived, else the URL's
 /// host, else a blank-tab placeholder.
-pub fn page_label(page : PageState) -> String {
+pub fn page_label(page : PageState, locale? : @i18n.Locale = English) -> String {
   if !page.title.is_empty() {
     return page.title
   }
   match page.url {
     Some(url) => host_of(url).unwrap_or(url)
-    None => "New Tab"
+    None => if locale is SimplifiedChinese { "新标签页" } else { "New Tab" }
   }
 }
 

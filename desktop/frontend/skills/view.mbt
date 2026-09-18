@@ -7,6 +7,7 @@
 /// listed so the user sees everything the engine advertises, but the app
 /// never offers to delete them.
 fn installed_row(
+  locale? : @i18n.Locale = English,
   state : State,
   skill : InstalledItem,
   emit : @cmd.Emit[Msg],
@@ -19,7 +20,7 @@ fn installed_row(
     @html.div(
       class="skill-meta",
       if skill.source.is_empty() {
-        "hand-written"
+        ui(locale, HandWritten)
       } else {
         skill.source
       },
@@ -48,9 +49,9 @@ fn installed_row(
           disabled=busy,
           on_click=emit(Uninstall(skill.id)),
           if busy {
-            "Removing…"
+            ui(locale, Removing)
           } else {
-            "Uninstall"
+            ui(locale, Uninstall)
           },
         ),
       ]),
@@ -61,10 +62,11 @@ fn installed_row(
 
 ///|
 /// One catalog row. The action button morphs: already installed at this
-/// exact version reads as a disabled "Installed" (an older install keeps
+/// exact version reads as a disabled ui(locale, InstalledLabel) (an older install keeps
 /// the button alive as the upgrade path), an install in flight reads as
-/// "Installing…".
+/// ui(locale, Installing).
 fn market_row(
+  locale? : @i18n.Locale = English,
   state : State,
   input : Input,
   item : MarketItem,
@@ -85,7 +87,7 @@ fn market_row(
   info.push(@html.div(class="skill-meta", meta))
   let action = if installed {
     @html.div(class="skill-actions", [
-      @html.span(class="skill-check ok", "✓ Installed"),
+      @html.span(class="skill-check ok", ui(locale, InstalledCheck)),
     ])
   } else {
     @html.div(class="skill-actions", [
@@ -94,9 +96,9 @@ fn market_row(
         disabled=busy,
         on_click=emit(Install(item)),
         if busy {
-          "Installing…"
+          ui(locale, Installing)
         } else {
-          "Install"
+          ui(locale, Install)
         },
       ),
     ])
@@ -115,24 +117,34 @@ fn market_row(
 
 ///|
 fn detail_page(
+  locale? : @i18n.Locale = English,
   state : State,
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   match state.preview {
-    Closed => list_page(state, input, emit)
+    Closed => list_page(locale~, state, input, emit)
     Loading(target~, ..) =>
       detail_shell(
+        locale~,
         target,
-        @html.div(class="skills-empty", "Loading SKILLS.md…"),
+        @html.div(class="skills-empty", ui(locale, LoadingDocument)),
         input,
         state,
         emit,
       )
     Ready(target~, content~, ..) =>
-      detail_shell(target, skill_document_view(content), input, state, emit)
+      detail_shell(
+        locale~,
+        target,
+        skill_document_view(locale~, content),
+        input,
+        state,
+        emit,
+      )
     Failed(target~, message~, ..) =>
       detail_shell(
+        locale~,
         target,
         @html.div(class="skills-empty danger", message),
         input,
@@ -143,7 +155,10 @@ fn detail_page(
 }
 
 ///|
-fn skill_document_view(source : String) -> @html.Html {
+fn skill_document_view(
+  locale? : @i18n.Locale = English,
+  source : String,
+) -> @html.Html {
   let document = parse_skill_document(source)
   let nodes : Array[@html.Html] = []
   if !document.metadata.is_empty() {
@@ -153,7 +168,7 @@ fn skill_document_view(source : String) -> @html.Html {
     })
     nodes.push(
       @html.div(class="skill-metadata", [
-        @html.div(class="skill-metadata-title", "Metadata"),
+        @html.div(class="skill-metadata-title", ui(locale, Metadata)),
         @html.div(class="skill-metadata-scroll", [
           @html.table(class="skill-metadata-table", rows),
         ]),
@@ -163,7 +178,7 @@ fn skill_document_view(source : String) -> @html.Html {
   nodes.push(
     @html.div(
       class="skill-preview-markdown msg-content markdown",
-      @markdown.markdown_nodes(document.body),
+      @markdown.markdown_nodes(locale~, document.body),
     ),
   )
   @html.div(nodes)
@@ -171,6 +186,7 @@ fn skill_document_view(source : String) -> @html.Html {
 
 ///|
 fn detail_shell(
+  locale? : @i18n.Locale = English,
   target : PreviewTarget,
   content : @html.Html,
   input : Input,
@@ -182,13 +198,13 @@ fn detail_shell(
       @html.button(
         class="button secondary skill-back",
         on_click=emit(BackToList),
-        "← Back to skills",
+        ui(locale, Back),
       ),
       @html.div(class="skill-detail-header", [
-        @html.div(class="page-eyebrow", "Skill details"),
+        @html.div(class="page-eyebrow", ui(locale, Details)),
         @html.h1(preview_name(target)),
-        @html.div(class="skill-detail-meta", preview_meta(target)),
-        detail_action(target, state, input, emit),
+        @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
+        detail_action(locale~, target, state, input, emit),
       ]),
       @html.div(class="skill-detail-card", [
         @html.div(class="skill-file-bar", [
@@ -197,11 +213,11 @@ fn detail_shell(
             Ready(content~, ..) =>
               @html.button(
                 class="button secondary skill-copy-button",
-                attrs=@html.Attrs::build().aria_label("Copy SKILL.md"),
+                attrs=@html.Attrs::build().aria_label(ui(locale, CopyDocument)),
                 on_click=copy_content(content),
-                "Copy",
+                ui(locale, Copy),
               )
-            _ => @html.span(class="skill-file-status", "Loading…")
+            _ => @html.span(class="skill-file-status", ui(locale, Loading))
           },
         ]),
         content,
@@ -219,7 +235,10 @@ fn preview_name(target : PreviewTarget) -> String {
 }
 
 ///|
-fn preview_meta(target : PreviewTarget) -> String {
+fn preview_meta(
+  locale? : @i18n.Locale = English,
+  target : PreviewTarget,
+) -> String {
   match target {
     Market(item) =>
       if item.author.is_empty() {
@@ -229,7 +248,7 @@ fn preview_meta(target : PreviewTarget) -> String {
       }
     Installed(item) =>
       if item.source.is_empty() {
-        "hand-written"
+        ui(locale, HandWritten)
       } else {
         item.source
       }
@@ -238,6 +257,7 @@ fn preview_meta(target : PreviewTarget) -> String {
 
 ///|
 fn detail_action(
+  locale? : @i18n.Locale = English,
   target : PreviewTarget,
   state : State,
   input : Input,
@@ -248,23 +268,23 @@ fn detail_action(
       let key = source_label(item)
       let busy = state.busy.contains(key)
       if input.has_installed(key) {
-        @html.span(class="skill-check ok", "✓ Installed")
+        @html.span(class="skill-check ok", ui(locale, InstalledCheck))
       } else {
         @html.button(
           class="button primary skill-detail-action",
           disabled=busy,
           on_click=emit(Install(item)),
           if busy {
-            "Installing…"
+            ui(locale, Installing)
           } else {
-            "Install skill"
+            ui(locale, InstallSkill)
           },
         )
       }
     }
     Installed(item) =>
       if item.source.is_empty() {
-        @html.span(class="skill-check ok", "hand-written skill")
+        @html.span(class="skill-check ok", ui(locale, HandWrittenSkill))
       } else {
         let busy = state.busy.contains(item.id)
         @html.button(
@@ -272,9 +292,9 @@ fn detail_action(
           disabled=busy,
           on_click=emit(Uninstall(item.id)),
           if busy {
-            "Removing…"
+            ui(locale, Removing)
           } else {
-            "Uninstall"
+            ui(locale, Uninstall)
           },
         )
       }
@@ -293,15 +313,17 @@ fn matches(query : String, fields : Array[String]) -> Bool {
 ///|
 /// The Skills page, shown in the main area in place of the conversation:
 /// header, search, the local library, then the mooncakes.io catalog.
-fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn list_page(
+  locale? : @i18n.Locale = English,
+  state : State,
+  input : Input,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   let sections : Array[@html.Html] = [
     @html.div(class="skills-header", [
-      @html.div(class="page-eyebrow", "Library"),
-      @html.h1("Skills"),
-      @html.div(
-        class="skills-subtitle",
-        "Playbooks the agent reads when a task matches. Skills apply to new chats.",
-      ),
+      @html.div(class="page-eyebrow", ui(locale, Library)),
+      @html.h1(ui(locale, Skills)),
+      @html.div(class="skills-subtitle", ui(locale, Description)),
     ]),
     @html.div(
       class="skills-search",
@@ -311,7 +333,7 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
         @html.input(
           input_type=@html.InputType::Search,
           value=state.query,
-          placeholder="Search skills…",
+          placeholder=ui(locale, Search),
           on_input=emit.map(value => QueryChanged(value)),
           attrs=@html.Attrs::build().data_set("focus-target", ""),
         ),
@@ -324,7 +346,7 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
   let installed_rows : Array[@html.Html] = []
   for skill in input.installed {
     if matches(state.query, [skill.name, skill.description, skill.source]) {
-      installed_rows.push(installed_row(state, skill, emit))
+      installed_rows.push(installed_row(locale~, state, skill, emit))
     }
   }
   if installed_rows.is_empty() {
@@ -332,26 +354,28 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
       @html.div(
         class="skills-empty",
         if input.installed.is_empty() {
-          "No skills installed yet."
+          ui(locale, EmptyInstalled)
         } else {
-          "No installed skill matches the search."
+          ui(locale, NoInstalledMatch)
         },
       ),
     )
   }
-  sections.push(@settings.group(icon_extensions, "Installed", installed_rows))
+  sections.push(
+    @settings.group(icon_extensions, ui(locale, InstalledLabel), installed_rows),
+  )
   let market_rows : Array[@html.Html] = []
   match state.catalog {
     Idle | Loading(_) =>
       market_rows.push(
-        @html.div(class="skills-empty", "Loading the skill catalog…"),
+        @html.div(class="skills-empty", ui(locale, LoadingCatalog)),
       )
     Failed(message) =>
       market_rows.push(@html.div(class="skills-empty danger", message))
     Ready(items) => {
       for item in items {
         if matches(state.query, [item.name, item.description, item.author]) {
-          market_rows.push(market_row(state, input, item, emit))
+          market_rows.push(market_row(locale~, state, input, item, emit))
         }
       }
       if market_rows.is_empty() {
@@ -359,9 +383,9 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
           @html.div(
             class="skills-empty",
             if items.is_empty() {
-              "The registry lists no installable skills yet."
+              ui(locale, EmptyRegistry)
             } else {
-              "No registry skill matches the search."
+              ui(locale, NoRegistryMatch)
             },
           ),
         )
@@ -376,15 +400,15 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
     @html.div(class="settings-group", [
       @html.div(class="settings-group-head", [
         icon(icon_package),
-        @html.h2("Mooncakes registry"),
+        @html.h2(ui(locale, Registry)),
         @html.button(
           class="button secondary skills-refresh",
           disabled=catalog_loading,
           on_click=emit(RefreshCatalog),
           if catalog_loading {
-            "Refreshing…"
+            ui(locale, Refreshing)
           } else {
-            "Refresh"
+            ui(locale, Refresh)
           },
         ),
       ]),
@@ -404,9 +428,14 @@ fn list_page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html 
 }
 
 ///|
-fn page(state : State, input : Input, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn page(
+  locale? : @i18n.Locale = English,
+  state : State,
+  input : Input,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   match state.preview {
-    Closed => list_page(state, input, emit)
-    _ => detail_page(state, input, emit)
+    Closed => list_page(locale~, state, input, emit)
+    _ => detail_page(locale~, state, input, emit)
   }
 }

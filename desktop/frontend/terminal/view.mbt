@@ -4,7 +4,12 @@
 // emulators are never torn down (see host.mbt).
 
 ///|
-fn tab_view(dispatch : @cmd.Emit[Msg], tab : Tab, active : Bool) -> @html.Html {
+fn tab_view(
+  locale? : @i18n.Locale = English,
+  dispatch : @cmd.Emit[Msg],
+  tab : Tab,
+  active : Bool,
+) -> @html.Html {
   let title = match tab.status {
     TabOpening => "starting…"
     TabRunning => tab.workspace_label
@@ -24,7 +29,7 @@ fn tab_view(dispatch : @cmd.Emit[Msg], tab : Tab, active : Bool) -> @html.Html {
     ),
     @html.button(
       class="terminal-tab-close",
-      title="Close terminal",
+      title=ui(locale, CloseTerminal),
       on_click=dispatch(TabClosed(key=tab.key)),
       "✕",
     ),
@@ -33,6 +38,7 @@ fn tab_view(dispatch : @cmd.Emit[Msg], tab : Tab, active : Bool) -> @html.Html {
 
 ///|
 fn panel_view(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -47,20 +53,25 @@ fn panel_view(
     ([] : Array[@html.Html]),
   )
   let items : Array[@html.Html] = [
-    @html.span(class="terminal-title", "Terminal"),
+    @html.span(class="terminal-title", ui(locale, TerminalLabel)),
   ]
   let visible = state.visible_tabs(ctx)
   let active = state.active_tab(ctx)
   for tab in visible {
     items.push(
-      tab_view(dispatch, tab, active is Some(current) && current.key == tab.key),
+      tab_view(
+        locale~,
+        dispatch,
+        tab,
+        active is Some(current) && current.key == tab.key,
+      ),
     )
   }
   if ctx.placement is Some(placement) && placement.is_ready() {
     items.push(
       @html.button(
         class="terminal-new",
-        title="New terminal in this workspace",
+        title=ui(locale, NewTerminal),
         on_click=dispatch(NewTerminal),
         "+",
       ),
@@ -78,13 +89,13 @@ fn panel_view(
     }
   } else if ctx.placement is None {
     items.push(
-      @html.span(class="terminal-status", "Waiting for workspace placement…"),
+      @html.span(class="terminal-status", ui(locale, WaitingPlacement)),
     )
   } else if ctx.placement is Some(@interop.MissingWorktree(..)) {
     items.push(
       @html.span(
         class="terminal-status terminal-error",
-        "Worktree checkout is missing",
+        ui(locale, MissingWorktree),
       ),
     )
   } else if !ctx.connected {
@@ -93,7 +104,7 @@ fn panel_view(
   items.push(
     @html.button(
       class="terminal-close",
-      title="Hide terminal (Ctrl+`)",
+      title=ui(locale, HideTerminal),
       on_click=dispatch(ToggleTerminal),
       "✕",
     ),

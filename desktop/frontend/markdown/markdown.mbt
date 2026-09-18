@@ -22,12 +22,13 @@
 /// Absent (tests, plain rendering), explicit links remain ordinary anchors.
 /// Inline code stays inert.
 pub fn markdown_nodes(
+  locale? : @i18n.Locale = English,
   source : String,
   open_file? : (String) -> @cmd.Cmd,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
-    let render = MarkdownRender::{ defs: doc.defs, open_file, }
+    let render = MarkdownRender::{ locale, defs: doc.defs, open_file, }
     @js.Value::cast_from(render.block_nodes(doc.block))
   }) catch {
     _ => [@html.pre(class="markdown-fallback", source)]
@@ -36,6 +37,7 @@ pub fn markdown_nodes(
 
 ///|
 priv struct MarkdownRender {
+  locale : @i18n.Locale
   // Link-reference and footnote definitions collected by the parser, used to
   // resolve `[text][label]` style references to their destinations.
   defs : Map[String, @cmark.LabelDef]
@@ -69,7 +71,8 @@ fn MarkdownRender::push_block(
     Heading(node) => out.push(self.heading(node.v))
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
-    CodeBlock(node) | ExtMathBlock(node) => out.push(code_block(node.v))
+    CodeBlock(node) | ExtMathBlock(node) =>
+      out.push(code_block(locale=self.locale, node.v))
     // Raw HTML is shown as text, not injected; see the module comment.
     HtmlBlock(node) =>
       out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
@@ -110,10 +113,13 @@ fn lines_text(lines : @cmark.Seq[@cmark.Node[String]]) -> String {
 }
 
 ///|
-fn code_block(block : @cmark.CodeBlock) -> @html.Html {
+fn code_block(
+  locale? : @i18n.Locale = English,
+  block : @cmark.CodeBlock,
+) -> @html.Html {
   let source = lines_text(block.code)
   @html.div(class="chat-code-block", [
-    @html.div(class="chat-code-toolbar", [code_copy_button(source)]),
+    @html.div(class="chat-code-toolbar", [code_copy_button(locale~, source)]),
     code_block_body(block, source),
   ])
 }
@@ -323,7 +329,7 @@ fn MarkdownRender::push_inline(
       // unsafe-scheme filter. It never becomes a browser anchor.
       if self.open_file is Some(open) &&
         self.file_destination(node.v) is Some(path) {
-        out.push(file_link_node(open, path, children))
+        out.push(file_link_node(locale=self.locale, open, path, children))
       } else {
         match self.link_destination(node.v) {
           Some(url) => out.push(link_node(url, children))
@@ -511,7 +517,11 @@ fn MarkdownRender::prose_nodes(
         matched.after() =~ re"^[[:space:]<>,;!?\"'(){}\[\]]" ||
         matched.after() =~ re"^\.(?:$|[[:space:]<>,;!?\"'(){}\[\]])"
       ) {
-      out.push(file_link_node(open, candidate, [@html.text(candidate)]))
+      out.push(
+        file_link_node(locale=self.locale, open, candidate, [
+          @html.text(candidate),
+        ]),
+      )
     } else {
       out.push(@html.text(candidate))
     }
@@ -664,6 +674,7 @@ fn link_node(href : String, children : Array[@html.Html]) -> @html.Html {
 /// only buttons carry an `on_click` in this html layer, and opening is an app
 /// action rather than navigation.
 fn file_link_node(
+  locale? : @i18n.Locale = English,
   open : (String) -> @cmd.Cmd,
   path : String,
   children : Array[@html.Html],
@@ -671,7 +682,11 @@ fn file_link_node(
   @html.button(
     class="file-link",
     type_="button",
-    title="Open \{path}",
+    title=if locale is SimplifiedChinese {
+      "打开 \{path}"
+    } else {
+      "Open \{path}"
+    },
     attrs=@html.Attrs::build().data_set("context-file", path),
     on_click=open(path),
     children,

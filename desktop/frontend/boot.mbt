@@ -402,6 +402,7 @@ fn main {
             emit.map(viewport => ViewportResized(width=viewport.width.to_int())),
           ),
           app_shortcut_subscription(emit),
+          language_subscription(emit),
           // Host event sources follow the device roster. Removing a device
           // therefore unloads its WebSocket immediately; advancing its retry
           // identity replaces only that device's connection.
@@ -529,35 +530,42 @@ fn main {
       },
     )
     let right_panel_input = state.map(model => model.right_panel_input())
-    let right_panel_html = @right_panel.component(right_panel_input, {
-      dock: emit.map(msg => Dock(msg)),
-      file_editor: emit.map(msg => FileEditor(msg)),
-      browser_tab: emit(BrowserTabRequested),
-      search: emit(ExplorerRequested(ExplorerSearch)),
-      files: emit(ExplorerRequested(ExplorerFiles)),
-      review: emit(ExplorerRequested(ExplorerChanges)),
-      workflows: emit(WorkflowsRequested),
-      jobs: emit(JobsRequested),
-      job_events: emit.map(msg => Jobs(msg)),
-      open_child: child => emit(OpenSessionHere(child)),
-      browser_input: emit.map(value => BrowserAddressEdited(value)),
-      browser_submit: emit(BrowserNavigateSubmitted),
-      browser_back: emit(BrowserBack),
-      browser_forward: emit(BrowserForward),
-      browser_reload: emit(BrowserReload),
-      browser_open_external: emit(BrowserOpenExternal),
-      reveal_file: path => emit(RevealFile(path)),
-      toggle_panel: emit(ToggleRightPanel),
-      toggle_menu: emit(ToggleRightPanelMenu),
-      toggle_expanded: emit(ToggleRightPanelExpanded),
-      close_all_tabs: emit(CloseAllTabs),
-      close_menu: emit(CloseRightPanelMenu),
-    })
+    let right_panel_html = @right_panel.component(
+      state.map(model => model.locale),
+      right_panel_input,
+      {
+        dock: emit.map(msg => Dock(msg)),
+        file_editor: emit.map(msg => FileEditor(msg)),
+        browser_tab: emit(BrowserTabRequested),
+        search: emit(ExplorerRequested(ExplorerSearch)),
+        files: emit(ExplorerRequested(ExplorerFiles)),
+        review: emit(ExplorerRequested(ExplorerChanges)),
+        workflows: emit(WorkflowsRequested),
+        jobs: emit(JobsRequested),
+        job_events: emit.map(msg => Jobs(msg)),
+        open_child: child => emit(OpenSessionHere(child)),
+        browser_input: emit.map(value => BrowserAddressEdited(value)),
+        browser_submit: emit(BrowserNavigateSubmitted),
+        browser_back: emit(BrowserBack),
+        browser_forward: emit(BrowserForward),
+        browser_reload: emit(BrowserReload),
+        browser_open_external: emit(BrowserOpenExternal),
+        reveal_file: path => emit(RevealFile(path)),
+        toggle_panel: emit(ToggleRightPanel),
+        toggle_menu: emit(ToggleRightPanelMenu),
+        toggle_expanded: emit(ToggleRightPanelExpanded),
+        close_all_tabs: emit(CloseAllTabs),
+        close_menu: emit(CloseRightPanelMenu),
+      },
+    )
     let terminal_input = state.map(model => model.terminal_input())
     let terminal_state = state.map(model => model.terminal)
     let terminal_emit = emit.map(msg => Terminal(msg))
     let terminal_html = @terminal.component(
-      terminal_input, terminal_state, terminal_emit,
+      state.map(model => model.locale),
+      terminal_input,
+      terminal_state,
+      terminal_emit,
     )
     let transcript_actions = (slot : String) => {
       (
@@ -612,11 +620,13 @@ fn main {
       )
     let composer_input = state.map(model => model.composer_input())
     let composer_html = @composer.component(
+      state.map(model => model.locale),
       composer_input,
       emit.map(action => ComposerAction(action)),
     )
     let codex_composer_input = state.map(model => model.codex_composer_input())
     let codex_composer_html = @composer.component(
+      state.map(model => model.locale),
       codex_composer_input,
       emit.map(action => CodexComposerAction(action)),
     )
@@ -628,8 +638,10 @@ fn main {
     let quick_open_html = @quick_open.component(
       state.map(model => model.quick_open),
       emit.map(msg => QuickOpen(msg)),
+      state.map(model => model.locale),
     )
     let context_menu_html = @action_menu.context_component(
+      state.map(model => model.locale),
       state.map(model => model.context_menu_input()),
       {
         open_link: url => emit(ExternalLinkClicked(url)),
@@ -641,12 +653,14 @@ fn main {
     let skills_html = @skills.component(
       state.map(model => model.skills_input()),
       state.map(model => model.skills),
+      state.map(model => model.locale),
       emit.map(msg => Skills(msg)),
     )
     let workspace_settings_input = state.map(model => {
       model.workspace_settings_input()
     })
     let workspace_settings_html = @workspace_settings.component(
+      state.map(model => model.locale),
       workspace_settings_input,
       {
         choose_default_mode: (channel, workspace, value) => {

@@ -33,6 +33,7 @@ fn DesktopViewerServices::DesktopViewerServices(
     on_navigation_error,
   )
   let viewer_services = @viewer.ViewerServices(
+    localization=viewer_localization,
     markers=@markers.MarkerStore(markers.marker_service_handle()),
     agent_feedback=feedback.agent_feedback_handle(),
     location_opener~,

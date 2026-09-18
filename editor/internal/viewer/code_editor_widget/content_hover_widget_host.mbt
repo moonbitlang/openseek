@@ -135,38 +135,41 @@ fn CodeEditorWidget::ensure_content_hover_widget(
         Mounted(mounted) => mounted
       }
       guard self.current_code_view() is Some(view) else { return None }
-      let widget = @hover_browser.ContentHoverWidget({
-        // Monaco's `ContentHoverWidget` retains the editor and measures its
-        // stable `_domElement`; a per-model View root is disposed on every
-        // `setModel` transition and cannot outlive this persistent widget.
-        root: mounted.container,
-        layout_content_widget: () => self.layout_content_hover_widget(),
-        render_now: () => self.flush_render(),
-        focus_editor: () => self.focus(),
-        scrolled_visible_position_top: position => {
-          self.scrolled_visible_position_top(position)
+      let widget = @hover_browser.ContentHoverWidget(
+        localization=self.services.localization,
+        {
+          // Monaco's `ContentHoverWidget` retains the editor and measures its
+          // stable `_domElement`; a per-model View root is disposed on every
+          // `setModel` transition and cannot outlive this persistent widget.
+          root: mounted.container,
+          layout_content_widget: () => self.layout_content_hover_widget(),
+          render_now: () => self.flush_render(),
+          focus_editor: () => self.focus(),
+          scrolled_visible_position_top: position => {
+            self.scrolled_visible_position_top(position)
+          },
+          // Monaco reads `EditorOption.lineHeight` — configuration, not layout.
+          line_height: () => {
+            self.configuration.snapshot().font_info.line_height.to_double()
+          },
+          keep_hover_open: () => self.keep_hover_open(),
+          handle_mouseleave: (posx, posy) => {
+            self.on_content_hover_widget_mouse_leave(posx, posy)
+          },
+          handle_keydown: (event, keyboard) => {
+            self.handle_hover_keydown(event, keyboard)
+          },
+          hook_scrollable_scrollbar_input: (scrollable, owner) => {
+            match self.current_code_browser_data() {
+              Some(browser) =>
+                browser.mouse_handler.hook_scrollable_scrollbar_input(
+                  scrollable, owner,
+                )
+              None => ()
+            }
+          },
         },
-        // Monaco reads `EditorOption.lineHeight` — configuration, not layout.
-        line_height: () => {
-          self.configuration.snapshot().font_info.line_height.to_double()
-        },
-        keep_hover_open: () => self.keep_hover_open(),
-        handle_mouseleave: (posx, posy) => {
-          self.on_content_hover_widget_mouse_leave(posx, posy)
-        },
-        handle_keydown: (event, keyboard) => {
-          self.handle_hover_keydown(event, keyboard)
-        },
-        hook_scrollable_scrollbar_input: (scrollable, owner) => {
-          match self.current_code_browser_data() {
-            Some(browser) =>
-              browser.mouse_handler.hook_scrollable_scrollbar_input(
-                scrollable, owner,
-              )
-            None => ()
-          }
-        },
-      })
+      )
       state.widget = Some(widget)
       view.content_widgets.add_widget(widget.content_widget_handle())
       Some(widget)

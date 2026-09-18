@@ -19,6 +19,7 @@ fn json_string_parts(values : Array[Json]) -> Array[String] {
 /// remains available below for diagnostics and fields this client does not yet
 /// understand.
 fn CodexRequestInput::approval_details(
+  locale? : @i18n.Locale = English,
   self : CodexRequestInput,
 ) -> Array[@html.Html] {
   guard self.params is Object(fields) else { return [] }
@@ -48,7 +49,10 @@ fn CodexRequestInput::approval_details(
     }
     details.push(
       @html.div(class="codex-request-detail", [
-        @html.div(class="codex-request-detail-label", "Network destination"),
+        @html.div(
+          class="codex-request-detail-label",
+          ui(locale, NetworkDestination),
+        ),
         @html.code(class="codex-request-value", destination),
       ]),
     )
@@ -68,7 +72,10 @@ fn CodexRequestInput::approval_details(
     if !commands.is_empty() {
       details.push(
         @html.div(class="codex-request-detail", [
-          @html.div(class="codex-request-detail-label", "Command"),
+          @html.div(
+            class="codex-request-detail-label",
+            ui(locale, CommandLabel),
+          ),
           @html.pre(class="codex-request-command", commands.join("\n")),
         ]),
       )
@@ -77,7 +84,10 @@ fn CodexRequestInput::approval_details(
   if @jsonx.json_text(fields, "cwd") is Some(cwd) && !cwd.is_empty() {
     details.push(
       @html.div(class="codex-request-detail", [
-        @html.div(class="codex-request-detail-label", "Working directory"),
+        @html.div(
+          class="codex-request-detail-label",
+          ui(locale, WorkingDirectory),
+        ),
         @html.code(class="codex-request-value", cwd),
       ]),
     )
@@ -87,7 +97,10 @@ fn CodexRequestInput::approval_details(
     if !parts.is_empty() {
       details.push(
         @html.div(class="codex-request-detail", [
-          @html.div(class="codex-request-detail-label", "Requested rule"),
+          @html.div(
+            class="codex-request-detail-label",
+            ui(locale, RequestedRule),
+          ),
           @html.code(class="codex-request-value", parts.join(" ")),
         ]),
       )
@@ -97,7 +110,7 @@ fn CodexRequestInput::approval_details(
     !grant_root.is_empty() {
     details.push(
       @html.div(class="codex-request-detail", [
-        @html.div(class="codex-request-detail-label", "Allowed path"),
+        @html.div(class="codex-request-detail-label", ui(locale, AllowedPath)),
         @html.code(class="codex-request-value", grant_root),
       ]),
     )
@@ -106,7 +119,10 @@ fn CodexRequestInput::approval_details(
     !(additional_permissions is Null) {
     details.push(
       @html.div(class="codex-request-detail", [
-        @html.div(class="codex-request-detail-label", "Additional permissions"),
+        @html.div(
+          class="codex-request-detail-label",
+          ui(locale, AdditionalPermissions),
+        ),
         @html.pre(
           class="codex-request-command",
           additional_permissions.stringify(indent=2),
@@ -140,6 +156,7 @@ fn CodexRequestInput::approval_decisions(
 /// decision object is authoritative; the top-level proposal is a fallback for
 /// older request payloads.
 fn CodexRequestInput::execpolicy_label(
+  locale? : @i18n.Locale = English,
   self : CodexRequestInput,
   decision : Json,
 ) -> String {
@@ -156,18 +173,20 @@ fn CodexRequestInput::execpolicy_label(
     parts = json_string_parts(values)
   }
   if parts.is_empty() {
-    "Allow by rule"
+    ui(locale, AllowByRule)
   } else {
-    "Allow by rule: \{parts.join(" ")}"
+    dynamic_text(locale, DRule(parts.join(" ").to_string()))
   }
 }
 
 ///|
 fn CodexRequestInput::approval_actions(
+  locale? : @i18n.Locale = English,
   self : CodexRequestInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   let controls : Array[@html.Html] = []
   for decision in self.approval_decisions() {
     match decision {
@@ -182,7 +201,7 @@ fn CodexRequestInput::approval_actions(
                 decision~,
               ),
             ),
-            "Approve once",
+            ui(locale, ApproveOnce),
           ),
         )
       String("acceptForSession") =>
@@ -196,7 +215,7 @@ fn CodexRequestInput::approval_actions(
                 decision~,
               ),
             ),
-            "Approve for session",
+            ui(locale, ApproveSession),
           ),
         )
       String("decline") =>
@@ -210,7 +229,7 @@ fn CodexRequestInput::approval_actions(
                 decision~,
               ),
             ),
-            "Decline",
+            ui(locale, DeclineLabel),
           ),
         )
       String("cancel") =>
@@ -224,7 +243,7 @@ fn CodexRequestInput::approval_actions(
                 decision~,
               ),
             ),
-            "Cancel",
+            ui(locale, CancelLabel),
           ),
         )
       Object(fields) if fields.get("acceptWithExecpolicyAmendment") is Some(_) =>
@@ -238,7 +257,7 @@ fn CodexRequestInput::approval_actions(
                 decision~,
               ),
             ),
-            self.execpolicy_label(decision),
+            self.execpolicy_label(locale~, decision),
           ),
         )
       _ => ()
@@ -248,7 +267,7 @@ fn CodexRequestInput::approval_actions(
     controls.push(
       @html.span(
         class="codex-request-unsupported",
-        "This app version cannot answer the advertised approval choices.",
+        ui(locale, UnsupportedChoices),
       ),
     )
   }
@@ -257,6 +276,7 @@ fn CodexRequestInput::approval_actions(
 
 ///|
 fn CodexRequestInput::questions(
+  locale? : @i18n.Locale = English,
   self : CodexRequestInput,
 ) -> Array[CodexRequestQuestion] {
   guard self.params is Object(fields) &&
@@ -282,7 +302,9 @@ fn CodexRequestInput::questions(
     }
     questions.push({
       id,
-      header: @jsonx.json_text(question, "header").unwrap_or("Question"),
+      header: @jsonx.json_text(question, "header").unwrap_or(
+        ui(locale, QuestionLabel),
+      ),
       question: @jsonx.json_text(question, "question").unwrap_or(""),
       options,
     })
@@ -292,21 +314,25 @@ fn CodexRequestInput::questions(
 
 ///|
 fn CodexRequestInput::raw_details(
+  locale? : @i18n.Locale = English,
   self : CodexRequestInput,
   open~ : Bool,
 ) -> @html.Html {
+  ignore(locale)
   @html.details(class="codex-request-raw", open~, [
-    @html.summary(class="codex-request-raw-summary", "Show details"),
+    @html.summary(class="codex-request-raw-summary", ui(locale, ShowDetails)),
     @html.pre(class="codex-raw", self.params.stringify(indent=2)),
   ])
 }
 
 ///|
 fn CodexRequestInput::render(
+  locale? : @i18n.Locale = English,
   self : CodexRequestInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   let body : Array[@html.Html] = [
     @html.div(
       class="codex-request-title",
@@ -314,14 +340,14 @@ fn CodexRequestInput::render(
         "item/commandExecution/requestApproval" =>
           if self.params is Object(fields) &&
             fields.get("networkApprovalContext") is Some(Object(_)) {
-            "Network access approval"
+            ui(locale, NetworkApproval)
           } else {
-            "Command approval"
+            ui(locale, CommandApproval)
           }
-        "item/fileChange/requestApproval" => "File change approval"
-        "item/permissions/requestApproval" => "Permission request"
-        "item/tool/requestUserInput" => "Codex needs your input"
-        "mcpServer/elicitation/request" => "Tool request"
+        "item/fileChange/requestApproval" => ui(locale, FileApproval)
+        "item/permissions/requestApproval" => ui(locale, PermissionRequest)
+        "item/tool/requestUserInput" => ui(locale, CodexNeedsInput)
+        "mcpServer/elicitation/request" => ui(locale, ToolRequest)
         other => other
       },
     ),
@@ -334,12 +360,12 @@ fn CodexRequestInput::render(
   match self.method_ {
     "item/commandExecution/requestApproval"
     | "item/fileChange/requestApproval" => {
-      let details = self.approval_details()
+      let details = self.approval_details(locale~)
       if !details.is_empty() {
         body.push(@html.div(class="codex-request-details", details))
       }
-      body.push(self.raw_details(open=details.is_empty()))
-      body.push(self.approval_actions(identity, action_emit))
+      body.push(self.raw_details(locale~, open=details.is_empty()))
+      body.push(self.approval_actions(locale~, identity, action_emit))
     }
     "item/permissions/requestApproval" => {
       body.push(@html.pre(class="codex-raw", self.params.stringify(indent=2)))
@@ -354,7 +380,7 @@ fn CodexRequestInput::render(
                 decision=Json("accept"),
               ),
             ),
-            "Grant for turn",
+            ui(locale, GrantTurn),
           ),
           @html.button(
             class="codex-request-action",
@@ -365,7 +391,7 @@ fn CodexRequestInput::render(
                 decision=Json("acceptForSession"),
               ),
             ),
-            "Grant for session",
+            ui(locale, GrantSession),
           ),
           @html.button(
             class="codex-request-action codex-request-action-danger",
@@ -376,13 +402,13 @@ fn CodexRequestInput::render(
                 decision=Json("decline"),
               ),
             ),
-            "Deny",
+            ui(locale, DenyLabel),
           ),
         ]),
       )
     }
     "item/tool/requestUserInput" => {
-      for question in self.questions() {
+      for question in self.questions(locale~) {
         let answer = self.answers.get(question.id).unwrap_or("")
         let controls : Array[@html.Html] = [
           @html.div(class="codex-question-header", question.header),
@@ -418,7 +444,7 @@ fn CodexRequestInput::render(
         controls.push(
           @html.input(
             value=answer,
-            placeholder="Type an answer",
+            placeholder=ui(locale, TypeAnswer),
             on_input=action_emit.map(value => {
               CodexRequestAnswerChanged(
                 identity~,
@@ -443,7 +469,7 @@ fn CodexRequestInput::render(
                 decision=Json("accept"),
               ),
             ),
-            "Submit answers",
+            ui(locale, SubmitAnswers),
           ),
         ]),
       )
@@ -453,7 +479,11 @@ fn CodexRequestInput::render(
       body.push(
         @html.textarea(
           value=self.answers.get("__content").unwrap_or("{}"),
-          placeholder="JSON content required by the tool",
+          placeholder=if locale is SimplifiedChinese {
+            "工具要求的 JSON 内容"
+          } else {
+            "JSON content required by the tool"
+          },
           on_input=action_emit.map(value => {
             CodexRequestAnswerChanged(
               identity~,
@@ -477,7 +507,7 @@ fn CodexRequestInput::render(
                 decision=Json("accept"),
               ),
             ),
-            "Submit JSON",
+            ui(locale, SubmitJson),
           ),
           @html.button(
             class="codex-request-action codex-request-action-danger",
@@ -488,7 +518,7 @@ fn CodexRequestInput::render(
                 decision=Json("decline"),
               ),
             ),
-            "Decline",
+            ui(locale, DeclineLabel),
           ),
         ]),
       )
@@ -497,7 +527,7 @@ fn CodexRequestInput::render(
       body.push(
         @html.pre(
           class="codex-raw danger",
-          "Unsupported app-server request:\n" + self.params.stringify(indent=2),
+          ui(locale, UnsupportedRequest) + self.params.stringify(indent=2),
         ),
       )
   }

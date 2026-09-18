@@ -132,6 +132,7 @@ priv struct DetachedReferencesGroupResources {
 /// One mutable Peek state machine per source surface. Controller instances are
 /// never shared between Code and Markdown surfaces.
 struct ReferencesController {
+  localization : @localization.Localization
   host : ReferencesPeekHost
   preview_factory : ReferencesPeekPreviewFactory
   resolver : @navigation_api.TextModelResolverHandle?
@@ -157,6 +158,7 @@ struct ReferencesController {
 
 ///|
 pub fn ReferencesController::ReferencesController(
+  localization? : @localization.Localization = @localization.Localization(),
   host : ReferencesPeekHost,
   preview_factory : ReferencesPeekPreviewFactory,
   resolver? : @navigation_api.TextModelResolverHandle,
@@ -164,6 +166,7 @@ pub fn ReferencesController::ReferencesController(
   launch_async_task : (async () -> Unit noraise) -> Unit,
 ) -> ReferencesController {
   {
+    localization,
     host,
     preview_factory,
     resolver,
@@ -267,6 +270,7 @@ pub fn ReferencesController::toggle_locations(
   self.anchor = Some(anchor)
   self.session_key = Some(key)
   let widget = ReferencesPeekWidget(
+    localization=self.localization,
     mode,
     {
       on_close: () => {
@@ -387,7 +391,10 @@ fn ReferencesController::install_locations(
   if result_model.is_empty() {
     if self.mode is Some(Definitions) {
       self.close(restore_focus=true)
-      (self.host.show_message)(anchor, definition_no_result_message(anchor))
+      (self.host.show_message)(
+        anchor,
+        definition_no_result_message(localization=self.localization, anchor),
+      )
     } else {
       widget.show_empty()
       self.phase = PeekShown(generation, self.preview_generation)
@@ -406,12 +413,17 @@ fn ReferencesController::install_locations(
 
 ///|
 fn definition_no_result_message(
+  localization? : @localization.Localization = @localization.Localization(),
   anchor : @goto_symbol.SymbolNavigationAnchor,
 ) -> String {
   match anchor.model().get_word_at_position(anchor.position()) {
     Some(word) if !word.word.is_empty() =>
-      "No definition found for '\{word.word}'"
-    _ => "No definition found"
+      if localization.language() is SimplifiedChinese {
+        "未找到“\{word.word}”的定义"
+      } else {
+        "No definition found for '\{word.word}'"
+      }
+    _ => localization.text(NoDefinition)
   }
 }
 
@@ -669,7 +681,9 @@ fn ReferencesController::load_preview(
   }
   guard self.resolver is Some(resolver) else {
     self.show_preview_unavailable(
-      generation, preview_generation, "No preview available",
+      generation,
+      preview_generation,
+      self.localization.text(NoPreview),
     )
     return
   }
@@ -701,7 +715,9 @@ fn ReferencesController::load_preview(
     match reference {
       None =>
         self.show_preview_unavailable(
-          generation, preview_generation, "No preview available",
+          generation,
+          preview_generation,
+          self.localization.text(NoPreview),
         )
       Some(reference) => {
         let model = reference.model()
@@ -709,7 +725,9 @@ fn ReferencesController::load_preview(
           model.uri.to_string() != location.uri.to_string() {
           reference.dispose()
           self.show_preview_unavailable(
-            generation, preview_generation, "No preview available",
+            generation,
+            preview_generation,
+            self.localization.text(NoPreview),
           )
           return
         }
@@ -793,7 +811,9 @@ fn ReferencesController::schedule_preview(
     guard preview is Some(preview) else {
       dispose_reference()
       self.show_preview_unavailable(
-        generation, preview_generation, "No preview available",
+        generation,
+        preview_generation,
+        self.localization.text(NoPreview),
       )
       return
     }
@@ -928,7 +948,10 @@ fn ReferencesController::confirm_item(
       self.generation == closed_generation &&
       self.anchor_is_current(anchor) &&
       peek_mode == Definitions {
-      (self.host.show_message)(anchor, "Unable to open definition")
+      (self.host.show_message)(
+        anchor,
+        self.localization.text(CannotOpenDefinition),
+      )
     }
   })
 }

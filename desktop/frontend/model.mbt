@@ -112,11 +112,17 @@ fn OpenSeekReasoning::parse(value : String) -> OpenSeekReasoning? {
 }
 
 ///|
-fn OpenSeekReasoning::label(self : OpenSeekReasoning) -> String {
-  match self {
-    ReasoningOff => "Off"
-    ReasoningHigh => "High"
-    ReasoningMax => "Max"
+fn OpenSeekReasoning::label(
+  self : OpenSeekReasoning,
+  locale? : @i18n.Locale = English,
+) -> String {
+  match (locale, self) {
+    (SimplifiedChinese, ReasoningOff) => "关闭"
+    (SimplifiedChinese, ReasoningHigh) => "高"
+    (SimplifiedChinese, ReasoningMax) => "最高"
+    (English, ReasoningOff) => "Off"
+    (English, ReasoningHigh) => "High"
+    (English, ReasoningMax) => "Max"
   }
 }
 
@@ -126,11 +132,16 @@ fn OpenSeekReasoning::label(self : OpenSeekReasoning) -> String {
 fn OpenSeekReasoning::label_for_model(
   self : OpenSeekReasoning,
   model : EngineModel,
+  locale? : @i18n.Locale = English,
 ) -> String {
   if model is (Glm53 | Glm53Flash) && self is ReasoningOff {
-    "Low"
+    if locale is SimplifiedChinese {
+      "低"
+    } else {
+      "Low"
+    }
   } else {
-    self.label()
+    self.label(locale~)
   }
 }
 
@@ -1274,6 +1285,7 @@ priv enum SelectMenu {
   ApiProviderMenu
   FollowupBehaviorMenu
   ThemeMenu
+  LanguageMenu
   FontSizeMenu
   NotificationCornerMenu
   TreeLayoutMenu
@@ -1425,6 +1437,8 @@ priv struct Model {
   // The Settings selection. Its effective palette drives the app root,
   // embedded viewer, and terminal together.
   theme : Theme
+  language : @i18n.Preference
+  locale : @i18n.Locale
   // The Settings type scale shared by app chrome, editor text, and terminals.
   app_font_size : AppFontSize
   // One local display preference shared by OpenSeek and Codex transcripts.
@@ -1825,6 +1839,10 @@ priv enum Msg {
   ToggleSidebar
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)
+  LanguageLoaded(@i18n.Preference?, Array[String])
+  LanguageChanged(String, Array[String])
+  SystemLanguagesChanged(Array[String])
+  LanguageStorageFailed(String)
   FpsOverlayChanged(Bool)
   MinimalTranscriptChanged(Bool)
   // A Settings selection changes the shared app/editor/terminal type scale.
@@ -2609,6 +2627,8 @@ fn initial_model(desktop~ : Bool) -> Model {
     },
     system_dark: host_prefers_dark(desktop),
     theme: System,
+    language: System,
+    locale: English,
     app_font_size: AppFontSize(14),
     fps_overlay_enabled: false,
     minimal_transcript: false,
@@ -4297,7 +4317,20 @@ fn RunOutcome::parse(wire : String) -> RunOutcome {
 }
 
 ///|
-fn RunOutcome::label(self : RunOutcome) -> String {
+fn RunOutcome::label(
+  self : RunOutcome,
+  locale? : @i18n.Locale = English,
+) -> String {
+  if locale is SimplifiedChinese {
+    return match self {
+      Completed => "已完成"
+      ContextYield => "已达上下文上限"
+      Aborted => "已中止"
+      RunFailed => "失败"
+      MaxStepsExhausted => "已达最大步数"
+      Unknown(wire) => if wire.is_blank() { "已结束" } else { wire }
+    }
+  }
   match self {
     Completed => "Finished"
     ContextYield => "Context limit reached"
@@ -4332,7 +4365,28 @@ priv enum Status {
 }
 
 ///|
-fn Status::label(self : Status) -> String {
+fn Status::label(self : Status, locale? : @i18n.Locale = English) -> String {
+  if locale is SimplifiedChinese {
+    return match self {
+      WaitingBridge => "正在等待连接桥"
+      Ready => "就绪"
+      SetupRequired => "需要设置"
+      ApiKeyRequired => "需要 API 密钥"
+      Starting => "正在启动"
+      Running => "运行中"
+      Cancelling => "正在取消"
+      Step(step) =>
+        if step is Some(step) {
+          "第 \{step} 步"
+        } else {
+          "执行步骤"
+        }
+      Failed => "失败"
+      Errored => "错误"
+      Finished(outcome) => outcome.label(locale~)
+      Unavailable(message) => message
+    }
+  }
   match self {
     WaitingBridge => "Waiting for bridge"
     Ready => "Ready"

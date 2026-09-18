@@ -191,6 +191,7 @@ fn delete_archived_session(
 /// copy names what disappears and what survives so the user does not have to
 /// infer filesystem or Git consequences from the word "delete".
 fn archived_delete_modal(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   confirm : ArchivedDeleteConfirm,
 ) -> @html.Html {
@@ -199,21 +200,21 @@ fn archived_delete_modal(
     on_click=dispatch(CancelDeleteArchivedSession),
     [
       @html.div(class="modal", [
-        @html.div(class="modal-title", "Permanently delete this chat?"),
+        @html.div(class="modal-title", shell_text(locale, DeleteChatQuestion)),
         @html.div(
           class="modal-body",
-          "“\{confirm.title}” and all of its archived subagent history will be permanently deleted. This cannot be undone. Project files and Git branches will remain.",
+          dynamic_text(locale, DDeleteConversation(confirm.title.to_string())),
         ),
         @html.div(class="modal-actions", [
           @html.button(
             class="button secondary",
             on_click=dispatch(CancelDeleteArchivedSession),
-            "Cancel",
+            shell_text(locale, CancelLabel),
           ),
           @html.button(
             class="button danger",
             on_click=dispatch(ConfirmDeleteArchivedSession),
-            "Delete permanently",
+            shell_text(locale, DeletePermanently),
           ),
         ]),
       ]),

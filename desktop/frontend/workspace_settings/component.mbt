@@ -157,6 +157,7 @@ fn setting_select(
 
 ///|
 fn page_view(
+  locale? : @i18n.Locale = English,
   input : Input,
   state : Model,
   emit : @cmd.Emit[Msg],
@@ -185,7 +186,7 @@ fn page_view(
       }
       let conversation_rows : Array[@html.Html] = [
         @settings.row(
-          "New chats",
+          ui(locale, NewChatsLabel),
           [
             setting_select(
               DefaultMode,
@@ -194,20 +195,20 @@ fn page_view(
               emit,
               id="workspace-default-mode-select",
               options=[
-                { value: "local", label: "Local", },
-                { value: "worktree", label: "Worktree", },
+                { value: "local", label: ui(locale, LocalLabel), },
+                { value: "worktree", label: ui(locale, WorktreeLabel), },
               ],
               selected=if worktree_mode { "worktree" } else { "local" },
-              aria_label="New chats",
+              aria_label=ui(locale, NewChatsLabel),
               change=actions.choose_default_mode,
             ).render(),
           ],
-          desc="Where a new chat starts: the workspace itself, or a fresh git worktree bound to that chat. The composer's chip still changes a single chat.",
+          desc=ui(locale, NewChatsDescription),
         ),
       ]
       let worktree_rows : Array[@html.Html] = [
         @settings.row(
-          "Submodules",
+          ui(locale, SubmodulesLabel),
           [
             setting_select(
               Submodules,
@@ -216,18 +217,18 @@ fn page_view(
               emit,
               id="workspace-submodules-select",
               options=[
-                { value: "checkout", label: "Initialize", },
-                { value: "skip", label: "Leave uninitialized", },
+                { value: "checkout", label: ui(locale, InitializeLabel), },
+                { value: "skip", label: ui(locale, LeaveUninitialized), },
               ],
               selected=if checkout_submodules { "checkout" } else { "skip" },
-              aria_label="Submodules in worktrees",
+              aria_label=ui(locale, WorktreeSubmodules),
               change=actions.choose_submodules,
             ).render(),
           ],
-          desc="For new or repaired worktrees in this workspace, mirror the top-level submodules already initialized in its main checkout.",
+          desc=ui(locale, SubmodulesDescription),
         ),
         @settings.row(
-          "Checkout timeout",
+          ui(locale, CheckoutTimeout),
           [
             setting_select(
               Timeout,
@@ -236,31 +237,37 @@ fn page_view(
               emit,
               id="workspace-submodule-timeout-select",
               options=[
-                { value: "5", label: "5 seconds", },
-                { value: "10", label: "10 seconds", },
-                { value: "30", label: "30 seconds", },
-                { value: "60", label: "60 seconds", },
+                { value: "5", label: ui(locale, FiveSeconds), },
+                { value: "10", label: ui(locale, TenSeconds), },
+                { value: "30", label: ui(locale, ThirtySeconds), },
+                { value: "60", label: ui(locale, SixtySeconds), },
               ],
               selected=submodule_checkout_timeout_seconds.to_string(),
-              aria_label="Submodule checkout timeout",
+              aria_label=ui(locale, SubmoduleTimeout),
               change=actions.choose_submodule_timeout,
             ).render(),
           ],
-          desc="Stop initializing submodules if Git has not finished within this time.",
+          desc=ui(locale, TimeoutDescription),
         ),
       ]
       @html.section(class="settings-page", [
         @html.div(class="settings-page-inner", [
           @html.div(class="settings-header", [
-            @html.div(class="page-eyebrow", "Workspace"),
+            @html.div(class="page-eyebrow", ui(locale, WorkspaceLabel)),
             @html.h1(@resource.label(workspace)),
             @html.div(class="settings-subtitle", workspace.path),
           ]),
           @html.div(class="settings", [
             @settings.group(
-              @icons.icon_worktree, "Conversations", conversation_rows,
+              @icons.icon_worktree,
+              ui(locale, ConversationsLabel),
+              conversation_rows,
             ),
-            @settings.group(@icons.icon_worktree, "Worktrees", worktree_rows),
+            @settings.group(
+              @icons.icon_worktree,
+              ui(locale, WorktreesLabel),
+              worktree_rows,
+            ),
           ]),
         ]),
       ])
@@ -273,6 +280,7 @@ fn page_view(
 /// updating Html. Mounted once for the app's lifetime; while another screen
 /// is active the projected input is inactive and the view renders nothing.
 pub fn component(
+  locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
@@ -295,7 +303,9 @@ pub fn component(
       }
     },
   )
-  state.view2(input, (state, input) => page_view(input, state, emit, actions))
+  state.view3(input, locale, (state, input, locale) => {
+    page_view(locale~, input, state, emit, actions)
+  })
 }
 
 ///|

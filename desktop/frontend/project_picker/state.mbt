@@ -156,6 +156,7 @@ pub fn State::open(
 /// the user registered (the picker has already closed itself) or a
 /// navigation failure the shell should surface as a toast.
 pub fn State::handle(
+  locale? : @i18n.Locale = English,
   self : State,
   emit : @cmd.Emit[Msg],
   msg : Msg,
@@ -197,7 +198,13 @@ pub fn State::handle(
       // describe an operation the user has already replaced.
       if channel == self.channel && generation == self.generation {
         let message = if self.new_folder is Some(_) {
-          "Cannot create folder: \{message}"
+          if locale is SimplifiedChinese {
+            "无法创建文件夹：\{message}"
+          } else {
+            "Cannot create folder: \{message}"
+          }
+        } else if locale is SimplifiedChinese {
+          "无法打开文件夹：\{message}"
         } else {
           "Cannot open folder: \{message}"
         }

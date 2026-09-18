@@ -46,6 +46,7 @@ pub(all) struct AgentFeedbackEditorWidgetHost {
 
 ///|
 struct AgentFeedbackEditorWidget {
+  localization : @localization.Localization
   host : AgentFeedbackEditorWidgetHost
   id : String
   comments : Array[@agent_feedback.SessionEditorComment]
@@ -72,6 +73,7 @@ struct AgentFeedbackEditorWidget {
 /// into a reply composer that had it before a rebuild
 /// (`IReplyDraftState.focusedCommentId`).
 pub fn AgentFeedbackEditorWidget::AgentFeedbackEditorWidget(
+  localization? : @localization.Localization = @localization.Localization(),
   host : AgentFeedbackEditorWidgetHost,
   id : String,
   comments : Array[@agent_feedback.SessionEditorComment],
@@ -106,6 +108,7 @@ pub fn AgentFeedbackEditorWidget::AgentFeedbackEditorWidget(
   arrow.set_attribute("class", "agent-feedback-widget-arrow")
   root.append_child(arrow.as_node())
   let widget : AgentFeedbackEditorWidget = {
+    localization,
     host,
     id,
     comments,
@@ -180,7 +183,13 @@ fn AgentFeedbackEditorWidget::update_title(
   if self.comments.length() == 1 {
     self.title.set_inner_html(@base_common.escape_html(self.comments[0].text))
   } else {
-    self.title.set_inner_html("\{self.comments.length().to_string()} comments")
+    self.title.set_inner_html(
+      if self.localization.language() is SimplifiedChinese {
+        "\{self.comments.length()} 条评论"
+      } else {
+        "\{self.comments.length().to_string()} comments"
+      },
+    )
   }
 }
 
@@ -193,12 +202,12 @@ fn AgentFeedbackEditorWidget::update_toggle(
     self.toggle.set_attribute(
       "class", "agent-feedback-widget-toggle agent-feedback-widget-toggle-up",
     )
-    self.toggle.set_attribute("title", "Collapse")
+    self.toggle.set_attribute("title", self.localization.text(CollapseLabel))
   } else {
     self.toggle.set_attribute(
       "class", "agent-feedback-widget-toggle agent-feedback-widget-toggle-down",
     )
-    self.toggle.set_attribute("title", "Expand")
+    self.toggle.set_attribute("title", self.localization.text(ExpandLabel))
   }
 }
 
@@ -270,10 +279,20 @@ fn AgentFeedbackEditorWidget::build_item(
   line_info.set_attribute("class", "agent-feedback-widget-line-info")
   let range = comment.range
   if range.start_line_number == range.end_line_number {
-    line_info.set_inner_html("Line \{range.start_line_number.to_string()}")
+    line_info.set_inner_html(
+      if self.localization.language() is SimplifiedChinese {
+        "第 \{range.start_line_number} 行"
+      } else {
+        "Line \{range.start_line_number.to_string()}"
+      },
+    )
   } else {
     line_info.set_inner_html(
-      "Lines \{range.start_line_number.to_string()}-\{range.end_line_number.to_string()}",
+      if self.localization.language() is SimplifiedChinese {
+        "第 \{range.start_line_number}–\{range.end_line_number} 行"
+      } else {
+        "Lines \{range.start_line_number.to_string()}-\{range.end_line_number.to_string()}"
+      },
     )
   }
   meta.append_child(line_info.as_node())
@@ -281,7 +300,7 @@ fn AgentFeedbackEditorWidget::build_item(
   if comment.kind == AgentReview {
     let badge = document.create_element("span")
     badge.set_attribute("class", "agent-feedback-widget-item-type")
-    badge.set_inner_html("Agent Review")
+    badge.set_inner_html(self.localization.text(AgentReview))
     meta.append_child(badge.as_node())
   }
   item_header.append_child(meta.as_node())
@@ -298,14 +317,14 @@ fn AgentFeedbackEditorWidget::build_item(
   )
   let reply_action = widget_icon_button(
     "reply",
-    "Add to Comment",
+    self.localization.text(AddToComment),
     "agent-feedback-widget-action-reply",
     () => self.start_reply(comment),
   )
   actions.append_child(reply_action.as_node())
   let edit_action = widget_icon_button(
     "edit",
-    "Edit",
+    self.localization.text(EditLabel),
     "agent-feedback-widget-action-edit",
     () => self.start_editing(comment, text),
   )
@@ -314,7 +333,7 @@ fn AgentFeedbackEditorWidget::build_item(
   if !shows_button_bar {
     let remove_action = widget_icon_button(
       "remove",
-      "Remove",
+      self.localization.text(RemoveLabel),
       "agent-feedback-widget-action-remove",
       () => (self.host.on_remove)(comment),
     )
@@ -389,8 +408,8 @@ fn AgentFeedbackEditorWidget::build_action_buttons(
   let accept = document.create_element("button")
   accept.set_attribute("type", "button")
   accept.set_attribute("class", "agent-feedback-widget-button-accept")
-  accept.set_attribute("title", "Share comment with agent")
-  accept.set_inner_html("Accept")
+  accept.set_attribute("title", self.localization.text(ShareComment))
+  accept.set_inner_html(self.localization.text(AcceptLabel))
   accept.add_event_listener("click", event => {
     event.prevent_default()
     event.stop_propagation()
@@ -400,8 +419,8 @@ fn AgentFeedbackEditorWidget::build_action_buttons(
   let delete = document.create_element("button")
   delete.set_attribute("type", "button")
   delete.set_attribute("class", "agent-feedback-widget-button-delete")
-  delete.set_attribute("title", "Remove agent comment")
-  delete.set_inner_html("Delete")
+  delete.set_attribute("title", self.localization.text(RemoveComment))
+  delete.set_inner_html(self.localization.text(DeleteLabel))
   delete.add_event_listener("click", event => {
     event.prevent_default()
     event.stop_propagation()
@@ -514,7 +533,7 @@ fn AgentFeedbackEditorWidget::open_reply_composer(
   let textarea = document.create_element("textarea")
   textarea.set_attribute("class", "agent-feedback-widget-edit-textarea")
   textarea.set_attribute("rows", "1")
-  textarea.set_attribute("placeholder", "Add a comment…")
+  textarea.set_attribute("placeholder", self.localization.text(AddComment))
   input_set_textarea_value(textarea, initial_text)
   composer.append_child(textarea.as_node())
   item.append_child(composer.as_node())

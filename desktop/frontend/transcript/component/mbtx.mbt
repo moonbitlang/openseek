@@ -82,12 +82,15 @@ fn decode_mbtx_call(arguments : String) -> MbtxCall? {
 /// after its skip marker. Cost stays bounded without it — `card_fields`
 /// refuses payloads past the shared card ceiling, and the numbered renderer
 /// clamps a degenerate line count itself, keeping true numbers on the tail.
-fn mbtx_card(arguments : String) -> (String, @html.Html)? {
+fn mbtx_card(
+  locale? : @i18n.Locale = English,
+  arguments : String,
+) -> (String, @html.Html)? {
   guard decode_mbtx_call(arguments) is Some(call) else { return None }
   let (label, content) = match call.program {
     Save(source, filename) =>
       (
-        "Save & run",
+        ui(locale, SaveRun),
         @html.div([
           @html.pre(class="tool-card-original-json", filename),
           @html.pre(class="moonbit-source", [
@@ -97,13 +100,16 @@ fn mbtx_card(arguments : String) -> (String, @html.Html)? {
       )
     Source(source) =>
       (
-        "Source",
+        ui(locale, SourceLabel),
         @html.pre(class="moonbit-source", [
           @syntax_html.moonbit_numbered_source(source),
         ]),
       )
     Filename(filename) =>
-      ("Filename", @html.pre(class="tool-card-original-json", filename))
+      (
+        ui(locale, FilenameLabel),
+        @html.pre(class="tool-card-original-json", filename),
+      )
   }
   let args = match call.args {
     Some(args) =>
@@ -144,6 +150,7 @@ fn mbtx_failure_stage(
 /// brief, which already names build failures. mbtx request rows use their
 /// status icon instead.
 fn failure_marker(
+  locale? : @i18n.Locale = English,
   name : String,
   brief : String?,
   is_error : Bool,
@@ -153,10 +160,38 @@ fn failure_marker(
   match mbtx_failure_stage(name, brief, is_error) {
     Some(BuildError) if arguments is None => None
     Some(BuildError) =>
-      Some(@html.span(class="tool-call-failed tool-stage-build", "build error"))
+      Some(
+        @html.span(
+          class="tool-call-failed tool-stage-build",
+          if locale is SimplifiedChinese {
+            "构建错误"
+          } else {
+            "build error"
+          },
+        ),
+      )
     Some(RuntimeError) =>
-      Some(@html.span(class="tool-call-failed tool-stage-run", "runtime error"))
-    None => Some(@html.span(class="tool-call-failed", "failed"))
+      Some(
+        @html.span(
+          class="tool-call-failed tool-stage-run",
+          if locale is SimplifiedChinese {
+            "运行错误"
+          } else {
+            "runtime error"
+          },
+        ),
+      )
+    None =>
+      Some(
+        @html.span(
+          class="tool-call-failed",
+          if locale is SimplifiedChinese {
+            "失败"
+          } else {
+            "failed"
+          },
+        ),
+      )
   }
 }
 

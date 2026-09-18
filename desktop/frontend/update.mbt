@@ -1046,6 +1046,7 @@ fn send_goal(
 ) -> @cmd.Cmd {
   if conv.goal_creates_worktree() is Some(workspace) {
     return set_goal_in_new_worktree(
+      locale=model.locale,
       dispatch,
       conv.device,
       conv.session_id,
@@ -2043,6 +2044,34 @@ fn update_msg(
       )
     }
     Console(msg) => update_console_msg(dispatch, msg, model)
+    LanguageLoaded(preference, languages) => {
+      let language = preference.unwrap_or(@i18n.Preference::System)
+      let locale = language.resolve(languages)
+      (apply_language(dispatch, locale), { ..model, language, locale, })
+    }
+    LanguageChanged(value, languages) => {
+      guard @i18n.Preference::parse(value) is Some(language) else {
+        return (@cmd.none, model)
+      }
+      let locale = language.resolve(languages)
+      (
+        @cmd.batch([
+          apply_language(dispatch, locale),
+          save_language(language, dispatch),
+        ]),
+        { ..model, language, locale, select_menu: None, },
+      )
+    }
+    LanguageStorageFailed(message) =>
+      // Report the failure without discarding the working in-memory choice.
+      model.notify_error(
+        dispatch,
+        @settings.text(model.locale, LanguageStorageFailed(message)),
+      )
+    SystemLanguagesChanged(languages) => {
+      let locale = model.language.resolve(languages)
+      (apply_language(dispatch, locale), { ..model, locale, })
+    }
     SettingsLoaded(
       notification_corner~,
       tree_layout~,
@@ -2083,6 +2112,7 @@ fn update_msg(
         (@cmd.none, model.codex)
       } else {
         @codex.update(
+          locale=model.locale,
           dispatch.map(msg => Codex(channel=model.focused, msg)),
           @codex.Msg::model_changed(codex_model.trim().to_owned()),
           model.codex,
@@ -2094,6 +2124,7 @@ fn update_msg(
         (@cmd.none, codex)
       } else {
         @codex.update(
+          locale=model.locale,
           dispatch.map(msg => Codex(channel=model.focused, msg)),
           @codex.Msg::effort_changed(codex_effort.trim().to_owned()),
           codex,
@@ -2213,6 +2244,7 @@ fn update_msg(
         _ => {
           let channel = model.focused
           let (command, codex) = @codex.update(
+            locale=model.locale,
             dispatch.map(next => Codex(channel~, next)),
             @codex.Msg::composer_action(action),
             model.codex,
@@ -2313,6 +2345,7 @@ fn update_msg(
               )
               (
                 queue_openseek(
+                  locale=model.locale,
                   dispatch,
                   conv.device,
                   conv.session_id,
@@ -2330,6 +2363,7 @@ fn update_msg(
                 queued_id == id
               (
                 queue_openseek(
+                  locale=model.locale,
                   dispatch,
                   conv.device,
                   conv.session_id,
@@ -3091,6 +3125,7 @@ fn update_msg(
             }
             let root = model.codex.new_thread_cwd()
             let (abandon_cmd, codex) = @codex.update(
+              locale=model.locale,
               dispatch.map(msg => Codex(channel=model.focused, msg)),
               @codex.Msg::abandon_draft(),
               model.codex,
@@ -3150,6 +3185,7 @@ fn update_msg(
           }
         CodexModel(id) => {
           let (model_cmd, codex) = @codex.update(
+            locale=model.locale,
             dispatch.map(msg => Codex(channel=model.focused, msg)),
             @codex.Msg::model_changed(id),
             model.codex,
@@ -3210,6 +3246,7 @@ fn update_msg(
     CodexEffortPicked(value) => {
       let model = { ..model, select_menu: None, }
       let (effort_cmd, codex) = @codex.update(
+        locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::effort_changed(value),
         model.codex,
@@ -3431,7 +3468,10 @@ fn update_msg(
               {
                 ..model,
                 update_ux: UpdateCheckFailed(
-                  message="Could not reach the update server: \{reason}",
+                  message=notice_text(
+                    model.locale,
+                    UpdateServer(reason.to_string()),
+                  ),
                 ),
               },
             )
@@ -3448,7 +3488,10 @@ fn update_msg(
               {
                 ..model,
                 update_ux: UpdateCheckFailed(
-                  message="The update server answered unusably: \{reason}",
+                  message=notice_text(
+                    model.locale,
+                    UpdateReply(reason.to_string()),
+                  ),
                 ),
               },
             )
@@ -3572,10 +3615,12 @@ fn update_msg(
         @cmd.none,
         { ..model, api_setup_open: true, api_setup_dismissed: false, },
       )
-    OpenCodexConfig => (open_codex_config(dispatch, model.focused), model)
+    OpenCodexConfig =>
+      (open_codex_config(locale=model.locale, dispatch, model.focused), model)
     CodexConfigOpenFailed(message) => model.notify_error(dispatch, message)
     OpenCodex => {
       let (cmd, codex) = @codex.update(
+        locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::refresh(),
         model.codex,
@@ -3594,6 +3639,7 @@ fn update_msg(
     }
     CodexDraftRotated(cwd~, id~) => {
       let (cmd, codex) = @codex.update(
+        locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::start_draft(id, cwd),
         model.codex,
@@ -3612,6 +3658,7 @@ fn update_msg(
     }
     CodexOpenThread(thread_id) => {
       let (cmd, codex) = @codex.update(
+        locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::open_thread(thread_id),
         model.codex,
@@ -3630,6 +3677,7 @@ fn update_msg(
     }
     CodexArchiveThread(thread_id) => {
       let (cmd, codex) = @codex.update(
+        locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::archive_thread(thread_id),
         model.codex,
@@ -3640,6 +3688,7 @@ fn update_msg(
     }
     CodexUnarchiveThread(thread_id) => {
       let (cmd, codex) = @codex.update(
+        locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         @codex.Msg::unarchive_thread(thread_id),
         model.codex,
@@ -3655,6 +3704,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let (cmd, codex) = @codex.update(
+        locale=model.locale,
         dispatch.map(next => Codex(channel~, next)),
         msg,
         model.codex,
@@ -3809,6 +3859,7 @@ fn update_msg(
           if conv.queue_edit_id is Some(id) {
             return (
               queue_openseek(
+                locale=model.locale,
                 dispatch,
                 model.focused,
                 conv.session_id,
@@ -3831,6 +3882,7 @@ fn update_msg(
           )
           let command = if followup_behavior is FollowupQueue {
             queue_openseek(
+              locale=model.locale,
               dispatch,
               model.focused,
               conv.session_id,
@@ -3908,6 +3960,7 @@ fn update_msg(
         let start_cmd = if fresh_worktree &&
           conv.workspace is Project(root=workspace) {
           start_in_new_worktree(
+            locale=model.locale,
             dispatch,
             model.focused,
             task,
@@ -3945,7 +3998,7 @@ fn update_msg(
       }
       if conv.run is Open(run_id~, ..) {
         (
-          cancel_openseek(dispatch, model.focused, run_id),
+          cancel_openseek(locale=model.locale, dispatch, model.focused, run_id),
           model.replace_conversation({
             ..conv,
             run: Open(run_id~, stage=Cancelling),
@@ -3967,6 +4020,7 @@ fn update_msg(
       }
       (
         approve_openseek(
+          locale=model.locale,
           dispatch,
           model.focused,
           conv.session_id,
@@ -4094,6 +4148,7 @@ fn update_msg(
       }
       (
         repair_worktree_cmd(
+          locale=model.locale,
           dispatch,
           conv.device,
           workspace.path,
@@ -4244,7 +4299,10 @@ fn update_msg(
       match result {
         Ok(path) => adopt_picked_directory(dispatch, channel, path, model)
         Err(message) =>
-          model.notify_error(dispatch, "Cannot create chat: \{message}")
+          model.notify_error(
+            dispatch,
+            notice_text(model.locale, CreateChat(message.to_string())),
+          )
       }
     }
     PickProject(channel) => {
@@ -4289,6 +4347,7 @@ fn update_msg(
       match model.project_picker {
         Some(picker) => {
           let (cmd, next, outcome) = @project_picker.State::handle(
+            locale=model.locale,
             picker,
             dispatch.map(msg => ProjectPicker(msg)),
             msg,
@@ -4523,7 +4582,7 @@ fn update_msg(
           !rename.draft.trim().is_empty() => {
           let saving = { ..rename, saving: true, error: None, }
           (
-            rename_conversation(dispatch, saving),
+            rename_conversation(locale=model.locale, dispatch, saving),
             { ..model, conversation_rename: Some(saving), },
           )
         }
@@ -4551,7 +4610,14 @@ fn update_msg(
               conversation_rename: Some({
                 ..rename,
                 saving: false,
-                error: Some("Rename failed: " + message),
+                error: Some(
+                  (if model.locale is SimplifiedChinese {
+                    "重命名失败："
+                  } else {
+                    "Rename failed: "
+                  }) +
+                  message,
+                ),
               }),
             },
           )
@@ -5230,6 +5296,7 @@ fn update_msg(
     // right panel on screen with its launcher menu closed.
     Jobs(msg) => {
       let (cmd, jobs) = @jobs.update(
+        locale=model.locale,
         dispatch.map(msg => Jobs(msg)),
         msg,
         model.jobs,
@@ -5438,6 +5505,7 @@ fn update_msg(
     }
     ExportDialog(msg) => {
       let (cmd, export_dialog) = model.export_dialog.update(
+        locale=model.locale,
         dispatch.map(next => ExportDialog(next)),
         msg,
       )
@@ -5615,6 +5683,7 @@ fn Model::apply_codex_worktree_snapshot(
       thread == thread_id &&
       row.path is Some(path) {
       let (command, codex) = @codex.update(
+        locale=self.locale,
         dispatch.map(msg => Codex(channel~, msg)),
         @codex.Msg::worktree_changed(
           thread_id,
@@ -5942,7 +6011,11 @@ fn update_device_msg(
       let failures = dev.reconnect_failures + 1
       let bridge = if failures == WsLostAfter {
         BridgeLost(
-          "Can't reach SeekMoon. Make sure SeekMoon is running, then reopen this page.",
+          if model.locale is SimplifiedChinese {
+            "无法连接 SeekMoon。请确认 SeekMoon 正在运行，然后重新打开此页面。"
+          } else {
+            "Can't reach SeekMoon. Make sure SeekMoon is running, then reopen this page."
+          },
         )
       } else {
         dev.bridge
@@ -6040,7 +6113,7 @@ fn update_device_msg(
       }
       let (notice, notified) = next.notify_error(
         dispatch,
-        "Saving settings failed: \{message}",
+        notice_text(model.locale, SaveSettings(message.to_string())),
       )
       let commands = [notice]
       if next.settings_saves == 0 {
@@ -6131,7 +6204,12 @@ fn update_device_msg(
           model
           .replace_conversation(next)
           .notify_error(
-            dispatch, "Message was not queued (the task ended as you sent it) — it is back in the composer.",
+            dispatch,
+            if model.locale is SimplifiedChinese {
+              "消息未加入队列（发送时任务已结束），已放回输入框。"
+            } else {
+              "Message was not queued (the task ended as you sent it) — it is back in the composer."
+            },
           )
         } else {
           (@cmd.none, model)
@@ -6438,7 +6516,10 @@ fn update_device_msg(
       } else {
         model
       }
-      model.notify_error(dispatch, "Workspace error: \{message}")
+      model.notify_error(
+        dispatch,
+        notice_text(model.locale, WorkspaceFailure(message.to_string())),
+      )
     }
     WorkspaceSettingsLoaded(
       workspace~,
@@ -6507,7 +6588,10 @@ fn update_device_msg(
       let request_generation = dev.workspace_settings_request_generation + 1
       let (toast, next) = model.notify_error(
         dispatch,
-        "Workspace settings not saved for \{workspace.path}: \{message}",
+        notice_text(
+          model.locale,
+          SaveWorkspace(workspace.path.to_string(), message.to_string()),
+        ),
       )
       (
         @cmd.batch([
@@ -6589,7 +6673,10 @@ fn update_device_msg(
       }
       model.notify_error(
         dispatch,
-        "Worktree list unavailable for \{workspace.path}: \{message}",
+        notice_text(
+          model.locale,
+          ListWorktrees(workspace.path.to_string(), message.to_string()),
+        ),
       )
     }
     WorktreesChanged(rows, workspace~) => {
@@ -6842,7 +6929,7 @@ fn update_device_msg(
       let (archived, model) = request_archived_refresh(dispatch, channel, model)
       let (toast, model) = model.notify_error(
         dispatch,
-        "Archive failed: \{message}",
+        notice_text(model.locale, ArchiveFailure(message.to_string())),
       )
       (@cmd.batch([refresh, archived, toast]), model)
     }
@@ -6850,13 +6937,16 @@ fn update_device_msg(
       let (refresh, model) = request_archived_refresh(dispatch, channel, model)
       let (toast, model) = model.notify_error(
         dispatch,
-        "Delete failed: \{message}",
+        notice_text(model.locale, DeleteFailure(message.to_string())),
       )
       (@cmd.batch([refresh, toast]), model)
     }
     WorktreeFailed(message) => model.notify_error(dispatch, message)
     SessionsFailed(message) =>
-      model.notify_error(dispatch, "Session list unavailable: \{message}")
+      model.notify_error(
+        dispatch,
+        notice_text(model.locale, ListSessions(message.to_string())),
+      )
     // Another client archived, restored, or deleted a conversation. Both
     // sidebar lists are stale, but this identity-bearing fact takes effect
     // immediately and remains authoritative over in-flight replies.
@@ -7817,6 +7907,7 @@ fn update_device_msg(
         owner.channel == channel &&
         owner.scope.session == session {
         let (cmd, jobs) = @jobs.update(
+          locale=model.locale,
           dispatch.map(msg => Jobs(msg)),
           Poll,
           model.jobs,
@@ -7889,7 +7980,7 @@ fn update_device_msg(
           updated.notify_error(dispatch, text)
         } else {
           let command = match approval_notification {
-            Some(notification) => notification.command()
+            Some(notification) => notification.command(locale=updated.locale)
             None => @cmd.none
           }
           (command, updated)
@@ -8186,7 +8277,14 @@ fn update_device_msg(
         .replace_conversation(conv)
         .notify_error(
           dispatch,
-          "Goal delivery could not be confirmed (" + message + ")" + detail,
+          (if model.locale is SimplifiedChinese {
+            "无法确认目标是否已送达（"
+          } else {
+            "Goal delivery could not be confirmed ("
+          }) +
+          message +
+          ")" +
+          detail,
         )
       } else {
         (@cmd.none, model)
@@ -8272,7 +8370,9 @@ fn update_device_msg(
         // the same Finished boundary must not post a second notification.
         if first_finish && channel is Local {
           commands.push(
-            FinishedSystemNotification::{ run_id, status, answer, }.command(),
+            FinishedSystemNotification::{ run_id, status, answer, }.command(
+              locale=next.locale,
+            ),
           )
         }
         // The turn's edits routinely land in files the editor panel never

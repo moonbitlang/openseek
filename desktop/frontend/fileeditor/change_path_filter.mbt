@@ -132,10 +132,18 @@ fn change_extension(path : @pathx.Relative) -> String? {
 }
 
 ///|
-fn extension_label(extension : String?) -> String {
+fn extension_label(
+  locale? : @i18n.Locale = English,
+  extension : String?,
+) -> String {
   match extension {
     Some(value) => value
-    None => "No extension"
+    None =>
+      if locale is SimplifiedChinese {
+        "无扩展名"
+      } else {
+        "No extension"
+      }
   }
 }
 

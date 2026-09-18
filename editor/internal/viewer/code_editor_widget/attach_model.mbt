@@ -259,6 +259,7 @@ fn CodeEditorWidget::create_code_browser(
     .view_zones_configuration(model.snapshot.line_count())
   }
   let view = @view.View(
+    localization=self.services.localization,
     view_zones_configuration_reader=read_view_zones_configuration,
   )
   view.install_view_zones_context(

@@ -65,46 +65,57 @@ pub(all) struct LauncherActions {
 /// The launcher rows shared by the empty-strip pane and the `+` popup: the
 /// kinds of tab the dock can open.
 fn LauncherActions::rows(
+  locale? : @i18n.Locale = English,
   self : LauncherActions,
   popup? : Bool = false,
 ) -> Array[@html.Html] {
   let entries : Array[(String, String, () -> @html.Html, @cmd.Cmd)] = []
   if self.browser is Some(open_browser) {
     entries.push(
-      ("Browse", "Open a page in a tab", @icons.icon_globe, open_browser),
+      (
+        ui(locale, BrowseLabel),
+        ui(locale, BrowseHint),
+        @icons.icon_globe,
+        open_browser,
+      ),
     )
   }
   entries.push(
     (
-      "Search",
-      "Search text across the workspace",
+      ui(locale, SearchLabel),
+      ui(locale, SearchHint),
       @icons.icon_search,
       self.search,
     ),
   )
   entries.push(
-    ("Files", "Open a file from the workspace", @icons.icon_folder, self.files),
+    (
+      ui(locale, FilesLabel),
+      ui(locale, FilesHint),
+      @icons.icon_folder,
+      self.files,
+    ),
   )
   entries.push(
     (
-      "Review",
-      "Review changed files and diffs",
+      ui(locale, ReviewLabel),
+      ui(locale, ReviewHint),
       @icons.icon_diff_multiple,
       self.review,
     ),
   )
   entries.push(
     (
-      "Workflows",
-      "Subagents this conversation delegated to",
+      ui(locale, WorkflowsLabel),
+      ui(locale, WorkflowsHint),
       @icons.icon_organization,
       self.workflows,
     ),
   )
   entries.push(
     (
-      "Jobs",
-      "Follow background commands and their logs",
+      ui(locale, JobsLabel),
+      ui(locale, JobsHint),
       @icons.icon_tasklist,
       self.jobs,
     ),
@@ -140,9 +151,12 @@ fn LauncherActions::rows(
 /// The empty strip's body: a centered launcher menu of the tab kinds the
 /// dock can open (Codex-style). Always rendered — CSS shows it only while
 /// the strip is empty — so the panel's child order stays structural.
-pub fn launcher_pane(actions : LauncherActions) -> @html.Html {
+pub fn launcher_pane(
+  locale? : @i18n.Locale = English,
+  actions : LauncherActions,
+) -> @html.Html {
   @html.div(class="dock-launcher", [
-    @html.div(class="dock-launcher-menu", actions.rows()),
+    @html.div(class="dock-launcher-menu", actions.rows(locale~)),
   ])
 }
 
@@ -153,6 +167,7 @@ pub fn launcher_pane(actions : LauncherActions) -> @html.Html {
 /// closes it without activating (the close click must not bubble into the
 /// tab's own handler).
 pub fn tabs_bar(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   chips : Array[TabChip],
@@ -186,7 +201,7 @@ pub fn tabs_bar(
           @html.span(class="tab-name", chip.label),
           @html.button(
             class="tab-close",
-            title="Close",
+            title=ui(locale, CloseLabel),
             attrs=@html.Attrs::build().on_click(event => {
               event.stop_propagation()
               dispatch(TabClosed(tab))
@@ -204,9 +219,9 @@ pub fn tabs_bar(
     @html.div(class="editor-tabs", tabs),
     @html.button(
       class="tab-action tab-close-all",
-      title="Close all tabs",
+      title=ui(locale, CloseAllTabs),
       attrs=@html.Attrs::build()
-        .aria_label("Close all tabs")
+        .aria_label(ui(locale, CloseAllTabs))
         .disabled(close_all_tabs_disabled)
         .on_click(_ => close_all_tabs),
       @icons.icon(@icons.icon_close_all),
@@ -217,7 +232,7 @@ pub fn tabs_bar(
       } else {
         "tab-action tab-add"
       },
-      title="New tab",
+      title=ui(locale, NewTab),
       attrs=@html.Attrs::build()
         .id("dock-new-tab")
         .aria_haspopup("menu")
@@ -228,16 +243,26 @@ pub fn tabs_bar(
     ),
     @html.button(
       class="panel-toggle panel-expand",
-      title=if expanded { "Restore panel" } else { "Expand panel" },
+      title=if expanded {
+        ui(locale, RestorePanel)
+      } else {
+        ui(locale, ExpandPanel)
+      },
       attrs=@html.Attrs::build()
-        .aria_label(if expanded { "Restore panel" } else { "Expand panel" })
+        .aria_label(
+          if expanded {
+            ui(locale, RestorePanel)
+          } else {
+            ui(locale, ExpandPanel)
+          },
+        )
         .aria_pressed(expanded.to_string())
         .on_click(_ => toggle_expanded),
       @icons.icon(if expanded { icon_restore_panel } else { icon_expand_panel }),
     ),
     @html.button(
       class="panel-toggle",
-      title="Hide panel",
+      title=ui(locale, HidePanel),
       on_click=toggle_panel,
       @icons.icon(@icons.icon_layout_sidebar_right),
     ),
@@ -251,10 +276,10 @@ pub fn tabs_bar(
         attrs=@html.Attrs::build()
           .id("dock-new-tab-menu")
           .role("menu")
-          .aria_label("New tab")
+          .aria_label(ui(locale, NewTab))
           .popover("manual")
           .on_keydown(event => menu.keydown(event)),
-        actions.rows(popup=true),
+        actions.rows(locale~, popup=true),
       ),
     )
   }

@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
 }
 
@@ -13,7 +14,7 @@ pub fn apply_font_family(String) -> @cmd.Cmd
 
 pub fn apply_font_size(Double) -> @cmd.Cmd
 
-pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @rabbita.Val[State], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
 
 pub fn output(@interop.ChannelId, String, Int, String) -> @cmd.Cmd
 

@@ -388,7 +388,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           services=services.viewer_services,
           options=@viewer.ViewerOptions(
             theme=viewer_state.theme,
-            placeholder="Select a file to view",
+            placeholder=file_placeholder(false),
             font_family=viewer_state.font_family,
             font_size=viewer_state.font_size,
           ),
@@ -511,7 +511,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
             services=services.viewer_services,
             options=@viewer.MarkdownViewerOptions(
               theme=viewer_state.theme,
-              placeholder="Select a Markdown file to view",
+              placeholder=file_placeholder(true),
             ),
           ),
         )
@@ -1122,7 +1122,13 @@ fn show_mbti_diagram(resource : @common.Uri, source : String) -> Unit {
     None => {
       let message =
         #|<div class="mbti-diagram-error" role="status">This interface could not be rendered as a UML diagram. View the source for details.</div>
-      host.set_inner_html(message)
+      host.set_inner_html(
+        if viewer_locale() is SimplifiedChinese {
+          "<div class=\"mbti-diagram-error\" role=\"status\">无法将此接口渲染为 UML 图，请查看源码了解详情。</div>"
+        } else {
+          message
+        },
+      )
     }
   }
 }
@@ -1175,7 +1181,14 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
     viewer_state.package_graph = Some(state)
     match state {
       PackageGraphLoading(_) =>
-        show_package_diagram_status(host, "Loading dependency graph…")
+        show_package_diagram_status(
+          host,
+          if viewer_locale() is SimplifiedChinese {
+            "正在加载依赖图…"
+          } else {
+            "Loading dependency graph…"
+          },
+        )
       PackageGraphReady(_, source) =>
         match @viewer.render_package_dep_diagram_svg(source) {
           Some(svg) => {
@@ -1188,13 +1201,22 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
           }
           None =>
             show_package_diagram_status(
-              host, "This dependency graph could not be rendered. View the source for details.",
+              host,
+              if viewer_locale() is SimplifiedChinese {
+                "无法渲染此依赖图，请查看源码了解详情。"
+              } else {
+                "This dependency graph could not be rendered. View the source for details."
+              },
             )
         }
       PackageGraphFailed(_, message) =>
         show_package_diagram_status(
           host,
-          "Could not load dependency graph: \{message}",
+          if viewer_locale() is SimplifiedChinese {
+            "无法加载依赖图：\{message}"
+          } else {
+            "Could not load dependency graph: \{message}"
+          },
         )
     }
   })

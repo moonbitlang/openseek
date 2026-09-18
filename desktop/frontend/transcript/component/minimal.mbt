@@ -11,6 +11,7 @@ priv struct MinimalCall {
 
 ///|
 fn MinimalCall::from_tool(
+  locale? : @i18n.Locale = English,
   call : @transcript.ToolCall,
   wait_label? : String,
 ) -> MinimalCall {
@@ -18,38 +19,38 @@ fn MinimalCall::from_tool(
   // pr list/view/diff/checks shapes" still belongs to Execute mbtx scripts;
   // descriptions name individual calls, without reclassifying their contents.
   let category = match call.name {
-    "read" => Some("Read files")
-    "edit" | "multi_edit" => Some("Edit files")
-    "write" => Some("Write files")
-    "remove" => Some("Remove files")
-    "mbtx" => Some("Execute mbtx scripts")
-    "shell" => Some("Execute commands")
-    "web_search" | "webSearch" => Some("Search the web")
-    "imageView" => Some("View images")
-    "imageGeneration" => Some("Generate images")
-    "enteredReviewMode" | "exitedReviewMode" => Some("Review code")
-    "review" | "spawn_agent" => Some("Create subagents")
-    "wait_agent" => Some("Wait for subagents")
-    "send_input" | "send_message" => Some("Send messages to subagents")
-    "resume_agent" => Some("Resume subagents")
-    "followup_task" => Some("Assign subagent tasks")
-    "interrupt_agent" => Some("Stop subagents")
-    "close_agent" => Some("Close subagents")
-    "list_agents" => Some("List subagents")
+    "read" => Some(ui(locale, ReadFiles))
+    "edit" | "multi_edit" => Some(ui(locale, EditFiles))
+    "write" => Some(ui(locale, WriteFiles))
+    "remove" => Some(ui(locale, RemoveFiles))
+    "mbtx" => Some(ui(locale, ExecuteMbtx))
+    "shell" => Some(ui(locale, ExecuteCommands))
+    "web_search" | "webSearch" => Some(ui(locale, SearchWeb))
+    "imageView" => Some(ui(locale, ViewImages))
+    "imageGeneration" => Some(ui(locale, GenerateImages))
+    "enteredReviewMode" | "exitedReviewMode" => Some(ui(locale, ReviewCode))
+    "review" | "spawn_agent" => Some(ui(locale, CreateSubagents))
+    "wait_agent" => Some(ui(locale, WaitSubagents))
+    "send_input" | "send_message" => Some(ui(locale, SendSubagents))
+    "resume_agent" => Some(ui(locale, ResumeSubagents))
+    "followup_task" => Some(ui(locale, AssignSubagents))
+    "interrupt_agent" => Some(ui(locale, StopSubagents))
+    "close_agent" => Some(ui(locale, CloseSubagents))
+    "list_agents" => Some(ui(locale, ListSubagents))
     "submit_result" | "submit_answer" | "submit_pattern_repair" =>
-      Some("Submit results")
-    "submit_review" => Some("Submit reviews")
-    "plan" => Some("Update plan")
-    "goal" => Some("Update goal")
+      Some(ui(locale, SubmitResults))
+    "submit_review" => Some(ui(locale, SubmitReviews))
+    "plan" => Some(ui(locale, UpdatePlan))
+    "goal" => Some(ui(locale, UpdateGoal))
     // Coordination and turn completion are not additional kinds of work.
     // These names come from the registered tools and the Codex adapter; keep
     // MCP/dynamic names namespaced so a foreign "read" cannot impersonate one.
     "job_wait" | "job_output" | "job_stop" | "finish" | "sleep" => None
-    _ => Some("Other tool calls")
+    _ => Some(ui(locale, OtherTools))
   }
   let status = ToolStatus::from_outcome(call.outcome)
   let brief = match call.outcome {
-    Snapshot(..) => Some("Snapshot")
+    Snapshot(..) => Some(ui(locale, SnapshotLabel))
     Pending(..) => None
     Done(brief~, ..) => brief
   }
@@ -190,22 +191,27 @@ fn MinimalToolStatus::from_activities(
 /// A failed call must not hide another call still running. Keep both indicators
 /// until the group settles, and use the same icons as the detailed tool rows.
 /// Successful groups stay quiet in minimal mode, without an empty status slot.
-fn MinimalToolStatus::view(self : MinimalToolStatus) -> @html.Html {
+fn MinimalToolStatus::view(
+  locale? : @i18n.Locale = English,
+  self : MinimalToolStatus,
+) -> @html.Html {
   if self.pending == 0 && self.failed == 0 {
     return @html.nothing
   }
   let children : Array[@html.Html] = []
   if self.pending > 0 {
-    children.push(ToolStatus::Pending.view())
+    children.push(ToolStatus::Pending.view(locale~))
   }
   if self.failed > 0 {
-    let label = if self.failed == 1 {
+    let label = if locale is SimplifiedChinese {
+      "\{self.failed} 次工具调用失败"
+    } else if self.failed == 1 {
       "1 tool call failed"
     } else {
       "\{self.failed} tool calls failed"
     }
     children.push(@html.span(class="minimal-failure-count", title=label, label))
-    children.push(ToolStatus::Failed.view())
+    children.push(ToolStatus::Failed.view(locale~))
   }
   @html.span(class="minimal-tool-status", children)
 }
@@ -305,7 +311,11 @@ fn MinimalStream::push_block(self : MinimalStream, part : MinimalPart) -> Unit {
 /// Only an explicit final answer collapses the preceding process. User inputs
 /// split disclosures without ending a turn. A stop, failure, or empty success
 /// flushes the same process unfolded, fencing it off from the next turn.
-fn MinimalStream::finish(self : MinimalStream, collapse~ : Bool) -> Unit {
+fn MinimalStream::finish(
+  locale? : @i18n.Locale = English,
+  self : MinimalStream,
+  collapse~ : Bool,
+) -> Unit {
   self.flush_parts()
   for section in self.sections {
     match section {
@@ -318,7 +328,7 @@ fn MinimalStream::finish(self : MinimalStream, collapse~ : Bool) -> Unit {
             item=row.item,
             anchor=Some(anchor),
             step_label=None,
-            assistant_name="Assistant",
+            assistant_name=ui(locale, AssistantLabel),
             subrun_parent=None,
             wait_labels=Map([]),
           ),
@@ -341,6 +351,7 @@ fn MinimalStream::finish(self : MinimalStream, collapse~ : Bool) -> Unit {
 
 ///|
 fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
+  let locale = self.locale
   let builder : MinimalStream = {
     stream: TranscriptSectionKey::stream(self),
     blocks: [],
@@ -363,7 +374,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
       }
       Assistant(prose~, calls~, finished~, ..) => {
         if finished && prose is Some(text) && !text.is_blank() {
-          builder.finish(collapse=true)
+          builder.finish(locale~, collapse=true)
           builder.push_block({
             identity: "final\u{0}\{identity}",
             content: Prose(
@@ -401,6 +412,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
           activity.push(
             Call(
               MinimalCall::from_tool(
+                locale~,
                 call,
                 wait_label?=pending_job_wait_label(call, descriptions~),
               ),
@@ -409,7 +421,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
           // Program calls are recorded under their parent. Preserve their
           // status and edit previews in the minimal work log as well.
           for child in call.children {
-            activity.push(Call(MinimalCall::from_tool(child)))
+            activity.push(Call(MinimalCall::from_tool(locale~, child)))
           }
         }
         if !activity.is_empty() {
@@ -417,7 +429,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         }
       }
       Answer(text) => {
-        builder.finish(collapse=!text.is_blank())
+        builder.finish(locale~, collapse=!text.is_blank())
         if !text.is_blank() {
           builder.push_block({
             identity: "final\u{0}\{identity}",
@@ -431,16 +443,20 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
           })
         }
       }
-      TurnEnd => builder.finish(collapse=false)
+      TurnEnd => builder.finish(locale~, collapse=false)
       Failure(text) => {
-        builder.finish(collapse=false)
+        builder.finish(locale~, collapse=false)
         builder.push_block({
           identity: "failure\u{0}\{identity}",
           content: Note(text~, error=true),
         })
       }
       Notice(label~, brief~, is_error~, body~) => {
-        let text = brief.unwrap_or(body.unwrap_or(label))
+        let text = tool_display_label(
+          locale~,
+          label,
+          brief.unwrap_or(body.unwrap_or(label)),
+        )
         builder.push_part(
           "notice\u{0}\{identity}",
           if label == "runtime notice" {
@@ -477,7 +493,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
       }
     }
   }
-  builder.finish(collapse=false)
+  builder.finish(locale~, collapse=false)
   if self.streaming_response is Some(text) && !text.is_blank() {
     builder.push_block({
       identity: "live\u{0}\{self.streaming_identity}",
@@ -529,9 +545,12 @@ fn MinimalContent::activities(self : MinimalContent) -> Array[MinimalActivity] {
 }
 
 ///|
-fn MinimalContent::summary(self : MinimalContent) -> String {
+fn MinimalContent::summary(
+  locale? : @i18n.Locale = English,
+  self : MinimalContent,
+) -> String {
   if self is ContextSummary(_) {
-    return "Context summary"
+    return ui(locale, ContextSummary)
   }
   // Preview the first three concrete operations in transcript order, including
   // failed calls and repeated captions. Outcome does not affect preview slots.
@@ -554,9 +573,9 @@ fn MinimalContent::summary(self : MinimalContent) -> String {
   if captions.is_empty() {
     captions.push(
       if self is Completed(_) {
-        "Work completed"
+        ui(locale, WorkCompleted)
       } else {
-        "View activity"
+        ui(locale, ViewActivity)
       },
     )
   }
@@ -571,6 +590,7 @@ fn MinimalContent::summary(self : MinimalContent) -> String {
 /// a completed process with only one group. This preserves statuses and edits
 /// when the redundant inner disclosure is omitted.
 fn MinimalActivity::render(
+  locale? : @i18n.Locale = English,
   self : MinimalActivity,
   single? : Bool = false,
 ) -> @html.Html {
@@ -609,17 +629,19 @@ fn MinimalActivity::render(
             call.caption,
           ),
           if single {
-            MinimalToolStatus::from_activities([self]).view()
+            MinimalToolStatus::from_activities([self]).view(locale~)
           } else if call.status is (Succeeded | Snapshot) {
             // Expanded calls follow the same quiet-success rule as summaries.
             @html.nothing
           } else {
-            call.status.view()
+            call.status.view(locale~)
           },
           if call.changes is Some(changes) {
             @html.div(
               class="minimal-edit-changes",
-              attrs=@html.Attrs::build().aria_label("Requested changes"),
+              attrs=@html.Attrs::build().aria_label(
+                ui(locale, RequestedChanges),
+              ),
               changes.render(),
             )
           } else {
@@ -632,6 +654,7 @@ fn MinimalActivity::render(
 
 ///|
 fn MinimalContent::render(
+  locale? : @i18n.Locale = English,
   self : MinimalContent,
   actions : Actions,
   active? : Bool = false,
@@ -643,6 +666,7 @@ fn MinimalContent::render(
       let children : Map[String, @html.Html] = Map([])
       for part in parts {
         children[part.identity] = part.content.render(
+          locale~,
           actions,
           active=active_group is Some(identity) && identity == part.identity,
         )
@@ -651,14 +675,17 @@ fn MinimalContent::render(
     }
     ContextSummary(text) =>
       @html.details(class="minimal-context-summary", [
-        self.summary_view(),
+        self.summary_view(locale~),
         @html.div(
           class="minimal-process-body msg-content markdown",
-          @markdown.markdown_nodes(text, open_file=path => (actions.open)(path)),
+          @markdown.markdown_nodes(locale~, text, open_file=path => {
+            (actions.open)(path)
+          }),
         ),
       ])
     Prose(text~, assistant~, finished~, live~, completed_at~) =>
       assistant_message_view(
+        locale~,
         text,
         path => (actions.open)(path),
         assistant,
@@ -681,20 +708,20 @@ fn MinimalContent::render(
       // once, including running/failed status and any requested edit preview.
       // This also applies inside a completed process that contains prose.
       if entries is [Call(call)] {
-        return MinimalActivity::Call(call).render(single=true)
+        return MinimalActivity::Call(call).render(locale~, single=true)
       }
       if active {
         return @html.div(
           class="minimal-tools-live minimal-rows",
-          entries.map(entry => entry.render()),
+          entries.map(entry => entry.render(locale~)),
         )
       }
       // Earlier groups start folded once a new assistant message arrives.
       @html.details(class="minimal-tools", [
-        self.summary_view(),
+        self.summary_view(locale~),
         @html.div(
           class="minimal-call-list",
-          entries.map(entry => entry.render()),
+          entries.map(entry => entry.render(locale~)),
         ),
       ])
     }
@@ -702,23 +729,23 @@ fn MinimalContent::render(
       // Neither the process nor its only tool group needs a disclosure when
       // they contain just one call. Keep the same row before and after final.
       if parts is [{ content: Activity([Call(call)]), .. }] {
-        return MinimalActivity::Call(call).render(single=true)
+        return MinimalActivity::Call(call).render(locale~, single=true)
       }
       // One group needs only the outer disclosure. Mixed prose and
       // tool groups retain their individual folds, with completed summaries.
       let body = if parts is [{ content: Activity(entries), .. }] {
         @html.div(
           class="minimal-process-body minimal-rows",
-          entries.map(entry => entry.render()),
+          entries.map(entry => entry.render(locale~)),
         )
       } else {
         let children : Map[String, @html.Html] = Map([])
         for part in parts {
-          children[part.identity] = part.content.render(actions)
+          children[part.identity] = part.content.render(locale~, actions)
         }
         @html.div(class="minimal-process-body minimal-rows", children)
       }
-      @html.details(class="minimal-process", [self.summary_view(), body])
+      @html.details(class="minimal-process", [self.summary_view(locale~), body])
     }
   }
 }
@@ -726,8 +753,11 @@ fn MinimalContent::render(
 ///|
 /// Keep native disclosure semantics while drawing the same chevron used by
 /// application controls. The icon is decorative; the text names the toggle.
-fn MinimalContent::summary_view(self : MinimalContent) -> @html.Html {
-  let text = self.summary()
+fn MinimalContent::summary_view(
+  locale? : @i18n.Locale = English,
+  self : MinimalContent,
+) -> @html.Html {
+  let text = self.summary(locale~)
   @html.summary(class="minimal-activity-summary", [
     @html.span(
       class="minimal-tool-icon",
@@ -740,6 +770,6 @@ fn MinimalContent::summary_view(self : MinimalContent) -> @html.Html {
       attrs=@html.Attrs::build().aria_hidden("true"),
       @icons.icon(@icons.icon_chevron_down),
     ),
-    MinimalToolStatus::from_activities(self.activities()).view(),
+    MinimalToolStatus::from_activities(self.activities()).view(locale~),
   ])
 }

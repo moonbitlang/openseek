@@ -322,17 +322,21 @@ fn copy_item(label : String, title : String, text : String) -> Entry {
 }
 
 ///|
-fn reveal_label(platform : ClientPlatform) -> String? {
+fn reveal_label(
+  locale? : @i18n.Locale = English,
+  platform : ClientPlatform,
+) -> String? {
   match platform {
-    MacOS => Some("Show in Finder")
-    Windows => Some("Show in File Explorer")
-    Linux => Some("Show in Folder")
+    MacOS => Some(ui(locale, ShowFinder))
+    Windows => Some(ui(locale, ShowExplorer))
+    Linux => Some(ui(locale, ShowFolder))
     Web => None
   }
 }
 
 ///|
 fn context_definition(
+  locale? : @i18n.Locale = English,
   input : ContextInput,
   request : ContextRequest,
   actions : ContextActions,
@@ -345,8 +349,8 @@ fn context_definition(
       if input.platform is Web {
         navigation.push(
           context_item(
-            "Open in New Tab",
-            "Open in New Tab",
+            ui(locale, OpenNewTab),
+            ui(locale, OpenNewTab),
             @icons.icon_link_external(),
             (actions.open_link)(url),
           ),
@@ -355,8 +359,8 @@ fn context_definition(
         if input.open_web_links_in_app {
           navigation.push(
             context_item(
-              "Open",
-              "Open",
+              ui(locale, OpenLabel),
+              ui(locale, OpenLabel),
               @icons.icon_link_external(),
               (actions.open_link)(url),
             ),
@@ -364,38 +368,41 @@ fn context_definition(
         }
         navigation.push(
           context_item(
-            "Open in Default Browser",
-            "Open in the system default browser",
+            ui(locale, OpenDefaultBrowser),
+            ui(locale, OpenSystemBrowser),
             @icons.icon_link_external(),
             (actions.open_external_link)(url),
           ),
         )
       }
-      clipboard.push(copy_item("Copy Link", "Copy link address", url))
+      clipboard.push(
+        copy_item(ui(locale, CopyLink), ui(locale, CopyLinkAddress), url),
+      )
     }
     EmailLink(url~, address~) => {
       navigation.push(
         context_item(
-          "Open",
-          "Open email link",
+          ui(locale, OpenLabel),
+          ui(locale, OpenEmail),
           @icons.icon_link_external(),
           (actions.open_link)(url),
         ),
       )
       clipboard.push(
-        copy_item("Copy Email Address", "Copy email address", address),
+        copy_item(ui(locale, CopyEmail), ui(locale, CopyEmailHint), address),
       )
     }
     FileLink(path) => {
       navigation.push(
         context_item(
-          "Open",
-          "Open file",
+          ui(locale, OpenLabel),
+          ui(locale, OpenFile),
           @icons.icon_link_external(),
           (actions.open_file)(path),
         ),
       )
-      if input.reveal_files && reveal_label(input.platform) is Some(label) {
+      if input.reveal_files &&
+        reveal_label(locale~, input.platform) is Some(label) {
         navigation.push(
           context_item(
             label,
@@ -405,11 +412,16 @@ fn context_definition(
           ),
         )
       }
-      clipboard.push(copy_item("Copy Path", "Copy file path", path))
+      clipboard.push(
+        copy_item(ui(locale, CopyPath), ui(locale, CopyFilePath), path),
+      )
     }
   }
   if request.selected_text is Some(text) {
-    clipboard.insert(0, copy_item("Copy", "Copy selected text", text))
+    clipboard.insert(
+      0,
+      copy_item(ui(locale, CopyLabel), ui(locale, CopySelected), text),
+    )
   }
   guard !navigation.is_empty() || !clipboard.is_empty() else { return None }
   let entries = navigation
@@ -419,7 +431,7 @@ fn context_definition(
   for entry in clipboard {
     entries.push(entry)
   }
-  Some({ label: "Context menu", entries, })
+  Some({ label: ui(locale, ContextMenu), entries, })
 }
 
 ///|
@@ -436,6 +448,7 @@ fn ContextOpen::as_menu_open(self : ContextOpen) -> Open {
 /// run first through ordinary DOM bubbling; unclaimed events are either
 /// converted into this themed menu or suppressed when they have no action.
 pub fn context_component(
+  locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[ContextInput],
   actions : ContextActions,
 ) -> @rabbita.Val[@html.Html] {
@@ -483,9 +496,10 @@ pub fn context_component(
       ])
     },
   )
-  state.map2(input, (state, input) => {
+  state.map3(input, locale, (state, input, locale) => {
     guard state.open_context is Some(open) &&
-      context_definition(input, open.request, actions) is Some(definition) &&
+      context_definition(locale~, input, open.request, actions)
+      is Some(definition) &&
       !definition.enabled_indices().is_empty() else {
       return @html.nothing
     }

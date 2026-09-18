@@ -8,6 +8,7 @@
 /// projects these services into a `@hover.HoverParticipantServices` when it
 /// builds a hover computer.
 struct CodeEditorServices {
+  localization : @localization.Localization
   languages : @languages.LanguageHandle
   marker_decorations : @markers.MarkerDecorationsHandle
   agent_feedback : @agent_feedback_api.AgentFeedbackHandle
@@ -31,6 +32,7 @@ struct CodeEditorServices {
 /// `services` argument creates the same shape internally and transfers only
 /// that internal bundle's lifetime to the CodeEditorWidget.
 pub fn CodeEditorServices::CodeEditorServices(
+  localization? : @localization.Localization = @localization.Localization(),
   languages? : @languages.LanguageHandle,
   markers? : @markers.MarkerDecorationsSource,
   agent_feedback? : @agent_feedback_api.AgentFeedbackHandle,
@@ -77,6 +79,7 @@ pub fn CodeEditorServices::CodeEditorServices(
     None => @quick_diff.QuickDiffService().quick_diff_handle()
   }
   {
+    localization,
     languages,
     marker_decorations,
     agent_feedback,

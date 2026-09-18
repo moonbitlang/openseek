@@ -358,15 +358,48 @@ pub fn Run::cost_usd(self : Run) -> Double? {
 /// running after its run CLOSED never got its finish — the snippet died, or
 /// the finish was lost — and is shown as unresolved rather than pulsing
 /// forever; a run's close is the last word its brackets will say.
-pub fn row_status(row : Row, closed~ : Bool) -> (String, String) {
+pub fn row_status(
+  locale? : @i18n.Locale = English,
+  row : Row,
+  closed~ : Bool,
+) -> (String, String) {
   match row.status {
     None =>
       if closed {
-        ("unresolved", "failed")
+        (
+          if locale is SimplifiedChinese {
+            "状态未确定"
+          } else {
+            "unresolved"
+          },
+          "failed",
+        )
       } else {
-        ("running", "running")
+        (
+          if locale is SimplifiedChinese {
+            "运行中"
+          } else {
+            "running"
+          },
+          "running",
+        )
       }
-    Some("captured") => ("done", "done")
-    Some(other) => (other.replace_all(old="_", new=" "), "failed")
+    Some("captured") =>
+      (if locale is SimplifiedChinese { "已完成" } else { "done" }, "done")
+    Some(other) =>
+      (
+        if locale is SimplifiedChinese {
+          match other {
+            "failed" => "失败"
+            "timed_out" => "已超时"
+            "cancelled" | "canceled" => "已取消"
+            "interrupted" => "已中断"
+            _ => other.replace_all(old="_", new=" ")
+          }
+        } else {
+          other.replace_all(old="_", new=" ")
+        },
+        "failed",
+      )
   }
 }

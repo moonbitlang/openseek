@@ -7,13 +7,14 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/symbols",
 }
 
 // Values
-pub fn component(@rabbita.Val[State], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
+pub fn component(@rabbita.Val[State], @cmd.Emit[Msg], @rabbita.Val[@i18n.Locale]) -> @rabbita.Val[@html.Html]
 
 // Errors
 

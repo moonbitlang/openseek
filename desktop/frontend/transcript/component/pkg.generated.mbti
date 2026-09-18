@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/transcript",
@@ -14,7 +15,7 @@ import {
 // Values
 pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
 
-pub fn program_calls_view(Json?, String, origin? : @transcript.TraceOrigin) -> @html.Html?
+pub fn program_calls_view(locale? : @i18n.Locale, Json?, String, origin? : @transcript.TraceOrigin) -> @html.Html?
 
 pub fn scroll_to_latest() -> @cmd.Cmd
 
@@ -35,7 +36,7 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(dark_mode? : Bool, minimal? : Bool, source~ : Source, focused~ : @interop.ChannelId, active_session~ : String, scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
+pub fn Input::Input(locale? : @i18n.Locale, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused~ : @interop.ChannelId, active_session~ : String, scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 

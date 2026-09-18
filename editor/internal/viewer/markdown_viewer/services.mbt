@@ -2,6 +2,7 @@
 /// The service capabilities used by the standalone Markdown surface. This
 /// package owns no CodeEditorWidget and does not import its service façade.
 struct MarkdownViewerServices {
+  localization : @localization.Localization
   languages : @languages.LanguageHandle
   marker_decorations : @markers.MarkerDecorationsHandle
   location_opener : @navigation_api.LocationOpenerHandle?
@@ -19,6 +20,7 @@ struct MarkdownViewerServices {
 /// Builds a Markdown-only service bundle. Supplied handles remain caller-owned;
 /// omitted marker services are created and released by this bundle.
 pub fn MarkdownViewerServices::MarkdownViewerServices(
+  localization? : @localization.Localization = @localization.Localization(),
   languages? : @languages.LanguageHandle,
   markers? : @markers.MarkerDecorationsSource,
   location_opener? : @navigation_api.LocationOpenerHandle,
@@ -54,6 +56,7 @@ pub fn MarkdownViewerServices::MarkdownViewerServices(
     Some(Decorations(decorations)) => (decorations, None, None)
   }
   {
+    localization,
     languages,
     marker_decorations,
     location_opener,

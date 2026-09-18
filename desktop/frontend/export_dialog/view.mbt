@@ -2,7 +2,11 @@
 /// Always mount the native HTML dialog at a stable position. showModal gives
 /// it keyboard focus containment, Escape dismissal, and focus restoration
 /// without adding DOM bindings or letting background controls receive clicks.
-pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
+pub fn Model::view(
+  locale? : @i18n.Locale = English,
+  self : Model,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   let children : Array[@html.Html] = []
   if self.content is Some(content) {
     let busy = content.operation.busy()
@@ -11,13 +15,13 @@ pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
         @html.div(
           id="conversation-export-title",
           class="modal-title",
-          "Export conversation",
+          ui(locale, ExportConversation),
         ),
         @html.button(
           class="export-dialog-close",
-          title="Close",
+          title=ui(locale, CloseLabel),
           on_click=emit(Close),
-          attrs=@html.Attrs::build().aria_label("Close export dialog"),
+          attrs=@html.Attrs::build().aria_label(ui(locale, CloseDialog)),
           @icons.icon(@icons.icon_close),
         ),
       ]),
@@ -28,7 +32,7 @@ pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
       @html.div(
         id="conversation-export-description",
         class="modal-body",
-        "Download saves an HTML file. Share uploads HTML and JSON, including tool inputs and outputs. Anyone with the link can view it for 7 days, preview HTML, and download both files. Check for private information before sharing.",
+        ui(locale, ExportDescription),
       ),
     )
     children.push(
@@ -38,9 +42,9 @@ pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
           disabled=busy,
           on_click=emit(Download),
           if content.operation is Downloading {
-            "Saving…"
+            ui(locale, SavingLabel)
           } else {
-            "Download"
+            ui(locale, DownloadLabel)
           },
         ),
         @html.button(
@@ -48,43 +52,46 @@ pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
           disabled=busy || content.publication is Some(_),
           on_click=emit(Share),
           if content.operation is Sharing {
-            "Sharing…"
+            ui(locale, SharingLabel)
           } else {
-            "Share"
+            ui(locale, ShareLabel)
           },
         ),
       ]),
     )
     let status = match content.operation {
       Ready => @html.nothing
-      Downloading => @html.span("Choose where to save the HTML file.")
-      Sharing => @html.span("Uploading conversation…")
-      SigningIn =>
-        @html.span("Complete sign-in in your browser, then click Share.")
+      Downloading => @html.span(ui(locale, ChooseSavePath))
+      Sharing => @html.span(ui(locale, UploadingConversation))
+      SigningIn => @html.span(ui(locale, CompleteBrowserSignIn))
       SignInRequired =>
         @html.div([
-          @html.p("Sign in to your OpenSeek server to share this conversation."),
-          @html.button(class="button primary", on_click=emit(SignIn), "Sign in"),
+          @html.p(ui(locale, SignInDescription)),
+          @html.button(
+            class="button primary",
+            on_click=emit(SignIn),
+            ui(locale, SignInLabel),
+          ),
         ])
       SignInFailed(message) =>
         @html.div([
           @html.p(
             class="export-error",
-            "\{message} You can try signing in again, or download this conversation.",
+            dynamic_text(locale, DSignInFailure(message.to_string())),
           ),
           @html.button(
             class="button primary",
             on_click=emit(SignIn),
-            "Try signing in again",
+            ui(locale, RetrySignIn),
           ),
         ])
       Failed(message) => @html.div(class="export-error", message)
       Saved(path~, opened~) =>
         @html.div(
           if opened {
-            "Saved to \{path}."
+            dynamic_text(locale, DSaved(path.to_string()))
           } else {
-            "Saved to \{path}, but couldn't open it automatically."
+            dynamic_text(locale, DSavedNotOpened(path.to_string()))
           },
         )
     }
@@ -106,7 +113,7 @@ pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
               @html.input(
                 value=url,
                 read_only=true,
-                attrs=@html.Attrs::build().aria_label("Share link"),
+                attrs=@html.Attrs::build().aria_label(ui(locale, ShareLink)),
               ),
               @html.button(
                 class=if copy is Copied {
@@ -114,14 +121,14 @@ pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
                 } else {
                   "button secondary"
                 },
-                title="Copy to clipboard",
+                title=ui(locale, CopyClipboard),
                 // Keep success feedback in the icon; the accessible name
                 // also reports it without adding visible status text.
                 attrs=@html.Attrs::build().aria_label(
                   if copy is Copied {
-                    "Share link copied"
+                    ui(locale, LinkCopied)
                   } else {
-                    "Copy share link"
+                    ui(locale, CopyShareLink)
                   },
                 ),
                 on_click=@clipboard.copy(
@@ -150,10 +157,7 @@ pub fn Model::view(self : Model, emit : @cmd.Emit[Msg]) -> @html.Html {
             match copy {
               Available | Copied => @html.nothing
               Failed(_) =>
-                @html.div(
-                  class="export-error",
-                  "Could not copy. Select the link and copy it manually.",
-                )
+                @html.div(class="export-error", ui(locale, CannotCopy))
             },
           ]),
         ),

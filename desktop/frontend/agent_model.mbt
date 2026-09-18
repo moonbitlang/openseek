@@ -178,7 +178,7 @@ test "the model group follows the configured provider" {
 /// Codex's group mirrors the fetched catalog; without one it offers the one
 /// row that leads to the Codex page instead of hiding the agent entirely.
 fn Model::codex_model_group(self : Model) -> @composer.ModelGroup {
-  match self.codex.model_listing() {
+  match self.codex.model_listing(locale=self.locale) {
     CodexModels(options, selected=_) => {
       let prefixed = options.map(option => @composer.ModelOption::{
         value: ModelChoice::CodexModel(option.value).wire(),
@@ -215,7 +215,12 @@ fn Model::openseek_model_chip(
     selected: ModelChoice::OpenSeekModel(conv.engine_model).wire(),
     disabled: false,
     open: self.select_menu is Some(OpenSeekModelMenu),
-    title: "Model: \{conv.engine_model.label()}",
+    title: (if self.locale is SimplifiedChinese {
+      "模型："
+    } else {
+      "Model: "
+    }) +
+    conv.engine_model.label(),
   }
 }
 
@@ -235,10 +240,16 @@ fn Model::openseek_reasoning_chip(
   let options : Array[@composer.ModelOption] = [
     {
       value: ReasoningOff.wire(),
-      label: ReasoningOff.label_for_model(conv.engine_model),
+      label: ReasoningOff.label_for_model(locale=self.locale, conv.engine_model),
     },
-    { value: ReasoningHigh.wire(), label: "High", },
-    { value: ReasoningMax.wire(), label: "Max", },
+    {
+      value: ReasoningHigh.wire(),
+      label: ReasoningHigh.label(locale=self.locale),
+    },
+    {
+      value: ReasoningMax.wire(),
+      label: ReasoningMax.label(locale=self.locale),
+    },
   ]
   Some({
     id: "openseek-reasoning-picker",
@@ -246,7 +257,12 @@ fn Model::openseek_reasoning_chip(
     selected: reasoning.wire(),
     disabled: false,
     open: self.select_menu is Some(OpenSeekReasoningMenu),
-    title: "Reasoning effort: \{reasoning.label_for_model(conv.engine_model)}",
+    title: (if self.locale is SimplifiedChinese {
+      "推理强度："
+    } else {
+      "Reasoning effort: "
+    }) +
+    reasoning.label_for_model(locale=self.locale, conv.engine_model),
   })
 }
 
@@ -260,7 +276,7 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
     groups.push(openseek_model_group(self.api_provider, self.default_model))
   }
   groups.push(self.codex_model_group())
-  let selected = match self.codex.model_listing() {
+  let selected = match self.codex.model_listing(locale=self.locale) {
     CodexModels(_, selected~) => ModelChoice::CodexModel(selected).wire()
     CodexModelsUnavailable(_) => CodexUnavailableChoiceWire
   }
@@ -270,6 +286,10 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
     selected,
     disabled: false,
     open: self.select_menu is Some(CodexModelMenu),
-    title: "Codex model",
+    title: if self.locale is SimplifiedChinese {
+      "Codex 模型"
+    } else {
+      "Codex model"
+    },
   }
 }

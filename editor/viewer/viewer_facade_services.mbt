@@ -11,6 +11,7 @@ struct ViewerServices {
 /// file path for Peek labels, or `None` to retain the default resource label.
 /// It is evaluated when results render so hosts can consult the live workspace.
 pub fn ViewerServices::ViewerServices(
+  localization? : @localization.Localization = @localization.Localization(),
   languages? : @languages.LanguageHandle,
   markers? : @markers.MarkerDecorationsSource,
   agent_feedback? : @agent_feedback_api.AgentFeedbackHandle,
@@ -22,6 +23,7 @@ pub fn ViewerServices::ViewerServices(
 ) -> ViewerServices {
   {
     inner: CodeEditorServices(
+      localization~,
       languages?,
       markers?,
       agent_feedback?,

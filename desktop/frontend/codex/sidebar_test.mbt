@@ -1,4 +1,38 @@
 ///|
+test "missing titles localize while user titles remain unchanged" {
+  let context : @codex.SidebarContext = {
+    channel: @interop.ChannelId::Local,
+    selected: true,
+    registered_projects: ["/work"],
+  }
+  let state = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "untitled",
+      "cwd": "/work",
+      "projectRoot": "/work",
+      "turns": [],
+    },
+  })
+  assert_eq(
+    state.project_conversations(locale=SimplifiedChinese, context, "/work")[0].input.label,
+    "新建对话",
+  )
+  let named = @codex.State::from_thread_snapshot({
+    "thread": {
+      "id": "named",
+      "name": "New chat",
+      "cwd": "/work",
+      "projectRoot": "/work",
+      "turns": [],
+    },
+  })
+  assert_eq(
+    named.project_conversations(locale=SimplifiedChinese, context, "/work")[0].input.label,
+    "New chat",
+  )
+}
+
+///|
 test "Windows Codex resource paths match registered sidebar projects" {
   let channel = @interop.ChannelId::Local
   // The host's to_uri_path canonicalizes the drive before publishing either

@@ -16,12 +16,12 @@ test: test-moon
 # Assemble the JS/CSS/font/HTML outputs and the verified local Mermaid runtime into web/dist
 dist-front-end:
     moon build
-    moon run --target native scripts/build-web.mbtx
+    moon run scripts/build-web.mbtx
     moon run --target native scripts/stage_mermaid
 
 # Stage the single browser-correctness runner into web/dist/browser-tests
 build-browser-tests: dist-front-end
-    moon run --target native scripts/build-browser-tests.mbtx
+    moon run scripts/build-browser-tests.mbtx
 
 # Web assets and the preferred-target server artifact (moon build covers the server member)
 build: dist-front-end

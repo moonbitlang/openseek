@@ -288,7 +288,13 @@ fn install_review_hunk_actions(
       button.set_attribute(
         "aria-label",
         if viewed {
-          "Unmark hunk \{index + 1} viewed"
+          if viewer_locale() is SimplifiedChinese {
+            "取消第 \{index + 1} 个差异块的已查看标记"
+          } else {
+            "Unmark hunk \{index + 1} viewed"
+          }
+        } else if viewer_locale() is SimplifiedChinese {
+          "将第 \{index + 1} 个差异块标为已查看"
         } else {
           "Mark hunk \{index + 1} viewed"
         },
@@ -304,9 +310,9 @@ fn install_review_hunk_actions(
       button.set_attribute(
         "title",
         if viewed {
-          "Mark this hunk unviewed"
+          ui(viewer_locale(), MarkHunkUnviewed)
         } else {
-          "Mark this hunk viewed"
+          ui(viewer_locale(), MarkHunkViewed)
         },
       )
       button.append_child(

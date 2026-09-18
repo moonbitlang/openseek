@@ -6,18 +6,19 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/sub",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
 }
 
 // Values
-pub fn panel(State, @cmd.Emit[Msg]) -> @html.Html
+pub fn panel(locale? : @i18n.Locale, State, @cmd.Emit[Msg]) -> @html.Html
 
 pub fn reconcile(@cmd.Emit[Msg], State, Owner?, Bool) -> (@cmd.Cmd, State)
 
 pub fn subscriptions(State, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
+pub fn update(locale? : @i18n.Locale, @cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
 
 // Errors
 

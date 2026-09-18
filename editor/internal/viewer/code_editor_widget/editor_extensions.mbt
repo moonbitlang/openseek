@@ -533,7 +533,19 @@ fn EditorContributionRegistry::resolve_editor_menu(
               registration_order: command.registration_order,
               entry: ContextMenuAction(
                 id=command.id,
-                label=command.title,
+                label=match command.id {
+                  "editor.action.revealDefinition" =>
+                    viewer.services.localization.text(GoDefinition)
+                  "editor.action.peekDefinition" =>
+                    viewer.services.localization.text(PeekDefinition)
+                  "editor.action.goToReferences" =>
+                    viewer.services.localization.text(GoReferences)
+                  "editor.action.referenceSearch.trigger" =>
+                    viewer.services.localization.text(PeekReferences)
+                  "editor.action.showContextMenu" =>
+                    viewer.services.localization.text(ShowContextMenu)
+                  _ => command.title
+                },
                 keybinding_label=command.menu_keybinding_label,
               ),
             })

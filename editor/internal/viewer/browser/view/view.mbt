@@ -32,6 +32,7 @@ pub struct View {
 
 ///|
 pub fn View::View(
+  localization? : @localization.Localization = @localization.Localization(),
   view_zones_configuration_reader? : () -> (Int, Double, Double) = () => {
     (0, 0.0, 0.0)
   },
@@ -142,6 +143,14 @@ pub fn View::View(
     lifetime_disposables: [],
     disposed: false,
   }
+  view.add_disposable(
+    localization.bind(language => {
+      root.set_attribute(
+        "aria-label",
+        @localization.text(language, ReadonlyCode),
+      )
+    }),
+  )
   view
 }
 

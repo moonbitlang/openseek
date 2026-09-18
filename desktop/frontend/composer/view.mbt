@@ -12,7 +12,11 @@ priv struct ActionButton {
 }
 
 ///|
-fn ActionButton::render(self : ActionButton) -> @html.Html {
+fn ActionButton::render(
+  locale? : @i18n.Locale = English,
+  self : ActionButton,
+) -> @html.Html {
+  ignore(locale)
   @html.button(
     id=self.id,
     class=self.class_name,
@@ -66,10 +70,12 @@ pub(all) struct ModelSelect {
 
 ///|
 fn ModelSelect::render(
+  locale? : @i18n.Locale = English,
   self : ModelSelect,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   @select_control.Control::{
     id: self.id,
     groups: self.groups.map(group => group.select_group()),
@@ -80,7 +86,7 @@ fn ModelSelect::render(
     dismiss: action_emit(SelectMenuDismissed(identity~)),
     change: action_emit.map(value => ModelSelected(identity~, value~)),
     title: self.title,
-    aria_label: "Model",
+    aria_label: ui(locale, ModelLabel),
     presentation: Composer("✦", false),
   }.render()
 }
@@ -100,15 +106,17 @@ pub(all) struct ReasoningSelect {
 
 ///|
 fn ReasoningSelect::render(
+  locale? : @i18n.Locale = English,
   self : ReasoningSelect,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   @select_control.Control::{
     id: self.id,
     groups: [
       {
-        label: "Reasoning effort",
+        label: ui(locale, ReasoningEffort),
         options: self.options.map(option => {
           value: option.value,
           label: option.label,
@@ -122,7 +130,7 @@ fn ReasoningSelect::render(
     dismiss: action_emit(SelectMenuDismissed(identity~)),
     change: action_emit.map(value => ReasoningSelected(identity~, value~)),
     title: self.title,
-    aria_label: "Reasoning effort",
+    aria_label: ui(locale, ReasoningEffort),
     presentation: Composer("◐", true),
   }.render()
 }
@@ -162,21 +170,27 @@ pub(all) struct WorktreeControl {
 /// keeps the selected mode visible while its first operation is in flight,
 /// but turns it into a statement so a click cannot disagree with that work.
 fn WorktreeControl::render(
+  locale? : @i18n.Locale = English,
   self : WorktreeControl,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   let (class_name, label, title) = match self.choice {
     LocalCheckout =>
-      (
-        "composer-worktree", "Local", "Runs in the workspace itself — click to run in a fresh git worktree",
-      )
+      ("composer-worktree", ui(locale, LocalLabel), ui(locale, LocalHint))
     FreshWorktree =>
       (
-        "composer-worktree on", "Worktree", "First prompt creates a git worktree and runs there — click for local",
+        "composer-worktree on",
+        ui(locale, WorktreeLabel),
+        ui(locale, WorktreeHint),
       )
     BoundWorktree(name) =>
-      ("composer-worktree on", name, "This chat runs in worktree \{name}")
+      (
+        "composer-worktree on",
+        name,
+        dynamic_text(locale, DWorktree(name.to_string())),
+      )
   }
   let body = [@icons.icon(@icons.icon_worktree), @html.span(label)]
   if self.enabled && !(self.choice is BoundWorktree(_)) {
@@ -203,28 +217,33 @@ pub(all) struct MissingWorktreeNotice {
 
 ///|
 fn MissingWorktreeNotice::render(
+  locale? : @i18n.Locale = English,
   self : MissingWorktreeNotice,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   @html.div(class="composer-notice", [
     @html.span(
       class="composer-notice-text",
-      "Worktree \{self.name} has no checkout. Rebuild it to continue; commits on its branch are safe.",
+      dynamic_text(locale, DMissingWorktree(self.name.to_string())),
     ),
     @html.button(
       class="composer-notice-btn",
       type_="button",
-      title="Check the branch out again at .worktrees/\{self.name}",
+      title=dynamic_text(locale, DRebuildWorktree(self.name.to_string())),
       on_click=action_emit(MissingWorktreeRebuildRequested(identity~)),
-      "Rebuild it",
+      ui(locale, RebuildLabel),
     ),
     @html.button(
       class="composer-notice-btn",
       type_="button",
-      title="Archive this \{self.conversation_noun} without rebuilding its worktree",
+      title=dynamic_text(
+        locale,
+        DArchiveMissing(self.conversation_noun.to_string()),
+      ),
       on_click=action_emit(MissingWorktreeArchiveRequested(identity~)),
-      "Archive \{self.conversation_noun}",
+      dynamic_text(locale, DArchiveLabel(self.conversation_noun.to_string())),
     ),
   ])
 }
@@ -235,27 +254,29 @@ fn MissingWorktreeNotice::render(
 /// identity-scoped decision, so arbitrary HTML and commands never cross the
 /// composer boundary.
 fn ApprovalNotice::render(
+  locale? : @i18n.Locale = English,
   self : ApprovalNotice,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   let actions : Array[@html.Html] = if self.answered {
-    [@html.span(class="composer-approval-state", "Sending…")]
+    [@html.span(class="composer-approval-state", ui(locale, SendingLabel))]
   } else {
     [
       @html.button(
         class="composer-approval-action composer-approval-deny",
         type_="button",
-        title="Refuse this request; the tool reports the refusal and keeps working inside the sandbox",
+        title=ui(locale, RefuseHint),
         on_click=action_emit(ApprovalAnswered(identity~, allow=false)),
-        "Deny",
+        ui(locale, DenyLabel),
       ),
       @html.button(
         class="composer-approval-action composer-approval-allow",
         type_="button",
-        title="Allow this one run; nothing beyond it is granted",
+        title=ui(locale, AllowOnceHint),
         on_click=action_emit(ApprovalAnswered(identity~, allow=true)),
-        "Allow once",
+        ui(locale, AllowOnce),
       ),
     ]
   }
@@ -297,17 +318,19 @@ fn ApprovalNotice::render(
 /// stable context column. It is public so callers and tests can render the
 /// typed component without reaching through the stateful composer shell.
 pub fn ContextComponent::render(
+  locale? : @i18n.Locale = English,
   self : ContextComponent,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   match self {
     ConnectionBanner(device_name~) =>
       match device_name {
         Some(name) =>
           @html.div(
             class="composer-banner",
-            "Can't reach \{name} — reconnecting…",
+            dynamic_text(locale, DReconnecting(name.to_string())),
           )
         None => @html.div(class="composer-banner hidden", "")
       }
@@ -318,16 +341,16 @@ pub fn ContextComponent::render(
         @html.button(
           class="composer-notice-btn",
           type_="button",
-          title="Configure the API endpoint",
+          title=ui(locale, ConfigureEndpoint),
           on_click=action_emit(ApiSetupRequested(identity~)),
-          "Set up",
+          ui(locale, SetupLabel),
         ),
       ])
-    ApprovalRequest(approval) => approval.render(identity, action_emit)
+    ApprovalRequest(approval) => approval.render(locale~, identity, action_emit)
     CodexRequests(requests~) => {
       let rendered : Array[@html.Html] = []
       for request in requests {
-        rendered.push(request.render(identity, action_emit))
+        rendered.push(request.render(locale~, identity, action_emit))
       }
       @html.div(class="codex-pending", rendered)
     }
@@ -338,7 +361,7 @@ pub fn ContextComponent::render(
           @html.div(class="pending-steer-row", title=shown, [
             @html.span(class="pending-steer-icon", "⤷"),
             @html.span(class="pending-steer-text", shown),
-            @html.span(class="pending-steer-state", "Steer"),
+            @html.span(class="pending-steer-state", ui(locale, SteerLabel)),
           ]),
         )
       }
@@ -358,9 +381,9 @@ pub fn ContextComponent::render(
               @html.span(
                 class="queued-input-state",
                 if interactive {
-                  "Queued"
+                  ui(locale, QueuedLabel)
                 } else {
-                  "Queued for resume"
+                  ui(locale, QueuedResume)
                 },
               ),
             )
@@ -370,8 +393,10 @@ pub fn ContextComponent::render(
                   @html.button(
                     class="queued-input-action",
                     type_="button",
-                    title="Steer",
-                    attrs=@html.Attrs::build().aria_label("Steer"),
+                    title=ui(locale, SteerLabel),
+                    attrs=@html.Attrs::build().aria_label(
+                      ui(locale, SteerLabel),
+                    ),
                     on_click=action_emit(
                       QueuedInputSteerRequested(identity~, id=item.id),
                     ),
@@ -384,12 +409,16 @@ pub fn ContextComponent::render(
                       "queued-input-action"
                     },
                     type_="button",
-                    title=if editing { "Editing" } else { "Edit" },
+                    title=if editing {
+                      ui(locale, EditingLabel)
+                    } else {
+                      ui(locale, EditLabel)
+                    },
                     attrs=@html.Attrs::build().aria_label(
                       if editing {
-                        "Editing"
+                        ui(locale, EditingLabel)
                       } else {
-                        "Edit"
+                        ui(locale, EditLabel)
                       },
                     ),
                     on_click=action_emit(
@@ -400,8 +429,10 @@ pub fn ContextComponent::render(
                   @html.button(
                     class="queued-input-action danger",
                     type_="button",
-                    title="Delete",
-                    attrs=@html.Attrs::build().aria_label("Delete"),
+                    title=ui(locale, DeleteLabel),
+                    attrs=@html.Attrs::build().aria_label(
+                      ui(locale, DeleteLabel),
+                    ),
                     on_click=action_emit(
                       QueuedInputDeleteRequested(identity~, id=item.id),
                     ),
@@ -432,64 +463,61 @@ pub fn ContextComponent::render(
         @html.span(
           class="composer-notice-text",
           if queued {
-            "Compaction queued — starts when the current turn ends"
+            ui(locale, CompactionQueued)
           } else {
-            "Compacting context…"
+            ui(locale, CompactingContext)
           },
         ),
       ])
     WorktreePlacementNotice =>
       @html.div(class="composer-notice", [
-        @html.span(
-          class="composer-notice-text",
-          "Waiting for workspace placement…",
-        ),
+        @html.span(class="composer-notice-text", ui(locale, WaitingPlacement)),
         @html.button(
           class="composer-notice-btn",
           type_="button",
-          title="Request this workspace's worktree list again",
+          title=ui(locale, RetryWorktreeList),
           on_click=action_emit(WorktreePlacementRetried(identity~)),
-          "Retry",
+          ui(locale, RetryLabel),
         ),
       ])
     MissingWorktreeNoticeComponent(notice) =>
-      notice.render(identity, action_emit)
+      notice.render(locale~, identity, action_emit)
   }
 }
 
 ///|
 fn @protocol.CodexPermissionMode::short_label(
+  locale? : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval => "Ask"
-    @protocol.AutoReview => "Approve for me"
-    @protocol.FullAccess => "Full access"
+    @protocol.RequestApproval => ui(locale, AskLabel)
+    @protocol.AutoReview => ui(locale, ApproveForMe)
+    @protocol.FullAccess => ui(locale, FullAccess)
   }
 }
 
 ///|
 fn @protocol.CodexPermissionMode::title(
+  locale? : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval => "Request approval"
-    @protocol.AutoReview => "Approve for me"
-    @protocol.FullAccess => "Full access"
+    @protocol.RequestApproval => ui(locale, RequestApproval)
+    @protocol.AutoReview => ui(locale, ApproveForMe)
+    @protocol.FullAccess => ui(locale, FullAccess)
   }
 }
 
 ///|
 fn @protocol.CodexPermissionMode::description(
+  locale? : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval =>
-      "Always ask before editing outside the workspace or using the internet"
-    @protocol.AutoReview =>
-      "Ask only when the reviewer detects a risky operation"
-    @protocol.FullAccess =>
-      "Unrestricted internet access and access to any file on this computer"
+    @protocol.RequestApproval => ui(locale, AskDescription)
+    @protocol.AutoReview => ui(locale, ReviewDescription)
+    @protocol.FullAccess => ui(locale, FullAccessDescription)
   }
 }
 
@@ -506,11 +534,13 @@ fn @protocol.CodexPermissionMode::glyph(
 
 ///|
 fn @protocol.CodexPermissionMode::render_option(
+  locale? : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
   selected : @protocol.CodexPermissionMode,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   let class_name = if self is @protocol.FullAccess {
     "codex-permission-option danger"
   } else {
@@ -523,8 +553,11 @@ fn @protocol.CodexPermissionMode::render_option(
     [
       @html.span(class="codex-permission-option-glyph", self.glyph()),
       @html.span(class="codex-permission-copy", [
-        @html.span(class="codex-permission-option-title", self.title()),
-        @html.span(class="codex-permission-option-desc", self.description()),
+        @html.span(class="codex-permission-option-title", self.title(locale~)),
+        @html.span(
+          class="codex-permission-option-desc",
+          self.description(locale~),
+        ),
       ]),
       @html.span(
         class="codex-permission-check",
@@ -540,10 +573,12 @@ fn @protocol.CodexPermissionMode::render_option(
 
 ///|
 fn PermissionControl::render(
+  locale? : @i18n.Locale = English,
   self : PermissionControl,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   let class_name = if self.mode is @protocol.FullAccess {
     "codex-permission-control danger"
   } else {
@@ -555,16 +590,16 @@ fn PermissionControl::render(
       type_="button",
       disabled=!self.enabled,
       title=if self.enabled {
-        "Choose how Codex handles approval requests"
+        ui(locale, PermissionHint)
       } else {
-        "Permission mode cannot change while Codex is running"
+        ui(locale, PermissionLocked)
       },
       on_click=action_emit(PermissionMenuToggled(identity~)),
       [
         @html.span(class="codex-permission-button-glyph", self.mode.glyph()),
         @html.span(
           class="codex-permission-button-label",
-          self.mode.short_label(),
+          self.mode.short_label(locale~),
         ),
         @html.span(class="codex-permission-chevron", "⌄"),
       ],
@@ -582,15 +617,26 @@ fn PermissionControl::render(
       @html.div(class="codex-permission-menu", [
         @html.div(
           class="codex-permission-menu-title",
-          "How should Codex approve operations?",
+          ui(locale, PermissionQuestion),
         ),
         @protocol.RequestApproval.render_option(
+          locale~,
           self.mode,
           identity,
           action_emit,
         ),
-        @protocol.AutoReview.render_option(self.mode, identity, action_emit),
-        @protocol.FullAccess.render_option(self.mode, identity, action_emit),
+        @protocol.AutoReview.render_option(
+          locale~,
+          self.mode,
+          identity,
+          action_emit,
+        ),
+        @protocol.FullAccess.render_option(
+          locale~,
+          self.mode,
+          identity,
+          action_emit,
+        ),
       ]),
     )
   }
@@ -599,20 +645,23 @@ fn PermissionControl::render(
 
 ///|
 fn StatusComponent::render(
+  locale? : @i18n.Locale = English,
   self : StatusComponent,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  ignore(locale)
   match self {
-    ModelStatus(control) => control.render(identity, action_emit)
-    ReasoningStatus(control) => control.render(identity, action_emit)
-    PermissionStatus(control) => control.render(identity, action_emit)
+    ModelStatus(control) => control.render(locale~, identity, action_emit)
+    ReasoningStatus(control) => control.render(locale~, identity, action_emit)
+    PermissionStatus(control) => control.render(locale~, identity, action_emit)
     GitStatus(control) =>
       control.presentation.render(
+        locale~,
         open=control.open,
         toggle=action_emit(GitDetailsToggled(identity~)),
       )
-    WorktreeStatus(control) => control.render(identity, action_emit)
+    WorktreeStatus(control) => control.render(locale~, identity, action_emit)
   }
 }
 
@@ -628,7 +677,10 @@ pub(all) struct WorktreeArchiveDialog {
 }
 
 ///|
-pub fn WorktreeArchiveDialog::message(self : WorktreeArchiveDialog) -> String {
+pub fn WorktreeArchiveDialog::message(
+  locale? : @i18n.Locale = English,
+  self : WorktreeArchiveDialog,
+) -> String {
   let refusal = self.refusal
   let preview = if refusal.dirty_paths.is_empty() {
     ""
@@ -637,27 +689,38 @@ pub fn WorktreeArchiveDialog::message(self : WorktreeArchiveDialog) -> String {
     let suffix = if remaining > 0 { ", and \{remaining} more" } else { "" }
     " Changed paths: \{refusal.dirty_paths.join(", ")}\{suffix}."
   }
-  "Worktree \{refusal.worktree} has uncommitted changes.\{preview} Archiving deletes this checkout and permanently discards its uncommitted, untracked, and ignored files. Committed work and the branch remain."
+  dynamic_text(
+    locale,
+    DArchiveWarning(refusal.worktree.to_string(), preview.to_string()),
+  )
 }
 
 ///|
 pub fn WorktreeArchiveDialog::render(
+  locale? : @i18n.Locale = English,
   self : WorktreeArchiveDialog,
 ) -> @html.Html {
+  ignore(locale)
   @html.div(class="modal-backdrop", on_click=self.cancel, [
     @html.div(class="modal", [
-      @html.div(class="modal-title", "Archive this \{self.conversation_noun}?"),
-      @html.div(class="modal-body", self.message()),
+      @html.div(
+        class="modal-title",
+        dynamic_text(
+          locale,
+          DArchiveQuestion(self.conversation_noun.to_string()),
+        ),
+      ),
+      @html.div(class="modal-body", self.message(locale~)),
       @html.div(class="modal-actions", [
         @html.button(
           class="button secondary",
           on_click=self.cancel,
-          "Keep working",
+          ui(locale, KeepWorking),
         ),
         @html.button(
           class="button primary",
           on_click=self.confirm,
-          "Discard local changes and archive",
+          ui(locale, DiscardAndArchive),
         ),
       ]),
     ]),
@@ -676,7 +739,11 @@ priv struct MentionChip {
 }
 
 ///|
-fn MentionChip::render(self : MentionChip) -> @html.Html {
+fn MentionChip::render(
+  locale? : @i18n.Locale = English,
+  self : MentionChip,
+) -> @html.Html {
+  ignore(locale)
   let glyph = @html.span(class="mention-glyph", self.glyph)
   let label = @html.span(class="mention-label", self.label)
   let body = match self.jump {
@@ -696,7 +763,7 @@ fn MentionChip::render(self : MentionChip) -> @html.Html {
       @html.button(
         class="mention-remove",
         type_="button",
-        title="Remove",
+        title=ui(locale, RemoveLabel),
         on_click=command,
         content,
       ),
@@ -725,13 +792,14 @@ priv struct View {
 }
 
 ///|
-fn View::render(self : View) -> @html.Html {
+fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
+  ignore(locale)
   let actions : Array[@html.Html] = []
   for action in self.actions {
     if action.id != "stop" {
       continue
     }
-    actions.push(action.render())
+    actions.push(action.render(locale~))
   }
   actions.push(
     @html.div(
@@ -746,7 +814,7 @@ fn View::render(self : View) -> @html.Html {
     if action.id == "stop" {
       continue
     }
-    actions.push(action.render())
+    actions.push(action.render(locale~))
   }
   let inner : Array[@html.Html] = [
     // Keep the input wrapper and its two children permanently mounted. Rabbita
@@ -785,8 +853,8 @@ fn View::render(self : View) -> @html.Html {
   let attrs = @html.Attrs::build().data_set("focus-owner", "")
   let attrs = if self.images is Some(emit) {
     attrs
-    .on_paste(event => @image_input.pasted(event, emit))
-    .on_drop(event => @image_input.dropped(event, emit))
+    .on_paste(event => @image_input.pasted(locale~, event, emit))
+    .on_drop(event => @image_input.dropped(locale~, event, emit))
     .on_dragover(event => @image_input.dragged(event))
   } else {
     attrs
@@ -811,13 +879,18 @@ fn View::render(self : View) -> @html.Html {
 /// the same shape as the plan panel's and for the same reason: the context
 /// column is diffed by position, so a row that came and went would shift the
 /// goal row below it on every run start and end.
-fn running_row(run : RunHeartbeat?, clock_ms~ : Double) -> @html.Html {
+fn running_row(
+  locale? : @i18n.Locale = English,
+  run : RunHeartbeat?,
+  clock_ms~ : Double,
+) -> @html.Html {
+  ignore(locale)
   guard run is Some(run) else {
     return @html.div(class="composer-running", ([] : Array[@html.Html]))
   }
   @html.div(class="composer-running", [
     @html.span(class="composer-running-mark", ""),
-    @html.span(class="composer-running-text", run.label(clock_ms~)),
+    @html.span(class="composer-running-text", run.label(locale~, clock_ms~)),
   ])
 }
 
@@ -826,15 +899,26 @@ fn running_row(run : RunHeartbeat?, clock_ms~ : Double) -> @html.Html {
 /// genuinely known — an adopted run has no start this page witnessed, and a
 /// turn before its first usage report has no count — so both absent leaves
 /// the bare stage, which is still the one thing worth saying.
-fn RunHeartbeat::label(self : RunHeartbeat, clock_ms~ : Double) -> String {
+fn RunHeartbeat::label(
+  locale? : @i18n.Locale = English,
+  self : RunHeartbeat,
+  clock_ms~ : Double,
+) -> String {
   let stage = match self.stage {
-    Starting => "Starting…"
-    Thinking => "Thinking…"
-    AtStep(step) => "Working · step \{step}"
+    Starting => ui(locale, StartingLabel)
+    Thinking => ui(locale, ThinkingLabel)
+    AtStep(step) => dynamic_text(locale, DWorkingStep(step.to_string()))
     Retrying(attempt~, max_attempts~, reason~) =>
-      "Retrying · attempt \{attempt}/\{max_attempts} · \{reason}"
-    Working => "Working…"
-    Stopping => "Stopping…"
+      dynamic_text(
+        locale,
+        DRetry(
+          attempt.to_string(),
+          max_attempts.to_string(),
+          reason.to_string(),
+        ),
+      )
+    Working => ui(locale, WorkingLabel)
+    Stopping => ui(locale, StoppingLabel)
   }
   let detail : Array[String] = []
   if self.started_ms is Some(started) && clock_ms > started {
@@ -878,7 +962,7 @@ priv struct CompletionRow {
 
 ///|
 /// A reusable completion popup. `empty` describes a caller-specific
-/// empty/loading state such as "Searching..." or "No files".
+/// empty/loading state such as "Searching..." or ui(locale, NoFiles).
 priv struct CompletionView {
   rows : Array[CompletionRow]
   selected : Int
@@ -890,9 +974,11 @@ priv struct CompletionView {
 /// Render one completion popup. A row uses `mousedown` so choosing it keeps
 /// focus in the textarea while the owning source updates its draft.
 fn CompletionView::render(
+  locale? : @i18n.Locale = English,
   self : CompletionView,
   pick : (Int) -> @cmd.Cmd,
 ) -> @html.Html {
+  ignore(locale)
   let rows : Array[@html.Html] = []
   for index, item in self.rows {
     rows.push(

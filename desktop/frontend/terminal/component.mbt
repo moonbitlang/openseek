@@ -63,11 +63,14 @@ pub fn State::reconcile(
 ///|
 /// Render the root-owned terminal state directly.
 pub fn component(
+  locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   state : @rabbita.Val[State],
   dispatch : @cmd.Emit[Msg],
 ) -> @rabbita.Val[@html.Html] {
-  state.view2(input, (state, input) => panel_view(dispatch, state, input.ctx))
+  state.view3(input, locale, (state, input, locale) => {
+    panel_view(locale~, dispatch, state, input.ctx)
+  })
 }
 
 ///|

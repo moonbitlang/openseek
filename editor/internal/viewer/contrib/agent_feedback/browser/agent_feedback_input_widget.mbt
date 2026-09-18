@@ -53,6 +53,7 @@ pub(all) struct AgentFeedbackInputWidgetHost {
 
 ///|
 struct AgentFeedbackInputWidget {
+  localization : @localization.Localization
   host : AgentFeedbackInputWidgetHost
   root : @rdom.Element
   textarea : @rdom.Element
@@ -63,6 +64,7 @@ struct AgentFeedbackInputWidget {
 
 ///|
 pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
+  localization? : @localization.Localization = @localization.Localization(),
   host : AgentFeedbackInputWidgetHost,
 ) -> AgentFeedbackInputWidget {
   let document = @rdom.document()
@@ -71,8 +73,8 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   root.set_attribute("style", "display:none")
   let textarea = document.create_element("textarea")
   textarea.set_attribute("rows", "3")
-  textarea.set_attribute("placeholder", "Add feedback")
-  textarea.set_attribute("aria-label", "Feedback")
+  textarea.set_attribute("placeholder", localization.text(AddFeedback))
+  textarea.set_attribute("aria-label", localization.text(FeedbackLabel))
   textarea.set_attribute("data-agent-feedback-input", "true")
   root.append_child(textarea.as_node())
   let actions = document.create_element("div")
@@ -82,31 +84,32 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   cancel.set_attribute(
     "class", "agent-feedback-input-action agent-feedback-input-action-cancel",
   )
-  cancel.set_attribute("title", "Cancel feedback (Escape)")
-  cancel.set_inner_html("Cancel")
+  cancel.set_attribute("title", localization.text(CancelFeedback))
+  cancel.set_inner_html(localization.text(CancelLabel))
   let add = document.create_element("button")
   add.set_attribute("type", "button")
   add.set_attribute(
     "class", "agent-feedback-input-action agent-feedback-input-action-secondary agent-feedback-input-action-add",
   )
   add.set_attribute("data-agent-feedback-action", "add")
-  add.set_attribute("title", "Add feedback to the batch (Enter)")
-  add.set_attribute("aria-label", "Add feedback")
-  add.set_inner_html("Add feedback")
+  add.set_attribute("title", localization.text(AddFeedbackBatch))
+  add.set_attribute("aria-label", localization.text(AddFeedback))
+  add.set_inner_html(localization.text(AddFeedback))
   let apply = document.create_element("button")
   apply.set_attribute("type", "button")
   apply.set_attribute(
     "class", "agent-feedback-input-action agent-feedback-input-action-primary agent-feedback-input-action-apply",
   )
   apply.set_attribute("data-agent-feedback-action", "apply")
-  apply.set_attribute("title", "Apply all feedback (Alt+Enter)")
-  apply.set_attribute("aria-label", "Apply all feedback")
-  apply.set_inner_html("Apply all feedback")
+  apply.set_attribute("title", localization.text(ApplyFeedbackShortcut))
+  apply.set_attribute("aria-label", localization.text(ApplyFeedback))
+  apply.set_inner_html(localization.text(ApplyFeedback))
   actions.append_child(cancel.as_node())
   actions.append_child(add.as_node())
   actions.append_child(apply.as_node())
   root.append_child(actions.as_node())
   let widget : AgentFeedbackInputWidget = {
+    localization,
     host,
     root,
     textarea,
@@ -218,7 +221,33 @@ fn AgentFeedbackInputWidget::handle_keydown(
 
 ///|
 pub fn AgentFeedbackInputWidget::show(self : AgentFeedbackInputWidget) -> Unit {
+  self.refresh_labels()
   @base_browser.set_style_property(self.root, "display", "")
+}
+
+///|
+pub fn AgentFeedbackInputWidget::refresh_labels(
+  self : AgentFeedbackInputWidget,
+) -> Unit {
+  self.textarea.set_attribute(
+    "placeholder",
+    self.localization.text(AddFeedback),
+  )
+  self.textarea.set_attribute(
+    "aria-label",
+    self.localization.text(FeedbackLabel),
+  )
+  self.cancel.set_attribute("title", self.localization.text(CancelFeedback))
+  self.cancel.set_inner_html(self.localization.text(CancelLabel))
+  self.add.set_attribute("title", self.localization.text(AddFeedbackBatch))
+  self.add.set_attribute("aria-label", self.localization.text(AddFeedback))
+  self.add.set_inner_html(self.localization.text(AddFeedback))
+  self.apply.set_attribute(
+    "title",
+    self.localization.text(ApplyFeedbackShortcut),
+  )
+  self.apply.set_attribute("aria-label", self.localization.text(ApplyFeedback))
+  self.apply.set_inner_html(self.localization.text(ApplyFeedback))
 }
 
 ///|

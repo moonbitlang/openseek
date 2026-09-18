@@ -140,12 +140,14 @@ fn semantic_range_label(
 
 ///|
 fn semantic_section_label(
+  locale? : @i18n.Locale = English,
   section : @moon_diff_provider.SemanticReviewSection,
 ) -> String {
   match (section.new_context, section.old_context, section.identity) {
     (Some(context), _, _) | (None, Some(context), _) => context
-    (None, None, Some(identity)) => "Top-level #\{identity + 1}"
-    (None, None, None) => "Whole file"
+    (None, None, Some(identity)) =>
+      dynamic_text(locale, DTopLevel((identity + 1).to_string()))
+    (None, None, None) => ui(locale, WholeFile)
   }
 }
 
@@ -198,6 +200,7 @@ priv enum SemanticReviewSide {
 
 ///|
 fn semantic_fallback_notice(
+  locale? : @i18n.Locale = English,
   section : @moon_diff_provider.SemanticReviewSection,
   requested : @moon_diff_provider.MoonDiffMode,
 ) -> @html.Html {
@@ -216,13 +219,13 @@ fn semantic_fallback_notice(
     [
       @html.strong(
         if whole && tree {
-          "Lexical fallback"
+          ui(locale, LexicalFallback)
         } else if whole {
-          "Sectioning fallback"
+          ui(locale, SectioningFallback)
         } else if tree {
-          "Section lexical fallback"
+          ui(locale, SectionLexicalFallback)
         } else {
-          "Section diff fallback"
+          ui(locale, SectionDiffFallback)
         },
       ),
       @html.span(section.fallbacks.join("; ")),
@@ -235,15 +238,16 @@ fn semantic_fallback_notice(
 /// intraline spans, gutters, and alignment zones are all rendered by the real
 /// DiffEditor mounted after paint.
 fn semantic_section_view(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   section : @moon_diff_provider.SemanticReviewSection,
   requested : @moon_diff_provider.MoonDiffMode,
   collapsed : Bool,
 ) -> @html.Html {
-  let label = semantic_section_label(section)
+  let label = semantic_section_label(locale~, section)
   let location = semantic_section_location(section)
   let content : Array[@html.Html] = [
-    semantic_fallback_notice(section, requested),
+    semantic_fallback_notice(locale~, section, requested),
     @html.div(
       class="semantic-entry-editor-parent",
       @html.div(
@@ -278,9 +282,9 @@ fn semantic_section_view(
             .aria_expanded((!collapsed).to_string())
             .aria_label(
               if collapsed {
-                "Expand \{label}"
+                dynamic_text(locale, DExpand(label.to_string()))
               } else {
-                "Collapse \{label}"
+                dynamic_text(locale, DCollapse(label.to_string()))
               },
             ),
           [
@@ -313,6 +317,7 @@ fn semantic_empty_view(message : String) -> @html.Html {
 
 ///|
 fn semantic_status_empty_view(
+  locale? : @i18n.Locale = English,
   plan : @moon_diff_provider.SectionedSemanticReviewPlan,
   input : SemanticReviewInput,
 ) -> @html.Html? {
@@ -327,7 +332,7 @@ fn semantic_status_empty_view(
       }
       Some(
         semantic_empty_view(
-          "No changes besides ignored \{subject} were found. Turn off the relevant Ignore filter to view them.",
+          dynamic_text(locale, DIgnoredChanges(subject.to_string())),
         ),
       )
     }
@@ -335,9 +340,9 @@ fn semantic_status_empty_view(
       Some(
         semantic_empty_view(
           if input.mode is @moon_diff_provider.Tree {
-            "No structural changes found. Switch to Token or Line to inspect text."
+            ui(locale, NoStructuralText)
           } else {
-            "No token changes found."
+            ui(locale, NoTokenChanges)
           },
         ),
       )
@@ -345,9 +350,9 @@ fn semantic_status_empty_view(
       Some(
         semantic_empty_view(
           if input.mode is @moon_diff_provider.Tree {
-            "No structural changes found. Switch to Token to view text changes."
+            ui(locale, NoStructuralToken)
           } else {
-            "No declaration-owned token changes found. Switch to Line to inspect the complete file."
+            ui(locale, NoDeclarationChanges)
           },
         ),
       )
@@ -358,23 +363,25 @@ fn semantic_status_empty_view(
 
 ///|
 fn semantic_plan_view(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   plan : @moon_diff_provider.SectionedSemanticReviewPlan,
   input : SemanticReviewInput,
   collapsed : Array[String],
 ) -> @html.Html {
-  if semantic_status_empty_view(plan, input) is Some(empty) {
+  if semantic_status_empty_view(locale~, plan, input) is Some(empty) {
     return empty
   }
   let sections : Map[String, @html.Html] = Map([])
   if plan.reordered {
     sections["reordered"] = @html.div(
       class="semantic-reorder",
-      "Top-level declarations are reordered; each declaration keeps its own DiffEditor.",
+      ui(locale, ReorderedDeclarations),
     )
   }
   for section in plan.main_sections {
     sections["main:\{section.key}"] = semantic_section_view(
+      locale~,
       dispatch,
       section,
       plan.requested,
@@ -386,6 +393,7 @@ fn semantic_plan_view(
   // status rather than introducing a second visual document hierarchy.
   for section in plan.deleted_sections {
     sections["deleted:\{section.key}"] = semantic_section_view(
+      locale~,
       dispatch,
       section,
       plan.requested,
@@ -393,9 +401,7 @@ fn semantic_plan_view(
     )
   }
   if sections.is_empty() {
-    semantic_empty_view(
-      "No semantic section changes found. Switch to Line to inspect the complete file.",
-    )
+    semantic_empty_view(ui(locale, NoSectionChanges))
   } else {
     @html.div(class="semantic-document", sections)
   }
@@ -405,15 +411,14 @@ fn semantic_plan_view(
 /// Render section metadata and stable DiffEditor mount points. Source text is
 /// intentionally absent from this HTML tree.
 pub fn semantic_review_view(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
 ) -> @html.Html {
   guard state.semantic_review_input is Some(input) else { return @html.nothing }
   guard state.semantic_review_plan is Some(plan) else {
     return @html.div(class="semantic-review", [
-      semantic_empty_view(
-        "The semantic result was invalid. Switch to Line to inspect the complete file.",
-      ),
+      semantic_empty_view(ui(locale, InvalidSemanticResult)),
     ])
   }
   @html.div(
@@ -435,7 +440,15 @@ pub fn semantic_review_view(
           "unified"
         },
       ),
-    [semantic_plan_view(dispatch, plan, input, state.semantic_review_collapsed)],
+    [
+      semantic_plan_view(
+        locale~,
+        dispatch,
+        plan,
+        input,
+        state.semantic_review_collapsed,
+      ),
+    ],
   )
 }
 

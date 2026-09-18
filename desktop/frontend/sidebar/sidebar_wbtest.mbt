@@ -1,6 +1,7 @@
 ///|
 test "the sidebar input keeps peer sections in one component value" {
   let input : Input = {
+    locale: English,
     notices: [],
     sections: [
       {

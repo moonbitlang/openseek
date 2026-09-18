@@ -1,9 +1,10 @@
 // Page-local UI preferences persisted in the webview's localStorage. Access
 // is guarded — a webview profile may deny storage — and a denied store just
 // means the defaults come back next launch.
-// All preferences below share load_setting/save_setting: read errors become
+// The older preferences below share load_setting/save_setting: read errors become
 // the absent-value spelling, and write errors are discarded without a result
 // message. Their in-memory controls can update even when persistence fails.
+// Language uses language.mbt's explicit Result/optional read and reports failures.
 //
 // The engine endpoint settings (provider, URLs, API keys) are NOT here: they
 // live on the host (`settings.get`/`set`), because relay pages
@@ -13,6 +14,7 @@
 ///|
 fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
+    scheduler.add(load_language(dispatch))
     scheduler.add(
       dispatch(
         SettingsLoaded(

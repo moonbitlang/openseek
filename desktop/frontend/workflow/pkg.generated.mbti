@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
 }
 
 // Values
@@ -18,9 +19,9 @@ pub fn entry(Array[Run], Entry) -> Array[Run]
 
 pub fn opened(Array[Run], id~ : String, session~ : String, first_child~ : Int, child_count~ : Int) -> Array[Run]
 
-pub fn panel(Array[Run], Actions) -> @html.Html
+pub fn panel(locale? : @i18n.Locale, Array[Run], Actions) -> @html.Html
 
-pub fn row_status(Row, closed~ : Bool) -> (String, String)
+pub fn row_status(locale? : @i18n.Locale, Row, closed~ : Bool) -> (String, String)
 
 // Errors
 

@@ -7,6 +7,7 @@ import {
   "moonbitlang/editor/internal/viewer/contrib/references",
   "moonbitlang/editor/language",
   "moonbitlang/editor/viewer/common/languages",
+  "moonbitlang/editor/viewer/common/localization",
   "moonbitlang/editor/viewer/common/model",
   "moonbitlang/editor/viewer/common/navigation_api",
 }
@@ -37,7 +38,7 @@ pub async fn ReferencesAction::run(Self, SymbolNavigationAnchor, SymbolNavigatio
 pub async fn ReferencesAction::run_reserved(Self, SymbolNavigationAnchor, SymbolNavigationActionConfig, Int) -> Unit noraise
 
 type SymbolNavigationAction
-pub fn SymbolNavigationAction::SymbolNavigationAction(@languages.LanguageHandle, SymbolNavigationActionHost, async (Array[async () -> Unit]) -> Unit) -> Self
+pub fn SymbolNavigationAction::SymbolNavigationAction(localization? : @localization.Localization, @languages.LanguageHandle, SymbolNavigationActionHost, async (Array[async () -> Unit]) -> Unit) -> Self
 pub fn SymbolNavigationAction::cancel(Self) -> Unit
 pub fn SymbolNavigationAction::dispose(Self) -> Unit
 
@@ -79,7 +80,7 @@ pub fn SymbolNavigationCommand::id(Self) -> String
 pub fn SymbolNavigationCommand::is_available(Self, @languages.LanguageHandle, @model.TextModel, Bool) -> Bool
 pub fn SymbolNavigationCommand::keybinding_label(Self) -> String?
 pub fn SymbolNavigationCommand::not_equal(Self, Self) -> Bool
-pub fn SymbolNavigationCommand::title(Self) -> String
+pub fn SymbolNavigationCommand::title(Self, localization? : @localization.Localization) -> String
 pub fn SymbolNavigationCommand::to_repr(Self) -> @debug.Repr
 
 // Type aliases

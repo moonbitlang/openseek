@@ -10,9 +10,11 @@ import {
 // Values
 pub fn browser_view_id(String) -> Int?
 
+pub fn localized_menu(String) -> @proton.MenuBar
+
 pub async fn open_external(@protocol.ExternalLinkPayload) -> @protocol.OpenExternalReply
 
-pub fn openseek_capability(@api.ApiState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.RendererCapability
+pub fn openseek_capability(runtime_dir? : String, @api.ApiState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.RendererCapability
 
 pub fn view_event_json(Int, @proton.ViewEvent) -> Json?
 
