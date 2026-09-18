@@ -1679,7 +1679,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
                 "ptc",
                 Json({
                   "type": "boolean",
-                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, and web_search through an explicit SDK import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for supported wasm runs; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with other targets, escalated, or subrun.",
+                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, and web_search through an explicit \"bobzhang/openseek_tools@0.1.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for supported wasm runs; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with other targets, escalated, or subrun.",
                 }),
               ),
             ]
