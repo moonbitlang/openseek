@@ -311,12 +311,8 @@ fn expect_respond(
 ///|
 fn expect_finish(action : @agent_tool.ToolAction, expected : String) -> String {
   match action {
-    Control(Finish(answer)) =>
-      if answer == expected {
-        ""
-      } else {
-        "finish answer mismatch: \{short_text(answer)}"
-      }
+    Control(Finish(answer)) if answer == expected => ""
+    Control(Finish(answer)) => "finish answer mismatch: \{short_text(answer)}"
     Control(WaitJobs(_)) => "expected Finish, got WaitJobs"
     Control(Abort(reason)) =>
       "expected Finish, got Abort: \{short_text(reason)}"

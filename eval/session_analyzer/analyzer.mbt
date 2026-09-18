@@ -166,13 +166,12 @@ fn append_item_text(
       write_line(out, result.content())
     }
     Runtime(notice) => write_line(out, notice.content())
-    Terminal(terminal) =>
-      match terminal {
-        Finished(message)
-        | Aborted(message)
-        | Interrupted(message)
-        | Failed(message) => write_line(out, message)
-      }
+    Terminal(
+      Finished(message)
+      | Aborted(message)
+      | Interrupted(message)
+      | Failed(message)
+    ) => write_line(out, message)
   }
 }
 

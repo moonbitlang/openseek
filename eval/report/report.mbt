@@ -177,7 +177,7 @@ pub fn Report::html(self : Report) -> String {
     out.write_string("</td></tr>")
   }
   out.write_string("</tbody></table></div>")
-  if has_detail_section(self.rows) {
+  if self.rows.any(row => row.has_details()) {
     out.write_string(
       "<section><h2>Trial Details</h2><div class=\"trial-grid\">",
     )
@@ -347,11 +347,6 @@ fn detail_section_lines(rows : Array[ReportRow]) -> Array[String] {
     }
   }
   lines
-}
-
-///|
-fn has_detail_section(rows : Array[ReportRow]) -> Bool {
-  rows.any(row => row.has_details())
 }
 
 ///|

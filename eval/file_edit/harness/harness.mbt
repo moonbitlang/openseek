@@ -244,11 +244,9 @@ fn summarize_agent_log(log_text : String) -> AgentLogSummary {
         has_json_events = true
         steps += 1
       }
-      { "event": String("tool_result"), "is_error": is_error, .. } => {
+      { "event": String("tool_result"), "is_error": True, .. } => {
         has_json_events = true
-        if is_error is True {
-          tool_errors += 1
-        }
+        tool_errors += 1
       }
       { "event": String(_), .. } => has_json_events = true
       _ => ()

@@ -118,12 +118,7 @@ fn inline_raw_html_is_comment(raw : @cmark.InlineRawHtml) -> Bool {
   for tight in raw.0.iter() {
     text.write_string(tight.to_string())
   }
-  is_html_comment(text.to_string())
-}
-
-///|
-fn is_html_comment(text : StringView) -> Bool {
-  text.trim_start().has_prefix("<!--")
+  text.to_string().trim_start().has_prefix("<!--")
 }
 
 ///|

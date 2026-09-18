@@ -13,30 +13,19 @@ import {
 
 ///|
 fn content_type(path : String) -> String {
-  if path.has_suffix(".html") {
-    "text/html; charset=utf-8"
-  } else if path.has_suffix(".js") || path.has_suffix(".mjs") {
-    "text/javascript; charset=utf-8"
-  } else if path.has_suffix(".css") {
-    "text/css; charset=utf-8"
-  } else if path.has_suffix(".json") || path.has_suffix(".map") {
-    "application/json"
-  } else if path.has_suffix(".svg") {
-    "image/svg+xml"
-  } else if path.has_suffix(".png") {
-    "image/png"
-  } else if path.has_suffix(".ico") {
-    "image/x-icon"
-  } else if path.has_suffix(".woff2") {
-    "font/woff2"
-  } else if path.has_suffix(".woff") {
-    "font/woff"
-  } else if path.has_suffix(".ttf") {
-    "font/ttf"
-  } else if path.has_suffix(".wasm") {
-    "application/wasm"
-  } else {
-    "application/octet-stream"
+  match path {
+    [.., .. ".html"] => "text/html; charset=utf-8"
+    [.., .. ".js"] | [.., .. ".mjs"] => "text/javascript; charset=utf-8"
+    [.., .. ".css"] => "text/css; charset=utf-8"
+    [.., .. ".json"] | [.., .. ".map"] => "application/json"
+    [.., .. ".svg"] => "image/svg+xml"
+    [.., .. ".png"] => "image/png"
+    [.., .. ".ico"] => "image/x-icon"
+    [.., .. ".woff2"] => "font/woff2"
+    [.., .. ".woff"] => "font/woff"
+    [.., .. ".ttf"] => "font/ttf"
+    [.., .. ".wasm"] => "application/wasm"
+    _ => "application/octet-stream"
   }
 }
 
