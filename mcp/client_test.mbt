@@ -74,6 +74,19 @@ fn stock_initialize_result() -> Json {
 }
 
 ///|
+/// A responder that answers exactly one method with `respond`'s reply and
+/// ignores every other message (notifications, other methods).
+fn answers(method_ : String, respond : (Json) -> Json) -> (Json) -> Json? {
+  fn(request : Json) -> Json? {
+    if method_of(request) == method_ {
+      Some(respond(request))
+    } else {
+      None
+    }
+  }
+}
+
+///|
 /// A stock server responder: answers `initialize`/`tools/list`/`tools/call`
 /// with the given fixtures and ignores everything else (notifications).
 fn stock_reply(tools_result : Json, call_result : Json) -> (Json) -> Json? {
@@ -88,33 +101,6 @@ fn stock_reply(tools_result : Json, call_result : Json) -> (Json) -> Json? {
 }
 
 ///|
-fn[X] spawn_client(group : @async.TaskGroup[X], rpc : @jsonrpc.Client) -> Unit {
-  group.spawn_bg(no_wait=true, allow_failure=true, () => rpc.run_message_pump())
-  group.spawn_bg(no_wait=true, allow_failure=true, () => rpc.run_writer())
-}
-
-///|
-async fn serve_loop(transport : FakeTransport, reply : (Json) -> Json?) -> Unit {
-  for ;; {
-    let request = transport.outbound.get()
-    if reply(request) is Some(response) {
-      transport.inbound.put(response)
-    }
-  }
-}
-
-///|
-fn[X] spawn_server(
-  group : @async.TaskGroup[X],
-  transport : FakeTransport,
-  reply : (Json) -> Json?,
-) -> Unit {
-  group.spawn_bg(no_wait=true, allow_failure=true, () => {
-    serve_loop(transport, reply)
-  })
-}
-
-///|
 /// An MCP client wired to a fake server that answers with `reply`: the queue
 /// transport, the jsonrpc client with its message pump, and the server loop,
 /// all spawned on `group`.
@@ -124,8 +110,16 @@ fn[X] fake_client(
 ) -> @mcp.McpClient {
   let transport = new_transport()
   let rpc = @jsonrpc.Client(transport)
-  spawn_client(group, rpc)
-  spawn_server(group, transport, reply)
+  group.spawn_bg(no_wait=true, allow_failure=true, () => rpc.run_message_pump())
+  group.spawn_bg(no_wait=true, allow_failure=true, () => rpc.run_writer())
+  group.spawn_bg(no_wait=true, allow_failure=true, () => {
+    for ;; {
+      let request = transport.outbound.get()
+      if reply(request) is Some(response) {
+        transport.inbound.put(response)
+      }
+    }
+  })
   McpClient(rpc)
 }
 
@@ -146,18 +140,12 @@ async test "initialize completes the handshake and returns server identity" {
 ///|
 async test "initialize accepts a supported older protocol version" {
   @async.with_task_group(group => {
-    let reply = fn(request : Json) -> Json? {
-      match method_of(request) {
-        "initialize" =>
-          Some(
-            success(request, {
-              "protocolVersion": "2024-11-05",
-              "serverInfo": { "name": "old", "version": "0.1" },
-            }),
-          )
-        _ => None
-      }
-    }
+    let reply = answers("initialize", request => {
+      success(request, {
+        "protocolVersion": "2024-11-05",
+        "serverInfo": { "name": "old", "version": "0.1" },
+      })
+    })
     let client = fake_client(group, reply)
     let init = client.initialize(client_name="openseek", client_version="0.1")
     assert_eq(init.protocol_version, "2024-11-05")
@@ -167,18 +155,12 @@ async test "initialize accepts a supported older protocol version" {
 ///|
 async test "initialize rejects an unsupported negotiated protocol version" {
   @async.with_task_group(group => {
-    let reply = fn(request : Json) -> Json? {
-      match method_of(request) {
-        "initialize" =>
-          Some(
-            success(request, {
-              "protocolVersion": "1999-01-01",
-              "serverInfo": { "name": "future", "version": "9.9" },
-            }),
-          )
-        _ => None
-      }
-    }
+    let reply = answers("initialize", request => {
+      success(request, {
+        "protocolVersion": "1999-01-01",
+        "serverInfo": { "name": "future", "version": "9.9" },
+      })
+    })
     let client = fake_client(group, reply)
     let outcome = try {
       client.initialize(client_name="openseek", client_version="0.1") |> ignore
@@ -230,24 +212,14 @@ async test "list_tools returns tools with pass-through schemas" {
 async test "list_tools follows nextCursor pagination" {
   @async.with_task_group(group => {
     let mut calls : Int = 0
-    let reply = fn(request : Json) -> Json? {
-      match method_of(request) {
-        "tools/list" => {
-          calls += 1
-          if calls == 1 {
-            Some(
-              success(request, {
-                "tools": [{ "name": "a" }],
-                "nextCursor": "page-2",
-              }),
-            )
-          } else {
-            Some(success(request, { "tools": [{ "name": "b" }] }))
-          }
-        }
-        _ => None
+    let reply = answers("tools/list", request => {
+      calls += 1
+      if calls == 1 {
+        success(request, { "tools": [{ "name": "a" }], "nextCursor": "page-2" })
+      } else {
+        success(request, { "tools": [{ "name": "b" }] })
       }
-    }
+    })
     let client = fake_client(group, reply)
     let tools = client.list_tools()
     assert_eq(tools.length(), 2)
@@ -290,12 +262,9 @@ async test "call_tool surfaces a tool-level error as is_error" {
 ///|
 async test "call_tool raises on a JSON-RPC error reply" {
   @async.with_task_group(group => {
-    let reply = fn(request : Json) -> Json? {
-      match method_of(request) {
-        "tools/call" => Some(failure(request, -32602, "unknown tool"))
-        _ => None
-      }
-    }
+    let reply = answers("tools/call", request => {
+      failure(request, -32602, "unknown tool")
+    })
     let client = fake_client(group, reply)
     let outcome = try {
       client.call_tool(name="ghost", arguments=Json::empty_object()) |> ignore
@@ -312,12 +281,9 @@ async test "call_tool raises on a JSON-RPC error reply" {
 ///|
 async test "list_tools raises Protocol on a malformed result" {
   @async.with_task_group(group => {
-    let reply = fn(request : Json) -> Json? {
-      match method_of(request) {
-        "tools/list" => Some(success(request, Json::empty_object()))
-        _ => None
-      }
-    }
+    let reply = answers("tools/list", request => {
+      success(request, Json::empty_object())
+    })
     let client = fake_client(group, reply)
     let outcome = try {
       client.list_tools() |> ignore

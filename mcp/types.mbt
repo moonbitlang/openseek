@@ -70,12 +70,6 @@ pub struct InitializeResult {
 } derive(Eq, Debug)
 
 ///|
-/// The open object schema used when a tool omits its `inputSchema`.
-fn default_object_schema() -> Json {
-  { "type": "object" }
-}
-
-///|
 /// Decode an `initialize` result. Raises `Protocol` when `protocolVersion` is
 /// missing (the one field the handshake cannot proceed without).
 fn decode_initialize_result(result : Json) -> InitializeResult raise {
@@ -114,9 +108,9 @@ fn decode_tool(entry : Json) -> McpTool raise {
     raise Protocol("tool entry is missing a string `name`")
   }
   let description = optional_string(entry, "description").unwrap_or("")
-  let input_schema = match entry {
+  let input_schema : Json = match entry {
     { "inputSchema": schema, .. } => schema
-    _ => default_object_schema()
+    _ => { "type": "object" }
   }
   { name, description, input_schema, }
 }

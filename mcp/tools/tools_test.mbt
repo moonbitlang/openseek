@@ -27,14 +27,6 @@ impl @jsonrpc.Transport for FakeTransport with fn close(self) {
 }
 
 ///|
-fn method_of(request : Json) -> String {
-  match request {
-    { "method": String(method_), .. } => method_
-    _ => ""
-  }
-}
-
-///|
 fn ok(request : Json, result : Json) -> Json {
   let id = match request {
     { "id": id, .. } => id
@@ -46,15 +38,15 @@ fn ok(request : Json, result : Json) -> Json {
 ///|
 /// A server that lists one `echo` tool and echoes a call's arguments back.
 fn server_reply(request : Json) -> Json? {
-  match method_of(request) {
-    "initialize" =>
+  match request {
+    { "method": "initialize", .. } =>
       Some(
         ok(request, {
           "protocolVersion": "2025-11-25",
           "serverInfo": { "name": "s", "version": "1" },
         }),
       )
-    "tools/list" =>
+    { "method": "tools/list", .. } =>
       Some(
         ok(request, {
           "tools": [
@@ -69,7 +61,7 @@ fn server_reply(request : Json) -> Json? {
           ],
         }),
       )
-    "tools/call" => {
+    { "method": "tools/call", .. } => {
       let args = match request {
         { "params": { "arguments": args, .. }, .. } => args
         _ => Json::null()

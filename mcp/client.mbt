@@ -88,10 +88,8 @@ pub async fn McpClient::list_tools(self : McpClient) -> Array[McpTool] {
     let result = self.rpc.request(method_="tools/list", params~)
     let (page, next) = decode_tools_page(result)
     tools.append(page)
-    match next {
-      Some(next) => cursor = Some(next)
-      None => break
-    }
+    guard next is Some(_) else { break }
+    cursor = next
   }
   tools
 }
