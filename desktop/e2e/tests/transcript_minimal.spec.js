@@ -314,7 +314,7 @@ test('minimal transcript groups live tools and folds completed work around user 
   await expect(stream.getByText('I will explore this project.', { exact: true })).toBeHidden();
   await expect(stream.getByText('Please focus on the architecture.', { exact: true })).toBeVisible();
   await expect(stream.locator('.msg-content strong')).toHaveText('final summary');
-  await expect(stream.locator('.assistant-message-copy')).toHaveCount(1);
+  await expect(stream.locator('.assistant-message-actions .message-copy')).toHaveCount(1);
   // Minimal mode mirrors detailed mode's finish line: the confirmed final
   // answer carries its durable commit instant beside the copy action.
   await expect(stream.locator('.assistant-message-actions .assistant-message-time')).toHaveCount(1);

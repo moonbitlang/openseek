@@ -538,8 +538,7 @@
   gap: 8px;
   margin-top: 4px;
 }
-.assistant-message-copy,
-.user-message-copy {
+.message-copy {
   --icon-size: var(--icon-md);
   display: grid;
   place-items: center;
@@ -557,13 +556,11 @@
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
 }
-.assistant-message-copy:hover,
-.user-message-copy:hover {
+.message-copy:hover {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
-.assistant-message-copy:focus-visible,
-.user-message-copy:focus-visible {
+.message-copy:focus-visible {
   outline: 1px solid var(--color-focus-ring);
   outline-offset: 1px;
 }

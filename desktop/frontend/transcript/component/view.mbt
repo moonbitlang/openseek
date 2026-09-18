@@ -762,7 +762,7 @@ fn user_message_view(
         [
           @markdown.copy_button(
             content,
-            class="user-message-copy",
+            class="message-copy",
             title="Copy message",
             label="Copy user message",
           ),
@@ -987,7 +987,7 @@ fn assistant_message_view(
     let actions = [
       @markdown.copy_button(
         content,
-        class="assistant-message-copy",
+        class="message-copy",
         title="Copy Markdown",
         label="Copy assistant message as Markdown",
       ),
