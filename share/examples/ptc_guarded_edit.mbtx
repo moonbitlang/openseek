@@ -6,7 +6,7 @@
 /// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
 /// a host-backed test that runs it through the real sandbox and host.
 import {
-  "bobzhang/openseek_tools@0.1.0" @tools,
+  "bobzhang/openseek_tools@0.1.0",
   "moonbitlang/async",
   "moonbitlang/core/env",
   "moonbitlang/core/string",
@@ -29,7 +29,7 @@ async fn main {
   // unchanged; the host validates it. The guards are integer thresholds on
   // the diagnostics the edit introduced, counted by identity so the edit's
   // own line shifts never count: 0 reverts on any, absent means no guard.
-  let result = @tools.call("edit", {
+  let result = @openseek_tools.call("edit", {
     "path": path,
     "start_line": start_line,
     "old_string": old_string,

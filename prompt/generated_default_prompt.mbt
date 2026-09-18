@@ -273,12 +273,10 @@ fn default_prompt() -> String {
     #|tools that rewrite source as their job (`moon fmt`, `moon info`,
     #|`moon test --update`, `git checkout`) do run normally.
     #|
-    #|### Host tool calls: the `@tools` package
+    #|### Host tool calls with bobzhang/openseek_tools
     #|
-    #|When `mbtx` offers `ptc` — the default on supported wasm runs, `ptc=false`
-    #|opts out — a script calls the host's own tools. Import the SDK and the async
-    #|runtime explicitly; the host does not rewrite your source.
-    #|`@tools.call(name, arguments)` is the whole API, and `arguments` is the same
+    #|A mbtx script can call the host's own tools. 
+    #|`@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
     #|JSON object the direct tool takes, forwarded unchanged: validation and
     #|defaults stay in the host. `edit`, `multi_edit` (`edits` or `edits_file`) and
     #|`web_search` (when registered) are the tools a script may call; `finish`,
@@ -310,7 +308,7 @@ fn default_prompt() -> String {
     #|/// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
     #|/// a host-backed test that runs it through the real sandbox and host.
     #|import {
-    #|  "bobzhang/openseek_tools@0.1.0" @tools,
+    #|  "bobzhang/openseek_tools@0.1.0",
     #|  "moonbitlang/async",
     #|  "moonbitlang/core/env",
     #|  "moonbitlang/core/string",
@@ -333,7 +331,7 @@ fn default_prompt() -> String {
     #|  // unchanged; the host validates it. The guards are integer thresholds on
     #|  // the diagnostics the edit introduced, counted by identity so the edit's
     #|  // own line shifts never count: 0 reverts on any, absent means no guard.
-    #|  let result = @tools.call("edit", {
+    #|  let result = @openseek_tools.call("edit", {
     #|    "path": path,
     #|    "start_line": start_line,
     #|    "old_string": old_string,
@@ -445,18 +443,12 @@ fn default_prompt() -> String {
     #|}
     #|```
     #|
-    #|Up to 1024 calls per script, four in flight, 64 KiB per request, and 64K
-    #|characters per result; a larger edit batch goes through `edits_file`. Stateful
-    #|calls serialize, while independent searches can overlap in a task group.
     #|Separate calls are not one atomic batch — `multi_edit` is what validates and
-    #|rolls back a batch, so keep related edits inside one. A script that exits with
-    #|calls still active fails: complete every call and join any spawned task first.
+    #|rolls back a batch.
     #|
-    #|Background handoff is unchanged: the script keeps calling tools after it
-    #|receives a job ID, and `job_output` returns the nested calls as metadata. Stop
-    #|when the next step needs model judgment.
     #|
-    #|### Delegation: the `moonbitlang/workflow` package
+    #|
+    #|### Orchestration: the `moonbitlang/workflow` package
     #|
     #|With `subrun=true` — offered only in a durable session — one snippet becomes
     #|a workflow whose `wf.agent` calls are child agents. `@hosted.context()` carries

@@ -149,12 +149,10 @@ line-anchored and reviewable — not by having a snippet rewrite files. The
 tools that rewrite source as their job (`moon fmt`, `moon info`,
 `moon test --update`, `git checkout`) do run normally.
 
-### Host tool calls: the `@tools` package
+### Host tool calls with bobzhang/openseek_tools
 
-When `mbtx` offers `ptc` — the default on supported wasm runs, `ptc=false`
-opts out — a script calls the host's own tools. Import the SDK and the async
-runtime explicitly; the host does not rewrite your source.
-`@tools.call(name, arguments)` is the whole API, and `arguments` is the same
+A mbtx script can call the host's own tools. 
+`@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
 JSON object the direct tool takes, forwarded unchanged: validation and
 defaults stay in the host. `edit`, `multi_edit` (`edits` or `edits_file`) and
 `web_search` (when registered) are the tools a script may call; `finish`,
@@ -186,18 +184,12 @@ truncation that affect the answer even when filtering successful results.
 
 [share/examples/ptc_search_filter.mbtx](../share/examples/ptc_search_filter.mbtx)
 
-Up to 1024 calls per script, four in flight, 64 KiB per request, and 64K
-characters per result; a larger edit batch goes through `edits_file`. Stateful
-calls serialize, while independent searches can overlap in a task group.
 Separate calls are not one atomic batch — `multi_edit` is what validates and
-rolls back a batch, so keep related edits inside one. A script that exits with
-calls still active fails: complete every call and join any spawned task first.
+rolls back a batch.
 
-Background handoff is unchanged: the script keeps calling tools after it
-receives a job ID, and `job_output` returns the nested calls as metadata. Stop
-when the next step needs model judgment.
 
-### Delegation: the `moonbitlang/workflow` package
+
+### Orchestration: the `moonbitlang/workflow` package
 
 With `subrun=true` — offered only in a durable session — one snippet becomes
 a workflow whose `wf.agent` calls are child agents. `@hosted.context()` carries
