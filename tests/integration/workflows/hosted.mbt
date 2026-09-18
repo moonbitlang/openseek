@@ -9,6 +9,9 @@ async fn hosted_child(
     fail("Missing child request")
   }
   let request = @json.parse(line)
+  if name == "de-slop" {
+    return de_slop_child(request, mode, calls, child)
+  }
   if name == "review" {
     return review_child(request, mode, calls)
   }
