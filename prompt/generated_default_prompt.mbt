@@ -264,70 +264,6 @@ fn default_prompt() -> String {
     #|tools that rewrite source as their job (`moon fmt`, `moon info`,
     #|`moon test --update`, `git checkout`) do run normally.
     #|
-    #|### Common `moon` subcommands
-    #|
-    #|- `moon check`: type-check for compiler feedback; supports
-    #|  `--target` and `--diagnostic-limit <N>`.
-    #|- `moon test`: targeted or full tests; run plain `moon test` before
-    #|  `moon test --update`. Example: `moon test parser --filter "Parser::*"
-    #|  --diagnostic-limit 5`. Filters support glob syntax. This is THE way to
-    #|  exercise local package code: write a black-box `_test.mbt` test and run it
-    #|  with `--filter` — never probe local packages through `moon run -e` (see
-    #|  below). To keep a test but not run it, annotate it `#skip("reason")`: still
-    #|  type-checked, but run only with `--include-skipped` (or `-i <index>`, which
-    #|  implies it) — plain `moon test --filter` will not run it. To keep code that
-    #|  need only parse — not type-check, not run — annotate it `#cfg(false)`: a
-    #|  structured alternative to commenting it out.
-    #|- `moon run`: executable package and CLI probes; package path goes before
-    #|  `--`, program arguments go after `--`. Example:
-    #|  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
-    #|  put in the workspace).
-    #|- `moon cram test`: durable CLI transcript tests under `tests/cram`;
-    #|  use `mooncram` blocks for stable help, examples, stdout/stderr, and exits.
-    #|  Example: `moon cram test tests/cram`.
-    #|- `moon info`: regenerate and inspect `.mbti` interface files.
-    #|- `moon fmt`: format MoonBit sources before finishing. Example:
-    #|  `moon fmt --check parser`.
-    #|- `moon build`: check build artifacts or backend-specific builds. Example:
-    #|  `moon build --target native cmd/tool --diagnostic-limit 5`.
-    #|- `moon doc` and `moon explain`: documentation and diagnostic help.
-    #|- `moon ide doc`, `moon ide outline`, `moon ide peek-def`,
-    #|  `moon ide find-references`, and `moon ide hover`: semantic navigation.
-    #|  Verified examples: `moon ide doc "@json.parse"`,
-    #|  `moon ide outline parser`, `moon ide peek-def parse --loc
-    #|  src/parser.mbt:42:9`, `moon ide find-references parse --loc
-    #|  src/parser.mbt:42:9`, and `moon ide hover parse --loc src/parser.mbt:42:9`.
-    #|- `moon add`, `moon remove`, `moon update`, and `moon tree`:
-    #|  dependencies and package registry/dependency inspection. Examples:
-    #|  `moon add moonbitlang/async`, `moon remove moonbitlang/async`,
-    #|  `moon update`, `moon tree`.
-    #|- `moon search`: search the package registry for modules by keyword when
-    #|  the exact module name is not known yet; then add the chosen module with
-    #|  `moon add`. Examples: `moon search base64`,
-    #|  `moon search json --limit 5 --json` (`--json` prints one result set as
-    #|  JSON for parsing).
-    #|- `moon clean`: clear `_build` when stale build output is suspected.
-    #|  Example: `moon clean`.
-    #|- `moon bench`: run benchmarks, e.g. `moon bench lib/parser`.
-    #|- `moon coverage analyze`: inspect test coverage when coverage matters.
-    #|  Example: `moon coverage analyze --package user/project/parser`.
-    #|
-    #|### Ast based search with `moongrep`
-    #|
-    #|```text
-    #|moonx moonbit-community/moongrep scan lib/parser --pattern 'match $(v:exp) { Some($(x:id)) => $(a:exp); None => $(b:exp) }' --json
-    #|```
-    #|
-    #|The positional argument is the scan root (a directory or one `.mbt` file;
-    #|the default `.` is the whole repository), `$(name:kind)` marks a
-    #|metavariable, and `--json` writes one finding per line on stdout with
-    #|diagnostics on stderr. Pass each argument as its own element of
-    #|`@shell.Cmd("moonx", [...])` — there is no shell to split them, and no `--`
-    #|separator is needed before moongrep's own flags. The pattern language, output
-    #|fields, scan-root exclusions, and exit codes are in
-    #|`<bundled-resources>/moongrep/README.md`; read it before going beyond this
-    #|example rather than guessing the flags.
-    #|
     #|### Host tool calls: the `@tools` package
     #|
     #|When `mbtx` offers `ptc`, a script can call the host's own tools:
@@ -645,7 +581,7 @@ fn default_prompt() -> String {
     #|To rename an API, add the new name, make the old one a deprecated alias,
     #|and fix the deprecations the compiler then flags — far more reliable than a regex sweep.
     #|
-    #|Run `moon check` through `mbtx` (see Running Commands in Part 1) as the primary fast feedback loop;
+    #|Run `moon check` through `mbtx` (see the Shell EDSL section in Part 1) as the primary fast feedback loop;
     #|add `--diagnostic-limit 5` for focused diagnostics. It skips code
     #|generation, so it is way faster than `moon build` or `moon test`. Use
     #|`moon build` or `moon test` only when you need artifacts or test results.
@@ -655,6 +591,70 @@ fn default_prompt() -> String {
     #|`moon check:`; failures include `exit=<code>` or `exit=cancelled`. Treat it as
     #|immediate/synchronous compiler feedback, and run an explicit `moon check --output-json` when you need
     #|full diagnostics.
+    #|
+    #|## Common `moon` subcommands
+    #|
+    #|- `moon check`: type-check for compiler feedback; supports
+    #|  `--target` and `--diagnostic-limit <N>`.
+    #|- `moon test`: targeted or full tests; run plain `moon test` before
+    #|  `moon test --update`. Example: `moon test parser --filter "Parser::*"
+    #|  --diagnostic-limit 5`. Filters support glob syntax. This is THE way to
+    #|  exercise local package code: write a black-box `_test.mbt` test and run it
+    #|  with `--filter` — never probe local packages through `moon run -e` (see
+    #|  below). To keep a test but not run it, annotate it `#skip("reason")`: still
+    #|  type-checked, but run only with `--include-skipped` (or `-i <index>`, which
+    #|  implies it) — plain `moon test --filter` will not run it. To keep code that
+    #|  need only parse — not type-check, not run — annotate it `#cfg(false)`: a
+    #|  structured alternative to commenting it out.
+    #|- `moon run`: executable package and CLI probes; package path goes before
+    #|  `--`, program arguments go after `--`. Example:
+    #|  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
+    #|  put in the workspace).
+    #|- `moon cram test`: durable CLI transcript tests under `tests/cram`;
+    #|  use `mooncram` blocks for stable help, examples, stdout/stderr, and exits.
+    #|  Example: `moon cram test tests/cram`.
+    #|- `moon info`: regenerate and inspect `.mbti` interface files.
+    #|- `moon fmt`: format MoonBit sources before finishing. Example:
+    #|  `moon fmt --check parser`.
+    #|- `moon build`: check build artifacts or backend-specific builds. Example:
+    #|  `moon build --target native cmd/tool --diagnostic-limit 5`.
+    #|- `moon doc` and `moon explain`: documentation and diagnostic help.
+    #|- `moon ide doc`, `moon ide outline`, `moon ide peek-def`,
+    #|  `moon ide find-references`, and `moon ide hover`: semantic navigation.
+    #|  Verified examples: `moon ide doc "@json.parse"`,
+    #|  `moon ide outline parser`, `moon ide peek-def parse --loc
+    #|  src/parser.mbt:42:9`, `moon ide find-references parse --loc
+    #|  src/parser.mbt:42:9`, and `moon ide hover parse --loc src/parser.mbt:42:9`.
+    #|- `moon add`, `moon remove`, `moon update`, and `moon tree`:
+    #|  dependencies and package registry/dependency inspection. Examples:
+    #|  `moon add moonbitlang/async`, `moon remove moonbitlang/async`,
+    #|  `moon update`, `moon tree`.
+    #|- `moon search`: search the package registry for modules by keyword when
+    #|  the exact module name is not known yet; then add the chosen module with
+    #|  `moon add`. Examples: `moon search base64`,
+    #|  `moon search json --limit 5 --json` (`--json` prints one result set as
+    #|  JSON for parsing).
+    #|- `moon clean`: clear `_build` when stale build output is suspected.
+    #|  Example: `moon clean`.
+    #|- `moon bench`: run benchmarks, e.g. `moon bench lib/parser`.
+    #|- `moon coverage analyze`: inspect test coverage when coverage matters.
+    #|  Example: `moon coverage analyze --package user/project/parser`.
+    #|
+    #|## Ast based search with `moongrep`
+    #|
+    #|```text
+    #|moonx moonbit-community/moongrep scan lib/parser --pattern 'match $(v:exp) { Some($(x:id)) => $(a:exp); None => $(b:exp) }' --json
+    #|```
+    #|
+    #|The positional argument is the scan root (a directory or one `.mbt` file;
+    #|the default `.` is the whole repository), `$(name:kind)` marks a
+    #|metavariable, and `--json` writes one finding per line on stdout with
+    #|diagnostics on stderr. Pass each argument as its own element of
+    #|`@shell.Cmd("moonx", [...])` — there is no shell to split them, and no `--`
+    #|separator is needed before moongrep's own flags. The pattern language, output
+    #|fields, scan-root exclusions, and exit codes are in
+    #|`<bundled-resources>/moongrep/README.md`; read it before going beyond this
+    #|example rather than guessing the flags.
     #|
     #|## MoonBit Project Setup
     #|
