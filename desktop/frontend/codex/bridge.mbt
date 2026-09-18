@@ -484,9 +484,25 @@ fn State::turn_inputs(self : State) -> Array[Json] {
   if !text.is_empty() {
     inputs.push({ "type": "text", "text": text })
   }
-  for mention in self.mentions {
-    if self.mention_input(mention) is Some(input) {
-      inputs.push(input)
+  let mut index = 0
+  while index < self.mentions.length() {
+    let mention = self.mentions[index]
+    if mention.ref_ is @mention_context.ReviewChanges(_) {
+      let changes : Array[@mention_context.MentionRef] = []
+      while index < self.mentions.length() &&
+            self.mentions[index].ref_ is @mention_context.ReviewChanges(_) {
+        changes.push(self.mentions[index].ref_)
+        index += 1
+      }
+      inputs.push({
+        "type": "text",
+        "text": @mention_context.encode(changes, ""),
+      })
+    } else {
+      if self.mention_input(mention) is Some(input) {
+        inputs.push(input)
+      }
+      index += 1
     }
   }
   for image in self.images {

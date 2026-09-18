@@ -140,118 +140,10 @@ pub fn with_review_changes(
 }
 
 ///|
-fn optional_review_string(
-  fields : Map[String, Json],
-  key : String,
-  path : @json.JsonPath,
-) -> String? raise @json.JsonDecodeError {
-  match fields.get(key) {
-    None | Some(Null) => None
-    Some(value) => Some(@json.from_json(value, path=path.add_key(key)))
-  }
-}
-
-///|
-// Required fields reject missing/null/malformed values. Optional metadata
-// accepts missing/null; unknown fields are intentionally ignored.
-pub impl @json.FromJson for ReviewSource with fn from_json(json, path) {
-  guard json is Object(fields) &&
-    json is { "workspace": workspace, "file": file, "version": version, .. } else {
-    raise @json.JsonDecodeError((path, "expected a review source"))
-  }
-  {
-    workspace: @json.from_json(workspace, path=path.add_key("workspace")),
-    file: @json.from_json(file, path=path.add_key("file")),
-    version: @json.from_json(version, path=path.add_key("version")),
-    original_file: optional_review_string(fields, "original_file", path),
-    base: optional_review_string(fields, "base", path),
-  }
-}
-
-///|
-pub impl ToJson for ReviewSource with fn to_json(self) {
-  let fields : Map[String, Json] = {
-    "workspace": self.workspace.to_json(),
-    "file": self.file.to_json(),
-    "version": self.version.to_json(),
-  }
-  if self.original_file is Some(file) {
-    fields["original_file"] = file.to_json()
-  }
-  if self.base is Some(base) {
-    fields["base"] = base.to_json()
-  }
-  fields.to_json()
-}
-
-///|
-pub impl @json.FromJson for ChangeLine with fn from_json(json, path) {
-  guard json is { "line": number, "text": text, .. } else {
-    raise @json.JsonDecodeError((path, "expected a selected line"))
-  }
-  let number : Int = @json.from_json(number, path=path.add_key("line"))
-  guard number > 0 else {
-    raise @json.JsonDecodeError((path, "line must be positive"))
-  }
-  { number, text: @json.from_json(text, path=path.add_key("text")), }
-}
-
-///|
-pub impl ToJson for ChangeLine with fn to_json(self) {
-  { "line": self.number, "text": self.text }
-}
-
-///|
-pub impl @json.FromJson for ChangeExcerpt with fn from_json(json, path) {
-  guard json is { "original": original, "modified": modified, .. } else {
-    raise @json.JsonDecodeError((path, "expected both change sides"))
-  }
-  let excerpt : ChangeExcerpt = {
-    original: @json.from_json(original, path=path.add_key("original")),
-    modified: @json.from_json(modified, path=path.add_key("modified")),
-  }
-  guard !excerpt.is_empty() else {
-    raise @json.JsonDecodeError((path, "empty change"))
-  }
-  excerpt
-}
-
-///|
-pub impl ToJson for ChangeExcerpt with fn to_json(self) {
-  { "original": self.original, "modified": self.modified }
-}
-
-///|
-pub impl @json.FromJson for ReviewChanges with fn from_json(json, path) {
-  guard json is { "source": source, "excerpts": excerpts, .. } else {
-    raise @json.JsonDecodeError((path, "expected selected review changes"))
-  }
-  let changes : ReviewChanges = {
-    source: @json.from_json(source, path=path.add_key("source")),
-    excerpts: @json.from_json(excerpts, path=path.add_key("excerpts")),
-  }
-  guard !changes.excerpts.is_empty() else {
-    raise @json.JsonDecodeError((path, "empty review selection"))
-  }
-  changes
-}
-
-///|
-pub impl ToJson for ReviewChanges with fn to_json(self) {
-  { "source": self.source, "excerpts": self.excerpts }
-}
-
-///|
 pub extend ReviewSource with Eq::{equal, not_equal}
 
 ///|
 pub extend ReviewSource with Debug::{to_repr}
-
-///|
-pub extend ReviewSource with ToJson::{to_json}
-
-///|
-pub extend ReviewSource with @json.FromJson::{from_json}
 
 ///|
 pub extend ChangeLine with Eq::{equal, not_equal}
@@ -260,34 +152,16 @@ pub extend ChangeLine with Eq::{equal, not_equal}
 pub extend ChangeLine with Debug::{to_repr}
 
 ///|
-pub extend ChangeLine with ToJson::{to_json}
-
-///|
-pub extend ChangeLine with @json.FromJson::{from_json}
-
-///|
 pub extend ChangeExcerpt with Eq::{equal, not_equal}
 
 ///|
 pub extend ChangeExcerpt with Debug::{to_repr}
 
 ///|
-pub extend ChangeExcerpt with ToJson::{to_json}
-
-///|
-pub extend ChangeExcerpt with @json.FromJson::{from_json}
-
-///|
 pub extend ReviewChanges with Eq::{equal, not_equal}
 
 ///|
 pub extend ReviewChanges with Debug::{to_repr}
-
-///|
-pub extend ReviewChanges with ToJson::{to_json}
-
-///|
-pub extend ReviewChanges with @json.FromJson::{from_json}
 
 ///|
 pub extend ContextCoverage with Eq::{equal, not_equal}

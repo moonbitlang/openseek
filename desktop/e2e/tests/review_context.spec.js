@@ -54,12 +54,13 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await first.click();
   await expect(chip).toContainText('Changes · 1 file');
   await page.getByTitle('Send', { exact: true }).click();
-  await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task).toContain('<review_changes>');
+  await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task).toContain('<review_changes workspace=');
   const prompt = app.requests.find(request => request.method === 'agent.start').params.task;
   expect(prompt).toContain('Extract the selected change');
-  const selected = JSON.parse(prompt.split('<review_changes>\n')[1].split('\n</review_changes>')[0]);
-  expect(selected.excerpts[0].modified).toEqual([{ line: 2, text: '  100' }]);
-  expect(selected.excerpts[0].original).toEqual([{ line: 2, text: '  1' }]);
+  expect(prompt).toContain(`<review_changes workspace="/workspace" base="${app.gitBaseline}">`);
+  expect(prompt).toMatch(/<file path="src\/main\.mbt" version="[a-f0-9]{64}">/);
+  expect(prompt).toContain('<hunk>\n<original lines="2">\n  1\n</original>\n<modified lines="2">\n  100\n</modified>\n</hunk>');
+  expect(prompt).not.toContain('\n  200\n');
   await expect(chip).toHaveCount(0);
   await expect(first).toHaveText('Add to context');
   const event = {
@@ -197,11 +198,14 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await expect.poll(() => app.requests.find(request => request.method === 'codex.turn.start'))
     .toBeTruthy();
   const input = app.requests.find(request => request.method === 'codex.turn.start').params.input;
-  const selected = input.filter(item => item.type === 'text' && item.text.includes('<review_changes>'));
-  expect(selected).toHaveLength(2);
-  const deletion = JSON.parse(selected.find(item => item.text.includes('lib.mbt')).text.split('\n')[2]);
-  expect(deletion.excerpts[0].modified).toEqual([]);
-  expect(deletion.excerpts[0].original.some(line => line.text === '  41')).toBe(true);
+  const selected = input.filter(item => item.type === 'text' && item.text.includes('<review_changes workspace='));
+  expect(selected).toHaveLength(1);
+  expect(selected[0].text.match(/<review_changes /g)).toHaveLength(1);
+  expect(selected[0].text).toContain('<file path="src/main.mbt"');
+  const deletion = selected[0].text.split('<file path="src/lib.mbt"')[1].split('</file>')[0];
+  expect(deletion).toContain('<modified/>');
+  expect(deletion).toContain('\n  41\n');
+  expect(deletion).toContain('<original lines=');
   await expect(chip).toHaveCount(0);
   const sentChip = page.locator('.user-bubble .changes-chip .mention-jump');
   await expect(sentChip).toHaveText('Changes · 2 files');
@@ -217,16 +221,10 @@ test('Codex composer groups multiple files and preserves deletion context on sen
 
 test('saved message changes keep independent disclosures and immutable previews', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
-  const selection = (file, oldText, newText) => ({
-    source: { workspace: '/workspace', file, version: 'saved-comparison' },
-    excerpts: [{
-      original: [{ line: 8, text: oldText }],
-      modified: [{ line: 9, text: newText }],
-    }],
-  });
-  const prompt = (task, selections) => `${task}\n\n<user_mentions>\n${
-    selections.map(value => `<review_changes>\n${JSON.stringify(value)}\n</review_changes>\n`).join('')
-  }</user_mentions>`;
+  const selection = (file, oldText, newText) => `<file path="${file}" version="saved-comparison">\n<hunk>\n<original lines="8">\n${oldText}\n</original>\n<modified lines="9">\n${newText}\n</modified>\n</hunk>\n</file>`;
+  const prompt = (task, selections) => `${task}\n\n<user_mentions>\n<review_changes workspace="/workspace">\n${
+    selections.join('\n\n')
+  }\n</review_changes>\n</user_mentions>`;
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: prompt('Show the browser fixture first snapshot', [
       selection('src/main.mbt', 'let old_value = 1', 'let saved_value = 2'),

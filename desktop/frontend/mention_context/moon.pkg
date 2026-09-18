@@ -1,6 +1,5 @@
 import {
   "moonbitlang/core/string",
-  "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
 }
 

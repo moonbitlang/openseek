@@ -211,8 +211,9 @@ pub fn target(mention : MentionRef) -> Target? {
 
 ///|
 /// Encode the composer draft into the outgoing prompt: the typed task first,
-/// then one element per chip inside the `<user_mentions>` block. A draft with
-/// no chips is passed through untouched, so ordinary prompts stay ordinary.
+/// then the chips inside the `<user_mentions>` block. Adjacent review files
+/// share their workspace/base envelope. A draft with no chips is passed
+/// through untouched, so ordinary prompts stay ordinary.
 pub fn encode(mentions : Array[MentionRef], task : String) -> String {
   let task = task.trim().to_owned()
   if mentions.is_empty() {
@@ -223,8 +224,28 @@ pub fn encode(mentions : Array[MentionRef], task : String) -> String {
     parts <+ "\{task}\n\n"
   }
   parts <+ "<user_mentions>\n"
+  let mut review_group : (String, String?)? = None
   for mention in mentions {
+    let group = match mention {
+      ReviewChanges(changes) =>
+        Some((changes.source.workspace, changes.source.base))
+      _ => None
+    }
+    if group != review_group {
+      if review_group is Some(_) {
+        parts <+ "</review_changes>\n"
+      }
+      if group is Some((workspace, base)) {
+        write_review_header(parts, workspace, base)
+      }
+      review_group = group
+    } else if group is Some(_) {
+      parts <+ "\n"
+    }
     write_mention(parts, mention)
+  }
+  if review_group is Some(_) {
+    parts <+ "</review_changes>\n"
   }
   parts <+ "</user_mentions>"
   parts.to_string()
@@ -233,9 +254,7 @@ pub fn encode(mentions : Array[MentionRef], task : String) -> String {
 ///|
 fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
   match mention {
-    ReviewChanges(changes) =>
-      parts <+
-        "<review_changes>\n\{changes.to_json().stringify()}\n</review_changes>\n"
+    ReviewChanges(changes) => write_review_file(parts, changes)
     Skill(name~) => {
       let name = MentionAttribute::encode(name).wire
       parts <+ "<skill name=\"\{name}\"/>\n"
@@ -289,27 +308,30 @@ fn write_body(parts : StringBuilder, body : String) -> Unit {
 /// message). The structure is validated strictly — the closing tag must be
 /// the last line (one trailing blank tolerated), an opener must precede it,
 /// and everything between must parse as mention elements — so a prompt that
-/// merely mentions the tags is not misread as chips. Attributes always use
-/// `MentionAttribute` encoding; there is only one wire format.
+/// merely mentions the tags is not misread as chips. Tagged attributes use
+/// `MentionAttribute` encoding.
 pub fn parse(content : String) -> MentionMessage? {
-  let lines = [
-    for raw in content.split("\n") => raw.trim_end(chars="\r").to_owned()
-  ]
+  let lines = content.split("\n").map(line => line.to_owned()).collect()
   let lines = if lines is [.. head, ""] { head } else { lines[:] }
+  // Only normalize CRLF framing when the envelope itself uses it. A source
+  // line's trailing CR inside our LF envelope belongs to the saved snapshot.
+  let lines = if content
+    .trim_end(chars="\r\n")
+    .has_suffix("\r\n</user_mentions>") {
+    lines.map(line => line.strip_suffix("\r").unwrap_or(line[:]).to_owned())
+  } else {
+    lines.to_owned()
+  }
   guard lines is [.. head, "</user_mentions>"] else { return None }
-  // The task text is arbitrary, so the envelope's opener is the last one —
-  // matched from the end inward, as the closing tag was.
-  let mut open_index = None
-  for index, line in head {
-    if line == "<user_mentions>" {
-      open_index = Some(index)
+  // Source bodies may themselves contain an opener. Try candidates from
+  // the end until the whole envelope parses, keeping such source verbatim.
+  for open = head.length() - 1; open >= 0; open = open - 1 {
+    if head[open] == "<user_mentions>" &&
+      parse_mention_block(head[open + 1:]) is Some(mentions) {
+      return Some({ mentions, task: head[:open].join("\n").trim().to_owned(), })
     }
   }
-  guard open_index is Some(open) else { return None }
-  guard parse_mention_block(head[open + 1:]) is Some(mentions) else {
-    return None
-  }
-  Some({ mentions, task: head[:open].join("\n").trim().to_owned(), })
+  None
 }
 
 ///|
@@ -341,16 +363,12 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
   let mut index = 0
   while index < lines.length() {
     let line = lines[index]
-    if line == "<review_changes>" {
-      guard lines.get(index + 1) is Some(body) &&
-        lines.get(index + 2) == Some("</review_changes>") else {
+    if review_changes_pattern.execute(line) is Some(_) {
+      guard parse_review_changes(lines[index:]) is Some((changes, consumed)) else {
         return None
       }
-      let changes : ReviewChanges = @json.from_json(@json.parse(body)) catch {
-        _ => return None
-      }
-      mentions.push(ReviewChanges(changes))
-      index += 3
+      mentions.append(changes.map(changes => ReviewChanges(changes)))
+      index += consumed
       continue
     }
     if skill_pattern.execute(line) is Some(matched) {
