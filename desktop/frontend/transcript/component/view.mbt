@@ -680,6 +680,7 @@ fn speaker_label(name : String) -> @html.Html {
 fn user_message_view(
   content : String,
   images? : Array[String] = [],
+  sent_at? : Double,
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -752,28 +753,43 @@ fn user_message_view(
   if !pictures.is_empty() {
     body.push(@html.div(class="user-images", pictures))
   }
+  let actions : Array[@html.Html] = []
+  if sent_at is Some(ts) {
+    let label = clock_label(ts)
+    if !label.is_empty() {
+      actions.push(
+        @html.span(class="turn-time", [
+          speaker_label("Sent "),
+          @html.text(label),
+        ]),
+      )
+    }
+  }
+  if !content.is_empty() {
+    actions.push(
+      @markdown.copy_button(
+        content,
+        class="message-copy",
+        title="Copy message",
+        label="Copy user message",
+      ),
+    )
+  }
   // The overview rail and scroll watcher share this stable turn anchor.
   @html.div(
     class="msg user",
     id?=anchor,
     [
       @html.div(class="user-bubble", body),
-      ..if !content.is_empty() {
-        [
-          @markdown.copy_button(
-            content,
-            class="message-copy",
-            title="Copy message",
-            label="Copy user message",
-          ),
-        ]
+      ..if !actions.is_empty() {
+        [@html.div(class="user-message-actions", actions)]
       },
     ],
   )
 }
 
 ///|
-/// Format a durable event's stamp for the turn rule: the clock alone for
+/// Format a durable event's stamp for its message: the clock alone for
 /// something sent today, the date in front of it for anything older, and
 /// nothing at all for the zero/absent stamps old stores wrote. Local time and
 /// locale order come from the viewer's own environment.
@@ -848,7 +864,7 @@ fn step_stamp(ts? : Double) -> @html.Html? {
 /// Deliberately not `clock_label`. That one dates a user's prompt, where the
 /// day matters and the minute is precise enough; steps of one turn commit
 /// seconds apart, so at `hh:mm` a whole turn would read as the same label
-/// repeated. The date is the turn rule's job — a step is always inside the
+/// repeated. The date is the user message's job — a step is always inside the
 /// turn already dated above it.
 fn step_time_label(unix_ms : Double) -> String {
   guard !unix_ms.is_nan() && !unix_ms.is_inf() && unix_ms > 0.0 else {
@@ -869,29 +885,6 @@ fn step_time_label(unix_ms : Double) -> String {
 }
 
 ///|
-/// The hairline closing a user's turn: everything below it until the next
-/// bubble is the agent's answer. Drawn after the bubble rather than before it
-/// because that is the boundary a reader needs — the bubble's own alignment
-/// already separates it from the answer above. The rule carries the prompt's
-/// send time at its right end, under the bubble it dates; a turn replayed
-/// from an unstamped store keeps the bare rule.
-fn turn_rule_view(ts? : Double) -> @html.Html {
-  let children : Array[@html.Html] = []
-  if ts is Some(ts) {
-    let label = clock_label(ts)
-    if !label.is_empty() {
-      children.push(
-        @html.span(class="turn-time", [
-          speaker_label("Sent "),
-          @html.text(label),
-        ]),
-      )
-    }
-  }
-  @html.div(class="turn-rule", children)
-}
-
-///|
 /// One transcript item as its own stream child. `step_label` is the ordinal an
 /// OpenSeek provider response carries ("#3"); every other source and kind
 /// has none.
@@ -907,7 +900,7 @@ fn transcript_item_view(
 ) -> @html.Html {
   match item.kind {
     User(text=prompt, images~) =>
-      user_message_view(prompt, images~, anchor?, on_jump?)
+      user_message_view(prompt, images~, sent_at?=item.ts, anchor?, on_jump?)
     Assistant(reasoning~, prose~, calls~, replay=_, finished~) =>
       assistant_view(
         on_open,

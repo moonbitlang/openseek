@@ -15,11 +15,6 @@ fn TranscriptRenderKey::row(identity : String) -> TranscriptRenderKey {
 }
 
 ///|
-fn TranscriptRenderKey::turn_rule(identity : String) -> TranscriptRenderKey {
-  { value: "rule\u{0}\{identity}", }
-}
-
-///|
 /// The response still streaming, keyed by its run: a new run gets a fresh
 /// node, and the durable commit that lands it replaces this one.
 fn TranscriptRenderKey::live(identity : String) -> TranscriptRenderKey {
@@ -437,8 +432,6 @@ priv enum BlockContent {
     subrun_parent~ : String?,
     wait_labels~ : Map[Int, String]
   )
-  /// The rule closing a user turn.
-  TurnRule(ts~ : Double?)
   /// The response still streaming, shown through the same view a settled
   /// response gets. Durable commits are untagged and cannot prove ownership
   /// of an in-flight preview, so the preview stays visible as the provisional
@@ -455,7 +448,7 @@ priv enum BlockContent {
 
 ///|
 /// The direct children of `#stream` in display order: one block per
-/// transcript item (a user turn also draws its closing rule), then the
+/// transcript item, then the
 /// response still streaming; or the empty state alone. Vector order determines
 /// visual order; the keys only determine node identity.
 fn stream_blocks(input : Input) -> @vector.Vector[Block] {
@@ -508,13 +501,6 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
         wait_labels=job_wait_labels(item, descriptions),
       ),
     })
-    if item.kind is User(..) {
-      blocks.push({
-        stream,
-        key: TranscriptRenderKey::turn_rule(row.identity),
-        content: TurnRule(ts=item.ts),
-      })
-    }
   }
   if input.streaming_reasoning is Some(_) || input.streaming_response is Some(_) {
     blocks.push({
@@ -571,7 +557,6 @@ fn Block::render(self : Block, actions : Actions) -> @html.Html {
           open: session => (actions.open_session)(session),
         }),
       )
-    TurnRule(ts~) => turn_rule_view(ts?)
     Live(prose~, reasoning~, reasoning_complete~, step_label~, assistant_name~) =>
       assistant_view(
         on_open,

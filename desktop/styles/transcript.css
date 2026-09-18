@@ -37,10 +37,9 @@
    them for style. A skipped row keeps the height it had when last rendered
    (`auto`); the component renders every row once when the transcript
    mounts (see render_rows_once_after_mount), so the 120px guess never
-   stands in and scroll offsets stay exact. The turn rule is a zero-height
-   row whose time stamp hangs outside it, and the empty state is one row
-   that is always on screen: neither wants the containment. */
-.stream > :not(.turn-rule):not(.empty) {
+   stands in and scroll offsets stay exact. The empty state is always
+   on screen and does not need containment. */
+.stream > :not(.empty) {
   content-visibility: var(--stream-rows-visibility, auto);
   contain-intrinsic-size: auto 120px;
 }
@@ -505,21 +504,17 @@
   white-space: nowrap;
 }
 
-/* Closes the user's turn: a hairline running to the right edge, where a
-   trailing label (the send time) can sit under the bubble it belongs
-   to. Empty of children it is simply the full-width rule. */
-.turn-rule {
+/* Keep time and actions together at the right edge, with time first. */
+.user-message-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--color-text-faint);
-  font-size: var(--font-size-xs);
+  justify-content: flex-end;
+  gap: 8px;
 }
-.turn-rule::before {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--color-border);
+.turn-time {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .msg-body {
