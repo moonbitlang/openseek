@@ -1,6 +1,6 @@
 # Small Proton examples
 
-These examples use Proton 0.3.0 APIs. Start with a generated **minimal**
+These examples use Proton 0.3.1 APIs. Start with a generated **minimal**
 project (`proton_cli new my-app --template minimal --yes`) and work from its
 directory. Keep its `proton.project.json`, including the application identity.
 In an existing project, preserve its entry and imports rather than replacing
@@ -42,12 +42,12 @@ and copies the returned greeting through the clipboard extension. Plain
 JavaScript keeps the frontend/native boundary visible; the default template
 shows the equivalent typed MoonBit/Rabbita organization.
 
-For a project using Proton 0.3.0, add these entries to the existing `import`
+For a project using Proton 0.3.1, add these entries to the existing `import`
 block in `moon.mod`, preserving its other dependencies:
 
 ```text
-"moonbit-community/proton_contract@0.3.0",
-"moonbit-community/proton_ext@0.3.0",
+"moonbit-community/proton_contract@0.3.1",
+"moonbit-community/proton_ext@0.3.1",
 ```
 
 Use these imports and executable settings in `app/moon.pkg`:
