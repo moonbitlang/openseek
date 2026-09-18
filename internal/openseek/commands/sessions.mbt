@@ -112,10 +112,7 @@ fn format_utc_minute(seconds : Int64) -> String {
 /// or first user prompt as a one-line label. Tab separation keeps the listing scriptable —
 /// `sessions list | cut -f1` recovers the bare ids the old format printed.
 fn format_session_listing(listing : @store.SessionListing) -> String {
-  let when = match listing.last_active_unix_seconds() {
-    Some(seconds) => format_utc_minute(seconds)
-    None => "-"
-  }
+  let when = listing.last_active_unix_seconds().map_or("-", format_utc_minute)
   let title = listing.title().unwrap_or_else(() => listing.first_prompt())
   "\{listing.id().value()}\t\{when}\t\{compact_prompt_label(title)}"
 }

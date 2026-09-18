@@ -14,14 +14,11 @@ fn parse_audit_report(
 ) -> Result[@agent_review.ReviewReport, String] {
   match @agent_review.ReviewReport::parse(json) {
     Err(msg) => Err(msg)
-    Ok(report) => {
-      let problems = report.validate()
-      if problems.length() > 0 {
-        Err(problems.join("; "))
-      } else {
-        Ok(report)
+    Ok(report) =>
+      match report.validate() {
+        [] => Ok(report)
+        problems => Err(problems.join("; "))
       }
-    }
   }
 }
 

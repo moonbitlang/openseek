@@ -605,8 +605,7 @@ async fn run_serve(
           goal_auto_target = None
           goal_turns_remaining = 0
           match active_work {
-            Some(ActiveTurn(task)) => task.cancel()
-            Some(ActiveCompact(task)) => task.cancel()
+            Some(ActiveTurn(task)) | Some(ActiveCompact(task)) => task.cancel()
             None =>
               // No active work: in wire order the cancel targets the next
               // submitted prompt, so withdraw it before it starts.

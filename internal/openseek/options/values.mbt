@@ -36,9 +36,19 @@ pub fn agent_settings(
 /// `None` — no flag, no env — means turns bounded by the model's context
 /// window (the engine's own default), not by a step count.
 pub fn max_steps(matches : @argparse.Matches) -> Int? raise {
-  match matches {
-    { values: { "max-steps": [input, ..], .. }, .. } =>
-      Some(@cli.parse_positive_int(input, "--max-steps"))
+  optional_positive_int(matches, "max-steps")
+}
+
+///|
+/// A positive-integer option, or `None` when no value was supplied for `name`.
+/// The rejection message names the flag (`--<name>`), exactly as the
+/// hand-written copies did.
+fn optional_positive_int(
+  matches : @argparse.Matches,
+  name : String,
+) -> Int? raise {
+  match matches.values.get(name) {
+    Some([input, ..]) => Some(@cli.parse_positive_int(input, "--\{name}"))
     _ => None
   }
 }
@@ -52,16 +62,8 @@ pub fn max_steps(matches : @argparse.Matches) -> Int? raise {
 /// in-process `@client.Client`; `export_retry_overrides` carries it to child
 /// processes.
 pub fn retry_overrides(matches : @argparse.Matches) -> (Int?, Int?) raise {
-  let attempts = match matches {
-    { values: { "retry-attempts": [input, ..], .. }, .. } =>
-      Some(@cli.parse_positive_int(input, "--retry-attempts"))
-    _ => None
-  }
-  let backoff_ms = match matches {
-    { values: { "retry-backoff-ms": [input, ..], .. }, .. } =>
-      Some(@cli.parse_positive_int(input, "--retry-backoff-ms"))
-    _ => None
-  }
+  let attempts = optional_positive_int(matches, "retry-attempts")
+  let backoff_ms = optional_positive_int(matches, "retry-backoff-ms")
   (attempts, backoff_ms)
 }
 

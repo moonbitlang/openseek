@@ -296,18 +296,12 @@ async fn copy_regular(s : String, d : String) -> Unit {
 /// skipped to avoid loops or escaping `--dir`.
 async fn copy_symlink(s : String, d : String, root : String) -> Unit {
   let resolved = @fs.realpath(s) catch { _ => return }
-  guard within_root(resolved, root) else { return }
+  guard resolved == root || resolved.has_prefix("\{root}/") else { return }
   let target_kind = @fs.kind(s, follow_symlink=true) catch { _ => return }
   match target_kind {
     Regular => copy_regular(s, d)
     _ => () // directory/other targets skipped (loop-safe)
   }
-}
-
-///|
-/// Whether absolute `path` is `root` or nested under it.
-fn within_root(path : String, root : String) -> Bool {
-  path == root || path.has_prefix("\{root}/")
 }
 
 ///|

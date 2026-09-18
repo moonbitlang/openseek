@@ -46,7 +46,8 @@ async fn collect_dirs(
     let child = "\{dir}/\{name}"
     let kind = @fs.kind(child, follow_symlink=false) catch { _ => continue }
     guard kind is Directory else { continue }
-    out.push("\{outline_indent(depth)}\{sanitize_name(name)}/")
+    let indent = "  ".repeat(depth)
+    out.push("\{indent}\{sanitize_name(name)}/")
     collect_dirs(child, depth + 1, max_depth, max_dirs, out)
   }
 }
@@ -79,9 +80,4 @@ fn skip_outline_dir(name : String) -> Bool {
   name == "node_modules" ||
   name == "_build" ||
   name == "target"
-}
-
-///|
-fn outline_indent(depth : Int) -> String {
-  "  ".repeat(depth)
 }
