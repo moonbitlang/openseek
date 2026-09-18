@@ -10,7 +10,7 @@ import {
 ///|
 /// Reading a path or stdin is async IO, so `main` is `async fn main`.
 async fn main {
-  let matches = @argparse.parse(
+  let matches : @argparse.Matches = @argparse.parse(
       Command(
         "count-input",
         about="Print the length of a file or stdin.",
@@ -32,6 +32,7 @@ async fn main {
   }
   let input = if stdin {
     @stdio.stdin.read_all().text()
+    // we also have @stdio.stderr
   } else {
     @fs.read_file(input).text()
   }

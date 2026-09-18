@@ -61,41 +61,8 @@ scripts are read-only: never supply `source` with `@builtin/`. Only
 `@builtin/` is supported today; other namespaces are reserved. Use
 `./path/check.mbtx` for a literal workspace path.
 
-### CLI Parsing
-
-- Read `@env.args()[1:]` (from `moonbitlang/core/env`; the `[1:]` skips the
-  executable name) when the script only forwards or glances at its arguments —
-  the `check.mbtx` above passes them straight through to `moon check`. Reach
-  for `moonbitlang/core/argparse` and `@argparse.parse(...)` on a `Command`
-  once the script owns options of its own to name, default, and validate; do
-  not hand-roll that parsing out of `@env.args()`.
-- `FlagArg.long` omits leading dashes: use `long="stdin"`, not
-  `long="--stdin"`.
-- Convert `@argparse.Matches` into local values before doing real work; keep
-  validation near that conversion.
-- Do not implement ordinary file/stdin IO with C FFI. Use `moonbitlang/async/fs`
-  and `moonbitlang/async/stdio`.
-- A native CLI that reads either a path or stdin usually needs `async fn main`.
-- For custom CLI diagnostics, write to stderr with `@stdio.stderr.write(...)`.
-  For a nonzero exit, add the `moonbitlang/x` module, import
-  `"moonbitlang/x/sys"` in `moon.pkg`, and call `@sys.exit(1)`.
-
-Pattern, verified by CI (type-checked and run under cram):
-
-[share/examples/cli_count_input.mbtx](../share/examples/cli_count_input.mbtx)
-
-- In `moon run`, the package path goes before `--`; program arguments go after
-  `--`. Example file probe:
-  `moon run --target native cmd/tomljson -- input.toml` (a file the `write` tool
-  put in the workspace).
-- Example stdin probe (no pipes — feed stdin directly):
-  `@shell.Cmd("moon", ["run", "--target", "native", "cmd/tomljson", "--",
-  "--stdin"], stdin=Text("a.b = 1\n"))`.
-- Implement stdin mode with `@stdio.stdin.read_all().text()`, not
-  `/dev/stdin` or C FFI.
-- Validate both file input and stdin input when promised.
-
 ### Reading files: `@builtin/read.mbtx`
+
 The builtin call you will make most. Read known files together immediately;
 `path:start:end` selects inclusive, 1-based lines, and its tool description
 gives the arguments. Use the returned text and file-status footers directly
@@ -103,7 +70,22 @@ to do the task, including empty/missing-file checks. List directories only to
 discover unknown paths. Reread only when needed content is missing,
 truncated, or changed.
 
-### Shell EDSL
+`mbtx` is powerful since it can reuse the whole MoonBit ecosystem
+
+### CLI Parsing with moonbitlang/core/argparse and env
+
+- Read `@env.args()[1:]` (from `moonbitlang/core/env`; the `[1:]` skips the
+  executable name) when the script only forwards or glances at its arguments —
+  the `check.mbtx` above passes them straight through to `moon check`. 
+
+Below is a complete example of CLI parsing using argparse:
+
+[share/examples/cli_count_input.mbtx](../share/examples/cli_count_input.mbtx)
+
+For a nonzero exit,import `"moonbitlang/x/sys"`, and call `@sys.exit(1)`.
+
+
+### Shell EDSL with moonbitlang/async/shell
 
 Use `@shell.Cmd` to run an external program and capture its output. Which
 programs a snippet may start is listed in the `mbtx` tool description, under
