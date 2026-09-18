@@ -109,6 +109,7 @@ pub fn State::transcript_items(Self) -> Array[@transcript.TranscriptItem]
 pub fn State::with_editor_comment(Self, String, @common.Range, String, String, side? : @mention_context.AnnotationSide) -> Self
 pub fn State::with_git_details_closed(Self) -> Self
 pub fn State::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self
+pub fn State::with_semantic_selection(Self, @mention_context.SemanticSearchReference?) -> Self
 pub fn State::worktree_launch_workspace(Self, @interop.ChannelId) -> @common.Uri?
 
 // Type aliases

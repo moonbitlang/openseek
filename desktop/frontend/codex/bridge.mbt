@@ -643,6 +643,10 @@ fn State::prompt_text(self : State) -> String {
   for mention in self.mentions {
     if mention.ref_ is @mention_context.Skill(name~) {
       markers.push("$" + name)
+    } else if mention.ref_ is @mention_context.SemanticSearchArtifact(artifact) {
+      markers.push(
+        "Use the attached semantic-search selection manifest \{artifact.path} as context; inspect its JSONL records selectively.",
+      )
     }
   }
   let task = self.draft.trim().to_owned()
@@ -665,6 +669,13 @@ fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
       }
       Some({ "type": "mention", "name": name, "path": path })
     }
+    @mention_context.SemanticSearchArtifact(artifact) => {
+      let name = match [..artifact.path.split("/")] {
+        [] => artifact.path
+        [.., last] => last.to_owned()
+      }
+      Some({ "type": "mention", "name": name, "path": artifact.path })
+    }
     @mention_context.Skill(name~) => {
       guard self.active_context() is Some(context) &&
         self.skills is CodexSkillsReady(cwd, skills) &&
@@ -685,6 +696,8 @@ fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
       })
     }
     @mention_context.Symbol(..)
+    | @mention_context.SemanticSearch(_)
+    | @mention_context.SemanticSearchPending(_)
     | @mention_context.Annotation(..)
     | @mention_context.ReviewChanges(_) =>
       Some({

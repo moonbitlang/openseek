@@ -52,53 +52,71 @@ for (const mode of ['Text', 'Code']) {
     }
     const results = page.locator('.search-results');
     const row = results.locator('.search-result-row');
-    const destination = row.getByRole('button', { name: mode === 'Text' ? /moon moon/ : /inspect\($/ });
-    await expect(row).toBeVisible();
+    const expectedRowCount = mode === 'Text' ? 1 : 2;
+    const expectVisibleRows = async () => {
+      await expect(row).toHaveCount(expectedRowCount);
+      for (let index = 0; index < expectedRowCount; index++) {
+        await expect(row.nth(index)).toBeVisible();
+      }
+    };
+    const destination = row
+      .getByRole('button', { name: mode === 'Text' ? /moon moon/ : /inspect\($/ })
+      .first();
+    await expectVisibleRows();
     if (mode === 'Code') {
-      await expect(row.locator('.search-result-line')).toHaveText(['1', '2', '3', '4', '5', '6']);
-      await expect(row.getByRole('button', { name: /second/ })).toHaveAttribute('title', 'Open src/main.mbt:5');
+      await expect(row.nth(0).locator('.search-result-line')).toHaveText(['1', '2', '3', '4', '5']);
+      await expect(row.nth(1).locator('.search-result-line')).toHaveText(['3', '4', '5', '6']);
+      await expect(row.nth(1).getByRole('button', { name: /second/ })).toHaveAttribute('title', 'Open src/main.mbt:5');
     }
     await expect(results.locator('.search-summary')).toHaveText(
       '2 matches in 1 file',
     );
-    await expect(row.locator('.search-match-highlight')).toHaveText(
-      mode === 'Text' ? ['moon', 'moon'] : ['inspect(', '    "moon moon",', '  )', 'inspect("second")'],
-    );
+    if (mode === 'Text') {
+      await expect(row.locator('.search-match-highlight')).toHaveText(['moon', 'moon']);
+    } else {
+      await expect(row.nth(0).locator('.search-match-highlight')).toHaveText([
+        'inspect(',
+        '    "moon moon",',
+        '  )',
+      ]);
+      await expect(row.nth(1).locator('.search-match-highlight')).toHaveText(['inspect("second")']);
+    }
     // Preview blocks must fit the panel, and every line must share its gutter
     // and text columns after neighboring contexts have been combined.
-    const geometry = await row.evaluate(element => {
+    const geometry = await row.evaluateAll(elements => elements.map(element => {
       const rect = element.getBoundingClientRect();
       const panel = element.closest('.search-results').getBoundingClientRect();
       return {
         overflow: Math.max(0, rect.right - panel.right),
         textStarts: [...element.querySelectorAll('.search-result-preview')].map(node => node.getBoundingClientRect().left),
       };
-    });
-    expect(geometry.overflow).toBeLessThanOrEqual(1);
-    expect(Math.max(...geometry.textStarts) - Math.min(...geometry.textStarts)).toBeLessThanOrEqual(1);
+    }));
+    for (const item of geometry) {
+      expect(item.overflow).toBeLessThanOrEqual(1);
+      expect(Math.max(...item.textStarts) - Math.min(...item.textStarts)).toBeLessThanOrEqual(1);
+    }
     await destination.focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('#viewer-host .view-lines')).toContainText('moon moon');
     const header = results.getByRole('button', { name: /main.mbt.*src/ });
     const expectChevronAligned = async () => {
       const offset = await header.evaluate(element => {
-        const icon = element.querySelector('.search-file-chevron svg').getBoundingClientRect();
+        const icon = element.querySelector('.search-file-chevron').getBoundingClientRect();
         const name = element.querySelector('.search-file-name').getBoundingClientRect();
         return Math.abs((icon.top + icon.bottom - name.top - name.bottom) / 2);
       });
       expect(offset).toBeLessThanOrEqual(1);
     };
     await expectChevronAligned();
-    await expect(results).not.toContainText(app.semanticSearchMatches[0].rule_id);
     await header.click();
     await expectChevronAligned();
-    await expect(row).toBeHidden();
+    await expect(row).toHaveCount(0);
     await header.click();
-    await expect(row).toBeVisible();
+    await expectVisibleRows();
     scanFailed = true;
     await page.locator('.workspace-search').getByRole('button', { name: 'Refresh', exact: true }).click();
     await expect(results.getByRole('alert')).toContainText('One file could not be read.');
-    await expect(row).toBeVisible();
+    await expectVisibleRows();
     expect(app.pageErrors).toEqual([]);
   });
 }

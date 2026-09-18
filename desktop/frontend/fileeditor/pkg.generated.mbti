@@ -254,6 +254,7 @@ pub(all) enum Msg {
   ExplorerModeSelected(ExplorerMode)
   Search(@grep_search.Msg)
   SearchMatchSelected(path~ : String, range~ : @common.Range)
+  SemanticSelectionChanged(owner~ : @interop.ConversationKey, reference~ : @mention_context.SemanticSearchReference?)
   ChangeExtensionToggled(String?)
   ChangeFiltersCleared
   ChangePathFilterChanged(String)

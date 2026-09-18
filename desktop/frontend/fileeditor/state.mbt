@@ -838,6 +838,10 @@ pub(all) enum Msg {
   // and ChangedFileSelected because opening a dock tab is shell state.
   Search(@grep_search.Msg)
   SearchMatchSelected(path~ : String, range~ : @common.Range)
+  SemanticSelectionChanged(
+    owner~ : @interop.ConversationKey,
+    reference~ : @mention_context.SemanticSearchReference?
+  )
   // Expand or collapse a directory row in the file tree; the first expansion
   // lazily lists the directory through the host.
   ChangeExtensionToggled(String?)

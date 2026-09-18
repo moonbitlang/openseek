@@ -104,6 +104,9 @@ fn State::submit_composer(
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, State) {
   if self.input_empty() ||
+    self.mentions.any(mention => {
+      mention.ref_ is @mention_context.SemanticSearchPending(_)
+    }) ||
     !self.has_active() ||
     self.loading ||
     !self.can_prompt() {

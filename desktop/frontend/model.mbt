@@ -849,6 +849,11 @@ priv struct Conversation {
   // competing run replaces that phase and the refusal that competition causes
   // arrives after it.
   pending_prompt : PendingPrompt?
+  // A large semantic-search selection is being materialized for a submitted
+  // prompt. This is separate from `mentions`: the user may change the visible
+  // search selection while the Host prepares the captured snapshot, but that
+  // edit must never cancel or alter the prompt already in flight.
+  pending_semantic_submission : PendingSemanticSubmission?
   // The durable transcript: exactly what `session.load` snapshots and
   // `session.event` commits said, nothing else — this is also everything the
   // transcript shows. Every failure the record will never carry is reported
@@ -1030,6 +1035,22 @@ priv struct PendingPrompt {
   submission_id : String
   draft : String
   mentions : Array[Mention]
+} derive(Eq)
+
+///|
+/// Captured data for one large semantic selection waiting for its immutable
+/// file. `visible_mentions` is the draft projection shown while preparation is
+/// pending; it lets the completion callback preserve later selection changes
+/// as the next draft instead of treating them as a cancellation.
+/// This record owns the submitted draft and action. Replies carry only its
+/// submission id and result; retries get a new id even for the same selection.
+priv struct PendingSemanticSubmission {
+  submission_id : String
+  reference : @mention_context.SemanticSearchReference
+  task : String
+  mentions : Array[Mention]
+  visible_mentions : Array[Mention]
+  followup : @composer.FollowupChoice?
 } derive(Eq)
 
 ///|
@@ -2072,6 +2093,19 @@ priv enum Msg {
   // composer chips, file/navigation selections update the dock strip, and a
   // `LanguageRequestFailed` uses the app-owned toast rail.
   FileEditor(@fileeditor.Msg)
+  // A large semantic-search selection is materialized only while preparing a
+  // send. The reply identifies the pending snapshot; later composer edits
+  // cannot change the captured draft or action stored in that snapshot.
+  SemanticSelectionMaterialized(
+    owner~ : @interop.ConversationKey,
+    submission_id~ : String,
+    artifact~ : @mention_context.SemanticSearchArtifact
+  )
+  SemanticSelectionMaterializationFailed(
+    owner~ : @interop.ConversationKey,
+    submission_id~ : String,
+    message~ : String
+  )
   // Terminal UI, host notifications, and xterm callbacks share one root-owned
   // state machine.
   Terminal(@terminal.Msg)
@@ -2506,6 +2540,7 @@ fn empty_conversation(
     queue_edit_id: None,
     pending_approval: None,
     pending_prompt: None,
+    pending_semantic_submission: None,
     messages: [],
     watermark: 0,
     sync: Synced,
@@ -3652,6 +3687,7 @@ fn Conversation::draft_empty(self : Conversation) -> Bool {
   self.task.is_blank() &&
   self.mentions.is_empty() &&
   !self.composer_draft_present &&
+  self.pending_semantic_submission is None &&
   !(self.goal_edit is Some(edit) && !edit.draft.is_blank()) &&
   self.goal_pending is None
 }

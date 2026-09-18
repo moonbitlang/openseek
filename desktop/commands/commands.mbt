@@ -402,6 +402,12 @@ pub let fs_read_file : Command[
 ] = Command("fs.read_file")
 
 ///|
+pub let fs_materialize_semantic_selection : Command[
+  @protocol.MaterializeSemanticSelectionPayload,
+  @protocol.MaterializeSemanticSelectionReply,
+] = Command("fs.materialize_semantic_selection")
+
+///|
 pub let fs_read_directory : Command[
   @protocol.ReadDirPayload,
   @protocol.ReadDirReply,

@@ -194,6 +194,12 @@ type ReadFilePayload = @protocol.ReadFilePayload
 type ReadFileReply = @protocol.ReadFileReply
 
 ///|
+type MaterializeSemanticSelectionPayload = @protocol.MaterializeSemanticSelectionPayload
+
+///|
+type MaterializeSemanticSelectionReply = @protocol.MaterializeSemanticSelectionReply
+
+///|
 /// `stat_files` asks for the mtime signatures of the absolute paths supplied
 /// by the caller. One op covers the whole tab set: the frontend calls it on
 /// every coarse "something changed" push to decide which files to re-read.

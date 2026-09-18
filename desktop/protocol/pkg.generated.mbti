@@ -1511,6 +1511,31 @@ pub fn MarketSkill::not_equal(Self, Self) -> Bool
 pub fn MarketSkill::to_json(Self) -> Json
 pub fn MarketSkill::to_repr(Self) -> @debug.Repr
 
+pub(all) struct MaterializeSemanticSelectionPayload {
+  root : String
+  artifact_id : String
+  patterns : Array[String]
+  include_glob : String
+  exclude_glob : String
+  matches : Array[SemanticSelectionMatchPayload]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn MaterializeSemanticSelectionPayload::equal(Self, Self) -> Bool
+pub fn MaterializeSemanticSelectionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn MaterializeSemanticSelectionPayload::not_equal(Self, Self) -> Bool
+pub fn MaterializeSemanticSelectionPayload::to_json(Self) -> Json
+pub fn MaterializeSemanticSelectionPayload::to_repr(Self) -> @debug.Repr
+
+pub(all) struct MaterializeSemanticSelectionReply {
+  path : String
+  match_count : Int
+  file_count : Int
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn MaterializeSemanticSelectionReply::equal(Self, Self) -> Bool
+pub fn MaterializeSemanticSelectionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn MaterializeSemanticSelectionReply::not_equal(Self, Self) -> Bool
+pub fn MaterializeSemanticSelectionReply::to_json(Self) -> Json
+pub fn MaterializeSemanticSelectionReply::to_repr(Self) -> @debug.Repr
+
 pub(all) struct MoonIdeCodeLens {
   range : LspRange
   title : String
@@ -2208,6 +2233,22 @@ pub(all) struct SemanticSearchProgressPayload {
 } derive(Eq, @debug.Debug)
 pub impl ToJson for SemanticSearchProgressPayload
 pub impl @json.FromJson for SemanticSearchProgressPayload
+
+pub(all) struct SemanticSelectionMatchPayload {
+  rule_id : String?
+  description : String?
+  file : String
+  start_line : Int
+  start_column : Int
+  end_line : Int
+  end_column : Int
+  matched_source : String
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn SemanticSelectionMatchPayload::equal(Self, Self) -> Bool
+pub fn SemanticSelectionMatchPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SemanticSelectionMatchPayload::not_equal(Self, Self) -> Bool
+pub fn SemanticSelectionMatchPayload::to_json(Self) -> Json
+pub fn SemanticSelectionMatchPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionAssistantMessage {
   content : String

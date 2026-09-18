@@ -49,6 +49,94 @@ test "encode lays out the task first, then the tagged mention block" {
 }
 
 ///|
+test "semantic search mentions round-trip as one aggregate reference" {
+  let reference : @mention_context.SemanticSearchReference = {
+    id: "search-1",
+    root: "/work",
+    patterns: ["inspect($(x:arg))", "match($x)"],
+    include_glob: "src/**",
+    exclude_glob: "src/generated/**",
+    matches: [
+      {
+        rule_id: Some("inspect-rule"),
+        description: None,
+        file: "src/main.mbt",
+        start_line: 4,
+        start_column: 1,
+        end_line: 4,
+        end_column: 12,
+        matched_source: "inspect(x)",
+      },
+      {
+        rule_id: Some("match-rule"),
+        description: Some("match expressions"),
+        file: "src/other.mbt",
+        start_line: 9,
+        start_column: 1,
+        end_line: 10,
+        end_column: 8,
+        matched_source: "match(value)",
+      },
+    ],
+  }
+  let mention = @mention_context.SemanticSearch(reference)
+  let encoded = @mention_context.encode([mention], "Explain these matches")
+  assert_true(
+    encoded.contains(
+      "<match file=\"src/main.mbt\" lines=\"4-4\" columns=\"1-12\" rule=\"inspect-rule\">\ninspect(x)\n</match>",
+    ),
+  )
+  assert_false(encoded.contains("<matched_source>"))
+  assert_false(encoded.contains("pattern=\"inspect($(x:arg))\""))
+  let parsed = @mention_context.parse(encoded).unwrap()
+  assert_eq(parsed.task, "Explain these matches")
+  assert_eq(parsed.mentions, [mention])
+  assert_true(@mention_context.label(mention).contains("2 patterns"))
+  assert_true(@mention_context.target(mention) is None)
+}
+
+///|
+test "large semantic searches round-trip as a JSONL file reference" {
+  let mention = @mention_context.SemanticSearchArtifact({
+    path: ".openseek/agent-context/semantic-search/semantic-search-4-2.jsonl",
+    pattern_count: 2,
+    match_count: 812,
+  })
+  let encoded = @mention_context.encode([mention], "Inspect this selection")
+  assert_true(encoded.contains("<semantic_search_file"))
+  guard @mention_context.parse(encoded) is Some(parsed) else {
+    fail("expected semantic search file reference")
+  }
+  assert_eq(parsed.mentions, [mention])
+  assert_eq(parsed.task, "Inspect this selection")
+}
+
+///|
+test "parse accepts the legacy semantic match wrapper" {
+  let content =
+    #|<user_mentions>
+    #|<semantic_search id="legacy" root="/work" include="" exclude="">
+    #|<pattern>
+    #|inspect($(x:arg))
+    #|</pattern>
+    #|<match pattern="inspect($(x:arg))" file="src/main.mbt" lines="4-4" columns="1-12">
+    #|<matched_source>
+    #|inspect(x)
+    #|</matched_source>
+    #|</match>
+    #|</semantic_search>
+    #|</user_mentions>
+  guard @mention_context.parse(content) is Some(parsed) else {
+    fail("expected legacy semantic-search envelope")
+  }
+  guard parsed.mentions is [@mention_context.SemanticSearch(reference)] else {
+    fail("expected one semantic-search mention")
+  }
+  assert_eq(reference.matches.length(), 1)
+  assert_eq(reference.matches[0].matched_source, "inspect(x)")
+}
+
+///|
 test "encode of chips alone omits the task block" {
   inspect(
     @mention_context.encode([Skill(name="review-pr")], "  "),

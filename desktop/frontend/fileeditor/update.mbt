@@ -2865,8 +2865,33 @@ fn update_inner(
       let highlights = ctx.active_file.bind(path => {
         next.editor_search_highlights(ctx, path)
       })
-      (update_search_match_highlights(highlights), next)
+      let selection_changed = next.search.selected_semantic_hits() !=
+        state.search.selected_semantic_hits()
+      let selection_command = if selection_changed && next.search.is_semantic() {
+        @cmd.custom_cmd(scheduler => {
+          scheduler.add(
+            dispatch(
+              SemanticSelectionChanged(
+                owner=ctx.owner,
+                reference=next.search.selected_semantic_reference(
+                  ctx.root().map(root => root.path).unwrap_or(""),
+                ),
+              ),
+            ),
+          )
+        })
+      } else {
+        @cmd.none
+      }
+      (
+        @cmd.batch([
+          update_search_match_highlights(highlights),
+          selection_command,
+        ]),
+        next,
+      )
     }
+    SemanticSelectionChanged(..) => (@cmd.none, state)
     ExplorerModeSelected(mode) => {
       let already_selected = state.explorer_mode == mode
       let selected = { ..state, explorer_mode: mode, }

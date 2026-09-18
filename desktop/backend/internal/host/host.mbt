@@ -205,6 +205,9 @@ pub fn endpoints(
 ) -> Array[@endpoint.Endpoint] {
   [
     Endpoint(@commands.fs_read_file, payload => read_file_op(payload)),
+    Endpoint(@commands.fs_materialize_semantic_selection, payload => {
+      materialize_semantic_selection_op(payload)
+    }),
     Endpoint(@commands.fs_read_directory, payload => read_directory_op(payload)),
     Endpoint(@commands.fs_search_files, payload => {
       search_files_op(connection.file_search, payload)

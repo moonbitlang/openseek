@@ -3,6 +3,267 @@
 // or derive a path from a conversation id.
 
 ///|
+/// A selection artifact is intentionally generous enough for a whole search
+/// page, while still preventing one browser request from creating an
+/// unbounded hidden workspace file. Refuse rather than truncate: a partial
+/// selection must never look authoritative to an agent.
+const MaxSemanticSelectionArtifactUnits : Int = 8_000_000
+
+///|
+fn semantic_selection_artifact_id_is_safe(id : String) -> Bool {
+  !id.is_empty() &&
+  !id.contains("/") &&
+  !id.contains("\\") &&
+  !id.contains("..") &&
+  !id.contains(":")
+}
+
+///|
+async fn materialize_semantic_selection_op(
+  payload : MaterializeSemanticSelectionPayload,
+) -> MaterializeSemanticSelectionReply {
+  guard semantic_selection_artifact_id_is_safe(payload.artifact_id) else {
+    raise HostError("invalid semantic selection artifact id")
+  }
+  let mut source_units = 0
+  let files : Map[String, Bool] = Map([])
+  for match_ in payload.matches {
+    source_units += match_.matched_source.length() + match_.file.length()
+    files[match_.file] = true
+  }
+  guard source_units <= MaxSemanticSelectionArtifactUnits else {
+    raise HostError("semantic selection is too large to materialize")
+  }
+  let root = WirePath::parse(payload.root).absolute
+  let relative_dir = ".openseek/agent-context/semantic-search"
+  let dir = root.join(relative_dir)
+  @fs.mkdir(dir.to_string(), recursive=true) catch {
+    error if @async.is_being_cancelled() => raise error
+    @os_error.OSError(_) as error if error.is_EEXIST() => {
+      // `async/fs.mkdir` only handles missing parents when recursive=true;
+      // Windows reports an existing leaf as ERROR_ALREADY_EXISTS. Treat that
+      // normal steady state as success, but never mistake a file at this path
+      // for the artifact directory.
+      let kind = @fs.kind(dir.to_string()) catch {
+        error if @async.is_being_cancelled() => raise error
+        error =>
+          raise HostError(
+            "could not inspect semantic selection directory: \{error}",
+          )
+      }
+      guard kind is Directory else {
+        raise HostError("semantic selection path is not a directory")
+      }
+    }
+    error =>
+      raise HostError("could not create semantic selection directory: \{error}")
+  }
+  let header : Json = {
+    "version": Json(1),
+    "kind": "semantic-search-selection".to_json(),
+    "root": payload.root.to_json(),
+    "patterns": payload.patterns.to_json(),
+    "include": payload.include_glob.to_json(),
+    "exclude": payload.exclude_glob.to_json(),
+    "selected_matches": payload.matches.length().to_json(),
+    "selected_files": files.length().to_json(),
+    "instructions": "This is an immutable semantic-search selection snapshot. Filter its JSONL match records before reading broadly; the working-tree files are the current source of truth.".to_json(),
+  }
+  let lines : Array[String] = [header.stringify()]
+  for match_ in payload.matches {
+    let record : Json = {
+      "kind": "match".to_json(),
+      "rule_id": match_.rule_id.to_json(),
+      "description": match_.description.to_json(),
+      "file": match_.file.to_json(),
+      "start_line": match_.start_line.to_json(),
+      "start_column": match_.start_column.to_json(),
+      "end_line": match_.end_line.to_json(),
+      "end_column": match_.end_column.to_json(),
+      "matched_source": match_.matched_source.to_json(),
+    }
+    lines.push(record.stringify())
+  }
+  let content = lines.join("\n") + "\n"
+  // The frontend's id is unique during one page lifetime, but deliberately
+  // is not a persistent identity. A restart can therefore ask for the same
+  // id while an earlier Agent still has the old snapshot open. Never replace
+  // an existing artifact: choose a suffixed path and create a new immutable
+  // snapshot instead. CreateNew arbitrates the final path itself, so a second
+  // window cannot win the existence-check/write race and overwrite a reader's
+  // snapshot.
+  for index = 0; ; index = index + 1 {
+    let suffix = if index == 0 { "" } else { "-\{index}" }
+    let relative_path = "\{relative_dir}/\{payload.artifact_id}\{suffix}.jsonl"
+    let target = root.join(relative_path)
+    if @fs.exists(target.to_string()) {
+      continue
+    }
+    @fs.write_file(target.to_string(), content, create_mode=CreateNew) catch {
+      error if @async.is_being_cancelled() => raise error
+      @os_error.OSError(_) as error if error.is_EEXIST() => continue
+      error =>
+        // Do not remove the path on an unknown write error: another process
+        // may own it, and preserving an old snapshot is more important than
+        // cleaning an unreferenced partial file. A later retry will choose a
+        // suffix if this path remains present.
+        raise HostError("could not write semantic selection: \{error}")
+    }
+    return {
+      path: relative_path,
+      match_count: payload.matches.length(),
+      file_count: files.length(),
+    }
+  }
+}
+
+///|
+async test "semantic selections materialize as bounded JSONL below the checkout" {
+  let dir = @fs.tmpdir(prefix="openseek-semantic-selection-")
+  defer @fs.rmdir(dir, recursive=true)
+  let root = @pathx.Path(@fs.realpath(dir))
+    .to_absolute()
+    .unwrap()
+    .to_uri_path()
+    .unwrap()
+  let reply = materialize_semantic_selection_op({
+    root,
+    artifact_id: "semantic-search-8-3",
+    patterns: ["inspect($(x:arg))"],
+    include_glob: "src/**",
+    exclude_glob: "generated/**",
+    matches: [
+      {
+        rule_id: Some("inspect"),
+        description: Some("inspection"),
+        file: "src/main.mbt",
+        start_line: 4,
+        start_column: 1,
+        end_line: 4,
+        end_column: 12,
+        matched_source: "inspect(value)",
+      },
+    ],
+  })
+  assert_eq(
+    reply.path,
+    ".openseek/agent-context/semantic-search/semantic-search-8-3.jsonl",
+  )
+  assert_eq(reply.match_count, 1)
+  assert_eq(reply.file_count, 1)
+  let written = @fs.read_file(@pathx.Path(dir).join(reply.path).to_string()).text()
+  assert_true(written.contains("\"kind\":\"semantic-search-selection\""))
+  assert_true(written.contains("inspect(value)"))
+}
+
+///|
+async test "semantic selection accepts an existing artifact directory" {
+  let dir = @fs.tmpdir(prefix="openseek-semantic-selection-existing-")
+  defer @fs.rmdir(dir, recursive=true)
+  let root = @pathx.Path(@fs.realpath(dir))
+    .to_absolute()
+    .unwrap()
+    .to_uri_path()
+    .unwrap()
+  let artifact_dir = @pathx.Path(dir).join(
+    ".openseek/agent-context/semantic-search",
+  )
+  @fs.mkdir(artifact_dir.to_string(), recursive=true)
+  @fs.write_file(
+    artifact_dir.join("previous.jsonl").to_string(),
+    "old snapshot\n",
+    create_mode=CreateNew,
+  )
+  let reply = materialize_semantic_selection_op({
+    root,
+    artifact_id: "semantic-search-existing",
+    patterns: ["inspect($(x:arg))"],
+    include_glob: "",
+    exclude_glob: "",
+    matches: [],
+  })
+  assert_true(reply.path.contains("semantic-search-existing"))
+  assert_true(@fs.exists(@pathx.Path(dir).join(reply.path).to_string()))
+  assert_eq(
+    @fs.read_file(artifact_dir.join("previous.jsonl").to_string()).text(),
+    "old snapshot\n",
+  )
+}
+
+///|
+async test "semantic selection materialization rejects path-shaped ids" {
+  let dir = @fs.tmpdir(prefix="openseek-semantic-selection-invalid-")
+  defer @fs.rmdir(dir, recursive=true)
+  let root = @pathx.Path(@fs.realpath(dir))
+    .to_absolute()
+    .unwrap()
+    .to_uri_path()
+    .unwrap()
+  let mut rejected = false
+  ignore(
+    materialize_semantic_selection_op({
+      root,
+      artifact_id: "../escape",
+      patterns: [],
+      include_glob: "",
+      exclude_glob: "",
+      matches: [],
+    }),
+  ) catch {
+    HostError(_) => rejected = true
+    error => raise error
+  }
+  assert_true(rejected)
+}
+
+///|
+async test "semantic selection materialization never replaces an old snapshot" {
+  let dir = @fs.tmpdir(prefix="openseek-semantic-selection-retry-")
+  defer @fs.rmdir(dir, recursive=true)
+  let root = @pathx.Path(@fs.realpath(dir))
+    .to_absolute()
+    .unwrap()
+    .to_uri_path()
+    .unwrap()
+  let payload : MaterializeSemanticSelectionPayload = {
+    root,
+    artifact_id: "semantic-search-1-1",
+    patterns: ["inspect($(x:arg))"],
+    include_glob: "",
+    exclude_glob: "",
+    matches: [
+      {
+        rule_id: Some("inspect"),
+        description: Some("first"),
+        file: "src/first.mbt",
+        start_line: 1,
+        start_column: 1,
+        end_line: 1,
+        end_column: 12,
+        matched_source: "inspect(first)",
+      },
+    ],
+  }
+  let first = materialize_semantic_selection_op(payload)
+  let first_path = @pathx.Path(dir).join(first.path).to_string()
+  let first_content = @fs.read_file(first_path).text()
+  let second = materialize_semantic_selection_op({
+    ..payload,
+    matches: [
+      {
+        ..payload.matches[0],
+        description: Some("second"),
+        matched_source: "inspect(second)",
+      },
+    ],
+  })
+  assert_true(second.path != first.path)
+  assert_eq(@fs.read_file(first_path).text(), first_content)
+  let second_path = @pathx.Path(dir).join(second.path).to_string()
+  assert_true(@fs.read_file(second_path).text().contains("inspect(second)"))
+}
+
+///|
 async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
   let dir = WirePath::parse(payload.path).absolute
   // A requested root can be created lazily by the engine. Treat a missing

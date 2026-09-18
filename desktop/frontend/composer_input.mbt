@@ -20,6 +20,10 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     archive_generation: self.composer_entry_retirements.length(),
   }
   let checkout_ready = checkout is Some(value) && value.is_ready()
+  let semantic_selection_pending = conv.pending_semantic_submission is Some(_) ||
+    conv.mentions.any(mention => {
+      mention.ref_ is @mention_context.SemanticSearchPending(_)
+    })
   // Sending needs a live engine and a workspace to run in — nothing about the
   // transcript. The record is what the turn writes, not a precondition for
   // starting one, so a reload in flight or a failed one never gates Send.
@@ -30,6 +34,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     @composer.Running(
       queue_available=true,
       steer_available=root_ready &&
+        !semantic_selection_pending &&
         conv.run is Open(stage~, ..) &&
         !(stage is Cancelling),
       can_stop=can_stop(conv),
@@ -42,7 +47,11 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       },
     )
   } else {
-    @composer.Send(available=root_ready && conv.compaction is NotCompacting)
+    @composer.Send(
+      available=root_ready &&
+        !semantic_selection_pending &&
+        conv.compaction is NotCompacting,
+    )
   }
   let status : Array[@composer.StatusComponent] = [
     @composer.ModelStatus(self.openseek_model_chip(conv)),
@@ -219,7 +228,11 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       } else {
         "Ask SeekMoon to inspect, edit, or explain this workspace."
       },
-      disabled: false,
+      // The file snapshot is the submission boundary. Freeze this composer
+      // until it settles so new local text cannot be mistaken for, or lost
+      // behind, the captured prompt; the File Editor remains usable for the
+      // next semantic selection.
+      disabled: semantic_selection_pending,
       primary_action,
     },
   }

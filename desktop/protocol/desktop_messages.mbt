@@ -549,6 +549,33 @@ pub(all) struct ReadFilePayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// One immutable structural-search match captured for an agent context file.
+/// Keeping the source in the artifact makes the selected snapshot useful even
+/// when the working tree changes before the agent reads it.
+pub(all) struct SemanticSelectionMatchPayload {
+  rule_id : String?
+  description : String?
+  file : String
+  start_line : Int
+  start_column : Int
+  end_line : Int
+  end_column : Int
+  matched_source : String
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
+/// Materialize one large semantic-search selection below the supplied checkout.
+/// The host owns the final path; callers can never choose an arbitrary file.
+pub(all) struct MaterializeSemanticSelectionPayload {
+  root : String
+  artifact_id : String
+  patterns : Array[String]
+  include_glob : String
+  exclude_glob : String
+  matches : Array[SemanticSelectionMatchPayload]
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
 pub(all) struct StatFilesPayload {
   paths : Array[String]
 } derive(Debug, Eq, FromJson, ToJson)
@@ -1942,6 +1969,30 @@ pub extend ReadFilePayload with Eq::{equal, not_equal}
 
 ///|
 pub extend ReadFilePayload with ToJson::{to_json}
+
+///|
+pub extend SemanticSelectionMatchPayload with Debug::{to_repr}
+
+///|
+pub extend SemanticSelectionMatchPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SemanticSelectionMatchPayload with FromJson::{from_json}
+
+///|
+pub extend SemanticSelectionMatchPayload with ToJson::{to_json}
+
+///|
+pub extend MaterializeSemanticSelectionPayload with Debug::{to_repr}
+
+///|
+pub extend MaterializeSemanticSelectionPayload with Eq::{equal, not_equal}
+
+///|
+pub extend MaterializeSemanticSelectionPayload with FromJson::{from_json}
+
+///|
+pub extend MaterializeSemanticSelectionPayload with ToJson::{to_json}
 
 ///|
 pub extend RunsPayload with Debug::{to_repr}

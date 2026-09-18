@@ -8,6 +8,7 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/mention_context",
   "openseek_desktop/protocol",
 }
 
@@ -62,8 +63,14 @@ pub(all) enum Msg {
   Refresh
   ClearResults
   CollapseAll
+  ClearSelection
   ShowMore
   ToggleFile(String)
+  TogglePattern(String)
+  ToggleSemanticHit(String)
+  ToggleSemanticPattern(String)
+  ToggleSemanticFile(String, String)
+  SetSemanticResultFilter(SemanticResultFilter)
   RequestStarted(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int)
   Loaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, reply~ : @protocol.SearchTextReply)
   SemanticLoaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, reply~ : @protocol.SearchSemanticReply)
@@ -89,6 +96,14 @@ type SearchRequestIdentity derive(Eq)
 
 type SearchResultSummary derive(Eq)
 
+pub(all) enum SemanticResultFilter {
+  AllSemanticResults
+  SelectedSemanticResults
+} derive(Eq, @debug.Debug)
+pub fn SemanticResultFilter::equal(Self, Self) -> Bool
+pub fn SemanticResultFilter::not_equal(Self, Self) -> Bool
+pub fn SemanticResultFilter::to_repr(Self) -> @debug.Repr
+
 type SemanticSearchState derive(Eq)
 
 type State derive(Eq)
@@ -97,9 +112,12 @@ pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::explorer_view(Self, Input, @cmd.Emit[Msg], (String, @common.Range) -> @cmd.Cmd) -> @html.Html
 pub fn State::handle(Self, Msg, Input) -> Self
+pub fn State::is_semantic(Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::park(Self) -> Self
 pub fn State::reset_checkout(Self) -> Self
+pub fn State::selected_semantic_hits(Self) -> Array[@protocol.SemanticSearchHit]
+pub fn State::selected_semantic_reference(Self, String) -> @mention_context.SemanticSearchReference?
 pub fn State::subscription(Self, Input, @cmd.Emit[Msg]) -> @sub.Sub
 
 type TextSearchState derive(Eq)

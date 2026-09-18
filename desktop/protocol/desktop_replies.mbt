@@ -1369,6 +1369,14 @@ pub(all) enum ReadFileReply {
 } derive(Debug, Eq)
 
 ///|
+/// The workspace-relative file created for a large semantic-search selection.
+pub(all) struct MaterializeSemanticSelectionReply {
+  path : String
+  match_count : Int
+  file_count : Int
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
 pub impl ToJson for ReadFileReply with fn to_json(self) {
   match self {
     Binary => { "kind": "binary" }
@@ -2626,6 +2634,18 @@ pub extend ReadFileReply with Eq::{equal, not_equal}
 
 ///|
 pub extend ReadFileReply with ToJson::{to_json}
+
+///|
+pub extend MaterializeSemanticSelectionReply with Debug::{to_repr}
+
+///|
+pub extend MaterializeSemanticSelectionReply with Eq::{equal, not_equal}
+
+///|
+pub extend MaterializeSemanticSelectionReply with FromJson::{from_json}
+
+///|
+pub extend MaterializeSemanticSelectionReply with ToJson::{to_json}
 
 ///|
 pub extend RunSettlementPayload with Debug::{to_repr}

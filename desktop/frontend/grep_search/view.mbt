@@ -571,6 +571,30 @@ fn search_body(
       },
     ),
   )
+  let selected_count = page.selected.length()
+  if page.mode is Semantic && selected_count > 0 {
+    children.push(
+      @html.div(class="search-selection-toolbar", [
+        @html.span("\{selected_count} selected"),
+        @html.button(
+          on_click=emit(SetSemanticResultFilter(SelectedSemanticResults)),
+          "Show selected",
+        ),
+        @html.button(on_click=emit(ClearSelection), "Clear selection"),
+      ]),
+    )
+  }
+  if page.mode is Semantic && page.semantic_filter is SelectedSemanticResults {
+    children.push(
+      @html.div(class="search-selection-toolbar", [
+        @html.span("Showing selected matches"),
+        @html.button(
+          on_click=emit(SetSemanticResultFilter(AllSemanticResults)),
+          "Show all",
+        ),
+      ]),
+    )
+  }
   if summary.limit_hit {
     children.push(
       @html.div(
@@ -594,23 +618,218 @@ fn search_body(
   }
   // A diagnostic and retained results are independent: both engines can
   // return useful matches before reporting a scan failure.
-  for group in visible_file_groups(items, page.visible_lines) {
-    children.push(file_group_view(page, group, emit, open_match))
+  let filtered_hits = match page.semantic_filter {
+    AllSemanticResults => page.semantic.hits
+    SelectedSemanticResults =>
+      selected_semantic_hits(page.semantic.hits, page.selected)
   }
-  let shown = page.visible_lines.min(items.length())
-  if shown < items.length() {
-    let next = VisibleSearchLineStep.min(items.length() - shown)
+  if page.mode is Semantic {
+    for
+      group in visible_semantic_pattern_groups(
+        filtered_hits,
+        page.visible_lines,
+      ) {
+      children.push(semantic_pattern_group_view(page, group, emit, open_match))
+    }
+  } else {
+    for group in visible_file_groups(items, page.visible_lines) {
+      children.push(file_group_view(page, group, emit, open_match))
+    }
+  }
+  // Pagination follows the visible selection filter in semantic mode.
+  let result_count = if page.mode is Semantic {
+    filtered_hits.length()
+  } else {
+    items.length()
+  }
+  let shown = page.visible_lines.min(result_count)
+  if shown < result_count {
+    let next = VisibleSearchLineStep.min(result_count - shown)
     children.push(
       @html.div(class="search-show-more", [
         @html.button(on_click=emit(ShowMore), "Show \{next} more results"),
         @html.div(
           class="search-show-more-detail",
-          "\{shown} of \{items.length()} results displayed",
+          "\{shown} of \{result_count} results displayed",
         ),
       ]),
     )
   }
   @html.div(class="search-results", children)
+}
+
+///|
+fn semantic_hit_view(
+  page : Page,
+  hit : @protocol.SemanticSearchHit,
+  emit : @cmd.Emit[Msg],
+  open_match : (String, @common.Range) -> @cmd.Cmd,
+) -> @html.Html {
+  let key = semantic_hit_key(hit)
+  let selected = page.selected.contains(key)
+  @html.div(
+    class=if selected {
+      "search-semantic-hit selected"
+    } else {
+      "search-semantic-hit"
+    },
+    attrs=@html.Attrs::build().data_set("semantic-hit-key", key),
+    [
+      @html.div(
+        class="search-semantic-context",
+        // Keep the shared UTF-16 highlights and matched-source fallback while
+        // selection identifies each structural hit independently.
+        [result_row(SearchResultItem::from_semantic(hit), open_match)],
+      ),
+      @html.button(
+        class="search-semantic-select",
+        attrs=@html.Attrs::build()
+          .aria_label(if selected { "Deselect match" } else { "Select match" })
+          .aria_pressed(selected.to_string())
+          .on_click(_ => emit(ToggleSemanticHit(key))),
+        if selected {
+          "☑"
+        } else {
+          "☐"
+        },
+      ),
+    ],
+  )
+}
+
+///|
+fn semantic_file_group_view(
+  page : Page,
+  pattern : String,
+  group : SemanticFileGroup,
+  emit : @cmd.Emit[Msg],
+  open_match : (String, @common.Range) -> @cmd.Cmd,
+) -> @html.Html {
+  let collapsed = page.collapsed
+    .get(semantic_file_key(pattern, group.path))
+    .unwrap_or(false)
+  let (name, parent) = file_label(group.path)
+  let rows = if collapsed {
+    ([] : Array[@html.Html])
+  } else {
+    group.hits.map(hit => semantic_hit_view(page, hit, emit, open_match))
+  }
+  let all_hits = page.semantic.hits.filter(hit => {
+    hit.rule_id == pattern && hit.path == group.path
+  })
+  let all_selected = !all_hits.is_empty() &&
+    all_hits.all(hit => page.selected.contains(semantic_hit_key(hit)))
+  @html.div(class="search-file-group", [
+    @html.button(
+      class="search-file-header",
+      title=group.path,
+      attrs=@html.Attrs::build()
+        .aria_expanded((!collapsed).to_string())
+        .on_click(_ => emit(ToggleFile(semantic_file_key(pattern, group.path)))),
+      [
+        @html.span(
+          class="search-file-chevron",
+          attrs=@html.Attrs::build().aria_hidden("true"),
+          if collapsed {
+            "›"
+          } else {
+            "⌄"
+          },
+        ),
+        @html.span(class="search-file-name", name),
+        @html.span(class="search-file-parent", parent),
+        @html.span(class="search-file-count", "\{group.count}"),
+        @html.span(
+          class="search-semantic-group-select",
+          attrs=@html.Attrs::build()
+            .aria_label(
+              if all_selected {
+                "Deselect file"
+              } else {
+                "Select file"
+              },
+            )
+            .aria_pressed(all_selected.to_string())
+            .on_click(event => {
+              event.stop_propagation()
+              emit(ToggleSemanticFile(pattern, group.path))
+            }),
+          if all_selected {
+            "☑"
+          } else {
+            "☐"
+          },
+        ),
+      ],
+    ),
+    @html.div(class="search-file-results", rows),
+  ])
+}
+
+///|
+fn semantic_pattern_group_view(
+  page : Page,
+  group : SemanticPatternGroup,
+  emit : @cmd.Emit[Msg],
+  open_match : (String, @common.Range) -> @cmd.Cmd,
+) -> @html.Html {
+  let collapsed = page.collapsed
+    .get(semantic_pattern_key(group.pattern))
+    .unwrap_or(false)
+  let files = if collapsed {
+    []
+  } else {
+    semantic_file_groups(group.hits).map(file => {
+      semantic_file_group_view(page, group.pattern, file, emit, open_match)
+    })
+  }
+  let all_hits = page.semantic.hits.filter(hit => hit.rule_id == group.pattern)
+  let all_selected = !all_hits.is_empty() &&
+    all_hits.all(hit => page.selected.contains(semantic_hit_key(hit)))
+  @html.div(class="search-semantic-pattern-group", [
+    @html.button(
+      class="search-semantic-pattern-header",
+      title=group.pattern,
+      attrs=@html.Attrs::build()
+        .aria_expanded((!collapsed).to_string())
+        .on_click(_ => emit(TogglePattern(group.pattern))),
+      [
+        @html.span(
+          class="search-file-chevron",
+          attrs=@html.Attrs::build().aria_hidden("true"),
+          if collapsed {
+            "›"
+          } else {
+            "⌄"
+          },
+        ),
+        @html.span(class="search-semantic-pattern", group.pattern),
+        @html.span(class="search-file-count", "\{group.count}"),
+        @html.span(
+          class="search-semantic-group-select",
+          attrs=@html.Attrs::build()
+            .aria_label(
+              if all_selected {
+                "Deselect pattern"
+              } else {
+                "Select pattern"
+              },
+            )
+            .aria_pressed(all_selected.to_string())
+            .on_click(event => {
+              event.stop_propagation()
+              emit(ToggleSemanticPattern(group.pattern))
+            }),
+          if all_selected {
+            "☑"
+          } else {
+            "☐"
+          },
+        ),
+      ],
+    ),
+    @html.div(class="search-semantic-pattern-results", files),
+  ])
 }
 
 ///|

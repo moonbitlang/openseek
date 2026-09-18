@@ -1258,6 +1258,31 @@ pub fn State::with_editor_comment(
 }
 
 ///|
+/// Replace the live semantic-search chip with the current file-editor
+/// selection. The editor emits snapshots for the active checkout, while the
+/// Codex composer keeps its own draft state separate from OpenSeek's
+/// conversation. Removing every prior semantic variant first makes clearing
+/// the selection and changing it both deterministic, without disturbing file,
+/// symbol, skill, or annotation chips already in the draft.
+pub fn State::with_semantic_selection(
+  self : State,
+  reference : @mention_context.SemanticSearchReference?,
+) -> State {
+  let mentions = self.mentions.filter(mention => {
+    !(mention.ref_ is @mention_context.SemanticSearch(_) ||
+    mention.ref_ is @mention_context.SemanticSearchArtifact(_) ||
+    mention.ref_ is @mention_context.SemanticSearchPending(_))
+  })
+  let mentions = match reference {
+    Some(reference) =>
+      mentions +
+      [{ ref_: @mention_context.SemanticSearch(reference), range: None, }]
+    None => mentions
+  }
+  { ..self, mentions, }
+}
+
+///|
 fn CodexItem::decode(value : Json) -> CodexItem? {
   guard value is Object(fields) &&
     @jsonx.json_text(fields, "id") is Some(id) &&
