@@ -75,12 +75,15 @@ pub impl @json.FromJson for AppFocusedBrowserReply
 
 pub(all) struct AppInfoReply {
   version : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  console_url : String?
+} derive(Eq, @debug.Debug)
 pub fn AppInfoReply::equal(Self, Self) -> Bool
 pub fn AppInfoReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AppInfoReply::not_equal(Self, Self) -> Bool
 pub fn AppInfoReply::to_json(Self) -> Json
 pub fn AppInfoReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for AppInfoReply
+pub impl @json.FromJson for AppInfoReply
 
 pub(all) struct AppSystemAppearanceReply {
   dark : Bool

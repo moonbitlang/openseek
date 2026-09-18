@@ -227,6 +227,9 @@ h2 {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
+  /* Descriptions quote URLs and ids; an unbreakable run must wrap inside
+     the column rather than widen the page past the window. */
+  overflow-wrap: anywhere;
 }
 
 /* A row's controls sit on one line, hugging the right edge; a lone

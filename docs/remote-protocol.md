@@ -153,6 +153,25 @@ not secrets — the barrier is ownership:
   `OPENSEEK_DEVICE_TOKEN` + `OPENSEEK_RELAY_URL` pin the connector config
   directly (bypassing sign-in), and `OPENSEEK_SERVER_URL` points the
   sign-in flow at an ad-hoc server regardless of the settings' selection.
+- **Development console** (`.dev` builds only): the host also serves its
+  own frontend bundle on `http://127.0.0.1:27183/` (an ephemeral port when
+  that one is taken) and answers
+  the console's account routes for itself — `/v1/auth/me`, a `/v1/devices`
+  roster naming this host as device `host`, and `/v1/devices/host/ws`
+  carrying the protocol above. The entry URL (Settings → Remote access →
+  Local console) is `/?device=host&token=<per-launch token>`; the document
+  response to it sets an HttpOnly `SameSite=Strict` session cookie named
+  after the port (browsers key cookies by host, so two development hosts
+  must not share one), and the URL stays complete rather than redirecting
+  the token away, so it can be reloaded or pasted into another browser
+  while the launch lasts. The session is the launch, not an account: the
+  gate's `GET /v1/auth/login` returns the page to the console and
+  `POST /v1/auth/logout` returns it to the gate, and neither moves the
+  token or the cookie. Every account route and the socket require that
+  cookie and, when a browser sends one, an `Origin` equal to the console's
+  own. Loopback cookies reach every port on the host, which is inherent to
+  local tools and not defended against. The window never uses this origin,
+  and a release build never opens the port.
 
 The relay's server implementation and HTTP surface (OAuth routes, the devices
 API, and schema) live in the openseek-api repository, which also documents

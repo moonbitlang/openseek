@@ -1276,7 +1276,31 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 /// this from `proton-package.json`; it is not an editable engine setting.
 pub(all) struct AppInfoReply {
   version : String
-} derive(Debug, Eq, FromJson, ToJson)
+  // A development build's console entry URL, the loopback origin the host
+  // serves its own frontend on for the system browser. Absent in a release.
+  console_url : String?
+} derive(Debug, Eq)
+
+///|
+/// `version` is required; `console_url` reads as absent when missing or
+/// null. Unknown fields are ignored.
+pub impl FromJson for AppInfoReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "app info reply")
+  {
+    version: object.required_string("version"),
+    console_url: object.optional_string("console_url"),
+  }
+}
+
+///|
+/// A release build omits `console_url` rather than sending null.
+pub impl ToJson for AppInfoReply with fn to_json(self) {
+  let object : Map[String, Json] = { "version": self.version.to_json() }
+  if self.console_url is Some(url) {
+    object["console_url"] = url.to_json()
+  }
+  Json::object(object)
+}
 
 ///|
 pub(all) struct UpdateDownloadProgressPayload {

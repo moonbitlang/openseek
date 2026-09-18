@@ -848,6 +848,27 @@ fn remote_access_rows(
   model : Model,
 ) -> Array[@html.Html] {
   let rows : Array[@html.Html] = []
+  // A development build serves this very frontend on loopback for the
+  // system browser, so the console can be worked on against this host with
+  // no relay in between. Open carries the launch token that grants the
+  // browser its session.
+  if model.console_url is Some(url) {
+    rows.push(
+      @settings.row(
+        "Local console",
+        [
+          @html.a(
+            class="button secondary setting-link",
+            href=url,
+            target=Blank,
+            rel="noopener noreferrer",
+            [icon(icon_link_external), @html.span("Open")],
+          ),
+        ],
+        desc="Development build — open the console this host serves in a browser on this machine.",
+      ),
+    )
+  }
   match model.remote_access {
     None =>
       rows.push(

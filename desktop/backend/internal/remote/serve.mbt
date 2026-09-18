@@ -27,21 +27,18 @@ priv struct ClientSubscription {
 }
 
 ///|
-/// One remote data WebSocket actor. It creates and closes the socket inside
-/// `run`; its subscription, outbound queue, writer, notification forwarder,
-/// pinger, and request tasks cannot outlive that run.
+/// One client's WebSocket actor: a relay data socket this host dials
+/// (`run`) or a development console socket it accepted (`serve`). Its
+/// subscription, outbound queue, writer, notification forwarder, pinger, and
+/// request tasks cannot outlive the socket.
 priv struct WsClientActor {
   state : @api.ApiState
   host_connection : @host.HostConnection
-  url : String
 }
 
 ///|
-fn WsClientActor::WsClientActor(
-  state : @api.ApiState,
-  url : String,
-) -> WsClientActor {
-  { state, host_connection: HostConnection(), url, }
+fn WsClientActor::WsClientActor(state : @api.ApiState) -> WsClientActor {
+  { state, host_connection: HostConnection(), }
 }
 
 ///|
@@ -145,8 +142,8 @@ const CodeHostError = -32001
 /// Dial and serve one announced remote client. A client hanging up mid-run
 /// is routine and only retires this actor; cancelling the parent relay actor
 /// still propagates so every owned resource is closed immediately.
-async fn WsClientActor::run(self : WsClientActor) -> Unit {
-  let conn = @websocket.Conn::connect(self.url)
+async fn WsClientActor::run(self : WsClientActor, url : String) -> Unit {
+  let conn = @websocket.Conn::connect(url)
   defer conn.close()
   self.serve(conn) catch {
     error if @async.is_being_cancelled() => raise error
@@ -417,7 +414,7 @@ fn error_envelope(id : Json, code : Int, message : String) -> Json {
 ///|
 async test "readiness precedes the first forwarded hub notification" {
   let state = @api.ApiState(engine="unused")
-  let subscription = WsClientActor::WsClientActor(state, "unused").open_subscription()
+  let subscription = WsClientActor(state).open_subscription()
   state.publish(
     SessionEvent({
       session: "session-1",

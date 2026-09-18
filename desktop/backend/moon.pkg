@@ -9,6 +9,7 @@ import {
   "openseek_desktop/backend/internal/engine",
   "openseek_desktop/backend/internal/extension",
   "openseek_desktop/backend/internal/host",
+  "openseek_desktop/backend/internal/pathx",
   "openseek_desktop/protocol",
   "openseek_desktop/backend/internal/remote",
   "openseek_desktop/backend/internal/shellenv",
