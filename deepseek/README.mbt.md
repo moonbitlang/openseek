@@ -11,7 +11,7 @@ The HTTP client lives in `bobzhang/openseek/deepseek/client`.
 ## API Shape
 
 - `Model`: provider-tagged chat models, e.g. `Deepseek(V4Pro)`,
-  `Deepseek(V41Flash)` (the canonical `deepseek-flash` wire name), `Kimi(K27Code)`,
+  `Deepseek(V4Flash)` (the canonical `deepseek-flash` wire name), `Kimi(K27Code)`,
   and `Glm(G53)`, with `Show` for wire strings and `Debug` for inspection.
 - `Model::api_key(matches)`: resolves the key a command main should send for
   this model — an explicit `--api-key` first, then the provider-specific
@@ -81,7 +81,6 @@ classDiagram
     <<enumeration>>
     V4Flash
     V4Pro
-    V41Flash
   }
 
   class KimiVariant {
@@ -242,7 +241,7 @@ test "encode chat request values" {
     ChatMessage(User, content="write a MoonBit test"),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [{ "role": "user", "content": "write a MoonBit test" }],
     "stream": false,
   })
@@ -272,7 +271,7 @@ test "encode tool-enabled chat request" {
     ]),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [
       { "role": "user", "content": "read README.mbt.md" },
       {
@@ -319,7 +318,7 @@ test "encode json-object response request" {
     ChatMessage(User, content="return {\"ok\":true}"),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [{ "role": "user", "content": "return {\"ok\":true}" }],
     "stream": false,
     "response_format": { "type": "json_object" },

@@ -1984,7 +1984,7 @@ test('initial OpenRouter setup only needs an API key', async ({ page }) => {
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('option', { name: 'DS Flash', exact: true }).click();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.model')))
-    .toBe('deepseek-v4-flash');
+    .toBe('deepseek-flash');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByLabel('OpenRouter model')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);

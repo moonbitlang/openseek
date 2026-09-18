@@ -10,7 +10,7 @@ test "minimal request: flash model, no response_format, non-stream" {
     ChatMessage(User, content="ping"),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [
       { "role": "system", "content": "plain text is fine" },
       { "role": "user", "content": "ping" },
@@ -41,7 +41,7 @@ test "response_format=JsonObject asks for a JSON object reply" {
     ChatMessage(User, content="ping"),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [
       { "role": "system", "content": "json only" },
       { "role": "user", "content": "ping" },
@@ -65,7 +65,7 @@ test "tools are advertised as function definitions" {
     ChatMessage(User, content="run tests"),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [{ "role": "user", "content": "run tests" }],
     "stream": false,
     "tools": [
@@ -91,7 +91,7 @@ test "stream=true requests usage-bearing streaming" {
     ChatMessage(User, content="stream this"),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [{ "role": "user", "content": "stream this" }],
     "stream": true,
     "stream_options": { "include_usage": true },
@@ -265,9 +265,9 @@ test "glm flash enables preserved thinking at max effort" {
 }
 
 ///|
-test "v4.1 flash encodes its canonical wire name and thinking fields" {
+test "flash model keeps its canonical wire name with thinking fields" {
   let body = @deepseek.encode_chat_request(
-    model=Deepseek(V41Flash),
+    model=Deepseek(V4Flash),
     thinking=Max,
   ) <| [
     ChatMessage(User, content="solve"),
@@ -314,7 +314,7 @@ test "deepseek tool-enabled reasoning and tool result round-trip" {
     ChatMessage(Tool("call_42"), content="exit=0\nok"),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [
       { "role": "system", "content": "be terse" },
       { "role": "user", "content": "check the setup" },
@@ -378,7 +378,7 @@ test "multiple tool definitions are all encoded" {
     ChatMessage(User, content="look around"),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [{ "role": "user", "content": "look around" }],
     "stream": false,
     "tools": [

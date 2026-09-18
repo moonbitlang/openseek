@@ -58,7 +58,7 @@ async test "suite config parses relative task paths and flattens jobs" {
     assert_eq(config.problems[1].prompt_label, "Beta Problem")
     let jobs = suite_jobs(config)
     assert_eq(jobs.length(), 12)
-    assert_eq(jobs[0].model.to_string(), "deepseek-v4-flash")
+    assert_eq(jobs[0].model.to_string(), "deepseek-flash")
     assert_eq(jobs[0].problem.id, "alpha")
     assert_eq(jobs[0].repeat_index, 0)
     assert_eq(jobs[3].problem.id, "beta")

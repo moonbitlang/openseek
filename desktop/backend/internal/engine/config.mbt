@@ -2,7 +2,7 @@
 // is spawned with.
 
 ///|
-const DefaultModel = "deepseek-v4-flash"
+const DefaultModel = "deepseek-flash"
 
 ///|
 const DefaultMaxSteps = 1000
