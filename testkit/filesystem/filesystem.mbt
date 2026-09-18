@@ -20,8 +20,7 @@ pub fn FileSystem::from_pairs(
   files : Array[(String, String)],
 ) -> FileSystem raise {
   let object : Map[String, Json] = Map([])
-  for file in files {
-    let (path, content) = file
+  for (path, content) in files {
     validate_relative_path(path)
     if object.contains(path) {
       fail("duplicate file path: \{path}")

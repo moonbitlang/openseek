@@ -60,17 +60,6 @@ pub fn classify_header(json : Json) -> HeaderParse {
 }
 
 ///|
-/// Decode a session-file header record, or `None` when `json` is not a
-/// header this build can read. Use `classify_header` to distinguish an
-/// unsupported version from a non-header.
-fn parse_header(json : Json) -> SessionFileHeader? {
-  match classify_header(json) {
-    Header(header) => Some(header)
-    UnsupportedVersion(_) | NotHeader => None
-  }
-}
-
-///|
 /// One JSONL line that could not be decoded into a `SessionEvent`. Kept so
 /// downstream tools can surface the offending line instead of silently
 /// dropping it or aborting the whole load.

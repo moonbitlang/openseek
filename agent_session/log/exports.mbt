@@ -63,7 +63,7 @@ pub fn parse_events(text : String) -> ParsedLog {
         continue
       }
     }
-    if may_be_header && parse_header(json) is Some(parsed_header) {
+    if may_be_header && classify_header(json) is Header(parsed_header) {
       header = Some(parsed_header)
       continue
     }
