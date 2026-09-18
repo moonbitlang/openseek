@@ -88,6 +88,19 @@ async fn execute(arguments : Json) -> @agent_tool.ToolAction {
 }
 
 ///|
+/// Run the `write` tool from a built definition — the shape every test that
+/// drives the registered executor uses.
+async fn run_write(
+  tool : @agent_tool.AgentToolDefinition,
+  arguments : Json,
+) -> @agent_tool.ToolAction {
+  match tool.execute {
+    Async(run) => run(arguments)
+    Sync(_) => fail("write tool should be async")
+  }
+}
+
+///|
 async fn execute_with_workspace(
   workspace_root : String,
   file_state : @agent_tool.FileStateMap,
@@ -346,11 +359,10 @@ async test "write creates a file with the given content" {
 ///|
 async test "write resolves relative paths under the workspace root" {
   @vfs.with_tmpdir(prefix="openseek-write-workspace-", dir => {
-    let tool = definition(workspace_root=dir)
-    let result = match tool.execute {
-      Async(execute) => execute({ "path": "note.txt", "content": "workspace" })
-      Sync(_) => fail("write tool should be async")
-    }
+    let result = run_write(definition(workspace_root=dir), {
+      "path": "note.txt",
+      "content": "workspace",
+    })
     guard result is Respond(output) else { fail("expected Respond") }
     let path = "\{dir}/note.txt"
     assert_false(output.is_error)
@@ -758,16 +770,13 @@ async test "write rejects non-object arguments" {
 async test "write records a new file as Created and keeps it on overwrite" {
   @vfs.with_tmpdir(dir => {
     let state = @agent_tool.FileStateMap()
-    let run = match definition(file_state=state).execute {
-      Async(run) => run
-      Sync(_) => fail("write tool should be async")
-    }
+    let tool = definition(file_state=state)
     let path = "\{dir}/note.txt"
     // A brand-new file the agent wrote is recorded as its own creation.
-    let _ = run({ "path": path, "content": "v1" })
+    let _ = run_write(tool, { "path": path, "content": "v1" })
     assert_true(state.get(path) is Some(Created))
     // Overwriting that same non-source file keeps the stronger Created state.
-    let _ = run({ "path": path, "content": "v2" })
+    let _ = run_write(tool, { "path": path, "content": "v2" })
     assert_true(state.get(path) is Some(Created))
   })
 }
@@ -779,11 +788,10 @@ async test "write records an overwrite of a pre-existing file as Modified" {
     let path = "\{dir}/pre.txt"
     // The file exists before the agent touches it this session.
     @vfs.FileSystem({ "pre.txt": "old" }).write_to(dir)
-    let run = match definition(file_state=state).execute {
-      Async(run) => run
-      Sync(_) => fail("write tool should be async")
-    }
-    let _ = run({ "path": path, "content": "new" })
+    let _ = run_write(definition(file_state=state), {
+      "path": path,
+      "content": "new",
+    })
     assert_true(state.get(path) is Some(Modified))
   })
 }
@@ -796,17 +804,16 @@ async test "a write scope confines write to its allowed paths" {
       is Ok(scope) else {
       fail("expected the scope to build")
     }
-    let run = match definition(workspace_root=dir, write_scope=scope).execute {
-      Async(execute) => execute
-      Sync(_) => fail("write tool should be async")
-    }
-    guard run({ "path": "lib/new.txt", "content": "n\n" }) is Respond(admitted) else {
+    let tool = definition(workspace_root=dir, write_scope=scope)
+    guard run_write(tool, { "path": "lib/new.txt", "content": "n\n" })
+      is Respond(admitted) else {
       fail("expected Respond")
     }
     assert_false(admitted.is_error)
     assert_eq(@fs.read_file("\{dir}/lib/new.txt").text(), "n\n")
     // Out of scope: blocked before parent directories are even created.
-    guard run({ "path": "other/new.txt", "content": "n\n" }) is Respond(blocked) else {
+    guard run_write(tool, { "path": "other/new.txt", "content": "n\n" })
+      is Respond(blocked) else {
       fail("expected Respond")
     }
     assert_true(blocked.is_error)

@@ -91,14 +91,9 @@ async fn source_write_readonly_profile_base(
   let real_workspace_root = @workspace_path.strip_trailing_slash(
     @path.Path(real_workspace_root).normalize().to_string(),
   )
-  match source_write_profile_cache.get(real_workspace_root) {
-    Some(cached) if cached_source_write_profile_valid(cached) =>
-      return {
-        profile: cached.profile,
-        denial_subjects: cached.denial_subjects,
-      }
-    Some(_) => ()
-    None => ()
+  if source_write_profile_cache.get(real_workspace_root) is Some(cached) &&
+    cached_source_write_profile_valid(cached) {
+    return { profile: cached.profile, denial_subjects: cached.denial_subjects, }
   }
   let scan = protected_source_tree_profile_scan(real_workspace_root)
   let denial_subjects = source_write_denial_subjects(scan.literal_paths)

@@ -129,15 +129,11 @@ async fn remove_file(
     )
   }
 
-  let exists = @fs.exists(path)
-  if !exists {
-    return err("no such file")
-  }
+  guard @fs.exists(path) else { return err("no such file") }
   // Classify the final component WITHOUT following a symlink: a path replaced by
   // a symlink since `write` recorded it must be refused, not followed to whatever
   // it now points at.
-  let kind = @fs.kind(path, follow_symlink=false)
-  guard kind is Regular else {
+  guard @fs.kind(path, follow_symlink=false) is Regular else {
     return err("not a regular file; remove deletes regular files")
   }
   // The gate is two steps. First the CHEAP provenance check: a path the agent

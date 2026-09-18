@@ -50,7 +50,7 @@ pub async fn WriteScope::create(
   Ok({
     root: @workspace_path.strip_trailing_slash(canonical_root),
     allowed,
-    allowed_display: allowed_paths.map(p => p.to_string()).join(", "),
+    allowed_display: allowed_paths.join(", "),
   })
 }
 

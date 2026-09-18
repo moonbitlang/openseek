@@ -219,12 +219,10 @@ pub fn respond(
 pub fn brief_line(text : String, limit? : Int = 72) -> String {
   let sanitized = StringBuilder()
   for ch in text {
-    if ch is ('\n' | '\r' | '\t') {
-      sanitized.write_char(' ')
-    } else if ch.to_int() < 0x20 || ch.to_int() == 0x7F {
-      continue
-    } else {
-      sanitized.write_char(ch)
+    match ch {
+      '\n' | '\r' | '\t' => sanitized.write_char(' ')
+      '\u{00}'..='\u{1F}' | '\u{7F}' => ()
+      _ => sanitized.write_char(ch)
     }
   }
   let one = sanitized.to_string().trim()

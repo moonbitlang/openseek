@@ -12,9 +12,8 @@ async fn scope_of(
 
 ///|
 async fn assert_admits(scope : @write_scope.WriteScope, path : String) -> Unit {
-  match scope.deny_reason(path) {
-    None => ()
-    Some(reason) => fail("expected \{path} admitted, denied: \{reason}")
+  if scope.deny_reason(path) is Some(reason) {
+    fail("expected \{path} admitted, denied: \{reason}")
   }
 }
 
