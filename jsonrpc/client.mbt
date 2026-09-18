@@ -132,10 +132,7 @@ pub async fn Client::request(
   // Register the inbox before enqueuing so a concurrent close still delivers
   // `Closed` here rather than leaving us to block forever.
   self.enqueue(build_request(id, method_, params))
-  match inbox.get() {
-    Ok(json) => json
-    Err(error) => raise error
-  }
+  inbox.get().unwrap_or_error()
 }
 
 ///|

@@ -112,6 +112,15 @@ fn[T : FromJson] job_optional(
 }
 
 ///|
+fn[T : FromJson] job_required(
+  fields : Map[String, Json],
+  name : String,
+  path : @json.JsonPath,
+) -> T raise @json.JsonDecodeError {
+  T::from_json(job_field(fields, name, path), path)
+}
+
+///|
 fn[T : ToJson] job_optional_json(value : T?) -> Json {
   match value {
     Some(value) => value.to_json()
@@ -153,9 +162,7 @@ pub fn valid_job_component(value : String) -> Bool {
   value != "." &&
   value != ".." &&
   value.length() <= 200 &&
-  value
-  .iter()
-  .all(c => {
+  value.all(c => {
     c is ('a'..='z' | 'A'..='Z' | '0'..='9') || c == '-' || c == '_' || c == '.'
   })
 }
@@ -203,22 +210,13 @@ pub impl FromJson for JobRecord with fn from_json(json, path) {
   }
   let cleanup_error : String? = job_optional(fields, "cleanup_error", path)
   let data : Json? = job_optional(fields, "data", path)
-  let generation : String = FromJson::from_json(
-    job_field(fields, "generation", path),
-    path,
-  )
-  let id : String = FromJson::from_json(job_field(fields, "id", path), path)
+  let generation : String = job_required(fields, "generation", path)
+  let id : String = job_required(fields, "id", path)
   let revision = job_uint(fields, "revision", path)
-  let command : String = FromJson::from_json(
-    job_field(fields, "command", path),
-    path,
-  )
+  let command : String = job_required(fields, "command", path)
   let description : String? = job_optional(fields, "description", path)
   let cwd : String? = job_optional(fields, "cwd", path)
-  let state : JobState = FromJson::from_json(
-    job_field(fields, "state", path),
-    path,
-  )
+  let state : JobState = job_required(fields, "state", path)
   let started_at_ms = job_uint(fields, "started_at_ms", path)
   let backgrounded_at_ms = job_uint(fields, "backgrounded_at_ms", path)
   let finished_at_ms : Int64? = job_optional_uint(
@@ -228,20 +226,11 @@ pub impl FromJson for JobRecord with fn from_json(json, path) {
     fields, "last_output_at_ms", path,
   )
   let output_file : String? = job_optional(fields, "output_file", path)
-  let output_persistent : Bool = FromJson::from_json(
-    job_field(fields, "output_persistent", path),
-    path,
-  )
+  let output_persistent : Bool = job_required(fields, "output_persistent", path)
   let output_bytes = job_uint(fields, "output_bytes", path)
   let output_chars = job_uint(fields, "output_chars", path)
-  let output_truncated : Bool = FromJson::from_json(
-    job_field(fields, "output_truncated", path),
-    path,
-  )
-  let invalid_utf8 : Bool = FromJson::from_json(
-    job_field(fields, "invalid_utf8", path),
-    path,
-  )
+  let output_truncated : Bool = job_required(fields, "output_truncated", path)
+  let invalid_utf8 : Bool = job_required(fields, "invalid_utf8", path)
   let output_error : String? = job_optional(fields, "output_error", path)
   let persistence_error : String? = job_optional(
     fields, "persistence_error", path,
@@ -251,10 +240,7 @@ pub impl FromJson for JobRecord with fn from_json(json, path) {
     revision > 0 &&
     revision <= 2147483647L &&
     output_chars <= 2147483647L &&
-    (match output_file {
-      Some(file) => valid_job_component(file)
-      None => true
-    }) else {
+    output_file.map_or(true, valid_job_component) else {
     raise JsonDecodeError((path, "invalid background job identity or count"))
   }
   {

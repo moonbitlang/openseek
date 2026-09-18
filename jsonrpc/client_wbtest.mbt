@@ -465,16 +465,7 @@ async test "cancelling the reader closes the client and fails in-flight requests
     // Reader with nothing to read (peer never answers); writer drains sends.
     let pump = group.spawn(() => client.run_message_pump())
     group.spawn_bg(no_wait=true, allow_failure=true, () => client.run_writer())
-    let request = group.spawn(() => {
-      try {
-        client.request(method_="ping", params=Json::empty_object()) |> ignore
-        "returned"
-      } catch {
-        Closed => "closed"
-        error if @async.is_being_cancelled() => raise error
-        _ => "other error"
-      }
-    })
+    let request = group.spawn(() => request_outcome(client, "ping"))
     pump.cancel()
     assert_eq(request.wait(), "closed")
     assert_true(client.is_closed())
