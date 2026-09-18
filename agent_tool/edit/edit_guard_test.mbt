@@ -407,10 +407,7 @@ async test "a rejected edit reports its parse errors in data" {
 
 ///|
 fn shown(data : Json?) -> String {
-  match data {
-    Some(data) => data.stringify()
-    None => "none"
-  }
+  data.map_or("none", json => json.stringify())
 }
 
 ///|

@@ -488,8 +488,7 @@ async fn preview_replace_all(
   let prefix_length = region.prefix.length()
   let needle = input.old_string[:]
   let mut from = 0
-  for ;; {
-    guard region.body[from:].find(needle) is Some(found) else { break }
+  while region.body[from:].find(needle) is Some(found) {
     let offset = from + found
     from = offset + input.old_string.length()
     let global = prefix_length + offset
@@ -662,15 +661,11 @@ fn render_site_context(
     } else {
       " "
     }
+    let number = "\{line}".pad_start(width, ' ')
     report.write_string(
-      "\{marker} \{preview_pad(line, width)} | \{preview_display_line(line_text_at(content, line_starts, line))}\n",
+      "\{marker} \{number} | \{preview_display_line(line_text_at(content, line_starts, line))}\n",
     )
   }
-}
-
-///|
-fn preview_pad(value : Int, width : Int) -> String {
-  "\{value}".pad_start(width, ' ')
 }
 
 ///|
@@ -1160,14 +1155,9 @@ async fn guarded_outcome(
   // point), so identity comparison is exact, in both directions.
   let delta = @auto_check.introduced(before, after)
   let removed = @auto_check.introduced(after, before)
-  let errors_hit = match guards.errors {
-    Some(limit) => delta.errors.length() > limit
-    None => false
-  }
-  let warnings_hit = match guards.warnings {
-    Some(limit) => delta.warnings.length() > limit
-    None => false
-  }
+  let errors_hit = guards.errors is Some(limit) && delta.errors.length() > limit
+  let warnings_hit = guards.warnings is Some(limit) &&
+    delta.warnings.length() > limit
   let reach_caveat = before.error_count > 0
   let common : Map[String, Json] = {
     "check": after.summary_json(),

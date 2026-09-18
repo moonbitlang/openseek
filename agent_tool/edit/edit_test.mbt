@@ -80,6 +80,24 @@ async fn run_edit_via_boundary(arguments : Json) -> @agent_tool.ToolOutput {
 }
 
 ///|
+/// The `multi_edit` edits array a preview emitted, parsed. The section, its
+/// brackets and the JSON between them are all part of what the preview
+/// promises, so a missing or unparseable one fails the test.
+fn preview_edits(content : String) -> Array[Json] raise {
+  guard content.find("multi_edit edits array") is Some(marker) else {
+    fail("expected the edits array section")
+  }
+  let tail = content.unsafe_substring(start=marker, end=content.length())
+  guard tail.find("[") is Some(open) else { fail("expected [") }
+  guard tail.rev_find("]") is Some(close) else { fail("expected ]") }
+  guard @json.parse(tail.unsafe_substring(start=open, end=close + 1))
+    is Array(entries) else {
+    fail("expected a JSON array of edits")
+  }
+  entries
+}
+
+///|
 async test "a failed edit names the file in its brief" {
   @vfs.with_tmpdir(dir => {
     // Editing a missing file fails; the dispatch boundary still briefs the
@@ -763,19 +781,7 @@ async test "replace_all_preview lists every site and round-trips into multi_edit
     assert_eq(@fs.read_file(path).text(), original)
     // extract the emitted edits array, then DROP the middle site (line 2) —
     // the selection step is the feature's point
-    guard preview.content.find("multi_edit edits array") is Some(marker) else {
-      fail("expected the edits array section")
-    }
-    let tail = preview.content.unsafe_substring(
-      start=marker,
-      end=preview.content.length(),
-    )
-    guard tail.find("[") is Some(open) else { fail("expected [") }
-    guard tail.rev_find("]") is Some(close) else { fail("expected ]") }
-    let edits_text = tail.unsafe_substring(start=open, end=close + 1)
-    guard @json.parse(edits_text) is Array(entries) else {
-      fail("expected a JSON array of edits")
-    }
+    let entries = preview_edits(preview.content)
     assert_eq(entries.length(), 3)
     let selected : Array[Json] = []
     for entry in entries {
@@ -1021,19 +1027,7 @@ async test "the entries array stays parseable under the result cap" {
     })
     assert_false(preview.is_error)
     assert_true(preview.content.contains("omitted to keep the array parseable"))
-    guard preview.content.find("multi_edit edits array") is Some(marker) else {
-      fail("expected the edits array section")
-    }
-    let tail = preview.content.unsafe_substring(
-      start=marker,
-      end=preview.content.length(),
-    )
-    guard tail.find("[") is Some(open) else { fail("expected [") }
-    guard tail.rev_find("]") is Some(close) else { fail("expected ]") }
-    guard @json.parse(tail.unsafe_substring(start=open, end=close + 1))
-      is Array(entries) else {
-      fail("expected a parseable JSON array")
-    }
+    let entries = preview_edits(preview.content)
     assert_true(entries.length() > 0)
     assert_true(entries.length() < 40)
   })
