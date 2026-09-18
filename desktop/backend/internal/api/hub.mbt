@@ -39,6 +39,13 @@ priv struct Hub {
   // frontend recovers the whole turn except the question holding it up, and
   // the only way out is to cancel the run.
   pending_approvals : Map[String, @protocol.PendingApprovalPayload]
+  // The follow-up queue of each open run, keyed by SESSION for the same
+  // reason as approvals: one engine per session, one open run per engine.
+  // The engine publishes the whole queue on every change, so this is a
+  // mirror of its latest announcement, never a derivation — and, like a
+  // standing question, it is live state the record never carries, which is
+  // why it rides `agent.runs` too.
+  queues : Map[String, @protocol.QueueChangedPayload]
 }
 
 ///|
@@ -48,6 +55,7 @@ fn Hub::Hub() -> Hub {
     active_starts: Map([]),
     settlements: Map([]),
     pending_approvals: Map([]),
+    queues: Map([]),
   }
 }
 
@@ -125,11 +133,29 @@ fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
       // settles its own on the way out; this covers the engine that did not
       // get to — a killed process emits no `approval_resolved`.
       self.forget_run_approvals(payload.run_id)
+      // A queue waits behind exactly one run. A normal finish promotes its
+      // head and the engine announces the remainder under the successor's
+      // id right after this; a death takes the queue with the process.
+      // Either way nothing is left waiting behind the run that just ended.
+      self.forget_run_queue(payload.run_id)
     }
     AgentEvent(payload) => self.track_approval(payload)
+    // Empty is the engine saying the queue is gone, not a queue of nothing.
+    AgentQueueChanged(payload) =>
+      if payload.queued.is_empty() {
+        self.queues.remove(payload.session)
+      } else {
+        self.queues[payload.session] = payload
+      }
     _ => ()
   }
   self.notifications.publish(notification)
+}
+
+///|
+/// Drop the queue waiting behind `run_id`.
+fn Hub::forget_run_queue(self : Hub, run_id : String) -> Unit {
+  self.queues.retain((_, queue) => queue.run_id != run_id)
 }
 
 ///|
@@ -208,7 +234,10 @@ fn Hub::runs(
   // stopped RIGHT NOW that anyone looking at that session should be able to
   // answer.
   let approvals = self.pending_approvals.values().to_array()
-  { runs, settled, approvals, }
+  // Replayed unconditionally for the same reason: a queue is what the open
+  // run will do next, and whoever is looking at that session may edit it.
+  let queues = self.queues.values().to_array()
+  { runs, settled, approvals, queues, }
 }
 
 ///|
@@ -240,6 +269,8 @@ fn Hub::engine_connected(
   // it was blocking on died with that process, so replaying it would offer an
   // answer with nowhere to go.
   self.pending_approvals.clear()
+  // Likewise a queue: it lived in the engine process that just went away.
+  self.queues.clear()
   self.publish(AgentConnected(payload))
 }
 
@@ -276,6 +307,7 @@ fn Hub::sink(
       // A workflow's ledger row. Like sub-run progress, nothing downstream
       // persists it: the journal in the session store is the record.
       WorkflowEntry(payload) => self.publish(WorkflowEntry(payload))
+      QueueChanged(payload) => self.publish(AgentQueueChanged(payload))
       // A failed command may have settled lifecycle before its process was
       // reapable. This later durable boundary is not a second finish: it must
       // not post another system notification or mutate the live-runs table.
@@ -556,7 +588,7 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
   let legacy : @protocol.RunsReply = @json.from_json(
     runs_endpoint.invoke(Json::empty_object()),
   )
-  guard legacy is { runs: [], settled: [], approvals: [], } else {
+  guard legacy is { runs: [], settled: [], approvals: [], queues: [], } else {
     fail("legacy agent.runs request changed shape")
   }
   let replay : @protocol.RunsReply = @json.from_json(
@@ -732,4 +764,70 @@ test "a resolution for a superseded id leaves the standing question" {
     fail("a resolution for another id retired the standing question")
   }
   assert_eq(standing.id, "ap-7")
+}
+
+///|
+fn queue_notification(
+  session : String,
+  run_id : String,
+  ids : Array[String],
+) -> @protocol.Notification {
+  AgentQueueChanged({
+    session,
+    run_id,
+    queued: ids.map(id => { id, content: "follow-up " + id, }),
+  })
+}
+
+///|
+/// The hub mirrors the engine's latest queue announcement the way it retains
+/// a standing question: the queue lives only in the host process, so a client
+/// that joins mid-run learns it from `agent.runs` or not at all.
+test "an open run's follow-up queue is replayed as the engine last announced it" {
+  let hub = Hub::Hub()
+  hub.publish(queue_notification("s1", "r1", ["q-1"]))
+  hub.publish(queue_notification("s1", "r1", ["q-1", "q-2"]))
+  guard hub.runs().queues is [queue] else { fail("the queue was not retained") }
+  assert_eq(queue.session, "s1")
+  assert_eq(queue.run_id, "r1")
+  assert_eq(queue.queued.map(item => item.id), ["q-1", "q-2"])
+  // The whole list replaces the whole list: a withdrawal announces what is
+  // left, and an empty announcement is the engine saying the queue is gone.
+  hub.publish(queue_notification("s1", "r1", ["q-2"]))
+  guard hub.runs().queues is [{ queued: [{ id: "q-2", .. }], .. }] else {
+    fail("a shorter announcement did not replace the queue")
+  }
+  hub.publish(queue_notification("s1", "r1", []))
+  guard hub.runs().queues is [] else {
+    fail("an emptied queue was still replayed")
+  }
+}
+
+///|
+/// A queue waits behind one run. When that run ends, the engine either
+/// promotes the head and re-announces the rest under the successor, or died
+/// and took the queue with it — so the finish alone retires the old mirror,
+/// and a successor's announcement stands on its own.
+test "a follow-up queue does not outlive the run it waited behind" {
+  let hub = Hub::Hub()
+  hub.publish(queue_notification("s1", "r1", ["q-1", "q-2"]))
+  hub.publish(queue_notification("s2", "r9", ["q-9"]))
+  hub.publish(
+    AgentFinished(@json.from_json({ "run_id": "r1", "status": "failed" })),
+  )
+  guard hub.runs().queues is [{ session: "s2", .. }] else {
+    fail("the finished run's queue was still replayed, or another was lost")
+  }
+  // The normal path: the finish is followed by the successor's Started and
+  // then the remainder announced under the successor's id.
+  hub.publish(queue_notification("s2", "r10", []))
+  hub.publish(queue_notification("s1", "r2", ["q-2"]))
+  guard hub.runs().queues is [{ session: "s1", run_id: "r2", .. }] else {
+    fail("the successor's queue was not adopted")
+  }
+  // A new engine pump has no queues from the old one.
+  hub.engine_connected({ stage: Serving, })
+  guard hub.runs().queues is [] else {
+    fail("a queue survived a new engine pump")
+  }
 }

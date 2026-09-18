@@ -253,7 +253,13 @@ pub impl FromJson for RunsReply with fn from_json(json, path) {
       @json.from_json(raw, path=path.add_key("approvals").add_index(index)),
     )
   }
-  { runs, settled, approvals, }
+  let queues : Array[QueueChangedPayload] = []
+  for index, raw in object.required_array("queues") {
+    queues.push(
+      @json.from_json(raw, path=path.add_key("queues").add_index(index)),
+    )
+  }
+  { runs, settled, approvals, queues, }
 }
 
 ///|
@@ -262,6 +268,7 @@ pub impl ToJson for RunsReply with fn to_json(self) {
     "runs": Json(self.runs.map(run => run.to_json())),
     "settled": Json(self.settled.map(entry => entry.to_json())),
     "approvals": Json(self.approvals.map(approval => approval.to_json())),
+    "queues": Json(self.queues.map(queue => queue.to_json())),
   }
 }
 

@@ -1673,6 +1673,24 @@ async fn ServeEngine::run(
 }
 
 ///|
+/// The follow-up queue as one publishable snapshot. Every mutation announces
+/// the whole list rather than its own delta, so a client that joins between
+/// two changes, or drops one, needs no history to be right.
+fn ServeEngine::queue_snapshot(
+  self : ServeEngine,
+  run_id : String,
+) -> @protocol.QueueChangedPayload {
+  {
+    session: self.session_key,
+    run_id,
+    queued: self.queued_runs.map(queued => {
+      id: queued.id,
+      content: queued.content,
+    }),
+  }
+}
+
+///|
 /// Whether this wire event means the turn died rather than finished — the
 /// engine writes these from a catch block on its way out of the turn, and can
 /// follow one with another for the same turn. This child is not trusted with
@@ -2015,6 +2033,10 @@ async fn ServeEngine::consume(
                     }),
                   }),
                 )
+                // The promoted prompt left the queue; what remains now waits
+                // behind the run just opened, and clients learn so after its
+                // Started so the announcement names a run they know.
+                emit(sink, QueueChanged(engine.queue_snapshot(next.run_id)))
               }
             }
           }

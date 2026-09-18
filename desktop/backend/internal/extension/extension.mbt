@@ -35,6 +35,11 @@ let finished_event : @proton_contract.Event[@protocol.FinishedPayload] = @comman
 )
 
 ///|
+let queue_changed_event : @proton_contract.Event[@protocol.QueueChangedPayload] = @commands.extension_contract.event(
+  @protocol.NotificationKind::AgentQueueChanged.wire_name(),
+)
+
+///|
 let session_event : @proton_contract.Event[@protocol.SessionCommitPayload] = @commands.extension_contract.event(
   @protocol.NotificationKind::SessionEvent.wire_name(),
 )
@@ -233,6 +238,8 @@ async fn PageEventTarget::emit(
     Hub(AgentEvent(payload)) => self.events.emit(agent_event, payload)
     Hub(AgentError(payload)) => self.events.emit(agent_error_event, payload)
     Hub(AgentFinished(payload)) => self.events.emit(finished_event, payload)
+    Hub(AgentQueueChanged(payload)) =>
+      self.events.emit(queue_changed_event, payload)
     Hub(SessionEvent(payload)) => self.events.emit(session_event, payload)
     Hub(SubrunProgress(payload)) => self.events.emit(subrun_progress, payload)
     Hub(WorkflowEntry(payload)) => self.events.emit(workflow_entry, payload)

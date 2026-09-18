@@ -239,11 +239,12 @@ test "an approval reply requires its one field" {
 /// reading it as empty loses live state silently: a tool left waiting on an
 /// approval with no card to answer it, and no deadline behind the question.
 test "the runs snapshot requires each of its sections" {
-  for missing in ["runs", "settled", "approvals"] {
+  for missing in ["runs", "settled", "approvals", "queues"] {
     let fields : Map[String, Json] = {
       "runs": Json(([] : Array[Json])),
       "settled": Json(([] : Array[Json])),
       "approvals": Json(([] : Array[Json])),
+      "queues": Json(([] : Array[Json])),
     }
     fields.remove(missing)
     let decoded : @protocol.RunsReply? = Some(@json.from_json(Json(fields))) catch {
@@ -259,6 +260,47 @@ test "the runs snapshot requires each of its sections" {
     "runs": [],
     "settled": [],
     "approvals": [],
+    "queues": [],
   })
   assert_eq(empty.approvals.length(), 0)
+  assert_eq(empty.queues.length(), 0)
+}
+
+///|
+/// The queue section carries every open run's whole follow-up queue, and the
+/// same shape rides the `agent.queue_changed` notification.
+test "the runs snapshot replays each open run's follow-up queue" {
+  let reply : @protocol.RunsReply = @json.from_json({
+    "runs": [],
+    "settled": [],
+    "approvals": [],
+    "queues": [
+      {
+        "session": "s1",
+        "run_id": "r1",
+        "queued": [
+          { "id": "q-1", "content": "then run the tests" },
+          { "id": "q-2", "content": "and commit" },
+        ],
+      },
+    ],
+  })
+  guard reply.queues is [queue] else { fail("expected one queue") }
+  assert_eq(queue.session, "s1")
+  assert_eq(queue.run_id, "r1")
+  assert_eq(queue.queued.map(item => item.id), ["q-1", "q-2"])
+  guard reply.to_json() is Object(encoded) &&
+    encoded.get("queues") is Some(queues) else {
+    fail("the encoded snapshot lacks its queues section")
+  }
+  @debug.assert_eq(queues, Json([queue.to_json()]))
+  guard @protocol.Notification::from_wire(
+      "agent.queue_changed",
+      queue.to_json(),
+    )
+    is Some(notification) else {
+    fail("the queue notification did not decode")
+  }
+  assert_eq(notification.wire_name(), "agent.queue_changed")
+  @debug.assert_eq(notification.params(), queue.to_json())
 }

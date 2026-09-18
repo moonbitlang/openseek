@@ -127,6 +127,10 @@ pub(all) enum EngineEvent {
   /// record, and the `workflow_started`/`workflow_finished` brackets on the
   /// raw stream own the run's start and end.
   WorkflowEntry(@protocol.WorkflowEntryPayload)
+  /// The whole follow-up queue of one open run, after it changed. Not
+  /// durable: the queue lives in this process and dies with the turn, so a
+  /// client that missed the change recovers it only through `agent.runs`.
+  QueueChanged(@protocol.QueueChangedPayload)
 }
 
 ///|

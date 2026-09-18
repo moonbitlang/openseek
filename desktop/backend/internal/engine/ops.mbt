@@ -521,6 +521,11 @@ pub fn queue_run(
       ignore(live.queued_runs.remove(index))
     }
   }
+  // Published before the reply, in the same synchronous step as the
+  // mutation: every client — the one that asked included — sees the queue
+  // the host now holds, and the asker's reply can only confirm what it
+  // already saw.
+  emit(live.sink, QueueChanged(live.queue_snapshot(run_id)))
   { accepted: true, }
 }
 
