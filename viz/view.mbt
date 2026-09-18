@@ -1278,11 +1278,7 @@ fn scalar_text(value : Json) -> String {
     True => "true"
     False => "false"
     Null => "null"
-    Number(n, repr~) =>
-      match repr {
-        Some(text) => text
-        None => n.to_string()
-      }
+    Number(n, repr~) => repr.unwrap_or_else(() => n.to_string())
     String(text) => text
     other => other.stringify()
   }
@@ -1344,12 +1340,7 @@ fn tool_card(
 ) -> @html.Html {
   let is_error = result.is_error()
   let is_escalated = escalated.contains(result.tool_call_id())
-  let kind = match (is_error, is_escalated) {
-    (false, false) => "tool"
-    (true, false) => "tool error"
-    (false, true) => "tool escalated"
-    (true, true) => "tool error escalated"
-  }
+  let kind = tool_card_kind(is_error~, is_escalated~)
   // Tag mbtx build failures so the build-errors-only filter keeps this result
   // card — the diagnostics live here — beside its originating call.
   let kind = if result_is_build_failed(result) {
@@ -1392,6 +1383,18 @@ fn tool_card(
     @html.summary(class="card-label") <| summary,
     @html.div(class="card-body") <| body,
   ]
+}
+
+///|
+/// The card class for a tool-result card, by whether the result errored and
+/// whether its call asked for escalation — one classification for both views.
+fn tool_card_kind(is_error~ : Bool, is_escalated~ : Bool) -> String {
+  match (is_error, is_escalated) {
+    (false, false) => "tool"
+    (true, false) => "tool error"
+    (false, true) => "tool escalated"
+    (true, true) => "tool error escalated"
+  }
 }
 
 ///|
@@ -2631,20 +2634,12 @@ fn model_tool_card(
   anchor~ : String?,
 ) -> @html.Html {
   let is_error = shown is Some(r) && r.is_error()
-  let name = match shown {
-    Some(r) => r.tool_name()
-    None => ""
-  }
+  let name = shown.map_or("", r => r.tool_name())
   let is_escalated = match message.role {
     Tool(id) => escalated.contains(id)
     _ => false
   }
-  let kind = match (is_error, is_escalated) {
-    (false, false) => "tool"
-    (true, false) => "tool error"
-    (false, true) => "tool escalated"
-    (true, true) => "tool error escalated"
-  }
+  let kind = tool_card_kind(is_error~, is_escalated~)
   // Same build-failure tag as the raw view's result card, derived only from
   // the result the projection actually shows.
   let kind = if shown is Some(r) && result_is_build_failed(r) {

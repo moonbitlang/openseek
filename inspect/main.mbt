@@ -355,34 +355,19 @@ fn valid_session_id(value : String) -> Bool {
 /// text — the header line followed by event lines — which the frontend parser
 /// splits apart itself.
 async fn session_envelope_reply(path : String) -> Reply {
-  json_reply(session_envelope_body(path))
-}
-
-///|
-/// The `{found, events, events_bytes}` payload for one session, factored out of
-/// `session_envelope_reply` so the standalone exporter can bake the exact same
-/// body the live server would return into the embedded data map.
-async fn session_envelope_body(path : String) -> Json {
   if !@fs.exists(path) {
-    return { "found": false }
+    return json_reply({ "found": false })
   }
-  {
+  json_reply({
     "found": true,
     "events": read_text_lossy(path),
     "events_bytes": Json(file_size(path).to_double()),
-  }
+  })
 }
 
 ///|
 async fn session_list_reply(catalog : SessionCatalog) -> Reply {
-  json_reply(session_list_json(catalog.rows()))
-}
-
-///|
-/// The `/api/sessions` listing as JSON, shared by the live route and the
-/// standalone exporter so both encode the sidebar rows identically.
-fn session_list_json(rows : Array[SessionListRow]) -> Json {
-  rows.map(row => row.to_json()).to_json()
+  json_reply(catalog.rows().map(row => row.to_json()).to_json())
 }
 
 ///|

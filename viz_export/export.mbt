@@ -34,10 +34,7 @@ pub fn Session::Session(
 ///|
 /// Encode the sidebar row consumed by `/api/sessions`.
 fn Session::listing_json(self : Session) -> Json {
-  let last_active : Json = match self.last_active {
-    Some(seconds) => Json::number(seconds)
-    None => Json::null()
-  }
+  let last_active = self.last_active.map_or(Json::null(), n => Json::number(n))
   {
     "key": self.key,
     "id": self.id,
