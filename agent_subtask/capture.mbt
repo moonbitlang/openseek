@@ -28,10 +28,7 @@ pub async fn capture(
   // first capture pins the recorded base; a RESUMED slice's worktree
   // legitimately sits at the previous capture's commit (update-ref moved
   // the checked-out branch), so later captures pin that commit instead.
-  let pin = match entry.commit_oid {
-    Some(prior) => prior
-    None => entry.base_oid
-  }
+  let pin = entry.commit_oid.unwrap_or(entry.base_oid)
   // The worker cannot commit (the sandbox denies the shared object store);
   // a moved HEAD means something abnormal happened — refuse to reason on it.
   match git_require(["rev-parse", "HEAD"], cwd=worker) {

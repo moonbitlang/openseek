@@ -11,11 +11,6 @@ struct Skill {
 } derive(Debug)
 
 ///|
-fn Skill::Skill(name~ : String, description~ : String, path~ : String) -> Skill {
-  { name, description, path, }
-}
-
-///|
 /// Parse `name:` and `description:` from a markdown frontmatter block — the
 /// lines between a leading `---` and the next `---`. Anything missing falls
 /// back to `fallback_name` / empty: a malformed header demotes the skill's
@@ -105,7 +100,7 @@ async fn add_skill_file(skills : Array[Skill], path : String) -> Unit {
     stem => stem
   }
   let (name, description) = parse_frontmatter(text, fallback)
-  skills.push(Skill(name~, description~, path~))
+  skills.push({ name, description, path, })
 }
 
 ///|

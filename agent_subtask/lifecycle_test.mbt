@@ -12,22 +12,30 @@ async fn seed_repo(dir : String) -> String {
       ["config", "user.email", "e2e@test"],
       ["config", "user.name", "e2e"],
     ] {
-    match @agent_subtask.git_require(args, cwd=repo) {
-      Ok(_) => ()
-      Err(reason) => fail(reason)
-    }
+    must_git(repo, args)
   }
   @fs.mkdir("\{repo}/lib")
   @fs.mkdir("\{repo}/other")
   @vfs.write_text("\{repo}/lib", "a.txt", "alpha\n")
   @vfs.write_text("\{repo}/other", "b.txt", "beta\n")
   for args in [["add", "-A"], ["commit", "-q", "-m", "base"]] {
-    match @agent_subtask.git_require(args, cwd=repo) {
-      Ok(_) => ()
-      Err(reason) => fail(reason)
-    }
+    must_git(repo, args)
   }
   repo
+}
+
+///|
+/// Run one setup git command in `repo`, failing the test on its diagnostics.
+#callsite(autofill(loc))
+async fn must_git(
+  repo : String,
+  args : Array[String],
+  loc~ : SourceLoc,
+) -> Unit {
+  match @agent_subtask.git_require(args, cwd=repo) {
+    Ok(_) => ()
+    Err(reason) => fail(reason, loc~)
+  }
 }
 
 ///|
@@ -194,10 +202,7 @@ async test "a conflicting merge hands off, continues after resolution" {
     // ...and the origin advances the SAME line before integration.
     @vfs.write_text("\{repo}/lib", "a.txt", "ORIGIN\n")
     for args in [["add", "-A"], ["commit", "-q", "-m", "origin moved"]] {
-      match @agent_subtask.git_require(args, cwd=repo) {
-        Ok(_) => ()
-        Err(reason) => fail(reason)
-      }
+      must_git(repo, args)
     }
     let conflicted = @agent_subtask.integrate(
       provisioned.geometry,
@@ -212,10 +217,7 @@ async test "a conflicting merge hands off, continues after resolution" {
     @vfs.write_text("\{repo}/lib", "a.txt", "MERGED\n")
     @vfs.write_text("\{repo}/other", "stray.txt", "stray\n")
     for args in [["add", "lib/a.txt"], ["add", "other/stray.txt"]] {
-      match @agent_subtask.git_require(args, cwd=repo) {
-        Ok(_) => ()
-        Err(reason) => fail(reason)
-      }
+      must_git(repo, args)
     }
     let strayed = @agent_subtask.integrate_continue(
       provisioned.geometry,
@@ -223,14 +225,7 @@ async test "a conflicting merge hands off, continues after resolution" {
     )
     assert_eq(strayed.result, "refused")
     assert_true(strayed.detail[0].contains("other/stray.txt"))
-    match
-      @agent_subtask.git_require(
-        ["restore", "--staged", "--worktree", "other/stray.txt"],
-        cwd=repo,
-      ) {
-      Ok(_) => ()
-      Err(reason) => fail(reason)
-    }
+    must_git(repo, ["restore", "--staged", "--worktree", "other/stray.txt"])
     let continued = @agent_subtask.integrate_continue(
       provisioned.geometry,
       conflicted.entry,
@@ -265,10 +260,7 @@ async test "integrate refuses a dirty tracked origin; abort restores state" {
     @vfs.write_text("\{repo}/other", "b.txt", "beta\n")
     @vfs.write_text("\{repo}/lib", "a.txt", "ORIGIN\n")
     for args in [["add", "-A"], ["commit", "-q", "-m", "origin moved"]] {
-      match @agent_subtask.git_require(args, cwd=repo) {
-        Ok(_) => ()
-        Err(reason) => fail(reason)
-      }
+      must_git(repo, args)
     }
     let conflicted = @agent_subtask.integrate(
       provisioned.geometry,
@@ -305,14 +297,7 @@ async test "linked worktree provisions and integrates into itself" {
   @vfs.with_tmpdir(prefix="openseek-subtask-precond-", dir => {
     let repo = seed_repo(dir)
     let linked = "\{dir}/linked"
-    match
-      @agent_subtask.git_require(
-        ["worktree", "add", "-q", "../linked", "-b", "linked"],
-        cwd=repo,
-      ) {
-      Ok(_) => ()
-      Err(reason) => fail(reason)
-    }
+    must_git(repo, ["worktree", "add", "-q", "../linked", "-b", "linked"])
     let provisioned = must_provision(
       linked,
       name="x",
@@ -560,10 +545,7 @@ async test "resume_running refuses conflicted slices and gone worktrees" {
     // Origin advances the same line: integration conflicts.
     @vfs.write_text("\{repo}/lib", "a.txt", "ORIGIN\n")
     for args in [["add", "-A"], ["commit", "-q", "-m", "origin moved"]] {
-      match @agent_subtask.git_require(args, cwd=repo) {
-        Ok(_) => ()
-        Err(reason) => fail(reason)
-      }
+      must_git(repo, args)
     }
     let conflicted = @agent_subtask.integrate(
       provisioned.geometry,

@@ -227,10 +227,7 @@ pub async fn resume_running(
     )
   }
   let entry = { ..entry, state: Running, }
-  match save_entry(geometry.common_git_dir, entry) {
-    Ok(_) => Ok(entry)
-    Err(reason) => Err(reason)
-  }
+  save_entry(geometry.common_git_dir, entry).map(_ => entry)
 }
 
 ///|

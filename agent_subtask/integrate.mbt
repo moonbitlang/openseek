@@ -44,11 +44,10 @@ async fn reload_entry(
   entry : SubtaskEntry,
 ) -> SubtaskEntry {
   let (entries, _) = load_entries(common_git_dir)
-  match
-    entries.filter(e => e.name == entry.name && e.nonce == entry.nonce).last() {
-    Some(fresh) => fresh
-    None => entry
-  }
+  entries
+  .filter(e => e.name == entry.name && e.nonce == entry.nonce)
+  .last()
+  .unwrap_or(entry)
 }
 
 ///|
