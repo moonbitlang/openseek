@@ -7,7 +7,6 @@ import {
 }
 
 // Values
-pub fn description() -> String
 
 // Errors
 

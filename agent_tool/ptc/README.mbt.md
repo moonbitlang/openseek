@@ -4,12 +4,15 @@ This package is the service and the per-script registration; mbtx wires it
 into the standard host (the `ptc` argument, default activation, background
 handoff) and the desktop renders the retained traces.
 
-The script-facing contract (API, result shape, error rule, budgets) is
-`description()`, the text appended to the mbtx tool description; this file
-covers hosting, lifetime, and wire bounds. Scripts call host tools through
-the published SDK, which invokes the same registered executors as direct
-tool calls, including edit validation, rollback checks, and the session's
-shared `FileStateMap`. Direct `edit` and `multi_edit` remain available.
+The script-facing contract (API, result shape, error rule, budgets) is the
+system prompt's "Host tool calls" section, not a tool description: PTC is
+always registered in the standard host, so the text belongs where the other
+script-authoring packages are taught. A host that ships its own prompt owns
+that text too. This file covers hosting, lifetime, and wire bounds. Scripts
+call host tools through the published SDK, which invokes the same registered
+executors as direct tool calls, including edit validation, rollback checks,
+and the session's shared `FileStateMap`. Direct `edit` and `multi_edit`
+remain available.
 
 For example, pass this as `source` to mbtx:
 

@@ -56,11 +56,9 @@ test-moon:
 # Refresh filesystem-derived prompt content even when only share/ changed.
 prompt:
     moon run scripts/md_to_mbt_string -- prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
-    moon run scripts/md_to_mbt_string -- agent_tool/ptc/ptc_description.md agent_tool/ptc/generated_ptc_description.mbt
 
 check-prompt:
     moon run scripts/md_to_mbt_string -- --check prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
-    moon run scripts/md_to_mbt_string -- --check agent_tool/ptc/ptc_description.md agent_tool/ptc/generated_ptc_description.mbt
 
 # Import the latest markdown build (or a specified commit) and regenerate the prompt.
 update-docs commit="latest":

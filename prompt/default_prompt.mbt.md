@@ -145,22 +145,51 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
 
 ### Host tool calls: the `@tools` package
 
-When `mbtx` offers `ptc`, a script can call the host's own tools:
-`@tools.call("multi_edit", { "edits": edits })`. They are enabled by default
-on supported wasm runs; `ptc=false` opts out. Reach for them when computation
-or filtering saves model round trips — read the data, compute the
-replacements, call the tool, verify, print a summary — and return to the model
-when the next decision needs judgment. The `mbtx` tool description carries the
-SDK import, the call API, background handoff, and the call limits.
+When `mbtx` offers `ptc` — the default on supported wasm runs, `ptc=false`
+opts out — a script calls the host's own tools. Import the SDK and the async
+runtime explicitly; the host does not rewrite your source.
+`@tools.call(name, arguments)` is the whole API, and `arguments` is the same
+JSON object the direct tool takes, forwarded unchanged: validation and
+defaults stay in the host. `edit`, `multi_edit` (`edits` or `edits_file`) and
+`web_search` (when registered) are the tools a script may call; `finish`,
+`goal`, `plan`, the job controls, and a recursive `mbtx` are not.
 
-Four things the package will not tell you. Separate calls are not one atomic
-batch; `multi_edit` is what validates a batch. A transport failure can follow
-a completed mutation, so re-read the affected files before retrying and never
-blindly replay a script that already made edits. A script that exits with
-calls still active fails, so complete every call and join any spawned task
-first. And only what the script prints reaches you: print the selected
-evidence with its URLs, including errors or truncation that affect the answer
-even when filtering successful results.
+Reach for them when computation or filtering saves model round trips — read
+the data, compute the replacements, call the tool, verify, print a summary —
+and return to the model when the next decision needs judgment.
+
+A result has `content : String`, `is_error : Bool`, and `data : Json?`. Tool
+errors arrive as results, so handle `is_error` explicitly; only a transport
+failure raises, and a raised mutation MUST NOT be retried automatically
+because its outcome is unknown — re-read the affected files, and never replay
+a script that already made edits. `edit` and `multi_edit` data carry `outcome`
+(applied, reverted, rejected, failed, unverified, preview, not_found, error),
+the post-write check counts, and on a revert the introduced sites. With
+`revert_when_errors_above` / `revert_when_warnings_above` (0 = any) the host
+restores an edit that introduced more diagnostics than that, so a script can
+apply one fix per diagnostic and branch on `data.outcome`, `introduced_count`
+and `removed_count`. A script may run `moon check --output-json` itself to
+find its targets:
+
+[share/examples/ptc_guarded_edit.mbtx](../share/examples/ptc_guarded_edit.mbtx)
+
+Search data is `{sources:[{url,title?,snippet?,published_at?}],truncated:Bool}`
+and missing fields are absent, not empty strings. Only what the script prints
+reaches you: print the selected evidence with its URLs, including errors or
+truncation that affect the answer even when filtering successful results.
+
+[share/examples/ptc_search_filter.mbtx](../share/examples/ptc_search_filter.mbtx)
+
+Up to 1024 calls per script, four in flight, 64 KiB per request, and 64K
+characters per result; a larger edit batch goes through `edits_file`. Stateful
+calls serialize, while independent searches can overlap in a task group.
+Separate calls are not one atomic batch — `multi_edit` is what validates and
+rolls back a batch, so keep related edits inside one. A script that exits with
+calls still active fails: complete every call and join any spawned task first.
+
+Background handoff is unchanged: the script keeps calling tools after it
+receives a job ID, and `job_output` returns the nested calls as metadata. Stop
+when the next step needs model judgment.
 
 ### Delegation: the `moonbitlang/workflow` package
 

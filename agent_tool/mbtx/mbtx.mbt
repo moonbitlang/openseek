@@ -143,14 +143,13 @@ pub fn definition(
   AgentToolDefinition(
     name="mbtx",
     description=description(
-        background=bg_runtime is Some(_),
-        escalation=approval is Some(_),
-        hosting=subrun is Some(_),
-        auto_background_after_ms~,
-        foreground_timeout_ms~,
-        build_timeout_ms~,
-      ) +
-      (if program_service is Some(_) { @ptc.description() } else { "" }),
+      background=bg_runtime is Some(_),
+      escalation=approval is Some(_),
+      hosting=subrun is Some(_),
+      auto_background_after_ms~,
+      foreground_timeout_ms~,
+      build_timeout_ms~,
+    ),
     schema=JsonSchema(
       schema(
         escalation=approval is Some(_),

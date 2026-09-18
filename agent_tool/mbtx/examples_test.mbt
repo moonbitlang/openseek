@@ -1,6 +1,6 @@
 ///|
 /// The PTC examples under share/examples are shown to the model inline by the
-/// PTC description; these tests run them through the real sandbox and host so
+/// system prompt; these tests run them through the real sandbox and host so
 /// what the model is shown is what the host accepts. `dispatch` comes from
 /// mbtx_test.mbt.
 async fn example_source(name : String) -> String {
