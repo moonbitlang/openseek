@@ -464,6 +464,17 @@ fn State::apply_composer_action(
         },
       )
     }
+    @composer.ReviewChangesRemoved(selections~, ..) => {
+      let mut draft : @composer.Draft = {
+        task: self.draft,
+        mentions: self.mentions,
+        images: self.images,
+      }
+      for selection in selections {
+        draft = draft.with_review_changes(selection, adding=false)
+      }
+      (@cmd.none, { ..self, mentions: draft.mentions, })
+    }
     @composer.RootMentionRemoved(mention~, ..) =>
       (
         @cmd.none,
@@ -514,6 +525,7 @@ fn State::apply_composer_action(
         @cmd.none
       })
     @composer.DraftPresenceChanged(..)
+    | @composer.ReviewChangesOpened(..)
     | @composer.MentionOpened(..)
     | @composer.GoalEditStarted(..)
     | @composer.GoalCancelled(..)

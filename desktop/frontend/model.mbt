@@ -1556,6 +1556,8 @@ priv struct Model {
   // `fileeditor` package; this model only carries its state and routes
   // `FileEditor` messages to it.
   file_panel : @fileeditor.State
+  // A saved Changes jump can precede the first Review inventory load.
+  pending_review_context : PendingReviewContext?
   // The browser subsystem behind the dock's Browser tabs: per-page address
   // state, keyed by page-global ids that only grow. The pages themselves
   // are native web contents views the desktop host owns.
@@ -2003,6 +2005,10 @@ priv enum Msg {
   // The transcript component reports where its reader was as it leaves the
   // screen; the root remembers it for the conversation's next visit.
   TranscriptLeft(slot~ : String, scroll~ : @transcript_component.ScrollPosition)
+  TranscriptReviewChangesOpened(
+    slot~ : String,
+    selection~ : @mention_context.ReviewChanges
+  )
   // The right panel renders these root-owned values and reports only user
   // actions. Keeping the transitions here avoids a component mirror and a
   // second message that writes the same visibility back into the root.
@@ -2633,6 +2639,7 @@ fn initial_model() -> Model {
     git_details_open: false,
     dock: @dock.State::empty(),
     file_panel: @fileeditor.State::empty(),
+    pending_review_context: None,
     preview: @preview.State::empty(),
     browser_pane: { shown: None, rect: None, geo: None, },
     notifications: [],

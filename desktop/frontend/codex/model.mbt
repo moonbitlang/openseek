@@ -3366,3 +3366,17 @@ test "Codex editor annotations stay in chips and preserve model context" {
 
 ///|
 pub extend State with Eq::{equal, not_equal}
+
+///|
+pub fn State::with_review_changes(
+  self : State,
+  selection : @mention_context.ReviewChanges,
+  adding~ : Bool,
+) -> State {
+  let draft : @composer.Draft = {
+    task: self.draft,
+    mentions: self.mentions,
+    images: self.images,
+  }
+  { ..self, mentions: draft.with_review_changes(selection, adding~).mentions, }
+}

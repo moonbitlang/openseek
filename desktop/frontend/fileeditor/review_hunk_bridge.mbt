@@ -19,6 +19,7 @@ priv struct ReviewHunkBridgeTarget {
   position : ReviewHunkPosition?
   ready : Bool
   semantic_keys : Array[String]
+  owner : @interop.ConversationKey
   dispatch : (Msg) -> Unit
 }
 
@@ -34,6 +35,7 @@ fn current_review_hunk_bridge_target(
   guard ctx.active_file is Some(path) &&
     state.docs.get(path) is Some(doc) &&
     doc.review is Some(review) &&
+    state.owner is Some(owner) &&
     doc.visible_diff() is Some((original, modified)) &&
     viewer_state.document == Some(path) &&
     viewer_state.review_diff_inputs == Some((original, modified)) &&
@@ -47,6 +49,7 @@ fn current_review_hunk_bridge_target(
     None => (None, None, None)
   }
   Some({
+    owner,
     change: review.selected,
     review_generation,
     surface_generation: state.review_hunk_surface_generation,
@@ -224,6 +227,9 @@ fn publish_semantic_review_active_hunk(
 ///|
 fn sync_review_hunk_actions(state : State) -> Unit {
   let target = review_hunk_bridge_target.val
+  if target is Some(target) {
+    reveal_pending_review_context(state, target)
+  }
   if mounted_diff_editor() is Some(editor) {
     if target is Some(target) && target.surface is ReviewLineSurface {
       install_review_hunk_actions(state, target, editor, None)
@@ -252,6 +258,7 @@ fn install_review_hunk_actions(
 ) -> Unit {
   editor.set_hunk_action_renderer(
     Some(index => {
+      guard editor.is_diff_up_to_date() else { return None }
       let (old_offset, new_offset) = match section {
         None => (Some(0), Some(0))
         Some((_, section)) =>
@@ -349,7 +356,16 @@ fn install_review_hunk_actions(
           ),
         )
       })
-      Some(button)
+      button.set_attribute("data-hunk-action", "viewed")
+      let actions = @dom.document().create_element("div")
+      actions.set_attribute("class", "review-hunk-actions")
+      actions.set_attribute("tabindex", "-1")
+      actions.add_event_listener("focusin", event => event.stop_propagation())
+      actions.append_child(button.as_node())
+      if state.review_context_selection(target.change, hunk) is Some(selection) {
+        append_review_context_action(actions, state, target, selection)
+      }
+      Some(actions)
     }),
   )
 }

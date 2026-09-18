@@ -83,6 +83,8 @@ priv struct Entry {
   context_generation : Int
   turn_id : String?
   followup_choice : FollowupChoice?
+  changes_open : Bool
+  changes_collapsed : Array[String]
   followup_menu_open : Bool
   image_reads : Int
   image_error : String?
@@ -107,6 +109,8 @@ fn Entry::Entry(input : Input) -> Entry {
     context_generation: input.context_generation,
     turn_id: input.turn_id,
     followup_choice: None,
+    changes_open: false,
+    changes_collapsed: [],
     followup_menu_open: false,
     image_reads: 0,
     image_error: None,
@@ -179,6 +183,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
       ..self,
       image_error: None,
       source: incoming,
+      changes_open: false,
       draft,
       source_goal: incoming_goal,
       goal_draft: incoming_goal,
@@ -255,6 +260,10 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
   {
     ..self,
     source: incoming,
+    changes_open: self.changes_open &&
+    draft.mentions.any(mention => {
+      mention.ref_ is @mention_context.ReviewChanges(_)
+    }),
     draft,
     source_goal: incoming_goal,
     goal_draft,
@@ -346,6 +355,11 @@ priv enum Msg {
   // A second passed while a turn was open. Carries nothing: the handler reads
   // the clock, and the message exists only to advance the span on screen.
   ClockTicked
+  ChangesToggled
+  ChangesDismissed(restore_focus~ : Bool)
+  ChangesFileToggled(String)
+  ChangesRemoved(Array[@mention_context.ReviewChanges])
+  ChangesOpened(@mention_context.ReviewChanges)
   MentionRemoved(Int)
   ImageRemoved(Int)
   ImageRead(Identity, @image_input.Event)
@@ -713,6 +727,64 @@ fn Model::update(
       self.commit_entry_change(entry, next, command, action_emit)
     }
     EntriesRetired => (self, @cmd.none)
+    ChangesToggled =>
+      (
+        self.with_entry({ ..entry, changes_open: !entry.changes_open, }),
+        @cmd.none,
+      )
+    ChangesDismissed(restore_focus~) =>
+      (
+        self.with_entry({ ..entry, changes_open: false, }),
+        if restore_focus {
+          @cmd.custom_cmd(
+            _ => {
+              if @dom.document()
+                .query_selector(".composer-changes .mention-jump")
+                .to_option()
+                is Some(button) {
+                @base_browser.focus_prevent_scroll(button)
+              }
+            },
+            kind=@cmd.after_render,
+          )
+        } else {
+          @cmd.none
+        },
+      )
+    ChangesFileToggled(key) => {
+      let collapsed = if entry.changes_collapsed.contains(key) {
+        entry.changes_collapsed.filter(existing => existing != key)
+      } else {
+        entry.changes_collapsed + [key]
+      }
+      (self.with_entry({ ..entry, changes_collapsed: collapsed, }), @cmd.none)
+    }
+    ChangesRemoved(selections) => {
+      // Review selections belong to the root. Keeping the local draft intact
+      // until that action arrives also preserves an immediate remove/re-add
+      // of the same snapshot before an input-only render is committed.
+      let mut remaining = entry.draft
+      for selection in selections {
+        remaining = remaining.with_review_changes(selection, adding=false)
+      }
+      (
+        self.with_entry({
+          ..entry,
+          changes_open: entry.changes_open &&
+          remaining.mentions.any(mention => {
+            mention.ref_ is @mention_context.ReviewChanges(_)
+          }),
+        }),
+        action_emit(
+          ReviewChangesRemoved(identity=entry.identity(), selections~),
+        ),
+      )
+    }
+    ChangesOpened(selection) =>
+      (
+        self.with_entry({ ..entry, changes_open: false, }),
+        action_emit(ReviewChangesOpened(identity=entry.identity(), selection~)),
+      )
     MentionRemoved(index) => {
       guard entry.draft.mentions.get(index) is Some(mention) else {
         return (self.with_entry(entry), @cmd.none)
@@ -915,6 +987,7 @@ fn Model::subscriptions(
   @sub.batch([
     @sub.every(1000, emit(ClockTicked)),
     self.editing_subscriptions(input, emit),
+    changes_dismiss_subscription(self.active(input), emit),
   ])
 }
 

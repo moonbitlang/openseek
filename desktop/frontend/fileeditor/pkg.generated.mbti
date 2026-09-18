@@ -11,6 +11,7 @@ import {
   "openseek_desktop/frontend/dock",
   "openseek_desktop/frontend/grep_search",
   "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/protocol",
 }
@@ -60,7 +61,7 @@ pub fn semantic_review_view(@cmd.Emit[Msg], State) -> @html.Html
 
 pub fn subscriptions(State, Ctx, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn sync(@cmd.Emit[Msg], State, Ctx) -> (State, @cmd.Cmd)
+pub fn sync(@cmd.Emit[Msg], State, Ctx, review_context? : Array[@mention_context.ReviewChanges]) -> (State, @cmd.Cmd)
 
 pub fn update(@cmd.Emit[Msg], Msg, State, Ctx) -> (@cmd.Cmd, State)
 
@@ -245,6 +246,8 @@ pub fn MoonModViewMode::equal(Self, Self) -> Bool
 pub fn MoonModViewMode::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
+  ReviewContextRevealFinished(source~ : @mention_context.ReviewSource, found~ : Bool)
+  ReviewContextChanged(owner~ : @interop.ConversationKey, selection~ : @mention_context.ReviewChanges, adding~ : Bool)
   RevealDirectory(@pathx.Relative)
   HighlightCleared(@pathx.Relative)
   ToggleTree
@@ -464,6 +467,8 @@ pub(all) struct State {
   git_graph_collapsed : Bool
   history_docs : Map[String, HistoryDiffDoc]
   history_generation : Int
+  review_context_reveal : @mention_context.ReviewChanges?
+  review_context : Array[@mention_context.ReviewChanges]
   review_progress : Array[ChangedFileReview]
   review_hunk_surface_generation : Int
   review_active_hunk : ReviewActiveHunk?
@@ -496,11 +501,13 @@ pub(all) struct State {
   index : FileIndex
   error : String?
 } derive(Eq)
+pub fn State::accepts_review_context(Self, @mention_context.ReviewChanges) -> Bool
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
+pub fn State::with_review_context_reveal(Self, @mention_context.ReviewChanges) -> Self
 pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, Bool) -> Self
 
 pub(all) enum TabState {

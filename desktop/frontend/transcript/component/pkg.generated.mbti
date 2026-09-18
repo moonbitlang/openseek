@@ -24,6 +24,7 @@ pub fn scroll_to_latest() -> @cmd.Cmd
 pub(all) struct Actions {
   open : @cmd.Emit[String]
   jump : @cmd.Emit[@mention_context.Target]
+  open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
   open_session : @cmd.Emit[String]
   choose_project : @cmd.Emit[@common.Uri]
   new_project : @cmd.Cmd

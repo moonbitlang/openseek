@@ -3,6 +3,7 @@ package "openseek_desktop/frontend/mention_context"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
 }
 
@@ -15,7 +16,11 @@ pub fn label(MentionRef) -> String
 
 pub fn parse(String) -> MentionMessage?
 
+pub fn review_changes(Array[MentionRef]) -> Array[ReviewChanges]
+
 pub fn target(MentionRef) -> Target?
+
+pub fn with_review_changes(Array[MentionRef], ReviewChanges, adding~ : Bool) -> Array[MentionRef]
 
 // Errors
 
@@ -28,6 +33,40 @@ pub fn AnnotationSide::equal(Self, Self) -> Bool
 pub fn AnnotationSide::not_equal(Self, Self) -> Bool
 pub fn AnnotationSide::to_repr(Self) -> @debug.Repr
 
+pub(all) struct ChangeExcerpt {
+  original : Array[ChangeLine]
+  modified : Array[ChangeLine]
+} derive(Eq, @debug.Debug)
+pub fn ChangeExcerpt::equal(Self, Self) -> Bool
+pub fn ChangeExcerpt::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ChangeExcerpt::is_empty(Self) -> Bool
+pub fn ChangeExcerpt::not_equal(Self, Self) -> Bool
+pub fn ChangeExcerpt::to_json(Self) -> Json
+pub fn ChangeExcerpt::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ChangeExcerpt
+pub impl @json.FromJson for ChangeExcerpt
+
+pub(all) struct ChangeLine {
+  number : Int
+  text : String
+} derive(Eq, @debug.Debug)
+pub fn ChangeLine::equal(Self, Self) -> Bool
+pub fn ChangeLine::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ChangeLine::not_equal(Self, Self) -> Bool
+pub fn ChangeLine::to_json(Self) -> Json
+pub fn ChangeLine::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ChangeLine
+pub impl @json.FromJson for ChangeLine
+
+pub(all) enum ContextCoverage {
+  NotIncluded
+  PartlyIncluded
+  Included
+} derive(Eq, @debug.Debug)
+pub fn ContextCoverage::equal(Self, Self) -> Bool
+pub fn ContextCoverage::not_equal(Self, Self) -> Bool
+pub fn ContextCoverage::to_repr(Self) -> @debug.Repr
+
 pub struct MentionMessage {
   mentions : Array[MentionRef]
   task : String
@@ -36,6 +75,7 @@ pub fn MentionMessage::display_text(Self) -> String
 pub fn MentionMessage::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MentionRef {
+  ReviewChanges(ReviewChanges)
   Skill(name~ : String)
   File(path~ : String)
   Symbol(name~ : String, file~ : String, line~ : Int)
@@ -44,6 +84,35 @@ pub(all) enum MentionRef {
 pub fn MentionRef::equal(Self, Self) -> Bool
 pub fn MentionRef::not_equal(Self, Self) -> Bool
 pub fn MentionRef::to_repr(Self) -> @debug.Repr
+
+pub(all) struct ReviewChanges {
+  source : ReviewSource
+  excerpts : Array[ChangeExcerpt]
+} derive(Eq, @debug.Debug)
+pub fn ReviewChanges::coverage(Self, Array[Self]) -> ContextCoverage
+pub fn ReviewChanges::equal(Self, Self) -> Bool
+pub fn ReviewChanges::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReviewChanges::not_equal(Self, Self) -> Bool
+pub fn ReviewChanges::to_json(Self) -> Json
+pub fn ReviewChanges::to_repr(Self) -> @debug.Repr
+pub fn ReviewChanges::without(Self, Self) -> Self
+pub impl ToJson for ReviewChanges
+pub impl @json.FromJson for ReviewChanges
+
+pub(all) struct ReviewSource {
+  workspace : String
+  file : String
+  original_file : String?
+  base : String?
+  version : String
+} derive(Eq, @debug.Debug)
+pub fn ReviewSource::equal(Self, Self) -> Bool
+pub fn ReviewSource::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ReviewSource::not_equal(Self, Self) -> Bool
+pub fn ReviewSource::to_json(Self) -> Json
+pub fn ReviewSource::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ReviewSource
+pub impl @json.FromJson for ReviewSource
 
 pub struct Target {
   file : String

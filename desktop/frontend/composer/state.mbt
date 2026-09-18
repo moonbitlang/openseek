@@ -148,7 +148,18 @@ fn Draft::reconciled(self : Draft, source~ : Draft, incoming~ : Draft) -> Draft 
   } else if self.mentions == source.mentions {
     incoming.mentions
   } else {
-    let mut merged = { ..self, task, }
+    let mut merged : Draft = {
+      ..self,
+      task,
+      mentions: self.mentions.filter(mention => {
+        !(mention.ref_ is @mention_context.ReviewChanges(_))
+      }),
+    }
+    for mention in incoming.mentions {
+      if mention.ref_ is @mention_context.ReviewChanges(_) {
+        merged = merged.with_mention(mention)
+      }
+    }
     for mention in incoming.mentions {
       let externally_added = source.mentions.all(existing => {
         existing.ref_ != mention.ref_
@@ -293,5 +304,29 @@ fn Input::completion(
         ),
       })
     }
+  }
+}
+
+///|
+/// Review selections are root-authored, just like editor feedback. Ordinary
+/// local chips keep their exact selection ranges while these are reconciled.
+pub fn Draft::with_review_changes(
+  self : Draft,
+  selection : @mention_context.ReviewChanges,
+  adding~ : Bool,
+) -> Draft {
+  let refs = @mention_context.with_review_changes(
+    self.mentions.map(mention => mention.ref_),
+    selection,
+    adding~,
+  )
+  {
+    ..self,
+    mentions: refs.map(ref_ => {
+      match self.mentions.search_by(mention => mention.ref_ == ref_) {
+        Some(index) => self.mentions[index]
+        None => { ref_, range: None, }
+      }
+    }),
   }
 }

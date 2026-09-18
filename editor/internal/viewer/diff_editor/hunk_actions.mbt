@@ -43,10 +43,19 @@ fn DiffEditorWidget::clear_hunk_actions(self : DiffEditorWidget) -> Unit {
 
 ///|
 fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
-  let mut focused : Int? = None
+  let mut focused : (Int, Int?)? = None
   for (index, node) in self.hunk_actions {
     if @base_browser.element_contains_active_element(node) {
-      focused = Some(index)
+      focused = Some(
+        (
+          index,
+          [
+            for button in node.query_selector_all("button") => button
+          ].search_by(button => {
+            @base_browser.element_contains_active_element(button)
+          }),
+        ),
+      )
     }
   }
   self.clear_hunk_actions()
@@ -64,8 +73,16 @@ fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
       wrapper.append_child(content.as_node())
       self.root.append_child(wrapper.as_node())
       self.hunk_actions.push((index, wrapper))
-      if focused == Some(index) {
-        @base_browser.focus_prevent_scroll(content)
+      if focused is Some((focused_index, action_index)) &&
+        focused_index == index {
+        let action = action_index
+          .bind(index => {
+            [
+              for button in wrapper.query_selector_all("button") => button
+            ].get(index)
+          })
+          .unwrap_or(content)
+        @base_browser.focus_prevent_scroll(action)
       }
     }
   }
@@ -119,6 +136,11 @@ fn DiffEditorWidget::layout_hunk_actions(self : DiffEditorWidget) -> Unit {
     match self.get_hunk_viewport_bounds(index) {
       Some((top, bottom)) if bottom > 0.0 && top < height => {
         node.remove_attribute("hidden")
+        @base_browser.set_style_property(
+          node,
+          "--diff-hunk-height",
+          "\{bottom - top.max(0.0)}px",
+        )
         @base_browser.set_style_property(node, "top", "\{top.max(0.0)}px")
       }
       _ => node.set_attribute("hidden", "")

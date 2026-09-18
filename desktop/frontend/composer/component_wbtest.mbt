@@ -845,3 +845,41 @@ test "image read events remain pure and settle their original cached draft" {
   )
   assert_true(dropped.entries.all(entry => entry.owner != input.identity.owner))
 }
+
+///|
+test "review context root removals reconcile beside local typing and file chips" {
+  let selection : @mention_context.ReviewChanges = {
+    source: {
+      workspace: "/work",
+      file: "main.mbt",
+      original_file: None,
+      base: None,
+      version: "v1",
+    },
+    excerpts: [{ original: [], modified: [{ number: 5, text: "chosen", }], }],
+  }
+  let source : Draft = { task: "", mentions: [], images: [], }.with_review_changes(
+    selection,
+    adding=true,
+  )
+  let locally_edited = { ..source, task: "typed locally", }.with_mention({
+    ref_: @mention_context.File(path="other.mbt"),
+    range: None,
+  })
+  let reconciled = locally_edited.reconciled(source~, incoming={
+    task: "",
+    mentions: [],
+    images: [],
+  })
+  assert_eq(reconciled.task, "typed locally")
+  assert_eq(reconciled.mentions, [
+    { ref_: @mention_context.File(path="other.mbt"), range: None, },
+  ])
+  let restored = reconciled.reconciled(
+    source={ task: "", mentions: [], images: [], },
+    incoming=source,
+  )
+  assert_eq(restored.task, "typed locally")
+  assert_eq(restored.mentions.length(), 2)
+  assert_true(restored.prompt().contains("chosen"))
+}

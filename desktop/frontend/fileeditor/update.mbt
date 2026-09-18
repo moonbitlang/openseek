@@ -1678,6 +1678,7 @@ pub fn subscriptions(
     },
     changes_poll_subscription(state, ctx, dispatch),
     review_diff_navigation_subscription(state, ctx, dispatch),
+    review_context_dismiss_subscription(),
     state.search.subscription(
       ctx.search_input(),
       dispatch.map(msg => Search(msg)),
@@ -1935,6 +1936,7 @@ pub fn sync(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
+  review_context? : Array[@mention_context.ReviewChanges] = [],
 ) -> (State, @cmd.Cmd) {
   let checkout_ready = ctx.checkout_ready()
   let owner_changed = state.owner != Some(ctx.owner)
@@ -2302,7 +2304,15 @@ pub fn sync(
   } else {
     (@cmd.none, state)
   }
-  let state = state.sync_semantic_review(ctx)
+  let review_context_reveal = state.review_context_reveal.filter(selection => {
+    ctx.active_file is Some(file) &&
+    ctx.relative(file) == Some(@pathx.Relative(selection.source.file)) &&
+    state.docs.get(file)
+    is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. })
+  })
+  let state = { ..state, review_context, review_context_reveal, }.sync_semantic_review(
+    ctx,
+  )
   let (state, package_graph_cmd) = sync_package_graph(dispatch, state, ctx)
   let (navigation_cmd, state) = sync_review_navigation_destination(
     dispatch, state, ctx,
@@ -2838,6 +2848,16 @@ fn update_inner(
       )
       (@cmd.none, next.toggle_active_review_hunk(ctx))
     }
+    ReviewContextRevealFinished(source~, ..) =>
+      (
+        @cmd.none,
+        if state.review_context_reveal is Some(selection) &&
+          selection.source == source {
+          { ..state, review_context_reveal: None, }
+        } else {
+          state
+        },
+      )
     ToggleActiveReviewHunk => (@cmd.none, state.toggle_active_review_hunk(ctx))
     Search(msg) => {
       let search = state.search.handle(msg, ctx.search_input())
@@ -4287,8 +4307,10 @@ fn update_inner(
     // chip there, which then clears the editor bubble through
     // `remove_editor_feedback`. Reaching this arm means the main update
     // didn't intercept it; changing nothing is the safe answer.
-    EditorCommentAdded(..) | DiffCommentAdded(..) | ApplyAllFeedback =>
-      (@cmd.none, state)
+    ReviewContextChanged(..)
+    | EditorCommentAdded(..)
+    | DiffCommentAdded(..)
+    | ApplyAllFeedback => (@cmd.none, state)
   }
 }
 

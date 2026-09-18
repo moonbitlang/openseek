@@ -979,3 +979,274 @@
 .composer-image-notice.error {
   color: var(--color-danger);
 }
+
+/* Selected review changes share the draft's mention tray and anchor to the
+   complete composer, so neither long paths nor a narrow pane clip the popup. */
+.composer-changes {
+  min-width: 0;
+}
+
+.changes-chip .mention-jump {
+  gap: 6px;
+}
+
+.changes-chevron {
+  --icon-size: var(--icon-sm);
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.changes-chip [aria-expanded="true"] .changes-chevron .icon {
+  transform: rotate(180deg);
+}
+
+.composer-changes-popup {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 0;
+  right: 0;
+}
+
+.changes-popup {
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  max-height: min(580px, 65vh);
+  min-height: 0;
+  padding: 16px 18px 0;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-surface), 0 8px 30px #0002;
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+}
+
+/* Historical snapshots use the same surface in the top layer so the
+   transcript scroller cannot clip it. Each message scopes its own anchor. */
+.message-changes {
+  anchor-scope: --message-changes-trigger;
+  min-width: 0;
+}
+
+.message-changes .mention-jump {
+  anchor-name: --message-changes-trigger;
+}
+
+.message-changes-popup {
+  display: none;
+  position: fixed;
+  position-anchor: --message-changes-trigger;
+  position-visibility: anchors-visible;
+  position-area: block-end span-inline-start;
+  position-try-order: most-block-size;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  inset: auto;
+  margin: 10px 0;
+  width: min(640px, 100cqw, calc(100dvw - 32px));
+  max-height: min(580px, calc(100dvh - 32px), calc(100% - 20px));
+}
+
+.message-changes-popup:popover-open {
+  display: flex;
+}
+
+.changes-popup-header, .changes-popup-heading, .changes-popup-footer,
+.changes-excerpt-header, .changes-file-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.changes-popup-header {
+  justify-content: space-between;
+}
+
+.changes-popup-heading {
+  font-size: 16px;
+}
+
+.changes-popup-subtitle, .changes-directory {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.changes-popup-subtitle {
+  margin: 8px 0 12px;
+}
+
+.changes-popup-files {
+  overflow-y: auto;
+  min-height: 0;
+  border-top: 1px solid var(--color-border);
+  overscroll-behavior: contain;
+}
+
+.changes-file {
+  padding-bottom: 10px;
+}
+
+.changes-file-header {
+  display: grid;
+  grid-template-columns: var(--icon-sm) minmax(0, 1fr) auto auto;
+  align-items: start;
+  width: 100%;
+  border: 0;
+  padding: 12px 0;
+  background: none;
+  color: inherit;
+  line-height: var(--line-height-normal);
+  text-align: left;
+  cursor: pointer;
+}
+
+.changes-file-header > .changes-chevron {
+  /* Align with the filename's line box, not the two-line path block. */
+  height: 1lh;
+}
+
+.changes-file-header[aria-expanded="false"] .changes-chevron .icon {
+  transform: rotate(-90deg);
+}
+
+.changes-file-path {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.changes-file-path > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changes-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.changes-count.added {
+  color: var(--color-success);
+}
+
+.changes-count.removed {
+  color: var(--color-danger);
+}
+
+.changes-excerpt {
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.changes-excerpt-header {
+  margin-bottom: 9px;
+  font-size: var(--font-size-sm);
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.changes-range {
+  flex: 1;
+  font-weight: 600;
+}
+
+.changes-open, .changes-remove, .changes-close, .changes-popup-footer button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 2px;
+}
+
+.changes-open {
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.changes-remove, .changes-close {
+  display: inline-flex;
+  flex: none;
+}
+
+.changes-preview {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+}
+
+.changes-preview-line {
+  display: flex;
+  min-width: max-content;
+  line-height: 22px;
+}
+
+.changes-preview-line.added {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+}
+
+.changes-preview-line.removed {
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+
+.changes-line-number {
+  width: 42px;
+  flex: none;
+  padding: 0 8px;
+  text-align: right;
+  color: var(--color-text-muted);
+  background: var(--color-bg-subtle);
+  user-select: none;
+}
+
+.changes-line-sign {
+  width: 26px;
+  flex: none;
+  text-align: center;
+  user-select: none;
+}
+
+.changes-line-code {
+  white-space: pre;
+  padding-right: 12px;
+}
+
+.changes-preview-gap {
+  color: var(--color-text-muted);
+  padding-left: 52px;
+}
+
+.changes-popup-footer {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--color-border);
+  padding: 12px 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.composer-changes-popup::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  background: var(--color-bg-surface);
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  transform: rotate(45deg);
+}
+
+.changes-chip .mention-jump {
+  text-decoration: none;
+}

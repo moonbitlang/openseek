@@ -1,0 +1,278 @@
+import { test, expect } from '@playwright/test';
+import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
+
+async function openReview(page, app) {
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+}
+
+const contextButtons = page => page.locator('.review-hunk-context-button:visible');
+
+test('review hunk context stays independent and sends only selected snapshots', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  const old = ['fn first() -> Int {', '  1', '}', ...Array(24).fill(''), 'fn second() -> Int {', '  2', '}', ''].join('\n');
+  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = old;
+  app.workingFiles['src/main.mbt'] = old.replace('  1', '  100').replace('  2', '  200');
+  await openReview(page, app);
+  const first = contextButtons(page).first();
+  await expect(first).toHaveText('Add to context');
+  await first.click();
+  await expect(first).toHaveText('In context');
+  await expect(first).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Mark hunk viewed', exact: true }).click();
+  await expect(first).toHaveText('In context');
+  const chip = page.locator('.composer-changes .changes-chip .mention-jump');
+  await expect(chip).toContainText('Changes · 1 file');
+  await page.locator('#task').fill('Extract the selected change');
+  await chip.click();
+  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  await expect(popup).toBeVisible();
+  await expect(popup.locator('.changes-preview')).toContainText('100');
+  await expect(popup.locator('.changes-preview')).not.toContainText('200');
+  await expect(popup).toContainText('Only selected changes are included.');
+  // The composer preview needs the token palette outside the editor host.
+  const selectedPreview = await popup.locator('.changes-line-code').allTextContents();
+  const plainColor = await popup.locator('.changes-line-code').first().evaluate(node => getComputedStyle(node).color);
+  await expect.poll(() => popup.locator('.mtk6').first().evaluate(node => getComputedStyle(node).color))
+    .not.toBe(plainColor);
+  await page.screenshot({ path: testInfo.outputPath('selected-context.png') });
+  await popup.getByRole('button', { name: 'Open in review', exact: true }).click();
+  await expect(popup).toBeHidden();
+  await expect(first).toHaveText('In context');
+  await chip.click();
+  await page.keyboard.press('Escape');
+  await expect(popup).toBeHidden();
+  await chip.click();
+  await popup.getByRole('button', { name: 'Remove change', exact: true }).click();
+  await expect(chip).toHaveCount(0);
+  await expect(first).toHaveText('Add to context');
+  await expect(page.locator('#task')).toHaveValue('Extract the selected change');
+  await first.click();
+  await expect(chip).toContainText('Changes · 1 file');
+  await page.getByTitle('Send', { exact: true }).click();
+  await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task).toContain('<review_changes>');
+  const prompt = app.requests.find(request => request.method === 'agent.start').params.task;
+  expect(prompt).toContain('Extract the selected change');
+  const selected = JSON.parse(prompt.split('<review_changes>\n')[1].split('\n</review_changes>')[0]);
+  expect(selected.excerpts[0].modified).toEqual([{ line: 2, text: '  100' }]);
+  expect(selected.excerpts[0].original).toEqual([{ line: 2, text: '  1' }]);
+  await expect(chip).toHaveCount(0);
+  await expect(first).toHaveText('Add to context');
+  const event = {
+    sequence: 18,
+    item: { kind: 'user', payload: {
+      content: prompt,
+      submission_id: app.requests.find(request => request.method === 'agent.start').params.submission_id,
+    } },
+  };
+  app.notify('session.event', {
+    session: 'session-1', session_root: '/workspace/.openseek', sequence: event.sequence, event,
+  });
+  const sentChip = page.locator('.user-bubble .changes-chip .mention-jump');
+  await expect(sentChip).toHaveText('Changes · 1 file');
+  await sentChip.click();
+  await expect(popup).toContainText('Included in this message');
+  await expect(popup.locator('.changes-line-code')).toHaveText(selectedPreview);
+  await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
+  await popup.getByRole('button', { name: 'Open in review', exact: true }).click();
+  await expect(popup).toBeHidden();
+  await expect(first).toHaveText('Add to context');
+  // Reload from the persisted message text, without any composer state.
+  app.sessionEvents = [
+    app.sessionEvents[0],
+    { sequence: 2, item: { kind: 'user', payload: { content: prompt } } },
+  ];
+  await page.reload();
+  await app.openSession();
+  await sentChip.click();
+  await expect(popup.locator('.changes-line-code')).toHaveText(selectedPreview);
+  await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('sent-context-reloaded.png') });
+  await page.keyboard.press('Escape');
+  await expect(sentChip).toBeFocused();
+  // A fresh session has no Review inventory yet. The saved message must be
+  // enough to open and load the review without visiting the panel first.
+  await expect(contextButtons(page)).toHaveCount(0);
+  const changesRequests = app.requests.filter(request => request.method === 'git.changes').length;
+  await sentChip.click();
+  await popup.getByRole('button', { name: 'Open in review', exact: true }).click();
+  await expect(popup).toBeHidden();
+  await expect(first).toHaveText('Add to context');
+  await expect(page.locator('.notification')).toHaveCount(0);
+  expect(app.requests.filter(request => request.method === 'git.changes').length).toBeGreaterThan(changesRequests);
+  await page.screenshot({ path: testInfo.outputPath('sent-context-cold-review.png') });
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('review context survives regrouping and a partial group changes only on explicit action', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  // Line groups nearby edits together; semantic sections split the functions.
+  const old = 'fn first() -> Int { 1 }\n\nfn second() -> Int { 2 }\n';
+  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = old;
+  app.workingFiles['src/main.mbt'] = old.replace('{ 1 }', '{ 10 }').replace('{ 2 }', '{ 20 }');
+  await openReview(page, app);
+  await page.getByRole('button', { name: 'Token diff', exact: true }).click();
+  await expect(contextButtons(page)).toHaveCount(2);
+  await contextButtons(page).first().click();
+  await expect(contextButtons(page).first()).toHaveText('In context');
+  await expect(contextButtons(page).last()).toHaveText('Add to context');
+  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
+  await expect(contextButtons(page)).toHaveCount(1);
+  await expect(contextButtons(page)).toHaveText('Partly in context');
+  await page.locator('.composer-changes .changes-chip .mention-jump').click();
+  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  await expect(popup).toContainText('10');
+  await expect(popup.locator('.changes-preview')).not.toContainText('20');
+  await page.keyboard.press('Escape');
+  await contextButtons(page).click();
+  await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeVisible();
+  const menu = page.getByRole('menu');
+  const sash = await page.locator('.moonbit-diff-editor-sash:visible').boundingBox();
+  const menuBounds = await menu.boundingBox();
+  const point = { x: sash.x + sash.width / 2, y: menuBounds.y + menuBounds.height / 2 };
+  expect(point.x).toBeGreaterThan(menuBounds.x);
+  expect(point.x).toBeLessThan(menuBounds.x + menuBounds.width);
+  expect(await menu.evaluate((node, point) => node.contains(document.elementFromPoint(point.x, point.y)), point))
+    .toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('partial-context.png') });
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(contextButtons(page)).toHaveText('In context');
+  await expect(contextButtons(page)).toBeFocused();
+  await page.getByRole('button', { name: 'Tree diff', exact: true }).click();
+  await expect(contextButtons(page)).toHaveCount(2);
+  for (const button of await contextButtons(page).all()) await expect(button).toHaveText('In context');
+  await contextButtons(page).last().click();
+  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
+  await expect(contextButtons(page)).toHaveText('Partly in context');
+  await contextButtons(page).click();
+  await page.getByRole('menuitem', { name: 'Remove included changes' }).click();
+  await expect(page.locator('.composer-changes .changes-chip')).toHaveCount(0);
+  await expect(contextButtons(page)).toHaveText('Add to context');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Codex composer groups multiple files and preserves deletion context on send', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
+    defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }] }];
+  app.gitChanges[1] = { path: 'src/lib.mbt', index_status: ' ', worktree_status: 'D', kind: 'deleted' };
+  delete app.workingFiles['src/lib.mbt'];
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+  await app.openReview();
+  const files = page.locator('#review-changes-body');
+  await files.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await contextButtons(page).first().click();
+  await files.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
+  await contextButtons(page).first().click();
+  const chip = page.locator('.composer-changes .changes-chip .mention-jump');
+  await expect(chip).toContainText('Changes · 2 files');
+  await chip.click();
+  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  const deleted = popup.locator('.changes-file').filter({ hasText: 'lib.mbt' });
+  await expect(deleted.locator('.changes-preview-line.removed').first()).toBeVisible();
+  await expect(deleted.locator('.changes-preview-line.added')).toHaveCount(0);
+  await popup.getByTitle('src/lib.mbt', { exact: true }).click();
+  await expect(deleted.locator('.changes-preview')).toHaveCount(0);
+  await popup.getByTitle('src/lib.mbt', { exact: true }).click();
+  await expect(deleted.locator('.changes-preview')).toBeVisible();
+  // A narrow composer owns its popup width and independently scrolls long diffs.
+  await page.setViewportSize({ width: 1060, height: 800 });
+  await page.screenshot({ path: testInfo.outputPath('codex-multiple-files.png') });
+  const box = await popup.boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(1060);
+  await page.keyboard.press('Escape');
+  await expect(chip).toBeFocused();
+  await page.locator('#task').fill('Explain these selected changes');
+  await page.getByTitle('Send', { exact: true }).click();
+  await expect.poll(() => app.requests.find(request => request.method === 'codex.turn.start'))
+    .toBeTruthy();
+  const input = app.requests.find(request => request.method === 'codex.turn.start').params.input;
+  const selected = input.filter(item => item.type === 'text' && item.text.includes('<review_changes>'));
+  expect(selected).toHaveLength(2);
+  const deletion = JSON.parse(selected.find(item => item.text.includes('lib.mbt')).text.split('\n')[2]);
+  expect(deletion.excerpts[0].modified).toEqual([]);
+  expect(deletion.excerpts[0].original.some(line => line.text === '  41')).toBe(true);
+  await expect(chip).toHaveCount(0);
+  const sentChip = page.locator('.user-bubble .changes-chip .mention-jump');
+  await expect(sentChip).toHaveText('Changes · 2 files');
+  await sentChip.click();
+  await expect(popup.locator('.changes-file')).toHaveCount(2);
+  await expect(popup.locator('.changes-file').filter({ hasText: 'lib.mbt' })
+    .locator('.changes-preview-line.added')).toHaveCount(0);
+  await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('codex-sent-multiple-files.png') });
+  expect(app.pageErrors).toEqual([]);
+});
+
+
+test('saved message changes keep independent disclosures and immutable previews', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  const selection = (file, oldText, newText) => ({
+    source: { workspace: '/workspace', file, version: 'saved-comparison' },
+    excerpts: [{
+      original: [{ line: 8, text: oldText }],
+      modified: [{ line: 9, text: newText }],
+    }],
+  });
+  const prompt = (task, selections) => `${task}\n\n<user_mentions>\n${
+    selections.map(value => `<review_changes>\n${JSON.stringify(value)}\n</review_changes>\n`).join('')
+  }</user_mentions>`;
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: prompt('Show the browser fixture first snapshot', [
+      selection('src/main.mbt', 'let old_value = 1', 'let saved_value = 2'),
+      selection('deleted/file.txt', 'saved removed text', 'saved replacement text'),
+    ]) } } },
+    { sequence: 2, item: { kind: 'user', payload: { content: prompt('Second snapshot', [
+      selection('src/main.mbt', 'let old_value = 10', 'let another_value = 20'),
+    ]) } } },
+  ];
+  // Current files intentionally do not contain the saved text.
+  app.workingFiles['src/main.mbt'] = 'fn main { println("current workspace") }\n';
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const chips = page.locator('.user-bubble .changes-chip .mention-jump');
+  await expect(chips).toHaveText(['Changes · 2 files', 'Changes · 1 file']);
+  await chips.first().click();
+  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  await expect(popup).toContainText('let saved_value = 2');
+  await expect(popup).not.toContainText('current workspace');
+  await expect(popup.locator('.changes-range').first()).toHaveText('Old L8 → New L9');
+  await popup.getByTitle('src/main.mbt', { exact: true }).click();
+  await expect(popup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
+  await chips.last().click();
+  await expect(page.getByRole('dialog', { name: 'Selected changes' })).toHaveCount(1);
+  await expect(popup.locator('.changes-preview')).toContainText('let another_value = 20');
+  await chips.first().click();
+  await expect(popup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
+  await popup.getByTitle('src/main.mbt', { exact: true }).click();
+  await expect(popup.locator('.changes-preview').first()).toContainText('let saved_value = 2');
+  await page.setViewportSize({ width: 860, height: 640 });
+  await chips.first().scrollIntoViewIfNeeded();
+  await expect(popup).toBeVisible();
+  const box = await popup.boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(860);
+  expect(box.y + box.height).toBeLessThanOrEqual(640);
+  await page.screenshot({ path: testInfo.outputPath('saved-message-changes-narrow.png') });
+  await page.getByText('Ready', { exact: true }).click();
+  await expect(popup).toBeHidden();
+  await page.locator('#task').click();
+  await expect(page.locator('#task')).toBeFocused();
+  await chips.first().click();
+  await popup.getByRole('button', { name: 'Close selected changes', exact: true }).click();
+  await expect(popup).toBeHidden();
+  await expect(chips.first()).toBeFocused();
+  expect(app.pageErrors).toEqual([]);
+});

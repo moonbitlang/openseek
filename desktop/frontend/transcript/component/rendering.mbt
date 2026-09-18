@@ -531,7 +531,11 @@ fn Block::branch_key(self : Block) -> String {
 ///|
 /// The block's Html. The parent's actions are captured by the component and
 /// passed through here; a block never stores them.
-fn Block::render(self : Block, actions : Actions) -> @html.Html {
+fn Block::render(
+  self : Block,
+  actions : Actions,
+  changes? : @review_changes.Control,
+) -> @html.Html {
   let on_open = path => (actions.open)(path)
   match self.content {
     Empty(empty) => empty.render(actions)
@@ -549,6 +553,7 @@ fn Block::render(self : Block, actions : Actions) -> @html.Html {
         on_open,
         wait_labels~,
         anchor?,
+        changes?,
         on_jump=target => (actions.jump)(target),
         assistant_name~,
         step_label?,

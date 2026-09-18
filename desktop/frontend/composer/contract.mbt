@@ -254,6 +254,14 @@ pub(all) enum Action {
     present~ : Bool,
     cleared_source~ : Draft?
   )
+  ReviewChangesRemoved(
+    identity~ : Identity,
+    selections~ : Array[@mention_context.ReviewChanges]
+  )
+  ReviewChangesOpened(
+    identity~ : Identity,
+    selection~ : @mention_context.ReviewChanges
+  )
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
   SlashCommand(identity~ : Identity, command~ : String)
   MentionOpened(identity~ : Identity, mention~ : Mention)
@@ -305,6 +313,8 @@ pub fn Action::identity(self : Action) -> Identity {
     DraftSubmitted(identity~, ..)
     | FollowupSubmitted(identity~, ..)
     | DraftPresenceChanged(identity~, ..)
+    | ReviewChangesRemoved(identity~, ..)
+    | ReviewChangesOpened(identity~, ..)
     | RootMentionRemoved(identity~, ..)
     | SlashCommand(identity~, ..)
     | MentionOpened(identity~, ..)

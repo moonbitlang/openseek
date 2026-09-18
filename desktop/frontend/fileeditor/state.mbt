@@ -477,6 +477,8 @@ pub(all) struct State {
   history_generation : Int
   // Exact changed rows and their shared Line/Token/Tree review coverage.
   // Complete may come from the file control or full hunk coverage.
+  review_context_reveal : @mention_context.ReviewChanges?
+  review_context : Array[@mention_context.ReviewChanges]
   review_progress : Array[ChangedFileReview]
   // Monotonic identity of the visible hunk surface. Mode, filter, collapse,
   // source/diff, and document transitions advance it so a callback queued by
@@ -617,6 +619,8 @@ pub fn State::empty() -> State {
     git_graph_collapsed: false,
     history_docs: Map([]),
     history_generation: 0,
+    review_context_reveal: None,
+    review_context: [],
     review_progress: [],
     review_hunk_surface_generation: 0,
     review_active_hunk: None,
@@ -808,6 +812,15 @@ fn Ctx::checkout_ready(self : Ctx) -> Bool {
 
 ///|
 pub(all) enum Msg {
+  ReviewContextRevealFinished(
+    source~ : @mention_context.ReviewSource,
+    found~ : Bool
+  )
+  ReviewContextChanged(
+    owner~ : @interop.ConversationKey,
+    selection~ : @mention_context.ReviewChanges,
+    adding~ : Bool
+  )
   // Open the directory's immediate children under the breadcrumb. Selecting
   // the already-open directory toggles the picker closed; an uncached level
   // is listed through the same request/cache as the explorer tree.

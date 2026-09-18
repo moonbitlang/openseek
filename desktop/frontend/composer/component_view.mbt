@@ -27,12 +27,15 @@ fn Completion::view(self : Completion, emit : @cmd.Emit[Msg]) -> @html.Html {
 ///|
 /// Render the permanent mention tray. Keeping it mounted when empty preserves
 /// the textarea's positional DOM identity.
-fn Draft::mention_chips(
-  self : Draft,
+fn Entry::mention_chips(
+  self : Entry,
   emit : @cmd.Emit[Msg],
 ) -> Array[@html.Html] {
   let chips : Array[@html.Html] = []
-  for index, mention in self.mentions {
+  for index, mention in self.draft.mentions {
+    if mention.ref_ is @mention_context.ReviewChanges(_) {
+      continue
+    }
     let target = @mention_context.target(mention.ref_)
     chips.push(
       MentionChip::{
@@ -55,6 +58,9 @@ fn Draft::mention_chips(
         ),
       }.render(),
     )
+  }
+  if self.review_changes().length() > 0 {
+    chips.push(self.changes_chip(emit))
   }
   chips
 }
@@ -274,10 +280,7 @@ fn Entry::view(
       None
     },
     before_inner: context,
-    mentions: [
-      ..self.draft.mention_chips(emit),
-      ..self.draft.image_previews(emit),
-    ],
+    mentions: [..self.mention_chips(emit), ..self.draft.image_previews(emit)],
     value: if goal_mode {
       self.goal_draft.unwrap_or("")
     } else {

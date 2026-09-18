@@ -26,6 +26,8 @@ pub(all) enum Action {
   DraftSubmitted(identity~ : Identity, draft~ : Draft)
   FollowupSubmitted(identity~ : Identity, draft~ : Draft, choice~ : FollowupChoice)
   DraftPresenceChanged(identity~ : Identity, present~ : Bool, cleared_source~ : Draft?)
+  ReviewChangesRemoved(identity~ : Identity, selections~ : Array[@mention_context.ReviewChanges])
+  ReviewChangesOpened(identity~ : Identity, selection~ : @mention_context.ReviewChanges)
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
   SlashCommand(identity~ : Identity, command~ : String)
   MentionOpened(identity~ : Identity, mention~ : Mention)
@@ -98,6 +100,7 @@ pub fn Draft::prompt(Self) -> String
 pub fn Draft::to_repr(Self) -> @debug.Repr
 pub fn Draft::user_item(Self) -> @transcript.ItemKind
 pub fn Draft::with_mention(Self, Mention) -> Self
+pub fn Draft::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self
 
 pub(all) enum FileIndex {
   FileIndexEmpty(epoch~ : Int)

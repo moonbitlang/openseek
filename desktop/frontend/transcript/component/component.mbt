@@ -152,6 +152,7 @@ pub fn Input::Input(
 pub(all) struct Actions {
   open : @cmd.Emit[String]
   jump : @cmd.Emit[@mention_context.Target]
+  open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
@@ -320,11 +321,16 @@ pub fn component(
   let rendered = blocks.assoc_by(
     (_, block) => {
       let renders = Ref(0)
-      block.map(block => {
+      let (changes, changes_emit) = message_changes_state(block, actions)
+      changes.map2(block, (changes, block) => {
         renders.val += 1
-        let html = @html.memo_by(block, block => block.render(actions), by=_ => {
-          renders.val
-        })
+        let html = @html.memo_by(
+          block,
+          block => {
+            block.render(actions, changes?=changes.control(block, changes_emit))
+          },
+          by=_ => renders.val,
+        )
         (block.key.wire(), html)
       })
     },

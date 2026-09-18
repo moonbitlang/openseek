@@ -668,7 +668,9 @@ fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
         "text": @mention_context.encode([mention.ref_], ""),
       })
     }
-    @mention_context.Symbol(..) | @mention_context.Annotation(..) =>
+    @mention_context.Symbol(..)
+    | @mention_context.Annotation(..)
+    | @mention_context.ReviewChanges(_) =>
       Some({
         "type": "text",
         "text": @mention_context.encode([mention.ref_], ""),

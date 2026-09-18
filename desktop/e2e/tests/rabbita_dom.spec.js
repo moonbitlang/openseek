@@ -2411,7 +2411,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     await page.mouse.wheel(0, 10000);
     await expect(position).toHaveText('Change 2 of 2');
     await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
-    const localAction = page.locator('.moonbit-diff-hunk-action:visible button').last();
+    const localAction = page.locator('.moonbit-diff-hunk-action:visible .review-hunk-marker').last();
     await localAction.click();
     await expect(localAction).toBeFocused();
     await expect(page.getByRole('button', { name: 'Unmark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -2422,7 +2422,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     await page.getByRole('button', { name: 'Next change', exact: true }).click();
     await expect(position).toHaveText('Change 2 of 2');
     await expect(page.getByRole('button', { name: 'Unmark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await page.locator('.moonbit-diff-hunk-action:visible button').last().click();
+    await page.locator('.moonbit-diff-hunk-action:visible .review-hunk-marker').last().click();
     await expect(page.getByRole('button', { name: 'Mark file reviewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
     expect(app.pageErrors).toEqual([]);
   });
@@ -2481,7 +2481,7 @@ for (const layout of ['Split', 'Unified']) {
     await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
     await page.getByRole('button', { name: 'Line diff', exact: true }).click();
     await page.getByRole('button', { name: `${layout} diff layout`, exact: true }).click();
-    const action = page.locator('.moonbit-diff-hunk-action:visible button');
+    const action = page.locator('.moonbit-diff-hunk-action:visible .review-hunk-marker');
     await expect(action).toBeVisible();
     const deleted = page.locator(layout === 'Split' ? '.moonbit-diff-editor-original .view-line' : '.diff-editor-inline-deleted-line').filter({ hasText: 'delete me' });
     // Layout switching can leave the original pane mounted but hidden for a

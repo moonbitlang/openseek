@@ -3070,3 +3070,127 @@ button.git-history-file.selected {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
+
+/* Viewed remains a gutter control; the independent context action sits on
+   the upper right of the same widget-owned hunk geometry. */
+.moonbit-diff-hunk-action:has(.review-hunk-actions) {
+  width: auto;
+  right: 18px;
+  pointer-events: none;
+}
+
+.review-hunk-actions {
+  position: relative;
+  width: 100%;
+  height: var(--diff-hunk-height, 20px);
+  pointer-events: none;
+}
+
+.review-hunk-actions > .review-hunk-marker {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid;
+  border-radius: 3px;
+  background: var(--color-bg-surface);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.review-hunk-actions[data-context="full"]::after,
+.review-hunk-actions[data-context="partial"]::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 24px;
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.review-hunk-actions[data-context="partial"]::after {
+  border-style: dashed;
+}
+
+.review-hunk-context {
+  position: absolute;
+  right: 6px;
+  top: 3px;
+  pointer-events: auto;
+}
+
+.review-hunk-context-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 27px;
+  padding: 0 10px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
+  background: var(--color-bg-surface);
+  color: var(--color-accent);
+  font-family: var(--font-family-sans);
+  font-size: 12px;
+  box-shadow: 0 1px 3px #0002;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.review-hunk-context-button:hover {
+  background: var(--color-bg-subtle);
+}
+
+.review-hunk-context-button[aria-pressed="mixed"]::after {
+  content: "⌄";
+}
+
+.review-hunk-context-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  min-width: 205px;
+  padding: 4px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-surface);
+}
+
+.review-hunk-context-menu[hidden] {
+  display: none;
+}
+
+.review-hunk-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-family-sans);
+  font-size: 12px;
+}
+
+.review-hunk-context-menu button:hover {
+  background: var(--color-bg-subtle);
+}
+
+.review-hunk-actions button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.review-hunk-context {
+  z-index: 1;
+}
+
+.moonbit-diff-hunk-action:has(.review-hunk-context-menu:not([hidden])) {
+  /* The split-pane resize handle uses 20; it must not cover menu actions. */
+  z-index: 21;
+}

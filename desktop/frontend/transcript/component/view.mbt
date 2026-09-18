@@ -683,12 +683,16 @@ fn user_message_view(
   sent_at? : Double,
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
+  changes? : @review_changes.Control,
 ) -> @html.Html {
   let body : Array[@html.Html] = [speaker_label("You")]
   match @mention_context.parse(content) {
     Some(parsed) => {
       let chips : Array[@html.Html] = []
       for mention in parsed.mentions {
+        if mention is @mention_context.ReviewChanges(_) {
+          continue
+        }
         let glyph = @html.span(
           class="mention-glyph",
           @mention_context.glyph(mention),
@@ -719,6 +723,11 @@ fn user_message_view(
           @html.span(class="mention-body", [glyph, label])
         }
         chips.push(@html.div(class="mention-chip", [chip]))
+      }
+      if changes is Some(control) {
+        chips.push(
+          control.view(@mention_context.review_changes(parsed.mentions)),
+        )
       }
       body.push(@html.div(class="mention-tray", chips))
       if !parsed.task.is_empty() {
@@ -894,13 +903,21 @@ fn transcript_item_view(
   wait_labels? : Map[Int, String] = Map([]),
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
+  changes? : @review_changes.Control,
   assistant_name? : String = "OpenSeek",
   step_label? : String,
   subrun? : SubrunLink,
 ) -> @html.Html {
   match item.kind {
     User(text=prompt, images~) =>
-      user_message_view(prompt, images~, sent_at?=item.ts, anchor?, on_jump?)
+      user_message_view(
+        prompt,
+        images~,
+        sent_at?=item.ts,
+        anchor?,
+        on_jump?,
+        changes?,
+      )
     Assistant(reasoning~, prose~, calls~, replay=_, finished~) =>
       assistant_view(
         on_open,

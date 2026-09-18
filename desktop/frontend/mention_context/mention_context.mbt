@@ -52,6 +52,7 @@ pub(all) enum AnnotationSide {
 
 ///|
 pub(all) enum MentionRef {
+  ReviewChanges(ReviewChanges)
   Skill(name~ : String)
   File(path~ : String)
   Symbol(name~ : String, file~ : String, line~ : Int)
@@ -137,6 +138,7 @@ pub struct Target {
 /// The short marker displayed before a mention's label.
 pub fn glyph(mention : MentionRef) -> String {
   match mention {
+    ReviewChanges(_) => "⑂"
     Skill(_) => "$"
     File(_) => "@"
     Symbol(_) => "#"
@@ -148,6 +150,7 @@ pub fn glyph(mention : MentionRef) -> String {
 /// Human-readable text for one mention chip.
 pub fn label(mention : MentionRef) -> String {
   match mention {
+    ReviewChanges(changes) => "Changes · \{changes.source.file}"
     Skill(name~) => name
     File(path~) => path
     Symbol(name~, ..) => name
@@ -162,7 +165,7 @@ pub fn label(mention : MentionRef) -> String {
 /// Resolve a mention into the working-file location its chip may open.
 pub fn target(mention : MentionRef) -> Target? {
   match mention {
-    Skill(_) => None
+    ReviewChanges(_) | Skill(_) => None
     File(path~) => Some({ file: path, range: None, annotation: None, })
     Symbol(file~, line~, ..) =>
       if file.is_empty() {
@@ -230,6 +233,9 @@ pub fn encode(mentions : Array[MentionRef], task : String) -> String {
 ///|
 fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
   match mention {
+    ReviewChanges(changes) =>
+      parts <+
+        "<review_changes>\n\{changes.to_json().stringify()}\n</review_changes>\n"
     Skill(name~) => {
       let name = MentionAttribute::encode(name).wire
       parts <+ "<skill name=\"\{name}\"/>\n"
@@ -335,6 +341,18 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
   let mut index = 0
   while index < lines.length() {
     let line = lines[index]
+    if line == "<review_changes>" {
+      guard lines.get(index + 1) is Some(body) &&
+        lines.get(index + 2) == Some("</review_changes>") else {
+        return None
+      }
+      let changes : ReviewChanges = @json.from_json(@json.parse(body)) catch {
+        _ => return None
+      }
+      mentions.push(ReviewChanges(changes))
+      index += 3
+      continue
+    }
     if skill_pattern.execute(line) is Some(matched) {
       guard matched.named_group("name") is Some(name) else { return None }
       mentions.push(Skill(name=MentionAttribute::decode(name.to_owned())))

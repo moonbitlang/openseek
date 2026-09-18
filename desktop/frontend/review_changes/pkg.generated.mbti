@@ -1,0 +1,35 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/review_changes"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/sub",
+  "openseek_desktop/frontend/mention_context",
+}
+
+// Values
+pub fn dismiss_subscription(String, @cmd.Emit[Bool]) -> @sub.Sub
+
+pub fn focus_trigger(String) -> @cmd.Cmd
+
+pub fn show_popup(String) -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+pub(all) struct Control {
+  id : String
+  open : Bool
+  collapsed : Array[String]
+  toggle : @cmd.Cmd
+  dismiss : @cmd.Cmd
+  toggle_file : @cmd.Emit[String]
+  open_review : @cmd.Emit[@mention_context.ReviewChanges]
+  remove : @cmd.Emit[Array[@mention_context.ReviewChanges]]?
+}
+pub fn Control::view(Self, Array[@mention_context.ReviewChanges]) -> @html.Html
+
+// Type aliases
+
+// Traits

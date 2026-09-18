@@ -782,6 +782,7 @@ fn conversation_relative(
 fn Model::begin_editor_navigation(self : Model) -> Model {
   {
     ..self,
+    pending_review_context: None,
     file_panel: {
       ..self.file_panel,
       file_link_generation: self.file_panel.file_link_generation + 1,
@@ -1554,6 +1555,13 @@ fn sync_file_panel(
     dispatch.map(msg => FileEditor(msg)),
     model.file_panel,
     file_ctx(model),
+    review_context=@mention_context.review_changes(
+      (if model.screen is Codex {
+        model.codex_composer_input().draft.mentions
+      } else {
+        model.active_conversation().map(conv => conv.mentions).unwrap_or([])
+      }).map(mention => mention.ref_),
+    ),
   )
   ({ ..model, file_panel: panel, }, cmd)
 }
@@ -1885,6 +1893,12 @@ fn update(
     model
   }
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
+  let model = {
+    ..model,
+    pending_review_context: model.pending_review_context.filter(pending => {
+      pending.is_current(model)
+    }),
+  }
   // The launcher menu belongs to one dock owner. Conversation changes are
   // already explicit root transitions, so close it here instead of observing a
   // rendered owner marker through the DOM.
@@ -2163,6 +2177,13 @@ fn update_msg(
           }
           update_msg(dispatch, CodexEffortPicked(value), model)
         }
+        @composer.ReviewChangesOpened(identity~, selection~) => {
+          guard model.screen is Codex &&
+            model.codex.accepts_composer_identity(identity, model.focused) else {
+            return (@cmd.none, model)
+          }
+          open_review_context(dispatch, model, selection)
+        }
         @composer.MentionOpened(identity~, mention~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
@@ -2410,6 +2431,29 @@ fn update_msg(
           } else {
             (@cmd.none, model)
           }
+        @composer.ReviewChangesRemoved(identity~, selections~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          let mut draft : @composer.Draft = {
+            task: conv.task,
+            mentions: conv.mentions,
+            images: [],
+          }
+          for selection in selections {
+            draft = draft.with_review_changes(selection, adding=false)
+          }
+          (
+            @cmd.none,
+            model.replace_conversation({ ..conv, mentions: draft.mentions, }),
+          )
+        }
+        @composer.ReviewChangesOpened(identity~, selection~) => {
+          guard model.conversation_for_composer_action(identity) is Some(_) else {
+            return (@cmd.none, model)
+          }
+          open_review_context(dispatch, model, selection)
+        }
         @composer.RootMentionRemoved(identity~, mention~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
@@ -2600,9 +2644,61 @@ fn update_msg(
     }
     JumpToLocation(path~, range~, annotation~) =>
       open_editor_at(dispatch, model, path, range, annotation?)
+    TranscriptReviewChangesOpened(slot~, selection~) => {
+      guard model.transcript_slot().map(active => active.key()) == Some(slot) else {
+        return (@cmd.none, model)
+      }
+      open_review_context(dispatch, model, selection)
+    }
     // Intercepted here rather than delegated to the fileeditor package: the
     // comment becomes an annotation chip on the composer draft, which only
     // this model knows about. `quote`/`range` come from the panel's viewer.
+    FileEditor(@fileeditor.ReviewContextRevealFinished(source~, found=false)) => {
+      guard model.file_panel.review_context_reveal is Some(selection) &&
+        selection.source == source else {
+        return (@cmd.none, model)
+      }
+      let (command, panel) = @fileeditor.update(
+        dispatch.map(msg => FileEditor(msg)),
+        @fileeditor.ReviewContextRevealFinished(source~, found=false),
+        model.file_panel,
+        file_ctx(model),
+      )
+      let (notice, next) = { ..model, file_panel: panel, }.notify_error(
+        dispatch, "These saved changes no longer match the current review or are hidden by its filters. The saved context is unchanged.",
+      )
+      (@cmd.batch([command, notice]), next)
+    }
+    FileEditor(@fileeditor.ReviewContextChanged(owner~, selection~, adding~)) => {
+      guard file_ctx(model).owner == owner &&
+        model.file_panel.accepts_review_context(selection) else {
+        return (@cmd.none, model)
+      }
+      if model.screen is Codex {
+        return (
+          @cmd.none,
+          {
+            ..model,
+            codex: model.codex.with_review_changes(selection, adding~),
+          },
+        )
+      }
+      guard model.active_conversation() is Some(conv) else {
+        return (@cmd.none, model)
+      }
+      let draft : @composer.Draft = {
+        task: conv.task,
+        mentions: conv.mentions,
+        images: [],
+      }
+      (
+        @cmd.none,
+        model.replace_conversation({
+          ..conv,
+          mentions: draft.with_review_changes(selection, adding~).mentions,
+        }),
+      )
+    }
     FileEditor(
       EditorCommentAdded(
         resource~,
@@ -4879,7 +4975,13 @@ fn update_msg(
         file_ctx(model),
       )
       let next = { ..model, file_panel: panel, }
-      (cmd, next)
+      let (reveal_cmd, next) = finish_review_context_load(
+        dispatch,
+        msg,
+        model.file_panel,
+        next,
+      )
+      (@cmd.batch([cmd, reveal_cmd]), next)
     }
     Dock(msg) => {
       // The strip machine is pure; the cross-package effects of the
@@ -20245,4 +20347,130 @@ test "file context inherits the conversation model and its reasoning family" {
       },
     )
   }
+}
+
+///|
+priv struct PendingReviewContext {
+  owner : @interop.ConversationKey
+  navigation : Int
+  selection : @mention_context.ReviewChanges
+} derive(Eq)
+
+///|
+fn PendingReviewContext::is_current(
+  self : PendingReviewContext,
+  model : Model,
+) -> Bool {
+  let ctx = file_ctx(model)
+  self.owner == ctx.owner &&
+  self.navigation == model.file_panel.file_link_generation &&
+  ctx.placement
+  .bind(placement => placement.checkout_root())
+  .map(root => root.path) ==
+  Some(self.selection.source.workspace)
+}
+
+///|
+fn open_review_context(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  selection : @mention_context.ReviewChanges,
+) -> (@cmd.Cmd, Model) {
+  let ctx = file_ctx(model)
+  guard ctx.placement
+    .bind(placement => placement.checkout_root())
+    .map(root => root.path) ==
+    Some(selection.source.workspace) else {
+    return model.notify_error(
+      dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
+    )
+  }
+  if model.file_panel.changes
+    is @fileeditor.ChangeListReady(refreshing=false, ..) {
+    return open_loaded_review_context(dispatch, model, selection)
+  }
+  // Opening Changes starts (or joins) its normal owner/generation-fenced
+  // inventory load. Keep the target separately until the authoritative reply
+  // arrives; the viewer's reveal state requires an already-open document.
+  let (command, opened) = open_explorer(dispatch, model, ExplorerChanges)
+  (
+    command,
+    {
+      ..opened,
+      pending_review_context: Some({
+        owner: ctx.owner,
+        navigation: opened.file_panel.file_link_generation,
+        selection,
+      }),
+    },
+  )
+}
+
+///|
+fn finish_review_context_load(
+  dispatch : @cmd.Emit[Msg],
+  msg : @fileeditor.Msg,
+  before : @fileeditor.State,
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  guard model.pending_review_context is Some(pending) &&
+    pending.is_current(model) else {
+    return (@cmd.none, model)
+  }
+  let (owner, generation, error) = match msg {
+    ChangesLoaded(owner~, generation~, ..) => (owner, generation, None)
+    ChangesFailed(owner~, generation~, message~) =>
+      (owner, generation, Some(message))
+    _ => return (@cmd.none, model)
+  }
+  // A coalesced refresh is still loading. Stale/duplicate replies cannot
+  // complete a newer jump, and an intermediate empty list is not deletion.
+  guard before.owner == Some(owner) &&
+    pending.owner == owner &&
+    before.changes_generation == generation &&
+    model.file_panel.changes_generation == generation &&
+    before.changes
+    is (ChangeListLoading(_) | ChangeListReady(refreshing=true, ..)) else {
+    return (@cmd.none, model)
+  }
+  let model = { ..model, pending_review_context: None, }
+  if error is Some(message) {
+    return model.notify_error(
+      dispatch,
+      "Unable to load the current review: \{message}",
+    )
+  }
+  open_loaded_review_context(dispatch, model, pending.selection)
+}
+
+///|
+fn open_loaded_review_context(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  selection : @mention_context.ReviewChanges,
+) -> (@cmd.Cmd, Model) {
+  guard model.file_panel.changes
+    is @fileeditor.ChangeListReady(files~, refreshing=false, ..) &&
+    files.search_by(change => {
+      change.path.0 == selection.source.file &&
+      change.original_path.map(path => path.0) == selection.source.original_file
+    })
+    is Some(index) else {
+    return model.notify_error(
+      dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
+    )
+  }
+  let (command, opened) = update_msg(
+    dispatch,
+    FileEditor(@fileeditor.ChangedFileSelected(files[index])),
+    model,
+  )
+  (
+    command,
+    {
+      ..opened,
+      right_panel_open: true,
+      file_panel: opened.file_panel.with_review_context_reveal(selection),
+    },
+  )
 }

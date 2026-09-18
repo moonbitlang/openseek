@@ -1,5 +1,6 @@
 import {
   "openseek_desktop/frontend/image_input",
+  "moonbitlang/editor/base/browser" @base_browser,
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
@@ -15,6 +16,7 @@ import {
   "openseek_desktop/frontend/labels",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
+  "openseek_desktop/frontend/review_changes",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/transcript",
   "openseek_desktop/frontend/skills",
