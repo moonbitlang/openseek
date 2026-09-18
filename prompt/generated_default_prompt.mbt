@@ -196,16 +196,19 @@ fn default_prompt() -> String {
     #|  // `-g` is the filter — and `*.mbt` excludes `.mbti` and `.mbt.md`; widen it
     #|  // to `*.mbt*` when those should count.
     #|  let out = @shell.Cmd("rg", [
-    #|    "-n", "protect_from_cancel\\(", // double the backslashes needs (`"\\("`) or pass `-F` for a literal match
+    #|    // A regex needle is one ordinary string element, so double the
+    #|    // backslashes MoonBit needs (`"\\("`), or pass `-F` to match literally.
+    #|    "-n", "protect_from_cancel\\(",
     #|    "-g", "*.mbt", "src",
     #|  ]).output()
     #|  // For redirect with `Cmd(.., stdout=ToFile(...))` to a file under
-    #|  //`@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
+    #|  // `@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
     #|  // directory, and that directory is the one place a snippet may write (`/tmp`
     #|  // itself is refused)
     #|
     #|  // `test` is a keyword, don't write `let test = ...`
-    #|  println(out.stdout()[:8000]) // clamped by at most 8000 utf16 code units.
+    #|  // Slicing clamps instead of panicking, so this is safe on shorter output.
+    #|  println(out.stdout()[:8000]) // at most 8000 UTF-16 code units
     #|  println(out.stderr()[:8000])
     #|  println("exit=\{out.exit_code()}") // `rg` exits 1 when nothing matched
     #|}
