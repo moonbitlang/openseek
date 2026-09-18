@@ -9,33 +9,29 @@ fn artifact_basename(path : String) -> String {
 
 ///|
 fn BgJob::record(self : BgJob, runtime : BgJobRuntime) -> @protocol.JobRecord {
-  let state : @protocol.JobState = if self.phase is (Live | Finishing) &&
-    self.exec.status() is (Exited(_) | Killed) {
-    Stopping
-  } else {
-    match self.exec.status() {
-      Running | Backgrounded =>
-        if self.requested_stop {
-          Stopping
+  let state : @protocol.JobState = match self.exec.status() {
+    Exited(_) | Killed if self.phase is (Live | Finishing) => Stopping
+    Running | Backgrounded =>
+      if self.requested_stop {
+        Stopping
+      } else {
+        Running
+      }
+    Exited(code) => Exited(code)
+    Killed =>
+      Stopped(
+        if self.exec.output_error() is Some(_) {
+          "capture_failed"
+        } else if self.exec.killed_by_output_limit() {
+          "output_limit"
+        } else if self.exec.killed_by_time_limit() {
+          "time_limit"
+        } else if self.requested_stop {
+          "user"
         } else {
-          Running
-        }
-      Exited(code) => Exited(code)
-      Killed =>
-        Stopped(
-          if self.exec.output_error() is Some(_) {
-            "capture_failed"
-          } else if self.exec.killed_by_output_limit() {
-            "output_limit"
-          } else if self.exec.killed_by_time_limit() {
-            "time_limit"
-          } else if self.requested_stop {
-            "user"
-          } else {
-            "session_ended"
-          },
-        )
-    }
+          "session_ended"
+        },
+      )
   }
   {
     generation: runtime.generation,

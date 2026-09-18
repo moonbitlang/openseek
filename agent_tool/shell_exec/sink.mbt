@@ -147,13 +147,7 @@ async fn ShellOutputSink::append_locked(
   if self.spill_path is Some(path) {
     if self.file is None &&
       self.total_chars + text.char_length() > self.inline_cap {
-      self.open_spill(path) catch {
-        error => {
-          let message = "failed to create output log: \{error}"
-          self.failure = Some(message)
-          fail(message)
-        }
-      }
+      self.open_spill(path)
     }
     if self.file is Some(file) {
       let bytes = @utf8.encode(text)
@@ -184,7 +178,9 @@ async fn ShellOutputSink::append_locked(
 }
 
 ///|
-/// Open the spill file and seed it with the output buffered so far.
+/// Open the spill file and seed it with the output buffered so far. A failure
+/// is recorded on the sink and re-raised, so the execution monitor sees it and
+/// stops the tracked process.
 async fn ShellOutputSink::open_spill(
   self : ShellOutputSink,
   path : String,
@@ -192,13 +188,21 @@ async fn ShellOutputSink::open_spill(
   // ReadWrite so the same descriptor serves both the streaming writes and later
   // `read_all` reads (a create/write-only handle cannot be read). CreateOrTruncate
   // gives a fresh file (the path is unique per job id).
-  let file = @fs.open(path, mode=ReadWrite, create_mode=CreateOrTruncate)
-  self.file_created = true
-  errdefer file.close()
-  let seed = @utf8.encode(self.head.to_string())
-  file.write_at(seed, position=0)
-  self.file = Some(file)
-  self.file_bytes = seed.length().to_int64()
+  try {
+    let file = @fs.open(path, mode=ReadWrite, create_mode=CreateOrTruncate)
+    self.file_created = true
+    errdefer file.close()
+    let seed = @utf8.encode(self.head.to_string())
+    file.write_at(seed, position=0)
+    self.file = Some(file)
+    self.file_bytes = seed.length().to_int64()
+  } catch {
+    error => {
+      let message = "failed to create output log: \{error}"
+      self.failure = Some(message)
+      fail(message)
+    }
+  }
 }
 
 ///|
@@ -349,13 +353,7 @@ async fn ShellOutputSink::materialize(self : ShellOutputSink) -> Unit {
     fail(error)
   }
   if !self.file_created && self.spill_path is Some(path) {
-    self.open_spill(path) catch {
-      error => {
-        let message = "failed to create output log: \{error}"
-        self.failure = Some(message)
-        fail(message)
-      }
-    }
+    self.open_spill(path)
   }
 }
 

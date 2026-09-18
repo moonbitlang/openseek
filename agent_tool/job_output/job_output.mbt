@@ -154,15 +154,10 @@ async fn execute(
   } else {
     ""
   }
-  let paging = match page {
-    Some(offset) => " window_offset=\{offset}"
-    None => ""
-  }
-  let file_hint = match snapshot.output_file {
-    Some(path) =>
-      " output_file=\{path.to_json().stringify()} output_persistent=\{snapshot.output_persistent}"
-    None => ""
-  }
+  let paging = page.map_or("", offset => " window_offset=\{offset}")
+  let file_hint = snapshot.output_file.map_or("", path => {
+    " output_file=\{path.to_json().stringify()} output_persistent=\{snapshot.output_persistent}"
+  })
   let footer = "<system>job=\{job_id} \{status_label}\{truncation}\{paging}\{binary}\{file_hint}</system>"
   // Assemble: output, then the source-write denial guidance (like the foreground
   // path), then the `<system>` footer LAST so it stays the trailing metadata line.
