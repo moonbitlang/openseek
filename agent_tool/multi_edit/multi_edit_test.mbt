@@ -8,8 +8,10 @@ async fn run_multi_edit(arguments : Json) -> @agent_tool.ToolOutput {
 async fn run_multi_edit_in_workspace(
   workspace_root : String,
   arguments : Json,
+  write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolOutput {
-  let action = match @multi_edit.definition(workspace_root~).execute {
+  let action = match
+    @multi_edit.definition(workspace_root~, write_scope?).execute {
     Async(execute) => execute(arguments)
     Sync(_) => fail("multi_edit tool should be async")
   }
@@ -666,12 +668,9 @@ async test "a write scope rejects the whole batch on one out-of-scope path" {
       is Ok(scope) else {
       fail("expected the scope to build")
     }
-    let run = match
-      @multi_edit.definition(workspace_root=dir, write_scope=scope).execute {
-      Async(execute) => execute
-      Sync(_) => fail("multi_edit tool should be async")
-    }
-    guard run({
+    let output = run_multi_edit_in_workspace(
+      dir,
+      {
         "edits": [
           {
             "file": "lib/a.txt",
@@ -686,10 +685,9 @@ async test "a write scope rejects the whole batch on one out-of-scope path" {
             "start_line": 1,
           },
         ],
-      })
-      is Respond(output) else {
-      fail("expected Respond")
-    }
+      },
+      write_scope=scope,
+    )
     // All-or-nothing: the out-of-scope member rejects the batch and the
     // in-scope file stays untouched too.
     assert_true(output.is_error)

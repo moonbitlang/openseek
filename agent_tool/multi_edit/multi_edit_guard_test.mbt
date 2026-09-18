@@ -30,10 +30,7 @@ async fn write_guard_module(dir : String) -> String {
 
 ///|
 fn shown(data : Json?) -> String {
-  match data {
-    Some(data) => data.stringify()
-    None => "none"
-  }
+  data.map_or("none", json => json.stringify())
 }
 
 ///|

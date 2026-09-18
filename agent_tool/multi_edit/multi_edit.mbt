@@ -1050,12 +1050,7 @@ async fn measure_baseline(paths : Array[String]) -> BaselineOutcome {
           first = Some(tally)
         }
         let placed = qualified(path, tally)
-        all = Some(
-          match all {
-            Some(sum) => sum.merged(placed)
-            None => placed
-          },
-        )
+        all = Some(all.map_or(placed, sum => sum.merged(placed)))
       }
       NotApplicable => ()
       Unavailable(reason) => return Refused(reason)
@@ -1172,9 +1167,7 @@ fn reverted_by_warnings(
 ) -> @agent_tool.ToolAction {
   let before = baseline.all
   let count = delta.warnings.length()
-  let shown = [
-    for site in delta.warnings[:count.min(IntroducedDisplayLimit)] => site
-  ]
+  let shown = delta.warnings[:count.min(IntroducedDisplayLimit)]
   let head = "reverted: applied \{total_edit_count(writes)} edit(s) across \{writes.length()} file(s), but moon check then reported \{count} warning(s) the tree did not have (> revert_when_warnings_above=\{limit}); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
   let listed = "\nintroduced:\n" +
     [ for site in shown => site.line() ].join("\n")
@@ -1782,22 +1775,13 @@ fn revert_report(
   } else {
     "\nfirst \{first_errors.length()} error(s):\n\{first_errors.join("\n")}"
   }
-  let restore_note = if restore_failures.is_empty() {
-    ""
-  } else {
-    "\nWARNING: could not restore \{restore_failures.length()} file(s): \{restore_failures.join(", ")} — inspect them manually."
-  }
-  "\{head}\{errors}\{restore_note}\n\{comparability_advice(evidence, introduced~)}"
+  "\{head}\{errors}\{restore_note(restore_failures)}\n\{comparability_advice(evidence, introduced~)}"
 }
 
 ///|
 /// List up to `SiteDisplayLimit` sites of one class, with an overflow note.
 fn site_list(sites : Array[String]) -> String {
-  let limit = if sites.length() < SiteDisplayLimit {
-    sites.length()
-  } else {
-    SiteDisplayLimit
-  }
+  let limit = sites.length().min(SiteDisplayLimit)
   let shown = sites[:limit]
   let more = if sites.length() > shown.length() {
     "\n… \{sites.length() - shown.length()} more"
