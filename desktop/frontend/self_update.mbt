@@ -161,7 +161,11 @@ fn Model::fetch_app_info(self : Model, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       ) catch {
         _ => return
       }
-      scheduler.add(dispatch(AppInfoLoaded(reply.version)))
+      scheduler.add(
+        dispatch(
+          AppInfoLoaded(version=reply.version, console_url=reply.console_url),
+        ),
+      )
     })
   })
 }

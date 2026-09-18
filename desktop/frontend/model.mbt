@@ -1433,6 +1433,10 @@ priv struct Model {
   window_focused : Bool
   // Installed package version supplied by the native host's `app.info` op.
   app_version : String
+  // From the same op: a development build's console entry URL, the loopback
+  // origin the host serves this frontend on for the system browser. None in
+  // a release build and in a browser page.
+  console_url : String?
   // The page's account layer: the relay session and the device roster (see
   // `ConsoleState`). The desktop window carries it too, settled from the
   // start on its own host as the one device `local`, so both pages boot and
@@ -1799,7 +1803,7 @@ priv enum Msg {
   RemoteDisconnectClicked
   RemoteDisconnectFailed(String)
   // Proton package metadata returned by the native host.
-  AppInfoLoaded(String)
+  AppInfoLoaded(version~ : String, console_url~ : String?)
   // A `check_update` reply (or its failure, folded into `Unreachable`).
   // `explicit` says a user asked, which is what decides how loudly each
   // outcome shows.
@@ -2623,6 +2627,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     is_desktop: desktop,
     window_focused: !desktop || @interop.page_has_focus(),
     app_version: "development",
+    console_url: None,
     // Every page is the console. A browser page signs in against the relay
     // and verifies its required query-selected device before that channel
     // opens; the desktop window starts where that ends, signed in to its own

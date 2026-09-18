@@ -31,6 +31,9 @@ struct ApiState {
   auth : @auth.AuthStore
   // Installed package version read from Proton's generated package manifest.
   app_version : String
+  // A development build's console entry URL (`internal/remote` serves the
+  // frontend on loopback for the system browser); a release build has none.
+  console_url : String?
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
   on_finished : ((@protocol.FinishedPayload) -> Unit)?
@@ -266,6 +269,7 @@ pub fn ApiState::ApiState(
   executable? : String,
   auth? : @auth.AuthStore,
   app_version? : String = "development",
+  console_url? : String,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
   let engine_actor = @engine.new_engine_actor(engine, runtime_dir?)
@@ -283,6 +287,7 @@ pub fn ApiState::ApiState(
       None => @auth.AuthStore::empty(app_version~)
     },
     app_version,
+    console_url,
     on_finished,
   }
 }
@@ -530,6 +535,7 @@ pub fn endpoints(
     Endpoint(@commands.settings_get, _ => @engine.settings_status(state.manager)),
     @endpoint.Endpoint::sync(@commands.app_info, _ => {
       version: state.app_version,
+      console_url: state.console_url,
     }),
     Endpoint(@commands.settings_set, payload => {
       // The store commit and its broadcast are one finite cancellation-

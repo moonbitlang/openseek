@@ -2,14 +2,28 @@
 package "openseek_desktop/backend/internal/remote"
 
 import {
+  "moonbitlang/async/http",
   "openseek_desktop/backend/internal/api",
 }
 
 // Values
+pub const LocalConsoleDevice : String = "host"
 
 // Errors
 
 // Types and methods
+pub struct LocalConsole {
+  server : @http.Server
+  token : String
+  cookie_name : String
+  name : String
+}
+pub async fn LocalConsole::bind(port~ : Int) -> Self
+pub fn LocalConsole::entry_url(Self) -> String
+pub fn LocalConsole::origin(Self) -> String
+pub fn LocalConsole::port(Self) -> Int
+pub async fn LocalConsole::run(Self, @api.ApiState, root~ : String, entry~ : String) -> Unit
+
 type RelayActor
 pub fn RelayActor::RelayActor(@api.ApiState, announce~ : (String) -> Unit) -> Self
 pub async fn RelayActor::run(Self) -> Unit

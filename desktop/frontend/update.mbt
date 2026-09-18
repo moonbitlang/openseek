@@ -3415,7 +3415,8 @@ fn update_msg(
       (disconnect_remote(dispatch), { ..model, remote_error: None, })
     RemoteDisconnectFailed(message) =>
       (@cmd.none, { ..model, remote_error: Some(message), })
-    AppInfoLoaded(version) => (@cmd.none, { ..model, app_version: version, })
+    AppInfoLoaded(version~, console_url~) =>
+      (@cmd.none, { ..model, app_version: version, console_url, })
     CheckForUpdates =>
       // A user-initiated check; never stacks on an in-flight one, and never
       // interrupts a download already underway.
@@ -18093,9 +18094,14 @@ test "CompactRejected clears the queued notice and reports the error" {
 ///|
 test "AppInfoLoaded replaces the displayed package version idempotently" {
   let dispatch = test_dispatch()
-  let (_, once) = update(dispatch, AppInfoLoaded("0.2.0"), test_model())
-  let (_, twice) = update(dispatch, AppInfoLoaded("0.2.0"), once)
+  let info = AppInfoLoaded(
+    version="0.2.0",
+    console_url=Some("http://127.0.0.1:27183/?token=sesame"),
+  )
+  let (_, once) = update(dispatch, info, test_model())
+  let (_, twice) = update(dispatch, info, once)
   assert_eq(once.app_version, "0.2.0")
+  assert_eq(once.console_url, Some("http://127.0.0.1:27183/?token=sesame"))
   assert_eq(twice.app_version, once.app_version)
   assert_eq(twice.notification_seq, once.notification_seq)
 }

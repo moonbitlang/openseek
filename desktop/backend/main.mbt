@@ -78,6 +78,16 @@ async fn main {
     env_override?=relay_settings(matches),
     app_version~,
   )
+  // A development build serves its own frontend on loopback for the system
+  // browser (`@remote.LocalConsole`), so the local console can be developed
+  // against this host with no relay in between. The listener binds now so
+  // the API state can hand its entry URL to the Settings page; it serves
+  // once the app starts. A release build never opens the port.
+  let console = if development {
+    Some(@remote.LocalConsole::bind(port=DevelopmentConsolePort))
+  } else {
+    None
+  }
   let state = @api.ApiState(
     engine~,
     codex~,
@@ -85,6 +95,7 @@ async fn main {
     executable~,
     auth~,
     app_version~,
+    console_url?=console.map(console => console.entry_url()),
   )
   let bridge = @extension.DesktopBridgeActor(state)
   // The dock's browser tabs: native web contents views, owned by the
@@ -280,6 +291,23 @@ async fn main {
         // The relay actor registers this host whenever a sign-in (or the
         // environment override) says so, and idles otherwise.
         group.spawn_bg(allow_failure=true, () => relay.run())
+        if console is Some(console) {
+          // The same directory and document the window loads.
+          let entry = @pathx.Path(frontend_entry)
+          @xlog.info() <?
+            {
+              "event": "desktop_console_serving",
+              "origin": console.origin(),
+              "root": entry.dirname().to_string(),
+            }
+          group.spawn_bg(allow_failure=true, () => {
+            console.run(
+              state,
+              root=entry.dirname().to_string(),
+              entry=entry.basename().to_owned(),
+            )
+          })
+        }
       },
       on_shutdown=_ => (),
     )
@@ -389,6 +417,12 @@ let command : @argparse.Command = Command(
     ),
   ],
 )
+
+///|
+/// The loopback port a development build serves its console on. Fixed rather
+/// than ephemeral so a browser bookmark keeps working across launches; when
+/// it is taken, `LocalConsole::bind` falls back to an ephemeral port.
+const DevelopmentConsolePort = 27183
 
 ///|
 /// The identity suffix `package/build.mjs` appends when it generates the
