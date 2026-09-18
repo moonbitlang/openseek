@@ -92,7 +92,7 @@ fn default_prompt() -> String {
     #|
     #|- Read `@env.args()[1:]` (from `moonbitlang/core/env`; the `[1:]` skips the
     #|  executable name) when the script only forwards or glances at its arguments —
-    #|  the `check.mbtx` above passes them straight through to `moon check`. 
+    #|  the `check.mbtx` above passes them straight through to `moon check`.
     #|
     #|Below is a complete example of CLI parsing using argparse:
     #|
@@ -140,7 +140,6 @@ fn default_prompt() -> String {
     #|```
     #|
     #|For a nonzero exit,import `"moonbitlang/x/sys"`, and call `@sys.exit(1)`.
-    #|
     #|
     #|### Shell EDSL with moonbitlang/async/shell
     #|
