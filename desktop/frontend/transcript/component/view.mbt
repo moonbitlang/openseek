@@ -753,7 +753,25 @@ fn user_message_view(
     body.push(@html.div(class="user-images", pictures))
   }
   // The overview rail and scroll watcher share this stable turn anchor.
-  @html.div(class="msg user", id?=anchor, [@html.div(class="user-bubble", body)])
+  @html.div(
+    class="msg user",
+    id?=anchor,
+    [
+      @html.div(class="user-bubble", body),
+      ..if !content.is_empty() {
+        [
+          @html.button(
+            class="user-message-copy",
+            type_="button",
+            title="Copy message",
+            on_click=@clipboard.copy(@clipboard.Text(content)),
+            attrs=@html.Attrs::build().aria_label("Copy user message"),
+            @icons.icon(@icons.icon_copy),
+          ),
+        ]
+      },
+    ],
+  )
 }
 
 ///|
