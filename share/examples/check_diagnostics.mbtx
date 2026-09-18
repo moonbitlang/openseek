@@ -12,11 +12,16 @@ async fn main {
     "moon",
     ["check", "--output-json", "--diagnostic-limit", "5"],
     env={ "NO_COLOR": "1" },
+    // argv is passed literally
+    // `|`, `>`, `&&`, `$()`, and `*` receive no shell interpretation.
+  // `<|` is sugar for a trailing lambda: `f() <| x => {...}` is the last
+  // argument of `f`, written after the call instead of inside it.
   ).each_line() <| line => {
+    // Stderr is inherited, try to parse jsonl
     let diagnostic = @json.parse(line) catch { _ => return }
     if diagnostic
       is {
-        "level": String("error"),
+        "level": "error", // literal does not need `String(..)`
         "path": String(path),
         "loc": String(loc),
         "message": String(message),

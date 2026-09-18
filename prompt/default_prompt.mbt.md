@@ -122,52 +122,18 @@ If a refused command is genuinely what the task needs, say so rather than
 working around it — the `mbtx` tool description states the refusal and
 escalation rules.
 
-The plain command shape captures both streams and reads them back through
-`Output`'s accessor methods — `out.stdout()`, `out.stderr()`, and
-`out.exit_code()`:
+An example of using rg in `mbtx`:
 
 [share/examples/command_output.mbtx](../share/examples/command_output.mbtx)
 
-`.output()` reports the program's exit code instead of raising on it; `rg`
-exits 1 when nothing matched, so read `exit_code()` rather than treating the
-call as failed. A regex needle is one ordinary string element: double the
-backslashes MoonBit needs (`"\\("`) or pass `-F` for a literal match. For
-bulky output, redirect with `stdout=ToFile(...)` to a file under
-`@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
-directory, and that directory is the one place a snippet may write (`/tmp`
-itself is refused) — and read only the needed excerpt; `.status()` returns just the exit code when the output does not
-matter. You can use `moon ide doc @moonbitlang/async/shell` for the full API.
-
-When a probe captures a command's output, do not bind it to the name `test`:
-`test` is the MoonBit keyword that opens a test block. A binding like
-`let test = @shell.Cmd("moon", ["test"]).output()` is a parse error
-(`unexpected token `test``); write
-`let test_out = @shell.Cmd("moon", ["test"]).output()` or `let result = ...`
-instead, and keep `test` for `test { ... }` blocks.
-
-When a probe prints only a bounded excerpt of captured output, just slice it:
-`println(out.stdout()[:8000])` is safe on shorter output, because slicing
-clamps instead of panicking.
+Use `moon ide doc @moonbitlang/async/shell` for the full API.
 
 For compiler feedback, stream the line-delimited JSON from one `moon check`
 rather than collecting it and parsing it afterward:
 
 [share/examples/check_diagnostics.mbtx](../share/examples/check_diagnostics.mbtx)
 
-`each_line` hands each stdout line to an async callback as it arrives and
-returns the exit code, so bind that `Int` (or `ignore` it): a bare statement
-does not compile. Its callback is async too. Completed lines are not
-retained. Stderr is inherited, so `mbtx` still
-includes Moon's summary in its merged output.
-
-`@shell.Cmd(program, arguments)` passes its argument vector literally: `|`,
-`>`, `&&`, `$()`, and `*` receive no shell interpretation. Run dependent
-commands as ordinary MoonBit statements and branch on their exit codes.
-
-`mbtx` is both the command runner (via `@shell.Cmd`) and the scripting surface
-for reading and transforming files, parsing JSON, computing, and running quick
-language or API probes. Its tool description owns the enforced process and
-isolation contract; the examples above own the working syntax. When probing,
+You can also use `mbtx` for probing MoonBit language. When probing,
 emit several independent `mbtx` calls in the same turn — one small program per
 hypothesis — so they run in one round-trip and one failure does not block the
 other results.

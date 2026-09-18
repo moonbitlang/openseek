@@ -179,9 +179,7 @@ fn default_prompt() -> String {
     #|working around it — the `mbtx` tool description states the refusal and
     #|escalation rules.
     #|
-    #|The plain command shape captures both streams and reads them back through
-    #|`Output`'s accessor methods — `out.stdout()`, `out.stderr()`, and
-    #|`out.exit_code()`:
+    #|An example of using rg in `mbtx`:
     #|
     #|```mbtx
     #|///|
@@ -192,35 +190,28 @@ fn default_prompt() -> String {
     #|
     #|///|
     #|async fn main {
+    #|  // `Cmd` takes an argv array, not a shell line: nothing expands `*.mbt`
+    #|  // before rg sees it, so rg applies it as its own glob. A glob with no `/`
+    #|  // matches the basename at any depth. rg ships no `moonbit` file type, so
+    #|  // `-g` is the filter — and `*.mbt` excludes `.mbti` and `.mbt.md`; widen it
+    #|  // to `*.mbt*` when those should count.
     #|  let out = @shell.Cmd("rg", [
-    #|    "-n", "protect_from_cancel\\(", "-g", "*.mbt", "src",
+    #|    "-n", "protect_from_cancel\\(", // double the backslashes needs (`"\\("`) or pass `-F` for a literal match
+    #|    "-g", "*.mbt", "src",
     #|  ]).output()
-    #|  println(out.stdout())
-    #|  println(out.stderr())
-    #|  println("exit=\{out.exit_code()}")
+    #|  // For redirect with `Cmd(.., stdout=ToFile(...))` to a file under
+    #|  //`@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
+    #|  // directory, and that directory is the one place a snippet may write (`/tmp`
+    #|  // itself is refused)
+    #|
+    #|  // `test` is a keyword, don't write `let test = ...`
+    #|  println(out.stdout()[:8000]) // clamped by at most 8000 utf16 code units.
+    #|  println(out.stderr()[:8000])
+    #|  println("exit=\{out.exit_code()}") // `rg` exits 1 when nothing matched
     #|}
     #|```
     #|
-    #|`.output()` reports the program's exit code instead of raising on it; `rg`
-    #|exits 1 when nothing matched, so read `exit_code()` rather than treating the
-    #|call as failed. A regex needle is one ordinary string element: double the
-    #|backslashes MoonBit needs (`"\\("`) or pass `-F` for a literal match. For
-    #|bulky output, redirect with `stdout=ToFile(...)` to a file under
-    #|`@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
-    #|directory, and that directory is the one place a snippet may write (`/tmp`
-    #|itself is refused) — and read only the needed excerpt; `.status()` returns just the exit code when the output does not
-    #|matter. You can use `moon ide doc @moonbitlang/async/shell` for the full API.
-    #|
-    #|When a probe captures a command's output, do not bind it to the name `test`:
-    #|`test` is the MoonBit keyword that opens a test block. A binding like
-    #|`let test = @shell.Cmd("moon", ["test"]).output()` is a parse error
-    #|(`unexpected token `test``); write
-    #|`let test_out = @shell.Cmd("moon", ["test"]).output()` or `let result = ...`
-    #|instead, and keep `test` for `test { ... }` blocks.
-    #|
-    #|When a probe prints only a bounded excerpt of captured output, just slice it:
-    #|`println(out.stdout()[:8000])` is safe on shorter output, because slicing
-    #|clamps instead of panicking.
+    #|Use `moon ide doc @moonbitlang/async/shell` for the full API.
     #|
     #|For compiler feedback, stream the line-delimited JSON from one `moon check`
     #|rather than collecting it and parsing it afterward:
@@ -240,11 +231,16 @@ fn default_prompt() -> String {
     #|    "moon",
     #|    ["check", "--output-json", "--diagnostic-limit", "5"],
     #|    env={ "NO_COLOR": "1" },
+    #|    // argv is passed literally
+    #|    // `|`, `>`, `&&`, `$()`, and `*` receive no shell interpretation.
+    #|  // `<|` is sugar for a trailing lambda: `f() <| x => {...}` is the last
+    #|  // argument of `f`, written after the call instead of inside it.
     #|  ).each_line() <| line => {
+    #|    // Stderr is inherited, try to parse jsonl
     #|    let diagnostic = @json.parse(line) catch { _ => return }
     #|    if diagnostic
     #|      is {
-    #|        "level": String("error"),
+    #|        "level": "error", // literal does not need `String(..)`
     #|        "path": String(path),
     #|        "loc": String(loc),
     #|        "message": String(message),
@@ -258,20 +254,7 @@ fn default_prompt() -> String {
     #|}
     #|```
     #|
-    #|`each_line` hands each stdout line to an async callback as it arrives and
-    #|returns the exit code, so bind that `Int` (or `ignore` it): a bare statement
-    #|does not compile. Its callback is async too. Completed lines are not
-    #|retained. Stderr is inherited, so `mbtx` still
-    #|includes Moon's summary in its merged output.
-    #|
-    #|`@shell.Cmd(program, arguments)` passes its argument vector literally: `|`,
-    #|`>`, `&&`, `$()`, and `*` receive no shell interpretation. Run dependent
-    #|commands as ordinary MoonBit statements and branch on their exit codes.
-    #|
-    #|`mbtx` is both the command runner (via `@shell.Cmd`) and the scripting surface
-    #|for reading and transforming files, parsing JSON, computing, and running quick
-    #|language or API probes. Its tool description owns the enforced process and
-    #|isolation contract; the examples above own the working syntax. When probing,
+    #|You can also use `mbtx` for probing MoonBit language. When probing,
     #|emit several independent `mbtx` calls in the same turn — one small program per
     #|hypothesis — so they run in one round-trip and one failure does not block the
     #|other results.
