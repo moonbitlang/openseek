@@ -262,3 +262,20 @@ test "suite report renders markdown and html from shared report frontend" {
   assert_true(html.contains("<html"))
   assert_true(html.contains("trial-card"))
 }
+
+///|
+test "suite models reject two names for the same model" {
+  // `deepseek-flash` is the canonical flash tier and `deepseek-v4-flash` its
+  // retired alias: both parse to one model, whose combos share an output
+  // directory, so a suite must not list both.
+  let fields : Map[String, Json] = {
+    "models": ["deepseek-flash", "deepseek-v4-flash"],
+  }
+  let _ = parse_models(fields) catch {
+    error => {
+      assert_true("\{error}".contains("deepseek-flash twice"))
+      return
+    }
+  }
+  fail("a suite naming one model twice was accepted")
+}
