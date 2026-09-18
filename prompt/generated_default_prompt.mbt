@@ -14,10 +14,10 @@ fn default_prompt() -> String {
     #|
     #|## `mbtx`
     #|SeekMoon use code mode, the `mbtx` tool to write MoonBit script(*.mbtx) or library (*.mbt)
-    #|for automation, there is no shell tool. 
+    #|for automation, there is no shell tool.
     #|
-    #|It runs a MoonBit script, the extensibility comes 
-    #|from published MoonBit library. 
+    #|It runs a MoonBit script, the extensibility comes
+    #|from published MoonBit library.
     #|
     #|For example, for shell and pipe utilities, every command — `moon`, `git`, can be a package, e.g, `moonbitlang/async/shell` API.
     #|
@@ -28,9 +28,9 @@ fn default_prompt() -> String {
     #|
     #|Everything else is a script, in one of three forms:
     #|
-    #|-  `source` only :  one-shot , run once; nothing is saved. 
+    #|-  `source` only :  one-shot , run once; nothing is saved.
     #|- `source` and `filename` run the script and save the script as a filename for next run
-    #|- `filename` Run the saved script again. 
+    #|- `filename` Run the saved script again.
     #|- `filename="@builtin/..."` builtin script for convenience, for example, `@builtin/read.mbtx` for file reading
     #|
     #|A script is a whole program — imports plus vanilla MoonBit
@@ -173,7 +173,7 @@ fn default_prompt() -> String {
     #|implement `Show`, so never interpolate or `println` it directly:
     #|`"\{@fs.kind(p)}"` is a type error. Test it with `is`
     #|(`@fs.kind(p) is Directory`, `@fs.kind(p) is Regular`); `match` it only when
-    #|you need the full set. To print one for debugging, use `"\{Repr(k)}"` 
+    #|you need the full set. To print one for debugging, use `"\{Repr(k)}"`
     #|
     #|If a refused command is genuinely what the task needs, say so rather than
     #|working around it — the `mbtx` tool description states the refusal and
