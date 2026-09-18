@@ -760,13 +760,11 @@ fn user_message_view(
       @html.div(class="user-bubble", body),
       ..if !content.is_empty() {
         [
-          @html.button(
+          @markdown.copy_button(
+            content,
             class="user-message-copy",
-            type_="button",
             title="Copy message",
-            on_click=@clipboard.copy(@clipboard.Text(content)),
-            attrs=@html.Attrs::build().aria_label("Copy user message"),
-            @icons.icon(@icons.icon_copy),
+            label="Copy user message",
           ),
         ]
       },
@@ -987,15 +985,11 @@ fn assistant_message_view(
   // the separate streaming view are not turn-ending answers.
   if show_actions {
     let actions = [
-      @html.button(
+      @markdown.copy_button(
+        content,
         class="assistant-message-copy",
-        type_="button",
         title="Copy Markdown",
-        on_click=@clipboard.copy(@clipboard.Text(content)),
-        attrs=@html.Attrs::build().aria_label(
-          "Copy assistant message as Markdown",
-        ),
-        @icons.icon(@icons.icon_copy),
+        label="Copy assistant message as Markdown",
       ),
     ]
     // The durable row is committed only after its complete message becomes

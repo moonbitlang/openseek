@@ -720,15 +720,15 @@
   pointer-events: auto;
 }
 /* Avoid an inline text baseline shifting either Codicon above the center. */
-.chat-code-copy-symbol,
-.chat-code-copy-check {
+.copy-button-symbol,
+.copy-button-check {
   display: flex;
 }
-.chat-code-copy-check,
-.chat-code-copy[data-copy-state="copied"] .chat-code-copy-symbol {
+.copy-button-check,
+[data-copy-state="copied"] .copy-button-symbol {
   display: none;
 }
-.chat-code-copy[data-copy-state="copied"] .chat-code-copy-check {
+[data-copy-state="copied"] .copy-button-check {
   display: inline-flex;
 }
 /* Put the control beside the first line, without adding a toolbar row. The

@@ -1,11 +1,27 @@
 ///|
 fn code_copy_button(source : String) -> @html.Html {
-  @html.button(
+  copy_button(
+    source,
     class="button secondary chat-code-copy",
-    type_="button",
     title="Copy code",
+    label="Copy code",
+  )
+}
+
+///|
+/// Copies source text and briefly acknowledges successful clipboard writes.
+pub fn copy_button(
+  source : String,
+  class~ : String,
+  title~ : String,
+  label~ : String,
+) -> @html.Html {
+  @html.button(
+    class~,
+    type_="button",
+    title~,
     attrs=@html.Attrs::build()
-      .aria_label("Copy code")
+      .aria_label(label)
       .on_click(event => {
         // Capture currentTarget while the event is being dispatched: the
         // clipboard command completes after the event has left the button.
@@ -14,13 +30,19 @@ fn code_copy_button(source : String) -> @html.Html {
         }
         @clipboard.copy(
           @clipboard.Text(source),
-          copied=@cmd.custom_cmd(_ => code_copy_feedback(button, true)),
-          failed=_ => @cmd.custom_cmd(_ => code_copy_feedback(button, false)),
+          copied=@cmd.custom_cmd(_ => {
+            copy_button_feedback(button, true, title, label)
+          }),
+          failed=_ => {
+            @cmd.custom_cmd(_ => {
+              copy_button_feedback(button, false, title, label)
+            })
+          },
         )
       }),
     [
-      @html.span(class="chat-code-copy-symbol", @icons.icon(@icons.icon_copy)),
-      @html.span(class="chat-code-copy-check", @icons.icon(@icons.icon_check)),
+      @html.span(class="copy-button-symbol", @icons.icon(@icons.icon_copy)),
+      @html.span(class="copy-button-check", @icons.icon(@icons.icon_check)),
     ],
   )
 }
@@ -29,24 +51,26 @@ fn code_copy_button(source : String) -> @html.Html {
 // Only transient DOM attributes are owned here; Rabbita retains ownership of
 // both icon subtrees. A per-element timer survives streaming re-renders and
 // restarts on repeated copies, without keeping removed buttons in a registry.
-extern "js" fn code_copy_feedback(
+extern "js" fn copy_button_feedback(
   button : @dom.EventTarget,
   copied : Bool,
+  title : String,
+  label : String,
 ) -> Unit =
   #| (() => {
   #|   const timers = new WeakMap();
-  #|   return (button, copied) => {
+  #|   return (button, copied, title, label) => {
   #|     if (!button.isConnected) return;
   #|     const previous = timers.get(button);
   #|     if (previous !== undefined) clearTimeout(previous);
   #|     button.setAttribute("data-copy-state", copied ? "copied" : "failed");
-  #|     const label = copied ? "Copied" : "Copy failed. Try again.";
-  #|     button.setAttribute("title", label);
-  #|     button.setAttribute("aria-label", label);
+  #|     const feedback = copied ? "Copied" : "Copy failed. Try again.";
+  #|     button.setAttribute("title", feedback);
+  #|     button.setAttribute("aria-label", feedback);
   #|     timers.set(button, setTimeout(() => {
   #|       button.removeAttribute("data-copy-state");
-  #|       button.setAttribute("title", "Copy code");
-  #|       button.setAttribute("aria-label", "Copy code");
+  #|       button.setAttribute("title", title);
+  #|       button.setAttribute("aria-label", label);
   #|       timers.delete(button);
   #|     }, 2000));
   #|   };
