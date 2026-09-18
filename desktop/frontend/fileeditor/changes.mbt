@@ -254,6 +254,7 @@ fn ChangedFile::unselectable_title(
   let reason = if self.kind is ChangeSubmodule {
     match locale {
       SimplifiedChinese => "Git 子模块；请单独打开其检出目录"
+      TraditionalChinese => "Git 子模組；請單獨開啟其檢出目錄"
       Japanese =>
         "Git サブモジュールです。個別にチェックアウトを開いてください"
       English => "Git submodule; open its nested checkout separately"
@@ -261,6 +262,7 @@ fn ChangedFile::unselectable_title(
   } else if self.kind is ChangeSymlink {
     match locale {
       SimplifiedChinese => "Git 符号链接；无法打开其目标"
+      TraditionalChinese => "Git 符號連結；無法開啟其目標"
       Japanese =>
         "Git シンボリックリンクです。リンク先を開く操作は無効です"
       English => "Git symlink; opening its target is disabled"
@@ -268,6 +270,8 @@ fn ChangedFile::unselectable_title(
   } else if self.path.0.has_suffix("/") {
     match locale {
       SimplifiedChinese => "未跟踪的目录；请单独打开其检出目录"
+      TraditionalChinese =>
+        "未跟蹤的目錄；請單獨開啟其檢出目錄"
       Japanese =>
         "未追跡のディレクトリです。個別にチェックアウトを開いてください"
       English => "untracked directory; open its nested checkout separately"
@@ -275,6 +279,7 @@ fn ChangedFile::unselectable_title(
   } else {
     match locale {
       SimplifiedChinese => "无法预览此更改"
+      TraditionalChinese => "無法預覽此更改"
       Japanese => "この変更をプレビューできません"
       English => "change cannot be previewed"
     }

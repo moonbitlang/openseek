@@ -4619,6 +4619,7 @@ fn update_msg(
                 error: Some(
                   (match model.locale {
                     SimplifiedChinese => "重命名失败："
+                    TraditionalChinese => "重新命名失敗："
                     Japanese => "名前を変更できませんでした："
                     English => "Rename failed: "
                   }) +
@@ -6020,6 +6021,8 @@ fn update_device_msg(
           match model.locale {
             SimplifiedChinese =>
               "无法连接 SeekMoon。请确认 SeekMoon 正在运行，然后重新打开此页面。"
+            TraditionalChinese =>
+              "無法連線 SeekMoon。請確認 SeekMoon 正在執行，然後重新開啟此頁面。"
             Japanese =>
               "SeekMoon に接続できません。SeekMoon が起動していることを確認して、このページを開き直してください。"
             English =>
@@ -6217,6 +6220,8 @@ fn update_device_msg(
             match model.locale {
               SimplifiedChinese =>
                 "消息未加入队列（发送时任务已结束），已放回输入框。"
+              TraditionalChinese =>
+                "訊息未加入佇列（傳送時任務已結束），已放回輸入框。"
               Japanese =>
                 "送信時にタスクが終了したため、メッセージをキューに追加せず入力欄に戻しました。"
               English =>
@@ -8291,6 +8296,7 @@ fn update_device_msg(
           dispatch,
           (match model.locale {
             SimplifiedChinese => "无法确认目标是否已送达（"
+            TraditionalChinese => "無法確認目標是否已送達（"
             Japanese => "目標が届いたか確認できません（"
             English => "Goal delivery could not be confirmed ("
           }) +

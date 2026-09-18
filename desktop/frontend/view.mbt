@@ -1310,6 +1310,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
               { value: "system", label: @settings.text(locale, System), },
               { value: "en", label: "English", },
               { value: "zh-Hans", label: "简体中文", },
+              { value: "zh-Hant", label: "繁體中文", },
               { value: "ja", label: "日本語", },
             ],
             selected=model.language.wire(),

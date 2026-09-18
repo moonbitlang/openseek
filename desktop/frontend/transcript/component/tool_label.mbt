@@ -30,6 +30,7 @@ fn tool_display_label(
       let (localized, separator) = match locale {
         English => (en, ": ")
         SimplifiedChinese => (zh, "：")
+        TraditionalChinese => (zh, "：")
         Japanese => (ja, "：")
       }
       if label == en {

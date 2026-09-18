@@ -369,6 +369,7 @@ pub fn row_status(
         (
           match locale {
             SimplifiedChinese => "状态未确定"
+            TraditionalChinese => "狀態未確定"
             Japanese => "状態未確定"
             English => "unresolved"
           },
@@ -378,6 +379,7 @@ pub fn row_status(
         (
           match locale {
             SimplifiedChinese => "运行中"
+            TraditionalChinese => "執行中"
             Japanese => "実行中"
             English => "running"
           },
@@ -388,6 +390,7 @@ pub fn row_status(
       (
         match locale {
           SimplifiedChinese => "已完成"
+          TraditionalChinese => "已完成"
           Japanese => "完了"
           English => "done"
         },
@@ -402,6 +405,14 @@ pub fn row_status(
               "timed_out" => "已超时"
               "cancelled" | "canceled" => "已取消"
               "interrupted" => "已中断"
+              _ => other.replace_all(old="_", new=" ")
+            }
+          TraditionalChinese =>
+            match other {
+              "failed" => "失敗"
+              "timed_out" => "已逾時"
+              "cancelled" | "canceled" => "已取消"
+              "interrupted" => "已中斷"
               _ => other.replace_all(old="_", new=" ")
             }
           Japanese =>

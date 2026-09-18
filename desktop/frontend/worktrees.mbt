@@ -142,6 +142,8 @@ fn start_in_new_worktree(
                     message=match locale {
                       SimplifiedChinese =>
                         "桌面主机未响应，无法创建工作树。请重试，或将此对话切换为本地模式。"
+                      TraditionalChinese =>
+                        "桌面主機未響應，無法建立工作樹。請重試，或將此對話切換為本地模式。"
                       Japanese =>
                         "デスクトップホストが応答しないため、ワークツリーを作成できません。再試行するか、このチャットをローカルに切り替えてください。"
                       English =>
@@ -163,6 +165,7 @@ fn start_in_new_worktree(
                     submission_id~,
                     message=(match locale {
                         SimplifiedChinese => "无法创建工作树。"
+                        TraditionalChinese => "無法建立工作樹。"
                         Japanese =>
                           "ワークツリーを作成できません。"
                         English => "Couldn’t create the worktree. "
@@ -185,6 +188,8 @@ fn start_in_new_worktree(
                   message=match locale {
                     SimplifiedChinese =>
                       "主机返回了不完整的响应，无法创建工作树。请重试，或将此对话切换为本地模式。"
+                    TraditionalChinese =>
+                      "主機返回了不完整的響應，無法建立工作樹。請重試，或將此對話切換為本地模式。"
                     Japanese =>
                       "ホストからの応答が不完全なため、ワークツリーを作成できません。再試行するか、このチャットをローカルに切り替えてください。"
                     English =>
@@ -310,6 +315,8 @@ fn set_goal_in_new_worktree(
                     message=match locale {
                       SimplifiedChinese =>
                         "桌面主机未响应，无法确认工作树是否已创建。此对话可能已绑定到新工作树；目标尚未发送。"
+                      TraditionalChinese =>
+                        "桌面主機未響應，無法確認工作樹是否已建立。此對話可能已繫結到新工作樹；目標尚未傳送。"
                       Japanese =>
                         "デスクトップホストが応答しないため、ワークツリーの作成を確認できません。このチャットはすでに新しいワークツリーに関連付けられている可能性があります。目標は送信されていません。"
                       English =>
@@ -332,6 +339,7 @@ fn set_goal_in_new_worktree(
                     draft=text,
                     message=(match locale {
                         SimplifiedChinese => "无法创建工作树。"
+                        TraditionalChinese => "無法建立工作樹。"
                         Japanese =>
                           "ワークツリーを作成できません。"
                         English => "Couldn’t create the worktree. "
@@ -353,6 +361,8 @@ fn set_goal_in_new_worktree(
                   message=match locale {
                     SimplifiedChinese =>
                       "主机返回了不完整的响应，无法创建工作树。目标尚未发送。"
+                    TraditionalChinese =>
+                      "主機返回了不完整的響應，無法建立工作樹。目標尚未傳送。"
                     Japanese =>
                       "ホストからの応答が不完全なため、ワークツリーを作成できません。目標は送信されていません。"
                     English =>
@@ -415,6 +425,8 @@ fn repair_worktree_cmd(
                 match locale {
                   SimplifiedChinese =>
                     "桌面主机未响应，无法修复工作树。请重试，或归档此对话。"
+                  TraditionalChinese =>
+                    "桌面主機未響應，無法修復工作樹。請重試，或歸檔此對話。"
                   Japanese =>
                     "デスクトップホストが応答しないため、ワークツリーを修復できません。再試行するか、このチャットをアーカイブしてください。"
                   English =>
@@ -432,6 +444,7 @@ fn repair_worktree_cmd(
             WorktreeFailed(
               (match locale {
                 SimplifiedChinese => "无法修复工作树。"
+                TraditionalChinese => "無法修復工作樹。"
                 Japanese => "ワークツリーを修復できません。"
                 English => "Couldn’t repair the worktree. "
               }) +

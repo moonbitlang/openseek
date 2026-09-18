@@ -1126,6 +1126,8 @@ fn show_mbti_diagram(resource : @common.Uri, source : String) -> Unit {
         match viewer_locale() {
           SimplifiedChinese =>
             "<div class=\"mbti-diagram-error\" role=\"status\">无法将此接口渲染为 UML 图，请查看源码了解详情。</div>"
+          TraditionalChinese =>
+            "<div class=\"mbti-diagram-error\" role=\"status\">無法將此介面渲染為 UML 圖，請檢視原始碼瞭解詳情。</div>"
           Japanese =>
             "<div class=\"mbti-diagram-error\" role=\"status\">このインターフェースを UML 図として表示できません。詳細はソースを確認してください。</div>"
           English => message
@@ -1187,6 +1189,7 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
           host,
           match viewer_locale() {
             SimplifiedChinese => "正在加载依赖图…"
+            TraditionalChinese => "正在載入依賴圖…"
             Japanese => "依存関係グラフを読み込み中…"
             English => "Loading dependency graph…"
           },
@@ -1207,6 +1210,8 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
               match viewer_locale() {
                 SimplifiedChinese =>
                   "无法渲染此依赖图，请查看源码了解详情。"
+                TraditionalChinese =>
+                  "無法渲染此依賴圖，請檢視原始碼瞭解詳情。"
                 Japanese =>
                   "この依存関係グラフを表示できません。詳細はソースを確認してください。"
                 English =>
@@ -1219,6 +1224,7 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
           host,
           match viewer_locale() {
             SimplifiedChinese => "无法加载依赖图：\{message}"
+            TraditionalChinese => "無法載入依賴圖：\{message}"
             Japanese =>
               "依存関係グラフを読み込めません：\{message}"
             English => "Could not load dependency graph: \{message}"

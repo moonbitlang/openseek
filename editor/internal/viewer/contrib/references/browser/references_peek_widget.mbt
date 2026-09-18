@@ -78,6 +78,7 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
     "aria-label",
     (match localization.language() {
       SimplifiedChinese => "关闭"
+      TraditionalChinese => "關閉"
       Japanese => "閉じる"
       English => "Close "
     }) +
@@ -421,6 +422,7 @@ fn ReferencesPeekWidget::set_result_count(
         if count == 1 {
           match self.localization.language() {
             SimplifiedChinese => "1 个结果"
+            TraditionalChinese => "1 個結果"
             Japanese => "1 件の結果"
             English => "1 result"
           }
@@ -428,6 +430,7 @@ fn ReferencesPeekWidget::set_result_count(
           count.to_string() +
           (match self.localization.language() {
             SimplifiedChinese => " 个结果"
+            TraditionalChinese => " 個結果"
             Japanese => " 件の結果"
             English => " results"
           })

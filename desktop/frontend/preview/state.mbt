@@ -115,6 +115,7 @@ pub fn page_label(page : PageState, locale? : @i18n.Locale = English) -> String 
     None =>
       match locale {
         SimplifiedChinese => "新标签页"
+        TraditionalChinese => "新標籤頁"
         Japanese => "新しいタブ"
         English => "New Tab"
       }

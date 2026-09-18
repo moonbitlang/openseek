@@ -169,3 +169,92 @@ test('Chinese system preference resolves at startup and a failed save keeps the 
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   expect(app.pageErrors).toEqual([]);
 });
+
+test('Traditional Chinese selection updates Settings and persists across reload', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#language-select').click();
+  await page.getByRole('option', { name: '繁體中文', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hant');
+  await expect(page.getByRole('heading', { name: '設定', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '技能', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '對話', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '專案', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '主題', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'API 端點', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '儲存 API 金鑰', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '開啟 config.toml', exact: true })).toBeVisible();
+  await expect(page.getByText('儲存在此裝置上，僅隨 API 請求傳送。SeekMoon 不會讀取它。')).toBeVisible();
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.screenshot({ path: testInfo.outputPath('traditional-chinese-settings.png') });
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('zh-Hant');
+  await page.reload();
+  await expect(page.getByRole('button', { name: '設定', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '設定', exact: true }).click();
+  await page.locator('#language-select').click();
+  await page.getByRole('option', { name: 'English', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Traditional Chinese system preferences preserve palette IME and editor contents', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openQuickOpen();
+  const input = page.locator('#quick-open-input');
+  await input.fill('main');
+  const result = page.getByRole('option', { name: /main\.mbt/ });
+  await expect(result).toHaveAttribute('aria-selected', 'true');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['fr', 'zh-HK', 'en'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(page.getByRole('dialog', { name: '搜尋工作區檔案' })).toBeVisible();
+  await expect(input).toHaveValue('main');
+  await expect(input).toBeFocused();
+  await expect(result).toHaveAttribute('aria-selected', 'true');
+  await input.dispatchEvent('compositionstart', { data: '中' });
+  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true });
+  await expect(input).toBeVisible();
+  await input.dispatchEvent('compositionend', { data: '中' });
+  await input.fill('不存在的檔案');
+  await expect(page.getByRole('status').filter({ hasText: '未找到檔案' })).toBeVisible();
+  await input.fill('main');
+  await expect(result).toBeVisible();
+  await input.press('Enter');
+  await expect(input).toBeHidden();
+  await expect.poll(() => app.requests.some(request => request.method === 'fs.read_file' && request.params?.path === '/workspace/src/main.mbt')).toBe(true);
+  await expect(page.getByLabel('唯讀程式碼檢視器', { exact: true })).toBeVisible();
+  const source = await page.locator('.view-lines').first().innerText();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['en'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(page.getByLabel('Readonly code viewer', { exact: true })).toBeVisible();
+  expect(await page.locator('.view-lines').first().innerText()).toBe(source);
+  expect(app.pageErrors).toEqual([]);
+});
+
+
+test('Traditional Chinese system startup yields to an explicit saved choice', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-Hant', 'en'] });
+  });
+  await app.goto();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hant');
+  await page.getByRole('button', { name: '設定', exact: true }).click();
+  await page.locator('#language-select').click();
+  await page.getByRole('option', { name: '简体中文', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('zh-Hans');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
+  expect(app.pageErrors).toEqual([]);
+});

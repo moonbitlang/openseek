@@ -14,6 +14,13 @@ test('host language updates a mounted editor and its context menu', async ({ pag
   await expect(page.getByRole('menuitem', { name: /转到定义/ })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.locator('[data-action="toggle-ui-language"]').click();
+  await expect(page.getByLabel('唯讀程式碼檢視器', { exact: true })).toBeVisible();
+  expect(await page.locator('.view-lines').first().innerText()).toBe(source);
+  await page.locator('.view-line').first().click({ button: 'right' });
+  await expect(page.getByRole('menu', { name: '編輯器快顯選單', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /轉到定義/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.locator('[data-action="toggle-ui-language"]').click();
   await expect(page.getByLabel('読み取り専用コードビューアー', { exact: true })).toBeVisible();
   expect(await page.locator('.view-lines').first().innerText()).toBe(source);
   await page.locator('.view-line').first().click({ button: 'right' });

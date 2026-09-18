@@ -1257,6 +1257,7 @@ fn queue_openseek(
                   run_id~,
                   message=match locale {
                     SimplifiedChinese => "队列中的消息已不可用。"
+                    TraditionalChinese => "佇列中的訊息已不可用。"
                     Japanese =>
                       "キュー内のメッセージは利用できなくなりました。"
                     English => "The queued message is no longer available."
@@ -1268,6 +1269,7 @@ fn queue_openseek(
                 HostActionFailed(
                   match locale {
                     SimplifiedChinese => "队列中的消息已不可用。"
+                    TraditionalChinese => "佇列中的訊息已不可用。"
                     Japanese =>
                       "キュー内のメッセージは利用できなくなりました。"
                     English => "The queued message is no longer available."
@@ -1474,6 +1476,7 @@ fn cancel_openseek(
                   run_id~,
                   message=(match locale {
                       SimplifiedChinese => "无法取消运行："
+                      TraditionalChinese => "無法取消執行："
                       Japanese => "実行をキャンセルできません："
                       English => "Failed to cancel the run: "
                     }) +
@@ -1529,6 +1532,7 @@ fn approve_openseek(
               HostActionFailed(
                 (match locale {
                   SimplifiedChinese => "无法回复审批请求："
+                  TraditionalChinese => "無法回覆審批請求："
                   Japanese => "承認要求に応答できません："
                   English => "Failed to answer the approval request: "
                 }) +
@@ -1550,6 +1554,8 @@ fn approve_openseek(
               match locale {
                 SimplifiedChinese =>
                   "该审批请求所属的任务轮次已结束，无需继续审批。"
+                TraditionalChinese =>
+                  "該審批請求所屬的任務輪次已結束，無需繼續審批。"
                 Japanese =>
                   "この承認要求のターンは終了しているため、承認は不要です。"
                 English =>
@@ -1627,6 +1633,7 @@ fn open_codex_config(
               CodexConfigOpenFailed(
                 (match locale {
                   SimplifiedChinese => "Codex 配置："
+                  TraditionalChinese => "Codex 配置："
                   Japanese => "Codex 設定："
                   English => "Codex config: "
                 }) +

@@ -66,6 +66,14 @@ fn run_view(
           } else {
             "未结束"
           }
+        TraditionalChinese =>
+          if run.closed {
+            "已結束"
+          } else if running > 0 {
+            "執行中"
+          } else {
+            "未結束"
+          }
         Japanese =>
           if run.closed {
             "終了済み"
@@ -81,6 +89,8 @@ fn run_view(
       class="workflow-run-count",
       match locale {
         SimplifiedChinese => "子智能体 \{rows.length()}/\{run.child_count}"
+        TraditionalChinese =>
+          "子代理程式 \{rows.length()}/\{run.child_count}"
         Japanese =>
           "サブエージェント \{rows.length()}/\{run.child_count}"
         English =>
@@ -126,6 +136,7 @@ fn row_view(
         class="workflow-row-steps",
         match locale {
           SimplifiedChinese => "\{row.steps} 步"
+          TraditionalChinese => "\{row.steps} 步"
           Japanese => "\{row.steps} ステップ"
           English => "\{row.steps} step\{plural(row.steps)}"
         },
@@ -153,6 +164,7 @@ fn row_view(
     class="workflow-row workflow-row-\{status_class}",
     title=match locale {
       SimplifiedChinese => "打开 \{row.child}"
+      TraditionalChinese => "開啟 \{row.child}"
       Japanese => "\{row.child} を開く"
       English => "Open \{row.child}"
     },

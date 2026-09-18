@@ -38,6 +38,15 @@ test('selected changes retain their preview during live language switching', asy
   await expect(japanesePopup.getByRole('button', { name: 'レビューで開く', exact: true })).toBeVisible();
   await expect(japanesePopup).toContainText('選択した変更のみが含まれます。');
   expect(await japanesePopup.locator('.changes-preview').allTextContents()).toEqual(preview);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-Hant'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(chip).toContainText('更改 · 1 個檔案');
+  const traditionalPopup = page.getByRole('dialog', { name: '所選更改', exact: true });
+  await expect(traditionalPopup).toBeVisible();
+  await expect(traditionalPopup.getByRole('button', { name: '在審閱中開啟', exact: true })).toBeVisible();
+  expect(await traditionalPopup.locator('.changes-preview').allTextContents()).toEqual(preview);
   expect(app.pageErrors).toEqual([]);
 });
 

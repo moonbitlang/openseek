@@ -291,6 +291,8 @@ fn install_review_hunk_actions(
           match viewer_locale() {
             SimplifiedChinese =>
               "取消第 \{index + 1} 个差异块的已查看标记"
+            TraditionalChinese =>
+              "取消第 \{index + 1} 個差異塊的已檢視標記"
             Japanese =>
               "差分ブロック \{index + 1} の確認済みマークを解除"
             English => "Unmark hunk \{index + 1} viewed"
@@ -299,6 +301,8 @@ fn install_review_hunk_actions(
           match viewer_locale() {
             SimplifiedChinese =>
               "将第 \{index + 1} 个差异块标为已查看"
+            TraditionalChinese =>
+              "將第 \{index + 1} 個差異塊標為已檢視"
             Japanese =>
               "差分ブロック \{index + 1} を確認済みにする"
             English => "Mark hunk \{index + 1} viewed"

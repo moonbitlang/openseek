@@ -111,6 +111,18 @@ fn reasoning_label(locale : @i18n.Locale, value : String) -> String {
         "ultra" => "超高"
         _ => value
       }
+    TraditionalChinese =>
+      match value {
+        "none" => "無"
+        "minimal" => "最低"
+        "low" => "低"
+        "medium" => "中"
+        "high" => "高"
+        "xhigh" => "極高"
+        "max" => "最高"
+        "ultra" => "超高"
+        _ => value
+      }
   }
 }
 

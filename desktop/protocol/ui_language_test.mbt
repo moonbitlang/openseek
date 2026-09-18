@@ -20,3 +20,14 @@ test "UI language codec distinguishes missing from malformed" {
   }
   assert_true(malformed)
 }
+
+///|
+test "traditional Chinese preference has a stable protocol round trip" {
+  let preference : @protocol.UiLanguagePreference = {
+    language: Some("zh-Hant"),
+  }
+  let restored : @protocol.UiLanguagePreference = @json.from_json(
+    preference.to_json(),
+  )
+  assert_eq(restored, preference)
+}

@@ -18,15 +18,15 @@ test "resolve a persisted preference at the application boundary" {
 `Preference::parse` returns `None` for an unsupported stored value. A storage
 read failure must be carried separately by the caller, not converted into an
 absent value. System resolution chooses the first supported language in browser
-preference order, then English. Traditional Chinese is not silently mapped to
-Simplified Chinese; explicit script tags take precedence over region.
+preference order, then English. Traditional Chinese resolves from `zh-Hant`,
+`zh-TW`, `zh-HK`, and `zh-MO`; explicit script tags take precedence over region.
 
 Changing locale must be a reactive input change, including for independently
 rendered components. The locale must not change command IDs, protocol fields,
 paths, conversation text or model output.
 
-English, Simplified Chinese and Japanese are built in. Feature catalogs and
-dynamic formatters use exhaustive locale matches, so a new language exposes
+English, Simplified Chinese, Traditional Chinese and Japanese are built in.
+Feature catalogs and dynamic formatters use exhaustive locale matches, so a new language exposes
 missing translations at compile time.
 
 ## Adding another language

@@ -141,6 +141,7 @@ fn extension_label(
     None =>
       match locale {
         SimplifiedChinese => "无扩展名"
+        TraditionalChinese => "無副檔名"
         Japanese => "拡張子なし"
         English => "No extension"
       }

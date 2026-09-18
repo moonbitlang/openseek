@@ -1175,6 +1175,7 @@ fn MarkdownDocumentView::refresh_localized_labels(
   let (label, title) = match self.localization.language() {
     English => ("Contents, \{count} sections", "Contents · \{count}")
     SimplifiedChinese => ("目录，共 \{count} 节", "目录 · \{count}")
+    TraditionalChinese => ("目錄，共 \{count} 節", "目錄 · \{count}")
     Japanese => ("目次、\{count} セクション", "目次 · \{count}")
   }
   self.toc_toggle.set_attribute("aria-label", label)

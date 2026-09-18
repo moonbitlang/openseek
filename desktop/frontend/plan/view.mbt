@@ -27,6 +27,7 @@ pub fn card(
         class="plan-cleared",
         match locale {
           SimplifiedChinese => "计划已清空"
+          TraditionalChinese => "計劃已清空"
           Japanese => "計画をクリアしました"
           English => "plan cleared"
         },
@@ -149,6 +150,7 @@ fn status_cell(locale? : @i18n.Locale = English, status : Status) -> @html.Html 
         class="step-icon",
         title=match locale {
           SimplifiedChinese => "待处理"
+          TraditionalChinese => "待處理"
           Japanese => "保留中"
           English => "pending"
         },
@@ -159,6 +161,7 @@ fn status_cell(locale? : @i18n.Locale = English, status : Status) -> @html.Html 
         class="step-icon",
         title=match locale {
           SimplifiedChinese => "进行中"
+          TraditionalChinese => "進行中"
           Japanese => "進行中"
           English => "in_progress"
         },
@@ -169,6 +172,7 @@ fn status_cell(locale? : @i18n.Locale = English, status : Status) -> @html.Html 
         class="step-icon",
         title=match locale {
           SimplifiedChinese => "已完成"
+          TraditionalChinese => "已完成"
           Japanese => "完了"
           English => "completed"
         },

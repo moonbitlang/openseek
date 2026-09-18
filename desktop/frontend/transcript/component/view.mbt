@@ -323,6 +323,7 @@ fn tool_request_view(
   let label = if background_job_id is Some(_) {
     match locale {
       SimplifiedChinese => "🐇 → 后台"
+      TraditionalChinese => "🐇 → 後臺"
       Japanese => "🐇 → バックグラウンド"
       English => "🐇 → background"
     }
@@ -363,6 +364,7 @@ fn tool_request_view(
         class="tool-call-failed",
         match locale {
           SimplifiedChinese => "失败"
+          TraditionalChinese => "失敗"
           Japanese => "失敗"
           English => "failed"
         },

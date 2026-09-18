@@ -207,18 +207,21 @@ fn summary_line(
   if active_step(steps) is Some(step) {
     match locale {
       SimplifiedChinese => "计划 \{completed}/\{total} · \{step.title}"
+      TraditionalChinese => "計劃 \{completed}/\{total} · \{step.title}"
       Japanese => "計画 \{completed}/\{total} · \{step.title}"
       English => "plan \{completed}/\{total} · \{step.title}"
     }
   } else if completed == total {
     match locale {
       SimplifiedChinese => "计划 \{completed}/\{total} · 全部完成"
+      TraditionalChinese => "計劃 \{completed}/\{total} · 全部完成"
       Japanese => "計画 \{completed}/\{total} · すべて完了"
       English => "plan \{completed}/\{total} · all steps done"
     }
   } else {
     match locale {
       SimplifiedChinese => "计划 \{completed}/\{total}"
+      TraditionalChinese => "計劃 \{completed}/\{total}"
       Japanese => "計画 \{completed}/\{total}"
       English => "plan \{completed}/\{total}"
     }

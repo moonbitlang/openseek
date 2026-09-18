@@ -429,12 +429,14 @@ fn update_schedules(
                       path,
                       (match model.locale {
                         SimplifiedChinese => "已记录的失败：\n"
+                        TraditionalChinese => "已記錄的失敗：\n"
                         Japanese => "記録されたエラー：\n"
                         English => "Recorded failure:\n"
                       }) +
                       message +
                       (match model.locale {
                         SimplifiedChinese => "\n\n无法读取日志：\n"
+                        TraditionalChinese => "\n\n無法讀取日誌：\n"
                         Japanese =>
                           "\n\nログを読み取れませんでした：\n"
                         English => "\n\nLog could not be read:\n"

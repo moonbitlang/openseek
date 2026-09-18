@@ -217,6 +217,7 @@ fn Model::openseek_model_chip(
     open: self.select_menu is Some(OpenSeekModelMenu),
     title: (match self.locale {
       SimplifiedChinese => "模型："
+      TraditionalChinese => "模型："
       Japanese => "モデル："
       English => "Model: "
     }) +
@@ -259,6 +260,7 @@ fn Model::openseek_reasoning_chip(
     open: self.select_menu is Some(OpenSeekReasoningMenu),
     title: (match self.locale {
       SimplifiedChinese => "推理强度："
+      TraditionalChinese => "推理強度："
       Japanese => "推論の強度："
       English => "Reasoning effort: "
     }) +
@@ -288,6 +290,7 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
     open: self.select_menu is Some(CodexModelMenu),
     title: match self.locale {
       SimplifiedChinese => "Codex 模型"
+      TraditionalChinese => "Codex 模型"
       Japanese => "Codex モデル"
       English => "Codex model"
     },

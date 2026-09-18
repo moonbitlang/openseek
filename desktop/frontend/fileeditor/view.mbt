@@ -2127,6 +2127,7 @@ fn mbti_view_toolbar(
       .aria_label(
         match locale {
           SimplifiedChinese => "MBTI 视图"
+          TraditionalChinese => "MBTI 檢視"
           Japanese => "MBTI ビュー"
           English => "MBTI view"
         },
@@ -2359,6 +2360,7 @@ fn review_diff_mode_button(
     },
     title=match locale {
       SimplifiedChinese => "使用" + mode.label(locale~) + "差异"
+      TraditionalChinese => "使用" + mode.label(locale~) + "差異"
       Japanese => "使用" + mode.label(locale~) + "差分"
       English => "Use " + mode.label(locale~) + " diff"
     },
@@ -2370,6 +2372,7 @@ fn review_diff_mode_button(
         mode.label(locale~) +
         (match locale {
           SimplifiedChinese => "差异"
+          TraditionalChinese => "差異"
           Japanese => "差分"
           English => " diff"
         }),

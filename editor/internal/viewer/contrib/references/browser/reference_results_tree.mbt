@@ -1016,6 +1016,8 @@ fn reference_accessible_label(
   match localization.language() {
     SimplifiedChinese =>
       return "\{display}，位于 \{@base_common.basename_or_authority(reference.uri)} 的第 \{reference.range.start_line_number} 行、第 \{reference.range.start_column} 列"
+    TraditionalChinese =>
+      return "\{display}，位於 \{@base_common.basename_or_authority(reference.uri)} 的第 \{reference.range.start_line_number} 行、第 \{reference.range.start_column} 列"
     Japanese =>
       return "\{display}、\{@base_common.basename_or_authority(reference.uri)} の \{reference.range.start_line_number} 行、\{reference.range.start_column} 列"
     English => ()
@@ -1043,6 +1045,13 @@ fn reference_group_accessible_label(
       return match parent {
         None => result
         Some(parent) => result + "，完整路径：" + parent
+      }
+    }
+    TraditionalChinese => {
+      let result = "\{basename} 中的 \{count} 個結果"
+      return match parent {
+        None => result
+        Some(parent) => result + "，完整路徑：" + parent
       }
     }
     Japanese => {
@@ -1081,6 +1090,12 @@ fn reference_results_summary(
           "在 \{resource_path_label(model.groups[0].uri).unwrap_or(model.groups[0].uri_string)} 中找到 \{reference_count} 个结果"
         } else {
           "在 \{group_count} 个文件中找到 \{reference_count} 个结果"
+        }
+      TraditionalChinese =>
+        return if group_count == 1 {
+          "在 \{resource_path_label(model.groups[0].uri).unwrap_or(model.groups[0].uri_string)} 中找到 \{reference_count} 個結果"
+        } else {
+          "在 \{group_count} 個檔案中找到 \{reference_count} 個結果"
         }
       Japanese =>
         return if group_count == 1 {

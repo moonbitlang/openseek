@@ -34,6 +34,7 @@ pub fn rail(
     let label = if entry.failed {
       match locale {
         SimplifiedChinese => "\{entry.text}（发生过错误）"
+        TraditionalChinese => "\{entry.text}（發生過錯誤）"
         Japanese => "\{entry.text}（エラーあり）"
         English => "\{entry.text} (had errors)"
       }
@@ -75,6 +76,7 @@ pub fn rail(
       .aria_label(
         match locale {
           SimplifiedChinese => "对话概览"
+          TraditionalChinese => "對話概覽"
           Japanese => "チャットの概要"
           English => "Conversation overview"
         },
@@ -152,6 +154,7 @@ fn preview(
         class="overview-preview-failed",
         match locale {
           SimplifiedChinese => "发生过错误"
+          TraditionalChinese => "發生過錯誤"
           Japanese => "エラーあり"
           English => "had errors"
         },

@@ -8,6 +8,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
         Hide,
         label=match language {
           "zh-Hans" => "隐藏 SeekMoon"
+          "zh-Hant" => "隱藏 SeekMoon"
           "ja" => "SeekMoon を隠す"
           _ => "Hide SeekMoon"
         },
@@ -16,6 +17,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
         HideOthers,
         label=match language {
           "zh-Hans" => "隐藏其他应用"
+          "zh-Hant" => "隱藏其他應用程式"
           "ja" => "ほかを隠す"
           _ => "Hide Others"
         },
@@ -24,6 +26,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
         ShowAll,
         label=match language {
           "zh-Hans" => "显示全部"
+          "zh-Hant" => "顯示全部"
           "ja" => "すべてを表示"
           _ => "Show All"
         },
@@ -33,6 +36,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
         Quit,
         label=match language {
           "zh-Hans" => "退出 SeekMoon"
+          "zh-Hant" => "結束 SeekMoon"
           "ja" => "SeekMoon を終了"
           _ => "Quit SeekMoon"
         },
@@ -42,6 +46,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
       Edit,
       label=match language {
         "zh-Hans" => "编辑"
+        "zh-Hant" => "編輯"
         "ja" => "編集"
         _ => "Edit"
       },
@@ -50,6 +55,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           Undo,
           label=match language {
             "zh-Hans" => "撤销"
+            "zh-Hant" => "復原"
             "ja" => "取り消す"
             _ => "Undo"
           },
@@ -58,6 +64,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           Redo,
           label=match language {
             "zh-Hans" => "重做"
+            "zh-Hant" => "重做"
             "ja" => "やり直す"
             _ => "Redo"
           },
@@ -67,6 +74,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           Cut,
           label=match language {
             "zh-Hans" => "剪切"
+            "zh-Hant" => "剪下"
             "ja" => "カット"
             _ => "Cut"
           },
@@ -75,6 +83,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           Copy,
           label=match language {
             "zh-Hans" => "复制"
+            "zh-Hant" => "複製"
             "ja" => "コピー"
             _ => "Copy"
           },
@@ -83,6 +92,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           Paste,
           label=match language {
             "zh-Hans" => "粘贴"
+            "zh-Hant" => "貼上"
             "ja" => "ペースト"
             _ => "Paste"
           },
@@ -91,6 +101,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           SelectAll,
           label=match language {
             "zh-Hans" => "全选"
+            "zh-Hant" => "全選"
             "ja" => "すべてを選択"
             _ => "Select All"
           },
@@ -100,6 +111,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
     Menu(
       match language {
         "zh-Hans" => "开发者"
+        "zh-Hant" => "開發者"
         "ja" => "開発者"
         _ => "Developer"
       },
@@ -108,6 +120,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           @commands.app_open_devtools.name(),
           match language {
             "zh-Hans" => "打开开发者工具"
+            "zh-Hant" => "開啟開發者工具"
             "ja" => "開発者ツールを開く"
             _ => "Open Developer Tools"
           },
@@ -118,6 +131,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
       Window,
       label=match language {
         "zh-Hans" => "窗口"
+        "zh-Hant" => "視窗"
         "ja" => "ウィンドウ"
         _ => "Window"
       },
@@ -126,6 +140,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           Minimize,
           label=match language {
             "zh-Hans" => "最小化"
+            "zh-Hant" => "最小化"
             "ja" => "最小化"
             _ => "Minimize"
           },
@@ -134,6 +149,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           Zoom,
           label=match language {
             "zh-Hans" => "缩放"
+            "zh-Hant" => "縮放"
             "ja" => "ズーム"
             _ => "Zoom"
           },
@@ -142,6 +158,7 @@ pub fn localized_menu(language : String) -> @proton.MenuBar {
           @commands.CloseFocusedMenuCommand,
           match language {
             "zh-Hans" => "关闭"
+            "zh-Hant" => "關閉"
             "ja" => "閉じる"
             _ => "Close"
           },

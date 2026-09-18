@@ -3,6 +3,7 @@
 pub(all) enum Locale {
   English
   SimplifiedChinese
+  TraditionalChinese
   Japanese
 } derive(Debug, Eq)
 
@@ -12,6 +13,7 @@ pub(all) enum Preference {
   System
   English
   SimplifiedChinese
+  TraditionalChinese
   Japanese
 } derive(Debug, Eq)
 
@@ -22,6 +24,7 @@ pub fn Preference::parse(value : String) -> Preference? {
     "system" => Some(System)
     "en" => Some(English)
     "zh-Hans" => Some(SimplifiedChinese)
+    "zh-Hant" => Some(TraditionalChinese)
     "ja" => Some(Japanese)
     _ => None
   }
@@ -34,6 +37,7 @@ pub fn Preference::wire(self : Preference) -> String {
     System => "system"
     English => "en"
     SimplifiedChinese => "zh-Hans"
+    TraditionalChinese => "zh-Hant"
     Japanese => "ja"
   }
 }
@@ -44,6 +48,7 @@ pub fn Locale::tag(self : Locale) -> String {
   match self {
     English => "en"
     SimplifiedChinese => "zh-Hans"
+    TraditionalChinese => "zh-Hant"
     Japanese => "ja"
   }
 }
@@ -58,10 +63,13 @@ fn supported_language(tag : String) -> Locale? {
     "zh" => {
       // Script takes precedence over region (for example zh-Hant-CN).
       if parts.contains("hant") {
-        return None
+        return Some(TraditionalChinese)
       }
       if parts.contains("hans") {
         return Some(SimplifiedChinese)
+      }
+      if parts.contains("tw") || parts.contains("hk") || parts.contains("mo") {
+        return Some(TraditionalChinese)
       }
       if parts.length() == 1 || parts.contains("cn") || parts.contains("sg") {
         Some(SimplifiedChinese)
@@ -82,6 +90,7 @@ pub fn Preference::resolve(
   match self {
     English => English
     SimplifiedChinese => SimplifiedChinese
+    TraditionalChinese => TraditionalChinese
     Japanese => Japanese
     System => {
       for language in languages {

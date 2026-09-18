@@ -1685,6 +1685,19 @@ fn navigation_range_announcement(
         "\{side}第 \{range.start_line_number} 至 \{range.end_line_number_exclusive - 1} 行"
       }
     }
+    TraditionalChinese => {
+      let side = if side == "original" {
+        "原始內容"
+      } else {
+        "修改後內容"
+      }
+      return if range.is_empty() {
+        let kind = if empty_kind == "insertion" { "插入" } else { "刪除" }
+        "\{side}的\{kind}位置在第 \{range.start_line_number} 行"
+      } else {
+        "\{side}第 \{range.start_line_number} 至 \{range.end_line_number_exclusive - 1} 行"
+      }
+    }
     Japanese => {
       let side = if side == "original" {
         "変更前の内容"
@@ -1717,6 +1730,8 @@ fn diff_navigation_announcement(
   (match language {
     SimplifiedChinese =>
       "第 \{target.change_index + 1} 处更改，共 \{target.change_count} 处；"
+    TraditionalChinese =>
+      "第 \{target.change_index + 1} 處更改，共 \{target.change_count} 處；"
     Japanese => "変更 \{target.change_index + 1}/\{target.change_count}；"
     English => "Change \{target.change_index + 1} of \{target.change_count}; "
   }) +

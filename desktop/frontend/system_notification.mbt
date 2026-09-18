@@ -51,6 +51,7 @@ fn FinishedSystemNotification::title(
       Some(
         match locale {
           SimplifiedChinese => "任务已完成"
+          TraditionalChinese => "任務已完成"
           Japanese => "タスクが完了しました"
           English => "Task finished"
         },
@@ -60,6 +61,7 @@ fn FinishedSystemNotification::title(
       Some(
         match locale {
           SimplifiedChinese => "任务达到步数上限，已停止"
+          TraditionalChinese => "任務達到步數上限，已停止"
           Japanese =>
             "ステップ数の上限に達したためタスクを停止しました"
           English => "Task stopped at the step limit"
@@ -69,6 +71,7 @@ fn FinishedSystemNotification::title(
       Some(
         match locale {
           SimplifiedChinese => "任务失败"
+          TraditionalChinese => "任務失敗"
           Japanese => "タスクが失敗しました"
           English => "Task failed"
         },
@@ -85,6 +88,7 @@ fn FinishedSystemNotification::body(
   guard self.answer is Some(answer) && !answer.is_blank() else {
     return match locale {
       SimplifiedChinese => "对话已就绪，请查看。"
+      TraditionalChinese => "對話已就緒，請檢視。"
       Japanese =>
         "チャットの準備ができました。ご確認ください。"
       English => "The conversation is ready for you."
@@ -198,6 +202,7 @@ fn ApprovalSystemNotification::title(
 ) -> String {
   match locale {
     SimplifiedChinese => "需要授权"
+    TraditionalChinese => "需要授權"
     Japanese => "許可が必要です"
     English => "Permission required"
   }
@@ -211,6 +216,7 @@ fn ApprovalSystemNotification::body(
   truncate_notification_body(
     match locale {
       SimplifiedChinese => "\{self.tool_name} 请求授权：\{self.detail}"
+      TraditionalChinese => "\{self.tool_name} 請求授權：\{self.detail}"
       Japanese =>
         "\{self.tool_name} が許可を要求しています：\{self.detail}"
       English => "\{self.tool_name} is asking permission to \{self.detail}"

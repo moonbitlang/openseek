@@ -293,6 +293,7 @@ fn Entry::view(
           match locale {
             English => message
             SimplifiedChinese => "每条消息最多可附加 4 张图片。"
+            TraditionalChinese => "每條訊息最多可附加 4 張圖片。"
             Japanese =>
               "1 件のメッセージに添付できる画像は 4 枚までです。"
           }

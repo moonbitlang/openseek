@@ -205,6 +205,7 @@ fn MinimalToolStatus::view(
   if self.failed > 0 {
     let label = match locale {
       SimplifiedChinese => "\{self.failed} 次工具调用失败"
+      TraditionalChinese => "\{self.failed} 次工具呼叫失敗"
       Japanese =>
         "\{self.failed} 件のツール呼び出しが失敗しました"
       English =>

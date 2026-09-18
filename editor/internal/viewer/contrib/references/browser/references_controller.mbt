@@ -420,6 +420,7 @@ fn definition_no_result_message(
     Some(word) if !word.word.is_empty() =>
       match localization.language() {
         SimplifiedChinese => "未找到“\{word.word}”的定义"
+        TraditionalChinese => "未找到“\{word.word}”的定義"
         Japanese => "「\{word.word}」の定義が見つかりません"
         English => "No definition found for '\{word.word}'"
       }

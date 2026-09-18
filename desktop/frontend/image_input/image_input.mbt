@@ -132,6 +132,7 @@ fn Selection::read(
               Failed(
                 match locale {
                   SimplifiedChinese => "无法读取图片：\{error}"
+                  TraditionalChinese => "無法讀取圖片：\{error}"
                   Japanese => "画像を読み取れません：\{error}"
                   English => "Could not read images: \{error}"
                 },
@@ -155,6 +156,7 @@ async fn Selection::load(
     return Failed(
       match locale {
         SimplifiedChinese => "每条消息最多可附加 4 张图片。"
+        TraditionalChinese => "每條訊息最多可附加 4 張圖片。"
         Japanese =>
           "メッセージには最大 4 枚の画像を添付できます。"
         English => "Attach up to 4 images per message."
@@ -167,6 +169,8 @@ async fn Selection::load(
       return Failed(
         match locale {
           SimplifiedChinese => "每张图片不得超过 5 MiB：\{file.name()}"
+          TraditionalChinese =>
+            "每張圖片不得超過 5 MiB：\{file.name()}"
           Japanese =>
             "画像は 1 枚あたり 5 MiB 以下にしてください：\{file.name()}"
           English => "Each image must be 5 MiB or smaller: \{file.name()}"
@@ -177,6 +181,7 @@ async fn Selection::load(
       return Failed(
         match locale {
           SimplifiedChinese => "图片为空：\{file.name()}"
+          TraditionalChinese => "圖片為空：\{file.name()}"
           Japanese => "画像が空です：\{file.name()}"
           English => "Image is empty: \{file.name()}"
         },
@@ -189,6 +194,8 @@ async fn Selection::load(
           match locale {
             SimplifiedChinese =>
               "请选择 PNG、JPEG、WebP 或 GIF 图片：\{file.name()}"
+            TraditionalChinese =>
+              "請選擇 PNG、JPEG、WebP 或 GIF 圖片：\{file.name()}"
             Japanese =>
               "PNG、JPEG、WebP または GIF の画像を選択してください：\{file.name()}"
             English => "Choose PNG, JPEG, WebP or GIF images: \{file.name()}"

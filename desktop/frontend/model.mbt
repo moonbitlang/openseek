@@ -118,10 +118,13 @@ fn OpenSeekReasoning::label(
 ) -> String {
   match (locale, self) {
     (SimplifiedChinese, ReasoningOff) => "关闭"
+    (TraditionalChinese, ReasoningOff) => "關閉"
     (Japanese, ReasoningOff) => "オフ"
     (SimplifiedChinese, ReasoningHigh) => "高"
+    (TraditionalChinese, ReasoningHigh) => "高"
     (Japanese, ReasoningHigh) => "高"
     (SimplifiedChinese, ReasoningMax) => "最高"
+    (TraditionalChinese, ReasoningMax) => "最高"
     (Japanese, ReasoningMax) => "最大"
     (English, ReasoningOff) => "Off"
     (English, ReasoningHigh) => "High"
@@ -140,6 +143,7 @@ fn OpenSeekReasoning::label_for_model(
   if model is (Glm53 | Glm53Flash) && self is ReasoningOff {
     match locale {
       SimplifiedChinese => "低"
+      TraditionalChinese => "低"
       Japanese => "低"
       English => "Low"
     }
@@ -4334,6 +4338,15 @@ fn RunOutcome::label(
         MaxStepsExhausted => "已达最大步数"
         Unknown(wire) => if wire.is_blank() { "已结束" } else { wire }
       }
+    TraditionalChinese =>
+      return match self {
+        Completed => "已完成"
+        ContextYield => "已達上下文上限"
+        Aborted => "已中止"
+        RunFailed => "失敗"
+        MaxStepsExhausted => "已達最大步數"
+        Unknown(wire) => if wire.is_blank() { "已結束" } else { wire }
+      }
     Japanese =>
       return match self {
         Completed => "完了"
@@ -4398,6 +4411,26 @@ fn Status::label(self : Status, locale? : @i18n.Locale = English) -> String {
           }
         Failed => "失败"
         Errored => "错误"
+        Finished(outcome) => outcome.label(locale~)
+        Unavailable(message) => message
+      }
+    TraditionalChinese =>
+      return match self {
+        WaitingBridge => "正在等待連線橋"
+        Ready => "就緒"
+        SetupRequired => "需要設定"
+        ApiKeyRequired => "需要 API 金鑰"
+        Starting => "正在啟動"
+        Running => "執行中"
+        Cancelling => "正在取消"
+        Step(step) =>
+          if step is Some(step) {
+            "第 \{step} 步"
+          } else {
+            "執行步驟"
+          }
+        Failed => "失敗"
+        Errored => "錯誤"
         Finished(outcome) => outcome.label(locale~)
         Unavailable(message) => message
       }

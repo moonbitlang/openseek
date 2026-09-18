@@ -35,6 +35,7 @@ fn pending_job_wait_label(
     if targets.length() == 1 {
       match locale {
         SimplifiedChinese => "等待任务 \{targets[0]} 完成"
+        TraditionalChinese => "等待任務 \{targets[0]} 完成"
         Japanese => "ジョブ \{targets[0]} の完了を待機"
         English => "Wait for job \{targets[0]} to complete"
       }
@@ -42,6 +43,8 @@ fn pending_job_wait_label(
       match locale {
         SimplifiedChinese =>
           "等待以下任一任务完成：\{targets.join("、")}"
+        TraditionalChinese =>
+          "等待以下任一任務完成：\{targets.join("、")}"
         Japanese =>
           "次のいずれかのジョブの完了を待機：\{targets.join("、")}"
         English =>

@@ -15,6 +15,7 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
         Some(
           match self.locale {
             SimplifiedChinese => "在访达中打开"
+            TraditionalChinese => "在訪達中開啟"
             Japanese => "Finder で開く"
             English => "Open in Finder"
           },
@@ -23,6 +24,7 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
         Some(
           match self.locale {
             SimplifiedChinese => "在文件资源管理器中打开"
+            TraditionalChinese => "在檔案資源管理器中開啟"
             Japanese => "エクスプローラーで開く"
             English => "Open in File Explorer"
           },
@@ -31,6 +33,7 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
         Some(
           match self.locale {
             SimplifiedChinese => "在文件夹中打开"
+            TraditionalChinese => "在資料夾中開啟"
             Japanese => "フォルダーで開く"
             English => "Open in Folder"
           },

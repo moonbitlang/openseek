@@ -33,6 +33,7 @@ fn Model::share(
     source,
     failure=match locale {
       SimplifiedChinese => "分享失败"
+      TraditionalChinese => "分享失敗"
       Japanese => "共有に失敗しました"
       English => "Could not share"
     },
@@ -62,6 +63,7 @@ fn Model::download(
     source,
     failure=match locale {
       SimplifiedChinese => "下载失败"
+      TraditionalChinese => "下載失敗"
       Japanese => "ダウンロードに失敗しました"
       English => "Could not download"
     },
@@ -84,6 +86,7 @@ fn Model::sign_in(
     @protocol.NoPayload,
     failure=match locale {
       SimplifiedChinese => "登录失败"
+      TraditionalChinese => "登入失敗"
       Japanese => "ログインに失敗しました"
       English => "Could not sign in"
     },

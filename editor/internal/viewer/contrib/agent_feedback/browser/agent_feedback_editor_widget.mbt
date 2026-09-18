@@ -186,6 +186,7 @@ fn AgentFeedbackEditorWidget::update_title(
     self.title.set_inner_html(
       match self.localization.language() {
         SimplifiedChinese => "\{self.comments.length()} 条评论"
+        TraditionalChinese => "\{self.comments.length()} 條評論"
         Japanese => "\{self.comments.length()} 件のコメント"
         English => "\{self.comments.length().to_string()} comments"
       },
@@ -282,6 +283,7 @@ fn AgentFeedbackEditorWidget::build_item(
     line_info.set_inner_html(
       match self.localization.language() {
         SimplifiedChinese => "第 \{range.start_line_number} 行"
+        TraditionalChinese => "第 \{range.start_line_number} 行"
         Japanese => "\{range.start_line_number} 行"
         English => "Line \{range.start_line_number.to_string()}"
       },
@@ -290,6 +292,8 @@ fn AgentFeedbackEditorWidget::build_item(
     line_info.set_inner_html(
       match self.localization.language() {
         SimplifiedChinese =>
+          "第 \{range.start_line_number}–\{range.end_line_number} 行"
+        TraditionalChinese =>
           "第 \{range.start_line_number}–\{range.end_line_number} 行"
         Japanese => "\{range.start_line_number}〜\{range.end_line_number} 行"
         English =>

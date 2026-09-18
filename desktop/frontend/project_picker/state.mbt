@@ -200,12 +200,14 @@ pub fn State::handle(
         let message = if self.new_folder is Some(_) {
           match locale {
             SimplifiedChinese => "无法创建文件夹：\{message}"
+            TraditionalChinese => "無法建立資料夾：\{message}"
             Japanese => "フォルダーを作成できません：\{message}"
             English => "Cannot create folder: \{message}"
           }
         } else {
           match locale {
             SimplifiedChinese => "无法打开文件夹：\{message}"
+            TraditionalChinese => "無法開啟資料夾：\{message}"
             Japanese => "フォルダーを開けません：\{message}"
             English => "Cannot open folder: \{message}"
           }

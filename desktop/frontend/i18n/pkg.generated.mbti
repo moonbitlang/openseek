@@ -13,6 +13,7 @@ import {
 pub(all) enum Locale {
   English
   SimplifiedChinese
+  TraditionalChinese
   Japanese
 } derive(Eq, @debug.Debug)
 pub fn Locale::equal(Self, Self) -> Bool
@@ -24,6 +25,7 @@ pub(all) enum Preference {
   System
   English
   SimplifiedChinese
+  TraditionalChinese
   Japanese
 } derive(Eq, @debug.Debug)
 pub fn Preference::equal(Self, Self) -> Bool

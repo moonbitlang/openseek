@@ -165,6 +165,7 @@ fn failure_marker(
           class="tool-call-failed tool-stage-build",
           match locale {
             SimplifiedChinese => "构建错误"
+            TraditionalChinese => "構建錯誤"
             Japanese => "ビルドエラー"
             English => "build error"
           },
@@ -176,6 +177,7 @@ fn failure_marker(
           class="tool-call-failed tool-stage-run",
           match locale {
             SimplifiedChinese => "运行错误"
+            TraditionalChinese => "執行錯誤"
             Japanese => "実行エラー"
             English => "runtime error"
           },
@@ -187,6 +189,7 @@ fn failure_marker(
           class="tool-call-failed",
           match locale {
             SimplifiedChinese => "失败"
+            TraditionalChinese => "失敗"
             Japanese => "失敗"
             English => "failed"
           },

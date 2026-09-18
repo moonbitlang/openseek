@@ -287,6 +287,7 @@ fn GitChanges::render(
     Some(
       match locale {
         SimplifiedChinese => "\{counted}，其余未跟踪文件未计入"
+        TraditionalChinese => "\{counted}，其餘未跟蹤檔案未計入"
         Japanese => "\{counted}、残りの未追跡ファイルは未集計"
         English => "\{counted}, untracked tail uncounted"
       },
@@ -295,6 +296,7 @@ fn GitChanges::render(
     Some(
       match locale {
         SimplifiedChinese => "其余未跟踪文件未计入"
+        TraditionalChinese => "其餘未跟蹤檔案未計入"
         Japanese => "残りの未追跡ファイルは未集計"
         English => "untracked tail uncounted"
       },

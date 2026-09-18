@@ -8,6 +8,7 @@ fn viewer_locale() -> @i18n.Locale {
   match viewer_localization.language() {
     English => English
     SimplifiedChinese => SimplifiedChinese
+    TraditionalChinese => TraditionalChinese
     Japanese => Japanese
   }
 }
@@ -19,6 +20,7 @@ pub fn apply_language(locale : @i18n.Locale) -> @cmd.Cmd {
       match locale {
         English => @localization.English
         SimplifiedChinese => @localization.SimplifiedChinese
+        TraditionalChinese => @localization.TraditionalChinese
         Japanese => @localization.Japanese
       },
     )
@@ -41,8 +43,10 @@ fn file_placeholder(markdown : Bool) -> String {
     (English, false) => "Select a file to view"
     (English, true) => "Select a Markdown file to view"
     (SimplifiedChinese, false) => "选择要查看的文件"
+    (TraditionalChinese, false) => "選擇要檢視的檔案"
     (Japanese, false) => "表示するファイルを選択"
     (SimplifiedChinese, true) => "选择要查看的 Markdown 文件"
+    (TraditionalChinese, true) => "選擇要檢視的 Markdown 檔案"
     (Japanese, true) => "表示する Markdown ファイルを選択"
   }
 }

@@ -166,6 +166,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       Every(n) =>
         match locale {
           SimplifiedChinese => "每 \{n} 分钟"
+          TraditionalChinese => "每 \{n} 分鐘"
           Japanese => "\{n} 分ごと"
           English => "Every \{n} min"
         }

@@ -684,6 +684,7 @@ fn file_link_node(
     type_="button",
     title=match locale {
       SimplifiedChinese => "打开 \{path}"
+      TraditionalChinese => "開啟 \{path}"
       Japanese => "\{path} を開く"
       English => "Open \{path}"
     },

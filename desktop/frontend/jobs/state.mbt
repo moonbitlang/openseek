@@ -481,6 +481,8 @@ pub fn update(
             match locale {
               SimplifiedChinese =>
                 "此任务已不属于当前引擎，请刷新其历史记录。"
+              TraditionalChinese =>
+                "此任務已不屬於當前引擎，請重新整理其歷史記錄。"
               Japanese =>
                 "このジョブは現在のエンジンに属していません。履歴を更新してください。"
               English =>
@@ -492,6 +494,8 @@ pub fn update(
             match locale {
               SimplifiedChinese =>
                 "引擎已重启，无法从新的运行环境停止此旧任务。"
+              TraditionalChinese =>
+                "引擎已重啟，無法從新的執行環境停止此舊任務。"
               Japanese =>
                 "エンジンが再起動したため、新しい実行環境から古いジョブを停止できません。"
               English =>

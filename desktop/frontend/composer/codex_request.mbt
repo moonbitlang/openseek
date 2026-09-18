@@ -481,6 +481,7 @@ fn CodexRequestInput::render(
           value=self.answers.get("__content").unwrap_or("{}"),
           placeholder=match locale {
             SimplifiedChinese => "工具要求的 JSON 内容"
+            TraditionalChinese => "工具要求的 JSON 內容"
             Japanese => "ツールが要求する JSON の内容"
             English => "JSON content required by the tool"
           },

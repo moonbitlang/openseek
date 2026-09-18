@@ -17,6 +17,8 @@ async test "native language preference survives independent reads and rejects in
   assert_eq(read_ui_language(Some(dir)).language, Some("en"))
   write_ui_language(Some(dir), { language: Some("ja"), }) |> ignore
   assert_eq(read_ui_language(Some(dir)).language, Some("ja"))
+  write_ui_language(Some(dir), { language: Some("zh-Hant"), }) |> ignore
+  assert_eq(read_ui_language(Some(dir)).language, Some("zh-Hant"))
   write_ui_language(Some(dir), { language: None, }) |> ignore
   assert_eq(read_ui_language(Some(dir)).language, None)
 }

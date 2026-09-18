@@ -31,6 +31,7 @@ fn changes_label(
   }
   match locale {
     SimplifiedChinese => return "更改 · \{files.length()} 个文件"
+    TraditionalChinese => return "更改 · \{files.length()} 個檔案"
     Japanese => return "変更 · \{files.length()} ファイル"
     English => ()
   }

@@ -434,6 +434,7 @@ pub fn component(
           attrs=@html.Attrs::build().aria_label(
             match locale {
               SimplifiedChinese => "在工作树 \{name} 中运行"
+              TraditionalChinese => "在工作樹 \{name} 中執行"
               Japanese => "ワークツリー \{name} で実行"
               English => "Runs in worktree \{name}"
             },

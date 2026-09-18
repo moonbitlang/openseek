@@ -3,6 +3,7 @@
 pub(all) enum Language {
   English
   SimplifiedChinese
+  TraditionalChinese
   Japanese
 } derive(Eq, Debug)
 
