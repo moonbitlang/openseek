@@ -639,13 +639,19 @@ html:is(
   padding: 10px 10px 6px 12px;
 }
 .search-query-row > input,
-.search-semantic-source input {
+.search-query-row > textarea,
+.search-semantic-source input,
+.search-semantic-source textarea {
   flex: 1 1 120px;
   min-width: 80px;
-  height: 28px;
+  height: 56px;
+  min-height: 28px;
+  max-height: 140px;
   padding: 4px 8px;
   border-radius: var(--radius-xs);
   font-size: var(--font-size-sm);
+  line-height: 1.35;
+  resize: vertical;
 }
 .search-option {
   flex: 0 0 auto;
