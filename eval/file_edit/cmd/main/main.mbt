@@ -24,7 +24,7 @@ fn cli_command() -> @argparse.Command {
         "model",
         long="model",
         default_values=[@deepseek.Deepseek(V4Flash).to_string()],
-        about="Chat model: deepseek-flash, deepseek-v4-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash.",
+        about="Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash.",
       ),
       OptionArg(
         "runs",
@@ -89,7 +89,7 @@ test "cli defaults to flash baseline" {
   let matches = cli_command().parse(argv=["--api-key", "test-key"])
   let config = config_from_matches(matches)
   assert_eq(config.api_key, "test-key")
-  assert_eq(config.model.to_string(), "deepseek-v4-flash")
+  assert_eq(config.model.to_string(), "deepseek-flash")
   assert_eq(config.runs, 10)
   assert_eq(config.concurrency, 1)
   assert_eq(config.min_successes, 8)

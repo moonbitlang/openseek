@@ -1,13 +1,12 @@
 ///|
 /// DeepSeek chat model variants.
 ///
-/// `V41Flash` is V4.1 Flash under its canonical wire name `deepseek-flash`.
-/// V4 Flash is retired, but its legacy name `deepseek-v4-flash` is still
-/// accepted and served by V4.1 Flash, so both variants stay callable.
+/// `V4Flash` is the DeepSeek flash tier under its canonical wire name
+/// `deepseek-flash`. The retired `deepseek-v4-flash` name is still accepted as
+/// an alias and served by the same model.
 pub(all) enum DsVariant {
   V4Flash
   V4Pro
-  V41Flash
 } derive(Eq, Debug)
 
 ///|
@@ -36,9 +35,8 @@ pub(all) enum Model {
 /// Returns the wire name for a DeepSeek chat model variant.
 impl Show for DsVariant with fn to_string(self : DsVariant) -> String {
   match self {
-    V4Flash => "deepseek-v4-flash"
+    V4Flash => "deepseek-flash"
     V4Pro => "deepseek-v4-pro"
-    V41Flash => "deepseek-flash"
   }
 }
 
@@ -74,9 +72,8 @@ pub impl Show for Model with fn to_string(self : Model) -> String {
 /// Parses a wire model name into a typed model.
 pub fn Model::parse(input : String) -> Model raise {
   match input {
-    "deepseek-v4-flash" => Deepseek(V4Flash)
+    "deepseek-flash" | "deepseek-v4-flash" => Deepseek(V4Flash)
     "deepseek-v4-pro" => Deepseek(V4Pro)
-    "deepseek-flash" => Deepseek(V41Flash)
     "kimi-k2.7-code" => Kimi(K27Code)
     "kimi-k2.7-code-highspeed" => Kimi(K27CodeHighSpeed)
     "glm-5.3" => Glm(G53)
@@ -89,15 +86,14 @@ pub fn Model::parse(input : String) -> Model raise {
 /// Context window served by the official API, in tokens.
 ///
 /// Every DeepSeek variant serves 1M context ("1M context is now the default
-/// across all official DeepSeek services", api-docs.deepseek.com news260424;
-/// V4.1 Flash lists `CONTEXT LENGTH 1M`); the kimi-k2.7-code family serves
-/// 256K. These are the totals a request's
+/// across all official DeepSeek services", api-docs.deepseek.com news260424);
+/// the kimi-k2.7-code family serves 256K. These are the totals a request's
 /// prompt and completion must fit within, used by the agent loop as the
 /// ceiling for its auto-compaction guard. Per-variant match so adding a
 /// variant forces an explicit choice here.
 pub fn Model::context_window(self : Model) -> Int {
   match self {
-    Deepseek(V4Flash | V4Pro | V41Flash) => 1_000_000
+    Deepseek(V4Flash | V4Pro) => 1_000_000
     Kimi(K27Code | K27CodeHighSpeed) => 262_144
     Glm(G53 | G53Flash) => 1_000_000
   }

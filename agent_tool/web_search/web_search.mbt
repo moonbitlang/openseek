@@ -7,10 +7,9 @@ const DefaultBaseUrl : String = "https://api.deepseek.com/anthropic/v1"
 
 ///|
 /// Default Anthropic-format model name for the auxiliary search call. The
-/// flash tier — `deepseek-flash` is V4.1 Flash's canonical name, and the
-/// retired `deepseek-v4-flash` name is only a temporary alias for it: the
-/// call exists to trigger native search and return result blocks, not to
-/// think.
+/// flash tier's canonical name is `deepseek-flash`, and the retired
+/// `deepseek-v4-flash` name is only a temporary alias for it: the call exists
+/// to trigger native search and return result blocks, not to think.
 const DefaultSearchModel : String = "deepseek-flash"
 
 ///|

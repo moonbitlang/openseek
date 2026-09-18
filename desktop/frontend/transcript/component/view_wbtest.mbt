@@ -54,7 +54,7 @@ test "transcript stream children use stable typed keys in display order" {
     streaming_identity="r7",
   )
   let keys = stream_keys(input)
-  assert_eq(keys, ["row\u{0}s41", "rule\u{0}s41", "row\u{0}s42", "live\u{0}r7"])
+  assert_eq(keys, ["row\u{0}s41", "row\u{0}s42", "live\u{0}r7"])
   // The result filling the call, and the durable reasoning the same event
   // turns out to carry, change the response's node, never its identity: the
   // browser-owned disclosures inside it survive both.
@@ -111,7 +111,7 @@ test "the live response is one node, replaced by the durable one" {
     streaming_identity="r7",
   )
   let live_keys = stream_keys(live_input)
-  assert_eq(live_keys, ["row\u{0}s1", "rule\u{0}s1", "live\u{0}r7"])
+  assert_eq(live_keys, ["row\u{0}s1", "live\u{0}r7"])
   // The answer streaming after the thought joins the same node.
   let answering = { ..live_input, streaming_response: Some("partial"), }
   assert_eq(stream_keys(answering), live_keys)
@@ -137,7 +137,7 @@ test "the live response is one node, replaced by the durable one" {
     ],
     streaming_reasoning: None,
   }
-  assert_eq(stream_keys(settled), ["row\u{0}s1", "rule\u{0}s1", "row\u{0}s2"])
+  assert_eq(stream_keys(settled), ["row\u{0}s1", "row\u{0}s2"])
 }
 
 ///|

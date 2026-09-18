@@ -9,9 +9,8 @@ pub fn openrouter_encode_chat_request(
   messages : Array[ChatMessage],
 ) -> Json {
   let model = match model {
-    V4Flash => "deepseek/deepseek-v4-flash-0731"
+    V4Flash => "deepseek/deepseek-v4.1-flash"
     V4Pro => "deepseek/deepseek-v4-pro"
-    V41Flash => "deepseek/deepseek-v4.1-flash"
   }
   let effort = match thinking {
     No => "none"

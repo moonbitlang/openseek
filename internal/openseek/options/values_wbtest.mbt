@@ -1,13 +1,13 @@
 ///|
-/// V4.1 Flash's canonical wire name is `deepseek-flash`; the retired
-/// `deepseek-v4-flash` name still parses to its own legacy tier.
-test "cli accepts the v4.1 flash wire name" {
+/// The DeepSeek flash tier's canonical wire name is `deepseek-flash`; the
+/// retired `deepseek-v4-flash` name is accepted as an alias for the same tier.
+test "cli accepts the canonical flash wire name" {
   let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
     "OPENSEEK_MODEL": "deepseek-flash",
   })
   let (model, thinking, api_url) = agent_settings(parsed)
-  assert_true(model is Deepseek(V41Flash))
+  assert_true(model is Deepseek(V4Flash))
   assert_eq(model.to_string(), "deepseek-flash")
   assert_eq(model.api_key(parsed.values), Some("test-key"))
   assert_true(thinking is High)

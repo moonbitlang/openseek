@@ -436,7 +436,7 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
-/* Worktree affordances: the sidebar row's branch glyph and the composer's
+/* Worktree affordances: the sidebar row's worktree glyph and the composer's
    launch-mode chip. The archive-discard confirmation reuses the shared
    modal styles. */
 /* The row's worktree glyph, shown when the registry mapping (or the local

@@ -189,7 +189,7 @@ export GLM=...
 moon run cmd/openseek -- --model glm-5.3 run "inspect this project"
 ```
 
-`OPENSEEK_MODEL` is optional and defaults to `deepseek-v4-flash`.
+`OPENSEEK_MODEL` is optional and defaults to `deepseek-flash`.
 `OPENSEEK_MAX_STEPS` is optional; when omitted, turns are bounded by the
 model's context window (a checkpoint summary carries each turn into the
 next) rather than a step count. Pass `--max-steps` to cap steps for one run.

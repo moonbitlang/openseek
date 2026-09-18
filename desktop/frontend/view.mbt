@@ -882,9 +882,14 @@ fn remote_access_rows(
             "Registers this machine so your browser can drive it through the relay."
         }
         let controls : Array[@html.Html] = [
+          // Once the sign-in completes this same slot becomes the Disconnect
+          // button, and rabbita patches the existing element. `disabled~`
+          // would set a DOM property, which its diff cannot clear (`delete`
+          // on a prototype accessor is a no-op), leaving Disconnect dead; the
+          // attribute form is removed correctly.
           @html.button(
             class="button primary",
-            disabled=model.remote_connecting,
+            attrs=@html.Attrs::build().disabled(model.remote_connecting),
             on_click=dispatch(RemoteConnectClicked),
             if model.remote_connecting {
               "Waiting for the browser…"

@@ -32,15 +32,15 @@ rejected; launch the UI with `openseek_tui`. The options shared with the engine
 ## `openseek run`
 
 ```bash
-moon run cmd/openseek -- run [--api-key sk-...] [--model deepseek-v4-flash] [--api-url https://api.deepseek.com/chat/completions] [--dir .] [--max-steps N] [--system-prompt-file prompt.md] [--system-prompt-addendum-file addendum.md] [--session session-id] [--session-root .openseek] "task text"
+moon run cmd/openseek -- run [--api-key sk-...] [--model deepseek-flash] [--api-url https://api.deepseek.com/chat/completions] [--dir .] [--max-steps N] [--system-prompt-file prompt.md] [--system-prompt-addendum-file addendum.md] [--session session-id] [--session-root .openseek] "task text"
 ```
 
 Runs require `--api-key` or the provider-specific environment variable:
 `DEEPSEEK` for DeepSeek models, `KIMI` for Kimi models, and `GLM` for Z.AI GLM
 models. `--model` can also be supplied with `OPENSEEK_MODEL`; it accepts
-`deepseek-flash` (V4.1 Flash), `deepseek-v4-flash`, `deepseek-v4-pro`,
+`deepseek-flash`, the retired `deepseek-v4-flash` alias, `deepseek-v4-pro`,
 `kimi-k2.7-code`, `kimi-k2.7-code-highspeed`, `glm-5.3`, and
-`glm-5.3-flash`, and defaults to `deepseek-v4-flash`. `--max-steps` can also
+`glm-5.3-flash`, and defaults to `deepseek-flash`. `--max-steps` can also
 be supplied with
 `OPENSEEK_MAX_STEPS`; when omitted, turns are bounded by the model's context
 window instead of a step count. `--api-url` can also be supplied
@@ -128,7 +128,7 @@ moon run cmd/openseek -- run "run moon test and summarize the result"
 ```
 
 ```bash
-OPENSEEK_MODEL=deepseek-v4-flash moon run cmd/openseek -- run "inspect the package docs"
+OPENSEEK_MODEL=deepseek-flash moon run cmd/openseek -- run "inspect the package docs"
 ```
 
 ```bash

@@ -58,7 +58,7 @@ async test "suite config parses relative task paths and flattens jobs" {
     assert_eq(config.problems[1].prompt_label, "Beta Problem")
     let jobs = suite_jobs(config)
     assert_eq(jobs.length(), 12)
-    assert_eq(jobs[0].model.to_string(), "deepseek-v4-flash")
+    assert_eq(jobs[0].model.to_string(), "deepseek-flash")
     assert_eq(jobs[0].problem.id, "alpha")
     assert_eq(jobs[0].repeat_index, 0)
     assert_eq(jobs[3].problem.id, "beta")
@@ -261,4 +261,21 @@ test "suite report renders markdown and html from shared report frontend" {
   let html = suite.html()
   assert_true(html.contains("<html"))
   assert_true(html.contains("trial-card"))
+}
+
+///|
+test "suite models reject two names for the same model" {
+  // `deepseek-flash` is the canonical flash tier and `deepseek-v4-flash` its
+  // retired alias: both parse to one model, whose combos share an output
+  // directory, so a suite must not list both.
+  let fields : Map[String, Json] = {
+    "models": ["deepseek-flash", "deepseek-v4-flash"],
+  }
+  let _ = parse_models(fields) catch {
+    error => {
+      assert_true("\{error}".contains("deepseek-flash twice"))
+      return
+    }
+  }
+  fail("a suite naming one model twice was accepted")
 }

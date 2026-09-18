@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub fn copy_button(String, class~ : String, title~ : String, label~ : String) -> @html.Html
+
 pub fn linkified_text_nodes(String) -> Array[@html.Html]
 
 pub fn markdown_nodes(String, open_file? : (String) -> @cmd.Cmd) -> Array[@html.Html]

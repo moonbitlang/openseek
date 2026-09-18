@@ -84,11 +84,15 @@ thinking effort to OpenRouter's portable `reasoning` object. Both
 `reasoning_content` and OpenRouter's `reasoning` response field are normalized
 into `ChatResponse::reasoning_content`.
 
-| DeepSeek model      | OpenRouter ids                    |
-|---------------------|-----------------------------------|
-| `deepseek-v4-flash` | `deepseek/deepseek-v4-flash-0731` |
-| `deepseek-v4-pro`   | `deepseek/deepseek-v4-pro`        |
-| `deepseek-flash`    | `deepseek/deepseek-v4.1-flash`    |
+| DeepSeek model    | OpenRouter ids                 |
+|-------------------|--------------------------------|
+| `deepseek-flash`  | `deepseek/deepseek-v4.1-flash` |
+| `deepseek-v4-pro` | `deepseek/deepseek-v4-pro`     |
+
+The flash tier is one model: it encodes as `deepseek/deepseek-v4.1-flash` on
+OpenRouter, which is the id that serves the canonical `deepseek-flash` wire
+name. The retired `deepseek/deepseek-v4-flash-0731` snapshot id is no longer
+sent.
 
 Use `tools=[...]` when the model may request native function calls.
 Use `response_format=JsonObject` only when the assistant content itself must be
@@ -131,7 +135,7 @@ test "Client::chat request body shape" {
     ChatMessage(User, content="read README.mbt.md"),
   ]
   json_inspect(body, content={
-    "model": "deepseek-v4-flash",
+    "model": "deepseek-flash",
     "messages": [{ "role": "user", "content": "read README.mbt.md" }],
     "stream": false,
     "response_format": { "type": "json_object" },

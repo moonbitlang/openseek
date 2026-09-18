@@ -270,17 +270,26 @@ fn suite_config_from_json(
 }
 
 ///|
+/// Parse the suite's model list. Two entries that name one model — the
+/// canonical `deepseek-flash` and its retired `deepseek-v4-flash` alias — would
+/// run as two combos sharing a single output directory, so a duplicate is
+/// rejected instead of silently collapsed onto one another.
 fn parse_models(fields : Map[String, Json]) -> Array[@deepseek.Model] raise {
   match fields.get("models") {
-    Some(Array(items)) =>
-      [
-        for item in items => {
-          match item {
-            String(value) => @deepseek.Model::parse(value)
-            _ => fail("suite model entries must be strings")
-          }
+    Some(Array(items)) => {
+      let models : Array[@deepseek.Model] = []
+      for item in items {
+        let model = match item {
+          String(value) => @deepseek.Model::parse(value)
+          _ => fail("suite model entries must be strings")
         }
-      ]
+        if models.contains(model) {
+          fail("suite models lists \{model} twice")
+        }
+        models.push(model)
+      }
+      models
+    }
     Some(_) => fail("suite models must be an array")
     None => fail("suite models is missing")
   }

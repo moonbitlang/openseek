@@ -33,7 +33,6 @@ pub impl @json.FromJson for ChatResponse
 pub(all) enum DsVariant {
   V4Flash
   V4Pro
-  V41Flash
 } derive(Eq, @debug.Debug)
 
 pub(all) enum GlmVariant {
