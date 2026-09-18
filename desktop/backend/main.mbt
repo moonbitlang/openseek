@@ -47,6 +47,12 @@ async fn main {
   @xlog.info() <? { "message": "engine", "path": engine }
   @xlog.info() <? { "message": "codex", "path": @codex.command() }
   @xlog.info() <? { "message": "app version", "version": app_version }
+  // The identity this process answers to. A development build never answers
+  // to the shipped one: `package/build.mjs` generates a project config
+  // carrying its own, and `proton dev` hands that config on to the host
+  // through PROTON_PROJECT_CONFIG, so this call picks it up either way.
+  let app = app.load_config()
+  let development = is_development(app)
   let runtime_dir = @host.prepared_runtime_dir(executable)
   let codex_home = match runtime_dir {
     Some(dir) => @codex.prepared_home(dir)
@@ -62,8 +68,13 @@ async fn main {
     }
   // The relay sign-in store: a persisted session from auth.json, unless the
   // environment override pins the connector config directly (development).
+  // A development build persists nothing: it shares the runtime dir with the
+  // shipped application, and one auth.json is one device token, so both hosts
+  // would register as the same relay device and keep replacing each other.
+  // Each development launch instead starts signed out, and Connect registers
+  // a device of its own.
   let auth = @auth.AuthStore::load(
-    runtime_dir?,
+    runtime_dir?=if development { None } else { runtime_dir },
     env_override?=relay_settings(matches),
     app_version~,
   )
@@ -87,15 +98,10 @@ async fn main {
   // entry serves from. The window is bridge-only: it makes no HTTP requests
   // at all. Remote browsers use the same method catalog over the relay
   // WebSocket instead (docs/remote-protocol.md).
-  // The identity this process answers to. A development build never answers
-  // to the shipped one: `package/build.mjs` generates a project config
-  // carrying its own, and `proton dev` hands that config on to the host
-  // through PROTON_PROJECT_CONFIG, so this call picks it up either way.
-  let app = app.load_config()
   // One host per identity: `single_instance` hands a later launch to the
   // process already holding that identity's lock, and that process brings its
   // window to the front. Off by default for now; see `single_instance_wanted`.
-  let single_instance = single_instance_wanted(matches, app)
+  let single_instance = single_instance_wanted(matches, development~)
   let app = if single_instance { app.single_instance() } else { app }
   let app = app
     // Let the page palette paint the native titlebar area. The default macOS
@@ -384,35 +390,30 @@ let command : @argparse.Command = Command(
 const DevelopmentSuffix = ".dev"
 
 ///|
+/// Whether this process runs under the development identity, as opposed to
+/// the shipped application's. The identity comes back through `data_dir`,
+/// whose last segment it is; a path separator cannot appear inside an
+/// identity, so a data directory ending in the suffix is one whose identity
+/// does. `data_dir` raises only without an identifier or a home directory,
+/// and `App::run` refuses both, so the raise ends a launch that could not
+/// have run anyway.
+fn is_development(app : @proton.App) -> Bool raise @proton.AppPathError {
+  app.data_dir().has_suffix(DevelopmentSuffix)
+}
+
+///|
 /// Whether this launch takes part in single instance.
 ///
 /// Off unless `--single-instance` (OPENSEEK_DESKTOP_SINGLE_INSTANCE=1) says
 /// so: a host that Proton leaves stuck in `cef_shutdown` keeps the identity's
 /// lock, and every later launch would hand itself to it. Even then only the
 /// shipped application takes part; a development build must start beside the
-/// binary it replaced. The identity comes back through `data_dir`, whose last
-/// segment it is.
+/// binary it replaced.
 fn single_instance_wanted(
   matches : @argparse.Matches,
-  app : @proton.App,
+  development~ : Bool,
 ) -> Bool {
-  guard matches.flags.get("single-instance") is Some(true) else { return false }
-  let identity = app.data_dir() catch {
-    error => {
-      // Without an identity there is nothing to lock on, and guessing one
-      // could silence a launch that belongs to the installed application.
-      @xlog.warn() <?
-        {
-          "event": "desktop_instance_identity_unknown",
-          "message": "could not resolve this application's identity; starting beside any running host",
-          "error": @debug.render(Repr(error)),
-        }
-      return false
-    }
-  }
-  // A path separator cannot appear inside an identity, so a data directory
-  // ending in the suffix is one whose identity does.
-  !identity.has_suffix(DevelopmentSuffix)
+  matches.flags.get("single-instance") is Some(true) && !development
 }
 
 ///|

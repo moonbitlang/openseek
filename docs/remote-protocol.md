@@ -145,7 +145,11 @@ not secrets — the barrier is ownership:
   base64url of `sha256(verifier)`, RFC 7636) at
   `POST /v1/auth/desktop/exchange` for `{device_token, device, user}` —
   the exchange **is** device registration. The host persists the token
-  (`auth.json` in its runtime dir, 0600). Development overrides:
+  (`auth.json` in its runtime dir, 0600); a development build (`.dev`
+  identity) persists nothing, since it shares that runtime dir with the
+  shipped application and one token is one relay device, so every launch
+  starts signed out and Connect registers a device of its own. Development
+  overrides:
   `OPENSEEK_DEVICE_TOKEN` + `OPENSEEK_RELAY_URL` pin the connector config
   directly (bypassing sign-in), and `OPENSEEK_SERVER_URL` points the
   sign-in flow at an ad-hoc server regardless of the settings' selection.
