@@ -623,7 +623,8 @@ fn workbench_update(
     ToggleUiLanguage => {
       let ui_language : @localization.Language = match model.ui_language {
         English => SimplifiedChinese
-        SimplifiedChinese => English
+        SimplifiedChinese => Japanese
+        Japanese => English
       }
       (
         @cmd.custom_cmd(_ => workbench_localization.set_language(ui_language)),
@@ -1267,7 +1268,8 @@ fn view_sidebar(
             attrs=@html.Attrs::build().data_set("action", "toggle-ui-language"),
             match model.ui_language {
               English => "中"
-              SimplifiedChinese => "EN"
+              SimplifiedChinese => "日"
+              Japanese => "EN"
             },
           ),
           @html.button(

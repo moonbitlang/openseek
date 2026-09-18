@@ -205,21 +205,23 @@ fn summary_line(
   let completed = completed_count(steps)
   let total = steps.length()
   if active_step(steps) is Some(step) {
-    if locale is SimplifiedChinese {
-      "计划 \{completed}/\{total} · \{step.title}"
-    } else {
-      "plan \{completed}/\{total} · \{step.title}"
+    match locale {
+      SimplifiedChinese => "计划 \{completed}/\{total} · \{step.title}"
+      Japanese => "計画 \{completed}/\{total} · \{step.title}"
+      English => "plan \{completed}/\{total} · \{step.title}"
     }
   } else if completed == total {
-    if locale is SimplifiedChinese {
-      "计划 \{completed}/\{total} · 全部完成"
-    } else {
-      "plan \{completed}/\{total} · all steps done"
+    match locale {
+      SimplifiedChinese => "计划 \{completed}/\{total} · 全部完成"
+      Japanese => "計画 \{completed}/\{total} · すべて完了"
+      English => "plan \{completed}/\{total} · all steps done"
     }
-  } else if locale is SimplifiedChinese {
-    "计划 \{completed}/\{total}"
   } else {
-    "plan \{completed}/\{total}"
+    match locale {
+      SimplifiedChinese => "计划 \{completed}/\{total}"
+      Japanese => "計画 \{completed}/\{total}"
+      English => "plan \{completed}/\{total}"
+    }
   }
 }
 

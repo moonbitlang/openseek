@@ -11,6 +11,36 @@ async function openReview(page, app) {
 
 const contextButtons = page => page.locator('.review-hunk-context-button:visible');
 
+test('selected changes retain their preview during live language switching', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await openReview(page, app);
+  await contextButtons(page).first().click();
+  const chip = page.locator('.composer-changes .changes-chip .mention-jump');
+  await chip.click();
+  const preview = await page.locator('.composer-changes .changes-preview').allTextContents();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-CN'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(chip).toContainText('更改 · 1 个文件');
+  const popup = page.getByRole('dialog', { name: '所选更改' });
+  await expect(popup).toBeVisible();
+  await expect(popup.getByRole('button', { name: '在审阅中打开', exact: true })).toBeVisible();
+  await expect(popup).toContainText('仅包含所选更改。');
+  expect(await popup.locator('.changes-preview').allTextContents()).toEqual(preview);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['ja-JP'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(chip).toContainText('変更 · 1 ファイル');
+  const japanesePopup = page.getByRole('dialog', { name: '選択した変更', exact: true });
+  await expect(japanesePopup).toBeVisible();
+  await expect(japanesePopup.getByRole('button', { name: 'レビューで開く', exact: true })).toBeVisible();
+  await expect(japanesePopup).toContainText('選択した変更のみが含まれます。');
+  expect(await japanesePopup.locator('.changes-preview').allTextContents()).toEqual(preview);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('review hunk context stays independent and sends only selected snapshots', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   const old = ['fn first() -> Int {', '  1', '}', ...Array(24).fill(''), 'fn second() -> Int {', '  2', '}', ''].join('\n');
@@ -150,6 +180,7 @@ test('review context survives regrouping and a partial group changes only on exp
   for (const button of await contextButtons(page).all()) await expect(button).toHaveText('In context');
   await contextButtons(page).last().click();
   await page.getByRole('button', { name: 'Line diff', exact: true }).click();
+  await expect(contextButtons(page)).toHaveCount(1);
   await expect(contextButtons(page)).toHaveText('Partly in context');
   await contextButtons(page).click();
   await page.getByRole('menuitem', { name: 'Remove included changes' }).click();

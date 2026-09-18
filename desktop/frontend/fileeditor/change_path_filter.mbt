@@ -139,10 +139,10 @@ fn extension_label(
   match extension {
     Some(value) => value
     None =>
-      if locale is SimplifiedChinese {
-        "无扩展名"
-      } else {
-        "No extension"
+      match locale {
+        SimplifiedChinese => "无扩展名"
+        Japanese => "拡張子なし"
+        English => "No extension"
       }
   }
 }

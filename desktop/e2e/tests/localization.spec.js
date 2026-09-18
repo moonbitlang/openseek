@@ -1,6 +1,61 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+test('Japanese selection covers pages and persists at a narrow viewport', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#language-select').click();
+  await page.getByRole('option', { name: '日本語', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+  await expect(page.getByRole('heading', { name: '設定', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'チャット', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'プロジェクト', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'API キーを保存', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('japanese-settings.png') });
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('ja');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.getByRole('button', { name: 'スキル', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'スキル', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'スケジュールタスク', exact: true }).click();
+  await page.getByRole('button', { name: '新しいスケジュール', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'スケジュールを保存', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('japanese-schedule-narrow.png') });
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Japanese system language preserves IME composition and live editor state', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openQuickOpen();
+  const input = page.locator('#quick-open-input');
+  await input.fill('main');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['fr', 'ja-JP', 'en'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(page.getByRole('dialog', { name: 'ワークスペースのファイルを検索' })).toBeVisible();
+  await expect(input).toHaveValue('main');
+  await expect(input).toBeFocused();
+  await input.dispatchEvent('compositionstart', { data: '日本語' });
+  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true });
+  await expect(input).toBeVisible();
+  await input.dispatchEvent('compositionend', { data: '日本語' });
+  await input.fill('存在しないファイル');
+  await expect(page.getByRole('status').filter({ hasText: 'ファイルが見つかりません' })).toBeVisible();
+  await input.fill('main');
+  await expect(page.getByRole('option', { name: /main\.mbt/ })).toHaveAttribute('aria-selected', 'true');
+  await input.press('Enter');
+  await expect(page.getByLabel('読み取り専用コードビューアー', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '送信', exact: true })).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('Chinese covers feature pages, composer and dock after live switching', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

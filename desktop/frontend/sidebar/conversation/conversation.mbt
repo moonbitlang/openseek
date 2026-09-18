@@ -432,10 +432,10 @@ pub fn component(
         @html.span(
           class="worktree-mark",
           attrs=@html.Attrs::build().aria_label(
-            if locale is SimplifiedChinese {
-              "在工作树 \{name} 中运行"
-            } else {
-              "Runs in worktree \{name}"
+            match locale {
+              SimplifiedChinese => "在工作树 \{name} 中运行"
+              Japanese => "ワークツリー \{name} で実行"
+              English => "Runs in worktree \{name}"
             },
           ),
           @icons.icon(@icons.icon_worktree),

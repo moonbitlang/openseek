@@ -19,19 +19,24 @@ fn tool_display_label(
   name : String,
   label : String,
 ) -> String {
-  if locale is SimplifiedChinese && name == "goal" {
+  if name == "goal" {
     for
-      (en, zh) in [
-        ("Goal set", "已设定目标"),
-        ("Goal cleared", "已清除目标"),
-        ("Goal blocked", "目标受阻"),
-        ("Goal resumed", "已恢复目标"),
+      (en, zh, ja) in [
+        ("Goal set", "已设定目标", "目標を設定しました"),
+        ("Goal cleared", "已清除目标", "目標をクリアしました"),
+        ("Goal blocked", "目标受阻", "目標がブロックされました"),
+        ("Goal resumed", "已恢复目标", "目標を再開しました"),
       ] {
+      let (localized, separator) = match locale {
+        English => (en, ": ")
+        SimplifiedChinese => (zh, "：")
+        Japanese => (ja, "：")
+      }
       if label == en {
-        return zh
+        return localized
       }
       if label.strip_prefix(en + ": ") is Some(rest) {
-        return zh + "：" + rest.to_owned()
+        return localized + separator + rest.to_owned()
       }
     }
   }

@@ -31,10 +31,10 @@ fn Model::share(
     emit,
     @commands.session_share,
     source,
-    failure=if locale is SimplifiedChinese {
-      "分享失败"
-    } else {
-      "Could not share"
+    failure=match locale {
+      SimplifiedChinese => "分享失败"
+      Japanese => "共有に失敗しました"
+      English => "Could not share"
     },
     result => {
       Published(
@@ -60,10 +60,10 @@ fn Model::download(
     emit,
     @commands.session_export,
     source,
-    failure=if locale is SimplifiedChinese {
-      "下载失败"
-    } else {
-      "Could not download"
+    failure=match locale {
+      SimplifiedChinese => "下载失败"
+      Japanese => "ダウンロードに失敗しました"
+      English => "Could not download"
     },
     result => Downloaded(generation~, result),
   )
@@ -82,10 +82,10 @@ fn Model::sign_in(
     emit,
     @commands.auth_connect,
     @protocol.NoPayload,
-    failure=if locale is SimplifiedChinese {
-      "登录失败"
-    } else {
-      "Could not sign in"
+    failure=match locale {
+      SimplifiedChinese => "登录失败"
+      Japanese => "ログインに失敗しました"
+      English => "Could not sign in"
     },
     result => SignedIn(generation~, result.map(_ => ())),
   )

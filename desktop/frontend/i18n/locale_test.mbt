@@ -1,6 +1,12 @@
 ///|
 test "language preference round trips and invalid values stay absent" {
-  for preference in [@i18n.System, @i18n.English, @i18n.SimplifiedChinese] {
+  for
+    preference in [
+      @i18n.System,
+      @i18n.English,
+      @i18n.SimplifiedChinese,
+      @i18n.Japanese,
+    ] {
     assert_eq(@i18n.Preference::parse(preference.wire()), Some(preference))
   }
   assert_eq(@i18n.Preference::parse(""), None)
@@ -18,6 +24,16 @@ test "system follows ordered supported languages and explicit script" {
     assert_eq(system.resolve([tag]), @i18n.Locale::English)
   }
   assert_eq(system.resolve([]), @i18n.Locale::English)
+  for tag in ["ja", "ja-JP", "JA-jp"] {
+    assert_eq(system.resolve([tag]), @i18n.Locale::Japanese)
+  }
+  assert_eq(system.resolve(["fr", "ja-JP", "zh-CN"]), @i18n.Locale::Japanese)
+  assert_eq(system.resolve(["en", "ja"]), @i18n.Locale::English)
+  assert_eq(
+    @i18n.Preference::Japanese.resolve(["zh-CN"]),
+    @i18n.Locale::Japanese,
+  )
+  assert_eq(@i18n.Locale::Japanese.tag(), "ja")
   assert_eq(
     system.resolve(["fr", "zh-CN", "en"]),
     @i18n.Locale::SimplifiedChinese,

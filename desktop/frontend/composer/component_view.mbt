@@ -66,7 +66,7 @@ fn Entry::mention_chips(
     )
   }
   if self.review_changes().length() > 0 {
-    chips.push(self.changes_chip(emit))
+    chips.push(self.changes_chip(locale~, emit))
   }
   chips
 }
@@ -289,9 +289,13 @@ fn Entry::view(
       @html.div(
         class="composer-image-notice error",
         attrs=@html.Attrs::build().role("alert"),
-        if message == "Attach up to 4 images per message." &&
-          locale is SimplifiedChinese {
-          "每条消息最多可附加 4 张图片。"
+        if message == "Attach up to 4 images per message." {
+          match locale {
+            English => message
+            SimplifiedChinese => "每条消息最多可附加 4 张图片。"
+            Japanese =>
+              "1 件のメッセージに添付できる画像は 4 枚までです。"
+          }
         } else {
           message
         },

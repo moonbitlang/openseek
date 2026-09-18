@@ -18,7 +18,7 @@ fn changes_file_key(changes : @mention_context.ReviewChanges) -> String {
 }
 
 ///|
-fn changes_label(changes : Array[@mention_context.ReviewChanges]) -> String {
+fn changes_label(locale : @i18n.Locale, changes : Array[@mention_context.ReviewChanges]) -> String {
   let files : Array[String] = []
   for selection in changes {
     let key = changes_file_key(selection)
@@ -26,11 +26,17 @@ fn changes_label(changes : Array[@mention_context.ReviewChanges]) -> String {
       files.push(key)
     }
   }
+  match locale {
+    SimplifiedChinese => return "更改 · \{files.length()} 个文件"
+    Japanese => return "変更 · \{files.length()} ファイル"
+    English => ()
+  }
   "Changes · \{files.length()} \{if files.length() == 1 { "file" } else { "files" }}"
 }
 
 ///|
 pub fn Control::view(
+  locale? : @i18n.Locale = English,
   self : Control,
   changes : Array[@mention_context.ReviewChanges],
 ) -> @html.Html {
@@ -39,7 +45,7 @@ pub fn Control::view(
       @html.button(
         class="mention-jump",
         type_="button",
-        title="Review selected changes",
+        title=ReviewSelected.text(locale),
         attrs=@html.Attrs::build()
           .aria_expanded(if self.open { "true" } else { "false" })
           .aria_haspopup("dialog")
@@ -47,7 +53,7 @@ pub fn Control::view(
         on_click=self.toggle,
         [
           @icons.icon(@icons.icon_diff_multiple),
-          @html.span(class="mention-label", changes_label(changes)),
+          @html.span(class="mention-label", changes_label(locale, changes)),
           @html.span(
             class="changes-chevron",
             @icons.icon(@icons.icon_chevron_down),
@@ -59,7 +65,7 @@ pub fn Control::view(
           @html.button(
             class="mention-remove",
             type_="button",
-            title="Remove selected changes",
+            title=RemoveSelected.text(locale),
             on_click=remove(changes),
             @icons.icon(@icons.icon_close),
           )
@@ -68,7 +74,7 @@ pub fn Control::view(
     ]),
   ]
   if self.open {
-    children.push(self.popup(changes))
+    children.push(self.popup(locale~, changes))
   }
   @html.div(
     id=self.id,
@@ -99,13 +105,13 @@ fn change_line_ranges(lines : Array[@mention_context.ChangeLine]) -> String {
 }
 
 ///|
-fn excerpt_label(excerpt : @mention_context.ChangeExcerpt) -> String {
+fn excerpt_label(locale : @i18n.Locale, excerpt : @mention_context.ChangeExcerpt) -> String {
   let parts : Array[String] = []
   if !excerpt.original.is_empty() {
-    parts.push("Old " + change_line_ranges(excerpt.original))
+    parts.push(OldLines.text(locale) + change_line_ranges(excerpt.original))
   }
   if !excerpt.modified.is_empty() {
-    parts.push("New " + change_line_ranges(excerpt.modified))
+    parts.push(NewLines.text(locale) + change_line_ranges(excerpt.modified))
   }
   parts.join(" → ")
 }
@@ -150,6 +156,7 @@ fn excerpt_preview(
 
 ///|
 fn Control::popup(
+  locale? : @i18n.Locale = English,
   self : Control,
   changes : Array[@mention_context.ReviewChanges],
 ) -> @html.Html {
@@ -180,21 +187,21 @@ fn Control::popup(
           cards.push(
             @html.div(class="changes-excerpt", [
               @html.div(class="changes-excerpt-header", [
-                @html.span(class="changes-range", excerpt_label(excerpt)),
+                @html.span(class="changes-range", excerpt_label(locale, excerpt)),
                 @html.button(
                   class="changes-open",
                   type_="button",
-                  title="Open in review",
-                  attrs=@html.Attrs::build().aria_label("Open in review"),
+                  title=OpenReview.text(locale),
+                  attrs=@html.Attrs::build().aria_label(OpenReview.text(locale)),
                   on_click=(self.open_review)(single),
-                  "↗ Open in review",
+                  OpenReviewLink.text(locale),
                 ),
                 match self.remove {
                   Some(remove) =>
                     @html.button(
                       class="changes-remove",
                       type_="button",
-                      title="Remove change",
+                      title=RemoveChange.text(locale),
                       on_click=remove([single]),
                       @icons.icon(@icons.icon_close),
                     )
@@ -255,7 +262,7 @@ fn Control::popup(
       let attrs = @html.Attrs::build()
         .id(self.id + "-popup")
         .role("dialog")
-        .aria_label("Selected changes")
+        .aria_label(SelectedChanges.text(locale))
       if self.remove is Some(_) {
         attrs
       } else {
@@ -266,12 +273,12 @@ fn Control::popup(
       @html.div(class="changes-popup-header", [
         @html.div(class="changes-popup-heading", [
           @icons.icon(@icons.icon_diff_multiple),
-          @html.strong(changes_label(changes)),
+          @html.strong(changes_label(locale, changes)),
         ]),
         @html.button(
           class="changes-close",
           type_="button",
-          title="Close selected changes",
+          title=CloseSelected.text(locale),
           on_click=self.dismiss,
           @icons.icon(@icons.icon_close),
         ),
@@ -279,20 +286,20 @@ fn Control::popup(
       @html.div(
         class="changes-popup-subtitle",
         if self.remove is Some(_) {
-          "Included in your next message"
+          NextMessage.text(locale)
         } else {
-          "Included in this message"
+          ThisMessage.text(locale)
         },
       ),
       @html.div(class="changes-popup-files", files),
       @html.div(class="changes-popup-footer", [
-        @html.span("Only selected changes are included."),
+        @html.span(SelectedOnly.text(locale)),
         match self.remove {
           Some(remove) =>
             @html.button(
               type_="button",
               on_click=remove(changes),
-              "Remove group",
+              RemoveGroup.text(locale),
             )
           None => @html.nothing
         },

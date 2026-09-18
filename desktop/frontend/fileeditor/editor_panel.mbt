@@ -1123,10 +1123,12 @@ fn show_mbti_diagram(resource : @common.Uri, source : String) -> Unit {
       let message =
         #|<div class="mbti-diagram-error" role="status">This interface could not be rendered as a UML diagram. View the source for details.</div>
       host.set_inner_html(
-        if viewer_locale() is SimplifiedChinese {
-          "<div class=\"mbti-diagram-error\" role=\"status\">无法将此接口渲染为 UML 图，请查看源码了解详情。</div>"
-        } else {
-          message
+        match viewer_locale() {
+          SimplifiedChinese =>
+            "<div class=\"mbti-diagram-error\" role=\"status\">无法将此接口渲染为 UML 图，请查看源码了解详情。</div>"
+          Japanese =>
+            "<div class=\"mbti-diagram-error\" role=\"status\">このインターフェースを UML 図として表示できません。詳細はソースを確認してください。</div>"
+          English => message
         },
       )
     }
@@ -1183,10 +1185,10 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
       PackageGraphLoading(_) =>
         show_package_diagram_status(
           host,
-          if viewer_locale() is SimplifiedChinese {
-            "正在加载依赖图…"
-          } else {
-            "Loading dependency graph…"
+          match viewer_locale() {
+            SimplifiedChinese => "正在加载依赖图…"
+            Japanese => "依存関係グラフを読み込み中…"
+            English => "Loading dependency graph…"
           },
         )
       PackageGraphReady(_, source) =>
@@ -1202,20 +1204,24 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
           None =>
             show_package_diagram_status(
               host,
-              if viewer_locale() is SimplifiedChinese {
-                "无法渲染此依赖图，请查看源码了解详情。"
-              } else {
-                "This dependency graph could not be rendered. View the source for details."
+              match viewer_locale() {
+                SimplifiedChinese =>
+                  "无法渲染此依赖图，请查看源码了解详情。"
+                Japanese =>
+                  "この依存関係グラフを表示できません。詳細はソースを確認してください。"
+                English =>
+                  "This dependency graph could not be rendered. View the source for details."
               },
             )
         }
       PackageGraphFailed(_, message) =>
         show_package_diagram_status(
           host,
-          if viewer_locale() is SimplifiedChinese {
-            "无法加载依赖图：\{message}"
-          } else {
-            "Could not load dependency graph: \{message}"
+          match viewer_locale() {
+            SimplifiedChinese => "无法加载依赖图：\{message}"
+            Japanese =>
+              "依存関係グラフを読み込めません：\{message}"
+            English => "Could not load dependency graph: \{message}"
           },
         )
     }

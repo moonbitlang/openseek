@@ -203,12 +203,16 @@ fn MinimalToolStatus::view(
     children.push(ToolStatus::Pending.view(locale~))
   }
   if self.failed > 0 {
-    let label = if locale is SimplifiedChinese {
-      "\{self.failed} 次工具调用失败"
-    } else if self.failed == 1 {
-      "1 tool call failed"
-    } else {
-      "\{self.failed} tool calls failed"
+    let label = match locale {
+      SimplifiedChinese => "\{self.failed} 次工具调用失败"
+      Japanese =>
+        "\{self.failed} 件のツール呼び出しが失敗しました"
+      English =>
+        if self.failed == 1 {
+          "1 tool call failed"
+        } else {
+          "\{self.failed} tool calls failed"
+        }
     }
     children.push(@html.span(class="minimal-failure-count", title=label, label))
     children.push(ToolStatus::Failed.view(locale~))

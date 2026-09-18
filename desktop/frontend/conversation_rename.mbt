@@ -90,10 +90,10 @@ fn rename_conversation(
           dispatch(
             ConversationRenameFailed(
               id=rename.id,
-              message=if locale is SimplifiedChinese {
-                "对话连接不可用"
-              } else {
-                "Conversation channel is unavailable"
+              message=match locale {
+                SimplifiedChinese => "对话连接不可用"
+                Japanese => "チャットの接続が利用できません"
+                English => "Conversation channel is unavailable"
               },
             ),
           ),
@@ -108,10 +108,11 @@ fn rename_conversation(
               dispatch(
                 ConversationRenameFailed(
                   id=rename.id,
-                  message=if locale is SimplifiedChinese {
-                    "对话工作区不可用"
-                  } else {
-                    "Conversation workspace is unavailable"
+                  message=match locale {
+                    SimplifiedChinese => "对话工作区不可用"
+                    Japanese =>
+                      "チャットのワークスペースが利用できません"
+                    English => "Conversation workspace is unavailable"
                   },
                 ),
               ),
@@ -160,10 +161,11 @@ fn rename_conversation(
             dispatch(
               ConversationRenameFailed(
                 id=rename.id,
-                message=if locale is SimplifiedChinese {
-                  "无法重命名此对话"
-                } else {
-                  "This conversation cannot be renamed"
+                message=match locale {
+                  SimplifiedChinese => "无法重命名此对话"
+                  Japanese =>
+                    "このチャットの名前を変更できません"
+                  English => "This conversation cannot be renamed"
                 },
               ),
             ),

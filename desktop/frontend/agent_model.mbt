@@ -215,10 +215,10 @@ fn Model::openseek_model_chip(
     selected: ModelChoice::OpenSeekModel(conv.engine_model).wire(),
     disabled: false,
     open: self.select_menu is Some(OpenSeekModelMenu),
-    title: (if self.locale is SimplifiedChinese {
-      "模型："
-    } else {
-      "Model: "
+    title: (match self.locale {
+      SimplifiedChinese => "模型："
+      Japanese => "モデル："
+      English => "Model: "
     }) +
     conv.engine_model.label(),
   }
@@ -257,10 +257,10 @@ fn Model::openseek_reasoning_chip(
     selected: reasoning.wire(),
     disabled: false,
     open: self.select_menu is Some(OpenSeekReasoningMenu),
-    title: (if self.locale is SimplifiedChinese {
-      "推理强度："
-    } else {
-      "Reasoning effort: "
+    title: (match self.locale {
+      SimplifiedChinese => "推理强度："
+      Japanese => "推論の強度："
+      English => "Reasoning effort: "
     }) +
     reasoning.label_for_model(locale=self.locale, conv.engine_model),
   })
@@ -286,10 +286,10 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
     selected,
     disabled: false,
     open: self.select_menu is Some(CodexModelMenu),
-    title: if self.locale is SimplifiedChinese {
-      "Codex 模型"
-    } else {
-      "Codex model"
+    title: match self.locale {
+      SimplifiedChinese => "Codex 模型"
+      Japanese => "Codex モデル"
+      English => "Codex model"
     },
   }
 }

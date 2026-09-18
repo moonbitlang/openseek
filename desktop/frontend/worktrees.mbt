@@ -139,10 +139,13 @@ fn start_in_new_worktree(
                   WorktreeSetupFailed(
                     session~,
                     submission_id~,
-                    message=if locale is SimplifiedChinese {
-                      "桌面主机未响应，无法创建工作树。请重试，或将此对话切换为本地模式。"
-                    } else {
-                      "Couldn’t create the worktree because the desktop host did not respond. Retry, or switch this chat to Local."
+                    message=match locale {
+                      SimplifiedChinese =>
+                        "桌面主机未响应，无法创建工作树。请重试，或将此对话切换为本地模式。"
+                      Japanese =>
+                        "デスクトップホストが応答しないため、ワークツリーを作成できません。再試行するか、このチャットをローカルに切り替えてください。"
+                      English =>
+                        "Couldn’t create the worktree because the desktop host did not respond. Retry, or switch this chat to Local."
                     },
                   ),
                 ),
@@ -158,10 +161,11 @@ fn start_in_new_worktree(
                   WorktreeSetupFailed(
                     session~,
                     submission_id~,
-                    message=(if locale is SimplifiedChinese {
-                        "无法创建工作树。"
-                      } else {
-                        "Couldn’t create the worktree. "
+                    message=(match locale {
+                        SimplifiedChinese => "无法创建工作树。"
+                        Japanese =>
+                          "ワークツリーを作成できません。"
+                        English => "Couldn’t create the worktree. "
                       }) +
                       message,
                   ),
@@ -178,10 +182,13 @@ fn start_in_new_worktree(
                 WorktreeSetupFailed(
                   session~,
                   submission_id~,
-                  message=if locale is SimplifiedChinese {
-                    "主机返回了不完整的响应，无法创建工作树。请重试，或将此对话切换为本地模式。"
-                  } else {
-                    "Couldn’t create the worktree because the host returned an incomplete reply. Retry, or switch this chat to Local."
+                  message=match locale {
+                    SimplifiedChinese =>
+                      "主机返回了不完整的响应，无法创建工作树。请重试，或将此对话切换为本地模式。"
+                    Japanese =>
+                      "ホストからの応答が不完全なため、ワークツリーを作成できません。再試行するか、このチャットをローカルに切り替えてください。"
+                    English =>
+                      "Couldn’t create the worktree because the host returned an incomplete reply. Retry, or switch this chat to Local."
                   },
                 ),
               ),
@@ -300,10 +307,13 @@ fn set_goal_in_new_worktree(
                     session~,
                     command~,
                     draft=text,
-                    message=if locale is SimplifiedChinese {
-                      "桌面主机未响应，无法确认工作树是否已创建。此对话可能已绑定到新工作树；目标尚未发送。"
-                    } else {
-                      "Couldn’t confirm worktree creation because the desktop host did not respond. This chat may already be bound to the new worktree; the goal was not sent."
+                    message=match locale {
+                      SimplifiedChinese =>
+                        "桌面主机未响应，无法确认工作树是否已创建。此对话可能已绑定到新工作树；目标尚未发送。"
+                      Japanese =>
+                        "デスクトップホストが応答しないため、ワークツリーの作成を確認できません。このチャットはすでに新しいワークツリーに関連付けられている可能性があります。目標は送信されていません。"
+                      English =>
+                        "Couldn’t confirm worktree creation because the desktop host did not respond. This chat may already be bound to the new worktree; the goal was not sent."
                     },
                   ),
                 ),
@@ -320,10 +330,11 @@ fn set_goal_in_new_worktree(
                     session~,
                     command~,
                     draft=text,
-                    message=(if locale is SimplifiedChinese {
-                        "无法创建工作树。"
-                      } else {
-                        "Couldn’t create the worktree. "
+                    message=(match locale {
+                        SimplifiedChinese => "无法创建工作树。"
+                        Japanese =>
+                          "ワークツリーを作成できません。"
+                        English => "Couldn’t create the worktree. "
                       }) +
                       message,
                   ),
@@ -339,10 +350,13 @@ fn set_goal_in_new_worktree(
                   session~,
                   command~,
                   draft=text,
-                  message=if locale is SimplifiedChinese {
-                    "主机返回了不完整的响应，无法创建工作树。目标尚未发送。"
-                  } else {
-                    "Couldn’t create the worktree because the host returned an incomplete reply. The goal was not sent."
+                  message=match locale {
+                    SimplifiedChinese =>
+                      "主机返回了不完整的响应，无法创建工作树。目标尚未发送。"
+                    Japanese =>
+                      "ホストからの応答が不完全なため、ワークツリーを作成できません。目標は送信されていません。"
+                    English =>
+                      "Couldn’t create the worktree because the host returned an incomplete reply. The goal was not sent."
                   },
                 ),
               ),
@@ -398,10 +412,13 @@ fn repair_worktree_cmd(
           scheduler.add(
             dispatch(
               WorktreeFailed(
-                if locale is SimplifiedChinese {
-                  "桌面主机未响应，无法修复工作树。请重试，或归档此对话。"
-                } else {
-                  "Couldn’t repair the worktree because the desktop host did not respond. Retry, or archive this chat."
+                match locale {
+                  SimplifiedChinese =>
+                    "桌面主机未响应，无法修复工作树。请重试，或归档此对话。"
+                  Japanese =>
+                    "デスクトップホストが応答しないため、ワークツリーを修復できません。再試行するか、このチャットをアーカイブしてください。"
+                  English =>
+                    "Couldn’t repair the worktree because the desktop host did not respond. Retry, or archive this chat."
                 },
               ),
             ),
@@ -413,10 +430,10 @@ fn repair_worktree_cmd(
         scheduler.add(
           dispatch(
             WorktreeFailed(
-              (if locale is SimplifiedChinese {
-                "无法修复工作树。"
-              } else {
-                "Couldn’t repair the worktree. "
+              (match locale {
+                SimplifiedChinese => "无法修复工作树。"
+                Japanese => "ワークツリーを修復できません。"
+                English => "Couldn’t repair the worktree. "
               }) +
               message,
             ),

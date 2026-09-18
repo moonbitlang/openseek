@@ -7,8 +7,16 @@ fn code_copy_button(
     locale~,
     source,
     class="button secondary chat-code-copy",
-    title=if locale is SimplifiedChinese { "复制代码" } else { "Copy code" },
-    label=if locale is SimplifiedChinese { "复制代码" } else { "Copy code" },
+    title=match locale {
+      SimplifiedChinese => "复制代码"
+      Japanese => "コードをコピー"
+      English => "Copy code"
+    },
+    label=match locale {
+      SimplifiedChinese => "复制代码"
+      Japanese => "コードをコピー"
+      English => "Copy code"
+    },
   )
 }
 
@@ -41,10 +49,10 @@ pub fn copy_button(
               true,
               title,
               label,
-              if locale is SimplifiedChinese {
-                "已复制"
-              } else {
-                "Copied"
+              match locale {
+                SimplifiedChinese => "已复制"
+                Japanese => "コピーしました"
+                English => "Copied"
               },
             )
           }),
@@ -55,10 +63,11 @@ pub fn copy_button(
                 false,
                 title,
                 label,
-                if locale is SimplifiedChinese {
-                  "复制失败，请重试。"
-                } else {
-                  "Copy failed. Try again."
+                match locale {
+                  SimplifiedChinese => "复制失败，请重试。"
+                  Japanese =>
+                    "コピーに失敗しました。再試行してください。"
+                  English => "Copy failed. Try again."
                 },
               )
             })

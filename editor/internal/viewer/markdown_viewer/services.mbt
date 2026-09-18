@@ -20,7 +20,7 @@ struct MarkdownViewerServices {
 /// Builds a Markdown-only service bundle. Supplied handles remain caller-owned;
 /// omitted marker services are created and released by this bundle.
 pub fn MarkdownViewerServices::MarkdownViewerServices(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   languages? : @languages.LanguageHandle,
   markers? : @markers.MarkerDecorationsSource,
   location_opener? : @navigation_api.LocationOpenerHandle,

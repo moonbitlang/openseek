@@ -40,7 +40,7 @@ struct ReferencesPeekWidget {
 /// Constructs a detached, mode-labelled shell in its loading state.
 #alias(new, deprecated)
 pub fn ReferencesPeekWidget::ReferencesPeekWidget(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
   callbacks : ReferencesPeekWidgetCallbacks,
   resource_path_label? : (@base_common.Uri) -> String? = _ => None,
@@ -76,10 +76,10 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
   close.set_attribute("type", "button")
   close.set_attribute(
     "aria-label",
-    (if localization.language() is SimplifiedChinese {
-      "关闭"
-    } else {
-      "Close "
+    (match localization.language() {
+      SimplifiedChinese => "关闭"
+      Japanese => "閉じる"
+      English => "Close "
     }) +
     references_peek_dialog_label(localization~, mode),
   )
@@ -419,17 +419,17 @@ fn ReferencesPeekWidget::set_result_count(
       @rdom.document()
       .create_text_node(
         if count == 1 {
-          if self.localization.language() is SimplifiedChinese {
-            "1 个结果"
-          } else {
-            "1 result"
+          match self.localization.language() {
+            SimplifiedChinese => "1 个结果"
+            Japanese => "1 件の結果"
+            English => "1 result"
           }
         } else {
           count.to_string() +
-          (if self.localization.language() is SimplifiedChinese {
-            " 个结果"
-          } else {
-            " results"
+          (match self.localization.language() {
+            SimplifiedChinese => " 个结果"
+            Japanese => " 件の結果"
+            English => " results"
           })
         },
       )
@@ -440,7 +440,7 @@ fn ReferencesPeekWidget::set_result_count(
 
 ///|
 fn references_peek_title(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
@@ -451,7 +451,7 @@ fn references_peek_title(
 
 ///|
 fn references_peek_dialog_label(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
@@ -462,7 +462,7 @@ fn references_peek_dialog_label(
 
 ///|
 fn references_peek_preview_label(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
@@ -473,7 +473,7 @@ fn references_peek_preview_label(
 
 ///|
 fn references_peek_loading_message(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
@@ -484,7 +484,7 @@ fn references_peek_loading_message(
 
 ///|
 fn references_peek_empty_message(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {

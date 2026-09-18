@@ -73,7 +73,7 @@ struct AgentFeedbackEditorWidget {
 /// into a reply composer that had it before a rebuild
 /// (`IReplyDraftState.focusedCommentId`).
 pub fn AgentFeedbackEditorWidget::AgentFeedbackEditorWidget(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   host : AgentFeedbackEditorWidgetHost,
   id : String,
   comments : Array[@agent_feedback.SessionEditorComment],
@@ -184,10 +184,10 @@ fn AgentFeedbackEditorWidget::update_title(
     self.title.set_inner_html(@base_common.escape_html(self.comments[0].text))
   } else {
     self.title.set_inner_html(
-      if self.localization.language() is SimplifiedChinese {
-        "\{self.comments.length()} 条评论"
-      } else {
-        "\{self.comments.length().to_string()} comments"
+      match self.localization.language() {
+        SimplifiedChinese => "\{self.comments.length()} 条评论"
+        Japanese => "\{self.comments.length()} 件のコメント"
+        English => "\{self.comments.length().to_string()} comments"
       },
     )
   }
@@ -280,18 +280,20 @@ fn AgentFeedbackEditorWidget::build_item(
   let range = comment.range
   if range.start_line_number == range.end_line_number {
     line_info.set_inner_html(
-      if self.localization.language() is SimplifiedChinese {
-        "第 \{range.start_line_number} 行"
-      } else {
-        "Line \{range.start_line_number.to_string()}"
+      match self.localization.language() {
+        SimplifiedChinese => "第 \{range.start_line_number} 行"
+        Japanese => "\{range.start_line_number} 行"
+        English => "Line \{range.start_line_number.to_string()}"
       },
     )
   } else {
     line_info.set_inner_html(
-      if self.localization.language() is SimplifiedChinese {
-        "第 \{range.start_line_number}–\{range.end_line_number} 行"
-      } else {
-        "Lines \{range.start_line_number.to_string()}-\{range.end_line_number.to_string()}"
+      match self.localization.language() {
+        SimplifiedChinese =>
+          "第 \{range.start_line_number}–\{range.end_line_number} 行"
+        Japanese => "\{range.start_line_number}〜\{range.end_line_number} 行"
+        English =>
+          "Lines \{range.start_line_number.to_string()}-\{range.end_line_number.to_string()}"
       },
     )
   }

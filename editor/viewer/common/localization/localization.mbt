@@ -3,6 +3,7 @@
 pub(all) enum Language {
   English
   SimplifiedChinese
+  Japanese
 } derive(Eq, Debug)
 
 ///|
@@ -23,7 +24,7 @@ struct Localization {
 pub fn Localization::Localization(
   language? : Language = English,
 ) -> Localization {
-  { language, changes: @common.Emitter(), }
+  { language, changes: Emitter(), }
 }
 
 ///|

@@ -18,23 +18,36 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
       "Open this subagent's own transcript (\{p0})"
     (SimplifiedChinese, DOpenSubagent(p0)) =>
       "打开此子智能体的对话记录（\{p0}）"
+    (Japanese, DOpenSubagent(p0)) =>
+      "このサブエージェントのチャット履歴を開く（\{p0}）"
     (English, DProgramCalls(p0)) => "Program tool calls (\{p0})"
     (SimplifiedChinese, DProgramCalls(p0)) => "程序工具调用（\{p0}）"
+    (Japanese, DProgramCalls(p0)) =>
+      "プログラムツール呼び出し（\{p0}）"
     (English, DToolOutput(p0)) => "Tool output · \{p0}"
     (SimplifiedChinese, DToolOutput(p0)) => "工具输出 · \{p0}"
+    (Japanese, DToolOutput(p0)) => "ツール出力 · \{p0}"
     (English, DToolError(p0)) => "Tool error · \{p0}"
     (SimplifiedChinese, DToolError(p0)) => "工具错误 · \{p0}"
+    (Japanese, DToolError(p0)) => "ツールエラー · \{p0}"
     (English, DJumpLine(p0, p1)) => "Jump to \{p0}:\{p1}"
     (SimplifiedChinese, DJumpLine(p0, p1)) => "跳转至 \{p0}:\{p1}"
+    (Japanese, DJumpLine(p0, p1)) => "\{p0}:\{p1} へ移動"
     (English, DJumpFile(p0)) => "Jump to \{p0}"
     (SimplifiedChinese, DJumpFile(p0)) => "跳转至 \{p0}"
+    (Japanese, DJumpFile(p0)) => "\{p0} へ移動"
     (English, DProgramCallsArray(p0)) => "Program tool calls (\{p0})"
     (SimplifiedChinese, DProgramCallsArray(p0)) =>
       "程序工具调用（\{p0}）"
+    (Japanese, DProgramCallsArray(p0)) =>
+      "プログラムツール呼び出し（\{p0}）"
     (English, DWhatBuild(p0)) => "What should we build in \{p0}?"
     (SimplifiedChinese, DWhatBuild(p0)) => "想在 \{p0} 中构建什么？"
+    (Japanese, DWhatBuild(p0)) => "\{p0} で何を作りましょうか？"
     (English, DChooseProject(p0)) => "Choose project, current project \{p0}"
     (SimplifiedChinese, DChooseProject(p0)) =>
       "选择项目，当前项目为 \{p0}"
+    (Japanese, DChooseProject(p0)) =>
+      "プロジェクトを選択、現在のプロジェクト：\{p0}"
   }
 }

@@ -285,7 +285,7 @@ fn empty_transcript_view(
         @html.span(ui(locale, BuildInPrefix)),
         @html.div(class="empty-title-project", [
           project_menu.render(locale~, project, label, input.projects),
-          @html.span("?"),
+          @html.span(ui(locale, BuildInSuffix)),
         ]),
       ])
     _ =>

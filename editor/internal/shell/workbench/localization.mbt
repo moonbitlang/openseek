@@ -1,2 +1,2 @@
 ///|
-let workbench_localization : @localization.Localization = @localization.Localization()
+let workbench_localization : @localization.Localization = Localization()

@@ -118,8 +118,11 @@ fn OpenSeekReasoning::label(
 ) -> String {
   match (locale, self) {
     (SimplifiedChinese, ReasoningOff) => "关闭"
+    (Japanese, ReasoningOff) => "オフ"
     (SimplifiedChinese, ReasoningHigh) => "高"
+    (Japanese, ReasoningHigh) => "高"
     (SimplifiedChinese, ReasoningMax) => "最高"
+    (Japanese, ReasoningMax) => "最大"
     (English, ReasoningOff) => "Off"
     (English, ReasoningHigh) => "High"
     (English, ReasoningMax) => "Max"
@@ -135,10 +138,10 @@ fn OpenSeekReasoning::label_for_model(
   locale? : @i18n.Locale = English,
 ) -> String {
   if model is (Glm53 | Glm53Flash) && self is ReasoningOff {
-    if locale is SimplifiedChinese {
-      "低"
-    } else {
-      "Low"
+    match locale {
+      SimplifiedChinese => "低"
+      Japanese => "低"
+      English => "Low"
     }
   } else {
     self.label(locale~)
@@ -4321,15 +4324,26 @@ fn RunOutcome::label(
   self : RunOutcome,
   locale? : @i18n.Locale = English,
 ) -> String {
-  if locale is SimplifiedChinese {
-    return match self {
-      Completed => "已完成"
-      ContextYield => "已达上下文上限"
-      Aborted => "已中止"
-      RunFailed => "失败"
-      MaxStepsExhausted => "已达最大步数"
-      Unknown(wire) => if wire.is_blank() { "已结束" } else { wire }
-    }
+  match locale {
+    SimplifiedChinese =>
+      return match self {
+        Completed => "已完成"
+        ContextYield => "已达上下文上限"
+        Aborted => "已中止"
+        RunFailed => "失败"
+        MaxStepsExhausted => "已达最大步数"
+        Unknown(wire) => if wire.is_blank() { "已结束" } else { wire }
+      }
+    Japanese =>
+      return match self {
+        Completed => "完了"
+        ContextYield => "コンテキスト上限に到達"
+        Aborted => "中止済み"
+        RunFailed => "失敗"
+        MaxStepsExhausted => "最大ステップ数に到達"
+        Unknown(wire) => if wire.is_blank() { "終了済み" } else { wire }
+      }
+    English => ()
   }
   match self {
     Completed => "Finished"
@@ -4366,26 +4380,48 @@ priv enum Status {
 
 ///|
 fn Status::label(self : Status, locale? : @i18n.Locale = English) -> String {
-  if locale is SimplifiedChinese {
-    return match self {
-      WaitingBridge => "正在等待连接桥"
-      Ready => "就绪"
-      SetupRequired => "需要设置"
-      ApiKeyRequired => "需要 API 密钥"
-      Starting => "正在启动"
-      Running => "运行中"
-      Cancelling => "正在取消"
-      Step(step) =>
-        if step is Some(step) {
-          "第 \{step} 步"
-        } else {
-          "执行步骤"
-        }
-      Failed => "失败"
-      Errored => "错误"
-      Finished(outcome) => outcome.label(locale~)
-      Unavailable(message) => message
-    }
+  match locale {
+    SimplifiedChinese =>
+      return match self {
+        WaitingBridge => "正在等待连接桥"
+        Ready => "就绪"
+        SetupRequired => "需要设置"
+        ApiKeyRequired => "需要 API 密钥"
+        Starting => "正在启动"
+        Running => "运行中"
+        Cancelling => "正在取消"
+        Step(step) =>
+          if step is Some(step) {
+            "第 \{step} 步"
+          } else {
+            "执行步骤"
+          }
+        Failed => "失败"
+        Errored => "错误"
+        Finished(outcome) => outcome.label(locale~)
+        Unavailable(message) => message
+      }
+    Japanese =>
+      return match self {
+        WaitingBridge => "ブリッジ接続を待機中"
+        Ready => "準備完了"
+        SetupRequired => "設定が必要です"
+        ApiKeyRequired => "API キーが必要です"
+        Starting => "起動中"
+        Running => "実行中"
+        Cancelling => "キャンセル中"
+        Step(step) =>
+          if step is Some(step) {
+            "ステップ \{step}"
+          } else {
+            "実行ステップ"
+          }
+        Failed => "失敗"
+        Errored => "エラー"
+        Finished(outcome) => outcome.label(locale~)
+        Unavailable(message) => message
+      }
+    English => ()
   }
   match self {
     WaitingBridge => "Waiting for bridge"

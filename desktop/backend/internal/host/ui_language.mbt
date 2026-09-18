@@ -18,7 +18,7 @@ pub async fn read_ui_language(
 ///|
 fn validate_ui_language(language : String?) -> Unit raise {
   match language {
-    None | Some("system" | "en" | "zh-Hans") => ()
+    None | Some("system" | "en" | "zh-Hans" | "ja") => ()
     Some(_) => raise HostError("Unknown UI language preference")
   }
 }

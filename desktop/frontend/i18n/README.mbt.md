@@ -25,19 +25,22 @@ Changing locale must be a reactive input change, including for independently
 rendered components. The locale must not change command IDs, protocol fields,
 paths, conversation text or model output.
 
-## Adding another language (for example Japanese)
+English, Simplified Chinese and Japanese are built in. Feature catalogs and
+dynamic formatters use exhaustive locale matches, so a new language exposes
+missing translations at compile time.
 
-1. Add `Japanese` to `Locale` and `Preference`, use the stable tag `ja`, and
-   recognize `ja` / `ja-JP` in ordered system-language resolution. Extend the
+## Adding another language
+
+1. Add the language to `Locale` and `Preference`, use a stable BCP 47 tag, and
+   recognize its variants in ordered system-language resolution. Extend the
    round-trip, fallback and language-order tests.
-2. Add 日本語 to the Settings language picker and a Japanese arm for every
+2. Add its native name to the Settings language picker and an arm for every
    feature-owned message enum in `desktop/frontend/**/messages.mbt` and other
    `*_messages.mbt` catalogs. Exhaustive matches identify missing catalog arms.
    Translate complete sentences, keeping interpolation parameters intact.
-3. Audit dynamic formatting branches that currently test `SimplifiedChinese`.
-   Move those into exhaustive locale matches as the third language is added;
-   a boolean Chinese/English branch would otherwise silently display English.
-4. Add Japanese to the independent editor language/catalog under
+3. Extend dynamic formatting matches, preserving language-specific word order
+   and plural rules. Avoid boolean language tests that silently fall back.
+4. Add the language to the independent editor language/catalog under
    `editor/viewer/common/localization`, then map it in Desktop's
    `fileeditor/localization.mbt`. Share a source through `ViewerServices` to
    update mounted editor controls without rebuilding document models.
@@ -45,10 +48,10 @@ paths, conversation text or model output.
    under `desktop/backend/internal/{host,extension}`. Browser preferences use
    localStorage; native preferences use the runtime directory's
    `ui-language.json`, independent of temporary browser profiles.
-6. Verify live switching, Japanese IME, date formatting, narrow layouts,
+6. Verify live switching, IME input, date formatting, narrow layouts,
    browser reload and native restart. Extend the existing localization browser
    tests; retain original paths, code, conversation titles and provider output.
 
-No feature needs a separate Japanese implementation. Adding a third language
+No feature needs a separate implementation for each language. Adding a language
 requires translations and these boundary mappings; it is not yet a single-file
 translation import.

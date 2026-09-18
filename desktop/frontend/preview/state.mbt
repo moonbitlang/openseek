@@ -112,7 +112,12 @@ pub fn page_label(page : PageState, locale? : @i18n.Locale = English) -> String 
   }
   match page.url {
     Some(url) => host_of(url).unwrap_or(url)
-    None => if locale is SimplifiedChinese { "新标签页" } else { "New Tab" }
+    None =>
+      match locale {
+        SimplifiedChinese => "新标签页"
+        Japanese => "新しいタブ"
+        English => "New Tab"
+      }
   }
 }
 

@@ -288,15 +288,21 @@ fn install_review_hunk_actions(
       button.set_attribute(
         "aria-label",
         if viewed {
-          if viewer_locale() is SimplifiedChinese {
-            "取消第 \{index + 1} 个差异块的已查看标记"
-          } else {
-            "Unmark hunk \{index + 1} viewed"
+          match viewer_locale() {
+            SimplifiedChinese =>
+              "取消第 \{index + 1} 个差异块的已查看标记"
+            Japanese =>
+              "差分ブロック \{index + 1} の確認済みマークを解除"
+            English => "Unmark hunk \{index + 1} viewed"
           }
-        } else if viewer_locale() is SimplifiedChinese {
-          "将第 \{index + 1} 个差异块标为已查看"
         } else {
-          "Mark hunk \{index + 1} viewed"
+          match viewer_locale() {
+            SimplifiedChinese =>
+              "将第 \{index + 1} 个差异块标为已查看"
+            Japanese =>
+              "差分ブロック \{index + 1} を確認済みにする"
+            English => "Mark hunk \{index + 1} viewed"
+          }
         },
       )
       button.set_attribute(

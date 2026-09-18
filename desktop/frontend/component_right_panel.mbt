@@ -13,26 +13,26 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
     reveal_label=match self.context_menu_input() {
       { reveal_files: true, platform: MacOS, .. } =>
         Some(
-          if self.locale is SimplifiedChinese {
-            "在访达中打开"
-          } else {
-            "Open in Finder"
+          match self.locale {
+            SimplifiedChinese => "在访达中打开"
+            Japanese => "Finder で開く"
+            English => "Open in Finder"
           },
         )
       { reveal_files: true, platform: Windows, .. } =>
         Some(
-          if self.locale is SimplifiedChinese {
-            "在文件资源管理器中打开"
-          } else {
-            "Open in File Explorer"
+          match self.locale {
+            SimplifiedChinese => "在文件资源管理器中打开"
+            Japanese => "エクスプローラーで開く"
+            English => "Open in File Explorer"
           },
         )
       { reveal_files: true, platform: Linux, .. } =>
         Some(
-          if self.locale is SimplifiedChinese {
-            "在文件夹中打开"
-          } else {
-            "Open in Folder"
+          match self.locale {
+            SimplifiedChinese => "在文件夹中打开"
+            Japanese => "フォルダーで開く"
+            English => "Open in Folder"
           },
         )
       _ => None

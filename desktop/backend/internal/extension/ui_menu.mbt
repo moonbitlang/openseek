@@ -2,64 +2,152 @@
 /// Native menu labels follow the window's effective UI language. Role items
 /// retain Proton's native key equivalents and responder-chain behavior.
 pub fn localized_menu(language : String) -> @proton.MenuBar {
-  let zh = language == "zh-Hans"
   MenuBar(menus=[
     @proton.Menu::role(Application, label="SeekMoon", items=[
       @proton.MenuItem::role(
         Hide,
-        label=if zh { "隐藏 SeekMoon" } else { "Hide SeekMoon" },
+        label=match language {
+          "zh-Hans" => "隐藏 SeekMoon"
+          "ja" => "SeekMoon を隠す"
+          _ => "Hide SeekMoon"
+        },
       ),
       @proton.MenuItem::role(
         HideOthers,
-        label=if zh { "隐藏其他应用" } else { "Hide Others" },
+        label=match language {
+          "zh-Hans" => "隐藏其他应用"
+          "ja" => "ほかを隠す"
+          _ => "Hide Others"
+        },
       ),
       @proton.MenuItem::role(
         ShowAll,
-        label=if zh { "显示全部" } else { "Show All" },
+        label=match language {
+          "zh-Hans" => "显示全部"
+          "ja" => "すべてを表示"
+          _ => "Show All"
+        },
       ),
       @proton.MenuItem::separator(),
       @proton.MenuItem::role(
         Quit,
-        label=if zh { "退出 SeekMoon" } else { "Quit SeekMoon" },
-      ),
-    ]),
-    @proton.Menu::role(Edit, label=if zh { "编辑" } else { "Edit" }, items=[
-      @proton.MenuItem::role(Undo, label=if zh { "撤销" } else { "Undo" }),
-      @proton.MenuItem::role(Redo, label=if zh { "重做" } else { "Redo" }),
-      @proton.MenuItem::separator(),
-      @proton.MenuItem::role(Cut, label=if zh { "剪切" } else { "Cut" }),
-      @proton.MenuItem::role(Copy, label=if zh { "复制" } else { "Copy" }),
-      @proton.MenuItem::role(Paste, label=if zh { "粘贴" } else { "Paste" }),
-      @proton.MenuItem::role(
-        SelectAll,
-        label=if zh { "全选" } else { "Select All" },
-      ),
-    ]),
-    Menu(if zh { "开发者" } else { "Developer" }, items=[
-      @proton.MenuItem::command(
-        @commands.app_open_devtools.name(),
-        if zh {
-          "打开开发者工具"
-        } else {
-          "Open Developer Tools"
+        label=match language {
+          "zh-Hans" => "退出 SeekMoon"
+          "ja" => "SeekMoon を終了"
+          _ => "Quit SeekMoon"
         },
       ),
     ]),
-    @proton.Menu::role(Window, label=if zh { "窗口" } else { "Window" }, items=[
-      @proton.MenuItem::role(
-        Minimize,
-        label=if zh { "最小化" } else { "Minimize" },
-      ),
-      @proton.MenuItem::role(Zoom, label=if zh { "缩放" } else { "Zoom" }),
-      @proton.MenuItem::command(
-        @commands.CloseFocusedMenuCommand,
-        if zh {
-          "关闭"
-        } else {
-          "Close"
-        },
-        key="w",
-      ),
-    ]),
+    @proton.Menu::role(
+      Edit,
+      label=match language {
+        "zh-Hans" => "编辑"
+        "ja" => "編集"
+        _ => "Edit"
+      },
+      items=[
+        @proton.MenuItem::role(
+          Undo,
+          label=match language {
+            "zh-Hans" => "撤销"
+            "ja" => "取り消す"
+            _ => "Undo"
+          },
+        ),
+        @proton.MenuItem::role(
+          Redo,
+          label=match language {
+            "zh-Hans" => "重做"
+            "ja" => "やり直す"
+            _ => "Redo"
+          },
+        ),
+        @proton.MenuItem::separator(),
+        @proton.MenuItem::role(
+          Cut,
+          label=match language {
+            "zh-Hans" => "剪切"
+            "ja" => "カット"
+            _ => "Cut"
+          },
+        ),
+        @proton.MenuItem::role(
+          Copy,
+          label=match language {
+            "zh-Hans" => "复制"
+            "ja" => "コピー"
+            _ => "Copy"
+          },
+        ),
+        @proton.MenuItem::role(
+          Paste,
+          label=match language {
+            "zh-Hans" => "粘贴"
+            "ja" => "ペースト"
+            _ => "Paste"
+          },
+        ),
+        @proton.MenuItem::role(
+          SelectAll,
+          label=match language {
+            "zh-Hans" => "全选"
+            "ja" => "すべてを選択"
+            _ => "Select All"
+          },
+        ),
+      ],
+    ),
+    Menu(
+      match language {
+        "zh-Hans" => "开发者"
+        "ja" => "開発者"
+        _ => "Developer"
+      },
+      items=[
+        @proton.MenuItem::command(
+          @commands.app_open_devtools.name(),
+          match language {
+            "zh-Hans" => "打开开发者工具"
+            "ja" => "開発者ツールを開く"
+            _ => "Open Developer Tools"
+          },
+        ),
+      ],
+    ),
+    @proton.Menu::role(
+      Window,
+      label=match language {
+        "zh-Hans" => "窗口"
+        "ja" => "ウィンドウ"
+        _ => "Window"
+      },
+      items=[
+        @proton.MenuItem::role(
+          Minimize,
+          label=match language {
+            "zh-Hans" => "最小化"
+            "ja" => "最小化"
+            _ => "Minimize"
+          },
+        ),
+        @proton.MenuItem::role(
+          Zoom,
+          label=match language {
+            "zh-Hans" => "缩放"
+            "ja" => "ズーム"
+            _ => "Zoom"
+          },
+        ),
+        @proton.MenuItem::command(
+          @commands.CloseFocusedMenuCommand,
+          match language {
+            "zh-Hans" => "关闭"
+            "ja" => "閉じる"
+            _ => "Close"
+          },
+          key="w",
+        ),
+      ],
+    ),
   ])
 }

@@ -77,7 +77,7 @@ fn markdown_document_root_class(show_unused : Bool) -> String {
 
 ///|
 pub fn MarkdownDocumentView::MarkdownDocumentView(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   source : String,
   source_model_version : Int,
   language_id : String,
@@ -1175,6 +1175,7 @@ fn MarkdownDocumentView::refresh_localized_labels(
   let (label, title) = match self.localization.language() {
     English => ("Contents, \{count} sections", "Contents · \{count}")
     SimplifiedChinese => ("目录，共 \{count} 节", "目录 · \{count}")
+    Japanese => ("目次、\{count} セクション", "目次 · \{count}")
   }
   self.toc_toggle.set_attribute("aria-label", label)
   self.toc_toggle.set_property("textContent", @js.Value::cast_from(title))

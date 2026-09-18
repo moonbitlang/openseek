@@ -52,7 +52,7 @@ struct ContextMenuWidget {
 
 ///|
 pub fn ContextMenuWidget::ContextMenuWidget(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   callbacks : ContextMenuWidgetCallbacks,
 ) -> ContextMenuWidget {
   let document = @rdom.document()
@@ -236,6 +236,11 @@ fn ContextMenuWidget::root_actions_node(
 
 ///|
 fn ContextMenuWidget::rebuild_root_menu(self : ContextMenuWidget) -> Unit {
+  self.menu
+  .get_children()
+  .item(0)
+  .unwrap()
+  .set_attribute("aria-label", self.localization.text(EditorContextMenu))
   self.root_actions_node().set_inner_html("")
   self.item_nodes = []
   for index, entry in self.entries {
@@ -765,7 +770,7 @@ fn ContextMenuWidget::clear_show_state(self : ContextMenuWidget) -> Unit {
 
 ///|
 fn build_context_submenu(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   entries : Array[ContextMenuEntry],
   parent_entry_index : Int,
 ) -> ContextMenuSubmenuView {

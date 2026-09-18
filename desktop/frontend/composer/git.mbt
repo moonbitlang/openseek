@@ -285,18 +285,18 @@ fn GitChanges::render(
     counted
   } else if counted is Some(counted) {
     Some(
-      if locale is SimplifiedChinese {
-        "\{counted}，其余未跟踪文件未计入"
-      } else {
-        "\{counted}, untracked tail uncounted"
+      match locale {
+        SimplifiedChinese => "\{counted}，其余未跟踪文件未计入"
+        Japanese => "\{counted}、残りの未追跡ファイルは未集計"
+        English => "\{counted}, untracked tail uncounted"
       },
     )
   } else {
     Some(
-      if locale is SimplifiedChinese {
-        "其余未跟踪文件未计入"
-      } else {
-        "untracked tail uncounted"
+      match locale {
+        SimplifiedChinese => "其余未跟踪文件未计入"
+        Japanese => "残りの未追跡ファイルは未集計"
+        English => "untracked tail uncounted"
       },
     )
   }

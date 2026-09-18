@@ -479,10 +479,10 @@ fn CodexRequestInput::render(
       body.push(
         @html.textarea(
           value=self.answers.get("__content").unwrap_or("{}"),
-          placeholder=if locale is SimplifiedChinese {
-            "工具要求的 JSON 内容"
-          } else {
-            "JSON content required by the tool"
+          placeholder=match locale {
+            SimplifiedChinese => "工具要求的 JSON 内容"
+            Japanese => "ツールが要求する JSON の内容"
+            English => "JSON content required by the tool"
           },
           on_input=action_emit.map(value => {
             CodexRequestAnswerChanged(

@@ -32,7 +32,7 @@ priv struct ReferenceResultsTree {
 
 ///|
 fn ReferenceResultsTree::ReferenceResultsTree(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   node : @rdom.Element,
   callbacks : ReferencesPeekWidgetCallbacks,
   layout_changed : () -> Unit,
@@ -1009,12 +1009,16 @@ fn reference_row_preview_text(
 
 ///|
 fn reference_accessible_label(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   reference : @references.ReferenceItem,
   display : String,
 ) -> String {
-  if localization.language() is SimplifiedChinese {
-    return "\{display}，位于 \{@base_common.basename_or_authority(reference.uri)} 的第 \{reference.range.start_line_number} 行、第 \{reference.range.start_column} 列"
+  match localization.language() {
+    SimplifiedChinese =>
+      return "\{display}，位于 \{@base_common.basename_or_authority(reference.uri)} 的第 \{reference.range.start_line_number} 行、第 \{reference.range.start_column} 列"
+    Japanese =>
+      return "\{display}、\{@base_common.basename_or_authority(reference.uri)} の \{reference.range.start_line_number} 行、\{reference.range.start_column} 列"
+    English => ()
   }
   display +
   " in " +
@@ -1027,18 +1031,28 @@ fn reference_accessible_label(
 
 ///|
 fn reference_group_accessible_label(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   group : @references.ReferenceGroup,
   basename : String,
   parent : String?,
 ) -> String {
   let count = group.references.length()
-  if localization.language() is SimplifiedChinese {
-    let result = "\{basename} 中的 \{count} 个结果"
-    return match parent {
-      None => result
-      Some(parent) => result + "，完整路径：" + parent
+  match localization.language() {
+    SimplifiedChinese => {
+      let result = "\{basename} 中的 \{count} 个结果"
+      return match parent {
+        None => result
+        Some(parent) => result + "，完整路径：" + parent
+      }
     }
+    Japanese => {
+      let result = "\{basename} 内の \{count} 件の結果"
+      return match parent {
+        None => result
+        Some(parent) => result + "、完全なパス：" + parent
+      }
+    }
+    English => ()
   }
   let result = if count == 1 {
     "1 result in " + basename
@@ -1053,17 +1067,27 @@ fn reference_group_accessible_label(
 
 ///|
 fn reference_results_summary(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   model : @references.ReferencesModel,
   resource_path_label? : (@base_common.Uri) -> String? = _ => None,
 ) -> String {
   let reference_count = model.references.length()
   let group_count = model.groups.length()
-  if localization.language() is SimplifiedChinese && reference_count > 0 {
-    return if group_count == 1 {
-      "在 \{resource_path_label(model.groups[0].uri).unwrap_or(model.groups[0].uri_string)} 中找到 \{reference_count} 个结果"
-    } else {
-      "在 \{group_count} 个文件中找到 \{reference_count} 个结果"
+  if reference_count > 0 {
+    match localization.language() {
+      English => ()
+      SimplifiedChinese =>
+        return if group_count == 1 {
+          "在 \{resource_path_label(model.groups[0].uri).unwrap_or(model.groups[0].uri_string)} 中找到 \{reference_count} 个结果"
+        } else {
+          "在 \{group_count} 个文件中找到 \{reference_count} 个结果"
+        }
+      Japanese =>
+        return if group_count == 1 {
+          "\{resource_path_label(model.groups[0].uri).unwrap_or(model.groups[0].uri_string)} に \{reference_count} 件の結果が見つかりました"
+        } else {
+          "\{group_count} ファイルに \{reference_count} 件の結果が見つかりました"
+        }
     }
   }
   if reference_count == 0 {

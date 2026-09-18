@@ -1255,20 +1255,22 @@ fn queue_openseek(
                   session~,
                   submission_id=id,
                   run_id~,
-                  message=if locale is SimplifiedChinese {
-                    "队列中的消息已不可用。"
-                  } else {
-                    "The queued message is no longer available."
+                  message=match locale {
+                    SimplifiedChinese => "队列中的消息已不可用。"
+                    Japanese =>
+                      "キュー内のメッセージは利用できなくなりました。"
+                    English => "The queued message is no longer available."
                   },
                 ),
               )
             QueueEdit(..) | QueueWithdraw(..) =>
               root_dispatch(
                 HostActionFailed(
-                  if locale is SimplifiedChinese {
-                    "队列中的消息已不可用。"
-                  } else {
-                    "The queued message is no longer available."
+                  match locale {
+                    SimplifiedChinese => "队列中的消息已不可用。"
+                    Japanese =>
+                      "キュー内のメッセージは利用できなくなりました。"
+                    English => "The queued message is no longer available."
                   },
                 ),
               )
@@ -1470,10 +1472,10 @@ fn cancel_openseek(
                 channel,
                 CancelFailed(
                   run_id~,
-                  message=(if locale is SimplifiedChinese {
-                      "无法取消运行："
-                    } else {
-                      "Failed to cancel the run: "
+                  message=(match locale {
+                      SimplifiedChinese => "无法取消运行："
+                      Japanese => "実行をキャンセルできません："
+                      English => "Failed to cancel the run: "
                     }) +
                     @interop.bridge_error_text(error),
                 ),
@@ -1525,10 +1527,10 @@ fn approve_openseek(
           scheduler.add(
             dispatch(
               HostActionFailed(
-                (if locale is SimplifiedChinese {
-                  "无法回复审批请求："
-                } else {
-                  "Failed to answer the approval request: "
+                (match locale {
+                  SimplifiedChinese => "无法回复审批请求："
+                  Japanese => "承認要求に応答できません："
+                  English => "Failed to answer the approval request: "
                 }) +
                 @interop.bridge_error_text(error),
               ),
@@ -1545,10 +1547,13 @@ fn approve_openseek(
         scheduler.add(
           dispatch(
             HostActionFailed(
-              if locale is SimplifiedChinese {
-                "该审批请求所属的任务轮次已结束，无需继续审批。"
-              } else {
-                "That approval request is no longer waiting — the turn it belonged to has ended."
+              match locale {
+                SimplifiedChinese =>
+                  "该审批请求所属的任务轮次已结束，无需继续审批。"
+                Japanese =>
+                  "この承認要求のターンは終了しているため、承認は不要です。"
+                English =>
+                  "That approval request is no longer waiting — the turn it belonged to has ended."
               },
             ),
           ),
@@ -1620,10 +1625,10 @@ fn open_codex_config(
           scheduler.add(
             dispatch(
               CodexConfigOpenFailed(
-                (if locale is SimplifiedChinese {
-                  "Codex 配置："
-                } else {
-                  "Codex config: "
+                (match locale {
+                  SimplifiedChinese => "Codex 配置："
+                  Japanese => "Codex 設定："
+                  English => "Codex config: "
                 }) +
                 @interop.bridge_error_text(error),
               ),

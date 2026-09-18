@@ -32,10 +32,10 @@ pub fn rail(
     // reader who cannot see the difference between two 7px dashes still hears
     // which turns hit errors while arrowing the rail.
     let label = if entry.failed {
-      if locale is SimplifiedChinese {
-        "\{entry.text}（发生过错误）"
-      } else {
-        "\{entry.text} (had errors)"
+      match locale {
+        SimplifiedChinese => "\{entry.text}（发生过错误）"
+        Japanese => "\{entry.text}（エラーあり）"
+        English => "\{entry.text} (had errors)"
       }
     } else {
       entry.text
@@ -73,10 +73,10 @@ pub fn rail(
     hidden=entries.length() < 2,
     attrs=@html.Attrs::build()
       .aria_label(
-        if locale is SimplifiedChinese {
-          "对话概览"
-        } else {
-          "Conversation overview"
+        match locale {
+          SimplifiedChinese => "对话概览"
+          Japanese => "チャットの概要"
+          English => "Conversation overview"
         },
       )
       .on_mouseleave(_ => emit(Left)),
@@ -150,10 +150,10 @@ fn preview(
     children.push(
       @html.div(
         class="overview-preview-failed",
-        if locale is SimplifiedChinese {
-          "发生过错误"
-        } else {
-          "had errors"
+        match locale {
+          SimplifiedChinese => "发生过错误"
+          Japanese => "エラーあり"
+          English => "had errors"
         },
       ),
     )

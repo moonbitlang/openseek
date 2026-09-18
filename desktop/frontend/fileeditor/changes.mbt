@@ -252,27 +252,32 @@ fn ChangedFile::unselectable_title(
   self : ChangedFile,
 ) -> String {
   let reason = if self.kind is ChangeSubmodule {
-    if locale is SimplifiedChinese {
-      "Git 子模块；请单独打开其检出目录"
-    } else {
-      "Git submodule; open its nested checkout separately"
+    match locale {
+      SimplifiedChinese => "Git 子模块；请单独打开其检出目录"
+      Japanese =>
+        "Git サブモジュールです。個別にチェックアウトを開いてください"
+      English => "Git submodule; open its nested checkout separately"
     }
   } else if self.kind is ChangeSymlink {
-    if locale is SimplifiedChinese {
-      "Git 符号链接；无法打开其目标"
-    } else {
-      "Git symlink; opening its target is disabled"
+    match locale {
+      SimplifiedChinese => "Git 符号链接；无法打开其目标"
+      Japanese =>
+        "Git シンボリックリンクです。リンク先を開く操作は無効です"
+      English => "Git symlink; opening its target is disabled"
     }
   } else if self.path.0.has_suffix("/") {
-    if locale is SimplifiedChinese {
-      "未跟踪的目录；请单独打开其检出目录"
-    } else {
-      "untracked directory; open its nested checkout separately"
+    match locale {
+      SimplifiedChinese => "未跟踪的目录；请单独打开其检出目录"
+      Japanese =>
+        "未追跡のディレクトリです。個別にチェックアウトを開いてください"
+      English => "untracked directory; open its nested checkout separately"
     }
-  } else if locale is SimplifiedChinese {
-    "无法预览此更改"
   } else {
-    "change cannot be previewed"
+    match locale {
+      SimplifiedChinese => "无法预览此更改"
+      Japanese => "この変更をプレビューできません"
+      English => "change cannot be previewed"
+    }
   }
   self.status_title() + " — " + reason
 }

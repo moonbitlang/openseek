@@ -182,7 +182,7 @@ pub fn ContentHoverWidget::content_widget_handle(
 /// `HoverWidget(fadeIn: true)`); starts hidden (`_setRenderedHover(undefined)`).
 /// The caller mounts it exactly once through the editor's content-widget seam.
 pub fn ContentHoverWidget::ContentHoverWidget(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   host : ContentHoverWidgetHost,
 ) -> ContentHoverWidget {
   let document = @rdom.document()
@@ -295,7 +295,7 @@ fn ContentHoverWidget::set_rendered_hover(
 /// touching the currently displayed hover. Each row receives the source's
 /// `_registerListenersOnRenderedParts` `tabIndex = 0`.
 fn render_hover_rows(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   parts : Array[@hover.HoverPart],
   language_id : String,
 ) -> HoverRowsRender {
@@ -419,7 +419,7 @@ fn standard_hover_row(text : String) -> @rdom.Element {
 /// Marker rows remain ordinary retained DOM and keep the existing diagnostic
 /// copy affordance. Text nodes and attribute writes replace manual escaping.
 fn marker_hover_row(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   text : String,
 ) -> @rdom.Element {
   let document = @rdom.document()

@@ -163,10 +163,10 @@ fn failure_marker(
       Some(
         @html.span(
           class="tool-call-failed tool-stage-build",
-          if locale is SimplifiedChinese {
-            "构建错误"
-          } else {
-            "build error"
+          match locale {
+            SimplifiedChinese => "构建错误"
+            Japanese => "ビルドエラー"
+            English => "build error"
           },
         ),
       )
@@ -174,10 +174,10 @@ fn failure_marker(
       Some(
         @html.span(
           class="tool-call-failed tool-stage-run",
-          if locale is SimplifiedChinese {
-            "运行错误"
-          } else {
-            "runtime error"
+          match locale {
+            SimplifiedChinese => "运行错误"
+            Japanese => "実行エラー"
+            English => "runtime error"
           },
         ),
       )
@@ -185,10 +185,10 @@ fn failure_marker(
       Some(
         @html.span(
           class="tool-call-failed",
-          if locale is SimplifiedChinese {
-            "失败"
-          } else {
-            "failed"
+          match locale {
+            SimplifiedChinese => "失败"
+            Japanese => "失敗"
+            English => "failed"
           },
         ),
       )

@@ -367,37 +367,52 @@ pub fn row_status(
     None =>
       if closed {
         (
-          if locale is SimplifiedChinese {
-            "状态未确定"
-          } else {
-            "unresolved"
+          match locale {
+            SimplifiedChinese => "状态未确定"
+            Japanese => "状態未確定"
+            English => "unresolved"
           },
           "failed",
         )
       } else {
         (
-          if locale is SimplifiedChinese {
-            "运行中"
-          } else {
-            "running"
+          match locale {
+            SimplifiedChinese => "运行中"
+            Japanese => "実行中"
+            English => "running"
           },
           "running",
         )
       }
     Some("captured") =>
-      (if locale is SimplifiedChinese { "已完成" } else { "done" }, "done")
+      (
+        match locale {
+          SimplifiedChinese => "已完成"
+          Japanese => "完了"
+          English => "done"
+        },
+        "done",
+      )
     Some(other) =>
       (
-        if locale is SimplifiedChinese {
-          match other {
-            "failed" => "失败"
-            "timed_out" => "已超时"
-            "cancelled" | "canceled" => "已取消"
-            "interrupted" => "已中断"
-            _ => other.replace_all(old="_", new=" ")
-          }
-        } else {
-          other.replace_all(old="_", new=" ")
+        match locale {
+          SimplifiedChinese =>
+            match other {
+              "failed" => "失败"
+              "timed_out" => "已超时"
+              "cancelled" | "canceled" => "已取消"
+              "interrupted" => "已中断"
+              _ => other.replace_all(old="_", new=" ")
+            }
+          Japanese =>
+            match other {
+              "failed" => "失敗"
+              "timed_out" => "タイムアウト"
+              "cancelled" | "canceled" => "キャンセル済み"
+              "interrupted" => "中断済み"
+              _ => other.replace_all(old="_", new=" ")
+            }
+          English => other.replace_all(old="_", new=" ")
         },
         "failed",
       )

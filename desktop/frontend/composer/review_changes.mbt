@@ -6,7 +6,7 @@ fn Entry::review_changes(self : Entry) -> Array[@mention_context.ReviewChanges] 
 }
 
 ///|
-fn Entry::changes_chip(self : Entry, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn Entry::changes_chip(locale? : @i18n.Locale = English, self : Entry, emit : @cmd.Emit[Msg]) -> @html.Html {
   @review_changes.Control::{
     id: "composer-review-changes",
     open: self.changes_open,
@@ -16,7 +16,7 @@ fn Entry::changes_chip(self : Entry, emit : @cmd.Emit[Msg]) -> @html.Html {
     toggle_file: emit.map(key => ChangesFileToggled(key)),
     open_review: emit.map(selection => ChangesOpened(selection)),
     remove: Some(emit.map(selections => ChangesRemoved(selections))),
-  }.view(self.review_changes())
+  }.view(locale~, self.review_changes())
 }
 
 ///|

@@ -104,7 +104,7 @@ pub fn SymbolNavigationCommand::id(self : SymbolNavigationCommand) -> String {
 ///|
 pub fn SymbolNavigationCommand::title(
   self : SymbolNavigationCommand,
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
 ) -> String {
   match self {
     RevealDefinition => localization.text(GoDefinition)
@@ -232,7 +232,7 @@ struct SymbolNavigationAction {
 
 ///|
 pub fn SymbolNavigationAction::SymbolNavigationAction(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   languages : @languages.LanguageHandle,
   host : SymbolNavigationActionHost,
   run_provider_tasks : async (Array[async () -> Unit]) -> Unit,
@@ -461,23 +461,23 @@ pub fn DefinitionLinkResolver::dispose(self : DefinitionLinkResolver) -> Unit {
 
 ///|
 fn symbol_navigation_no_result_message(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   kind : SymbolNavigationQueryKind,
   anchor : SymbolNavigationAnchor,
 ) -> String {
   let word = anchor.model().get_word_at_position(anchor.position())
   match (kind, word) {
     (DefinitionQuery, Some(word)) if !word.word.is_empty() =>
-      if localization.language() is SimplifiedChinese {
-        "未找到“\{word.word}”的定义"
-      } else {
-        "No definition found for '\{word.word}'"
+      match localization.language() {
+        SimplifiedChinese => "未找到“\{word.word}”的定义"
+        Japanese => "「\{word.word}」の定義が見つかりません"
+        English => "No definition found for '\{word.word}'"
       }
     (ReferencesQuery, Some(word)) if !word.word.is_empty() =>
-      if localization.language() is SimplifiedChinese {
-        "未找到“\{word.word}”的引用"
-      } else {
-        "No references found for '\{word.word}'"
+      match localization.language() {
+        SimplifiedChinese => "未找到“\{word.word}”的引用"
+        Japanese => "「\{word.word}」の参照が見つかりません"
+        English => "No references found for '\{word.word}'"
       }
     (DefinitionQuery, _) => localization.text(NoDefinition)
     (ReferencesQuery, _) => localization.text(NoReferences)
@@ -486,7 +486,7 @@ fn symbol_navigation_no_result_message(
 
 ///|
 fn symbol_navigation_open_failure_message(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   kind : SymbolNavigationQueryKind,
 ) -> String {
   match kind {

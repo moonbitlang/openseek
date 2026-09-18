@@ -4611,10 +4611,10 @@ fn update_msg(
                 ..rename,
                 saving: false,
                 error: Some(
-                  (if model.locale is SimplifiedChinese {
-                    "重命名失败："
-                  } else {
-                    "Rename failed: "
+                  (match model.locale {
+                    SimplifiedChinese => "重命名失败："
+                    Japanese => "名前を変更できませんでした："
+                    English => "Rename failed: "
                   }) +
                   message,
                 ),
@@ -6011,10 +6011,13 @@ fn update_device_msg(
       let failures = dev.reconnect_failures + 1
       let bridge = if failures == WsLostAfter {
         BridgeLost(
-          if model.locale is SimplifiedChinese {
-            "无法连接 SeekMoon。请确认 SeekMoon 正在运行，然后重新打开此页面。"
-          } else {
-            "Can't reach SeekMoon. Make sure SeekMoon is running, then reopen this page."
+          match model.locale {
+            SimplifiedChinese =>
+              "无法连接 SeekMoon。请确认 SeekMoon 正在运行，然后重新打开此页面。"
+            Japanese =>
+              "SeekMoon に接続できません。SeekMoon が起動していることを確認して、このページを開き直してください。"
+            English =>
+              "Can't reach SeekMoon. Make sure SeekMoon is running, then reopen this page."
           },
         )
       } else {
@@ -6205,10 +6208,13 @@ fn update_device_msg(
           .replace_conversation(next)
           .notify_error(
             dispatch,
-            if model.locale is SimplifiedChinese {
-              "消息未加入队列（发送时任务已结束），已放回输入框。"
-            } else {
-              "Message was not queued (the task ended as you sent it) — it is back in the composer."
+            match model.locale {
+              SimplifiedChinese =>
+                "消息未加入队列（发送时任务已结束），已放回输入框。"
+              Japanese =>
+                "送信時にタスクが終了したため、メッセージをキューに追加せず入力欄に戻しました。"
+              English =>
+                "Message was not queued (the task ended as you sent it) — it is back in the composer."
             },
           )
         } else {
@@ -8277,10 +8283,10 @@ fn update_device_msg(
         .replace_conversation(conv)
         .notify_error(
           dispatch,
-          (if model.locale is SimplifiedChinese {
-            "无法确认目标是否已送达（"
-          } else {
-            "Goal delivery could not be confirmed ("
+          (match model.locale {
+            SimplifiedChinese => "无法确认目标是否已送达（"
+            Japanese => "目標が届いたか確認できません（"
+            English => "Goal delivery could not be confirmed ("
           }) +
           message +
           ")" +

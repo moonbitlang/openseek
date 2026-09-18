@@ -198,15 +198,17 @@ pub fn State::handle(
       // describe an operation the user has already replaced.
       if channel == self.channel && generation == self.generation {
         let message = if self.new_folder is Some(_) {
-          if locale is SimplifiedChinese {
-            "无法创建文件夹：\{message}"
-          } else {
-            "Cannot create folder: \{message}"
+          match locale {
+            SimplifiedChinese => "无法创建文件夹：\{message}"
+            Japanese => "フォルダーを作成できません：\{message}"
+            English => "Cannot create folder: \{message}"
           }
-        } else if locale is SimplifiedChinese {
-          "无法打开文件夹：\{message}"
         } else {
-          "Cannot open folder: \{message}"
+          match locale {
+            SimplifiedChinese => "无法打开文件夹：\{message}"
+            Japanese => "フォルダーを開けません：\{message}"
+            English => "Cannot open folder: \{message}"
+          }
         }
         (
           self.resume_path_edit_after_render(),

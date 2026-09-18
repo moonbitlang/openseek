@@ -682,10 +682,10 @@ fn file_link_node(
   @html.button(
     class="file-link",
     type_="button",
-    title=if locale is SimplifiedChinese {
-      "打开 \{path}"
-    } else {
-      "Open \{path}"
+    title=match locale {
+      SimplifiedChinese => "打开 \{path}"
+      Japanese => "\{path} を開く"
+      English => "Open \{path}"
     },
     attrs=@html.Attrs::build().data_set("context-file", path),
     on_click=open(path),

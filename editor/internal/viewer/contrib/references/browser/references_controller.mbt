@@ -158,7 +158,7 @@ struct ReferencesController {
 
 ///|
 pub fn ReferencesController::ReferencesController(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   host : ReferencesPeekHost,
   preview_factory : ReferencesPeekPreviewFactory,
   resolver? : @navigation_api.TextModelResolverHandle,
@@ -413,15 +413,15 @@ fn ReferencesController::install_locations(
 
 ///|
 fn definition_no_result_message(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   anchor : @goto_symbol.SymbolNavigationAnchor,
 ) -> String {
   match anchor.model().get_word_at_position(anchor.position()) {
     Some(word) if !word.word.is_empty() =>
-      if localization.language() is SimplifiedChinese {
-        "未找到“\{word.word}”的定义"
-      } else {
-        "No definition found for '\{word.word}'"
+      match localization.language() {
+        SimplifiedChinese => "未找到“\{word.word}”的定义"
+        Japanese => "「\{word.word}」の定義が見つかりません"
+        English => "No definition found for '\{word.word}'"
       }
     _ => localization.text(NoDefinition)
   }

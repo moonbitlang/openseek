@@ -164,10 +164,10 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     })
     let timing = match entry.spec.timing {
       Every(n) =>
-        if locale is SimplifiedChinese {
-          "每 \{n} 分钟"
-        } else {
-          "Every \{n} min"
+        match locale {
+          SimplifiedChinese => "每 \{n} 分钟"
+          Japanese => "\{n} 分ごと"
+          English => "Every \{n} min"
         }
       Once(at) => ui(locale, OnceLabel) + schedule_time(locale~, at)
     }

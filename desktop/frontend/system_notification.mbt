@@ -49,27 +49,28 @@ fn FinishedSystemNotification::title(
   match self.status {
     "finished" =>
       Some(
-        if locale is SimplifiedChinese {
-          "任务已完成"
-        } else {
-          "Task finished"
+        match locale {
+          SimplifiedChinese => "任务已完成"
+          Japanese => "タスクが完了しました"
+          English => "Task finished"
         },
       )
     "cancelled" => None
     "max_steps_exhausted" =>
       Some(
-        if locale is SimplifiedChinese {
-          "任务达到步数上限，已停止"
-        } else {
-          "Task stopped at the step limit"
+        match locale {
+          SimplifiedChinese => "任务达到步数上限，已停止"
+          Japanese =>
+            "ステップ数の上限に達したためタスクを停止しました"
+          English => "Task stopped at the step limit"
         },
       )
     _ =>
       Some(
-        if locale is SimplifiedChinese {
-          "任务失败"
-        } else {
-          "Task failed"
+        match locale {
+          SimplifiedChinese => "任务失败"
+          Japanese => "タスクが失敗しました"
+          English => "Task failed"
         },
       )
   }
@@ -82,10 +83,11 @@ fn FinishedSystemNotification::body(
   self : FinishedSystemNotification,
 ) -> String {
   guard self.answer is Some(answer) && !answer.is_blank() else {
-    return if locale is SimplifiedChinese {
-      "对话已就绪，请查看。"
-    } else {
-      "The conversation is ready for you."
+    return match locale {
+      SimplifiedChinese => "对话已就绪，请查看。"
+      Japanese =>
+        "チャットの準備ができました。ご確認ください。"
+      English => "The conversation is ready for you."
     }
   }
   truncate_notification_body(answer)
@@ -194,10 +196,10 @@ fn ApprovalSystemNotification::title(
   locale? : @i18n.Locale = English,
   _self : ApprovalSystemNotification,
 ) -> String {
-  if locale is SimplifiedChinese {
-    "需要授权"
-  } else {
-    "Permission required"
+  match locale {
+    SimplifiedChinese => "需要授权"
+    Japanese => "許可が必要です"
+    English => "Permission required"
   }
 }
 
@@ -207,10 +209,11 @@ fn ApprovalSystemNotification::body(
   self : ApprovalSystemNotification,
 ) -> String {
   truncate_notification_body(
-    if locale is SimplifiedChinese {
-      "\{self.tool_name} 请求授权：\{self.detail}"
-    } else {
-      "\{self.tool_name} is asking permission to \{self.detail}"
+    match locale {
+      SimplifiedChinese => "\{self.tool_name} 请求授权：\{self.detail}"
+      Japanese =>
+        "\{self.tool_name} が許可を要求しています：\{self.detail}"
+      English => "\{self.tool_name} is asking permission to \{self.detail}"
     },
   )
 }

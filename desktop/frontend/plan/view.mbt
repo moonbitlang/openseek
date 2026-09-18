@@ -25,10 +25,10 @@ pub fn card(
     return @html.div(class="plan-args", [
       @html.span(
         class="plan-cleared",
-        if locale is SimplifiedChinese {
-          "计划已清空"
-        } else {
-          "plan cleared"
+        match locale {
+          SimplifiedChinese => "计划已清空"
+          Japanese => "計画をクリアしました"
+          English => "plan cleared"
         },
       ),
     ])
@@ -147,26 +147,30 @@ fn status_cell(locale? : @i18n.Locale = English, status : Status) -> @html.Html 
     Pending =>
       @html.span(
         class="step-icon",
-        title=if locale is SimplifiedChinese { "待处理" } else { "pending" },
+        title=match locale {
+          SimplifiedChinese => "待处理"
+          Japanese => "保留中"
+          English => "pending"
+        },
         "○",
       )
     InProgress =>
       @html.span(
         class="step-icon",
-        title=if locale is SimplifiedChinese {
-          "进行中"
-        } else {
-          "in_progress"
+        title=match locale {
+          SimplifiedChinese => "进行中"
+          Japanese => "進行中"
+          English => "in_progress"
         },
         "◐",
       )
     Completed =>
       @html.span(
         class="step-icon",
-        title=if locale is SimplifiedChinese {
-          "已完成"
-        } else {
-          "completed"
+        title=match locale {
+          SimplifiedChinese => "已完成"
+          Japanese => "完了"
+          English => "completed"
         },
         "✓",
       )

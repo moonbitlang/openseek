@@ -32,7 +32,7 @@ pub struct View {
 
 ///|
 pub fn View::View(
-  localization? : @localization.Localization = @localization.Localization(),
+  localization? : @localization.Localization = Localization(),
   view_zones_configuration_reader? : () -> (Int, Double, Double) = () => {
     (0, 0.0, 0.0)
   },

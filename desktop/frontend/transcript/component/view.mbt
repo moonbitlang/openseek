@@ -321,10 +321,10 @@ fn tool_request_view(
     _ => None
   }
   let label = if background_job_id is Some(_) {
-    if locale is SimplifiedChinese {
-      "🐇 → 后台"
-    } else {
-      "🐇 → background"
+    match locale {
+      SimplifiedChinese => "🐇 → 后台"
+      Japanese => "🐇 → バックグラウンド"
+      English => "🐇 → background"
     }
   } else if brief is Some(brief) && !brief.is_blank() {
     tool_display_label(locale~, name, brief)
@@ -361,10 +361,10 @@ fn tool_request_view(
     line.push(
       @html.span(
         class="tool-call-failed",
-        if locale is SimplifiedChinese {
-          "失败"
-        } else {
-          "failed"
+        match locale {
+          SimplifiedChinese => "失败"
+          Japanese => "失敗"
+          English => "failed"
         },
       ),
     )
@@ -771,7 +771,7 @@ fn user_message_view(
       }
       if changes is Some(control) {
         chips.push(
-          control.view(@mention_context.review_changes(parsed.mentions)),
+          control.view(locale~, @mention_context.review_changes(parsed.mentions)),
         )
       }
       body.push(@html.div(class="mention-tray", chips))

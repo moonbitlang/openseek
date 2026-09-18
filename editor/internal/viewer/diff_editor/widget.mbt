@@ -141,7 +141,7 @@ pub fn DiffEditorWidget::create(
 ) -> DiffEditorWidget {
   let localization = services
     .map(s => s.localization())
-    .unwrap_or(@localization.Localization())
+    .unwrap_or(Localization())
   let document = @rdom.document()
   let root = document.create_element("section")
   root.set_attribute("class", "moonbit-diff-editor")
@@ -1671,18 +1671,34 @@ fn navigation_range_announcement(
   empty_kind : String,
   range : @base_common.LineRange,
 ) -> String {
-  if language is SimplifiedChinese {
-    let side = if side == "original" {
-      "原始内容"
-    } else {
-      "修改后内容"
+  match language {
+    SimplifiedChinese => {
+      let side = if side == "original" {
+        "原始内容"
+      } else {
+        "修改后内容"
+      }
+      return if range.is_empty() {
+        let kind = if empty_kind == "insertion" { "插入" } else { "删除" }
+        "\{side}的\{kind}位置在第 \{range.start_line_number} 行"
+      } else {
+        "\{side}第 \{range.start_line_number} 至 \{range.end_line_number_exclusive - 1} 行"
+      }
     }
-    return if range.is_empty() {
-      let kind = if empty_kind == "insertion" { "插入" } else { "删除" }
-      "\{side}的\{kind}位置在第 \{range.start_line_number} 行"
-    } else {
-      "\{side}第 \{range.start_line_number} 至 \{range.end_line_number_exclusive - 1} 行"
+    Japanese => {
+      let side = if side == "original" {
+        "変更前の内容"
+      } else {
+        "変更後の内容"
+      }
+      return if range.is_empty() {
+        let kind = if empty_kind == "insertion" { "挿入" } else { "削除" }
+        "\{side}の\{kind}位置：\{range.start_line_number} 行"
+      } else {
+        "\{side}：\{range.start_line_number}〜\{range.end_line_number_exclusive - 1} 行"
+      }
     }
+    English => ()
   }
   if range.is_empty() {
     "\{side} \{empty_kind} anchor at line \{range.start_line_number}"
@@ -1698,10 +1714,11 @@ fn diff_navigation_announcement(
   target : DiffNavigationTarget,
 ) -> String {
   let change = target.change
-  (if language is SimplifiedChinese {
-    "第 \{target.change_index + 1} 处更改，共 \{target.change_count} 处；"
-  } else {
-    "Change \{target.change_index + 1} of \{target.change_count}; "
+  (match language {
+    SimplifiedChinese =>
+      "第 \{target.change_index + 1} 处更改，共 \{target.change_count} 处；"
+    Japanese => "変更 \{target.change_index + 1}/\{target.change_count}；"
+    English => "Change \{target.change_index + 1} of \{target.change_count}; "
   }) +
   navigation_range_announcement(
     language~,

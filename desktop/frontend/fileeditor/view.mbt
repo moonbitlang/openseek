@@ -2125,10 +2125,10 @@ fn mbti_view_toolbar(
     attrs=@html.Attrs::build()
       .role("group")
       .aria_label(
-        if locale is SimplifiedChinese {
-          "MBTI 视图"
-        } else {
-          "MBTI view"
+        match locale {
+          SimplifiedChinese => "MBTI 视图"
+          Japanese => "MBTI ビュー"
+          English => "MBTI view"
         },
       ),
     [
@@ -2357,10 +2357,10 @@ fn review_diff_mode_button(
     } else {
       "review-mode-button"
     },
-    title=if locale is SimplifiedChinese {
-      "使用" + mode.label(locale~) + "差异"
-    } else {
-      "Use " + mode.label(locale~) + " diff"
+    title=match locale {
+      SimplifiedChinese => "使用" + mode.label(locale~) + "差异"
+      Japanese => "使用" + mode.label(locale~) + "差分"
+      English => "Use " + mode.label(locale~) + " diff"
     },
     disabled=!enabled,
     on_click~,
@@ -2368,7 +2368,11 @@ fn review_diff_mode_button(
       .data_set("diff-mode", mode.attribute())
       .aria_label(
         mode.label(locale~) +
-        (if locale is SimplifiedChinese { "差异" } else { " diff" }),
+        (match locale {
+          SimplifiedChinese => "差异"
+          Japanese => "差分"
+          English => " diff"
+        }),
       )
       .aria_pressed(active.to_string()),
     mode.label(locale~),

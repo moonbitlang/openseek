@@ -478,18 +478,24 @@ pub fn update(
         Ok({ outcome: Stopped | AlreadyTerminal, }) => None
         Ok({ outcome: NotFound, }) =>
           Some(
-            if locale is SimplifiedChinese {
-              "此任务已不属于当前引擎，请刷新其历史记录。"
-            } else {
-              "This job no longer belongs to the live engine. Refresh its history."
+            match locale {
+              SimplifiedChinese =>
+                "此任务已不属于当前引擎，请刷新其历史记录。"
+              Japanese =>
+                "このジョブは現在のエンジンに属していません。履歴を更新してください。"
+              English =>
+                "This job no longer belongs to the live engine. Refresh its history."
             },
           )
         Ok({ outcome: WrongRuntime, }) =>
           Some(
-            if locale is SimplifiedChinese {
-              "引擎已重启，无法从新的运行环境停止此旧任务。"
-            } else {
-              "The engine restarted; this old job cannot be stopped from the new runtime."
+            match locale {
+              SimplifiedChinese =>
+                "引擎已重启，无法从新的运行环境停止此旧任务。"
+              Japanese =>
+                "エンジンが再起動したため、新しい実行環境から古いジョブを停止できません。"
+              English =>
+                "The engine restarted; this old job cannot be stopped from the new runtime."
             },
           )
       }

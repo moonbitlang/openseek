@@ -57,24 +57,34 @@ fn run_view(
     @html.span(class="workflow-run-id", run.id),
     @html.span(
       class="workflow-run-state workflow-run-state-\{state}",
-      if locale is SimplifiedChinese {
-        if run.closed {
-          "已结束"
-        } else if running > 0 {
-          "运行中"
-        } else {
-          "未结束"
-        }
-      } else {
-        state
+      match locale {
+        SimplifiedChinese =>
+          if run.closed {
+            "已结束"
+          } else if running > 0 {
+            "运行中"
+          } else {
+            "未结束"
+          }
+        Japanese =>
+          if run.closed {
+            "終了済み"
+          } else if running > 0 {
+            "実行中"
+          } else {
+            "未終了"
+          }
+        English => state
       },
     ),
     @html.span(
       class="workflow-run-count",
-      if locale is SimplifiedChinese {
-        "子智能体 \{rows.length()}/\{run.child_count}"
-      } else {
-        "\{rows.length()} of \{run.child_count} subagent\{plural(rows.length())}"
+      match locale {
+        SimplifiedChinese => "子智能体 \{rows.length()}/\{run.child_count}"
+        Japanese =>
+          "サブエージェント \{rows.length()}/\{run.child_count}"
+        English =>
+          "\{rows.length()} of \{run.child_count} subagent\{plural(rows.length())}"
       },
     ),
   ]
@@ -114,10 +124,10 @@ fn row_view(
     detail.push(
       @html.span(
         class="workflow-row-steps",
-        if locale is SimplifiedChinese {
-          "\{row.steps} 步"
-        } else {
-          "\{row.steps} step\{plural(row.steps)}"
+        match locale {
+          SimplifiedChinese => "\{row.steps} 步"
+          Japanese => "\{row.steps} ステップ"
+          English => "\{row.steps} step\{plural(row.steps)}"
         },
       ),
     )
@@ -141,10 +151,10 @@ fn row_view(
   let label = if row.label.is_empty() { row.child } else { row.label }
   @html.button(
     class="workflow-row workflow-row-\{status_class}",
-    title=if locale is SimplifiedChinese {
-      "打开 \{row.child}"
-    } else {
-      "Open \{row.child}"
+    title=match locale {
+      SimplifiedChinese => "打开 \{row.child}"
+      Japanese => "\{row.child} を開く"
+      English => "Open \{row.child}"
     },
     on_click=(actions.open_child)(row.child),
     [

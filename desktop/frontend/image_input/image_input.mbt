@@ -130,10 +130,10 @@ fn Selection::read(
           scheduler.add(
             emit(
               Failed(
-                if locale is SimplifiedChinese {
-                  "无法读取图片：\{error}"
-                } else {
-                  "Could not read images: \{error}"
+                match locale {
+                  SimplifiedChinese => "无法读取图片：\{error}"
+                  Japanese => "画像を読み取れません：\{error}"
+                  English => "Could not read images: \{error}"
                 },
               ),
             ),
@@ -153,10 +153,11 @@ async fn Selection::load(
 ) -> Event {
   if self.0.length() > 4 {
     return Failed(
-      if locale is SimplifiedChinese {
-        "每条消息最多可附加 4 张图片。"
-      } else {
-        "Attach up to 4 images per message."
+      match locale {
+        SimplifiedChinese => "每条消息最多可附加 4 张图片。"
+        Japanese =>
+          "メッセージには最大 4 枚の画像を添付できます。"
+        English => "Attach up to 4 images per message."
       },
     )
   }
@@ -164,19 +165,20 @@ async fn Selection::load(
     let blob = file.blob()
     if blob.get_size() > 5 * 1024 * 1024 {
       return Failed(
-        if locale is SimplifiedChinese {
-          "每张图片不得超过 5 MiB：\{file.name()}"
-        } else {
-          "Each image must be 5 MiB or smaller: \{file.name()}"
+        match locale {
+          SimplifiedChinese => "每张图片不得超过 5 MiB：\{file.name()}"
+          Japanese =>
+            "画像は 1 枚あたり 5 MiB 以下にしてください：\{file.name()}"
+          English => "Each image must be 5 MiB or smaller: \{file.name()}"
         },
       )
     }
     if blob.get_size() == 0 {
       return Failed(
-        if locale is SimplifiedChinese {
-          "图片为空：\{file.name()}"
-        } else {
-          "Image is empty: \{file.name()}"
+        match locale {
+          SimplifiedChinese => "图片为空：\{file.name()}"
+          Japanese => "画像が空です：\{file.name()}"
+          English => "Image is empty: \{file.name()}"
         },
       )
     }
@@ -184,10 +186,12 @@ async fn Selection::load(
       "image/png" | "image/jpeg" | "image/webp" | "image/gif" => ()
       _ =>
         return Failed(
-          if locale is SimplifiedChinese {
-            "请选择 PNG、JPEG、WebP 或 GIF 图片：\{file.name()}"
-          } else {
-            "Choose PNG, JPEG, WebP or GIF images: \{file.name()}"
+          match locale {
+            SimplifiedChinese =>
+              "请选择 PNG、JPEG、WebP 或 GIF 图片：\{file.name()}"
+            Japanese =>
+              "PNG、JPEG、WebP または GIF の画像を選択してください：\{file.name()}"
+            English => "Choose PNG, JPEG, WebP or GIF images: \{file.name()}"
           },
         )
     }
