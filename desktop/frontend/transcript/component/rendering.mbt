@@ -201,7 +201,7 @@ fn EmptyProjectControl::render(
     }
     children.push(
       @html.div(
-        class="empty-project-menu",
+        class="menu-surface empty-project-menu",
         attrs=@html.Attrs::build()
           .id(EmptyProjectMenuId)
           .role("dialog")

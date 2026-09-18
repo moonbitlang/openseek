@@ -1472,6 +1472,26 @@ test('new-chat project title filters and switches registered projects', async ({
   await expect(page.getByText(/SeekMoon plans the work/)).toHaveCount(0);
   const originalSession = await transcript.getAttribute('data-transcript-session');
 
+  // The picker borrows the app's select popup frame. Capture that frame from
+  // the Model select and compare the two computed surfaces.
+  const modelTrigger = page.getByRole('button', { name: 'Model', exact: true });
+  await modelTrigger.click();
+  const modelMenu = page.getByRole('listbox', { name: 'Model' });
+  await expect(modelMenu).toBeVisible();
+  const selectSurface = await modelMenu.evaluate(element => {
+    const style = getComputedStyle(element);
+    return [
+      style.padding,
+      style.border,
+      style.borderRadius,
+      style.backgroundColor,
+      style.boxShadow,
+      style.fontFamily,
+    ];
+  });
+  await modelTrigger.click();
+  await expect(modelMenu).toBeHidden();
+
   const trigger = page.getByRole('button', {
     name: 'Choose project, current project workspace',
   });
@@ -1480,6 +1500,17 @@ test('new-chat project title filters and switches registered projects', async ({
   const search = picker.getByRole('textbox', { name: 'Search projects' });
   const options = picker.getByRole('group', { name: 'Projects' });
   await expect(picker).toBeVisible();
+  expect(await picker.evaluate(element => {
+    const style = getComputedStyle(element);
+    return [
+      style.padding,
+      style.border,
+      style.borderRadius,
+      style.backgroundColor,
+      style.boxShadow,
+      style.fontFamily,
+    ];
+  })).toEqual(selectSurface);
   await expect(search).toBeFocused();
   const triggerBounds = await trigger.boundingBox();
   const pickerBounds = await picker.boundingBox();

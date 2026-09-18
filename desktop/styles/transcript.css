@@ -319,6 +319,8 @@
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
+/* The floating frame itself is `.menu-surface` in base.css, shared with the
+   app's select menus; this block only places and sizes the picker. */
 .empty-project-menu {
   position: fixed;
   position-anchor: --empty-project-trigger;
@@ -335,13 +337,11 @@
   max-height: min(420px, calc(100dvh - 24px), calc(100% - 18px));
   margin: 9px 0;
   overflow: hidden;
-  padding: 8px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-surface);
   color: var(--color-text-primary);
-  box-shadow: var(--shadow-overlay);
-  font-family: var(--font-family-mono);
+  /* The picker node inherits the heading's large, bold type from the title;
+     pin it back to the app's body type and sans stack, matching the select
+     menus instead of the mono stack. */
+  font-family: var(--font-family-sans);
   font-size: var(--font-size-md);
   font-weight: 400;
   line-height: var(--line-height-normal);
