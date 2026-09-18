@@ -291,7 +291,7 @@ fn indent_context(context : String) -> String {
 /// `N |text` shape indented by two spaces.
 fn excerpt_for_loc(lines : Array[String], loc : String) -> String {
   guard loc_line_span(loc) is Some((start_line, end_line)) else { return "" }
-  let first = if start_line <= 1 { 1 } else { start_line - 1 }
+  let first = (start_line - 1).max(1)
   if first > lines.length() {
     return ""
   }

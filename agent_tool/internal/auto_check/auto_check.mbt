@@ -256,10 +256,7 @@ fn new_sites(
 /// The position-free identity `introduced` compares by. `\u{0}` separates the
 /// parts so a path and a message can never concatenate into another pair.
 fn ErrorSite::kind(self : ErrorSite) -> String {
-  let code = match self.code {
-    Some(code) => code.to_string()
-    None => ""
-  }
+  let code = self.code.map_or("", code => code.to_string())
   "\{self.path.unwrap_or("")}\u{0}\{code}\u{0}\{self.message}"
 }
 
@@ -267,11 +264,7 @@ fn ErrorSite::kind(self : ErrorSite) -> String {
 /// The first few error lines for display: enough to show the shape of an
 /// over-match without dumping a broken build.
 pub fn CheckErrors::first_errors(self : CheckErrors) -> Array[String] {
-  let shown = if self.errors.length() < RevertErrorDisplayLimit {
-    self.errors.length()
-  } else {
-    RevertErrorDisplayLimit
-  }
+  let shown = self.errors.length().min(RevertErrorDisplayLimit)
   [
     for site in self.errors[:shown] => site.line()
   ]
@@ -418,12 +411,8 @@ fn is_relevant_moonbit_path(path : String) -> Bool {
   // match on Windows too; the source suffixes below contain no separator and
   // so are unaffected by them.
   @workspace_path.path_basename(path) is ("moon.mod" | "moon.pkg" | "moon.work") ||
-  is_moonbit_source_path(path)
-}
-
-///|
-fn is_moonbit_source_path(path : String) -> Bool {
-  path.has_suffix(".mbt") || path.has_suffix(".mbt.md")
+  path.has_suffix(".mbt") ||
+  path.has_suffix(".mbt.md")
 }
 
 ///|

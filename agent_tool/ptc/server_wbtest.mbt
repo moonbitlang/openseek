@@ -147,9 +147,7 @@ async test "PTC rejects unauthenticated unregistered and loop-control calls befo
     for name in ["finish", "hidden", "mbtx", "goal", "job_wait"] {
       assert_true(request(env, name, {}) is { "is_error": true, .. })
     }
-    guard @json.parse(env["OPENSEEK_PTC"]) is { "url": String(url), .. } else {
-      fail("missing URL")
-    }
+    let (url, _) = capability(env)
     let (response, _) = @http.post(url, ({} : Json))
     assert_eq(response.code, 403)
     @agent_tool.respond("ok")

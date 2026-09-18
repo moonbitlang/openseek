@@ -88,10 +88,7 @@ async fn read_output_prefix(
 
 ///|
 fn text_prefix_by_chars(text : String, max_chars : Int) -> String {
-  match text.offset_of_nth_char(max_chars) {
-    Some(end) => "\{text[:end]}"
-    None => text
-  }
+  text.offset_of_nth_char(max_chars).map_or(text, end => "\{text[:end]}")
 }
 
 ///|

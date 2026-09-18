@@ -257,10 +257,7 @@ async test "HTTP admission rejects oversized headers and ambiguous framing witho
       ]),
     )
     let program = service.register()
-    guard @json.parse(program.env()["OPENSEEK_PTC"])
-      is { "token": String(token), .. } else {
-      fail("missing token")
-    }
+    let (_, token) = capability(program.env())
     for
       headers in [
         "X-Long: \{"x".repeat(8192)}\r\n",
@@ -315,10 +312,7 @@ async test "client disconnect leaves an accepted call owned by its live program"
         ]),
       )
       let program = service.register()
-      guard @json.parse(program.env()["OPENSEEK_PTC"])
-        is { "token": String(token), .. } else {
-        fail("missing token")
-      }
+      let (_, token) = capability(program.env())
       let client = @socket.Tcp::connect(service.server.addr)
       defer client.close()
       let body = ({ "version": 1, "name": "edit", "arguments": {} } : Json).stringify()
@@ -536,10 +530,7 @@ async test "HTTP accepts fragmented headers and UTF-8 across single-byte chunks"
         ]),
       )
       let program = service.register()
-      guard @json.parse(program.env()["OPENSEEK_PTC"])
-        is { "token": String(token), .. } else {
-        fail("missing token")
-      }
+      let (_, token) = capability(program.env())
       let client = @socket.Tcp::connect(service.server.addr)
       defer client.close()
       client.write("POST /ca")
@@ -579,10 +570,7 @@ async test "HTTP rejects malformed chunks and excessive framing before reservati
         ]),
       )
       let program = service.register()
-      guard @json.parse(program.env()["OPENSEEK_PTC"])
-        is { "token": String(token), .. } else {
-        fail("missing token")
-      }
+      let (_, token) = capability(program.env())
       let body = (
         { "version": 1, "name": "probe", "arguments": "x".repeat(23000) } : Json).stringify()
       let framed = body.iter().map(c => "1\r\n\{c}\r\n").to_array().join("") +
