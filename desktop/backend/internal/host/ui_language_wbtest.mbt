@@ -34,3 +34,24 @@ async test "native preference read reports corrupt files" {
   }
   assert_true(rejected)
 }
+
+///|
+async test "native preference read propagates filesystem errors" {
+  let dir = @fs.tmpdir(prefix="openseek-ui-language-")
+  defer @fs.rmdir(dir, recursive=true)
+  // A directory at the preference path is a read failure, not an absent choice.
+  @fs.mkdir(dir + "/ui-language.json")
+  try read_ui_language(Some(dir)) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected preference read failure for a directory")
+  }
+  // A non-directory ancestor must not be mistaken for a missing preference.
+  let file = dir + "/not-a-directory"
+  @fs.write_file(file, "ordinary file")
+  try read_ui_language(Some(file)) catch {
+    _ => ()
+  } noraise {
+    _ => fail("expected preference read failure for a non-directory ancestor")
+  }
+}

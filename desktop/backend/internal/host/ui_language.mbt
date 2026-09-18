@@ -5,7 +5,7 @@ pub async fn read_ui_language(
 ) -> @protocol.UiLanguagePreference {
   guard runtime_dir is Some(dir) else { return { language: None, } }
   let path : @pathx.Path = dir
-  guard @fsx.try_read_text(path.join("ui-language.json")) is Some(text) else {
+  guard @fsx.read_text_if_exists(path.join("ui-language.json")) is Some(text) else {
     return { language: None, }
   }
   let preference : @protocol.UiLanguagePreference = @json.from_json(
