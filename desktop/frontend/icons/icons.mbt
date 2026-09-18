@@ -161,8 +161,8 @@ pub fn icon_more() -> @html.Html {
 }
 
 ///|
-/// Hand-drawn (not a codicon): a git branch — two commits on a trunk with
-/// one forking off — for the workspace worktree affordance.
+/// Hand-drawn worktree mark: an upper-right branch and a separate lower-right
+/// arrow. The gap keeps the two directions distinct at sidebar icon sizes.
 pub fn icon_worktree() -> @html.Html {
   @svg.svg(
     width=16,
@@ -171,18 +171,18 @@ pub fn icon_worktree() -> @html.Html {
     attrs=@svg.Attrs::build()
       .fill("none")
       .stroke("currentColor")
-      .stroke_width("1.3"),
+      .stroke_width("1.2")
+      .stroke_linecap("round")
+      .stroke_linejoin("round"),
     [
-      svg_circle("4.5", "3.5", "1.6"),
-      svg_circle("4.5", "12.5", "1.6"),
-      svg_circle("11.5", "5.5", "1.6"),
-      @svg.path(d="M4.5 5.1v5.8M11.5 7.1c0 2.4-3.2 2.6-5.4 3.4"),
+      @svg.path(d="M2 8h5l6-6M8.5 2H13v4.5"),
+      @svg.path(d="m9 10 4 4M8.5 14H13V9.5"),
     ],
   )
 }
 
 ///|
-/// Hand-drawn in the same style as `icon_worktree`: a pull request — a branch
+/// Hand-drawn (not a codicon): a pull request — a branch
 /// line on the left, and on the right a line arriving through an arrow.
 pub fn icon_pull_request() -> @html.Html {
   @svg.svg(
