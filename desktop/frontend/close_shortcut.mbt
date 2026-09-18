@@ -13,6 +13,10 @@ fn focused_close_message() -> Msg? {
     None
   } else if element.closest(".terminal-panel") is Some(_) {
     Some(Terminal(@terminal.CloseActiveTerminal))
+  } else if element.closest(".editor.tree-open .file-tree-pane") is Some(_) {
+    // The navigator can own focus while a resource remains selected. Its
+    // collapsed reopen control belongs to the dock, not an open navigator.
+    Some(CloseWorkspaceNavigator)
   } else if element.closest(".editor") is Some(_) {
     Some(CloseActiveDockTab)
   } else {
@@ -58,7 +62,7 @@ fn close_focused(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 }
 
 ///|
-/// Keep focus in the dock when its launcher or a closed tab loses focus.
+/// Keep focus in the dock when its navigator, launcher, or a closed tab loses focus.
 fn focus_dock_after_render() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {

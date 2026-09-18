@@ -243,15 +243,11 @@ fn icon(image : () -> @html.Html) -> @html.Html {
 /// The `div.editor` class list the root view wraps the panel's parts in:
 /// tree visibility and the Settings-chosen dock layout are both classes, not
 /// structure, so every state renders the same children in the same order and
-/// the viewer host is never re-keyed. With no file open the breadcrumb row
-/// hides (see `breadcrumb_view`) and takes the tree toggle with it, so the
-/// tree must show regardless of the toggle's state — the panel is otherwise
-/// a dead pane.
+/// the viewer host is never re-keyed. With no file open the launcher can
+/// reveal any inventory, so visibility no longer depends on the active tab.
 pub fn editor_classes(state : State, ctx : Ctx) -> String {
-  let tree_visible = state.tree_open ||
-    (ctx.active_file is None && ctx.active_history_diff is None)
   let mut classes = "editor"
-  if tree_visible {
+  if state.tree_open {
     classes += " tree-open"
   }
   if ctx.tree_layout is RightSidebar {
@@ -574,44 +570,66 @@ fn tree_pane(dispatch : @cmd.Emit[Msg], state : State, ctx : Ctx) -> @html.Html 
         .class("tree-resize-handle"),
       ([] : Array[@html.Html]),
     ),
-    @html.div(
-      class="explorer-tabs",
-      attrs=@html.Attrs::build().role("tablist").aria_label("Explorer views"),
-      [
-        explorer_tab(
-          dispatch,
-          state.explorer_mode,
-          ExplorerFiles,
-          "Workspace files",
-          [
-            @icons.icon(@icons.icon_folder),
-            @html.span(class="visually-hidden", "Files"),
-          ],
-        ),
-        explorer_tab(
-          dispatch,
-          state.explorer_mode,
-          ExplorerChanges,
-          "Changed files (click again to refresh)",
-          // Keep the name and count in the accessibility tree, as before.
-          [
-            @icons.icon(@icons.icon_diff_multiple),
-            @html.span(class="visually-hidden", "Changes"),
-            change_count(state.changes),
-          ],
-        ),
-        explorer_tab(
-          dispatch,
-          state.explorer_mode,
-          ExplorerSearch,
-          "Search across the workspace",
-          [
-            @icons.icon(@icons.icon_search),
-            @html.span(class="visually-hidden", "Search"),
-          ],
-        ),
-      ],
-    ),
+    @html.div(class="explorer-header", [
+      @html.div(
+        class="explorer-tabs",
+        attrs=@html.Attrs::build().role("tablist").aria_label("Explorer views"),
+        [
+          explorer_tab(
+            dispatch,
+            state.explorer_mode,
+            ExplorerFiles,
+            "Workspace files",
+            [
+              @icons.icon(@icons.icon_folder),
+              @html.span(class="visually-hidden", "Files"),
+            ],
+          ),
+          explorer_tab(
+            dispatch,
+            state.explorer_mode,
+            ExplorerChanges,
+            "Changed files (click again to refresh)",
+            // Keep the name and count in the accessibility tree, as before.
+            [
+              @icons.icon(@icons.icon_diff_multiple),
+              @html.span(class="visually-hidden", "Changes"),
+              change_count(state.changes),
+            ],
+          ),
+          explorer_tab(
+            dispatch,
+            state.explorer_mode,
+            ExplorerSearch,
+            "Search across the workspace",
+            [
+              @icons.icon(@icons.icon_search),
+              @html.span(class="visually-hidden", "Search"),
+            ],
+          ),
+        ],
+      ),
+      @html.button(
+        class="panel-toggle navigator-toggle",
+        title=if state.tree_open {
+          "Hide workspace navigator"
+        } else {
+          "Show workspace navigator"
+        },
+        attrs=@html.Attrs::build()
+          .aria_label(
+            if state.tree_open {
+              "Hide workspace navigator"
+            } else {
+              "Show workspace navigator"
+            },
+          )
+          .aria_controls(ExplorerPanelId)
+          .aria_expanded(state.tree_open.to_string())
+          .on_click(_ => dispatch(ToggleTree)),
+        @icons.icon(@icons.icon_layout_sidebar_right),
+      ),
+    ]),
     @html.div(
       class=if state.explorer_mode is ExplorerSearch {
         "file-tree search-inventory"
@@ -1507,6 +1525,22 @@ fn change_inventory_rows(
             },
           ),
         ]
+        // Queue actions belong to Changes, while Content/Diff stays with the
+        // active document. Only expose actions for a selected queue member.
+        if active_review_position(state, ctx) is Some((selected, _, _)) {
+          rows.push(
+            @html.div(
+              class="changes-review-controls",
+              attrs=@html.Attrs::build()
+                .role("group")
+                .aria_label("Review \{selected.path.0}"),
+              [
+                review_navigation(dispatch, state, ctx),
+                review_progress(dispatch, state, ctx),
+              ],
+            ),
+          )
+        }
         let visible = filtered_changes(state)
         if visible.is_empty() {
           rows.push(
@@ -1879,16 +1913,6 @@ pub fn breadcrumb_view(
             @html.span(class="crumb-sep", "›"),
             @html.span(class="crumb crumb-file", diff.path.0),
           ]),
-          @html.button(
-            class="panel-toggle",
-            title=if state.tree_open {
-              "Hide file tree"
-            } else {
-              "Show file tree"
-            },
-            on_click=dispatch(ToggleTree),
-            icon(icon_folder),
-          ),
         ]),
         @html.div(class="review-command-row", [
           review_diff_mode_toolbar(dispatch, state, ctx),
@@ -1946,13 +1970,13 @@ pub fn breadcrumb_view(
   }
   let review = review_toolbar_visible(state, ctx)
   let path_row : Array[@html.Html] = [@html.div(class="crumb-path", crumbs)]
-  if !review {
-    path_row.push(review_diff_navigation(dispatch, state, ctx))
+  // Keep the per-file view choice in place while replacement inputs load.
+  if review {
+    path_row.push(review_mode_toolbar(dispatch, state, ctx))
   }
   if !full_diff_available(state, ctx) {
     path_row.push(review_badge(dispatch, state, ctx))
   }
-  path_row.push(review_progress(dispatch, state, ctx))
   if mbti_view_available(state, ctx) {
     path_row.push(mbti_view_toolbar(dispatch, state, ctx))
   }
@@ -1971,19 +1995,12 @@ pub fn breadcrumb_view(
       ),
     )
   }
-  path_row.push(
-    @html.button(
-      class="panel-toggle",
-      title=if state.tree_open { "Hide file tree" } else { "Show file tree" },
-      on_click=dispatch(ToggleTree),
-      icon(icon_folder),
-    ),
-  )
+
   if review {
     let children : Array[@html.Html] = [
       @html.div(class="viewer-breadcrumb-row", path_row),
       @html.div(class="review-command-row", [
-        review_mode_toolbar(dispatch, state, ctx),
+        review_diff_mode_toolbar(dispatch, state, ctx),
         @html.span(
           class="review-control-divider",
           attrs=@html.Attrs::build().aria_hidden("true"),
@@ -2301,75 +2318,52 @@ fn review_mode_toolbar(
     return @html.span(class="review-mode-toolbar hidden", "")
   }
   let diff = review.view_mode == ReviewDiff
-  let enabled = doc.diff_content() is Some(_)
-  let moon = supports_moon_diff(path.path)
-  let children : Array[@html.Html] = [
-    @html.button(
-      type_="button",
-      class=if diff {
-        "review-mode-button"
-      } else {
-        "review-mode-button active"
-      },
-      title="Show file",
-      disabled=!enabled,
-      on_click=if diff { dispatch(ToggleReviewDiff) } else { @cmd.none },
-      attrs=@html.Attrs::build()
-        .data_set("review-mode", "file")
-        .aria_label("File view")
-        .aria_pressed((!diff).to_string()),
-      "File",
-    ),
-    @html.span(
-      class="review-mode-divider",
-      attrs=@html.Attrs::build().aria_hidden("true"),
-      "",
-    ),
-    review_diff_mode_button(
-      enabled~,
-      ReviewDiffLine,
-      diff && (!moon || state.review_diff_mode == ReviewDiffLine),
-      if moon {
-        dispatch(ReviewDiffModeSelected(ReviewDiffLine))
-      } else if diff {
-        @cmd.none
-      } else {
-        dispatch(ToggleReviewDiff)
-      },
-    ),
-  ]
-  if moon {
-    children.push(
-      review_diff_mode_button(
-        enabled~,
-        ReviewDiffToken,
-        diff && state.review_diff_mode == ReviewDiffToken,
-        dispatch(ReviewDiffModeSelected(ReviewDiffToken)),
-      ),
-    )
-    children.push(
-      review_diff_mode_button(
-        enabled~,
-        ReviewDiffTree,
-        diff && state.review_diff_mode == ReviewDiffTree,
-        dispatch(ReviewDiffModeSelected(ReviewDiffTree)),
-      ),
-    )
-  }
   @html.div(
-    class=if review_controls_pending(state, ctx) {
-      "review-mode-toolbar pending"
-    } else {
-      "review-mode-toolbar"
-    },
-    attrs=@html.Attrs::build().role("toolbar").aria_label("Review mode"),
-    children,
+    class="review-mode-toolbar file-view-toggle",
+    attrs=@html.Attrs::build().role("group").aria_label("File view"),
+    [
+      @html.button(
+        type_="button",
+        class=if diff {
+          "review-mode-button"
+        } else {
+          "review-mode-button active"
+        },
+        title=if review.selected.has_working_tree_file() {
+          "Show this file's current content"
+        } else {
+          "No working file exists"
+        },
+        disabled=!review.selected.has_working_tree_file(),
+        on_click=if diff { dispatch(ToggleReviewDiff) } else { @cmd.none },
+        attrs=@html.Attrs::build()
+          .data_set("review-mode", "content")
+          .aria_label("Content view")
+          .aria_pressed((!diff).to_string()),
+        "Content",
+      ),
+      @html.button(
+        type_="button",
+        class=if diff {
+          "review-mode-button active"
+        } else {
+          "review-mode-button"
+        },
+        title="Compare this file's changes",
+        on_click=if diff { @cmd.none } else { dispatch(ToggleReviewDiff) },
+        attrs=@html.Attrs::build()
+          .data_set("review-mode", "diff")
+          .aria_label("Diff view")
+          .aria_pressed(diff.to_string()),
+        "Diff",
+      ),
+    ],
   )
 }
 
 ///|
-/// Historical comparisons have no File surface, but retain the same explicit
-/// MoonBit comparison algorithms as changed-file reviews.
+/// Algorithms describe the comparison, independently from Content/Diff.
+/// Historical comparisons reuse the same control without a Content switch.
 fn review_diff_mode_toolbar(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -2379,11 +2373,13 @@ fn review_diff_mode_toolbar(
     return @html.span(class="review-mode-toolbar hidden", "")
   }
   @html.div(
-    class="review-mode-toolbar review-history-mode-toolbar",
+    class="review-mode-toolbar comparison-algorithm" +
+      (if review_controls_pending(state, ctx) { " pending" } else { "" }),
     attrs=@html.Attrs::build()
       .role("toolbar")
       .aria_label("Comparison algorithm"),
     [
+      @html.span(class="review-option-label", "Compare by"),
       review_diff_mode_button(
         enabled=moon_diff_ready(state, ctx),
         ReviewDiffLine,
@@ -2407,6 +2403,8 @@ fn review_diff_mode_toolbar(
 }
 
 ///|
+/// Keep filters stable while replacement diff inputs load. Native checkboxes
+/// emit click for pointer and Space activation.
 fn review_comments_control(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -2417,17 +2415,11 @@ fn review_comments_control(
   }
   let enabled = full_diff_ready(state, ctx) &&
     state.review_diff_mode != ReviewDiffLine
+  // Preserve the selected filter while replacement diff inputs load.
   let pending = review_controls_pending(state, ctx) &&
     state.review_diff_mode != ReviewDiffLine
-  @html.button(
-    type_="button",
-    class="review-comments-control" +
-      (if (enabled || pending) && state.review_diff_ignore_comments {
-        " active"
-      } else {
-        ""
-      }) +
-      (if pending { " pending" } else { "" }),
+  @html.label(
+    class="review-comments-control" + (if pending { " pending" } else { "" }),
     title=if !full_diff_ready(state, ctx) {
       "Available in diff view"
     } else if state.review_diff_mode == ReviewDiffLine {
@@ -2437,18 +2429,16 @@ fn review_comments_control(
     } else {
       "Ignore comment-only changes"
     },
-    disabled=!enabled,
-    on_click=dispatch(ToggleReviewDiffIgnoreComments),
-    attrs=@html.Attrs::build()
-      .aria_label("Ignore comments")
-      .aria_pressed(
-        ((enabled || pending) && state.review_diff_ignore_comments).to_string(),
+    [
+      @html.input(
+        input_type=Checkbox,
+        checked=(enabled || pending) && state.review_diff_ignore_comments,
+        attrs=@html.Attrs::build()
+          .disabled(!enabled)
+          .on_click(_ => dispatch(ToggleReviewDiffIgnoreComments)),
       ),
-    if state.review_diff_ignore_comments {
-      "Comments: ignored"
-    } else {
-      "Comments: included"
-    },
+      @html.text("Ignore comments"),
+    ],
   )
 }
 
@@ -2463,17 +2453,11 @@ fn review_tests_control(
   }
   let enabled = full_diff_ready(state, ctx) &&
     state.review_diff_mode != ReviewDiffLine
+  // Preserve the selected filter while replacement diff inputs load.
   let pending = review_controls_pending(state, ctx) &&
     state.review_diff_mode != ReviewDiffLine
-  @html.button(
-    type_="button",
-    class="review-tests-control" +
-      (if (enabled || pending) && state.review_diff_ignore_tests {
-        " active"
-      } else {
-        ""
-      }) +
-      (if pending { " pending" } else { "" }),
+  @html.label(
+    class="review-tests-control" + (if pending { " pending" } else { "" }),
     title=if !full_diff_ready(state, ctx) {
       "Available in diff view"
     } else if state.review_diff_mode == ReviewDiffLine {
@@ -2483,18 +2467,16 @@ fn review_tests_control(
     } else {
       "Ignore MoonBit test blocks"
     },
-    disabled=!enabled,
-    on_click=dispatch(ToggleReviewDiffIgnoreTests),
-    attrs=@html.Attrs::build()
-      .aria_label("Ignore tests")
-      .aria_pressed(
-        ((enabled || pending) && state.review_diff_ignore_tests).to_string(),
+    [
+      @html.input(
+        input_type=Checkbox,
+        checked=(enabled || pending) && state.review_diff_ignore_tests,
+        attrs=@html.Attrs::build()
+          .disabled(!enabled)
+          .on_click(_ => dispatch(ToggleReviewDiffIgnoreTests)),
       ),
-    if state.review_diff_ignore_tests {
-      "Tests: ignored"
-    } else {
-      "Tests: included"
-    },
+      @html.text("Ignore tests"),
+    ],
   )
 }
 
@@ -2882,9 +2864,62 @@ fn breadcrumb_picker_row(
 }
 
 ///|
+/// Previous/next controls for walking the reviewable Changes queue without
+/// leaving the inventory. Native buttons remain keyboard
+/// reachable; changed rows additionally support ArrowUp/Down and Home/End.
+fn review_navigation(
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
+) -> @html.Html {
+  guard active_review_position(state, ctx) is Some((selected, index, total)) else {
+    return @html.span(class="review-navigation hidden", "")
+  }
+  let previous = review_neighbor(state, selected, -1)
+  let next = review_neighbor(state, selected, 1)
+  @html.div(
+    class="review-navigation",
+    attrs=@html.Attrs::build()
+      .role("group")
+      .aria_label("Changed file navigation"),
+    [
+      @html.button(
+        type_="button",
+        class="review-nav-button",
+        title="Previous changed file",
+        disabled=previous is None,
+        on_click=match previous {
+          Some(previous) => dispatch(ChangedFileSelected(previous))
+          None => @cmd.none
+        },
+        attrs=@html.Attrs::build().aria_label("Previous changed file"),
+        "‹",
+      ),
+      @html.span(
+        class="review-nav-position",
+        attrs=@html.Attrs::build().aria_live("polite"),
+        "\{index + 1} of \{total}",
+      ),
+      @html.button(
+        type_="button",
+        class="review-nav-button",
+        title="Next changed file",
+        disabled=next is None,
+        on_click=match next {
+          Some(next) => dispatch(ChangedFileSelected(next))
+          None => @cmd.none
+        },
+        attrs=@html.Attrs::build().aria_label("Next changed file"),
+        "›",
+      ),
+    ],
+  )
+}
+
+///|
 /// Progress control for the exact Changes row attached to the active review.
-/// Keeping it beside the diff-mode badge makes completion explicit without
-/// turning an ordinary file open into review state.
+/// Keeping it with the queue makes its scope explicit while the file viewer
+/// retains the document's independent Content/Diff choice.
 fn review_progress(
   dispatch : @cmd.Emit[Msg],
   state : State,
