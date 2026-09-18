@@ -326,14 +326,21 @@ pub fn component(
   let rendered = blocks.assoc_by(
     (_, block) => {
       let renders = Ref(0)
-      let (changes, changes_emit) = message_changes_state(block.map(pair => pair.1), actions)
+      let (changes, changes_emit) = message_changes_state(
+        block.map(pair => pair.1),
+        actions,
+      )
       changes.map2(block, (changes, pair) => {
         let (locale, block) = pair
         renders.val += 1
         let html = @html.memo_by(
           block,
           block => {
-            block.render(locale~, actions, changes?=changes.control(block, changes_emit))
+            block.render(
+              locale~,
+              actions,
+              changes?=changes.control(block, changes_emit),
+            )
           },
           by=_ => renders.val,
         )

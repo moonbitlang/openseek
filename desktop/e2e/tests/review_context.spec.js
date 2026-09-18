@@ -279,6 +279,20 @@ test('saved message changes keep independent disclosures and immutable previews'
   await expect(popup.locator('.changes-range').first()).toHaveText('Old L8 → New L9');
   await popup.getByTitle('src/main.mbt', { exact: true }).click();
   await expect(popup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['ja-JP'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  const localizedPopup = page.getByRole('dialog', { name: '選択した変更', exact: true });
+  await expect(localizedPopup).toBeVisible();
+  await expect(chips.first()).toHaveText('変更 · 2 ファイル');
+  await expect(localizedPopup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
+  await expect(localizedPopup).toContainText('このメッセージに含まれています');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['en'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(popup).toBeVisible();
   await chips.last().click();
   await expect(page.getByRole('dialog', { name: 'Selected changes' })).toHaveCount(1);
   await expect(popup.locator('.changes-preview')).toContainText('let another_value = 20');

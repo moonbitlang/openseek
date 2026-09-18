@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/sub",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/mention_context",
 }
 
@@ -28,7 +29,7 @@ pub(all) struct Control {
   open_review : @cmd.Emit[@mention_context.ReviewChanges]
   remove : @cmd.Emit[Array[@mention_context.ReviewChanges]]?
 }
-pub fn Control::view(Self, Array[@mention_context.ReviewChanges]) -> @html.Html
+pub fn Control::view(locale? : @i18n.Locale, Self, Array[@mention_context.ReviewChanges]) -> @html.Html
 
 // Type aliases
 

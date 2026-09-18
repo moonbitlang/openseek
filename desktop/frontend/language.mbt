@@ -35,10 +35,11 @@ fn read_language_preference() -> Result[@i18n.Preference?, String] {
 
 ///|
 fn save_language(
+  is_desktop~ : Bool,
   language : @i18n.Preference,
   dispatch : @cmd.Emit[Msg],
 ) -> @cmd.Cmd {
-  if @interop.page_channel() is Some(Local) {
+  if is_desktop {
     return @cmd.custom_cmd(scheduler => {
       @js.async_run(() => {
         let _reply = @interop.bridge_request_in_order(
@@ -73,9 +74,9 @@ fn save_language(
 }
 
 ///|
-fn load_language(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+fn load_language(is_desktop~ : Bool, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    if @interop.page_channel() is Some(Local) {
+    if is_desktop {
       @js.async_run(() => {
         let saved = @interop.bridge_request_in_order(
           Local,
@@ -113,10 +114,14 @@ fn load_language(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 }
 
 ///|
-fn apply_language(dispatch : @cmd.Emit[Msg], locale : @i18n.Locale) -> @cmd.Cmd {
+fn apply_language(
+  is_desktop~ : Bool,
+  dispatch : @cmd.Emit[Msg],
+  locale : @i18n.Locale,
+) -> @cmd.Cmd {
   @cmd.batch([
     @fileeditor.apply_language(locale),
-    if @interop.page_channel() is Some(Local) {
+    if is_desktop {
       browser_op(
         dispatch,
         @commands.app_language_apply,

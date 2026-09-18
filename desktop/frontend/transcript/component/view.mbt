@@ -771,7 +771,10 @@ fn user_message_view(
       }
       if changes is Some(control) {
         chips.push(
-          control.view(locale~, @mention_context.review_changes(parsed.mentions)),
+          control.view(
+            locale~,
+            @mention_context.review_changes(parsed.mentions),
+          ),
         )
       }
       body.push(@html.div(class="mention-tray", chips))

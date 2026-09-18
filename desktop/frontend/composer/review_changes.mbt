@@ -6,7 +6,11 @@ fn Entry::review_changes(self : Entry) -> Array[@mention_context.ReviewChanges] 
 }
 
 ///|
-fn Entry::changes_chip(locale? : @i18n.Locale = English, self : Entry, emit : @cmd.Emit[Msg]) -> @html.Html {
+fn Entry::changes_chip(
+  locale? : @i18n.Locale = English,
+  self : Entry,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   @review_changes.Control::{
     id: "composer-review-changes",
     open: self.changes_open,

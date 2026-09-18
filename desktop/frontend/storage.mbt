@@ -12,9 +12,12 @@
 // localStorage would leak across hosts.
 
 ///|
-fn load_saved_settings(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+fn load_saved_settings(
+  is_desktop~ : Bool,
+  dispatch : @cmd.Emit[Msg],
+) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    scheduler.add(load_language(dispatch))
+    scheduler.add(load_language(is_desktop~, dispatch))
     scheduler.add(
       dispatch(
         SettingsLoaded(

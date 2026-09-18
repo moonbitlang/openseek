@@ -255,9 +255,9 @@ fn append_review_context_action(
   button.set_attribute("class", "review-hunk-context-button")
   button.set_attribute("data-hunk-action", "context")
   let label = match coverage {
-    @mention_context.NotIncluded => "Add to context"
-    @mention_context.PartlyIncluded => "Partly in context"
-    @mention_context.Included => "In context"
+    @mention_context.NotIncluded => ui(viewer_locale(), AddToContext)
+    @mention_context.PartlyIncluded => ui(viewer_locale(), PartlyInContext)
+    @mention_context.Included => ui(viewer_locale(), InContext)
   }
   button.set_attribute("aria-label", label)
   button.set_attribute(
@@ -271,7 +271,7 @@ fn append_review_context_action(
   button.set_attribute(
     "title",
     if coverage is @mention_context.Included {
-      "Remove this hunk from context"
+      ui(viewer_locale(), RemoveHunkContext)
     } else {
       label
     },
@@ -331,8 +331,8 @@ fn append_review_context_action(
     })
     for
       (label, adding) in [
-        ("Add remaining changes", true),
-        ("Remove included changes", false),
+        (ui(viewer_locale(), AddRemainingChanges), true),
+        (ui(viewer_locale(), RemoveIncludedChanges), false),
       ] {
       let item = @dom.document().create_element("button")
       item.set_attribute("type", "button")

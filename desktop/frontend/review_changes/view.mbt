@@ -18,7 +18,10 @@ fn changes_file_key(changes : @mention_context.ReviewChanges) -> String {
 }
 
 ///|
-fn changes_label(locale : @i18n.Locale, changes : Array[@mention_context.ReviewChanges]) -> String {
+fn changes_label(
+  locale : @i18n.Locale,
+  changes : Array[@mention_context.ReviewChanges],
+) -> String {
   let files : Array[String] = []
   for selection in changes {
     let key = changes_file_key(selection)
@@ -105,7 +108,10 @@ fn change_line_ranges(lines : Array[@mention_context.ChangeLine]) -> String {
 }
 
 ///|
-fn excerpt_label(locale : @i18n.Locale, excerpt : @mention_context.ChangeExcerpt) -> String {
+fn excerpt_label(
+  locale : @i18n.Locale,
+  excerpt : @mention_context.ChangeExcerpt,
+) -> String {
   let parts : Array[String] = []
   if !excerpt.original.is_empty() {
     parts.push(OldLines.text(locale) + change_line_ranges(excerpt.original))
@@ -187,7 +193,10 @@ fn Control::popup(
           cards.push(
             @html.div(class="changes-excerpt", [
               @html.div(class="changes-excerpt-header", [
-                @html.span(class="changes-range", excerpt_label(locale, excerpt)),
+                @html.span(
+                  class="changes-range",
+                  excerpt_label(locale, excerpt),
+                ),
                 @html.button(
                   class="changes-open",
                   type_="button",

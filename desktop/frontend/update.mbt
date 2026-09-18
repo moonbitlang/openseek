@@ -2035,7 +2035,7 @@ fn update_msg(
       (
         @cmd.batch([
           device,
-          load_saved_settings(dispatch),
+          load_saved_settings(is_desktop=model.is_desktop, dispatch),
           watch_color_scheme(dispatch, model.is_desktop),
           request_sidebar_resize_mount(),
           measure_scrollbar_lane(),
@@ -2047,7 +2047,10 @@ fn update_msg(
     LanguageLoaded(preference, languages) => {
       let language = preference.unwrap_or(@i18n.Preference::System)
       let locale = language.resolve(languages)
-      (apply_language(dispatch, locale), { ..model, language, locale, })
+      (
+        apply_language(is_desktop=model.is_desktop, dispatch, locale),
+        { ..model, language, locale, },
+      )
     }
     LanguageChanged(value, languages) => {
       guard @i18n.Preference::parse(value) is Some(language) else {
@@ -2056,8 +2059,8 @@ fn update_msg(
       let locale = language.resolve(languages)
       (
         @cmd.batch([
-          apply_language(dispatch, locale),
-          save_language(language, dispatch),
+          apply_language(is_desktop=model.is_desktop, dispatch, locale),
+          save_language(is_desktop=model.is_desktop, language, dispatch),
         ]),
         { ..model, language, locale, select_menu: None, },
       )
@@ -2070,7 +2073,10 @@ fn update_msg(
       )
     SystemLanguagesChanged(languages) => {
       let locale = model.language.resolve(languages)
-      (apply_language(dispatch, locale), { ..model, locale, })
+      (
+        apply_language(is_desktop=model.is_desktop, dispatch, locale),
+        { ..model, locale, },
+      )
     }
     SettingsLoaded(
       notification_corner~,
