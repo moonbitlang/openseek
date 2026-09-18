@@ -110,11 +110,42 @@ $ moonx "$READ" sample.mbt:3
 <system>start_line=3 shown_lines=2 total_lines=4 truncated=false</system>
 ```
 
+## Read several files in one call
+
+One call takes any number of selectors and returns them in the order given,
+each under its own heading with its own footer. Selectors are independent, so
+a range on one file does not affect the next. Batch the paths you already know
+into a single call rather than calling once per file.
+
+```mooncram
+$ moonx "$READ" sample.mbt:2:3 note.txt
+=== "sample.mbt" ===
+2 |selected
+3 |last
+<system>start_line=2 shown_lines=2 total_lines=4 truncated=false</system>
+=== "note.txt" ===
+1 |whole file
+<system>start_line=1 shown_lines=1 total_lines=1 truncated=false</system>
+```
+
+The same path may appear more than once, which is how two distant regions of
+one file arrive together:
+
+```mooncram
+$ moonx "$READ" sample.mbt:1:1 sample.mbt:3
+=== "sample.mbt" ===
+1 |first
+<system>start_line=1 shown_lines=1 total_lines=4 truncated=false</system>
+=== "sample.mbt" ===
+3 |last
+4 |
+<system>start_line=3 shown_lines=2 total_lines=4 truncated=false</system>
+```
+
 ## Read past EOF or read an empty file
 
 A range beyond the end is not an error: the footer reports what the file
-holds. An empty file says so explicitly. Several selectors in one call come
-back in order, each under its own heading.
+holds. An empty file says so explicitly.
 
 ```mooncram
 $ moonx "$READ" sample.mbt:10:20 empty.txt

@@ -81,7 +81,13 @@ fn default_prompt() -> String {
     #|
     #|The builtin call you will make most. Read known files together immediately;
     #|`path:start:end` selects inclusive, 1-based lines, and its tool description
-    #|gives the arguments. Use the returned text and file-status footers directly
+    #|gives the arguments. One call takes any number of selectors and returns them
+    #|in order, each under its own heading, so batch every path you already know
+    #|instead of calling once per file:
+    #|
+    #|`mbtx(description="...", filename="@builtin/read.mbtx", args=["moon.mod", "src/main.mbt:120:200", "src/lib.mbt"])`
+    #|
+    #|Use the returned text and file-status footers directly
     #|to do the task, including empty/missing-file checks. List directories only to
     #|discover unknown paths. Reread only when needed content is missing,
     #|truncated, or changed.
