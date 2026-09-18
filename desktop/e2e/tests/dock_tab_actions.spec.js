@@ -25,6 +25,8 @@ test('new-tab menu stays anchored to plus in split, expanded and narrow panels',
       await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
     } else if (layout === 'narrow') {
       await page.setViewportSize({ width: 390, height: 844 });
+      // Narrow navigation covers the retained resource; dismiss it to use the tab bar.
+      await page.getByRole('button', { name: 'Hide workspace navigator', exact: true }).click();
     }
     await add.click();
     await expect(menu).toBeVisible();

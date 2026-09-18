@@ -106,8 +106,8 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   // Line diff keeps semantic-only filters inert. Token and Tree make those
   // user controls available.
   await reviewToolbar.getByRole('button', { name: 'Line diff' }).click();
-  const ignoreComments = page.getByRole('button', { name: 'Ignore comments' });
-  const ignoreTests = page.getByRole('button', { name: 'Ignore tests' });
+  const ignoreComments = page.getByRole('checkbox', { name: 'Ignore comments' });
+  const ignoreTests = page.getByRole('checkbox', { name: 'Ignore tests' });
   await expect(ignoreComments).toBeDisabled();
   await expect(ignoreTests).toBeDisabled();
 
@@ -123,12 +123,12 @@ test('Review loads changed files and preserves its interactive diff workflow', a
     'aria-pressed',
     'true',
   );
-  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'true');
-  await expect(ignoreTests).toHaveAttribute('aria-pressed', 'true');
+  await expect(ignoreComments).toBeChecked();
+  await expect(ignoreTests).toBeChecked();
   await ignoreComments.click();
   await ignoreTests.click();
-  await expect(ignoreComments).toHaveAttribute('aria-pressed', 'false');
-  await expect(ignoreTests).toHaveAttribute('aria-pressed', 'false');
+  await expect(ignoreComments).not.toBeChecked();
+  await expect(ignoreTests).not.toBeChecked();
 
   await reviewToolbar.getByRole('button', { name: 'Tree diff' }).click();
   await expect(reviewToolbar.getByRole('button', { name: 'Tree diff' })).toHaveAttribute(
@@ -228,9 +228,9 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   await expect(changes.locator('.review-progress-summary')).toHaveText(
     '1 / 2 reviewed',
   );
-  await page.getByRole('button', { name: 'Next change' }).click();
+  await page.getByRole('button', { name: 'Next change', exact: true }).click();
   await expect(library).toHaveAttribute('aria-current', 'page');
-  await expect(page.locator('.review-nav-position')).toHaveText('File 2 of 2');
+  await expect(page.locator('.review-navigation-controls .review-nav-position')).toHaveText('File 2 of 2');
   await expect.poll(() => app.requests.find(request =>
     request.method === 'git.original_file' &&
     request.params?.path === 'src/lib.mbt' &&
@@ -314,11 +314,11 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
       await expect(line).toBeDisabled();
       await expect(split).toBeDisabled();
       await expect(mode.getByRole('button', { name: 'Token diff' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Ignore comments' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Ignore tests' })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'Ignore comments' })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'Ignore tests' })).toBeVisible();
       await expect(page.locator('.review-navigation-controls')).toBeVisible();
       await expect(page.locator('.review-navigation-controls')).toHaveAttribute('aria-busy', 'true');
-      await expect(page.locator('.review-nav-position')).toHaveText('File 1 of 2');
+      await expect(page.locator('.review-navigation-controls .review-nav-position')).toHaveText('File 1 of 2');
       await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
       await expect(page.locator('.review-navigation-controls')).toHaveAttribute('inert', '');
       expect(await navigationAppearance()).toEqual(appearanceBefore);
@@ -335,7 +335,7 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
     await expect(split).toBeEnabled();
     await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 15');
     await expect(page.locator('.review-navigation-controls')).toContainText('Mark viewed');
-    await expect(page.locator('.review-nav-position')).toHaveText('File 2 of 2');
+    await expect(page.locator('.review-navigation-controls .review-nav-position')).toHaveText('File 2 of 2');
     await expect(page.locator('.review-navigation-controls')).toHaveAttribute('aria-busy', 'false');
     await expect(page.locator('.viewer-notice')).not.toContainText('Loading diff');
     const frames = await page.evaluate(() => {
@@ -508,7 +508,7 @@ test('Review routes Markdown source and keeps non-MoonBit comparisons on Line di
     'aria-pressed',
     'true',
   );
-  await expect(page.getByRole('button', { name: 'Ignore comments' })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Ignore comments' })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: 'Ignore tests' })).toHaveCount(0);
 
   await toolbar.getByRole('button', { name: 'Content view' }).click();
@@ -741,8 +741,8 @@ test('Git history expands commits and opens an immutable historical diff', async
     'true',
   );
   await expect(algorithms.getByRole('button')).toHaveText(['Line', 'Token', 'Tree']);
-  await expect(page.getByRole('button', { name: 'Ignore comments' })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Ignore tests' })).toBeEnabled();
+  await expect(page.getByRole('checkbox', { name: 'Ignore comments' })).toBeEnabled();
+  await expect(page.getByRole('checkbox', { name: 'Ignore tests' })).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 

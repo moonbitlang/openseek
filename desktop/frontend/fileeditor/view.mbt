@@ -1577,7 +1577,7 @@ fn change_inventory_rows(
                 .aria_label("Review \{selected.path.0}"),
               [
                 review_navigation(dispatch, state, ctx),
-                review_progress(dispatch, state, ctx),
+                review_progress(locale~, dispatch, state, ctx),
               ],
             ),
           )
@@ -2050,7 +2050,6 @@ pub fn breadcrumb_view(
   if !full_diff_available(state, ctx) {
     path_row.push(review_badge(locale~, dispatch, state, ctx))
   }
-  path_row.push(review_progress(locale~, dispatch, state, ctx))
   if mbti_view_available(state, ctx) {
     path_row.push(mbti_view_toolbar(locale~, dispatch, state, ctx))
   }
@@ -2498,7 +2497,8 @@ fn review_diff_mode_toolbar(
     return @html.span(class="review-mode-toolbar hidden", "")
   }
   @html.div(
-    class="review-mode-toolbar comparison-algorithm",
+    class="review-mode-toolbar comparison-algorithm" +
+      (if review_controls_pending(state, ctx) { " pending" } else { "" }),
     attrs=@html.Attrs::build()
       .role("toolbar")
       .aria_label(ui(locale, ComparisonAlgorithm)),
@@ -2530,7 +2530,8 @@ fn review_diff_mode_toolbar(
 }
 
 ///|
-/// Keep the shared filter buttons stable while replacement diff inputs load.
+/// Keep filters stable while replacement diff inputs load. Native checkboxes
+/// emit click for pointer and Space activation.
 fn review_comments_control(
   locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
@@ -2542,17 +2543,11 @@ fn review_comments_control(
   }
   let enabled = full_diff_ready(state, ctx) &&
     state.review_diff_mode != ReviewDiffLine
+  // Preserve the selected filter while replacement diff inputs load.
   let pending = review_controls_pending(state, ctx) &&
     state.review_diff_mode != ReviewDiffLine
-  @html.button(
-    type_="button",
-    class="review-comments-control" +
-      (if (enabled || pending) && state.review_diff_ignore_comments {
-        " active"
-      } else {
-        ""
-      }) +
-      (if pending { " pending" } else { "" }),
+  @html.label(
+    class="review-comments-control" + (if pending { " pending" } else { "" }),
     title=if !full_diff_ready(state, ctx) {
       ui(locale, AvailableDiff)
     } else if state.review_diff_mode == ReviewDiffLine {
@@ -2562,18 +2557,16 @@ fn review_comments_control(
     } else {
       ui(locale, IgnoreCommentChanges)
     },
-    disabled=!enabled,
-    on_click=dispatch(ToggleReviewDiffIgnoreComments),
-    attrs=@html.Attrs::build()
-      .aria_label(ui(locale, IgnoreComments))
-      .aria_pressed(
-        ((enabled || pending) && state.review_diff_ignore_comments).to_string(),
+    [
+      @html.input(
+        input_type=Checkbox,
+        checked=(enabled || pending) && state.review_diff_ignore_comments,
+        attrs=@html.Attrs::build()
+          .disabled(!enabled)
+          .on_click(_ => dispatch(ToggleReviewDiffIgnoreComments)),
       ),
-    if state.review_diff_ignore_comments {
-      ui(locale, CommentsIgnored)
-    } else {
-      ui(locale, CommentsIncluded)
-    },
+      @html.text(ui(locale, IgnoreComments)),
+    ],
   )
 }
 
@@ -2589,17 +2582,11 @@ fn review_tests_control(
   }
   let enabled = full_diff_ready(state, ctx) &&
     state.review_diff_mode != ReviewDiffLine
+  // Preserve the selected filter while replacement diff inputs load.
   let pending = review_controls_pending(state, ctx) &&
     state.review_diff_mode != ReviewDiffLine
-  @html.button(
-    type_="button",
-    class="review-tests-control" +
-      (if (enabled || pending) && state.review_diff_ignore_tests {
-        " active"
-      } else {
-        ""
-      }) +
-      (if pending { " pending" } else { "" }),
+  @html.label(
+    class="review-tests-control" + (if pending { " pending" } else { "" }),
     title=if !full_diff_ready(state, ctx) {
       ui(locale, AvailableDiff)
     } else if state.review_diff_mode == ReviewDiffLine {
@@ -2609,18 +2596,16 @@ fn review_tests_control(
     } else {
       ui(locale, IgnoreTestBlocks)
     },
-    disabled=!enabled,
-    on_click=dispatch(ToggleReviewDiffIgnoreTests),
-    attrs=@html.Attrs::build()
-      .aria_label(ui(locale, IgnoreTests))
-      .aria_pressed(
-        ((enabled || pending) && state.review_diff_ignore_tests).to_string(),
+    [
+      @html.input(
+        input_type=Checkbox,
+        checked=(enabled || pending) && state.review_diff_ignore_tests,
+        attrs=@html.Attrs::build()
+          .disabled(!enabled)
+          .on_click(_ => dispatch(ToggleReviewDiffIgnoreTests)),
       ),
-    if state.review_diff_ignore_tests {
-      ui(locale, TestsIgnored)
-    } else {
-      ui(locale, TestsIncluded)
-    },
+      @html.text(ui(locale, IgnoreTests)),
+    ],
   )
 }
 

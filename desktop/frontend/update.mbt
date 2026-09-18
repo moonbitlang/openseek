@@ -5825,6 +5825,10 @@ fn update_msg(
         {
           ..model,
           dock: @dock.open_github(model.dock),
+          file_panel: {
+            ..model.file_panel,
+            tree_open: model.file_panel.tree_open && !model.narrow,
+          },
           right_panel_open: true,
           right_panel_menu_open: false,
         },
@@ -5835,6 +5839,10 @@ fn update_msg(
         {
           ..model,
           dock: @dock.open_jobs(model.dock),
+          file_panel: {
+            ..model.file_panel,
+            tree_open: model.file_panel.tree_open && !model.narrow,
+          },
           right_panel_open: true,
           right_panel_menu_open: false,
         },
@@ -20256,6 +20264,8 @@ test "closing a file preserves the promoted non-file tab and navigator preferenc
     request in [
       ExternalLinkClicked("https://example.test/"),
       WorkflowsRequested,
+      JobsRequested,
+      GithubRequested,
     ] {
     for narrow in [false, true] {
       let (_, destination) = update(dispatch, request, {
@@ -20264,6 +20274,9 @@ test "closing a file preserves the promoted non-file tab and navigator preferenc
         sidebar_open: false,
         right_panel_open: true,
       })
+      if narrow {
+        assert_false(destination.file_panel.tree_open)
+      }
       let successor = destination.dock.active
       let (_, opened) = update(
         dispatch,
@@ -20296,6 +20309,8 @@ test "closing the last dock tab prepares the navigator for reopening" {
     request in [
       BrowserTabRequested,
       WorkflowsRequested,
+      JobsRequested,
+      GithubRequested,
       FileEditor(FileSelected(path=Relative("src/main.mbt"), name="main.mbt")),
     ] {
     let (_, opened) = update(dispatch, request, {

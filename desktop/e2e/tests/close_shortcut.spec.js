@@ -92,7 +92,7 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   await expect(toggle).toHaveAccessibleName('Show sidebar');
   await expect(page.locator('.app > aside')).toBeHidden();
   await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
-  await page.getByRole('button', { name: 'Collapse right panel', exact: true }).click();
+  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
   await toggle.click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
@@ -155,10 +155,11 @@ for (const width of [1440, 390]) {
       const app = await installDesktop(page);
       await page.setViewportSize({ width, height: 900 });
       await app.openReview();
-      await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+      await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+      await page.getByRole('button', { name: 'Line diff', exact: true }).click();
       if (destination !== 'File') {
         await page.getByTitle('New tab', { exact: true }).click();
-        await page.getByRole('button', { name: destination === 'Browser' ? /^Browse / : /^Workflows / }).click();
+        await page.getByRole('menuitem', { name: destination === 'Browser' ? 'Browse' : 'Workflows', exact: true }).click();
       }
       const tabs = page.locator('.editor-tab');
       const initialTabs = await tabs.allTextContents();
@@ -173,7 +174,7 @@ for (const width of [1440, 390]) {
         await tab.click();
         // Exercise both the navigator header and controls inside its body.
         if (inventory === 'Changes') {
-          await page.getByRole('button', { name: /View diff: src\/lib\.mbt/ }).focus();
+          await page.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).focus();
         } else if (inventory === 'Search') {
           await page.locator('#workspace-search-input').fill('answer');
         } else {
@@ -201,6 +202,7 @@ test('Selecting a dock tab moves focus out of the composer', async ({ page }) =>
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.getByRole('button', { name: /^Review / }).click();
   await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   const review = page.locator('.editor-tab', { hasText: 'main.mbt' });
   await page.getByTitle('New tab', { exact: true }).click();
   await page.getByRole('menu', { name: 'New tab', exact: true })
@@ -424,6 +426,7 @@ for (const destination of ['Browser', 'Workflows']) {
     await page.setViewportSize({ width: 390, height: 850 });
     await app.openReview();
     await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.getByRole('button', { name: 'Line diff', exact: true }).click();
     await page.getByTitle('New tab', { exact: true }).click();
     await page.getByRole('menuitem', { name: destination === 'Browser' ? 'Browse' : 'Workflows', exact: true }).click();
     const tabs = page.locator('.editor-tab');

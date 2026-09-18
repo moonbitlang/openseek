@@ -16,7 +16,7 @@ test('transcript directory link reopens Files beside the current Workflows tab',
   await app.openReview();
   await page.getByRole('button', { name: /^Workflows / }).click();
   await page.getByRole('button', { name: 'Hide workspace navigator' }).click();
-  await page.getByRole('button', { name: 'Collapse right panel' }).click();
+  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
   await page.getByRole('button', { name: 'Source directory', exact: true }).click();
   await expect(page.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.file-tree-pane').getByText('main.mbt', { exact: true })).toBeVisible();
@@ -37,7 +37,8 @@ test('failed Search refresh replaces retained review content with a visible noti
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   await expect(page.locator('#diff-editor-host')).toContainText('working tree');
   await page.getByRole('tab', { name: 'Search', exact: true }).click();
   await page.getByRole('textbox', { name: 'Search', exact: true }).fill('working');
@@ -73,7 +74,8 @@ test('workspace navigation preserves tabs and each file owns its Content/Diff vi
   await expect(tabs).toHaveCount(0);
   const navigator = page.getByRole('tablist', { name: 'Explorer views' });
   const fileView = page.getByRole('group', { name: 'File view' });
-  await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   await fileView.getByRole('button', { name: 'Content view' }).click();
   await page.getByRole('button', { name: 'Next changed file' }).click();
   await expect(fileView.getByRole('button', { name: 'Diff view' })).toHaveAttribute('aria-pressed', 'true');
@@ -106,7 +108,7 @@ test('workspace navigation preserves tabs and each file owns its Content/Diff vi
   await page.getByRole('button', { name: 'Hide workspace navigator' }).click();
   await expect(navigator).toBeHidden();
   await expect(fileView).toBeVisible();
-  await page.getByRole('button', { name: 'Collapse right panel' }).click();
+  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
   await expect(page.locator('.editor')).toBeHidden();
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Show workspace navigator' })).toBeVisible();
@@ -117,40 +119,44 @@ test('workspace navigation preserves tabs and each file owns its Content/Diff vi
 });
 
 for (const layout of ['right-sidebar', 'bottom-panel', 'narrow']) {
-  test(`empty navigator and resource views remain reachable in ${layout}`, async ({ page }) => {
-    if (layout === 'narrow') await page.setViewportSize({ width: 390, height: 850 });
-    await page.addInitScript(layout => localStorage.setItem('openseek.tree_layout', layout), layout);
-    const app = new DesktopBrowserHarness(page);
-    await app.install();
-    await app.goto();
-    if (layout === 'narrow') await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
-    await app.openSession();
-    await app.openReview();
-    await expect(page.locator('.editor-tab')).toHaveCount(0);
-    await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
-    await expect(page.getByRole('group', { name: 'File view' })).toBeVisible();
-    if (layout === 'narrow') {
-      await page.getByRole('button', { name: 'Show workspace navigator' }).click();
-    }
-    await expect(page.getByRole('tab', { name: /^Changes/ })).toBeVisible();
-    await page.getByRole('button', { name: 'Hide workspace navigator' }).click();
-    await expect(page.getByRole('group', { name: 'File view' })).toBeVisible();
-    const viewer = await page.locator('.viewer-stack').boundingBox();
-    expect(viewer.height).toBeGreaterThan(100);
-    expect(viewer.width).toBeGreaterThan(200);
-    await page.getByTitle('New tab', { exact: true }).click();
-    await page.getByRole('button', { name: /^Workflows / }).click();
-    await expect(page.locator('.workflow-panel')).toBeVisible();
-    await page.getByRole('button', { name: 'Show workspace navigator' }).click();
-    await expect(page.getByRole('tab', { name: /^Changes/ })).toBeVisible();
-    if (layout === 'narrow') {
-      await expect(page.locator('.workflow-panel')).toBeHidden();
+  for (const [destination, body] of [['Workflows', '.workflow-panel'], ['Jobs', '.jobs-panel'], ['GitHub', '.github-panel']]) {
+    test(`empty navigator and ${destination} remain reachable in ${layout}`, async ({ page }) => {
+      if (layout === 'narrow') await page.setViewportSize({ width: 390, height: 850 });
+      await page.addInitScript(layout => localStorage.setItem('openseek.tree_layout', layout), layout);
+      const app = new DesktopBrowserHarness(page);
+      await app.install();
+      await app.goto();
+      if (layout === 'narrow') await page.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+      await app.openSession();
+      await app.openReview();
+      await expect(page.locator('.editor-tab')).toHaveCount(0);
+      await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+      await page.getByRole('button', { name: 'Line diff', exact: true }).click();
+      await expect(page.getByRole('group', { name: 'File view' })).toBeVisible();
+      if (layout === 'narrow') {
+        await page.getByRole('button', { name: 'Show workspace navigator' }).click();
+      }
+      await expect(page.getByRole('tab', { name: /^Changes/ })).toBeVisible();
       await page.getByRole('button', { name: 'Hide workspace navigator' }).click();
-    }
-    await expect(page.locator('.workflow-panel')).toBeVisible();
-    await expect(page.locator('.editor-tab')).toHaveCount(2);
-    expect(app.pageErrors).toEqual([]);
-  });
+      await expect(page.getByRole('group', { name: 'File view' })).toBeVisible();
+      const viewer = await page.locator('.viewer-stack').boundingBox();
+      expect(viewer.height).toBeGreaterThan(100);
+      expect(viewer.width).toBeGreaterThan(200);
+      await page.getByTitle('New tab', { exact: true }).click();
+      await page.getByRole('menuitem', { name: destination, exact: true }).click();
+      await expect(page.locator(body)).toBeVisible();
+      await page.getByRole('button', { name: 'Show workspace navigator' }).click();
+      await expect(page.getByRole('tab', { name: /^Changes/ })).toBeVisible();
+      if (layout === 'narrow') {
+        await expect(page.locator(body)).toBeHidden();
+        await page.getByRole('button', { name: 'Hide workspace navigator' }).click();
+      }
+      await expect(page.locator(body)).toBeVisible();
+      await expect(page.locator('.editor-tab')).toHaveCount(2);
+      await expect(page.locator('.editor-tab.active')).toContainText(destination);
+      expect(app.pageErrors).toEqual([]);
+    });
+  }
 }
 
 test('comparison filters support native checkbox pointer and keyboard input', async ({ page }) => {
@@ -159,7 +165,8 @@ test('comparison filters support native checkbox pointer and keyboard input', as
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByRole('button', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   const comments = page.getByRole('checkbox', { name: 'Ignore comments' });
   await expect(comments).toBeDisabled();
   await expect(comments).not.toBeChecked();
