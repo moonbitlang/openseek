@@ -118,15 +118,15 @@ fn key_attrs(emit : @cmd.Emit[Msg], selected : Int?) -> @html.Attrs {
 fn empty_view(open : Open, locale : @i18n.Locale) -> @html.Html {
   let (class, message) = match (open.phase, open.provider()) {
     (Debouncing | Loading, Files) =>
-      ("quick-open-empty", text(locale, IndexingFiles))
+      ("quick-open-empty", Message::IndexingFiles.text(locale))
     (Debouncing | Loading, Symbols) =>
-      ("quick-open-empty", text(locale, SearchingSymbols))
+      ("quick-open-empty", Message::SearchingSymbols.text(locale))
     (Failed, Files) =>
-      ("quick-open-empty error", text(locale, FileSearchFailed))
+      ("quick-open-empty error", Message::FileSearchFailed.text(locale))
     (Failed, Symbols) =>
-      ("quick-open-empty error", text(locale, SymbolSearchFailed))
-    (Ready, Files) => ("quick-open-empty", text(locale, NoFiles))
-    (Ready, Symbols) => ("quick-open-empty", text(locale, NoSymbols))
+      ("quick-open-empty error", Message::SymbolSearchFailed.text(locale))
+    (Ready, Files) => ("quick-open-empty", Message::NoFiles.text(locale))
+    (Ready, Symbols) => ("quick-open-empty", Message::NoSymbols.text(locale))
   }
   @html.div(
     class~,
@@ -162,15 +162,15 @@ fn dialog_view(
   let active_id = selected.map(index => row_id(index)).unwrap_or("")
   let (dialog_label, placeholder, group_label) = if open.provider() is Files {
     (
-      text(locale, SearchWorkspaceFiles),
-      text(locale, SearchFiles),
-      text(locale, Files),
+      Message::SearchWorkspaceFiles.text(locale),
+      Message::SearchFiles.text(locale),
+      Message::Files.text(locale),
     )
   } else {
     (
-      text(locale, SearchWorkspaceSymbols),
-      text(locale, SearchSymbols),
-      text(locale, Symbols),
+      Message::SearchWorkspaceSymbols.text(locale),
+      Message::SearchSymbols.text(locale),
+      Message::Symbols.text(locale),
     )
   }
   let base_input_attrs = key_attrs(emit, selected)

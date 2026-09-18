@@ -17,8 +17,8 @@ priv enum Message {
 }
 
 ///|
-fn text(locale : @i18n.Locale, message : Message) -> String {
-  match (locale, message) {
+fn Message::text(self : Message, locale : @i18n.Locale) -> String {
+  match (locale, self) {
     (English, IndexingFiles) => "Indexing files…"
     (SimplifiedChinese, IndexingFiles) => "正在索引文件…"
     (English, SearchingSymbols) => "Searching symbols…"
