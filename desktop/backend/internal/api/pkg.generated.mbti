@@ -19,7 +19,7 @@ pub fn endpoints(ApiState, @host.HostConnection) -> Array[@endpoint.Endpoint]
 
 // Types and methods
 type ApiState
-pub fn ApiState::ApiState(engine~ : String, codex? : @codex.CodexSettings, runtime_dir? : @pathx.Path, executable? : String, auth? : @auth.AuthStore, app_version? : String, on_finished? : (@protocol.FinishedPayload) -> Unit) -> Self
+pub fn ApiState::ApiState(engine~ : String, codex? : @codex.CodexSettings, runtime_dir? : @pathx.Path, executable? : String, auth? : @auth.AuthStore, app_version? : String, console_url? : String, on_finished? : (@protocol.FinishedPayload) -> Unit) -> Self
 pub fn ApiState::auth_store(Self) -> @auth.AuthStore
 pub fn ApiState::codex_actor(Self) -> @codex.Actor
 pub fn ApiState::engine_actor(Self) -> @engine.EngineActor

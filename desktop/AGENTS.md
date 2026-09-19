@@ -9,6 +9,20 @@
   for compatibility with a pre-change host unless the user explicitly asks for
   it.
 
+## Development Builds
+
+- The supported development build is the packaged `.dev` application
+  (`package/build.mjs` with the development project config, e.g.
+  `dist/SeekMoonDev.app`). It runs the same packaged layout as a release —
+  `seekmoon/web` for the frontend, the per-user runtime dir for state — and
+  differs only by its identity suffix and the development-only behavior gated
+  on it.
+- The unpackaged launch — `just desktop-dev` / `package/dev`, `proton dev`,
+  `desktop-dev.html`, `@development.Layout`, `desktop/target/dev-state` — is
+  deprecated and no longer supported. Do not design for it, review against it,
+  or fix issues that only reproduce under it; code that exists only to serve
+  it may be removed.
+
 ## Child Processes
 
 - For a one-shot command that collects stdout and stderr but must not read
@@ -60,3 +74,21 @@
 - A security finding must name the less-trusted principal and the new capability
   it gains. Do not report a privilege escalation solely because a trusted
   frontend can craft fields that the normal UI does not expose.
+- The local user and whatever they choose to run are one principal. A branch
+  the user checked out and built, its hooks and build scripts, any process
+  running under their account, a development build, and the DevTools console
+  all already act with the user's authority. A finding whose attacker is "a
+  branch the developer checked out", "a file in the checkout", or "a process
+  on the developer's machine" names no less-trusted principal and is not a
+  security finding.
+- "Repository content is untrusted" means the host must not grant command
+  authority to content it processes as data — rendered Markdown, diffs, file
+  previews, tool output, model output. It does not apply to code the user
+  runs on purpose; checking out and building a branch is running its code.
+- Release and development builds share this one model. A development build
+  differs in the surfaces it exposes, not in who is trusted: a development-only
+  surface such as the loopback console is judged by the same two-principal
+  test. Loopback binding limits reachability, not identity — a web page from
+  another origin can reach loopback — so such a surface fences web origins
+  with a launch token, a session cookie, and an `Origin` check, and does not
+  need to defend against processes already running as the user.
