@@ -192,7 +192,8 @@ async fn dispatch_kind(
   let session_id = durable.map(pair => pair.0)
   let append_item = durable.map(pair => {
     let store = @store.SessionStore(pair.1)
-    (session, item) => store.append(session, item)
+    let run_settings = @setup.run_settings(model)
+    (session, item) => store.append(session, item, settings=run_settings)
   })
   // Every model-driven kind gets its own scratch lab: a temp directory
   // where the otherwise read-only child MAY scaffold projects and write

@@ -99,10 +99,13 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
           model,
           workspace_root~,
         )
+        let run_settings = @setup.run_settings(model)
         run_task_turn(
           matches,
           session,
-          append_item=(session, item) => store.append(session, item),
+          append_item=(session, item) => {
+            store.append(session, item, settings=run_settings)
+          },
           job_log_dir=store.job_logs_dir(id),
           api_key~,
           model~,

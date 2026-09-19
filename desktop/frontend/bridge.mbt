@@ -1050,6 +1050,7 @@ fn open_session(
           watermark=view.watermark,
           goal=view.goal,
           goal_markers=view.goal_markers,
+          model=view.model,
           generation~,
         ),
       )
@@ -1096,6 +1097,7 @@ fn refresh_session(
           watermark=view.watermark,
           goal=view.goal,
           goal_markers=view.goal_markers,
+          model=view.model,
           generation~,
         ),
       )

@@ -181,3 +181,8 @@ async test "load_or_new_session recovers empty interrupted session directory" {
     assert_eq(with_event.events().length(), 1)
   })
 }
+
+///|
+test "a run's settings name its model by wire name" {
+  assert_eq(run_settings(Deepseek(V4Pro)), { "model": Json("deepseek-v4-pro") })
+}

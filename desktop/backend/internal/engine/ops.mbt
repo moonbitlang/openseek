@@ -696,6 +696,7 @@ pub async fn load_session(
     return {
       session: document,
       watermark: Some(session_max_sequence(document)),
+      model: configured_model(root, session),
     }
   }
   // A record that moved to an archived twin is a different answer than one
@@ -714,7 +715,11 @@ pub async fn load_session(
     @session_record.Absent(_) => return empty_session_reply(session)
     error => raise EngineError("session load failed: \{error}")
   }
-  { session: document, watermark: Some(session_max_sequence(document)), }
+  {
+    session: document,
+    watermark: Some(session_max_sequence(document)),
+    model: configured_model(root, session),
+  }
 }
 
 ///|
@@ -729,7 +734,37 @@ fn empty_session_reply(session : String) -> LoadSessionReply {
       events: Some([]),
     },
     watermark: Some(0),
+    model: Unconfigured,
   }
+}
+
+///|
+/// The model a conversation is set to, from its settings sidecar. The
+/// transcript is the load's substance, so a sidecar that cannot be read does
+/// not fail the load — but it is reported as `Unreadable`, never folded into
+/// "nothing configured": the client must be able to tell damage from
+/// absence rather than show its own default over it.
+async fn configured_model(
+  root : @pathx.Absolute,
+  session : String,
+) -> @protocol.ConfiguredModel {
+  let store = @store.SessionStore(root.to_string())
+  let settings = store.settings(SessionId(session)) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => {
+      @xlog.warn() <?
+        {
+          "event": "desktop_session_settings_unreadable",
+          "session": session,
+          "error": "\{error}",
+        }
+      return Unreadable("\{error}")
+    }
+  }
+  guard settings.get("model") is Some(String(model)) else {
+    return Unconfigured
+  }
+  Configured(model)
 }
 
 ///|
@@ -779,7 +814,11 @@ pub async fn load_archived_session(
     error if @async.is_being_cancelled() => raise error
     error => raise EngineError("archived session load failed: \{error}")
   }
-  { session: document, watermark: Some(session_max_sequence(document)), }
+  {
+    session: document,
+    watermark: Some(session_max_sequence(document)),
+    model: configured_model(root, session),
+  }
 }
 
 ///|

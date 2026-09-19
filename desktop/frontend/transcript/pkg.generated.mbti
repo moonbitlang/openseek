@@ -107,6 +107,7 @@ pub struct SessionLoadView {
   watermark : Int
   goal : GoalStanding?
   goal_markers : Array[(Int, GoalMarker)]
+  model : @protocol.ConfiguredModel
 }
 
 pub struct SessionTreeRow {
