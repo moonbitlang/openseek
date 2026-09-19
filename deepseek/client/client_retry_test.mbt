@@ -66,7 +66,7 @@ async test "chat retries transient 5xx and succeeds" {
       return
     }
     let client = retry_client(url, attempts=3)
-    let response = client.chat([ChatMessage(User, content="hello")])
+    let response = client.chat([ChatMessage(User, content=[Text(text="hello")])])
     assert_eq(response.content, "ok")
     assert_eq(hits.val, 3)
   }
@@ -79,7 +79,7 @@ async test "chat gives up after the retry budget with the API error" {
       return
     }
     let client = retry_client(url, attempts=2)
-    let _ = client.chat([ChatMessage(User, content="hello")]) catch {
+    let _ = client.chat([ChatMessage(User, content=[Text(text="hello")])]) catch {
       error => {
         assert_true("\{error}".contains("DeepSeek API error 500"))
         assert_eq(hits.val, 2)
@@ -97,7 +97,7 @@ async test "chat never retries a non-429 client error" {
       return
     }
     let client = retry_client(url, attempts=3)
-    let _ = client.chat([ChatMessage(User, content="hello")]) catch {
+    let _ = client.chat([ChatMessage(User, content=[Text(text="hello")])]) catch {
       error => {
         assert_true("\{error}".contains("DeepSeek API error 400"))
         assert_eq(hits.val, 1)
@@ -118,7 +118,7 @@ async test "streaming chat retries a pre-stream 429 and then streams" {
     let client = retry_client(url, attempts=3)
     let deltas : Array[String] = []
     let response = client.chat(
-      [ChatMessage(User, content="hello")],
+      [ChatMessage(User, content=[Text(text="hello")])],
       stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
     )
     assert_eq(response.content, "ok")
@@ -143,7 +143,7 @@ async test "streaming Kimi chat retries a pre-stream 502 and then streams" {
     )
     let deltas : Array[String] = []
     let response = client.chat(
-      [ChatMessage(User, content="hello")],
+      [ChatMessage(User, content=[Text(text="hello")])],
       stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
     )
     assert_eq(response.content, "ok")
@@ -184,7 +184,7 @@ async test "streaming chat retries a pre-delta stream drop" {
     let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
     let client = retry_client(url, attempts=3)
     let response = client.chat(
-      [ChatMessage(User, content="hello")],
+      [ChatMessage(User, content=[Text(text="hello")])],
       stream=StreamHandler(on_content_delta=_ => ()),
     )
     assert_eq(response.content, "ok")
@@ -224,7 +224,7 @@ async test "streaming chat never retries after the first delta" {
     let client = retry_client(url, attempts=3)
     let deltas : Array[String] = []
     let _ = client.chat(
-      [ChatMessage(User, content="hello")],
+      [ChatMessage(User, content=[Text(text="hello")])],
       stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
     ) catch {
       error => {
@@ -281,7 +281,7 @@ async test "streaming chat retries after a delta when the consumer opts in" {
     let deltas : Array[String] = []
     let retries : Array[String] = []
     let response = client.chat(
-      [ChatMessage(User, content="hello")],
+      [ChatMessage(User, content=[Text(text="hello")])],
       stream=StreamHandler(on_content_delta=delta => deltas.push(delta), on_retry=(
         attempt,
         max_attempts,
@@ -329,7 +329,7 @@ async test "streaming chat never retries after a tool-call-only delta" {
     let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
     let client = retry_client(url, attempts=3)
     let _ = client.chat(
-      [ChatMessage(User, content="hello")],
+      [ChatMessage(User, content=[Text(text="hello")])],
       stream=StreamHandler(on_content_delta=_ => ()),
     ) catch {
       error => {

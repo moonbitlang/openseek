@@ -10,13 +10,14 @@ async test "realworld DeepSeek API smoke test" {
   let client = @client.Client(api_key~, model=Deepseek(V4Pro), thinking=High)
   let response = client.chat(
     [
-      ChatMessage(
-        System,
-        content=(
-          #|Reply with exactly this JSON object and no markdown: {"answer":"pong"}
+      ChatMessage(System, content=[
+        Text(
+          text=(
+            #|Reply with exactly this JSON object and no markdown: {"answer":"pong"}
+          ),
         ),
-      ),
-      ChatMessage(User, content="ping"),
+      ]),
+      ChatMessage(User, content=[Text(text="ping")]),
     ],
     response_format=JsonObject,
   )
@@ -50,11 +51,10 @@ async test "realworld Kimi API smoke test" {
   let model = @deepseek.Model::parse(model_name)
   let client = @client.Client(api_key~, model~)
   let response = client.chat([
-    ChatMessage(
-      System,
-      content="Reply with exactly this plain text and no markdown: pong",
-    ),
-    ChatMessage(User, content="ping"),
+    ChatMessage(System, content=[
+      Text(text="Reply with exactly this plain text and no markdown: pong"),
+    ]),
+    ChatMessage(User, content=[Text(text="ping")]),
   ])
   assert_true(response.content.contains("pong"))
   assert_true(response.usage.total_tokens > 0)
@@ -74,11 +74,10 @@ async test "realworld Kimi API streaming smoke test" {
   let deltas : Array[String] = []
   let response = client.chat(
     [
-      ChatMessage(
-        System,
-        content="Reply with exactly this plain text and no markdown: pong",
-      ),
-      ChatMessage(User, content="ping"),
+      ChatMessage(System, content=[
+        Text(text="Reply with exactly this plain text and no markdown: pong"),
+      ]),
+      ChatMessage(User, content=[Text(text="ping")]),
     ],
     stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
   )
@@ -109,13 +108,16 @@ async test "realworld Kimi API tool-call smoke test" {
   )
   let response = client.chat(
     [
-      ChatMessage(
-        System,
-        content=(
-          #|You must call the return_token tool exactly once. Do not answer in text.
+      ChatMessage(System, content=[
+        Text(
+          text=(
+            #|You must call the return_token tool exactly once. Do not answer in text.
+          ),
         ),
-      ),
-      ChatMessage(User, content="Call return_token with token pong."),
+      ]),
+      ChatMessage(User, content=[
+        Text(text="Call return_token with token pong."),
+      ]),
     ],
     tools=[tool],
   )
@@ -146,18 +148,18 @@ async test "realworld Kimi API multi-turn reasoning-content smoke test" {
       "required": ["token"],
     },
   )
-  let first_user : @deepseek.ChatMessage = ChatMessage(
-    User,
-    content="Call return_token with token pong.",
-  )
+  let first_user : @deepseek.ChatMessage = ChatMessage(User, content=[
+    Text(text="Call return_token with token pong."),
+  ])
   let first = client.chat(
     [
-      ChatMessage(
-        System,
-        content=(
-          #|You must call the return_token tool exactly once. Do not answer in text.
+      ChatMessage(System, content=[
+        Text(
+          text=(
+            #|You must call the return_token tool exactly once. Do not answer in text.
+          ),
         ),
-      ),
+      ]),
       first_user,
     ],
     tools=[tool],
@@ -167,21 +169,22 @@ async test "realworld Kimi API multi-turn reasoning-content smoke test" {
   let call = first.tool_calls[0]
   let second = client.chat(
     [
-      ChatMessage(
-        System,
-        content=(
-          #|After the tool result is available, do not call any tool again. Reply exactly: done
+      ChatMessage(System, content=[
+        Text(
+          text=(
+            #|After the tool result is available, do not call any tool again. Reply exactly: done
+          ),
         ),
-      ),
+      ]),
       first_user,
       ChatMessage(
         Assistant,
-        content=first.content,
+        content=[Text(text=first.content)],
         tool_calls=first.tool_calls,
         reasoning_content=first.reasoning_content,
       ),
-      ChatMessage(Tool(call.id), content="{\"token\":\"pong\"}"),
-      ChatMessage(User, content="Use the tool result now."),
+      ChatMessage(Tool(call.id), content=[Text(text="{\"token\":\"pong\"}")]),
+      ChatMessage(User, content=[Text(text="Use the tool result now.")]),
     ],
     tools=[tool],
   )
@@ -212,13 +215,16 @@ async test "realworld GLM streaming tool-call smoke test" {
   )
   let response = client.chat(
     [
-      ChatMessage(
-        System,
-        content=(
-          #|You must call the return_token tool exactly once. Do not answer in text.
+      ChatMessage(System, content=[
+        Text(
+          text=(
+            #|You must call the return_token tool exactly once. Do not answer in text.
+          ),
         ),
-      ),
-      ChatMessage(User, content="Call return_token with token pong."),
+      ]),
+      ChatMessage(User, content=[
+        Text(text="Call return_token with token pong."),
+      ]),
     ],
     tools=[tool],
     stream=StreamHandler(on_content_delta=_ => ()),

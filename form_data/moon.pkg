@@ -1,0 +1,10 @@
+import {
+  "moonbitlang/async/io",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "moonbitlang/async",
+} for "test"
+
+supported_targets = "+wasm+native"

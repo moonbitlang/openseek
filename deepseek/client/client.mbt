@@ -33,7 +33,7 @@ fn encode_chat_request_for_endpoint(
   stream~ : Bool,
   response_format? : @deepseek.ResponseFormat,
   messages : Array[@deepseek.ChatMessage],
-) -> Json {
+) -> Json raise @deepseek.ChatMessageError {
   if api_url is OpenRouterChatCompletionsUrl && model is Deepseek(variant) {
     @deepseek.openrouter_encode_chat_request(
       model=variant,

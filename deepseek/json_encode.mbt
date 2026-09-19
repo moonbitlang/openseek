@@ -34,7 +34,7 @@ fn thinking_json_fields(
 ///|
 /// Encodes a `ChatMessage` as a chat-completions `messages[]` entry.
 ///
-/// Assistant messages whose `content` is empty but carry tool calls are
+/// Assistant messages whose combined text is empty but carry tool calls are
 /// encoded with JSON `content: null`, as the API requires.
 ///
 /// Assistant `reasoning_content` is always replayed: DeepSeek requires it
@@ -44,10 +44,21 @@ fn thinking_json_fields(
 /// See: https://api-docs.deepseek.com/guides/thinking_mode#thinking-mode-with-tool-calls
 /// See: https://platform.kimi.ai/docs/guide/use-kimi-k2-thinking-model#using-the-kimi-k2-7-code-model
 impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
-  let content = match message.role {
-    Assistant if message.tool_calls.length() > 0 && message.content == "" =>
-      Json::null()
-    _ => Json(message.content)
+  // Request encoders validate first, so system/assistant content contains
+  // only text. Those roles require a string: concatenate without separators.
+  // A single text part keeps the existing string encoding for every role;
+  // user/tool messages otherwise retain the original array and part order.
+  let content = match (message.role, message.content.0) {
+    (_, [Text(text~)]) => Json(text)
+    (System | Assistant, _) => Json(message.content.text())
+    (_, parts) => Json(parts)
+  }
+  let content = if message.role is Assistant &&
+    content is String("") &&
+    !message.tool_calls.is_empty() {
+    Json::null()
+  } else {
+    content
   }
   Json(
     Map(
@@ -108,7 +119,10 @@ pub fn encode_chat_request(
   response_format? : ResponseFormat,
   model? : Model = Deepseek(V4Pro),
   messages : Array[ChatMessage],
-) -> Json {
+) -> Json raise ChatMessageError {
+  for message in messages {
+    message.validate_content()
+  }
   Json(
     Map(
       [
@@ -132,7 +146,7 @@ pub fn encode_chat_request(
 
 ///|
 test "tool messages include tool call id" {
-  let body = ChatMessage(Tool("call_123"), content="tool result")
+  let body = ChatMessage(Tool("call_123"), content=[Text(text="tool result")])
   json_inspect(body, content={
     "role": "tool",
     "content": "tool result",
@@ -199,7 +213,7 @@ test "tool definitions omit strict when unset and keep their key order" {
 test "assistant tool calls preserve reasoning content" {
   let body = ChatMessage(
     Assistant,
-    content="",
+    content=[Text(text="")],
     tool_calls=[
       ToolCall(
         id="call_123",
@@ -230,7 +244,7 @@ test "assistant tool calls preserve reasoning content" {
 test "assistant reasoning content is always replayed" {
   let body = ChatMessage(
     Assistant,
-    content="The tests pass.",
+    content=[Text(text="The tests pass.")],
     reasoning_content="checked the test output",
   )
   json_inspect(body, content={
@@ -242,13 +256,17 @@ test "assistant reasoning content is always replayed" {
 
 ///|
 test "assistant tool call messages preserve content when present" {
-  let body = ChatMessage(Assistant, content="I will check that now.", tool_calls=[
-    ToolCall(
-      id="call_123",
-      name="get_weather",
-      arguments="{\"location\":\"Hangzhou\"}",
-    ),
-  ])
+  let body = ChatMessage(
+    Assistant,
+    content=[Text(text="I will check that now.")],
+    tool_calls=[
+      ToolCall(
+        id="call_123",
+        name="get_weather",
+        arguments="{\"location\":\"Hangzhou\"}",
+      ),
+    ],
+  )
   json_inspect(body, content={
     "role": "assistant",
     "content": "I will check that now.",
@@ -272,7 +290,7 @@ test "tool call arguments pass through as opaque strings" {
     name="write",
     arguments="not even valid json{",
   )
-  let body = ChatMessage(Assistant, content="", tool_calls=[call])
+  let body = ChatMessage(Assistant, content=[Text(text="")], tool_calls=[call])
   json_inspect(body, content={
     "role": "assistant",
     "content": null,

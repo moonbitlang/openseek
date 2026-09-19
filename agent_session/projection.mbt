@@ -46,23 +46,28 @@ fn append_item_message(
   messages : Array[@deepseek.ChatMessage],
 ) -> Unit {
   match item {
-    User(message) => messages.push(ChatMessage(User, content=message.content()))
+    User(message) =>
+      messages.push(ChatMessage(User, content=[Text(text=message.content())]))
     Runtime(notice) =>
-      messages.push(ChatMessage(User, content=notice.content()))
+      messages.push(ChatMessage(User, content=[Text(text=notice.content())]))
     Summary(summary) =>
-      messages.push(ChatMessage(User, content=summary_model_content(summary)))
+      messages.push(
+        ChatMessage(User, content=[Text(text=summary_model_content(summary))]),
+      )
     Assistant(message) =>
       messages.push(
         ChatMessage(
           Assistant,
-          content=message.content(),
+          content=[Text(text=message.content())],
           tool_calls=message.tool_calls(),
           reasoning_content?=message.reasoning_content(),
         ),
       )
     Tool(result) =>
       messages.push(
-        ChatMessage(Tool(result.tool_call_id()), content=result.content()),
+        ChatMessage(Tool(result.tool_call_id()), content=[
+          Text(text=result.content()),
+        ]),
       )
     Terminal(terminal) =>
       if terminal_model_message(terminal) is Some(content) {
@@ -71,8 +76,9 @@ fn append_item_message(
         // same answer a second time.
         if !(messages.last() is Some(last) &&
           last.role is Assistant &&
-          last.content == content) {
-          messages.push(ChatMessage(Assistant, content~))
+          last.content.is_text_only() &&
+          last.content.text() == content) {
+          messages.push(ChatMessage(Assistant, content=[Text(text=content)]))
         }
       }
   }
@@ -85,10 +91,11 @@ fn flush_pending_tool_calls(
 ) -> Unit {
   for call in pending {
     messages.push(
-      ChatMessage(
-        Tool(call.id),
-        content="error: previous agent process exited before recording a result for tool \{call.name}",
-      ),
+      ChatMessage(Tool(call.id), content=[
+        Text(
+          text="error: previous agent process exited before recording a result for tool \{call.name}",
+        ),
+      ]),
     )
   }
   pending.clear()
@@ -137,7 +144,7 @@ fn is_covered_by_later_summary(
 /// removes durable events.
 pub fn Session::chat_messages(self : Session) -> Array[@deepseek.ChatMessage] {
   let messages : Array[@deepseek.ChatMessage] = [
-    ChatMessage(System, content=self.system_prompt()),
+    ChatMessage(System, content=[Text(text=self.system_prompt())]),
   ]
   let pending_tool_calls : Array[@deepseek.ToolCall] = []
   let events = self.events()

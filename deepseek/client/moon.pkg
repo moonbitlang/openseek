@@ -1,5 +1,6 @@
 import {
   "bobzhang/openseek/deepseek",
+  "bobzhang/openseek/form_data",
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/async/io",
@@ -12,6 +13,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/socket",
   "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
 } for "test"
 
 warnings = "+unnecessary_annotation"
