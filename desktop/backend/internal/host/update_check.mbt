@@ -1,13 +1,14 @@
 // Self-update ops, driven entirely by the webview: `check_update` asks the
 // release manifest and reports what it found as data (never an op
-// rejection — every outcome is a state the frontend renders); a user
-// clicking Update hands one download to the app-lifetime pump, which fetches
-// + verifies into the staging dir and reports progress and completion as
-// `update.*` notifications; the `update.downloaded` notification then lets
-// the page run `apply_update` (swap the bundle and arrange the relaunch that
-// `main` performs once the run loop exits). The download cannot live in its
-// `op_async` request: Proton cancels any bridge request that exceeds its
-// finite request deadline.
+// rejection — every outcome is a state the frontend renders); the page
+// hands one download at a time to the app-lifetime pump (it starts one by
+// itself once a check reports an installable release), which fetches +
+// verifies into the staging dir and reports progress and completion as
+// `update.*` notifications; the `update.downloaded` notification leaves the
+// release staged until the user asks the page to run `apply_update` (swap
+// the bundle and arrange the relaunch that `main` performs once the run
+// loop exits). The download cannot live in its `op_async` request: Proton
+// cancels any bridge request that exceeds its finite request deadline.
 
 ///|
 /// Self-update state shared by request tasks and the app-lifetime download

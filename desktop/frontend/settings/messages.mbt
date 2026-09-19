@@ -6,6 +6,7 @@ pub(all) enum Message {
   DevicePageDescription(String, String)
   RegisterServer(String)
   UpdateTo(String)
+  RestartToInstall(String)
   CannotInstallUpdate(String)
   RestartingVersion(String)
   DownloadProgress(String, Int, Int, Int)
@@ -149,6 +150,13 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, UpdateTo(version)) => "更新至 \{version}"
     (TraditionalChinese, UpdateTo(version)) => "更新至 \{version}"
     (Japanese, UpdateTo(version)) => "\{version} に更新"
+    (English, RestartToInstall(version)) => "Restart to install \{version}"
+    (SimplifiedChinese, RestartToInstall(version)) =>
+      "重启以安装 \{version}"
+    (TraditionalChinese, RestartToInstall(version)) =>
+      "重啟以安裝 \{version}"
+    (Japanese, RestartToInstall(version)) =>
+      "再起動して \{version} をインストール"
     (English, CannotInstallUpdate(version)) =>
       "\{version} is available, but this build cannot install updates."
     (SimplifiedChinese, CannotInstallUpdate(version)) =>

@@ -20,6 +20,7 @@ pub(all) enum Message {
   DevicePageDescription(String, String)
   RegisterServer(String)
   UpdateTo(String)
+  RestartToInstall(String)
   CannotInstallUpdate(String)
   RestartingVersion(String)
   DownloadProgress(String, Int, Int, Int)

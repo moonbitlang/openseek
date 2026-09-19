@@ -6,7 +6,7 @@ priv enum DynamicMessage {
   DSessionWorkspace(String, String)
   DSession(String)
   DConnecting(String)
-  DUpdateQuestion(String)
+  DRestartQuestion(String)
   DDeleteConversation(String)
 }
 
@@ -47,10 +47,11 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (SimplifiedChinese, DConnecting(p0)) => "正在连接 \{p0}…"
     (TraditionalChinese, DConnecting(p0)) => "正在連線 \{p0}…"
     (Japanese, DConnecting(p0)) => "\{p0} に接続中…"
-    (English, DUpdateQuestion(p0)) => "Update to \{p0}?"
-    (SimplifiedChinese, DUpdateQuestion(p0)) => "更新至 \{p0}？"
-    (TraditionalChinese, DUpdateQuestion(p0)) => "更新至 \{p0}？"
-    (Japanese, DUpdateQuestion(p0)) => "\{p0} に更新しますか？"
+    (English, DRestartQuestion(p0)) => "Restart into \{p0}?"
+    (SimplifiedChinese, DRestartQuestion(p0)) => "重启至 \{p0}？"
+    (TraditionalChinese, DRestartQuestion(p0)) => "重啟至 \{p0}？"
+    (Japanese, DRestartQuestion(p0)) =>
+      "再起動して \{p0} に更新しますか？"
     (English, DDeleteConversation(p0)) =>
       "“\{p0}” and all of its archived subagent history will be permanently deleted. This cannot be undone. Project files and Git branches will remain."
     (SimplifiedChinese, DDeleteConversation(p0)) =>

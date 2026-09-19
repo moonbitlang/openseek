@@ -3417,12 +3417,14 @@ fn update_msg(
       (@cmd.none, { ..model, remote_error: Some(message), })
     AppInfoLoaded(version) => (@cmd.none, { ..model, app_version: version, })
     CheckForUpdates =>
-      // A user-initiated check; never stacks on an in-flight one, and never
-      // interrupts a download already underway.
+      // A user-initiated check; never stacks on an in-flight one, never
+      // interrupts a download already underway, and never clobbers a staged
+      // download waiting for its restart.
       if model.update_ux
         is (CheckingForUpdate
         | ConfirmingRestart(..)
         | DownloadingUpdate(..)
+        | UpdateReady(..)
         | RestartingForUpdate(..)) {
         (@cmd.none, model)
       } else {
@@ -3442,14 +3444,29 @@ fn update_msg(
         return (@cmd.none, model)
       }
       match result {
-        CheckFound(version~, installable~, unavailable_reason~) => {
-          let (cmd, next) = if !installable &&
-            unavailable_reason is Some(reason) {
+        CheckFound(version~, installable=true, ..) =>
+          // An installable release downloads itself — restarting into it
+          // stays the user's call.
+          (
+            download_update(dispatch),
+            {
+              ..model,
+              update_ux: DownloadingUpdate(version~, progress={
+                downloaded_bytes: 0,
+                total_bytes: None,
+              }),
+            },
+          )
+        CheckFound(version~, installable=false, unavailable_reason~) => {
+          let (cmd, next) = if unavailable_reason is Some(reason) {
             model.notify_error(dispatch, reason)
           } else {
             (@cmd.none, model)
           }
-          (cmd, { ..next, update_ux: UpdateAvailable(version~, installable~), })
+          (
+            cmd,
+            { ..next, update_ux: UpdateAvailable(version~, installable=false), },
+          )
         }
         CheckUpToDate =>
           (
@@ -3518,13 +3535,13 @@ fn update_msg(
       }
     }
     UpdateClicked =>
-      // Only meaningful while an installable release is on offer; the
-      // button does not render otherwise, but a stale click must not
-      // restart a download.
-      if model.update_ux is UpdateAvailable(version~, installable=true) {
-        if model.any_conversation_busy() {
-          (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~), })
-        } else {
+      // The one accent button walks the whole flow: from an offer it retries
+      // the download (harmless while conversations run), from a staged
+      // download it restarts — asking first when that would cut a
+      // conversation off. The button does not render in other states, but a
+      // stale click must not restart a download or replay an apply.
+      match model.update_ux {
+        UpdateAvailable(version~, installable=true) =>
           (
             download_update(dispatch),
             {
@@ -3535,31 +3552,31 @@ fn update_msg(
               }),
             },
           )
-        }
-      } else {
-        (@cmd.none, model)
+        UpdateReady(version~) =>
+          if model.any_conversation_busy() {
+            (@cmd.none, { ..model, update_ux: ConfirmingRestart(version~), })
+          } else {
+            (
+              apply_update(dispatch),
+              { ..model, update_ux: RestartingForUpdate(version~), },
+            )
+          }
+        _ => (@cmd.none, model)
       }
     ConfirmUpdateRestart =>
       if model.update_ux is ConfirmingRestart(version~) {
         (
-          download_update(dispatch),
-          {
-            ..model,
-            update_ux: DownloadingUpdate(version~, progress={
-              downloaded_bytes: 0,
-              total_bytes: None,
-            }),
-          },
+          apply_update(dispatch),
+          { ..model, update_ux: RestartingForUpdate(version~), },
         )
       } else {
         (@cmd.none, model)
       }
     CancelUpdateRestart =>
       if model.update_ux is ConfirmingRestart(version~) {
-        (
-          @cmd.none,
-          { ..model, update_ux: UpdateAvailable(version~, installable=true), },
-        )
+        // The download already happened; declining the restart just parks
+        // the staged release until the user is ready.
+        (@cmd.none, { ..model, update_ux: UpdateReady(version~), })
       } else {
         (@cmd.none, model)
       }
@@ -3580,12 +3597,15 @@ fn update_msg(
         // download after the UI has moved to another state.
         (@cmd.none, model)
       }
-    UpdateDownloaded =>
-      if model.update_ux is DownloadingUpdate(version~, ..) {
-        (
-          apply_update(dispatch),
-          { ..model, update_ux: RestartingForUpdate(version~), },
-        )
+    UpdateDownloaded(version~) =>
+      if model.update_ux is DownloadingUpdate(..) {
+        // Staged, not applied: swapping the bundle under the running app
+        // waits for the user's restart, so nothing is pulled out from
+        // beneath the process (or the person) mid-flight. The version shown
+        // from here on is the one the host actually staged — its deliberate
+        // re-check may have picked up a release newer than the one this
+        // flow started from.
+        (@cmd.none, { ..model, update_ux: UpdateReady(version~), })
       } else {
         (@cmd.none, model)
       }
@@ -18101,24 +18121,24 @@ test "AppInfoLoaded replaces the displayed package version idempotently" {
 }
 
 ///|
-test "a startup check surfaces an installable release as the Update button" {
+test "a check finding an installable release downloads it by itself" {
   let dispatch = test_dispatch()
-  let (_, model) = update(
-    dispatch,
-    UpdateCheckFinished(
-      result=CheckFound(
-        version="0.2.0",
-        installable=true,
-        unavailable_reason=None,
-      ),
-      explicit=false,
-    ),
-    test_model(),
+  let found = CheckFound(
+    version="0.2.0",
+    installable=true,
+    unavailable_reason=None,
   )
-  assert_true(
-    model.update_ux is UpdateAvailable(version="0.2.0", installable=true),
-  )
-  assert_eq(model.notifications.length(), 0)
+  // The quiet startup check and the user asking from Settings download the
+  // same way; only the restart waits for a click.
+  for explicit in [false, true] {
+    let (_, next) = update(
+      dispatch,
+      UpdateCheckFinished(result=found, explicit~),
+      test_model(),
+    )
+    assert_true(next.update_ux is DownloadingUpdate(version="0.2.0", ..))
+    assert_eq(next.notifications.length(), 0)
+  }
 }
 
 ///|
@@ -18224,20 +18244,21 @@ test "a broken package entry is loud even when the app asked" {
 }
 
 ///|
-test "clicking Update goes straight to download when nothing runs" {
+test "a finished download stages the release; restarting stays a click away" {
   let dispatch = test_dispatch()
-  let available = {
+  let downloading = {
     ..test_model(),
-    update_ux: UpdateAvailable(version="0.2.0", installable=true),
+    update_ux: DownloadingUpdate(version="0.2.0", progress={
+      downloaded_bytes: 0,
+      total_bytes: None,
+    }),
   }
-  let (_, clicked) = update(dispatch, UpdateClicked, available)
-  assert_true(clicked.update_ux is DownloadingUpdate(version="0.2.0", ..))
   let progress = UpdateDownloadProgress(
     downloaded_bytes=42,
     total_bytes=Some(100),
   )
-  let (_, progressed) = update(dispatch, progress, clicked)
-  let (_, replayed) = update(dispatch, progress, clicked)
+  let (_, progressed) = update(dispatch, progress, downloading)
+  let (_, replayed) = update(dispatch, progress, downloading)
   assert_true(progressed.update_ux == replayed.update_ux)
   assert_true(
     progressed.update_ux
@@ -18246,30 +18267,83 @@ test "clicking Update goes straight to download when nothing runs" {
       progress={ downloaded_bytes: 42, total_bytes: Some(100), }
     ),
   )
-  // Downloaded hands off to apply and marks the restart.
-  let (_, done) = update(dispatch, UpdateDownloaded, progressed)
-  assert_true(done.update_ux is RestartingForUpdate(version="0.2.0"))
+  // Downloaded stages the release instead of swapping it: restarting is the
+  // user's call.
+  let (_, staged) = update(
+    dispatch,
+    UpdateDownloaded(version="0.2.0"),
+    progressed,
+  )
+  assert_true(staged.update_ux is UpdateReady(version="0.2.0"))
+  // With nothing running, the restart click applies immediately.
+  let (_, clicked) = update(dispatch, UpdateClicked, staged)
+  assert_true(clicked.update_ux is RestartingForUpdate(version="0.2.0"))
 }
 
 ///|
-test "clicking Update asks first while a conversation runs" {
+test "the staged version comes from the host, not the stale check" {
+  let dispatch = test_dispatch()
+  let downloading = {
+    ..test_model(),
+    update_ux: DownloadingUpdate(version="0.2.0", progress={
+      downloaded_bytes: 0,
+      total_bytes: None,
+    }),
+  }
+  // The host's download-time re-check staged a release newer than the one
+  // this flow started from; the notification's version wins.
+  let (_, staged) = update(
+    dispatch,
+    UpdateDownloaded(version="0.2.1"),
+    downloading,
+  )
+  assert_true(staged.update_ux is UpdateReady(version="0.2.1"))
+}
+
+///|
+test "clicking the restored offer retries the download" {
+  let dispatch = test_dispatch()
+  let available = {
+    ..test_model(),
+    update_ux: UpdateAvailable(version="0.2.0", installable=true),
+  }
+  // A retry starts the download again; it is harmless while conversations
+  // run, so it does not ask first.
+  let (_, clicked) = update(dispatch, UpdateClicked, available)
+  assert_true(clicked.update_ux is DownloadingUpdate(version="0.2.0", ..))
+}
+
+///|
+test "a staged release survives stale check replies and re-check clicks" {
+  let dispatch = test_dispatch()
+  let staged = { ..test_model(), update_ux: UpdateReady(version="0.2.0"), }
+  let (_, after_reply) = update(
+    dispatch,
+    UpdateCheckFinished(result=CheckUpToDate, explicit=false),
+    staged,
+  )
+  assert_true(after_reply.update_ux is UpdateReady(version="0.2.0"))
+  let (_, after_click) = update(dispatch, CheckForUpdates, staged)
+  assert_true(after_click.update_ux is UpdateReady(version="0.2.0"))
+}
+
+///|
+test "restarting asks first while a conversation runs" {
   let dispatch = test_dispatch()
   let busy = {
     ..test_model().replace_conversation({
       ..test_conversation(),
       run: Starting(submission_id="pending-update"),
     }),
-    update_ux: UpdateAvailable(version="0.2.0", installable=true),
+    update_ux: UpdateReady(version="0.2.0"),
   }
   let (_, asked) = update(dispatch, UpdateClicked, busy)
   assert_true(asked.update_ux is ConfirmingRestart(version="0.2.0"))
-  // Cancel restores the offer; confirm starts the download.
+  // Cancel parks the staged release; confirm applies it.
   let (_, kept) = update(dispatch, CancelUpdateRestart, asked)
-  assert_true(
-    kept.update_ux is UpdateAvailable(version="0.2.0", installable=true),
-  )
+  assert_true(kept.update_ux is UpdateReady(version="0.2.0"))
   let (_, confirmed) = update(dispatch, ConfirmUpdateRestart, asked)
-  assert_true(confirmed.update_ux is DownloadingUpdate(version="0.2.0", ..))
+  assert_true(confirmed.update_ux is RestartingForUpdate(version="0.2.0"))
 }
 
 ///|

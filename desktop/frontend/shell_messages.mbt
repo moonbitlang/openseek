@@ -11,6 +11,7 @@ priv enum ShellMessage {
   NoOnlineDevice
   UpdateLabel
   RestartingLabel
+  RestartToUpdateLabel
   ArchivedReadOnly
   RestoreBeforeContinue
   RestoreLabel
@@ -50,7 +51,7 @@ priv enum ShellMessage {
   DisconnectedLabel
   InterruptForUpdate
   KeepWorking
-  UpdateRestart
+  RestartNow
   SetupDeepSeek
   SetupGlm
   SetupOpenRouter
@@ -128,6 +129,10 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, RestartingLabel) => "正在重启…"
     (TraditionalChinese, RestartingLabel) => "正在重啟…"
     (Japanese, RestartingLabel) => "再起動中…"
+    (English, RestartToUpdateLabel) => "Restart to update"
+    (SimplifiedChinese, RestartToUpdateLabel) => "重启以更新"
+    (TraditionalChinese, RestartToUpdateLabel) => "重啟以更新"
+    (Japanese, RestartToUpdateLabel) => "再起動して更新"
     (English, ArchivedReadOnly) => "Archived conversation · Read only"
     (SimplifiedChinese, ArchivedReadOnly) => "已归档对话 · 只读"
     (TraditionalChinese, ArchivedReadOnly) => "已歸檔對話 · 唯讀"
@@ -304,21 +309,21 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (TraditionalChinese, DisconnectedLabel) => "已斷開連線"
     (Japanese, DisconnectedLabel) => "切断済み"
     (English, InterruptForUpdate) =>
-      "A conversation is still running. Updating restarts the app and interrupts it; the transcript so far is saved."
+      "A conversation is still running. Restarting the app interrupts it; the transcript so far is saved."
     (SimplifiedChinese, InterruptForUpdate) =>
-      "仍有对话正在运行。更新会重启应用并中断运行，已有的对话记录将会保留。"
+      "仍有对话正在运行。重启应用会中断运行，已有的对话记录将会保留。"
     (TraditionalChinese, InterruptForUpdate) =>
-      "仍有對話正在執行。更新會重啟應用並中斷執行，已有的對話記錄將會保留。"
+      "仍有對話正在執行。重啟應用會中斷執行，已有的對話記錄將會保留。"
     (Japanese, InterruptForUpdate) =>
-      "実行中のチャットがあります。更新するとアプリが再起動して実行が中断されますが、既存のチャット履歴は保持されます。"
+      "実行中のチャットがあります。アプリを再起動すると実行が中断されますが、既存のチャット履歴は保持されます。"
     (English, KeepWorking) => "Keep working"
     (SimplifiedChinese, KeepWorking) => "继续工作"
     (TraditionalChinese, KeepWorking) => "繼續工作"
     (Japanese, KeepWorking) => "作業を続行"
-    (English, UpdateRestart) => "Update and restart"
-    (SimplifiedChinese, UpdateRestart) => "更新并重启"
-    (TraditionalChinese, UpdateRestart) => "更新並重啟"
-    (Japanese, UpdateRestart) => "更新して再起動"
+    (English, RestartNow) => "Restart now"
+    (SimplifiedChinese, RestartNow) => "立即重启"
+    (TraditionalChinese, RestartNow) => "立即重啟"
+    (Japanese, RestartNow) => "今すぐ再起動"
     (English, SetupDeepSeek) => "Set up your DeepSeek API key"
     (SimplifiedChinese, SetupDeepSeek) => "设置 DeepSeek API 密钥"
     (TraditionalChinese, SetupDeepSeek) => "設定 DeepSeek API 金鑰"

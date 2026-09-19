@@ -673,13 +673,16 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
       []
     }
   }
-  // The footer's Update button tracks the download so its progress stays
-  // visible from any screen.
+  // The footer's update button tracks the automatic download so its progress
+  // stays visible from any screen, and asks for the restart once the release
+  // is staged.
   let update_label : String? = match self.update_ux {
-    UpdateAvailable(installable=true, ..) | ConfirmingRestart(..) =>
+    UpdateAvailable(installable=true, ..) =>
       Some(shell_text(self.locale, UpdateLabel))
     DownloadingUpdate(progress~, ..) =>
       Some(progress.sidebar_label(locale=self.locale))
+    UpdateReady(..) | ConfirmingRestart(..) =>
+      Some(shell_text(self.locale, RestartToUpdateLabel))
     RestartingForUpdate(..) => Some(shell_text(self.locale, RestartingLabel))
     _ => None
   }
@@ -702,7 +705,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     locale: self.locale,
     sections,
     update_label,
-    update_enabled: self.update_ux is UpdateAvailable(..),
+    update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),
     schedules_active: self.screen is Schedules,
     skills_active: self.screen is Skills,
     settings_active: self.screen is Settings,
@@ -965,8 +968,9 @@ fn remote_access_rows(
 
 ///|
 /// The Settings check-for-updates row: the last check's outcome — status
-/// text, or the accent Update button once an installable release is found —
-/// on the left, the Check button on the right.
+/// text, a download's progress, the restart button once a release is
+/// staged, or the accent Update button a failed download restored — on the
+/// left, the Check button on the right.
 fn update_check_controls(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -1005,13 +1009,22 @@ fn update_check_controls(
           ),
         )
       }
+    UpdateReady(version~) =>
+      // The release is staged; this button is the restart the flow waits for.
+      controls.push(
+        @html.button(
+          class="button primary",
+          on_click=dispatch(UpdateClicked),
+          @settings.text(model.locale, RestartToInstall(version)),
+        ),
+      )
     ConfirmingRestart(version~) =>
       // The interrupt modal is up over this row; keep the button visible
       // behind it so the row does not blink while the user decides.
       controls.push(
         @html.button(
           class="button primary",
-          @settings.text(model.locale, UpdateTo(version)),
+          @settings.text(model.locale, RestartToInstall(version)),
         ),
       )
     DownloadingUpdate(version~, progress~) => {
@@ -1049,7 +1062,10 @@ fn update_check_controls(
     @html.button(
       class="button secondary",
       disabled=model.update_ux
-        is (CheckingForUpdate | DownloadingUpdate(..) | RestartingForUpdate(..)),
+        is (CheckingForUpdate
+        | DownloadingUpdate(..)
+        | UpdateReady(..)
+        | RestartingForUpdate(..)),
       on_click=dispatch(CheckForUpdates),
       @settings.text(model.locale, CheckUpdates),
     ),
@@ -2125,9 +2141,10 @@ fn bridge_lost_overlay(
 }
 
 ///|
-/// The modal shown when updating would cut running conversations off:
-/// restarting tears the engine processes down mid-run. The backdrop and the
-/// Cancel button both keep the current version running.
+/// The modal shown when restarting into a staged update would cut running
+/// conversations off: restarting tears the engine processes down mid-run.
+/// The backdrop and the Cancel button both keep the current version running,
+/// with the downloaded release parked for later.
 fn update_confirm_modal(
   locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
@@ -2137,7 +2154,7 @@ fn update_confirm_modal(
     @html.div(class="modal", [
       @html.div(
         class="modal-title",
-        dynamic_text(locale, DUpdateQuestion(version.to_string())),
+        dynamic_text(locale, DRestartQuestion(version)),
       ),
       @html.div(class="modal-body", shell_text(locale, InterruptForUpdate)),
       @html.div(class="modal-actions", [
@@ -2149,7 +2166,7 @@ fn update_confirm_modal(
         @html.button(
           class="button primary",
           on_click=dispatch(ConfirmUpdateRestart),
-          shell_text(locale, UpdateRestart),
+          shell_text(locale, RestartNow),
         ),
       ]),
     ]),
