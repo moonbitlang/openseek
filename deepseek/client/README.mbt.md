@@ -57,7 +57,7 @@ including non-JSON error pages. Cancellation and transport errors propagate.
 
 ```mbt nocheck
 ///|
-let client = @client.Client(api_key~, model=Deepseek(V41Flash))
+let client = @client.Client(api_key~, model=Deepseek(V4Flash))
 
 ///|
 let uploaded = client.upload_image(
