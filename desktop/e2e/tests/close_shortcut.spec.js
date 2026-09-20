@@ -88,8 +88,8 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
   await page.getByRole('button', { name: 'Show panel', exact: true }).click();
   await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
   await expect(toggle).toBeVisible();
-  await toggle.click();
   await expect(toggle).toHaveAccessibleName('Show sidebar');
+  await expect(page.locator('.app > aside')).toBeHidden();
   await expect.poll(async () => (await toggle.boundingBox()).x).toBe(88);
   await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
   await toggle.click();

@@ -4754,6 +4754,7 @@ fn update_msg(
         ..model,
         right_panel_menu_open: false,
         right_panel_expanded: !model.right_panel_expanded,
+        sidebar_open: model.right_panel_expanded && model.sidebar_open,
       }
       let cmd = if @dock.active_file(model.dock) is Some(_) {
         @fileeditor.request_viewer_remeasure()
