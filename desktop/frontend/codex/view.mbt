@@ -482,9 +482,9 @@ pub fn State::page(
   self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  terminal_open : Bool,
-  file_panel_open : Bool,
-  narrow : Bool,
+  terminal_open~ : Bool,
+  file_panel_open~ : Bool,
+  narrow~ : Bool,
   actions : PageActions,
 ) -> Array[@html.Html] {
   // Account actions (sign in/out, the pending sign-in page) live in the

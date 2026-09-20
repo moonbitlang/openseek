@@ -2014,9 +2014,9 @@ fn view(
         locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         model.focused,
-        terminal_panel_visible,
-        file_panel_visible,
-        model.narrow,
+        terminal_open=terminal_panel_visible,
+        file_panel_open=file_panel_visible,
+        narrow=model.narrow,
         @codex.PageActions::{
           toggle_terminal,
           toggle_files: toggle_right_panel,
