@@ -42,7 +42,9 @@ can be supplied through `--editor-font-family`, `--editor-font-size`, and
 `--editor-line-height`.
 
 The component owns one native horizontal scroll region. Lines never wrap;
-old/new line numbers and change markers stay pinned together. Change colors
+one line-number column and change markers stay pinned together. Removed rows
+show original coordinates; added rows show modified coordinates. Context uses
+the modified coordinate, falling back to the original if it is unknown. Change colors
 are composed over an opaque background so scrolled text cannot bleed through
 the gutter. Native text selection excludes gutter text. The region can be
 focused for keyboard scrolling. Hosts keep file titles, copy actions and

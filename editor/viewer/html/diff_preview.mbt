@@ -80,12 +80,23 @@ pub fn diff_preview(
   })
   let rows : Array[@rhtml.Html] = []
   for line in lines {
-    let (source, original, modified, sign, kind) = match line {
+    // One coordinate column leaves more room for source. Context follows the
+    // modified file, falling back to its original coordinate when unknown.
+    let (source, number, sign, kind) = match line {
       Context(source, old_line~, new_line~) =>
-        (source, old_line, new_line, " ", "context")
-      Added(source, line~) => (source, None, line, "+", "added")
-      Removed(source, line~) => (source, line, None, "−", "removed")
-      Gap => ("…", None, None, " ", "gap")
+        (
+          source,
+          if new_line is Some(_) {
+            new_line
+          } else {
+            old_line
+          },
+          " ",
+          "context",
+        )
+      Added(source, line~) => (source, line, "+", "added")
+      Removed(source, line~) => (source, line, "−", "removed")
+      Gap => ("…", None, " ", "gap")
     }
     let code = if syntax is Some(syntax) {
       syntax.render(line, source)
@@ -99,11 +110,7 @@ pub fn diff_preview(
         @rhtml.span(class="editor-diff-gutter", [
           @rhtml.span(
             class="editor-diff-number",
-            original.map(n => n.to_string()).unwrap_or(""),
-          ),
-          @rhtml.span(
-            class="editor-diff-number",
-            modified.map(n => n.to_string()).unwrap_or(""),
+            number.map(n => n.to_string()).unwrap_or(""),
           ),
           @rhtml.span(class="editor-diff-sign", sign),
         ]),

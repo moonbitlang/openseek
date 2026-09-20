@@ -33,8 +33,11 @@ for (const theme of ['light', 'dark']) {
     }));
     for (const row of cells) {
       if (row[0].textRight > 0) expect(row[1].x - row[0].textRight).toBeGreaterThanOrEqual(7);
-      if (row[1].textRight > 0) expect(row[2].x - row[1].textRight).toBeGreaterThanOrEqual(7);
+      expect(row).toHaveLength(2);
     }
+    await expect(preview.locator('.context .editor-diff-number')).toHaveText(['1528', '1531']);
+    await expect(preview.locator('.removed .editor-diff-number')).toHaveText(['1529', '99999']);
+    await expect(preview.locator('.added .editor-diff-number')).toHaveText(['1529', '1530', '100000']);
     await expect(preview.locator('.editor-diff-number', { hasText: /^100000$/ })).toBeVisible();
     await preview.evaluate(el => { el.scrollLeft = 180; });
     await expect.poll(() => preview.evaluate(el => el.scrollLeft)).toBe(180);
