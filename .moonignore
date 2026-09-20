@@ -1,15 +1,27 @@
 # Packaging ignore list for `moonbitlang/openseek`.
 #
-# `.moonignore` overrides `.gitignore` in this directory, so the build and
-# dependency directories from `.gitignore` are repeated here. The rest excludes
-# what does not belong in the published archive: nested member modules (each is
-# published separately or not published to mooncakes at all) and developer-only
-# tooling, docs and tests.
+# `.moonignore` overrides `.gitignore` in this directory, so the build,
+# dependency and local-state entries from `.gitignore` are repeated here. The
+# rest excludes what does not belong in the published archive: nested member
+# modules (each is published separately or not published to mooncakes at all)
+# and developer-only tooling, docs and tests.
 
 _build/
 .mooncakes/
 node_modules/
 target/
+
+# Local state and editor/OS cruft, repeated from `.gitignore`. `.openseek/` holds
+# dogfooding session state (prompts, source, tool output) and must never enter a
+# published archive; `.moonagent/`, `.repos/` and `.claude/` are the same kind of
+# untracked local state, and `.proton/` is a generated runtime manifest.
+.DS_Store
+.vscode/
+.moonagent/
+.repos/
+.openseek/
+.claude/
+.proton/
 
 # Nested workspace-member modules and apps, published separately.
 /desktop
