@@ -190,7 +190,8 @@ fn MinimalToolStatus::from_activities(
 ///|
 /// A failed call must not hide another call still running. Keep both indicators
 /// until the group settles, and use the same icons as the detailed tool rows.
-/// Successful groups stay quiet in minimal mode, without an empty status slot.
+/// A failure is carried by that icon alone: a summary never counts failed
+/// calls. Successful groups stay quiet in minimal mode, without an empty slot.
 fn MinimalToolStatus::view(
   locale? : @i18n.Locale = English,
   self : MinimalToolStatus,
@@ -203,19 +204,6 @@ fn MinimalToolStatus::view(
     children.push(ToolStatus::Pending.view(locale~))
   }
   if self.failed > 0 {
-    let label = match locale {
-      SimplifiedChinese => "\{self.failed} 次工具调用失败"
-      TraditionalChinese => "\{self.failed} 次工具呼叫失敗"
-      Japanese =>
-        "\{self.failed} 件のツール呼び出しが失敗しました"
-      English =>
-        if self.failed == 1 {
-          "1 tool call failed"
-        } else {
-          "\{self.failed} tool calls failed"
-        }
-    }
-    children.push(@html.span(class="minimal-failure-count", title=label, label))
     children.push(ToolStatus::Failed.view(locale~))
   }
   @html.span(class="minimal-tool-status", children)
@@ -559,7 +547,7 @@ fn MinimalContent::summary(
   }
   // Preview the first three concrete operations in transcript order, including
   // failed calls and repeated captions. Outcome does not affect preview slots.
-  // Signal omitted operations; status counts are rendered separately at the
+  // Signal omitted operations; status indicators are rendered separately at the
   // right, where truncating this preview cannot hide them.
   let captions : Array[String] = []
   let mut more = false

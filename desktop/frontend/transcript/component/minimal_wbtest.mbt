@@ -261,7 +261,7 @@ test "folded minimal summaries preview operations independent of their outcome" 
 }
 
 ///|
-test "completed turn summaries show the first three captions and retain failure counts" {
+test "completed turn summaries show the first three captions and track failure status" {
   let pending : MinimalCall = {
     tool_name: "read",
     changes: None,
@@ -287,7 +287,7 @@ test "completed turn summaries show the first three captions and retain failure 
     "Read project files · Read project files",
   )
   // Count operations in order, including repeated captions. Failures beyond
-  // the three visible operations must still appear in the failure total.
+  // the three visible operations must still be tracked, though never displayed.
   for count in 0..<=4 {
     let calls : Array[MinimalActivity] = []
     for index in 0..<count {

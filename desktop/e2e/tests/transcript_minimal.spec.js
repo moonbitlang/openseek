@@ -97,7 +97,8 @@ test('single minimal calls have no duplicate disclosure and preserve status and 
   app.append('tool_result', { tool_call_id: 'edit', tool_name: 'edit', content: '', brief: 'Edit failed', is_error: true });
   await expect(single.locator('.minimal-call-caption')).toHaveText('Edit failed');
   await expect(single.locator('.tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
-  await expect(single.locator('.minimal-failure-count')).toHaveText('1 tool call failed');
+  await expect(single.locator('.minimal-failure-count')).toHaveCount(0);
+  await expect(single).not.toContainText(/tool calls? failed/);
   app.append('terminal', { kind: 'finished', message: 'Could not edit.' });
   await expect(stream.getByText('Could not edit.', { exact: true })).toBeVisible();
   await expect(single.locator('.tool-status')).toBeVisible();
@@ -263,7 +264,8 @@ test('minimal transcript groups live tools and folds completed work around user 
   await expect(tools.locator('.minimal-chevron svg')).toHaveCount(1);
   await expect(tools.locator('summary > .minimal-summary-text')).toHaveText('Read the project manifest · Cannot read the second file · Check project details');
   const aggregate = tools.locator(':scope > summary > .minimal-tool-status');
-  await expect(aggregate.locator('.minimal-failure-count')).toHaveText('1 tool call failed');
+  await expect(aggregate.locator('.minimal-failure-count')).toHaveCount(0);
+  await expect(aggregate).not.toContainText(/tool calls? failed/);
   await expect(aggregate.getByRole('img', { name: 'Tool failed' })).toBeVisible();
   const spinner = aggregate.locator('.tool-status-spinner');
   await expect(spinner).toBeVisible();
@@ -289,7 +291,8 @@ test('minimal transcript groups live tools and folds completed work around user 
   });
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Check project details');
   await expect(aggregate.locator('.tool-status-spinner')).toHaveCount(0);
-  await expect(aggregate.locator('.minimal-failure-count')).toHaveText('1 tool call failed');
+  await expect(aggregate.locator('.minimal-failure-count')).toHaveCount(0);
+  await expect(aggregate).not.toContainText(/tool calls? failed/);
   await expect(tools.locator('summary > .minimal-summary-text')).toHaveText('Read the project manifest · Cannot read the second file · Check project details');
   await expect(tools).toHaveAttribute('open', '');
   expect(await originalTools.evaluate(node => node.isConnected)).toBe(true);
@@ -309,8 +312,12 @@ test('minimal transcript groups live tools and folds completed work around user 
   await expect(processes).toHaveCount(2);
   await expect(processes.nth(0).locator(':scope > summary > .minimal-summary-text')).toHaveText('Read the project manifest · Cannot read the second file · Check project details');
   await expect(processes.nth(1).locator(':scope > summary > .minimal-summary-text')).toHaveText('mcp__example__inspect');
-  await expect(processes.nth(0).locator(':scope > summary .minimal-failure-count')).toHaveText('1 tool call failed');
-  await expect(processes.nth(1).locator(':scope > summary .minimal-failure-count')).toHaveText('1 tool call failed');
+  await expect(processes.nth(0).locator(':scope > summary .minimal-failure-count')).toHaveCount(0);
+  await expect(processes.nth(1).locator(':scope > summary .minimal-failure-count')).toHaveCount(0);
+  await expect(processes.nth(0).locator(':scope > summary')).not.toContainText(/tool calls? failed/);
+  await expect(processes.nth(1).locator(':scope > summary')).not.toContainText(/tool calls? failed/);
+  await expect(processes.nth(0).locator(':scope > summary').getByRole('img', { name: 'Tool failed' })).toBeVisible();
+  await expect(processes.nth(1).locator(':scope > summary').getByRole('img', { name: 'Tool failed' })).toBeVisible();
   await expect(stream.getByText('I will explore this project.', { exact: true })).toBeHidden();
   await expect(stream.getByText('Please focus on the architecture.', { exact: true })).toBeVisible();
   await expect(stream.locator('.msg-content strong')).toHaveText('final summary');
@@ -504,7 +511,11 @@ test('minimal summaries truncate to one line at wide and narrow widths', async (
         ]);
         expect(statusBox.x).toBeGreaterThanOrEqual(labelBox.x + labelBox.width);
         expect(statusBox.x + statusBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
-        if (completed) await expect(status.locator('.minimal-failure-count')).toHaveText('2 tool calls failed');
+        if (completed) {
+          await expect(status.locator('.minimal-failure-count')).toHaveCount(0);
+          await expect(status).not.toContainText(/tool calls? failed/);
+          await expect(status.getByRole('img', { name: 'Tool failed' })).toBeVisible();
+        }
       }
     }
   }
@@ -535,7 +546,9 @@ test('minimal transcript folds background notices into the surrounding tool acti
   const process = page.locator('#stream .minimal-process');
   await expect(process).toHaveCount(1);
   await expect(page.getByText(notice, { exact: true })).toBeHidden();
-  await expect(process.locator(':scope > summary .minimal-failure-count')).toHaveText('1 tool call failed');
+  await expect(process.locator(':scope > summary .minimal-failure-count')).toHaveCount(0);
+  await expect(process.locator(':scope > summary')).not.toContainText(/tool calls? failed/);
+  await expect(process.locator(':scope > summary').getByRole('img', { name: 'Tool failed' })).toBeVisible();
   await expect(process.locator(':scope > summary')).not.toContainText(/Background activity|Read job output|Wait for jobs|Stop jobs/);
   await process.locator(':scope > summary').click();
   await process.locator('.minimal-tools > summary').click();

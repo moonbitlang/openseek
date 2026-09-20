@@ -1751,9 +1751,6 @@
 .minimal-activity-summary > .minimal-tool-status {
   margin-left: auto;
 }
-.minimal-failure-count {
-  color: var(--color-danger);
-}
 /* Every call keeps its status on the right, independently of caption length.
    Explicit grid placement also keeps detail mode's icon order from moving the
    status below an edit preview. */
