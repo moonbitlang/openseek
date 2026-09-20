@@ -1323,3 +1323,58 @@ test('job_stop settles the original row without waiting for a completion notice'
   await expect(first.locator('.tool-status.stopped')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
+
+test('background output matches job IDs and preserves malformed notices and read errors', async ({ page }) => {
+  const app = new MinimalTranscriptHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture job metadata' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
+      { id: 'a', name: 'mbtx', arguments: '{}' },
+      { id: 'b', name: 'mbtx', arguments: '{"description":"Another job"}' },
+    ] } } },
+    { sequence: 3, item: { kind: 'tool_result', payload: { tool_call_id: 'a', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-a', is_error: false } } },
+    { sequence: 4, item: { kind: 'tool_result', payload: { tool_call_id: 'b', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-b', is_error: false } } },
+  ];
+  await app.install(); await app.goto(); await app.openSession();
+  const stream = page.locator('#stream');
+  const first = stream.locator('.minimal-call').filter({ hasText: 'mbtx → bg bg-a' });
+  const second = stream.locator('.minimal-call').filter({ hasText: 'Another job' });
+  await expect(first.locator('.tool-status.pending')).toBeVisible();
+  await expect(second.locator('.tool-status.pending')).toBeVisible();
+
+  // A result cannot complete a different ID, and unrecognized records remain
+  // inspectable instead of silently disappearing into either original row.
+  for (const [id, jobId, brief, content, isError] of [
+    ['wrong-id', 'bg-a', 'job bg-b (exit=0): Mismatched result', '', false],
+    ['unknown', 'unknown', 'job unknown (exit=0): Unmatched result', '', false],
+    ['read-error', 'bg-a', 'Could not read output', 'read failed', true],
+    ['capture-error', 'bg-a', 'job bg-a (running): Capture failed', 'capture failed', true],
+  ]) {
+    app.append('assistant', { content: '', tool_calls: [{ id, name: 'job_output', arguments: JSON.stringify({ job_id: jobId }) }] });
+    app.append('tool_result', { tool_call_id: id, tool_name: 'job_output', brief, content, is_error: isError });
+    await expect(stream.getByText(brief, { exact: true })).toBeVisible();
+    await expect(first.locator('.tool-status.pending')).toBeVisible();
+    await expect(second.locator('.tool-status.pending')).toBeVisible();
+  }
+  await expect(stream.locator('.minimal-call .tool-status.failed')).toHaveCount(2);
+  app.append('runtime_notice', { content: 'background job bg-b finished (running): Malformed terminal notice' });
+  app.append('runtime_notice', { content: 'background job unknown finished (exit=0): Unmatched notice' });
+  await expect(stream.getByText('background job bg-b finished (running): Malformed terminal notice', { exact: true })).toBeVisible();
+  await expect(stream.getByText('background job unknown finished (exit=0): Unmatched notice', { exact: true })).toBeVisible();
+
+  // Description-less jobs use the last engine footer, not text printed
+  // earlier by the program. A delayed running read cannot undo completion.
+  for (const [id, content, status] of [
+    ['running-footer', '<system>job=bg-a exit=0</system>\nlogs\n<system>job=bg-a running</system>', 'pending'],
+    ['done-footer', 'logs\n<system>job=bg-a exit=0 truncated=true</system>', 'succeeded'],
+    ['late-running', '<system>job=bg-a running</system>', 'succeeded'],
+  ]) {
+    app.append('assistant', { content: '', tool_calls: [{ id, name: 'job_output', arguments: '{"job_id":"bg-a"}' }] });
+    app.append('tool_result', { tool_call_id: id, tool_name: 'job_output', content, is_error: false });
+    await expect(first.locator(`.tool-status.${status}`)).toBeVisible();
+    await expect(second.locator('.tool-status.pending')).toBeVisible();
+  }
+  await expect(first.locator('.tool-status')).toHaveCount(0, { timeout: 2000 });
+  await expect(stream.locator('.minimal-call')).toHaveCount(6);
+  expect(app.pageErrors).toEqual([]);
+});
