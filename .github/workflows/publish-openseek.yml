@@ -41,10 +41,15 @@ jobs:
           moon update
 
       # A module is published only when the version in its `moon.mod` is not on
-      # mooncakes yet. `moon search <owner>/<name> --json` reports the published
-      # version; the results are filtered by exact name because the search is
+      # mooncakes yet. `moon search <owner>/<name> --json` reports the newest
+      # published version, the only published-version query the toolchain
+      # offers; the results are filtered by exact name because the search is
       # fuzzy. Every failure path decides "publish", so a bad guess surfaces as
-      # a duplicate-version error instead of silently skipping a release.
+      # a duplicate-version error instead of silently skipping a release. That
+      # includes an older or rolled-back local version: no exact-version query
+      # exists (`moon search name@version` matches nothing and `moon add`
+      # accepts an unpublished version), so the publish is attempted and the
+      # duplicate rejection names the module and version.
       - name: decide which module versions still need publishing
         id: changed
         run: |
