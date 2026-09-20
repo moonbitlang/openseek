@@ -1648,14 +1648,17 @@ fn topbar_view(
     )
   }
   // A phone's titlebar carries identity and run state only: the detail,
-  // terminal, and right-panel controls all leave the narrow layout.
+  // export, terminal, and right-panel controls all leave the narrow layout.
   if !model.narrow {
     items.push(model.detail_toggle(dispatch))
   }
   // Export is a native-window operation and the visualizer consumes durable
   // OpenSeek JSONL. Remote-device conversations and fresh drafts therefore do
   // not offer a button that their host cannot fulfill.
-  if model.is_desktop && conv.device is Local && !conv.messages.is_empty() {
+  if !model.narrow &&
+    model.is_desktop &&
+    conv.device is Local &&
+    !conv.messages.is_empty() {
     items.push(
       @html.button(
         class="panel-toggle",
