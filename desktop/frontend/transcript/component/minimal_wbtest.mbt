@@ -519,3 +519,310 @@ test "minimal prose keeps the durable completion stamp only when finished" {
   assert_eq(completed_at, None)
   assert_true(live)
 }
+
+///|
+test "background minimal call remains pending after detaching" {
+  let call : @transcript.ToolCall = {
+    call_id: "start",
+    name: "mbtx",
+    arguments: Some("{\"description\":\"Run tests\"}"),
+    outcome: Done(content="", is_error=false, brief=Some("mbtx → bg bg-1")),
+    children: [],
+  }
+  assert_true(MinimalCall::from_tool(call).status is Pending)
+}
+
+///|
+test "background status joins only matching metadata and completion expiry is pure" {
+  let start : @transcript.ToolCall = {
+    call_id: "start",
+    name: "mbtx",
+    arguments: Some("{}"),
+    children: [],
+    outcome: Done(content="", is_error=false, brief=Some("mbtx → bg bg-a")),
+  }
+  let jobs : BackgroundJobs = { statuses: Map([]), }
+  jobs.collect(start)
+  jobs.collect({
+    ..start,
+    call_id: "second",
+    outcome: Done(content="", is_error=false, brief=Some("mbtx → bg bg-b")),
+  })
+  let output : @transcript.ToolCall = {
+    call_id: "read",
+    name: "job_output",
+    arguments: Some("{\"job_id\":\"bg-a\"}"),
+    children: [],
+    outcome: Done(
+      content="",
+      is_error=false,
+      brief=Some("job bg-a (running): Tests"),
+    ),
+  }
+  jobs.read_output(output)
+  assert_true(jobs.statuses.get("bg-a") is Some(Pending))
+  jobs.read_output({
+    ..output,
+    outcome: Done(
+      content="",
+      is_error=false,
+      brief=Some("job bg-b (exit=0): Wrong job"),
+    ),
+  })
+  assert_true(jobs.statuses.get("bg-a") is Some(Pending))
+  jobs.read_output({
+    ..output,
+    outcome: Done(
+      content="logs\n<system>job=bg-a exit=0 truncated=true</system>",
+      is_error=false,
+      brief=None,
+    ),
+  })
+  assert_true(jobs.statuses.get("bg-a") is Some(RecentlySucceeded))
+  assert_true(jobs.statuses.get("bg-b") is Some(Pending))
+  jobs.read_output(output)
+  assert_true(jobs.statuses.get("bg-a") is Some(RecentlySucceeded))
+  let failed_read = {
+    ..output,
+    outcome: Done(content="read failed", is_error=true, brief=None),
+  }
+  assert_false(jobs.absorbs(failed_read))
+  // Capture diagnostics can fail while the process itself is still running.
+  // Keep that read's error visible without marking its owner completed.
+  let capture_error = {
+    ..output,
+    outcome: Done(
+      content="capture failed",
+      is_error=true,
+      brief=Some("job bg-a (running): Tests"),
+    ),
+  }
+  assert_false(jobs.absorbs(capture_error))
+  assert_false(
+    jobs.absorbs({ ..output, arguments: Some("{\"job_id\":\"unknown\"}"), }),
+  )
+  assert_true(
+    BackgroundJobs::finished_notice(
+      "background job bg-b finished (exit=1): Tests",
+    )
+    is Some(("bg-b", Failed)),
+  )
+  assert_true(
+    BackgroundJobs::finished_notice(
+      "background job bg-b finished (running): Tests",
+    )
+    is None,
+  )
+  let input = {
+    ..base_input(),
+    minimal: true,
+    items: VisibleRow::history([
+      {
+        kind: Assistant(
+          reasoning=None,
+          prose=None,
+          calls=[start],
+          replay=false,
+          finished=false,
+        ),
+        ts: None,
+        sequence: Some(1),
+      },
+      {
+        kind: Notice(
+          label="runtime notice",
+          brief=Some("background job bg-a finished (exit=0): Tests"),
+          body=None,
+          is_error=false,
+        ),
+        ts: None,
+        sequence: Some(2),
+      },
+    ]),
+  }
+  let initial = pinned_model({ ..input, items: [], })
+  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let (observed, _) = initial.update(input, ContentRendered, emit)
+  let (again, _) = initial.update(input, ContentRendered, emit)
+  assert_true(observed == again)
+  assert_eq(initial.job_completions.entries.length(), 0)
+  assert_eq(observed.job_completions.entries.length(), 1)
+  let (duplicate, _) = observed.update(input, ContentRendered, emit)
+  assert_true(duplicate == observed)
+  let (expired, _) = observed.update(input, JobCompletionExpired("bg-a"), emit)
+  let (expired_again, _) = observed.update(
+    input,
+    JobCompletionExpired("bg-a"),
+    emit,
+  )
+  assert_true(expired == expired_again)
+  assert_false(observed.job_completions.hidden("bg-a"))
+  assert_true(expired.job_completions.hidden("bg-a"))
+  assert_true(JobCompletions::history(input).hidden("bg-a"))
+  let entries = input
+    .minimal_blocks(completions=expired.job_completions)
+    .to_array()
+  guard entries is [{ content: Minimal(content), .. }] else {
+    fail("expected one original row")
+  }
+  assert_true(
+    content.activities()
+    is [Call({ caption: "mbtx → bg bg-a", status: Succeeded, .. })],
+  )
+}
+
+///|
+test "successful job_stop settles its original background call without a notice" {
+  let start : @transcript.ToolCall = {
+    call_id: "start",
+    name: "mbtx",
+    arguments: Some("{\"description\":\"Check popover attributes\"}"),
+    children: [],
+    outcome: Done(
+      content="",
+      is_error=false,
+      brief=Some("mbtx → bg bg-stopped"),
+    ),
+  }
+  let stop : @transcript.ToolCall = {
+    call_id: "stop",
+    name: "job_stop",
+    arguments: Some("{\"job_id\":\"bg-stopped\"}"),
+    children: [],
+    outcome: Done(
+      content="stopped background job bg-stopped",
+      is_error=false,
+      brief=None,
+    ),
+  }
+  let input = {
+    ..base_input(),
+    minimal: true,
+    items: VisibleRow::history([
+      {
+        kind: Assistant(
+          reasoning=None,
+          prose=None,
+          calls=[start],
+          replay=false,
+          finished=false,
+        ),
+        ts: None,
+        sequence: Some(1),
+      },
+      {
+        kind: Assistant(
+          reasoning=None,
+          prose=None,
+          calls=[stop],
+          replay=false,
+          finished=false,
+        ),
+        ts: None,
+        sequence: Some(2),
+      },
+    ]),
+  }
+  let jobs = BackgroundJobs::from_input(input)
+  assert_false(jobs.statuses.get("bg-stopped") is Some(Pending))
+  assert_true(jobs.absorbs(stop))
+}
+
+///|
+test "job records settle original calls and reject ambiguous generations" {
+  let start : @transcript.ToolCall = {
+    call_id: "start",
+    name: "mbtx",
+    arguments: None,
+    children: [],
+    outcome: Done(content="", is_error=false, brief=Some("mbtx → bg bg-1")),
+  }
+  let view : @protocol.JobView = {
+    job: {
+      generation: "current",
+      id: "bg-1",
+      revision: 1,
+      command: "test",
+      description: None,
+      cwd: None,
+      state: Running,
+      started_at_ms: 1,
+      backgrounded_at_ms: 2,
+      finished_at_ms: None,
+      last_output_at_ms: None,
+      output_file: None,
+      output_persistent: false,
+      output_bytes: 0,
+      output_chars: 0,
+      output_truncated: false,
+      invalid_utf8: false,
+      output_error: None,
+      persistence_error: None,
+      cleanup_error: None,
+      data: None,
+    },
+    output_path: None,
+    controllable: false,
+    error: None,
+  }
+  let input = {
+    ..base_input(),
+    items: VisibleRow::history([
+      {
+        kind: Assistant(
+          reasoning=None,
+          prose=None,
+          calls=[start],
+          replay=false,
+          finished=false,
+        ),
+        ts: None,
+        sequence: Some(1),
+      },
+    ]),
+  }
+  for
+    (state, expected) in [
+      (view.job.state, Pending),
+      (Stopping, Pending),
+      (Exited(0), RecentlySucceeded),
+      (Exited(2), Failed),
+      (Stopped("user"), Stopped),
+      (Stopped("output_limit"), Failed),
+      (Stopped("time_limit"), Failed),
+      (Stopped("capture_failed"), Failed),
+      (Interrupted, Failed),
+    ] {
+    let jobs = BackgroundJobs::from_input({
+      ..input,
+      background_jobs: [{ ..view, job: { ..view.job, state, }, }],
+    })
+    assert_true(jobs.statuses.get("bg-1") == Some(expected))
+  }
+  let success = { ..view, job: { ..view.job, state: Exited(0), }, }
+  let failed = BackgroundJobs::from_input({
+    ..input,
+    background_jobs: [
+      {
+        ..success,
+        job: { ..success.job, cleanup_error: Some("cleanup failed"), },
+      },
+    ],
+  })
+  assert_true(failed.statuses.get("bg-1") is Some(Failed))
+  let ambiguous = BackgroundJobs::from_input({
+    ..input,
+    background_jobs: [
+      success,
+      { ..view, job: { ..view.job, generation: "previous", }, },
+    ],
+  })
+  assert_true(ambiguous.statuses.get("bg-1") is Some(Pending))
+  assert_true(
+    BackgroundJobs::from_input({
+      ..input,
+      items: [],
+      background_jobs: [success],
+    }).statuses.is_empty(),
+  )
+}

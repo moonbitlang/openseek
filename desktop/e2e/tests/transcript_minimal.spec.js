@@ -212,7 +212,7 @@ test('minimal captions persist through completion and yield to newer description
   app.append('tool_result', {
     tool_call_id: 'script', tool_name: 'mbtx', brief: 'mbtx → bg bg-1', content: '', is_error: false,
   });
-  await expect(calls.locator('.tool-status')).toHaveCount(0);
+  await expect(calls.locator('.tool-status.pending')).toBeVisible();
   await expect(summary).toHaveText('Run project tests');
   app.append('runtime_notice', { content: 'background job bg-1 finished (exit=0): Run project tests' });
   app.append('assistant', { content: '', tool_calls: [{ id: 'edit', name: 'edit', arguments: '{}' }] });
@@ -253,7 +253,7 @@ test('minimal captions persist through completion and yield to newer description
   for (const call of await completed.locator('.minimal-call').all()) {
     await expect(call).toBeVisible();
   }
-  await expect(completed.locator('.minimal-note')).toBeVisible();
+  await expect(completed.locator('.minimal-note')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1045,18 +1045,18 @@ test('minimal job waits name their targets while pending and disappear after suc
   await app.goto();
   await app.enableMinimal();
   const stream = page.locator('#stream');
-  const tools = stream.locator('.minimal-tools-live');
+  const tools = stream;
   const caption = 'Wait for job "Run the pr tests" to complete';
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText(caption);
 
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests', caption]);
-  await expect(tools.locator('.minimal-call .tool-status.pending')).toHaveAttribute('aria-label', 'Tool in progress');
+  await expect(tools.locator('.minimal-call .tool-status.pending')).toHaveCount(2);
   const notice = 'background job bg-2 finished (exit=0): Run the pr tests';
   app.append('runtime_notice', { content: notice });
   app.append('tool_result', { tool_call_id: 'wait', tool_name: 'job_wait', content: 'WAIT_RESULT_SENTINEL', is_error: false });
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests']);
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Run the pr tests');
-  await expect(tools.getByText(notice, { exact: true })).toBeVisible();
+  await expect(tools.getByText(notice, { exact: true })).toHaveCount(0);
   await expect(stream).not.toContainText('WAIT_RESULT_SENTINEL');
 
   app.append('assistant', { content: '', tool_calls: [
@@ -1149,7 +1149,6 @@ test('minimal Codex activities render recorded patches without classifying forei
   expect(app.pageErrors).toEqual([]);
 });
 
-
 for (const scenario of ['partial', 'search-bound', 'append', 'clean', 'recreated']) test(`minimal diff title opens the file without a position check: ${scenario}`, async ({ page, context }) => {
   const app = new MinimalTranscriptHarness(page);
   const source = Array.from({ length: 180 }, (_, i) => `fn line_${i + 1}() -> Int { ${i + 1} }`).join('\n');
@@ -1197,5 +1196,130 @@ for (const scenario of ['partial', 'search-bound', 'append', 'clean', 'recreated
   expect(app.requests.filter(r => r.method === 'host.open_path').map(r => r.params.path)).toEqual(['src/main.mbt', 'src/main.mbt']);
   expect(app.requests.filter(r => r.method === 'git.original_file')).toHaveLength(0);
   await expect(page.locator('.notification')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('background jobs keep their original rows and retire completion checks once', async ({ page }) => {
+  const app = new MinimalTranscriptHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture tracking two jobs' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
+      { id: 'a', name: 'mbtx', arguments: JSON.stringify({ description: 'Run first tests' }) },
+      { id: 'b', name: 'mbtx', arguments: JSON.stringify({ description: 'Run second tests' }) },
+    ] } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const stream = page.locator('#stream');
+  const first = stream.locator('.minimal-call').filter({ hasText: 'Run first tests' });
+  const second = stream.locator('.minimal-call').filter({ hasText: 'Run second tests' });
+  app.append('tool_result', { tool_call_id: 'a', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-a', is_error: false });
+  app.append('tool_result', { tool_call_id: 'b', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-b', is_error: false });
+  await expect(first.locator('.tool-status.pending')).toBeVisible();
+  await expect(second.locator('.tool-status.pending')).toBeVisible();
+  app.append('assistant', { content: '', tool_calls: [
+    { id: 'read-a', name: 'job_output', arguments: '{"job_id":"bg-a"}' },
+  ] });
+  app.append('tool_result', { tool_call_id: 'read-a', tool_name: 'job_output', content: '', brief: 'job bg-a (running): Run first tests', is_error: false });
+  await expect(stream.locator('.minimal-call')).toHaveCount(2);
+  await expect(first.locator('.tool-status.pending')).toBeVisible();
+  app.append('runtime_notice', { content: 'background job bg-b finished (exit=0): `Run second tests`' });
+  await expect(second.locator('.tool-status.succeeded')).toBeVisible();
+  await expect(first.locator('.tool-status.pending')).toBeVisible();
+  await expect(stream.locator('.minimal-note')).toHaveCount(0);
+  await expect(second.locator('.tool-status')).toHaveCount(0, { timeout: 2000 });
+  // Repeating a finished read must neither create a row nor restart the check.
+  app.append('assistant', { content: '', tool_calls: [
+    { id: 'read-b', name: 'job_output', arguments: '{"job_id":"bg-b"}' },
+    { id: 'done-a', name: 'job_output', arguments: '{"job_id":"bg-a"}' },
+  ] });
+  app.append('tool_result', { tool_call_id: 'read-b', tool_name: 'job_output', content: '', brief: 'job bg-b (exit=0): Run second tests', is_error: false });
+  app.append('tool_result', { tool_call_id: 'done-a', tool_name: 'job_output', content: '', brief: 'job bg-a (exit=0): Run first tests', is_error: false });
+  await expect(first.locator('.tool-status.succeeded')).toBeVisible();
+  await expect(second.locator('.tool-status')).toHaveCount(0);
+  await expect(stream.locator('.minimal-call')).toHaveCount(2);
+  await expect(first.locator('.tool-status')).toHaveCount(0, { timeout: 2000 });
+  app.append('runtime_notice', { content: 'background job bg-a finished (exit=0): `Run first tests`' });
+  await expect(stream.locator('.tool-status')).toHaveCount(0);
+  // Historical completions stay quiet when the conversation is reopened.
+  await page.reload();
+  await app.openSession();
+  await expect(stream.locator('.tool-status')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('background completion updates folded work and retains failures', async ({ page }) => {
+  const app = new MinimalTranscriptHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture folded jobs' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
+      { id: 'a', name: 'mbtx', arguments: '{"description":"Run tests"}' },
+      { id: 'b', name: 'mbtx', arguments: '{"description":"Run checks"}' },
+    ] } } },
+    { sequence: 3, item: { kind: 'tool_result', payload: { tool_call_id: 'a', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-a', is_error: false } } },
+    { sequence: 4, item: { kind: 'tool_result', payload: { tool_call_id: 'b', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-b', is_error: false } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  app.append('terminal', { kind: 'finished', message: 'Jobs are running in the background.' });
+  const process = page.locator('#stream .minimal-process');
+  const summary = process.locator(':scope > summary');
+  await expect(summary.locator('.tool-status.pending')).toBeVisible();
+  app.append('runtime_notice', { content: 'background job bg-a finished (exit=0): `Run tests`' });
+  await expect(summary.locator('.tool-status.succeeded')).toBeVisible();
+  await expect(summary.locator('.tool-status.pending')).toBeVisible();
+  // A check remains long enough to be seen, then retires after one second.
+  await page.waitForTimeout(500);
+  await expect(summary.locator('.tool-status.succeeded')).toBeVisible();
+  await expect(summary.locator('.tool-status.succeeded')).toHaveCount(0, { timeout: 1000 });
+  app.append('runtime_notice', { content: 'background job bg-b finished (exit=2): `Run checks`' });
+  await expect(summary.locator('.tool-status.pending')).toHaveCount(0);
+  await expect(summary.locator('.tool-status.failed')).toBeVisible();
+  await summary.click();
+  await expect(process.locator('.minimal-call').filter({ hasText: 'Run tests' }).locator('.tool-status')).toHaveCount(0);
+  await expect(process.locator('.minimal-call').filter({ hasText: 'Run checks' }).locator('.tool-status.failed')).toBeVisible();
+  await expect(page.locator('#stream .minimal-note')).toHaveCount(0);
+  await app.detailedMode().click();
+  await expect(page.locator('#stream')).toContainText('background job bg-b finished');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('job_stop settles the original row without waiting for a completion notice', async ({ page }) => {
+  const app = new MinimalTranscriptHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture stopped jobs' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
+      { id: 'a', name: 'mbtx', arguments: '{"description":"Check popover attributes"}' },
+      { id: 'b', name: 'mbtx', arguments: '{"description":"Check menus"}' },
+    ] } } },
+    { sequence: 3, item: { kind: 'tool_result', payload: { tool_call_id: 'a', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-a', is_error: false } } },
+    { sequence: 4, item: { kind: 'tool_result', payload: { tool_call_id: 'b', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-b', is_error: false } } },
+  ];
+  await app.install(); await app.goto(); await app.openSession();
+  const stream = page.locator('#stream');
+  const first = stream.locator('.minimal-call').filter({ hasText: 'Check popover attributes' });
+  const second = stream.locator('.minimal-call').filter({ hasText: 'Check menus' });
+  app.append('assistant', { content: '', tool_calls: [{ id: 'stop-error', name: 'job_stop', arguments: '{"job_id":"bg-a"}' }] });
+  app.append('tool_result', { tool_call_id: 'stop-error', tool_name: 'job_stop', content: 'stop failed', brief: 'Could not stop job', is_error: true });
+  await expect(first.locator('.tool-status.pending')).toBeVisible();
+  await expect(stream.getByText('Could not stop job', { exact: true })).toBeVisible();
+  app.append('assistant', { content: '', tool_calls: [{ id: 'stop-a', name: 'job_stop', arguments: '{"job_id":"bg-a"}' }] });
+  // This is the actual result shape from the reported session: no brief and
+  // no runtime_notice after the successful stop.
+  app.append('tool_result', { tool_call_id: 'stop-a', tool_name: 'job_stop', content: 'stopped background job bg-a', is_error: false });
+  await expect(first.locator('.tool-status.stopped')).toHaveAttribute('aria-label', 'Tool stopped');
+  await expect(first.locator('.tool-status.pending')).toHaveCount(0);
+  await expect(second.locator('.tool-status.pending')).toBeVisible();
+  app.append('runtime_notice', { content: 'background job bg-b finished (exit=0): Check menus' });
+  await expect(second.locator('.tool-status.succeeded')).toBeVisible();
+  app.append('assistant', { content: '', tool_calls: [{ id: 'stop-b', name: 'job_stop', arguments: '{"job_id":"bg-b"}' }] });
+  app.append('tool_result', { tool_call_id: 'stop-b', tool_name: 'job_stop', content: 'stopped background job bg-b', is_error: false });
+  await expect(second.locator('.tool-status.stopped')).toHaveCount(0);
+  await expect(second.locator('.tool-status')).toHaveCount(0);
+  await expect(stream.locator('.minimal-call')).toHaveCount(3); // two jobs plus the failed request
+  await page.reload(); await app.openSession();
+  await expect(first.locator('.tool-status.stopped')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });

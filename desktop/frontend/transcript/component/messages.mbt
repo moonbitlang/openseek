@@ -16,6 +16,7 @@ priv enum UiMessage {
   ToolInProgress
   ToolFailed
   ToolSucceeded
+  ToolStopped
   ToolDetails
   OriginalJson
   ArgumentsLabel
@@ -156,6 +157,10 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ToolFailed) => "工具运行失败"
     (TraditionalChinese, ToolFailed) => "工具執行失敗"
     (Japanese, ToolFailed) => "ツールの実行に失敗しました"
+    (English, ToolStopped) => "Tool stopped"
+    (SimplifiedChinese, ToolStopped) => "工具已停止"
+    (TraditionalChinese, ToolStopped) => "工具已停止"
+    (Japanese, ToolStopped) => "ツールは停止しました"
     (English, ToolSucceeded) => "Tool succeeded"
     (Spanish, ToolSucceeded) => "La herramienta se ejecutó correctamente"
     (SimplifiedChinese, ToolSucceeded) => "工具运行成功"

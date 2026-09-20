@@ -487,3 +487,28 @@ test('background program calls update live and retain edit diffs after reload', 
   await expect(trace.locator('.tool-status-spinner')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('stopping from Jobs settles the minimal transcript without a tool result', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'true'));
+  app = new BackgroundJobsHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture panel stop' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
+      { id: 'start', name: 'mbtx', arguments: '{"description":"Watch build output"}' },
+    ] } } },
+    { sequence: 3, item: { kind: 'tool_result', payload: { tool_call_id: 'start', tool_name: 'mbtx', content: '', brief: `mbtx → bg ${app.liveId}`, is_error: false } } },
+  ];
+  app.liveSessions.push({ id: 'session-2', title: 'Another conversation', updated_at_ms: 2 });
+  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
+  const row = page.locator('#stream .minimal-call');
+  await expect(row.locator('.tool-status.pending')).toBeVisible();
+  await page.getByRole('button', { name: 'Stop job', exact: true }).click();
+  await expect(page.locator('.jobs-detail-title')).toContainText('Stopped');
+  await expect(row.locator('.tool-status.stopped')).toBeVisible();
+  await expect(row.locator('.tool-status.pending')).toHaveCount(0);
+  // The same transcript fixture in another conversation deliberately reuses
+  // the ID: the previous conversation's stopped record must not leak into it.
+  await page.locator('.conversation-row[title="session-2"]').click();
+  await expect(row.locator('.tool-status.pending')).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});
