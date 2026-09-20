@@ -877,21 +877,6 @@ fn reconcile_reviews_after_changes(
       previous_files,
       review.selected,
     )
-    // File-link reviews compare the file even after its recorded edit has
-    // been committed or reverted. Changes-row reviews retain list membership.
-    let unlisted_file_review = current_change is None &&
-      state.file_review_paths.contains(path)
-    let current_change = if unlisted_file_review {
-      Some({
-        path: review.selected.path,
-        original_path: None,
-        index_status: " ",
-        worktree_status: " ",
-        kind: ChangeModified,
-      })
-    } else {
-      current_change
-    }
     match current_change {
       None => {
         let ordinary = { ..doc, review: None, }
@@ -962,7 +947,6 @@ fn reconcile_reviews_after_changes(
           )
         let review_inputs_changed = review_incomplete ||
           head_changed ||
-          (unlisted_file_review && review.selected != change) ||
           ({
             let previous_source = if review.selected.kind
               is (ChangeRenamed | ChangeCopied) {
@@ -1954,12 +1938,6 @@ pub fn sync(
   ctx : Ctx,
   review_context? : Array[@mention_context.ReviewChanges] = [],
 ) -> (State, @cmd.Cmd) {
-  let state = {
-    ..state,
-    file_review_paths: state.file_review_paths.filter(path => {
-      ctx.open_files.contains(path)
-    }),
-  }
   let checkout_ready = ctx.checkout_ready()
   let owner_changed = state.owner != Some(ctx.owner)
   // The first owner claim has no previous conversation request to fence and
@@ -2328,7 +2306,7 @@ pub fn sync(
   }
   let review_context_reveal = state.review_context_reveal.filter(selection => {
     ctx.active_file is Some(file) &&
-    ctx.relative(file) == Some(@pathx.Relative(selection.source.file)) &&
+    ctx.relative(file) == Some(@pathx.Relative(selection.file())) &&
     state.docs.get(file)
     is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. })
   })
@@ -2870,11 +2848,10 @@ fn update_inner(
       )
       (@cmd.none, next.toggle_active_review_hunk(ctx))
     }
-    ReviewContextRevealFinished(source~, ..) =>
+    ReviewContextRevealFinished(target~, ..) =>
       (
         @cmd.none,
-        if state.review_context_reveal is Some(selection) &&
-          selection.source == source {
+        if state.review_context_reveal is Some(selection) && selection == target {
           { ..state, review_context_reveal: None, }
         } else {
           state
@@ -3310,18 +3287,6 @@ fn update_inner(
         for cmd in legacy_cmds {
           review_cmds.push(cmd)
         }
-        let review_navigation_destination = state.review_navigation_destination.bind(destination => {
-            let (change, generation, target) = destination
-            guard target is ReviewLine(_) &&
-              ctx.resource(change.path) is Some(file) &&
-              state.docs.get(file) is Some({ review: Some(previous), .. }) &&
-              previous.generation == generation &&
-              docs.get(file) is Some({ review: Some(current), .. }) else {
-              return Some(destination)
-            }
-            Some((current.selected, current.generation, target))
-          },
-        )
         let settle = if follow_up {
           list_changes(
             dispatch,
@@ -3367,7 +3332,6 @@ fn update_inner(
             },
             changes_generation: next_generation,
             review_generation,
-            review_navigation_destination,
             review_progress,
             review_active_hunk,
             review_hunk_ready: if !follow_up && head_changed {

@@ -903,7 +903,6 @@ fn open_editor_at(
   range : @common.Range?,
   file_link_generation? : Int,
   annotation? : String,
-  review? : Bool = false,
 ) -> (@cmd.Cmd, Model) {
   // A transcript host reply already carries the token its click spent. Every
   // direct mention, Quick Open, or location jump is a newer competing action.
@@ -955,19 +954,6 @@ fn open_editor_at(
   }
   // Owner preparation can advance the request epoch; read with the new one.
   let ctx = file_ctx(model)
-  if review {
-    guard model.active_relative_path(path) is Some(relative) else {
-      return (@cmd.none, model)
-    }
-    let (cmd, panel) = panel.open_review_at(
-      femit,
-      ctx,
-      relative,
-      range.map(range => range.start_line_number),
-      had_active~,
-    )
-    return (cmd, { ..model, file_panel: panel, })
-  }
   let (cmd, panel) = @fileeditor.open_file(
     femit,
     panel,
@@ -1987,7 +1973,6 @@ fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
   | JumpToLocation(..)
   | QuickOpen(@quick_open.Pick(_))
   | OpenFileAt(..)
-  | OpenReview(..)
   | FileEditor(@fileeditor.SearchMatchSelected(..)))
 }
 
@@ -2697,6 +2682,24 @@ fn update_msg(
     }
     JumpToLocation(path~, range~, annotation~) =>
       open_editor_at(dispatch, model, path, range, annotation?)
+    OpenReview(slot~, path~, excerpt~) => {
+      guard model.transcript_slot().map(active => active.key()) == Some(slot) else {
+        return (@cmd.none, model)
+      }
+      guard excerpt is Some(excerpt) &&
+        model.active_relative_path(path) is Some(file) &&
+        file_ctx(model).placement.bind(placement => placement.checkout_root())
+        is Some(root) else {
+        return model.notify_error(
+          dispatch, "These saved changes no longer match the current review or are hidden by its filters. The saved context is unchanged.",
+        )
+      }
+      open_review_target(
+        dispatch,
+        model,
+        @fileeditor.RecordedEdit(workspace=root.path, file=file.0, excerpt~),
+      )
+    }
     TranscriptReviewChangesOpened(slot~, selection~) => {
       guard model.transcript_slot().map(active => active.key()) == Some(slot) else {
         return (@cmd.none, model)
@@ -2706,14 +2709,14 @@ fn update_msg(
     // Intercepted here rather than delegated to the fileeditor package: the
     // comment becomes an annotation chip on the composer draft, which only
     // this model knows about. `quote`/`range` come from the panel's viewer.
-    FileEditor(@fileeditor.ReviewContextRevealFinished(source~, found=false)) => {
+    FileEditor(@fileeditor.ReviewContextRevealFinished(target~, found=false)) => {
       guard model.file_panel.review_context_reveal is Some(selection) &&
-        selection.source == source else {
+        selection == target else {
         return (@cmd.none, model)
       }
       let (command, panel) = @fileeditor.update(
         dispatch.map(msg => FileEditor(msg)),
-        @fileeditor.ReviewContextRevealFinished(source~, found=false),
+        @fileeditor.ReviewContextRevealFinished(target~, found=false),
         model.file_panel,
         file_ctx(model),
       )
@@ -2976,7 +2979,7 @@ fn update_msg(
           panel.with_review_navigation_destination(
             file_ctx(model),
             change,
-            @fileeditor.ReviewEdge(last),
+            last,
           )
         _ => panel
       }
@@ -4813,12 +4816,6 @@ fn update_msg(
           { ..model, app_font_size, },
         )
       }
-    }
-    OpenReview(path~, line~) => {
-      // The recorded coordinate remains authoritative; never search current
-      // file contents for a similar snippet after subsequent edits.
-      let range = line.map(line => @common.Range(line.max(1), 1, line.max(1), 1))
-      open_editor_at(dispatch, model, path, range, review=true)
     }
     OpenFile(path) => {
       // A relative path is taken against the active conversation's projected
@@ -20571,7 +20568,7 @@ test "file context inherits the conversation model and its reasoning family" {
 priv struct PendingReviewContext {
   owner : @interop.ConversationKey
   navigation : Int
-  selection : @mention_context.ReviewChanges
+  target : @fileeditor.ReviewContextTarget
 } derive(Eq)
 
 ///|
@@ -20585,27 +20582,27 @@ fn PendingReviewContext::is_current(
   ctx.placement
   .bind(placement => placement.checkout_root())
   .map(root => root.path) ==
-  Some(self.selection.source.workspace)
+  Some(self.target.workspace())
 }
 
 ///|
-fn open_review_context(
+fn open_review_target(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  selection : @mention_context.ReviewChanges,
+  target : @fileeditor.ReviewContextTarget,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(model)
   guard ctx.placement
     .bind(placement => placement.checkout_root())
     .map(root => root.path) ==
-    Some(selection.source.workspace) else {
+    Some(target.workspace()) else {
     return model.notify_error(
       dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
     )
   }
   if model.file_panel.changes
     is @fileeditor.ChangeListReady(refreshing=false, ..) {
-    return open_loaded_review_context(dispatch, model, selection)
+    return open_loaded_review_context(dispatch, model, target)
   }
   // Opening Changes starts (or joins) its normal owner/generation-fenced
   // inventory load. Keep the target separately until the authoritative reply
@@ -20618,7 +20615,7 @@ fn open_review_context(
       pending_review_context: Some({
         owner: ctx.owner,
         navigation: opened.file_panel.file_link_generation,
-        selection,
+        target,
       }),
     },
   )
@@ -20658,22 +20655,18 @@ fn finish_review_context_load(
       "Unable to load the current review: \{message}",
     )
   }
-  open_loaded_review_context(dispatch, model, pending.selection)
+  open_loaded_review_context(dispatch, model, pending.target)
 }
 
 ///|
 fn open_loaded_review_context(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  selection : @mention_context.ReviewChanges,
+  target : @fileeditor.ReviewContextTarget,
 ) -> (@cmd.Cmd, Model) {
   guard model.file_panel.changes
     is @fileeditor.ChangeListReady(files~, refreshing=false, ..) &&
-    files.search_by(change => {
-      change.path.0 == selection.source.file &&
-      change.original_path.map(path => path.0) == selection.source.original_file
-    })
-    is Some(index) else {
+    files.search_by(change => target.matches_change(change)) is Some(index) else {
     return model.notify_error(
       dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
     )
@@ -20688,31 +20681,16 @@ fn open_loaded_review_context(
     {
       ..opened,
       right_panel_open: true,
-      file_panel: opened.file_panel.with_review_context_reveal(selection),
+      file_panel: opened.file_panel.with_review_context_reveal(target),
     },
   )
 }
 
 ///|
-test "a transcript review opens the sidebar and preserves its recorded destination" {
-  let dispatch = test_dispatch()
-  let initial = { ..desktop_model(), right_panel_open: false, }
-  let message = OpenReview(path="src/main.mbt", line=Some(140))
-  let (_, opened) = update(dispatch, message, initial)
-  let (_, repeated) = update(dispatch, message, initial)
-  let file = initial.test_file("src/main.mbt")
-  assert_true(opened.right_panel_open)
-  assert_true(opened.dock == repeated.dock)
-  assert_true(@dock.active_file(opened.dock) == Some(file))
-  assert_true(opened.file_panel.review_diff_mode is ReviewDiffLine)
-  assert_true(
-    opened.file_panel.review_navigation_destination
-    is Some((_, _, @fileeditor.ReviewLine(140))),
-  )
-  assert_true(
-    opened.file_panel.review_navigation_destination ==
-    repeated.file_panel.review_navigation_destination,
-  )
-  assert_true(opened.file_panel.docs.get(file) is Some({ review: Some(_), .. }))
-  assert_true(message.opens_file_before_panel_reconciliation())
+fn open_review_context(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  selection : @mention_context.ReviewChanges,
+) -> (@cmd.Cmd, Model) {
+  open_review_target(dispatch, model, @fileeditor.SavedReviewContext(selection))
 }

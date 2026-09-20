@@ -89,9 +89,9 @@ test "saved review jump loads a cold inventory and waits for its final snapshot"
     opened.file_panel.docs.get(file)
     is Some({ review: Some({ view_mode: @fileeditor.ReviewDiff, .. }), .. }),
   )
-  assert_eq(
-    opened.file_panel.review_context_reveal,
-    Some(saved_review_selection("src/main.mbt")),
+  assert_true(
+    opened.file_panel.review_context_reveal ==
+    Some(@fileeditor.SavedReviewContext(saved_review_selection("src/main.mbt"))),
   )
   assert_true(opened.pending_review_context is None)
   assert_eq(opened.notifications.length(), 0)
@@ -139,9 +139,9 @@ test "the latest saved review jump wins and rejects unrelated inventory replies"
     @dock.active_file(opened.dock),
     Some(opened.test_file("src/last.mbt")),
   )
-  assert_eq(
-    opened.file_panel.review_context_reveal,
-    Some(saved_review_selection("src/last.mbt")),
+  assert_true(
+    opened.file_panel.review_context_reveal ==
+    Some(@fileeditor.SavedReviewContext(saved_review_selection("src/last.mbt"))),
   )
   assert_eq(opened.notifications.length(), 0)
 }
@@ -226,4 +226,72 @@ test "saved review jumps distinguish a missing change from an inventory failure"
       "Unable to load the current review: Git is unavailable",
     )
   }
+}
+
+///|
+test "recorded edits share inventory loading and reject missing coordinates or stale transcript slots" {
+  let initial = desktop_model()
+  guard initial.transcript_slot() is Some(slot) else {
+    fail("expected transcript")
+  }
+  let excerpt = saved_review_selection("src/main.mbt").excerpts[0]
+  let click = OpenReview(
+    slot=slot.key(),
+    path="src/main.mbt",
+    excerpt=Some(excerpt),
+  )
+  let (_, loading) = update(test_dispatch(), click, initial)
+  assert_true(
+    loading.pending_review_context
+    is Some({ target: @fileeditor.RecordedEdit(file="src/main.mbt", ..), .. }),
+  )
+  let (_, intermediate) = update(
+    test_dispatch(),
+    review_inventory_reply(loading, []),
+    loading,
+  )
+  let (_, opened) = update(
+    test_dispatch(),
+    review_inventory_reply(intermediate, [saved_review_file("src/main.mbt")]),
+    intermediate,
+  )
+  assert_true(opened.right_panel_open)
+  assert_eq(
+    @dock.active_file(opened.dock),
+    Some(opened.test_file("src/main.mbt")),
+  )
+  assert_true(
+    opened.file_panel.review_context_reveal
+    is Some(@fileeditor.RecordedEdit(excerpt=recorded, ..)) &&
+    recorded == excerpt,
+  )
+  assert_true(opened.file_panel.review_navigation_destination is None)
+  assert_true(
+    opened.file_panel.review_diff_mode == initial.file_panel.review_diff_mode,
+  )
+  let (_, unknown) = update(
+    test_dispatch(),
+    OpenReview(slot=slot.key(), path="src/main.mbt", excerpt=None),
+    initial,
+  )
+  assert_eq(unknown.notifications.length(), 1)
+  assert_true(unknown.pending_review_context is None)
+  let (_, stale) = update(
+    test_dispatch(),
+    OpenReview(
+      slot="another transcript",
+      path="src/main.mbt",
+      excerpt=Some(excerpt),
+    ),
+    initial,
+  )
+  assert_eq(stale.notifications.length(), 0)
+  assert_true(stale.pending_review_context is None)
+  let (_, missing) = update(
+    test_dispatch(),
+    review_inventory_reply(intermediate, []),
+    intermediate,
+  )
+  assert_eq(missing.notifications.length(), 1)
+  assert_true(missing.file_panel.review_context_reveal is None)
 }

@@ -25,6 +25,7 @@ priv struct EditDiff {
   path : String?
   start_line : Int?
   lines : Array[EditDiffLine]
+  review_excerpt : @mention_context.ChangeExcerpt?
 } derive(Eq)
 
 ///|
@@ -370,12 +371,19 @@ fn EditDiff::new(
   for row in tail.rev_iter() {
     visible.push(row)
   }
-  { anchors, path, start_line: first_line, diff, lines: visible, }
+  {
+    anchors,
+    path,
+    start_line: first_line,
+    diff,
+    lines: visible,
+    review_excerpt: recorded_edit_excerpt(rows),
+  }
 }
 
 ///|
 /// Minimal mode keeps source coordinates in the gutter. Its title opens the
-/// current review at the recorded location even if later edits changed it.
+/// matching current review hunk; obsolete recorded changes are rejected.
 fn EditChanges::render_minimal(
   locale? : @i18n.Locale = English,
   self : EditChanges,
@@ -405,7 +413,7 @@ fn EditChanges::render_minimal(
               class="edit-path",
               type_="button",
               title=ui(locale, OpenDiffReview) + ": " + path,
-              on_click=(actions.review)((path, edit.start_line)),
+              on_click=(actions.review)((path, edit.review_excerpt)),
               path,
             )
           } else {
@@ -465,4 +473,42 @@ fn EditDiff::preview_lines(self : EditDiff) -> Array[@syntax_html.DiffLine] {
     }
   }
   rows
+}
+
+///|
+// Capture complete changed lines before display truncation. Unknown coordinates
+// cannot identify a current hunk and must not become a fabricated line number.
+fn recorded_edit_excerpt(
+  rows : Array[EditDiffLine],
+) -> @mention_context.ChangeExcerpt? {
+  let original : Array[@mention_context.ChangeLine] = []
+  let modified : Array[@mention_context.ChangeLine] = []
+  for row in rows {
+    if row.class_name == "diff-del" || row.class_name == "diff-add" {
+      guard row.source_offset is Some(offset) && !row.truncated else {
+        return None
+      }
+      let number = if row.class_name == "diff-del" {
+        row.old_line
+      } else {
+        row.new_line
+      }
+      guard number is Some(number) && number > 0 else { return None }
+      let line : @mention_context.ChangeLine = {
+        number,
+        text: row.text[offset:].to_owned(),
+      }
+      if row.class_name == "diff-del" {
+        original.push(line)
+      } else {
+        modified.push(line)
+      }
+    }
+  }
+  let excerpt : @mention_context.ChangeExcerpt = { original, modified, }
+  if excerpt.is_empty() {
+    None
+  } else {
+    Some(excerpt)
+  }
 }

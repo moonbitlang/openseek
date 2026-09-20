@@ -448,10 +448,7 @@ pub(all) struct State {
   // at least one completed change for cyclic previous/next navigation.
   review_diff_navigation_available : Bool
   // A cross-file destination waits for both sides, fenced by exact row and generation.
-  review_navigation_destination : (ChangedFile, Int, ReviewDestination)?
-  // Reviews opened by file path remain meaningful when the path is no longer
-  // in Changes (for example after committing or reverting a recorded edit).
-  file_review_paths : Array[@common.Uri]
+  review_navigation_destination : (ChangedFile, Int, Bool)?
   // None includes all types; Some([]) deliberately includes no types.
   change_extensions : Array[String?]?
   change_path_filter : String
@@ -480,7 +477,7 @@ pub(all) struct State {
   history_generation : Int
   // Exact changed rows and their shared Line/Token/Tree review coverage.
   // Complete may come from the file control or full hunk coverage.
-  review_context_reveal : @mention_context.ReviewChanges?
+  review_context_reveal : ReviewContextTarget?
   review_context : Array[@mention_context.ReviewChanges]
   review_progress : Array[ChangedFileReview]
   // Monotonic identity of the visible hunk surface. Mode, filter, collapse,
@@ -606,7 +603,6 @@ pub fn State::empty() -> State {
     semantic_review_collapsed: [],
     review_diff_navigation_available: false,
     review_navigation_destination: None,
-    file_review_paths: [],
     change_extensions: None,
     change_path_filter: "",
     changes: ChangeListIdle,
@@ -816,10 +812,7 @@ fn Ctx::checkout_ready(self : Ctx) -> Bool {
 
 ///|
 pub(all) enum Msg {
-  ReviewContextRevealFinished(
-    source~ : @mention_context.ReviewSource,
-    found~ : Bool
-  )
+  ReviewContextRevealFinished(target~ : ReviewContextTarget, found~ : Bool)
   ReviewContextChanged(
     owner~ : @interop.ConversationKey,
     selection~ : @mention_context.ReviewChanges,

@@ -103,11 +103,102 @@ fn State::review_context_selection(
 }
 
 ///|
+/// Review selections carry a complete comparison identity. Tool edits only
+/// carry recorded changed lines, so their navigation validates those excerpts
+/// against the loaded comparison instead of inventing a historical version.
+pub(all) enum ReviewContextTarget {
+  SavedReviewContext(@mention_context.ReviewChanges)
+  RecordedEdit(
+    workspace~ : String,
+    file~ : String,
+    excerpt~ : @mention_context.ChangeExcerpt
+  )
+} derive(Eq)
+
+///|
+pub extend ReviewContextTarget with Eq::{equal, not_equal}
+
+///|
+pub fn ReviewContextTarget::workspace(self : ReviewContextTarget) -> String {
+  match self {
+    SavedReviewContext(selection) => selection.source.workspace
+    RecordedEdit(workspace~, ..) => workspace
+  }
+}
+
+///|
+fn ReviewContextTarget::file(self : ReviewContextTarget) -> String {
+  match self {
+    SavedReviewContext(selection) => selection.source.file
+    RecordedEdit(file~, ..) => file
+  }
+}
+
+///|
+pub fn ReviewContextTarget::matches_change(
+  self : ReviewContextTarget,
+  change : ChangedFile,
+) -> Bool {
+  guard change.path.0 == self.file() else { return false }
+  match self {
+    SavedReviewContext(selection) =>
+      change.original_path.map(path => path.0) == selection.source.original_file
+    RecordedEdit(..) => true
+  }
+}
+
+///|
+fn recorded_lines_match(
+  lines : Array[@mention_context.ChangeLine],
+  text : String,
+) -> Bool {
+  let current = text.split("\n").to_array()
+  lines.all(line => {
+    line.number > 0 &&
+    current.get(line.number - 1).map(value => value.to_owned()) ==
+    Some(line.text)
+  })
+}
+
+///|
+fn State::resolve_review_context(
+  self : State,
+  target : ReviewContextTarget,
+  change : ChangedFile,
+) -> @mention_context.ReviewChanges? {
+  match target {
+    SavedReviewContext(selection) =>
+      if self.accepts_review_context(selection) {
+        Some(selection)
+      } else {
+        None
+      }
+    RecordedEdit(workspace~, excerpt~, ..) => {
+      guard target.matches_change(change) &&
+        !excerpt.is_empty() &&
+        self.review_source(change) is Some(source) &&
+        source.workspace == workspace &&
+        self.placement.identity().bind(placement => placement.checkout_root())
+        is Some(root) &&
+        self.docs.get(@resource.join_relative(root, change.path)) is Some(doc) &&
+        doc.visible_diff() is Some((original, modified)) &&
+        recorded_lines_match(excerpt.original, original) &&
+        recorded_lines_match(excerpt.modified, modified) else {
+        return None
+      }
+      // This identity describes the now-validated comparison, not the tool's
+      // historical file version. It is used only for this pending reveal.
+      Some({ source, excerpts: [excerpt], })
+    }
+  }
+}
+
+///|
 pub fn State::with_review_context_reveal(
   self : State,
-  selection : @mention_context.ReviewChanges,
+  target : ReviewContextTarget,
 ) -> State {
-  { ..self, review_context_reveal: Some(selection), }
+  { ..self, review_context_reveal: Some(target), }
 }
 
 ///|
@@ -174,15 +265,13 @@ fn reveal_pending_review_context(
   state : State,
   target : ReviewHunkBridgeTarget,
 ) -> Unit {
-  guard state.review_context_reveal is Some(selection) &&
-    target.change.path.0 == selection.source.file &&
+  guard state.review_context_reveal is Some(request) &&
+    target.change.path.0 == request.file() &&
     target.ready else {
     return
   }
-  if !state.accepts_review_context(selection) {
-    (target.dispatch)(
-      ReviewContextRevealFinished(source=selection.source, found=false),
-    )
+  guard state.resolve_review_context(request, target.change) is Some(selection) else {
+    (target.dispatch)(ReviewContextRevealFinished(target=request, found=false))
     return
   }
   let found = if target.surface is ReviewLineSurface {
@@ -215,9 +304,7 @@ fn reveal_pending_review_context(
     }
     found
   }
-  (target.dispatch)(
-    ReviewContextRevealFinished(source=selection.source, found~),
-  )
+  (target.dispatch)(ReviewContextRevealFinished(target=request, found~))
 }
 
 ///|
