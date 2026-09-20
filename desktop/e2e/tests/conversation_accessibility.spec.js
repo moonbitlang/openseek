@@ -42,3 +42,25 @@ test('conversation titles support keyboard activation and independent row action
   expect(app.requests.filter(r => r.method === 'session.load' && r.params?.session === 'session-1')).toHaveLength(1);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('pointer selection keeps the status slot instead of revealing row actions', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.liveSessions.push({ id: 'session-2', title: 'Second conversation', updated_at_ms: 2 });
+  await app.install();
+  await app.goto();
+  const first = page.locator('.conversation-row[title="session-1"]');
+  const openFirst = first.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
+  const archive = first.locator('.row-archive');
+  await expect(archive).toHaveCount(1);
+  // A pointer press must not leave focus on the title: once the pointer
+  // leaves the row, the row shows its status slot again rather than the
+  // actions a lingering focus would pin open.
+  await openFirst.click();
+  await expect(first).toHaveClass(/active/);
+  await expect.poll(() => app.requests.filter(r => r.method === 'session.load' && r.params?.session === 'session-1').length).toBe(1);
+  await page.mouse.move(1439, 899);
+  await expect(archive).toBeHidden();
+  // Hover is still the pointer affordance for the actions.
+  await first.hover();
+  await expect(archive).toBeVisible();
+});

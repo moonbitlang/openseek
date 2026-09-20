@@ -392,13 +392,19 @@ pub fn component(
         @html.button(
           type_="button",
           class="sidebar-label conversation-open",
-          attrs=@html.Attrs::build().aria_current(
-            if input.active {
-              "true"
-            } else {
-              "false"
-            },
-          ),
+          attrs=@html.Attrs::build()
+            .aria_current(if input.active { "true" } else { "false" })
+            // A pointer press must not leave focus on the title. The row
+            // reveals its actions on hover and on keyboard focus; a button
+            // left focused by a click would keep them pinned open in place of
+            // the status. Keyboard activation never fires `mousedown`, so
+            // Tab/Enter still reach the row's actions.
+            .on_mousedown(event => {
+              if event.get_button() == 0 {
+                event.prevent_default()
+              }
+              @cmd.none
+            }),
           input.label,
         )
       } else {
