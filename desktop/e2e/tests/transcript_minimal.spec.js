@@ -667,6 +667,9 @@ test('minimal transcript preference persists and full mode restores details', as
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(toggle).toHaveClass(/active/);
+  // A click must update the current transcript without reopening the task.
+  await expect(page.locator('#stream .minimal-tools')).toHaveCount(0);
+  await expect(page.locator('#stream details.tool-call').first()).toBeVisible();
   await app.openSession();
   await expect(page.locator('.minimal-tools')).toHaveCount(0);
   await expect(page.locator('#stream')).toContainText('REASONING_SENTINEL');
@@ -682,6 +685,32 @@ test('minimal transcript preference persists and full mode restores details', as
   await expect(page.locator('.minimal-tools')).toHaveCount(1);
   await page.reload();
   await app.openSession();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('detail toggle stays enabled when a Codex draft gains its working directory', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.codexModels = [{
+    id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
+    defaultReasoningEffort: 'medium',
+    supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }],
+  }];
+  // Keep the initial directory-less header visible before the draft reply
+  // inserts its workspace label ahead of the buttons.
+  app.rpcDelays.set('codex.draft.open', 1000);
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+  const terminal = page.getByTitle('Terminal requires an available Codex task placement', { exact: true });
+  await expect(terminal).toBeDisabled();
+  await expect(page.locator('.codex-topbar .topbar-workspace')).toBeVisible();
+  const toggle = page.getByRole('button', { name: 'Detailed mode', exact: true });
+  await expect(toggle).toBeEnabled();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   expect(app.pageErrors).toEqual([]);
 });
@@ -738,6 +767,9 @@ test('minimal transcript also collapses Codex final replies and recognizes subag
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  // A click must update the current transcript without reopening the task.
+  await expect(stream.locator('.minimal-process, .minimal-tools')).toHaveCount(0);
+  await expect(stream.locator('details.tool-call').first()).toBeVisible();
   await app.openSession();
   await expect(page.locator('#stream .minimal-process, #stream .minimal-tools')).toHaveCount(0);
   await expect(page.locator('#stream details.tool-call').first()).toBeVisible();

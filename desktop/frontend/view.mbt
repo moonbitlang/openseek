@@ -1580,6 +1580,9 @@ fn session_tooltip(model : Model, conv : Conversation) -> String {
 ///|
 /// The telescope is on for detailed mode. Both conversation sources use the
 /// inverse of the stored minimal preference, preserving existing choices.
+/// This local preference has no connection or run-state gate. Neighboring
+/// controls must clear their disabled state when Rabbita reuses their DOM
+/// for this button (see the Codex topbar).
 fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
   @html.button(
     class=if self.minimal_transcript {
