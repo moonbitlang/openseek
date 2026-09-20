@@ -223,7 +223,7 @@ fn fetch_branch(
   }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(channel, @commands.git_branch, {
         session,
         cwd: cwd.map(resource => resource.path),
@@ -256,6 +256,7 @@ fn fetch_branch(
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -497,7 +498,7 @@ fn fetch_pull_request(
   }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let empty = PullRequestLoaded(
         session~,
         branch~,
@@ -529,5 +530,6 @@ fn fetch_pull_request(
         ),
       )
     })
+    |> ignore
   })
 }

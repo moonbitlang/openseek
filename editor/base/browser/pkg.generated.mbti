@@ -59,6 +59,8 @@ pub fn set_style_property(@dom.Element, String, String) -> Unit
 
 pub fn set_style_property_with_priority(@dom.Element, String, String, String) -> Unit
 
+pub async fn[T] wait_callback(((T) -> Unit) -> Unit) -> T
+
 pub fn wall_clock_now_ms() -> Double
 
 // Errors

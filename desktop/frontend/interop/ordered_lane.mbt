@@ -5,16 +5,9 @@
 /// One serialized lane: `held` says whether someone is running on it, and
 /// `waiters` holds the continuations of the callers queued behind them.
 ///
-/// Built on the compiler's own async primitive rather than `@async.Mutex`,
-/// because `moonbitlang/async`'s locks suspend through that library's
-/// coroutine scheduler, and this program never runs it. That scheduler is
-/// entered only by the toolchain's `async fn main` / async-test integration;
-/// the page boots from a synchronous `fn main`, and every host call starts in
-/// a rabbita effect reached from a DOM callback or a promise continuation.
-/// With no current coroutine, the waiting path of `Semaphore::acquire` panics
-/// in `current_coroutine()` — and past that, its `wake` only queues the
-/// waiter for a `reschedule` that never comes. Both stay invisible until the
-/// lane is contended, which is exactly when it is doing its job.
+/// Each waiter uses a Promise continuation in the async runtime shared by
+/// Rabbita effects. Direct hand-off keeps newly arriving callers behind the
+/// existing queue while the next Promise continuation is waiting to resume.
 priv struct Lane {
   mut held : Bool
   waiters : @deque.Deque[(Unit) -> Unit]
@@ -33,7 +26,7 @@ fn Lane::Lane() -> Lane {
 /// reached on `op`'s error path too.
 async fn[T] Lane::run(self : Lane, op : async () -> T) -> T {
   if self.held {
-    @js.suspend((wake, _fail : (Error) -> Unit) => self.waiters.push_back(wake))
+    @base_browser.wait_callback(wake => self.waiters.push_back(wake))
   } else {
     self.held = true
   }
@@ -63,22 +56,36 @@ fn lane_task(
   failures : Array[String],
   op : async () -> Unit,
 ) -> Unit {
-  @js.async_run(() => lane.run(op) catch { error => failures.push("\{error}") })
+  @js.Promise::from_async(() => {
+    lane.run(op) catch {
+      error => failures.push("\{error}")
+    }
+  })
+  |> ignore
 }
 
 ///|
-test "an uncontended lane runs its caller straight away" {
+async fn drain_lane_tasks() -> Unit {
+  // A timer runs after the complete chain of Promise hand-off microtasks.
+  @base_browser.wait_callback(resolve => {
+    @base_browser.schedule_timeout(() => resolve(()), 0) |> ignore
+  })
+}
+
+///|
+async test "an uncontended lane runs its caller and releases the lane" {
   let lane = Lane::Lane()
   let failures = []
   let ran = []
   lane_task(lane, failures, () => ran.push(true))
+  drain_lane_tasks()
   assert_eq(ran, [true])
   assert_eq(failures, ([] : Array[String]))
   assert_false(lane.held)
 }
 
 ///|
-test "a contended lane serves its callers in arrival order" {
+async test "a contended lane serves its callers in arrival order" {
   let lane = Lane::Lane()
   let failures = []
   let entered = []
@@ -88,35 +95,39 @@ test "a contended lane serves its callers in arrival order" {
   for index in 0..<3 {
     lane_task(lane, failures, () => {
       entered.push(index)
-      @js.suspend((wake, _fail : (Error) -> Unit) => parked.push(wake))
+      @base_browser.wait_callback(wake => parked.push(wake))
     })
   }
-  // Only the first caller is inside. This is the point at which the page used
-  // to die: under `@async.Mutex` the second arrival panicked here.
+  drain_lane_tasks()
+  // Only the first caller has entered; the other callers are queued.
   assert_eq(entered, [0])
   parked[0](())
+  drain_lane_tasks()
   assert_eq(entered, [0, 1])
   parked[1](())
+  drain_lane_tasks()
   assert_eq(entered, [0, 1, 2])
   parked[2](())
+  drain_lane_tasks()
   assert_eq(failures, ([] : Array[String]))
   assert_false(lane.held)
 }
 
 ///|
-test "a failing caller still hands the lane on" {
+async test "a failing caller still hands the lane on" {
   let lane = Lane::Lane()
   let failures = []
   let entered = []
   lane_task(lane, failures, () => raise BridgeError("host refused"))
   lane_task(lane, failures, () => entered.push(true))
+  drain_lane_tasks()
   assert_eq(failures, ["host refused"])
   assert_eq(entered, [true])
   assert_false(lane.held)
 }
 
 ///|
-test "a caller arriving mid-queue waits behind it" {
+async test "a caller arriving mid-queue waits behind it" {
   let lane = Lane::Lane()
   let failures = []
   let entered = []
@@ -124,16 +135,20 @@ test "a caller arriving mid-queue waits behind it" {
   for index in 0..<2 {
     lane_task(lane, failures, () => {
       entered.push(index)
-      @js.suspend((wake, _fail : (Error) -> Unit) => parked.push(wake))
+      @base_browser.wait_callback(wake => parked.push(wake))
     })
   }
+  drain_lane_tasks()
   parked[0](())
+  drain_lane_tasks()
   // The second caller holds the lane now, so a late arrival still waits.
   assert_true(lane.held)
   let late = []
   lane_task(lane, failures, () => late.push(true))
+  drain_lane_tasks()
   assert_eq(late, ([] : Array[Bool]))
   parked[1](())
+  drain_lane_tasks()
   assert_eq(late, [true])
   assert_eq(failures, ([] : Array[String]))
   assert_false(lane.held)

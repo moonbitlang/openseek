@@ -28,7 +28,7 @@ fn pattern_repair_request_loader(
   let timer = @dom.window().set_timeout(
     () => {
       guard active else { return }
-      @js.async_run(() => {
+      @js.Promise::from_async(() => {
         let reply = @interop.bridge_request(
           owner.channel,
           @commands.pattern_repair,
@@ -80,6 +80,7 @@ fn pattern_repair_request_loader(
             )
         }
       })
+      |> ignore
     },
     delay_ms,
   )

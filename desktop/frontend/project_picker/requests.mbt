@@ -19,7 +19,7 @@ fn browse(
   generation~ : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(channel, @commands.fs_browse, {
         path: match path.trim() {
           "" => None
@@ -43,6 +43,7 @@ fn browse(
         emit(reply_message(channel, reply, generation~, drives=true)),
       )
     })
+    |> ignore
   })
 }
 
@@ -58,7 +59,7 @@ fn create_folder(
   generation~ : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         channel,
         @commands.fs_create_directory,
@@ -95,6 +96,7 @@ fn create_folder(
         emit(reply_message(channel, reply, generation~, drives=false)),
       )
     })
+    |> ignore
   })
 }
 

@@ -41,7 +41,7 @@ fn save_language(
 ) -> @cmd.Cmd {
   if is_desktop {
     return @cmd.custom_cmd(scheduler => {
-      @js.async_run(() => {
+      @js.Promise::from_async(() => {
         let _reply = @interop.bridge_request_in_order(
           Local,
           @commands.app_language_set,
@@ -55,6 +55,7 @@ fn save_language(
           }
         }
       })
+      |> ignore
     })
   }
   @cmd.custom_cmd(scheduler => {
@@ -77,7 +78,7 @@ fn save_language(
 fn load_language(is_desktop~ : Bool, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     if is_desktop {
-      @js.async_run(() => {
+      @js.Promise::from_async(() => {
         let saved = @interop.bridge_request_in_order(
           Local,
           @commands.app_language_get,
@@ -100,6 +101,7 @@ fn load_language(is_desktop~ : Bool, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
           ),
         )
       })
+      |> ignore
     } else {
       let saved = match read_language_preference() {
         Ok(value) => value

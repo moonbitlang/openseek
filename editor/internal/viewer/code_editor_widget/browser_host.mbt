@@ -122,10 +122,10 @@ async fn run_async_tasks_concurrently(tasks : Array[async () -> Unit]) -> Unit {
     tasks[0]()
     return
   }
-  @js.suspend((resolve : (Unit) -> Unit, _reject : (Error) -> Unit) => {
+  @base_browser.wait_callback((resolve : (Unit) -> Unit) => {
     let mut remaining = tasks.length()
     for task in tasks {
-      @js.async_run(() => {
+      @js.Promise::from_async(() => {
         task() catch {
           _ => ()
         }
@@ -134,6 +134,7 @@ async fn run_async_tasks_concurrently(tasks : Array[async () -> Unit]) -> Unit {
           resolve(())
         }
       })
+      |> ignore
     }
   }) catch {
     _ => ()
@@ -144,5 +145,5 @@ async fn run_async_tasks_concurrently(tasks : Array[async () -> Unit]) -> Unit {
 /// Starts one detached JS async continuation. Freshness/cancellation ownership
 /// remains with the request stamp captured by the continuation.
 fn launch_async_task(task : async () -> Unit noraise) -> Unit {
-  @js.async_run(task)
+  @js.Promise::from_async(() => task()) |> ignore
 }

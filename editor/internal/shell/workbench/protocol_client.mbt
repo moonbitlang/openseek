@@ -43,8 +43,7 @@ fn next_request_id(prefix : String) -> String {
 ///|
 /// Sends a request packet and suspends until the response with the same id
 /// arrives. Correlation is by request id, so two in-flight requests of the
-/// same kind can no longer cross. The reject continuation is never called;
-/// failures resolve as `RemoteError` packets instead.
+/// same kind can no longer cross. Failures resolve as `RemoteError` packets.
 async fn protocol_request(
   prefix : String,
   make_packet : (String) -> @remote_protocol.ClientPacket,
@@ -54,9 +53,8 @@ async fn protocol_request(
   if token.is_cancellation_requested() {
     return cancelled_protocol_response(id)
   }
-  @js.suspend((
+  @base_browser.wait_callback((
     resolve : (@remote_protocol.ServerPacket) -> Unit,
-    _reject : (Error) -> Unit,
   ) => {
     let pending : PendingProtocolRequest = {
       resolve,

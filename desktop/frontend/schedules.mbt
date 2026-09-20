@@ -90,7 +90,7 @@ fn request_schedules(
   let channel = model.focused
   let sequence = page.sequence + 1
   let cmd = @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let result : Result[@protocol.SchedulesReply, String] = try {
         let reply = match request {
           List =>
@@ -116,6 +116,7 @@ fn request_schedules(
         ),
       )
     })
+    |> ignore
   })
   (
     cmd,
@@ -380,7 +381,7 @@ fn update_schedules(
       let channel = model.focused
       (
         @cmd.custom_cmd(scheduler => {
-          @js.async_run(() => {
+          @js.Promise::from_async(() => {
             let result : Result[String, String] = try {
               let reply = @interop.bridge_request(
                 channel,
@@ -399,6 +400,7 @@ fn update_schedules(
               dispatch(SchedulePage(LogLoaded(channel, path, result))),
             )
           })
+          |> ignore
         }),
         model,
       )
@@ -459,7 +461,7 @@ fn update_schedules(
       let channel = model.focused
       (
         @cmd.custom_cmd(scheduler => {
-          @js.async_run(() => {
+          @js.Promise::from_async(() => {
             let result : Result[@protocol.SessionsReply, String] = Ok(
               @interop.bridge_request(
                 channel,
@@ -473,6 +475,7 @@ fn update_schedules(
               dispatch(SchedulePage(Opened(channel, run.session, result))),
             )
           })
+          |> ignore
         }),
         model,
       )

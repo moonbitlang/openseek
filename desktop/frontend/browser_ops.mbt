@@ -25,7 +25,7 @@ fn[Payload : ToJson] browser_op(
   quiet~ : Bool,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let _ : @protocol.EmptyReply = @interop.bridge_request_in_order(
         @interop.ChannelId::Local,
         command,
@@ -41,6 +41,7 @@ fn[Payload : ToJson] browser_op(
         }
       }
     })
+    |> ignore
   })
 }
 

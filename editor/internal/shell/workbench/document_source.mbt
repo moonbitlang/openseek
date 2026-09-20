@@ -164,7 +164,7 @@ fn read_active_document(
   generation : Int,
   view_state : DocumentViewState,
 ) -> Unit {
-  @js.async_run(() => {
+  @js.Promise::from_async(() => {
     let result = document_provider.read(uri) catch {
       _ =>
         DocumentReadFailed(
@@ -175,6 +175,7 @@ fn read_active_document(
       dispatch_workbench_msg(ActiveDocumentRead(result, view_state))
     }
   })
+  |> ignore
 }
 
 ///|

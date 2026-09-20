@@ -33,6 +33,11 @@ import {
 
 supported_targets = "js"
 
+// Async protocol tests share the workbench's transport and dispatch globals.
 import {
   "moonbitlang/async",
 } for "wbtest"
+
+options(
+  "max-concurrent-tests": 1,
+)

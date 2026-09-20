@@ -33,7 +33,7 @@ fn open_browser_link(url : String) -> @cmd.Cmd {
 /// openers; the browser page never emits this command.
 fn open_external_link(dispatch : @cmd.Emit[Msg], url : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(
           @interop.ChannelId::Local,
@@ -49,5 +49,6 @@ fn open_external_link(dispatch : @cmd.Emit[Msg], url : String) -> @cmd.Cmd {
         },
       )
     })
+    |> ignore
   })
 }

@@ -579,7 +579,7 @@ fn fetch_runs(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   let payload = runs_payload(frontier)
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         channel, @commands.agent_runs, payload,
       ) catch {
@@ -627,6 +627,7 @@ fn fetch_runs(
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -873,7 +874,7 @@ fn start_openseek(
     workspace~,
   )
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // Behind anything already out for this session: the host serves one
       // command per session, so a prompt issued after a goal must not reach
       // the engine first and start its turn without it.
@@ -890,6 +891,7 @@ fn start_openseek(
         _ => ()
       }
     })
+    |> ignore
   })
 }
 
@@ -985,11 +987,12 @@ fn fetch_sessions(
   request_generation : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       refresh_sessions_into(
         scheduler, dispatch, channel, connection_generation, request_generation,
       )
     })
+    |> ignore
   })
 }
 
@@ -1123,7 +1126,7 @@ fn load_session_cmd(
     _ => ()
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = try {
         if archived {
           @interop.bridge_request(channel, @commands.session_load_archived, {
@@ -1144,6 +1147,7 @@ fn load_session_cmd(
       }
       scheduler.add(on_loaded(@transcript.session_from_reply(reply)))
     })
+    |> ignore
   })
 }
 
@@ -1162,7 +1166,7 @@ fn steer_openseek(
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let delivered = steer_delivered(channel, text, submission_id, run_id) catch {
         error => {
           scheduler.add(
@@ -1183,6 +1187,7 @@ fn steer_openseek(
         )
       }
     })
+    |> ignore
   })
 }
 
@@ -1213,7 +1218,7 @@ fn queue_openseek(
   let root_dispatch = dispatch
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let accepted = try {
         let reply = @interop.bridge_request(channel, @commands.agent_queue, {
           action,
@@ -1284,6 +1289,7 @@ fn queue_openseek(
         scheduler.add(dispatch(QueueAccepted(session~, action~, run_id~)))
       }
     })
+    |> ignore
   })
 }
 
@@ -1307,7 +1313,7 @@ fn compact_openseek(
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // Compaction claims the same per-session slot as start and goal, so it
       // waits behind them rather than colliding.
       ignore(
@@ -1340,6 +1346,7 @@ fn compact_openseek(
         },
       )
     })
+    |> ignore
   })
 }
 
@@ -1366,7 +1373,7 @@ fn goal_openseek(
     session, model, reasoning, max_steps, workspace, text,
   )
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       @interop.in_ordered_lane(
         @interop.session_command_lane(channel, session),
         () => {
@@ -1380,6 +1387,7 @@ fn goal_openseek(
         _ => ()
       }
     })
+    |> ignore
   })
 }
 
@@ -1463,7 +1471,7 @@ fn cancel_openseek(
   run_id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply : @protocol.CancelReply = @interop.bridge_request(
         channel,
         @commands.agent_cancel,
@@ -1494,6 +1502,7 @@ fn cancel_openseek(
         scheduler.add(dispatch(FromDevice(channel, CancelNotOpen(run_id~))))
       }
     })
+    |> ignore
   })
 }
 
@@ -1521,7 +1530,7 @@ fn approve_openseek(
   allow~ : Bool,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply : @protocol.ApprovalReply = @interop.bridge_request(
         channel,
         @commands.agent_approval,
@@ -1568,6 +1577,7 @@ fn approve_openseek(
         )
       }
     })
+    |> ignore
   })
 }
 
@@ -1578,7 +1588,7 @@ fn approve_openseek(
 /// toast and the app keeps running the current version.
 fn apply_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // Self-update always targets the page's own desktop host, never a
       // focused remote device.
       ignore(
@@ -1597,6 +1607,7 @@ fn apply_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       )
       scheduler.add(dispatch(UpdateApplied))
     })
+    |> ignore
   })
 }
 
@@ -1623,7 +1634,7 @@ fn open_codex_config(
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let _ : @protocol.EmptyReply = @interop.codex_request(
         channel,
         @commands.codex_config_open,
@@ -1647,6 +1658,7 @@ fn open_codex_config(
         }
       }
     })
+    |> ignore
   })
 }
 
@@ -1670,7 +1682,7 @@ fn open_file(
     _ => ()
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(channel, @commands.host_open_path, {
         session,
         cwd: cwd.map(resource => resource.path),
@@ -1722,6 +1734,7 @@ fn open_file(
         Opened => ()
       }
     })
+    |> ignore
   })
 }
 
@@ -1739,7 +1752,7 @@ fn reveal_file(
     return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply : @protocol.RevealPathReply = @interop.bridge_request(
         channel,
         @commands.host_reveal_path,
@@ -1756,5 +1769,6 @@ fn reveal_file(
         scheduler.add(dispatch(HostActionFailed(message)))
       }
     })
+    |> ignore
   })
 }

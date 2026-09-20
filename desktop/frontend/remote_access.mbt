@@ -31,7 +31,7 @@ fn RemoteAccess::from_status(
 /// current mirror in place — `auth.changed` corrects it on the next move.
 fn fetch_remote_status(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let status = @interop.bridge_request(
         Local,
         @commands.auth_status,
@@ -43,6 +43,7 @@ fn fetch_remote_status(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         dispatch(RemoteStatusLoaded(RemoteAccess::from_status(status))),
       )
     })
+    |> ignore
   })
 }
 
@@ -52,7 +53,7 @@ fn fetch_remote_status(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// in-progress state the whole while.
 fn connect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let status = @interop.bridge_request(
         Local,
         @commands.auth_connect,
@@ -69,6 +70,7 @@ fn connect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         dispatch(RemoteConnectFinished(RemoteAccess::from_status(status))),
       )
     })
+    |> ignore
   })
 }
 
@@ -77,7 +79,7 @@ fn connect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// section, so this only surfaces its *own* failure (a dead bridge).
 fn cancel_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let _ = @interop.bridge_request(
         Local,
         @commands.auth_cancel,
@@ -91,6 +93,7 @@ fn cancel_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         }
       }
     })
+    |> ignore
   })
 }
 
@@ -98,7 +101,7 @@ fn cancel_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// Sign out. Success comes back as the post-sign-out status.
 fn disconnect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         Local,
         @commands.auth_disconnect,
@@ -115,5 +118,6 @@ fn disconnect_remote(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         dispatch(RemoteStatusLoaded(RemoteAccess::from_status(reply))),
       )
     })
+    |> ignore
   })
 }

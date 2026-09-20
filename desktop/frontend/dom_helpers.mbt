@@ -163,7 +163,7 @@ fn measure_scrollbar_lane() -> @cmd.Cmd {
 /// older startup reply. Query failures preserve the last known preference.
 fn fetch_system_appearance(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let appearance = @interop.bridge_request_in_order(
         @interop.ChannelId::Local,
         @commands.app_system_appearance,
@@ -178,5 +178,6 @@ fn fetch_system_appearance(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       }
       scheduler.add(dispatch(ColorSchemeChanged(appearance.dark)))
     })
+    |> ignore
   })
 }

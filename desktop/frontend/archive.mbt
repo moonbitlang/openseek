@@ -29,7 +29,7 @@ fn fetch_archived(
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // A host without the op (or without a session store) just reads as an
       // empty Archived group.
       let reply = @interop.bridge_request(
@@ -50,6 +50,7 @@ fn fetch_archived(
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -64,12 +65,13 @@ fn archive_session(
   force? : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       archive_session_into(
         scheduler, dispatch, channel, session, connection_generation, sessions_request_generation,
         archived_request_generation, force,
       )
     })
+    |> ignore
   })
 }
 
@@ -155,7 +157,7 @@ fn delete_archived_session(
     FromDevice(channel, msg)
   })
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         channel,
         @commands.session_delete_archived,
@@ -183,6 +185,7 @@ fn delete_archived_session(
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -236,7 +239,7 @@ fn archive_action(
     FromDevice(channel, msg)
   })
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(channel, command, payload) catch {
         error => {
           scheduler.add(
@@ -250,6 +253,7 @@ fn archive_action(
         archived_request_generation,
       )
     })
+    |> ignore
   })
 }
 

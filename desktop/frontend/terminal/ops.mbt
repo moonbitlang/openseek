@@ -22,7 +22,7 @@ fn open_session(
     _ => ()
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(channel, @commands.terminal_open, {
         session,
         workspace: workspace.map(value => value.path),
@@ -40,6 +40,7 @@ fn open_session(
       }
       scheduler.add(dispatch(Opened(channel~, key~, id=reply.id)))
     })
+    |> ignore
   })
 }
 
@@ -52,7 +53,7 @@ fn send_input(
   binary : Bool,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(channel, @commands.terminal_input, {
           id,
@@ -76,6 +77,7 @@ fn send_input(
         },
       )
     })
+    |> ignore
   })
 }
 
@@ -87,7 +89,7 @@ fn send_resize(
   rows : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(channel, @commands.terminal_resize, {
           id,
@@ -98,6 +100,7 @@ fn send_resize(
         },
       )
     })
+    |> ignore
   })
 }
 
@@ -115,7 +118,7 @@ priv struct TerminalAck {
 ///|
 fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(self.channel, @commands.terminal_ack, {
           id: self.id,
@@ -125,18 +128,20 @@ fn TerminalAck::send(self : TerminalAck) -> @cmd.Cmd {
         },
       )
     })
+    |> ignore
   })
 }
 
 ///|
 fn send_close(channel : @interop.ChannelId, id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(channel, @commands.terminal_close, { id, }) catch {
           _ => return
         },
       )
     })
+    |> ignore
   })
 }

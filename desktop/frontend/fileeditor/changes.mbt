@@ -70,7 +70,7 @@ fn list_changes(
     _ => ()
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.git_changes,
@@ -109,6 +109,7 @@ fn list_changes(
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -141,7 +142,7 @@ fn read_git_original(
     _ => ()
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let original = @interop.bridge_request(
         owner.channel,
         @commands.git_original_file,
@@ -173,6 +174,7 @@ fn read_git_original(
         ),
       )
     })
+    |> ignore
   })
 }
 

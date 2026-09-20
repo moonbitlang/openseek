@@ -56,7 +56,7 @@ pub fn Request::run(
   let cache_key = self.cache_key(root)
   let lane_key = self.lane_key(cache_key)
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // Clear and repopulate one Host cache key as an indivisible sequence.
       // A conversation can return A→B→A while the first A scan is unresolved;
       // without this lane, its stale clear may overtake and cancel the current
@@ -102,6 +102,7 @@ pub fn Request::run(
         _ => scheduler.add(failed())
       }
     })
+    |> ignore
   })
 }
 
@@ -174,7 +175,7 @@ fn searching_loader(
       }
       let cache_key = request.cache_key(root)
       let lane_key = request.lane_key(cache_key)
-      @js.async_run(() => {
+      @js.Promise::from_async(() => {
         // Sharing the ordered lane with `run` refreshes prevents this query
         // from landing between their clear and repopulate steps. The Host's
         // cancellation frontier is never advanced for this cache key, so the
@@ -211,6 +212,7 @@ fn searching_loader(
           _ => if active { scheduler.add(failed()) }
         }
       })
+      |> ignore
     },
     SearchingDebounceMs,
   )
@@ -242,7 +244,7 @@ pub fn Request::retire(self : Request) -> @cmd.Cmd {
   let cache_key = self.cache_key(root)
   let lane_key = self.lane_key(cache_key)
   @cmd.custom_cmd(_scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       @interop.in_ordered_lane(lane_key, () => {
         ignore(
           @interop.bridge_request(
@@ -257,5 +259,6 @@ pub fn Request::retire(self : Request) -> @cmd.Cmd {
         _ => ()
       }
     })
+    |> ignore
   })
 }

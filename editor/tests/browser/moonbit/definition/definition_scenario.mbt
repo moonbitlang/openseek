@@ -19,7 +19,7 @@ extern "js" fn BrowserDefinitionGate::new() -> BrowserDefinitionGate =
 ///|
 extern "js" fn BrowserDefinitionGate::promise(
   self : BrowserDefinitionGate,
-) -> @js.Promise = "gate => gate.promise"
+) -> @js.Promise[@js.Value] = "gate => gate.promise"
 
 ///|
 extern "js" fn BrowserDefinitionGate::release(

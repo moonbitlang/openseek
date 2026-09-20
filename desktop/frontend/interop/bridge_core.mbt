@@ -50,7 +50,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
       guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
         raise BridgeUnsent("SeekMoon bridge unavailable")
       }
-      js_method_promise(api, op, payload).wait()
+      wait_bridge_promise(js_method_promise(api, op, payload))
     }
     Remote(_) => ws_request(channel, op, payload)
   }
@@ -102,7 +102,7 @@ extern "js" fn js_ordered_method_promise(
   target : @js.Value,
   name : String,
   payload : @js.Value,
-) -> @js.Promise =
+) -> @js.Promise[@js.Value] =
   #| (() => {
   #|   let tail = Promise.resolve();
   #|   return (target, name, payload) => {
@@ -191,7 +191,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
         guard openseek_api() is Some(api) && js_prop(api, op) is Some(_) else {
           raise BridgeUnsent("SeekMoon bridge unavailable")
         }
-        js_ordered_method_promise(api, op, payload).wait()
+        wait_bridge_promise(js_ordered_method_promise(api, op, payload))
       }
       Remote(_) => ws_request(channel, op, payload)
     }
@@ -225,13 +225,13 @@ test "a lane key separates what must not share a lane" {
 }
 
 ///|
-test "an ordered request failure releases its channel lane" {
+async test "an ordered request failure releases its channel lane" {
   // No bridge is injected under test, so both calls fail at the same point.
   // The second one only reaches it if the first released the lane on its way
   // out; before, a lane still held would have parked it forever.
   let failures = []
   for _ in 0..<2 {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         bridge_request_in_order(
           Local,
@@ -246,7 +246,9 @@ test "an ordered request failure releases its channel lane" {
       }
       failures.push(false)
     })
+    |> ignore
   }
+  drain_lane_tasks()
   assert_eq(failures, [true, true])
 }
 

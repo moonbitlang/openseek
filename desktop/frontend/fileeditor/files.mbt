@@ -20,7 +20,7 @@ fn read_directory(
   }
   let target = @resource.join_relative(root, path)
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.fs_read_directory,
@@ -45,6 +45,7 @@ fn read_directory(
       })
       scheduler.add(dispatch(DirLoaded(owner~, epoch~, path~, entries~)))
     })
+    |> ignore
   })
 }
 
@@ -103,7 +104,7 @@ fn read_file(
     )
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.fs_read_file,
@@ -141,6 +142,7 @@ fn read_file(
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -170,7 +172,7 @@ fn read_package_graph(
     )
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.moon_package_graph,
@@ -205,6 +207,7 @@ fn read_package_graph(
       }
       scheduler.add(dispatch(message))
     })
+    |> ignore
   })
 }
 
@@ -295,7 +298,7 @@ fn stat_files(
     return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // Stat snapshots mutate cached document/review state. Keep their host
       // observations in issue order, while `epoch` fences a placement or
       // conversation boundary that an already-issued request outlives.
@@ -317,6 +320,7 @@ fn stat_files(
         dispatch(StatsLoaded(owner~, epoch~, stats~, recheck_diagnostics~)),
       )
     })
+    |> ignore
   })
 }
 
@@ -334,7 +338,7 @@ fn watch_workspace(
     return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       if watched is None {
         ignore(
           @interop.bridge_request_in_order(
@@ -371,6 +375,7 @@ fn watch_workspace(
         )
       }
     })
+    |> ignore
   })
 }
 

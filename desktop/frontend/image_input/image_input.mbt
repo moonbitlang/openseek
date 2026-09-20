@@ -124,7 +124,7 @@ fn Selection::read(
   }
   @cmd.custom_cmd(scheduler => {
     scheduler.add(emit(Reading))
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let result = self.load(locale~) catch {
         error => {
           scheduler.add(
@@ -144,6 +144,7 @@ fn Selection::read(
       }
       scheduler.add(emit(result))
     })
+    |> ignore
   })
 }
 

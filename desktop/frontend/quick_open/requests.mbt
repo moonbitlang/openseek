@@ -28,7 +28,7 @@ fn file_request(
     return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.fs_search_files,
@@ -83,6 +83,7 @@ fn file_request(
         }
       }
     })
+    |> ignore
   })
 }
 
@@ -95,7 +96,7 @@ fn cancel_file_search(
   generation : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(
           owner.channel,
@@ -106,6 +107,7 @@ fn cancel_file_search(
         _ => ()
       }
     })
+    |> ignore
   })
 }
 
@@ -116,7 +118,7 @@ fn clear_file_cache(
   cache_key : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(
           owner.channel,
@@ -127,6 +129,7 @@ fn clear_file_cache(
         _ => ()
       }
     })
+    |> ignore
   })
 }
 

@@ -164,10 +164,10 @@ async fn ws_request(
       raise BridgeUnsent(bridge_error_text(error))
     }
   }
-  let promise : @js.Promise = @js.Value::cast(
+  let promise : @js.Promise[@js.Value] = @js.Value::cast(
     (deferred.get_with_string("promise") : @js.Value),
   )
-  promise.wait() catch {
+  wait_bridge_promise(promise) catch {
     error => raise ws_reply_failure(error)
   }
 }
@@ -325,8 +325,7 @@ test "only marked browser RPC errors are definitive refusals" {
 }
 
 ///|
-/// Throw a JS value — test-only. `@js.Error_` is read-only, so the error a
-/// rejected promise raises can only be obtained by producing one for real.
+/// Throw the original JS value so Error_::wrap preserves its rejection metadata.
 extern "js" fn js_throw(value : @js.Value) -> @js.Value =
   #| (value) => { throw value; }
 

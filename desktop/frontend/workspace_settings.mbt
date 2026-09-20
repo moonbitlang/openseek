@@ -34,7 +34,7 @@ fn fetch_workspace_settings(
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // A failed read dispatches nothing: the workspace keeps the Local
       // default until a later fetch answers.
       // Unlike a worktree list, nothing downstream is blocked on it.
@@ -58,6 +58,7 @@ fn fetch_workspace_settings(
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -87,7 +88,7 @@ fn save_workspace_settings(
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // Success needs no dispatch: the committed state reaches every client
       // (this one included) as the canonical `workspace.settings_changed`
       // broadcast from the store's commit seam.
@@ -115,6 +116,7 @@ fn save_workspace_settings(
         }
       }
     })
+    |> ignore
   })
 }
 

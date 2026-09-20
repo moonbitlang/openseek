@@ -54,7 +54,7 @@ fn fetch_worktrees(
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply : @protocol.WorktreesReply = @interop.bridge_request(
         channel,
         @commands.worktree_list,
@@ -88,6 +88,7 @@ fn fetch_worktrees(
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -114,7 +115,7 @@ fn start_in_new_worktree(
     FromDevice(channel, msg)
   })
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // The whole chain holds this session's command lane, not just the
       // start: two of these started together would run independent creates,
       // and whichever reply came back first would start its run first.
@@ -229,6 +230,7 @@ fn start_in_new_worktree(
         _ => ()
       }
     })
+    |> ignore
   })
 }
 
@@ -278,7 +280,7 @@ fn set_goal_in_new_worktree(
     FromDevice(channel, msg)
   })
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // The whole chain holds this session's goal lane, not just the send.
       // Two of these started together would otherwise run independent
       // creates, and whichever reply came back first would send its goal
@@ -395,6 +397,7 @@ fn set_goal_in_new_worktree(
         _ => ()
       }
     })
+    |> ignore
   })
 }
 
@@ -412,7 +415,7 @@ fn repair_worktree_cmd(
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let result : @protocol.WorktreeCreateResult = @interop.bridge_request(
         channel,
         @commands.worktree_create,
@@ -454,6 +457,7 @@ fn repair_worktree_cmd(
         )
       }
     })
+    |> ignore
   })
 }
 

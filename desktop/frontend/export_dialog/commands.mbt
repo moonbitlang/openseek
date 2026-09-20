@@ -10,12 +10,13 @@ fn[Payload : ToJson, Reply : @json.FromJson] request(
   to_msg : (Result[Reply, String]) -> Msg,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let result = Ok(@interop.bridge_request(Local, command, payload)) catch {
         error => Err("\{failure}: \{@interop.bridge_error_text(error)}")
       }
       scheduler.add(emit(to_msg(result)))
     })
+    |> ignore
   })
 }
 
@@ -100,7 +101,7 @@ fn Model::sign_in(
 /// failure here has nothing left to report to.
 fn cancel_sign_in() -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let _ = @interop.bridge_request(
         Local,
         @commands.auth_cancel,
@@ -109,5 +110,6 @@ fn cancel_sign_in() -> @cmd.Cmd {
         _ => return
       }
     })
+    |> ignore
   })
 }

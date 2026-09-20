@@ -112,7 +112,7 @@ fn searching_loader(
       // An unauthorized root stays silently pending, matching `search`
       // returning no command: the caller's next declaration change resolves it.
       guard active && @resource.belongs_to(root, owner.channel) else { return }
-      @js.async_run(() => {
+      @js.Promise::from_async(() => {
         let reply : @protocol.WorkspaceSymbolsReply = @interop.bridge_request(
           owner.channel,
           @commands.lsp_workspace_symbols,
@@ -129,6 +129,7 @@ fn searching_loader(
           scheduler.add(loaded(decode(reply)))
         }
       })
+      |> ignore
     },
     SearchingDebounceMs,
   )
@@ -160,7 +161,7 @@ pub fn search(
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(root, owner.channel) else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply : @protocol.WorkspaceSymbolsReply = @interop.bridge_request(
         owner.channel,
         @commands.lsp_workspace_symbols,
@@ -173,6 +174,7 @@ pub fn search(
       }
       scheduler.add(loaded(decode(reply)))
     })
+    |> ignore
   })
 }
 

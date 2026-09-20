@@ -182,7 +182,7 @@ fn request_diagnostics(
     return @cmd.none
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = request_lsp_open(owner~, root~, path~) catch { _ => return }
       // An absent `diagnostics` field means the host's check could not run:
       // keep the markers we have rather than clearing them with fake "no
@@ -192,6 +192,7 @@ fn request_diagnostics(
         dispatch(DiagnosticsLoaded(owner~, epoch~, absolute~, diagnostics~)),
       )
     })
+    |> ignore
   })
 }
 

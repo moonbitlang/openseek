@@ -161,7 +161,7 @@ fn UpdateCheck::from_reply(reply : @protocol.CheckUpdateReply) -> UpdateCheck {
 fn Model::fetch_app_info(self : Model, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   guard self.is_desktop else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         Local,
         @commands.app_info,
@@ -175,6 +175,7 @@ fn Model::fetch_app_info(self : Model, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -184,7 +185,7 @@ fn Model::fetch_app_info(self : Model, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 /// into `CheckUnreachable`, so the handler has one shape to route.
 fn check_for_updates(dispatch : @cmd.Emit[Msg], explicit~ : Bool) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let result = try {
         // Self-update always targets the page's own desktop host, never a
         // focused remote device.
@@ -199,6 +200,7 @@ fn check_for_updates(dispatch : @cmd.Emit[Msg], explicit~ : Bool) -> @cmd.Cmd {
       }
       scheduler.add(dispatch(UpdateCheckFinished(result~, explicit~)))
     })
+    |> ignore
   })
 }
 
@@ -209,7 +211,7 @@ fn check_for_updates(dispatch : @cmd.Emit[Msg], explicit~ : Bool) -> @cmd.Cmd {
 /// `update.download_failed` carries a background failure.
 fn download_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(
           Local,
@@ -225,6 +227,7 @@ fn download_update(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         },
       )
     })
+    |> ignore
   })
 }
 

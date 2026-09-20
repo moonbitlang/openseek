@@ -4,6 +4,7 @@ package "openseek_desktop/frontend/interop"
 import {
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/js",
+  "moonbitlang/async/js_async",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
@@ -30,7 +31,7 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] codex_request(ChannelId, 
 
 pub async fn[T] in_ordered_lane(String, async () -> T) -> T
 
-pub fn js_method_promise(@js.Value, String, @js.Value) -> @js.Promise raise @js.Error_
+pub fn js_method_promise(@js.Value, String, @js.Value) -> @js_async.Promise[@js.Value] raise @js.Error_
 
 pub fn js_prop(@js.Value, String) -> @js.Value?
 

@@ -116,7 +116,7 @@ fn show_system_notification(
     payload["title"] = title
     payload["body"] = body
     payload["payload"] = run_id
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let _ : @js.Value = @interop.js_method_promise(
         notification,
         "show",
@@ -125,6 +125,7 @@ fn show_system_notification(
         _ => return
       }
     })
+    |> ignore
   })
 }
 
@@ -156,7 +157,7 @@ fn set_notification_badge_count(count : Int) -> @cmd.Cmd {
     }
     let payload = @js.Object::new()
     payload["count"] = count
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let _ : @js.Value = @interop.js_method_promise(
         notification,
         "setBadge",
@@ -165,6 +166,7 @@ fn set_notification_badge_count(count : Int) -> @cmd.Cmd {
         _ => return
       }
     })
+    |> ignore
   })
 }
 

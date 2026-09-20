@@ -47,7 +47,7 @@ fn SearchRequest::cancel(
   self : SearchRequest,
   owner : @interop.ConversationKey,
 ) -> Unit {
-  @js.async_run(() => {
+  @js.Promise::from_async(() => {
     match self {
       Text(payload) =>
         ignore(
@@ -77,6 +77,7 @@ fn SearchRequest::cancel(
         }
     }
   })
+  |> ignore
 }
 
 ///|
@@ -106,7 +107,7 @@ fn search_request_loader(
           ),
         ),
       )
-      @js.async_run(() => {
+      @js.Promise::from_async(() => {
         let loaded : LoadedReply = match request {
           Text(payload) =>
             TextLoaded(
@@ -169,6 +170,7 @@ fn search_request_loader(
           }
         }
       })
+      |> ignore
     },
     delay_ms,
   )

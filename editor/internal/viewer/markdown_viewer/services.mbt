@@ -28,7 +28,7 @@ pub fn MarkdownViewerServices::MarkdownViewerServices(
   resource_path_label? : (@base_common.Uri) -> String? = _ => None,
   preview_factory? : @references_browser.ReferencesPeekPreviewFactory,
   launch_async_task? : (async () -> Unit noraise) -> Unit = task => {
-    @js.async_run(task)
+    @js.Promise::from_async(() => task()) |> ignore
   },
   log_service? : @log.LogHandle,
 ) -> MarkdownViewerServices {

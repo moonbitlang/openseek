@@ -218,7 +218,7 @@ fn ImageOwner::read_image(
   emit : @cmd.Emit[Msg],
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         self.channel,
         @commands.fs_read_file,
@@ -237,5 +237,6 @@ fn ImageOwner::read_image(
       }
       scheduler.add(emit(ImageResolved(self, path, result)))
     })
+    |> ignore
   })
 }

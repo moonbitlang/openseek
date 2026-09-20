@@ -29,7 +29,7 @@ fn fetch_catalog(
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         channel,
         @commands.skills_catalog,
@@ -48,6 +48,7 @@ fn fetch_catalog(
         emit(CatalogLoaded(channel~, items=catalog_from_reply(reply))),
       )
     })
+    |> ignore
   })
 }
 
@@ -59,7 +60,7 @@ fn fetch_content(
   target : PreviewTarget,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       match target {
         Market(item) => {
           let reply = @interop.bridge_request(
@@ -113,6 +114,7 @@ fn fetch_content(
         }
       }
     })
+    |> ignore
   })
 }
 
@@ -149,7 +151,7 @@ fn install(
 ) -> @cmd.Cmd {
   let key = source_label(item)
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(channel, @commands.skills_install, {
           module_name: item.module_name,
@@ -176,6 +178,7 @@ fn install(
       )
       scheduler.add(emit(ActionDone(channel~, key~, error="")))
     })
+    |> ignore
   })
 }
 
@@ -188,7 +191,7 @@ fn uninstall(
   id : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         @interop.bridge_request(channel, @commands.skills_uninstall, { id, }) catch {
           error => {
@@ -207,5 +210,6 @@ fn uninstall(
       )
       scheduler.add(emit(ActionDone(channel~, key=id, error="")))
     })
+    |> ignore
   })
 }

@@ -42,7 +42,7 @@ fn request_git_history(
     _ => ()
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.git_history,
@@ -72,6 +72,7 @@ fn request_git_history(
         dispatch(GitHistoryLoaded(owner~, generation~, append~, reply~)),
       )
     })
+    |> ignore
   })
 }
 
@@ -96,7 +97,7 @@ fn request_git_commit_changes(
     _ => ()
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
         owner.channel,
         @commands.git_commit_changes,
@@ -124,6 +125,7 @@ fn request_git_commit_changes(
         dispatch(GitCommitChangesLoaded(owner~, generation~, reply~)),
       )
     })
+    |> ignore
   })
 }
 
@@ -152,7 +154,7 @@ fn request_history_blob(
     _ => ()
   }
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let blob = @interop.bridge_request(
         owner.channel,
         @commands.git_original_file,
@@ -182,6 +184,7 @@ fn request_history_blob(
         dispatch(HistoryBlobLoaded(owner~, key~, generation~, side~, blob~)),
       )
     })
+    |> ignore
   })
 }
 

@@ -59,7 +59,7 @@ fn LocalBridgeSub::open_host_connection(
   scheduler : &@cmd.Scheduler,
   api : @js.Value,
 ) -> Unit {
-  @js.async_run(() => {
+  @js.Promise::from_async(() => {
     let _ : @js.Value = @interop.js_method_promise(
       api,
       "host.connect",
@@ -79,6 +79,7 @@ fn LocalBridgeSub::open_host_connection(
       }
     }
   })
+  |> ignore
 }
 
 ///|

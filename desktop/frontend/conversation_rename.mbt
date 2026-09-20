@@ -83,7 +83,7 @@ fn rename_conversation(
   rename : ConversationRename,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       guard @interop.ChannelId::from_uri_authority(rename.id.channel())
         is Some(channel) else {
         scheduler.add(
@@ -178,6 +178,7 @@ fn rename_conversation(
       }
       scheduler.add(dispatch(ConversationRenameSucceeded(rename.id)))
     })
+    |> ignore
   })
 }
 

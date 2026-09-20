@@ -13,7 +13,7 @@ fn fetch_projects(
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       // A host without the op just reads as "no projects attached".
       let reply = @interop.bridge_request(
         channel,
@@ -49,6 +49,7 @@ fn fetch_projects(
         ),
       )
     })
+    |> ignore
   })
 }
 
@@ -88,7 +89,7 @@ fn project_action(
   report_added? : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       project_action_into(
         scheduler,
         dispatch,
@@ -98,6 +99,7 @@ fn project_action(
         report_added~,
       )
     })
+    |> ignore
   })
 }
 
@@ -1235,7 +1237,7 @@ fn create_chat_workspace(
   generation~ : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let result : Result[String, String] = try {
         match
           @interop.bridge_request(
@@ -1255,5 +1257,6 @@ fn create_chat_workspace(
         dispatch(ChatWorkspaceCreated(channel~, generation~, result~)),
       )
     })
+    |> ignore
   })
 }

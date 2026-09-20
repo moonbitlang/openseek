@@ -11,7 +11,7 @@ fn[Payload : ToJson, Response : FromJson + ToJson] CodexReplyKind::request(
   payload : Payload,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply : Response = @interop.codex_request(channel, command, payload) catch {
         error => {
           let message = @interop.bridge_error_text(error)
@@ -22,6 +22,7 @@ fn[Payload : ToJson, Response : FromJson + ToJson] CodexReplyKind::request(
       let value = ToJson::to_json(reply)
       scheduler.add(dispatch(Reply(kind=self, value~)))
     })
+    |> ignore
   })
 }
 
@@ -35,7 +36,7 @@ fn CodexCatalogReplyContext::run(
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let rows : Array[Json] = []
       let seen_cursors : Array[String] = []
       let mut cursor : String? = None
@@ -83,6 +84,7 @@ fn CodexCatalogReplyContext::run(
         dispatch(Reply(kind=CodexThreadsReply(self), value={ "data": rows })),
       )
     })
+    |> ignore
   })
 }
 
@@ -192,7 +194,7 @@ fn State::close_draft(
     return @cmd.none
   }
   @cmd.custom_cmd(_scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       ignore(
         try
           @interop.codex_request(channel, @commands.codex_draft_close, @protocol.CodexDraftClosePayload::{
@@ -205,6 +207,7 @@ fn State::close_draft(
         },
       )
     })
+    |> ignore
   })
 }
 
@@ -227,7 +230,7 @@ fn CodexDraftThreadRequest::run(
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       @interop.in_ordered_lane(
         @interop.session_command_lane(channel, self.draft_id),
         () => {
@@ -303,6 +306,7 @@ fn CodexDraftThreadRequest::run(
           )
       }
     })
+    |> ignore
   })
 }
 
@@ -365,7 +369,7 @@ fn State::refresh_git(
   let generation = self.git_request_generation + 1
   (
     @cmd.custom_cmd(scheduler => {
-      @js.async_run(() => {
+      @js.Promise::from_async(() => {
         let reply : @protocol.GitPullRequestReply = @interop.bridge_request(
           channel,
           @commands.git_pull_request,
@@ -381,6 +385,7 @@ fn State::refresh_git(
           ),
         )
       })
+      |> ignore
     }),
     { ..self, git_request_generation: generation, },
   )
@@ -398,7 +403,7 @@ fn State::resume_for_send(
   guard self.active_thread() is Some(active) else { return @cmd.none }
   let thread_id = active.id
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let _reply : @protocol.CodexThreadReply = @interop.codex_request(
         channel,
         @commands.codex_thread_resume,
@@ -418,6 +423,7 @@ fn State::resume_for_send(
       }
       scheduler.add(dispatch(ResumeSucceeded(thread_id)))
     })
+    |> ignore
   })
 }
 
@@ -530,7 +536,7 @@ fn State::start_turn_in_new_worktree(
   let effort = self.selected_effort.trim().to_owned()
   let permission_mode = self.permission_mode()
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       @interop.in_ordered_lane(
         @interop.session_command_lane(channel, thread_id),
         () => {
@@ -630,6 +636,7 @@ fn State::start_turn_in_new_worktree(
           )
       }
     })
+    |> ignore
   })
 }
 
@@ -708,7 +715,7 @@ fn State::load_skills(
   let thread_id = owner.thread_id
   let cwd = owner.cwd
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let reply : @protocol.CodexDataReply = @interop.codex_request(
         channel,
         @commands.codex_skills_list,
@@ -724,6 +731,7 @@ fn State::load_skills(
         None => scheduler.add(dispatch(SkillsFailed(cwd~)))
       }
     })
+    |> ignore
   })
 }
 
@@ -825,7 +833,7 @@ fn State::repair_worktree(
   }
   let thread_id = active.id
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let result : @protocol.WorktreeCreateResult = @interop.bridge_request(
         channel,
         @commands.worktree_create,
@@ -874,6 +882,7 @@ fn State::repair_worktree(
         ),
       )
     })
+    |> ignore
   })
 }
 

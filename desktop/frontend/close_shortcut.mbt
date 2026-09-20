@@ -32,7 +32,7 @@ fn close_focused(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   // names its previous focus owner. Ask Proton instead of using that stale
   // element, and close the returned tab identity rather than a later active tab.
   @cmd.custom_cmd(scheduler => {
-    @js.async_run(() => {
+    @js.Promise::from_async(() => {
       let focused = @interop.bridge_request(
         @interop.ChannelId::Local,
         @commands.app_focused_browser,
@@ -54,6 +54,7 @@ fn close_focused(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         )
       }
     })
+    |> ignore
   })
 }
 

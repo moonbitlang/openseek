@@ -15,7 +15,7 @@ fn AsyncFeatureGate::AsyncFeatureGate() -> AsyncFeatureGate {
 ///|
 async fn AsyncFeatureGate::wait(self : AsyncFeatureGate) -> String? noraise {
   Some(
-    @js.suspend((resolve : (String) -> Unit, _reject : (Error) -> Unit) => {
+    @base_browser.wait_callback((resolve : (String) -> Unit) => {
       self.resolver = Some(resolve)
     }),
   ) catch {
