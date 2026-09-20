@@ -311,9 +311,9 @@ moon test deepseek/client
 ```
 
 The blackbox test suite includes real text and image DeepSeek API smoke tests
-when `DEEPSEEK` is set. The image smoke uploads an embedded PNG with a one-hour
-expiry, sends its returned file ID to `deepseek-flash`, and checks that the
-model identifies the two colored halves. The filename and prompt do not reveal
+when `DEEPSEEK` is set. The image smoke reads `testdata/two-colors.png`, uploads it
+with a one-hour expiry, sends its returned file ID to `deepseek-flash`, and checks
+that the model identifies the two colored halves. The filename and prompt do not reveal
 the expected colors. It uses real API quota and has a two-minute timeout.
 Multipart and error-path tests continue to use a local mock HTTP server.
 
