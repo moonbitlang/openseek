@@ -216,3 +216,106 @@ test "partial source rows reset lexical state and unknown patches remain visible
     is Context("unrecognized patch", old_line=None, new_line=None),
   )
 }
+
+///|
+test "no-newline notes preserve adjacent source rows and copy text" {
+  for note in ["\\ No newline at end of file", "\\ 文件末尾没有换行"] {
+    let patch = "@@ -4 +9 @@\n-old\n\{note}\n+new\n\{note}"
+    let edit = EditDiff::new([], None, None, patch, unified=true)
+    let rows = edit.preview_lines()
+    assert_eq(rows.length(), 2)
+    assert_true(rows[0] is Removed("old", line=Some(4)))
+    assert_true(rows[1] is Added("new", line=Some(9)))
+    assert_eq(edit.diff, patch)
+    assert_true(edit.lines[2].content is Metadata)
+    assert_true(edit.lines[4].content is Metadata)
+  }
+}
+
+///|
+test "completed hunks distinguish file headers from header-looking source" {
+  let patch =
+    #|diff --git a/one b/one
+    #|index abc..def 100644
+    #|--- a/one
+    #|+++ b/one
+    #|@@ -1 +1 @@
+    #|--- old source
+    #|+++ new source
+    #|--- a/two
+    #|+++ b/two
+    #|@@ -0,0 +1 @@
+    #|+created
+    #|diff --git a/three b/three
+    #|deleted file mode 100644
+    #|--- a/three
+    #|+++ /dev/null
+    #|@@ -5 +0,0 @@
+    #|-deleted
+  let edit = EditDiff::new([], None, None, patch, unified=true)
+  let rows = edit.preview_lines()
+  assert_eq(rows.length(), 6)
+  assert_true(rows[0] is Removed("-- old source", line=Some(1)))
+  assert_true(rows[1] is Added("++ new source", line=Some(1)))
+  assert_true(rows[2] is Gap)
+  assert_true(rows[3] is Added("created", line=Some(1)))
+  assert_true(rows[4] is Gap)
+  assert_true(rows[5] is Removed("deleted", line=Some(5)))
+}
+
+///|
+test "extended patch headers are metadata while prefixed text is source" {
+  for
+    header in [
+      "index abc..def 100644", "old mode 100644", "new mode 100755", "new file mode 100644",
+      "deleted file mode 100644", "rename from old", "rename to new", "copy from old",
+      "copy to new", "similarity index 99%", "dissimilarity index 10%",
+    ] {
+    let patch = "\{header}\n@@ -1 +1 @@\n-\{header}\n+\\ No newline at end of file"
+    let edit = EditDiff::new([], None, None, patch, unified=true)
+    assert_true(edit.lines[0].content is Metadata)
+    let rows = edit.preview_lines()
+    assert_eq(rows.length(), 2)
+    assert_true(rows[0] is Removed(text, line=Some(1)) && text == header)
+    assert_true(rows[1] is Added("\\ No newline at end of file", line=Some(1)))
+  }
+}
+
+///|
+test "malformed hunk ranges cannot inherit the previous hunk coordinates" {
+  for range in ["-2,bad", "-2,-1", "-2,1,1", "-0,1", "-2147483648"] {
+    let patch = "@@ -1 +1 @@\n-old\n+new\n@@ \{range} +3 @@\n-bad\n+bad\n@@ -8 +9 @@\n-last\n+last"
+    let edit = EditDiff::new([], None, None, patch, unified=true)
+    assert_eq(edit.lines[4].old_line, None)
+    assert_eq(edit.lines[5].new_line, None)
+    let rows = edit.preview_lines()
+    assert_eq(rows.length(), 5)
+    assert_true(rows[2] is Gap)
+    assert_true(rows[3] is Removed("last", line=Some(8)))
+    assert_true(rows[4] is Added("last", line=Some(9)))
+  }
+}
+
+///|
+test "no-newline metadata does not erase a truncation boundary" {
+  let patch = "@@ -1 +1 @@\n-" +
+    "x".repeat(13000) +
+    "\n\\ No newline at end of file\n+new\n\\ No newline at end of file"
+  let edit = EditDiff::new([], None, None, patch, unified=true)
+  let rows = edit.preview_lines()
+  assert_eq(rows.length(), 3)
+  assert_true(rows[1] is Gap)
+  assert_true(rows[2] is Added("new", line=Some(1)))
+}
+
+///|
+test "generated snippets do not interpret patch metadata or lose rows after gaps" {
+  let patch = "- \\ No newline at end of file\n+ @@ -1 +1 @@\nunknown separator\n+ index abc..def"
+  let edit = EditDiff::new([], None, Some(7), patch)
+  let rows = edit.preview_lines()
+  assert_eq(rows.length(), 4)
+  assert_true(rows[0] is Removed("\\ No newline at end of file", line=Some(7)))
+  assert_true(rows[1] is Added("@@ -1 +1 @@", line=Some(7)))
+  assert_true(rows[2] is Gap)
+  assert_true(rows[3] is Added("index abc..def", line=Some(8)))
+}

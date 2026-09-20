@@ -206,9 +206,55 @@ priv struct EditDiffLine {
   old_line : Int?
   new_line : Int?
   class_name : String
-  source_offset : Int?
+  content : EditDiffLineContent
   truncated : Bool
 } derive(Eq)
+
+///|
+priv enum EditDiffLineContent {
+  SourceRow(Int)
+  Boundary
+  Metadata
+  Unknown
+} derive(Eq)
+
+///|
+/// Unified ranges omit the count for a single line; zero counts describe
+/// insertions/deletions. Keep counts so header-looking source stays source.
+fn edit_diff_range(value : StringView) -> (Int, Int)? {
+  let fields = [..value.split(",")]
+  guard fields.length() == 1 || fields.length() == 2 else { return None }
+  try {
+    let start = @string.parse_int(fields[0])
+    let count = if fields.length() == 2 {
+      @string.parse_int(fields[1])
+    } else {
+      1
+    }
+    if start >= 0 && count >= 0 && (start > 0 || count == 0) {
+      Some((start, count))
+    } else {
+      None
+    }
+  } catch {
+    _ => None
+  }
+}
+
+///|
+fn edit_diff_metadata(text : String) -> Bool {
+  text.has_prefix("index ") ||
+  text.has_prefix("old mode ") ||
+  text.has_prefix("new mode ") ||
+  text.has_prefix("deleted file mode ") ||
+  text.has_prefix("new file mode ") ||
+  text.has_prefix("copy from ") ||
+  text.has_prefix("copy to ") ||
+  text.has_prefix("rename from ") ||
+  text.has_prefix("rename to ") ||
+  text.has_prefix("similarity index ") ||
+  text.has_prefix("dissimilarity index ")
+}
 
 ///|
 fn EditDiff::new(
@@ -222,48 +268,29 @@ fn EditDiff::new(
   let mut new_line = start_line
   let mut first_line = start_line
   let mut in_hunk = !unified
+  let mut remaining : (Int, Int)? = None
   let rows : Array[EditDiffLine] = []
   for raw in diff.split("\n") {
     let text = raw.to_owned()
     if unified && text.has_prefix("@@ ") {
-      // Parse only the coordinates; section names after @@ are source text.
+      // Section names after the closing @@ do not participate in parsing.
       let fields = [..text.split(" ")]
       old_line = None
       new_line = None
+      remaining = None
       in_hunk = false
       if fields.length() >= 4 &&
         fields[3] == "@@" &&
         fields[1].has_prefix("-") &&
-        fields[2].has_prefix("+") {
-        let old_start = fields[1][1:].split(",").next()
-        let new_start = fields[2][1:].split(",").next()
-        old_line = old_start.bind(value => {
-          try {
-            let n = @string.parse_int(value)
-            if n >= 0 {
-              Some(n)
-            } else {
-              None
-            }
-          } catch {
-            _ => None
-          }
-        })
-        new_line = new_start.bind(value => {
-          try {
-            let n = @string.parse_int(value)
-            if n >= 0 {
-              Some(n)
-            } else {
-              None
-            }
-          } catch {
-            _ => None
-          }
-        })
-        in_hunk = old_line is Some(_) && new_line is Some(_)
-        if first_line is None && in_hunk {
-          first_line = new_line.map(line => line.max(1))
+        fields[2].has_prefix("+") &&
+        edit_diff_range(fields[1][1:]) is Some((old_start, old_count)) &&
+        edit_diff_range(fields[2][1:]) is Some((new_start, new_count)) {
+        old_line = Some(old_start)
+        new_line = Some(new_start)
+        remaining = Some((old_count, new_count))
+        in_hunk = old_count > 0 || new_count > 0
+        if first_line is None {
+          first_line = Some(new_start.max(1))
         }
       }
       rows.push({
@@ -271,21 +298,53 @@ fn EditDiff::new(
         old_line: None,
         new_line: None,
         class_name: "diff-ctx",
-        source_offset: None,
+        content: Boundary,
         truncated: false,
       })
       continue
     }
-    let added = in_hunk && text.has_prefix("+")
-    let removed = in_hunk && text.has_prefix("-")
-    let context = in_hunk && text.has_prefix(" ")
-    let source_offset = if added || removed || context {
-      Some(if unified { 1 } else { 2 })
+    let added = in_hunk &&
+      text.has_prefix("+") &&
+      remaining.map(counts => counts.1 > 0).unwrap_or(true)
+    let removed = in_hunk &&
+      text.has_prefix("-") &&
+      remaining.map(counts => counts.0 > 0).unwrap_or(true)
+    let context = in_hunk &&
+      text.has_prefix(" ") &&
+      remaining.map(counts => counts.0 > 0 && counts.1 > 0).unwrap_or(true)
+    let content : EditDiffLineContent = if added || removed || context {
+      SourceRow(if unified { 1 } else { 2 })
+    } else if unified && text.has_prefix("\\ ") {
+      // The no-newline note describes the preceding source row; its wording
+      // may be localized. It consumes no coordinate and does not end a hunk.
+      Metadata
+    } else if unified &&
+      (
+        text.has_prefix("diff --git ") ||
+        (!in_hunk && (text.has_prefix("--- ") || text.has_prefix("+++ ")))
+      ) {
+      in_hunk = false
+      remaining = None
+      old_line = None
+      new_line = None
+      Boundary
+    } else if unified &&
+      !in_hunk &&
+      (text.is_empty() || edit_diff_metadata(text)) {
+      Metadata
     } else {
-      None
+      // Unrecognized records cannot safely carry source coordinates or
+      // lexical state into subsequent rows. Keep their text for fallback.
+      if unified {
+        in_hunk = false
+        remaining = None
+        old_line = None
+        new_line = None
+      }
+      Unknown
     }
     rows.push({
-      source_offset,
+      content,
       truncated: false,
       text,
       old_line: if removed || context {
@@ -306,6 +365,12 @@ fn EditDiff::new(
         "diff-ctx"
       },
     })
+    if remaining is Some((old_count, new_count)) {
+      let old_remaining = old_count - (if removed || context { 1 } else { 0 })
+      let new_remaining = new_count - (if added || context { 1 } else { 0 })
+      remaining = Some((old_remaining, new_remaining))
+      in_hunk = old_remaining > 0 || new_remaining > 0
+    }
     if removed || context {
       old_line = old_line.bind(line => {
         if line < 2147483647 {
@@ -359,7 +424,7 @@ fn EditDiff::new(
   }
   if tail_start > head_end {
     visible.push({
-      source_offset: None,
+      content: Boundary,
       truncated: false,
       text: "⋯ \{tail_start - head_end} lines skipped ⋯",
       old_line: None,
@@ -440,7 +505,7 @@ fn EditDiff::preview_lines(self : EditDiff) -> Array[@syntax_html.DiffLine] {
   let rows : Array[@syntax_html.DiffLine] = []
   let mut gap = false
   for line in self.lines {
-    if line.source_offset is Some(offset) && offset <= line.text.length() {
+    if line.content is SourceRow(offset) && offset <= line.text.length() {
       if gap && !rows.is_empty() {
         rows.push(Gap)
       }
@@ -454,7 +519,7 @@ fn EditDiff::preview_lines(self : EditDiff) -> Array[@syntax_html.DiffLine] {
         },
       )
       gap = line.truncated
-    } else {
+    } else if line.content != Metadata {
       gap = true
     }
   }

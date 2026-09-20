@@ -1094,7 +1094,7 @@ test('minimal OpenSeek searches and submit tools use registered activity names',
 });
 
 test('minimal Codex activities render recorded patches without classifying foreign tools as edits', async ({ page }) => {
-  const patch = '--- a/main.mbt\n+++ b/main.mbt\n@@ -1,2 +1,2 @@\n-old\n+++ new\n context';
+  const patch = 'diff --git a/main.mbt b/main.mbt\nindex abc..def 100644\n--- a/main.mbt\n+++ b/main.mbt\n@@ -1,2 +1,2 @@\n context\n-old\n\\ No newline at end of file\n+++ new\n\\ No newline at end of file';
   const app = new CodexMinimalHarness(page, [
     { id: 'edit', type: 'fileChange', status: 'completed', changes: [
       { path: 'src/main.mbt', kind: { type: 'update', move_path: null }, diff: patch },
@@ -1127,6 +1127,8 @@ test('minimal Codex activities render recorded patches without classifying forei
   await expect(diff.locator('.removed .editor-diff-source')).toHaveText(['old']);
   await expect(diff.locator('.added .editor-diff-source')).toHaveText(['++ new']);
   await expect(diff.locator('.context .editor-diff-source')).toHaveText(['context']);
+  await expect(diff.locator('.editor-diff-row.gap')).toHaveCount(0);
+  await expect(diff.locator('.editor-diff-row')).toHaveCount(3);
   await expect(process.locator('.edit-path')).toHaveText('src/main.mbt');
   await expect(process.locator('.minimal-call-caption').last()).toHaveText('dynamic__example__edit');
   await expect(process.locator('.minimal-call .tool-status.failed')).toHaveAttribute('aria-label', 'Tool failed');
