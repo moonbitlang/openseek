@@ -589,18 +589,39 @@ fn MinimalActivity::render(
   single? : Bool = false,
 ) -> @html.Html {
   match self {
-    Notice(text~, error~) =>
+    Notice(text~, error~) => {
+      let caption = JobCaption::notice(text)
       @html.div(
-        class=if error {
+        class=if caption is Some(_) && error {
+          "minimal-note minimal-job-note transcript-error-message"
+        } else if caption is Some(_) {
+          "minimal-note minimal-job-note"
+        } else if error {
           "minimal-note transcript-error-message"
         } else {
           "minimal-note"
         },
         title=text,
-        JobCaption::notice(text).map_or(text, caption => {
-          caption.label(locale, notice=true)
-        }),
+        if caption is Some(caption) {
+          [
+            @html.span(
+              class="minimal-tool-icon",
+              attrs=@html.Attrs::build().aria_hidden("true"),
+              if caption.status == "exit=0" {
+                @icons.icon_check()
+              } else if caption.status == "stopped" {
+                @icons.icon_debug_stop()
+              } else {
+                @icons.icon_error()
+              },
+            ),
+            @html.span(caption.label(locale, notice=true)),
+          ]
+        } else {
+          [@html.text(text)]
+        },
       )
+    }
     Call(call) =>
       @html.div(
         class=if single {

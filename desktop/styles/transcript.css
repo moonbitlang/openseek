@@ -1737,6 +1737,12 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.minimal-job-note {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+}
 .minimal-tool-status {
   display: inline-flex;
   align-items: center;

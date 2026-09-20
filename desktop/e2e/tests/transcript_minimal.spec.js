@@ -1058,7 +1058,8 @@ test('minimal job waits name their targets while pending and disappear after suc
   app.append('tool_result', { tool_call_id: 'wait', tool_name: 'job_wait', content: 'WAIT_RESULT_SENTINEL', is_error: false });
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests']);
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Run the pr tests');
-  await expect(tools.getByText('Job "Run the pr tests" completed', { exact: true })).toHaveAttribute('title', notice);
+  await expect(tools.locator('.minimal-note')).toHaveText('Job "Run the pr tests" completed');
+  await expect(tools.locator('.minimal-note')).toHaveAttribute('title', notice);
   await expect(stream).not.toContainText('WAIT_RESULT_SENTINEL');
 
   app.append('assistant', { content: '', tool_calls: [
@@ -1225,6 +1226,7 @@ test('minimal job captions append recorded facts without updating earlier rows',
   app.append('runtime_notice', { content: notice });
   await expect(stream.locator('.minimal-note')).toHaveText('Job "Run root tests" completed');
   await expect(stream.locator('.minimal-note')).toHaveAttribute('title', notice);
+  await expect(stream.locator('.minimal-note .minimal-tool-icon > svg')).toBeVisible();
   app.append('assistant', { content: '', tool_calls: [
     { id: 'done', name: 'job_output', arguments: JSON.stringify({ job_id: id }) },
   ] });
@@ -1274,6 +1276,7 @@ test('minimal job captions retain failed reads and unrecognized metadata', async
     app.append('runtime_notice', { content: notice });
     await expect(stream.locator('.minimal-note').last()).toHaveText(caption);
     await expect(stream.locator('.minimal-note').last()).toHaveAttribute('title', notice);
+    await expect(stream.locator('.minimal-note').last().locator('.minimal-tool-icon > svg')).toHaveCount(caption.startsWith('Job "') ? 1 : 0);
   }
   expect(app.pageErrors).toEqual([]);
 });
