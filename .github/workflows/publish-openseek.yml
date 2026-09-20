@@ -2,7 +2,7 @@ name: publish-openseek
 
 # Bump the desired module versions, then dispatch this workflow. The script
 # stages standalone packages and publishes protocol -> tools SDK -> root,
-# skipping versions the registry explicitly reports as already published.
+# skipping exact versions listed by moon view --versions --json.
 on:
   workflow_dispatch:
 

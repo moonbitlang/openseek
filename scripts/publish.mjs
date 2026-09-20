@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,24 +58,65 @@ export async function stageModules(repository, destination) {
   return staged;
 }
 
-function moon(args, cwd) {
+function moon(args, cwd, { capture = false } = {}) {
   return new Promise((resolveResult, reject) => {
     const child = spawn("moon", args, {
       cwd,
       env: { ...process.env, NO_COLOR: "1", MOON_WORK: "off", MOON_IGNORE_PREBUILD: "1" },
       stdio: ["ignore", "pipe", "pipe"],
     });
-    let output = "";
-    for (const [stream, sink] of [[child.stdout, process.stdout], [child.stderr, process.stderr]]) {
-      stream.setEncoding("utf8");
-      stream.on("data", chunk => { output += chunk; sink.write(chunk); });
-    }
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", chunk => {
+      stdout += chunk;
+      if (!capture) process.stdout.write(chunk);
+    });
+    child.stderr.pipe(process.stderr, { end: false });
     child.once("error", reject);
     child.once("close", (code, signal) => {
       if (signal) reject(new Error(`moon ${args.join(" ")} terminated by ${signal}`));
-      else resolveResult({ code, output });
+      else resolveResult({ code, stdout });
     });
   });
+}
+
+async function view(args, cwd) {
+  const result = await moon(["view", ...args, "--json"], cwd, { capture: true });
+  if (result.code !== 0) throw new Error(`moon view ${args.join(" ")} failed: ${result.stdout.trim()}`);
+  const report = JSON.parse(result.stdout);
+  if (report?.version !== 1 || report.status !== "success") {
+    throw new Error(`Invalid moon view report for ${args.join(" ")}: ${result.stdout.trim()}`);
+  }
+  return report.result;
+}
+
+async function publicationPlan(staged, cwd) {
+  const profile = await view(["moonbitlang"], cwd);
+  if (profile?.username !== "moonbitlang" || !Array.isArray(profile.modules) ||
+      !profile.modules.every(module => typeof module?.name === "string")) {
+    throw new Error("Invalid moon view organization profile");
+  }
+  const publishedModules = new Set(profile.modules.map(module => module.name));
+  const plan = [];
+  for (const module of staged) {
+    // These repository manifests use a top-level string version. Refuse an
+    // absent/ambiguous declaration rather than guessing which version to skip.
+    const manifest = await readFile(join(module.cwd, "moon.mod"), "utf8");
+    const versions = [...manifest.matchAll(/^[ \t]*version[ \t]*=[ \t]*"([^"\r\n]+)"[ \t]*(?:\/\/[^\r\n]*)?\r?$/gm)];
+    if (versions.length !== 1) throw new Error(`Expected one version declaration in ${module.name}/moon.mod`);
+    const version = versions[0][1];
+    let published = false;
+    if (publishedModules.has(module.name)) {
+      const releases = await view([module.name, "--versions"], cwd);
+      if (!Array.isArray(releases) || !releases.every(release => typeof release?.version === "string")) {
+        throw new Error(`Invalid moon view release list for ${module.name}`);
+      }
+      // Deprecated releases still occupy their version and must not be uploaded again.
+      published = releases.some(release => release.version === version);
+    }
+    plan.push({ ...module, version, published });
+  }
+  return plan;
 }
 
 async function updateRegistry(cwd) {
@@ -88,20 +129,24 @@ export async function publish(repository) {
   const results = [];
   try {
     const staged = await stageModules(repository, temporary);
-    await updateRegistry(temporary);
-    for (const module of staged) {
-      console.log(`\nPublishing ${module.name}`);
+    // Finish every registry query before the first upload. A failed lookup is
+    // never interpreted as an unpublished module or version.
+    const plan = await publicationPlan(staged, temporary);
+    if (plan.some(module => !module.published)) await updateRegistry(temporary);
+    for (const module of plan) {
+      if (module.published) {
+        results.push(`${module.name}: already published`);
+        continue;
+      }
+      console.log(`\nPublishing ${module.name}@${module.version}`);
       const result = await moon(["publish"], module.cwd);
       if (result.code === 0) {
         results.push(`${module.name}: published`);
-      } else if (/^Server status: 409 Conflict, detail: [^\r\n]*[Tt]he version you are attempting to upload \([^)]+\) is duplicated with an existing version/m.test(result.output)) {
-        results.push(`${module.name}: already published`);
       } else {
         results.push(`${module.name}: failed`);
         throw new Error(`Publishing ${module.name} failed`);
       }
       // Root publication validates against the registry, not the local member.
-      // Refresh even after a duplicate response (another run may have published it).
       if (module.directory === "protocol") await updateRegistry(temporary);
     }
   } finally {

@@ -68,8 +68,14 @@ test("staging isolates members, excludes development files, and keeps runtime so
   assert.equal((await fs.lstat(join(root, "README.md"))).isSymbolicLink(), false);
 });
 
-async function runFixture(t, replies = {}) {
+const protocol = "moonbitlang/openseek_protocol";
+const sdk = "moonbitlang/openseek_tools";
+const root = "moonbitlang/openseek";
+const report = result => JSON.stringify({ version: 1, status: "success", result, messages: [] });
+
+async function runFixture(t, { existing = {}, replies = {}, manifest } = {}) {
   const { base, repository } = await fixture(t);
+  if (manifest !== undefined) await fs.writeFile(join(repository, "protocol/moon.mod"), manifest);
   const bin = join(base, "bin");
   const log = join(base, "calls.jsonl");
   await fs.mkdir(bin);
@@ -81,15 +87,33 @@ const cwd = process.cwd();
 const calls = fs.existsSync(process.env.CALL_LOG) ? fs.readFileSync(process.env.CALL_LOG, 'utf8').trim().split('\\n').map(JSON.parse) : [];
 const entry = { command, cwd, workspace: process.env.MOON_WORK, prebuild: process.env.MOON_IGNORE_PREBUILD };
 fs.appendFileSync(process.env.CALL_LOG, JSON.stringify(entry) + '\\n');
-const key = command[0] === 'update' ? 'update-' + calls.filter(c => c.command[0] === 'update').length : path.basename(cwd);
-if (command[0] === 'publish' && !fs.existsSync(path.join(cwd, 'moon.mod'))) throw new Error('Missing staged manifest');
+const existing = JSON.parse(process.env.EXISTING);
+let key, result;
+if (command[0] === 'view') {
+  if (command.at(-1) !== '--json') throw new Error('Expected JSON query');
+  key = command[1] === 'moonbitlang' ? 'profile' : command[1];
+  if (key === 'profile') result = { username: 'moonbitlang', modules: Object.keys(existing).map(name => ({ name })) };
+  else {
+    if (command[2] !== '--versions' || !Object.hasOwn(existing, key)) throw new Error('Unexpected version query');
+    result = existing[key];
+  }
+} else if (command[0] === 'update') {
+  key = 'update-' + calls.filter(c => c.command[0] === 'update').length;
+} else if (command[0] === 'publish') {
+  key = path.basename(cwd);
+  if (!fs.existsSync(path.join(cwd, 'moon.mod'))) throw new Error('Missing staged manifest');
+} else throw new Error('Unexpected moon command');
 const reply = JSON.parse(process.env.REPLIES)[key];
-if (reply) { console.error(reply); process.exit(1); }
-console.log('OK');
+if (reply) {
+  process.stdout.write(reply.stdout ?? '');
+  process.stderr.write(reply.stderr ?? '');
+  process.exitCode = reply.code ?? 0;
+} else if (command[0] === 'view') console.log(JSON.stringify({ version: 1, status: 'success', result, messages: [] }));
+else console.log('OK');
 `, { mode: 0o755 });
   const result = spawnSync(process.execPath, [join(repository, "scripts/publish.mjs")], {
     cwd: repository,
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, CALL_LOG: log, REPLIES: JSON.stringify(replies) },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, CALL_LOG: log, REPLIES: JSON.stringify(replies), EXISTING: JSON.stringify(existing) },
     encoding: "utf8",
   });
   const calls = (await fs.readFile(log, "utf8")).trim().split("\n").map(JSON.parse);
@@ -101,42 +125,100 @@ console.log('OK');
   return { result, calls };
 }
 
-// Actual Mooncakes response recorded during the PR's live dry-run verification.
-const duplicate = "Server status: 409 Conflict, detail: Version Error: The version you are attempting to upload (0.1.1) is duplicated with an existing version (0.1.1). Please select a different version to publish.";
+const published = {
+  [protocol]: [{ version: "0.1.3" }, { version: "0.1.2", yanked: true }],
+  [sdk]: [{ version: "0.2.0" }],
+  [root]: [{ version: "0.3.2" }],
+};
 
-for (const replies of [{}, { protocol: duplicate, tools_sdk: duplicate }, { protocol: duplicate, tools_sdk: duplicate, root: duplicate }]) {
-  test(`publishes in dependency order and refreshes after protocol (${Object.keys(replies).length} duplicate versions)`, async t => {
-    const { result, calls } = await runFixture(t, replies);
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(calls.map(c => c.command), [["update"], ["publish"], ["update"], ["publish"], ["publish"]]);
-    assert.deepEqual(calls.filter(c => c.command[0] === "publish").map(c => c.cwd.split("/").at(-1)), ["protocol", "tools_sdk", "root"]);
-    assert.match(result.stdout, replies.root ? /moonbitlang\/openseek: already published/ : /moonbitlang\/openseek: published/);
-    if (replies.protocol) assert.match(result.stdout, /moonbitlang\/openseek_protocol: already published/);
+test("publishes new modules in dependency order and refreshes after protocol", async t => {
+  const { result, calls } = await runFixture(t);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(calls.map(c => c.command), [["view", "moonbitlang", "--json"], ["update"], ["publish"], ["update"], ["publish"], ["publish"]]);
+  assert.deepEqual(calls.filter(c => c.command[0] === "publish").map(c => c.cwd.split("/").at(-1)), ["protocol", "tools_sdk", "root"]);
+});
+
+test("skips exact published versions, including older and yanked releases", async t => {
+  const { result, calls } = await runFixture(t, { existing: published });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(calls.map(c => c.command), [
+    ["view", "moonbitlang", "--json"],
+    ...[protocol, sdk, root].map(name => ["view", name, "--versions", "--json"]),
+  ]);
+  for (const name of [protocol, sdk, root]) assert.ok(result.stdout.includes(`${name}: already published`));
+});
+
+test("publishes a missing exact version even when newer versions exist", async t => {
+  const { result, calls } = await runFixture(t, { existing: { ...published, [root]: [{ version: "0.3.3" }] } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(calls.slice(4).map(c => c.command), [["update"], ["publish"]]);
+  assert.equal(calls.at(-1).cwd.split("/").at(-1), "root");
+});
+
+for (const [label, reply] of Object.entries({
+  "query failure": { code: 1, stdout: '{"version":1,"status":"failure","result":null,"messages":[]}' },
+  "nonzero exit with valid JSON": { code: 1, stdout: report({ username: "moonbitlang", modules: [] }) },
+  "malformed JSON": { stdout: "not JSON" },
+  "failure envelope": { stdout: '{"version":1,"status":"failure","result":null}' },
+  "unsupported schema version": { stdout: '{"version":2,"status":"success","result":null}' },
+  "wrong owner": { stdout: report({ username: "someone", modules: [] }) },
+  "missing module list": { stdout: report({ username: "moonbitlang" }) },
+  "invalid module entry": { stdout: report({ username: "moonbitlang", modules: [null] }) },
+})) {
+  test(`aborts before publication on profile ${label}`, async t => {
+    const { result, calls } = await runFixture(t, { replies: { profile: reply } });
+    assert.equal(result.status, 1);
+    assert.equal(calls.length, 1);
   });
 }
 
-for (const failure of ["Server status: 403 Forbidden", "Server status: 409 Conflict, detail: unrelated conflict", "Server status: 500 Internal Server Error", "moon check failed"]) {
-  test(`stops on ${failure} and cleans staging`, async t => {
-    const { result, calls } = await runFixture(t, { protocol: failure });
+for (const reply of [{ code: 1, stderr: "HTTP 404" }, { stdout: report(null) }, { stdout: report([{ version: 123 }]) }]) {
+  test(`aborts all publication on invalid release lookup: ${JSON.stringify(reply)}`, async t => {
+    const { result, calls } = await runFixture(t, { existing: { [root]: [] }, replies: { [root]: reply } });
     assert.equal(result.status, 1);
-    assert.equal(calls.length, 2);
+    assert.ok(calls.every(c => c.command[0] === "view"));
+  });
+}
+
+test("stderr diagnostics do not interfere with JSON parsing", async t => {
+  const { result } = await runFixture(t, { replies: { profile: {
+    stdout: report({ username: "moonbitlang", modules: [] }), stderr: "registry warning\n",
+  } } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /registry warning/);
+});
+
+for (const manifest of ['name = "example/module"\n', 'version = "0.1.2"\nversion = "0.1.3"\n']) {
+  test(`rejects ambiguous or missing local version: ${JSON.stringify(manifest)}`, async t => {
+    const { result, calls } = await runFixture(t, { manifest });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Expected one version declaration/);
+    assert.ok(calls.every(c => c.command[0] === "view"));
+  });
+}
+
+for (const failure of ["403 Forbidden", "409 Conflict: The version you are attempting to upload is duplicated with an existing version", "500 Internal Server Error", "moon check failed"]) {
+  test(`stops on publish failure ${failure} without matching diagnostic text`, async t => {
+    const { result, calls } = await runFixture(t, { replies: { protocol: { code: 1, stderr: failure } } });
+    assert.equal(result.status, 1);
+    assert.equal(calls.length, 3);
     assert.match(result.stdout, /moonbitlang\/openseek_protocol: failed/);
   });
 }
 
 test("reports partial publication and stops before root on an SDK failure", async t => {
-  const { result, calls } = await runFixture(t, { tools_sdk: "connection reset" });
+  const { result, calls } = await runFixture(t, { replies: { tools_sdk: { code: 1, stderr: "connection reset" } } });
   assert.equal(result.status, 1);
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
   assert.match(result.stdout, /moonbitlang\/openseek_protocol: published/);
   assert.match(result.stdout, /moonbitlang\/openseek_tools: failed/);
 });
 
 for (const step of ["update-0", "update-1"]) {
   test(`stops when ${step} fails`, async t => {
-    const { result, calls } = await runFixture(t, { [step]: "registry unavailable" });
+    const { result, calls } = await runFixture(t, { replies: { [step]: { code: 1, stderr: "registry unavailable" } } });
     assert.equal(result.status, 1);
-    assert.equal(calls.length, step === "update-0" ? 1 : 3);
+    assert.equal(calls.length, step === "update-0" ? 2 : 4);
     assert.match(result.stderr, /moon update failed/);
   });
 }
