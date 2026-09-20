@@ -1,16 +1,15 @@
-name: publish-openseek
+name: publish-openseek-tools
 
-# Bump the root module version, then dispatch this workflow.
-# Publish any new dependency versions (such as protocol or editor) first.
+# Bump the tools SDK module version in tools_sdk/moon.mod, then dispatch this workflow.
 on:
   workflow_dispatch:
 
 concurrency:
-  group: publish-openseek
+  group: publish-openseek-tools
   cancel-in-progress: false
 
 jobs:
-  publish-openseek:
+  publish-openseek-tools:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -41,4 +40,4 @@ jobs:
           umask 077
           printf '%s\n' "$SECRET" > ~/.moon/credentials.json
           moon version --all
-          node scripts/publish.mjs root
+          node scripts/publish.mjs tools_sdk
