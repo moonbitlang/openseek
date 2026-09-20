@@ -24,7 +24,7 @@ pub(all) enum SteerInput {
 /// Use this for background state that should be visible at agent step
 /// boundaries, such as long-running tool progress snapshots. Do not use it for
 /// mid-turn user steering text; use `queue_steer` for that lossless channel.
-pub(all) extenum AgentEvent {}
+pub extenum AgentEvent
 
 ///|
 /// Per-agent-loop runtime state shared with side-effectful tools.
