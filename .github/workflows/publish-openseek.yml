@@ -3,10 +3,11 @@ name: publish-openseek
 # Publishes the modules this repository owns under the `moonbitlang` namespace:
 # `moonbitlang/openseek_protocol` (`protocol/`), `moonbitlang/openseek_tools`
 # (`tools_sdk/`) and `moonbitlang/openseek` (repo root) to mooncakes.
+#
 # Manual, with no inputs: bump `version` in the `moon.mod` of every module you
-# want to release, then run this workflow. It publishes exactly the modules
-# whose local version is not on mooncakes yet, in dependency order, so a
-# root-only release no longer trips over the unchanged protocol version and a
+# want to release, then run this workflow. A module is published only when the
+# registry does not already have that exact version, in dependency order, so a
+# root-only release does not trip over the unchanged protocol version and a
 # re-run after a partial failure publishes only what is left. All three are
 # published under the moonbitlang namespace, so they use the organization's
 # mooncakes token, not a personal one.
@@ -40,42 +41,20 @@ jobs:
           moon version --all
           moon update
 
-      # A module is published only when the version in its `moon.mod` is not on
-      # mooncakes yet. `moon search <owner>/<name> --json` reports the newest
-      # published version, the only published-version query the toolchain
-      # offers; the results are filtered by exact name because the search is
-      # fuzzy. Every failure path decides "publish", so a bad guess surfaces as
-      # a duplicate-version error instead of silently skipping a release. That
-      # includes an older or rolled-back local version: no exact-version query
-      # exists (`moon search name@version` matches nothing and `moon add`
-      # accepts an unpublished version), so the publish is attempted and the
-      # duplicate rejection names the module and version.
-      - name: decide which module versions still need publishing
-        id: changed
-        run: |
-          needs_publish() {
-            local dir="$1" module="$2" local_version published_version
-            local_version="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' "$dir/moon.mod" | head -n1)"
-            published_version="$(moon search "$module" --limit 20 --json 2>/dev/null | python3 -c 'import json, sys
-          name = sys.argv[1]
-          print(next((r["version"] for r in json.load(sys.stdin).get("results", []) if r["name"] == name), ""))' "$module" 2>/dev/null)" || published_version=""
-            echo "$module: local=${local_version:-<none>} published=${published_version:-<none>}" >&2
-            if [ -z "$local_version" ]; then
-              echo "$dir/moon.mod has no version; publishing so the job fails loudly" >&2
-              return 0
-            fi
-            [ "$local_version" != "$published_version" ]
-          }
-          {
-            needs_publish protocol moonbitlang/openseek_protocol && echo protocol=true || echo protocol=false
-            needs_publish tools_sdk moonbitlang/openseek_tools && echo tools_sdk=true || echo tools_sdk=false
-            needs_publish . moonbitlang/openseek && echo root=true || echo root=false
-          } >> "$GITHUB_OUTPUT"
-
       # MOONCAKES_MOONBITLANG_TOKEN is the moonbitlang org's mooncakes token:
       # only it can publish under the moonbitlang/* owner namespace.
+      #
+      # The registry is the authority on what is already published. It answers
+      # for the exact coordinate, and a version it already holds comes back as
+      # `Server status: 409 Conflict`. A dry run performs the same server check
+      # without uploading, so it decides for free: the module is skipped when
+      # its version is already there, instead of failing the job and leaving
+      # every module after it unpublished. Any other outcome publishes, and an
+      # unexpected failure is reported by that publish.
+      #
+      # `set -e` is on for `run:` steps and the 409 exits non-zero, so the dry
+      # run is captured with `|| true` and its output inspected.
       - name: publish moonbitlang/openseek_protocol
-        if: steps.changed.outputs.protocol == 'true'
         env:
           SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
         working-directory: protocol
@@ -88,11 +67,17 @@ jobs:
           fi
           trap 'rm -f ~/.moon/credentials.json' EXIT
           echo "$SECRET" > ~/.moon/credentials.json
+          probe="$(moon publish --dry-run 2>&1)" || true
+          printf '%s\n' "$probe"
+          case "$probe" in
+            *"Server status: 409"*)
+              echo "moonbitlang/openseek_protocol already has this version; skipping"
+              exit 0
+              ;;
+          esac
           moon publish
-          rm -f ~/.moon/credentials.json
 
       - name: publish moonbitlang/openseek_tools
-        if: steps.changed.outputs.tools_sdk == 'true'
         env:
           SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
         working-directory: tools_sdk
@@ -105,11 +90,17 @@ jobs:
           fi
           trap 'rm -f ~/.moon/credentials.json' EXIT
           echo "$SECRET" > ~/.moon/credentials.json
+          probe="$(moon publish --dry-run 2>&1)" || true
+          printf '%s\n' "$probe"
+          case "$probe" in
+            *"Server status: 409"*)
+              echo "moonbitlang/openseek_tools already has this version; skipping"
+              exit 0
+              ;;
+          esac
           moon publish
-          rm -f ~/.moon/credentials.json
 
       - name: publish moonbitlang/openseek
-        if: steps.changed.outputs.root == 'true'
         env:
           SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
         shell: bash
@@ -121,5 +112,12 @@ jobs:
           fi
           trap 'rm -f ~/.moon/credentials.json' EXIT
           echo "$SECRET" > ~/.moon/credentials.json
+          probe="$(moon publish --dry-run 2>&1)" || true
+          printf '%s\n' "$probe"
+          case "$probe" in
+            *"Server status: 409"*)
+              echo "moonbitlang/openseek already has this version; skipping"
+              exit 0
+              ;;
+          esac
           moon publish
-          rm -f ~/.moon/credentials.json
