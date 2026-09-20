@@ -484,6 +484,7 @@ pub fn State::page(
   channel : @interop.ChannelId,
   terminal_open : Bool,
   file_panel_open : Bool,
+  narrow : Bool,
   actions : PageActions,
 ) -> Array[@html.Html] {
   // Account actions (sign in/out, the pending sign-in page) live in the
@@ -532,7 +533,10 @@ pub fn State::page(
       ],
     ),
   )
-  topbar.push(actions.detail_toggle)
+  // The narrow titlebar carries no conversation controls, matching OpenSeek.
+  if !narrow {
+    topbar.push(actions.detail_toggle)
+  }
   // These are OpenSeek's existing host panels, re-rooted by `file_ctx` and
   // `terminal_ctx` to the selected app-server thread. They stay in this one
   // topbar instead of creating a nested Codex application frame.
@@ -540,25 +544,27 @@ pub fn State::page(
   // Rabbita can reuse this button's DOM for the detail toggle. Use an
   // attribute for disabled: removing the boolean DOM property is a no-op
   // and would leave the detail toggle disabled after the slot changes.
-  topbar.push(
-    @html.button(
-      class=if terminal_open { "panel-toggle active" } else { "panel-toggle" },
-      attrs=@html.Attrs::build().disabled(!terminal_available),
-      title=if terminal_open {
-        ui(locale, HideTerminal)
-      } else if terminal_available {
-        ui(locale, ShowTerminal)
-      } else {
-        ui(locale, TerminalPlacement)
-      },
-      on_click=actions.toggle_terminal,
-      icon(icon_terminal),
-    ),
-  )
+  if !narrow {
+    topbar.push(
+      @html.button(
+        class=if terminal_open { "panel-toggle active" } else { "panel-toggle" },
+        attrs=@html.Attrs::build().disabled(!terminal_available),
+        title=if terminal_open {
+          ui(locale, HideTerminal)
+        } else if terminal_available {
+          ui(locale, ShowTerminal)
+        } else {
+          ui(locale, TerminalPlacement)
+        },
+        on_click=actions.toggle_terminal,
+        icon(icon_terminal),
+      ),
+    )
+  }
   // An open file panel carries its close toggle in the breadcrumb, matching
   // the OpenSeek conversation topbar. Without a cwd there is no safe root to
   // list, so the disabled button explains why no guessed directory is opened.
-  if !file_panel_open {
+  if !narrow && !file_panel_open {
     topbar.push(
       @html.button(
         class="panel-toggle",

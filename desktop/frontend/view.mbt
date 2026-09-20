@@ -1578,6 +1578,14 @@ fn session_tooltip(model : Model, conv : Conversation) -> String {
 }
 
 ///|
+/// The narrow layout always renders the minimal transcript: its titlebar has
+/// no detail toggle, and a phone has no room for the detailed view. The
+/// stored preference is preserved for the wide layout.
+fn Model::minimal_transcript_effective(self : Model) -> Bool {
+  self.narrow || self.minimal_transcript
+}
+
+///|
 /// The telescope is on for detailed mode. Both conversation sources use the
 /// inverse of the stored minimal preference, preserving existing choices.
 /// This local preference has no connection or run-state gate. Neighboring
@@ -1639,7 +1647,11 @@ fn topbar_view(
       ),
     )
   }
-  items.push(model.detail_toggle(dispatch))
+  // A phone's titlebar carries identity and run state only: the detail,
+  // terminal, and right-panel controls all leave the narrow layout.
+  if !model.narrow {
+    items.push(model.detail_toggle(dispatch))
+  }
   // Export is a native-window operation and the visualizer consumes durable
   // OpenSeek JSONL. Remote-device conversations and fresh drafts therefore do
   // not offer a button that their host cannot fulfill.
@@ -1662,27 +1674,29 @@ fn topbar_view(
   }
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
-  items.push(
-    @html.button(
-      class=if model.terminal.is_open() {
-        "panel-toggle active"
-      } else {
-        "panel-toggle"
-      },
-      title=if model.terminal.is_open() {
-        shell_text(model.locale, HideTerminal)
-      } else {
-        shell_text(model.locale, ShowTerminal)
-      },
-      on_click=toggle_terminal,
-      icon(icon_terminal),
-    ),
-  )
+  if !model.narrow {
+    items.push(
+      @html.button(
+        class=if model.terminal.is_open() {
+          "panel-toggle active"
+        } else {
+          "panel-toggle"
+        },
+        title=if model.terminal.is_open() {
+          shell_text(model.locale, HideTerminal)
+        } else {
+          shell_text(model.locale, ShowTerminal)
+        },
+        on_click=toggle_terminal,
+        icon(icon_terminal),
+      ),
+    )
+  }
   // Rightmost: the toggle for the whole right-hand panel — only while the
   // panel is closed; an open panel carries the toggle at the right edge of
   // its breadcrumb instead, keeping this bar uncrowded. Both spots hug the
   // window's right edge, so the toggle stays put as the panel opens/closes.
-  if !model.right_panel_open {
+  if !model.narrow && !model.right_panel_open {
     items.push(
       @html.button(
         class="panel-toggle",
@@ -2002,6 +2016,7 @@ fn view(
         model.focused,
         terminal_panel_visible,
         file_panel_visible,
+        model.narrow,
         @codex.PageActions::{
           toggle_terminal,
           toggle_files: toggle_right_panel,

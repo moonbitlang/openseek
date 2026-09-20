@@ -130,7 +130,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       @transcript_component.Input(
         locale=self.locale,
         dark_mode=self.theme.is_dark(self.system_dark),
-        minimal=self.minimal_transcript,
+        minimal=self.minimal_transcript_effective(),
         source=@transcript_component.Codex,
         focused=self.focused,
         active_session=self.codex.active_id().unwrap_or("none"),
@@ -155,7 +155,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
           @transcript_component.Input(
             locale=self.locale,
             dark_mode=self.theme.is_dark(self.system_dark),
-            minimal=self.minimal_transcript,
+            minimal=self.minimal_transcript_effective(),
             source=@transcript_component.OpenSeek,
             focused=self.focused,
             active_session=self.active_session,
@@ -175,7 +175,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
           @transcript_component.Input(
             locale=self.locale,
             dark_mode=self.theme.is_dark(self.system_dark),
-            minimal=self.minimal_transcript,
+            minimal=self.minimal_transcript_effective(),
             source=@transcript_component.OpenSeek,
             focused=self.focused,
             active_session=self.active_session,
