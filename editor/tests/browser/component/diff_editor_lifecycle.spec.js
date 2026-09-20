@@ -271,6 +271,90 @@ test('the latest deferred edge reveal supersedes an earlier request', async ({ p
   await disposeDiffLifecycle(page);
 });
 
+for (const layout of ['inline', 'split']) {
+  test(`reveals recorded lines and clamps document bounds in ${layout} comparisons`, async ({ page }) => {
+    const root = await openDiffLifecycle(page);
+    const modified = root.locator('.moonbit-diff-editor-modified');
+    await setDiffLifecycleOptions(page, { layout, renderIndicators: true });
+    await setDiffLifecycleFixture(page, 'first-line');
+    await waitForDiffBands(root);
+
+    // Line 70 is unchanged: navigation must not snap to either hunk (1, 100).
+    for (const [requested, expected] of [[70, 70], [10000, 140], [-5, 1]]) {
+      await page.evaluate(line =>
+        globalThis.__diffEditorLifecycleControls.reveal_modified_line(line), requested,
+      );
+      await expect(modified.locator('.line-numbers.active-line-number'))
+        .toHaveText(String(expected));
+      await expect(modified.locator('.line-numbers.active-line-number')).toBeInViewport();
+    }
+
+    // Equal models have no changed hunk, but still have source destinations.
+    await setDiffLifecycleFixture(page, 'digits');
+    await page.evaluate(() => {
+      globalThis.__diffEditorLifecycleControls.set_digit_line_count(180);
+      globalThis.__diffEditorLifecycleControls.reveal_modified_line(140);
+    });
+    await expect(modified.locator('.line-numbers.active-line-number')).toHaveText('140');
+    await expect(modified.locator('.line-numbers.active-line-number')).toBeInViewport();
+    await disposeDiffLifecycle(page);
+  });
+}
+
+test('recorded line reveal waits for layout, supersedes edges, and runs only once', async ({ page }) => {
+  const root = await openDiffLifecycle(page);
+  const host = page.locator('.diff-lifecycle-host');
+  const modified = root.locator('.moonbit-diff-editor-modified');
+  await host.evaluate(node => { node.style.display = 'none'; });
+  await page.evaluate(() => {
+    const controls = globalThis.__diffEditorLifecycleControls;
+    controls.set_fixture('late');
+    controls.reveal_first_diff();
+    controls.reveal_modified_line(170);
+  });
+  await host.evaluate(node => { node.style.display = 'block'; });
+  await expect(modified.locator('.line-numbers.active-line-number')).toHaveText('170');
+  await expect(modified.locator('.view-line').filter({ hasText: 'stable line 170' })).toBeInViewport();
+
+  const scrollable = modified.locator('.monaco-scrollable-element.editor-scrollable');
+  await scrollable.hover();
+  await page.mouse.wheel(0, -1600);
+  await waitForAnimationFrames(page, 6);
+  const before = await modifiedScrollTop(root);
+  await page.evaluate(() => globalThis.__diffEditorLifecycleControls.set_provider('core'));
+  await waitForAnimationFrames(page, 6);
+  expect(Math.abs(await modifiedScrollTop(root) - before)).toBeLessThanOrEqual(1);
+  await disposeDiffLifecycle(page);
+});
+
+test('edge navigation and model replacement cancel pending recorded-line reveals', async ({ page }) => {
+  const root = await openDiffLifecycle(page);
+  const host = page.locator('.diff-lifecycle-host');
+  const modified = root.locator('.moonbit-diff-editor-modified');
+  await host.evaluate(node => { node.style.display = 'none'; });
+  await page.evaluate(() => {
+    const controls = globalThis.__diffEditorLifecycleControls;
+    controls.set_fixture('late');
+    controls.reveal_modified_line(170);
+    controls.reveal_last_diff();
+  });
+  await host.evaluate(node => { node.style.display = 'block'; });
+  await expect(modified.locator('.line-numbers.active-line-number')).toHaveText('190');
+  await expect(modified.locator('.view-line').filter({ hasText: 'new second hunk' })).toBeInViewport();
+
+  await host.evaluate(node => { node.style.display = 'none'; });
+  await page.evaluate(() => {
+    const controls = globalThis.__diffEditorLifecycleControls;
+    controls.reveal_modified_line(170);
+    controls.set_fixture('first-line');
+  });
+  await host.evaluate(node => { node.style.display = 'block'; });
+  await expect(modified.locator('.line-numbers.active-line-number')).toHaveText('1');
+  await expect(modified.locator('.line-numbers.active-line-number')).toBeInViewport();
+  await disposeDiffLifecycle(page);
+  await page.evaluate(() => globalThis.__diffEditorLifecycleControls.reveal_modified_line(170));
+});
+
 test('keeps overview interactions, failure status, and disposal observable', async ({ page }) => {
   const root = await openDiffLifecycle(page);
   await expect(root.locator('.moonbit-diff-editor-pane > .monaco-editor')).toHaveCount(2);
