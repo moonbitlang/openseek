@@ -10,6 +10,7 @@
     "formats": ["app", "zip"],
     "icons": [
       "package/macos/AppIcon.icns",
+      "package/windows/AppIcon.ico",
       "package/linux/appicon.png"
     ],
     "resources": ["seekmoon/**"],
