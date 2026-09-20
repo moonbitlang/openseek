@@ -7,6 +7,8 @@
   column-gap: 8px;
   min-width: 0;
   overflow-x: auto;
+  /* Keep boundary gestures from rubber-banding the code and pinned gutter. */
+  overscroll-behavior-x: none;
   padding: 10px 0;
   color: var(--vscode-editor-foreground);
   background: var(--vscode-editor-background);
