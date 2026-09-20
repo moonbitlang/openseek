@@ -50,6 +50,59 @@ test('selected changes retain their preview during live language switching', asy
   expect(app.pageErrors).toEqual([]);
 });
 
+test('composer script previews pin one coordinate and sign while code scrolls', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  const file = 'scripts/example.mbtx';
+  const original = `let message = "old ${'long source '.repeat(18)}"`;
+  const modified = original.replace('old ', 'new ');
+  app.gitChanges = [{ path: file, index_status: ' ', worktree_status: 'M', kind: 'modified' }];
+  app.gitFilesByRevision[app.gitBaseline][file] = `${original}\n`;
+  app.workingFiles[file] = `${modified}\n`;
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: scripts\/example\.mbtx/ }).click();
+  await contextButtons(page).first().click();
+  await page.setViewportSize({ width: 1060, height: 800 });
+  await page.locator('.composer-changes .changes-chip .mention-jump').click();
+  const popup = page.getByRole('dialog', { name: 'Selected changes' });
+  const preview = popup.locator('.editor-diff-preview');
+  await expect(preview.locator('.editor-diff-source')).toHaveText([original, modified]);
+  await expect(preview.locator('.editor-diff-number')).toHaveText(['1', '1']);
+  await expect(preview.locator('.editor-diff-sign')).toHaveText(['−', '+']);
+  await expect(preview.locator('.editor-diff-row.removed')).toHaveCount(1);
+  await expect(preview.locator('.editor-diff-row.added')).toHaveCount(1);
+  const geometry = () => preview.evaluate(node => {
+    const bounds = selector => node.querySelector(selector).getBoundingClientRect();
+    return {
+      number: bounds('.editor-diff-number').x,
+      sign: bounds('.editor-diff-sign').x,
+      source: bounds('.editor-diff-source').x,
+      width: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+      scrollLeft: node.scrollLeft,
+    };
+  });
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+    await preview.evaluate(node => { node.scrollLeft = 0; });
+    const before = await geometry();
+    expect(before.scrollWidth).toBeGreaterThan(before.width);
+    const sourceColor = await preview.locator('.editor-diff-source').first().evaluate(node => getComputedStyle(node).color);
+    const stringColor = await preview.locator('.mtk5').first().evaluate(node => getComputedStyle(node).color);
+    expect(stringColor).not.toBe(sourceColor);
+    await preview.evaluate(node => { node.scrollLeft = 180; });
+    await expect.poll(async () => (await geometry()).scrollLeft).toBe(180);
+    const after = await geometry();
+    expect(after.number).toBeCloseTo(before.number, 1);
+    expect(after.sign).toBeCloseTo(before.sign, 1);
+    expect(after.source).toBeCloseTo(before.source - 180, 1);
+    await page.screenshot({ path: testInfo.outputPath(`composer-diff-${theme}-scrolled.png`) });
+  }
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('review hunk context stays independent and sends only selected snapshots', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   const old = ['fn first() -> Int {', '  1', '}', ...Array(24).fill(''), 'fn second() -> Int {', '  2', '}', ''].join('\n');
@@ -74,8 +127,8 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await expect(popup.locator('.changes-preview')).not.toContainText('200');
   await expect(popup).toContainText('Only selected changes are included.');
   // The composer preview needs the token palette outside the editor host.
-  const selectedPreview = await popup.locator('.changes-line-code').allTextContents();
-  const plainColor = await popup.locator('.changes-line-code').first().evaluate(node => getComputedStyle(node).color);
+  const selectedPreview = await popup.locator('.editor-diff-source').allTextContents();
+  const plainColor = await popup.locator('.editor-diff-source').first().evaluate(node => getComputedStyle(node).color);
   await expect.poll(() => popup.locator('.mtk6').first().evaluate(node => getComputedStyle(node).color))
     .not.toBe(plainColor);
   await page.screenshot({ path: testInfo.outputPath('selected-context.png') });
@@ -116,7 +169,7 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await expect(sentChip).toHaveText('Changes · 1 file');
   await sentChip.click();
   await expect(popup).toContainText('Included in this message');
-  await expect(popup.locator('.changes-line-code')).toHaveText(selectedPreview);
+  await expect(popup.locator('.editor-diff-source')).toHaveText(selectedPreview);
   await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
   await popup.getByRole('button', { name: 'Open in review', exact: true }).click();
   await expect(popup).toBeHidden();
@@ -129,7 +182,7 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await page.reload();
   await app.openSession();
   await sentChip.click();
-  await expect(popup.locator('.changes-line-code')).toHaveText(selectedPreview);
+  await expect(popup.locator('.editor-diff-source')).toHaveText(selectedPreview);
   await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('sent-context-reloaded.png') });
   await page.keyboard.press('Escape');
@@ -219,8 +272,8 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await chip.click();
   const popup = page.getByRole('dialog', { name: 'Selected changes' });
   const deleted = popup.locator('.changes-file').filter({ hasText: 'lib.mbt' });
-  await expect(deleted.locator('.changes-preview-line.removed').first()).toBeVisible();
-  await expect(deleted.locator('.changes-preview-line.added')).toHaveCount(0);
+  await expect(deleted.locator('.editor-diff-row.removed').first()).toBeVisible();
+  await expect(deleted.locator('.editor-diff-row.added')).toHaveCount(0);
   await popup.getByTitle('src/lib.mbt', { exact: true }).click();
   await expect(deleted.locator('.changes-preview')).toHaveCount(0);
   await popup.getByTitle('src/lib.mbt', { exact: true }).click();
@@ -252,7 +305,7 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await sentChip.click();
   await expect(popup.locator('.changes-file')).toHaveCount(2);
   await expect(popup.locator('.changes-file').filter({ hasText: 'lib.mbt' })
-    .locator('.changes-preview-line.added')).toHaveCount(0);
+    .locator('.editor-diff-row.added')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: /Remove/ })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('codex-sent-multiple-files.png') });
   expect(app.pageErrors).toEqual([]);
@@ -326,5 +379,44 @@ test('saved message changes keep independent disclosures and immutable previews'
   await popup.getByRole('button', { name: 'Close selected changes', exact: true }).click();
   await expect(popup).toBeHidden();
   await expect(chips.first()).toBeFocused();
+  expect(app.pageErrors).toEqual([]);
+});
+
+
+test('saved change excerpts preserve discontinuous coordinates and literal source', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [{ sequence: 1, item: { kind: 'user', payload: { content: `Show the browser fixture saved snapshot
+
+<user_mentions>
+<review_changes workspace="/workspace">
+<file path="notes.txt" version="saved-comparison">
+<hunk>
+<original lines="8">
+<before> & old
+</original>
+<original lines="12">
+last removed
+</original>
+<modified lines="9">
+<after> & new
+</modified>
+<modified lines="15">
+last added
+</modified>
+</hunk>
+</file>
+</review_changes>
+</user_mentions>` } } }];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await page.locator('.user-bubble .changes-chip .mention-jump').click();
+  const preview = page.getByRole('dialog', { name: 'Selected changes' }).locator('.editor-diff-preview');
+  await expect(preview.locator('.editor-diff-number')).toHaveText(['8', '', '12', '9', '', '15']);
+  await expect(preview.locator('.editor-diff-source')).toHaveText([
+    '<before> & old', '…', 'last removed', '<after> & new', '…', 'last added',
+  ]);
+  await expect(preview.locator('.editor-diff-row.gap')).toHaveCount(2);
+  await expect(preview.locator('before, after')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

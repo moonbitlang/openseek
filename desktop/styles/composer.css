@@ -1177,52 +1177,12 @@
 }
 
 .changes-preview {
-  overflow-x: auto;
+  --editor-font-family: var(--font-family-mono);
+  --editor-font-size: 12px;
+  --editor-line-height: 22px;
+  overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 5px;
-  font-family: var(--font-family-mono);
-  font-size: 12px;
-}
-
-.changes-preview-line {
-  display: flex;
-  min-width: max-content;
-  line-height: 22px;
-}
-
-.changes-preview-line.added {
-  background: color-mix(in srgb, var(--color-success) 14%, transparent);
-}
-
-.changes-preview-line.removed {
-  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
-}
-
-.changes-line-number {
-  width: 42px;
-  flex: none;
-  padding: 0 8px;
-  text-align: right;
-  color: var(--color-text-muted);
-  background: var(--color-bg-subtle);
-  user-select: none;
-}
-
-.changes-line-sign {
-  width: 26px;
-  flex: none;
-  text-align: center;
-  user-select: none;
-}
-
-.changes-line-code {
-  white-space: pre;
-  padding-right: 12px;
-}
-
-.changes-preview-gap {
-  color: var(--color-text-muted);
-  padding-left: 52px;
 }
 
 .changes-popup-footer {

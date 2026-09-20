@@ -31,3 +31,4 @@
 @import url("../../../editor/viewer/browser/diagram_viewport/diagram_viewport.css");
 @import url("../../../editor/viewer/contrib/markdown_comments/browser/markdown_comments.css");
 @import url("../../../editor/internal/viewer/browser/markdown_document/markdown_document.css");
+@import url("../../../editor/viewer/html/diff_preview.css");

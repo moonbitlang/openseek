@@ -128,37 +128,31 @@ fn excerpt_preview(
   excerpt : @mention_context.ChangeExcerpt,
   file : String,
 ) -> @html.Html {
-  let rows : Array[@html.Html] = []
-  for
-    (lines, sign, style) in [
-      (excerpt.original, "−", "removed"),
-      (excerpt.modified, "+", "added"),
-    ] {
+  let rows : Array[@syntax_html.DiffLine] = []
+  for (lines, removed) in [(excerpt.original, true), (excerpt.modified, false)] {
     let mut previous : Int? = None
-    let source = lines.map(line => line.text).join("\n")
-    let highlighted = if file.has_suffix(".mbt") || file.has_suffix(".mbti") {
-      @syntax_html.moonbit_source_lines(source)
-    } else {
-      []
-    }
-    for index, line in lines {
+    for line in lines {
       if previous is Some(number) && line.number != number + 1 {
-        rows.push(@html.div(class="changes-preview-gap", "…"))
+        rows.push(Gap)
       }
       rows.push(
-        @html.div(class="changes-preview-line \{style}", [
-          @html.span(class="changes-line-number", line.number.to_string()),
-          @html.span(class="changes-line-sign", sign),
-          @html.code(
-            class="changes-line-code",
-            highlighted.get(index).unwrap_or(@html.text(line.text)),
-          ),
-        ]),
+        if removed {
+          Removed(line.text, line=Some(line.number))
+        } else {
+          Added(line.text, line=Some(line.number))
+        },
       )
       previous = Some(line.number)
     }
   }
-  @html.div(class="changes-preview", rows)
+  let preview = if file.has_suffix(".mbt") ||
+    file.has_suffix(".mbti") ||
+    file.has_suffix(".mbtx") {
+    @syntax_html.diff_preview(rows, tokenizer=@lang_moonbit.MoonBitTokenizer())
+  } else {
+    @syntax_html.diff_preview(rows)
+  }
+  @html.div(class="changes-preview", preview)
 }
 
 ///|

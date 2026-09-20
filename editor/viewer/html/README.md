@@ -68,3 +68,10 @@ workspace requests.
 `tests/browser/smoke/diff_preview.spec.js` verifies actual browser glyph
 spacing, pinned gutter geometry, source scrolling, responsive layout and
 escaped highlighted content.
+
+OpenSeek's `desktop/frontend/review_changes` uses this function for composer
+Changes mentions and their saved-message previews. The adapter maps recorded
+original/modified lines and discontinuities to `DiffLine`, chooses the MoonBit
+tokenizer for `.mbt`, `.mbti`, and `.mbtx`, and owns the surrounding file
+actions. Desktop loads the shared stylesheet through its viewer CSS entrypoint
+and supplies its theme and compact typography.
