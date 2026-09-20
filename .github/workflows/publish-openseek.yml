@@ -1,25 +1,14 @@
 name: publish-openseek
 
-# Publishes the modules this repository owns under the `moonbitlang` namespace:
-# `moonbitlang/openseek_protocol` (`protocol/`), `moonbitlang/openseek_tools`
-# (`tools_sdk/`) and `moonbitlang/openseek` (repo root) to mooncakes.
-#
-# Manual, with no inputs: bump `version` in the `moon.mod` of every module you
-# want to release, then run this workflow. A module is published only when the
-# registry does not already have that exact version, in dependency order, so a
-# root-only release does not trip over the unchanged protocol version and a
-# re-run after a partial failure publishes only what is left. All three are
-# published under the moonbitlang namespace, so they use the organization's
-# mooncakes token, not a personal one.
-#
-# `openseek_protocol` is published first because the root `openseek` module
-# depends on it; `openseek_tools` is independent and published in between. The
-# publish itself type-checks the module, and the full workspace build/tests are
-# already gated on every main push by ci.yml. The root `.moonignore` keeps the
-# nested member modules (desktop, editor, …) out of the published archive.
-
+# Bump the desired module versions, then dispatch this workflow. The script
+# stages standalone packages and publishes protocol -> tools SDK -> root,
+# skipping versions the registry explicitly reports as already published.
 on:
   workflow_dispatch:
+
+concurrency:
+  group: publish-openseek
+  cancel-in-progress: false
 
 jobs:
   publish-openseek:
@@ -31,93 +20,26 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: install moon
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
-      - name: post install
+      - name: publish
+        env:
+          SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
+        shell: bash
         run: |
+          if [ -z "$SECRET" ]; then
+            echo "Error: MOONCAKES_MOONBITLANG_TOKEN secret is not set."
+            exit 1
+          fi
+          trap 'rm -f ~/.moon/credentials.json' EXIT
+          umask 077
+          printf '%s\n' "$SECRET" > ~/.moon/credentials.json
           moon version --all
-          moon update
-
-      # MOONCAKES_MOONBITLANG_TOKEN is the moonbitlang org's mooncakes token:
-      # only it can publish under the moonbitlang/* owner namespace.
-      #
-      # The registry is the authority on what is already published. It answers
-      # for the exact coordinate, and a version it already holds comes back as
-      # `Server status: 409 Conflict`. A dry run performs the same server check
-      # without uploading, so it decides for free: the module is skipped when
-      # its version is already there, instead of failing the job and leaving
-      # every module after it unpublished. Any other outcome publishes, and an
-      # unexpected failure is reported by that publish.
-      #
-      # `set -e` is on for `run:` steps and the 409 exits non-zero, so the dry
-      # run is captured with `|| true` and its output inspected.
-      - name: publish moonbitlang/openseek_protocol
-        env:
-          SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
-        working-directory: protocol
-        shell: bash
-        run: |
-          if [ -z "$SECRET" ]; then
-            echo "Error: MOONCAKES_MOONBITLANG_TOKEN secret is not set."
-            echo "Please contact an admin to grant access to this secret."
-            exit 1
-          fi
-          trap 'rm -f ~/.moon/credentials.json' EXIT
-          echo "$SECRET" > ~/.moon/credentials.json
-          probe="$(moon publish --dry-run 2>&1)" || true
-          printf '%s\n' "$probe"
-          case "$probe" in
-            *"Server status: 409"*)
-              echo "moonbitlang/openseek_protocol already has this version; skipping"
-              exit 0
-              ;;
-          esac
-          moon publish
-
-      - name: publish moonbitlang/openseek_tools
-        env:
-          SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
-        working-directory: tools_sdk
-        shell: bash
-        run: |
-          if [ -z "$SECRET" ]; then
-            echo "Error: MOONCAKES_MOONBITLANG_TOKEN secret is not set."
-            echo "Please contact an admin to grant access to this secret."
-            exit 1
-          fi
-          trap 'rm -f ~/.moon/credentials.json' EXIT
-          echo "$SECRET" > ~/.moon/credentials.json
-          probe="$(moon publish --dry-run 2>&1)" || true
-          printf '%s\n' "$probe"
-          case "$probe" in
-            *"Server status: 409"*)
-              echo "moonbitlang/openseek_tools already has this version; skipping"
-              exit 0
-              ;;
-          esac
-          moon publish
-
-      - name: publish moonbitlang/openseek
-        env:
-          SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
-        shell: bash
-        run: |
-          if [ -z "$SECRET" ]; then
-            echo "Error: MOONCAKES_MOONBITLANG_TOKEN secret is not set."
-            echo "Please contact an admin to grant access to this secret."
-            exit 1
-          fi
-          trap 'rm -f ~/.moon/credentials.json' EXIT
-          echo "$SECRET" > ~/.moon/credentials.json
-          probe="$(moon publish --dry-run 2>&1)" || true
-          printf '%s\n' "$probe"
-          case "$probe" in
-            *"Server status: 409"*)
-              echo "moonbitlang/openseek already has this version; skipping"
-              exit 0
-              ;;
-          esac
-          moon publish
+          node scripts/publish.mjs
