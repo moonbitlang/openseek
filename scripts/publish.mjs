@@ -94,7 +94,7 @@ export async function publish(repository) {
       const result = await moon(["publish"], module.cwd);
       if (result.code === 0) {
         results.push(`${module.name}: published`);
-      } else if (/^Server status: 409 Conflict, detail: [^\r\n]*the version you are attempting to upload \([^)]+\) is duplicated with an existing version/m.test(result.output)) {
+      } else if (/^Server status: 409 Conflict, detail: [^\r\n]*[Tt]he version you are attempting to upload \([^)]+\) is duplicated with an existing version/m.test(result.output)) {
         results.push(`${module.name}: already published`);
       } else {
         results.push(`${module.name}: failed`);

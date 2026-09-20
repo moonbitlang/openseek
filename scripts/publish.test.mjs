@@ -101,15 +101,16 @@ console.log('OK');
   return { result, calls };
 }
 
-const duplicate = "Server status: 409 Conflict, detail: the version you are attempting to upload (0.1.2) is duplicated with an existing version";
+// Actual Mooncakes response recorded during the PR's live dry-run verification.
+const duplicate = "Server status: 409 Conflict, detail: Version Error: The version you are attempting to upload (0.1.1) is duplicated with an existing version (0.1.1). Please select a different version to publish.";
 
-for (const replies of [{}, { protocol: duplicate, tools_sdk: duplicate }]) {
-  test(`publishes in dependency order and refreshes after protocol (${Object.keys(replies).length ? "duplicates" : "new versions"})`, async t => {
+for (const replies of [{}, { protocol: duplicate, tools_sdk: duplicate }, { protocol: duplicate, tools_sdk: duplicate, root: duplicate }]) {
+  test(`publishes in dependency order and refreshes after protocol (${Object.keys(replies).length} duplicate versions)`, async t => {
     const { result, calls } = await runFixture(t, replies);
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(calls.map(c => c.command), [["update"], ["publish"], ["update"], ["publish"], ["publish"]]);
     assert.deepEqual(calls.filter(c => c.command[0] === "publish").map(c => c.cwd.split("/").at(-1)), ["protocol", "tools_sdk", "root"]);
-    assert.match(result.stdout, /moonbitlang\/openseek: published/);
+    assert.match(result.stdout, replies.root ? /moonbitlang\/openseek: already published/ : /moonbitlang\/openseek: published/);
     if (replies.protocol) assert.match(result.stdout, /moonbitlang\/openseek_protocol: already published/);
   });
 }
