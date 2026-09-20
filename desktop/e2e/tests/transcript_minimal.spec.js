@@ -537,7 +537,7 @@ test('minimal transcript folds background notices into the surrounding tool acti
   await app.goto();
   await app.enableMinimal();
   const notice = 'background job bg-1 finished (exit=0): Run the issue tests';
-  const caption = 'Completed · Run the issue tests · exit 0';
+  const caption = 'Job "Run the issue tests" completed';
   app.append('runtime_notice', { content: notice });
   app.append('assistant', { content: '', tool_calls: [
     { id: 'output', name: 'job_output', arguments: '{"description":"Read test results"}' },
@@ -565,7 +565,7 @@ test('minimal transcript folds background notices into the surrounding tool acti
   // A notice arriving between turns remains independently expandable, without
   // moving it before an already completed answer or presenting it as prose.
   const lateNotice = 'background job bg-2 finished (exit=0): Run remaining checks';
-  const lateCaption = 'Completed · Run remaining checks · exit 0';
+  const lateCaption = 'Job "Run remaining checks" completed';
   app.append('runtime_notice', { content: lateNotice });
   await expect(page.locator('#stream > .minimal-messages > .minimal-tools')).toHaveCount(1);
   await expect(page.getByText(lateCaption, { exact: true })).toBeHidden();
@@ -1058,7 +1058,7 @@ test('minimal job waits name their targets while pending and disappear after suc
   app.append('tool_result', { tool_call_id: 'wait', tool_name: 'job_wait', content: 'WAIT_RESULT_SENTINEL', is_error: false });
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests']);
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Run the pr tests');
-  await expect(tools.getByText('Completed · Run the pr tests · exit 0', { exact: true })).toHaveAttribute('title', notice);
+  await expect(tools.getByText('Job "Run the pr tests" completed', { exact: true })).toHaveAttribute('title', notice);
   await expect(stream).not.toContainText('WAIT_RESULT_SENTINEL');
 
   app.append('assistant', { content: '', tool_calls: [
@@ -1218,19 +1218,19 @@ test('minimal job captions append recorded facts without updating earlier rows',
   await app.install(); await app.goto(); await app.openSession();
   const stream = page.locator('#stream');
   const captions = stream.locator('.minimal-call-caption');
-  await expect(captions).toHaveText(['Run root tests', 'Read output · Run root tests · running when read']);
+  await expect(captions).toHaveText(['Run root tests', 'Read output of job "Run root tests" (running when read)']);
   await expect(captions.nth(1)).toHaveAttribute('title', running);
   await expect(stream.locator('.tool-status')).toHaveCount(0);
   const original = await stream.locator('.minimal-call').evaluateAll(rows => rows.map(row => row.outerHTML));
   app.append('runtime_notice', { content: notice });
-  await expect(stream.locator('.minimal-note')).toHaveText('Completed · Run root tests · exit 0');
+  await expect(stream.locator('.minimal-note')).toHaveText('Job "Run root tests" completed');
   await expect(stream.locator('.minimal-note')).toHaveAttribute('title', notice);
   app.append('assistant', { content: '', tool_calls: [
     { id: 'done', name: 'job_output', arguments: JSON.stringify({ job_id: id }) },
   ] });
   const exited = `job ${id} (exit=0): Run root tests`;
   app.append('tool_result', { tool_call_id: 'done', tool_name: 'job_output', content: 'OUTPUT_SENTINEL', brief: exited, is_error: false });
-  await expect(captions.last()).toHaveText('Read output · Run root tests · exit 0');
+  await expect(captions.last()).toHaveText('Read output of job "Run root tests" (exit 0)');
   // A second read or notice remains a second event. No completion timer,
   // background state lookup, or later event may rewrite the first two rows.
   app.append('runtime_notice', { content: notice });
@@ -1240,7 +1240,7 @@ test('minimal job captions append recorded facts without updating earlier rows',
   await expect(stream.locator('.tool-status')).toHaveCount(0);
   await expect(stream).not.toContainText(/COMMAND_SENTINEL|OUTPUT_SENTINEL|AaCyli8GcHyDo51pdbGWUQ/);
   await page.reload(); await app.openSession();
-  await expect(captions).toHaveText(['Run root tests', 'Read output · Run root tests · running when read', 'Read output · Run root tests · exit 0']);
+  await expect(captions).toHaveText(['Run root tests', 'Read output of job "Run root tests" (running when read)', 'Read output of job "Run root tests" (exit 0)']);
   await expect(stream.locator('.minimal-note')).toHaveCount(2);
   await app.detailedMode().click();
   await expect(stream).toContainText(notice);
@@ -1254,8 +1254,8 @@ test('minimal job captions retain failed reads and unrecognized metadata', async
   await app.install(); await app.goto(); await app.openSession();
   const stream = page.locator('#stream');
   for (const [id, brief, caption, error] of [
-    ['failed', 'job bg-1 (exit=2): Run tests', 'Read output · Run tests · exit 2', true],
-    ['stopped', 'job bg-1 (stopped): Run tests', 'Read output · Run tests · stopped', true],
+    ['failed', 'job bg-1 (exit=2): Run tests', 'Read output of job "Run tests" (exit 2)', true],
+    ['stopped', 'job bg-1 (stopped): Run tests', 'Read output of job "Run tests" (stopped)', true],
     ['read-error', 'Could not read job output', 'Could not read job output', true],
     ['unknown', 'job bg-1 (unrecognized): Run tests', 'job bg-1 (unrecognized): Run tests', false],
   ]) {
@@ -1265,8 +1265,8 @@ test('minimal job captions retain failed reads and unrecognized metadata', async
     await expect(stream.locator('.minimal-call').last().locator('.tool-status.failed')).toHaveCount(error ? 1 : 0);
   }
   for (const [notice, caption] of [
-    ['background job bg-1 finished (exit=2): Run tests', 'Failed · Run tests · exit 2'],
-    ['background job bg-1 finished (stopped): Run tests', 'Stopped · Run tests · stopped'],
+    ['background job bg-1 finished (exit=2): Run tests', 'Job "Run tests" failed (exit 2)'],
+    ['background job bg-1 finished (stopped): Run tests', 'Job "Run tests" stopped'],
     ['background job bg-1 finished (running): Keep this malformed notice', 'background job bg-1 finished (running): Keep this malformed notice'],
     ['background job bg-1 finished (exit=0): `Incomplete notice', 'background job bg-1 finished (exit=0): `Incomplete notice'],
     ['An unrelated runtime notice', 'An unrelated runtime notice'],

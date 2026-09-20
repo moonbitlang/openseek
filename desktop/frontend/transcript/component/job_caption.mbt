@@ -62,34 +62,37 @@ fn JobCaption::label(
   locale : @i18n.Locale,
   notice~ : Bool,
 ) -> String {
-  let action = if !notice {
+  let caption = if !notice {
     match locale {
-      English => "Read output"
-      SimplifiedChinese => "读取输出"
-      TraditionalChinese => "讀取輸出"
-      Japanese => "出力を確認"
+      English => "Read output of job \"\{self.target}\""
+      SimplifiedChinese => "读取任务“\{self.target}”的输出"
+      TraditionalChinese => "讀取工作「\{self.target}」的輸出"
+      Japanese => "ジョブ「\{self.target}」の出力を確認"
     }
   } else if self.status == "exit=0" {
     match locale {
-      English => "Completed"
-      SimplifiedChinese => "已完成"
-      TraditionalChinese => "已完成"
-      Japanese => "完了"
+      English => "Job \"\{self.target}\" completed"
+      SimplifiedChinese => "任务“\{self.target}”已完成"
+      TraditionalChinese => "工作「\{self.target}」已完成"
+      Japanese => "ジョブ「\{self.target}」が完了"
     }
   } else if self.status == "stopped" {
     match locale {
-      English => "Stopped"
-      SimplifiedChinese => "已停止"
-      TraditionalChinese => "已停止"
-      Japanese => "停止"
+      English => "Job \"\{self.target}\" stopped"
+      SimplifiedChinese => "任务“\{self.target}”已停止"
+      TraditionalChinese => "工作「\{self.target}」已停止"
+      Japanese => "ジョブ「\{self.target}」が停止"
     }
   } else {
     match locale {
-      English => "Failed"
-      SimplifiedChinese => "失败"
-      TraditionalChinese => "失敗"
-      Japanese => "失敗"
+      English => "Job \"\{self.target}\" failed"
+      SimplifiedChinese => "任务“\{self.target}”失败"
+      TraditionalChinese => "工作「\{self.target}」失敗"
+      Japanese => "ジョブ「\{self.target}」が失敗"
     }
+  }
+  if notice && (self.status == "exit=0" || self.status == "stopped") {
+    return caption
   }
   let status = if self.status == "running" {
     // A historical read says nothing about whether the job is running now.
@@ -104,5 +107,5 @@ fn JobCaption::label(
   } else {
     self.status
   }
-  "\{action} · \{self.target} · \{status}"
+  "\{caption} (\{status})"
 }
