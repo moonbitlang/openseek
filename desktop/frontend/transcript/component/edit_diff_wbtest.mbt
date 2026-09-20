@@ -216,39 +216,3 @@ test "partial source rows reset lexical state and unknown patches remain visible
     is Context("unrecognized patch", old_line=None, new_line=None),
   )
 }
-
-///|
-test "review targets retain complete changed lines independently of the bounded preview" {
-  let old = "x".repeat(13000)
-  let edit = EditDiff::new(
-    [],
-    Some("main.mbt"),
-    Some(80),
-    "  context\n- " + old + "\n+ new",
-  )
-  assert_eq(
-    edit.review_excerpt,
-    Some({
-      original: [{ number: 81, text: old, }],
-      modified: [{ number: 81, text: "new", }],
-    }),
-  )
-  assert_true(
-    EditDiff::new([], Some("main.mbt"), None, "- old\n+ new").review_excerpt
-    is None,
-  )
-  let unified = EditDiff::new(
-    [],
-    Some("main.mbt"),
-    None,
-    "@@ -2,1 +4,1 @@\n-old\n+new\n@@ -10,1 +12,1 @@\n-last\n+next",
-    unified=true,
-  )
-  assert_eq(
-    unified.review_excerpt,
-    Some({
-      original: [{ number: 2, text: "old", }, { number: 10, text: "last", }],
-      modified: [{ number: 4, text: "new", }, { number: 12, text: "next", }],
-    }),
-  )
-}

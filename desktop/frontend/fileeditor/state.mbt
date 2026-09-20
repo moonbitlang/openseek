@@ -477,7 +477,7 @@ pub(all) struct State {
   history_generation : Int
   // Exact changed rows and their shared Line/Token/Tree review coverage.
   // Complete may come from the file control or full hunk coverage.
-  review_context_reveal : ReviewContextTarget?
+  review_context_reveal : @mention_context.ReviewChanges?
   review_context : Array[@mention_context.ReviewChanges]
   review_progress : Array[ChangedFileReview]
   // Monotonic identity of the visible hunk surface. Mode, filter, collapse,
@@ -812,7 +812,10 @@ fn Ctx::checkout_ready(self : Ctx) -> Bool {
 
 ///|
 pub(all) enum Msg {
-  ReviewContextRevealFinished(target~ : ReviewContextTarget, found~ : Bool)
+  ReviewContextRevealFinished(
+    source~ : @mention_context.ReviewSource,
+    found~ : Bool
+  )
   ReviewContextChanged(
     owner~ : @interop.ConversationKey,
     selection~ : @mention_context.ReviewChanges,

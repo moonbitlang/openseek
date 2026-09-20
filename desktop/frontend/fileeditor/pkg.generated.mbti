@@ -249,7 +249,7 @@ pub fn MoonModViewMode::equal(Self, Self) -> Bool
 pub fn MoonModViewMode::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
-  ReviewContextRevealFinished(target~ : ReviewContextTarget, found~ : Bool)
+  ReviewContextRevealFinished(source~ : @mention_context.ReviewSource, found~ : Bool)
   ReviewContextChanged(owner~ : @interop.ConversationKey, selection~ : @mention_context.ReviewChanges, adding~ : Bool)
   RevealDirectory(@pathx.Relative)
   HighlightCleared(@pathx.Relative)
@@ -364,15 +364,6 @@ pub(all) enum ReviewBaseline {
 pub fn ReviewBaseline::equal(Self, Self) -> Bool
 pub fn ReviewBaseline::not_equal(Self, Self) -> Bool
 
-pub(all) enum ReviewContextTarget {
-  SavedReviewContext(@mention_context.ReviewChanges)
-  RecordedEdit(workspace~ : String, file~ : String, excerpt~ : @mention_context.ChangeExcerpt)
-} derive(Eq)
-pub fn ReviewContextTarget::equal(Self, Self) -> Bool
-pub fn ReviewContextTarget::matches_change(Self, ChangedFile) -> Bool
-pub fn ReviewContextTarget::not_equal(Self, Self) -> Bool
-pub fn ReviewContextTarget::workspace(Self) -> String
-
 pub(all) enum ReviewDiffLayout {
   ReviewSideBySide
   ReviewInline
@@ -479,7 +470,7 @@ pub(all) struct State {
   git_graph_collapsed : Bool
   history_docs : Map[String, HistoryDiffDoc]
   history_generation : Int
-  review_context_reveal : ReviewContextTarget?
+  review_context_reveal : @mention_context.ReviewChanges?
   review_context : Array[@mention_context.ReviewChanges]
   review_progress : Array[ChangedFileReview]
   review_hunk_surface_generation : Int
@@ -519,7 +510,7 @@ pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
-pub fn State::with_review_context_reveal(Self, ReviewContextTarget) -> Self
+pub fn State::with_review_context_reveal(Self, @mention_context.ReviewChanges) -> Self
 pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, Bool) -> Self
 
 pub(all) enum TabState {

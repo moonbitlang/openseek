@@ -440,11 +440,3 @@ pub fn DiffEditor::get_hunk_viewport_bounds(
 pub fn DiffEditor::select_hunk(self : DiffEditor, index : Int) -> Unit {
   self.widget.select_hunk(index)
 }
-
-///|
-/// Center a recorded modified-side line once the current model pair is ready.
-/// Coordinates beyond EOF clamp to the last line; no hunk matching is used.
-/// Replacing the pair cancels a pending reveal.
-pub fn DiffEditor::reveal_modified_line(self : DiffEditor, line : Int) -> Unit {
-  self.widget.reveal_modified_line(line)
-}

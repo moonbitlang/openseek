@@ -2682,22 +2682,21 @@ fn update_msg(
     }
     JumpToLocation(path~, range~, annotation~) =>
       open_editor_at(dispatch, model, path, range, annotation?)
-    OpenReview(slot~, path~, excerpt~) => {
+    OpenReview(slot~, path~) => {
       guard model.transcript_slot().map(active => active.key()) == Some(slot) else {
         return (@cmd.none, model)
       }
-      guard excerpt is Some(excerpt) &&
-        model.active_relative_path(path) is Some(file) &&
+      guard model.active_relative_path(path) is Some(file) &&
         file_ctx(model).placement.bind(placement => placement.checkout_root())
         is Some(root) else {
         return model.notify_error(
-          dispatch, "These saved changes no longer match the current review or are hidden by its filters. The saved context is unchanged.",
+          dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
         )
       }
       open_review_target(
         dispatch,
         model,
-        @fileeditor.RecordedEdit(workspace=root.path, file=file.0, excerpt~),
+        ReviewFile(workspace=root.path, file=file.0),
       )
     }
     TranscriptReviewChangesOpened(slot~, selection~) => {
@@ -2709,14 +2708,14 @@ fn update_msg(
     // Intercepted here rather than delegated to the fileeditor package: the
     // comment becomes an annotation chip on the composer draft, which only
     // this model knows about. `quote`/`range` come from the panel's viewer.
-    FileEditor(@fileeditor.ReviewContextRevealFinished(target~, found=false)) => {
+    FileEditor(@fileeditor.ReviewContextRevealFinished(source~, found=false)) => {
       guard model.file_panel.review_context_reveal is Some(selection) &&
-        selection == target else {
+        selection.source == source else {
         return (@cmd.none, model)
       }
       let (command, panel) = @fileeditor.update(
         dispatch.map(msg => FileEditor(msg)),
-        @fileeditor.ReviewContextRevealFinished(target~, found=false),
+        @fileeditor.ReviewContextRevealFinished(source~, found=false),
         model.file_panel,
         file_ctx(model),
       )
@@ -20565,10 +20564,39 @@ test "file context inherits the conversation model and its reasoning family" {
 }
 
 ///|
+/// A file title opens the current comparison; a saved Changes selection also
+/// requests a version-checked hunk reveal after that comparison is loaded.
+priv enum ReviewOpenTarget {
+  ReviewFile(workspace~ : String, file~ : String)
+  ReviewSelection(@mention_context.ReviewChanges)
+} derive(Eq)
+
+///|
+fn ReviewOpenTarget::workspace(self : ReviewOpenTarget) -> String {
+  match self {
+    ReviewFile(workspace~, ..) => workspace
+    ReviewSelection(selection) => selection.source.workspace
+  }
+}
+
+///|
+fn ReviewOpenTarget::matches_change(
+  self : ReviewOpenTarget,
+  change : @fileeditor.ChangedFile,
+) -> Bool {
+  match self {
+    ReviewFile(file~, ..) => change.path.0 == file
+    ReviewSelection(selection) =>
+      change.path.0 == selection.source.file &&
+      change.original_path.map(path => path.0) == selection.source.original_file
+  }
+}
+
+///|
 priv struct PendingReviewContext {
   owner : @interop.ConversationKey
   navigation : Int
-  target : @fileeditor.ReviewContextTarget
+  target : ReviewOpenTarget
 } derive(Eq)
 
 ///|
@@ -20589,7 +20617,7 @@ fn PendingReviewContext::is_current(
 fn open_review_target(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  target : @fileeditor.ReviewContextTarget,
+  target : ReviewOpenTarget,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(model)
   guard ctx.placement
@@ -20662,7 +20690,7 @@ fn finish_review_context_load(
 fn open_loaded_review_context(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  target : @fileeditor.ReviewContextTarget,
+  target : ReviewOpenTarget,
 ) -> (@cmd.Cmd, Model) {
   guard model.file_panel.changes
     is @fileeditor.ChangeListReady(files~, refreshing=false, ..) &&
@@ -20681,7 +20709,11 @@ fn open_loaded_review_context(
     {
       ..opened,
       right_panel_open: true,
-      file_panel: opened.file_panel.with_review_context_reveal(target),
+      file_panel: match target {
+        ReviewSelection(selection) =>
+          opened.file_panel.with_review_context_reveal(selection)
+        ReviewFile(..) => { ..opened.file_panel, review_context_reveal: None, }
+      },
     },
   )
 }
@@ -20692,5 +20724,5 @@ fn open_review_context(
   model : Model,
   selection : @mention_context.ReviewChanges,
 ) -> (@cmd.Cmd, Model) {
-  open_review_target(dispatch, model, @fileeditor.SavedReviewContext(selection))
+  open_review_target(dispatch, model, ReviewSelection(selection))
 }

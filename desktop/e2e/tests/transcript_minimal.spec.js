@@ -1128,52 +1128,48 @@ test('minimal Codex activities render recorded patches without classifying forei
 });
 
 
-for (const scenario of ['matching', 'stale', 'clean']) test(`minimal diff title copies source and validates ${scenario} review`, async ({ page, context }) => {
+for (const scenario of ['partial', 'search-bound', 'append', 'clean']) test(`minimal diff title opens the file without a position check: ${scenario}`, async ({ page, context }) => {
   const app = new MinimalTranscriptHarness(page);
   const source = Array.from({ length: 180 }, (_, i) => `fn line_${i + 1}() -> Int { ${i + 1} }`).join('\n');
-  const original = 'fn line_140() -> Int { 140 }';
-  const modified = 'fn line_140() -> Int { 999 }';
   app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = source;
-  app.workingFiles['src/main.mbt'] = scenario === 'clean' ? source : source.replace('Int { 2 }', 'Int { 998 }').replace(original, scenario === 'matching' ? modified : 'fn line_140() -> Int { 1000 }');
+  // Later edits do not block opening the file. The requested fragment no
+  // longer matches, and the first current hunk is far from the old request.
+  app.workingFiles['src/main.mbt'] = scenario === 'clean' ? source : source.replace('Int { 2 }', 'Int { 998 }').replace('Int { 140 }', 'Int { 1000 }');
   if (scenario === 'clean') app.gitChanges = [];
+  const old = scenario === 'append' ? '' : '140';
+  const modified = scenario === 'append' ? 'fn appended() -> Int { 999 }' : '999';
+  const start = scenario === 'append' ? 999999 : scenario === 'search-bound' ? 1 : 140;
   app.rpcDelays.set('git.original_file', 150);
   app.rpcDelays.set('fs.read_file', 75);
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture recorded edit' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
-      { id: 'recorded', name: 'edit', arguments: JSON.stringify({ path: 'src/main.mbt', start_line: 140, old_string: original, new_string: modified }) },
+      { id: 'recorded', name: scenario === 'search-bound' ? 'multi_edit' : 'edit', arguments: JSON.stringify(scenario === 'search-bound' ? {
+        edits: [{ file: 'src/main.mbt', start_line: start, old_string: old, new_string: modified }],
+      } : { path: 'src/main.mbt', start_line: start, old_string: old, new_string: modified }) },
     ] } } },
   ];
   await app.install();
   await app.goto();
   await app.enableMinimal();
   const block = page.locator('.minimal-edit-block');
-  await expect(block.locator('.editor-diff-number')).toHaveText(['140', '140']);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await block.hover();
   await block.getByRole('button', { name: 'Copy diff', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`- ${original}\n+ ${modified}`);
-  await expect(block.locator('.edit-copy')).toHaveAttribute('data-copy-state', 'copied');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(old ? `- ${old}\n+ ${modified}` : `+ ${modified}`);
   const title = block.getByRole('button', { name: 'src/main.mbt', exact: true });
   await title.click();
-  if (scenario !== 'matching') {
-    await expect(page.locator('.notification')).toContainText(scenario === 'clean' ? 'no longer available' : 'no longer match');
+  if (scenario === 'clean') {
+    await expect(page.locator('.notification')).toContainText('no longer available');
   } else {
-    // Keep the user's default semantic mode; the shared hunk path reveals
-    // the recorded change, even with unrelated current edits elsewhere.
-    const target = page.locator('.semantic-diff-entry .view-line').filter({ hasText: 'line_140()' }).last();
-    await expect(target).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'Token diff', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.semantic-diff-entry .view-line').filter({ hasText: 'line_2()' }).last()).toBeInViewport();
     await expect(page.locator('.notification')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Token diff', exact: true }).click();
-    await title.click();
-    await expect(target).toBeInViewport();
     await page.getByRole('button', { name: 'Line diff', exact: true }).click();
     await title.click();
-    const review = page.locator('#diff-editor-host');
-    await expect(review.locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: 'line_140()' })).toBeInViewport();
-    await page.getByRole('button', { name: 'Previous change', exact: true }).click();
-    await title.click();
-    await expect(review.locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: 'line_140()' })).toBeInViewport();
+    await expect(page.locator('#diff-editor-host')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Line diff', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => app.requests.filter(r => r.method === 'fs.read_file' && r.params.path === '/workspace/src/main.mbt').length).toBeGreaterThan(0);
     await expect(page.locator('.notification')).toHaveCount(0);
   }
   expect(app.pageErrors).toEqual([]);

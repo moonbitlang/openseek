@@ -571,9 +571,7 @@ fn main {
       (
         {
           open: emit.map(path => OpenFile(path)),
-          review: emit.map(target => {
-            OpenReview(slot~, path=target.0, excerpt=target.1)
-          }),
+          review: emit.map(path => OpenReview(slot~, path~)),
           jump: emit.map(target => {
             JumpToLocation(
               path=target.file,

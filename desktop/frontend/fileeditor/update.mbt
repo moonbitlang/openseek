@@ -2306,7 +2306,7 @@ pub fn sync(
   }
   let review_context_reveal = state.review_context_reveal.filter(selection => {
     ctx.active_file is Some(file) &&
-    ctx.relative(file) == Some(@pathx.Relative(selection.file())) &&
+    ctx.relative(file) == Some(@pathx.Relative(selection.source.file)) &&
     state.docs.get(file)
     is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. })
   })
@@ -2848,10 +2848,11 @@ fn update_inner(
       )
       (@cmd.none, next.toggle_active_review_hunk(ctx))
     }
-    ReviewContextRevealFinished(target~, ..) =>
+    ReviewContextRevealFinished(source~, ..) =>
       (
         @cmd.none,
-        if state.review_context_reveal is Some(selection) && selection == target {
+        if state.review_context_reveal is Some(selection) &&
+          selection.source == source {
           { ..state, review_context_reveal: None, }
         } else {
           state
