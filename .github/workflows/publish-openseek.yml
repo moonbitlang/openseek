@@ -3,36 +3,22 @@ name: publish-openseek
 # Publishes the modules this repository owns under the `moonbitlang` namespace:
 # `moonbitlang/openseek_protocol` (`protocol/`), `moonbitlang/openseek_tools`
 # (`tools_sdk/`) and `moonbitlang/openseek` (repo root) to mooncakes.
-# Manual. Bump `version` in the `moon.mod` of every module you want to release,
-# then select those modules below. All three are published under the moonbitlang
-# namespace, so they use the organization's mooncakes token, not a personal one.
-#
-# Select only the modules whose version changed: mooncakes rejects a version
-# that is already published, and re-publishing an unchanged module would fail
-# the job before it reached the modules after it.
+# Manual, with no inputs: bump `version` in the `moon.mod` of every module you
+# want to release, then run this workflow. It publishes exactly the modules
+# whose local version is not on mooncakes yet, in dependency order, so a
+# root-only release no longer trips over the unchanged protocol version and a
+# re-run after a partial failure publishes only what is left. All three are
+# published under the moonbitlang namespace, so they use the organization's
+# mooncakes token, not a personal one.
 #
 # `openseek_protocol` is published first because the root `openseek` module
-# depends on it; `openseek_tools` is independent and published in between. A
-# root release that needs a new protocol version must select both. The
+# depends on it; `openseek_tools` is independent and published in between. The
 # publish itself type-checks the module, and the full workspace build/tests are
 # already gated on every main push by ci.yml. The root `.moonignore` keeps the
 # nested member modules (desktop, editor, …) out of the published archive.
 
 on:
   workflow_dispatch:
-    inputs:
-      publish_protocol:
-        description: Publish moonbitlang/openseek_protocol (bump protocol/moon.mod first).
-        type: boolean
-        default: false
-      publish_tools_sdk:
-        description: Publish moonbitlang/openseek_tools (bump tools_sdk/moon.mod first).
-        type: boolean
-        default: false
-      publish_root:
-        description: Publish moonbitlang/openseek (bump moon.mod first).
-        type: boolean
-        default: true
 
 jobs:
   publish-openseek:
@@ -54,10 +40,37 @@ jobs:
           moon version --all
           moon update
 
+      # A module is published only when the version in its `moon.mod` is not on
+      # mooncakes yet. `moon search <owner>/<name> --json` reports the published
+      # version; the results are filtered by exact name because the search is
+      # fuzzy. Every failure path decides "publish", so a bad guess surfaces as
+      # a duplicate-version error instead of silently skipping a release.
+      - name: decide which module versions still need publishing
+        id: changed
+        run: |
+          needs_publish() {
+            local dir="$1" module="$2" local_version published_version
+            local_version="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' "$dir/moon.mod" | head -n1)"
+            published_version="$(moon search "$module" --limit 20 --json 2>/dev/null | python3 -c 'import json, sys
+          name = sys.argv[1]
+          print(next((r["version"] for r in json.load(sys.stdin).get("results", []) if r["name"] == name), ""))' "$module" 2>/dev/null)" || published_version=""
+            echo "$module: local=${local_version:-<none>} published=${published_version:-<none>}" >&2
+            if [ -z "$local_version" ]; then
+              echo "$dir/moon.mod has no version; publishing so the job fails loudly" >&2
+              return 0
+            fi
+            [ "$local_version" != "$published_version" ]
+          }
+          {
+            needs_publish protocol moonbitlang/openseek_protocol && echo protocol=true || echo protocol=false
+            needs_publish tools_sdk moonbitlang/openseek_tools && echo tools_sdk=true || echo tools_sdk=false
+            needs_publish . moonbitlang/openseek && echo root=true || echo root=false
+          } >> "$GITHUB_OUTPUT"
+
       # MOONCAKES_MOONBITLANG_TOKEN is the moonbitlang org's mooncakes token:
       # only it can publish under the moonbitlang/* owner namespace.
       - name: publish moonbitlang/openseek_protocol
-        if: inputs.publish_protocol
+        if: steps.changed.outputs.protocol == 'true'
         env:
           SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
         working-directory: protocol
@@ -74,7 +87,7 @@ jobs:
           rm -f ~/.moon/credentials.json
 
       - name: publish moonbitlang/openseek_tools
-        if: inputs.publish_tools_sdk
+        if: steps.changed.outputs.tools_sdk == 'true'
         env:
           SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
         working-directory: tools_sdk
@@ -91,7 +104,7 @@ jobs:
           rm -f ~/.moon/credentials.json
 
       - name: publish moonbitlang/openseek
-        if: inputs.publish_root
+        if: steps.changed.outputs.root == 'true'
         env:
           SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
         shell: bash
