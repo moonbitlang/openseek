@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn diff_preview(Array[DiffLine], tokenizer? : &@syntax.LineTokenizer) -> @moonbit-community/rabbita/html.Html
+pub fn diff_preview(Array[DiffLine], label~ : String, tokenizer? : &@syntax.LineTokenizer) -> @moonbit-community/rabbita/html.Html
 
 pub fn moonbit_numbered_source(String) -> @moonbit-community/rabbita/html.Html
 

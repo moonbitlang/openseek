@@ -9,6 +9,7 @@ for (const theme of ['light', 'dark']) {
     await expect(page.locator('.diff-preview-demo')).toHaveAttribute('data-theme', theme);
     const card = page.locator('.preview-card').first();
     const preview = card.locator('.editor-diff-preview');
+    await expect(preview).toHaveAccessibleName('src/main.mbtx: recorded changes');
     const gutters = preview.locator('.editor-diff-gutter');
     const before = await gutters.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().x));
     const titleBefore = await card.locator('.preview-title').boundingBox();

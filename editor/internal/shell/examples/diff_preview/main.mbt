@@ -22,6 +22,7 @@ fn main {
       Removed("let count = 1", line=Some(99999)),
       Added("let count = 2", line=Some(100000)),
     ],
+    label="src/main.mbtx: recorded changes",
     tokenizer=@lang_moonbit.MoonBitTokenizer(),
   )
   let javascript = @preview.diff_preview(
@@ -35,9 +36,10 @@ fn main {
       Gap,
       Added("const html = '<img src=x onerror=alert(1)>';", line=Some(40)),
     ],
+    label="src/comments.js: recorded changes",
     tokenizer=@lang_javascript.JavascriptTokenizer(),
   )
-  let plain = @preview.diff_preview([
+  let plain = @preview.diff_preview(label="Plain text: unknown coordinates", [
     Removed("<before> & \"quoted\"", line=None),
     Added("<after> & \"quoted\"", line=None),
     Added("", line=None),

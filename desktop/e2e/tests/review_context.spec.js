@@ -17,6 +17,8 @@ test('selected changes retain their preview during live language switching', asy
   await contextButtons(page).first().click();
   const chip = page.locator('.composer-changes .changes-chip .mention-jump');
   await chip.click();
+  const region = page.locator('.composer-changes .editor-diff-preview');
+  await expect(region).toHaveAccessibleName(/^src\/main\.mbt: Old L.+ → New L.+$/);
   const preview = await page.locator('.composer-changes .changes-preview').allTextContents();
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-CN'] });
@@ -27,6 +29,7 @@ test('selected changes retain their preview during live language switching', asy
   await expect(popup).toBeVisible();
   await expect(popup.getByRole('button', { name: '在审阅中打开', exact: true })).toBeVisible();
   await expect(popup).toContainText('仅包含所选更改。');
+  await expect(region).toHaveAccessibleName(/^src\/main\.mbt: 原始 L.+ → 修改后 L.+$/);
   expect(await popup.locator('.changes-preview').allTextContents()).toEqual(preview);
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'languages', { configurable: true, value: ['ja-JP'] });
@@ -37,6 +40,7 @@ test('selected changes retain their preview during live language switching', asy
   await expect(japanesePopup).toBeVisible();
   await expect(japanesePopup.getByRole('button', { name: 'レビューで開く', exact: true })).toBeVisible();
   await expect(japanesePopup).toContainText('選択した変更のみが含まれます。');
+  await expect(region).toHaveAccessibleName(/^src\/main\.mbt: 変更前 L.+ → 変更後 L.+$/);
   expect(await japanesePopup.locator('.changes-preview').allTextContents()).toEqual(preview);
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-Hant'] });
@@ -46,6 +50,7 @@ test('selected changes retain their preview during live language switching', asy
   const traditionalPopup = page.getByRole('dialog', { name: '所選更改', exact: true });
   await expect(traditionalPopup).toBeVisible();
   await expect(traditionalPopup.getByRole('button', { name: '在審閱中開啟', exact: true })).toBeVisible();
+  await expect(region).toHaveAccessibleName(/^src\/main\.mbt: 原始 L.+ → 修改後 L.+$/);
   expect(await traditionalPopup.locator('.changes-preview').allTextContents()).toEqual(preview);
   expect(app.pageErrors).toEqual([]);
 });
@@ -314,7 +319,7 @@ test('Codex composer groups multiple files and preserves deletion context on sen
 
 test('saved message changes keep independent disclosures and immutable previews', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
-  const selection = (file, oldText, newText) => `<file path="${file}" version="saved-comparison">\n<hunk>\n<original lines="8">\n${oldText}\n</original>\n<modified lines="9">\n${newText}\n</modified>\n</hunk>\n</file>`;
+  const selection = (file, oldText, newText, oldLine = 8, newLine = 9) => `<file path="${file}" version="saved-comparison">\n<hunk>\n<original lines="${oldLine}">\n${oldText}\n</original>\n<modified lines="${newLine}">\n${newText}\n</modified>\n</hunk>\n</file>`;
   const prompt = (task, selections) => `${task}\n\n<user_mentions>\n<review_changes workspace="/workspace">\n${
     selections.join('\n\n')
   }\n</review_changes>\n</user_mentions>`;
@@ -322,6 +327,7 @@ test('saved message changes keep independent disclosures and immutable previews'
     { sequence: 1, item: { kind: 'user', payload: { content: prompt('Show the browser fixture first snapshot', [
       selection('src/main.mbt', 'let old_value = 1', 'let saved_value = 2'),
       selection('deleted/file.txt', 'saved removed text', 'saved replacement text'),
+      selection('src/main.mbt', 'let later = 3', 'let later = 4', 20, 21),
     ]) } } },
     { sequence: 2, item: { kind: 'user', payload: { content: prompt('Second snapshot', [
       selection('src/main.mbt', 'let old_value = 10', 'let another_value = 20'),
@@ -339,6 +345,11 @@ test('saved message changes keep independent disclosures and immutable previews'
   await expect(popup).toContainText('let saved_value = 2');
   await expect(popup).not.toContainText('current workspace');
   await expect(popup.locator('.changes-range').first()).toHaveText('Old L8 → New L9');
+  await expect(popup.getByRole('region')).toHaveCount(3);
+  for (const name of ['src/main.mbt: Old L8 → New L9', 'src/main.mbt: Old L20 → New L21',
+    'deleted/file.txt: Old L8 → New L9']) {
+    await expect(popup.getByRole('region', { name, exact: true })).toBeVisible();
+  }
   await popup.getByTitle('src/main.mbt', { exact: true }).click();
   await expect(popup.locator('.changes-file').first().locator('.changes-preview')).toHaveCount(0);
   await page.evaluate(() => {

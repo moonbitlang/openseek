@@ -69,8 +69,11 @@ fn DiffSyntax::render(
 /// tokenization. Load `viewer/html/diff_preview.css` and the editor token
 /// stylesheet inside the host's editor theme. Titlebars and file actions stay
 /// outside this scroll surface and remain the caller's responsibility.
+/// The required label names the focusable region; hosts localize it and include
+/// file/range context so multiple previews can be distinguished.
 pub fn diff_preview(
   lines : Array[DiffLine],
+  label~ : String,
   tokenizer? : &@syntax.LineTokenizer,
 ) -> @rhtml.Html {
   let syntax = tokenizer.map(tokenizer => DiffSyntax::{
@@ -120,10 +123,7 @@ pub fn diff_preview(
   }
   @rhtml.div(
     class="editor-diff-preview",
-    attrs=@rhtml.Attrs::build()
-      .role("region")
-      .aria_label("Diff preview")
-      .tabindex(0),
+    attrs=@rhtml.Attrs::build().role("region").aria_label(label).tabindex(0),
     rows,
   )
 }

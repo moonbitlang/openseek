@@ -10,7 +10,7 @@ patch; it does not compute a diff or read current files.
 
 ## Diff preview
 
-Call `diff_preview(lines, tokenizer=...)` when a snapshot changes;
+Call `diff_preview(lines, label=..., tokenizer=...)` when a snapshot changes;
 reuse the returned `Html` during unrelated host renders. Each `DiffLine`
 contains a single physical source line:
 
@@ -31,6 +31,10 @@ File-extension policy belongs to the caller. Without a tokenizer, source is
 plain escaped text. Original and modified states advance independently;
 context rows display modified-side highlighting. All text, including content
 that resembles HTML, goes through Rabbita text nodes.
+
+The required `label` is the accessible name of the focusable scroll region.
+Hosts supply a localized label with file and range context to distinguish
+multiple previews; the renderer has no language policy or English fallback.
 
 ## Styling and composition
 

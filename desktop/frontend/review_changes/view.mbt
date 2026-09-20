@@ -125,6 +125,7 @@ fn excerpt_label(
 
 ///|
 fn excerpt_preview(
+  locale : @i18n.Locale,
   excerpt : @mention_context.ChangeExcerpt,
   file : String,
 ) -> @html.Html {
@@ -145,12 +146,17 @@ fn excerpt_preview(
       previous = Some(line.number)
     }
   }
+  let label = "\{file}: \{excerpt_label(locale, excerpt)}"
   let preview = if file.has_suffix(".mbt") ||
     file.has_suffix(".mbti") ||
     file.has_suffix(".mbtx") {
-    @syntax_html.diff_preview(rows, tokenizer=@lang_moonbit.MoonBitTokenizer())
+    @syntax_html.diff_preview(
+      rows,
+      label~,
+      tokenizer=@lang_moonbit.MoonBitTokenizer(),
+    )
   } else {
-    @syntax_html.diff_preview(rows)
+    @syntax_html.diff_preview(rows, label~)
   }
   @html.div(class="changes-preview", preview)
 }
@@ -212,7 +218,7 @@ fn Control::popup(
                   None => @html.nothing
                 },
               ]),
-              excerpt_preview(excerpt, path),
+              excerpt_preview(locale, excerpt, path),
             ]),
           )
         }
