@@ -314,8 +314,8 @@ fn tool_request_view(
   }
   let background_job_id = match (name, is_error, brief) {
     ("mbtx", false, Some(brief)) =>
-      match JobEvent::from_tool_brief(name, brief) {
-        Some(Backgrounded(id)) => Some(id)
+      match brief.strip_prefix("mbtx → bg ") {
+        Some(id) if !id.is_blank() => Some(id.to_owned())
         _ => None
       }
     _ => None

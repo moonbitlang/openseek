@@ -1152,6 +1152,7 @@ test('minimal Codex activities render recorded patches without classifying forei
   expect(app.pageErrors).toEqual([]);
 });
 
+
 for (const scenario of ['partial', 'search-bound', 'append', 'clean', 'recreated']) test(`minimal diff title opens the file without a position check: ${scenario}`, async ({ page, context }) => {
   const app = new MinimalTranscriptHarness(page);
   const source = Array.from({ length: 180 }, (_, i) => `fn line_${i + 1}() -> Int { ${i + 1} }`).join('\n');
@@ -1247,7 +1248,6 @@ test('minimal job captions append recorded facts without updating earlier rows',
   await app.detailedMode().click();
   await expect(stream).toContainText(notice);
   await expect(stream).toContainText(`⏳ ${id} (running): Run root tests`);
-  await expect(stream.locator('.tool-call-text').first()).toContainText('🐇 → background');
   expect(app.pageErrors).toEqual([]);
 });
 

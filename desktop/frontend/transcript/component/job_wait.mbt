@@ -69,18 +69,25 @@ fn collect_job_description(
     call.arguments is Some(arguments) else {
     return
   }
-  let event = JobEvent::from_tool_brief(call.name, brief)
-  if event is Some(Backgrounded(id)) {
+  if call.name == "mbtx" {
+    guard brief.strip_prefix("mbtx → bg ") is Some(id) && !id.is_blank() else {
+      return
+    }
     let args = @json.parse(arguments) catch { _ => return }
     guard args is { "description": String(description), .. } &&
       !description.is_blank() else {
       return
     }
-    descriptions[id] = description
-  } else if event is Some(OutputRead(job)) {
+    descriptions[id.to_owned()] = description
+  } else if call.name == "job_output" {
     let args = @json.parse(arguments) catch { _ => return }
-    guard args is { "job_id": String(id), .. } && id == job.id else { return }
-    descriptions[id] = job.description
+    guard args is { "job_id": String(id), .. } &&
+      brief.strip_prefix("job \{id} (") is Some(rest) &&
+      rest.split_once("): ") is Some((_, description)) &&
+      !description.is_blank() else {
+      return
+    }
+    descriptions[id] = description.to_owned()
   }
 }
 
