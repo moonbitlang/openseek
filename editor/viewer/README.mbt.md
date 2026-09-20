@@ -203,6 +203,9 @@ and center that modified-side line after the model and diff are ready. It
 clamps to the current document bounds without matching a nearby hunk, works
 for clean comparisons, and cancels pending first/last-change navigation.
 Replacing the model cancels the pending line reveal.
+The reveal clears any selected hunk so subsequent F7/Shift+F7 navigation starts
+from the recorded line. Its programmatic scroll does not select a nearby hunk;
+later manual scrolling resumes normal viewport-based hunk selection.
 Pane gutters reserve 16px for Markdown-comment folding only when
 `render_markdown_comments` is enabled. Source-only diff panes reclaim that
 space; enabled Feedback independently reserves its own control lane.

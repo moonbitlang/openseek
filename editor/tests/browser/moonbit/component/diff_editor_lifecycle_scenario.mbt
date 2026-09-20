@@ -311,6 +311,8 @@ pub fn run_diff_editor_lifecycle_test() -> Unit {
     () => widget.reveal_first_diff(),
     () => widget.reveal_last_diff(),
     line => widget.reveal_modified_line(line),
+    index => widget.select_hunk(index),
+    () => widget.focus(),
     left => widget.set_scroll_left(left),
     () => widget.dispose(),
     () => {
@@ -342,11 +344,13 @@ extern "js" fn install_diff_editor_lifecycle_controls(
   reveal_first_diff : () -> Unit,
   reveal_last_diff : () -> Unit,
   reveal_modified_line : (Int) -> Unit,
+  select_hunk : (Int) -> Unit,
+  focus : () -> Unit,
   set_scroll_left : (Double) -> Unit,
   dispose : () -> Unit,
   dispose_models : () -> Unit,
 ) -> Unit =
-  #| (setFixture, setDigitLineCount, setOptions, setProvider, setModelAttached, revealFirstDiff, revealLastDiff, revealModifiedLine, setScrollLeft, dispose, disposeModels) => {
+  #| (setFixture, setDigitLineCount, setOptions, setProvider, setModelAttached, revealFirstDiff, revealLastDiff, revealModifiedLine, selectHunk, focus, setScrollLeft, dispose, disposeModels) => {
   #|   globalThis.__diffEditorLifecycleControls = Object.freeze({
   #|     set_fixture: setFixture,
   #|     set_digit_line_count: setDigitLineCount,
@@ -356,6 +360,8 @@ extern "js" fn install_diff_editor_lifecycle_controls(
   #|     reveal_first_diff: revealFirstDiff,
   #|     reveal_last_diff: revealLastDiff,
   #|     reveal_modified_line: revealModifiedLine,
+  #|     select_hunk: selectHunk,
+  #|     focus,
   #|     set_scroll_left: setScrollLeft,
   #|     dispose,
   #|     dispose_models: disposeModels,

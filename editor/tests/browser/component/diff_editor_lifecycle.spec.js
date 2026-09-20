@@ -301,6 +301,47 @@ for (const layout of ['inline', 'split']) {
   });
 }
 
+for (const layout of ['inline', 'split']) {
+  for (const scrolling of [false, true]) {
+    test(`F7 follows the recorded line after ${scrolling ? 'scrolling' : 'stationary'} reveal in ${layout}`, async ({ page }) => {
+      const root = await openDiffLifecycle(page);
+      const modified = root.locator('.moonbit-diff-editor-modified');
+      await setDiffLifecycleOptions(page, { layout, renderIndicators: true });
+      await setDiffLifecycleFixture(page, 'first-line');
+      await waitForDiffBands(root);
+      for (const [key, line, oldHunk, expected] of [
+        ['F7', 70, 1, 100], ['Shift+F7', 30, 0, 1],
+      ]) {
+        await page.evaluate(({ scrolling, line }) => {
+          const controls = globalThis.__diffEditorLifecycleControls;
+          controls.reveal_modified_line(scrolling ? 140 : line);
+        }, { scrolling, line });
+        await waitForAnimationFrames(page, 6);
+        await page.evaluate(({ oldHunk, line }) => {
+          const controls = globalThis.__diffEditorLifecycleControls;
+          controls.select_hunk(oldHunk);
+          controls.reveal_modified_line(line);
+          controls.focus();
+        }, { oldHunk, line });
+        await expect(modified.locator('.line-numbers.active-line-number')).toHaveText(String(line));
+        await waitForAnimationFrames(page, 6);
+        await page.keyboard.press(key);
+        await expect(modified.locator('.line-numbers.active-line-number')).toHaveText(String(expected));
+      }
+      // A later manual scroll resumes viewport-based hunk selection. The
+      // cursor stays at 1 while the viewport approaches the final hunk (100),
+      // so F7 must wrap to 1 rather than navigate from the cursor to 100.
+      await modified.locator('.monaco-scrollable-element.editor-scrollable').hover();
+      await page.mouse.wheel(0, 1800);
+      await expect.poll(() => modifiedScrollTop(root)).toBeGreaterThan(1200);
+      await waitForAnimationFrames(page, 6);
+      await page.keyboard.press('F7');
+      await expect(modified.locator('.line-numbers.active-line-number')).toHaveText('1');
+      await disposeDiffLifecycle(page);
+    });
+  }
+}
+
 test('recorded line reveal waits for layout, supersedes edges, and runs only once', async ({ page }) => {
   const root = await openDiffLifecycle(page);
   const host = page.locator('.diff-lifecycle-host');
