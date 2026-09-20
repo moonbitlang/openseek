@@ -99,10 +99,14 @@ test "cross-file reveal waits for content and cancels when its review is superse
   }
   let ctx = { ..test_ctx(), active_file: Some(file), }
   let state = { ..owned_state(), docs, }.with_review_navigation_destination(
-    ctx, change, true,
+    ctx,
+    change,
+    ReviewEdge(true),
   )
   let (_, waiting) = sync_review_navigation_destination(test_emit(), state, ctx)
-  assert_true(waiting.review_navigation_destination is Some((_, 1, true)))
+  assert_true(
+    waiting.review_navigation_destination is Some((_, 1, ReviewEdge(true))),
+  )
   let (_, cancelled) = sync_review_navigation_destination(
     test_emit(),
     waiting,
@@ -253,4 +257,104 @@ test "history filtering shares matching but owns its inventory and counts" {
   }
   assert_eq(change_extension_options(working), [(Some(".mbt"), 1)])
   assert_true(filtered_changes(working) == [workspace])
+}
+
+///|
+test "recorded review lines wait for content and cancel on a new review generation" {
+  let path = @pathx.Relative("src/main.mbt")
+  let file = test_ctx().resource(path).unwrap()
+  let change = test_modified_change(path)
+  let doc = reviewed_doc(path, change)
+  let docs = owned_state().docs.copy()
+  docs[file] = {
+    ..doc,
+    review: doc.review.map(review => { ..review, baseline: ReviewLoading, }),
+  }
+  let ctx = { ..test_ctx(), active_file: Some(file), }
+  let state = { ..owned_state(), docs, }.with_review_navigation_destination(
+    ctx,
+    change,
+    ReviewLine(140),
+  )
+  assert_eq(state.review_diff_mode, ReviewDiffLine)
+  let (_, waiting) = sync_review_navigation_destination(test_emit(), state, ctx)
+  let (_, repeated) = sync_review_navigation_destination(
+    test_emit(),
+    state,
+    ctx,
+  )
+  assert_true(
+    waiting.review_navigation_destination ==
+    repeated.review_navigation_destination,
+  )
+  assert_true(
+    waiting.review_navigation_destination is Some((_, 1, ReviewLine(140))),
+  )
+  let (_, left) = sync_review_navigation_destination(test_emit(), waiting, {
+    ..ctx,
+    active_file: None,
+  })
+  assert_true(left.review_navigation_destination is None)
+  let newer = docs.copy()
+  newer[file] = {
+    ..doc,
+    review: doc.review.map(review => { ..review, generation: 2, }),
+  }
+  let (_, replaced) = sync_review_navigation_destination(
+    test_emit(),
+    { ..waiting, docs: newer, },
+    ctx,
+  )
+  assert_true(replaced.review_navigation_destination is None)
+  let ready = docs.copy()
+  ready[file] = doc
+  // Constructing the reveal command must not access the mounted JS editor.
+  let (_, completed) = sync_review_navigation_destination(
+    test_emit(),
+    { ..waiting, docs: ready, },
+    ctx,
+  )
+  assert_true(completed.review_navigation_destination is None)
+}
+
+///|
+test "file review survives a clean inventory while row review leaves it" {
+  let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
+  let ctx = { ..test_ctx(), active_file: Some(file), open_files: [file], }
+  let (_, opened) = owned_state().open_review_at(
+    test_emit(),
+    ctx,
+    path,
+    Some(140),
+    had_active=false,
+  )
+  let pending = { ..opened, changes: ChangeListLoading(refresh_again=false), }
+  let message = ChangesLoaded(
+    owner=ctx.owner,
+    generation=pending.changes_generation,
+    repository=true,
+    head=Some("head"),
+    files=[],
+  )
+  let (_, clean) = update(test_emit(), message, pending, ctx)
+  let (_, repeated) = update(test_emit(), message, pending, ctx)
+  assert_true(clean == repeated)
+  assert_true(clean.docs.get(file) is Some({ review: Some(_), .. }))
+  assert_true(
+    clean.review_navigation_destination is Some((_, _, ReviewLine(140))),
+  )
+  let (_, row) = update(
+    test_emit(),
+    message,
+    { ..pending, file_review_paths: [], },
+    ctx,
+  )
+  assert_true(row.docs.get(file) is Some({ review: None, .. }))
+  let (closed, _) = sync(test_emit(), clean, {
+    ..ctx,
+    active_file: None,
+    open_files: [],
+  })
+  assert_true(closed.file_review_paths.is_empty())
 }

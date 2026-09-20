@@ -58,6 +58,7 @@ pub fn DiffEditor::on_did_reveal_change(Self, (DiffEditorRevealEvent) -> Unit) -
 pub fn DiffEditor::on_did_update_diff(Self, () -> Unit) -> @common.Disposable
 pub fn DiffEditor::reveal_first_diff(Self) -> Unit
 pub fn DiffEditor::reveal_last_diff(Self) -> Unit
+pub fn DiffEditor::reveal_modified_line(Self, Int) -> Unit
 pub fn DiffEditor::reveal_next_change(Self) -> Bool
 pub fn DiffEditor::reveal_next_change_without_wrap(Self) -> Bool
 pub fn DiffEditor::reveal_previous_change(Self) -> Bool

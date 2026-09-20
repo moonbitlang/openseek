@@ -364,6 +364,13 @@ pub(all) enum ReviewBaseline {
 pub fn ReviewBaseline::equal(Self, Self) -> Bool
 pub fn ReviewBaseline::not_equal(Self, Self) -> Bool
 
+pub(all) enum ReviewDestination {
+  ReviewEdge(Bool)
+  ReviewLine(Int)
+} derive(Eq)
+pub fn ReviewDestination::equal(Self, Self) -> Bool
+pub fn ReviewDestination::not_equal(Self, Self) -> Bool
+
 pub(all) enum ReviewDiffLayout {
   ReviewSideBySide
   ReviewInline
@@ -453,7 +460,8 @@ pub(all) struct State {
   semantic_review_plan : @moondiff.SectionedSemanticReviewPlan?
   semantic_review_collapsed : Array[String]
   review_diff_navigation_available : Bool
-  review_navigation_destination : (ChangedFile, Int, Bool)?
+  review_navigation_destination : (ChangedFile, Int, ReviewDestination)?
+  file_review_paths : Array[@common.Uri]
   change_extensions : Array[String?]?
   change_path_filter : String
   changes : ChangeList
@@ -508,10 +516,11 @@ pub fn State::accepts_review_context(Self, @mention_context.ReviewChanges) -> Bo
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::open_review_at(Self, @cmd.Emit[Msg], Ctx, @pathx.Relative, Int?, had_active~ : Bool) -> (@cmd.Cmd, Self)
 pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
 pub fn State::with_review_context_reveal(Self, @mention_context.ReviewChanges) -> Self
-pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, Bool) -> Self
+pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, ReviewDestination) -> Self
 
 pub(all) enum TabState {
   TabLoading

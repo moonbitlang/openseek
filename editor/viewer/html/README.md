@@ -79,3 +79,10 @@ original/modified lines and discontinuities to `DiffLine`, chooses the MoonBit
 tokenizer for `.mbt`, `.mbti`, and `.mbtx`, and owns the surrounding file
 actions. Desktop loads the shared stylesheet through its viewer CSS entrypoint
 and supplies its theme and compact typography.
+
+Minimal transcript edit cards also use this renderer. Their adapter derives
+rows from edit arguments or recorded unified patches, preserves historical
+coordinates through bounded head/tail excerpts, and inserts `Gap` across
+omitted content. Transcript blocks retain their rendered HTML until their
+projection changes. File titles, full-diff copying and Review navigation stay
+outside the shared preview.

@@ -877,6 +877,21 @@ fn reconcile_reviews_after_changes(
       previous_files,
       review.selected,
     )
+    // File-link reviews compare the file even after its recorded edit has
+    // been committed or reverted. Changes-row reviews retain list membership.
+    let unlisted_file_review = current_change is None &&
+      state.file_review_paths.contains(path)
+    let current_change = if unlisted_file_review {
+      Some({
+        path: review.selected.path,
+        original_path: None,
+        index_status: " ",
+        worktree_status: " ",
+        kind: ChangeModified,
+      })
+    } else {
+      current_change
+    }
     match current_change {
       None => {
         let ordinary = { ..doc, review: None, }
@@ -947,6 +962,7 @@ fn reconcile_reviews_after_changes(
           )
         let review_inputs_changed = review_incomplete ||
           head_changed ||
+          (unlisted_file_review && review.selected != change) ||
           ({
             let previous_source = if review.selected.kind
               is (ChangeRenamed | ChangeCopied) {
@@ -1938,6 +1954,12 @@ pub fn sync(
   ctx : Ctx,
   review_context? : Array[@mention_context.ReviewChanges] = [],
 ) -> (State, @cmd.Cmd) {
+  let state = {
+    ..state,
+    file_review_paths: state.file_review_paths.filter(path => {
+      ctx.open_files.contains(path)
+    }),
+  }
   let checkout_ready = ctx.checkout_ready()
   let owner_changed = state.owner != Some(ctx.owner)
   // The first owner claim has no previous conversation request to fence and
@@ -3288,6 +3310,18 @@ fn update_inner(
         for cmd in legacy_cmds {
           review_cmds.push(cmd)
         }
+        let review_navigation_destination = state.review_navigation_destination.bind(destination => {
+            let (change, generation, target) = destination
+            guard target is ReviewLine(_) &&
+              ctx.resource(change.path) is Some(file) &&
+              state.docs.get(file) is Some({ review: Some(previous), .. }) &&
+              previous.generation == generation &&
+              docs.get(file) is Some({ review: Some(current), .. }) else {
+              return Some(destination)
+            }
+            Some((current.selected, current.generation, target))
+          },
+        )
         let settle = if follow_up {
           list_changes(
             dispatch,
@@ -3333,6 +3367,7 @@ fn update_inner(
             },
             changes_generation: next_generation,
             review_generation,
+            review_navigation_destination,
             review_progress,
             review_active_hunk,
             review_hunk_ready: if !follow_up && head_changed {

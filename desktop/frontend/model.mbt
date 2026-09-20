@@ -2009,6 +2009,7 @@ priv enum Msg {
   // use the system opener. Each click spends a generation before the
   // asynchronous request, so only the newest click may steer the panel.
   OpenFile(String)
+  OpenReview(path~ : String, line~ : Int?)
   // Show a transcript file reference in this Desktop's file manager. The menu
   // exposes this only for a local checkout; resolution still stays host-side
   // so relative paths and editor-position suffixes match `OpenFile` exactly.

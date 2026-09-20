@@ -448,7 +448,10 @@ pub(all) struct State {
   // at least one completed change for cyclic previous/next navigation.
   review_diff_navigation_available : Bool
   // A cross-file destination waits for both sides, fenced by exact row and generation.
-  review_navigation_destination : (ChangedFile, Int, Bool)?
+  review_navigation_destination : (ChangedFile, Int, ReviewDestination)?
+  // Reviews opened by file path remain meaningful when the path is no longer
+  // in Changes (for example after committing or reverting a recorded edit).
+  file_review_paths : Array[@common.Uri]
   // None includes all types; Some([]) deliberately includes no types.
   change_extensions : Array[String?]?
   change_path_filter : String
@@ -603,6 +606,7 @@ pub fn State::empty() -> State {
     semantic_review_collapsed: [],
     review_diff_navigation_available: false,
     review_navigation_destination: None,
+    file_review_paths: [],
     change_extensions: None,
     change_path_filter: "",
     changes: ChangeListIdle,

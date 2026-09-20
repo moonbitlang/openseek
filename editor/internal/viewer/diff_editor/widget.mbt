@@ -75,6 +75,8 @@ pub struct DiffEditorWidget {
   /// Symmetric request used when a multi-diff host enters this item while
   /// navigating backward.
   mut pending_reveal_last_diff_generation : Int?
+  // A recorded source location waits for the same model/layout barriers as edges.
+  priv mut pending_reveal_modified_line : (Int, Int)?
   mut reconciling_generation : Int
   mut is_reconciling : Bool
   /// Cancellable paint barrier for the latest outer layout transaction.
@@ -247,6 +249,7 @@ pub fn DiffEditorWidget::create(
     last_published_content_height: None,
     pending_reveal_first_diff_generation: None,
     pending_reveal_last_diff_generation: None,
+    pending_reveal_modified_line: None,
     reconciling_generation: 0,
     is_reconciling: false,
     layout_render_waiters: [],
@@ -1339,12 +1342,14 @@ fn DiffEditorWidget::reconcile_view_model(self : DiffEditorWidget) -> Unit {
     self.commit_empty_diff_features(generation)
     self.try_reveal_first_diff()
     self.try_reveal_last_diff()
+    self.try_reveal_modified_line()
     return
   }
   let diff_state = DiffState::from_diff_result(document_diff)
   self.commit_diff_state(diff_state, model, generation)
   self.try_reveal_first_diff()
   self.try_reveal_last_diff()
+  self.try_reveal_modified_line()
 }
 
 ///|
@@ -1381,6 +1386,7 @@ pub fn DiffEditorWidget::set_model(
   }
   self.pending_reveal_first_diff_generation = None
   self.pending_reveal_last_diff_generation = None
+  self.pending_reveal_modified_line = None
   self.pending_layout_modified_viewport = None
   self.set_active_hunk_index(None)
   self.navigate_from_active_hunk = false
@@ -1859,6 +1865,7 @@ pub fn DiffEditorWidget::reveal_first_diff(self : DiffEditorWidget) -> Unit {
   // for diff/layout readiness; allowing both to fire would leave the cursor at
   // the last hunk while the parent consumes the first hunk's scroll event.
   self.pending_reveal_last_diff_generation = None
+  self.pending_reveal_modified_line = None
   self.pending_reveal_first_diff_generation = Some(
     self.editors.committed_model_generation(),
   )
@@ -1908,6 +1915,7 @@ pub fn DiffEditorWidget::reveal_last_diff(self : DiffEditorWidget) -> Unit {
     return
   }
   self.pending_reveal_first_diff_generation = None
+  self.pending_reveal_modified_line = None
   self.pending_reveal_last_diff_generation = Some(
     self.editors.committed_model_generation(),
   )
@@ -2140,6 +2148,7 @@ pub fn DiffEditorWidget::dispose(self : DiffEditorWidget) -> Unit {
   self.last_published_content_height = None
   self.pending_reveal_first_diff_generation = None
   self.pending_reveal_last_diff_generation = None
+  self.pending_reveal_modified_line = None
   self.reconciling_generation = 0
   self.is_reconciling = false
   self.layout_render_generation = 0
@@ -2152,4 +2161,55 @@ pub fn DiffEditorWidget::dispose(self : DiffEditorWidget) -> Unit {
   self.did_change_content_height.dispose()
   self.did_reveal_change.dispose()
   self.host.remove_child(self.root.as_node())
+}
+
+///|
+/// Reveal a recorded modified-side coordinate, without matching it to a hunk.
+/// Later source edits can move or remove that line; only EOF clamping applies.
+pub fn DiffEditorWidget::reveal_modified_line(
+  self : DiffEditorWidget,
+  line : Int,
+) -> Unit {
+  if self.disposed || self.view_model.get_model() is None {
+    return
+  }
+  self.pending_reveal_first_diff_generation = None
+  self.pending_reveal_last_diff_generation = None
+  self.pending_reveal_modified_line = Some(
+    (self.editors.committed_model_generation(), line),
+  )
+  self.try_reveal_modified_line()
+}
+
+///|
+fn DiffEditorWidget::try_reveal_modified_line(self : DiffEditorWidget) -> Unit {
+  guard self.pending_reveal_modified_line is Some((generation, line)) else {
+    return
+  }
+  if self.editors.committed_model_generation() != generation ||
+    !self.editors.same_model(self.view_model.get_model()) {
+    self.pending_reveal_modified_line = None
+    return
+  }
+  match self.view_model.get_state() {
+    Pending => return
+    NoModel | Failed => {
+      self.pending_reveal_modified_line = None
+      return
+    }
+    Ready => ()
+  }
+  guard self.diff_state is Some(_) && self.view_model.get_model() is Some(model) else {
+    return
+  }
+  self.pending_reveal_modified_line = None
+  self.pending_layout_modified_viewport = None
+  let line = line.clamp(min=1, max=model.modified.get_line_count().max(1))
+  let range = @base_common.Range(line, 1, line, 1)
+  self.editors.modified.set_position(
+    Position(line, 1),
+    source="diffEditor.revealModifiedLine",
+  )
+  self.editors.modified.reveal_range_in_center(range)
+  self.did_reveal_change.fire({ modified_range: range, })
 }

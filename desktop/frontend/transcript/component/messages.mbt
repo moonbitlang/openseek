@@ -69,11 +69,21 @@ priv enum UiMessage {
   WorkCompleted
   ViewActivity
   RequestedChanges
+  CopyDiff
+  OpenDiffReview
 }
 
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, CopyDiff) => "Copy diff"
+    (SimplifiedChinese, CopyDiff) => "复制差异"
+    (TraditionalChinese, CopyDiff) => "複製差異"
+    (Japanese, CopyDiff) => "差分をコピー"
+    (English, OpenDiffReview) => "Open review"
+    (SimplifiedChinese, OpenDiffReview) => "在审阅中打开"
+    (TraditionalChinese, OpenDiffReview) => "在審閱中開啟"
+    (Japanese, OpenDiffReview) => "レビューで開く"
     (English, WhatBuild) => "What should we build?"
     (SimplifiedChinese, WhatBuild) => "我们来构建什么？"
     (TraditionalChinese, WhatBuild) => "我們來構建什麼？"

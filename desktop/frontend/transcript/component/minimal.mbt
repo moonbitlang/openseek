@@ -597,6 +597,7 @@ fn MinimalContent::summary(
 fn MinimalActivity::render(
   locale? : @i18n.Locale = English,
   self : MinimalActivity,
+  actions : Actions,
   single? : Bool = false,
 ) -> @html.Html {
   match self {
@@ -647,7 +648,7 @@ fn MinimalActivity::render(
               attrs=@html.Attrs::build().aria_label(
                 ui(locale, RequestedChanges),
               ),
-              changes.render(),
+              changes.render_minimal(locale~, actions),
             )
           } else {
             @html.nothing
@@ -713,12 +714,12 @@ fn MinimalContent::render(
       // once, including running/failed status and any requested edit preview.
       // This also applies inside a completed process that contains prose.
       if entries is [Call(call)] {
-        return MinimalActivity::Call(call).render(locale~, single=true)
+        return MinimalActivity::Call(call).render(locale~, actions, single=true)
       }
       if active {
         return @html.div(
           class="minimal-tools-live minimal-rows",
-          entries.map(entry => entry.render(locale~)),
+          entries.map(entry => entry.render(locale~, actions)),
         )
       }
       // Earlier groups start folded once a new assistant message arrives.
@@ -726,7 +727,7 @@ fn MinimalContent::render(
         self.summary_view(locale~),
         @html.div(
           class="minimal-call-list",
-          entries.map(entry => entry.render(locale~)),
+          entries.map(entry => entry.render(locale~, actions)),
         ),
       ])
     }
@@ -734,14 +735,14 @@ fn MinimalContent::render(
       // Neither the process nor its only tool group needs a disclosure when
       // they contain just one call. Keep the same row before and after final.
       if parts is [{ content: Activity([Call(call)]), .. }] {
-        return MinimalActivity::Call(call).render(locale~, single=true)
+        return MinimalActivity::Call(call).render(locale~, actions, single=true)
       }
       // One group needs only the outer disclosure. Mixed prose and
       // tool groups retain their individual folds, with completed summaries.
       let body = if parts is [{ content: Activity(entries), .. }] {
         @html.div(
           class="minimal-process-body minimal-rows",
-          entries.map(entry => entry.render(locale~)),
+          entries.map(entry => entry.render(locale~, actions)),
         )
       } else {
         let children : Map[String, @html.Html] = Map([])

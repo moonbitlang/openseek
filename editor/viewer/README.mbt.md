@@ -198,6 +198,11 @@ Manual scrolling selects the hunk nearest the viewport center without moving
 the cursor. Outer-scroll hosts use `get_hunk_viewport_bounds` and `select_hunk`
 to maintain one global selection. Navigation continues from that selection;
 explicit cursor movement restores cursor-relative navigation.
+Hosts with recorded source coordinates use `reveal_modified_line` to select
+and center that modified-side line after the model and diff are ready. It
+clamps to the current document bounds without matching a nearby hunk, works
+for clean comparisons, and cancels pending first/last-change navigation.
+Replacing the model cancels the pending line reveal.
 Pane gutters reserve 16px for Markdown-comment folding only when
 `render_markdown_comments` is enabled. Source-only diff panes reclaim that
 space; enabled Feedback independently reserves its own control lane.

@@ -177,6 +177,7 @@ pub fn DiffEditorWidget::on_did_reveal_change(Self, (DiffEditorRevealEvent) -> U
 pub fn DiffEditorWidget::on_did_update_diff(Self, () -> Unit) -> @common.Disposable
 pub fn DiffEditorWidget::reveal_first_diff(Self) -> Unit
 pub fn DiffEditorWidget::reveal_last_diff(Self) -> Unit
+pub fn DiffEditorWidget::reveal_modified_line(Self, Int) -> Unit
 pub fn DiffEditorWidget::reveal_next_change(Self) -> Bool
 pub fn DiffEditorWidget::reveal_next_change_without_wrap(Self) -> Bool
 pub fn DiffEditorWidget::reveal_previous_change(Self) -> Bool

@@ -22,7 +22,7 @@ pub fn State::with_review_navigation_destination(
   self : State,
   ctx : Ctx,
   change : ChangedFile,
-  last : Bool,
+  destination : ReviewDestination,
 ) -> State {
   guard ctx.resource(change.path).bind(file => self.docs.get(file))
     is Some({ review: Some(review), .. }) &&
@@ -31,7 +31,14 @@ pub fn State::with_review_navigation_destination(
   }
   {
     ..self,
-    review_navigation_destination: Some((change, review.generation, last)),
+    review_diff_mode: if destination is ReviewLine(_) {
+      ReviewDiffLine
+    } else {
+      self.review_diff_mode
+    },
+    review_navigation_destination: Some(
+      (change, review.generation, destination),
+    ),
   }
 }
 
@@ -50,12 +57,15 @@ fn reveal_semantic_review_edge(
 ///|
 /// Reconciliation runs after accepted content replies and before the render.
 /// Cancel a stale destination instead of moving a later tab when a read settles.
+/// A recorded line survives status-only inventory updates for the same file
+/// and generation; edge navigation still follows an exact Changes row.
 fn sync_review_navigation_destination(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
-  guard state.review_navigation_destination is Some((change, generation, last)) else {
+  guard state.review_navigation_destination
+    is Some((change, generation, destination)) else {
     return (@cmd.none, state)
   }
   let cleared = { ..state, review_navigation_destination: None, }
@@ -63,7 +73,10 @@ fn sync_review_navigation_destination(
     ctx.active_file.bind(file => ctx.relative(file)) == Some(change.path) &&
     ctx.resource(change.path).bind(file => state.docs.get(file)) is Some(doc) &&
     doc.review is Some(review) &&
-    review.selected == change &&
+    (
+      review.selected == change ||
+      (destination is ReviewLine(_) && review.selected.path == change.path)
+    ) &&
     review.generation == generation &&
     review.view_mode is ReviewDiff else {
     return (@cmd.none, cleared)
@@ -72,10 +85,14 @@ fn sync_review_navigation_destination(
     return (@cmd.none, state)
   }
   guard full_diff_ready(state, ctx) else { return (@cmd.none, cleared) }
-  if line_diff_ready(state, ctx) {
-    (reveal_line_review_edge(last), cleared)
-  } else {
-    reveal_semantic_review_edge(dispatch, cleared, last)
+  match destination {
+    ReviewLine(line) => (ReviewDestination::reveal_line(line), cleared)
+    ReviewEdge(last) =>
+      if line_diff_ready(state, ctx) {
+        (reveal_line_review_edge(last), cleared)
+      } else {
+        reveal_semantic_review_edge(dispatch, cleared, last)
+      }
   }
 }
 
@@ -224,3 +241,91 @@ fn State::sync_review_navigation_display(self : State, ctx : Ctx) -> State {
 
 ///|
 pub extend ReviewNavigationDisplay with Eq::{equal, not_equal}
+
+///|
+/// A transcript position is a source line, while cross-file F7 navigation
+/// selects an edge of the current changes. Neither is inferred from text.
+pub(all) enum ReviewDestination {
+  ReviewEdge(Bool)
+  ReviewLine(Int)
+} derive(Eq)
+
+///|
+fn ReviewDestination::reveal_line(line : Int) -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      if mounted_diff_editor() is Some(editor) {
+        editor.reveal_modified_line(line)
+        editor.focus()
+      }
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
+/// Prefer the current inventory's rename/deletion metadata. A transcript can
+/// also refer to a now-clean file or arrive before the inventory is loaded;
+/// those paths still have a valid HEAD-versus-working-tree review.
+fn State::change_for_review(
+  self : State,
+  path : @pathx.Relative,
+) -> ChangedFile {
+  if self.changes is ChangeListReady(files~, ..) {
+    for change in files {
+      if change.path == path {
+        return change
+      }
+    }
+  }
+  {
+    path,
+    original_path: None,
+    kind: ChangeModified,
+    index_status: " ",
+    worktree_status: " ",
+  }
+}
+
+///|
+pub extend ReviewDestination with Eq::{equal, not_equal}
+
+///|
+/// Open a file comparison independently of membership in the Changes list.
+/// A clean file still has a HEAD/current pair and can reveal a recorded line.
+pub fn State::open_review_at(
+  self : State,
+  dispatch : @cmd.Emit[Msg],
+  ctx : Ctx,
+  path : @pathx.Relative,
+  line : Int?,
+  had_active~ : Bool,
+) -> (@cmd.Cmd, State) {
+  guard ctx.resource(path) is Some(file) else { return (@cmd.none, self) }
+  let change = self.change_for_review(path)
+  guard ctx.placement_ready() && change.selectable() else {
+    return (@cmd.none, self)
+  }
+  let (cmd, state) = open_changed_document(
+    dispatch,
+    self,
+    ctx,
+    change,
+    had_active~,
+  )
+  let state = state.with_review_navigation_destination(
+    ctx,
+    change,
+    line.map(line => ReviewLine(line)).unwrap_or(ReviewEdge(false)),
+  )
+  (
+    @cmd.batch([mount_cmds(dispatch), cmd]),
+    {
+      ..state,
+      file_review_paths: [
+        ..state.file_review_paths.filter(path => path != file),
+        file,
+      ],
+    },
+  )
+}

@@ -1762,6 +1762,8 @@
   grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 8px;
+  /* Separate an edit preview from its caption like other tool content rows. */
+  row-gap: var(--minimal-row-gap);
   min-width: 0;
 }
 .minimal-call > .tool-status,
@@ -1780,6 +1782,8 @@
 }
 .minimal-call > .minimal-edit-changes {
   grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 8px;
 }
 .minimal-call.failed,
 .minimal-note.transcript-error-message {
@@ -1822,4 +1826,79 @@
   max-height: 240px;
   object-fit: contain;
   border-radius: 8px;
+}
+
+/* Match ordinary code blocks, with a separate row for the path and copy action.
+   Numbers are separate from selectable source and from the copied diff. */
+.minimal-edit-block {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+}
+.minimal-edit-block + .minimal-edit-block {
+  padding-top: 0;
+}
+.edit-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 4px 4px 13px;
+  border-bottom: 1px solid var(--color-separator);
+  font-size: var(--font-size-sm);
+}
+.edit-path,
+.edit-path-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  color: var(--color-text-muted);
+}
+.edit-path {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+.edit-path:hover,
+.edit-path:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.edit-copy.icon-button {
+  --icon-size: var(--icon-lg);
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.minimal-edit-block:hover .edit-copy,
+.edit-titlebar:focus-within .edit-copy {
+  opacity: 1;
+  pointer-events: auto;
+}
+.minimal-diff-preview {
+  --editor-font-family: var(--font-family-mono);
+  --editor-font-size: 12px;
+  --editor-line-height: 20px;
+}
+
+@media (hover: none) {
+  .minimal-edit-block .edit-copy {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
