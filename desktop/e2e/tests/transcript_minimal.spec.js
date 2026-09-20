@@ -212,7 +212,7 @@ test('minimal captions persist through completion and yield to newer description
   app.append('tool_result', {
     tool_call_id: 'script', tool_name: 'mbtx', brief: 'mbtx → bg bg-1', content: '', is_error: false,
   });
-  await expect(calls.locator('.tool-status.pending')).toBeVisible();
+  await expect(calls.locator('.tool-status')).toHaveCount(0);
   await expect(summary).toHaveText('Run project tests');
   app.append('runtime_notice', { content: 'background job bg-1 finished (exit=0): Run project tests' });
   app.append('assistant', { content: '', tool_calls: [{ id: 'edit', name: 'edit', arguments: '{}' }] });
@@ -253,7 +253,7 @@ test('minimal captions persist through completion and yield to newer description
   for (const call of await completed.locator('.minimal-call').all()) {
     await expect(call).toBeVisible();
   }
-  await expect(completed.locator('.minimal-note')).toHaveCount(0);
+  await expect(completed.locator('.minimal-note')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -537,6 +537,7 @@ test('minimal transcript folds background notices into the surrounding tool acti
   await app.goto();
   await app.enableMinimal();
   const notice = 'background job bg-1 finished (exit=0): Run the issue tests';
+  const caption = 'Completed · Run the issue tests · exit 0';
   app.append('runtime_notice', { content: notice });
   app.append('assistant', { content: '', tool_calls: [
     { id: 'output', name: 'job_output', arguments: '{"description":"Read test results"}' },
@@ -544,31 +545,32 @@ test('minimal transcript folds background notices into the surrounding tool acti
   const tools = page.locator('#stream .minimal-tools-live');
   await expect(tools).toHaveCount(1);
   await expect(tools.locator('summary')).toHaveCount(0);
-  await expect(page.getByText(notice, { exact: true })).toBeVisible();
+  await expect(page.getByText(caption, { exact: true })).toBeVisible();
   await expect(tools.locator('.minimal-call-caption, .minimal-note')).toHaveText([
     'Read the project manifest', 'Cannot read the second file', 'Check project details',
-    notice, 'Read test results',
+    caption, 'Read test results',
   ]);
   app.append('terminal', { kind: 'finished', message: 'The tests passed.' });
   const process = page.locator('#stream .minimal-process');
   await expect(process).toHaveCount(1);
-  await expect(page.getByText(notice, { exact: true })).toBeHidden();
+  await expect(page.getByText(caption, { exact: true })).toBeHidden();
   await expect(process.locator(':scope > summary .minimal-failure-count')).toHaveCount(0);
   await expect(process.locator(':scope > summary')).not.toContainText(/tool calls? failed/);
   await expect(process.locator(':scope > summary').getByRole('img', { name: 'Tool failed' })).toBeVisible();
   await expect(process.locator(':scope > summary')).not.toContainText(/Background activity|Read job output|Wait for jobs|Stop jobs/);
   await process.locator(':scope > summary').click();
   await process.locator('.minimal-tools > summary').click();
-  await expect(page.getByText(notice, { exact: true })).toBeVisible();
+  await expect(page.getByText(caption, { exact: true })).toBeVisible();
 
   // A notice arriving between turns remains independently expandable, without
   // moving it before an already completed answer or presenting it as prose.
   const lateNotice = 'background job bg-2 finished (exit=0): Run remaining checks';
+  const lateCaption = 'Completed · Run remaining checks · exit 0';
   app.append('runtime_notice', { content: lateNotice });
   await expect(page.locator('#stream > .minimal-messages > .minimal-tools')).toHaveCount(1);
-  await expect(page.getByText(lateNotice, { exact: true })).toBeHidden();
+  await expect(page.getByText(lateCaption, { exact: true })).toBeHidden();
   await page.locator('#stream > .minimal-messages > .minimal-tools > summary').click();
-  await expect(page.getByText(lateNotice, { exact: true })).toBeVisible();
+  await expect(page.getByText(lateCaption, { exact: true })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1045,18 +1047,18 @@ test('minimal job waits name their targets while pending and disappear after suc
   await app.goto();
   await app.enableMinimal();
   const stream = page.locator('#stream');
-  const tools = stream;
+  const tools = stream.locator('.minimal-tools-live');
   const caption = 'Wait for job "Run the pr tests" to complete';
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText(caption);
 
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests', caption]);
-  await expect(tools.locator('.minimal-call .tool-status.pending')).toHaveCount(2);
+  await expect(tools.locator('.minimal-call .tool-status.pending')).toHaveAttribute('aria-label', 'Tool in progress');
   const notice = 'background job bg-2 finished (exit=0): Run the pr tests';
   app.append('runtime_notice', { content: notice });
   app.append('tool_result', { tool_call_id: 'wait', tool_name: 'job_wait', content: 'WAIT_RESULT_SENTINEL', is_error: false });
   await expect(tools.locator('.minimal-call-caption')).toHaveText(['Run the pr tests']);
   await expect(tools.locator('.minimal-call-caption').last()).toHaveText('Run the pr tests');
-  await expect(tools.getByText(notice, { exact: true })).toHaveCount(0);
+  await expect(tools.getByText('Completed · Run the pr tests · exit 0', { exact: true })).toHaveAttribute('title', notice);
   await expect(stream).not.toContainText('WAIT_RESULT_SENTINEL');
 
   app.append('assistant', { content: '', tool_calls: [
@@ -1199,182 +1201,79 @@ for (const scenario of ['partial', 'search-bound', 'append', 'clean', 'recreated
   expect(app.pageErrors).toEqual([]);
 });
 
-test('background jobs keep their original rows and retire completion checks once', async ({ page }) => {
+test('minimal job captions append recorded facts without updating earlier rows', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
+  const id = 'AaCyli8GcHyDo51pdbGWUQ';
+  const running = `job ${id} (running): Run root tests`;
+  const notice = `background job ${id} finished (exit=0): \`Run root tests · mbtx run (build ok): COMMAND_SENTINEL\` — read its output with job_output (job_id="${id}").`;
   app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture tracking two jobs' } } },
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture append-only jobs' } } },
     { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
-      { id: 'a', name: 'mbtx', arguments: JSON.stringify({ description: 'Run first tests' }) },
-      { id: 'b', name: 'mbtx', arguments: JSON.stringify({ description: 'Run second tests' }) },
+      { id: 'start', name: 'mbtx', arguments: '{"description":"Run root tests"}' },
+      { id: 'read', name: 'job_output', arguments: JSON.stringify({ job_id: id }) },
     ] } } },
-  ];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const stream = page.locator('#stream');
-  const first = stream.locator('.minimal-call').filter({ hasText: 'Run first tests' });
-  const second = stream.locator('.minimal-call').filter({ hasText: 'Run second tests' });
-  app.append('tool_result', { tool_call_id: 'a', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-a', is_error: false });
-  app.append('tool_result', { tool_call_id: 'b', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-b', is_error: false });
-  await expect(first.locator('.tool-status.pending')).toBeVisible();
-  await expect(second.locator('.tool-status.pending')).toBeVisible();
-  app.append('assistant', { content: '', tool_calls: [
-    { id: 'read-a', name: 'job_output', arguments: '{"job_id":"bg-a"}' },
-  ] });
-  app.append('tool_result', { tool_call_id: 'read-a', tool_name: 'job_output', content: '', brief: 'job bg-a (running): Run first tests', is_error: false });
-  await expect(stream.locator('.minimal-call')).toHaveCount(2);
-  await expect(first.locator('.tool-status.pending')).toBeVisible();
-  app.append('runtime_notice', { content: 'background job bg-b finished (exit=0): `Run second tests`' });
-  await expect(second.locator('.tool-status.succeeded')).toBeVisible();
-  await expect(first.locator('.tool-status.pending')).toBeVisible();
-  await expect(stream.locator('.minimal-note')).toHaveCount(0);
-  await expect(second.locator('.tool-status')).toHaveCount(0, { timeout: 2000 });
-  // Repeating a finished read must neither create a row nor restart the check.
-  app.append('assistant', { content: '', tool_calls: [
-    { id: 'read-b', name: 'job_output', arguments: '{"job_id":"bg-b"}' },
-    { id: 'done-a', name: 'job_output', arguments: '{"job_id":"bg-a"}' },
-  ] });
-  app.append('tool_result', { tool_call_id: 'read-b', tool_name: 'job_output', content: '', brief: 'job bg-b (exit=0): Run second tests', is_error: false });
-  app.append('tool_result', { tool_call_id: 'done-a', tool_name: 'job_output', content: '', brief: 'job bg-a (exit=0): Run first tests', is_error: false });
-  await expect(first.locator('.tool-status.succeeded')).toBeVisible();
-  await expect(second.locator('.tool-status')).toHaveCount(0);
-  await expect(stream.locator('.minimal-call')).toHaveCount(2);
-  await expect(first.locator('.tool-status')).toHaveCount(0, { timeout: 2000 });
-  app.append('runtime_notice', { content: 'background job bg-a finished (exit=0): `Run first tests`' });
-  await expect(stream.locator('.tool-status')).toHaveCount(0);
-  // Historical completions stay quiet when the conversation is reopened.
-  await page.reload();
-  await app.openSession();
-  await expect(stream.locator('.tool-status')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('background completion updates folded work and retains failures', async ({ page }) => {
-  const app = new MinimalTranscriptHarness(page);
-  app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture folded jobs' } } },
-    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
-      { id: 'a', name: 'mbtx', arguments: '{"description":"Run tests"}' },
-      { id: 'b', name: 'mbtx', arguments: '{"description":"Run checks"}' },
-    ] } } },
-    { sequence: 3, item: { kind: 'tool_result', payload: { tool_call_id: 'a', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-a', is_error: false } } },
-    { sequence: 4, item: { kind: 'tool_result', payload: { tool_call_id: 'b', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-b', is_error: false } } },
-  ];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  app.append('terminal', { kind: 'finished', message: 'Jobs are running in the background.' });
-  const process = page.locator('#stream .minimal-process');
-  const summary = process.locator(':scope > summary');
-  await expect(summary.locator('.tool-status.pending')).toBeVisible();
-  app.append('runtime_notice', { content: 'background job bg-a finished (exit=0): `Run tests`' });
-  await expect(summary.locator('.tool-status.succeeded')).toBeVisible();
-  await expect(summary.locator('.tool-status.pending')).toBeVisible();
-  // A check remains long enough to be seen, then retires after one second.
-  await page.waitForTimeout(500);
-  await expect(summary.locator('.tool-status.succeeded')).toBeVisible();
-  await expect(summary.locator('.tool-status.succeeded')).toHaveCount(0, { timeout: 1000 });
-  app.append('runtime_notice', { content: 'background job bg-b finished (exit=2): `Run checks`' });
-  await expect(summary.locator('.tool-status.pending')).toHaveCount(0);
-  await expect(summary.locator('.tool-status.failed')).toBeVisible();
-  await summary.click();
-  await expect(process.locator('.minimal-call').filter({ hasText: 'Run tests' }).locator('.tool-status')).toHaveCount(0);
-  await expect(process.locator('.minimal-call').filter({ hasText: 'Run checks' }).locator('.tool-status.failed')).toBeVisible();
-  await expect(page.locator('#stream .minimal-note')).toHaveCount(0);
-  await app.detailedMode().click();
-  await expect(page.locator('#stream')).toContainText('background job bg-b finished');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('job_stop settles the original row without waiting for a completion notice', async ({ page }) => {
-  const app = new MinimalTranscriptHarness(page);
-  app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture stopped jobs' } } },
-    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
-      { id: 'a', name: 'mbtx', arguments: '{"description":"Check popover attributes"}' },
-      { id: 'b', name: 'mbtx', arguments: '{"description":"Check menus"}' },
-    ] } } },
-    { sequence: 3, item: { kind: 'tool_result', payload: { tool_call_id: 'a', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-a', is_error: false } } },
-    { sequence: 4, item: { kind: 'tool_result', payload: { tool_call_id: 'b', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-b', is_error: false } } },
+    { sequence: 3, item: { kind: 'tool_result', payload: { tool_call_id: 'start', tool_name: 'mbtx', content: '', brief: `mbtx → bg ${id}`, is_error: false } } },
+    { sequence: 4, item: { kind: 'tool_result', payload: { tool_call_id: 'read', tool_name: 'job_output', content: 'OUTPUT_SENTINEL', brief: running, is_error: false } } },
   ];
   await app.install(); await app.goto(); await app.openSession();
   const stream = page.locator('#stream');
-  const first = stream.locator('.minimal-call').filter({ hasText: 'Check popover attributes' });
-  const second = stream.locator('.minimal-call').filter({ hasText: 'Check menus' });
-  app.append('assistant', { content: '', tool_calls: [{ id: 'stop-error', name: 'job_stop', arguments: '{"job_id":"bg-a"}' }] });
-  app.append('tool_result', { tool_call_id: 'stop-error', tool_name: 'job_stop', content: 'stop failed', brief: 'Could not stop job', is_error: true });
-  await expect(first.locator('.tool-status.pending')).toBeVisible();
-  await expect(stream.getByText('Could not stop job', { exact: true })).toBeVisible();
-  app.append('assistant', { content: '', tool_calls: [{ id: 'stop-a', name: 'job_stop', arguments: '{"job_id":"bg-a"}' }] });
-  // This is the actual result shape from the reported session: no brief and
-  // no runtime_notice after the successful stop.
-  app.append('tool_result', { tool_call_id: 'stop-a', tool_name: 'job_stop', content: 'stopped background job bg-a', is_error: false });
-  await expect(first.locator('.tool-status.stopped')).toHaveAttribute('aria-label', 'Tool stopped');
-  await expect(first.locator('.tool-status.pending')).toHaveCount(0);
-  await expect(second.locator('.tool-status.pending')).toBeVisible();
-  app.append('runtime_notice', { content: 'background job bg-b finished (exit=0): Check menus' });
-  await expect(second.locator('.tool-status.succeeded')).toBeVisible();
-  app.append('assistant', { content: '', tool_calls: [{ id: 'stop-b', name: 'job_stop', arguments: '{"job_id":"bg-b"}' }] });
-  app.append('tool_result', { tool_call_id: 'stop-b', tool_name: 'job_stop', content: 'stopped background job bg-b', is_error: false });
-  await expect(second.locator('.tool-status.stopped')).toHaveCount(0);
-  await expect(second.locator('.tool-status')).toHaveCount(0);
-  await expect(stream.locator('.minimal-call')).toHaveCount(3); // two jobs plus the failed request
+  const captions = stream.locator('.minimal-call-caption');
+  await expect(captions).toHaveText(['Run root tests', 'Read output · Run root tests · running when read']);
+  await expect(captions.nth(1)).toHaveAttribute('title', running);
+  await expect(stream.locator('.tool-status')).toHaveCount(0);
+  const original = await stream.locator('.minimal-call').evaluateAll(rows => rows.map(row => row.outerHTML));
+  app.append('runtime_notice', { content: notice });
+  await expect(stream.locator('.minimal-note')).toHaveText('Completed · Run root tests · exit 0');
+  await expect(stream.locator('.minimal-note')).toHaveAttribute('title', notice);
+  app.append('assistant', { content: '', tool_calls: [
+    { id: 'done', name: 'job_output', arguments: JSON.stringify({ job_id: id }) },
+  ] });
+  const exited = `job ${id} (exit=0): Run root tests`;
+  app.append('tool_result', { tool_call_id: 'done', tool_name: 'job_output', content: 'OUTPUT_SENTINEL', brief: exited, is_error: false });
+  await expect(captions.last()).toHaveText('Read output · Run root tests · exit 0');
+  // A second read or notice remains a second event. No completion timer,
+  // background state lookup, or later event may rewrite the first two rows.
+  app.append('runtime_notice', { content: notice });
+  await expect(stream.locator('.minimal-note')).toHaveCount(2);
+  await page.waitForTimeout(1100);
+  expect(await stream.locator('.minimal-call').evaluateAll(rows => rows.slice(0, 2).map(row => row.outerHTML))).toEqual(original);
+  await expect(stream.locator('.tool-status')).toHaveCount(0);
+  await expect(stream).not.toContainText(/COMMAND_SENTINEL|OUTPUT_SENTINEL|AaCyli8GcHyDo51pdbGWUQ/);
   await page.reload(); await app.openSession();
-  await expect(first.locator('.tool-status.stopped')).toBeVisible();
+  await expect(captions).toHaveText(['Run root tests', 'Read output · Run root tests · running when read', 'Read output · Run root tests · exit 0']);
+  await expect(stream.locator('.minimal-note')).toHaveCount(2);
+  await app.detailedMode().click();
+  await expect(stream).toContainText(notice);
+  await expect(stream).toContainText(`⏳ ${id} (running): Run root tests`);
   expect(app.pageErrors).toEqual([]);
 });
 
-test('background output matches job IDs and preserves malformed notices and read errors', async ({ page }) => {
+test('minimal job captions retain failed reads and unrecognized metadata', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
-  app.sessionEvents = [
-    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture job metadata' } } },
-    { sequence: 2, item: { kind: 'assistant', payload: { content: '', tool_calls: [
-      { id: 'a', name: 'mbtx', arguments: '{}' },
-      { id: 'b', name: 'mbtx', arguments: '{"description":"Another job"}' },
-    ] } } },
-    { sequence: 3, item: { kind: 'tool_result', payload: { tool_call_id: 'a', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-a', is_error: false } } },
-    { sequence: 4, item: { kind: 'tool_result', payload: { tool_call_id: 'b', tool_name: 'mbtx', content: '', brief: 'mbtx → bg bg-b', is_error: false } } },
-  ];
+  app.sessionEvents = [{ sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture job outcomes' } } }];
   await app.install(); await app.goto(); await app.openSession();
   const stream = page.locator('#stream');
-  const first = stream.locator('.minimal-call').filter({ hasText: 'mbtx → bg bg-a' });
-  const second = stream.locator('.minimal-call').filter({ hasText: 'Another job' });
-  await expect(first.locator('.tool-status.pending')).toBeVisible();
-  await expect(second.locator('.tool-status.pending')).toBeVisible();
-
-  // A result cannot complete a different ID, and unrecognized records remain
-  // inspectable instead of silently disappearing into either original row.
-  for (const [id, jobId, brief, content, isError] of [
-    ['wrong-id', 'bg-a', 'job bg-b (exit=0): Mismatched result', '', false],
-    ['unknown', 'unknown', 'job unknown (exit=0): Unmatched result', '', false],
-    ['read-error', 'bg-a', 'Could not read output', 'read failed', true],
-    ['capture-error', 'bg-a', 'job bg-a (running): Capture failed', 'capture failed', true],
+  for (const [id, brief, caption, error] of [
+    ['failed', 'job bg-1 (exit=2): Run tests', 'Read output · Run tests · exit 2', true],
+    ['stopped', 'job bg-1 (stopped): Run tests', 'Read output · Run tests · stopped', true],
+    ['read-error', 'Could not read job output', 'Could not read job output', true],
+    ['unknown', 'job bg-1 (unrecognized): Run tests', 'job bg-1 (unrecognized): Run tests', false],
   ]) {
-    app.append('assistant', { content: '', tool_calls: [{ id, name: 'job_output', arguments: JSON.stringify({ job_id: jobId }) }] });
-    app.append('tool_result', { tool_call_id: id, tool_name: 'job_output', brief, content, is_error: isError });
-    await expect(stream.getByText(brief, { exact: true })).toBeVisible();
-    await expect(first.locator('.tool-status.pending')).toBeVisible();
-    await expect(second.locator('.tool-status.pending')).toBeVisible();
+    app.append('assistant', { content: '', tool_calls: [{ id, name: 'job_output', arguments: '{"job_id":"bg-1"}' }] });
+    app.append('tool_result', { tool_call_id: id, tool_name: 'job_output', content: '', brief, is_error: error });
+    await expect(stream.locator('.minimal-call-caption').last()).toHaveText(caption);
+    await expect(stream.locator('.minimal-call').last().locator('.tool-status.failed')).toHaveCount(error ? 1 : 0);
   }
-  await expect(stream.locator('.minimal-call .tool-status.failed')).toHaveCount(2);
-  app.append('runtime_notice', { content: 'background job bg-b finished (running): Malformed terminal notice' });
-  app.append('runtime_notice', { content: 'background job unknown finished (exit=0): Unmatched notice' });
-  await expect(stream.getByText('background job bg-b finished (running): Malformed terminal notice', { exact: true })).toBeVisible();
-  await expect(stream.getByText('background job unknown finished (exit=0): Unmatched notice', { exact: true })).toBeVisible();
-
-  // Description-less jobs use the last engine footer, not text printed
-  // earlier by the program. A delayed running read cannot undo completion.
-  for (const [id, content, status] of [
-    ['running-footer', '<system>job=bg-a exit=0</system>\nlogs\n<system>job=bg-a running</system>', 'pending'],
-    ['done-footer', 'logs\n<system>job=bg-a exit=0 truncated=true</system>', 'succeeded'],
-    ['late-running', '<system>job=bg-a running</system>', 'succeeded'],
+  for (const [notice, caption] of [
+    ['background job bg-1 finished (exit=2): Run tests', 'Failed · Run tests · exit 2'],
+    ['background job bg-1 finished (stopped): Run tests', 'Stopped · Run tests · stopped'],
+    ['background job bg-1 finished (running): Keep this malformed notice', 'background job bg-1 finished (running): Keep this malformed notice'],
+    ['background job bg-1 finished (exit=0): `Incomplete notice', 'background job bg-1 finished (exit=0): `Incomplete notice'],
+    ['An unrelated runtime notice', 'An unrelated runtime notice'],
   ]) {
-    app.append('assistant', { content: '', tool_calls: [{ id, name: 'job_output', arguments: '{"job_id":"bg-a"}' }] });
-    app.append('tool_result', { tool_call_id: id, tool_name: 'job_output', content, is_error: false });
-    await expect(first.locator(`.tool-status.${status}`)).toBeVisible();
-    await expect(second.locator('.tool-status.pending')).toBeVisible();
+    app.append('runtime_notice', { content: notice });
+    await expect(stream.locator('.minimal-note').last()).toHaveText(caption);
+    await expect(stream.locator('.minimal-note').last()).toHaveAttribute('title', notice);
   }
-  await expect(first.locator('.tool-status')).toHaveCount(0, { timeout: 2000 });
-  await expect(stream.locator('.minimal-call')).toHaveCount(6);
   expect(app.pageErrors).toEqual([]);
 });

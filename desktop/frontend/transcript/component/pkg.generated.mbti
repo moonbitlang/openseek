@@ -10,7 +10,6 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/transcript",
-  "openseek_desktop/protocol",
 }
 
 // Values
@@ -37,7 +36,7 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(locale? : @i18n.Locale, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused~ : @interop.ChannelId, active_session~ : String, scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], background_jobs? : Array[@protocol.JobView], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
+pub fn Input::Input(locale? : @i18n.Locale, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused~ : @interop.ChannelId, active_session~ : String, scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 

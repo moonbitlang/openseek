@@ -5,10 +5,7 @@ priv enum ToolStatus {
   Snapshot
   Pending
   Succeeded
-  // Minimal background jobs show this check for one second after completion.
-  RecentlySucceeded
   Failed
-  Stopped
 } derive(Eq)
 
 ///|
@@ -40,15 +37,13 @@ fn ToolStatus::view(
           @html.nothing,
         ),
       )
-    Stopped =>
-      (ui(locale, ToolStopped), "tool-status stopped", @icons.icon_debug_stop())
     Failed =>
       (
         ui(locale, ToolFailed),
         "tool-status failed",
         @icons.icon(@icons.icon_error),
       )
-    Succeeded | RecentlySucceeded =>
+    Succeeded =>
       (
         ui(locale, ToolSucceeded),
         "tool-status succeeded",

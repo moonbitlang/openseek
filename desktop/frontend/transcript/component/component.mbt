@@ -93,9 +93,6 @@ struct Input {
   // image paths so the owning host, rather than the frontend, resolves them.
   root : @common.Uri?
   items : Array[VisibleRow]
-  // The root supplies only records owned by this conversation and device.
-  // Their terminal state can settle a job even without a transcript notice.
-  background_jobs : Array[@protocol.JobView]
   // The in-flight assistant text to show below the committed rows, or `None`
   // when nothing is streaming. It is deliberately not a `VisibleRow`: the
   // rows are the durable record and this is not durable yet.
@@ -124,7 +121,6 @@ pub fn Input::Input(
   project_query~ : String,
   root~ : @common.Uri?,
   items~ : Array[VisibleRow],
-  background_jobs? : Array[@protocol.JobView] = [],
   streaming_response~ : String?,
   streaming_reasoning? : String,
   reasoning_complete? : Bool = false,
@@ -146,7 +142,6 @@ pub fn Input::Input(
     project_query,
     root,
     items,
-    background_jobs,
     streaming_response,
     streaming_reasoning,
     reasoning_complete,
@@ -186,7 +181,6 @@ priv struct Model {
   overview : @transcript_overview.State
   image_owner : ImageOwner
   images : ImageCache
-  job_completions : JobCompletions
 } derive(Eq)
 
 ///|
@@ -194,7 +188,6 @@ priv enum Msg {
   Pinned(Bool)
   JumpToLatest
   ContentRendered
-  JobCompletionExpired(String)
   ImageRequested(String)
   ImageResolved(ImageOwner, String, ImageReadResult)
   Overview(@transcript_overview.Msg)
@@ -226,14 +219,7 @@ fn Model::update(
           report_visible_turn_after_render(emit, current=self.overview.active),
         ]),
       )
-    JobCompletionExpired(id) =>
-      ({ ..self, job_completions: self.job_completions.expire(id), }, @cmd.none)
     ContentRendered => {
-      // Start each completion's one-second lifetime after its first render.
-      // Repeated notices and disclosure changes cannot restart that timer.
-      let (job_completions, completion_command) = self.job_completions.observe(
-        input, emit,
-      )
       // Rendered content grew or changed size. A pinned reader follows the
       // tail; the overview re-reads which turn sits under the reading line.
       let commands : Array[@cmd.Cmd] = []
@@ -248,8 +234,7 @@ fn Model::update(
         ),
       )
       commands.push(self.images.apply_after_render())
-      commands.push(completion_command)
-      ({ ..self, job_completions, }, @cmd.batch(commands))
+      (self, @cmd.batch(commands))
     }
     ImageRequested(path) => {
       let (images, command) = self.images.begin_read(image_owner, path, emit)
@@ -308,7 +293,6 @@ pub fn component(
           overview: @transcript_overview.State::empty(),
           image_owner: input.image_owner(),
           images: ImageCache::empty(),
-          job_completions: JobCompletions::history(input),
         },
         @cmd.batch([
           render_rows_once_after_mount(),
@@ -336,14 +320,8 @@ pub fn component(
   // branch renders only when its block changes (blocks compare by value), so
   // an unchanged key means an unchanged subtree, and the diff skips it. Stream
   // children are keyed, so a counter never meets another branch's counter.
-  let completions = state.map(model => model.job_completions)
-  let blocks = input.map2(completions, (input, completions) => {
-    let blocks = if input.minimal {
-      input.minimal_blocks(completions~)
-    } else {
-      stream_blocks(input)
-    }
-    blocks.map(block => (input.locale, block))
+  let blocks = input.map(input => {
+    stream_blocks(input).map(block => (input.locale, block))
   })
   let rendered = blocks.assoc_by(
     (_, block) => {
@@ -933,7 +911,6 @@ fn pinned_model(input : Input) -> Model {
     overview: @transcript_overview.State::empty(),
     image_owner: input.image_owner(),
     images: ImageCache::empty(),
-    job_completions: JobCompletions::history(input),
   }
 }
 

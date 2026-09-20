@@ -191,12 +191,6 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
               .conversation_placement(conversation)
               .bind(value => value.checkout_root()),
             items=conversation.visible_transcript_rows(),
-            background_jobs=if self.jobs.owner is Some(_) &&
-              self.jobs.owner == self.jobs_owner() {
-              self.jobs.jobs
-            } else {
-              []
-            },
             streaming_response=conversation.turn.streaming_response,
             streaming_reasoning?,
             reasoning_complete~,

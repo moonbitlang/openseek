@@ -48,11 +48,7 @@ fn MinimalCall::from_tool(
     "job_wait" | "job_output" | "job_stop" | "finish" | "sleep" => None
     _ => Some(ui(locale, OtherTools))
   }
-  let status = if BackgroundJobs::started(call) is Some(_) {
-    Pending
-  } else {
-    ToolStatus::from_outcome(call.outcome)
-  }
+  let status = ToolStatus::from_outcome(call.outcome)
   let brief = match call.outcome {
     Snapshot(..) => Some(ui(locale, SnapshotLabel))
     Pending(..) => None
@@ -167,13 +163,10 @@ priv enum MinimalActivity {
 
 ///|
 /// Count pending and failed calls represented by a group, including waits.
-/// Notices are not tool rows. Newly completed background jobs briefly keep
-/// their check; ordinary successful calls need no minimal status.
+/// Notices are not tool rows, and successful calls need no minimal status.
 priv struct MinimalToolStatus {
   failed : Int
   pending : Int
-  completed : Int
-  stopped : Int
 }
 
 ///|
@@ -182,20 +175,16 @@ fn MinimalToolStatus::from_activities(
 ) -> MinimalToolStatus {
   let mut failed = 0
   let mut pending = 0
-  let mut completed = 0
-  let mut stopped = 0
   for entry in entries {
     if entry is Call(call) {
       match call.status {
-        RecentlySucceeded => completed += 1
-        Stopped => stopped += 1
         Pending => pending += 1
         Failed => failed += 1
         Succeeded | Snapshot => ()
       }
     }
   }
-  { failed, pending, completed, stopped, }
+  { failed, pending, }
 }
 
 ///|
@@ -207,21 +196,12 @@ fn MinimalToolStatus::view(
   locale? : @i18n.Locale = English,
   self : MinimalToolStatus,
 ) -> @html.Html {
-  if self.pending == 0 &&
-    self.failed == 0 &&
-    self.completed == 0 &&
-    self.stopped == 0 {
+  if self.pending == 0 && self.failed == 0 {
     return @html.nothing
   }
   let children : Array[@html.Html] = []
   if self.pending > 0 {
     children.push(ToolStatus::Pending.view(locale~))
-  }
-  if self.completed > 0 {
-    children.push(ToolStatus::RecentlySucceeded.view(locale~))
-  }
-  if self.stopped > 0 {
-    children.push(ToolStatus::Stopped.view(locale~))
   }
   if self.failed > 0 {
     children.push(ToolStatus::Failed.view(locale~))
@@ -363,12 +343,8 @@ fn MinimalStream::finish(
 }
 
 ///|
-fn Input::minimal_blocks(
-  self : Input,
-  completions? : JobCompletions = { entries: @vector.Vector::new(), },
-) -> @vector.Vector[Block] {
+fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
   let locale = self.locale
-  let jobs = BackgroundJobs::from_input(self)
   let builder : MinimalStream = {
     stream: TranscriptSectionKey::stream(self),
     blocks: [],
@@ -426,15 +402,11 @@ fn Input::minimal_blocks(
           if call.name == "job_wait" && call.outcome is Done(is_error=false, ..) {
             continue
           }
-          if jobs.absorbs(call) {
-            continue
-          }
           activity.push(
             Call(
-              jobs.minimal_call(
+              MinimalCall::from_tool(
                 locale~,
                 call,
-                completions,
                 wait_label?=pending_job_wait_label(call, descriptions~),
               ),
             ),
@@ -442,11 +414,7 @@ fn Input::minimal_blocks(
           // Program calls are recorded under their parent. Preserve their
           // status and edit previews in the minimal work log as well.
           for child in call.children {
-            if !jobs.absorbs(child) {
-              activity.push(
-                Call(jobs.minimal_call(locale~, child, completions)),
-              )
-            }
+            activity.push(Call(MinimalCall::from_tool(locale~, child)))
           }
         }
         if !activity.is_empty() {
@@ -477,14 +445,11 @@ fn Input::minimal_blocks(
         })
       }
       Notice(label~, brief~, is_error~, body~) => {
-        let text = brief.unwrap_or(body.unwrap_or(label))
-        // Match the recorded notice before translating its display label.
-        if label == "runtime notice" &&
-          BackgroundJobs::finished_notice(text) is Some((id, _)) &&
-          jobs.statuses.contains(id) {
-          continue
-        }
-        let text = tool_display_label(locale~, label, text)
+        let text = tool_display_label(
+          locale~,
+          label,
+          brief.unwrap_or(body.unwrap_or(label)),
+        )
         builder.push_part(
           "notice\u{0}\{identity}",
           if label == "runtime notice" {
@@ -631,7 +596,10 @@ fn MinimalActivity::render(
         } else {
           "minimal-note"
         },
-        text,
+        title=text,
+        JobCaption::notice(text).map_or(text, caption => {
+          caption.label(locale, notice=true)
+        }),
       )
     Call(call) =>
       @html.div(
@@ -655,7 +623,13 @@ fn MinimalActivity::render(
           @html.span(
             class="minimal-call-caption",
             title=call.caption,
-            call.caption,
+            if call.tool_name == "job_output" {
+              JobCaption::output(call.caption).map_or(call.caption, caption => {
+                caption.label(locale, notice=false)
+              })
+            } else {
+              call.caption
+            },
           ),
           if single {
             MinimalToolStatus::from_activities([self]).view(locale~)
