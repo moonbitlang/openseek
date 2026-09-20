@@ -2420,11 +2420,8 @@ fn model_failed_call_ids(
 
 ///|
 /// Renders the provider's ordered content without treating a file ID as a URL.
-priv struct ModelContent(@deepseek.Content)
-
-///|
-fn ModelContent::view(self : ModelContent) -> Array[@html.Html] {
-  self.0
+fn model_content_view(content : @deepseek.Content) -> Array[@html.Html] {
+  content
   .iter()
   .filter_map(part => {
     match part {
@@ -2458,7 +2455,7 @@ fn message_card(
             "System prompt",
             time~,
           ),
-          ..ModelContent(message.content).view(),
+          ..model_content_view(message.content),
         ],
       ]
     User => {
@@ -2716,7 +2713,7 @@ fn model_tool_card(
       ..if message.content.is_text_only() {
         [tool_result_content(shown, message.content.text())]
       } else {
-        ModelContent(message.content).view()
+        model_content_view(message.content)
       },
     ],
   ]
@@ -2744,7 +2741,7 @@ fn model_card(
         ],
       ]
     },
-    ..ModelContent(message.content).view(),
+    ..model_content_view(message.content),
     ..if !message.tool_calls.is_empty() {
       [
         @html.div(class="tool-calls") <| [
