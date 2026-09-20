@@ -1247,6 +1247,7 @@ test('minimal job captions append recorded facts without updating earlier rows',
   await app.detailedMode().click();
   await expect(stream).toContainText(notice);
   await expect(stream).toContainText(`⏳ ${id} (running): Run root tests`);
+  await expect(stream.locator('.tool-call-text').first()).toContainText('🐇 → background');
   expect(app.pageErrors).toEqual([]);
 });
 

@@ -97,6 +97,11 @@ test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
     ignored,
   )
   collect_job_description({ ..start, arguments: Some("{"), }, ignored)
+  // The shared decoder must not associate a result with a different request.
+  collect_job_description(
+    { ..output, arguments: Some("{\"job_id\":\"bg-other\"}"), },
+    ignored,
+  )
   collect_job_description(
     { ..start, arguments: Some("{\"description\":\"  \"}"), },
     ignored,
@@ -113,6 +118,19 @@ test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
     ignored,
   )
   assert_true(ignored.is_empty())
+  // Naming a wait does not require recognizing the job's status vocabulary.
+  collect_job_description(
+    {
+      ..output,
+      outcome: Done(
+        content="",
+        is_error=false,
+        brief=Some("job bg-11 (future-status): Future job"),
+      ),
+    },
+    descriptions,
+  )
+  assert_eq(descriptions.get("bg-11"), Some("Future job"))
 }
 
 ///|

@@ -6,6 +6,7 @@ priv struct MinimalCall {
   category : String?
   caption : String
   status : ToolStatus
+  job_event : JobEvent?
   changes : EditChanges?
 } derive(Eq)
 
@@ -80,7 +81,12 @@ fn MinimalCall::from_tool(
   } else {
     None
   }
-  { tool_name: call.name, category, caption, status, changes, }
+  let job_event = if call.outcome is Done(brief=Some(text), ..) {
+    JobEvent::from_tool_brief(call.name, text)
+  } else {
+    None
+  }
+  { tool_name: call.name, category, caption, status, job_event, changes, }
 }
 
 ///|
@@ -158,7 +164,7 @@ priv struct MinimalPart {
 /// calls and must never increase the failed-tool count.
 priv enum MinimalActivity {
   Call(MinimalCall)
-  Notice(text~ : String, error~ : Bool)
+  Notice(text~ : String, error~ : Bool, job_event~ : JobEvent?)
 } derive(Eq)
 
 ///|
@@ -453,7 +459,13 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         builder.push_part(
           "notice\u{0}\{identity}",
           if label == "runtime notice" {
-            Activity([Notice(text~, error=is_error)])
+            Activity([
+              Notice(
+                text~,
+                error=is_error,
+                job_event=JobEvent::from_notice(text),
+              ),
+            ])
           } else {
             Note(text~, error=is_error)
           },
@@ -589,12 +601,11 @@ fn MinimalActivity::render(
   single? : Bool = false,
 ) -> @html.Html {
   match self {
-    Notice(text~, error~) => {
-      let caption = JobCaption::notice(text)
+    Notice(text~, error~, job_event~) =>
       @html.div(
-        class=if caption is Some(_) && error {
+        class=if job_event is Some(_) && error {
           "minimal-note minimal-job-note transcript-error-message"
-        } else if caption is Some(_) {
+        } else if job_event is Some(_) {
           "minimal-note minimal-job-note"
         } else if error {
           "minimal-note transcript-error-message"
@@ -602,26 +613,19 @@ fn MinimalActivity::render(
           "minimal-note"
         },
         title=text,
-        if caption is Some(caption) {
+        if job_event is Some(event) {
           [
             @html.span(
               class="minimal-tool-icon",
               attrs=@html.Attrs::build().aria_hidden("true"),
-              if caption.status == "exit=0" {
-                @icons.icon_check()
-              } else if caption.status == "stopped" {
-                @icons.icon_debug_stop()
-              } else {
-                @icons.icon_error()
-              },
+              event.icon(),
             ),
-            @html.span(caption.label(locale, notice=true)),
+            @html.span(event.minimal_caption(locale).unwrap_or(text)),
           ]
         } else {
           [@html.text(text)]
         },
       )
-    }
     Call(call) =>
       @html.div(
         class=if single {
@@ -644,10 +648,8 @@ fn MinimalActivity::render(
           @html.span(
             class="minimal-call-caption",
             title=call.caption,
-            if call.tool_name == "job_output" {
-              JobCaption::output(call.caption).map_or(call.caption, caption => {
-                caption.label(locale, notice=false)
-              })
+            if call.job_event is Some(event) {
+              event.minimal_caption(locale).unwrap_or(call.caption)
             } else {
               call.caption
             },
