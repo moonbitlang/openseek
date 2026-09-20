@@ -154,8 +154,6 @@ pub fn Input::Input(
 /// the component construction and never stored in its Model.
 pub(all) struct Actions {
   open : @cmd.Emit[String]
-  /// Open the current file comparison without a recorded line destination.
-  review : @cmd.Emit[String]
   jump : @cmd.Emit[@mention_context.Target]
   open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
   /// Open another session's transcript. Used by a sub-run tool card to reach

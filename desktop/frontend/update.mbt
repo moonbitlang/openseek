@@ -2682,23 +2682,6 @@ fn update_msg(
     }
     JumpToLocation(path~, range~, annotation~) =>
       open_editor_at(dispatch, model, path, range, annotation?)
-    OpenReview(slot~, path~) => {
-      guard model.transcript_slot().map(active => active.key()) == Some(slot) else {
-        return (@cmd.none, model)
-      }
-      guard model.active_relative_path(path) is Some(file) &&
-        file_ctx(model).placement.bind(placement => placement.checkout_root())
-        is Some(root) else {
-        return model.notify_error(
-          dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
-        )
-      }
-      open_review_target(
-        dispatch,
-        model,
-        ReviewFile(workspace=root.path, file=file.0),
-      )
-    }
     TranscriptReviewChangesOpened(slot~, selection~) => {
       guard model.transcript_slot().map(active => active.key()) == Some(slot) else {
         return (@cmd.none, model)
@@ -20564,39 +20547,10 @@ test "file context inherits the conversation model and its reasoning family" {
 }
 
 ///|
-/// A file title opens the current comparison; a saved Changes selection also
-/// requests a version-checked hunk reveal after that comparison is loaded.
-priv enum ReviewOpenTarget {
-  ReviewFile(workspace~ : String, file~ : String)
-  ReviewSelection(@mention_context.ReviewChanges)
-} derive(Eq)
-
-///|
-fn ReviewOpenTarget::workspace(self : ReviewOpenTarget) -> String {
-  match self {
-    ReviewFile(workspace~, ..) => workspace
-    ReviewSelection(selection) => selection.source.workspace
-  }
-}
-
-///|
-fn ReviewOpenTarget::matches_change(
-  self : ReviewOpenTarget,
-  change : @fileeditor.ChangedFile,
-) -> Bool {
-  match self {
-    ReviewFile(file~, ..) => change.path.0 == file
-    ReviewSelection(selection) =>
-      change.path.0 == selection.source.file &&
-      change.original_path.map(path => path.0) == selection.source.original_file
-  }
-}
-
-///|
 priv struct PendingReviewContext {
   owner : @interop.ConversationKey
   navigation : Int
-  target : ReviewOpenTarget
+  selection : @mention_context.ReviewChanges
 } derive(Eq)
 
 ///|
@@ -20610,27 +20564,27 @@ fn PendingReviewContext::is_current(
   ctx.placement
   .bind(placement => placement.checkout_root())
   .map(root => root.path) ==
-  Some(self.target.workspace())
+  Some(self.selection.source.workspace)
 }
 
 ///|
-fn open_review_target(
+fn open_review_context(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  target : ReviewOpenTarget,
+  selection : @mention_context.ReviewChanges,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(model)
   guard ctx.placement
     .bind(placement => placement.checkout_root())
     .map(root => root.path) ==
-    Some(target.workspace()) else {
+    Some(selection.source.workspace) else {
     return model.notify_error(
       dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
     )
   }
   if model.file_panel.changes
     is @fileeditor.ChangeListReady(refreshing=false, ..) {
-    return open_loaded_review_context(dispatch, model, target)
+    return open_loaded_review_context(dispatch, model, selection)
   }
   // Opening Changes starts (or joins) its normal owner/generation-fenced
   // inventory load. Keep the target separately until the authoritative reply
@@ -20643,7 +20597,7 @@ fn open_review_target(
       pending_review_context: Some({
         owner: ctx.owner,
         navigation: opened.file_panel.file_link_generation,
-        target,
+        selection,
       }),
     },
   )
@@ -20683,18 +20637,22 @@ fn finish_review_context_load(
       "Unable to load the current review: \{message}",
     )
   }
-  open_loaded_review_context(dispatch, model, pending.target)
+  open_loaded_review_context(dispatch, model, pending.selection)
 }
 
 ///|
 fn open_loaded_review_context(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  target : ReviewOpenTarget,
+  selection : @mention_context.ReviewChanges,
 ) -> (@cmd.Cmd, Model) {
   guard model.file_panel.changes
     is @fileeditor.ChangeListReady(files~, refreshing=false, ..) &&
-    files.search_by(change => target.matches_change(change)) is Some(index) else {
+    files.search_by(change => {
+      change.path.0 == selection.source.file &&
+      change.original_path.map(path => path.0) == selection.source.original_file
+    })
+    is Some(index) else {
     return model.notify_error(
       dispatch, "This selection belongs to a review that is no longer available. Its saved context is unchanged.",
     )
@@ -20709,20 +20667,7 @@ fn open_loaded_review_context(
     {
       ..opened,
       right_panel_open: true,
-      file_panel: match target {
-        ReviewSelection(selection) =>
-          opened.file_panel.with_review_context_reveal(selection)
-        ReviewFile(..) => { ..opened.file_panel, review_context_reveal: None, }
-      },
+      file_panel: opened.file_panel.with_review_context_reveal(selection),
     },
   )
-}
-
-///|
-fn open_review_context(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  selection : @mention_context.ReviewChanges,
-) -> (@cmd.Cmd, Model) {
-  open_review_target(dispatch, model, ReviewSelection(selection))
 }

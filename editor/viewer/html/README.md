@@ -84,5 +84,5 @@ Minimal transcript edit cards also use this renderer. Their adapter derives
 rows from edit arguments or recorded unified patches, preserves historical
 coordinates through bounded head/tail excerpts, and inserts `Gap` across
 omitted content. Transcript blocks retain their rendered HTML until their
-projection changes. File titles, full-diff copying and Review navigation stay
+projection changes. File titles, full-diff copying and file opening stay
 outside the shared preview.

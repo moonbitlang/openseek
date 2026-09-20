@@ -375,7 +375,7 @@ fn EditDiff::new(
 
 ///|
 /// Minimal mode keeps source coordinates in the gutter. Its title opens the
-/// current file comparison, without requesting a source position.
+/// current file in the ordinary editor, without requesting a source position.
 fn EditChanges::render_minimal(
   locale? : @i18n.Locale = English,
   self : EditChanges,
@@ -404,8 +404,8 @@ fn EditChanges::render_minimal(
             @html.button(
               class="edit-path",
               type_="button",
-              title=ui(locale, OpenDiffReview) + ": " + path,
-              on_click=(actions.review)(path),
+              title=ui(locale, OpenDiffFile) + ": " + path,
+              on_click=(actions.open)(path),
               path,
             )
           } else {

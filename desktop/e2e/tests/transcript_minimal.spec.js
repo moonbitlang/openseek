@@ -44,6 +44,13 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
     ];
   }
 
+  replyFor(request) {
+    if (request.method === 'host.open_path' && request.params.path === 'src/main.mbt') {
+      return { opened: false, editor_target: { path: '/workspace/src/main.mbt' } };
+    }
+    return super.replyFor(request);
+  }
+
   // The titlebar telescope is off while the minimal transcript is shown.
   async enableMinimal() {
     await this.openSession();
@@ -1128,7 +1135,7 @@ test('minimal Codex activities render recorded patches without classifying forei
 });
 
 
-for (const scenario of ['partial', 'search-bound', 'append', 'clean']) test(`minimal diff title opens the file without a position check: ${scenario}`, async ({ page, context }) => {
+for (const scenario of ['partial', 'search-bound', 'append', 'clean', 'recreated']) test(`minimal diff title opens the file without a position check: ${scenario}`, async ({ page, context }) => {
   const app = new MinimalTranscriptHarness(page);
   const source = Array.from({ length: 180 }, (_, i) => `fn line_${i + 1}() -> Int { ${i + 1} }`).join('\n');
   app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = source;
@@ -1136,6 +1143,10 @@ for (const scenario of ['partial', 'search-bound', 'append', 'clean']) test(`min
   // longer matches, and the first current hunk is far from the old request.
   app.workingFiles['src/main.mbt'] = scenario === 'clean' ? source : source.replace('Int { 2 }', 'Int { 998 }').replace('Int { 140 }', 'Int { 1000 }');
   if (scenario === 'clean') app.gitChanges = [];
+  if (scenario === 'recreated') app.gitChanges = [
+    { path: 'src/main.mbt', index_status: 'D', worktree_status: ' ', kind: 'deleted' },
+    { path: 'src/main.mbt', index_status: '?', worktree_status: '?', kind: 'untracked' },
+  ];
   const old = scenario === 'append' ? '' : '140';
   const modified = scenario === 'append' ? 'fn appended() -> Int { 999 }' : '999';
   const start = scenario === 'append' ? 999999 : scenario === 'search-bound' ? 1 : 140;
@@ -1159,18 +1170,17 @@ for (const scenario of ['partial', 'search-bound', 'append', 'clean']) test(`min
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(old ? `- ${old}\n+ ${modified}` : `+ ${modified}`);
   const title = block.getByRole('button', { name: 'src/main.mbt', exact: true });
   await title.click();
-  if (scenario === 'clean') {
-    await expect(page.locator('.notification')).toContainText('no longer available');
-  } else {
-    await expect(page.getByRole('button', { name: 'Token diff', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('.semantic-diff-entry .view-line').filter({ hasText: 'line_2()' }).last()).toBeInViewport();
-    await expect(page.locator('.notification')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Line diff', exact: true }).click();
-    await title.click();
-    await expect(page.locator('#diff-editor-host')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Line diff', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(() => app.requests.filter(r => r.method === 'fs.read_file' && r.params.path === '/workspace/src/main.mbt').length).toBeGreaterThan(0);
-    await expect(page.locator('.notification')).toHaveCount(0);
-  }
+  await expect(page.locator('#viewer-host')).toBeVisible();
+  await expect(page.locator('#viewer-host')).toContainText('line_1()');
+  await expect(page.locator('#viewer-host')).toContainText(scenario === 'clean' ? 'Int { 2 }' : 'Int { 998 }');
+  await expect(page.locator('#diff-editor-host')).toBeHidden();
+  await expect(page.locator('.semantic-review')).toBeHidden();
+  await title.click();
+  await expect(page.locator('#viewer-host')).toBeVisible();
+  await expect(page.locator('.editor-tab')).toHaveCount(1);
+  await expect.poll(() => app.requests.filter(r => r.method === 'fs.read_file' && r.params.path === '/workspace/src/main.mbt').length).toBeGreaterThan(0);
+  expect(app.requests.filter(r => r.method === 'host.open_path').map(r => r.params.path)).toEqual(['src/main.mbt', 'src/main.mbt']);
+  expect(app.requests.filter(r => r.method === 'git.original_file')).toHaveLength(0);
+  await expect(page.locator('.notification')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
