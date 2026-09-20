@@ -1,0 +1,12 @@
+import {
+  "moonbit-community/rabbita",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/editor/viewer/html" @preview,
+  "moonbitlang/editor/syntax/lang_moonbit",
+  "moonbitlang/editor/syntax/lang_javascript",
+}
+
+supported_targets = "js"
+
+pkgtype(kind: "executable")

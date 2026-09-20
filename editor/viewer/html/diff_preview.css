@@ -1,0 +1,67 @@
+/* A static patch uses native horizontal scrolling, with one shared set of
+   intrinsic tracks. Unlike minmax(min, max-content), max-content cannot shrink
+   the gutter below the recorded coordinates when a source line is very long. */
+.editor-diff-preview {
+  display: grid;
+  grid-template-columns: max-content max-content max-content minmax(max-content, 1fr);
+  column-gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 10px 0;
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+  font-family: var(--editor-font-family, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--editor-font-size, 13px);
+  line-height: var(--editor-line-height, 21px);
+  tab-size: 4;
+}
+.editor-diff-row {
+  --diff-row-tint: transparent;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  min-height: 1lh;
+}
+.editor-diff-row.added {
+  --diff-row-tint: var(--vscode-diffEditor-insertedLineBackground, #9ccc2c33);
+}
+.editor-diff-row.removed {
+  --diff-row-tint: var(--vscode-diffEditor-removedLineBackground, #ff000033);
+}
+.editor-diff-row,
+.editor-diff-gutter {
+  /* Compose translucent change colors over an opaque surface so horizontally
+     scrolled code never shows through the pinned numbers and signs. */
+  background: linear-gradient(var(--diff-row-tint), var(--diff-row-tint)), var(--vscode-editor-background);
+}
+.editor-diff-gutter {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / 4;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding: 0 8px 0 12px;
+  user-select: none;
+  white-space: pre;
+}
+.editor-diff-number {
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-editorLineNumber-foreground);
+}
+.editor-diff-sign {
+  min-width: 1ch;
+  text-align: center;
+}
+.editor-diff-source {
+  padding-right: 12px;
+  font: inherit;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.editor-diff-row.gap .editor-diff-source {
+  color: var(--vscode-editorLineNumber-foreground);
+  user-select: none;
+}

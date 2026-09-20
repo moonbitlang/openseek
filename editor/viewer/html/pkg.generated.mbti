@@ -1,7 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/editor/viewer/html"
 
+import {
+  "moonbitlang/editor/syntax",
+}
+
 // Values
+pub fn diff_preview(Array[DiffLine], tokenizer? : &@syntax.LineTokenizer) -> @moonbit-community/rabbita/html.Html
+
 pub fn moonbit_numbered_source(String) -> @moonbit-community/rabbita/html.Html
 
 pub fn moonbit_source_code(String) -> @moonbit-community/rabbita/html.Html
@@ -11,6 +17,12 @@ pub fn moonbit_source_lines(String) -> Array[@moonbit-community/rabbita/html.Htm
 // Errors
 
 // Types and methods
+pub(all) enum DiffLine {
+  Context(String, old_line~ : Int?, new_line~ : Int?)
+  Added(String, line~ : Int?)
+  Removed(String, line~ : Int?)
+  Gap
+}
 
 // Type aliases
 

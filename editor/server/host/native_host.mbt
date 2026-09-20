@@ -612,6 +612,12 @@ fn static_route(path : String) -> (String, String)? {
   match path {
     "/" | "/index.html" => Some(("index.html", "text/html; charset=utf-8"))
     "/embed.html" => Some(("embed.html", "text/html; charset=utf-8"))
+    "/diff-preview.html" =>
+      Some(("diff-preview.html", "text/html; charset=utf-8"))
+    "/diff-preview.mjs" =>
+      Some(("diff-preview.mjs", "text/javascript; charset=utf-8"))
+    "/diff-preview.mjs.map" =>
+      Some(("diff-preview.mjs.map", "application/json; charset=utf-8"))
     "/style.css" => Some(("style.css", "text/css; charset=utf-8"))
     "/codicon.ttf" => Some(("codicon.ttf", "font/ttf"))
     "/editor.mjs" => Some(("editor.mjs", "text/javascript; charset=utf-8"))

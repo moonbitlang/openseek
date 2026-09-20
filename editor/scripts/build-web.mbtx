@@ -120,6 +120,29 @@ async fn main {
     create_mode=@fs.CreateOrTruncate,
   )
 
+  let preview_source_dir = resolved_build_dir(
+    "internal/shell/examples/diff_preview",
+    ["diff_preview.js", "diff_preview.js.map"],
+  )
+  @fs.write_file(
+    "\{target_dir}/diff-preview.mjs",
+    @fs.read_file("\{preview_source_dir}/diff_preview.js").text().replace(
+      old="//# sourceMappingURL=diff_preview.js.map",
+      new="//# sourceMappingURL=diff-preview.mjs.map",
+    ),
+    create_mode=@fs.CreateOrTruncate,
+  )
+  @fs.write_file(
+    "\{target_dir}/diff-preview.mjs.map",
+    @fs.read_file("\{preview_source_dir}/diff_preview.js.map"),
+    create_mode=@fs.CreateOrTruncate,
+  )
+  @fs.write_file(
+    "\{target_dir}/diff-preview.html",
+    @fs.read_file("internal/shell/examples/diff_preview/index.html"),
+    create_mode=@fs.CreateOrTruncate,
+  )
+
   println("Generated production web assets under web/dist")
 }
 
@@ -128,6 +151,7 @@ fn css_sources() -> Array[String] {
   [
     "internal/shell/workbench/theme.css",
     "internal/shell/workbench/shell.css",
+    "viewer/html/diff_preview.css",
     "internal/shell/widgets/file_tree/file_tree.css",
     "viewer/browser/view/codicon/codicon.css",
     "viewer/browser/view/editor.css",

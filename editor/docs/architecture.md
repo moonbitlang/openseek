@@ -85,6 +85,13 @@ Markdown and diff setters return their fully detached old model value so the
 host can release it immediately. Disposal is idempotent and never disposes
 caller-owned models, hosts, or services.
 
+For bounded recorded snippets, `viewer/html` is a separate static presentation
+surface: it prepares escaped Rabbita source and diff HTML without constructing
+editor widgets or models. `diff_preview` consumes caller-owned patch rows and
+optional production tokenizers; it owns gutter layout and scrolling, while
+file actions, excerpt selection and bounds remain host policy. Its contract
+is documented in `viewer/html/README.md`.
+
 The host owns files, transport, persistence, reload policy, shell chrome, and
 error presentation. The viewer owns readonly rendering, selection, scrolling,
 widgets, language-feature presentation, and editor events.

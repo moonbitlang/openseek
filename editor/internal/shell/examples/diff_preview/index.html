@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Diff preview</title>
+    <link rel="stylesheet" href="/style.css" />
+    <style>
+      body { margin: 0; }
+      .diff-preview-demo {
+        box-sizing: border-box;
+        display: block;
+        height: auto;
+        min-height: 100vh;
+        padding: 32px;
+        background: var(--vscode-editor-background);
+        color: var(--vscode-editor-foreground);
+        font-family: system-ui, sans-serif;
+        --editor-font-size: 13px;
+        --editor-line-height: 22px;
+      }
+      .preview-toolbar { margin-bottom: 24px; }
+      .preview-toolbar h1 { font-size: 22px; margin: 0; }
+      .preview-toolbar p { font-size: 14px; }
+      .preview-toolbar button {
+        padding: 6px 12px;
+        margin-right: 8px;
+        border: 1px solid var(--vscode-widget-border);
+        border-radius: 6px;
+        color: inherit;
+        background: transparent;
+        cursor: pointer;
+      }
+      .preview-toolbar button:focus-visible { outline: 2px solid var(--vscode-focusBorder); }
+      .preview-stage { width: 100%; max-width: 1000px; }
+      .preview-stage.narrow { max-width: 420px; }
+      .preview-card { border: 1px solid var(--vscode-widget-border); border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+      .preview-title { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid var(--vscode-widget-border); }
+      @media (max-width: 500px) { .diff-preview-demo { padding: 16px; } }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/diff-preview.mjs"></script>
+  </body>
+</html>
