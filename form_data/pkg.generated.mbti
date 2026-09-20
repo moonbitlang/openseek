@@ -14,6 +14,7 @@ pub(all) suberror FormDataError {
   InvalidFieldName
   InvalidFilename
   InvalidContentType
+  EntropyUnavailable
 } derive(@debug.Debug)
 pub fn FormDataError::to_repr(Self) -> @debug.Repr
 

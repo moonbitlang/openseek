@@ -12,13 +12,15 @@ pub(all) enum Part {
 }
 
 ///|
-/// Invalid multipart metadata. Header values cannot contain control characters;
-/// field names and file content types must also be nonempty.
+/// Multipart construction failures: invalid metadata or unavailable secure
+/// randomness. Header values cannot contain control characters; field names
+/// and file content types must also be nonempty.
 pub(all) suberror FormDataError {
   EmptyForm
   InvalidFieldName
   InvalidFilename
   InvalidContentType
+  EntropyUnavailable
 } derive(Debug)
 
 ///|
@@ -40,6 +42,10 @@ impl Show for FormDataError with fn output(self, logger) {
     InvalidContentType =>
       logger.write_string(
         "multipart file content type must be nonempty ASCII without control characters",
+      )
+    EntropyUnavailable =>
+      logger.write_string(
+        "secure randomness unavailable for multipart boundary",
       )
   }
 }
@@ -103,27 +109,17 @@ fn Part::encode(self : Part) -> EncodedPart raise FormDataError {
 /// its boundary before any network IO. Later edits to `parts` do not affect the
 /// form; immutable file Bytes are retained without copying their contents.
 ///
-/// RFC 7578 section 4.1 requires noncolliding delimiters. We conservatively
-/// scan all encoded headers and payloads, trying numbered suffixes on collision.
-/// The resulting boundary stays fixed for both content_type() and write_to().
+/// The boundary is 30 secure random bytes encoded as 60 hexadecimal characters.
+/// Headers and payloads are not scanned for collisions. Construction fails if
+/// secure randomness is unavailable. The boundary stays fixed for both
+/// content_type() and write_to().
 pub fn FormData::FormData(parts : Array[Part]) -> FormData raise FormDataError {
   if parts.is_empty() {
     raise EmptyForm
   }
   let encoded = parts.map(part => part.encode())
-  let mut boundary = "openseek-form-data"
-  let mut candidate = 0
-  for ;; {
-    let token = @utf8.encode(boundary)
-    if !encoded.any(part => {
-        part.headers.find(token) is Some(_) || part.data.find(token) is Some(_)
-      }) {
-      break
-    }
-    candidate += 1
-    boundary = "openseek-form-data-\{candidate}"
-  }
-  { boundary, parts: encoded, }
+  guard @env.rand(30) is Some(entropy) else { raise EntropyUnavailable }
+  { boundary: @hex.encode(entropy), parts: encoded, }
 }
 
 ///|

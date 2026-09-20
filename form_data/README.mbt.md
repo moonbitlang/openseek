@@ -25,8 +25,13 @@ let connection = @http.post_stream(url, headers={
 form.write_to(connection)
 ```
 
-Construction validates metadata and chooses a boundary absent from all encoded
-headers and field contents. A form must contain at least one field. Order and
+Construction validates metadata and generates a boundary from 30 secure random
+bytes encoded as 60 hexadecimal characters. It does not scan headers or field
+contents for collisions; the random boundary makes accidental collisions
+negligibly unlikely. If secure randomness is unavailable, construction raises
+`FormDataError::EntropyUnavailable`.
+
+A form must contain at least one field. Order and
 duplicate names are preserved. Names must be nonempty; names and filenames may
 contain Unicode, quotes, and backslashes, but no ASCII control characters. File
 content types must be nonempty ASCII without control characters; callers supply

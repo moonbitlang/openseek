@@ -51,60 +51,43 @@ async test "multipart escapes quoted names and filenames" {
 }
 
 ///|
-async test "multipart avoids delimiters in all field headers and payloads" {
-  let baseline = @form_data.FormData([Text(name="x", value="x")])
-  guard baseline.content_type().strip_prefix("multipart/form-data; boundary=")
-    is Some(initial) else {
-    fail("expected multipart Content-Type")
+async test "multipart uses fresh hex boundaries and preserves old delimiter candidates" {
+  let payload = StringBuilder()
+  payload.write_string("openseek-form-data")
+  for i in 1..<=1024 {
+    payload.write_string("\r\n--openseek-form-data-\{i}")
   }
-  let collision = "\{initial}\r\n--\{initial}-1\r\n--\{initial}-2"
-  let cases : Array[@form_data.Part] = [
-    Text(name="x", value=collision),
-    Text(name=initial.to_owned(), value="x"),
+  let data = @utf8.encode(payload.to_string()) + b"\x00\xff"
+  let parts : Array[@form_data.Part] = [
     File(
-      name="x",
-      filename=initial.to_owned(),
+      name="file",
+      filename="image.bin",
       content_type="application/octet-stream",
-      data=b"",
-    ),
-    File(
-      name="x",
-      filename="x",
-      content_type="application/\{initial}",
-      data=b"",
-    ),
-    File(
-      name="x",
-      filename="x",
-      content_type="application/octet-stream",
-      data=@utf8.encode(collision),
+      data~,
     ),
   ]
-  for part in cases {
-    let form = @form_data.FormData([part])
+  let first = @form_data.FormData(parts)
+  let second = @form_data.FormData(parts)
+  assert_true(first.content_type() != second.content_type())
+  for form in [first, second] {
     guard form.content_type().strip_prefix("multipart/form-data; boundary=")
       is Some(boundary) else {
       fail("expected multipart Content-Type")
     }
-    assert_true(boundary != initial)
-    match part {
-      Text(name~, value~) => {
-        assert_true(!name.contains(boundary))
-        assert_true(!value.contains(boundary))
-      }
-      File(name~, filename~, content_type~, data~) => {
-        assert_true(!name.contains(boundary))
-        assert_true(!filename.contains(boundary))
-        assert_true(!content_type.contains(boundary))
-        assert_true(data.find(@utf8.encode(boundary)) is None)
-      }
-    }
-    assert_true(boundary.length() <= 70)
+    assert_eq(boundary.length(), 60)
+    assert_true(
+      boundary
+      .iter()
+      .all(ch => (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')),
+    )
     let reader = @io.MemoryReader(writer => form.write_to(writer))
     defer reader.close()
-    let body = reader.read_all().text()
-    assert_true(body.has_prefix("--\{boundary}\r\n"))
-    assert_true(body.has_suffix("\r\n--\{boundary}--\r\n"))
+    let body = reader.read_all().binary()
+    let prefix = "--\{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"image.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+    assert_eq(
+      body,
+      @utf8.encode(prefix) + data + @utf8.encode("\r\n--\{boundary}--\r\n"),
+    )
   }
 }
 

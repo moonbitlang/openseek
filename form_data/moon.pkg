@@ -1,6 +1,8 @@
 import {
   "moonbitlang/async/io",
+  "moonbitlang/core/encoding/hex",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
 }
 
 import {
