@@ -14,7 +14,7 @@ const modules = {
 // These exclusions belong to the root module only. A repository-level
 // .moonignore would also exclude the members when publishing them separately.
 const rootExclusions = [
-  "desktop", "editor", "protocol", "tools_sdk", "cmd/viz_app", "inspect", "scripts",
+  "desktop", "editor", "protocol", "tools_sdk", "cmd/viz_app", "inspect",
   "tests", "eval", "docs/plans", ".github", ".agents", ".codex",
   "moon.work", "justfile", "AGENTS.md", "agent-improvement-guide.md",
   "improvement.md", "shrink_package.md", "desktop-dev.html", "web/viz_app.js",
@@ -55,7 +55,7 @@ async function stageModule(repository, cwd, module) {
 function moon(args, cwd) {
   execFileSync("moon", args, {
     cwd,
-    env: { ...process.env, NO_COLOR: "1", MOON_WORK: "off", MOON_IGNORE_PREBUILD: "1" },
+    env: { ...process.env, NO_COLOR: "1", MOON_WORK: "off" },
     stdio: ["ignore", "inherit", "inherit"],
   });
 }
