@@ -305,6 +305,9 @@ pub fn endpoints(
     Endpoint(@commands.git_branch, payload => git_branch_op(payload)),
     Endpoint(@commands.git_pull_request, payload => git_pull_request_op(payload)),
     Endpoint(@commands.github_list, payload => github_list_op(payload)),
+    Endpoint(@commands.github_pull_request, payload => {
+      github_pull_request_op(payload)
+    }),
     Endpoint(@commands.git_changes, payload => git_changes_op(payload)),
     Endpoint(@commands.git_history, payload => git_history_op(payload)),
     Endpoint(@commands.git_commit_changes, payload => {

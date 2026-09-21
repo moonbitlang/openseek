@@ -1209,6 +1209,20 @@ pub fn GitPullRequestReply::not_equal(Self, Self) -> Bool
 pub fn GitPullRequestReply::to_json(Self) -> Json
 pub fn GitPullRequestReply::to_repr(Self) -> @debug.Repr
 
+pub(all) struct GithubCheck {
+  name : String
+  state : String
+  url : String?
+  workflow : String?
+} derive(Eq, @debug.Debug)
+pub fn GithubCheck::equal(Self, Self) -> Bool
+pub fn GithubCheck::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubCheck::not_equal(Self, Self) -> Bool
+pub fn GithubCheck::to_json(Self) -> Json
+pub fn GithubCheck::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubCheck
+pub impl @json.FromJson for GithubCheck
+
 pub(all) struct GithubItem {
   number : Int
   title : String
@@ -1265,6 +1279,56 @@ pub fn GithubListReply::to_json(Self) -> Json
 pub fn GithubListReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GithubListReply
 pub impl @json.FromJson for GithubListReply
+
+pub(all) struct GithubPullRequestDetail {
+  item : GithubItem
+  state : String
+  mergeable : String
+  body : String
+  base : String
+  head : String
+  additions : Int
+  deletions : Int
+  changed_files : Int
+  checks : Array[GithubCheck]
+  created_at : String
+  reviewers : Array[GithubReviewer]
+  assignees : Array[String]
+  labels : Array[String]
+  milestone : String?
+} derive(Eq, @debug.Debug)
+pub fn GithubPullRequestDetail::equal(Self, Self) -> Bool
+pub fn GithubPullRequestDetail::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubPullRequestDetail::not_equal(Self, Self) -> Bool
+pub fn GithubPullRequestDetail::to_json(Self) -> Json
+pub fn GithubPullRequestDetail::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubPullRequestDetail
+pub impl @json.FromJson for GithubPullRequestDetail
+
+pub(all) struct GithubPullRequestPayload {
+  cwd : String
+  repository_url : String
+  number : Int
+} derive(Eq, @debug.Debug)
+pub fn GithubPullRequestPayload::equal(Self, Self) -> Bool
+pub fn GithubPullRequestPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubPullRequestPayload::not_equal(Self, Self) -> Bool
+pub fn GithubPullRequestPayload::to_json(Self) -> Json
+pub fn GithubPullRequestPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubPullRequestPayload
+pub impl @json.FromJson for GithubPullRequestPayload
+
+pub(all) struct GithubReviewer {
+  name : String
+  state : String
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewer::equal(Self, Self) -> Bool
+pub fn GithubReviewer::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewer::not_equal(Self, Self) -> Bool
+pub fn GithubReviewer::to_json(Self) -> Json
+pub fn GithubReviewer::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewer
+pub impl @json.FromJson for GithubReviewer
 
 pub(all) struct GoalPayload {
   session : String

@@ -18,6 +18,16 @@ pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
 // Errors
 
 // Types and methods
+pub(all) struct Detail {
+  repository_url : String
+  item : @protocol.GithubItem
+  reply : @protocol.GithubPullRequestDetail?
+  loading : Bool
+  error : String?
+} derive(Eq)
+pub fn Detail::equal(Self, Self) -> Bool
+pub fn Detail::not_equal(Self, Self) -> Bool
+
 pub(all) struct Group {
   expanded : Bool
   reply : @protocol.GithubListReply?
@@ -33,6 +43,10 @@ pub(all) enum Msg {
   Refresh
   Retry(@protocol.GithubListKind)
   More(@protocol.GithubListKind)
+  Select(String, @protocol.GithubItem)
+  RefreshDetail
+  CloseDetail
+  DetailLoaded(Int, Result[@protocol.GithubPullRequestDetail, String])
   Listed(Int, @protocol.GithubListKind, Result[@protocol.GithubListReply, String])
 }
 
@@ -51,6 +65,8 @@ pub(all) struct State {
   created : Group
   all_open : Group
   issues : Group
+  detail : Detail?
+  detail_epoch : Int
 } derive(Eq)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool

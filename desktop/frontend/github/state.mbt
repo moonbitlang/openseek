@@ -18,6 +18,15 @@ fn Group::empty(expanded : Bool) -> Group {
 }
 
 ///|
+pub(all) struct Detail {
+  repository_url : String
+  item : @protocol.GithubItem
+  reply : @protocol.GithubPullRequestDetail?
+  loading : Bool
+  error : String?
+} derive(Eq)
+
+///|
 pub(all) struct State {
   owner : Owner?
   active : Bool
@@ -26,6 +35,8 @@ pub(all) struct State {
   created : Group
   all_open : Group
   issues : Group
+  detail : Detail?
+  detail_epoch : Int
 } derive(Eq)
 
 ///|
@@ -38,6 +49,8 @@ pub fn State::empty() -> State {
     created: Group::empty(false),
     all_open: Group::empty(true),
     issues: Group::empty(true),
+    detail: None,
+    detail_epoch: 0,
   }
 }
 
@@ -48,6 +61,10 @@ pub(all) enum Msg {
   Refresh
   Retry(@protocol.GithubListKind)
   More(@protocol.GithubListKind)
+  Select(String, @protocol.GithubItem)
+  RefreshDetail
+  CloseDetail
+  DetailLoaded(Int, Result[@protocol.GithubPullRequestDetail, String])
   Listed(
     Int,
     @protocol.GithubListKind,
@@ -138,6 +155,7 @@ pub fn reconcile(
       owner,
       active,
       epoch: state.epoch + 1,
+      detail_epoch: state.detail_epoch + 1,
     })
   }
   if state.active != active {
@@ -164,13 +182,45 @@ pub fn update(
       )
     }
     Refresh =>
-      request_visible(emit, {
+      refresh(emit, {
         ..state,
         epoch: state.epoch + 1,
         created: Group::empty(state.created.expanded),
         all_open: Group::empty(state.all_open.expanded),
         issues: Group::empty(state.issues.expanded),
       })
+    Select(repository_url, item) => {
+      guard state.active else { return (@cmd.none, state) }
+      request_detail(emit, {
+        ..state,
+        detail: Some({
+          repository_url,
+          item,
+          reply: None,
+          loading: false,
+          error: None,
+        }),
+      })
+    }
+    RefreshDetail => request_detail(emit, state)
+    CloseDetail =>
+      (
+        @cmd.none,
+        { ..state, detail: None, detail_epoch: state.detail_epoch + 1, },
+      )
+    DetailLoaded(epoch, result) => {
+      guard epoch == state.detail_epoch &&
+        state.detail is Some(detail) &&
+        detail.loading else {
+        return (@cmd.none, state)
+      }
+      let detail = match result {
+        Ok(reply) =>
+          { ..detail, reply: Some(reply), loading: false, error: None, }
+        Err(error) => { ..detail, loading: false, error: Some(error), }
+      }
+      (@cmd.none, { ..state, detail: Some(detail), })
+    }
     Retry(kind) =>
       request(
         emit,
@@ -206,6 +256,56 @@ pub fn update(
 }
 
 ///|
+fn request_detail(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
+  guard state.active &&
+    state.owner is Some(owner) &&
+    state.detail is Some(detail) else {
+    return (@cmd.none, state)
+  }
+  let epoch = state.detail_epoch + 1
+  let command = @cmd.attempt(
+    result => {
+      emit(DetailLoaded(epoch, result.map_err(@interop.bridge_error_text)))
+    },
+    () => {
+      @interop.bridge_request(owner.channel, @commands.github_pull_request, {
+        cwd: owner.cwd,
+        repository_url: detail.repository_url,
+        number: detail.item.number,
+      })
+    },
+  )
+  (
+    command,
+    {
+      ..state,
+      detail_epoch: epoch,
+      detail: Some({ ..detail, loading: true, error: None, }),
+    },
+  )
+}
+
+///|
+/// Keep the last loaded description readable during refresh or a temporary
+/// disconnection. A separate generation fences selection, close and host changes
+/// without invalidating the inventory's independent requests.
+fn refresh(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
+  let (lists, state) = request_visible(emit, state)
+  if !state.active {
+    return (
+      lists,
+      {
+        ..state,
+        detail_epoch: state.detail_epoch + 1,
+        detail: state.detail.map(detail => { ..detail, loading: false, }),
+      },
+    )
+  }
+  let (details, state) = request_detail(emit, state)
+  (@cmd.batch([lists, details]), state)
+}
+
+///|
 pub extend Owner with Eq::{equal, not_equal}
 
 ///|
@@ -213,3 +313,6 @@ pub extend Group with Eq::{equal, not_equal}
 
 ///|
 pub extend State with Eq::{equal, not_equal}
+
+///|
+pub extend Detail with Eq::{equal, not_equal}

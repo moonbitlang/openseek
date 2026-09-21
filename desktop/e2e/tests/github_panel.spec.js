@@ -1,6 +1,63 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+test('PR Markdown resolves hosted links and opens images only on an explicit click', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const originalReply = app.replyFor.bind(app);
+  const url = 'https://github.com/owner/project/pull/42';
+  const item = { number: 42, title: 'Hosted Markdown', url, author: 'contributor', draft: false };
+  const remoteRequests = [];
+  await page.context().route('https://**/*', route => {
+    remoteRequests.push(route.request().url());
+    return route.fulfill({ contentType: 'text/html', body: '<title>Explicit image navigation</title>' });
+  });
+  app.replyFor = request => {
+    if (request.method === 'github.list') return {
+      repository: 'owner/project', repository_url: 'https://github.com/owner/project',
+      has_more: false, items: request.params.kind === 'issues' ? [] : [item],
+    };
+    if (request.method === 'github.pull_request') return {
+      item, state: 'OPEN', mergeable: 'MERGEABLE', base: 'main', head: 'feature',
+      body: [
+        '[Guide](../blob/main/README.md)', '[Discussion](#discussion)',
+        '![Relative screenshot](docs/shot.png)', '![Remote screenshot](https://image.example.test/tracker.png)',
+        '[Local file](file:///tmp/private.txt)', '[Unsafe script](javascript:alert(1))',
+      ].join('\n\n'),
+      additions: 1, deletions: 0, changed_files: 1, checks: [], comments: [],
+      created_at: '2026-09-21T00:00:00Z', reviewers: [], assignees: [], labels: [],
+    };
+    return originalReply(request);
+  };
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.getByTitle('New tab', { exact: true }).click();
+  await page.getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  await page.locator('.github-pulls').getByRole('button', { name: /^Hosted Markdown,/ }).click();
+  const body = page.locator('.github-description .markdown');
+  await expect(body.getByRole('link', { name: 'Guide', exact: true }))
+    .toHaveAttribute('href', 'https://github.com/owner/project/blob/main/README.md');
+  await expect(body.getByRole('link', { name: 'Discussion', exact: true })).toHaveAttribute('href', url + '#discussion');
+  await expect(body.getByRole('link', { name: 'Open image: Relative screenshot', exact: true }))
+    .toHaveAttribute('href', 'https://github.com/owner/project/pull/docs/shot.png');
+  await expect(body.locator('img, .transcript-image, .file-link')).toHaveCount(0);
+  await expect(body.getByRole('link', { name: 'Local file', exact: true })).toHaveCount(0);
+  await expect(body.getByRole('link', { name: 'Unsafe script', exact: true })).toHaveCount(0);
+  expect(remoteRequests).toEqual([]);
+  const popupPromise = page.waitForEvent('popup');
+  const navigationPromise = page.context().waitForEvent('request', {
+    predicate: request => request.url() === 'https://image.example.test/tracker.png',
+  });
+  await body.getByRole('link', { name: 'Open image: Remote screenshot', exact: true }).click();
+  const popup = await popupPromise;
+  await navigationPromise;
+  await popup.close();
+  expect(remoteRequests).toEqual(['https://image.example.test/tracker.png']);
+  expect(app.requests.filter(request => request.method === 'fs.read_file' && request.params?.path === 'docs/shot.png')).toEqual([]);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('GitHub dock keeps both inventories scrollable and disclosures keyboard accessible', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const originalReply = app.replyFor.bind(app);

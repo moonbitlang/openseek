@@ -21,14 +21,26 @@
 /// returned command (the frontend opens the file or reveals the directory).
 /// Absent (tests, plain rendering), explicit links remain ordinary anchors.
 /// Inline code stays inert.
+/// `web_source` renders a hosted document: relative links resolve against its
+/// URL, local file actions are disabled, and images require an explicit click.
 pub fn markdown_nodes(
   locale? : @i18n.Locale = English,
   source : String,
   open_file? : (String) -> @cmd.Cmd,
+  web_source? : String,
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
-    let render = MarkdownRender::{ locale, defs: doc.defs, open_file, }
+    let render = MarkdownRender::{
+      locale,
+      defs: doc.defs,
+      open_file: if web_source is Some(_) {
+        None
+      } else {
+        open_file
+      },
+      web_source,
+    }
     @js.Value::cast_from(render.block_nodes(doc.block))
   }) catch {
     _ => [@html.pre(class="markdown-fallback", source)]
@@ -43,6 +55,7 @@ priv struct MarkdownRender {
   defs : Map[String, @cmark.LabelDef]
   // How to make a file path clickable; `None` renders paths inertly.
   open_file : ((String) -> @cmd.Cmd)?
+  web_source : String?
 }
 
 ///|
@@ -313,10 +326,11 @@ fn MarkdownRender::push_inline(
       // regular links and images, otherwise it renders as inert text.
       if node.v.is_email {
         out.push(link_node("mailto:" + url, [@html.text(url)]))
-      } else if @cmark.InlineLink::is_unsafe(url) {
-        out.push(@html.text(url))
       } else {
-        out.push(link_node(url, [@html.text(url)]))
+        match self.safe_destination(url) {
+          Some(href) => out.push(link_node(href, [@html.text(url)]))
+          None => out.push(@html.text(url))
+        }
       }
     }
     Link(node) => {
@@ -341,7 +355,20 @@ fn MarkdownRender::push_inline(
     // from destinations that pass the same safety filter as links.
     Image(node) => {
       let alt = plain_text(node.v.text)
-      if self.local_image_destination(node.v) is Some(path) {
+      if self.web_source is Some(_) {
+        // A hosted author must not initiate a request from this machine just
+        // because their Markdown is displayed. Keep the destination reviewable.
+        let label = match self.locale {
+          SimplifiedChinese => "打开图片：" + alt
+          TraditionalChinese => "開啟圖片：" + alt
+          Japanese => "画像を開く：" + alt
+          English => "Open image: " + alt
+        }
+        match self.link_destination(node.v) {
+          Some(url) => out.push(link_node(url, [@html.text(label)]))
+          None => out.push(@html.text(alt))
+        }
+      } else if self.local_image_destination(node.v) is Some(path) {
         // Local paths must not resolve against the page's `proton://app/`
         // origin. Leave `src` empty and let the transcript's viewport observer
         // read bounded bytes from the owning host only when this node is seen.
@@ -544,12 +571,34 @@ fn MarkdownRender::link_destination(
   guard self.raw_link_destination(link) is Some(destination) else {
     return None
   }
+  self.safe_destination(destination)
+}
+
+///|
+fn MarkdownRender::safe_destination(
+  self : MarkdownRender,
+  destination : String,
+) -> String? {
   if @cmark.InlineLink::is_unsafe(destination) {
     None
+  } else if self.web_source is Some(base) {
+    resolve_web_destination(destination, base).to_option()
   } else {
     Some(destination)
   }
 }
+
+///|
+extern "js" fn resolve_web_destination(
+  destination : String,
+  base : String,
+) -> @js.Nullable[String] =
+  #| (destination, base) => {
+  #|   try {
+  #|     const url = new URL(destination, base);
+  #|     return ["https:", "http:", "mailto:"].includes(url.protocol) ? url.href : null;
+  #|   } catch (_) { return null; }
+  #| }
 
 ///|
 /// Resolve an inline or reference-style Markdown link without deciding how

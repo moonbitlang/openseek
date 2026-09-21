@@ -640,6 +640,12 @@ pub let github_list : Command[
 ] = Command("github.list")
 
 ///|
+pub let github_pull_request : Command[
+  @protocol.GithubPullRequestPayload,
+  @protocol.GithubPullRequestDetail,
+] = Command("github.pull_request")
+
+///|
 pub let git_changes : Command[
   @protocol.GitChangesPayload,
   @protocol.GitChangesReply,

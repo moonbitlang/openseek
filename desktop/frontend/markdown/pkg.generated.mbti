@@ -12,7 +12,7 @@ pub fn copy_button(locale? : @i18n.Locale, String, class~ : String, title~ : Str
 
 pub fn linkified_text_nodes(String) -> Array[@html.Html]
 
-pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd) -> Array[@html.Html]
+pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd, web_source? : String) -> Array[@html.Html]
 
 // Errors
 

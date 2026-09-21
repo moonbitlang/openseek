@@ -53,15 +53,26 @@ fn list_view(
       )
     }
     for item in reply.items {
+      let selected = !(kind is Issues) &&
+        state.detail is Some({ item: { url, .. }, .. }) &&
+        url == item.url
       let meta = "#\{item.number}" +
         item.author.map(author => " · \{author}").unwrap_or("") +
         (if item.draft { " · Draft" } else { "" })
       children.push(
         @html.button(
-          class="github-item" + (if item.draft { " draft" } else { "" }),
-          title="\{item.title}\n\{meta}\nOpen on GitHub",
-          attrs=@html.Attrs::build().aria_label("\{item.title}, \{meta}"),
-          on_click=open_link(item.url),
+          class="github-item" +
+            (if item.draft { " draft" } else { "" }) +
+            (if selected { " selected" } else { "" }),
+          title="\{item.title}\n\{meta}",
+          attrs=@html.Attrs::build()
+            .aria_label("\{item.title}, \{meta}")
+            .aria_current(if selected { "true" } else { "false" }),
+          on_click=if kind is Issues {
+            open_link(item.url)
+          } else {
+            emit(Select(reply.repository_url, item))
+          },
           [
             avatar_view(item.avatar_url),
             @html.span(class="github-item-title", item.title),
@@ -152,7 +163,7 @@ fn avatar_view(url : String?) -> @html.Html {
 }
 
 ///|
-pub fn panel(
+fn inventory(
   state : State,
   emit : @cmd.Emit[Msg],
   open_link : (String) -> @cmd.Cmd,
@@ -192,7 +203,7 @@ pub fn panel(
     }
     pulls.push(@html.div(class="github-section-body", groups))
   }
-  @html.div(class="github-panel", [
+  @html.div(class="github-inventory", [
     @html.div(class="github-toolbar", [
       @html.span(
         class="github-repository",
@@ -245,5 +256,25 @@ pub fn panel(
         },
       ],
     ),
+  ])
+}
+
+///|
+pub fn panel(
+  state : State,
+  emit : @cmd.Emit[Msg],
+  open_link : (String) -> @cmd.Cmd,
+) -> @html.Html {
+  // Replacing the selected PR resets its scroll position. Refreshing the same
+  // PR keeps the keyed subtree, so a reader does not lose their place.
+  let detail_key = state.detail
+    .map(detail => detail.item.url)
+    .unwrap_or("placeholder")
+  let details : Map[String, @html.Html] = Map([
+    (detail_key, detail_view(state, emit, open_link)),
+  ])
+  @html.div(class="github-panel", [
+    @html.div(class="github-detail-host", details),
+    inventory(state, emit, open_link),
   ])
 }

@@ -226,6 +226,10 @@ test('review context survives regrouping and a partial group changes only on exp
   await expect(popup).toContainText('10');
   await expect(popup.locator('.changes-preview')).not.toContainText('20');
   await page.keyboard.press('Escape');
+  // Dismissal restores focus in an after-render command. Finish that transition
+  // before opening the hunk menu, whose outside-focus listener would close it.
+  await expect(popup).toBeHidden();
+  await expect(page.locator('.composer-changes .changes-chip .mention-jump')).toBeFocused();
   await contextButtons(page).click();
   await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeVisible();
   const menu = page.getByRole('menu');
