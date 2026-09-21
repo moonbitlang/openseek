@@ -1737,10 +1737,10 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.minimal-job-note {
+.minimal-runtime-note {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   column-gap: 8px;
 }
 .minimal-tool-status {

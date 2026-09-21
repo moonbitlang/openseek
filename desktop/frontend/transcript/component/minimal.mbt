@@ -69,7 +69,17 @@ fn MinimalCall::from_tool(
   } else if call.name == "mbtx" && argument_description(call) is Some(text) {
     text
   } else if brief is Some(text) {
-    text
+    if call.name == "job_output" {
+      match locale {
+        English => "Read output of \{text}"
+        Spanish => "Leer la salida de \{text}"
+        SimplifiedChinese => "读取输出：\{text}"
+        TraditionalChinese => "讀取輸出：\{text}"
+        Japanese => "出力を確認：\{text}"
+      }
+    } else {
+      text
+    }
   } else if call.name != "mbtx" && argument_description(call) is Some(text) {
     text
   } else {
@@ -589,33 +599,27 @@ fn MinimalActivity::render(
   single? : Bool = false,
 ) -> @html.Html {
   match self {
-    Notice(text~, error~) => {
-      let caption = job_caption(text, locale, notice=true)
+    Notice(text~, error~) =>
       @html.div(
-        class=if caption is Some(_) && error {
-          "minimal-note minimal-job-note transcript-error-message"
-        } else if caption is Some(_) {
-          "minimal-note minimal-job-note"
-        } else if error {
-          "minimal-note transcript-error-message"
+        class=if error {
+          "minimal-note minimal-runtime-note transcript-error-message"
         } else {
-          "minimal-note"
+          "minimal-note minimal-runtime-note"
         },
         title=text,
-        if caption is Some(caption) {
-          [
-            @html.span(
-              class="minimal-tool-icon",
-              attrs=@html.Attrs::build().aria_hidden("true"),
-              caption.icon,
-            ),
-            @html.span(caption.label),
-          ]
-        } else {
-          [@html.text(text)]
-        },
+        [
+          @html.span(
+            class="minimal-tool-icon",
+            attrs=@html.Attrs::build().aria_hidden("true"),
+            if error {
+              @icons.icon_error()
+            } else {
+              @icons.icon_comment()
+            },
+          ),
+          @html.span(text),
+        ],
       )
-    }
     Call(call) =>
       @html.div(
         class=if single {
@@ -638,14 +642,7 @@ fn MinimalActivity::render(
           @html.span(
             class="minimal-call-caption",
             title=call.caption,
-            if call.tool_name == "job_output" {
-              job_caption(call.caption, locale, notice=false).map_or(
-                call.caption,
-                caption => caption.label,
-              )
-            } else {
-              call.caption
-            },
+            call.caption,
           ),
           if single {
             MinimalToolStatus::from_activities([self]).view(locale~)
