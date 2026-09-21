@@ -34,7 +34,7 @@ tool, not the decoder.
 | `edits[i].new_string` | string | yes | Same missing/wrong-type behavior as `file`. |
 | `edits[i].start_line` | integer | yes | Positive 1-based inclusive search start; absent lists the present keys so a misnamed key (e.g. `line`) is obvious. |
 | `edits[i].end_line` | integer | no | Optional positive 1-based inclusive range end; when present, it must be greater than or equal to `start_line`. |
-| `revert_if_error_delta_greater_or_equal` | integer | no | Non-negative threshold; absent/null is `None`, resolved by the tool to default `10` (cap `200`). |
+| `revert_if_error_delta_greater_or_equal` | integer | no | Non-negative threshold; absent/null is `None`, resolved by the tool to default `10`. |
 | `revert_if_warning_delta_greater_or_equal` | integer | no | Non-negative threshold; absent/null disables the warning guard. |
 
 The decoder does not check whether `old_string` occurs in the file, nor that a

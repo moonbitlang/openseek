@@ -19,8 +19,7 @@ pub fn Comparability::feedback(
   if self.before_count is Some(count) {
     data["baseline_error_count"] = count.to_json()
   }
-  if verdict is (CertifiedReach | PlausibleReach) &&
-    delta < HostMaxRevertThreshold {
+  if verdict is (CertifiedReach | PlausibleReach) {
     data["reissue_with"] = (delta + 1).to_json()
   }
   data

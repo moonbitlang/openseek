@@ -42,16 +42,6 @@ pub fn decode(arguments : Json) -> EditInput raise {
 
 ///|
 fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
-  if fields.contains("revert_when_errors_above") {
-    fail(
-      "arguments.revert_when_errors_above was replaced by revert_if_error_delta_greater_or_equal, which compares the net error-count change",
-    )
-  }
-  if fields.contains("revert_when_warnings_above") {
-    fail(
-      "arguments.revert_when_warnings_above was renamed to revert_if_warning_delta_greater_or_equal and now compares the net warning change",
-    )
-  }
   let path = required_string(fields, "path")
   let old_string = required_string(fields, "old_string")
   let new_string = required_string(fields, "new_string")

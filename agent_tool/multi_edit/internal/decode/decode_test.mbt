@@ -124,18 +124,6 @@ test "decode_args rejects a non-integer revert_if_error_delta_greater_or_equal" 
 }
 
 ///|
-test "decode_args rejects legacy diagnostic guard names" {
-  assert_decode_args_error(
-    { "revert_when_errors_above": 10 },
-    "replaced by revert_if_error_delta_greater_or_equal",
-  )
-  assert_decode_args_error(
-    { "revert_when_warnings_above": 0 },
-    "replaced by revert_if_warning_delta_greater_or_equal",
-  )
-}
-
-///|
 test "decode_edits_json parses a bare array of edits" {
   let edits = @decode.decode_edits_json([
     {

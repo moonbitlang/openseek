@@ -83,7 +83,7 @@ pub fn definition(
         "revert_if_error_delta_greater_or_equal": {
           "type": "integer",
           "description": (
-            #|Auto-revert safety net, default 10, clamped to 0..200 (edit defaults to 5). Revert
+            #|Auto-revert safety net, default 10 (edit defaults to 5). Revert
             #|the entire batch when the reported error count change (after - before)
             #|is >= this non-negative threshold. 0 requires a decrease; 1 permits an
             #|unchanged total. Counts are not proof that no new problems exist. Caveat:
@@ -97,7 +97,7 @@ pub fn definition(
             #|value to re-issue the unchanged batch with), or in dependents of a package
             #|the batch fixed (plausible reach — it names the sites to vet first, then
             #|the value). Review those diagnostics before raising the threshold: to admit
-            #|a delta D, the threshold must be at least D + 1 (host maximum 200).
+            #|a delta D, the threshold must be at least D + 1.
           ),
           "examples": [10],
         },
@@ -497,9 +497,7 @@ async fn multi_edit_files(
     revert_guarded_response(
       check_paths,
       writes,
-      @diagnostic_guard.effective_revert_threshold(
-        revert_if_error_delta_greater_or_equal,
-      ),
+      revert_if_error_delta_greater_or_equal.unwrap_or(10),
       baseline,
       warnings_guard=revert_if_warning_delta_greater_or_equal,
       write_scope?,

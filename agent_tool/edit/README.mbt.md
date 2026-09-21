@@ -72,7 +72,7 @@ and the edit should stay inside a tighter range:
 | `start_line`  | integer | yes | 1-based first line of the search/replace range. The first match at or after this line is replaced. |
 | `end_line`    | integer | no  | 1-based last line of the search/replace range. Defaults to the file end. |
 | `revert_on_parse_errors` | boolean | no (default `true`) | Reject an edit whose result would introduce new lex/parse errors into a syncheck input (`.mbt`, `.mbt.md`, `moon.mod`, `moon.pkg`), leaving the file untouched and returning the errors with excerpts. In `.mbt.md` only the checked fenced blocks are parsed. Set `false` only to intentionally produce non-parsing content. |
-| `revert_if_error_delta_greater_or_equal` | integer | no (default `5`) | Revert when `after.error_count - before.error_count >= threshold`. Non-negative, clamped to `0..200`: `0` requires a decrease; `1` allows an unchanged total. |
+| `revert_if_error_delta_greater_or_equal` | integer | no (default `5`) | Revert when `after.error_count - before.error_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. |
 | `revert_if_warning_delta_greater_or_equal` | integer | no (off) | Revert when `after.warning_count - before.warning_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. Removing two warnings and introducing one passes at `0`. |
 | `replace_all_preview` | boolean | no (default `false`) | Preview mode: the file is **not** modified. Every match of `old_string` in the range is listed with surrounding context lines, plus a ready-to-review `multi_edit` edits array (capped at 40 sites; several matches on one line collapse into a single whole-line entry). |
 
@@ -89,7 +89,7 @@ the error guard defaults to `5` and the warning guard is off.
 Error-triggered reverts include the same `comparability:` analysis as `multi_edit`:
 edited-file errors, breakage in dependent code, uncertain attribution, or
 previously unreached diagnostics. Reach verdicts include `data.reissue_with = delta + 1`
-when within the host cap, alongside `verdict` and its evidence. Inspect the named
+alongside `verdict` and its evidence. Inspect the named
 sites before retrying; these are diagnostic hints, not proof of causation.
 
 Legacy calls with `replace_all=false` are tolerated, but `replace_all=true` is

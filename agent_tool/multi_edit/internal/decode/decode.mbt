@@ -19,9 +19,7 @@ pub struct MultiEditItem {
 pub struct MultiEditArgs {
   inline : Array[MultiEditItem]
   edits_file : String?
-  // The model's requested auto-revert threshold (`None` = host default). The
-  // tool clamps it to a host-enforced range, so the model can tighten the
-  // guardrail but not raise it past the cap.
+  // Requested auto-revert threshold (`None` = host default).
   revert_if_error_delta_greater_or_equal : Int?
   // Pre-write syntax gate (default true): reject the batch when any edited
   // `.mbt` file would gain new lex/parse errors.
@@ -44,19 +42,6 @@ pub struct MultiEditArgs {
 pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
   match arguments {
     Object(fields) => {
-      for
-        (old_name, replacement) in [
-          ("revert_when_errors_above", "revert_if_error_delta_greater_or_equal"),
-          (
-            "revert_when_warnings_above", "revert_if_warning_delta_greater_or_equal",
-          ),
-        ] {
-        if fields.contains(old_name) {
-          fail(
-            "arguments.\{old_name} was replaced by \{replacement}, which compares the net count change",
-          )
-        }
-      }
       let inline = match fields {
         { "edits": Array(items), .. } => decode_edit_array(items)
         { "edits"? : Some(Null) | None, .. } => []

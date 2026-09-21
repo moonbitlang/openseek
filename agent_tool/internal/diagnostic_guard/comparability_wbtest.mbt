@@ -56,22 +56,6 @@ fn classify(
 }
 
 ///|
-test "effective_revert_threshold defaults and clamps to the host policy" {
-  // Absent → host default.
-  assert_eq(effective_revert_threshold(None), DefaultRevertThreshold)
-  // The model may tighten the guard, down to 0 (revert on any new error).
-  assert_eq(effective_revert_threshold(Some(2)), 2)
-  assert_eq(effective_revert_threshold(Some(0)), 0)
-  // A negative request is floored at 0, not treated as "disable".
-  assert_eq(effective_revert_threshold(Some(-3)), 0)
-  // The model cannot raise the guard past the host cap.
-  assert_eq(
-    effective_revert_threshold(Some(HostMaxRevertThreshold + 50)),
-    HostMaxRevertThreshold,
-  )
-}
-
-///|
 /// The issue-#1452 shape: the pre-batch run stopped at 10 errors in the edited
 /// package `x`; the batch fixed all 10, moon then compiled `y` (which imports
 /// `x`), and 87 errors in `y` surfaced. By count that is "77 introduced"; by
@@ -108,18 +92,6 @@ test "comparability calls new errors in dependents of a fixed package a plausibl
     ),
   )
   assert_false(advice.contains("more precise old_strings"))
-  // Past the host cap the override cannot reach; say so instead of naming an
-  // unreachable value.
-  let capped = comparability_advice(
-    evidence,
-    introduced=HostMaxRevertThreshold + 1,
-  )
-  assert_true(
-    capped.contains(
-      "exceeds the host cap of revert_if_error_delta_greater_or_equal=\{HostMaxRevertThreshold}",
-    ),
-  )
-  assert_false(capped.contains("UNCHANGED"))
 }
 
 ///|
@@ -453,17 +425,14 @@ fn clean_tree_evidence() -> Comparability {
 }
 
 ///|
-test "inclusive retry threshold respects the host cap" {
+test "inclusive retry threshold can exceed 200" {
   let evidence = classify(
     Some(check_result([site("x/x.mbt", "1:1-1:2", "old")])),
     check_result([site("z/z.mbt", "1:1-1:2", "new")]),
     ["/r/x/x.mbt"],
   )
   assert_true(
-    evidence.feedback(delta=199).get("reissue_with") is Some(Number(200, ..)),
+    evidence.feedback(delta=250).get("reissue_with") is Some(Number(251, ..)),
   )
-  assert_true(evidence.feedback(delta=200).get("reissue_with") is None)
-  assert_true(reissue_advice(199).contains("greater_or_equal=200"))
-  assert_true(reissue_advice(200).contains("split it by package"))
-  assert_eq(effective_revert_threshold(None, default=5), 5)
+  assert_true(reissue_advice(250).contains("greater_or_equal=251"))
 }

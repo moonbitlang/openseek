@@ -1,29 +1,4 @@
 ///|
-/// Inclusive error-delta default for batches; single edits request 5.
-const DefaultRevertThreshold : Int = 10
-
-///|
-/// The largest threshold the model may request. The model can make the guard
-/// stricter (0 requires a decrease) and, when a revert report
-/// shows the count delta to be a measurement artifact (see `Comparability`),
-/// raise it above the reported delta so the same batch is admitted — but never
-/// past this cap, so an overconfident call cannot silently disable the net.
-const HostMaxRevertThreshold : Int = 200
-
-///|
-/// Resolve the model's requested threshold against the host policy: absent →
-/// the default; present → clamped to `[0, HostMaxRevertThreshold]`.
-pub fn effective_revert_threshold(
-  requested : Int?,
-  default? : Int = DefaultRevertThreshold,
-) -> Int {
-  match requested {
-    Some(value) => value.clamp(min=0, max=HostMaxRevertThreshold)
-    None => default
-  }
-}
-
-///|
 /// The verdict's name in `data`, one word per outcome.
 fn Verdict::name(self : Verdict) -> String {
   match self {
@@ -429,13 +404,9 @@ fn site_list(sites : Array[String]) -> String {
 }
 
 ///|
-/// The re-issue instruction for a reach verdict, or why it cannot be given.
+/// The inclusive threshold that admits the reported delta.
 fn reissue_advice(introduced : Int) -> String {
-  if introduced >= HostMaxRevertThreshold {
-    "The delta exceeds the host cap of revert_if_error_delta_greater_or_equal=\{HostMaxRevertThreshold}, so this batch cannot be admitted in one call: split it by package and let each part's check reach further."
-  } else {
-    "Re-issue the batch UNCHANGED with revert_if_error_delta_greater_or_equal=\{introduced + 1}; it will then be kept and the remaining errors reported."
-  }
+  "Re-issue the batch UNCHANGED with revert_if_error_delta_greater_or_equal=\{introduced + 1}; it will then be kept and the remaining errors reported."
 }
 
 ///|

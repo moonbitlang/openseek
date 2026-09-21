@@ -84,7 +84,7 @@ At least one of `edits` / `edits_file` must yield a non-empty batch.
 | `edits[i].new_string` | string | yes | Replacement text. It must differ from `old_string`. |
 | `edits[i].start_line` | integer | yes | 1-based first line of this edit's search range. The first match at or after this line is replaced. |
 | `edits[i].end_line` | integer | no | Optional 1-based last line of this edit's search range. Defaults to the file end. |
-| `revert_if_error_delta_greater_or_equal` | integer | no (default `10`) | Revert when `after.error_count - before.error_count >= threshold`. Non-negative, clamped to `0..200`: `0` requires a decrease; `1` allows an unchanged total. |
+| `revert_if_error_delta_greater_or_equal` | integer | no (default `10`) | Revert when `after.error_count - before.error_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. |
 | `revert_if_warning_delta_greater_or_equal` | integer | no (off) | Revert when `after.warning_count - before.warning_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. Removing two warnings and introducing one passes at `0`. |
 
 Both guards compare reported count changes over all projects touched by the batch.
@@ -93,7 +93,7 @@ specified. Checks run before and after writing. An unavailable or incomplete
 baseline refuses the batch, and an unverifiable post-write check rolls it back.
 Errors can expose or hide checked packages, so counts do not prove that no new
 problems exist. Error reverts use the shared `comparability:` analysis; after
-reviewing its evidence, a reach retry uses `delta + 1`, up to the error cap `200`.
+reviewing its evidence, a reach retry uses `delta + 1`.
 For warning fixes, explicitly use error threshold `1` and warning threshold `0`.
 
 ## Action

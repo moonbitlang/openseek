@@ -47,6 +47,7 @@ async test "both tools enforce their default boundary and allow explicit overrid
         (limit - 1, None, true),
         (limit, None, false),
         (limit, Some(limit + 1), true),
+        (201, Some(202), true),
       ] {
       @vfs.with_tmpdir(dir => {
         let original = "pub fn f() -> Int { 0 }\n"

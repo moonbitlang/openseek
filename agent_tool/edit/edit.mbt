@@ -77,7 +77,7 @@ pub fn definition(
       #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
       #|Diagnostic guards run moon check before and after writing. The error-delta
-      #|threshold defaults to 5 (clamped to 0..200); the warning guard defaults off.
+      #|threshold defaults to 5; the warning guard defaults off.
       #|revert_if_error_delta_greater_or_equal=1 reverts when the error total increases;
       #|revert_if_warning_delta_greater_or_equal=0 reverts when the warning total does not
       #|decrease (after - before >= 0). Combine them for a warning-fix script.
@@ -123,7 +123,7 @@ pub fn definition(
         "revert_if_error_delta_greater_or_equal": {
           "type": "integer",
           "description": (
-            #|Post-write guard, default 5, clamped to 0..200. Revert when the reported error count
+            #|Post-write guard, default 5. Revert when the reported error count
             #|change (after - before) is >= this non-negative threshold. 0 requires a
             #|decrease; 1 allows an unchanged total. Counts can be misleading when errors
             #|change which packages moon check reaches; a decrease does not prove no new
@@ -771,10 +771,7 @@ async fn commit_edit(
     return rejection
   }
   let guards : Guards = {
-    errors: @diagnostic_guard.effective_revert_threshold(
-      input.revert_if_error_delta_greater_or_equal,
-      default=5,
-    ),
+    errors: input.revert_if_error_delta_greater_or_equal.unwrap_or(5),
     warnings: input.revert_if_warning_delta_greater_or_equal,
   }
   // The guards' baseline is measured before the write, so nothing has to be

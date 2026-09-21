@@ -170,30 +170,6 @@ test "decode rejects non-object arguments" {
 }
 
 ///|
-test "decode rejects renamed guards instead of silently ignoring them" {
-  assert_decode_error(
-    {
-      "path": "file.mbt",
-      "old_string": "old",
-      "new_string": "new",
-      "start_line": 1,
-      "revert_when_errors_above": 0,
-    },
-    "replaced by revert_if_error_delta_greater_or_equal",
-  )
-  assert_decode_error(
-    {
-      "path": "file.mbt",
-      "old_string": "old",
-      "new_string": "new",
-      "start_line": 1,
-      "revert_when_warnings_above": 0,
-    },
-    "renamed to revert_if_warning_delta_greater_or_equal",
-  )
-}
-
-///|
 test "decode reads revert_on_parse_errors" {
   let off = @decode.decode({
     "path": "file.mbt",

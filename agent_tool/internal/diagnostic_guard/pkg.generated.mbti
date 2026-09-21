@@ -8,8 +8,6 @@ import {
 // Values
 pub fn comparability_advice(Comparability, introduced~ : Int) -> String
 
-pub fn effective_revert_threshold(Int?, default? : Int) -> Int
-
 pub async fn gather_comparability(String, @auto_check.CheckErrors?, @auto_check.CheckErrors, Array[String]) -> Comparability
 
 // Errors
