@@ -44,12 +44,19 @@ priv struct CheckoutState {
 
 ///|
 /// NUL-delimited porcelain preserves spaces, newlines and non-ASCII paths.
-/// Git canonicalizes the workspace root and the listed checkout paths alike.
+/// Match Git's resolved paths even when `.worktrees` is a symlink.
 async fn checkout_states(dir : @pathx.Absolute) -> Map[String, CheckoutState] {
   let root = @gitx.output(dir, ["rev-parse", "--show-toplevel"])
     .trim_end(chars="\r\n")
     .trim_end(chars="/")
-  let prefix = "\{root}/\{WorktreesDirName}/"
+  let managed_root = "\{root}/\{WorktreesDirName}"
+  let managed_root = if @fs.exists(managed_root) {
+    @pathx.Path(@fs.realpath(managed_root)).resolve().normalize().to_string()
+  } else {
+    // Keep stale registrations discoverable if the whole directory was deleted.
+    managed_root
+  }
+  let prefix = managed_root.trim_end(chars="/").to_owned() + "/"
   let output = @gitx.output(dir, ["worktree", "list", "--porcelain", "-z"])
   let states : Map[String, CheckoutState] = Map([])
   let mut current : String? = None
