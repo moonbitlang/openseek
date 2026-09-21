@@ -58,6 +58,7 @@ async function closeFocused(page) {
 test('fixed sidebar toggle respects native geometry across pages and fullscreen', async ({ page }) => {
   const app = await installDesktop(page);
   const toggle = page.getByRole('button', { name: /^(Hide|Show) sidebar$/ });
+  const desktopToggle = await toggle.boundingBox();
   await page.evaluate(() => {
     // The configured macOS buttons sit at y=16 with a 14pt height. Proton
     // reserves equal space above and below them: 16 + 14 + 16 = 46.
@@ -103,7 +104,15 @@ test('fixed sidebar toggle respects native geometry across pages and fullscreen'
     window.titlebarArea = null;
     window.desktopEvent('openseek.window.chrome_changed', {});
   });
-  await expect.poll(async () => (await toggle.boundingBox()).x).toBe(8);
+  // Without native chrome, narrow screens retain the desktop inset and size.
+  await expect.poll(async () => {
+    const { x, width, height } = await toggle.boundingBox();
+    return { x, width, height };
+  }).toEqual({
+    x: desktopToggle.x,
+    width: desktopToggle.width,
+    height: desktopToggle.height,
+  });
   await expect.poll(async () => {
     const box = await toggle.boundingBox();
     const headerHeight = await toggle.evaluate(button =>

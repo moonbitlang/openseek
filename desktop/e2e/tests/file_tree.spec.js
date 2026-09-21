@@ -233,7 +233,7 @@ test('file tree keeps compact aligned rows and continuous ancestor guides', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Files scrolls below the view tabs and keeps narrow-screen touch targets', async ({ page }, testInfo) => {
+test('Files scrolls below the view tabs and keeps desktop row height on narrow screens', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   app.directoryEntries['/workspace'] = Array.from({ length: 80 }, (_, index) => ({
     name: `file_${String(index).padStart(2, '0')}_with_a_very_long_deployment_configuration_name_for_truncation.mbt`,
@@ -249,6 +249,7 @@ test('Files scrolls below the view tabs and keeps narrow-screen touch targets', 
   const tree = page.locator('.workspace-file-list');
   // The first row starts directly below the view tabs, without a second title.
   expect((await tree.locator('.tree-file').first().boundingBox()).y - (await tree.boundingBox()).y).toBe(4);
+  const desktopRowHeight = (await tree.locator('.tree-file').first().boundingBox()).height;
   const tabsBefore = await tabs.boundingBox();
   await tree.locator('.tree-file').last().scrollIntoViewIfNeeded();
   expect(await tree.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
@@ -259,7 +260,7 @@ test('Files scrolls below the view tabs and keeps narrow-screen touch targets', 
   await tabs.getByRole('tab', { name: 'Files', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 760 });
   await expect(tree).toBeVisible();
-  expect((await tree.locator('.tree-file').first().boundingBox()).height).toBe(44);
+  await expect.poll(async () => (await tree.locator('.tree-file').first().boundingBox()).height).toBe(desktopRowHeight);
   expect(await tree.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   await expect.poll(() => tree.locator('.tree-name').first().evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
   await page.locator('.file-tree-pane').screenshot({ path: testInfo.outputPath('files-narrow.png') });
