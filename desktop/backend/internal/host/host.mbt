@@ -308,6 +308,10 @@ pub fn endpoints(
     Endpoint(@commands.github_pull_request, payload => {
       github_pull_request_op(payload)
     }),
+    Endpoint(@commands.github_checkout, payload => github_checkout_op(payload)),
+    Endpoint(@commands.github_checkout_status, payload => {
+      github_checkout_status_op(payload)
+    }),
     Endpoint(@commands.git_changes, payload => git_changes_op(payload)),
     Endpoint(@commands.git_history, payload => git_history_op(payload)),
     Endpoint(@commands.git_commit_changes, payload => {

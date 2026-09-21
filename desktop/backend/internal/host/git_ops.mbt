@@ -1160,10 +1160,14 @@ async fn git_changes_op(payload : GitChangesPayload) -> GitChangesReply {
       _ => raise HostError("Git returned a non-UTF-8 workspace prefix")
     },
   )
-  let recorded_base = @work_dir.session_review_base(
-    payload.session,
-    workspace?=payload.workspace,
-  )
+  let recorded_base = match github_local_checkout_association(dir) {
+    Some(pr) => Some(pr.base)
+    None =>
+      @work_dir.session_review_base(
+        payload.session,
+        workspace?=payload.workspace,
+      )
+  }
   let pinned_base = match recorded_base {
     Some(base) => {
       guard valid_commit_identity(base) else {

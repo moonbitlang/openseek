@@ -2474,6 +2474,11 @@ fn update_inner(
     }
   }
   match msg {
+    PullRequestUpdated => {
+      let (changes, state) = refresh_changes(dispatch, state, ctx)
+      let (graph, state) = refresh_git_graph(dispatch, state, ctx)
+      (@cmd.batch([changes, graph]), state)
+    }
     ChangeDirectoryExpanded(path, expanded) => {
       let collapsed = if expanded {
         state.change_tree_collapsed.filter(dir => dir != path)

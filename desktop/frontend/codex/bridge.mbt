@@ -357,7 +357,7 @@ fn State::open_thread(
 /// `gitInfo` is creation-time metadata; this host operation is the same GitHub
 /// lookup used by OpenSeek's composer and therefore follows branch changes
 /// made during a Codex turn.
-fn State::refresh_git(
+pub fn State::refresh_git(
   self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,

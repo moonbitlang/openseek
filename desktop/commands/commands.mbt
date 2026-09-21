@@ -646,6 +646,18 @@ pub let github_pull_request : Command[
 ] = Command("github.pull_request")
 
 ///|
+pub let github_checkout : Command[
+  @protocol.GithubCheckoutPayload,
+  @protocol.GithubCheckoutReply,
+] = Command("github.checkout")
+
+///|
+pub let github_checkout_status : Command[
+  @protocol.GithubWorkspacePayload,
+  @protocol.GithubCheckoutStatus,
+] = Command("github.checkout_status")
+
+///|
 pub let git_changes : Command[
   @protocol.GitChangesPayload,
   @protocol.GitChangesReply,

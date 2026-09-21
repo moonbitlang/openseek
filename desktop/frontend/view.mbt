@@ -2112,9 +2112,12 @@ fn view(
   // The toast stack floats over everything (position: fixed), so appending
   // it last never shifts the layout; skipping it entirely while empty keeps
   // the corner clickable.
-  if model.notifications.length() > 0 {
+  if model.notifications.length() > 0 || model.github.checkout is Some(_) {
     children.push(notifications_view(dispatch, model))
   }
+  children.push(
+    @github.checkout_dialog(model.github, dispatch.map(msg => Github(msg))),
+  )
   // The interrupt-confirmation modal floats the same way, above the toasts.
   if model.update_ux is ConfirmingRestart(version~) {
     children.push(update_confirm_modal(locale=model.locale, dispatch, version))
@@ -2259,7 +2262,12 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 /// The floating toast stack, fixed to the configured window corner. Each
 /// toast dismisses on click; its timer handles the rest.
 fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
-  let toasts : Array[@html.Html] = []
+  let toasts : Array[@html.Html] = [
+    @github.checkout_notification(
+      model.github,
+      dispatch.map(msg => Github(msg)),
+    ),
+  ]
   for toast in model.notifications {
     toasts.push(
       @html.div(

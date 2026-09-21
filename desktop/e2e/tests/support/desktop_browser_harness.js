@@ -713,6 +713,8 @@ export class DesktopBrowserHarness {
       }
       case 'git.branch':
         return {};
+      case 'github.checkout_status':
+        return { branch: 'codex/browser-fixture', has_open_pull_request: false };
       case 'git.changes':
         return {
           repository: true,

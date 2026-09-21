@@ -153,3 +153,91 @@ test('avatar errors retain the inventory and retry clears the warning', async ({
   await expect(pulls.locator('.github-item')).toHaveCount(1);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('PR checkout supports keyboard choices, failure notifications and opens Review on success', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const originalReply = app.replyFor.bind(app);
+  let current = { branch: 'main', has_open_pull_request: false };
+  app.replyFor = request => {
+    if (request.method === 'github.checkout_status') return current;
+    if (request.method === 'github.checkout') {
+      if (request.params.changes === 'ask') return { status: 'uncommitted_changes' };
+      if (request.params.changes === 'carry') return { status: 'error',
+        message: 'Your local changes would be overwritten. Commit or stash them before switching branches.',
+        details: 'error: Your local changes would be overwritten by checkout:\n\tsrc/main.mbt\nAborting' };
+      current = { branch: 'contributor/feature', pull_request_url: 'https://github.com/owner/project/pull/42', has_open_pull_request: true };
+      return { status: 'success', branch: current.branch };
+    }
+    if (request.method !== 'github.list') return originalReply(request);
+    return {
+      repository: 'owner/project', repository_url: 'https://github.com/owner/project', has_more: false,
+      items: [{ number: 42, title: 'A pull request with a long title to leave room for checkout',
+        url: `https://github.com/owner/project/${request.params.kind === 'issues' ? 'issues' : 'pull'}/42`,
+        draft: false }],
+    };
+  };
+  app.rpcDelays.set('github.checkout', 500);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.getByTitle('New tab', { exact: true }).click();
+  await page.getByRole('menu', { name: 'New tab', exact: true }).getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  const panel = page.locator('.github-panel');
+  const row = panel.locator('.github-pulls .github-item');
+  const checkout = row.getByRole('button', { name: 'Check out PR #42 locally', exact: true });
+  await expect(panel.locator('.github-issues .github-checkout')).toHaveCount(0);
+  await row.locator('.github-item-open').focus();
+  await page.keyboard.press('Tab');
+  await expect(checkout).toBeFocused();
+  await expect(checkout).toHaveCSS('opacity', '1');
+  const bounds = await row.evaluate(element => {
+    const row = element.getBoundingClientRect();
+    const title = element.querySelector('.github-item-title').getBoundingClientRect();
+    const action = element.querySelector('.github-checkout').getBoundingClientRect();
+    return { fits: title.right <= action.left && action.right <= row.right, height: row.height };
+  });
+  expect(bounds).toEqual({ fits: true, height: 26 });
+  await page.keyboard.press('Enter');
+  await expect(row.getByRole('button', { name: 'Checking out PR #42…', exact: true })).toBeDisabled();
+  const dialog = page.getByRole('dialog', { name: 'Uncommitted changes before checking out PR #42' });
+  const stash = dialog.getByRole('button', { name: 'Stash changes', exact: true });
+  await expect(stash).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(checkout).toBeFocused();
+  await checkout.click();
+  await dialog.getByRole('button', { name: 'Try checkout anyway', exact: true }).click();
+  const notification = page.locator('.github-checkout-notification');
+  await expect(notification).toHaveAttribute('role', 'alert');
+  await expect(notification).toContainText('Commit or stash');
+  await expect(page.locator('.editor-tab.active')).toContainText('GitHub');
+  await expect(checkout).toBeEnabled();
+  await notification.getByRole('button', { name: 'Show details', exact: true }).click();
+  await expect(notification.locator('pre')).toContainText('src/main.mbt');
+  const placement = await notification.evaluate(element => {
+    const bounds = element.getBoundingClientRect();
+    return bounds.right <= innerWidth && bounds.bottom <= innerHeight && !element.closest('.github-panel');
+  });
+  expect(placement).toBe(true);
+  await notification.getByRole('button', { name: 'Dismiss checkout notification' }).click();
+  await expect(notification).toHaveCount(0);
+  const branchRequests = app.requests.filter(request => request.method === 'git.branch').length;
+  await checkout.click();
+  await stash.click();
+  await expect(page.locator('.editor-tab.active')).toContainText('main.mbt');
+  await expect(page.locator('.github-checkout-notification')).toHaveCount(0);
+  await expect.poll(() => app.requests.filter(request => request.method === 'git.branch').length).toBeGreaterThan(branchRequests);
+  await page.locator('.editor-tab').filter({ hasText: 'GitHub' }).click();
+  await expect(row.locator('.github-current')).toHaveAttribute('title', 'Currently checked out');
+  await expect(row.getByRole('button', { name: 'Update checkout for PR #42', exact: true })).toBeEnabled();
+  await expect(row.locator('.github-item-open')).toHaveAccessibleName(/Currently checked out/);
+  expect(app.requests.filter(request => request.method === 'github.checkout').map(request => request.params))
+    .toEqual(['ask', 'ask', 'carry', 'ask', 'stash'].map(changes => ({
+      cwd: '/workspace', repository_url: 'https://github.com/owner/project', number: 42, changes, update: false,
+    })));
+  expect(app.requests.some(request => request.method === 'github.pull_request')).toBe(false);
+  expect(app.pageErrors).toEqual([]);
+});

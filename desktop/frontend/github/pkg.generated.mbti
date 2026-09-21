@@ -9,15 +9,47 @@ import {
 }
 
 // Values
+pub fn checkout_dialog(State, @cmd.Emit[Msg]) -> @html.Html
+
+pub fn checkout_notification(State, @cmd.Emit[Msg]) -> @html.Html
+
 pub fn panel(State, @cmd.Emit[Msg], (String) -> @cmd.Cmd) -> @html.Html
 
-pub fn reconcile(@cmd.Emit[Msg], State, Owner?, Bool) -> (@cmd.Cmd, State)
+pub fn reconcile(@cmd.Emit[Msg], State, CheckoutScope?, Bool, review_active? : Bool, review_busy? : Bool) -> (@cmd.Cmd, State)
 
 pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
 
 // Errors
 
 // Types and methods
+pub(all) struct Checkout {
+  repository_url : String
+  number : Int
+  url : String
+  updating : Bool
+  phase : CheckoutPhase
+  show_details : Bool
+} derive(Eq)
+pub fn Checkout::equal(Self, Self) -> Bool
+pub fn Checkout::not_equal(Self, Self) -> Bool
+
+pub(all) enum CheckoutPhase {
+  Running
+  Confirming
+  Failed(String, String?)
+} derive(Eq)
+pub fn CheckoutPhase::equal(Self, Self) -> Bool
+pub fn CheckoutPhase::not_equal(Self, Self) -> Bool
+
+pub(all) struct CheckoutScope {
+  channel : @interop.ChannelId
+  cwd : String
+  branch : String?
+  head : String?
+} derive(Eq)
+pub fn CheckoutScope::equal(Self, Self) -> Bool
+pub fn CheckoutScope::not_equal(Self, Self) -> Bool
+
 pub(all) struct Detail {
   repository_url : String
   item : @protocol.GithubItem
@@ -41,24 +73,25 @@ pub(all) enum Msg {
   TogglePulls
   Toggle(@protocol.GithubListKind)
   Refresh
+  RefreshCurrent
   Retry(@protocol.GithubListKind)
   More(@protocol.GithubListKind)
   Select(String, @protocol.GithubItem)
   RefreshDetail
   CloseDetail
+  Checkout(String, @protocol.GithubItem)
+  UpdatePullRequest(String)
+  CheckedOut(Int, Result[@protocol.GithubCheckoutReply, String])
+  ConfirmCheckout(@protocol.GithubCheckoutChanges)
+  DismissCheckout
+  ToggleCheckoutDetails
+  CurrentLoaded(Int, Result[@protocol.GithubCheckoutStatus, String])
   DetailLoaded(Int, Result[@protocol.GithubPullRequestDetail, String])
   Listed(Int, @protocol.GithubListKind, Result[@protocol.GithubListReply, String])
 }
 
-pub(all) struct Owner {
-  channel : @interop.ChannelId
-  cwd : String
-} derive(Eq)
-pub fn Owner::equal(Self, Self) -> Bool
-pub fn Owner::not_equal(Self, Self) -> Bool
-
 pub(all) struct State {
-  owner : Owner?
+  scope : CheckoutScope?
   active : Bool
   epoch : Int
   pulls_expanded : Bool
@@ -67,9 +100,22 @@ pub(all) struct State {
   issues : Group
   detail : Detail?
   detail_epoch : Int
+  checkout : Checkout?
+  checkout_epoch : Int
+  current : Result[@protocol.GithubCheckoutStatus, String]?
+  current_epoch : Int
+  current_loading : Bool
+  current_active : Bool
+  review_pending : Bool
 } derive(Eq)
+pub fn State::checking_out(Self) -> Bool
+pub fn State::checkout_busy(Self) -> Bool
+pub fn State::current_url(Self) -> String?
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
+pub fn State::has_open_pr(Self) -> Bool
+pub fn State::invalidate_current(Self) -> Self
+pub fn State::is_current(Self, @protocol.GithubItem) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 
 // Type aliases

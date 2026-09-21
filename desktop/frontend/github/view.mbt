@@ -58,24 +58,48 @@ fn list_view(
         url == item.url
       let meta = "#\{item.number}" +
         item.author.map(author => " · \{author}").unwrap_or("") +
-        (if item.draft { " · Draft" } else { "" })
+        (if item.draft { " · Draft" } else { "" }) +
+        (if !(kind is Issues) && state.is_current(item) {
+          " · Currently checked out"
+        } else {
+          ""
+        })
       children.push(
-        @html.button(
+        @html.div(
           class="github-item" +
             (if item.draft { " draft" } else { "" }) +
             (if selected { " selected" } else { "" }),
-          title="\{item.title}\n\{meta}",
-          attrs=@html.Attrs::build()
-            .aria_label("\{item.title}, \{meta}")
-            .aria_current(if selected { "true" } else { "false" }),
-          on_click=if kind is Issues {
-            open_link(item.url)
-          } else {
-            emit(Select(reply.repository_url, item))
-          },
           [
-            avatar_view(item.avatar_url),
-            @html.span(class="github-item-title", item.title),
+            @html.button(
+              class="github-item-open",
+              title="\{item.title}\n\{meta}",
+              attrs=@html.Attrs::build()
+                .aria_label("\{item.title}, \{meta}")
+                .aria_current(if selected { "true" } else { "false" }),
+              on_click=if kind is Issues {
+                open_link(item.url)
+              } else {
+                emit(Select(reply.repository_url, item))
+              },
+              [
+                avatar_view(item.avatar_url),
+                if !(kind is Issues) && state.is_current(item) {
+                  @html.span(
+                    class="github-current",
+                    title="Currently checked out",
+                    @icons.icon(@icons.icon_check),
+                  )
+                } else {
+                  @html.nothing
+                },
+                @html.span(class="github-item-title", item.title),
+              ],
+            ),
+            if kind is Issues {
+              @html.nothing
+            } else {
+              checkout_button(state, reply.repository_url, item, emit)
+            },
           ],
         ),
       )
@@ -135,6 +159,50 @@ fn list_view(
     )
   }
   @html.div(class="github-list", children)
+}
+
+///|
+fn checkout_button(
+  state : State,
+  repository_url : String,
+  item : @protocol.GithubItem,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
+  let pending = state.checkout is Some({ url, phase: Running, .. }) &&
+    url == item.url
+  let updating = state.is_current(item)
+  let label = if pending {
+    if updating {
+      "Updating checkout for PR #\{item.number}…"
+    } else {
+      "Checking out PR #\{item.number}…"
+    }
+  } else if updating {
+    "Update checkout for PR #\{item.number}"
+  } else {
+    "Check out PR #\{item.number} locally"
+  }
+  @html.button(
+    class="github-checkout" + (if pending { " pending" } else { "" }),
+    title=label,
+    attrs=@html.Attrs::build().aria_label(label),
+    disabled=!state.active || state.checkout_busy(),
+    on_click=emit(
+      if updating {
+        UpdatePullRequest(item.url)
+      } else {
+        Checkout(repository_url, item)
+      },
+    ),
+    if pending || updating {
+      @icons.icon(@icons.icon_sync)
+    } else {
+      @html.span(
+        class="github-checkout-arrow",
+        @icons.icon(@icons.icon_arrow_up),
+      )
+    },
+  )
 }
 
 ///|
@@ -207,19 +275,19 @@ fn inventory(
     @html.div(class="github-toolbar", [
       @html.span(
         class="github-repository",
-        title=state.owner.map(owner => owner.cwd).unwrap_or("GitHub"),
+        title=state.scope.map(owner => owner.cwd).unwrap_or("GitHub"),
         repository.map(reply => reply.repository).unwrap_or("GitHub"),
       ),
       @html.button(
         class="tab-action",
         title="Refresh GitHub",
         attrs=@html.Attrs::build().aria_label("Refresh GitHub"),
-        disabled=!state.active || state.owner is None,
+        disabled=!state.active || state.scope is None,
         on_click=emit(Refresh),
         @icons.icon(@icons.icon_sync),
       ),
     ]),
-    if state.owner is None {
+    if state.scope is None {
       @html.div(
         class="github-empty",
         "Open a task with a GitHub repository to see pull requests and issues.",

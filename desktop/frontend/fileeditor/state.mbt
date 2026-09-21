@@ -821,6 +821,7 @@ pub(all) enum Msg {
     selection~ : @mention_context.ReviewChanges,
     adding~ : Bool
   )
+  PullRequestUpdated
   // Open the directory's immediate children under the breadcrumb. Selecting
   // the already-open directory toggles the picker closed; an uncached level
   // is listed through the same request/cache as the explorer tree.

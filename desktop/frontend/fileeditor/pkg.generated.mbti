@@ -251,6 +251,7 @@ pub fn MoonModViewMode::not_equal(Self, Self) -> Bool
 pub(all) enum Msg {
   ReviewContextRevealFinished(source~ : @mention_context.ReviewSource, found~ : Bool)
   ReviewContextChanged(owner~ : @interop.ConversationKey, selection~ : @mention_context.ReviewChanges, adding~ : Bool)
+  PullRequestUpdated
   RevealDirectory(@pathx.Relative)
   HighlightCleared(@pathx.Relative)
   ToggleTree

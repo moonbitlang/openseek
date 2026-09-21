@@ -1223,6 +1223,57 @@ pub fn GithubCheck::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GithubCheck
 pub impl @json.FromJson for GithubCheck
 
+pub(all) enum GithubCheckoutChanges {
+  Ask
+  Stash
+  Discard
+  Carry
+} derive(Eq, @debug.Debug)
+pub fn GithubCheckoutChanges::equal(Self, Self) -> Bool
+pub fn GithubCheckoutChanges::not_equal(Self, Self) -> Bool
+pub fn GithubCheckoutChanges::to_repr(Self) -> @debug.Repr
+
+pub(all) struct GithubCheckoutPayload {
+  cwd : String
+  repository_url : String
+  number : Int
+  changes : GithubCheckoutChanges
+  update : Bool
+} derive(Eq, @debug.Debug)
+pub fn GithubCheckoutPayload::equal(Self, Self) -> Bool
+pub fn GithubCheckoutPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubCheckoutPayload::not_equal(Self, Self) -> Bool
+pub fn GithubCheckoutPayload::to_json(Self) -> Json
+pub fn GithubCheckoutPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubCheckoutPayload
+pub impl @json.FromJson for GithubCheckoutPayload
+
+pub(all) enum GithubCheckoutReply {
+  CheckoutSuccess(String)
+  CheckoutNeedsConfirmation
+  CheckoutFailure(String, String?)
+} derive(Eq, @debug.Debug)
+pub fn GithubCheckoutReply::equal(Self, Self) -> Bool
+pub fn GithubCheckoutReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubCheckoutReply::not_equal(Self, Self) -> Bool
+pub fn GithubCheckoutReply::to_json(Self) -> Json
+pub fn GithubCheckoutReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubCheckoutReply
+pub impl @json.FromJson for GithubCheckoutReply
+
+pub(all) struct GithubCheckoutStatus {
+  branch : String?
+  pull_request_url : String?
+  has_open_pull_request : Bool
+} derive(Eq, @debug.Debug)
+pub fn GithubCheckoutStatus::equal(Self, Self) -> Bool
+pub fn GithubCheckoutStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubCheckoutStatus::not_equal(Self, Self) -> Bool
+pub fn GithubCheckoutStatus::to_json(Self) -> Json
+pub fn GithubCheckoutStatus::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubCheckoutStatus
+pub impl @json.FromJson for GithubCheckoutStatus
+
 pub(all) struct GithubItem {
   number : Int
   title : String
@@ -1329,6 +1380,17 @@ pub fn GithubReviewer::to_json(Self) -> Json
 pub fn GithubReviewer::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GithubReviewer
 pub impl @json.FromJson for GithubReviewer
+
+pub(all) struct GithubWorkspacePayload {
+  cwd : String
+} derive(Eq, @debug.Debug)
+pub fn GithubWorkspacePayload::equal(Self, Self) -> Bool
+pub fn GithubWorkspacePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubWorkspacePayload::not_equal(Self, Self) -> Bool
+pub fn GithubWorkspacePayload::to_json(Self) -> Json
+pub fn GithubWorkspacePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubWorkspacePayload
+pub impl @json.FromJson for GithubWorkspacePayload
 
 pub(all) struct GoalPayload {
   session : String

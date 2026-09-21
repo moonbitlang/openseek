@@ -1901,6 +1901,48 @@ fn update(
   } else {
     model
   }
+  let ctx = file_ctx(model)
+  let owns_panel = model.file_panel.owner == Some(ctx.owner)
+  let checkout = ctx.placement
+    .bind(placement => placement.checkout_root())
+    .map(root => {
+      let previous = model.github.scope.filter(checkout => {
+        checkout.channel == ctx.owner.channel && checkout.cwd == root.path
+      })
+      @github.CheckoutScope::{
+        channel: ctx.owner.channel,
+        cwd: root.path,
+        head: if owns_panel {
+          model.file_panel.git_actual_head
+        } else {
+          previous.bind(checkout => checkout.head)
+        },
+        branch: match (owns_panel, model.file_panel.git_graph) {
+          (true, GitGraphReady(snapshot~, ..)) => snapshot.branch
+          _ => previous.bind(checkout => checkout.branch)
+        },
+      }
+    })
+  let github_visible = model.file_panel_visible() &&
+    model.devices.any(dev => {
+      dev.channel == ctx.owner.channel &&
+      dev.bridge is Connected &&
+      dev.reconnect_failures == 0
+    })
+  let (github_cmd, github) = @github.reconcile(
+    dispatch.map(msg => Github(msg)),
+    model.github,
+    checkout,
+    github_visible && model.dock.active is Some(Github),
+    review_active=github_visible &&
+      ctx.panel_open &&
+      ctx.active_history_diff is None &&
+      ctx.active_file
+      .bind(path => model.file_panel.docs.get(path))
+      .bind(doc => doc.review)
+      is Some(_),
+  )
+  let model = { ..model, github, }
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
   let model = {
     ..model,
@@ -1942,31 +1984,6 @@ fn update(
     active,
   )
   let model = { ..model, jobs, }
-  let github_owner = model
-    .active_checkout()
-    .bind(active => {
-      active.placement
-      .bind(placement => placement.checkout_root())
-      .map(root => @github.Owner::{
-        channel: active.owner.channel,
-        cwd: root.path,
-      })
-    })
-  let github_active = model.file_panel_visible() &&
-    model.dock.active is Some(Github) &&
-    github_owner is Some(owner) &&
-    model.devices.any(dev => {
-      dev.channel == owner.channel &&
-      dev.bridge is Connected &&
-      dev.reconnect_failures == 0
-    })
-  let (github_cmd, github) = @github.reconcile(
-    dispatch.map(msg => Github(msg)),
-    model.github,
-    github_owner,
-    github_active,
-  )
-  let model = { ..model, github, }
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
@@ -5106,7 +5123,38 @@ fn update_msg(
         model.file_panel,
         next,
       )
-      (@cmd.batch([cmd, reveal_cmd]), next)
+      if model.github.review_pending &&
+        msg is @fileeditor.ChangesLoaded(owner~, generation~, files~, ..) &&
+        model.file_panel.owner == Some(owner) &&
+        model.file_panel.changes_generation == generation &&
+        panel.changes_generation == generation &&
+        panel.changes is ChangeListReady(refreshing=false, ..) {
+        let next = {
+          ..next,
+          github: { ..next.github, review_pending: false, },
+        }
+        // Only the Review navigation initiated by checkout may open a file.
+        // A newer user selection wins while the snapshot is being fetched.
+        if next.dock.active is Some(FilePicker) &&
+          next.file_panel.explorer_mode is ExplorerChanges &&
+          files
+          .iter()
+          .filter(file => {
+            !(file.kind is (ChangeUntracked | ChangeSubmodule | ChangeSymlink))
+          })
+          .next()
+          is Some(change) {
+          let (open_cmd, next) = update_msg(
+            dispatch,
+            FileEditor(ChangedFileSelected(change)),
+            next,
+          )
+          return (@cmd.batch([cmd, reveal_cmd, open_cmd]), next)
+        }
+        (@cmd.batch([cmd, reveal_cmd]), next)
+      } else {
+        (@cmd.batch([cmd, reveal_cmd]), next)
+      }
     }
     Dock(msg) => {
       // The strip machine is pure; the cross-package effects of the
@@ -5365,12 +5413,55 @@ fn update_msg(
       (cmd, { ..model, jobs, })
     }
     Github(msg) => {
+      let completed = msg is @github.CheckedOut(epoch, _) &&
+        epoch == model.github.checkout_epoch &&
+        model.github.checking_out() &&
+        !(msg is @github.CheckedOut(_, Ok(CheckoutNeedsConfirmation)))
+      let succeeded = completed &&
+        msg is @github.CheckedOut(_, Ok(CheckoutSuccess(_)))
+      let enter_review = succeeded && model.github.active
       let (cmd, github) = @github.update(
         dispatch.map(msg => Github(msg)),
         msg,
         model.github,
       )
-      (cmd, { ..model, github, })
+      let model = {
+        ..model,
+        github: if completed && !enter_review {
+          { ..github, review_pending: false, }
+        } else {
+          github
+        },
+      }
+      guard completed else { return (cmd, model) }
+      let (git_cmd, model) = if model.screen is Codex {
+        let (git_cmd, codex) = model.codex.refresh_git(
+          dispatch.map(msg => Codex(channel=model.focused, msg)),
+          model.focused,
+        )
+        (git_cmd, { ..model, codex, })
+      } else if model.active_conversation() is Some(conv) {
+        probe_branch(
+          dispatch,
+          model,
+          conv.device,
+          conv.session_id,
+          model.conversation_root(conv),
+        )
+      } else {
+        (@cmd.none, model)
+      }
+      let (review_cmd, model) = if enter_review {
+        open_explorer(dispatch, model, ExplorerChanges)
+      } else {
+        (@cmd.none, model)
+      }
+      let (update_cmd, model) = if succeeded {
+        update_msg(dispatch, FileEditor(@fileeditor.PullRequestUpdated), model)
+      } else {
+        (@cmd.none, model)
+      }
+      (@cmd.batch([cmd, git_cmd, review_cmd, update_cmd]), model)
     }
     GithubRequested =>
       (
