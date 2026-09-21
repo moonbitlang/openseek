@@ -363,6 +363,7 @@ fn MarkdownRender::push_inline(
           TraditionalChinese => "開啟圖片：" + alt
           Japanese => "画像を開く：" + alt
           English => "Open image: " + alt
+          Spanish => "Abrir imagen: " + alt
         }
         match self.link_destination(node.v) {
           Some(url) => out.push(link_node(url, [@html.text(label)]))
