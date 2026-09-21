@@ -438,8 +438,7 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   assert_true(
     resumed_refusal.contains("wt") && resumed_refusal.contains("gone"),
   )
-  // Recreating repairs the SAME environment: same name, same branch, and the
-  // branch's commit is back in the working tree.
+  // Recreating repairs the same detached environment and committed content.
   let repaired = @worktree.create(
     manager.worktree_host(),
     repo.to_string(),
@@ -455,13 +454,9 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   guard created.worktrees is [created_info] else {
     fail("create must publish the one worktree it made")
   }
-  // The repair restores the very branch create minted (`openseek/wt-<salt>`),
-  // never a lookalike.
-  assert_true(created_info.branch.has_prefix("openseek/wt-"))
-  assert_eq(
-    @gitx.run(checkout, ["rev-parse", "--abbrev-ref", "HEAD"]),
-    created_info.branch,
-  )
+  // Repair keeps the checkout detached.
+  assert_eq(created_info.branch, None)
+  assert_eq(@gitx.run(checkout, ["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD")
   assert_eq(
     @worktree.run_dir(repo, "s-vanish").to_string(),
     checkout.to_string(),
@@ -539,7 +534,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   )
   assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
   // The confirmed dialog retries with force: the checkout goes away, while
-  // the branch, archived history, and placement row all survive. The retained
+  // the recovery ref, archived history, and placement row all survive. The retained
   // row broadcasts as missing before the conversation is archived.
   let changes : Array[(String, Array[WorktreeInfo])] = []
   guard archive_session(manager, "s-arc", (_, _) => (), force=true, on_worktree_changed=(
@@ -558,14 +553,11 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   assert_eq(archived_worktree.session, Some("s-arc"))
   assert_false(archived_worktree.present)
   assert_false(@fsx.exists(repo.join(".worktrees/wt-1").to_path()))
-  assert_true(
-    @gitx.probe(repo, [
-      "show-ref",
-      "--verify",
-      "--quiet",
-      "refs/heads/\{archived_worktree.branch}",
-    ])
-    is Some(_),
+  assert_eq(archived_worktree.branch, None)
+  assert_false(
+    @gitx.run(repo, [
+      "for-each-ref", "--format=%(refname)", "refs/openseek/worktrees/",
+    ]).is_empty(),
   )
   assert_true(
     @fsx.is_dir(

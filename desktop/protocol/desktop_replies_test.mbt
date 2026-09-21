@@ -1836,3 +1836,40 @@ test "editor target codecs require absolute paths and validate optional position
     assert_true(decoded is None)
   }
 }
+
+///|
+test "detached worktree replies omit branch and reject malformed branch values" {
+  let json : Json = {
+    "name": "wt-1",
+    "base": "abc",
+    "session": "s1",
+    "path": "/repo/.worktrees/wt-1",
+    "present": true,
+  }
+  let detached : @protocol.WorktreeInfo = @json.from_json(json)
+  assert_eq(detached.branch, None)
+  @debug.assert_eq(detached.to_json(), json)
+  let null_branch : @protocol.WorktreeInfo = @json.from_json({
+    "name": "wt-1",
+    "branch": null,
+    "base": "abc",
+    "session": "s1",
+    "path": "/repo/.worktrees/wt-1",
+    "present": true,
+  })
+  assert_eq(null_branch.branch, None)
+  @debug.assert_eq(null_branch.to_json(), json)
+  for branch in [Json(""), Json(42), Json(false)] {
+    assert_true(
+      refused(() => {
+        let _ : @protocol.WorktreeInfo = @json.from_json({
+          "name": "wt-1",
+          "branch": branch,
+          "base": "abc",
+          "path": "/repo/.worktrees/wt-1",
+          "present": true,
+        })
+      }),
+    )
+  }
+}

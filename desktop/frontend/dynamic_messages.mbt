@@ -19,15 +19,15 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (TraditionalChinese, DTokens(p0)) => "\{p0} 個詞元"
     (Japanese, DTokens(p0)) => "\{p0} トークン"
     (English, DWorktreeArchiveHint(p0, p1)) =>
-      "\{p0}\nRuns in worktree \{p1}; archiving removes its checkout but keeps the branch for Repair"
+      "\{p0}\nRuns in worktree \{p1}; archiving removes its checkout but keeps committed work for Repair"
     (Spanish, DWorktreeArchiveHint(p0, p1)) =>
-      "\{p0}\nSe ejecuta en el worktree \{p1}; al archivarlo se elimina la copia de trabajo, pero se conserva la rama para repararla"
+      "\{p0}\nSe ejecuta en el worktree \{p1}; al archivarlo se elimina la copia de trabajo, pero se conservan los commits para la reparación"
     (SimplifiedChinese, DWorktreeArchiveHint(p0, p1)) =>
-      "\{p0}\n在工作树 \{p1} 中运行；归档会移除检出目录，但保留分支以供修复"
+      "\{p0}\n在工作树 \{p1} 中运行；归档会移除检出目录，但保留已提交的更改以供修复"
     (TraditionalChinese, DWorktreeArchiveHint(p0, p1)) =>
-      "\{p0}\n在工作樹 \{p1} 中執行；歸檔會移除檢出目錄，但保留分支以供修復"
+      "\{p0}\n在工作樹 \{p1} 中執行；歸檔會移除檢出目錄，但保留已提交的變更以供修復"
     (Japanese, DWorktreeArchiveHint(p0, p1)) =>
-      "\{p0}\nワークツリー \{p1} で実行。アーカイブするとチェックアウトを削除しますが、修復用のブランチは保持されます"
+      "\{p0}\nワークツリー \{p1} で実行。アーカイブするとチェックアウトを削除しますが、修復用のコミットは保持されます"
     (English, DStorageUnavailable(p0)) => "Chats storage unavailable: \{p0}"
     (Spanish, DStorageUnavailable(p0)) =>
       "El almacenamiento de conversaciones no está disponible: \{p0}"

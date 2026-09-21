@@ -730,7 +730,6 @@ fn test_archive_refusal(
 test "worktree commit decoder carries the workspace and its rows" {
   let row : Json = {
     "name": "wt",
-    "branch": "openseek/wt",
     "base": "main",
     "session": "s1",
     "path": "/proj/.worktrees/wt",

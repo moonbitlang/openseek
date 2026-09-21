@@ -781,7 +781,9 @@ pub impl FromJson for WorkspacesReply with fn from_json(json, path) {
 /// registries and are never claimed by either conversation source.
 pub(all) struct WorktreeInfo {
   name : String
-  branch : String
+  // Legacy placement branch; detached placements omit it. Live HEAD is read
+  // through git.branch, including branches the user creates after placement.
+  branch : String?
   base : String
   session : String?
   codex_thread : String?
@@ -796,7 +798,10 @@ pub impl FromJson for WorktreeInfo with fn from_json(json, path) {
   }
   let object = JsonObject::of(fields, path)
   let name = object.required_string("name")
-  let branch = object.required_string("branch")
+  let branch = object.optional_string("branch")
+  if branch is Some(branch) && branch.is_empty() {
+    raise JsonDecodeError((path, "worktree branch must not be empty"))
+  }
   let base = object.required_string("base")
   let session = object.optional_string("session")
   let codex_thread = object.optional_string("codex_thread")
@@ -815,10 +820,12 @@ pub impl FromJson for WorktreeInfo with fn from_json(json, path) {
 pub impl ToJson for WorktreeInfo with fn to_json(self) {
   let fields : Map[String, Json] = {
     "name": Json(self.name),
-    "branch": Json(self.branch),
     "base": Json(self.base),
     "path": Json(self.path),
     "present": Json(self.present),
+  }
+  if self.branch is Some(branch) {
+    fields["branch"] = Json(branch)
   }
   if self.session is Some(session) {
     fields["session"] = Json(session)

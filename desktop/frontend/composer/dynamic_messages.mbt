@@ -67,25 +67,25 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (Japanese, DWorktree(p0)) =>
       "このチャットはワークツリー \{p0} で実行されます"
     (English, DMissingWorktree(p0)) =>
-      "Worktree \{p0} has no checkout. Rebuild it to continue; commits on its branch are safe."
+      "Worktree \{p0} has no checkout. Rebuild it from its saved commits to continue."
     (Spanish, DMissingWorktree(p0)) =>
-      "El worktree \{p0} no tiene una copia de trabajo. Reconstrúyelo para continuar; los commits de su rama están a salvo."
+      "El worktree \{p0} no tiene una copia de trabajo. Reconstrúyelo a partir de los commits guardados para continuar."
     (SimplifiedChinese, DMissingWorktree(p0)) =>
-      "工作树 \{p0} 缺少检出目录。重建后即可继续，分支上的提交仍然安全。"
+      "工作树 \{p0} 缺少检出目录。从保留的提交重建后即可继续。"
     (TraditionalChinese, DMissingWorktree(p0)) =>
-      "工作樹 \{p0} 缺少檢出目錄。重建後即可繼續，分支上的提交仍然安全。"
+      "工作樹 \{p0} 缺少檢出目錄。從保留的提交重建後即可繼續。"
     (Japanese, DMissingWorktree(p0)) =>
-      "ワークツリー \{p0} のチェックアウトがありません。再作成すると続行できます。ブランチのコミットは保持されています。"
+      "ワークツリー \{p0} のチェックアウトがありません。保存されたコミットから再作成すると続行できます。"
     (English, DRebuildWorktree(p0)) =>
-      "Check the branch out again at .worktrees/\{p0}"
+      "Restore committed work at .worktrees/\{p0}"
     (Spanish, DRebuildWorktree(p0)) =>
-      "Volver a crear la copia de trabajo de la rama en .worktrees/\{p0}"
+      "Restaurar los cambios confirmados en .worktrees/\{p0}"
     (SimplifiedChinese, DRebuildWorktree(p0)) =>
-      "将分支重新检出到 .worktrees/\{p0}"
+      "将已提交的更改恢复到 .worktrees/\{p0}"
     (TraditionalChinese, DRebuildWorktree(p0)) =>
-      "將分支重新檢出到 .worktrees/\{p0}"
+      "將已提交的變更恢復到 .worktrees/\{p0}"
     (Japanese, DRebuildWorktree(p0)) =>
-      "ブランチを .worktrees/\{p0} に再チェックアウト"
+      "コミットを .worktrees/\{p0} に復元"
     (English, DArchiveMissing(p0)) =>
       "Archive this \{p0} without rebuilding its worktree"
     (Spanish, DArchiveMissing(_)) =>

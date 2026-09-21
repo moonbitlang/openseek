@@ -1,10 +1,10 @@
 // Worktrees of a registered workspace: isolated checkouts under
 // `<workspace>/.worktrees/<name>` where ONE conversation works on its own
-// branch — a worktree is an execution environment, bound 1:1 to the
+// detached HEAD — a worktree is an execution environment, bound 1:1 to the
 // conversation that chose it — while the durable record stays in the main
 // repository's store. A worktree is never itself a workspace; this
 // registry — `<workspace>/.openseek/worktrees.json`,
-// desktop-owned — remembers each worktree's branch, base commit, and bound
+// desktop-owned — remembers each worktree's recovery ref, base commit, and bound
 // session. The worktree's path is always derived from its name, never
 // stored.
 
@@ -47,8 +47,7 @@ const WorktreesFile = "worktrees.json"
 const WorktreesDirName = ".worktrees"
 
 ///|
-/// Prefix for desktop-created branches: keeps them recognizable and away
-/// from user branch names.
+/// Legacy desktop branches remain reserved when allocating worktree names.
 const WorktreeBranchPrefix = "openseek/"
 
 ///|
@@ -61,7 +60,7 @@ let worktree_registry_lock : @async.Mutex = Mutex()
 ///|
 priv struct WorktreeEntry {
   name : String
-  branch : String
+  checkout : WorktreeCheckout
   base : String
   // Old registries and OpenSeek conversations use `session`; Codex-owned
   // worktrees use `codex_thread`. A valid app-created row has exactly one.
@@ -78,8 +77,11 @@ priv struct WorktreeEntry {
 impl ToJson for WorktreeEntry with fn to_json(self) {
   let fields : Map[String, Json] = {
     "name": Json(self.name),
-    "branch": Json(self.branch),
     "base": Json(self.base),
+  }
+  match self.checkout {
+    Branch(branch) => fields["branch"] = Json(branch)
+    Detached(recovery_ref) => fields["recovery_ref"] = Json(recovery_ref)
   }
   if self.session is Some(session) {
     fields["session"] = Json(session)
@@ -221,7 +223,7 @@ fn owner_field(fields : Map[String, Json], key : String) -> String? {
 
 ///|
 /// The registered worktrees of `workspace`, dropping anything malformed: an
-/// entry without a valid name, branch, and base string self-heals to absent
+/// entry without a valid name, checkout reference, and base string is dropped
 /// rather than poisoning every later operation. A missing or unreadable
 /// registry reads as "no worktrees".
 async fn read_worktrees_unlocked(
@@ -245,8 +247,12 @@ async fn read_worktrees_unlocked(
     if entries.any(existing => existing.name == name) {
       continue
     }
-    guard fields.get("branch") is Some(String(branch)) && !branch.is_empty() else {
-      continue
+    let checkout = match (fields.get("branch"), fields.get("recovery_ref")) {
+      (Some(String(branch)), None) if !branch.is_empty() => Branch(branch)
+      (None, Some(String(recovery_ref))) if valid_recovery_ref(
+          name, recovery_ref,
+        ) => Detached(recovery_ref)
+      _ => continue
     }
     guard fields.get("base") is Some(String(base)) else { continue }
     let session = owner_field(fields, "session")
@@ -254,7 +260,7 @@ async fn read_worktrees_unlocked(
     // A row cannot be owned by both products. Drop a malformed ambiguous row
     // instead of letting whichever lookup happens first claim its checkout.
     guard session is None || codex_thread is None else { continue }
-    entries.push({ name, branch, base, session, codex_thread, })
+    entries.push({ name, checkout, base, session, codex_thread, })
   }
   entries
 }
@@ -319,7 +325,7 @@ async fn worktree_infos(
     }
     infos.push({
       name: entry.name,
-      branch: entry.branch,
+      branch: entry.checkout.branch(),
       base: entry.base,
       session: entry.session,
       codex_thread: entry.codex_thread,
@@ -362,7 +368,7 @@ async fn tree_of(workspace : @pathx.Absolute, session : String) -> SessionTree {
 }
 
 ///|
-/// The immutable commit a conversation's worktree branch was created from.
+/// The immutable commit a conversation's worktree was created from.
 /// Workspace-root conversations have no desktop-owned task boundary and
 /// therefore return `None`; their review surface may derive a branch boundary
 /// separately. The registry owns the task fact, so callers never infer a
@@ -472,10 +478,10 @@ pub async fn WorktreeOwner::archive_check(
 
 ///|
 /// Remove the checkout bound to this owner while retaining its registry row.
-/// Archiving frees the directory, but the name, branch, and owner remain the
-/// durable placement needed for an explicit rebuild. Without `force` a dirty
-/// checkout refuses; committed work stays on the branch either way. The caller
-/// must first fence its own backend writer (OpenSeek's slot claim or a
+/// Archiving frees the directory, but the placement and a Git reference keep
+/// committed work available for an explicit rebuild. Without `force` a dirty
+/// checkout refuses; detached HEAD is pinned before its directory is removed.
+/// The caller must first fence its own backend writer (OpenSeek's slot claim or a
 /// successful Codex `thread/archive`). An owner without a worktree is a no-op.
 pub async fn WorktreeOwner::archive_checkout(
   self : WorktreeOwner,
@@ -501,10 +507,11 @@ pub async fn WorktreeOwner::archive_checkout(
         return Some({ worktree: entry.name, dirty_paths, dirty_path_count, })
       }
     }
+    preserve_worktree_head(workspace, entry)
     delete_worktree_checkout(workspace, entry.name)
   } else {
     // The checkout is already gone; drop git's stale bookkeeping for it.
-    ignore(@gitx.probe(workspace, ["worktree", "prune"]))
+    prune_worktrees(workspace)
   }
   // The checkout changed, not the placement. Publish the retained row with
   // `present: false` so every client blocks this conversation immediately;
@@ -524,9 +531,9 @@ pub async fn WorktreeOwner::archive_checkout(
 /// for the caller to roll its own work back against.
 ///
 /// This is what permanent deletion of an archived conversation needs: the
-/// checkout itself went away when the conversation was archived, and removing
-/// the retained row is what lets the branch survive without an unusable ghost
-/// placement.
+/// checkout itself went away when the conversation was archived. Removing
+/// its placement row leaves the recovery reference intact, preserving commits
+/// without an unusable ghost placement.
 pub async fn drop_placements(
   workspace : @pathx.Absolute,
   sessions : Array[String],
@@ -680,8 +687,8 @@ pub async fn list_codex_worktree_bindings() -> Array[CodexWorktreeBinding] {
 
 ///|
 /// The smallest `wt-N` nobody holds: free in the registry, on disk, and as
-/// a branch. Branches survive removal, so the counter moves past history
-/// instead of pairing a reused name with a lookalike of an old branch.
+/// a retained reference. References survive removal, so the counter moves
+/// past history instead of pairing a reused name with an old checkout.
 async fn fresh_worktree_name(
   dir : @pathx.Absolute,
   entries : Array[WorktreeEntry],
@@ -706,6 +713,7 @@ async fn fresh_worktree_name(
         "--format=%(refname)",
         "refs/heads/\{WorktreeBranchPrefix}\{name}",
         "refs/heads/\{WorktreeBranchPrefix}\{name}-*",
+        "\{WorktreeRecoveryPrefix}\{name}-*",
       ])
       is Some(listing) &&
       !listing.is_empty() {
@@ -717,8 +725,8 @@ async fn fresh_worktree_name(
 }
 
 ///|
-/// Create a worktree `<workspace>/.worktrees/<name>` on a fresh salted
-/// branch `openseek/<name>-<salt>` at the workspace's current HEAD, bound
+/// Create a detached worktree `<workspace>/.worktrees/<name>` at the
+/// workspace's current HEAD, with a private recovery reference, bound
 /// from birth to `owner` — creation IS the binding, so the start path never
 /// mutates the registry and a refused start cannot re-route a conversation.
 /// The owner id is the idempotency key: an owner that already holds a
@@ -782,9 +790,8 @@ pub async fn create(
   let entries = read_worktrees_unlocked(dir)
   // This conversation already holds its environment. Two shapes land here:
   // the idempotent replay of a create whose reply was lost, and the repair
-  // of a checkout deleted outside the app. The registry keeps the branch,
-  // and the branch keeps every commit, so the repair restores the real
-  // environment rather than an empty lookalike.
+  // of a checkout deleted outside the app. Repair saves Git's remaining
+  // worktree HEAD before pruning stale bookkeeping, then restores it.
   for entry in entries {
     guard entry.belongs_to(owner) else { continue }
     let present = @fsx.is_dir(worktree_dir(dir, entry.name).to_path()) catch {
@@ -796,6 +803,7 @@ pub async fn create(
       // restored the checkout but before its notification ran. Republish the
       // complete host-derived list so that retry repairs every client's stale
       // `present: false` view instead of returning success invisibly.
+      finish_worktree_creation(dir, entry)
       let infos = worktree_infos(dir, entries)
       @async.protect_from_cancel(() => on_committed(infos))
       return { name: entry.name, worktrees: infos, }
@@ -856,8 +864,8 @@ pub async fn create(
     None => fresh_worktree_name(dir, entries)
   }
   // Refusals name the holder: the registry entry or the directory (a worker
-  // slice can own `.worktrees/<name>` without any registry entry). The branch
-  // is freshly salted, so nothing can hold it ahead of us.
+  // slice can own `.worktrees/<name>` without any registry entry). The recovery
+  // reference is freshly salted, so nothing can hold it ahead of us.
   if entries.any(entry => entry.name == name) {
     raise WorktreeError("worktree \{name} already exists in this workspace")
   }
@@ -871,185 +879,138 @@ pub async fn create(
       "\{target} already exists on disk; another tool may own it",
     )
   }
-  // Salted so that two machines' independent `wt-N` counters can never mint
-  // the same branch name and collide on a shared remote; 32 bits is plenty
-  // for that, and anything longer only clutters the branch chip and
-  // pull-request heads. No OS entropy is a hard failure, never weak
-  // randomness.
-  guard @entropy.random_hex(4) is Some(salt) else {
-    raise WorktreeError("no OS entropy available to mint a worktree branch")
+  // A unique reference keeps archived commits reachable without creating a
+  // user branch. Creating it with an expected absent old value is atomic.
+  guard @entropy.random_hex(16) is Some(salt) else {
+    raise WorktreeError("no OS entropy available to identify a worktree")
   }
-  let branch = "\{WorktreeBranchPrefix}\{name}-\{salt}"
+  let recovery_ref = "\{WorktreeRecoveryPrefix}\{name}-\{salt}"
   @workspaces.exclude_from_git(dir, WorktreesDirName)
   let base = @gitx.run(dir, ["rev-parse", "HEAD"])
-  // The branch comes first, on its own: our locks are in-process only, so
-  // another process can race the probes above — `git branch` then fails
-  // atomically having created nothing, and from here on the branch is
-  // provably THIS invocation's, which is what makes the rollback's
-  // `branch -D` safe.
-  ignore(@gitx.run(dir, ["branch", branch, base]))
+  ignore(
+    @gitx.run(dir, ["update-ref", recovery_ref, base, "0".repeat(base.length())]),
+  )
+  let entry : WorktreeEntry = {
+    name,
+    checkout: Detached(recovery_ref),
+    base,
+    session: owner.session(),
+    codex_thread: owner.codex_thread(),
+  }
+  let lock_reason = "\{entry.lock_prefix()}\{salt}"
+  let mut infos : Array[WorktreeInfo] = []
   {
     errdefer @async.protect_from_cancel(() => {
-      rollback_worktree(dir, name, branch)
+      rollback_worktree_checkout(dir, name, lock_reason)
+      @gitx.rollback(dir, ["update-ref", "-d", recovery_ref, base])
     })
     ignore(
-      @gitx.run(dir, ["worktree", "add", "\{WorktreesDirName}/\{name}", branch]),
+      @gitx.run(dir, [
+        "worktree",
+        "add",
+        "--detach",
+        "--lock",
+        "--reason",
+        lock_reason,
+        "\{WorktreesDirName}/\{name}",
+        base,
+      ]),
     )
     if checkout_submodules {
       provision_initialized_submodules(
         dir, target, submodule_checkout_timeout_seconds,
       )
     }
-  }
-  entries.push({
-    name,
-    branch,
-    base,
-    session: owner.session(),
-    codex_thread: owner.codex_thread(),
-  })
-  let mut infos : Array[WorktreeInfo] = []
-  @async.protect_from_cancel(() => {
-    {
-      errdefer rollback_worktree(dir, name, branch)
+    entries.push(entry)
+    @async.protect_from_cancel(() => {
+      // Keep the ownership lock through every fallible preparation step.
+      infos = worktree_infos(dir, entries)
       write_worktrees(dir, entries)
-    }
-    infos = worktree_infos(dir, entries)
-    on_committed(infos)
-  })
+    })
+  }
+  // Once the registry is committed, cleanup must never erase the checkout.
+  // A retry can finish this unlock if the subprocess fails after publication.
+  finish_worktree_creation(dir, entry)
+  @async.protect_from_cancel(() => on_committed(infos))
   { name, worktrees: infos, }
 }
 
 ///|
-/// Rebuild a registered worktree's checkout on the branch it already owns,
-/// after the directory was deleted outside the app. The stale bookkeeping
-/// that deletion left behind would make `worktree add` refuse the path, so
-/// it is pruned first — deliberately unguarded by `worktree_checked_out_on`,
-/// since the whole premise here is that the checkout is gone. The branch is
-/// never re-created: it survived the deletion and carries the conversation's
-/// commits, which is what makes this a repair rather than a fresh start.
+/// Restore the last saved detached HEAD, or an existing legacy branch.
+/// Pin every managed HEAD before global pruning, including other missing
+/// checkouts: repairing one conversation must not destroy another's history.
 async fn restore_worktree_checkout(
   dir : @pathx.Absolute,
   entry : WorktreeEntry,
   checkout_submodules~ : Bool,
   submodule_checkout_timeout_seconds~ : Int,
 ) -> Unit {
-  guard @gitx.probe(dir, [
-      "show-ref",
-      "--verify",
-      "--quiet",
-      "refs/heads/\{entry.branch}",
-    ])
-    is Some(_) else {
-    raise WorktreeError(
-      "branch \{entry.branch} is gone too; this worktree cannot be restored",
-    )
+  finish_worktree_creation(dir, entry)
+  prune_worktrees(dir)
+  let revision = entry.checkout.revision()
+  let commit = @gitx.run(dir, ["rev-parse", "--verify", "\{revision}^{commit}"])
+  guard @entropy.random_hex(16) is Some(salt) else {
+    raise WorktreeError("no OS entropy available to identify a worktree repair")
   }
-  ignore(@gitx.probe(dir, ["worktree", "prune"]))
+  let lock_reason = "\{entry.lock_prefix()}\{salt}"
   @workspaces.exclude_from_git(dir, WorktreesDirName)
   let target = worktree_dir(dir, entry.name)
   errdefer @async.protect_from_cancel(() => {
-    rollback_worktree_checkout(dir, entry.name, entry.branch)
+    rollback_worktree_checkout(dir, entry.name, lock_reason)
   })
-  ignore(
-    @gitx.run(dir, [
-      "worktree",
-      "add",
-      "\{WorktreesDirName}/\{entry.name}",
-      entry.branch,
-    ]),
-  )
+  let args = ["worktree", "add", "--lock", "--reason", lock_reason]
+  match entry.checkout {
+    Branch(branch) => {
+      args.push("\{WorktreesDirName}/\{entry.name}")
+      args.push(branch)
+    }
+    Detached(_) => {
+      args.push("--detach")
+      args.push("\{WorktreesDirName}/\{entry.name}")
+      args.push(commit)
+    }
+  }
+  ignore(@gitx.run(dir, args))
   if checkout_submodules {
     provision_initialized_submodules(
       dir, target, submodule_checkout_timeout_seconds,
     )
   }
+  @async.protect_from_cancel(() => {
+    ignore(
+      @gitx.run(dir, ["worktree", "unlock", "\{WorktreesDirName}/\{entry.name}"]),
+    )
+  })
 }
 
 ///|
-/// Best-effort removal of an app-created checkout while preserving its branch.
-/// Deliberately not `git worktree remove --force`: rollback must only delete
-/// what THIS invocation provably created, and Git's validation does not
-/// check the branch — `worktree_checked_out_on` does, leaving a path another
-/// process claimed in the race window alone. Unforced removal is no
-/// alternative either: it refuses any tree containing a gitlink.
+/// Only a checkout bearing this invocation's random lock token is ours to
+/// roll back. A failed add that raced another process cannot remove its tree,
+/// even when both checkouts would have had the same detached commit.
 async fn rollback_worktree_checkout(
   dir : @pathx.Absolute,
   name : String,
-  branch : String,
+  lock_reason : String,
 ) -> Unit {
-  if worktree_checked_out_on(dir, name, branch) &&
-    worktree_lock_reason(dir, name) is None {
-    @fs.rmdir(worktree_dir(dir, name).to_string(), recursive=true) catch {
-      _ => ()
-    }
+  // Called under a cancellation shield while an earlier error propagates.
+  let reason = worktree_lock_reason(dir, name) catch { _ => return }
+  if reason == Some(lock_reason) {
+    @gitx.rollback(dir, [
+      "worktree",
+      "remove",
+      "--force",
+      "--force",
+      "\{WorktreesDirName}/\{name}",
+    ])
   }
-  @gitx.rollback(dir, ["worktree", "prune"])
-}
-
-///|
-/// Best-effort removal of a half-created worktree, deleting only what this
-/// invocation provably created: the branch was made first on its own, so
-/// `branch -D` is always ours to run, while the checkout is force-removed
-/// only when git's own bookkeeping shows the target path checked out on
-/// that branch — a path another process claimed in the race window is left
-/// alone. Only ever runs inside a cancellation shield while the original
-/// failure propagates.
-async fn rollback_worktree(
-  dir : @pathx.Absolute,
-  name : String,
-  branch : String,
-) -> Unit {
-  rollback_worktree_checkout(dir, name, branch)
-  @gitx.rollback(dir, ["branch", "-D", branch])
-}
-
-///|
-/// Whether `git worktree list` shows a checkout at `.worktrees/<name>` on
-/// `branch`. Matched by path suffix — git prints canonicalized absolute
-/// paths (`/private/var` for a `/var` workspace, say), so a literal
-/// comparison against our derived path would misfire.
-async fn worktree_checked_out_on(
-  dir : @pathx.Absolute,
-  name : String,
-  branch : String,
-) -> Bool {
-  guard @gitx.probe(dir, ["worktree", "list", "--porcelain"]) is Some(output) else {
-    return false
-  }
-  let suffix = "/\{WorktreesDirName}/\{name}"
-  let mut at_target = false
-  for line in output.split("\n") {
-    let line = line.trim()
-    if line.has_prefix("worktree ") {
-      at_target = line.has_suffix(suffix)
-    } else if at_target && line == "branch refs/heads/\{branch}" {
-      return true
-    }
-  }
-  false
 }
 
 ///|
 /// An external `git worktree lock` must remain authoritative even on the
 /// gitlink cleanup path, where Git cannot perform the removal itself.
 async fn worktree_lock_reason(dir : @pathx.Absolute, name : String) -> String? {
-  guard @gitx.probe(dir, ["worktree", "list", "--porcelain"]) is Some(output) else {
-    return None
-  }
-  let suffix = "/\{WorktreesDirName}/\{name}"
-  let mut at_target = false
-  for line in output.split("\n") {
-    let line = line.trim()
-    if line.has_prefix("worktree ") {
-      at_target = line.has_suffix(suffix)
-    } else if at_target && line == "locked" {
-      return Some("")
-    } else if at_target && line.has_prefix("locked ") {
-      return Some(line.view(start_offset="locked ".length()).to_owned())
-    }
-  }
-  None
+  guard checkout_states(dir).get(name) is Some(state) else { return None }
+  state.lock_reason
 }
 
 ///|
@@ -1080,9 +1041,9 @@ async fn delete_worktree_checkout(
 }
 
 ///|
-/// Remove a worktree's checkout and registry entry. The branch
-/// `openseek/<name>` always survives — committed work is never lost by
-/// deleting a worktree; uncommitted changes are, and only behind `force`.
+/// Remove a worktree's checkout and registry entry. Its recovery reference
+/// (or legacy branch) survives, retaining committed work. Uncommitted changes
+/// are discarded only behind `force`.
 /// The bound conversation is drained first (an idle serve process still
 /// has its cwd inside the directory being deleted); it then becomes a
 /// plain workspace conversation with its history intact. A registry entry
@@ -1130,6 +1091,11 @@ pub async fn remove(
   if entry.session is Some(bound) {
     (host.drain_sessions)([bound])
   }
+  // Serialize recovery snapshots with archive and repair. Otherwise a
+  // concurrent archive could save a newer HEAD just before pruning replaced
+  // its recovery ref with an older snapshot.
+  worktree_registry_lock.acquire()
+  defer worktree_registry_lock.release()
   let target = worktree_dir(dir, name)
   let present = @fsx.is_dir(target.to_path()) catch {
     error if @async.is_being_cancelled() => raise error
@@ -1144,15 +1110,13 @@ pub async fn remove(
         )
       }
     }
+    preserve_worktree_head(dir, entry)
     delete_worktree_checkout(dir, name)
   } else {
     // The checkout is already gone; drop git's stale bookkeeping for it.
-    ignore(@gitx.probe(dir, ["worktree", "prune"]))
+    prune_worktrees(dir)
   }
-  worktree_registry_lock.acquire()
-  defer worktree_registry_lock.release()
-  // Re-read: another worktree may have been created while the checkout was
-  // being removed (creation takes only the registry lock).
+  // Re-read after draining the owning session; keep unrelated placements.
   let remaining = read_worktrees_unlocked(dir).filter(entry => {
     entry.name != name
   })
@@ -1260,13 +1224,27 @@ async test "worktree registry decode drops malformed entries" {
       { "name": "nobranch", "base": "y" },
       { "name": "ok", "branch": "dup", "base": "y" },
       "not-an-object",
+      {
+        "name": "detached",
+        "base": "def",
+        "recovery_ref": "\{WorktreeRecoveryPrefix}detached-\{"a".repeat(32)}",
+      },
+      {
+        "name": "both",
+        "base": "def",
+        "branch": "openseek/both",
+        "recovery_ref": "\{WorktreeRecoveryPrefix}both-\{"b".repeat(32)}",
+      },
+      { "name": "wrong", "base": "def", "recovery_ref": "refs/heads/main" },
+      { "name": "null", "base": "def", "recovery_ref": null },
+      { "name": "empty", "base": "def", "recovery_ref": "" },
     ],
   }
   @fsx.write_text(worktrees_file(root).to_path(), registry.stringify())
   let entries = read_worktrees_unlocked(root)
-  assert_eq(entries.length(), 3)
+  assert_eq(entries.length(), 4)
   assert_eq(entries[0].name, "ok")
-  assert_eq(entries[0].branch, "openseek/ok")
+  assert_eq(entries[0].checkout, Branch("openseek/ok"))
   assert_eq(entries[0].base, "abc")
   assert_eq(entries[0].session, Some("s1"))
   assert_eq(entries[0].codex_thread, None)
@@ -1277,6 +1255,11 @@ async test "worktree registry decode drops malformed entries" {
   assert_eq(entries[2].name, "blank")
   assert_true(entries[2].session is None)
   assert_true(entries[2].codex_thread is None)
+  assert_eq(
+    entries[3].checkout,
+    Detached("\{WorktreeRecoveryPrefix}detached-\{"a".repeat(32)}"),
+  )
+  assert_eq(entries[3].checkout.branch(), None)
 }
 
 ///|
@@ -1285,7 +1268,7 @@ async test "failed worktree registry staging preserves every live row" {
   defer @fs.rmdir(root.to_string(), recursive=true)
   let retained : WorktreeEntry = {
     name: "retained",
-    branch: "openseek/retained",
+    checkout: Branch("openseek/retained"),
     base: "abc",
     session: Some("other-session"),
     codex_thread: None,
@@ -1307,7 +1290,7 @@ async test "failed worktree registry staging preserves every live row" {
     fail("the previous worktree registry must remain readable")
   }
   assert_eq(after.name, retained.name)
-  assert_eq(after.branch, retained.branch)
+  assert_eq(after.checkout, retained.checkout)
   assert_eq(after.base, retained.base)
   assert_eq(after.session, retained.session)
 }
@@ -1363,7 +1346,7 @@ async test "attach refuses a linked worktree, keeps main and non-git attachable"
 
 ///|
 #cfg(not(platform="windows"))
-async test "worktree create provisions checkout, branch, registry, exclusion" {
+async test "worktree create provisions detached checkout, recovery ref, registry, exclusion" {
   worktree_env_test_lock.acquire()
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
@@ -1387,9 +1370,20 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
   assert_eq(reply.name, "fix-auth")
   guard reply.worktrees is [info] else { fail("expected one worktree") }
   assert_eq(info.name, "fix-auth")
-  // The minted branch is `openseek/<name>-<8 hex chars of salt>`.
-  assert_true(info.branch.has_prefix("openseek/fix-auth-"))
-  assert_eq(info.branch.length(), "openseek/fix-auth-".length() + 8)
+  assert_eq(info.branch, None)
+  guard read_worktrees_unlocked(repo) is [entry] else {
+    fail("missing registry row")
+  }
+  guard entry.checkout is Detached(recovery_ref) else {
+    fail("expected detached checkout")
+  }
+  assert_true(valid_recovery_ref(info.name, recovery_ref))
+  assert_eq(
+    @gitx.run(repo, [
+      "for-each-ref", "--format=%(refname)", "refs/heads/openseek/",
+    ]),
+    "",
+  )
   assert_eq(info.base, @gitx.run(repo, ["rev-parse", "HEAD"]))
   // Creation IS the binding: the entry carries its conversation from birth.
   assert_eq(info.session, Some("s-fix-auth"))
@@ -1399,20 +1393,15 @@ async test "worktree create provisions checkout, branch, registry, exclusion" {
   assert_true(info.present)
   assert_true(@fsx.is_dir(repo.join(".worktrees/fix-auth").to_path()))
   assert_true(
-    @gitx.probe(repo, [
-      "show-ref",
-      "--verify",
-      "--quiet",
-      "refs/heads/\{info.branch}",
-    ])
+    @gitx.probe(repo, ["show-ref", "--verify", "--quiet", recovery_ref])
     is Some(_),
   )
-  // The new checkout sits on its own branch at the recorded base.
+  // The new checkout sits detached at the recorded base.
   assert_eq(
     @gitx.run(repo.join(".worktrees/fix-auth"), [
       "rev-parse", "--abbrev-ref", "HEAD",
     ]),
-    info.branch,
+    "HEAD",
   )
   let exclude = @fsx.read_text(repo.join(".git/info/exclude").to_path())
   assert_true(exclude.contains(".worktrees/"))
@@ -1459,7 +1448,7 @@ async test "explicit registry removal can prune a vanished worktree" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "worktree names are host-generated and skip surviving branches" {
+async test "worktree names are host-generated and skip surviving references" {
   worktree_env_test_lock.acquire()
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
@@ -1486,8 +1475,7 @@ async test "worktree names are host-generated and skip surviving branches" {
     ()
   })
   assert_eq(second.name, "wt-2")
-  // Removal keeps the branch, so a fresh name never resurrects wt-1: the
-  // counter moves past every holder, branches included.
+  // Removal keeps the recovery ref, so a fresh name never resurrects wt-1.
   ignore(remove(host, repo.to_string(), "wt-1", false, _ => ()))
   let third = create(host, repo.to_string(), WorktreeOwner::openseek("s-3"), _ => {
     ()
@@ -1598,7 +1586,7 @@ async test "worktree create names the holder in every refusal" {
   write_worktrees(elsewhere, [
     {
       name: "wt-e",
-      branch: "openseek/wt-e",
+      checkout: Branch("openseek/wt-e"),
       base: "abc",
       session: Some("s-elsewhere"),
       codex_thread: None,
@@ -1678,7 +1666,7 @@ async fn remove_refusal(
 
 ///|
 #cfg(not(platform="windows"))
-async test "worktree remove enforces the dirty check and keeps the branch" {
+async test "worktree remove enforces the dirty check and keeps recovery references" {
   worktree_env_test_lock.acquire()
   defer worktree_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
@@ -1695,12 +1683,14 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
       "no worktree named",
     ),
   )
-  let w1 = create(
-    host,
-    repo.to_string(),
-    WorktreeOwner::openseek("s-w1"),
-    _ => (),
-    name="w1",
+  ignore(
+    create(
+      host,
+      repo.to_string(),
+      WorktreeOwner::openseek("s-w1"),
+      _ => (),
+      name="w1",
+    ),
   )
   @fs.write_file(
     repo.join(".worktrees/w1/junk.txt").to_string(),
@@ -1713,6 +1703,9 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
     ),
   )
   assert_eq(list(repo.to_string()).worktrees.length(), 1)
+  guard read_worktrees_unlocked(repo) is [w1_entry] else {
+    fail("missing first row")
+  }
   let committed : Ref[Int] = Ref(-1)
   let forced = remove(host, repo.to_string(), "w1", true, infos => {
     committed.val = infos.length()
@@ -1720,33 +1713,45 @@ async test "worktree remove enforces the dirty check and keeps the branch" {
   assert_eq(committed.val, 0)
   assert_eq(forced.worktrees.length(), 0)
   assert_false(@fsx.exists(repo.join(".worktrees/w1").to_path()))
-  guard w1.worktrees is [w1_info] else { fail("expected one worktree") }
-  // Committed work is never lost: the branch survives every removal.
+  // Committed work remains reachable after removal.
   assert_true(
     @gitx.probe(repo, [
       "show-ref",
       "--verify",
       "--quiet",
-      "refs/heads/\{w1_info.branch}",
+      w1_entry.checkout.revision(),
     ])
     is Some(_),
   )
-  let w2 = create(
-    host,
-    repo.to_string(),
-    WorktreeOwner::openseek("s-w2"),
-    _ => (),
-    name="w2",
+  ignore(
+    create(
+      host,
+      repo.to_string(),
+      WorktreeOwner::openseek("s-w2"),
+      _ => (),
+      name="w2",
+    ),
+  )
+  guard read_worktrees_unlocked(repo) is [w2_entry] else {
+    fail("missing second row")
+  }
+  let committed_head = commit_recovery_fixture(
+    worktree_dir(repo, "w2"),
+    "keep removed work",
   )
   ignore(remove(host, repo.to_string(), "w2", false, _ => ()))
+  collect_recovery_fixture(repo)
+  assert_eq(
+    @gitx.run(repo, ["rev-parse", w2_entry.checkout.revision()]),
+    committed_head,
+  )
   assert_eq(list(repo.to_string()).worktrees.length(), 0)
-  guard w2.worktrees is [w2_info] else { fail("expected one worktree") }
   assert_true(
     @gitx.probe(repo, [
       "show-ref",
       "--verify",
       "--quiet",
-      "refs/heads/\{w2_info.branch}",
+      w2_entry.checkout.revision(),
     ])
     is Some(_),
   )

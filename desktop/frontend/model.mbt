@@ -1982,7 +1982,7 @@ priv enum Msg {
   // real list reply or worktree commit broadcast identifies its placement.
   RetryWorktreePlacement
   // Rebuild the active conversation's missing worktree checkout on its
-  // surviving branch. The other safe exit is the ordinary ArchiveSession:
+  // saved commits. The other safe exit is the ordinary ArchiveSession:
   // a bound conversation never migrates into the workspace root.
   RepairWorktree
   // The archive-discard dialog's two exits: retry the archive with force

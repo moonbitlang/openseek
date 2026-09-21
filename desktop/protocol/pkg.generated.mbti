@@ -3387,7 +3387,7 @@ pub impl @json.FromJson for WorktreeCreateResult
 
 pub(all) struct WorktreeInfo {
   name : String
-  branch : String
+  branch : String?
   base : String
   session : String?
   codex_thread : String?
