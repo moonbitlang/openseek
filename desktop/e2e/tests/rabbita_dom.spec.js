@@ -783,7 +783,12 @@ test('project picker adds the browsed folder with Enter', async ({ page }) => {
   await app.install();
   await app.goto();
 
-  await page.getByRole('button', { name: 'Add a project' }).click();
+  // The empty-state CTA carries the same label as the sidebar's action, so
+  // scope the click to the sidebar the test is about.
+  await page
+    .getByRole('complementary')
+    .getByRole('button', { name: 'Add a project' })
+    .click();
   const picker = page.getByRole('dialog', { name: 'Add a project' });
   await expect(picker).toBeVisible();
   await expect(
