@@ -2,6 +2,7 @@ import {
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/resource",
   "openseek_desktop/frontend/jobs",
+  "openseek_desktop/frontend/github",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",

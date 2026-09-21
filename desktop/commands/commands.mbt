@@ -634,6 +634,12 @@ pub let git_pull_request : Command[
 ] = Command("git.pull_request")
 
 ///|
+pub let github_list : Command[
+  @protocol.GithubListPayload,
+  @protocol.GithubListReply,
+] = Command("github.list")
+
+///|
 pub let git_changes : Command[
   @protocol.GitChangesPayload,
   @protocol.GitChangesReply,

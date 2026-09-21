@@ -1150,6 +1150,9 @@ test('a model step shows its thought, then its prose, then its tool rows', async
 
 test('transcript Markdown keeps links safe and loads local raster bytes through the host', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
+  await page.context().route('https://example.test/docs', route => route.fulfill({
+    contentType: 'text/html', body: '<title>External docs</title>',
+  }));
   app.binaryFiles['diagram.png'] = {
     data_base64: 'iVBORw0KGgo=',
     media_type: 'image/png',

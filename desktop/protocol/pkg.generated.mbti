@@ -1209,6 +1209,63 @@ pub fn GitPullRequestReply::not_equal(Self, Self) -> Bool
 pub fn GitPullRequestReply::to_json(Self) -> Json
 pub fn GitPullRequestReply::to_repr(Self) -> @debug.Repr
 
+pub(all) struct GithubItem {
+  number : Int
+  title : String
+  url : String
+  author : String?
+  avatar_url : String?
+  draft : Bool
+} derive(Eq, @debug.Debug)
+pub fn GithubItem::equal(Self, Self) -> Bool
+pub fn GithubItem::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubItem::not_equal(Self, Self) -> Bool
+pub fn GithubItem::to_json(Self) -> Json
+pub fn GithubItem::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubItem
+pub impl @json.FromJson for GithubItem
+
+pub(all) enum GithubListKind {
+  CreatedByMe
+  AllOpen
+  Issues
+} derive(Eq, @debug.Debug)
+pub fn GithubListKind::equal(Self, Self) -> Bool
+pub fn GithubListKind::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubListKind::not_equal(Self, Self) -> Bool
+pub fn GithubListKind::to_json(Self) -> Json
+pub fn GithubListKind::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubListKind
+pub impl @json.FromJson for GithubListKind
+
+pub(all) struct GithubListPayload {
+  cwd : String
+  kind : GithubListKind
+  limit : Int
+} derive(Eq, @debug.Debug)
+pub fn GithubListPayload::equal(Self, Self) -> Bool
+pub fn GithubListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubListPayload::not_equal(Self, Self) -> Bool
+pub fn GithubListPayload::to_json(Self) -> Json
+pub fn GithubListPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubListPayload
+pub impl @json.FromJson for GithubListPayload
+
+pub(all) struct GithubListReply {
+  repository : String
+  repository_url : String
+  items : Array[GithubItem]
+  has_more : Bool
+  avatar_error : String?
+} derive(Eq, @debug.Debug)
+pub fn GithubListReply::equal(Self, Self) -> Bool
+pub fn GithubListReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubListReply::not_equal(Self, Self) -> Bool
+pub fn GithubListReply::to_json(Self) -> Json
+pub fn GithubListReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubListReply
+pub impl @json.FromJson for GithubListReply
+
 pub(all) struct GoalPayload {
   session : String
   text : String?

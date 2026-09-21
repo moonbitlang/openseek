@@ -39,6 +39,7 @@ pub(all) enum DockTab {
   // conversation's snippets announced, one row per subagent, each a click
   // from that child's own transcript. At most one lives in the strip.
   Workflows
+  Github
   Jobs
 } derive(Eq)
 

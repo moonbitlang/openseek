@@ -13,7 +13,7 @@ test('new-tab popup and empty launcher share Codicons without changing actions',
   const labels = await menu.locator('.dock-launcher-name').allTextContents();
   // Browse is available only when the current renderer supports browser tabs.
   expect(labels.filter(label => label !== 'Browse')).toEqual([
-    'Search', 'Files', 'Review', 'Workflows', 'Jobs',
+    'Search', 'Files', 'Review', 'GitHub', 'Workflows', 'Jobs',
   ]);
   const paths = [];
   for (const label of labels) {

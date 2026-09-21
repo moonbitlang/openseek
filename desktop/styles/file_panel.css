@@ -2913,6 +2913,37 @@ button.git-history-file.selected {
 .editor.mode-jobs .editor-body,
 .editor.mode-jobs .browser-chrome { display: none; }
 .editor.mode-jobs .jobs-panel { display: flex; }
+
+/* The GitHub inventory is its own dock body, independent of Review/Files. */
+.editor .github-panel { display: none; }
+.editor.mode-github .viewer-breadcrumb,
+.editor.mode-github .editor-body,
+.editor.mode-github .browser-chrome { display: none; }
+.editor.mode-github .github-panel { display: flex; }
+.github-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: column; padding: 0 8px 8px; overflow: hidden; color: var(--color-text-primary); }
+.github-toolbar { flex: none; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 4px 0 8px; }
+.github-repository { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
+.github-section { display: flex; flex-direction: column; flex: none; min-height: 0; border-top: 1px solid var(--color-border); }
+.github-pulls.expanded { flex: 2 1 0; }
+.github-issues.expanded { flex: 1 1 0; }
+.github-section-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 2px 0 8px; scrollbar-width: thin; }
+.github-heading, .github-group-heading { display: flex; align-items: center; gap: 5px; width: 100%; min-height: 32px; padding: 5px 6px; border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.github-heading { flex: none; font-weight: 600; }
+.github-group-heading { padding-left: 16px; }
+.github-heading:hover, .github-group-heading:hover, .github-item:hover { background: var(--color-hover-subtle); }
+.github-heading:focus-visible, .github-group-heading:focus-visible, .github-item:focus-visible, .github-more:focus-visible { outline: 1px solid var(--color-accent); outline-offset: -1px; background: var(--color-hover-subtle); }
+.github-chevron { display: inline-flex; transform: rotate(-90deg); }
+.github-chevron.expanded { transform: none; }
+.github-item { display: flex; align-items: center; gap: 6px; width: 100%; height: 26px; padding: 3px 8px 3px 36px; border: 0; border-radius: 5px; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.github-issues .github-item { padding-left: 16px; }
+.github-avatar { position: relative; display: inline-flex; flex: 0 0 16px; width: 16px; height: 16px; border-radius: 50%; overflow: hidden; color: var(--color-text-secondary); }
+.github-avatar-image { position: absolute; inset: 0; border-radius: inherit; background-size: cover; background-position: center; }
+.github-item-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--font-size-sm); line-height: 20px; }
+.github-item.draft .github-item-title { font-style: italic; }
+.github-empty, .github-error { padding: 10px 16px; font-size: var(--font-size-sm); line-height: 1.5; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.github-error { color: var(--color-error, #d45b5b); }
+.github-more { margin: 6px 16px; padding: 4px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--color-accent); font: inherit; font-size: var(--font-size-sm); cursor: pointer; }
+.github-error .github-more { margin: 6px 0 0; }
 .jobs-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: column; overflow: auto; padding: 18px; gap: 12px; color: var(--color-text-primary); }
 .jobs-heading, .jobs-row-head, .jobs-detail-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .jobs-heading h3 { margin: 0 0 8px; font-size: var(--font-size-lg); font-weight: 600; letter-spacing: -.2px; }

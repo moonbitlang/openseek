@@ -40,6 +40,13 @@ fn panel_view(
         }
         { tab, label, title, missing: false, }
       }
+      Github =>
+        {
+          tab,
+          label: "GitHub",
+          title: "GitHub pull requests and issues",
+          missing: false,
+        }
       Jobs =>
         {
           tab,
@@ -75,6 +82,7 @@ fn panel_view(
     files: @cmd.batch([actions.files, actions.close_menu]),
     review: @cmd.batch([actions.review, actions.close_menu]),
     jobs: @cmd.batch([actions.jobs, actions.close_menu]),
+    github: @cmd.batch([actions.github, actions.close_menu]),
     workflows: @cmd.batch([actions.workflows, actions.close_menu]),
   }
   // Every body remains mounted and CSS selects the active kind. This preserves
@@ -90,6 +98,7 @@ fn panel_view(
     Some(File(_)) => "mode-file"
     Some(GitDiff(_)) => "mode-history"
     Some(Jobs) => "mode-jobs"
+    Some(Github) => "mode-github"
     Some(Workflows) => "mode-workflows"
   }
   let active_page : @preview.PageState = match
@@ -159,6 +168,7 @@ fn panel_view(
         open_child: actions.open_child,
       }),
       @dock.launcher_pane(locale~, launcher),
+      @github.panel(input.github, actions.github_events, actions.open_link),
     ],
   )
 }

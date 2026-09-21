@@ -4,6 +4,7 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
   @right_panel.Input(
     dock=self.dock,
     jobs=self.jobs,
+    github=self.github,
     file_panel=self.file_panel,
     preview=self.preview,
     file_ctx=file_ctx(self),

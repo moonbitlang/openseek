@@ -169,6 +169,8 @@ pub let git_original_file : Command[@protocol.GitOriginalFilePayload, @protocol.
 
 pub let git_pull_request : Command[@protocol.GitPullRequestPayload, @protocol.GitPullRequestReply]
 
+pub let github_list : Command[@protocol.GithubListPayload, @protocol.GithubListReply]
+
 pub let host_connect : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
 pub let host_open_path : Command[@protocol.OpenPathPayload, @protocol.OpenPathReply]

@@ -11,6 +11,7 @@ struct Input {
   expanded : Bool
   reveal_label : String?
   // Session-scoped jobs, including retained history and the selected log.
+  github : @github.State
   jobs : @jobs.State
   // The workflows the active conversation's snippets announced, for the
   // Workflows tab. Live-only state projected from the root's conversation.
@@ -27,6 +28,7 @@ pub fn Input::Input(
   menu_open~ : Bool,
   expanded~ : Bool,
   reveal_label~ : String?,
+  github~ : @github.State,
   jobs~ : @jobs.State,
   workflows~ : Array[@workflow.Run],
 ) -> Input {
@@ -41,6 +43,7 @@ pub fn Input::Input(
     reveal_label,
     workflows,
     jobs,
+    github,
   }
 }
 
@@ -54,6 +57,9 @@ pub(all) struct Actions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
+  github : @cmd.Cmd
+  github_events : @cmd.Emit[@github.Msg]
+  open_link : (String) -> @cmd.Cmd
   jobs : @cmd.Cmd
   job_events : @cmd.Emit[@jobs.Msg]
   workflows : @cmd.Cmd

@@ -56,6 +56,8 @@ pub fn icon_folder() -> @html.Html
 
 pub fn icon_folder_opened() -> @html.Html
 
+pub fn icon_github() -> @html.Html
+
 pub fn icon_globe() -> @html.Html
 
 pub fn icon_key() -> @html.Html

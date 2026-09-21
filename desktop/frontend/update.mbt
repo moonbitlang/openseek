@@ -839,8 +839,12 @@ fn reveal_local_directory(
 ) -> (@cmd.Cmd, Model) {
   let dock = match model.dock.active {
     Some(File(_)) | Some(FilePicker) => model.dock
-    None | Some(Browser(_)) | Some(GitDiff(_)) | Some(Workflows) | Some(Jobs) =>
-      @dock.open_picker(model.dock)
+    None
+    | Some(Browser(_))
+    | Some(GitDiff(_))
+    | Some(Workflows)
+    | Some(Jobs)
+    | Some(Github) => @dock.open_picker(model.dock)
   }
   let model = {
     ..model,
@@ -1478,7 +1482,8 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     .unwrap_or(model.default_model)
   let file_body_visible = match model.dock.active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
-    None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) => false
+    None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) | Some(Github) =>
+      false
   }
   {
     // Keep the real identity even while placement is unresolved or missing.
@@ -1937,6 +1942,31 @@ fn update(
     active,
   )
   let model = { ..model, jobs, }
+  let github_owner = model
+    .active_checkout()
+    .bind(active => {
+      active.placement
+      .bind(placement => placement.checkout_root())
+      .map(root => @github.Owner::{
+        channel: active.owner.channel,
+        cwd: root.path,
+      })
+    })
+  let github_active = model.file_panel_visible() &&
+    model.dock.active is Some(Github) &&
+    github_owner is Some(owner) &&
+    model.devices.any(dev => {
+      dev.channel == owner.channel &&
+      dev.bridge is Connected &&
+      dev.reconnect_failures == 0
+    })
+  let (github_cmd, github) = @github.reconcile(
+    dispatch.map(msg => Github(msg)),
+    model.github,
+    github_owner,
+    github_active,
+  )
+  let model = { ..model, github, }
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
@@ -1947,6 +1977,7 @@ fn update(
       panel_cmd,
       terminal_cmd,
       jobs_cmd,
+      github_cmd,
       browser_cmd,
       sync_dock_visibility(
         model.dock.active != previous.dock.active ||
@@ -5259,7 +5290,7 @@ fn update_msg(
               }
               // Neither tab owns a document: closing one while active hands
               // focus to a neighbouring file or diff, and otherwise nothing.
-              FilePicker | Workflows | Jobs =>
+              FilePicker | Workflows | Jobs | Github =>
                 if was_active && next_file is Some(path) {
                   let (cmd, panel) = @fileeditor.activate(
                     femit,
@@ -5332,6 +5363,24 @@ fn update_msg(
       )
       (cmd, { ..model, jobs, })
     }
+    Github(msg) => {
+      let (cmd, github) = @github.update(
+        dispatch.map(msg => Github(msg)),
+        msg,
+        model.github,
+      )
+      (cmd, { ..model, github, })
+    }
+    GithubRequested =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          dock: @dock.open_github(model.dock),
+          right_panel_open: true,
+          right_panel_menu_open: false,
+        },
+      )
     JobsRequested =>
       (
         @cmd.none,

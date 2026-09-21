@@ -7,6 +7,7 @@ import {
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/dock",
   "openseek_desktop/frontend/fileeditor",
+  "openseek_desktop/frontend/github",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/jobs",
   "openseek_desktop/frontend/preview",
@@ -26,6 +27,9 @@ pub(all) struct Actions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
+  github : @cmd.Cmd
+  github_events : @cmd.Emit[@github.Msg]
+  open_link : (String) -> @cmd.Cmd
   jobs : @cmd.Cmd
   job_events : @cmd.Emit[@jobs.Msg]
   workflows : @cmd.Cmd
@@ -45,7 +49,7 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(dock~ : @dock.State, file_panel~ : @fileeditor.State, preview~ : @preview.State, file_ctx~ : @fileeditor.Ctx, is_desktop~ : Bool, menu_open~ : Bool, expanded~ : Bool, reveal_label~ : String?, jobs~ : @jobs.State, workflows~ : Array[@workflow.Run]) -> Self
+pub fn Input::Input(dock~ : @dock.State, file_panel~ : @fileeditor.State, preview~ : @preview.State, file_ctx~ : @fileeditor.Ctx, is_desktop~ : Bool, menu_open~ : Bool, expanded~ : Bool, reveal_label~ : String?, github~ : @github.State, jobs~ : @jobs.State, workflows~ : Array[@workflow.Run]) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 

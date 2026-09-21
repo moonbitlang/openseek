@@ -142,3 +142,8 @@ pub fn sync(state : State, owner : @interop.ConversationKey) -> State {
 pub fn open_jobs(state : State) -> State {
   open_tab(state, Jobs)
 }
+
+///|
+pub fn open_github(state : State) -> State {
+  open_tab(state, Github)
+}

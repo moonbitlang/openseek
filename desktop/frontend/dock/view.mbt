@@ -57,6 +57,7 @@ pub(all) struct LauncherActions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
+  github : @cmd.Cmd
   workflows : @cmd.Cmd
   jobs : @cmd.Cmd
 }
@@ -102,6 +103,14 @@ fn LauncherActions::rows(
       ui(locale, ReviewHint),
       @icons.icon_diff_multiple,
       self.review,
+    ),
+  )
+  entries.push(
+    (
+      "GitHub",
+      "Browse pull requests and issues",
+      @icons.icon_github,
+      self.github,
     ),
   )
   entries.push(

@@ -28,6 +28,8 @@ pub fn open_browser(State, Int) -> State
 
 pub fn open_file(State, @common.Uri) -> State
 
+pub fn open_github(State) -> State
+
 pub fn open_history_diff(State, GitHistoryDiff) -> State
 
 pub fn open_jobs(State) -> State
@@ -53,6 +55,7 @@ pub(all) enum DockTab {
   Browser(id~ : Int)
   FilePicker
   Workflows
+  Github
   Jobs
 } derive(Eq)
 pub fn DockTab::equal(Self, Self) -> Bool
@@ -75,6 +78,7 @@ pub(all) struct LauncherActions {
   search : @cmd.Cmd
   files : @cmd.Cmd
   review : @cmd.Cmd
+  github : @cmd.Cmd
   workflows : @cmd.Cmd
   jobs : @cmd.Cmd
 }

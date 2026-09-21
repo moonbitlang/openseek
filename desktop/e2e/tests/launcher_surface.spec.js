@@ -28,6 +28,7 @@ test('new-tab popup shares select surface and supports keyboard dismissal', asyn
     'SearchSearch text across the workspace',
     'FilesOpen a file from the workspace',
     'ReviewReview changed files and diffs',
+    'GitHubBrowse pull requests and issues',
     'WorkflowsSubagents this conversation delegated to',
     'JobsFollow background commands and their logs',
   ]);

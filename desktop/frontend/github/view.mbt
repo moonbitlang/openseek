@@ -1,0 +1,249 @@
+///|
+fn disclosure(
+  label : String,
+  expanded : Bool,
+  action : @cmd.Cmd,
+  section? : Bool = false,
+) -> @html.Html {
+  @html.button(
+    class=if section { "github-heading" } else { "github-group-heading" },
+    attrs=@html.Attrs::build()
+      .aria_expanded(expanded.to_string())
+      .aria_label(label),
+    on_click=action,
+    [
+      @html.span(
+        class=if expanded {
+          "github-chevron expanded"
+        } else {
+          "github-chevron"
+        },
+        @icons.icon(@icons.icon_chevron_down),
+      ),
+      @html.span(label),
+    ],
+  )
+}
+
+///|
+fn list_view(
+  state : State,
+  kind : @protocol.GithubListKind,
+  emit : @cmd.Emit[Msg],
+  open_link : (String) -> @cmd.Cmd,
+) -> @html.Html {
+  let group = state.group(kind)
+  let children : Array[@html.Html] = []
+  if group.reply is Some(reply) {
+    if reply.avatar_error is Some(error) {
+      children.push(
+        @html.div(
+          class="github-error",
+          attrs=@html.Attrs::build().role("alert"),
+          [
+            @html.div(error),
+            @html.button(
+              class="github-more",
+              disabled=group.loading,
+              on_click=emit(Retry(kind)),
+              "Retry avatars",
+            ),
+          ],
+        ),
+      )
+    }
+    for item in reply.items {
+      let meta = "#\{item.number}" +
+        item.author.map(author => " · \{author}").unwrap_or("") +
+        (if item.draft { " · Draft" } else { "" })
+      children.push(
+        @html.button(
+          class="github-item" + (if item.draft { " draft" } else { "" }),
+          title="\{item.title}\n\{meta}\nOpen on GitHub",
+          attrs=@html.Attrs::build().aria_label("\{item.title}, \{meta}"),
+          on_click=open_link(item.url),
+          [
+            avatar_view(item.avatar_url),
+            @html.span(class="github-item-title", item.title),
+          ],
+        ),
+      )
+    }
+    if reply.items.is_empty() && !group.loading && group.error is None {
+      children.push(
+        @html.div(
+          class="github-empty",
+          match kind {
+            CreatedByMe => "No open pull requests created by you."
+            AllOpen => "No open pull requests."
+            Issues => "No open issues."
+          },
+        ),
+      )
+    }
+    if reply.has_more && !group.loading {
+      children.push(
+        @html.button(
+          class="github-more",
+          on_click=if reply.items.length() < 1000 {
+            emit(More(kind))
+          } else {
+            open_link(
+              reply.repository_url +
+              (if kind is Issues { "/issues" } else { "/pulls" }),
+            )
+          },
+          if reply.items.length() < 1000 {
+            "Load more…"
+          } else {
+            "View all on GitHub"
+          },
+        ),
+      )
+    }
+  }
+  if group.loading {
+    children.push(
+      @html.div(
+        class="github-empty",
+        attrs=@html.Attrs::build().role("status"),
+        "Loading…",
+      ),
+    )
+  }
+  if group.error is Some(error) {
+    children.push(
+      @html.div(
+        class="github-error",
+        attrs=@html.Attrs::build().role("alert"),
+        [
+          @html.div(error),
+          @html.button(class="github-more", on_click=emit(Retry(kind)), "Retry"),
+        ],
+      ),
+    )
+  }
+  @html.div(class="github-list", children)
+}
+
+///|
+fn avatar_view(url : String?) -> @html.Html {
+  // A background layer leaves the GitHub glyph visible if the image cannot
+  // load, without a broken-image marker or imperative DOM error handler.
+  @html.span(
+    class="github-avatar",
+    attrs=@html.Attrs::build().aria_hidden("true"),
+    [
+      @icons.icon(@icons.icon_github),
+      match url {
+        Some(url) =>
+          @html.span(
+            class="github-avatar-image",
+            attrs=@html.Attrs::build().style(
+              "background-image",
+              "url(\"\{url.replace_all(old="\"", new="%22")}\")",
+            ),
+            ([] : Array[@html.Html]),
+          )
+        None => @html.nothing
+      },
+    ],
+  )
+}
+
+///|
+pub fn panel(
+  state : State,
+  emit : @cmd.Emit[Msg],
+  open_link : (String) -> @cmd.Cmd,
+) -> @html.Html {
+  let repository = match
+    (state.all_open.reply, state.created.reply, state.issues.reply) {
+    (Some(reply), _, _) | (_, Some(reply), _) | (_, _, Some(reply)) =>
+      Some(reply)
+    _ => None
+  }
+  let pulls : Array[@html.Html] = [
+    disclosure(
+      "Pull Requests",
+      state.pulls_expanded,
+      emit(TogglePulls),
+      section=true,
+    ),
+  ]
+  if state.pulls_expanded {
+    let groups : Array[@html.Html] = []
+    for
+      (kind, label) in [
+        (@protocol.CreatedByMe, "Created By Me"),
+        (@protocol.AllOpen, "All Open"),
+      ] {
+      let group = state.group(kind)
+      groups.push(
+        @html.div(class="github-group", [
+          disclosure(label, group.expanded, emit(Toggle(kind))),
+          if group.expanded {
+            list_view(state, kind, emit, open_link)
+          } else {
+            @html.nothing
+          },
+        ]),
+      )
+    }
+    pulls.push(@html.div(class="github-section-body", groups))
+  }
+  @html.div(class="github-panel", [
+    @html.div(class="github-toolbar", [
+      @html.span(
+        class="github-repository",
+        title=state.owner.map(owner => owner.cwd).unwrap_or("GitHub"),
+        repository.map(reply => reply.repository).unwrap_or("GitHub"),
+      ),
+      @html.button(
+        class="tab-action",
+        title="Refresh GitHub",
+        attrs=@html.Attrs::build().aria_label("Refresh GitHub"),
+        disabled=!state.active || state.owner is None,
+        on_click=emit(Refresh),
+        @icons.icon(@icons.icon_sync),
+      ),
+    ]),
+    if state.owner is None {
+      @html.div(
+        class="github-empty",
+        "Open a task with a GitHub repository to see pull requests and issues.",
+      )
+    } else if !state.active {
+      @html.div(
+        class="github-empty",
+        "Connect to the workspace host to load GitHub.",
+      )
+    } else {
+      @html.nothing
+    },
+    @html.div(
+      class="github-section github-pulls" +
+        (if state.pulls_expanded { " expanded" } else { "" }),
+      pulls,
+    ),
+    @html.div(
+      class="github-section github-issues" +
+        (if state.issues.expanded { " expanded" } else { "" }),
+      [
+        disclosure(
+          "Issues",
+          state.issues.expanded,
+          emit(Toggle(@protocol.Issues)),
+          section=true,
+        ),
+        if state.issues.expanded {
+          @html.div(class="github-section-body", [
+            list_view(state, @protocol.Issues, emit, open_link),
+          ])
+        } else {
+          @html.nothing
+        },
+      ],
+    ),
+  ])
+}
