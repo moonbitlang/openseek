@@ -14,6 +14,13 @@ runs and no normalization is needed.
 
 ## Echo Kind: Events Then the Typed Report Line
 
+Select the root executable explicitly so the deprecated entry point does not
+add warnings to these transcripts.
+
+```mooncram
+$ export PATH="$TESTDIR/../../_build/native/debug/build/moonbitlang/openseek:$PATH"
+```
+
 ```mooncram
 $ (printf '{"probe": 42}\n'; sleep 1) | openseek.exe subrun echo
 {"event":"agent_step","step":1}

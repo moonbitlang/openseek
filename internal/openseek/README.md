@@ -1,9 +1,9 @@
 # Headless CLI implementation
 
-`cmd/openseek` owns the executable entry point, error reporting, and exit status.
-This internal package exports only `dispatch`, which parses arguments and calls
-the selected handler. The executable path and command-line interface stay stable
-as the implementation grows.
+The root package and the deprecated `cmd/openseek` package both call `run_cli`,
+which owns process-level diagnostics and exit status. `dispatch` parses
+arguments and calls the selected handler. The legacy entry point adds a warning
+to stderr before invoking the shared runner.
 
 | Package | Owns |
 | --- | --- |
@@ -32,7 +32,7 @@ stdout contains only their own report or listing. Keep this lifetime explicit:
 in particular, a subrun's final report must follow all its queued events, and
 process exit belongs outside the drain's scope.
 
-There is no logger in this binary: nothing linked into `cmd/openseek` logs, so
+There is no logger in this binary: nothing linked into either entry point logs, so
 stdout carries only the event stream or the command's own output. The
 `MOON_XLOG` case in `tests/cram/cli.md` guards this for `run`; keep it true
 for every package here, since a logging import in any one of them would

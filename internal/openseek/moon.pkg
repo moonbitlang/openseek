@@ -1,4 +1,7 @@
 import {
+  "moonbitlang/openseek/cli",
+  "moonbitlang/async/stdio",
+  "moonbitlang/x/sys",
   "moonbitlang/core/argparse",
   "moonbitlang/openseek/internal/openseek/commands",
   "moonbitlang/core/env",

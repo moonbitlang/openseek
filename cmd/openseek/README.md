@@ -1,7 +1,10 @@
 # OpenSeek CLI
 
-This package is the automation entry point for OpenSeek — the
-`openseek` binary. It is a subcommand tree for the headless engine (the
+This package is the deprecated compatibility entry point for OpenSeek.
+Use `moonx moonbitlang/openseek` or `moon run .` from the repository root.
+The old coordinate remains supported and prints one warning to stderr.
+
+The `openseek` binary is a subcommand tree for the headless engine (the
 interactive terminal UI is the separate `openseek_tui` binary, maintained in
 [moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui)). It parses arguments with
 `moonbitlang/core/argparse`, reads defaults from environment variables, and
@@ -9,8 +12,8 @@ drives turns through `moonbitlang/openseek/agent.run_turn_in_scope` (both one-sh
 `run` and durable sessions; fleet mode's independent attempts use
 `agent.run_turn_with_append`).
 
-The executable package only starts the application and reports process-level
-errors. Command parsing, handlers, and shared setup live under
+Both executable packages call the same application entry point and share
+process-level error handling. Command parsing, handlers, and shared setup live under
 [`internal/openseek`](../../internal/openseek/README.md).
 
 ```
@@ -32,7 +35,7 @@ rejected; launch the UI with `openseek_tui`. The options shared with the engine
 ## `openseek run`
 
 ```bash
-moon run cmd/openseek -- run [--api-key sk-...] [--model deepseek-flash] [--api-url https://api.deepseek.com/chat/completions] [--dir .] [--max-steps N] [--system-prompt-file prompt.md] [--system-prompt-addendum-file addendum.md] [--session session-id] [--session-root .openseek] "task text"
+moon run . -- run [--api-key sk-...] [--model deepseek-flash] [--api-url https://api.deepseek.com/chat/completions] [--dir .] [--max-steps N] [--system-prompt-file prompt.md] [--system-prompt-addendum-file addendum.md] [--session session-id] [--session-root .openseek] "task text"
 ```
 
 Runs require `--api-key` or the provider-specific environment variable:
@@ -83,10 +86,10 @@ model name.
 The session-management subcommands are offline and do not require `--api-key`:
 
 ```bash
-moon run cmd/openseek -- sessions list --session-root .openseek
-moon run cmd/openseek -- sessions list --format=json --session-root .openseek
-moon run cmd/openseek -- sessions show parser-fix --session-root .openseek
-moon run cmd/openseek -- sessions compact parser-fix --file summary.txt --from 1 --to 120
+moon run . -- sessions list --session-root .openseek
+moon run . -- sessions list --format=json --session-root .openseek
+moon run . -- sessions show parser-fix --session-root .openseek
+moon run . -- sessions compact parser-fix --file summary.txt --from 1 --to 120
 ```
 
 `sessions list --format=json` is the machine-readable form of the listing,
@@ -124,23 +127,23 @@ protocol for other integrations.
 
 ```bash
 export DEEPSEEK=sk-...
-moon run cmd/openseek -- run "run moon test and summarize the result"
+moon run . -- run "run moon test and summarize the result"
 ```
 
 ```bash
-OPENSEEK_MODEL=deepseek-flash moon run cmd/openseek -- run "inspect the package docs"
+OPENSEEK_MODEL=deepseek-flash moon run . -- run "inspect the package docs"
 ```
 
 ```bash
-moon run cmd/openseek -- run --max-steps 200 "write tests, fix failures, and summarize"
+moon run . -- run --max-steps 200 "write tests, fix failures, and summarize"
 ```
 
 ```bash
-moon run cmd/openseek -- run --dir ../another-workspace "run moon test"
+moon run . -- run --dir ../another-workspace "run moon test"
 ```
 
 ```bash
-moon run cmd/openseek -- run --session parser-fix "continue from the last run"
+moon run . -- run --session parser-fix "continue from the last run"
 ```
 
 Best-of-N: run the same task in N sibling copies of `--dir` concurrently, each
@@ -156,7 +159,7 @@ original repo. Each run's session lives under its run directory.
 
 ```bash
 # 3 attempts at the same fix in dir_run_1 / dir_run_2 / dir_run_3
-moon run cmd/openseek -- run --concurrency 3 --dir myproject "fix the failing test"
+moon run . -- run --concurrency 3 --dir myproject "fix the failing test"
 ```
 
 `run --concurrency` cannot be combined with `--session` or `--no-session`.

@@ -12,7 +12,7 @@ import {
   "moonbitlang/workflow@0.7.1",
 }
 
-readme = "README.mbt.md"
+readme = "README.md"
 
 repository = "https://github.com/moonbitlang/openseek"
 

@@ -4,6 +4,8 @@ package "moonbitlang/openseek/internal/openseek"
 // Values
 pub async fn dispatch() -> Unit
 
+pub async fn run_cli() -> Unit
+
 // Errors
 
 // Types and methods
