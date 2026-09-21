@@ -328,7 +328,7 @@ pub fn component(
           (
             "\{input.id.key()}:more",
             @html.button(
-              class="project-show-more",
+              class="section-show-more",
               type_="button",
               title=@messages.text(locale, ShowMoreIn(input.label)),
               on_click=emit(ShowMore),

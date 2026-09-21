@@ -410,6 +410,7 @@ html.is-resizing .sidebar-resize-handle {
   color: var(--color-text-secondary);
 }
 .workspace-disclosure:focus-visible,
+.section-show-more:focus-visible,
 .project-show-more:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
@@ -490,6 +491,7 @@ button.composer-worktree:hover {
 .conversation-row.nested {
   padding-left: 16px;
 }
+.section-show-more,
 .project-show-more {
   width: 100%;
   min-height: 28px;
@@ -503,6 +505,16 @@ button.composer-worktree:hover {
   text-align: left;
   cursor: pointer;
 }
+/* Each instance sits under the titles of the rows it reveals. A section's
+   top-level conversation rows indent their label 8 + 14 + 6 = 28px; a
+   project's nested rows add their own 16px pad on top, landing at 36px. */
+.section-show-more {
+  padding-left: 28px;
+}
+.project-show-more {
+  padding-left: 36px;
+}
+.section-show-more:hover,
 .project-show-more:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-secondary);
