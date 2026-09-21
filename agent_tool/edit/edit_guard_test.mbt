@@ -175,12 +175,12 @@ async test "the error guard reverts a type-breaking edit and reports the site" {
       "old_string": "  xs.length()",
       "new_string": "  \"not an int\"",
       "start_line": 9,
-      "revert_when_errors_above": 0,
+      "revert_when_errors_greater_or_equal": 1,
     })
     assert_true(reverted.is_error)
     assert_true(
       reverted.content.contains(
-        "reverted: the edit introduced 1 error(s) (> revert_when_errors_above=0) the tree did not have",
+        "reverted: the edit introduced 1 error(s) (>= revert_when_errors_greater_or_equal=1) the tree did not have",
       ),
       msg=reverted.content,
     )
@@ -270,6 +270,36 @@ async test "a guarded edit is not written when moon check cannot verify the tree
 }
 
 ///|
+async test "error guard uses an inclusive threshold" {
+  for
+    (replacement, threshold, kept) in [
+      ("  xs.length() + 0", 0, false),
+      ("  xs.length() + 0", 1, true),
+      ("  \"not an int\"", 1, false),
+      ("  \"not an int\"", 2, true),
+    ] {
+    @vfs.with_tmpdir(dir => {
+      let path = write_guard_module(dir)
+      let original = @fs.read_file(path).text()
+      let output = run_edit({
+        "path": path,
+        "old_string": "  xs.length()",
+        "new_string": replacement,
+        "start_line": 9,
+        "revert_when_errors_greater_or_equal": threshold,
+      })
+      assert_eq(output.is_error, !kept, msg=output.content)
+      if kept {
+        assert_true(@fs.read_file(path).text().contains(replacement))
+      } else {
+        assert_true(output.data is Some({ "reason": "introduced_errors", .. }))
+        assert_eq(@fs.read_file(path).text(), original)
+      }
+    })
+  }
+}
+
+///|
 async test "warning guard at zero requires a net decrease" {
   for
     (replacement, kept) in [
@@ -307,7 +337,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "old_string": "old",
       "new_string": "new",
       "start_line": 1,
-      "revert_when_errors_above": 0,
+      "revert_when_errors_greater_or_equal": 1,
       "revert_when_warnings_greater_or_equal": 0,
     })
     assert_false(out.is_error, msg=out.content)
@@ -361,12 +391,12 @@ async test "guards are moot outside a MoonBit project and data still names the o
         "old_string": "new",
         "new_string": "x",
         "start_line": 1,
-        "revert_when_errors_above": value,
+        "revert_when_errors_greater_or_equal": value,
       })
       assert_true(rejected.is_error, msg=rejected.content)
       assert_true(
         rejected.content.contains(
-          "arguments.revert_when_errors_above to be a non-negative integer",
+          "arguments.revert_when_errors_greater_or_equal to be a non-negative integer",
         ),
         msg=rejected.content,
       )
@@ -377,7 +407,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "old_string": "new",
       "new_string": "newer",
       "start_line": 1,
-      "revert_when_errors_above": Json::null(),
+      "revert_when_errors_greater_or_equal": Json::null(),
     })
     assert_false(off.is_error, msg=off.content)
     assert_true(
@@ -454,7 +484,7 @@ async test "guards reach a MoonBit target through a link with another name" {
       "old_string": "  xs.length()",
       "new_string": "  \"not an int\"",
       "start_line": 9,
-      "revert_when_errors_above": 0,
+      "revert_when_errors_greater_or_equal": 1,
     })
     assert_true(reverted.is_error, msg=reverted.content)
     assert_true(
@@ -493,7 +523,7 @@ async test "guards check the module of a link's target as well as the link's own
       "old_string": "pub fn f() -> Int {\n  1",
       "new_string": "pub fn f(x : Int) -> Int {\n  x",
       "start_line": 2,
-      "revert_when_errors_above": 0,
+      "revert_when_errors_greater_or_equal": 1,
     })
     assert_true(reverted.is_error, msg=reverted.content)
     guard reverted.data

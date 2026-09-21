@@ -105,10 +105,10 @@ never depend on an unpinned latest version in generated examples.
 
 ## Warning-fix loop
 
-The host's `edit` tool accepts `revert_when_errors_above` and
+The host's `edit` tool accepts `revert_when_errors_greater_or_equal` and
 `revert_when_warnings_greater_or_equal`: `moon check` runs before and after
-the write. At `0`, the error guard rejects introduced errors and the warning
-guard requires a net decrease in warning count (`after - before < 0`).
+the write. At `1`, the error guard rejects introduced errors; at `0`, the
+warning guard requires a net decrease in warning count (`after - before < 0`).
 Every result's `data` names the
 `outcome` and, for a guarded edit, `introduced_count` and `removed_count` per
 severity, so a script can fix diagnostics one at a time and keep what the
@@ -125,7 +125,7 @@ let result = @tools.call("edit", {
   "end_line": site.line,
   "old_string": line_prefix_through_span,
   "new_string": line_prefix_before_span + replacement,
-  "revert_when_errors_above": 0,
+  "revert_when_errors_greater_or_equal": 1,
   "revert_when_warnings_greater_or_equal": 0,
 })
 match result.data {

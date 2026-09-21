@@ -17,7 +17,7 @@ test "decode valid edit input" {
       #|  start_line: 1,
       #|  end_line: None,
       #|  revert_on_parse_errors: true,
-      #|  revert_when_errors_above: None,
+      #|  revert_when_errors_greater_or_equal: None,
       #|  revert_when_warnings_greater_or_equal: None,
       #|}
     ),
@@ -44,7 +44,7 @@ test "decode replace_all flag" {
       #|  start_line: 1,
       #|  end_line: None,
       #|  revert_on_parse_errors: true,
-      #|  revert_when_errors_above: None,
+      #|  revert_when_errors_greater_or_equal: None,
       #|  revert_when_warnings_greater_or_equal: None,
       #|}
     ),
@@ -71,7 +71,7 @@ test "decode line range" {
       #|  start_line: 2,
       #|  end_line: Some(4),
       #|  revert_on_parse_errors: true,
-      #|  revert_when_errors_above: None,
+      #|  revert_when_errors_greater_or_equal: None,
       #|  revert_when_warnings_greater_or_equal: None,
       #|}
     ),
@@ -170,7 +170,17 @@ test "decode rejects non-object arguments" {
 }
 
 ///|
-test "decode rejects the renamed warning guard instead of silently ignoring it" {
+test "decode rejects renamed guards instead of silently ignoring them" {
+  assert_decode_error(
+    {
+      "path": "file.mbt",
+      "old_string": "old",
+      "new_string": "new",
+      "start_line": 1,
+      "revert_when_errors_above": 0,
+    },
+    "renamed to revert_when_errors_greater_or_equal",
+  )
   assert_decode_error(
     {
       "path": "file.mbt",

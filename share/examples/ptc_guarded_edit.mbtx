@@ -31,7 +31,7 @@ async fn main {
     "start_line": start_line,
     "old_string": old_string,
     "new_string": new_string,
-    "revert_when_errors_above": 0,
+    "revert_when_errors_greater_or_equal": 1,
     "revert_when_warnings_greater_or_equal": 0,
   })
   // A tool error is a result (`is_error` set, `content` explains). Only a

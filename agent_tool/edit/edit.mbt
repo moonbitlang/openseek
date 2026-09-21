@@ -38,7 +38,7 @@
 /// - `Respond(ToolOutput("rejected: the edit would introduce ...", is_error=true))`
 ///   when the parse gate refused an edit whose result does not parse.
 /// - `Respond(ToolOutput("reverted: ...", is_error=true))`
-///   when a post-write guard (`revert_when_errors_above` /
+///   when a post-write guard (`revert_when_errors_greater_or_equal` /
 ///   `revert_when_warnings_greater_or_equal`)
 ///   restored the file.
 /// - `Respond(ToolOutput("not applied: ... moon check could not verify ...", is_error=true))`
@@ -77,7 +77,7 @@ pub fn definition(
       #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
       #|Diagnostic guards (off unless given) run moon check before and after writing.
-      #|revert_when_errors_above=0 rejects introduced errors;
+      #|revert_when_errors_greater_or_equal=1 rejects introduced errors;
       #|revert_when_warnings_greater_or_equal=0 reverts when the warning total does not
       #|decrease (after - before >= 0). Combine them for a warning-fix script. For
       #|multiple compiler-feedback fixes in one file, use multi_edit with explicit
@@ -113,13 +113,14 @@ pub fn definition(
           ),
           "examples": [false],
         },
-        "revert_when_errors_above": {
+        "revert_when_errors_greater_or_equal": {
           "type": "integer",
           "description": (
             #|Post-write guard, off unless given. moon check runs from the file's module
-            #|before and after the write; if the edit INTRODUCED more than this many
+            #|before and after the write; if the edit INTRODUCED at least this many
             #|errors the tree did not have — counted by diagnostic identity (path, code,
-            #|message), so line shifts never count; 0 reverts on any — the file is
+            #|message), so line shifts never count; 1 reverts on any new error,
+            #|0 always reverts a checked edit — the file is
             #|restored and the call returns is_error with the introduced sites. The
             #|result's data carries introduced_count and removed_count per severity on
             #|kept and reverted outcomes, not on unverified ones. A baseline that already has errors makes the comparison
@@ -128,7 +129,7 @@ pub fn definition(
             #|says when that caveat applies. If moon check cannot run, a guarded edit is
             #|not written at all.
           ),
-          "examples": [0],
+          "examples": [1],
         },
         "revert_when_warnings_greater_or_equal": {
           "type": "integer",
@@ -137,7 +138,7 @@ pub fn definition(
             #|change (after.warning_count - before.warning_count) is >= this non-negative
             #|threshold. 0 requires a decrease; 1 allows an unchanged total. Removing
             #|two warnings while introducing one passes at 0. Pair with
-            #|revert_when_errors_above=0 to reject introduced errors too.
+            #|revert_when_errors_greater_or_equal=1 to reject introduced errors too.
           ),
           "examples": [0],
         },
@@ -732,7 +733,7 @@ fn total_line_count(content : String) -> Int {
 /// every failure onto the same `→ edit · edit <file> 🚩` viz line. `lines` is
 /// the inclusive line range the new content occupies, for the result's data.
 ///
-/// With `revert_when_errors_above` / `revert_when_warnings_greater_or_equal` the tree is checked before
+/// With `revert_when_errors_greater_or_equal` / `revert_when_warnings_greater_or_equal` the tree is checked before
 /// the write (the baseline) and after it, and the file is restored when the
 /// edit violates the introduced-error limit or net-warning threshold — see
 /// `guarded_outcome`. Without them the post-write check only reports.
@@ -761,7 +762,7 @@ async fn commit_edit(
     return rejection
   }
   let guards : Guards = {
-    errors: input.revert_when_errors_above,
+    errors: input.revert_when_errors_greater_or_equal,
     warnings: input.revert_when_warnings_greater_or_equal,
   }
   // The guards' baseline is measured before the write, so nothing has to be
@@ -1154,7 +1155,8 @@ async fn guarded_outcome(
   // point), so identity comparison is exact, in both directions.
   let delta = @auto_check.introduced(before, after)
   let removed = @auto_check.introduced(after, before)
-  let errors_hit = guards.errors is Some(limit) && delta.errors.length() > limit
+  let errors_hit = guards.errors is Some(limit) &&
+    delta.errors.length() >= limit
   let warning_delta = after.warning_count - before.warning_count
   let warnings_hit = guards.warnings is Some(limit) && warning_delta >= limit
   let reach_caveat = before.error_count > 0
@@ -1189,7 +1191,7 @@ async fn guarded_outcome(
   }
   let shown_errors = if errors_hit { sites(delta.errors) } else { [] }
   let shown_warnings = if warnings_hit { sites(delta.warnings) } else { [] }
-  let over_errors = "the edit introduced \{delta.errors.length()} error(s) (> revert_when_errors_above=\{guards.errors.unwrap_or(0)}) the tree did not have"
+  let over_errors = "the edit introduced \{delta.errors.length()} error(s) (>= revert_when_errors_greater_or_equal=\{guards.errors.unwrap_or(0)}) the tree did not have"
   let over_warnings = "the warning count changed by \{warning_delta} (>= revert_when_warnings_greater_or_equal=\{guards.warnings.unwrap_or(0)})"
   let what = match (errors_hit, warnings_hit) {
     (true, true) => "\{over_errors} and \{over_warnings}"

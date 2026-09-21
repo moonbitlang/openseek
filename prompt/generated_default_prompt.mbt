@@ -300,7 +300,7 @@ fn default_prompt() -> String {
     #|`edit` and `multi_edit` data carry `outcome`
     #|(applied, reverted, rejected, failed, unverified, preview, not_found, error),
     #|the post-write check counts, and on a revert the introduced sites. For `edit`,
-    #|`revert_when_errors_above: 0` rejects introduced errors, and
+    #|`revert_when_errors_greater_or_equal: 1` rejects introduced errors, and
     #|`revert_when_warnings_greater_or_equal: 0` reverts unless the warning total
     #|decreases (`after - before < 0`). A script can apply one fix per diagnostic
     #|and branch on `data.outcome`, `introduced_count`, and `removed_count`.
@@ -340,7 +340,7 @@ fn default_prompt() -> String {
     #|    "start_line": start_line,
     #|    "old_string": old_string,
     #|    "new_string": new_string,
-    #|    "revert_when_errors_above": 0,
+    #|    "revert_when_errors_greater_or_equal": 1,
     #|    "revert_when_warnings_greater_or_equal": 0,
     #|  })
     #|  // A tool error is a result (`is_error` set, `content` explains). Only a
