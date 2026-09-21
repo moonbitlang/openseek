@@ -477,27 +477,29 @@ fn main {
               emit.map((_ : Unit) => AppToggleMaximizedRequested),
             ),
           )
-          // Rabbita captures its own `@html.a` nodes. The embedded Viewer owns
-          // foreign DOM below `.viewer-host`, so its anchors need the adjacent
-          // document subscription to reach the same root URL policy.
-          subs.push(
-            @sub.on_url_request(
-              emit.map(request => {
-                ExternalLinkClicked(
-                  match request {
-                    @url.Internal(url) => url.to_string()
-                    @url.External(url) => url
-                  },
-                )
-              }),
-            ),
-          )
+          // The embedded Viewer owns foreign DOM below `.viewer-host`.
+          // Only Desktop intercepts those anchors for its native Browser tabs.
           subs.push(
             viewer_external_link_subscription(
               emit.map(url => ExternalLinkClicked(url)),
             ),
           )
         }
+        // Rabbita captures ordinary clicks on its `@html.a` nodes on both
+        // hosts. Always handle their URL requests: Desktop uses its dock,
+        // while the browser console opens a new browser tab.
+        subs.push(
+          @sub.on_url_request(
+            emit.map(request => {
+              ExternalLinkClicked(
+                match request {
+                  @url.Internal(url) => url.to_string()
+                  @url.External(url) => url
+                },
+              )
+            }),
+          ),
+        )
         if model.file_panel.highlighted is Some(directory) {
           subs.push(
             @dismiss.on_outside_click(
