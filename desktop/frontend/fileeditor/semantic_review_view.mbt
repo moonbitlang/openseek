@@ -243,13 +243,13 @@ fn semantic_section_view(
   section : @moon_diff_provider.SemanticReviewSection,
   requested : @moon_diff_provider.MoonDiffMode,
   collapsed : Bool,
+  state : State,
 ) -> @html.Html {
   let label = semantic_section_label(locale~, section)
   let location = semantic_section_location(section)
   let content : Array[@html.Html] = [
     semantic_fallback_notice(locale~, section, requested),
-    @html.div(
-      class="semantic-entry-editor-parent",
+    @html.div(class="semantic-entry-editor-parent", [
       @html.div(
         attrs=@html.Attrs::build()
           .id(semantic_editor_host_id(section.key))
@@ -257,7 +257,14 @@ fn semantic_section_view(
           .data_set("semantic-section", section.key),
         ([] : Array[@html.Html]),
       ),
-    ),
+      github_review_layer(
+        dispatch,
+        state.github_review,
+        section.key,
+        Some(section),
+        !collapsed && github_review_semantic_matches(state),
+      ),
+    ]),
   ]
   @html.section(
     class=if collapsed {
@@ -367,7 +374,7 @@ fn semantic_plan_view(
   dispatch : @cmd.Emit[Msg],
   plan : @moon_diff_provider.SectionedSemanticReviewPlan,
   input : SemanticReviewInput,
-  collapsed : Array[String],
+  state : State,
 ) -> @html.Html {
   if semantic_status_empty_view(locale~, plan, input) is Some(empty) {
     return empty
@@ -385,7 +392,8 @@ fn semantic_plan_view(
       dispatch,
       section,
       plan.requested,
-      collapsed.contains(section.key),
+      state.semantic_review_collapsed.contains(section.key),
+      state,
     )
   }
   // Deleted identities cannot participate in the new-side order. Like VS
@@ -397,7 +405,8 @@ fn semantic_plan_view(
       dispatch,
       section,
       plan.requested,
-      collapsed.contains(section.key),
+      state.semantic_review_collapsed.contains(section.key),
+      state,
     )
   }
   if sections.is_empty() {
@@ -440,15 +449,7 @@ pub fn semantic_review_view(
           "unified"
         },
       ),
-    [
-      semantic_plan_view(
-        locale~,
-        dispatch,
-        plan,
-        input,
-        state.semantic_review_collapsed,
-      ),
-    ],
+    [semantic_plan_view(locale~, dispatch, plan, input, state)],
   )
 }
 
@@ -538,7 +539,8 @@ fn semantic_diff_options(
       ReviewSideBySide => @viewer.SideBySide
       ReviewInline => @viewer.Inline
     },
-    automatic_inline=false,
+    automatic_inline=github_review_auto_layout.val,
+    automatic_inline_width=640.0,
     sash_enabled=true,
     diff_word_wrap=@viewer.Off,
     overview_ruler=false,

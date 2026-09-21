@@ -7,9 +7,7 @@ fn detail_view(
   guard state.detail is Some(detail) else {
     return @html.div(class="github-detail github-detail-placeholder", [
       @icons.icon(@icons.icon_pull_request),
-      @html.p(
-        "Select a pull request to view its description, reviews, and checks.",
-      ),
+      @html.p("Select a pull request to view its description and discussion."),
     ])
   }
   @html.div(class="github-detail", [
@@ -179,6 +177,22 @@ fn pull_request_body(
       open_link,
     ),
   ]
+  for comment in pr.comments {
+    conversation.push(
+      comment_card(
+        comment.author,
+        if comment.author == pr.item.author {
+          author_avatar
+        } else {
+          None
+        },
+        comment.created_at,
+        comment.url,
+        comment.body,
+        open_link,
+      ),
+    )
+  }
   conversation.push(checks_view(pr, open_link))
   @html.div(class="github-pr-layout", [
     @html.section(

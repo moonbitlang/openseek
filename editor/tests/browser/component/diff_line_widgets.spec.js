@@ -107,3 +107,28 @@ test('editing either diff model retires the hovered action until a fresh hit tes
     await expect(root).toHaveAttribute('data-action', `${original}:2`);
   }
 });
+
+test('host line policies retire hovered actions and are rechecked on click', async ({ page }) => {
+  await gotoBrowserScenario(page, 'diff-line-widgets');
+  const root = page.locator('#line-widget-editor');
+  const action = root.getByRole('button', { name: 'Add line comment' });
+  await root.locator('.moonbit-diff-editor-original .view-line').filter({ hasText: /^header$/ }).hover();
+  await expect(action).toBeVisible();
+  const blocked = await page.evaluate(() => {
+    globalThis.__lineWidgets.restrict(false, 2);
+    const button = document.querySelector('.moonbit-diff-line-action');
+    button.click();
+    return { hidden: button.hidden, dispatched: document.querySelector('#line-widget-editor').hasAttribute('data-action') };
+  });
+  expect(blocked).toEqual({ hidden: true, dispatched: false });
+  await root.locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: /^new$/ }).hover();
+  await expect(action).toBeVisible();
+  await action.click();
+  await expect(root).toHaveAttribute('data-action', 'false:2');
+  await page.evaluate(() => globalThis.__lineWidgets.restrict(true, 3));
+  await expect(action).toBeHidden();
+  await root.locator('.moonbit-diff-editor-original .view-line').filter({ hasText: /^old\s+two$/ }).hover();
+  await expect(action).toBeVisible();
+  await action.click();
+  await expect(root).toHaveAttribute('data-action', 'true:3');
+});

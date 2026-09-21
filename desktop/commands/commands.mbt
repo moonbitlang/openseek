@@ -640,6 +640,24 @@ pub let github_list : Command[
 ] = Command("github.list")
 
 ///|
+pub let github_review : Command[
+  @protocol.GithubWorkspacePayload,
+  @protocol.GithubReviewReply,
+] = Command("github.review")
+
+///|
+pub let github_review_file : Command[
+  @protocol.GithubReviewFilePayload,
+  @protocol.GithubReviewFileReply,
+] = Command("github.review_file")
+
+///|
+pub let github_review_mutate : Command[
+  @protocol.GithubReviewMutationPayload,
+  @protocol.GithubReviewMutationReply,
+] = Command("github.review_mutate")
+
+///|
 pub let github_pull_request : Command[
   @protocol.GithubPullRequestPayload,
   @protocol.GithubPullRequestDetail,
@@ -854,3 +872,15 @@ pub let schedules_action : Command[
   @protocol.ScheduleActionPayload,
   @protocol.SchedulesReply,
 ] = Command("schedules.action")
+
+///|
+pub let github_drafts_get : Command[
+  @protocol.GithubDraftsKey,
+  @protocol.GithubDrafts,
+] = Command("github.drafts_get")
+
+///|
+pub let github_drafts_set : Command[
+  @protocol.GithubDrafts,
+  @protocol.EmptyReply,
+] = Command("github.drafts_set")

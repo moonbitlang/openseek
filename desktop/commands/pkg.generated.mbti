@@ -173,9 +173,19 @@ pub let github_checkout : Command[@protocol.GithubCheckoutPayload, @protocol.Git
 
 pub let github_checkout_status : Command[@protocol.GithubWorkspacePayload, @protocol.GithubCheckoutStatus]
 
+pub let github_drafts_get : Command[@protocol.GithubDraftsKey, @protocol.GithubDrafts]
+
+pub let github_drafts_set : Command[@protocol.GithubDrafts, @protocol.EmptyReply]
+
 pub let github_list : Command[@protocol.GithubListPayload, @protocol.GithubListReply]
 
 pub let github_pull_request : Command[@protocol.GithubPullRequestPayload, @protocol.GithubPullRequestDetail]
+
+pub let github_review : Command[@protocol.GithubWorkspacePayload, @protocol.GithubReviewReply]
+
+pub let github_review_file : Command[@protocol.GithubReviewFilePayload, @protocol.GithubReviewFileReply]
+
+pub let github_review_mutate : Command[@protocol.GithubReviewMutationPayload, @protocol.GithubReviewMutationReply]
 
 pub let host_connect : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 

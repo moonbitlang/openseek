@@ -9,6 +9,8 @@ import {
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/viewer/diff_provider/moondiff",
   "openseek_desktop/frontend/dock",
+  "openseek_desktop/frontend/github",
+  "openseek_desktop/frontend/github_review",
   "openseek_desktop/frontend/grep_search",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
@@ -134,6 +136,7 @@ pub(all) struct Ctx {
   active_file : @common.Uri?
   open_history_diffs : Array[@dock.GitHistoryDiff]
   active_history_diff : @dock.GitHistoryDiff?
+  github : @github.State
 } derive(Eq)
 pub fn Ctx::equal(Self, Self) -> Bool
 pub fn Ctx::not_equal(Self, Self) -> Bool
@@ -251,6 +254,8 @@ pub fn MoonModViewMode::not_equal(Self, Self) -> Bool
 pub(all) enum Msg {
   ReviewContextRevealFinished(source~ : @mention_context.ReviewSource, found~ : Bool)
   ReviewContextChanged(owner~ : @interop.ConversationKey, selection~ : @mention_context.ReviewChanges, adding~ : Bool)
+  GithubReview(@github_review.Msg)
+  UpdatePullRequest
   PullRequestUpdated
   RevealDirectory(@pathx.Relative)
   HighlightCleared(@pathx.Relative)
@@ -446,6 +451,7 @@ pub(all) struct State {
   tree_open : Bool
   explorer_mode : ExplorerMode
   search : @grep_search.State
+  github_review : @github_review.State
   review_diff_layout : ReviewDiffLayout
   review_diff_mode : ReviewDiffMode
   review_diff_ignore_comments : Bool

@@ -55,6 +55,7 @@ pub struct DiffEditorWidget {
   mut diff_state : DiffState?
   priv line_widgets : Array[MountedDiffLineWidget]
   priv mut line_action : ((Bool, Int) -> Unit)?
+  priv mut line_action_allowed : ((Bool, Int) -> Bool)?
   priv mut line_action_button : @rdom.Element?
   priv mut line_action_target : (Bool, Int)?
   priv mut hunk_action_renderer : ((Int) -> @rdom.Element?)?
@@ -243,6 +244,7 @@ pub fn DiffEditorWidget::create(
     diff_state: None,
     line_widgets: [],
     line_action: None,
+    line_action_allowed: None,
     line_action_button: None,
     line_action_target: None,
     hunk_action_renderer: None,

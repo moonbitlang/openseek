@@ -247,17 +247,32 @@ fn DiffEditorWidget::sync_line_widget_anchors(
 pub fn DiffEditorWidget::set_line_action(
   self : DiffEditorWidget,
   action : ((Bool, Int) -> Unit)?,
+  allowed? : (Bool, Int) -> Bool,
 ) -> Unit {
   self.line_action = action
+  self.line_action_allowed = allowed
   if self.line_action_button is Some(button) {
-    if action is Some(_) &&
-      self.line_action_target is Some(_) &&
-      self.is_diff_up_to_date() {
+    if self.line_action_target is Some((original, line)) &&
+      self.line_action_can_run(original, line) {
       button.remove_attribute("hidden")
     } else {
       button.set_attribute("hidden", "")
     }
   }
+}
+
+///|
+fn DiffEditorWidget::line_action_can_run(
+  self : DiffEditorWidget,
+  original : Bool,
+  line : Int,
+) -> Bool {
+  self.line_action is Some(_) &&
+  self.is_diff_up_to_date() &&
+  (match self.line_action_allowed {
+    Some(allowed) => allowed(original, line)
+    None => true
+  })
 }
 
 ///|
@@ -291,7 +306,8 @@ fn DiffEditorWidget::install_line_action(self : DiffEditorWidget) -> Unit {
       return
     }
     if self.line_action is Some(action) &&
-      self.line_action_target is Some((original, line)) {
+      self.line_action_target is Some((original, line)) &&
+      self.line_action_can_run(original, line) {
       action(original, line)
     }
   })
@@ -327,7 +343,7 @@ fn DiffEditorWidget::install_line_action(self : DiffEditorWidget) -> Unit {
         @base_browser.set_style_property(button, "left", "\{left.max(0.0)}px")
         // Keep hit testing live while the host loads its context, so enabling
         // the action does not require another mouse movement.
-        if self.line_action is Some(_) {
+        if self.line_action_can_run(original, line) {
           button.remove_attribute("hidden")
         } else {
           button.set_attribute("hidden", "")

@@ -424,6 +424,7 @@ pub(all) struct State {
   // reducer/request/view remain in grep_search, while this State supplies the
   // same owner/root lifecycle already used by Files and Changes.
   search : @grep_search.State
+  github_review : @github_review.State
   // Side-by-side/inline remains a reviewer preference rather than
   // document state. Line applies it to its retained models; Token/Tree update
   // the DiffEditor mounted inside every semantic section.
@@ -592,6 +593,7 @@ pub fn State::empty() -> State {
     tree_open: true,
     explorer_mode: ExplorerFiles,
     search: @grep_search.State::empty(),
+    github_review: @github_review.State::empty(),
     review_diff_layout: ReviewSideBySide,
     review_diff_mode: ReviewDiffToken,
     // Token/Tree starts from semantic production changes. Both explicit
@@ -699,6 +701,7 @@ pub fn State::prepare_owner(
     tree_open: self.tree_open,
     explorer_mode: self.explorer_mode,
     search: self.search.reset_checkout(),
+    github_review: self.github_review,
     review_diff_layout: self.review_diff_layout,
     review_diff_mode: self.review_diff_mode,
     review_diff_ignore_comments: self.review_diff_ignore_comments,
@@ -780,6 +783,7 @@ pub(all) struct Ctx {
   active_file : @common.Uri?
   open_history_diffs : Array[@dock.GitHistoryDiff]
   active_history_diff : @dock.GitHistoryDiff?
+  github : @github.State
 } derive(Eq)
 
 ///|
@@ -821,6 +825,8 @@ pub(all) enum Msg {
     selection~ : @mention_context.ReviewChanges,
     adding~ : Bool
   )
+  GithubReview(@github_review.Msg)
+  UpdatePullRequest
   PullRequestUpdated
   // Open the directory's immediate children under the breadcrumb. Selecting
   // the already-open directory toggles the picker closed; an uncached level

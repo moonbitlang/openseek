@@ -94,6 +94,11 @@ pub fn run_diff_line_widgets_test() -> Unit {
     enabled => {
       editor.set_line_action(if enabled { Some(line_action) } else { None })
     },
+    (original, line) => {
+      editor.set_line_action(Some(line_action), allowed=(side, target) => {
+        side == original && target == line
+      })
+    },
     inline => {
       editor.update_options(
         DiffEditorOptions(
@@ -123,6 +128,7 @@ pub fn run_diff_line_widgets_test() -> Unit {
 ///|
 extern "js" fn install_line_widget_controls(
   action : (Bool) -> Unit,
+  restrict : (Bool, Int) -> Unit,
   layout : (Bool) -> Unit,
   refresh : () -> Unit,
   edit : (Bool) -> Unit,
@@ -130,6 +136,6 @@ extern "js" fn install_line_widget_controls(
   clear : () -> Unit,
   dispose : () -> Unit,
 ) -> Unit =
-  #| (action, layout, refresh, edit, ready, clear, dispose) => {
-  #|   globalThis.__lineWidgets = { action, layout, refresh, edit, ready, clear, dispose };
+  #| (action, restrict, layout, refresh, edit, ready, clear, dispose) => {
+  #|   globalThis.__lineWidgets = { action, restrict, layout, refresh, edit, ready, clear, dispose };
   #| }

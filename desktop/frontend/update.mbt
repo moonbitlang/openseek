@@ -1514,6 +1514,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     active_file: @dock.active_file(model.dock),
     open_history_diffs: @dock.history_diffs(model.dock),
     active_history_diff: @dock.active_history_diff(model.dock),
+    github: model.github,
   }
 }
 
@@ -1941,6 +1942,8 @@ fn update(
       .bind(path => model.file_panel.docs.get(path))
       .bind(doc => doc.review)
       is Some(_),
+    review_busy=model.file_panel.github_review.busy &&
+      model.file_panel.github_review.checkout == checkout,
   )
   let model = { ..model, github, }
   let (model, panel_cmd) = sync_file_panel(dispatch, model)
@@ -5109,6 +5112,19 @@ fn update_msg(
       }
       (@cmd.none, model.replace_conversation({ ..conv, goal_edit: None, }))
     }
+    FileEditor(@fileeditor.GithubReview(CheckAvailability)) =>
+      update_msg(dispatch, Github(@github.RefreshCurrent), model)
+    FileEditor(@fileeditor.GithubReview(Refresh)) if !model.github.has_open_pr() =>
+      update_msg(dispatch, Github(@github.RefreshCurrent), model)
+    FileEditor(@fileeditor.UpdatePullRequest) => {
+      guard model.file_panel.github_review.review is Some(review) &&
+        model.file_panel.github_review.checkout is Some(checkout) &&
+        model.github.scope == Some(checkout) &&
+        !model.file_panel.github_review.busy else {
+        return (@cmd.none, model)
+      }
+      update_msg(dispatch, Github(@github.UpdatePullRequest(review.url)), model)
+    }
     FileEditor(msg) => {
       let (cmd, panel) = @fileeditor.update(
         dispatch.map(msg => FileEditor(msg)),
@@ -5116,7 +5132,18 @@ fn update_msg(
         model.file_panel,
         file_ctx(model),
       )
-      let next = { ..model, file_panel: panel, }
+      // The host can discover a closed/replaced PR while loading comments.
+      // Feed that observation back through the one discovery owner. A retired
+      // comment request must never invalidate a newer checkout's status.
+      let github = if msg
+        is @fileeditor.GithubReview(Loaded(epoch, Ok(ReviewLoaded(review)), _)) &&
+        epoch == model.file_panel.github_review.epoch &&
+        review.map(pr => pr.url) != model.github.current_url() {
+        model.github.invalidate_current()
+      } else {
+        model.github
+      }
+      let next = { ..model, file_panel: panel, github, }
       let (reveal_cmd, next) = finish_review_context_load(
         dispatch,
         msg,

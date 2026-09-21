@@ -1,0 +1,76 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/github_review"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/github",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn composer(State, @cmd.Emit[Msg], @protocol.GithubDraftTarget, Bool) -> @html.Html
+
+pub fn reconcile(@cmd.Emit[Msg], State, @github.State, String?) -> (@cmd.Cmd, State)
+
+pub fn status_view(State, @cmd.Emit[Msg], Bool, Array[@protocol.GithubReviewThread], Array[@protocol.GithubDraftTarget], update_pr~ : @cmd.Cmd, updating~ : Bool, current~ : @github.State) -> @html.Html
+
+pub fn thread_view(State, @cmd.Emit[Msg], @protocol.GithubReviewThread) -> @html.Html
+
+pub fn toolbar(State, @cmd.Emit[Msg], current~ : @github.State) -> @html.Html
+
+pub fn update(@cmd.Emit[Msg], Msg, State, current~ : @github.State) -> (@cmd.Cmd, State)
+
+// Errors
+
+// Types and methods
+pub(all) enum Msg {
+  CheckAvailability
+  Toggle
+  Refresh
+  Loaded(Int, Result[@protocol.GithubReviewReply, String], Result[Array[@protocol.GithubDraft], String])
+  FileLoaded(Int, String, Result[@protocol.GithubReviewFileReply, String])
+  Compose(@protocol.GithubDraftTarget)
+  Edit(@protocol.GithubDraftTarget, String)
+  Cancel(@protocol.GithubDraftTarget)
+  Send(@protocol.GithubDraftTarget)
+  DeleteRequested(String)
+  DeleteCancelled
+  DeleteConfirmed(String)
+  Resolve(String, Bool)
+  Expand(String)
+  Mutated(Int, @protocol.GithubReviewAction, @protocol.GithubDraft?, Result[@protocol.GithubReviewMutationReply, String], Result[Unit, String])
+  StorageSaved(String, Result[Unit, String])
+}
+
+pub(all) struct State {
+  checkout : @github.CheckoutScope?
+  path : String?
+  refresh_pending : Bool
+  enabled : Bool
+  epoch : Int
+  loading : Bool
+  review : @protocol.GithubReview?
+  file : Result[@protocol.GithubReviewFile?, String]?
+  files : Array[(String, @protocol.GithubReviewFile?)]
+  file_epoch : Int
+  file_loading : Bool
+  error : String?
+  drafts : Array[@protocol.GithubDraft]
+  active : @protocol.GithubDraftTarget?
+  expanded : Array[String]
+  deleting : String?
+  busy : Bool
+  mutation_epoch : Int
+  mutation_error : String?
+  storage_error : String?
+} derive(Eq)
+pub fn State::comment_count(Self, String) -> Int
+pub fn State::draft_body(Self, @protocol.GithubDraftTarget) -> String
+pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

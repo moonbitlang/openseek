@@ -27,11 +27,15 @@ pub async fn open_codex_config(@pathx.Path?) -> Unit
 
 pub async fn prepared_runtime_dir(String) -> @pathx.Path?
 
+pub async fn read_github_drafts(String?, @protocol.GithubDraftsKey) -> @protocol.GithubDrafts
+
 pub async fn read_ui_language(String?) -> @protocol.UiLanguagePreference
 
 pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
 
 pub async fn viz_assets() -> VizAssets
+
+pub async fn write_github_drafts(String?, @protocol.GithubDrafts) -> @protocol.EmptyReply
 
 pub async fn write_ui_language(String?, @protocol.UiLanguagePreference) -> @protocol.EmptyReply
 

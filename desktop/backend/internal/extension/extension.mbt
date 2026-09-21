@@ -356,7 +356,13 @@ pub fn openseek_capability(
 ) -> @proton_extension.RendererCapability {
   let endpoints = @api.endpoints(state, bridge.host_connection)
   let window_only = [
-    @endpoint.WindowEndpoint(@commands.app_language_get, (_, _) => {
+    @endpoint.WindowEndpoint(@commands.github_drafts_get, (_, payload) => {
+      @host.read_github_drafts(runtime_dir, payload)
+    }),
+    WindowEndpoint(@commands.github_drafts_set, (_, payload) => {
+      @host.write_github_drafts(runtime_dir, payload)
+    }),
+    WindowEndpoint(@commands.app_language_get, (_, _) => {
       @host.read_ui_language(runtime_dir)
     }),
     WindowEndpoint(@commands.app_language_set, (_, payload) => {

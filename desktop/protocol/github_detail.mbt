@@ -25,6 +25,38 @@ pub impl ToJson for GithubPullRequestPayload with fn to_json(self) {
 }
 
 ///|
+pub(all) struct GithubComment {
+  author : String?
+  body : String
+  url : String
+  created_at : String
+} derive(Eq, Debug)
+
+///|
+pub impl FromJson for GithubComment with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "GitHub comment")
+  {
+    author: object.optional_string("author"),
+    body: object.required_string("body"),
+    url: object.required_string("url"),
+    created_at: object.required_string("created_at"),
+  }
+}
+
+///|
+pub impl ToJson for GithubComment with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "body": self.body.to_json(),
+    "url": self.url.to_json(),
+    "created_at": self.created_at.to_json(),
+  }
+  if self.author is Some(author) {
+    fields["author"] = author.to_json()
+  }
+  Json(fields)
+}
+
+///|
 pub(all) struct GithubCheck {
   name : String
   state : String
@@ -89,6 +121,7 @@ pub(all) struct GithubPullRequestDetail {
   additions : Int
   deletions : Int
   changed_files : Int
+  comments : Array[GithubComment]
   checks : Array[GithubCheck]
   created_at : String
   reviewers : Array[GithubReviewer]
@@ -113,6 +146,7 @@ pub impl FromJson for GithubPullRequestDetail with fn from_json(json, path) {
     additions: object.required_int("additions"),
     deletions: object.required_int("deletions"),
     changed_files: object.required_int("changed_files"),
+    comments: object.required_array_of("comments"),
     checks: object.required_array_of("checks"),
     created_at: object.required_string("created_at"),
     reviewers: object.required_array_of("reviewers"),
@@ -134,6 +168,7 @@ pub impl ToJson for GithubPullRequestDetail with fn to_json(self) {
     "additions": self.additions,
     "deletions": self.deletions,
     "changed_files": self.changed_files,
+    "comments": self.comments.to_json(),
     "checks": self.checks.to_json(),
     "created_at": self.created_at.to_json(),
     "reviewers": self.reviewers.to_json(),
@@ -157,6 +192,18 @@ pub extend GithubPullRequestPayload with FromJson::{from_json}
 
 ///|
 pub extend GithubPullRequestPayload with ToJson::{to_json}
+
+///|
+pub extend GithubComment with Eq::{equal, not_equal}
+
+///|
+pub extend GithubComment with Debug::{to_repr}
+
+///|
+pub extend GithubComment with FromJson::{from_json}
+
+///|
+pub extend GithubComment with ToJson::{to_json}
 
 ///|
 pub extend GithubCheck with Eq::{equal, not_equal}

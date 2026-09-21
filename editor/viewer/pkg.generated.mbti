@@ -65,7 +65,7 @@ pub fn DiffEditor::reveal_previous_change_without_wrap(Self) -> Bool
 pub fn DiffEditor::select_hunk(Self, Int) -> Unit
 pub fn DiffEditor::set_diff_provider(Self, &@diff.DocumentDiffProvider) -> Unit
 pub fn DiffEditor::set_hunk_action_renderer(Self, ((Int) -> @dom.Element?)?) -> Unit
-pub fn DiffEditor::set_line_action(Self, ((Bool, Int) -> Unit)?) -> Unit
+pub fn DiffEditor::set_line_action(Self, ((Bool, Int) -> Unit)?, allowed? : (Bool, Int) -> Bool) -> Unit
 pub fn DiffEditor::set_line_widgets(Self, Array[DiffLineWidget]) -> Unit
 pub fn DiffEditor::set_model(Self, DiffEditorModel?) -> DiffEditorModel?
 pub fn DiffEditor::set_scroll_left(Self, Double) -> Unit

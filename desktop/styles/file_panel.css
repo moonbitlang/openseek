@@ -3369,3 +3369,58 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   /* The split-pane resize handle uses 20; it must not cover menu actions. */
   z-index: 21;
 }
+/* GitHub review threads share the existing Review shell and diff geometry. */
+.github-review-controls { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.github-review-toggle { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 9px; border: 1px solid var(--color-separator); border-radius: 5px; font-size: 12px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; }
+.github-review-toggle svg { width: 14px; height: 14px; }
+.github-review-switch { display: inline-block; width: 26px; height: 15px; border-radius: 10px; background: var(--color-text-faint); padding: 2px; box-sizing: border-box; }
+.github-review-switch::after { content: ''; display: block; width: 11px; height: 11px; border-radius: 50%; background: white; }
+.github-review-switch.on { background: #0969da; }
+.github-review-switch.on::after { margin-left: 11px; }
+.github-review-refresh { font-size: 19px; padding: 0 4px; cursor: pointer; }
+.github-review-status { font-size: 12px; padding: 5px 10px; border-top: 1px solid var(--color-separator); color: var(--color-text-muted); white-space: normal; }
+.github-review-status.hidden { display: none; }
+.github-review-error { color: var(--color-danger, #cf222e); white-space: pre-wrap; overflow-wrap: anywhere; }
+.github-review-recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 4px 0; }
+.github-review-recovery > span { flex: 1 1 260px; }
+.github-review-update { flex: none; padding: 4px 10px; border: 1px solid var(--color-separator); border-radius: 5px; color: var(--color-text); background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-update:disabled { opacity: .5; cursor: default; }
+.github-review-unplaced { margin-top: 4px; }
+.github-review-unplaced summary { cursor: pointer; }
+.github-review-unplaced-body { max-height: 36vh; overflow: auto; padding: 8px 0; }
+.github-review-inline-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 12; }
+.semantic-entry-editor-parent { position: relative; }
+.github-review-inline-block { position: absolute; visibility: hidden; width: calc(100% - 80px); pointer-events: auto; box-sizing: border-box; padding: 6px 0 10px; }
+.github-review-thread { color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; overflow: hidden; font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif); font-size: 13px; line-height: 1.5; text-align: left; white-space: normal; }
+.github-review-thread + .github-review-thread { margin-top: 8px; }
+.github-review-thread-location { display: flex; align-items: center; gap: 8px; padding: 4px 12px; color: var(--color-text-muted); font-size: 11px; background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-separator); }
+.github-review-thread.resolved .github-review-thread-location { border-bottom: 0; }
+.github-review-resolved-toggle { margin-left: auto; cursor: pointer; color: var(--color-text-muted); }
+.github-review-comment + .github-review-comment { border-top: 1px solid var(--color-separator); }
+.github-review-comment-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; min-width: 0; }
+.github-review-avatar { width: 26px; height: 26px; border-radius: 50%; flex: 0 0 26px; }
+.github-review-avatar-fallback { display: flex; align-items: center; justify-content: center; background: var(--color-bg-subtle); }
+.github-review-avatar-fallback svg { width: 16px; height: 16px; }
+.github-review-time { font-size: 12px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.github-review-delete { margin-left: auto; color: var(--color-text-muted); cursor: pointer; padding: 3px; }
+.github-review-delete svg { width: 14px; height: 14px; }
+.github-review-markdown { padding: 4px 12px 12px 46px; overflow-wrap: anywhere; font-size: 13px; }
+.github-review-markdown > :first-child { margin-top: 0; }
+.github-review-markdown > :last-child { margin-bottom: 0; }
+.github-review-markdown pre { max-width: 100%; overflow: auto; padding: 8px; background: var(--color-bg-subtle); }
+.github-review-markdown img { max-width: 100%; }
+.github-review-thread-footer { padding: 10px 12px; border-top: 1px solid var(--color-separator); background: var(--color-bg-subtle); }
+.github-review-composer { padding: 12px; }
+.github-review-thread-footer .github-review-composer { padding: 0; }
+.github-review-input { box-sizing: border-box; display: block; width: 100%; min-height: 34px; resize: vertical; padding: 8px 12px; color: var(--color-text); background: var(--color-bg-surface); border: 1px solid var(--color-separator); border-radius: 6px; font: inherit; line-height: 1.5; }
+.github-review-input:focus { border-color: #0969da; outline: 1px solid #0969da; outline-offset: -1px; }
+.github-review-composer-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; }
+.github-review-composer-actions button, .github-review-resolve, .github-review-delete-confirm button { padding: 5px 12px; border: 1px solid var(--color-separator); border-radius: 6px; background: var(--color-bg-surface); cursor: pointer; font: inherit; }
+.github-review-composer-actions .github-review-send { color: white; background: #1f883d; border-color: #1a7f37; font-weight: 600; }
+.github-review-thread button:disabled { opacity: .5; cursor: default; }
+.github-review-resolve { margin-top: 12px; }
+.github-review-badge { padding: 0 6px; border: 1px solid var(--color-separator); border-radius: 9px; }
+.github-review-delete-confirm { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 8px 12px; }
+.github-review-delete-confirm .danger { color: #cf222e; }
+.github-review-file-count { display: inline-flex; align-items: center; gap: 3px; color: var(--color-text-muted); font-size: 11px; padding-left: 4px; }
+.github-review-file-count svg { width: 13px; height: 13px; }

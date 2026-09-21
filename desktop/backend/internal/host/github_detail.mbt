@@ -21,7 +21,7 @@ async fn github_pull_request_op(
       "--repo",
       payload.repository_url,
       "--json",
-      "number,title,url,author,isDraft,state,body,baseRefName,headRefName,additions,deletions,changedFiles,statusCheckRollup,createdAt,reviewRequests,latestReviews,assignees,labels,milestone,mergeable",
+      "number,title,url,author,isDraft,state,body,baseRefName,headRefName,additions,deletions,changedFiles,comments,statusCheckRollup,createdAt,reviewRequests,latestReviews,assignees,labels,milestone,mergeable",
     ])
     github_pull_request_detail(raw)
   })
@@ -41,6 +41,21 @@ fn github_comment_author(raw : Json) -> String? raise {
     { "login": String(login), .. } => Some(login)
     _ => raise HostError("GitHub returned an invalid comment author.")
   }
+}
+
+///|
+fn github_detail_comment(raw : Json) -> @protocol.GithubComment raise {
+  guard raw
+    is {
+      "author": author,
+      "body": String(body),
+      "url": String(url),
+      "createdAt": String(created_at),
+      ..
+    } else {
+    raise HostError("GitHub returned an invalid comment.")
+  }
+  { author: github_comment_author(author), body, url, created_at, }
 }
 
 ///|
@@ -113,6 +128,7 @@ fn github_pull_request_detail(
       "additions": additions,
       "deletions": deletions,
       "changedFiles": changed_files,
+      "comments": Array(raw_comments),
       "statusCheckRollup": rollup,
       "createdAt": String(created_at),
       "reviewRequests": Array(requests),
@@ -139,6 +155,7 @@ fn github_pull_request_detail(
     additions: @json.from_json(additions),
     deletions: @json.from_json(deletions),
     changed_files: @json.from_json(changed_files),
+    comments: raw_comments.map(github_detail_comment),
     checks: raw_checks.map(github_detail_check),
     created_at,
     reviewers: github_detail_reviewers(reviews, requests),

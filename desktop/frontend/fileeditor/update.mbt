@@ -2064,6 +2064,7 @@ pub fn sync(
     (
       {
         ..State::empty(),
+        github_review: state.github_review,
         owner: Some(ctx.owner),
         // A new incarnation must not inherit the identity it replaced, so this
         // reconciles from `PlacementUnknown` rather than the outgoing value.
@@ -2313,6 +2314,7 @@ pub fn sync(
   let state = { ..state, review_context, review_context_reveal, }.sync_semantic_review(
     ctx,
   )
+  let (github_review_cmd, state) = sync_github_review(dispatch, state, ctx)
   let (state, package_graph_cmd) = sync_package_graph(dispatch, state, ctx)
   let (navigation_cmd, state) = sync_review_navigation_destination(
     dispatch, state, ctx,
@@ -2326,7 +2328,9 @@ pub fn sync(
     graph_cmd,
     history_cmd,
     package_graph_cmd,
+    github_review_cmd,
     sync_semantic_review_editors(dispatch, state, ctx),
+    sync_github_review_widgets(dispatch, state, ctx),
     navigation_cmd,
   ])
   // The dock has already reconciled its active editor. Reveal from this shared
@@ -2474,10 +2478,27 @@ fn update_inner(
     }
   }
   match msg {
+    // Checkout ownership and the unsaved-change dialog belong to the shell.
+    UpdatePullRequest => (@cmd.none, state)
     PullRequestUpdated => {
+      let (comments, state) = update_inner(
+        dispatch,
+        GithubReview(@github_review.Refresh),
+        state,
+        ctx,
+      )
       let (changes, state) = refresh_changes(dispatch, state, ctx)
       let (graph, state) = refresh_git_graph(dispatch, state, ctx)
-      (@cmd.batch([changes, graph]), state)
+      (@cmd.batch([comments, changes, graph]), state)
+    }
+    GithubReview(msg) => {
+      let (command, github_review) = @github_review.update(
+        dispatch.map(msg => GithubReview(msg)),
+        msg,
+        state.github_review,
+        current=ctx.github,
+      )
+      (command, { ..state, github_review, })
     }
     ChangeDirectoryExpanded(path, expanded) => {
       let collapsed = if expanded {
@@ -4348,6 +4369,7 @@ fn test_ctx() -> Ctx {
     active_file: None,
     open_history_diffs: [],
     active_history_diff: None,
+    github: @github.State::empty(),
   }
 }
 

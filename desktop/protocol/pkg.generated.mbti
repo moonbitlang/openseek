@@ -1274,6 +1274,75 @@ pub fn GithubCheckoutStatus::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GithubCheckoutStatus
 pub impl @json.FromJson for GithubCheckoutStatus
 
+pub(all) struct GithubComment {
+  author : String?
+  body : String
+  url : String
+  created_at : String
+} derive(Eq, @debug.Debug)
+pub fn GithubComment::equal(Self, Self) -> Bool
+pub fn GithubComment::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubComment::not_equal(Self, Self) -> Bool
+pub fn GithubComment::to_json(Self) -> Json
+pub fn GithubComment::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubComment
+pub impl @json.FromJson for GithubComment
+
+pub(all) struct GithubCommentableFile {
+  path : String
+  left_lines : Array[Int]
+  right_lines : Array[Int]
+} derive(Eq, @debug.Debug)
+pub fn GithubCommentableFile::equal(Self, Self) -> Bool
+pub fn GithubCommentableFile::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubCommentableFile::not_equal(Self, Self) -> Bool
+pub fn GithubCommentableFile::to_json(Self) -> Json
+pub fn GithubCommentableFile::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubCommentableFile
+pub impl @json.FromJson for GithubCommentableFile
+
+pub(all) struct GithubDraft {
+  target : GithubDraftTarget
+  body : String
+} derive(Eq)
+pub fn GithubDraft::equal(Self, Self) -> Bool
+pub fn GithubDraft::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubDraft::not_equal(Self, Self) -> Bool
+pub fn GithubDraft::to_json(Self) -> Json
+pub impl ToJson for GithubDraft
+pub impl @json.FromJson for GithubDraft
+
+pub(all) enum GithubDraftTarget {
+  Line(path~ : String, side~ : String, line~ : Int, head~ : String)
+  Thread(thread~ : String, comment~ : String)
+} derive(Eq)
+pub fn GithubDraftTarget::equal(Self, Self) -> Bool
+pub fn GithubDraftTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubDraftTarget::key(Self) -> String
+pub fn GithubDraftTarget::not_equal(Self, Self) -> Bool
+pub fn GithubDraftTarget::to_json(Self) -> Json
+pub impl ToJson for GithubDraftTarget
+pub impl @json.FromJson for GithubDraftTarget
+
+pub(all) struct GithubDrafts {
+  url : String
+  drafts : Array[GithubDraft]
+} derive(Eq)
+pub fn GithubDrafts::equal(Self, Self) -> Bool
+pub fn GithubDrafts::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubDrafts::not_equal(Self, Self) -> Bool
+pub fn GithubDrafts::to_json(Self) -> Json
+pub impl ToJson for GithubDrafts
+pub impl @json.FromJson for GithubDrafts
+
+pub(all) struct GithubDraftsKey {
+  url : String
+}
+pub fn GithubDraftsKey::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubDraftsKey::to_json(Self) -> Json
+pub impl ToJson for GithubDraftsKey
+pub impl @json.FromJson for GithubDraftsKey
+
 pub(all) struct GithubItem {
   number : Int
   title : String
@@ -1341,6 +1410,7 @@ pub(all) struct GithubPullRequestDetail {
   additions : Int
   deletions : Int
   changed_files : Int
+  comments : Array[GithubComment]
   checks : Array[GithubCheck]
   created_at : String
   reviewers : Array[GithubReviewer]
@@ -1368,6 +1438,150 @@ pub fn GithubPullRequestPayload::to_json(Self) -> Json
 pub fn GithubPullRequestPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GithubPullRequestPayload
 pub impl @json.FromJson for GithubPullRequestPayload
+
+pub(all) struct GithubReview {
+  url : String
+  head : String
+  base : String
+  threads : Array[GithubReviewThread]
+  commentable : Array[GithubCommentableFile]
+} derive(Eq, @debug.Debug)
+pub fn GithubReview::can_comment(Self, String, Bool, Int) -> Bool
+pub fn GithubReview::equal(Self, Self) -> Bool
+pub fn GithubReview::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReview::not_equal(Self, Self) -> Bool
+pub fn GithubReview::to_json(Self) -> Json
+pub fn GithubReview::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReview
+pub impl @json.FromJson for GithubReview
+
+pub(all) enum GithubReviewAction {
+  Post(path~ : String, side~ : String, line~ : Int, body~ : String, head~ : String)
+  Reply(comment~ : String, body~ : String)
+  Delete(comment~ : String)
+  Resolve(thread~ : String, resolved~ : Bool)
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewAction::equal(Self, Self) -> Bool
+pub fn GithubReviewAction::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewAction::not_equal(Self, Self) -> Bool
+pub fn GithubReviewAction::to_json(Self) -> Json
+pub fn GithubReviewAction::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewAction
+pub impl @json.FromJson for GithubReviewAction
+
+pub(all) struct GithubReviewComment {
+  id : String
+  body : String
+  url : String
+  author : String?
+  avatar_url : String?
+  created_at : String
+  can_delete : Bool
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewComment::equal(Self, Self) -> Bool
+pub fn GithubReviewComment::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewComment::not_equal(Self, Self) -> Bool
+pub fn GithubReviewComment::to_json(Self) -> Json
+pub fn GithubReviewComment::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewComment
+pub impl @json.FromJson for GithubReviewComment
+
+pub(all) struct GithubReviewFile {
+  path : String
+  original : String?
+  modified : String?
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewFile::equal(Self, Self) -> Bool
+pub fn GithubReviewFile::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewFile::not_equal(Self, Self) -> Bool
+pub fn GithubReviewFile::to_json(Self) -> Json
+pub fn GithubReviewFile::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewFile
+pub impl @json.FromJson for GithubReviewFile
+
+pub(all) struct GithubReviewFilePayload {
+  cwd : String
+  path : String
+  base : String
+  head : String
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewFilePayload::equal(Self, Self) -> Bool
+pub fn GithubReviewFilePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewFilePayload::not_equal(Self, Self) -> Bool
+pub fn GithubReviewFilePayload::to_json(Self) -> Json
+pub fn GithubReviewFilePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewFilePayload
+pub impl @json.FromJson for GithubReviewFilePayload
+
+pub(all) enum GithubReviewFileReply {
+  ReviewFileLoaded(GithubReviewFile?)
+  ReviewFileFailed(String)
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewFileReply::equal(Self, Self) -> Bool
+pub fn GithubReviewFileReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewFileReply::not_equal(Self, Self) -> Bool
+pub fn GithubReviewFileReply::to_json(Self) -> Json
+pub fn GithubReviewFileReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewFileReply
+pub impl @json.FromJson for GithubReviewFileReply
+
+pub(all) struct GithubReviewMutationPayload {
+  cwd : String
+  url : String
+  action : GithubReviewAction
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewMutationPayload::equal(Self, Self) -> Bool
+pub fn GithubReviewMutationPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewMutationPayload::not_equal(Self, Self) -> Bool
+pub fn GithubReviewMutationPayload::to_json(Self) -> Json
+pub fn GithubReviewMutationPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewMutationPayload
+pub impl @json.FromJson for GithubReviewMutationPayload
+
+pub(all) enum GithubReviewMutationReply {
+  ReviewMutationSuccess
+  ReviewMutationFailure(String)
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewMutationReply::equal(Self, Self) -> Bool
+pub fn GithubReviewMutationReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewMutationReply::not_equal(Self, Self) -> Bool
+pub fn GithubReviewMutationReply::to_json(Self) -> Json
+pub fn GithubReviewMutationReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewMutationReply
+pub impl @json.FromJson for GithubReviewMutationReply
+
+pub(all) enum GithubReviewReply {
+  ReviewLoaded(GithubReview?)
+  ReviewLoadFailed(String)
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewReply::equal(Self, Self) -> Bool
+pub fn GithubReviewReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewReply::not_equal(Self, Self) -> Bool
+pub fn GithubReviewReply::to_json(Self) -> Json
+pub fn GithubReviewReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewReply
+pub impl @json.FromJson for GithubReviewReply
+
+pub(all) struct GithubReviewThread {
+  id : String
+  path : String
+  side : String
+  line : Int?
+  original_line : Int?
+  resolved : Bool
+  outdated : Bool
+  can_reply : Bool
+  can_resolve : Bool
+  can_unresolve : Bool
+  comments : Array[GithubReviewComment]
+} derive(Eq, @debug.Debug)
+pub fn GithubReviewThread::equal(Self, Self) -> Bool
+pub fn GithubReviewThread::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GithubReviewThread::not_equal(Self, Self) -> Bool
+pub fn GithubReviewThread::to_json(Self) -> Json
+pub fn GithubReviewThread::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GithubReviewThread
+pub impl @json.FromJson for GithubReviewThread
 
 pub(all) struct GithubReviewer {
   name : String

@@ -436,6 +436,7 @@ pub fn body_view(
       diff_editor_host,
       semantic_review_host,
       viewer_notice(locale~, state, ctx),
+      github_review_line_layer(dispatch, state, ctx),
     ]),
     tree_pane(locale~, dispatch, state, ctx),
   ])
@@ -1750,6 +1751,21 @@ fn change_tree_row(
       },
       @html.span(class="change-path", row.node.label),
       match item {
+        ChangeFile(change) => {
+          let count = state.github_review.comment_count(change.path.0)
+          if count > 0 {
+            @html.span(
+              class="github-review-file-count",
+              title="Unresolved GitHub conversations",
+              [@icons.icon_comment(), @html.text(count.to_string())],
+            )
+          } else {
+            @html.nothing
+          }
+        }
+        _ => @html.nothing
+      },
+      match item {
         ChangeFile(change) =>
           @html.span(
             class="change-status " + change.kind_class(),
@@ -2045,8 +2061,14 @@ pub fn breadcrumb_view(
         review_diff_layout_toggle(locale~, dispatch, state, ctx),
         review_comments_control(locale~, dispatch, state, ctx),
         review_tests_control(locale~, dispatch, state, ctx),
+        @github_review.toolbar(
+          state.github_review,
+          dispatch.map(msg => GithubReview(msg)),
+          current=ctx.github,
+        ),
         review_navigation_controls(locale~, dispatch, state, ctx),
       ]),
+      github_review_status(dispatch, state, ctx),
     ]
     if state.highlighted is Some(directory) {
       children.push(breadcrumb_picker(locale~, dispatch, state, ctx, directory))
