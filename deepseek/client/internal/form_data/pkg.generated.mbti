@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "bobzhang/openseek/form_data"
+package "bobzhang/openseek/deepseek/client/internal/form_data"
 
 import {
   "moonbitlang/async/io",

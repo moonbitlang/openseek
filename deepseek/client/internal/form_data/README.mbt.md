@@ -1,6 +1,6 @@
 # Multipart Form Data
 
-`bobzhang/openseek/form_data` encodes text and binary file fields as
+`bobzhang/openseek/deepseek/client/internal/form_data` encodes text and binary file fields as
 `multipart/form-data`. It owns boundary selection, quoted header parameters,
 UTF-8 text encoding, field separators, and the final delimiter.
 

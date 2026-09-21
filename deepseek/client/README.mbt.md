@@ -37,7 +37,7 @@ filename, and optional expiration time. The server performs full image
 validation; the client checks signatures, the 64 MiB size limit, and metadata.
 The filename is a display name, not a path, and must not contain quotes, path
 separators, or ASCII control characters. Multipart framing and boundary
-selection are handled by `bobzhang/openseek/form_data`.
+selection are handled by `bobzhang/openseek/deepseek/client/internal/form_data`.
 
 The upload uses the same API key and replaces the trailing `/chat/completions`
 in `api_url` with `/files`, preserving prefixes such as `/v1`. The configured

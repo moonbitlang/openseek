@@ -1,6 +1,6 @@
 import {
   "moonbitlang/openseek/deepseek",
-  "moonbitlang/openseek/form_data",
+  "moonbitlang/openseek/deepseek/client/internal/form_data",
   "moonbitlang/async",
   "moonbitlang/async/http",
   "moonbitlang/async/io",
