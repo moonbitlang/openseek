@@ -18,13 +18,6 @@ network calls. The live, API-backed examples live in
 so the top level lists the subcommands and the engine-shared options. It exits
 successfully.
 
-Select the root executable explicitly so the deprecated entry point does not
-add warnings to these transcripts.
-
-```mooncram
-$ export PATH="$TESTDIR/../../_build/native/debug/build/moonbitlang/openseek:$PATH"
-```
-
 ```mooncram
 $ openseek.exe --help
 Usage: openseek [options] <command>
