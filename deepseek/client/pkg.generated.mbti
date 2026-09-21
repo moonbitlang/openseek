@@ -3,12 +3,35 @@ package "moonbitlang/openseek/deepseek/client"
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/json",
   "moonbitlang/openseek/deepseek",
 }
 
 // Values
 
 // Errors
+pub(all) suberror FileUploadError {
+  UnsupportedImageFormat
+  ImageTooLarge(bytes~ : Int, limit~ : Int)
+  InvalidFilename
+  InvalidExpirySeconds(Int)
+  InvalidTimeoutMs(Int)
+  UnsupportedApiUrl
+  HttpStatus(Int, String)
+  MalformedResponseJson(@json.ParseError)
+  InvalidResponseShape(@json.JsonDecodeError)
+  UnexpectedFileObject(String)
+  UnexpectedFilePurpose(String)
+  MissingFileId
+  MissingFilename
+  FileByteCountMismatch(expected~ : Int, actual~ : Double)
+  InvalidCreatedAt(Double)
+  InvalidExpiresAt(Double)
+  MissingExpiresAt
+} derive(Eq, @debug.Debug)
+pub fn FileUploadError::equal(Self, Self) -> Bool
+pub fn FileUploadError::not_equal(Self, Self) -> Bool
+pub fn FileUploadError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub struct Client {
@@ -22,9 +45,19 @@ pub struct Client {
 } derive(@debug.Debug)
 pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode, retry_attempts? : Int, retry_backoff_ms? : Int, idle_timeout_ms? : Int) -> Self
 pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat, stream? : StreamHandler) -> @deepseek.ChatResponse
+pub async fn Client::upload_image(Self, Bytes, filename~ : String, expires_after_seconds? : Int, timeout_ms? : Int) -> UploadedFile
 
 type StreamHandler
 pub fn StreamHandler::StreamHandler(on_content_delta~ : async (String) -> Unit, on_reasoning_delta? : async (String) -> Unit, on_retry? : (Int, Int, String) -> Unit) -> Self
+
+pub struct UploadedFile {
+  id : String
+  bytes : Int64
+  created_at : Int64
+  filename : String
+  expires_at : Int64?
+} derive(@debug.Debug)
+pub fn UploadedFile::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
