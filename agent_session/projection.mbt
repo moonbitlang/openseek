@@ -47,18 +47,18 @@ fn append_item_message(
 ) -> Unit {
   match item {
     User(message) =>
-      messages.push(ChatMessage(User, content=[Text(text=message.content())]))
+      messages.push(ChatMessage(User, content=[Text(message.content())]))
     Runtime(notice) =>
-      messages.push(ChatMessage(User, content=[Text(text=notice.content())]))
+      messages.push(ChatMessage(User, content=[Text(notice.content())]))
     Summary(summary) =>
       messages.push(
-        ChatMessage(User, content=[Text(text=summary_model_content(summary))]),
+        ChatMessage(User, content=[Text(summary_model_content(summary))]),
       )
     Assistant(message) =>
       messages.push(
         ChatMessage(
           Assistant,
-          content=[Text(text=message.content())],
+          content=[Text(message.content())],
           tool_calls=message.tool_calls(),
           reasoning_content?=message.reasoning_content(),
         ),
@@ -66,7 +66,7 @@ fn append_item_message(
     Tool(result) =>
       messages.push(
         ChatMessage(Tool(result.tool_call_id()), content=[
-          Text(text=result.content()),
+          Text(result.content()),
         ]),
       )
     Terminal(terminal) =>
@@ -78,7 +78,7 @@ fn append_item_message(
           last.role is Assistant &&
           last.content.is_text_only() &&
           last.content.text() == content) {
-          messages.push(ChatMessage(Assistant, content=[Text(text=content)]))
+          messages.push(ChatMessage(Assistant, content=[Text(content)]))
         }
       }
   }
@@ -93,7 +93,7 @@ fn flush_pending_tool_calls(
     messages.push(
       ChatMessage(Tool(call.id), content=[
         Text(
-          text="error: previous agent process exited before recording a result for tool \{call.name}",
+          "error: previous agent process exited before recording a result for tool \{call.name}",
         ),
       ]),
     )
@@ -144,7 +144,7 @@ fn is_covered_by_later_summary(
 /// removes durable events.
 pub fn Session::chat_messages(self : Session) -> Array[@deepseek.ChatMessage] {
   let messages : Array[@deepseek.ChatMessage] = [
-    ChatMessage(System, content=[Text(text=self.system_prompt())]),
+    ChatMessage(System, content=[Text(self.system_prompt())]),
   ]
   let pending_tool_calls : Array[@deepseek.ToolCall] = []
   let events = self.events()

@@ -2,10 +2,10 @@
 test "text extraction joins all fragments while iteration preserves files" {
   let parts : Array[@deepseek.ContentPart] = [
     File(file_id="file-api-before"),
-    Text(text="previous agent"),
+    Text("previous agent"),
     File(file_id="file-api-middle"),
-    Text(text=" process"),
-    Text(text=" exited"),
+    Text(" process"),
+    Text(" exited"),
     File(file_id="file-api-after"),
   ]
   let message = @deepseek.ChatMessage(User, content=parts)
@@ -27,10 +27,10 @@ test "empty and file-only content contribute no text" {
   assert_false(file_only.is_text_only())
   assert_false(file_only.contains("file-api-only"))
   let text_only = @deepseek.Content([
-    Text(text=""),
-    Text(text="hello"),
-    Text(text="\nworld"),
-    Text(text=""),
+    Text(""),
+    Text("hello"),
+    Text("\nworld"),
+    Text(""),
   ])
   assert_eq(text_only.text(), "hello\nworld")
   assert_true(text_only.is_text_only())
@@ -39,11 +39,11 @@ test "empty and file-only content contribute no text" {
 ///|
 test "content parts preserve interleaved text and uploaded files" {
   let user = @deepseek.ChatMessage(User, content=[
-    Text(text="first image"),
+    Text("first image"),
     File(file_id="file-api-one"),
-    Text(text="compare with this"),
+    Text("compare with this"),
     File(file_id="file-api-two"),
-    Text(text="explain the difference"),
+    Text("explain the difference"),
   ])
   guard @deepseek.encode_chat_request([user]) is { "messages": [message], .. } else {
     fail("expected one encoded message")
@@ -78,8 +78,8 @@ test "tool file content keeps its tool call identity" {
 ///|
 test "encoding chooses the wire shape from the content array" {
   guard @deepseek.encode_chat_request([
-      ChatMessage(User, content=[Text(text="hello"), Text(text=" world")]),
-      ChatMessage(User, content=[Text(text="hello")]),
+      ChatMessage(User, content=[Text("hello"), Text(" world")]),
+      ChatMessage(User, content=[Text("hello")]),
     ])
     is { "messages": Array(messages), .. } else {
     fail("expected messages")
@@ -100,8 +100,8 @@ test "encoding chooses the wire shape from the content array" {
 test "system and assistant text parts are concatenated without separators" {
   for role in [@deepseek.System, Assistant] {
     let message = @deepseek.ChatMessage(role, content=[
-      Text(text="hello"),
-      Text(text=" world"),
+      Text("hello"),
+      Text(" world"),
     ])
     guard @deepseek.encode_chat_request([message])
       is { "messages": [{ "content": content, .. }], .. } else {

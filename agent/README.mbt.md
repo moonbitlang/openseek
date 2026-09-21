@@ -90,7 +90,7 @@ test "turn APIs use the session prompt exactly as supplied" {
   debug_inspect(
     session.chat_messages()[0].content,
     content=(
-      #|Content([Text(text="custom system")])
+      #|Content([Text("custom system")])
     ),
   )
 }

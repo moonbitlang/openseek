@@ -43,7 +43,7 @@ pub fn Content::text(Self) -> String
 pub fn Content::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ContentPart {
-  Text(text~ : String)
+  Text(String)
   File(file_id~ : String)
 } derive(Eq, @debug.Debug)
 pub fn ContentPart::equal(Self, Self) -> Bool

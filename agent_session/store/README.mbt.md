@@ -156,19 +156,19 @@ async test "append saves progress and load resumes it" {
         #|[
         #|  {
         #|    role: System,
-        #|    content: Content([Text(text="system")]),
+        #|    content: Content([Text("system")]),
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },
         #|  {
         #|    role: User,
-        #|    content: Content([Text(text="inspect README")]),
+        #|    content: Content([Text("inspect README")]),
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },
         #|  {
         #|    role: Assistant,
-        #|    content: Content([Text(text="done")]),
+        #|    content: Content([Text("done")]),
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },
@@ -246,13 +246,13 @@ async test "compact appends a durable summary" {
         #|[
         #|  {
         #|    role: System,
-        #|    content: Content([Text(text="system")]),
+        #|    content: Content([Text("system")]),
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },
         #|  {
         #|    role: User,
-        #|    content: Content([Text(text="[conversation summary]\nsource_events=1..2\nold user and assistant discussed README")]),
+        #|    content: Content([Text("[conversation summary]\nsource_events=1..2\nold user and assistant discussed README")]),
         #|    tool_calls: [],
         #|    reasoning_content: None,
         #|  },

@@ -178,11 +178,11 @@ impl Show for Role with fn to_string(self : Role) -> String {
 ///|
 /// A typed chat message.
 ///
-/// Construct content messages with `ChatMessage(User, content=[Text(text="hello")])`,
-/// `ChatMessage(System, content=[Text(text="...")])`, or
-/// `ChatMessage(Tool("call_id"), content=[Text(text="...")])`.
+/// Construct content messages with `ChatMessage(User, content=[Text("hello")])`,
+/// `ChatMessage(System, content=[Text("...")])`, or
+/// `ChatMessage(Tool("call_id"), content=[Text("...")])`.
 /// Assistant tool-call echo messages should pass the assistant response
-/// content explicitly with `ChatMessage(Assistant, content=[Text(text=response.content)],
+/// content explicitly with `ChatMessage(Assistant, content=[Text(response.content)],
 /// tool_calls=response.tool_calls)`. When the combined assistant text is empty,
 /// a tool-call message encodes JSON `content: null`.
 pub struct ChatMessage {
@@ -235,13 +235,13 @@ pub struct ChatResponse {
 
 ///|
 test "chat message constructor" {
-  let user = ChatMessage(User, content=[Text(text="hello")])
+  let user = ChatMessage(User, content=[Text("hello")])
   assert_eq("\{user.role}", "user")
   assert_eq(user.content.text(), "hello")
-  let assistant = ChatMessage(Assistant, content=[Text(text="done")])
+  let assistant = ChatMessage(Assistant, content=[Text("done")])
   assert_eq("\{assistant.role}", "assistant")
   assert_eq(assistant.content.text(), "done")
-  let tool = ChatMessage(Tool("call_123"), content=[Text(text="tool result")])
+  let tool = ChatMessage(Tool("call_123"), content=[Text("tool result")])
   assert_eq("\{tool.role}", "tool")
   assert_eq(tool.content.text(), "tool result")
 }

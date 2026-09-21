@@ -85,10 +85,7 @@ async test "image upload sends multipart bytes then file ID can enter chat" {
       @utf8.encode(prefix) + bytes + @utf8.encode("\r\n--\{boundary}--\r\n"),
     )
     guard @deepseek.encode_chat_request([
-        ChatMessage(User, content=[
-          Text(text="describe"),
-          File(file_id=uploaded.id),
-        ]),
+        ChatMessage(User, content=[Text("describe"), File(file_id=uploaded.id)]),
       ])
       is { "messages": [message], .. } else {
       fail("expected uploaded image in the chat request")

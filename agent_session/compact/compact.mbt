@@ -35,8 +35,8 @@ fn compaction_messages(
   // `chat_messages` always starts with the session's system message. Replace
   // only that authority-bearing message; preserve the projected conversation,
   // including valid assistant/tool pairs, byte-for-byte after it.
-  messages[0] = ChatMessage(System, content=[Text(text=CompactionSystemPrompt)])
-  messages..push(ChatMessage(User, content=[Text(text=CompactionUserPrompt)]))
+  messages[0] = ChatMessage(System, content=[Text(CompactionSystemPrompt)])
+  messages..push(ChatMessage(User, content=[Text(CompactionUserPrompt)]))
 }
 
 ///|

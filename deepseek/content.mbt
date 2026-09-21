@@ -15,7 +15,7 @@ pub fn Content::text(self : Content) -> String {
   .iter()
   .filter_map(part => {
     match part {
-      Text(text~) => Some(text)
+      Text(text) => Some(text)
       File(_) => None
     }
   })
@@ -51,7 +51,7 @@ pub fn Content::iter(self : Content) -> Iter[ContentPart] {
 /// This package currently exposes uploaded-file references; the API's URL and
 /// inline file-data alternatives are not yet represented here.
 pub(all) enum ContentPart {
-  Text(text~ : String)
+  Text(String)
   File(file_id~ : String)
 } derive(Debug, Eq)
 
@@ -103,7 +103,7 @@ fn ChatMessage::validate_content(
 ///|
 impl ToJson for ContentPart with fn to_json(self) {
   match self {
-    Text(text~) => { "type": "text", "text": Json(text) }
+    Text(text) => { "type": "text", "text": Json(text) }
     File(file_id~) => { "type": "file", "file_id": Json(file_id) }
   }
 }

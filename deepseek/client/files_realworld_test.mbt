@@ -34,7 +34,7 @@ async test "realworld DeepSeek image upload and recognition" {
       [
         ChatMessage(User, content=[
           Text(
-            text="Identify the solid color of each half of this image. Reply only with a JSON object with keys left and right, using one lowercase English color name for each.",
+            "Identify the solid color of each half of this image. Reply only with a JSON object with keys left and right, using one lowercase English color name for each.",
           ),
           File(file_id=uploaded.id),
         ]),

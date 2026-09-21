@@ -12,12 +12,12 @@ async test "realworld DeepSeek API smoke test" {
     [
       ChatMessage(System, content=[
         Text(
-          text=(
+          (
             #|Reply with exactly this JSON object and no markdown: {"answer":"pong"}
           ),
         ),
       ]),
-      ChatMessage(User, content=[Text(text="ping")]),
+      ChatMessage(User, content=[Text("ping")]),
     ],
     response_format=JsonObject,
   )
@@ -52,9 +52,9 @@ async test "realworld Kimi API smoke test" {
   let client = @client.Client(api_key~, model~)
   let response = client.chat([
     ChatMessage(System, content=[
-      Text(text="Reply with exactly this plain text and no markdown: pong"),
+      Text("Reply with exactly this plain text and no markdown: pong"),
     ]),
-    ChatMessage(User, content=[Text(text="ping")]),
+    ChatMessage(User, content=[Text("ping")]),
   ])
   assert_true(response.content.contains("pong"))
   assert_true(response.usage.total_tokens > 0)
@@ -75,9 +75,9 @@ async test "realworld Kimi API streaming smoke test" {
   let response = client.chat(
     [
       ChatMessage(System, content=[
-        Text(text="Reply with exactly this plain text and no markdown: pong"),
+        Text("Reply with exactly this plain text and no markdown: pong"),
       ]),
-      ChatMessage(User, content=[Text(text="ping")]),
+      ChatMessage(User, content=[Text("ping")]),
     ],
     stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
   )
@@ -110,14 +110,12 @@ async test "realworld Kimi API tool-call smoke test" {
     [
       ChatMessage(System, content=[
         Text(
-          text=(
+          (
             #|You must call the return_token tool exactly once. Do not answer in text.
           ),
         ),
       ]),
-      ChatMessage(User, content=[
-        Text(text="Call return_token with token pong."),
-      ]),
+      ChatMessage(User, content=[Text("Call return_token with token pong.")]),
     ],
     tools=[tool],
   )
@@ -149,13 +147,13 @@ async test "realworld Kimi API multi-turn reasoning-content smoke test" {
     },
   )
   let first_user : @deepseek.ChatMessage = ChatMessage(User, content=[
-    Text(text="Call return_token with token pong."),
+    Text("Call return_token with token pong."),
   ])
   let first = client.chat(
     [
       ChatMessage(System, content=[
         Text(
-          text=(
+          (
             #|You must call the return_token tool exactly once. Do not answer in text.
           ),
         ),
@@ -171,7 +169,7 @@ async test "realworld Kimi API multi-turn reasoning-content smoke test" {
     [
       ChatMessage(System, content=[
         Text(
-          text=(
+          (
             #|After the tool result is available, do not call any tool again. Reply exactly: done
           ),
         ),
@@ -179,12 +177,12 @@ async test "realworld Kimi API multi-turn reasoning-content smoke test" {
       first_user,
       ChatMessage(
         Assistant,
-        content=[Text(text=first.content)],
+        content=[Text(first.content)],
         tool_calls=first.tool_calls,
         reasoning_content=first.reasoning_content,
       ),
-      ChatMessage(Tool(call.id), content=[Text(text="{\"token\":\"pong\"}")]),
-      ChatMessage(User, content=[Text(text="Use the tool result now.")]),
+      ChatMessage(Tool(call.id), content=[Text("{\"token\":\"pong\"}")]),
+      ChatMessage(User, content=[Text("Use the tool result now.")]),
     ],
     tools=[tool],
   )
@@ -217,14 +215,12 @@ async test "realworld GLM streaming tool-call smoke test" {
     [
       ChatMessage(System, content=[
         Text(
-          text=(
+          (
             #|You must call the return_token tool exactly once. Do not answer in text.
           ),
         ),
       ]),
-      ChatMessage(User, content=[
-        Text(text="Call return_token with token pong."),
-      ]),
+      ChatMessage(User, content=[Text("Call return_token with token pong.")]),
     ],
     tools=[tool],
     stream=StreamHandler(on_content_delta=_ => ()),

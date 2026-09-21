@@ -24,7 +24,7 @@ test "OpenRouter encodes DeepSeek models and reasoning fields" {
           thinking~,
           tools=[],
           stream=false,
-          [ChatMessage(User, content=[Text(text="hello")])],
+          [ChatMessage(User, content=[Text("hello")])],
         ),
         expected,
       )

@@ -68,7 +68,7 @@ let uploaded = client.upload_image(
 
 ///|
 let message = @deepseek.ChatMessage(User, content=[
-  Text(text="Describe this screenshot."),
+  Text("Describe this screenshot."),
   File(file_id=uploaded.id),
 ])
 
@@ -82,7 +82,7 @@ skipping files, and `message.content.iter()` to inspect the ordered parts.
 Text-only comparisons can additionally require `content.is_text_only()` so
 file references are not silently discarded. A single text part
 encodes as a plain string for compatibility with existing requests. Other
-user/tool content encodes as an array of content parts. Each `Text(text=...)`
+user/tool content encodes as an array of content parts. Each `Text(...)`
 part produces `{"type":"text","text":...}`; each `File(file_id=...)` produces
 `{"type":"file","file_id":...}`. Parts retain their order, so text and images
 can be interleaved. File-only arrays are supported, and tool messages retain
@@ -178,7 +178,7 @@ let client = @client.Client(api_key~, thinking=Max)
 
 ///|
 let response = client.chat(
-  [@deepseek.ChatMessage(User, content=[Text(text="Return {\"ok\":true}.")])],
+  [@deepseek.ChatMessage(User, content=[Text("Return {\"ok\":true}.")])],
   response_format=JsonObject,
 )
 ```
@@ -204,7 +204,7 @@ test "Client::chat request body shape" {
     tools=[tool],
     response_format=JsonObject,
   ) <| [
-    ChatMessage(User, content=[Text(text="read README.mbt.md")]),
+    ChatMessage(User, content=[Text("read README.mbt.md")]),
   ]
   json_inspect(body, content={
     "model": "deepseek-flash",
@@ -266,7 +266,7 @@ let stream = @client.StreamHandler(on_content_delta=delta => print(delta), on_re
 
 ///|
 let response = client.chat(
-  [@deepseek.ChatMessage(User, content=[Text(text="Explain this briefly.")])],
+  [@deepseek.ChatMessage(User, content=[Text("Explain this briefly.")])],
   stream~,
 )
 ```
@@ -282,7 +282,7 @@ test "Client::chat streaming request body shape" {
     thinking=client.thinking,
     stream=true,
   ) <| [
-    ChatMessage(User, content=[Text(text="stream this")]),
+    ChatMessage(User, content=[Text("stream this")]),
   ]
   json_inspect(body, content={
     "model": "deepseek-v4-pro",

@@ -7,7 +7,7 @@ test "chat message constructor keeps labeled fields" {
   )
   let message = @deepseek.ChatMessage(
     Assistant,
-    content=[Text(text="")],
+    content=[Text("")],
     tool_calls=[call],
     reasoning_content="run tests first",
   )

@@ -64,7 +64,7 @@ async test "chat stream handler accumulates SSE content, tool calls, and usage" 
     let reasoning_deltas : Array[String] = []
     let callbacks : Array[String] = []
     let response = client.chat(
-      [ChatMessage(User, content=[Text(text="hello")])],
+      [ChatMessage(User, content=[Text("hello")])],
       stream=StreamHandler(
         on_content_delta=delta => {
           deltas.push(delta)
@@ -108,7 +108,7 @@ async test "chat stream handler accumulates Kimi stream_options usage" {
       api_url=url,
     )
     let response = client.chat(
-      [ChatMessage(User, content=[Text(text="hello")])],
+      [ChatMessage(User, content=[Text("hello")])],
       stream=StreamHandler(on_content_delta=_ => ()),
     )
     assert_eq(response.content, "Hello world")
@@ -165,7 +165,7 @@ async test "streaming chat retries an idle stall before any event" {
       idle_timeout_ms=100,
     )
     let response = client.chat(
-      [ChatMessage(User, content=[Text(text="hello")])],
+      [ChatMessage(User, content=[Text("hello")])],
       stream=StreamHandler(on_content_delta=_ => ()),
     )
     assert_eq(response.content, "ok")
@@ -216,7 +216,7 @@ async test "streaming chat fails an idle stall after a delta without retrying" {
     )
     let deltas : Array[String] = []
     let _ = client.chat(
-      [ChatMessage(User, content=[Text(text="hello")])],
+      [ChatMessage(User, content=[Text("hello")])],
       stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
     ) catch {
       error => {
@@ -274,7 +274,7 @@ async test "streaming chat does not retry an idle stall after an unterminated da
     )
     let deltas : Array[String] = []
     let _ = client.chat(
-      [ChatMessage(User, content=[Text(text="hello")])],
+      [ChatMessage(User, content=[Text("hello")])],
       stream=StreamHandler(on_content_delta=delta => deltas.push(delta)),
     ) catch {
       error => {
@@ -295,7 +295,7 @@ async test "chat stream handler rejects EOF before done" {
     let client = @client.Client(api_key="test-key", api_url=url)
     try {
       let _ = client.chat(
-        [ChatMessage(User, content=[Text(text="hello")])],
+        [ChatMessage(User, content=[Text("hello")])],
         stream=StreamHandler(on_content_delta=_ => ()),
       )
       fail("expected truncated stream to fail")

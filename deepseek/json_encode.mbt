@@ -49,7 +49,7 @@ impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
   // A single text part keeps the existing string encoding for every role;
   // user/tool messages otherwise retain the original array and part order.
   let content = match (message.role, message.content.0) {
-    (_, [Text(text~)]) => Json(text)
+    (_, [Text(text)]) => Json(text)
     (System | Assistant, _) => Json(message.content.text())
     (_, parts) => Json(parts)
   }
@@ -146,7 +146,7 @@ pub fn encode_chat_request(
 
 ///|
 test "tool messages include tool call id" {
-  let body = ChatMessage(Tool("call_123"), content=[Text(text="tool result")])
+  let body = ChatMessage(Tool("call_123"), content=[Text("tool result")])
   json_inspect(body, content={
     "role": "tool",
     "content": "tool result",
@@ -213,7 +213,7 @@ test "tool definitions omit strict when unset and keep their key order" {
 test "assistant tool calls preserve reasoning content" {
   let body = ChatMessage(
     Assistant,
-    content=[Text(text="")],
+    content=[Text("")],
     tool_calls=[
       ToolCall(
         id="call_123",
@@ -244,7 +244,7 @@ test "assistant tool calls preserve reasoning content" {
 test "assistant reasoning content is always replayed" {
   let body = ChatMessage(
     Assistant,
-    content=[Text(text="The tests pass.")],
+    content=[Text("The tests pass.")],
     reasoning_content="checked the test output",
   )
   json_inspect(body, content={
@@ -256,17 +256,13 @@ test "assistant reasoning content is always replayed" {
 
 ///|
 test "assistant tool call messages preserve content when present" {
-  let body = ChatMessage(
-    Assistant,
-    content=[Text(text="I will check that now.")],
-    tool_calls=[
-      ToolCall(
-        id="call_123",
-        name="get_weather",
-        arguments="{\"location\":\"Hangzhou\"}",
-      ),
-    ],
-  )
+  let body = ChatMessage(Assistant, content=[Text("I will check that now.")], tool_calls=[
+    ToolCall(
+      id="call_123",
+      name="get_weather",
+      arguments="{\"location\":\"Hangzhou\"}",
+    ),
+  ])
   json_inspect(body, content={
     "role": "assistant",
     "content": "I will check that now.",
@@ -290,7 +286,7 @@ test "tool call arguments pass through as opaque strings" {
     name="write",
     arguments="not even valid json{",
   )
-  let body = ChatMessage(Assistant, content=[Text(text="")], tool_calls=[call])
+  let body = ChatMessage(Assistant, content=[Text("")], tool_calls=[call])
   json_inspect(body, content={
     "role": "assistant",
     "content": null,

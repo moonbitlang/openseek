@@ -2425,7 +2425,7 @@ fn model_content_view(content : @deepseek.Content) -> Array[@html.Html] {
   .iter()
   .filter_map(part => {
     match part {
-      Text(text~) => if text.is_blank() { None } else { Some(text_block(text)) }
+      Text(text) => if text.is_blank() { None } else { Some(text_block(text)) }
       File(file_id~) => Some(text_block("Image file: \{file_id}"))
     }
   })

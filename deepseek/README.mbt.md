@@ -26,9 +26,9 @@ The HTTP client lives in `moonbitlang/openseek/deepseek/client`.
   to each provider's supported request policy.
 - `Role`: `System`, `User`, `Assistant`, and `Tool(tool_call_id)`, with `Show`
   for wire strings and `Debug` for inspection.
-- `ChatMessage(role, content=[Text(text=...)], tool_calls?, reasoning_content?)`: one typed
+- `ChatMessage(role, content=[Text(...)], tool_calls?, reasoning_content?)`: one typed
   chat message constructor. `content=[...]` supplies an ordered array of
-  `Text(text=...)` and `File(file_id=...)` parts for user/tool messages.
+  `Text(...)` and `File(file_id=...)` parts for user/tool messages.
   Request encoders reject invalid content with `ChatMessageError`.
   Use `Assistant` with `tool_calls` for the assistant
   message that must be sent back after DeepSeek requests native tool calls.
@@ -199,7 +199,7 @@ DeepSeek tool calling uses the same flow described in the
 [official API docs](https://api-docs.deepseek.com/guides/tool_calls): send
 `tools` with a chat request, read `response.tool_calls`, append the assistant
 tool-call message, execute each local function, then append
-`ChatMessage(Tool(call.id), content=[Text(text=result)])` before the next request.
+`ChatMessage(Tool(call.id), content=[Text(result)])` before the next request.
 
 ### `ToolDefinition` vs `ToolCall`
 
@@ -215,11 +215,11 @@ The usual sequence is:
 1. Define available tools with `ToolDefinition(...)`.
 2. Send them with `Client::chat(..., tools=[...])`.
 3. Decode DeepSeek's response into `ToolCall` values.
-4. Append `ChatMessage(Assistant, content=[Text(text=response.content)],
+4. Append `ChatMessage(Assistant, content=[Text(response.content)],
    tool_calls=response.tool_calls)` so the conversation records the model's
    requested calls.
 5. Execute each local function after parsing `ToolCall.arguments`.
-6. Append each result as `ChatMessage(Tool(call.id), content=[Text(text=result)])`.
+6. Append each result as `ChatMessage(Tool(call.id), content=[Text(result)])`.
 
 ```mermaid
 sequenceDiagram
@@ -236,7 +236,7 @@ sequenceDiagram
   loop each ToolCall
     Caller->>Tool: parse arguments and execute
     Tool-->>Caller: result text
-    Caller->>Caller: append ChatMessage(Tool(call.id), content=[Text(text=result)])
+    Caller->>Caller: append ChatMessage(Tool(call.id), content=[Text(result)])
   end
   Caller->>API: next chat request with tool results
 ```
@@ -245,7 +245,7 @@ sequenceDiagram
 ///|
 test "encode chat request values" {
   let body = @deepseek.encode_chat_request(model=Deepseek(V4Flash)) <| [
-    ChatMessage(User, content=[Text(text="write a MoonBit test")]),
+    ChatMessage(User, content=[Text("write a MoonBit test")]),
   ]
   json_inspect(body, content={
     "model": "deepseek-flash",
@@ -268,8 +268,8 @@ test "encode tool-enabled chat request" {
       }),
     ],
   ) <| [
-    ChatMessage(User, content=[Text(text="read README.mbt.md")]),
-    ChatMessage(Assistant, content=[Text(text="")], tool_calls=[
+    ChatMessage(User, content=[Text("read README.mbt.md")]),
+    ChatMessage(Assistant, content=[Text("")], tool_calls=[
       ToolCall(
         id="call_1",
         name="read",
@@ -322,7 +322,7 @@ test "encode json-object response request" {
     model=Deepseek(V4Flash),
     response_format=JsonObject,
   ) <| [
-    ChatMessage(User, content=[Text(text="return {\"ok\":true}")]),
+    ChatMessage(User, content=[Text("return {\"ok\":true}")]),
   ]
   json_inspect(body, content={
     "model": "deepseek-flash",
