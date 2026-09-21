@@ -46,6 +46,9 @@ export class DesktopBrowserHarness {
       has_glm_key: false,
       has_custom_key: false,
       followup_behavior: 'steer',
+      // The models a custom endpoint serves. The real host always publishes
+      // the list, empty included, so the fixture does too.
+      custom_models: [],
     };
     this.installedSkills = [
       {
@@ -568,6 +571,13 @@ export class DesktopBrowserHarness {
             const savedKey = `has_${key.replace('_api_key', '')}_key`;
             this.hostSettings[savedKey] = patch[key].trim().length > 0;
           }
+        }
+        // The list travels whole: absent leaves it alone, `[]` clears it.
+        if (patch.custom_models !== undefined) {
+          this.hostSettings.custom_models = patch.custom_models.map(model => {
+            const label = (model.label ?? '').trim();
+            return label ? { id: model.id, label } : { id: model.id };
+          });
         }
         this.hostSettings.revision += 1;
         return this.hostSettings;

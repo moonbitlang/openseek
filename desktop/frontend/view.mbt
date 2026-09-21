@@ -1329,7 +1329,13 @@ fn api_settings_rows(
         stack=true,
       ),
     )
-    rows.append(custom_model_rows(dispatch, model))
+    // One container, not a spread of rows: the API group's child list must not
+    // change shape in the middle of the card. Rabbita diffs array children
+    // positionally, and inserting several rows between the URL row and the key
+    // row left the inputs bound to one another's handlers.
+    rows.push(
+      @html.div(class="custom-models", custom_model_rows(dispatch, model)),
+    )
   }
   // The key lives on the host and is never echoed back — the page only
   // knows one is saved; saving a new one overwrites it.

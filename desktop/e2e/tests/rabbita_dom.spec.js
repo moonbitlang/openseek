@@ -1984,6 +1984,83 @@ test('settings persist host API changes through settings.set', async ({ page }) 
   expect(app.pageErrors).toEqual([]);
 });
 
+test('custom models persist and join the model menu', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'API endpoint' }).click();
+  await page.getByRole('option', { name: 'Custom URL' }).click();
+  await page.getByRole('textbox', { name: 'Endpoint URL' }).fill(
+    'https://example.test/chat/completions',
+  );
+  // Let the URL commit before touching the model form: the reply re-renders
+  // the API group, and typing into a node the render is about to replace
+  // would race it.
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'settings.set' &&
+    request.params?.custom_api_url === 'https://example.test/chat/completions'))
+    .toBe(true);
+  await expect(page.getByRole('textbox', { name: 'Endpoint URL' })).toHaveValue(
+    'https://example.test/chat/completions',
+  );
+
+  // The add form is gated: a duplicate or an id that is not one word cannot be
+  // submitted, and the row says why.
+  await page.getByRole('textbox', { name: 'Model ID' }).fill('qwen 3');
+  await expect(page.getByRole('button', { name: 'Add', exact: true }))
+    .toBeDisabled();
+  await expect(page.getByText('A model id is one word without spaces'))
+    .toBeVisible();
+  await page.getByRole('textbox', { name: 'Model ID' }).fill('qwen3-coder');
+  await page.getByRole('textbox', { name: 'Display name' }).fill('Qwen3 Coder');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'settings.set' &&
+    JSON.stringify(request.params?.custom_models) ===
+      JSON.stringify([{ id: 'qwen3-coder', label: 'Qwen3 Coder' }])))
+    .toBe(true);
+  // The staged fields clear, and the stored row appears with its wire id.
+  await expect(page.getByRole('textbox', { name: 'Model ID' })).toHaveValue('');
+  await expect(page.getByText('qwen3-coder', { exact: true })).toBeVisible();
+  expect(app.hostSettings.custom_models).toEqual([
+    { id: 'qwen3-coder', label: 'Qwen3 Coder' },
+  ]);
+
+  // The composer's model menu offers it under the display name, and picking
+  // it pins the conversation and the page default to its wire id.
+  await app.openSession();
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'Qwen3 Coder' })).toBeVisible();
+  await page.getByRole('option', { name: 'Qwen3 Coder' }).click();
+  const chip = page.getByRole('button', { name: 'Model', exact: true });
+  await expect(chip).toContainText('Qwen3 Coder');
+  await expect.poll(() => page.evaluate(() =>
+    localStorage.getItem('openseek.model'))).toBe('qwen3-coder');
+
+  // Removing it sends the emptied list and drops it from the settings rows.
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect.poll(() => app.requests.some(request =>
+    request.method === 'settings.set' &&
+    JSON.stringify(request.params?.custom_models) === JSON.stringify([])))
+    .toBe(true);
+  expect(app.hostSettings.custom_models).toEqual([]);
+  await expect(page.getByText('qwen3-coder', { exact: true })).toHaveCount(0);
+
+  // A conversation pinned to it keeps that model — shown by its wire id now
+  // that the endpoint no longer names it — rather than being moved behind the
+  // user's back.
+  await app.openSession();
+  await expect(chip).toContainText('qwen3-coder');
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await expect(page.getByRole('option', { name: 'Qwen3 Coder' })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'qwen3-coder' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('initial OpenRouter setup only needs an API key', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.hostSettings.has_deepseek_key = false;
