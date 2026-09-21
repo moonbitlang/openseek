@@ -192,3 +192,16 @@ fn JsonObject::required_string_array(
   }
   decoded
 }
+
+///|
+/// Decode the array at `name`, or `None` when the field is absent (or an
+/// explicit `null`). The settings patch uses this for a list field whose
+/// absence means "leave the stored list alone" and whose `[]` means "clear
+/// it" — two different instructions the option keeps apart.
+fn[T : @json.FromJson] JsonObject::optional_array_of(
+  self : JsonObject,
+  name : String,
+) -> Array[T]? raise @json.JsonDecodeError {
+  guard self.optional_json(name) is Some(_) else { return None }
+  Some(self.required_array_of(name))
+}

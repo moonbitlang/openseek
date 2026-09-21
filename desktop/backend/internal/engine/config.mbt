@@ -73,17 +73,33 @@ fn configured_api_key(
 
 ///|
 /// The model runs fall back to when neither the request nor `OPENSEEK_MODEL`
-/// names one: each official provider's flagship, and DeepSeek's for a custom
-/// endpoint (any wire name works there, but the engine still needs one).
-fn ApiProvider::default_model(self : ApiProvider) -> String {
+/// names one: each official provider's flagship, and for a custom endpoint the
+/// first model the user configured for it — the endpoint serves what it was
+/// told it serves, so DeepSeek's tier is only a guess there.
+fn ApiProvider::default_model(
+  self : ApiProvider,
+  custom_models : Array[CustomModel],
+) -> String {
   match self {
     Glm => "glm-5.3"
-    Deepseek | Custom => DefaultModel
+    Deepseek => DefaultModel
+    Custom =>
+      match custom_models {
+        [first, ..] => first.id
+        [] => DefaultModel
+      }
   }
 }
 
 ///|
 /// The environment variable the engine resolves for one model wire name.
+///
+/// A custom endpoint's id follows the same prefixes the engine's own key
+/// lookup uses (`Model::key_option`): `glm-*` and `kimi-*` ids keep the
+/// provider whose wire names they resemble, and everything else travels in the
+/// DeepSeek variable, the bucket for a model the engine does not know. The two
+/// tables must agree, or a run's key would sit in a variable the engine never
+/// reads.
 fn model_key_env(model : String) -> String {
   if model.has_prefix("glm-") {
     "GLM"
@@ -91,6 +107,63 @@ fn model_key_env(model : String) -> String {
     "KIMI"
   } else {
     "DEEPSEEK"
+  }
+}
+
+///|
+/// The longest custom model id or display name this host stores. The id bound
+/// mirrors the engine's `CustomModelIdMaxLength` — an id the host accepts must
+/// be one the engine will parse — and the display name, which is only ever UI
+/// text, gets the same ceiling rather than an unbounded one.
+const CustomModelTextMaxLength : Int = 128
+
+///|
+/// Whether `id` could be sent as a model wire name: one non-blank token,
+/// within the length bound. Mirrors the engine's `is_valid_custom_model_id`.
+fn valid_custom_model_id(id : StringView) -> Bool {
+  let id = id.trim()
+  !id.is_blank() &&
+  id.length() <= CustomModelTextMaxLength &&
+  !id.contains_any(chars=" \t\r\n")
+}
+
+///|
+/// Whether the engine parses `model` as one of its built-in models. The
+/// Desktop stores a model as an opaque string, so the engine's name table is
+/// restated here (the desktop backend is versioned against a published engine,
+/// so a new engine API must not be a prerequisite for validating an id); the
+/// retired `deepseek-v4-flash` alias stays valid because the engine still
+/// parses it.
+fn builtin_engine_model(model : StringView) -> Bool {
+  match model.trim() {
+    "deepseek-flash"
+    | "deepseek-v4-flash"
+    | "deepseek-v4-pro"
+    | "kimi-k2.7-code"
+    | "kimi-k2.7-code-highspeed"
+    | "glm-5.3"
+    | "glm-5.3-flash" => true
+    _ => false
+  }
+}
+
+///|
+/// Whether the Desktop's own model menu already offers this wire name.
+///
+/// Narrower than `builtin_engine_model`: the menu lists four models, while the
+/// engine also parses two Kimi ids the menu has no entry for. Those stay
+/// available as custom models — a proxy serving `kimi-k2.7-code` is exactly
+/// what the custom list is for — while re-listing a model the menu already
+/// shows would only duplicate it. Mirrors the frontend's
+/// `EngineModel::parse` table, including the retired flash alias.
+fn reserved_desktop_model(model : StringView) -> Bool {
+  match model.trim() {
+    "deepseek-flash"
+    | "deepseek-v4-flash"
+    | "deepseek-v4-pro"
+    | "glm-5.3"
+    | "glm-5.3-flash" => true
+    _ => false
   }
 }
 
@@ -103,9 +176,14 @@ fn model_key_env(model : String) -> String {
 /// follows the model's variable, or the engine would never find it; the
 /// desktop stores the model as an opaque string, so that routing mirrors the
 /// engine's wire-name prefixes.
+///
+/// A custom endpoint's model must be one this build knows or one the user
+/// configured: an id from nowhere would reach the engine only to fail there,
+/// so the host refuses it while it can still name the fix.
 fn key_env_for(
   provider : ApiProvider,
   model : String,
+  custom_models : Array[CustomModel],
 ) -> String raise EngineError {
   let model_key = model_key_env(model)
   match provider {
@@ -125,7 +203,15 @@ fn key_env_for(
       }
       "GLM"
     }
-    Custom => model_key
+    Custom => {
+      guard builtin_engine_model(model) ||
+        custom_models.any(configured => configured.id == model) else {
+        raise EngineError(
+          "model \{model} is not configured for this endpoint; add it under Custom models in Settings",
+        )
+      }
+      model_key
+    }
   }
 }
 
@@ -274,12 +360,14 @@ async fn serve_config(
     // deliberately ignored — see `serve_engine_env`), so the host's
     // fallback must read the same variable.
     None =>
-      @env.get("OPENSEEK_MODEL").unwrap_or(settings.provider.default_model())
+      @env.get("OPENSEEK_MODEL").unwrap_or(
+        settings.provider.default_model(settings.custom_models),
+      )
   }
   {
     task,
     api_key: endpoint.api_key,
-    key_env: key_env_for(settings.provider, model),
+    key_env: key_env_for(settings.provider, model, settings.custom_models),
     api_url: endpoint.api_url,
     model,
     thinking: RunConfig::configured_thinking(thinking),
@@ -414,6 +502,7 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     deepseek_api_key: Some("sk-official"),
     glm_api_key: None,
     custom_api_key: None,
+    custom_models: None,
   })
   let config = run_config(manager, {
     task: "hello",

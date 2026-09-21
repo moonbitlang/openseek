@@ -14,11 +14,19 @@ const OpenRouterChatCompletionsUrl : String = "https://openrouter.ai/api/v1/chat
 let default_model : @deepseek.Model = Deepseek(V4Pro)
 
 ///|
-fn default_api_url_for_model(model : @deepseek.Model) -> String {
+/// The endpoint a model talks to when the caller names none: each official
+/// provider's own URL.
+///
+/// A custom model has none — it exists only beside an explicit endpoint,
+/// which `Model::parse_for_endpoint` enforces — so building a client for one
+/// without a URL fails here rather than aiming an id this build does not know
+/// at DeepSeek's official API.
+fn default_api_url_for_model(model : @deepseek.Model) -> String raise {
   match model {
     Kimi(_) => KimiDefaultApiUrl
     Glm(_) => GlmDefaultApiUrl
     Deepseek(_) => DeepSeekDefaultApiUrl
+    Custom(id) => fail("model \{id} needs an explicit API endpoint")
   }
 }
 
@@ -74,8 +82,10 @@ pub struct Client {
 /// Constructs a DeepSeek HTTP client.
 ///
 /// `model` defaults to `deepseek-v4-pro`; `api_url` defaults to the DeepSeek
-/// endpoint, or the Kimi endpoint for Kimi models. `thinking` defaults to
-/// `No`; pass `High` or `Max` to enable DeepSeek V4 thinking mode explicitly.
+/// endpoint, or the Kimi endpoint for Kimi models. A custom model has no
+/// default endpoint, so constructing a client for one without `api_url` fails
+/// rather than guessing. `thinking` defaults to `No`; pass `High` or `Max` to
+/// enable DeepSeek V4 thinking mode explicitly.
 ///
 /// Transient failures — transport errors, HTTP 429, and 5xx — are retried up
 /// to `retry_attempts` total tries with exponential backoff starting at
@@ -100,12 +110,16 @@ pub struct Client {
 pub fn Client::Client(
   api_key~ : String,
   model? : @deepseek.Model = default_model,
-  api_url? : String = default_api_url_for_model(model),
+  api_url? : String,
   thinking? : @deepseek.ThinkingMode = No,
   retry_attempts? : Int = 5,
   retry_backoff_ms? : Int = 500,
   idle_timeout_ms? : Int = 120_000,
-) -> Client {
+) -> Client raise {
+  let api_url = match api_url {
+    Some(url) => url
+    None => default_api_url_for_model(model)
+  }
   {
     api_key,
     model,

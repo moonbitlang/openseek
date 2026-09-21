@@ -1105,6 +1105,87 @@ fn provider_hint(model : Model, provider : ApiProvider) -> String {
 }
 
 ///|
+/// The custom-model rows of the API group: one row per model the user
+/// configured for the custom endpoint, then the form that adds another. They
+/// sit directly under the endpoint URL because the list is what that endpoint
+/// serves — the composer's model menu offers these ids, and a run names them
+/// verbatim.
+fn custom_model_rows(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> Array[@html.Html] {
+  let settings_loaded = model.host_settings_loaded()
+  let rows : Array[@html.Html] = []
+  for configured in model.custom_models {
+    // The id is what a run sends; the row's name is only what the user called
+    // it, so an unnamed model shows the id itself and needs no second line.
+    let desc = match configured.label {
+      Some(_) => configured.id
+      None => @settings.text(model.locale, CustomModelId)
+    }
+    rows.push(
+      @settings.row(
+        configured.display_label(),
+        [
+          @html.button(
+            class="button secondary",
+            disabled=!settings_loaded,
+            on_click=dispatch(CustomModelRemoved(configured.id)),
+            @settings.text(model.locale, RemoveCustomModel),
+          ),
+        ],
+        desc~,
+      ),
+    )
+  }
+  // A draft the form refuses says why in place of the description: the Add
+  // button is disabled, and the reason must be visible without a click.
+  let desc = match model.custom_model_draft_error() {
+    Some(error) => error
+    None => @settings.text(model.locale, CustomModelsDescription)
+  }
+  rows.push(
+    @settings.row(
+      @settings.text(model.locale, AddCustomModel),
+      [
+        @html.input(
+          input_type=@html.InputType::Text,
+          value=model.custom_model_draft_id,
+          placeholder=@settings.text(model.locale, CustomModelIdPlaceholder),
+          on_input=dispatch.map(value => CustomModelDraftIdChanged(value)),
+          attrs=@html.Attrs::build()
+            .aria_label(@settings.text(model.locale, CustomModelId))
+            .data_set("focus-owner", "")
+            .disabled(!settings_loaded),
+        ),
+        @html.input(
+          input_type=@html.InputType::Text,
+          value=model.custom_model_draft_label,
+          placeholder=@settings.text(model.locale, CustomModelNamePlaceholder),
+          on_input=dispatch.map(value => CustomModelDraftLabelChanged(value)),
+          attrs=@html.Attrs::build()
+            .aria_label(@settings.text(model.locale, CustomModelName))
+            .data_set("focus-owner", "")
+            .disabled(!settings_loaded),
+        ),
+        @html.button(
+          // The id is layout only (the shared stack rule right-aligns the
+          // action); the fill is the shared primary style.
+          id="addCustomModel",
+          class="button primary",
+          disabled=!settings_loaded || !model.custom_model_draft_addable(),
+          on_click=dispatch(CustomModelAdded),
+          @settings.text(model.locale, Add),
+        ),
+      ],
+      desc~,
+      stack=true,
+    ),
+  )
+  rows
+}
+
+///|
 /// The bring-your-own-key guide shown at the top of the API group while the
 /// configured endpoint is not usable. SeekMoon ships no hosted API: every
 /// request goes straight from this machine to the user's own model
@@ -1247,6 +1328,13 @@ fn api_settings_rows(
         ],
         stack=true,
       ),
+    )
+    // One container, not a spread of rows: the API group's child list must not
+    // change shape in the middle of the card. Rabbita diffs array children
+    // positionally, and inserting several rows between the URL row and the key
+    // row left the inputs bound to one another's handlers.
+    rows.push(
+      @html.div(class="custom-models", custom_model_rows(dispatch, model)),
     )
   }
   // The key lives on the host and is never echoed back — the page only

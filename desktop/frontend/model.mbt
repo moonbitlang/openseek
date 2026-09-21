@@ -229,6 +229,118 @@ test "engine models round-trip their wire names" {
 }
 
 ///|
+/// One model the user configured for a custom OpenAI-compatible endpoint: the
+/// id a run sends to that endpoint verbatim, and the display name the model
+/// menu shows for it. `label` is `None` when the user did not name it — the id
+/// is then the label, and absence is never spelled `""`.
+priv struct CustomModel {
+  id : String
+  label : String?
+} derive(Eq, Debug)
+
+///|
+/// What the composer's chip and the settings list call this model.
+fn CustomModel::display_label(self : CustomModel) -> String {
+  match self.label {
+    Some(label) => label
+    None => self.id
+  }
+}
+
+///|
+/// The most custom models one endpoint may list. Mirrors the host's
+/// `CustomModelsLimit`; the form refuses an add past it rather than letting
+/// the save fail.
+const CustomModelsLimit : Int = 32
+
+///|
+/// The longest custom model id or display name the form accepts. Mirrors the
+/// host's bound so a field the form allows is one the save accepts.
+const CustomModelTextMaxLength : Int = 128
+
+///|
+/// Whether `id` could be sent as a model wire name: one non-blank token,
+/// within the length bound. Mirrors the host's `valid_custom_model_id`.
+fn valid_custom_model_id(id : StringView) -> Bool {
+  let id = id.trim()
+  !id.is_blank() &&
+  id.length() <= CustomModelTextMaxLength &&
+  !id.contains_any(chars=" \t\r\n")
+}
+
+///|
+/// The wire names the Desktop's model menu offers by itself. A custom model
+/// may not reuse one: the menu would list the same model twice, and the engine
+/// would run its built-in model rather than the endpoint's.
+fn builtin_desktop_model(id : StringView) -> Bool {
+  match id.trim() {
+    "deepseek-flash"
+    | "deepseek-v4-flash"
+    | "deepseek-v4-pro"
+    | "glm-5.3"
+    | "glm-5.3-flash" => true
+    _ => false
+  }
+}
+
+///|
+/// Why the staged custom model cannot be added, or `None` when it can. The
+/// form reads this for its hint and its Add button, and the update handler
+/// re-checks it, so a stale click cannot store something the form refused.
+fn Model::custom_model_draft_error(self : Model) -> String? {
+  let id = self.custom_model_draft_id.trim().to_owned()
+  if id.is_blank() {
+    return None
+  }
+  if !valid_custom_model_id(id) {
+    return Some(@settings.text(self.locale, InvalidCustomModelId))
+  }
+  if builtin_desktop_model(id) {
+    return Some(@settings.text(self.locale, BuiltinCustomModelId))
+  }
+  if self.custom_models.any(configured => configured.id == id) {
+    return Some(@settings.text(self.locale, DuplicateCustomModelId))
+  }
+  if self.custom_models.length() >= CustomModelsLimit {
+    return Some(
+      @settings.text(self.locale, CustomModelsLimitReached(CustomModelsLimit)),
+    )
+  }
+  None
+}
+
+///|
+/// Whether the staged custom model may be added.
+fn Model::custom_model_draft_addable(self : Model) -> Bool {
+  !self.custom_model_draft_id.trim().is_blank() &&
+  self.custom_model_draft_error() is None
+}
+
+///|
+/// The label for one wire id: the name the user gave that custom model, or the
+/// id itself when the endpoint does not list it (a conversation carried in
+/// from a build that knew the model, or one whose entry was removed).
+fn custom_model_label(
+  custom_models : Array[CustomModel],
+  id : String,
+) -> String {
+  match custom_models.search_by(configured => configured.id == id) {
+    Some(index) => custom_models[index].display_label()
+    None => id
+  }
+}
+
+///|
+/// The label to show for one engine model: a custom model shows the name the
+/// user gave it, and every other model shows its own.
+fn Model::engine_model_label(self : Model, model : EngineModel) -> String {
+  match model {
+    Other(id) => custom_model_label(self.custom_models, id)
+    _ => model.label()
+  }
+}
+
+///|
 /// Viewports at most this wide (CSS pixels) get the narrow layout. Must
 /// match the `@media (max-width: …)` breakpoint in index.html.
 const NarrowBreakpoint : Int = 760
@@ -467,23 +579,42 @@ fn ApiProvider::parse(value : String) -> ApiProvider {
 ///|
 /// The model a fresh conversation starts from when the selected provider and
 /// the page's last model choice belong to different known model families.
-fn ApiProvider::default_model(self : ApiProvider) -> EngineModel {
+/// A custom endpoint prefers the first model the user configured for it —
+/// the endpoint serves what it was told it serves, and DeepSeek's tiers are
+/// only a guess there.
+fn ApiProvider::default_model(
+  self : ApiProvider,
+  custom_models : Array[CustomModel],
+) -> EngineModel {
   match self {
-    Deepseek | OpenRouter | Custom => DsFlash
+    Deepseek | OpenRouter => DsFlash
     Glm => Glm53
+    Custom =>
+      match custom_models {
+        [first, ..] => Other(first.id)
+        [] => DsFlash
+      }
   }
 }
 
 ///|
 /// Whether a known model belongs to the selected provider. Custom endpoints
-/// deliberately accept every model, and an unknown wire name stays pinned so
-/// a newer engine's model is never silently replaced by an older frontend.
+/// accept the built-in models and the ones the user configured for them — the
+/// configured list is what makes an otherwise unknown id selectable — while an
+/// unknown wire name stays pinned elsewhere so a newer engine's model is never
+/// silently replaced by an older frontend.
 fn EngineModel::matches_provider(
   self : EngineModel,
   provider : ApiProvider,
+  custom_models : Array[CustomModel],
 ) -> Bool {
   match (provider, self) {
-    (Custom, _) | (_, Other(_)) => true
+    (Custom, _) =>
+      match self {
+        Other(id) => custom_models.any(model => model.id == id)
+        _ => true
+      }
+    (_, Other(_)) => true
     (Deepseek | OpenRouter, DsPro | DsFlash) | (Glm, Glm53 | Glm53Flash) => true
     _ => false
   }
@@ -1397,11 +1528,19 @@ priv struct Model {
   glm_key_saved : Bool
   custom_key_saved : Bool
   setup_api_key : String
-  // Which endpoint the engine talks to; `custom_api_url` only matters when
-  // the provider is `Custom`. Both mirror the host's settings store and are
-  // edited through `settings.set`.
+  // Which endpoint the engine talks to; `custom_api_url` and
+  // `custom_models` only matter when the provider is `Custom`. All three
+  // mirror the host's settings store and are edited through `settings.set`.
   api_provider : ApiProvider
   custom_api_url : String
+  // The model ids this custom endpoint serves, in the order the user added
+  // them. They join the composer's model menu beside the built-in models, and
+  // the host refuses a run naming anything else.
+  custom_models : Array[CustomModel]
+  // The add-a-model form's staged fields, page-local like the rest of the
+  // form: the id and the optional display name, cleared once the add lands.
+  custom_model_draft_id : String
+  custom_model_draft_label : String
   followup_behavior : FollowupBehavior
   // Host-settings writes still in flight. While any are, incoming
   // `settings.changed` broadcasts and `settings.get` replies may predate an
@@ -1702,6 +1841,7 @@ priv struct HostSettings {
   has_glm_key : Bool
   has_custom_key : Bool
   followup_behavior : String
+  custom_models : Array[CustomModel]
 } derive(Eq)
 
 ///|
@@ -1781,6 +1921,16 @@ priv enum Msg {
   ProviderChanged(String)
   FollowupBehaviorChanged(String)
   CustomApiUrlChanged(String)
+  // The custom-model form's staged fields. They are page-local until the add
+  // button turns them into a whole-list `settings.set`.
+  CustomModelDraftIdChanged(String)
+  CustomModelDraftLabelChanged(String)
+  // Add the staged model to the custom endpoint's list. The form disables the
+  // button for an unusable draft; the handler re-checks, so a stale click
+  // cannot store what the form refused.
+  CustomModelAdded
+  // Remove one configured custom model by its id.
+  CustomModelRemoved(String)
   // The Settings choice of which window corner error toasts pop up in.
   NotificationCornerChanged(String)
   // The Settings choice of where the editor's file tree docks.
@@ -2631,6 +2781,9 @@ fn initial_model(desktop~ : Bool) -> Model {
     setup_api_key: "",
     api_provider: Deepseek,
     custom_api_url: "",
+    custom_models: [],
+    custom_model_draft_id: "",
+    custom_model_draft_label: "",
     followup_behavior: FollowupSteer,
     settings_saves: 0,
     host_settings_revision: -1,
@@ -2857,6 +3010,7 @@ fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
     deferred_host_settings: None,
     api_provider: provider,
     custom_api_url: settings.custom_api_url,
+    custom_models: settings.custom_models,
     followup_behavior: FollowupBehavior::parse(settings.followup_behavior),
     deepseek_key_saved: settings.has_deepseek_key,
     glm_key_saved: settings.has_glm_key,
@@ -2872,15 +3026,18 @@ fn Model::apply_host_settings(self : Model, settings : HostSettings) -> Model {
 /// has no history to preserve and otherwise begins with a known-bad
 /// provider/model mismatch.
 fn Model::align_fresh_conversation_with_provider(self : Model) -> Model {
-  let default_model = if self.default_model.matches_provider(self.api_provider) {
+  let default_model = if self.default_model.matches_provider(
+      self.api_provider,
+      self.custom_models,
+    ) {
     self.default_model
   } else {
-    self.api_provider.default_model()
+    self.api_provider.default_model(self.custom_models)
   }
   let next = { ..self, default_model, }
   guard next.composing_new_chat() &&
     next.active_conversation() is Some(conv) &&
-    !conv.engine_model.matches_provider(next.api_provider) else {
+    !conv.engine_model.matches_provider(next.api_provider, next.custom_models) else {
     return next
   }
   next.replace_conversation({ ..conv, engine_model: default_model, })

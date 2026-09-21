@@ -80,6 +80,14 @@ pub struct ConversationExport {
 }
 pub async fn ConversationExport::capture(EngineManager, @protocol.SessionExportPayload, String, String) -> Self
 
+pub(all) struct CustomModel {
+  id : String
+  label : String?
+} derive(Eq, @debug.Debug)
+pub fn CustomModel::equal(Self, Self) -> Bool
+pub fn CustomModel::not_equal(Self, Self) -> Bool
+pub fn CustomModel::to_repr(Self) -> @debug.Repr
+
 type EngineActor
 pub fn EngineActor::manager(Self) -> EngineManager
 pub async fn EngineActor::run(Self, EventSink, (String) -> Unit) -> Unit
@@ -120,6 +128,7 @@ pub(all) struct SettingsPatch {
   deepseek_api_key : String?
   glm_api_key : String?
   custom_api_key : String?
+  custom_models : Array[CustomModel]?
 }
 
 // Type aliases

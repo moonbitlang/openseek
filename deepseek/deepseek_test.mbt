@@ -63,6 +63,99 @@ test "context windows per model" {
   )
   assert_eq((Glm(G53) : @deepseek.Model).context_window(), 1_000_000)
   assert_eq((Glm(G53Flash) : @deepseek.Model).context_window(), 1_000_000)
+  // A custom endpoint's real window is unknown, so the guard assumes the
+  // conservative floor rather than guessing high and overflowing.
+  assert_eq((Custom("qwen3-coder") : @deepseek.Model).context_window(), 131_072)
+}
+
+///|
+test "an unknown model is a custom model only with an explicit endpoint" {
+  // With an endpoint the id travels verbatim: the endpoint, not this build,
+  // decides whether it exists.
+  let custom = @deepseek.Model::parse_for_endpoint(
+    " qwen3-coder ",
+    Some("https://proxy.example/chat/completions"),
+  )
+  assert_true(custom is Custom("qwen3-coder"))
+  assert_eq(custom.to_string(), "qwen3-coder")
+  // The same name without an endpoint stays an error, so a typo cannot
+  // silently become a model id sent to an official provider.
+  let _ = @deepseek.Model::parse_for_endpoint("qwen3-coder", None) catch {
+    error => {
+      assert_true("\{error}".contains("unknown model: qwen3-coder"))
+      return
+    }
+  }
+  fail("unknown model accepted without an endpoint")
+}
+
+///|
+test "built-in names parse the same with or without an endpoint" {
+  assert_true(
+    @deepseek.Model::parse_for_endpoint(
+      "glm-5.3",
+      Some("https://proxy.example/chat/completions"),
+    )
+    is Glm(G53),
+  )
+  assert_true(
+    @deepseek.Model::parse_for_endpoint("deepseek-v4-flash", None)
+    is Deepseek(V4Flash),
+  )
+}
+
+///|
+test "a malformed custom model id is refused" {
+  for id in ["", "   ", "qwen 3", "qwen3\tcoder", "a".repeat(129)] {
+    let rejected = try {
+      ignore(@deepseek.Model::parse_for_endpoint(id, Some("https://x/y")))
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
+  assert_true(@deepseek.is_valid_custom_model_id("vendor/family:tag"))
+  assert_false(@deepseek.is_valid_custom_model_id("vendor family"))
+}
+
+///|
+test "a custom model resolves its key from the DeepSeek bucket" {
+  let custom : @deepseek.Model = Custom("qwen3-coder")
+  let stored : Map[String, Array[String]] = {
+    "deepseek-api-key": ["sk-proxy"],
+    "glm-api-key": ["sk-glm"],
+  }
+  assert_eq(custom.api_key(stored), Some("sk-proxy"))
+  // An explicit generic key still wins, as it does for every model.
+  let explicit : Map[String, Array[String]] = {
+    "api-key": ["sk-explicit"],
+    "deepseek-api-key": ["sk-proxy"],
+  }
+  assert_eq(custom.api_key(explicit), Some("sk-explicit"))
+  let glm_only : Map[String, Array[String]] = { "glm-api-key": ["sk-glm"] }
+  assert_eq(custom.api_key(glm_only), None)
+}
+
+///|
+test "a custom model sends no provider thinking fields" {
+  let modes : Array[@deepseek.ThinkingMode] = [No, High, Max]
+  for thinking in modes {
+    let body = @deepseek.encode_chat_request(
+      model=Custom("qwen3-coder"),
+      thinking~,
+    ) <| [
+      ChatMessage(User, content="hi"),
+    ]
+    // Claiming a dialect (DeepSeek's `thinking`, GLM's `reasoning_effort`)
+    // could fail a request the endpoint would otherwise serve, so only the
+    // model id and the shared fields travel.
+    json_inspect(body, content={
+      "model": "qwen3-coder",
+      "messages": [{ "role": "user", "content": "hi" }],
+      "stream": false,
+    })
+  }
 }
 
 ///|

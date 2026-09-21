@@ -17,6 +17,10 @@ fn HostSettings::from_status(
     has_glm_key: payload.has_glm_key,
     has_custom_key: payload.has_custom_key,
     followup_behavior: payload.followup_behavior,
+    custom_models: payload.custom_models.map(model => {
+      id: model.id,
+      label: model.label,
+    }),
   }
 }
 
@@ -116,6 +120,7 @@ fn provider_settings_patch(
     glm_api_key: None,
     custom_api_key: None,
     followup_behavior: None,
+    custom_models: None,
   }
 }
 
@@ -130,6 +135,7 @@ fn custom_url_settings_patch(url : String) -> @protocol.SettingsSetPayload {
     glm_api_key: None,
     custom_api_key: None,
     followup_behavior: None,
+    custom_models: None,
   }
 }
 
@@ -167,6 +173,7 @@ fn api_key_settings_patch(
       None
     },
     followup_behavior: None,
+    custom_models: None,
   }
 }
 
@@ -198,5 +205,26 @@ fn followup_behavior_patch(
     glm_api_key: None,
     custom_api_key: None,
     followup_behavior: Some(behavior.wire()),
+    custom_models: None,
+  }
+}
+
+///|
+/// Replace the endpoint's custom-model list. The list travels whole — the host
+/// validates it as one instruction — so an add or a removal is the new list,
+/// and an empty one is the wire's "clear it".
+fn custom_models_settings_patch(
+  models : Array[CustomModel],
+) -> @protocol.SettingsSetPayload {
+  {
+    provider: None,
+    custom_api_url: None,
+    deepseek_api_key: None,
+    glm_api_key: None,
+    custom_api_key: None,
+    followup_behavior: None,
+    custom_models: Some(
+      models.map(model => { id: model.id, label: model.label, }),
+    ),
   }
 }

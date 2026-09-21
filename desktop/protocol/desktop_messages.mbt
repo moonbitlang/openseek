@@ -205,6 +205,33 @@ pub(all) struct ArchivedSessionPayload {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// One model a user configured for a custom OpenAI-compatible endpoint: the
+/// id sent to that endpoint verbatim, and the display name the composer's
+/// model menu shows for it. An absent label means "show the id".
+pub(all) struct CustomModelPayload {
+  id : String
+  label : String?
+} derive(Debug, Eq)
+
+///|
+/// `id` is required; a missing or `null` label reads as absent.
+pub impl FromJson for CustomModelPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "custom model payload")
+  { id: object.required_string("id"), label: object.optional_string("label"), }
+}
+
+///|
+/// The label is omitted when absent rather than written as `null`, so the
+/// wire keeps the one spelling the host writes into its store.
+pub impl ToJson for CustomModelPayload with fn to_json(self) {
+  let fields : Map[String, Json] = { "id": self.id.to_json() }
+  if self.label is Some(label) {
+    fields["label"] = label.to_json()
+  }
+  Json(fields)
+}
+
+///|
 pub(all) struct SettingsSetPayload {
   provider : String?
   custom_api_url : String?
@@ -212,6 +239,9 @@ pub(all) struct SettingsSetPayload {
   glm_api_key : String?
   custom_api_key : String?
   followup_behavior : String?
+  // Absent leaves the stored list alone; `[]` clears it, exactly like a
+  // present-but-empty string field.
+  custom_models : Array[CustomModelPayload]?
 } derive(Debug, Eq)
 
 ///|
@@ -224,6 +254,7 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
     glm_api_key: object.optional_string("glm_api_key"),
     custom_api_key: object.optional_string("custom_api_key"),
     followup_behavior: object.optional_string("followup_behavior"),
+    custom_models: object.optional_array_of("custom_models"),
   }
 }
 
@@ -247,6 +278,9 @@ pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   }
   if self.custom_api_key is Some(value) {
     fields["custom_api_key"] = value.to_json()
+  }
+  if self.custom_models is Some(value) {
+    fields["custom_models"] = ([ for model in value => model ] : Json)
   }
   Json(fields)
 }
@@ -1239,6 +1273,10 @@ pub(all) struct SettingsStatusPayload {
   has_glm_key : Bool
   has_custom_key : Bool
   followup_behavior : String
+  // Always present, `[]` when none are configured: the list is small, and an
+  // absent field would make every client re-derive "no custom models" from
+  // two spellings.
+  custom_models : Array[CustomModelPayload]
 } derive(Debug, Eq)
 
 ///|
@@ -1252,6 +1290,7 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
     has_glm_key: object.required_bool("has_glm_key"),
     has_custom_key: object.required_bool("has_custom_key"),
     followup_behavior: object.required_string("followup_behavior"),
+    custom_models: object.required_array_of("custom_models"),
   }
 }
 
@@ -1264,6 +1303,7 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
     "has_glm_key": self.has_glm_key.to_json(),
     "has_custom_key": self.has_custom_key.to_json(),
     "followup_behavior": self.followup_behavior.to_json(),
+    "custom_models": ([ for model in self.custom_models => model ] : Json),
   }
   if self.custom_api_url is Some(value) {
     fields["custom_api_url"] = value.to_json()
@@ -1654,6 +1694,18 @@ pub extend ConnectedStage with Eq::{equal, not_equal}
 
 ///|
 pub extend ConnectedStage with ToJson::{to_json}
+
+///|
+pub extend CustomModelPayload with Debug::{to_repr}
+
+///|
+pub extend CustomModelPayload with FromJson::{from_json}
+
+///|
+pub extend CustomModelPayload with Eq::{equal, not_equal}
+
+///|
+pub extend CustomModelPayload with ToJson::{to_json}
 
 ///|
 pub extend DiagnosticsPayload with Debug::{to_repr}

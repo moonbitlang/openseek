@@ -131,6 +131,17 @@ fn api_key_env_for_model(model : @deepseek.Model) -> String {
     Kimi(_) => "KIMI"
     Glm(_) => "GLM"
     Deepseek(_) => "DEEPSEEK"
+    // A custom model follows its id's prefixes, mirroring the engine's
+    // `key_option`: a trial for `glm-4.6` inherits GLM, and every other id
+    // inherits DEEPSEEK.
+    Custom(id) =>
+      if id.has_prefix("glm-") {
+        "GLM"
+      } else if id.has_prefix("kimi-") {
+        "KIMI"
+      } else {
+        "DEEPSEEK"
+      }
   }
 }
 

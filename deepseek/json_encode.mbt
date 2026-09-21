@@ -6,12 +6,16 @@
 ///
 /// Providers are matched by name, never by wildcard, so adding a model
 /// variant fails exhaustiveness here until its thinking policy is chosen.
+/// A custom model sends none: its endpoint's dialect is unknown, and claiming
+/// one (`thinking` for DeepSeek, `reasoning_effort` for GLM) could make a
+/// request fail that would otherwise work. The composer hides the reasoning
+/// chip for those models, so no choice is silently dropped.
 fn thinking_json_fields(
   model : Model,
   thinking : ThinkingMode?,
 ) -> Array[(String, Json)] {
   match (model, thinking) {
-    (Kimi(_), _) | (Deepseek(_) | Glm(_), None) => []
+    (Kimi(_), _) | (Custom(_), _) | (Deepseek(_) | Glm(_), None) => []
     (Glm(_), Some(mode)) => {
       let effort = match mode {
         No => "low"

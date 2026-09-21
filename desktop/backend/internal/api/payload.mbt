@@ -9,7 +9,9 @@ type KnownRunPayload = @protocol.KnownRunPayload
 
 ///|
 /// `settings.set`: every field optional (absent = unchanged); a present
-/// string field is trimmed, and empty clears the stored value.
+/// string field is trimmed, and empty clears the stored value. The
+/// custom-model list is the one list field: absent leaves it alone, `[]`
+/// clears it.
 type SettingsSetPayload = @protocol.SettingsSetPayload
 
 ///|
@@ -22,6 +24,9 @@ fn SettingsSetPayload::to_patch(
     deepseek_api_key: self.deepseek_api_key,
     glm_api_key: self.glm_api_key,
     custom_api_key: self.custom_api_key,
+    custom_models: self.custom_models.map(models => {
+      models.map(model => { id: model.id, label: model.label, })
+    }),
   }
 }
 

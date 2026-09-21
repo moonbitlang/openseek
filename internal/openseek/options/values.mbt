@@ -19,15 +19,20 @@ pub fn agent_settings(
         ..
       },
       ..
-    } =>
+    } => {
+      // The endpoint is resolved before the model: a name this build does not
+      // know is a custom model only when the run is pointed at an endpoint the
+      // user configured (see `Model::parse_for_endpoint`).
+      let endpoint : String? = match api_url.trim() {
+        "" => None
+        url => Some("\{url}")
+      }
       (
-        @deepseek.Model::parse(model),
+        @deepseek.Model::parse_for_endpoint(model, endpoint),
         @deepseek.ThinkingMode::parse(thinking),
-        match api_url.trim() {
-          "" => None
-          url => Some("\{url}")
-        },
+        endpoint,
       )
+    }
     _ => fail("missing parsed agent defaults")
   }
 }
