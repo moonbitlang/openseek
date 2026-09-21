@@ -299,18 +299,18 @@ fn default_prompt() -> String {
     #|
     #|`edit` and `multi_edit` data carry `outcome`
     #|(applied, reverted, rejected, failed, unverified, preview, not_found, error),
-    #|the post-write check counts, and on a revert the introduced sites. With
-    #|`revert_when_errors_above` / `revert_when_warnings_above` (0 = any) the host
-    #|restores an edit that introduced more diagnostics than that, so a script can
-    #|apply one fix per diagnostic and branch on `data.outcome`, `introduced_count`
-    #|and `removed_count`. A script may run `moon check --output-json` itself to
-    #|find its targets:
+    #|the post-write check counts, and on a revert the introduced sites. For `edit`,
+    #|`revert_when_errors_above: 0` rejects introduced errors, and
+    #|`revert_when_warnings_greater_or_equal: 0` reverts unless the warning total
+    #|decreases (`after - before < 0`). A script can apply one fix per diagnostic
+    #|and branch on `data.outcome`, `introduced_count`, and `removed_count`.
+    #|A script may run `moon check --output-json` itself to find its targets:
     #|
     #|```mbtx
     #|///|
     #|/// One guarded edit from a script. The host checks the tree before and
-    #|/// after the write and restores the file if the edit introduced more
-    #|/// diagnostics than the thresholds allow (0 = any); the script reads the
+    #|/// after the write and restores the file unless the warning total decreases
+    #|/// without introducing errors; the script reads the
     #|/// outcome from `result.data` instead of parsing prose. Arguments:
     #|/// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
     #|/// a host-backed test that runs it through the real sandbox and host.
@@ -334,16 +334,14 @@ fn default_prompt() -> String {
     #|      @string.from_str(line) catch { _ => fail("start_line must be an integer") }
     #|    _ => 1
     #|  }
-    #|  // The guards are integer thresholds on
-    #|  // the diagnostics the edit introduced, counted by identity so the edit's
-    #|  // own line shifts never count: 0 reverts on any, absent means no guard.
+    #|  // Reject introduced errors, and require a net decrease in warning count.
     #|  let result = @openseek_tools.call("edit", {
     #|    "path": path,
     #|    "start_line": start_line,
     #|    "old_string": old_string,
     #|    "new_string": new_string,
     #|    "revert_when_errors_above": 0,
-    #|    "revert_when_warnings_above": 0,
+    #|    "revert_when_warnings_greater_or_equal": 0,
     #|  })
     #|  // A tool error is a result (`is_error` set, `content` explains). Only a
     #|  // transport failure raises, and a mutation may already have happened
@@ -362,6 +360,8 @@ fn default_prompt() -> String {
     #|    // explanation, never as an ordinary revert.
     #|    Some({ "outcome": "reverted", "restore_failed": true, .. }) =>
     #|      println("reverted but NOT restored: \{result.content}")
+    #|    Some({ "outcome": "reverted", "reason": "warning_delta", .. }) =>
+    #|      println(result.content)
     #|    Some(
     #|      {
     #|        "outcome": "reverted",

@@ -21,7 +21,7 @@ pub struct EditInput {
   end_line : Int?
   revert_on_parse_errors : Bool
   revert_when_errors_above : Int?
-  revert_when_warnings_above : Int?
+  revert_when_warnings_greater_or_equal : Int?
 } derive(@debug.Debug)
 
 // Type aliases

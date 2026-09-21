@@ -38,7 +38,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "old_string": "length([1, 2, 3])",
       "new_string": "len([1, 2, 3])",
       "start_line": 14,
-      "revert_when_warnings_above": 0,
+      "revert_when_warnings_greater_or_equal": 0,
     })
     assert_false(fixed.is_error, msg=fixed.content)
     assert_true(
@@ -75,12 +75,12 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "old_string": "  len([1, 2, 3]) + length([4])",
       "new_string": "  let unused = 0\n  len([1, 2, 3]) + len([4])",
       "start_line": 14,
-      "revert_when_warnings_above": 0,
+      "revert_when_warnings_greater_or_equal": 0,
     })
     assert_true(reverted.is_error)
     assert_true(
       reverted.content.contains(
-        "reverted: the edit introduced 1 warning(s) (> revert_when_warnings_above=0) the tree did not have",
+        "reverted: the warning count changed by 0 (>= revert_when_warnings_greater_or_equal=0)",
       ),
       msg=reverted.content,
     )
@@ -91,7 +91,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       is Some(
         {
           "outcome": "reverted",
-          "reason": "introduced_warnings",
+          "reason": "warning_delta",
           "restore_failed": false,
           "introduced": {
             "errors": [],
@@ -111,11 +111,13 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "old_string": "  len([1, 2, 3]) + length([4])",
       "new_string": "  let unused = 0\n  let idle = 1\n  len([1, 2, 3]) + len([4])",
       "start_line": 14,
-      "revert_when_warnings_above": 1,
+      "revert_when_warnings_greater_or_equal": 1,
     })
     assert_true(over.is_error, msg=over.content)
     assert_true(
-      over.content.contains("2 warning(s) (> revert_when_warnings_above=1)"),
+      over.content.contains(
+        "warning count changed by 1 (>= revert_when_warnings_greater_or_equal=1)",
+      ),
       msg=over.content,
     )
     assert_true(
@@ -123,14 +125,13 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       is Some({ "introduced_count": { "warnings": Number(2, ..), .. }, .. }),
     )
     assert_eq(@fs.read_file(path).text(), after_fix)
-    // With a tolerance of one the same edit is kept, and the data quantifies
-    // the delta: one warning introduced, one removed.
+    // Threshold one allows an unchanged total: one introduced, one removed.
     let tolerated = run_edit({
       "path": path,
       "old_string": "  len([1, 2, 3]) + length([4])",
       "new_string": "  let unused = 0\n  len([1, 2, 3]) + len([4])",
       "start_line": 14,
-      "revert_when_warnings_above": 1,
+      "revert_when_warnings_greater_or_equal": 1,
     })
     assert_false(tolerated.is_error, msg=tolerated.content)
     guard tolerated.data
@@ -241,7 +242,7 @@ async test "a guarded edit is not written when moon check cannot verify the tree
       "old_string": "length([1, 2, 3])",
       "new_string": "len([1, 2, 3])",
       "start_line": 14,
-      "revert_when_warnings_above": 0,
+      "revert_when_warnings_greater_or_equal": 0,
     })
     assert_true(out.is_error)
     assert_true(out.content.contains("not applied:"), msg=out.content)
@@ -269,6 +270,34 @@ async test "a guarded edit is not written when moon check cannot verify the tree
 }
 
 ///|
+async test "warning guard at zero requires a net decrease" {
+  for
+    (replacement, kept) in [
+      ("  length([1, 2, 3, 4]) + length([4])", false),
+      ("  let unused = 0\n  len([1, 2, 3]) + len([4])", true),
+    ] {
+    @vfs.with_tmpdir(dir => {
+      let path = write_guard_module(dir)
+      let original = @fs.read_file(path).text()
+      let output = run_edit({
+        "path": path,
+        "old_string": "  length([1, 2, 3]) + length([4])",
+        "new_string": replacement,
+        "start_line": 14,
+        "revert_when_warnings_greater_or_equal": 0,
+      })
+      assert_eq(output.is_error, !kept, msg=output.content)
+      if kept {
+        assert_true(@fs.read_file(path).text().contains(replacement))
+      } else {
+        assert_true(output.data is Some({ "reason": "warning_delta", .. }))
+        assert_eq(@fs.read_file(path).text(), original)
+      }
+    })
+  }
+}
+
+///|
 async test "guards are moot outside a MoonBit project and data still names the outcome" {
   @vfs.with_tmpdir(prefix="openseek-edit-guard-plain-", dir => {
     let path = "\{dir}/note.txt"
@@ -279,7 +308,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "new_string": "new",
       "start_line": 1,
       "revert_when_errors_above": 0,
-      "revert_when_warnings_above": 0,
+      "revert_when_warnings_greater_or_equal": 0,
     })
     assert_false(out.is_error, msg=out.content)
     assert_false(out.content.contains("moon check"))
@@ -315,12 +344,12 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "old_string": "new",
       "new_string": "x",
       "start_line": 1,
-      "revert_when_warnings_above": "yes",
+      "revert_when_warnings_greater_or_equal": "yes",
     })
     assert_true(bad.is_error)
     assert_true(
       bad.content.contains(
-        "arguments.revert_when_warnings_above to be a non-negative integer",
+        "arguments.revert_when_warnings_greater_or_equal to be a non-negative integer",
       ),
     )
     assert_true(bad.data is Some({ "outcome": "error", .. }))

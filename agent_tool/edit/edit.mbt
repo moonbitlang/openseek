@@ -37,9 +37,9 @@
 ///   (possibly clamped) insertion point is end of file.
 /// - `Respond(ToolOutput("rejected: the edit would introduce ...", is_error=true))`
 ///   when the parse gate refused an edit whose result does not parse.
-/// - `Respond(ToolOutput("reverted: the edit introduced ...", is_error=true))`
+/// - `Respond(ToolOutput("reverted: ...", is_error=true))`
 ///   when a post-write guard (`revert_when_errors_above` /
-///   `revert_when_warnings_above`)
+///   `revert_when_warnings_greater_or_equal`)
 ///   restored the file.
 /// - `Respond(ToolOutput("not applied: ... moon check could not verify ...", is_error=true))`
 ///   when a guard was requested but the tree could not be checked.
@@ -76,11 +76,10 @@ pub fn definition(
       #|insertion for grouping related code. An edit that would introduce lex/parse errors
       #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
-      #|revert_when_errors_above / revert_when_warnings_above (off unless given) add a
-      #|post-write guard: moon check runs before and after the write and the file is
-      #|restored if the edit introduced more than that many diagnostics the tree did not
-      #|have (0 = any) — one guarded edit per diagnostic, at 0, is the unit of a
-      #|mechanical warning-fix script. For
+      #|Diagnostic guards (off unless given) run moon check before and after writing.
+      #|revert_when_errors_above=0 rejects introduced errors;
+      #|revert_when_warnings_greater_or_equal=0 reverts when the warning total does not
+      #|decrease (after - before >= 0). Combine them for a warning-fix script. For
       #|multiple compiler-feedback fixes in one file, use multi_edit with explicit
       #|line-anchored edits. To change EVERY occurrence of a string, pass
       #|replace_all_preview=true: the file is not modified; instead every match site is
@@ -131,14 +130,14 @@ pub fn definition(
           ),
           "examples": [0],
         },
-        "revert_when_warnings_above": {
+        "revert_when_warnings_greater_or_equal": {
           "type": "integer",
           "description": (
-            #|Post-write guard, off unless given: same mechanism as
-            #|revert_when_errors_above, for warnings — the edit is restored if it
-            #|introduced more than this many warnings the tree did not have. One guarded
-            #|edit per diagnostic at 0 is the unit of a mechanical warning-fix script;
-            #|read the machine-readable outcome from the result's data.
+            #|Post-write guard, off unless given. Restore the edit when the net warning
+            #|change (after.warning_count - before.warning_count) is >= this non-negative
+            #|threshold. 0 requires a decrease; 1 allows an unchanged total. Removing
+            #|two warnings while introducing one passes at 0. Pair with
+            #|revert_when_errors_above=0 to reject introduced errors too.
           ),
           "examples": [0],
         },
@@ -733,9 +732,9 @@ fn total_line_count(content : String) -> Int {
 /// every failure onto the same `→ edit · edit <file> 🚩` viz line. `lines` is
 /// the inclusive line range the new content occupies, for the result's data.
 ///
-/// With `revert_when_errors_above` / `revert_when_warnings_above` the tree is checked before
+/// With `revert_when_errors_above` / `revert_when_warnings_greater_or_equal` the tree is checked before
 /// the write (the baseline) and after it, and the file is restored when the
-/// edit introduced a diagnostic the baseline did not have — see
+/// edit violates the introduced-error limit or net-warning threshold — see
 /// `guarded_outcome`. Without them the post-write check only reports.
 async fn commit_edit(
   path : String,
@@ -763,7 +762,7 @@ async fn commit_edit(
   }
   let guards : Guards = {
     errors: input.revert_when_errors_above,
-    warnings: input.revert_when_warnings_above,
+    warnings: input.revert_when_warnings_greater_or_equal,
   }
   // The guards' baseline is measured before the write, so nothing has to be
   // restored just to know what the tree looked like. A guard on a tree that
@@ -771,7 +770,7 @@ async fn commit_edit(
   // written at all rather than written unverified.
   fn not_verified(reason : String) -> @agent_tool.ToolAction {
     @agent_tool.respond(
-      "not applied: a revert_when_*_above guard was requested, but moon check could not verify the tree (\{reason}); \{path} was NOT modified",
+      "not applied: a diagnostic guard was requested, but moon check could not verify the tree (\{reason}); \{path} was NOT modified",
       is_error=true,
       brief=fail_brief,
       data=edit_data("unverified", path, lines, { "reason": reason.to_json() }),
@@ -1130,8 +1129,8 @@ priv struct Guards {
 const IntroducedDisplayLimit : Int = 20
 
 ///|
-/// Decide a guarded edit from its two checks: the diagnostics introduced, by
-/// identity, are counted against each severity's threshold (an overflowed
+/// Decide a guarded edit from its two checks: errors compare introduced
+/// identities; warnings compare the net count change (an overflowed
 /// capture never reaches here — it is refused as unverified, since its lists
 /// are windows and a site can enter one without being new). A baseline with
 /// errors makes the reading
@@ -1156,8 +1155,8 @@ async fn guarded_outcome(
   let delta = @auto_check.introduced(before, after)
   let removed = @auto_check.introduced(after, before)
   let errors_hit = guards.errors is Some(limit) && delta.errors.length() > limit
-  let warnings_hit = guards.warnings is Some(limit) &&
-    delta.warnings.length() > limit
+  let warning_delta = after.warning_count - before.warning_count
+  let warnings_hit = guards.warnings is Some(limit) && warning_delta >= limit
   let reach_caveat = before.error_count > 0
   let common : Map[String, Json] = {
     "check": after.summary_json(),
@@ -1190,8 +1189,8 @@ async fn guarded_outcome(
   }
   let shown_errors = if errors_hit { sites(delta.errors) } else { [] }
   let shown_warnings = if warnings_hit { sites(delta.warnings) } else { [] }
-  let over_errors = "\{delta.errors.length()} error(s) (> revert_when_errors_above=\{guards.errors.unwrap_or(0)})"
-  let over_warnings = "\{delta.warnings.length()} warning(s) (> revert_when_warnings_above=\{guards.warnings.unwrap_or(0)})"
+  let over_errors = "the edit introduced \{delta.errors.length()} error(s) (> revert_when_errors_above=\{guards.errors.unwrap_or(0)}) the tree did not have"
+  let over_warnings = "the warning count changed by \{warning_delta} (>= revert_when_warnings_greater_or_equal=\{guards.warnings.unwrap_or(0)})"
   let what = match (errors_hit, warnings_hit) {
     (true, true) => "\{over_errors} and \{over_warnings}"
     (true, false) => over_errors
@@ -1214,7 +1213,7 @@ async fn guarded_outcome(
   common["reason"] = if errors_hit {
     "introduced_errors"
   } else {
-    "introduced_warnings"
+    "warning_delta"
   }
   common["introduced"] = {
     "errors": Json::array([ for site in shown_errors => site.to_json() ]),
@@ -1231,7 +1230,7 @@ async fn guarded_outcome(
     lines~,
     fail_brief~,
     common,
-    head="the edit introduced \{what} the tree did not have",
+    head=what,
     detail="\{detail}\{caveat}",
     write_scope?,
   )

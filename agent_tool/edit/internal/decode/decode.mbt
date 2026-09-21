@@ -18,10 +18,10 @@ pub struct EditInput {
   end_line : Int?
   revert_on_parse_errors : Bool
   /// Post-write guards (absent = off): after the write, `moon check` runs and
-  /// the edit is restored if it introduced more than this many errors /
-  /// warnings the tree did not have before; `0` reverts on any.
+  /// the edit is restored if it introduced more than this many errors.
   revert_when_errors_above : Int?
-  revert_when_warnings_above : Int?
+  /// Revert when the net warning-count change is >= this threshold.
+  revert_when_warnings_greater_or_equal : Int?
 } derive(Debug)
 
 ///|
@@ -42,6 +42,11 @@ pub fn decode(arguments : Json) -> EditInput raise {
 
 ///|
 fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
+  if fields.contains("revert_when_warnings_above") {
+    fail(
+      "arguments.revert_when_warnings_above was renamed to revert_when_warnings_greater_or_equal and now compares the net warning change",
+    )
+  }
   let path = required_string(fields, "path")
   let old_string = required_string(fields, "old_string")
   let new_string = required_string(fields, "new_string")
@@ -55,8 +60,8 @@ fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
   let revert_when_errors_above = optional_threshold(
     fields, "revert_when_errors_above",
   )
-  let revert_when_warnings_above = optional_threshold(
-    fields, "revert_when_warnings_above",
+  let revert_when_warnings_greater_or_equal = optional_threshold(
+    fields, "revert_when_warnings_greater_or_equal",
   )
   if end_line is Some(end) && end < start_line {
     fail(
@@ -73,7 +78,7 @@ fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
     end_line,
     revert_on_parse_errors,
     revert_when_errors_above,
-    revert_when_warnings_above,
+    revert_when_warnings_greater_or_equal,
   }
 }
 

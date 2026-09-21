@@ -18,7 +18,7 @@ test "decode valid edit input" {
       #|  end_line: None,
       #|  revert_on_parse_errors: true,
       #|  revert_when_errors_above: None,
-      #|  revert_when_warnings_above: None,
+      #|  revert_when_warnings_greater_or_equal: None,
       #|}
     ),
   )
@@ -45,7 +45,7 @@ test "decode replace_all flag" {
       #|  end_line: None,
       #|  revert_on_parse_errors: true,
       #|  revert_when_errors_above: None,
-      #|  revert_when_warnings_above: None,
+      #|  revert_when_warnings_greater_or_equal: None,
       #|}
     ),
   )
@@ -72,7 +72,7 @@ test "decode line range" {
       #|  end_line: Some(4),
       #|  revert_on_parse_errors: true,
       #|  revert_when_errors_above: None,
-      #|  revert_when_warnings_above: None,
+      #|  revert_when_warnings_greater_or_equal: None,
       #|}
     ),
   )
@@ -167,6 +167,20 @@ test "decode rejects missing required fields" {
 ///|
 test "decode rejects non-object arguments" {
   assert_decode_error(Json::null(), "object arguments")
+}
+
+///|
+test "decode rejects the renamed warning guard instead of silently ignoring it" {
+  assert_decode_error(
+    {
+      "path": "file.mbt",
+      "old_string": "old",
+      "new_string": "new",
+      "start_line": 1,
+      "revert_when_warnings_above": 0,
+    },
+    "renamed to revert_when_warnings_greater_or_equal",
+  )
 }
 
 ///|
