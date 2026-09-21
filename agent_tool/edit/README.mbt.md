@@ -72,9 +72,20 @@ and the edit should stay inside a tighter range:
 | `start_line`  | integer | yes | 1-based first line of the search/replace range. The first match at or after this line is replaced. |
 | `end_line`    | integer | no  | 1-based last line of the search/replace range. Defaults to the file end. |
 | `revert_on_parse_errors` | boolean | no (default `true`) | Reject an edit whose result would introduce new lex/parse errors into a syncheck input (`.mbt`, `.mbt.md`, `moon.mod`, `moon.pkg`), leaving the file untouched and returning the errors with excerpts. In `.mbt.md` only the checked fenced blocks are parsed. Set `false` only to intentionally produce non-parsing content. |
-| `revert_when_errors_greater_or_equal` | integer | no (off) | Post-write guard. Revert when the number of introduced errors is `>= threshold`, counted by diagnostic identity (path, code, message), so line shifts never count. `1` forbids new errors; `0` always reverts a checked edit. If the check cannot run, a guarded edit is not written. |
-| `revert_when_warnings_greater_or_equal` | integer | no (off) | Revert when `after.warning_count - before.warning_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. Removing two warnings and introducing one passes at `0`. |
+| `revert_if_error_delta_greater_or_equal` | integer | no (off) | Revert when `after.error_count - before.error_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. If the baseline check cannot run, a guarded edit is not written. |
+| `revert_if_warning_delta_greater_or_equal` | integer | no (off) | Revert when `after.warning_count - before.warning_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. Removing two warnings and introducing one passes at `0`. |
 | `replace_all_preview` | boolean | no (default `false`) | Preview mode: the file is **not** modified. Every match of `old_string` in the range is listed with surrounding context lines, plus a ready-to-review `multi_edit` edits array (capped at 40 sites; several matches on one line collapse into a single whole-line entry). |
+
+Both guards compare reported counts, not diagnostic identities. Errors can change
+which packages the compiler checks: fixing errors may expose existing diagnostics,
+and new errors may hide them. A lower count does not guarantee no new problems;
+review the diagnostics when the baseline has errors. The identity-based
+`introduced_count` and `removed_count` fields are informational only.
+If the diagnostics justify accepting a reverted edit, retry with an explicit
+threshold greater than its observed delta. For example, warning threshold `1`
+admits an unchanged total. Do not raise thresholds merely to bypass a guard.
+The warning-fix combination (error `1`, warning `0`) is a recommendation;
+omitted guards are off.
 
 Legacy calls with `replace_all=false` are tolerated, but `replace_all=true` is
 rejected. Use `multi_edit` when a compiler diagnostic suggests several known
@@ -110,11 +121,11 @@ has one of these shapes:
   warning(s)` plus the first warning, or `moon check: <e> error(s), <w>
   warning(s)` plus the first error sites; a check that could not run says so
   (`moon check: timed out`).
-- `"reverted: the edit introduced <what> the tree did not have, so <path> was
-  restored to its pre-edit content."` with `is_error=true` — a post-write
+- `"reverted: the error count changed by <delta> (>= revert_if_error_delta_greater_or_equal=<threshold>), ..."`
+  with `is_error=true` — a post-write
   guard fired; the body lists the introduced sites and, when the baseline
   already had errors, the reach caveat.
-- `"reverted: the warning count changed by <delta> (>= revert_when_warnings_greater_or_equal=<threshold>), ..."`
+- `"reverted: the warning count changed by <delta> (>= revert_if_warning_delta_greater_or_equal=<threshold>), ..."`
   with `is_error=true` — the net-warning guard restored the file.
 - `"not applied: a diagnostic guard was requested, but moon check
   could not verify the tree (<reason>); <path> was NOT modified"` with
@@ -141,7 +152,7 @@ project adds `check` (`error_count`, `warning_count`, `truncated`, first
 `errors`); a guarded edit adds `baseline` counts, `introduced_count` and
 `removed_count` per severity (on kept and reverted outcomes; an `unverified`
 outcome has none of them), and `reach_caveat`; a
-reverted one adds `reason` (`introduced_errors`, `warning_delta`,
+reverted one adds `reason` (`error_delta`, `warning_delta`,
 `unverified`), `introduced` (`errors`, `warnings`, `complete`), and
 `restore_failed` (also set when the file no longer held the edit at restore
 time, so another writer's content was left alone; the comparison and the

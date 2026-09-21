@@ -1,7 +1,7 @@
 ///|
 /// One guarded edit from a script. The host checks the tree before and
 /// after the write and restores the file unless the warning total decreases
-/// without introducing errors; the script reads the
+/// without increasing the reported error total; the script reads the
 /// outcome from `result.data` instead of parsing prose. Arguments:
 /// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
 /// a host-backed test that runs it through the real sandbox and host.
@@ -25,14 +25,14 @@ async fn main {
       @string.from_str(line) catch { _ => fail("start_line must be an integer") }
     _ => 1
   }
-  // Reject introduced errors, and require a net decrease in warning count.
+  // Require no error-count increase and a net decrease in warning count.
   let result = @openseek_tools.call("edit", {
     "path": path,
     "start_line": start_line,
     "old_string": old_string,
     "new_string": new_string,
-    "revert_when_errors_greater_or_equal": 1,
-    "revert_when_warnings_greater_or_equal": 0,
+    "revert_if_error_delta_greater_or_equal": 1,
+    "revert_if_warning_delta_greater_or_equal": 0,
   })
   // A tool error is a result (`is_error` set, `content` explains). Only a
   // transport failure raises, and a mutation may already have happened
@@ -51,23 +51,8 @@ async fn main {
     // explanation, never as an ordinary revert.
     Some({ "outcome": "reverted", "restore_failed": true, .. }) =>
       println("reverted but NOT restored: \{result.content}")
-    Some({ "outcome": "reverted", "reason": "warning_delta", .. }) =>
+    Some({ "outcome": "reverted", .. }) =>
       println(result.content)
-    Some(
-      {
-        "outcome": "reverted",
-        "reason": String(reason),
-        "introduced_count": {
-          "errors": Number(errors, ..),
-          "warnings": Number(warnings, ..),
-          ..
-        },
-        ..
-      }
-    ) =>
-      println(
-        "reverted: \{reason} (\{errors} error(s), \{warnings} warning(s) introduced)",
-      )
     Some({ "outcome": String(outcome), .. }) =>
       println("\{outcome}: \{result.content}")
     _ => println("no data: \{result.content}")

@@ -6,7 +6,7 @@
 /// ("use `len` instead"), and for each site — bottom-up per file, right to
 /// left per line, so an earlier edit never shifts a later span — asks the
 /// host to replace exactly the diagnosed span through `edit` with
-/// revert_when_errors_greater_or_equal=1 and revert_when_warnings_greater_or_equal=0. Then it
+/// revert_if_error_delta_greater_or_equal=1 and revert_if_warning_delta_greater_or_equal=0. Then it
 /// reports what was fixed,
 /// what the host reverted (and why), and what needs a human, and checks once
 /// more for the remaining counts.
@@ -325,8 +325,8 @@ async fn main {
       "end_line": site.line,
       "old_string": old_string,
       "new_string": new_string,
-      "revert_when_errors_greater_or_equal": 1,
-      "revert_when_warnings_greater_or_equal": 0,
+      "revert_if_error_delta_greater_or_equal": 1,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     match result.data {
       Some({ "outcome": "applied", .. }) => {

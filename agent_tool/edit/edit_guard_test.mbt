@@ -38,7 +38,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "old_string": "length([1, 2, 3])",
       "new_string": "len([1, 2, 3])",
       "start_line": 14,
-      "revert_when_warnings_greater_or_equal": 0,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_false(fixed.is_error, msg=fixed.content)
     assert_true(
@@ -75,12 +75,12 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "old_string": "  len([1, 2, 3]) + length([4])",
       "new_string": "  let unused = 0\n  len([1, 2, 3]) + len([4])",
       "start_line": 14,
-      "revert_when_warnings_greater_or_equal": 0,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_true(reverted.is_error)
     assert_true(
       reverted.content.contains(
-        "reverted: the warning count changed by 0 (>= revert_when_warnings_greater_or_equal=0)",
+        "reverted: the warning count changed by 0 (>= revert_if_warning_delta_greater_or_equal=0)",
       ),
       msg=reverted.content,
     )
@@ -111,12 +111,12 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "old_string": "  len([1, 2, 3]) + length([4])",
       "new_string": "  let unused = 0\n  let idle = 1\n  len([1, 2, 3]) + len([4])",
       "start_line": 14,
-      "revert_when_warnings_greater_or_equal": 1,
+      "revert_if_warning_delta_greater_or_equal": 1,
     })
     assert_true(over.is_error, msg=over.content)
     assert_true(
       over.content.contains(
-        "warning count changed by 1 (>= revert_when_warnings_greater_or_equal=1)",
+        "warning count changed by 1 (>= revert_if_warning_delta_greater_or_equal=1)",
       ),
       msg=over.content,
     )
@@ -131,7 +131,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "old_string": "  len([1, 2, 3]) + length([4])",
       "new_string": "  let unused = 0\n  len([1, 2, 3]) + len([4])",
       "start_line": 14,
-      "revert_when_warnings_greater_or_equal": 1,
+      "revert_if_warning_delta_greater_or_equal": 1,
     })
     assert_false(tolerated.is_error, msg=tolerated.content)
     guard tolerated.data
@@ -175,12 +175,12 @@ async test "the error guard reverts a type-breaking edit and reports the site" {
       "old_string": "  xs.length()",
       "new_string": "  \"not an int\"",
       "start_line": 9,
-      "revert_when_errors_greater_or_equal": 1,
+      "revert_if_error_delta_greater_or_equal": 1,
     })
     assert_true(reverted.is_error)
     assert_true(
       reverted.content.contains(
-        "reverted: the edit introduced 1 error(s) (>= revert_when_errors_greater_or_equal=1) the tree did not have",
+        "reverted: the error count changed by 1 (>= revert_if_error_delta_greater_or_equal=1)",
       ),
       msg=reverted.content,
     )
@@ -190,7 +190,7 @@ async test "the error guard reverts a type-breaking edit and reports the site" {
       is Some(
         {
           "outcome": "reverted",
-          "reason": "introduced_errors",
+          "reason": "error_delta",
           "introduced": {
             "errors": [{ "loc": String(loc), .. }],
             "warnings": [],
@@ -242,7 +242,7 @@ async test "a guarded edit is not written when moon check cannot verify the tree
       "old_string": "length([1, 2, 3])",
       "new_string": "len([1, 2, 3])",
       "start_line": 14,
-      "revert_when_warnings_greater_or_equal": 0,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_true(out.is_error)
     assert_true(out.content.contains("not applied:"), msg=out.content)
@@ -286,13 +286,61 @@ async test "error guard uses an inclusive threshold" {
         "old_string": "  xs.length()",
         "new_string": replacement,
         "start_line": 9,
-        "revert_when_errors_greater_or_equal": threshold,
+        "revert_if_error_delta_greater_or_equal": threshold,
       })
       assert_eq(output.is_error, !kept, msg=output.content)
       if kept {
         assert_true(@fs.read_file(path).text().contains(replacement))
       } else {
-        assert_true(output.data is Some({ "reason": "introduced_errors", .. }))
+        assert_true(output.data is Some({ "reason": "error_delta", .. }))
+        assert_eq(@fs.read_file(path).text(), original)
+      }
+    })
+  }
+}
+
+///|
+async test "error guard compares net counts even when diagnostic identity changes" {
+  for
+    (replacement, threshold, kept) in [
+      ("  true", 1, true),
+      ("  true", 0, false),
+      ("  xs.length()", 0, true),
+    ] {
+    @vfs.with_tmpdir(dir => {
+      let path = write_guard_module(dir)
+      let broken = run_edit({
+        "path": path,
+        "old_string": "  xs.length()",
+        "new_string": "  \"not an int\"",
+        "start_line": 9,
+      })
+      assert_false(broken.is_error, msg=broken.content)
+      let original = @fs.read_file(path).text()
+      let output = run_edit({
+        "path": path,
+        "old_string": "  \"not an int\"",
+        "new_string": replacement,
+        "start_line": 9,
+        "revert_if_error_delta_greater_or_equal": threshold,
+      })
+      assert_eq(output.is_error, !kept, msg=output.content)
+      if replacement == "  true" {
+        assert_true(
+          output.data
+          is Some(
+            {
+              "baseline": { "error_count": Number(1, ..), .. },
+              "check": { "error_count": Number(1, ..), .. },
+              "introduced_count": { "errors": Number(1, ..), .. },
+              ..
+            }
+          ),
+        )
+      }
+      if kept {
+        assert_true(@fs.read_file(path).text().contains(replacement))
+      } else {
         assert_eq(@fs.read_file(path).text(), original)
       }
     })
@@ -314,7 +362,7 @@ async test "warning guard at zero requires a net decrease" {
         "old_string": "  length([1, 2, 3]) + length([4])",
         "new_string": replacement,
         "start_line": 14,
-        "revert_when_warnings_greater_or_equal": 0,
+        "revert_if_warning_delta_greater_or_equal": 0,
       })
       assert_eq(output.is_error, !kept, msg=output.content)
       if kept {
@@ -337,8 +385,8 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "old_string": "old",
       "new_string": "new",
       "start_line": 1,
-      "revert_when_errors_greater_or_equal": 1,
-      "revert_when_warnings_greater_or_equal": 0,
+      "revert_if_error_delta_greater_or_equal": 1,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_false(out.is_error, msg=out.content)
     assert_false(out.content.contains("moon check"))
@@ -374,12 +422,12 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "old_string": "new",
       "new_string": "x",
       "start_line": 1,
-      "revert_when_warnings_greater_or_equal": "yes",
+      "revert_if_warning_delta_greater_or_equal": "yes",
     })
     assert_true(bad.is_error)
     assert_true(
       bad.content.contains(
-        "arguments.revert_when_warnings_greater_or_equal to be a non-negative integer",
+        "arguments.revert_if_warning_delta_greater_or_equal to be a non-negative integer",
       ),
     )
     assert_true(bad.data is Some({ "outcome": "error", .. }))
@@ -391,12 +439,12 @@ async test "guards are moot outside a MoonBit project and data still names the o
         "old_string": "new",
         "new_string": "x",
         "start_line": 1,
-        "revert_when_errors_greater_or_equal": value,
+        "revert_if_error_delta_greater_or_equal": value,
       })
       assert_true(rejected.is_error, msg=rejected.content)
       assert_true(
         rejected.content.contains(
-          "arguments.revert_when_errors_greater_or_equal to be a non-negative integer",
+          "arguments.revert_if_error_delta_greater_or_equal to be a non-negative integer",
         ),
         msg=rejected.content,
       )
@@ -407,7 +455,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "old_string": "new",
       "new_string": "newer",
       "start_line": 1,
-      "revert_when_errors_greater_or_equal": Json::null(),
+      "revert_if_error_delta_greater_or_equal": Json::null(),
     })
     assert_false(off.is_error, msg=off.content)
     assert_true(
@@ -484,12 +532,12 @@ async test "guards reach a MoonBit target through a link with another name" {
       "old_string": "  xs.length()",
       "new_string": "  \"not an int\"",
       "start_line": 9,
-      "revert_when_errors_greater_or_equal": 1,
+      "revert_if_error_delta_greater_or_equal": 1,
     })
     assert_true(reverted.is_error, msg=reverted.content)
     assert_true(
       reverted.data
-      is Some({ "outcome": "reverted", "reason": "introduced_errors", .. }),
+      is Some({ "outcome": "reverted", "reason": "error_delta", .. }),
       // Distinguish guard failures from check unavailability in CI.
       msg=reverted.content,
     )
@@ -523,14 +571,14 @@ async test "guards check the module of a link's target as well as the link's own
       "old_string": "pub fn f() -> Int {\n  1",
       "new_string": "pub fn f(x : Int) -> Int {\n  x",
       "start_line": 2,
-      "revert_when_errors_greater_or_equal": 1,
+      "revert_if_error_delta_greater_or_equal": 1,
     })
     assert_true(reverted.is_error, msg=reverted.content)
     guard reverted.data
       is Some(
         {
           "outcome": "reverted",
-          "reason": "introduced_errors",
+          "reason": "error_delta",
           "introduced": { "errors": [{ "path": String(site), .. }, ..], .. },
           ..
         }

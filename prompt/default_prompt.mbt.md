@@ -176,10 +176,14 @@ pub struct CallResult {
 `edit` and `multi_edit` data carry `outcome`
 (applied, reverted, rejected, failed, unverified, preview, not_found, error),
 the post-write check counts, and on a revert the introduced sites. For `edit`,
-`revert_when_errors_greater_or_equal: 1` rejects introduced errors, and
-`revert_when_warnings_greater_or_equal: 0` reverts unless the warning total
+`revert_if_error_delta_greater_or_equal: 1` rejects an increased error total, and
+`revert_if_warning_delta_greater_or_equal: 0` reverts unless the warning total
 decreases (`after - before < 0`). A script can apply one fix per diagnostic
 and branch on `data.outcome`, `introduced_count`, and `removed_count`.
+Errors can change which packages are checked, exposing or hiding diagnostics;
+a lower reported count does not guarantee no new problems.
+If the diagnostics justify accepting a reverted edit, retry with an explicit
+threshold greater than the observed delta; do not raise it merely to bypass the guard.
 A script may run `moon check --output-json` itself to find its targets:
 
 [share/examples/ptc_guarded_edit.mbtx](../share/examples/ptc_guarded_edit.mbtx)

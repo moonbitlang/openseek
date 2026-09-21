@@ -17,8 +17,8 @@ test "decode valid edit input" {
       #|  start_line: 1,
       #|  end_line: None,
       #|  revert_on_parse_errors: true,
-      #|  revert_when_errors_greater_or_equal: None,
-      #|  revert_when_warnings_greater_or_equal: None,
+      #|  revert_if_error_delta_greater_or_equal: None,
+      #|  revert_if_warning_delta_greater_or_equal: None,
       #|}
     ),
   )
@@ -44,8 +44,8 @@ test "decode replace_all flag" {
       #|  start_line: 1,
       #|  end_line: None,
       #|  revert_on_parse_errors: true,
-      #|  revert_when_errors_greater_or_equal: None,
-      #|  revert_when_warnings_greater_or_equal: None,
+      #|  revert_if_error_delta_greater_or_equal: None,
+      #|  revert_if_warning_delta_greater_or_equal: None,
       #|}
     ),
   )
@@ -71,8 +71,8 @@ test "decode line range" {
       #|  start_line: 2,
       #|  end_line: Some(4),
       #|  revert_on_parse_errors: true,
-      #|  revert_when_errors_greater_or_equal: None,
-      #|  revert_when_warnings_greater_or_equal: None,
+      #|  revert_if_error_delta_greater_or_equal: None,
+      #|  revert_if_warning_delta_greater_or_equal: None,
       #|}
     ),
   )
@@ -179,7 +179,7 @@ test "decode rejects renamed guards instead of silently ignoring them" {
       "start_line": 1,
       "revert_when_errors_above": 0,
     },
-    "renamed to revert_when_errors_greater_or_equal",
+    "replaced by revert_if_error_delta_greater_or_equal",
   )
   assert_decode_error(
     {
@@ -189,7 +189,7 @@ test "decode rejects renamed guards instead of silently ignoring them" {
       "start_line": 1,
       "revert_when_warnings_above": 0,
     },
-    "renamed to revert_when_warnings_greater_or_equal",
+    "renamed to revert_if_warning_delta_greater_or_equal",
   )
 }
 

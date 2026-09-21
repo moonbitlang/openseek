@@ -82,7 +82,7 @@ async test "ptc_guarded_edit example applies a clean fix and reports a reverted 
       assert_false(reverted.is_error, msg=reverted.content)
       assert_true(
         reverted.content.contains(
-          "reverted: the warning count changed by 0 (>= revert_when_warnings_greater_or_equal=0)",
+          "reverted: the warning count changed by 0 (>= revert_if_warning_delta_greater_or_equal=0)",
         ),
         msg=reverted.content,
       )

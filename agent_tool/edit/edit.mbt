@@ -38,8 +38,8 @@
 /// - `Respond(ToolOutput("rejected: the edit would introduce ...", is_error=true))`
 ///   when the parse gate refused an edit whose result does not parse.
 /// - `Respond(ToolOutput("reverted: ...", is_error=true))`
-///   when a post-write guard (`revert_when_errors_greater_or_equal` /
-///   `revert_when_warnings_greater_or_equal`)
+///   when a post-write guard (`revert_if_error_delta_greater_or_equal` /
+///   `revert_if_warning_delta_greater_or_equal`)
 ///   restored the file.
 /// - `Respond(ToolOutput("not applied: ... moon check could not verify ...", is_error=true))`
 ///   when a guard was requested but the tree could not be checked.
@@ -77,9 +77,15 @@ pub fn definition(
       #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
       #|Diagnostic guards (off unless given) run moon check before and after writing.
-      #|revert_when_errors_greater_or_equal=1 rejects introduced errors;
-      #|revert_when_warnings_greater_or_equal=0 reverts when the warning total does not
-      #|decrease (after - before >= 0). Combine them for a warning-fix script. For
+      #|revert_if_error_delta_greater_or_equal=1 reverts when the error total increases;
+      #|revert_if_warning_delta_greater_or_equal=0 reverts when the warning total does not
+      #|decrease (after - before >= 0). Combine them for a warning-fix script.
+      #|Counts are only what each check reports: fixing errors can expose previously
+      #|unchecked packages, while new errors can hide them. A lower count does not
+      #|guarantee no new problems. Review diagnostics before overriding a threshold:
+      #|if they support accepting the edit (for example, newly reached existing errors),
+      #|retry with an explicit higher threshold. To admit delta D, use a threshold > D.
+      #|Do not raise it merely to bypass a failed guard. Omitted guards are off. For
       #|multiple compiler-feedback fixes in one file, use multi_edit with explicit
       #|line-anchored edits. To change EVERY occurrence of a string, pass
       #|replace_all_preview=true: the file is not modified; instead every match site is
@@ -113,32 +119,32 @@ pub fn definition(
           ),
           "examples": [false],
         },
-        "revert_when_errors_greater_or_equal": {
+        "revert_if_error_delta_greater_or_equal": {
           "type": "integer",
           "description": (
-            #|Post-write guard, off unless given. moon check runs from the file's module
-            #|before and after the write; if the edit INTRODUCED at least this many
-            #|errors the tree did not have — counted by diagnostic identity (path, code,
-            #|message), so line shifts never count; 1 reverts on any new error,
-            #|0 always reverts a checked edit — the file is
-            #|restored and the call returns is_error with the introduced sites. The
-            #|result's data carries introduced_count and removed_count per severity on
-            #|kept and reverted outcomes, not on unverified ones. A baseline that already has errors makes the comparison
-            #|approximate: moon skips the dependents of a failing package, so a fix that
-            #|lets the build reach further can read as introducing errors; the result
-            #|says when that caveat applies. If moon check cannot run, a guarded edit is
-            #|not written at all.
+            #|Post-write guard, off unless given. Revert when the reported error count
+            #|change (after - before) is >= this non-negative threshold. 0 requires a
+            #|decrease; 1 allows an unchanged total. Counts can be misleading when errors
+            #|change which packages moon check reaches; a decrease does not prove no new
+            #|errors. Diagnostic identities are informational, not part of this guard.
+            #|After reviewing diagnostics, you may retry with a higher threshold to
+            #|admit an acceptable change; the threshold must exceed the observed delta.
+            #|If the baseline check cannot run, a guarded edit is not written.
           ),
           "examples": [1],
         },
-        "revert_when_warnings_greater_or_equal": {
+        "revert_if_warning_delta_greater_or_equal": {
           "type": "integer",
           "description": (
             #|Post-write guard, off unless given. Restore the edit when the net warning
             #|change (after.warning_count - before.warning_count) is >= this non-negative
             #|threshold. 0 requires a decrease; 1 allows an unchanged total. Removing
             #|two warnings while introducing one passes at 0. Pair with
-            #|revert_when_errors_greater_or_equal=1 to reject introduced errors too.
+            #|revert_if_error_delta_greater_or_equal=1 to reject an increased error total.
+            #|Counts can change because errors alter which packages are checked, not
+            #|just because warnings were fixed. A decrease does not prove no new problems.
+            #|After reviewing diagnostics, you may override with a threshold greater
+            #|than the observed delta; do not raise it merely to bypass the guard.
           ),
           "examples": [0],
         },
@@ -733,9 +739,9 @@ fn total_line_count(content : String) -> Int {
 /// every failure onto the same `→ edit · edit <file> 🚩` viz line. `lines` is
 /// the inclusive line range the new content occupies, for the result's data.
 ///
-/// With `revert_when_errors_greater_or_equal` / `revert_when_warnings_greater_or_equal` the tree is checked before
+/// With `revert_if_error_delta_greater_or_equal` / `revert_if_warning_delta_greater_or_equal` the tree is checked before
 /// the write (the baseline) and after it, and the file is restored when the
-/// edit violates the introduced-error limit or net-warning threshold — see
+/// edit violates either net-count threshold — see
 /// `guarded_outcome`. Without them the post-write check only reports.
 async fn commit_edit(
   path : String,
@@ -762,8 +768,8 @@ async fn commit_edit(
     return rejection
   }
   let guards : Guards = {
-    errors: input.revert_when_errors_greater_or_equal,
-    warnings: input.revert_when_warnings_greater_or_equal,
+    errors: input.revert_if_error_delta_greater_or_equal,
+    warnings: input.revert_if_warning_delta_greater_or_equal,
   }
   // The guards' baseline is measured before the write, so nothing has to be
   // restored just to know what the tree looked like. A guard on a tree that
@@ -1130,14 +1136,9 @@ priv struct Guards {
 const IntroducedDisplayLimit : Int = 20
 
 ///|
-/// Decide a guarded edit from its two checks: errors compare introduced
-/// identities; warnings compare the net count change (an overflowed
-/// capture never reaches here — it is refused as unverified, since its lists
-/// are windows and a site can enter one without being new). A baseline with
-/// errors makes the reading
-/// approximate — moon skips the dependents of a failing package, so a fix
-/// that lets the build reach further surfaces diagnostics that were always
-/// there — and the result says so rather than pretending otherwise.
+/// Compare reported count changes against inclusive thresholds. Incomplete
+/// captures are refused before this point. Errors can change which packages
+/// the compiler reaches, so counts are not proof that no new problems exist.
 async fn guarded_outcome(
   path : String,
   target~ : String,
@@ -1151,13 +1152,12 @@ async fn guarded_outcome(
   keep : (String?, Map[String, Json]) -> @agent_tool.ToolAction,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
-  // Both captures are complete here (an overflowed one is refused before this
-  // point), so identity comparison is exact, in both directions.
+  // Identity differences describe diagnostics; only count changes decide rollback.
   let delta = @auto_check.introduced(before, after)
   let removed = @auto_check.introduced(after, before)
-  let errors_hit = guards.errors is Some(limit) &&
-    delta.errors.length() >= limit
+  let error_delta = after.error_count - before.error_count
   let warning_delta = after.warning_count - before.warning_count
+  let errors_hit = guards.errors is Some(limit) && error_delta >= limit
   let warnings_hit = guards.warnings is Some(limit) && warning_delta >= limit
   let reach_caveat = before.error_count > 0
   let common : Map[String, Json] = {
@@ -1177,7 +1177,7 @@ async fn guarded_outcome(
     "reach_caveat": reach_caveat.to_json(),
   }
   let caveat = if reach_caveat {
-    "\nnote: the baseline already had \{before.error_count} error(s); moon skips the dependents of a failing package, so the guard compared only what the build reached. If this edit fixed an error, the next check reaches further."
+    "\nnote: the baseline already had \{before.error_count} error(s); errors can change which packages moon check reaches. Fixes may expose existing diagnostics, and new errors may hide them; a lower count does not prove no new problems."
   } else {
     ""
   }
@@ -1191,8 +1191,8 @@ async fn guarded_outcome(
   }
   let shown_errors = if errors_hit { sites(delta.errors) } else { [] }
   let shown_warnings = if warnings_hit { sites(delta.warnings) } else { [] }
-  let over_errors = "the edit introduced \{delta.errors.length()} error(s) (>= revert_when_errors_greater_or_equal=\{guards.errors.unwrap_or(0)}) the tree did not have"
-  let over_warnings = "the warning count changed by \{warning_delta} (>= revert_when_warnings_greater_or_equal=\{guards.warnings.unwrap_or(0)})"
+  let over_errors = "the error count changed by \{error_delta} (>= revert_if_error_delta_greater_or_equal=\{guards.errors.unwrap_or(0)})"
+  let over_warnings = "the warning count changed by \{warning_delta} (>= revert_if_warning_delta_greater_or_equal=\{guards.warnings.unwrap_or(0)})"
   let what = match (errors_hit, warnings_hit) {
     (true, true) => "\{over_errors} and \{over_warnings}"
     (true, false) => over_errors
@@ -1212,11 +1212,7 @@ async fn guarded_outcome(
   } else {
     ""
   }
-  common["reason"] = if errors_hit {
-    "introduced_errors"
-  } else {
-    "warning_delta"
-  }
+  common["reason"] = if errors_hit { "error_delta" } else { "warning_delta" }
   common["introduced"] = {
     "errors": Json::array([ for site in shown_errors => site.to_json() ]),
     "warnings": Json::array([ for site in shown_warnings => site.to_json() ]),
