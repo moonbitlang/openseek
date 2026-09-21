@@ -106,12 +106,7 @@ fn LauncherActions::rows(
     ),
   )
   entries.push(
-    (
-      "GitHub",
-      "Browse pull requests and issues",
-      @icons.icon_github,
-      self.github,
-    ),
+    ("GitHub", ui(locale, GithubHint), @icons.icon_github, self.github),
   )
   entries.push(
     (

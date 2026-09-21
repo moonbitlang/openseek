@@ -2132,7 +2132,11 @@ fn view(
     children.push(notifications_view(dispatch, model))
   }
   children.push(
-    @github.checkout_dialog(model.github, dispatch.map(msg => Github(msg))),
+    @github.checkout_dialog(
+      locale=model.locale,
+      model.github,
+      dispatch.map(msg => Github(msg)),
+    ),
   )
   // The interrupt-confirmation modal floats the same way, above the toasts.
   if model.update_ux is ConfirmingRestart(version~) {
@@ -2280,6 +2284,7 @@ fn api_setup_modal(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 fn notifications_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let toasts : Array[@html.Html] = [
     @github.checkout_notification(
+      locale=model.locale,
       model.github,
       dispatch.map(msg => Github(msg)),
     ),

@@ -1,5 +1,6 @@
 ///|
 pub fn checkout_notification(
+  locale~ : @i18n.Locale,
   state : State,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -8,9 +9,9 @@ pub fn checkout_notification(
   let message = match checkout.phase {
     Running =>
       if checkout.updating {
-        "Updating checkout for PR #\{checkout.number}…"
+        ui(locale, UpdatingCheckout(checkout.number))
       } else {
-        "Checking out PR #\{checkout.number}…"
+        ui(locale, CheckingOut(checkout.number))
       }
     Failed(message, _) => "PR #\{checkout.number}: \{message}"
     Confirming => return @html.nothing
@@ -26,10 +27,8 @@ pub fn checkout_notification(
         if failed {
           @html.button(
             class="tab-action",
-            title="Dismiss checkout notification",
-            attrs=@html.Attrs::build().aria_label(
-              "Dismiss checkout notification",
-            ),
+            title=ui(locale, DismissCheckout),
+            attrs=@html.Attrs::build().aria_label(ui(locale, DismissCheckout)),
             on_click=emit(DismissCheckout),
             @icons.icon(@icons.icon_close),
           )
@@ -46,9 +45,9 @@ pub fn checkout_notification(
             ),
             on_click=emit(ToggleCheckoutDetails),
             if checkout.show_details {
-              "Hide details"
+              ui(locale, HideDetails)
             } else {
-              "Show details"
+              ui(locale, ShowDetails)
             },
           ),
           if checkout.show_details {
@@ -65,7 +64,11 @@ pub fn checkout_notification(
 }
 
 ///|
-pub fn checkout_dialog(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
+pub fn checkout_dialog(
+  locale~ : @i18n.Locale,
+  state : State,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
   guard state.checkout is Some({ phase: Confirming, number, updating, .. }) else {
     return @html.nothing
   }
@@ -78,9 +81,9 @@ pub fn checkout_dialog(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
         .aria_modal("true")
         .aria_label(
           if updating {
-            "Uncommitted changes before updating checkout for PR #\{number}"
+            ui(locale, UncommittedBeforeUpdate(number))
           } else {
-            "Uncommitted changes before checking out PR #\{number}"
+            ui(locale, UncommittedBeforeCheckout(number))
           },
         )
         .on_click(event => {
@@ -104,35 +107,42 @@ pub fn checkout_dialog(state : State, emit : @cmd.Emit[Msg]) -> @html.Html {
           }
         }),
       [
-        @html.div(class="modal-title", "You have uncommitted changes"),
+        @html.div(class="modal-title", ui(locale, UncommittedChanges)),
         @html.div(
           class="modal-body",
-          "Choose how to handle your changes before \{if updating { "updating the checkout for" } else { "checking out" }} PR #\{number}. Stashed changes remain saved for later. Discard permanently removes tracked changes. Untracked files are kept.",
+          ui(
+            locale,
+            if updating {
+              BeforeUpdate(number)
+            } else {
+              BeforeCheckout(number)
+            },
+          ),
         ),
         @html.div(class="github-checkout-choices", [
           @html.button(
             class="button primary",
             on_click=emit(ConfirmCheckout(Stash)),
-            "Stash changes",
+            ui(locale, StashChanges),
           ),
           @html.button(
             class="button secondary github-checkout-discard",
             on_click=emit(ConfirmCheckout(Discard)),
-            "Discard changes",
+            ui(locale, DiscardChanges),
           ),
           @html.button(
             class="button secondary",
             on_click=emit(ConfirmCheckout(Carry)),
             if updating {
-              "Update checkout anyway"
+              ui(locale, UpdateAnyway)
             } else {
-              "Try checkout anyway"
+              ui(locale, CheckoutAnyway)
             },
           ),
           @html.button(
             class="button secondary",
             on_click=emit(DismissCheckout),
-            "Cancel",
+            ui(locale, CancelLabel),
           ),
         ]),
       ],
@@ -162,4 +172,4 @@ fn focus_checkout_action(number : Int) -> @cmd.Cmd {
 
 ///|
 extern "js" fn restore_checkout_focus(number : Int) -> Unit =
-  #| number => [...document.querySelectorAll(`.github-review-update, .github-checkout[aria-label="Update checkout for PR #${number}"], .github-checkout[aria-label="Check out PR #${number} locally"]`)].find(element => element.getClientRects().length)?.focus()
+  #| number => [...document.querySelectorAll(`.github-review-update, .github-checkout[data-pr-number="${number}"]`)].find(element => element.getClientRects().length)?.focus()

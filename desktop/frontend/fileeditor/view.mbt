@@ -436,7 +436,7 @@ pub fn body_view(
       diff_editor_host,
       semantic_review_host,
       viewer_notice(locale~, state, ctx),
-      github_review_line_layer(dispatch, state, ctx),
+      github_review_line_layer(locale~, dispatch, state, ctx),
     ]),
     tree_pane(locale~, dispatch, state, ctx),
   ])
@@ -1538,7 +1538,10 @@ fn change_inventory_rows(
             if reviewable.is_empty() {
               ui(locale, NoReviewableFiles)
             } else {
-              "\{reviewed} / \{reviewable.length()} reviewed"
+              dynamic_text(
+                locale,
+                DReviewedFiles(reviewed, reviewable.length()),
+              )
             },
           ),
         ]
@@ -1756,7 +1759,7 @@ fn change_tree_row(
           if count > 0 {
             @html.span(
               class="github-review-file-count",
-              title="Unresolved GitHub conversations",
+              title=ui(locale, UnresolvedGithubConversations),
               [@icons.icon_comment(), @html.text(count.to_string())],
             )
           } else {
@@ -2062,13 +2065,14 @@ pub fn breadcrumb_view(
         review_comments_control(locale~, dispatch, state, ctx),
         review_tests_control(locale~, dispatch, state, ctx),
         @github_review.toolbar(
+          locale~,
           state.github_review,
           dispatch.map(msg => GithubReview(msg)),
           current=ctx.github,
         ),
         review_navigation_controls(locale~, dispatch, state, ctx),
       ]),
-      github_review_status(dispatch, state, ctx),
+      github_review_status(locale~, dispatch, state, ctx),
     ]
     if state.highlighted is Some(directory) {
       children.push(breadcrumb_picker(locale~, dispatch, state, ctx, directory))

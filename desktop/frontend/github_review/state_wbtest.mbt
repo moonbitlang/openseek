@@ -23,9 +23,9 @@ fn current_pr() -> @github.State {
 test "draft save acknowledgements cannot change another PR's storage error" {
   let state = {
     ..test_review_state(),
-    storage_error: Some("current save failed"),
+    storage_error: Some(SaveDraftsFailed("current save failed")),
   }
-  for result in [Ok(()), Err("previous save failed")] {
+  for result in [Ok(()), Err(Failure::SaveDraftsFailed("previous save failed"))] {
     let (_, next) = review_update(
       _ => @cmd.none,
       StorageSaved("https://github.com/o/r/pull/2", result),
@@ -106,7 +106,9 @@ test "comment controls consume shared discovery without loading discussions unti
   let pending = { ..current_pr(), current_loading: true, current: None, }
   let (_, state) = reconcile(emit, State::empty(), pending, Some("retry.mbt"))
   assert_false(state.loading)
-  assert_true(toolbar(state, emit, current=pending) == @html.nothing)
+  assert_true(
+    toolbar(locale=English, state, emit, current=pending) == @html.nothing,
+  )
   let (_, untoggled) = review_update(emit, Toggle, state, current=pending)
   assert_true(untoggled == state)
   for
@@ -126,7 +128,10 @@ test "comment controls consume shared discovery without loading discussions unti
       ),
     }
     let (_, ready) = reconcile(emit, state, current, state.path)
-    assert_eq(toolbar(ready, emit, current~) == @html.nothing, !open)
+    assert_eq(
+      toolbar(locale=English, ready, emit, current~) == @html.nothing,
+      !open,
+    )
     assert_false(ready.loading)
     let (_, toggled) = review_update(emit, Toggle, ready, current~)
     assert_eq(toggled.enabled, open)
@@ -134,9 +139,10 @@ test "comment controls consume shared discovery without loading discussions unti
   }
   let current = { ..current_pr(), current: Some(Err("offline")), }
   let (_, failed) = reconcile(emit, state, current, state.path)
-  assert_true(toolbar(failed, emit, current~) == @html.nothing)
+  assert_true(toolbar(locale=English, failed, emit, current~) == @html.nothing)
   assert_false(
     status_view(
+      locale=English,
       failed,
       emit,
       false,
@@ -171,7 +177,9 @@ test "shared revalidation preserves discussions and closure retires late loads" 
   }
   let (_, retired) = reconcile(emit, waiting, closed, old.path)
   assert_false(retired.enabled)
-  assert_true(toolbar(retired, emit, current=closed) == @html.nothing)
+  assert_true(
+    toolbar(locale=English, retired, emit, current=closed) == @html.nothing,
+  )
   let (_, late) = review_update(
     emit,
     Loaded(old.epoch, Ok(@protocol.ReviewLoaded(old.review)), Ok([])),
@@ -242,7 +250,7 @@ test "failed sends retain drafts and successful sends only clear the submitted b
     state,
   )
   assert_true(failure.drafts == [sent])
-  assert_eq(failure.mutation_error, Some("denied"))
+  assert_eq(failure.mutation_error, Some(Remote("denied")))
   assert_false(failure.busy)
   let (_, success) = review_update(
     emit,
@@ -267,9 +275,7 @@ test "old-revision drafts remain local and cannot silently attach to the current
   let (_, next) = review_update(emit, Send(target), state)
   assert_false(next.busy)
   assert_true(next.drafts == [draft])
-  assert_true(
-    next.mutation_error is Some(error) && error.contains("earlier PR revision"),
-  )
+  assert_true(next.mutation_error is Some(EarlierRevision))
   let encoded = [
     draft,
     { target: Thread(thread="thread-id", comment="9000000001"), body: "reply", },
@@ -289,7 +295,7 @@ test "refresh preserves unsaved edits and does not resurrect sent drafts after s
   let state = {
     ..test_review_state(),
     drafts: [draft],
-    storage_error: Some("quota exceeded"),
+    storage_error: Some(SaveDraftsFailed("quota exceeded")),
   }
   let (_, refreshed) = review_update(
     emit,
@@ -311,7 +317,7 @@ test "refresh preserves unsaved edits and does not resurrect sent drafts after s
       action,
       Some(draft),
       Ok(@protocol.ReviewMutationSuccess),
-      Err("cannot remove draft"),
+      Err(SaveDraftsFailed("cannot remove draft")),
     ),
     state,
   )
@@ -321,7 +327,7 @@ test "refresh preserves unsaved edits and does not resurrect sent drafts after s
     sent,
   )
   assert_true(loaded.drafts.is_empty())
-  assert_eq(loaded.storage_error, Some("cannot remove draft"))
+  assert_eq(loaded.storage_error, Some(SaveDraftsFailed("cannot remove draft")))
 }
 
 ///|
@@ -387,8 +393,5 @@ test "sending a draft outside the GitHub patch preserves it without starting a m
   assert_eq(next.mutation_epoch, state.mutation_epoch)
   assert_true(next.drafts == [draft])
   assert_true(next.active == Some(target))
-  assert_true(
-    next.mutation_error is Some(message) &&
-    message.contains("outside the GitHub PR diff"),
-  )
+  assert_true(next.mutation_error is Some(LineOutsideDiff))
 }

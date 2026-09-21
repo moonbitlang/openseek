@@ -6,7 +6,7 @@ fn drafts_storage_key(url : String) -> String {
 ///|
 async fn load_drafts_unlocked(
   url : String,
-) -> Result[Array[GithubDraft], String] {
+) -> Result[Array[GithubDraft], Failure] {
   if @interop.openseek_api() is None {
     return load_browser_drafts(url)
   }
@@ -16,15 +16,10 @@ async fn load_drafts_unlocked(
       @commands.github_drafts_get,
       { url, },
     )
-    guard reply.url == url else {
-      return Err("Local drafts belong to a different pull request.")
-    }
+    guard reply.url == url else { return Err(WrongDraftPullRequest) }
     Ok(reply.drafts)
   } catch {
-    error =>
-      Err(
-        "Could not restore local comment drafts: \{@interop.bridge_error_text(error)}",
-      )
+    error => Err(RestoreDraftsFailed(@interop.bridge_error_text(error)))
   }
 }
 
@@ -32,7 +27,7 @@ async fn load_drafts_unlocked(
 async fn store_drafts_unlocked(
   url : String,
   drafts : Array[GithubDraft],
-) -> Result[Unit, String] {
+) -> Result[Unit, Failure] {
   if @interop.openseek_api() is None {
     return store_browser_drafts(url, drafts)
   }
@@ -44,15 +39,12 @@ async fn store_drafts_unlocked(
     |> ignore
     Ok(())
   } catch {
-    error =>
-      Err(
-        "Your draft remains in this window, but could not be saved locally: \{@interop.bridge_error_text(error)}",
-      )
+    error => Err(SaveDraftsFailed(@interop.bridge_error_text(error)))
   }
 }
 
 ///|
-async fn load_drafts(url : String) -> Result[Array[GithubDraft], String] {
+async fn load_drafts(url : String) -> Result[Array[GithubDraft], Failure] {
   @interop.in_ordered_lane(drafts_storage_key(url), () => {
     load_drafts_unlocked(url)
   })
@@ -62,7 +54,7 @@ async fn load_drafts(url : String) -> Result[Array[GithubDraft], String] {
 async fn store_drafts(
   url : String,
   drafts : Array[GithubDraft],
-) -> Result[Unit, String] {
+) -> Result[Unit, Failure] {
   @interop.in_ordered_lane(drafts_storage_key(url), () => {
     store_drafts_unlocked(url, drafts)
   })
@@ -72,7 +64,7 @@ async fn store_drafts(
 async fn remove_sent_draft(
   url : String,
   sent : GithubDraft,
-) -> Result[Unit, String] {
+) -> Result[Unit, Failure] {
   // Hold the same lane across read/modify/write so a send completion cannot
   // race a newer edit or restore a previously cancelled draft.
   @interop.in_ordered_lane(drafts_storage_key(url), () => {
@@ -85,14 +77,14 @@ async fn remove_sent_draft(
 }
 
 ///|
-fn load_browser_drafts(url : String) -> Result[Array[GithubDraft], String] {
+fn load_browser_drafts(url : String) -> Result[Array[GithubDraft], Failure] {
   try {
     let value = @js.Error_::wrap(
       () => @js.globalThis.get_with_string("localStorage"),
       map_ok=value => value,
     )
     guard !value.is_null() && !value.is_undefined() else {
-      return Err("Local draft storage is unavailable.")
+      return Err(StorageUnavailable)
     }
     let storage = value
     let raw : String? = @js.Error_::wrap(
@@ -110,7 +102,7 @@ fn load_browser_drafts(url : String) -> Result[Array[GithubDraft], String] {
       },
     )
   } catch {
-    error => Err("Could not restore local comment drafts: \{error}")
+    error => Err(RestoreDraftsFailed(error.to_string()))
   }
 }
 
@@ -118,14 +110,14 @@ fn load_browser_drafts(url : String) -> Result[Array[GithubDraft], String] {
 fn store_browser_drafts(
   url : String,
   drafts : Array[GithubDraft],
-) -> Result[Unit, String] {
+) -> Result[Unit, Failure] {
   try {
     let value = @js.Error_::wrap(
       () => @js.globalThis.get_with_string("localStorage"),
       map_ok=value => value,
     )
     guard !value.is_null() && !value.is_undefined() else {
-      return Err("Local draft storage is unavailable.")
+      return Err(StorageUnavailable)
     }
     let storage = value
     @js.Error_::wrap(
@@ -145,9 +137,6 @@ fn store_browser_drafts(
     )
     Ok(())
   } catch {
-    error =>
-      Err(
-        "Your draft remains in this window, but could not be saved locally: \{error}",
-      )
+    error => Err(SaveDraftsFailed(error.to_string()))
   }
 }

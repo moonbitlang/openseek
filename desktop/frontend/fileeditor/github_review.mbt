@@ -152,6 +152,7 @@ fn github_review_target_line(
 
 ///|
 fn github_review_layer(
+  locale~ : @i18n.Locale,
   dispatch : @cmd.Emit[Msg],
   state : @github_review.State,
   surface : String,
@@ -166,11 +167,12 @@ fn github_review_layer(
       }
       let emit = dispatch.map(msg => GithubReview(msg))
       let content = match block.content {
-        GithubThread(thread) => @github_review.thread_view(state, emit, thread)
+        GithubThread(thread) =>
+          @github_review.thread_view(locale~, state, emit, thread)
         GithubDraft(target) =>
           @html.section(
             class="github-review-thread",
-            @github_review.composer(state, emit, target, true),
+            @github_review.composer(locale~, state, emit, target, true),
           )
       }
       children[block.key] = @html.div(
@@ -187,11 +189,13 @@ fn github_review_layer(
 
 ///|
 fn github_review_line_layer(
+  locale~ : @i18n.Locale,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
   github_review_layer(
+    locale~,
     dispatch,
     state.github_review,
     "line",
@@ -398,6 +402,7 @@ fn sync_github_review_widgets(
 
 ///|
 fn github_review_status(
+  locale~ : @i18n.Locale,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -433,6 +438,7 @@ fn github_review_status(
       !inline_blocks.any(block => block.key == "draft:" + target.key())
     })
   @github_review.status_view(
+    locale~,
     review,
     dispatch.map(msg => GithubReview(msg)),
     matching,

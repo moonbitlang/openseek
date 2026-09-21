@@ -1,6 +1,82 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+test('GitHub inventory, PR details and checkout follow live language changes', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  const fallback = app.replyFor.bind(app);
+  const item = { number: 42, title: 'Keep this PR title', url: 'https://github.com/owner/project/pull/42', author: 'contributor', draft: false };
+  app.replyFor = request => {
+    if (request.method === 'github.list') return {
+      repository: 'owner/project', repository_url: 'https://github.com/owner/project', has_more: false,
+      items: request.params.kind === 'issues' ? [] : [item],
+    };
+    if (request.method === 'github.pull_request') return {
+      item, state: 'OPEN', mergeable: 'MERGEABLE', base: 'main', head: 'feature',
+      body: 'Keep the original description.', additions: 2, deletions: 1, changed_files: 1,
+      checks: [
+        { name: 'Build', state: 'SUCCESS' },
+        { name: 'Test', state: 'SUCCESS' },
+        { name: 'Lint', state: 'IN_PROGRESS' },
+      ],
+      comments: [], created_at: '2026-01-02T00:00:00Z',
+      reviewers: [{ name: 'reviewer', state: 'APPROVED' }], assignees: [], labels: [],
+    };
+    if (request.method === 'github.checkout') return { status: 'uncommitted_changes' };
+    return fallback(request);
+  };
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.getByTitle('New tab', { exact: true }).click();
+  await page.getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  const panel = page.locator('.github-panel');
+  await panel.locator('.github-item-open').click();
+  const languages = [
+    { tag: 'zh-Hans', pulls: '拉取请求', reviews: '审阅者', approved: '已批准', checks: '2 项检查成功，1 项检查等待中', files: '1 个文件已更改', checkout: '在本地检出 PR #42', hint: '浏览拉取请求和议题', newTab: '新建标签页' },
+    { tag: 'zh-Hant', pulls: '提取要求', reviews: '審閱者', approved: '已核准', checks: '2 項檢查成功，1 項檢查等待中', files: '1 個檔案已變更', checkout: '在本機簽出 PR #42', hint: '瀏覽提取要求和議題', newTab: '新建標籤頁' },
+    { tag: 'ja', pulls: 'プルリクエスト', reviews: 'レビュアー', approved: '承認済み', checks: '成功のチェック 2 件、保留中のチェック 1 件', files: '1 個のファイルを変更', checkout: 'PR #42 をローカルにチェックアウト', hint: 'プルリクエストと Issue を表示', newTab: '新しいタブ' },
+    { tag: 'es', pulls: 'Solicitudes de incorporación', reviews: 'Revisores', approved: 'Aprobado', checks: '2 comprobaciones correctas y 1 comprobación pendiente', files: '1 archivo modificado', checkout: 'Obtener la PR #42 localmente', hint: 'Explorar solicitudes de incorporación e incidencias', newTab: 'Nueva pestaña' },
+    { tag: 'en', pulls: 'Pull Requests', reviews: 'Reviewers', approved: 'Approved', checks: '2 successful checks and 1 pending check', files: '1 changed file', checkout: 'Check out PR #42 locally', hint: 'Browse pull requests and issues', newTab: 'New tab' },
+  ];
+  for (const locale of languages) {
+    await page.evaluate(tag => {
+      Object.defineProperty(navigator, 'languages', { configurable: true, value: [tag] });
+      window.dispatchEvent(new Event('languagechange'));
+    }, locale.tag);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale.tag);
+    await expect(panel.getByRole('button', { name: locale.pulls, exact: true })).toBeVisible();
+    await expect(panel.getByRole('heading', { name: locale.reviews, exact: true })).toBeVisible();
+    await expect(panel.locator('.github-review-state')).toHaveText(locale.approved);
+    await expect(panel.locator('.github-check-summary')).toHaveText(locale.checks);
+    await expect(panel.getByText(locale.files, { exact: true })).toBeVisible();
+    await expect(panel.getByRole('button', { name: locale.checkout, exact: true })).toBeAttached();
+    await expect(panel.locator('.github-detail-title')).toHaveText('Keep this PR title #42');
+    await expect(panel.locator('.github-description .markdown')).toHaveText('Keep the original description.');
+    await expect(panel.locator('.github-merge-description code')).toHaveText(locale.tag === 'en' ? ['main', 'feature'] : ['feature', 'main']);
+    await page.getByTitle(locale.newTab, { exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: 'GitHub', exact: true })).toContainText(locale.hint);
+    await page.keyboard.press('Escape');
+  }
+  await page.setViewportSize({ width: 1050, height: 768 });
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-Hans'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  const checkout = panel.getByRole('button', { name: '在本地检出 PR #42', exact: true });
+  await checkout.click();
+  const dialog = page.getByRole('dialog', { name: '检出 PR #42 前有未提交的更改', exact: true });
+  await expect(dialog.getByRole('button', { name: '暂存更改', exact: true })).toBeFocused();
+  await expect(dialog).toContainText('丢弃会永久删除已跟踪文件的更改。未跟踪文件会保留。');
+  await page.screenshot({ path: testInfo.outputPath('github-checkout-zh.png') });
+  await page.keyboard.press('Escape');
+  await expect(checkout).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('github-panel-zh.png') });
+  expect(app.requests.filter(request => request.method === 'github.pull_request')).toHaveLength(1);
+  expect(app.requests.filter(request => request.method === 'github.checkout').map(request => request.params.changes)).toEqual(['ask']);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('PR Markdown resolves hosted links and opens images only on an explicit click', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const originalReply = app.replyFor.bind(app);

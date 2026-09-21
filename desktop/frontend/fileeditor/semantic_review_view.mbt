@@ -258,6 +258,7 @@ fn semantic_section_view(
         ([] : Array[@html.Html]),
       ),
       github_review_layer(
+        locale~,
         dispatch,
         state.github_review,
         section.key,

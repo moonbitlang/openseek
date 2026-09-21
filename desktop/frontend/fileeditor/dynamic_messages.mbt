@@ -1,5 +1,6 @@
 ///|
 priv enum DynamicMessage {
+  DReviewedFiles(Int, Int)
   DLoadingDiff(String)
   DLoadingBaseline(String)
   DBinaryBaseline(String)
@@ -29,6 +30,16 @@ priv enum DynamicMessage {
 ///|
 fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
   match (locale, message) {
+    (English, DReviewedFiles(reviewed, total)) =>
+      "\{reviewed} / \{total} reviewed"
+    (SimplifiedChinese, DReviewedFiles(reviewed, total)) =>
+      "已审阅 \{reviewed} / \{total}"
+    (TraditionalChinese, DReviewedFiles(reviewed, total)) =>
+      "已審閱 \{reviewed} / \{total}"
+    (Japanese, DReviewedFiles(reviewed, total)) =>
+      "\{reviewed} / \{total} レビュー済み"
+    (Spanish, DReviewedFiles(reviewed, total)) =>
+      "\{reviewed} / \{total} revisados"
     (English, DLoadingDiff(p0)) => "Loading diff for \{p0}…"
     (Spanish, DLoadingDiff(p0)) => "Cargando diferencias de \{p0}…"
     (SimplifiedChinese, DLoadingDiff(p0)) => "正在加载 \{p0} 的差异…"

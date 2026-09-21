@@ -4,16 +4,17 @@ package "openseek_desktop/frontend/github"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
 }
 
 // Values
-pub fn checkout_dialog(State, @cmd.Emit[Msg]) -> @html.Html
+pub fn checkout_dialog(locale~ : @i18n.Locale, State, @cmd.Emit[Msg]) -> @html.Html
 
-pub fn checkout_notification(State, @cmd.Emit[Msg]) -> @html.Html
+pub fn checkout_notification(locale~ : @i18n.Locale, State, @cmd.Emit[Msg]) -> @html.Html
 
-pub fn panel(State, @cmd.Emit[Msg], (String) -> @cmd.Cmd) -> @html.Html
+pub fn panel(locale~ : @i18n.Locale, State, @cmd.Emit[Msg], (String) -> @cmd.Cmd) -> @html.Html
 
 pub fn reconcile(@cmd.Emit[Msg], State, CheckoutScope?, Bool, review_active? : Bool, review_busy? : Bool) -> (@cmd.Cmd, State)
 

@@ -2,6 +2,7 @@
 
 ///|
 priv enum UiMessage {
+  UnresolvedGithubConversations
   AddToContext
   PartlyInContext
   InContext
@@ -151,6 +152,16 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, UnresolvedGithubConversations) =>
+      "Unresolved GitHub conversations"
+    (SimplifiedChinese, UnresolvedGithubConversations) =>
+      "未解决的 GitHub 讨论"
+    (TraditionalChinese, UnresolvedGithubConversations) =>
+      "未解決的 GitHub 討論"
+    (Japanese, UnresolvedGithubConversations) =>
+      "未解決の GitHub ディスカッション"
+    (Spanish, UnresolvedGithubConversations) =>
+      "Discusiones de GitHub sin resolver"
     (English, AddToContext) => "Add to context"
     (Spanish, AddToContext) => "Añadir al contexto"
     (SimplifiedChinese, AddToContext) => "添加到上下文"

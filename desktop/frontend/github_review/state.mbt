@@ -21,8 +21,8 @@ pub(all) struct State {
   deleting : String?
   busy : Bool
   mutation_epoch : Int
-  mutation_error : String?
-  storage_error : String?
+  mutation_error : Failure?
+  storage_error : Failure?
 } derive(Eq)
 
 ///|
@@ -59,7 +59,7 @@ pub(all) enum Msg {
   Loaded(
     Int,
     Result[@protocol.GithubReviewReply, String],
-    Result[Array[GithubDraft], String]
+    Result[Array[GithubDraft], Failure]
   )
   FileLoaded(Int, String, Result[@protocol.GithubReviewFileReply, String])
   Compose(GithubDraftTarget)
@@ -76,9 +76,9 @@ pub(all) enum Msg {
     @protocol.GithubReviewAction,
     GithubDraft?,
     Result[@protocol.GithubReviewMutationReply, String],
-    Result[Unit, String]
+    Result[Unit, Failure]
   )
-  StorageSaved(String, Result[Unit, String])
+  StorageSaved(String, Result[Unit, Failure])
 }
 
 ///|
@@ -446,23 +446,13 @@ pub fn update(
           guard head == review.head else {
             return (
               @cmd.none,
-              {
-                ..state,
-                mutation_error: Some(
-                  "This draft belongs to an earlier PR revision. Copy it to a current line before sending.",
-                ),
-              },
+              { ..state, mutation_error: Some(EarlierRevision), },
             )
           }
           guard review.can_comment(path, side == "LEFT", line) else {
             return (
               @cmd.none,
-              {
-                ..state,
-                mutation_error: Some(
-                  "This line is outside the GitHub PR diff. Choose a current diff line; your draft is kept locally.",
-                ),
-              },
+              { ..state, mutation_error: Some(LineOutsideDiff), },
             )
           }
           Post(path~, side~, line~, head~, body=draft.body)
@@ -532,7 +522,10 @@ pub fn update(
           request(emit, next, current)
         }
         Ok(@protocol.ReviewMutationFailure(error)) | Err(error) =>
-          (@cmd.none, { ..state, busy: false, mutation_error: Some(error), })
+          (
+            @cmd.none,
+            { ..state, busy: false, mutation_error: Some(Remote(error)), },
+          )
       }
     }
     StorageSaved(url, result) => {

@@ -2,6 +2,7 @@
 
 ///|
 priv enum UiMessage {
+  GithubHint
   BrowseLabel
   BrowseHint
   SearchLabel
@@ -24,6 +25,12 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, GithubHint) => "Browse pull requests and issues"
+    (SimplifiedChinese, GithubHint) => "浏览拉取请求和议题"
+    (TraditionalChinese, GithubHint) => "瀏覽提取要求和議題"
+    (Japanese, GithubHint) => "プルリクエストと Issue を表示"
+    (Spanish, GithubHint) =>
+      "Explorar solicitudes de incorporación e incidencias"
     (English, BrowseLabel) => "Browse"
     (Spanish, BrowseLabel) => "Navegar"
     (SimplifiedChinese, BrowseLabel) => "浏览"

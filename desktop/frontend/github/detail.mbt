@@ -1,5 +1,6 @@
 ///|
 fn detail_view(
+  locale~ : @i18n.Locale,
   state : State,
   emit : @cmd.Emit[Msg],
   open_link : (String) -> @cmd.Cmd,
@@ -7,19 +8,19 @@ fn detail_view(
   guard state.detail is Some(detail) else {
     return @html.div(class="github-detail github-detail-placeholder", [
       @icons.icon(@icons.icon_pull_request),
-      @html.p("Select a pull request to view its description and discussion."),
+      @html.p(ui(locale, SelectPullRequestHint)),
     ])
   }
   @html.div(class="github-detail", [
     @html.div(class="github-detail-scroll", [
       @html.div(class="github-detail-content", [
-        detail_header(detail, open_link),
-        detail_actions(detail, state.active, emit, open_link),
+        detail_header(locale~, detail, open_link),
+        detail_actions(locale~, detail, state.active, emit, open_link),
         if detail.loading && detail.reply is None {
           @html.div(
             class="github-detail-status",
             attrs=@html.Attrs::build().role("status"),
-            "Loading pull request…",
+            ui(locale, LoadingPullRequest),
           )
         } else {
           @html.nothing
@@ -27,7 +28,7 @@ fn detail_view(
         if !state.active {
           @html.div(
             class="github-detail-status",
-            "Connect to the workspace host to refresh this pull request.",
+            ui(locale, ConnectPullRequestHint),
           )
         } else {
           @html.nothing
@@ -43,7 +44,7 @@ fn detail_view(
                   class="github-more",
                   disabled=!state.active,
                   on_click=emit(RefreshDetail),
-                  "Retry",
+                  ui(locale, RetryLabel),
                 ),
               ],
             )
@@ -51,7 +52,7 @@ fn detail_view(
         },
         match detail.reply {
           Some(reply) =>
-            pull_request_body(reply, detail.item.avatar_url, open_link)
+            pull_request_body(locale~, reply, detail.item.avatar_url, open_link)
           None => @html.nothing
         },
       ]),
@@ -61,6 +62,7 @@ fn detail_view(
 
 ///|
 fn detail_header(
+  locale~ : @i18n.Locale,
   detail : Detail,
   open_link : (String) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -70,7 +72,7 @@ fn detail_header(
       @html.text(item.title + " "),
       @html.button(
         class="github-detail-link github-title-number",
-        title="Open pull request on GitHub",
+        title=ui(locale, OpenPullRequest),
         on_click=open_link(item.url),
         "#\{item.number}",
       ),
@@ -78,23 +80,20 @@ fn detail_header(
     match detail.reply {
       Some(pr) =>
         @html.div(class="github-detail-meta", [
-          pull_request_state(pr),
-          @html.span(class="github-merge-description", [
-            @html.span(class="github-pr-author", [
-              avatar_view(detail.item.avatar_url),
-              @html.strong(item.author.unwrap_or("Deleted user")),
-            ]),
-            @html.text(
-              match pr.state {
-                "MERGED" => " merged changes into "
-                "CLOSED" => " proposed changes into "
-                _ => " wants to merge changes into "
-              },
+          pull_request_state(locale~, pr),
+          @html.span(
+            class="github-merge-description",
+            merge_description(
+              locale,
+              pr.state,
+              @html.span(class="github-pr-author", [
+                avatar_view(detail.item.avatar_url),
+                @html.strong(item.author.unwrap_or(ui(locale, DeletedUser))),
+              ]),
+              @html.code(pr.base),
+              @html.code(pr.head),
             ),
-            @html.code(pr.base),
-            @html.text(" from "),
-            @html.code(pr.head),
-          ]),
+          ),
         ])
       None => @html.nothing
     },
@@ -103,6 +102,7 @@ fn detail_header(
 
 ///|
 fn detail_actions(
+  locale~ : @i18n.Locale,
   detail : Detail,
   active : Bool,
   emit : @cmd.Emit[Msg],
@@ -112,11 +112,14 @@ fn detail_actions(
     @html.button(
       class="github-action-button",
       on_click=open_link(detail.item.url),
-      [@icons.icon(@icons.icon_link_external), @html.text("Open on GitHub")],
+      [
+        @icons.icon(@icons.icon_link_external),
+        @html.text(ui(locale, OpenOnGithub)),
+      ],
     ),
     @html.button(
       class="github-action-button",
-      attrs=@html.Attrs::build().aria_label("Refresh pull request"),
+      attrs=@html.Attrs::build().aria_label(ui(locale, RefreshPullRequest)),
       disabled=!active || detail.loading,
       on_click=emit(RefreshDetail),
       [
@@ -125,20 +128,20 @@ fn detail_actions(
           attrs=@html.Attrs::build().role("status"),
           if detail.loading {
             if detail.reply is None {
-              "Loading…"
+              ui(locale, LoadingLabel)
             } else {
-              "Refreshing…"
+              ui(locale, RefreshingLabel)
             }
           } else {
-            "Refresh"
+            ui(locale, RefreshLabel)
           },
         ),
       ],
     ),
     @html.button(
       class="tab-action github-detail-dismiss",
-      title="Close pull request details",
-      attrs=@html.Attrs::build().aria_label("Close pull request details"),
+      title=ui(locale, CloseDetails),
+      attrs=@html.Attrs::build().aria_label(ui(locale, CloseDetails)),
       on_click=emit(CloseDetail),
       @icons.icon(@icons.icon_close),
     ),
@@ -146,12 +149,15 @@ fn detail_actions(
 }
 
 ///|
-fn pull_request_state(pr : @protocol.GithubPullRequestDetail) -> @html.Html {
+fn pull_request_state(
+  locale~ : @i18n.Locale,
+  pr : @protocol.GithubPullRequestDetail,
+) -> @html.Html {
   let (label, style) = match pr.state {
-    "OPEN" if pr.item.draft => ("Draft", "draft")
-    "OPEN" => ("Open", "open")
-    "MERGED" => ("Merged", "merged")
-    "CLOSED" => ("Closed", "closed")
+    "OPEN" if pr.item.draft => (ui(locale, DraftLabel), "draft")
+    "OPEN" => (ui(locale, OpenLabel), "open")
+    "MERGED" => (ui(locale, MergedLabel), "merged")
+    "CLOSED" => (ui(locale, ClosedLabel), "closed")
     state => (state, "unknown")
   }
   @html.span(class="github-pr-state " + style, [
@@ -162,12 +168,14 @@ fn pull_request_state(pr : @protocol.GithubPullRequestDetail) -> @html.Html {
 
 ///|
 fn pull_request_body(
+  locale~ : @i18n.Locale,
   pr : @protocol.GithubPullRequestDetail,
   author_avatar : String?,
   open_link : (String) -> @cmd.Cmd,
 ) -> @html.Html {
   let conversation : Array[@html.Html] = [
     comment_card(
+      locale~,
       pr.item.author,
       author_avatar,
       pr.created_at,
@@ -180,6 +188,7 @@ fn pull_request_body(
   for comment in pr.comments {
     conversation.push(
       comment_card(
+        locale~,
         comment.author,
         if comment.author == pr.item.author {
           author_avatar
@@ -193,19 +202,20 @@ fn pull_request_body(
       ),
     )
   }
-  conversation.push(checks_view(pr, open_link))
+  conversation.push(checks_view(locale~, pr, open_link))
   @html.div(class="github-pr-layout", [
     @html.section(
       class="github-conversation",
-      attrs=@html.Attrs::build().aria_label("Pull request conversation"),
+      attrs=@html.Attrs::build().aria_label(ui(locale, ConversationLabel)),
       conversation,
     ),
-    metadata_view(pr),
+    metadata_view(locale~, pr),
   ])
 }
 
 ///|
 fn comment_card(
+  locale~ : @i18n.Locale,
   author : String?,
   avatar : String?,
   created_at : String,
@@ -221,26 +231,26 @@ fn comment_card(
       @html.header(class="github-comment-header", [
         avatar_view(avatar),
         @html.div(class="github-comment-meta", [
-          @html.strong(author.unwrap_or("Deleted user")),
+          @html.strong(author.unwrap_or(ui(locale, DeletedUser))),
           @html.button(
             class="github-detail-link github-comment-date",
             title=created_at,
             on_click=open_link(url),
-            [
-              @html.text("commented "),
-              @html.time(datetime=created_at, relative_date(created_at)),
-            ],
+            @html.time(
+              datetime=created_at,
+              ui(locale, CommentedAt(relative_date(created_at, locale.tag()))),
+            ),
           ),
         ]),
         if description {
-          @html.span(class="github-author-badge", "Author")
+          @html.span(class="github-author-badge", ui(locale, AuthorLabel))
         } else {
           @html.nothing
         },
       ]),
       @html.div(class="github-comment-body", [
         if body.is_empty() {
-          @html.p(class="github-detail-status", "No description provided.")
+          @html.p(class="github-detail-status", ui(locale, NoDescription))
         } else {
           @html.div(
             class="msg-content markdown",
@@ -253,16 +263,16 @@ fn comment_card(
 }
 
 ///|
-extern "js" fn relative_date(value : String) -> String =
-  #| (value) => {
+extern "js" fn relative_date(value : String, locale : String) -> String =
+  #| (value, locale) => {
   #|   const date = new Date(value);
   #|   if (!Number.isFinite(date.getTime())) return value;
   #|   const seconds = Math.max(0, (Date.now() - date.getTime()) / 1000);
-  #|   if (seconds < 60) return "just now";
-  #|   if (seconds < 3600) return new Intl.RelativeTimeFormat("en").format(-Math.floor(seconds / 60), "minute");
-  #|   if (seconds < 86400) return new Intl.RelativeTimeFormat("en").format(-Math.floor(seconds / 3600), "hour");
-  #|   if (seconds < 604800) return new Intl.RelativeTimeFormat("en").format(-Math.floor(seconds / 86400), "day");
-  #|   return "on " + new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+  #|   if (seconds < 60) return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(0, "second");
+  #|   if (seconds < 3600) return new Intl.RelativeTimeFormat(locale).format(-Math.floor(seconds / 60), "minute");
+  #|   if (seconds < 86400) return new Intl.RelativeTimeFormat(locale).format(-Math.floor(seconds / 3600), "hour");
+  #|   if (seconds < 604800) return new Intl.RelativeTimeFormat(locale).format(-Math.floor(seconds / 86400), "day");
+  #|   return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(date);
   #| }
 
 ///|
@@ -274,25 +284,29 @@ fn metadata_section(title : String, children : Array[@html.Html]) -> @html.Html 
 }
 
 ///|
-fn metadata_view(pr : @protocol.GithubPullRequestDetail) -> @html.Html {
+fn metadata_view(
+  locale~ : @i18n.Locale,
+  pr : @protocol.GithubPullRequestDetail,
+) -> @html.Html {
   @html.div(
     class="github-metadata",
     attrs=@html.Attrs::build()
       .role("complementary")
-      .aria_label("Pull request details"),
+      .aria_label(ui(locale, DetailsLabel)),
     [
       metadata_section(
-        "Reviewers",
+        ui(locale, ReviewersLabel),
         if pr.reviewers.is_empty() {
-          [@html.p(class="github-metadata-empty", "No reviews yet")]
+          [@html.p(class="github-metadata-empty", ui(locale, NoReviews))]
         } else {
           pr.reviewers.map(reviewer => {
             let (label, style) = match reviewer.state {
-              "APPROVED" => ("Approved", "passed")
-              "CHANGES_REQUESTED" => ("Changes requested", "failed")
-              "REQUESTED" => ("Review requested", "pending")
-              "COMMENTED" => ("Commented", "other")
-              "DISMISSED" => ("Dismissed", "other")
+              "APPROVED" => (ui(locale, ApprovedLabel), "passed")
+              "CHANGES_REQUESTED" => (ui(locale, ChangesRequested), "failed")
+              "REQUESTED" => (ui(locale, ReviewRequested), "pending")
+              "COMMENTED" => (ui(locale, CommentedLabel), "other")
+              "DISMISSED" => (ui(locale, DismissedLabel), "other")
+              "PENDING" => (ui(locale, PendingLabel), "pending")
               _ =>
                 (
                   reviewer.state.to_lower().replace_all(old="_", new=" "),
@@ -307,17 +321,17 @@ fn metadata_view(pr : @protocol.GithubPullRequestDetail) -> @html.Html {
         },
       ),
       metadata_section(
-        "Assignees",
+        ui(locale, AssigneesLabel),
         if pr.assignees.is_empty() {
-          [@html.p(class="github-metadata-empty", "No one assigned")]
+          [@html.p(class="github-metadata-empty", ui(locale, NoAssignees))]
         } else {
           pr.assignees.map(name => @html.p(name))
         },
       ),
       metadata_section(
-        "Labels",
+        ui(locale, LabelsLabel),
         if pr.labels.is_empty() {
-          [@html.p(class="github-metadata-empty", "None yet")]
+          [@html.p(class="github-metadata-empty", ui(locale, NoLabels))]
         } else {
           [
             @html.div(
@@ -327,14 +341,14 @@ fn metadata_view(pr : @protocol.GithubPullRequestDetail) -> @html.Html {
           ]
         },
       ),
-      metadata_section("Milestone", [
+      metadata_section(ui(locale, MilestoneLabel), [
         @html.p(
           class=if pr.milestone is None { "github-metadata-empty" } else { "" },
-          pr.milestone.unwrap_or("No milestone"),
+          pr.milestone.unwrap_or(ui(locale, NoMilestone)),
         ),
       ]),
-      metadata_section("Changes", [
-        @html.p("\{pr.changed_files} changed files"),
+      metadata_section(ui(locale, ChangesLabel), [
+        @html.p(ui(locale, ChangedFiles(pr.changed_files))),
         @html.div(class="github-diffstat", [
           @html.span(class="github-additions", "+\{pr.additions}"),
           @html.span(class="github-deletions", "−\{pr.deletions}"),
@@ -346,26 +360,27 @@ fn metadata_view(pr : @protocol.GithubPullRequestDetail) -> @html.Html {
 
 ///|
 fn checks_view(
+  locale~ : @i18n.Locale,
   pr : @protocol.GithubPullRequestDetail,
   open_link : (String) -> @cmd.Cmd,
 ) -> @html.Html {
-  let (summary, style) = checks_summary(pr.checks)
+  let (summary, style) = checks_summary(locale~, pr.checks)
   let rows : Array[@html.Html] = []
   // Keep the provider's order within each group, with actionable checks first.
   for group in ["failed", "pending", "other", "passed"] {
     for check in pr.checks {
       if check_style(check.state) == group {
-        rows.push(check_row(check, open_link))
+        rows.push(check_row(locale~, check, open_link))
       }
     }
   }
   @html.section(
     class="github-checks-card",
-    attrs=@html.Attrs::build().aria_label("Checks"),
+    attrs=@html.Attrs::build().aria_label(ui(locale, ChecksLabel)),
     [
       if pr.checks.is_empty() {
         @html.div(class="github-checks-summary", [
-          check_icon("other", "No checks"),
+          check_icon("other", ui(locale, NoChecks)),
           @html.span(class="github-check-summary", summary),
         ])
       } else {
@@ -374,33 +389,36 @@ fn checks_view(
           open=style == "failed" || style == "pending",
           [
             @html.summary(class="github-checks-summary", [
-              check_icon(style, "Check status"),
+              check_icon(style, ui(locale, CheckStatus)),
               @html.span(class="github-check-summary", summary),
               @html.span(class="github-check-toggle", [
-                @html.span(class="github-check-show", "Show"),
-                @html.span(class="github-check-hide", "Hide"),
+                @html.span(class="github-check-show", ui(locale, ShowLabel)),
+                @html.span(class="github-check-hide", ui(locale, HideLabel)),
               ]),
             ]),
             @html.div(
               class="github-checks",
               attrs=@html.Attrs::build()
                 .role("region")
-                .aria_label("Check results")
+                .aria_label(ui(locale, CheckResults))
                 .tabindex(0),
               rows,
             ),
           ],
         )
       },
-      mergeability_view(pr),
+      mergeability_view(locale~, pr),
     ],
   )
 }
 
 ///|
-fn checks_summary(checks : Array[@protocol.GithubCheck]) -> (String, String) {
+fn checks_summary(
+  locale~ : @i18n.Locale,
+  checks : Array[@protocol.GithubCheck],
+) -> (String, String) {
   if checks.is_empty() {
-    return ("No checks reported", "other")
+    return (ui(locale, NoChecksReported), "other")
   }
   let passed = checks
     .filter(check => check_style(check.state) == "passed")
@@ -424,18 +442,16 @@ fn checks_summary(checks : Array[@protocol.GithubCheck]) -> (String, String) {
   let phrases : Array[String] = []
   for
     (count, label) in [
-      (passed, "successful"),
-      (pending, "pending"),
-      (failed, "failed"),
-      (cancelled, "cancelled"),
-      (skipped, "skipped"),
-      (neutral, "neutral"),
-      (other, "other"),
+      (passed, ui(locale, SuccessfulChecks(passed))),
+      (pending, ui(locale, PendingChecks(pending))),
+      (failed, ui(locale, FailedChecks(failed))),
+      (cancelled, ui(locale, CancelledChecks(cancelled))),
+      (skipped, ui(locale, SkippedChecks(skipped))),
+      (neutral, ui(locale, NeutralChecks(neutral))),
+      (other, ui(locale, OtherChecks(other))),
     ] {
     if count > 0 {
-      phrases.push(
-        "\{count} \{label} " + (if count == 1 { "check" } else { "checks" }),
-      )
+      phrases.push(label)
     }
   }
   let style = if failed > 0 {
@@ -447,7 +463,17 @@ fn checks_summary(checks : Array[@protocol.GithubCheck]) -> (String, String) {
   } else {
     "passed"
   }
-  (phrases.join(" and "), style)
+  (
+    phrases.join(
+      match locale {
+        English => " and "
+        SimplifiedChinese | TraditionalChinese => "，"
+        Japanese => "、"
+        Spanish => " y "
+      },
+    ),
+    style,
+  )
 }
 
 ///|
@@ -476,15 +502,30 @@ fn check_icon(style : String, label : String) -> @html.Html {
 
 ///|
 fn check_row(
+  locale~ : @i18n.Locale,
   check : @protocol.GithubCheck,
   open_link : (String) -> @cmd.Cmd,
 ) -> @html.Html {
   let name = check.workflow.map(workflow => workflow + " / ").unwrap_or("") +
     check.name
   let label = match check.state {
-    "SUCCESS" => "Successful"
-    "FAILURE" | "ERROR" => "Failed"
-    state => state.to_lower().replace_all(old="_", new=" ")
+    "SUCCESS" => ui(locale, SuccessfulLabel)
+    "FAILURE" => ui(locale, FailedLabel)
+    "ERROR" => ui(locale, FailedLabel)
+    "CANCELLED" => ui(locale, CancelledLabel)
+    "SKIPPED" => ui(locale, SkippedLabel)
+    "NEUTRAL" => ui(locale, NeutralLabel)
+    "QUEUED" => ui(locale, QueuedLabel)
+    "IN_PROGRESS" => ui(locale, InProgressLabel)
+    "PENDING" => ui(locale, PendingLabel)
+    "EXPECTED" => ui(locale, ExpectedLabel)
+    "WAITING" => ui(locale, WaitingLabel)
+    "REQUESTED" => ui(locale, RequestedLabel)
+    "TIMED_OUT" => ui(locale, TimedOutLabel)
+    "ACTION_REQUIRED" => ui(locale, ActionRequiredLabel)
+    "STARTUP_FAILURE" => ui(locale, StartupFailureLabel)
+    "STALE" => ui(locale, StaleLabel)
+    state => state
   }
   @html.div(class="github-check", [
     check_icon(check_style(check.state), label),
@@ -493,7 +534,7 @@ fn check_row(
       title=if check.workflow is Some(_) {
         "GitHub Actions"
       } else {
-        "Status check"
+        ui(locale, StatusCheck)
       },
       @icons.icon(
         if check.workflow is Some(_) {
@@ -509,9 +550,9 @@ fn check_row(
         @html.button(
           class="github-detail-link github-check-details",
           title=url,
-          attrs=@html.Attrs::build().aria_label("Details for " + name),
+          attrs=@html.Attrs::build().aria_label(ui(locale, CheckDetails(name))),
           on_click=open_link(url),
-          "Details",
+          ui(locale, ViewDetails),
         )
       None => @html.nothing
     },
@@ -519,18 +560,19 @@ fn check_row(
 }
 
 ///|
-fn mergeability_view(pr : @protocol.GithubPullRequestDetail) -> @html.Html {
+fn mergeability_view(
+  locale~ : @i18n.Locale,
+  pr : @protocol.GithubPullRequestDetail,
+) -> @html.Html {
   let (text, style) = match (pr.state, pr.mergeable) {
-    ("MERGED", _) => ("Pull request successfully merged.", "passed")
-    ("CLOSED", _) => ("This pull request is closed.", "other")
-    (_, "MERGEABLE") =>
-      ("This branch has no conflicts with the base branch.", "passed")
-    (_, "CONFLICTING") =>
-      ("This branch has conflicts with the base branch.", "failed")
-    _ => ("Merge conflict status is not available yet.", "other")
+    ("MERGED", _) => (ui(locale, MergeSucceeded), "passed")
+    ("CLOSED", _) => (ui(locale, PullRequestClosed), "other")
+    (_, "MERGEABLE") => (ui(locale, NoConflicts), "passed")
+    (_, "CONFLICTING") => (ui(locale, HasConflicts), "failed")
+    _ => (ui(locale, ConflictsUnavailable), "other")
   }
   @html.div(class="github-mergeability", [
-    check_icon(style, "Merge conflict status"),
+    check_icon(style, ui(locale, MergeConflictStatus)),
     @html.span(text),
   ])
 }

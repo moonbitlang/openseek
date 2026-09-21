@@ -167,7 +167,12 @@ fn panel_view(
         open_child: actions.open_child,
       }),
       @dock.launcher_pane(locale~, launcher),
-      @github.panel(input.github, actions.github_events, actions.open_link),
+      @github.panel(
+        locale~,
+        input.github,
+        actions.github_events,
+        actions.open_link,
+      ),
     ],
   )
 }

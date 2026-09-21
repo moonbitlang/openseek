@@ -1,5 +1,6 @@
 ///|
 pub fn toolbar(
+  locale~ : @i18n.Locale,
   state : State,
   emit : @cmd.Emit[Msg],
   current~ : @github.State,
@@ -9,15 +10,15 @@ pub fn toolbar(
     @html.button(
       class="github-review-toggle",
       type_="button",
-      title="Show GitHub pull request comments",
+      title=ui(locale, ShowComments),
       on_click=emit(Toggle),
       attrs=@html.Attrs::build()
         .role("switch")
-        .aria_label("GitHub comments")
+        .aria_label(ui(locale, CommentsLabel))
         .aria_checked(state.enabled.to_string()),
       [
         @icons.icon_github(),
-        @html.span("GitHub comments"),
+        @html.span(ui(locale, CommentsLabel)),
         @html.span(
           class=if state.enabled {
             "github-review-switch on"
@@ -31,7 +32,7 @@ pub fn toolbar(
     if state.enabled {
       @html.button(
         class="github-review-refresh",
-        title="Refresh GitHub comments",
+        title=ui(locale, RefreshComments),
         disabled=state.loading || state.busy,
         on_click=emit(Refresh),
         "↻",
@@ -44,6 +45,7 @@ pub fn toolbar(
 
 ///|
 fn comment_view(
+  locale~ : @i18n.Locale,
   state : State,
   emit : @cmd.Emit[Msg],
   comment : @protocol.GithubReviewComment,
@@ -67,19 +69,17 @@ fn comment_view(
               @icons.icon_github(),
             )
         },
-        @html.strong(comment.author.unwrap_or("Deleted user")),
+        @html.strong(comment.author.unwrap_or(ui(locale, DeletedUser))),
         @html.a(
           class="github-review-time",
           href=comment.url,
           title=comment.created_at,
-          comment.created_at
-          .replace_all(old="T", new=" ")
-          .replace_all(old="Z", new=" UTC"),
+          comment_date(comment.created_at, locale.tag()),
         ),
         if comment.can_delete {
           @html.button(
             class="github-review-delete",
-            title="Delete comment",
+            title=ui(locale, DeleteComment),
             disabled=state.busy,
             on_click=emit(DeleteRequested(comment.id)),
             @icons.icon_trash(),
@@ -97,17 +97,17 @@ fn comment_view(
           class="github-review-delete-confirm",
           attrs=@html.Attrs::build().role("alert"),
           [
-            @html.span("Delete this comment?"),
+            @html.span(ui(locale, ConfirmDelete)),
             @html.button(
               disabled=state.busy,
               on_click=emit(DeleteCancelled),
-              "Cancel",
+              ui(locale, CancelLabel),
             ),
             @html.button(
               class="danger",
               disabled=state.busy,
               on_click=emit(DeleteConfirmed(comment.id)),
-              "Delete",
+              ui(locale, DeleteLabel),
             ),
           ],
         )
@@ -120,6 +120,7 @@ fn comment_view(
 
 ///|
 pub fn composer(
+  locale~ : @i18n.Locale,
   state : State,
   emit : @cmd.Emit[Msg],
   target : GithubDraftTarget,
@@ -130,8 +131,8 @@ pub fn composer(
     state.active == Some(target) ||
     !body.is_empty()
   let title = match target {
-    Line(..) => "Write a comment"
-    Thread(..) => "Reply"
+    Line(..) => ui(locale, WriteComment)
+    Thread(..) => ui(locale, ReplyLabel)
   }
   @html.div(
     class="github-review-composer",
@@ -143,9 +144,9 @@ pub fn composer(
         value=body,
         rows=if expanded { 4 } else { 1 },
         placeholder=if target is Thread(..) {
-          "Reply…"
+          ui(locale, ReplyPlaceholder)
         } else {
-          "Leave a comment…"
+          ui(locale, CommentPlaceholder)
         },
         disabled=state.busy,
         on_input=body => emit(Edit(target, body)),
@@ -172,16 +173,16 @@ pub fn composer(
           @html.button(
             disabled=state.busy,
             on_click=emit(Cancel(target)),
-            "Cancel",
+            ui(locale, CancelLabel),
           ),
           @html.button(
             class="github-review-send",
             disabled=state.busy || !enabled || body.trim().is_empty(),
             on_click=emit(Send(target)),
             if state.busy {
-              "Sending…"
+              ui(locale, SendingLabel)
             } else {
-              "Send"
+              ui(locale, SendLabel)
             },
           ),
         ])
@@ -194,6 +195,7 @@ pub fn composer(
 
 ///|
 pub fn thread_view(
+  locale~ : @i18n.Locale,
   state : State,
   emit : @cmd.Emit[Msg],
   thread : @protocol.GithubReviewThread,
@@ -205,9 +207,15 @@ pub fn thread_view(
       None => thread.original_line
     }) {
     Some(line) =>
-      (if thread.side == "LEFT" { "Original line " } else { "Line " }) +
-      line.to_string()
-    None => "File conversation"
+      ui(
+        locale,
+        if thread.side == "LEFT" {
+          OriginalLine(line)
+        } else {
+          LineLabel(line)
+        },
+      )
+    None => ui(locale, FileConversation)
   }
   @html.section(
     class="github-review-thread" +
@@ -217,7 +225,7 @@ pub fn thread_view(
       @html.div(class="github-review-thread-location", [
         @html.span(location),
         if thread.outdated {
-          @html.span(class="github-review-badge", "Outdated")
+          @html.span(class="github-review-badge", ui(locale, OutdatedLabel))
         } else {
           @html.nothing
         },
@@ -227,9 +235,9 @@ pub fn thread_view(
             on_click=emit(Expand(thread.id)),
             attrs=@html.Attrs::build().aria_expanded((!collapsed).to_string()),
             if collapsed {
-              "Resolved · Show conversation"
+              ui(locale, ResolvedShow)
             } else {
-              "Resolved · Hide conversation"
+              ui(locale, ResolvedHide)
             },
           )
         } else {
@@ -241,11 +249,14 @@ pub fn thread_view(
       } else {
         @html.div([
           @html.div(
-            thread.comments.map(comment => comment_view(state, emit, comment)),
+            thread.comments.map(comment => {
+              comment_view(locale~, state, emit, comment)
+            }),
           ),
           @html.div(class="github-review-thread-footer", [
             if thread.can_reply && thread.comments.get(0) is Some(root) {
               composer(
+                locale~,
                 state,
                 emit,
                 Thread(thread=thread.id, comment=root.id),
@@ -261,9 +272,9 @@ pub fn thread_view(
                 disabled=state.busy,
                 on_click=emit(Resolve(thread.id, !thread.resolved)),
                 if thread.resolved {
-                  "Unresolve conversation"
+                  ui(locale, UnresolveConversation)
                 } else {
-                  "Resolve conversation"
+                  ui(locale, ResolveConversation)
                 },
               )
             } else {
@@ -278,6 +289,7 @@ pub fn thread_view(
 
 ///|
 pub fn status_view(
+  locale~ : @i18n.Locale,
   state : State,
   emit : @cmd.Emit[Msg],
   matching : Bool,
@@ -292,13 +304,13 @@ pub fn status_view(
       @html.div(
         class="github-review-error",
         attrs=@html.Attrs::build().role("alert"),
-        "Could not check the current GitHub pull request. \{error}",
+        ui(locale, CheckFailed(error)),
       ),
       @html.button(
         type_="button",
         disabled=current.current_loading,
         on_click=emit(CheckAvailability),
-        "Retry PR check",
+        ui(locale, RetryCheck),
       ),
     ])
   }
@@ -310,15 +322,15 @@ pub fn status_view(
     children.push(
       @html.span(
         attrs=@html.Attrs::build().role("status"),
-        "Loading GitHub comments…",
+        ui(locale, LoadingComments),
       ),
     )
   }
   for
     error in [
       state.error,
-      state.mutation_error,
-      state.storage_error,
+      state.mutation_error.map(error => failure_text(locale, error)),
+      state.storage_error.map(error => failure_text(locale, error)),
       match state.file {
         Some(Err(error)) => Some(error)
         _ => None
@@ -341,18 +353,16 @@ pub fn status_view(
     !matching {
     children.push(
       @html.div(class="github-review-recovery", [
-        @html.span(
-          "Update this checkout to the latest PR revision to add inline comments. Local edits can also make the comparison differ.",
-        ),
+        @html.span(ui(locale, UpdateHint)),
         @html.button(
           class="github-review-update",
           type_="button",
           disabled=updating || state.busy,
           on_click=update_pr,
           if updating {
-            "Updating checkout…"
+            ui(locale, UpdatingCheckout)
           } else {
-            "Update checkout"
+            ui(locale, UpdateCheckout)
           },
         ),
       ]),
@@ -362,18 +372,20 @@ pub fn status_view(
     children.push(
       @html.details(class="github-review-unplaced", [
         @html.summary(
-          "Conversations outside the current diff (\{unplaced.length() + drafts.length()})",
+          ui(locale, OutsideDiff(unplaced.length() + drafts.length())),
         ),
         @html.div(class="github-review-unplaced-body", [
-          @html.div(unplaced.map(thread => thread_view(state, emit, thread))),
+          @html.div(
+            unplaced.map(thread => thread_view(locale~, state, emit, thread)),
+          ),
           @html.div(
             drafts.map(target => {
               @html.section(class="github-review-thread", [
                 @html.div(
                   class="github-review-thread-location",
-                  "Local draft · earlier or hidden line",
+                  ui(locale, EarlierDraft),
                 ),
-                composer(state, emit, target, false),
+                composer(locale~, state, emit, target, false),
               ])
             }),
           ),
@@ -404,3 +416,11 @@ pub fn State::comment_count(self : State, path : String) -> Int {
   })
   .unwrap_or(0)
 }
+
+///|
+extern "js" fn comment_date(value : String, locale : String) -> String =
+  #| (value, locale) => {
+  #|   const date = new Date(value);
+  #|   if (!Number.isFinite(date.getTime())) return value;
+  #|   return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  #| }

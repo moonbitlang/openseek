@@ -27,6 +27,7 @@ fn disclosure(
 
 ///|
 fn list_view(
+  locale~ : @i18n.Locale,
   state : State,
   kind : @protocol.GithubListKind,
   emit : @cmd.Emit[Msg],
@@ -46,7 +47,7 @@ fn list_view(
               class="github-more",
               disabled=group.loading,
               on_click=emit(Retry(kind)),
-              "Retry avatars",
+              ui(locale, RetryAvatars),
             ),
           ],
         ),
@@ -58,9 +59,9 @@ fn list_view(
         url == item.url
       let meta = "#\{item.number}" +
         item.author.map(author => " · \{author}").unwrap_or("") +
-        (if item.draft { " · Draft" } else { "" }) +
+        (if item.draft { " · " + ui(locale, DraftLabel) } else { "" }) +
         (if !(kind is Issues) && state.is_current(item) {
-          " · Currently checked out"
+          " · " + ui(locale, CurrentCheckout)
         } else {
           ""
         })
@@ -86,7 +87,7 @@ fn list_view(
                 if !(kind is Issues) && state.is_current(item) {
                   @html.span(
                     class="github-current",
-                    title="Currently checked out",
+                    title=ui(locale, CurrentCheckout),
                     @icons.icon(@icons.icon_check),
                   )
                 } else {
@@ -98,7 +99,7 @@ fn list_view(
             if kind is Issues {
               @html.nothing
             } else {
-              checkout_button(state, reply.repository_url, item, emit)
+              checkout_button(locale~, state, reply.repository_url, item, emit)
             },
           ],
         ),
@@ -109,9 +110,9 @@ fn list_view(
         @html.div(
           class="github-empty",
           match kind {
-            CreatedByMe => "No open pull requests created by you."
-            AllOpen => "No open pull requests."
-            Issues => "No open issues."
+            CreatedByMe => ui(locale, NoCreatedPulls)
+            AllOpen => ui(locale, NoOpenPulls)
+            Issues => ui(locale, NoOpenIssues)
           },
         ),
       )
@@ -129,9 +130,9 @@ fn list_view(
             )
           },
           if reply.items.length() < 1000 {
-            "Load more…"
+            ui(locale, LoadMore)
           } else {
-            "View all on GitHub"
+            ui(locale, ViewAll)
           },
         ),
       )
@@ -142,7 +143,7 @@ fn list_view(
       @html.div(
         class="github-empty",
         attrs=@html.Attrs::build().role("status"),
-        "Loading…",
+        ui(locale, LoadingLabel),
       ),
     )
   }
@@ -153,7 +154,11 @@ fn list_view(
         attrs=@html.Attrs::build().role("alert"),
         [
           @html.div(error),
-          @html.button(class="github-more", on_click=emit(Retry(kind)), "Retry"),
+          @html.button(
+            class="github-more",
+            on_click=emit(Retry(kind)),
+            ui(locale, RetryLabel),
+          ),
         ],
       ),
     )
@@ -163,6 +168,7 @@ fn list_view(
 
 ///|
 fn checkout_button(
+  locale~ : @i18n.Locale,
   state : State,
   repository_url : String,
   item : @protocol.GithubItem,
@@ -173,19 +179,21 @@ fn checkout_button(
   let updating = state.is_current(item)
   let label = if pending {
     if updating {
-      "Updating checkout for PR #\{item.number}…"
+      ui(locale, UpdatingCheckout(item.number))
     } else {
-      "Checking out PR #\{item.number}…"
+      ui(locale, CheckingOut(item.number))
     }
   } else if updating {
-    "Update checkout for PR #\{item.number}"
+    ui(locale, UpdateCheckout(item.number))
   } else {
-    "Check out PR #\{item.number} locally"
+    ui(locale, CheckoutLocally(item.number))
   }
   @html.button(
     class="github-checkout" + (if pending { " pending" } else { "" }),
     title=label,
-    attrs=@html.Attrs::build().aria_label(label),
+    attrs=@html.Attrs::build()
+      .aria_label(label)
+      .data_set("pr-number", item.number.to_string()),
     disabled=!state.active || state.checkout_busy(),
     on_click=emit(
       if updating {
@@ -232,6 +240,7 @@ fn avatar_view(url : String?) -> @html.Html {
 
 ///|
 fn inventory(
+  locale~ : @i18n.Locale,
   state : State,
   emit : @cmd.Emit[Msg],
   open_link : (String) -> @cmd.Cmd,
@@ -244,7 +253,7 @@ fn inventory(
   }
   let pulls : Array[@html.Html] = [
     disclosure(
-      "Pull Requests",
+      ui(locale, PullRequestsLabel),
       state.pulls_expanded,
       emit(TogglePulls),
       section=true,
@@ -254,15 +263,15 @@ fn inventory(
     let groups : Array[@html.Html] = []
     for
       (kind, label) in [
-        (@protocol.CreatedByMe, "Created By Me"),
-        (@protocol.AllOpen, "All Open"),
+        (@protocol.CreatedByMe, ui(locale, CreatedByMeLabel)),
+        (@protocol.AllOpen, ui(locale, AllOpenLabel)),
       ] {
       let group = state.group(kind)
       groups.push(
         @html.div(class="github-group", [
           disclosure(label, group.expanded, emit(Toggle(kind))),
           if group.expanded {
-            list_view(state, kind, emit, open_link)
+            list_view(locale~, state, kind, emit, open_link)
           } else {
             @html.nothing
           },
@@ -280,23 +289,17 @@ fn inventory(
       ),
       @html.button(
         class="tab-action",
-        title="Refresh GitHub",
-        attrs=@html.Attrs::build().aria_label("Refresh GitHub"),
+        title=ui(locale, RefreshGithub),
+        attrs=@html.Attrs::build().aria_label(ui(locale, RefreshGithub)),
         disabled=!state.active || state.scope is None,
         on_click=emit(Refresh),
         @icons.icon(@icons.icon_sync),
       ),
     ]),
     if state.scope is None {
-      @html.div(
-        class="github-empty",
-        "Open a task with a GitHub repository to see pull requests and issues.",
-      )
+      @html.div(class="github-empty", ui(locale, OpenRepositoryHint))
     } else if !state.active {
-      @html.div(
-        class="github-empty",
-        "Connect to the workspace host to load GitHub.",
-      )
+      @html.div(class="github-empty", ui(locale, ConnectGithubHint))
     } else {
       @html.nothing
     },
@@ -310,14 +313,14 @@ fn inventory(
         (if state.issues.expanded { " expanded" } else { "" }),
       [
         disclosure(
-          "Issues",
+          ui(locale, IssuesLabel),
           state.issues.expanded,
           emit(Toggle(@protocol.Issues)),
           section=true,
         ),
         if state.issues.expanded {
           @html.div(class="github-section-body", [
-            list_view(state, @protocol.Issues, emit, open_link),
+            list_view(locale~, state, @protocol.Issues, emit, open_link),
           ])
         } else {
           @html.nothing
@@ -329,6 +332,7 @@ fn inventory(
 
 ///|
 pub fn panel(
+  locale~ : @i18n.Locale,
   state : State,
   emit : @cmd.Emit[Msg],
   open_link : (String) -> @cmd.Cmd,
@@ -339,10 +343,10 @@ pub fn panel(
     .map(detail => detail.item.url)
     .unwrap_or("placeholder")
   let details : Map[String, @html.Html] = Map([
-    (detail_key, detail_view(state, emit, open_link)),
+    (detail_key, detail_view(locale~, state, emit, open_link)),
   ])
   @html.div(class="github-panel", [
     @html.div(class="github-detail-host", details),
-    inventory(state, emit, open_link),
+    inventory(locale~, state, emit, open_link),
   ])
 }

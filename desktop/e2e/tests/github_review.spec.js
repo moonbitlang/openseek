@@ -66,6 +66,51 @@ async function openComments(page, { holdReview = false, missingRevision = false,
   return { app, fixture };
 }
 
+test('mounted GitHub comments, draft failures and focus follow live language changes', async ({ page }, testInfo) => {
+  const { app } = await openComments(page);
+  const right = page.locator('.github-review-inline-block [data-thread-id="right"]');
+  const draft = 'Keep this unsaved draft in its original language.';
+  await page.evaluate(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith('seekmoon.github-comment-drafts.v1:')) throw new Error('quota test');
+      return setItem.call(this, key, value);
+    };
+  });
+  await right.getByRole('textbox', { name: 'Reply', exact: true }).fill(draft);
+  const languages = [
+    { tag: 'zh-Hans', label: 'GitHub 评论', reply: '回复', send: '发送', resolve: '解决讨论', line: '第 8 行', error: '草稿仍保留在此窗口中，但无法保存到本地：', mode: 'token' },
+    { tag: 'zh-Hant', label: 'GitHub 留言', reply: '回覆', send: '傳送', resolve: '解決討論', line: '第 8 行', error: '草稿仍保留在此視窗中，但無法儲存至本機：', mode: 'tree' },
+    { tag: 'ja', label: 'GitHub コメント', reply: '返信', send: '送信', resolve: 'ディスカッションを解決', line: '8 行目', error: '下書きはこのウィンドウに残っていますが、ローカルに保存できませんでした：', mode: 'line' },
+    { tag: 'es', label: 'Comentarios de GitHub', reply: 'Responder', send: 'Enviar', resolve: 'Resolver discusión', line: 'Línea 8', error: 'El borrador sigue en esta ventana, pero no se pudo guardar localmente:', mode: 'token' },
+    { tag: 'en', label: 'GitHub comments', reply: 'Reply', send: 'Send', resolve: 'Resolve conversation', line: 'Line 8', error: 'Your draft remains in this window, but could not be saved locally:', mode: 'line' },
+  ];
+  for (const locale of languages) {
+    await right.locator('textarea').focus();
+    await page.evaluate(tag => {
+      Object.defineProperty(navigator, 'languages', { configurable: true, value: [tag] });
+      window.dispatchEvent(new Event('languagechange'));
+    }, locale.tag);
+    await expect(page.getByRole('switch', { name: locale.label, exact: true })).toHaveAttribute('aria-checked', 'true');
+    const reply = right.getByRole('textbox', { name: locale.reply, exact: true });
+    await expect(reply).toBeFocused();
+    await expect(reply).toHaveValue(draft);
+    await expect(reply).toHaveAttribute('placeholder', `${locale.reply}…`);
+    await expect(right.getByRole('button', { name: locale.send, exact: true })).toBeVisible();
+    await expect(right.getByRole('button', { name: locale.resolve, exact: true })).toBeVisible();
+    await expect(right.locator('.github-review-thread-location')).toHaveText(locale.line);
+    await expect(page.locator('.github-review-error')).toContainText(locale.error);
+    await expect(page.locator('.github-review-error')).toContainText('quota test');
+    await page.locator(`[data-diff-mode="${locale.mode}"]`).click();
+    await expect(right).toBeVisible();
+    await expect(reply).toHaveValue(draft);
+    await expect(right.locator('.github-review-markdown')).toContainText('Could we add coverage for the new limit?');
+    if (locale.tag === 'zh-Hans') await page.screenshot({ path: testInfo.outputPath('github-comments-zh.png') });
+  }
+  expect(app.requests.filter(request => request.method === 'github.review_mutate')).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('inline comment Markdown uses the hosted document context without loading images', async ({ page }) => {
   const requests = [];
   await page.route('https://**/*', route => {

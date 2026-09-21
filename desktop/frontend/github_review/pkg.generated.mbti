@@ -4,31 +4,46 @@ package "openseek_desktop/frontend/github_review"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
   "openseek_desktop/frontend/github",
+  "openseek_desktop/frontend/i18n",
   "openseek_desktop/protocol",
 }
 
 // Values
-pub fn composer(State, @cmd.Emit[Msg], @protocol.GithubDraftTarget, Bool) -> @html.Html
+pub fn composer(locale~ : @i18n.Locale, State, @cmd.Emit[Msg], @protocol.GithubDraftTarget, Bool) -> @html.Html
 
 pub fn reconcile(@cmd.Emit[Msg], State, @github.State, String?) -> (@cmd.Cmd, State)
 
-pub fn status_view(State, @cmd.Emit[Msg], Bool, Array[@protocol.GithubReviewThread], Array[@protocol.GithubDraftTarget], update_pr~ : @cmd.Cmd, updating~ : Bool, current~ : @github.State) -> @html.Html
+pub fn status_view(locale~ : @i18n.Locale, State, @cmd.Emit[Msg], Bool, Array[@protocol.GithubReviewThread], Array[@protocol.GithubDraftTarget], update_pr~ : @cmd.Cmd, updating~ : Bool, current~ : @github.State) -> @html.Html
 
-pub fn thread_view(State, @cmd.Emit[Msg], @protocol.GithubReviewThread) -> @html.Html
+pub fn thread_view(locale~ : @i18n.Locale, State, @cmd.Emit[Msg], @protocol.GithubReviewThread) -> @html.Html
 
-pub fn toolbar(State, @cmd.Emit[Msg], current~ : @github.State) -> @html.Html
+pub fn toolbar(locale~ : @i18n.Locale, State, @cmd.Emit[Msg], current~ : @github.State) -> @html.Html
 
 pub fn update(@cmd.Emit[Msg], Msg, State, current~ : @github.State) -> (@cmd.Cmd, State)
 
 // Errors
 
 // Types and methods
+pub(all) enum Failure {
+  Remote(String)
+  EarlierRevision
+  LineOutsideDiff
+  WrongDraftPullRequest
+  StorageUnavailable
+  RestoreDraftsFailed(String)
+  SaveDraftsFailed(String)
+} derive(Eq, @debug.Debug)
+pub fn Failure::equal(Self, Self) -> Bool
+pub fn Failure::not_equal(Self, Self) -> Bool
+pub fn Failure::to_repr(Self) -> @debug.Repr
+
 pub(all) enum Msg {
   CheckAvailability
   Toggle
   Refresh
-  Loaded(Int, Result[@protocol.GithubReviewReply, String], Result[Array[@protocol.GithubDraft], String])
+  Loaded(Int, Result[@protocol.GithubReviewReply, String], Result[Array[@protocol.GithubDraft], Failure])
   FileLoaded(Int, String, Result[@protocol.GithubReviewFileReply, String])
   Compose(@protocol.GithubDraftTarget)
   Edit(@protocol.GithubDraftTarget, String)
@@ -39,8 +54,8 @@ pub(all) enum Msg {
   DeleteConfirmed(String)
   Resolve(String, Bool)
   Expand(String)
-  Mutated(Int, @protocol.GithubReviewAction, @protocol.GithubDraft?, Result[@protocol.GithubReviewMutationReply, String], Result[Unit, String])
-  StorageSaved(String, Result[Unit, String])
+  Mutated(Int, @protocol.GithubReviewAction, @protocol.GithubDraft?, Result[@protocol.GithubReviewMutationReply, String], Result[Unit, Failure])
+  StorageSaved(String, Result[Unit, Failure])
 }
 
 pub(all) struct State {
@@ -62,8 +77,8 @@ pub(all) struct State {
   deleting : String?
   busy : Bool
   mutation_epoch : Int
-  mutation_error : String?
-  storage_error : String?
+  mutation_error : Failure?
+  storage_error : Failure?
 } derive(Eq)
 pub fn State::comment_count(Self, String) -> Int
 pub fn State::draft_body(Self, @protocol.GithubDraftTarget) -> String
