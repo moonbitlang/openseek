@@ -36,6 +36,7 @@ pub struct ChatResponse {
 pub impl @json.FromJson for ChatResponse
 
 pub(all) struct Content(Array[ContentPart]) derive(@debug.Debug)
+pub fn Content::contains(Self, StringView) -> Bool
 pub fn Content::is_text_only(Self) -> Bool
 pub fn Content::iter(Self) -> Iter[ContentPart]
 pub fn Content::text(Self) -> String

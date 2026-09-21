@@ -23,6 +23,13 @@ pub fn Content::text(self : Content) -> String {
 }
 
 ///|
+/// Search the concatenated text, including matches spanning text parts.
+/// File IDs are excluded, just as in `text()`.
+pub fn Content::contains(self : Content, pattern : StringView) -> Bool {
+  self.text().contains(pattern)
+}
+
+///|
 /// Whether every part is text. Empty content is text-only. Use this alongside
 /// `text()` when a comparison must not discard file references.
 pub fn Content::is_text_only(self : Content) -> Bool {

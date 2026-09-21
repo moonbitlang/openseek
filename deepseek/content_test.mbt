@@ -10,7 +10,7 @@ test "text extraction joins all fragments while iteration preserves files" {
   ]
   let message = @deepseek.ChatMessage(User, content=parts)
   assert_eq(message.content.text(), "previous agent process exited")
-  assert_true(message.content.text().contains("previous agent process exited"))
+  assert_true(message.content.contains("previous agent process exited"))
   assert_false(message.content.is_text_only())
   assert_eq(message.content.iter().collect(), parts)
 }
@@ -20,10 +20,12 @@ test "empty and file-only content contribute no text" {
   let empty = @deepseek.Content([])
   assert_eq(empty.text(), "")
   assert_true(empty.is_text_only())
+  assert_true(empty.contains(""))
   let file_only = @deepseek.Content([File(file_id="file-api-only")])
   assert_eq(file_only.text(), "")
-  assert_false(file_only.text().contains("previous agent process exited"))
+  assert_false(file_only.contains("previous agent process exited"))
   assert_false(file_only.is_text_only())
+  assert_false(file_only.contains("file-api-only"))
   let text_only = @deepseek.Content([
     Text(text=""),
     Text(text="hello"),

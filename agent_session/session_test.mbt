@@ -186,9 +186,7 @@ test "projection closes unresolved historical tool calls" {
   assert_true(messages[1].role is Assistant)
   assert_eq(messages[1].tool_calls.length(), 1)
   assert_true(messages[2].role is Tool("call_1"))
-  assert_true(
-    messages[2].content.text().contains("previous agent process exited"),
-  )
+  assert_true(messages[2].content.contains("previous agent process exited"))
   assert_true(messages[3].role is User)
   assert_eq(messages[3].content.text(), "continue")
 }
@@ -216,7 +214,7 @@ test "projection skips context-yield terminals" {
     )
   let messages = session.chat_messages()
   assert_eq(messages.length(), 3)
-  assert_true(messages[1].content.text().contains("checkpoint"))
+  assert_true(messages[1].content.contains("checkpoint"))
   assert_true(messages[2].role is User)
   assert_eq(messages[2].content.text(), "preserved steer")
 }
@@ -276,7 +274,7 @@ test "projection skips compacted assistant tool results" {
   assert_true(messages[1].role is User)
   assert_eq(messages[1].content.text(), "inspect")
   assert_true(messages[2].role is User)
-  assert_true(messages[2].content.text().contains("assistant inspected README"))
+  assert_true(messages[2].content.contains("assistant inspected README"))
 }
 
 ///|
@@ -300,9 +298,9 @@ test "summary events compact covered model context" {
   // The summary stands where the covered range stood, before the uncovered
   // recent user message — not at its own append position after it.
   assert_true(messages[1].role is User)
-  assert_true(messages[1].content.text().contains("[conversation summary]"))
-  assert_false(messages[1].content.text().contains("old user\n"))
-  assert_true(messages[1].content.text().contains("old user and assistant"))
+  assert_true(messages[1].content.contains("[conversation summary]"))
+  assert_false(messages[1].content.contains("old user\n"))
+  assert_true(messages[1].content.contains("old user and assistant"))
   assert_true(messages[2].role is User)
   assert_eq(messages[2].content.text(), "recent user")
 }
@@ -329,7 +327,7 @@ test "summary appended mid-turn projects before the uncovered tail" {
   let messages = session.chat_messages()
   assert_eq(messages.length(), 4)
   assert_true(messages[1].role is User)
-  assert_true(messages[1].content.text().contains("prior turn recap"))
+  assert_true(messages[1].content.contains("prior turn recap"))
   assert_true(messages[2].role is User)
   assert_eq(messages[2].content.text(), "active task")
   assert_true(messages[3].role is Assistant)
@@ -356,8 +354,8 @@ test "later summary supersedes earlier summary in model context" {
     )
   let messages = session.chat_messages()
   assert_eq(messages.length(), 2)
-  assert_true(messages[1].content.text().contains("superseding summary"))
-  assert_false(messages[1].content.text().contains("first summary"))
+  assert_true(messages[1].content.contains("superseding summary"))
+  assert_false(messages[1].content.contains("first summary"))
 }
 
 ///|
