@@ -9,6 +9,7 @@ import {
   "openseek_desktop/backend/internal/workspaces",
   "moonbitlang/async",
   "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
   "moonbitlang/core/json",
 }
 

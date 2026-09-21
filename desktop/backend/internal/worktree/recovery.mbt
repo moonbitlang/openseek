@@ -50,12 +50,14 @@ async fn checkout_states(dir : @pathx.Absolute) -> Map[String, CheckoutState] {
     .trim_end(chars="\r\n")
     .trim_end(chars="/")
   let managed_root = "\{root}/\{WorktreesDirName}"
-  let managed_root = if @fs.exists(managed_root) {
-    @pathx.Path(@fs.realpath(managed_root)).resolve().normalize().to_string()
-  } else {
-    // Keep stale registrations discoverable if the whole directory was deleted.
-    managed_root
-  }
+  let managed_root = @pathx.Path(@fs.realpath(managed_root))
+    .resolve()
+    .normalize()
+    .to_string() catch {
+      // Keep stale registrations discoverable if the whole directory was deleted.
+      @os_error.OSError(_) as error if error.is_ENOENT() => managed_root
+      error => raise error
+    }
   let prefix = managed_root.trim_end(chars="/").to_owned() + "/"
   let output = @gitx.output(dir, ["worktree", "list", "--porcelain", "-z"])
   let states : Map[String, CheckoutState] = Map([])
