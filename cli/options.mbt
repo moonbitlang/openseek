@@ -1,11 +1,11 @@
 ///|
-/// Options shared by the agent-running mains (`cmd/openseek` here and the
+/// Options shared by the agent-running mains (the root CLI here and the
 /// `openseek_tui` binary in `moonbitlang/openseek_tui`): `--api-key`,
 /// `--model`, `--api-url`, `--retry-attempts`, `--retry-backoff-ms`,
 /// `--max-steps`, `--thinking`, `--session`, `--session-root`, plus the
 /// provider-specific key options.
 ///
-/// `cmd/openseek` installs these on its root command with `global=true`, so
+/// The root CLI installs these on its root command with `global=true`, so
 /// they read the same value in any position — `openseek --api-key k run`,
 /// `openseek run --api-key k` — and the engine subcommands inherit them rather
 /// than redeclaring (redeclaring a global is a build error). `openseek_tui`

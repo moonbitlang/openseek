@@ -181,7 +181,7 @@ async fn[G] Engine::spawn(group : @async.TaskGroup[G]) -> Engine {
   let _proc = @process.spawn(
     group,
     "moon",
-    ["run", "--target", "native", "cmd/openseek", "--", "serve"],
+    ["run", "--target", "native", ".", "--", "serve"],
     inherit_env=false,
     extra_env=child_env,
     stdin=child_stdin,

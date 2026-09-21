@@ -1,5 +1,5 @@
 ///|
-/// Shared helpers for the command mains (`cmd/openseek`, the `eval` harness
+/// Shared helpers for the command mains (the root CLI, the `eval` harness
 /// mains, and the out-of-tree `openseek_tui` binary): accessors over
 /// `@argparse.Matches`, the shared agent options, and the sanitizer every
 /// command runs untrusted text through before printing it. Each main used to
@@ -85,7 +85,7 @@ test "terminal_safe_line collapses whitespace, drops controls, elides at limit" 
 /// Normalize a raised error's text for a one-line stderr report. argparse
 /// already prefixes its own errors with `error: `, and some Moon failures carry
 /// a `FAILED: ` marker, so strip those to avoid `error: error: …`. This is the
-/// single sanitizer both command mains (`cmd/openseek` here and the
+/// single sanitizer both command mains (the root CLI here and the
 /// `openseek_tui` binary in `moonbitlang/openseek_tui`) run untrusted failure
 /// text through. The result is a `StringView` that borrows `error_text` — the
 /// matched arms strip prefixes without copying; callers that need owned text

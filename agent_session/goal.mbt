@@ -44,7 +44,7 @@ pub const GoalCheckPrefix : String = "[goal check]"
 /// model has to read it as one — but no human typed it. Readers that tell
 /// the user's own words apart from engine-injected input (the visualizer)
 /// need the exact text, so it lives here with the goal vocabulary where the
-/// producer (`cmd/openseek` serve) and its readers cannot drift.
+/// producer (`openseek serve`) and its readers cannot drift.
 pub const GoalContinuePrompt : String =
   #|Continue working toward the standing goal. When it is fully met, record
   #|that by calling the goal tool with status "met".

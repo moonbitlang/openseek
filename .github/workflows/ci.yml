@@ -264,8 +264,8 @@ jobs:
       - name: Background turn lifecycle (offline CLI)
         if: matrix.target == 'native'
         run: |
-          moon build cmd/openseek --target native
-          moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/cmd/openseek/openseek.exe
+          moon build . --target native
+          moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
 
   # cmd/viz_app is a separate MoonBit module and owns its browser test runner.
   # Keep it out of Desktop's recipe so either application can be tested alone.

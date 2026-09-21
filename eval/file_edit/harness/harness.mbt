@@ -95,9 +95,7 @@ async fn run_trial(config : Config, index : Int) -> TrialResult {
     "run",
     "--target",
     "native",
-    // cmd/openseek is the engine package (the pre-rename cmd/main no longer
-    // exists, so the old invocation could not have launched at all).
-    "\{repo_root}/cmd/openseek",
+    repo_root,
     "--",
     "--max-steps",
     config.max_steps.to_string(),

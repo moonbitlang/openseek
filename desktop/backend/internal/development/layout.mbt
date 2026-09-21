@@ -58,10 +58,7 @@ pub fn Layout::viz_bundle(self : Layout) -> String {
 ///|
 /// Return the engine output directory in the same native profile as the host.
 pub fn Layout::engine_dir(self : Layout) -> String {
-  self.build_root
-  .join("moonbitlang/openseek/cmd/openseek")
-  .normalize()
-  .to_string()
+  self.build_root.join("moonbitlang/openseek").normalize().to_string()
 }
 
 ///|

@@ -4,9 +4,9 @@ Included in `just test` and native CI. Run it separately with
 `just test-turn-finish`, or directly against the native CLI:
 
 ```sh
-moon build cmd/openseek --target native
+moon build . --target native
 moon run tests/integration/turn_finish.mbtx \
-  _build/native/debug/build/moonbitlang/openseek/cmd/openseek/openseek.exe
+  _build/native/debug/build/moonbitlang/openseek/openseek.exe
 ```
 
 The local scripted provider checks the actual request messages through a real

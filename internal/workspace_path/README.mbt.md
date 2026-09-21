@@ -3,7 +3,7 @@
 Lexical path helpers shared by every agent tool that has to interpret a path
 the model wrote. `write`, `edit`, `multi_edit`, `remove`, `mbtx`,
 `write_scope`, `auto_check`, `moon_check`, `source_write_policy`, `sandbox`,
-`agent_subtask`, and the `cmd/openseek` entry point all resolve and compare
+`agent_subtask`, and the root CLI entry point all resolve and compare
 paths through this package,
 so they agree on what "inside the workspace" means.
 

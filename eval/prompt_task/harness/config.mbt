@@ -5,7 +5,7 @@
 /// and the prompt variant under test (`prompt_label`, `task_file`,
 /// `system_prompt_file`, `system_prompt_addendum_file` — empty paths mean
 /// the built-in prompt). A non-empty `engine` is a prebuilt openseek binary
-/// trials exec directly; empty falls back to `moon run <repo>/cmd/openseek`,
+/// trials exec directly; empty falls back to `moon run <repo>`,
 /// which only works when the repo's build rules resolve from the trial
 /// workspace (a dev_build rule path resolves against the cwd, so prefer the
 /// prebuilt binary).

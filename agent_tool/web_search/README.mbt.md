@@ -38,7 +38,7 @@ failed search never breaks the turn.
 ## Registration
 
 The tool needs a DeepSeek API key, so it is registered through the
-`extra_tools` seam in `cmd/openseek` rather than the standard registry: a
+`extra_tools` seam in `internal/openseek` rather than the standard registry: a
 DeepSeek-model run reuses the turn's own key, any other provider needs the
 dedicated `--deepseek-api-key`/`$DEEPSEEK` credential, and a run with neither
 simply does not expose the tool.

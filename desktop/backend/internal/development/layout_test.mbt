@@ -22,9 +22,7 @@ async test "Moon native host layout identifies checkout-local development paths"
   )
   assert_eq(
     layout.engine_dir(),
-    root
-    .join("_build/native/debug/build/moonbitlang/openseek/cmd/openseek")
-    .to_string(),
+    root.join("_build/native/debug/build/moonbitlang/openseek").to_string(),
   )
   assert_eq(
     layout.state_dir(),

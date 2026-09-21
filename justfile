@@ -46,8 +46,8 @@ test-cram:
 
 # Real CLI lifecycle regression with an offline scripted model.
 test-turn-finish:
-    moon build cmd/openseek --target native
-    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/cmd/openseek/openseek.exe
+    moon build . --target native
+    moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
 
 test-moon:
     moon test --target native

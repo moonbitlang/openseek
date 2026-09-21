@@ -36,7 +36,7 @@ policy, and visible tests identical.
 
 | Runner | Purpose | Invocation Shape |
 | --- | --- | --- |
-| `openseek-deepseek-v4-pro` | Main subject under test. Measures our agent loop, DeepSeek V4 Pro reasoning, MoonBit prompt, and local tools together. | `moon run cmd/openseek -- run --model deepseek-v4-pro "$(cat TASK.md)"` |
+| `openseek-deepseek-v4-pro` | Main subject under test. Measures our agent loop, DeepSeek V4 Pro reasoning, MoonBit prompt, and local tools together. | `moon run . -- run --model deepseek-v4-pro "$(cat TASK.md)"` |
 | `codex-strong` | Strong reference agent. Measures whether failures are task difficulty or OpenSeek-specific. | Codex runner with a current strong coding model. |
 | `codex-weak` | Lower-cost/weak baseline. Measures whether DeepSeek clears a practical quality bar. | Same Codex runner with a deliberately cheaper model. |
 | `deepseek-v4-pro-compat` | Optional control. Measures DeepSeek through an existing SWE-AGI-compatible runner if available. | SWE-AGI-style runner using DeepSeek credentials. |

@@ -193,7 +193,7 @@ opens the release page in the browser.
 - The [`moon`](https://www.moonbitlang.com/download) toolchain.
 
 No separate `openseek` engine is needed on your `PATH`: both packaging and the
-development launcher build it from the monorepo's `cmd/openseek` source.
+development launcher build it from the monorepo's root CLI package.
 Packaged apps run the bundled engine and MoonBit toolchain seed. The unbundled
 development host runs that checkout's `_build` engine and resolves a local
 MoonBit toolchain through the normal fallback chain.
@@ -368,7 +368,7 @@ Inside every Windows output, application-owned resources have one fixed path:
 ## Package (macOS)
 
 The shared build program builds the `openseek` engine from the monorepo's
-`cmd/openseek` source and prepares the frontend and MoonBit toolchain inputs.
+root CLI package and prepares the frontend and MoonBit toolchain inputs.
 It delegates the App layout, CEF runtime, helper bundles, package metadata,
 signing, ZIP, and DMG to `proton_cli package`. Build a debug app with:
 

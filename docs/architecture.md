@@ -8,7 +8,7 @@ natively by GitHub.
 
 ## System overview
 
-One shared engine, three frontends. `cmd/openseek` is the engine (headless
+One shared engine, three frontends. The root CLI package is the engine (headless
 automation: `run`/`serve`/`review`/`subrun`/`mcp`/`sessions`; the desktop app and the
 viz server are separate executables that spawn or read from it): its `serve`
 mode reads JSONL commands on stdin and streams typed JSONL events
@@ -25,7 +25,7 @@ flowchart LR
     VIZ["inspect + viz —<br/>session visualizer (browser)"]
   end
 
-  subgraph engine ["openseek engine (cmd/openseek)"]
+  subgraph engine ["openseek engine (root CLI)"]
     SERVE["serve / run / review / sessions / mcp"]
     AGENT["agent — turn loop"]
     TOOLS["agent_tool — registry:<br/>mbtx·job_output·job_stop·job_wait<br/>edit·multi_edit·write·remove<br/>plan·goal·finish"]

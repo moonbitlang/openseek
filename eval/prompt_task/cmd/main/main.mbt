@@ -103,7 +103,7 @@ fn cli_command() -> @argparse.Command {
         "engine",
         long="engine",
         default_values=[""],
-        about="Prebuilt openseek binary to exec per trial; empty falls back to `moon run <repo-root>/cmd/openseek` (which breaks when the repo defines dev_build rules, since their paths resolve against the trial cwd).",
+        about="Prebuilt openseek binary to exec per trial; empty falls back to `moon run <repo-root>` (which breaks when the repo defines dev_build rules, since their paths resolve against the trial cwd).",
       ),
       OptionArg(
         "prompt-label",

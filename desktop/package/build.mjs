@@ -285,17 +285,17 @@ class Build {
     await this.proton(["cef", "setup"], env);
     if (this.command === "macos") {
       await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", join(this.desktop, "target/moonbuild/macos-12.0"), ...release], { cwd: this.backend, env });
-      await this.commandRun("moon", ["build", "cmd/openseek", "--target", "native", "--target-dir", "desktop/target/moonbuild/macos-12.0", ...release], { cwd: this.repo, env });
+      await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", "desktop/target/moonbuild/macos-12.0", ...release], { cwd: this.repo, env });
       const host = join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/openseek_desktop/backend/backend.exe`);
       const expected = join(this.repo, `_build/native/${profile}/build/openseek_desktop/backend/backend.exe`);
       await mkdir(dirname(expected), { recursive: true });
       await cp(host, expected);
-      return join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/moonbitlang/openseek/cmd/openseek/openseek.exe`);
+      return join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/moonbitlang/openseek/openseek.exe`);
     }
     const warning = this.command === "windows" ? ["--warn-list", "-20"] : [];
     await this.commandRun("moon", ["build", ".", "--target", "native", ...warning, ...release], { cwd: this.backend });
-    await this.commandRun("moon", ["build", "cmd/openseek", "--target", "native", ...release], { cwd: this.repo });
-    return join(this.repo, `_build/native/${profile}/build/moonbitlang/openseek/cmd/openseek/openseek.exe`);
+    await this.commandRun("moon", ["build", ".", "--target", "native", ...release], { cwd: this.repo });
+    return join(this.repo, `_build/native/${profile}/build/moonbitlang/openseek/openseek.exe`);
   }
 
   async vendors() {
@@ -451,7 +451,7 @@ class Build {
     if (this.command === "browser") return await this.web(options.release ? "release" : "debug", true);
     if (this.command === "dev") {
       await this.web("debug");
-      await this.commandRun("moon", ["build", "cmd/openseek", "--target", "native"], { cwd: this.repo });
+      await this.commandRun("moon", ["build", ".", "--target", "native"], { cwd: this.repo });
       // The same development identity a packaged development build gets, for
       // the same reason: never the shipped one.
       const config = await this.developmentConfig();

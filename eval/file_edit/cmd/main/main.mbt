@@ -60,7 +60,7 @@ fn cli_command() -> @argparse.Command {
         "repo-root",
         long="repo-root",
         default_values=["."],
-        about="OpenSeek repository root used to run the cmd/openseek engine.",
+        about="OpenSeek repository root used to run the root CLI package.",
       ),
       OptionArg(
         "prompt-label",
