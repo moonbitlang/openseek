@@ -26,10 +26,6 @@
 }
 
 @media (max-width: 760px) {
-  .app {
-    --app-header-height: 52px;
-  }
-
   .quick-open-backdrop {
     padding: 16px;
   }
@@ -49,8 +45,6 @@
      content column always has the full width. */
   .app {
     --sidebar-column-width: 0px;
-    --sidebar-toggle-size: 44px;
-    --topbar-inline-padding: 12px;
     grid-template-columns: minmax(0, 1fr);
   }
   .app.sidebar-collapsed {
@@ -124,10 +118,6 @@
     border-top: 0;
     border-left: 0;
   }
-  /* Compact desktop rows still provide full touch targets on phones. */
-  .workspace-file-list .tree-row {
-    min-height: 44px;
-  }
   .editor-resize-handle,
   .sidebar-resize-handle,
   .tree-resize-handle {
@@ -149,40 +139,6 @@
   .setting-control {
     width: 100%;
     justify-content: flex-start;
-  }
-  .settings-page,
-  .skills-page {
-    padding: calc(var(--topbar-height) + 24px) 16px 24px;
-  }
-
-  /* Touch targets at 44px and 16px fields — a smaller font makes iOS
-     zoom the whole page when a field takes focus. */
-  input,
-  textarea,
-  .setting-control input,
-  .setting-select-button,
-  .composer textarea {
-    font-size: var(--font-size-lg);
-  }
-  .topbar,
-  .sidebar-header,
-  .editor-tabsbar {
-    height: var(--topbar-height);
-  }
-  .panel-toggle {
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .button,
-  .portal-button-link {
-    min-height: 44px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-  }
-  .conversation-row,
-  .section-primary-action,
-  .sidebar-button {
-    min-height: 44px;
   }
 
   /* Portal: the header wraps instead of overflowing. */
