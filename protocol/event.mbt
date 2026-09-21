@@ -22,6 +22,9 @@ pub(all) enum Event {
   /// represented by `agent_session.SessionItem`, and therefore never appended
   /// to `session.jsonl`.
   StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
+  /// The provider request exhausted its idle-timeout retries. No provider
+  /// diagnostic is carried so constrained callers can choose a safe recovery.
+  ProviderRequestTimedOut
   AgentAborted(reason~ : String)
   AgentFinished(answer~ : String)
   MaxStepsExhausted

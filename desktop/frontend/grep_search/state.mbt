@@ -281,7 +281,11 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
             ..page,
             pattern_repair_phase: PatternRepairFailed,
             pattern_repair_message: Some(message),
-            pattern_repair_candidate: Some(candidate_pattern),
+            pattern_repair_candidate: if validation_status == "timed_out" {
+              None
+            } else {
+              Some(candidate_pattern)
+            },
             pattern_repair_validation_status: Some(validation_status),
           },
         }

@@ -105,6 +105,9 @@ pub fn decode_engine_event(
     AgentStep(step~) => Some(AgentStep(Some(step)))
     StreamRetry(attempt~, max_attempts~, reason~) =>
       Some(StreamRetry(attempt~, max_attempts~, reason~))
+    // Consumers that need structured timeout recovery read this transient
+    // signal from the engine stream; the transcript gets the terminal error.
+    ProviderRequestTimedOut => None
     AssistantDelta(content~) => Some(AssistantDelta(content))
     ReasoningDelta(content~) => Some(ReasoningDelta(content))
     ReasoningMessage(content~) => Some(ReasoningMessage(content))

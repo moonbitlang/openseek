@@ -470,6 +470,9 @@ async fn AgentLoop::chat(self : Self, step : Int) -> @deepseek.ChatResponse {
       on_retry=(attempt, max_attempts, reason) => {
         @emit.emit(StreamRetry(attempt~, max_attempts~, reason~))
       },
+      // Keep timeout recovery machine-readable for constrained child callers.
+      // The event deliberately contains no provider diagnostic.
+      on_timeout=() => @emit.emit(ProviderRequestTimedOut),
     ),
   )
   response.log_and_reasoning_content()

@@ -139,10 +139,13 @@ pub fn Client::Client(
 /// `reason` describes the failure. Pre-stream retries (429, 5xx, connect
 /// errors) report through it too, so a consumer can show that the request is
 /// being retried rather than silently waiting.
+/// `on_timeout()` runs once if the retry budget ends on an idle timeout. It is
+/// a closed signal; provider diagnostics remain in the normal failure path.
 struct StreamHandler {
   on_content_delta : async (String) -> Unit
   on_reasoning_delta : async (String) -> Unit
   on_retry : ((Int, Int, String) -> Unit)?
+  on_timeout : (() -> Unit)?
 }
 
 ///|
@@ -151,8 +154,9 @@ pub fn StreamHandler::StreamHandler(
   on_content_delta~ : async (String) -> Unit,
   on_reasoning_delta? : async (String) -> Unit = _ => (),
   on_retry? : (Int, Int, String) -> Unit,
+  on_timeout? : () -> Unit,
 ) -> StreamHandler {
-  { on_content_delta, on_reasoning_delta, on_retry, }
+  { on_content_delta, on_reasoning_delta, on_retry, on_timeout, }
 }
 
 ///|
@@ -299,7 +303,13 @@ pub async fn Client::chat(
         ) catch {
           error if @async.is_being_cancelled() ||
             @async.is_cancellation_error(error) => raise error
-          error => fail(progress.failure_message(self, error))
+          error => {
+            if error is IdleTimeout(_, _) &&
+              stream.on_timeout is Some(on_timeout) {
+              on_timeout()
+            }
+            fail(progress.failure_message(self, error))
+          }
         }
       }
     }
