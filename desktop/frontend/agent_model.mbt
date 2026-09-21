@@ -123,28 +123,44 @@ test "agent choices round-trip their wire names" {
 
 ///|
 /// The OpenSeek group offers the configured provider's models: the DeepSeek
-/// service tiers, the GLM models, or — for a custom endpoint, where the key
-/// follows whichever model is named — every model this build knows. A
-/// conversation running a model outside that list keeps it visible, same as
+/// service tiers, the GLM models, or — for a custom endpoint — every built-in
+/// model this build knows plus the ids the user configured for that endpoint.
+/// A conversation running a model outside that list keeps it visible, same as
 /// the old selector.
 fn openseek_model_group(
   provider : ApiProvider,
   selected : EngineModel,
+  custom_models : Array[CustomModel],
 ) -> @composer.ModelGroup {
   let listed : Array[EngineModel] = match provider {
     Deepseek => [DsPro, DsFlash]
     Glm => [Glm53, Glm53Flash]
     OpenRouter => [DsPro, DsFlash]
-    Custom => [DsPro, DsFlash, Glm53, Glm53Flash]
+    Custom =>
+      [
+        DsPro,
+        DsFlash,
+        Glm53,
+        Glm53Flash,
+        ..custom_models.map(model => Other(model.id)),
+      ]
   }
   let options = listed.map(model => @composer.ModelOption::{
     value: ModelChoice::OpenSeekModel(model).wire(),
-    label: model.label(),
+    label: match model {
+      Other(id) => custom_model_label(custom_models, id)
+      _ => model.label()
+    },
   })
   if !listed.contains(selected) {
     options.push({
       value: ModelChoice::OpenSeekModel(selected).wire(),
-      label: selected.label(),
+      // A carried model still shows the name the user gave it when the
+      // endpoint's list has moved on since.
+      label: match selected {
+        Other(id) => custom_model_label(custom_models, id)
+        _ => selected.label()
+      },
     })
   }
   { label: "OpenSeek", options, }
@@ -152,25 +168,48 @@ fn openseek_model_group(
 
 ///|
 test "the model group follows the configured provider" {
-  let deepseek = openseek_model_group(Deepseek, DsPro)
+  let deepseek = openseek_model_group(Deepseek, DsPro, [])
   assert_eq(deepseek.options.map(option => option.label), ["DS Pro", "DS Flash"])
-  let glm = openseek_model_group(Glm, Glm53)
+  let glm = openseek_model_group(Glm, Glm53, [])
   assert_eq(glm.options.map(option => option.value), [
     "openseek:glm-5.3", "openseek:glm-5.3-flash",
   ])
-  let openrouter = openseek_model_group(OpenRouter, DsFlash)
+  let openrouter = openseek_model_group(OpenRouter, DsFlash, [])
   assert_eq(openrouter.options.map(option => option.label), [
     "DS Pro", "DS Flash",
   ])
   // A conversation carried across a provider switch keeps its model visible,
   // same as an unknown wire name always did.
-  let carried = openseek_model_group(Glm, DsPro)
+  let carried = openseek_model_group(Glm, DsPro, [])
   assert_eq(carried.options.map(option => option.label), [
     "GLM 5.3", "GLM 5.3 Flash", "DS Pro",
   ])
-  let custom = openseek_model_group(Custom, Other("proxy-model"))
+  // A custom endpoint lists what the user configured for it, under the name
+  // they gave each model.
+  let custom = openseek_model_group(Custom, DsFlash, [
+    { id: "qwen3-coder", label: Some("Qwen3 Coder"), },
+    { id: "local-llama", label: None, },
+  ])
   assert_eq(custom.options.map(option => option.label), [
-    "DS Pro", "DS Flash", "GLM 5.3", "GLM 5.3 Flash", "proxy-model",
+    "DS Pro", "DS Flash", "GLM 5.3", "GLM 5.3 Flash", "Qwen3 Coder", "local-llama",
+  ])
+  assert_eq(custom.options.map(option => option.value), [
+    "openseek:deepseek-v4-pro", "openseek:deepseek-flash", "openseek:glm-5.3", "openseek:glm-5.3-flash",
+    "openseek:qwen3-coder", "openseek:local-llama",
+  ])
+  // A conversation pinned to a model the endpoint no longer lists keeps it,
+  // under its wire name.
+  let unlisted = openseek_model_group(Custom, Other("retired-model"), [])
+  assert_eq(unlisted.options.map(option => option.label), [
+    "DS Pro", "DS Flash", "GLM 5.3", "GLM 5.3 Flash", "retired-model",
+  ])
+  // A model the page knows by name but this provider's menu does not list
+  // still shows that name rather than its wire id.
+  let carried = openseek_model_group(OpenRouter, Other("qwen3-coder"), [
+    { id: "qwen3-coder", label: Some("Qwen3 Coder"), },
+  ])
+  assert_eq(carried.options.map(option => option.label), [
+    "DS Pro", "DS Flash", "Qwen3 Coder",
   ])
 }
 
@@ -204,7 +243,11 @@ fn Model::openseek_model_chip(
   conv : Conversation,
 ) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = [
-    openseek_model_group(self.api_provider, conv.engine_model),
+    openseek_model_group(
+      self.api_provider,
+      conv.engine_model,
+      self.custom_models,
+    ),
   ]
   if self.composing_new_chat() {
     groups.push(self.codex_model_group())
@@ -222,7 +265,7 @@ fn Model::openseek_model_chip(
       English => "Model: "
       Spanish => "Modelo: "
     }) +
-    conv.engine_model.label(),
+    self.engine_model_label(conv.engine_model),
   }
 }
 
@@ -277,7 +320,13 @@ fn Model::openseek_reasoning_chip(
 fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
   let groups : Array[@composer.ModelGroup] = []
   if self.codex.composing_draft() {
-    groups.push(openseek_model_group(self.api_provider, self.default_model))
+    groups.push(
+      openseek_model_group(
+        self.api_provider,
+        self.default_model,
+        self.custom_models,
+      ),
+    )
   }
   groups.push(self.codex_model_group())
   let selected = match self.codex.model_listing(locale=self.locale) {

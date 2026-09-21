@@ -15,6 +15,52 @@ test "cli accepts the canonical flash wire name" {
 }
 
 ///|
+/// A run pointed at a custom endpoint reads its model from that endpoint: an
+/// unknown name becomes a custom model there, and its key travels in the
+/// variable the engine's own lookup reads.
+test "cli accepts a custom model only beside an explicit endpoint" {
+  let custom = @testkit.run_matches(
+    argv=[
+      "--api-url", "https://proxy.example/v1/chat/completions", "--model", "qwen3-coder",
+      "write", "MoonBit",
+    ],
+    env={ "DEEPSEEK": "proxy-key" },
+  )
+  let (model, _, api_url) = agent_settings(custom)
+  assert_true(model is Custom("qwen3-coder"))
+  assert_eq(model.to_string(), "qwen3-coder")
+  assert_eq(api_url, Some("https://proxy.example/v1/chat/completions"))
+  assert_eq(model.api_key(custom.values), Some("proxy-key"))
+  // A custom id whose prefix resembles another provider keeps that provider's
+  // variable, exactly as the engine's lookup and the Desktop's routing do.
+  let glm_like = @testkit.run_matches(
+    argv=[
+      "--api-url", "https://proxy.example/v1/chat/completions", "--model", "glm-4.6",
+      "write", "MoonBit",
+    ],
+    env={ "GLM": "proxy-key", "DEEPSEEK": "wrong-key" },
+  )
+  let (glm_model, _, _) = agent_settings(glm_like)
+  assert_true(glm_model is Custom("glm-4.6"))
+  assert_eq(glm_model.api_key(glm_like.values), Some("proxy-key"))
+  // Without an endpoint the same name stays an error, so a typo cannot
+  // silently become a model id.
+  let bare = @testkit.run_matches(
+    argv=["--model", "qwen3-coder", "write", "MoonBit"],
+    env={ "DEEPSEEK": "proxy-key" },
+  )
+  let detail = try {
+    ignore(agent_settings(bare))
+    ""
+  } catch {
+    error => "\{error}"
+  } noraise {
+    _ => ""
+  }
+  assert_true(detail.contains("unknown model: qwen3-coder"))
+}
+
+///|
 test "cli retry flags override the environment and reject non-positives" {
   let parsed = @testkit.run_matches(
     argv=["--retry-attempts", "2", "--retry-backoff-ms", "7", "write"],

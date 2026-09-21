@@ -190,6 +190,16 @@ moon run cmd/openseek -- --model glm-5.3 run "inspect this project"
 ```
 
 `OPENSEEK_MODEL` is optional and defaults to `deepseek-flash`.
+Point a run at any other OpenAI-compatible endpoint with `--api-url` (or
+`OPENSEEK_API_URL`); there, a name outside the built-in list runs as a custom
+model, sent to that endpoint verbatim:
+
+```bash
+moon run cmd/openseek -- --api-url https://proxy.example/v1/chat/completions --model qwen3-coder run "inspect this project"
+```
+
+A custom model's key travels in the `DEEPSEEK` variable unless its id starts
+with `glm-` or `kimi-`; pass `--api-key` to name it directly.
 `OPENSEEK_MAX_STEPS` is optional; when omitted, turns are bounded by the
 model's context window (a checkpoint summary carries each turn into the
 next) rather than a step count. Pass `--max-steps` to cap steps for one run.

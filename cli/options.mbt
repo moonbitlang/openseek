@@ -56,7 +56,7 @@ pub fn agent_shared_options(
       env="OPENSEEK_MODEL",
       default_values=[@deepseek.Deepseek(V4Flash).to_string()],
       global~,
-      about="Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash.",
+      about="Chat model: deepseek-flash, deepseek-v4-pro, kimi-k2.7-code, kimi-k2.7-code-highspeed, glm-5.3, or glm-5.3-flash. With --api-url, any other name runs as a custom model on that endpoint.",
     ),
     OptionArg(
       "api-url",

@@ -816,6 +816,18 @@ pub fn CreateDirectoryPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CreateDirectoryPayload
 pub impl @json.FromJson for CreateDirectoryPayload
 
+pub(all) struct CustomModelPayload {
+  id : String
+  label : String?
+} derive(Eq, @debug.Debug)
+pub fn CustomModelPayload::equal(Self, Self) -> Bool
+pub fn CustomModelPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CustomModelPayload::not_equal(Self, Self) -> Bool
+pub fn CustomModelPayload::to_json(Self) -> Json
+pub fn CustomModelPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CustomModelPayload
+pub impl @json.FromJson for CustomModelPayload
+
 pub(all) struct DiagnosticsPayload {
   root : String
   path : String
@@ -2589,6 +2601,7 @@ pub(all) struct SettingsSetPayload {
   glm_api_key : String?
   custom_api_key : String?
   followup_behavior : String?
+  custom_models : Array[CustomModelPayload]?
 } derive(Eq, @debug.Debug)
 pub fn SettingsSetPayload::equal(Self, Self) -> Bool
 pub fn SettingsSetPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2606,6 +2619,7 @@ pub(all) struct SettingsStatusPayload {
   has_glm_key : Bool
   has_custom_key : Bool
   followup_behavior : String
+  custom_models : Array[CustomModelPayload]
 } derive(Eq, @debug.Debug)
 pub fn SettingsStatusPayload::equal(Self, Self) -> Bool
 pub fn SettingsStatusPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

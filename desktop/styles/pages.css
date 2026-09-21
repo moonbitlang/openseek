@@ -296,7 +296,8 @@ h2 {
   justify-self: start;
 }
 
-#saveApiKey {
+#saveApiKey,
+#addCustomModel {
   align-self: flex-end;
 }
 

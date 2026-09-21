@@ -82,6 +82,18 @@ pub(all) enum Message {
   GlmApiKey
   OpenRouterApiKey
   CustomApiKey
+  AddCustomModel
+  Add
+  CustomModelsDescription
+  CustomModelId
+  CustomModelIdPlaceholder
+  CustomModelName
+  CustomModelNamePlaceholder
+  RemoveCustomModel
+  InvalidCustomModelId
+  BuiltinCustomModelId
+  DuplicateCustomModelId
+  CustomModelsLimitReached(Int)
   SavedKey
   ApiKey
   SaveApiKey

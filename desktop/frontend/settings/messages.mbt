@@ -68,6 +68,18 @@ pub(all) enum Message {
   GlmApiKey
   OpenRouterApiKey
   CustomApiKey
+  AddCustomModel
+  Add
+  CustomModelsDescription
+  CustomModelId
+  CustomModelIdPlaceholder
+  CustomModelName
+  CustomModelNamePlaceholder
+  RemoveCustomModel
+  InvalidCustomModelId
+  BuiltinCustomModelId
+  DuplicateCustomModelId
+  CustomModelsLimitReached(Int)
   SavedKey
   ApiKey
   SaveApiKey
@@ -583,6 +595,88 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, CustomApiKey) => "自定义 API 密钥"
     (TraditionalChinese, CustomApiKey) => "自定義 API 金鑰"
     (Japanese, CustomApiKey) => "カスタム API キー"
+    (English, AddCustomModel) => "Add custom model"
+    (Spanish, AddCustomModel) => "Añadir modelo personalizado"
+    (SimplifiedChinese, AddCustomModel) => "添加自定义模型"
+    (TraditionalChinese, AddCustomModel) => "新增自訂模型"
+    (Japanese, AddCustomModel) => "カスタムモデルを追加"
+    (English, Add) => "Add"
+    (Spanish, Add) => "Añadir"
+    (SimplifiedChinese, Add) => "添加"
+    (TraditionalChinese, Add) => "新增"
+    (Japanese, Add) => "追加"
+    (English, CustomModelsDescription) =>
+      "Model ids this endpoint serves. Each one joins the composer's model menu, and a run names it exactly as written."
+    (Spanish, CustomModelsDescription) =>
+      "Identificadores de modelo que sirve este endpoint. Cada uno se añade al menú de modelos del compositor y las ejecuciones lo usan tal cual."
+    (SimplifiedChinese, CustomModelsDescription) =>
+      "该端点提供的模型 ID。它们会加入输入框的模型菜单，请求会按原样使用这些 ID。"
+    (TraditionalChinese, CustomModelsDescription) =>
+      "此端點提供的模型 ID。它們會加入輸入框的模型選單，請求會按原樣使用這些 ID。"
+    (Japanese, CustomModelsDescription) =>
+      "このエンドポイントが提供するモデル ID です。コンポーザーのモデルメニューに追加され、リクエストではそのままの ID が使われます。"
+    (English, CustomModelId) => "Model ID"
+    (Spanish, CustomModelId) => "ID del modelo"
+    (SimplifiedChinese, CustomModelId) => "模型 ID"
+    (TraditionalChinese, CustomModelId) => "模型 ID"
+    (Japanese, CustomModelId) => "モデル ID"
+    (English, CustomModelIdPlaceholder) => "qwen3-coder"
+    (Spanish, CustomModelIdPlaceholder) => "qwen3-coder"
+    (SimplifiedChinese, CustomModelIdPlaceholder) => "qwen3-coder"
+    (TraditionalChinese, CustomModelIdPlaceholder) => "qwen3-coder"
+    (Japanese, CustomModelIdPlaceholder) => "qwen3-coder"
+    (English, CustomModelName) => "Display name"
+    (Spanish, CustomModelName) => "Nombre visible"
+    (SimplifiedChinese, CustomModelName) => "显示名称"
+    (TraditionalChinese, CustomModelName) => "顯示名稱"
+    (Japanese, CustomModelName) => "表示名"
+    (English, CustomModelNamePlaceholder) => "Optional"
+    (Spanish, CustomModelNamePlaceholder) => "Opcional"
+    (SimplifiedChinese, CustomModelNamePlaceholder) => "可选"
+    (TraditionalChinese, CustomModelNamePlaceholder) => "選填"
+    (Japanese, CustomModelNamePlaceholder) => "任意"
+    (English, RemoveCustomModel) => "Remove"
+    (Spanish, RemoveCustomModel) => "Quitar"
+    (SimplifiedChinese, RemoveCustomModel) => "移除"
+    (TraditionalChinese, RemoveCustomModel) => "移除"
+    (Japanese, RemoveCustomModel) => "削除"
+    (English, InvalidCustomModelId) =>
+      "A model id is one word without spaces, at most 128 characters."
+    (Spanish, InvalidCustomModelId) =>
+      "El ID del modelo es una sola palabra sin espacios, de 128 caracteres como máximo."
+    (SimplifiedChinese, InvalidCustomModelId) =>
+      "模型 ID 必须是不含空格的单个词，且不超过 128 个字符。"
+    (TraditionalChinese, InvalidCustomModelId) =>
+      "模型 ID 必須是不含空格的單一詞彙，且不超過 128 個字元。"
+    (Japanese, InvalidCustomModelId) =>
+      "モデル ID は空白を含まない 1 語で、128 文字以内にしてください。"
+    (English, BuiltinCustomModelId) =>
+      "That id is already a built-in model; pick it from the model menu."
+    (Spanish, BuiltinCustomModelId) =>
+      "Ese ID ya es un modelo integrado; elígelo en el menú de modelos."
+    (SimplifiedChinese, BuiltinCustomModelId) =>
+      "该 ID 已是内置模型，请直接从模型菜单中选择。"
+    (TraditionalChinese, BuiltinCustomModelId) =>
+      "該 ID 已是內建模型，請直接從模型選單中選擇。"
+    (Japanese, BuiltinCustomModelId) =>
+      "その ID は組み込みモデルです。モデルメニューから選択してください。"
+    (English, DuplicateCustomModelId) => "That model id is already configured."
+    (Spanish, DuplicateCustomModelId) =>
+      "Ese ID de modelo ya está configurado."
+    (SimplifiedChinese, DuplicateCustomModelId) => "该模型 ID 已配置。"
+    (TraditionalChinese, DuplicateCustomModelId) => "該模型 ID 已設定。"
+    (Japanese, DuplicateCustomModelId) =>
+      "そのモデル ID はすでに設定されています。"
+    (English, CustomModelsLimitReached(limit)) =>
+      "At most \{limit} custom models can be configured."
+    (Spanish, CustomModelsLimitReached(limit)) =>
+      "Se pueden configurar como máximo \{limit} modelos personalizados."
+    (SimplifiedChinese, CustomModelsLimitReached(limit)) =>
+      "最多只能配置 \{limit} 个自定义模型。"
+    (TraditionalChinese, CustomModelsLimitReached(limit)) =>
+      "最多只能設定 \{limit} 個自訂模型。"
+    (Japanese, CustomModelsLimitReached(limit)) =>
+      "設定できるカスタムモデルは最大 \{limit} 個です。"
     (English, SavedKey) => "saved — enter to replace"
     (Spanish, SavedKey) => "guardada — introduce otra para reemplazarla"
     (SimplifiedChinese, SavedKey) => "已保存，输入新密钥可替换"

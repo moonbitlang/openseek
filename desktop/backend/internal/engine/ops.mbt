@@ -945,6 +945,7 @@ async fn configure_custom_provider(manager : EngineManager) -> Unit {
       deepseek_api_key: None,
       glm_api_key: None,
       custom_api_key: None,
+      custom_models: None,
     }),
   )
 }

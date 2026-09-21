@@ -25,10 +25,17 @@ pub(all) enum GlmVariant {
 
 ///|
 /// Supported chat models grouped by provider.
+///
+/// `Custom(id)` is a model id this build does not know, served by an
+/// OpenAI-compatible endpoint the user configured. Only
+/// `Model::parse_for_endpoint` mints it, and only when an explicit endpoint
+/// accompanies the name, so a mistyped `--model` still fails loudly instead of
+/// silently naming a model no official provider serves.
 pub(all) enum Model {
   Deepseek(DsVariant)
   Kimi(KimiVariant)
   Glm(GlmVariant)
+  Custom(String)
 } derive(Eq, Debug)
 
 ///|
@@ -65,22 +72,83 @@ pub impl Show for Model with fn to_string(self : Model) -> String {
     Deepseek(variant) => "\{variant}"
     Kimi(variant) => "\{variant}"
     Glm(variant) => "\{variant}"
+    Custom(id) => id
   }
 }
 
 ///|
+/// The longest custom model id this build accepts. Long enough for the
+/// namespaced ids gateways use (`vendor/family:tag`), short enough that a
+/// pasted paragraph is refused instead of stored as a model.
+const CustomModelIdMaxLength : Int = 128
+
+///|
+/// Whether `id` is usable as a custom model id: non-blank, no embedded
+/// whitespace (a wire name is one token), and within the length bound.
+pub fn is_valid_custom_model_id(id : StringView) -> Bool {
+  let id = id.trim()
+  !id.is_blank() &&
+  id.length() <= CustomModelIdMaxLength &&
+  !id.contains_any(chars=" \t\r\n")
+}
+
+///|
 /// Parses a wire model name into a typed model.
+///
+/// Unrecognized names are refused: a typo must fail loudly rather than name a
+/// model no endpoint serves. A run pointed at a custom endpoint reads its
+/// model through `Model::parse_for_endpoint`, which accepts them.
 pub fn Model::parse(input : String) -> Model raise {
-  match input {
-    "deepseek-flash" | "deepseek-v4-flash" => Deepseek(V4Flash)
-    "deepseek-v4-pro" => Deepseek(V4Pro)
-    "kimi-k2.7-code" => Kimi(K27Code)
-    "kimi-k2.7-code-highspeed" => Kimi(K27CodeHighSpeed)
-    "glm-5.3" => Glm(G53)
-    "glm-5.3-flash" => Glm(G53Flash)
-    other => fail("unknown model: \{other}")
+  Model::parse_for_endpoint(input, None)
+}
+
+///|
+/// Parses a wire model name for a run whose endpoint is known.
+///
+/// The built-in names always parse. Any other name parses as `Custom` when
+/// `api_url` is `Some(_)` — an explicit `--api-url`/`OPENSEEK_API_URL`, i.e. an
+/// endpoint the user configured — because that endpoint, not this build, is
+/// what knows whether the id exists. Without an endpoint the same name is an
+/// error, so a typo cannot silently become a model id sent to an official
+/// provider.
+pub fn Model::parse_for_endpoint(
+  input : String,
+  api_url : String?,
+) -> Model raise {
+  let name = input.trim()
+  let known : Model? = match name {
+    "deepseek-flash" | "deepseek-v4-flash" => Some(Deepseek(V4Flash))
+    "deepseek-v4-pro" => Some(Deepseek(V4Pro))
+    "kimi-k2.7-code" => Some(Kimi(K27Code))
+    "kimi-k2.7-code-highspeed" => Some(Kimi(K27CodeHighSpeed))
+    "glm-5.3" => Some(Glm(G53))
+    "glm-5.3-flash" => Some(Glm(G53Flash))
+    _ => None
+  }
+  match known {
+    Some(model) => model
+    None =>
+      match api_url {
+        Some(_) =>
+          if is_valid_custom_model_id(name) {
+            Custom(name.to_owned())
+          } else {
+            fail("invalid custom model id: \{input}")
+          }
+        None => fail("unknown model: \{name}")
+      }
   }
 }
+
+///|
+/// A custom model's context window, in tokens.
+///
+/// The endpoint knows the real number and this build does not, so the value is
+/// a deliberately conservative floor: the agent loop's auto-compaction guard
+/// compacts a little early rather than letting a request overflow. It only
+/// costs an extra checkpoint summary on a long turn; guessing high would fail
+/// the request outright.
+const CustomModelContextWindow : Int = 131_072
 
 ///|
 /// Context window served by the official API, in tokens.
@@ -96,6 +164,7 @@ pub fn Model::context_window(self : Model) -> Int {
     Deepseek(V4Flash | V4Pro) => 1_000_000
     Kimi(K27Code | K27CodeHighSpeed) => 262_144
     Glm(G53 | G53Flash) => 1_000_000
+    Custom(_) => CustomModelContextWindow
   }
 }
 

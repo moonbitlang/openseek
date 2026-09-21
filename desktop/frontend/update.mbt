@@ -3385,6 +3385,62 @@ fn update_msg(
         },
       )
     }
+    CustomModelDraftIdChanged(value) => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      (@cmd.none, { ..model, custom_model_draft_id: value, })
+    }
+    CustomModelDraftLabelChanged(value) => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      (@cmd.none, { ..model, custom_model_draft_label: value, })
+    }
+    CustomModelAdded => {
+      guard model.host_settings_loaded() && model.custom_model_draft_addable() else {
+        return (@cmd.none, model)
+      }
+      let staged : CustomModel = {
+        id: model.custom_model_draft_id.trim().to_owned(),
+        label: match model.custom_model_draft_label.trim() {
+          "" => None
+          label => Some(label.to_owned())
+        },
+      }
+      let models = [..model.custom_models, staged]
+      (
+        push_host_settings(
+          dispatch,
+          model.focused,
+          custom_models_settings_patch(models),
+          model.focused_connection_generation(),
+        ),
+        {
+          ..model,
+          custom_models: models,
+          custom_model_draft_id: "",
+          custom_model_draft_label: "",
+          settings_saves: model.settings_saves + 1,
+        }.align_fresh_conversation_with_provider(),
+      )
+    }
+    CustomModelRemoved(id) => {
+      guard model.host_settings_loaded() else { return (@cmd.none, model) }
+      let models = model.custom_models.filter(configured => configured.id != id)
+      guard models.length() < model.custom_models.length() else {
+        return (@cmd.none, model)
+      }
+      (
+        push_host_settings(
+          dispatch,
+          model.focused,
+          custom_models_settings_patch(models),
+          model.focused_connection_generation(),
+        ),
+        {
+          ..model,
+          custom_models: models,
+          settings_saves: model.settings_saves + 1,
+        }.align_fresh_conversation_with_provider(),
+      )
+    }
     NotificationCornerChanged(value) => {
       let corner = NotificationCorner::parse(value)
       (
@@ -13997,6 +14053,7 @@ fn host_settings(
   has_glm_key? : Bool = false,
   has_custom_key? : Bool = false,
   custom_api_url? : String = "",
+  custom_models? : Array[CustomModel] = [],
 ) -> HostSettings {
   {
     revision,
@@ -14006,6 +14063,7 @@ fn host_settings(
     has_glm_key,
     has_custom_key,
     followup_behavior: "steer",
+    custom_models,
   }
 }
 
@@ -14020,6 +14078,167 @@ test "the OpenRouter custom preset restores as OpenRouter" {
   )
   assert_true(restored.api_provider is OpenRouter)
   assert_true(restored.api_ready())
+}
+
+///|
+test "a host snapshot mirrors its custom models into the model menu" {
+  let dispatch = test_dispatch()
+  let (_, model) = update_dev(
+    dispatch,
+    HostSettingsLoaded(
+      host_settings(
+        provider="custom",
+        custom_api_url="https://proxy.example/chat",
+        has_custom_key=true,
+        custom_models=[
+          { id: "qwen3-coder", label: Some("Qwen3 Coder"), },
+          { id: "local-llama", label: None, },
+        ],
+      ),
+      connection_generation=None,
+    ),
+    {
+      ..test_model(),
+      api_provider: Custom,
+      custom_api_url: "https://proxy.example/chat",
+      custom_key_saved: true,
+    },
+  )
+  assert_eq(model.custom_models.length(), 2)
+  // The chip shows the name the user gave a model, and the id when they gave
+  // none — including for an id the endpoint no longer lists.
+  assert_eq(model.engine_model_label(Other("qwen3-coder")), "Qwen3 Coder")
+  assert_eq(model.engine_model_label(Other("local-llama")), "local-llama")
+  assert_eq(model.engine_model_label(Other("retired-model")), "retired-model")
+  assert_eq(model.engine_model_label(DsPro), "DS Pro")
+  let group = openseek_model_group(
+    model.api_provider,
+    model.default_model,
+    model.custom_models,
+  )
+  assert_eq(group.options.map(option => option.label), [
+    "DS Pro", "DS Flash", "GLM 5.3", "GLM 5.3 Flash", "Qwen3 Coder", "local-llama",
+  ])
+}
+
+///|
+test "adding a custom model stages it, clears the form, and patches the host" {
+  let dispatch = test_dispatch()
+  let staged = {
+    ..test_model(),
+    api_provider: Custom,
+    custom_api_url: "https://proxy.example/chat",
+    custom_key_saved: true,
+    custom_model_draft_id: "  qwen3-coder  ",
+    custom_model_draft_label: "  Qwen3 Coder  ",
+  }
+  assert_true(staged.custom_model_draft_addable())
+  let (_, added) = update(dispatch, CustomModelAdded, staged)
+  assert_eq(added.custom_models, [
+    { id: "qwen3-coder", label: Some("Qwen3 Coder"), },
+  ])
+  assert_eq(added.custom_model_draft_id, "")
+  assert_eq(added.custom_model_draft_label, "")
+  assert_eq(added.settings_saves, staged.settings_saves + 1)
+  // A second add starts from the new list.
+  let (_, again) = update(dispatch, CustomModelAdded, {
+    ..added,
+    custom_model_draft_id: "local-llama",
+  })
+  assert_eq(again.custom_models.length(), 2)
+  assert_true(again.custom_models[1].label is None)
+  // Removing one sends the rest; removing an id that is not configured is a
+  // no-op rather than a save.
+  let (_, removed) = update(dispatch, CustomModelRemoved("qwen3-coder"), again)
+  assert_eq(removed.custom_models, [{ id: "local-llama", label: None, }])
+  let (_, untouched) = update(dispatch, CustomModelRemoved("ghost"), again)
+  assert_eq(untouched.settings_saves, again.settings_saves)
+}
+
+///|
+test "the add form refuses a draft the host would refuse" {
+  let dispatch = test_dispatch()
+  let base = {
+    ..test_model(),
+    api_provider: Custom,
+    custom_api_url: "https://proxy.example/chat",
+    custom_key_saved: true,
+    custom_models: [{ id: "qwen3-coder", label: None, }],
+  }
+  // An empty draft is not an error — it is a form nobody has filled in yet —
+  // but it is not addable either.
+  let empty = { ..base, custom_model_draft_id: "   ", }
+  assert_true(empty.custom_model_draft_error() is None)
+  assert_false(empty.custom_model_draft_addable())
+  // A duplicate, a name the menu already lists, and an id that is not one
+  // word each say why.
+  let duplicate = { ..base, custom_model_draft_id: "qwen3-coder", }
+  assert_true(duplicate.custom_model_draft_error().unwrap().contains("already"))
+  let builtin = { ..base, custom_model_draft_id: "glm-5.3", }
+  assert_true(builtin.custom_model_draft_error().unwrap().contains("built-in"))
+  let spaced = { ..base, custom_model_draft_id: "qwen 3", }
+  assert_true(spaced.custom_model_draft_error().unwrap().contains("one word"))
+  for draft in [duplicate, builtin, spaced] {
+    assert_false(draft.custom_model_draft_addable())
+    // A stale click cannot store what the form refuses.
+    let (_, refused) = update(dispatch, CustomModelAdded, draft)
+    assert_eq(refused.custom_models, base.custom_models)
+    assert_eq(refused.settings_saves, base.settings_saves)
+  }
+  // The limit is a form error too.
+  let full : Array[CustomModel] = []
+  for index in 0..<CustomModelsLimit {
+    full.push({ id: "model-\{index}", label: None, })
+  }
+  let at_limit = {
+    ..base,
+    custom_models: full,
+    custom_model_draft_id: "one-more",
+  }
+  assert_true(at_limit.custom_model_draft_error().unwrap().contains("32"))
+}
+
+///|
+test "a fresh custom-endpoint chat aligns with the configured models" {
+  let dispatch = test_dispatch()
+  // A chat the page has never held, pinned to an id nobody configured: the
+  // endpoint's first configured model is the only thing that can run.
+  let stray = {
+    ..test_model(),
+    api_provider: Custom,
+    custom_api_url: "https://proxy.example/chat",
+    custom_key_saved: true,
+    default_model: Other("ghost-model"),
+    conversations: [
+      { ..test_conversation(), engine_model: Other("ghost-model"), },
+    ],
+  }
+  let snapshot = host_settings(
+    provider="custom",
+    custom_api_url="https://proxy.example/chat",
+    has_custom_key=true,
+    custom_models=[{ id: "qwen3-coder", label: None, }],
+  )
+  let (_, aligned) = update_dev(
+    dispatch,
+    HostSettingsLoaded(snapshot, connection_generation=None),
+    stray,
+  )
+  assert_true(aligned.active().engine_model is Other("qwen3-coder"))
+  // A configured model the chat already sits on is left alone.
+  let pinned = {
+    ..stray,
+    default_model: Other("qwen3-coder"),
+    conversations: [
+      { ..test_conversation(), engine_model: Other("qwen3-coder"), },
+    ],
+  }
+  let (_, kept) = update_dev(
+    dispatch,
+    HostSettingsLoaded(snapshot, connection_generation=None),
+    pinned,
+  )
+  assert_true(kept.active().engine_model is Other("qwen3-coder"))
 }
 
 ///|

@@ -551,6 +551,7 @@ test "a revoked page device is retired without connecting a survivor" {
       has_glm_key: false,
       has_custom_key: false,
       followup_behavior: "steer",
+      custom_models: [],
     }),
     installed_skills: [
       {

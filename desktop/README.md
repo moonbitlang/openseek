@@ -156,11 +156,16 @@ OpenRouter id (`deepseek/deepseek-v4.1-flash`, `deepseek/deepseek-v4-pro`) and
 translates the reasoning fields; Desktop keeps the same model preference for
 both endpoints. **Custom URL**
 accepts any other OpenAI-compatible chat-completions endpoint, with the key
-optional — whether one is needed is the endpoint's business. The provider
-choice, the custom URL, and the keys live in the host's settings store
-(`engine-settings.json` in the runtime dir), shared by the desktop window
-and every remote page; a key is never echoed back to a client, only its
-presence. While no usable endpoint is configured, an API-setup modal opens
+optional — whether one is needed is the endpoint's business. Because that
+endpoint, not this app, decides which models exist, the Custom URL section
+also carries a **custom models** list: each entry is a model id (sent to the
+endpoint verbatim) with an optional display name, and every entry joins the
+composer's model menu beside the four built-in models. A run naming anything
+else is refused with a message pointing back at Settings. The provider
+choice, the custom URL, the custom models, and the keys live in the host's
+settings store (`engine-settings.json` in the runtime dir), shared by the
+desktop window and every remote page; a key is never echoed back to a client,
+only its presence. While no usable endpoint is configured, an API-setup modal opens
 over the chat (the Settings page's API section lifted out of the page) and
 the composer keeps Send disabled, with a notice saying why. The host passes
 a custom endpoint to the engine as `OPENSEEK_API_URL`, substituting a

@@ -420,7 +420,12 @@ its next start.
 `provider` is the chat endpoint selection: `deepseek` (the official
 endpoint with the user's key), `glm` (the official Z.AI GLM endpoint
 with its own key), or `custom` (any OpenAI-compatible
-chat-completions URL; key optional). SeekMoon runs are
+chat-completions URL; key optional). A custom endpoint also carries
+`custom_models`: the model ids that endpoint serves, each `{id, label?}`
+with `id` sent to the endpoint verbatim and `label` the composer's display
+name. The host stores them, offers them in the model menu, and refuses a run
+naming anything else, so a client cannot point one conversation at an id the
+user never configured. SeekMoon runs are
 bring-your-own-key only — the hosted proxy is retired, and the retired
 names `openseek` / `openseek-staging` are accepted aliases that resolve
 to `deepseek`. The update channel is always `production` and remote
@@ -431,7 +436,7 @@ still signs out a session whose issuer no longer matches the origin.
 | method | params | result |
 |---|---|---|
 | `settings.get` | `{}` | the status shape below |
-| `settings.set` | `{provider?, custom_api_url?, deepseek_api_key?, glm_api_key?, custom_api_key?}` — absent fields stay unchanged; a present string field is trimmed and, when empty, **clears** the stored value; an unknown `provider` is refused. | the status shape below, post-write |
+| `settings.set` | `{provider?, custom_api_url?, deepseek_api_key?, glm_api_key?, custom_api_key?, followup_behavior?, custom_models?}` — absent fields stay unchanged; a present string field is trimmed and, when empty, **clears** the stored value; an unknown `provider` is refused. `custom_models` is the whole list: absent leaves it alone, `[]` clears it, and an id that is blank, not one word, already a built-in model, or listed twice refuses the entire patch. | the status shape below, post-write |
 
 The status shape, also the params of every `settings.changed` notification:
 
@@ -442,7 +447,11 @@ The status shape, also the params of every `settings.changed` notification:
   "custom_api_url": "https://…",   // absent when unset
   "has_deepseek_key": false,       // presence only — the key text never leaves the host
   "has_glm_key": false,
-  "has_custom_key": false
+  "has_custom_key": false,
+  "followup_behavior": "steer",
+  "custom_models": [               // always present; [] when none are configured
+    { "id": "qwen3-coder", "label": "Qwen3 Coder" }
+  ]
 }
 ```
 

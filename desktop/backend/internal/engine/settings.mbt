@@ -19,7 +19,7 @@
 // - Saves are atomic: temp file + rename, 0600.
 
 ///|
-const EngineSettingsVersion = 2
+const EngineSettingsVersion = 3
 
 ///|
 const EngineSettingsFileName = "engine-settings.json"
@@ -72,6 +72,31 @@ fn ApiProvider::parse(value : String) -> ApiProvider? {
 }
 
 ///|
+/// One model the user configured for a custom OpenAI-compatible endpoint: the
+/// id a run sends to that endpoint verbatim, and the display name the
+/// composer's model menu shows for it. `label` is `None` when the user did not
+/// name it — the id is then the label, and absence is never spelled `""`.
+///
+/// Public because it is the field type of the public `SettingsPatch`: the
+/// store's own model list, not the wire payload, is what a patch carries.
+pub(all) struct CustomModel {
+  id : String
+  label : String?
+} derive(Eq, Debug)
+
+///|
+pub extend CustomModel with Debug::{to_repr}
+
+///|
+pub extend CustomModel with Eq::{equal, not_equal}
+
+///|
+/// The most custom models one endpoint may list. The list is a settings field
+/// a client sends whole, so an unbounded one would mean an unbounded write per
+/// edit; well past what a model menu can usefully show.
+const CustomModelsLimit : Int = 32
+
+///|
 /// The decoded settings plus `raw`, the file's own object — the save path
 /// works on `raw` so fields this build does not know survive a rewrite.
 priv struct EngineSettings {
@@ -79,6 +104,7 @@ priv struct EngineSettings {
   version : Int
   provider : ApiProvider
   custom_api_url : String?
+  custom_models : Array[CustomModel]
   deepseek_api_key : String?
   glm_api_key : String?
   custom_api_key : String?
@@ -119,6 +145,47 @@ fn settings_text(fields : Map[String, Json], key : String) -> String? {
 }
 
 ///|
+/// Read one stored custom model. A malformed entry reads as `None` — a store
+/// hand-edited into nonsense costs the entry, never the whole settings file —
+/// and an id the save path would refuse (one that is not a wire name, or one
+/// the composer's own menu already lists) is dropped for the same reason.
+fn decode_custom_model(value : Json) -> CustomModel? {
+  guard value is Object(fields) else { return None }
+  guard settings_text(fields, "id") is Some(id) else { return None }
+  guard valid_custom_model_id(id) && !reserved_desktop_model(id) else {
+    return None
+  }
+  let label = settings_text(fields, "label").bind(label => {
+    let label = label.trim()
+    if label.length() <= CustomModelTextMaxLength {
+      Some(label.to_owned())
+    } else {
+      None
+    }
+  })
+  Some({ id, label, })
+}
+
+///|
+/// The stored custom models, in the order the user added them. Duplicates are
+/// dropped on read (the first spelling wins) so a hand-edited file cannot make
+/// one id appear twice in the composer's menu.
+fn decode_custom_models(fields : Map[String, Json]) -> Array[CustomModel] {
+  let models : Array[CustomModel] = []
+  guard fields.get("custom_models") is Some(Array(entries)) else {
+    return models
+  }
+  for entry in entries {
+    guard decode_custom_model(entry) is Some(model) else { continue }
+    guard models.length() < CustomModelsLimit else { break }
+    if !models.any(existing => existing.id == model.id) {
+      models.push(model)
+    }
+  }
+  models
+}
+
+///|
 fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
   {
     raw,
@@ -132,6 +199,7 @@ fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
     .bind(value => ApiProvider::parse(value))
     .unwrap_or(Deepseek),
     custom_api_url: settings_text(raw, "custom_api_url"),
+    custom_models: decode_custom_models(raw),
     deepseek_api_key: settings_text(raw, "deepseek_api_key"),
     glm_api_key: settings_text(raw, "glm_api_key"),
     custom_api_key: settings_text(raw, "custom_api_key"),
@@ -145,13 +213,15 @@ fn decode_settings(raw : Map[String, Json]) -> EngineSettings {
 ///|
 /// One `settings.set` request, decoded by the transport layer. Every field
 /// is optional: absent = leave unchanged. A present string field is
-/// trimmed; empty after trimming clears the stored value.
+/// trimmed; empty after trimming clears the stored value. `custom_models` is
+/// the list itself: absent leaves it alone, `[]` clears it.
 pub(all) struct SettingsPatch {
   provider : String?
   custom_api_url : String?
   deepseek_api_key : String?
   glm_api_key : String?
   custom_api_key : String?
+  custom_models : Array[CustomModel]?
 }
 
 ///|
@@ -173,6 +243,10 @@ fn settings_status_payload(
     has_glm_key: settings.glm_api_key is Some(_) || @env.get("GLM") is Some(_),
     has_custom_key: settings.custom_api_key is Some(_),
     followup_behavior: settings.followup_behavior,
+    custom_models: settings.custom_models.map(model => {
+      id: model.id,
+      label: model.label,
+    }),
   }
 }
 
@@ -229,6 +303,20 @@ pub async fn update_settings(
   apply_text_patch(raw, "deepseek_api_key", patch.deepseek_api_key)
   apply_text_patch(raw, "glm_api_key", patch.glm_api_key)
   apply_text_patch(raw, "custom_api_key", patch.custom_api_key)
+  if patch.custom_models is Some(models) {
+    // Validated as a whole before anything is written: one patch is one
+    // instruction, so a bad entry must not leave half a list stored.
+    let models = validated_custom_models(models)
+    if models.is_empty() {
+      raw.remove("custom_models")
+    } else {
+      raw["custom_models"] = Json(
+        [
+          for model in models => custom_model_json(model)
+        ],
+      )
+    }
+  }
   if followup_behavior is Some(value) {
     guard value == "steer" || value == "queue" else {
       raise EngineError("unknown follow-up behavior '\{value}'")
@@ -270,6 +358,64 @@ fn apply_text_patch(
   } else {
     fields[key] = Json(value)
   }
+}
+
+///|
+/// One custom model as the store writes it: `id` always, `label` only when the
+/// user named it. An absent label is the absence of a name, never `""`.
+fn custom_model_json(model : CustomModel) -> Json {
+  let fields : Map[String, Json] = { "id": Json(model.id) }
+  if model.label is Some(label) {
+    fields["label"] = Json(label)
+  }
+  Json(fields)
+}
+
+///|
+/// Check one patch's custom-model list and normalize it: ids trimmed and
+/// unique, labels trimmed with a blank one read as "no name". Raises on the
+/// first problem rather than storing a partly-acceptable list, because the
+/// client sent the whole list as one instruction.
+fn validated_custom_models(
+  models : Array[CustomModel],
+) -> Array[CustomModel] raise EngineError {
+  guard models.length() <= CustomModelsLimit else {
+    raise EngineError(
+      "at most \{CustomModelsLimit} custom models can be configured",
+    )
+  }
+  let validated : Array[CustomModel] = []
+  for model in models {
+    let id = model.id.trim().to_owned()
+    guard valid_custom_model_id(id) else {
+      raise EngineError(
+        "custom model id '\{model.id}' must be one word of at most \{CustomModelTextMaxLength} characters",
+      )
+    }
+    guard !reserved_desktop_model(id) else {
+      raise EngineError(
+        "custom model id '\{id}' is already in the model menu; pick it there instead",
+      )
+    }
+    guard !validated.any(existing => existing.id == id) else {
+      raise EngineError("custom model id '\{id}' is listed twice")
+    }
+    let label = match model.label {
+      Some(label) =>
+        if label.trim().is_empty() {
+          None
+        } else if label.trim().length() > CustomModelTextMaxLength {
+          raise EngineError(
+            "the display name for '\{id}' is longer than \{CustomModelTextMaxLength} characters",
+          )
+        } else {
+          Some(label.trim().to_owned())
+        }
+      None => None
+    }
+    validated.push({ id, label, })
+  }
+  validated
 }
 
 ///|
@@ -362,7 +508,7 @@ pub async fn pattern_repair_environment(
   }
   let endpoint = resolved_endpoint(settings)
   let env = @sys.get_env_vars()
-  env[key_env_for(settings.provider, model)] = endpoint.api_key
+  env[key_env_for(settings.provider, model, settings.custom_models)] = endpoint.api_key
   match endpoint.api_url {
     Some(url) => env["OPENSEEK_API_URL"] = url
     None => env.remove("OPENSEEK_API_URL")
@@ -437,6 +583,7 @@ async test "missing settings read as the BYOK defaults" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "custom_models": [],
     })
   })
 }
@@ -455,6 +602,7 @@ async test "the DEEPSEEK env fallback reads as a usable key" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "custom_models": [],
     })
   })
 }
@@ -468,6 +616,7 @@ async test "a saved key round-trips as presence, never as text" {
       deepseek_api_key: Some("  sk-secret  "),
       glm_api_key: None,
       custom_api_key: None,
+      custom_models: None,
     })
     json_inspect(status, content={
       "revision": 1,
@@ -476,6 +625,7 @@ async test "a saved key round-trips as presence, never as text" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "custom_models": [],
     })
     // The status never carries the key; the file carries it trimmed.
     assert_false(status.to_json().stringify().contains("sk-secret"))
@@ -503,6 +653,7 @@ async test "retired hosted providers converge on the DeepSeek default" {
       deepseek_api_key: None,
       glm_api_key: None,
       custom_api_key: None,
+      custom_models: None,
     })
     json_inspect(status, content={
       "revision": 1,
@@ -511,6 +662,7 @@ async test "retired hosted providers converge on the DeepSeek default" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "custom_models": [],
     })
     let text = @fsx.read_text(settings_file(dir))
     assert_true(text.contains("\"provider\": \"deepseek\""))
@@ -532,6 +684,7 @@ async test "a present-but-blank field clears the stored value" {
       deepseek_api_key: None,
       glm_api_key: None,
       custom_api_key: Some("sk-custom"),
+      custom_models: None,
     })
     let status = update_settings(manager, {
       provider: None,
@@ -539,6 +692,7 @@ async test "a present-but-blank field clears the stored value" {
       deepseek_api_key: None,
       glm_api_key: None,
       custom_api_key: Some(""),
+      custom_models: None,
     })
     json_inspect(status, content={
       "revision": 2,
@@ -547,6 +701,7 @@ async test "a present-but-blank field clears the stored value" {
       "has_glm_key": false,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "custom_models": [],
     })
   })
 }
@@ -564,6 +719,7 @@ async test "a save removes the retired WSL settings group" {
       deepseek_api_key: Some("sk-kept"),
       glm_api_key: None,
       custom_api_key: None,
+      custom_models: None,
     })
     guard @json.parse(@fsx.read_text(settings_file(dir))) is Object(fields) else {
       fail("settings file is not valid JSON")
@@ -571,7 +727,7 @@ async test "a save removes the retired WSL settings group" {
     assert_true(fields.get("wsl") is None)
     assert_true(
       fields.get("version") is Some(Number(version, ..)) &&
-      version.to_int() == 2,
+      version.to_int() == EngineSettingsVersion,
     )
   })
 }
@@ -596,6 +752,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             deepseek_api_key: Some("sk-concurrent"),
             glm_api_key: None,
             custom_api_key: None,
+            custom_models: None,
           },
           on_committed=status => committed.push(status.revision),
         )
@@ -610,6 +767,7 @@ async test "concurrent disjoint settings patches merge and publish in revision o
             deepseek_api_key: None,
             glm_api_key: None,
             custom_api_key: Some("sk-custom"),
+            custom_models: None,
           },
           on_committed=status => committed.push(status.revision),
         )
@@ -654,6 +812,7 @@ async test "saves preserve fields a newer build added" {
       deepseek_api_key: Some("sk-new"),
       glm_api_key: None,
       custom_api_key: None,
+      custom_models: None,
     })
     let text = @fsx.read_text(settings_file(dir))
     assert_true(text.contains("\"future_field\""))
@@ -684,6 +843,7 @@ async test "a newer-version file is read best-effort but never rewritten" {
         deepseek_api_key: None,
         glm_api_key: None,
         custom_api_key: None,
+        custom_models: None,
       })
     catch {
       EngineError(message) => message
@@ -707,6 +867,7 @@ async test "an unknown provider is refused on write, defaulted on read" {
         deepseek_api_key: None,
         glm_api_key: None,
         custom_api_key: None,
+        custom_models: None,
       })
     catch {
       EngineError(message) => message
@@ -750,6 +911,7 @@ async test "run config resolves the endpoint from the stored provider" {
       deepseek_api_key: Some("sk-stored"),
       glm_api_key: None,
       custom_api_key: None,
+      custom_models: None,
     })
     let config = run_config(manager, {
       task: "hello",
@@ -778,6 +940,7 @@ async test "run config resolves the endpoint from the stored provider" {
       deepseek_api_key: None,
       glm_api_key: Some("glm-stored"),
       custom_api_key: None,
+      custom_models: None,
     })
     let glm = run_config(manager, {
       task: "hello",
@@ -798,6 +961,7 @@ async test "run config resolves the endpoint from the stored provider" {
       deepseek_api_key: None,
       glm_api_key: None,
       custom_api_key: None,
+      custom_models: None,
     })
     let custom = run_config(manager, {
       task: "hello",
@@ -827,6 +991,7 @@ async test "the GLM provider stores its own key and reports presence" {
       deepseek_api_key: None,
       glm_api_key: Some("  glm-secret  "),
       custom_api_key: None,
+      custom_models: None,
     })
     json_inspect(status, content={
       "revision": 1,
@@ -835,6 +1000,7 @@ async test "the GLM provider stores its own key and reports presence" {
       "has_glm_key": true,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "custom_models": [],
     })
     // The status never carries the key; the store carries it trimmed, in its
     // own slot rather than DeepSeek's.
@@ -860,6 +1026,7 @@ async test "the GLM env fallback reads as a usable key" {
       "has_glm_key": true,
       "has_custom_key": false,
       "followup_behavior": "steer",
+      "custom_models": [],
     })
   })
 }
@@ -873,6 +1040,7 @@ async test "a custom provider without a URL refuses to start" {
       deepseek_api_key: None,
       glm_api_key: None,
       custom_api_key: None,
+      custom_models: None,
     })
     let refused = try
       run_config(manager, {
@@ -903,6 +1071,7 @@ async test "pattern repair uses provider credentials and leaves run options to a
       deepseek_api_key: None,
       glm_api_key: None,
       custom_api_key: Some("repair-key"),
+      custom_models: None,
     })
     let previous = ["OPENSEEK_MODEL", "OPENSEEK_THINKING", "OPENSEEK_MAX_STEPS"].map(name => {
         (name, @sys.get_env_var(name))

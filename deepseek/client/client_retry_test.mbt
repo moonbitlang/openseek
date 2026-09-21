@@ -50,7 +50,7 @@ async fn flaky_server(
 /// The retrying client these tests drive: the fake key, the flaky server's
 /// endpoint, and a 1ms backoff so a retry budget is exercised without real
 /// sleeps. Only the attempt budget varies per test.
-fn retry_client(url : String, attempts~ : Int) -> @client.Client {
+fn retry_client(url : String, attempts~ : Int) -> @client.Client raise {
   Client(
     api_key="test-key",
     api_url=url,
