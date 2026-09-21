@@ -326,7 +326,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
 
 ///|
 #cfg(not(platform="windows"))
-async test "a checkout deleted outside the app refuses runs and is repairable" {
+async test "a deleted checkout refuses runs and repairs to the last OpenSeek save point" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
@@ -347,6 +347,14 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   let repo = root.join("repo")
   prepare_git_repo(repo)
   ignore(@workspaces.add(repo.to_string(), _ => ()))
+  @fsx.write_text(repo.join("kept.txt").to_path(), "saved work")
+  ignore(@gitx.run(repo, ["add", "kept.txt"]))
+  ignore(
+    @gitx.run(repo, [
+      "-c", "user.email=test@example.com", "-c", "user.name=test", "-c", "commit.gpgsign=false",
+      "commit", "-q", "-m", "saved work",
+    ]),
+  )
   let manager = new_engine_manager("openseek")
   let created = @worktree.create(
     manager.worktree_host(),
@@ -356,9 +364,9 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
     name="wt",
   )
   let checkout = repo.join(".worktrees/wt")
-  // A commit on the worktree's branch stands in for the conversation's
-  // work: the repair must bring it back, not just an empty directory.
-  @fsx.write_text(checkout.join("kept.txt").to_path(), "committed work")
+  // External work advances HEAD after OpenSeek saved the creation commit.
+  // Repair must restore the saved content, not this later commit.
+  @fsx.write_text(checkout.join("kept.txt").to_path(), "external work")
   ignore(@gitx.run(checkout, ["add", "kept.txt"]))
   ignore(
     @gitx.run(checkout, [
@@ -438,7 +446,7 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   assert_true(
     resumed_refusal.contains("wt") && resumed_refusal.contains("gone"),
   )
-  // Recreating repairs the same detached environment and committed content.
+  // Recreating repairs the same detached environment at its saved commit.
   let repaired = @worktree.create(
     manager.worktree_host(),
     repo.to_string(),
@@ -447,13 +455,11 @@ async test "a checkout deleted outside the app refuses runs and is repairable" {
   )
   assert_eq(repaired.name, created.name)
   assert_true(@fsx.is_dir(checkout.to_path()))
-  assert_eq(
-    @fsx.read_text(checkout.join("kept.txt").to_path()),
-    "committed work",
-  )
+  assert_eq(@fsx.read_text(checkout.join("kept.txt").to_path()), "saved work")
   guard created.worktrees is [created_info] else {
     fail("create must publish the one worktree it made")
   }
+  assert_eq(@gitx.run(checkout, ["rev-parse", "HEAD"]), created_info.base)
   // Repair keeps the checkout detached.
   assert_eq(created_info.branch, None)
   assert_eq(@gitx.run(checkout, ["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD")

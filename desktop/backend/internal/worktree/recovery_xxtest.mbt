@@ -84,7 +84,7 @@ async test "detached archive survives GC and later user-created branches" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "repair pins all externally deleted worktree HEADs before pruning" {
+async test "repair restores the OpenSeek save point without touching other worktrees" {
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
     let second = WorktreeOwner::codex("second")
@@ -92,23 +92,96 @@ async test "repair pins all externally deleted worktree HEADs before pruning" {
     let b = create(host, resource_path(repo), second, _ => ())
     let a_dir = worktree_dir(repo, a.name)
     let b_dir = worktree_dir(repo, b.name)
-    let a_head = commit_recovery_fixture(a_dir, "first detached commit")
-    let b_head = commit_recovery_fixture(b_dir, "second detached commit")
+    let saved = @gitx.run(a_dir, ["rev-parse", "HEAD"])
+    let external = commit_recovery_fixture(a_dir, "external commit")
+    ignore(commit_recovery_fixture(b_dir, "another task's external commit"))
+    assert_true(saved != external)
+    let refs_before = @gitx.run(repo, [
+      "for-each-ref",
+      "--format=%(refname) %(objectname)",
+      WorktreeRecoveryPrefix,
+    ])
     @fs.rmdir(a_dir.to_string(), recursive=true)
     @fs.rmdir(b_dir.to_string(), recursive=true)
+    let b_metadata = repo.join(".git/worktrees").join(b.name).join("HEAD")
+    let b_head_before = @fsx.try_read_text(b_metadata.to_path())
+    assert_true(b_head_before is Some(_))
     ignore(create(host, resource_path(repo), first, _ => ()))
-    // Repair pruned both absent admin entries. The second HEAD must already
-    // be reachable without its worktree metadata or any branch/reflog.
-    collect_recovery_fixture(repo)
-    ignore(create(host, resource_path(repo), second, _ => ()))
-    assert_eq(@gitx.run(a_dir, ["rev-parse", "HEAD"]), a_head)
-    assert_eq(@gitx.run(b_dir, ["rev-parse", "HEAD"]), b_head)
+    assert_eq(@gitx.run(a_dir, ["rev-parse", "HEAD"]), saved)
+    assert_eq(@fsx.try_read_text(b_metadata.to_path()), b_head_before)
     assert_eq(
       @gitx.run(repo, [
-        "for-each-ref", "--format=%(refname)", "refs/heads/openseek/",
+        "for-each-ref",
+        "--format=%(refname) %(objectname)",
+        WorktreeRecoveryPrefix,
       ]),
-      "",
+      refs_before,
     )
+    assert_false(@fsx.exists(b_dir.to_path()))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "repair after external prune and GC restores the last archive save point" {
+  with_recovery_fixture((repo, host) => {
+    let owner = WorktreeOwner::codex("pruned")
+    let created = create(host, resource_path(repo), owner, _ => ())
+    let checkout = worktree_dir(repo, created.name)
+    let base = @gitx.run(checkout, ["rev-parse", "HEAD"])
+    let saved = commit_recovery_fixture(checkout, "saved by archive")
+    assert_eq(owner.archive_checkout(false), None)
+    ignore(create(host, resource_path(repo), owner, _ => ()))
+    let external = commit_recovery_fixture(
+      checkout, "external commit after save",
+    )
+    assert_true(saved != base && saved != external)
+    @fs.rmdir(checkout.to_string(), recursive=true)
+    ignore(@gitx.run(repo, ["worktree", "prune", "--expire=now"]))
+    collect_recovery_fixture(repo)
+    ignore(create(host, resource_path(repo), owner, _ => ()))
+    assert_eq(@gitx.run(checkout, ["rev-parse", "HEAD"]), saved)
+    assert_eq(tree_base(repo, "pruned"), Some(base))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "archiving and removing missing checkouts retain their OpenSeek save points" {
+  with_recovery_fixture((repo, host) => {
+    let archived = WorktreeOwner::codex("archived")
+    let removed = WorktreeOwner::openseek("removed")
+    let a = create(host, resource_path(repo), archived, _ => ())
+    let b = create(host, resource_path(repo), removed, _ => ())
+    let a_dir = worktree_dir(repo, a.name)
+    let b_dir = worktree_dir(repo, b.name)
+    let saved = @gitx.run(a_dir, ["rev-parse", "HEAD"])
+    let refs_before = @gitx.run(repo, [
+      "for-each-ref",
+      "--format=%(refname) %(objectname)",
+      WorktreeRecoveryPrefix,
+    ])
+    ignore(commit_recovery_fixture(a_dir, "externally deleted archive"))
+    ignore(commit_recovery_fixture(b_dir, "externally deleted removal"))
+    @fs.rmdir(a_dir.to_string(), recursive=true)
+    @fs.rmdir(b_dir.to_string(), recursive=true)
+    let b_metadata = repo.join(".git/worktrees").join(b.name).join("HEAD")
+    let b_head_before = @fsx.try_read_text(b_metadata.to_path())
+    assert_true(b_head_before is Some(_))
+    assert_eq(archived.archive_checkout(false), None)
+    assert_eq(@fsx.try_read_text(b_metadata.to_path()), b_head_before)
+    ignore(remove(host, resource_path(repo), b.name, false, _ => ()))
+    assert_eq(
+      @gitx.run(repo, [
+        "for-each-ref",
+        "--format=%(refname) %(objectname)",
+        WorktreeRecoveryPrefix,
+      ]),
+      refs_before,
+    )
+    collect_recovery_fixture(repo)
+    ignore(create(host, resource_path(repo), archived, _ => ()))
+    assert_eq(@gitx.run(a_dir, ["rev-parse", "HEAD"]), saved)
   })
 }
 

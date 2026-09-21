@@ -510,8 +510,8 @@ pub async fn WorktreeOwner::archive_checkout(
     preserve_worktree_head(workspace, entry)
     delete_worktree_checkout(workspace, entry.name)
   } else {
-    // The checkout is already gone; drop git's stale bookkeeping for it.
-    prune_worktrees(workspace)
+    // The checkout is already gone; retain its last OpenSeek save point.
+    remove_missing_checkout(workspace, entry.name)
   }
   // The checkout changed, not the placement. Publish the retained row with
   // `present: false` so every client blocks this conversation immediately;
@@ -790,8 +790,8 @@ pub async fn create(
   let entries = read_worktrees_unlocked(dir)
   // This conversation already holds its environment. Two shapes land here:
   // the idempotent replay of a create whose reply was lost, and the repair
-  // of a checkout deleted outside the app. Repair saves Git's remaining
-  // worktree HEAD before pruning stale bookkeeping, then restores it.
+  // of a checkout deleted outside the app. Repair uses the saved
+  // reference without adopting external changes to the missing checkout.
   for entry in entries {
     guard entry.belongs_to(owner) else { continue }
     let present = @fsx.is_dir(worktree_dir(dir, entry.name).to_path()) catch {
@@ -937,18 +937,18 @@ pub async fn create(
 
 ///|
 /// Restore the last saved detached HEAD, or an existing legacy branch.
-/// Pin every managed HEAD before global pruning, including other missing
-/// checkouts: repairing one conversation must not destroy another's history.
+/// Only this checkout's stale registration is removed; other worktrees and
+/// their saved references are unaffected.
 async fn restore_worktree_checkout(
   dir : @pathx.Absolute,
   entry : WorktreeEntry,
   checkout_submodules~ : Bool,
   submodule_checkout_timeout_seconds~ : Int,
 ) -> Unit {
-  finish_worktree_creation(dir, entry)
-  prune_worktrees(dir)
   let revision = entry.checkout.revision()
   let commit = @gitx.run(dir, ["rev-parse", "--verify", "\{revision}^{commit}"])
+  finish_worktree_creation(dir, entry)
+  remove_missing_checkout(dir, entry.name)
   guard @entropy.random_hex(16) is Some(salt) else {
     raise WorktreeError("no OS entropy available to identify a worktree repair")
   }
@@ -1046,9 +1046,8 @@ async fn delete_worktree_checkout(
 /// are discarded only behind `force`.
 /// The bound conversation is drained first (an idle serve process still
 /// has its cwd inside the directory being deleted); it then becomes a
-/// plain workspace conversation with its history intact. A registry entry
-/// whose directory is already gone is pruned — the self-heal for a
-/// worktree deleted outside the app.
+/// plain workspace conversation with its history intact. If its directory was
+/// deleted outside the app, only this worktree's Git registration is removed.
 pub async fn remove(
   host : WorktreeHost,
   workspace : String,
@@ -1091,9 +1090,7 @@ pub async fn remove(
   if entry.session is Some(bound) {
     (host.drain_sessions)([bound])
   }
-  // Serialize recovery snapshots with archive and repair. Otherwise a
-  // concurrent archive could save a newer HEAD just before pruning replaced
-  // its recovery ref with an older snapshot.
+  // Serialize saving and removal with archive and repair.
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   let target = worktree_dir(dir, name)
@@ -1113,8 +1110,8 @@ pub async fn remove(
     preserve_worktree_head(dir, entry)
     delete_worktree_checkout(dir, name)
   } else {
-    // The checkout is already gone; drop git's stale bookkeeping for it.
-    prune_worktrees(dir)
+    // The checkout is already gone; retain its last OpenSeek save point.
+    remove_missing_checkout(dir, name)
   }
   // Re-read after draining the owning session; keep unrelated placements.
   let remaining = read_worktrees_unlocked(dir).filter(entry => {

@@ -67,25 +67,25 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (Japanese, DWorktree(p0)) =>
       "このチャットはワークツリー \{p0} で実行されます"
     (English, DMissingWorktree(p0)) =>
-      "Worktree \{p0} has no checkout. Rebuild it from its saved commits to continue."
+      "Worktree \{p0} has no checkout. Restore the commit last saved by OpenSeek to continue."
     (Spanish, DMissingWorktree(p0)) =>
-      "El worktree \{p0} no tiene una copia de trabajo. Reconstrúyelo a partir de los commits guardados para continuar."
+      "El worktree \{p0} no tiene una copia de trabajo. Restaura el último commit guardado por OpenSeek para continuar."
     (SimplifiedChinese, DMissingWorktree(p0)) =>
-      "工作树 \{p0} 缺少检出目录。从保留的提交重建后即可继续。"
+      "工作树 \{p0} 缺少检出目录。恢复到 OpenSeek 上次保存的提交后即可继续。"
     (TraditionalChinese, DMissingWorktree(p0)) =>
-      "工作樹 \{p0} 缺少檢出目錄。從保留的提交重建後即可繼續。"
+      "工作樹 \{p0} 缺少檢出目錄。恢復到 OpenSeek 上次儲存的提交後即可繼續。"
     (Japanese, DMissingWorktree(p0)) =>
-      "ワークツリー \{p0} のチェックアウトがありません。保存されたコミットから再作成すると続行できます。"
+      "ワークツリー \{p0} のチェックアウトがありません。OpenSeek が最後に保存したコミットを復元すると続行できます。"
     (English, DRebuildWorktree(p0)) =>
-      "Restore committed work at .worktrees/\{p0}"
+      "Restore the last saved commit at .worktrees/\{p0}"
     (Spanish, DRebuildWorktree(p0)) =>
-      "Restaurar los cambios confirmados en .worktrees/\{p0}"
+      "Restaurar el último commit guardado en .worktrees/\{p0}"
     (SimplifiedChinese, DRebuildWorktree(p0)) =>
-      "将已提交的更改恢复到 .worktrees/\{p0}"
+      "将上次保存的提交恢复到 .worktrees/\{p0}"
     (TraditionalChinese, DRebuildWorktree(p0)) =>
-      "將已提交的變更恢復到 .worktrees/\{p0}"
+      "將上次儲存的提交恢復到 .worktrees/\{p0}"
     (Japanese, DRebuildWorktree(p0)) =>
-      "コミットを .worktrees/\{p0} に復元"
+      "最後に保存したコミットを .worktrees/\{p0} に復元"
     (English, DArchiveMissing(p0)) =>
       "Archive this \{p0} without rebuilding its worktree"
     (Spanish, DArchiveMissing(_)) =>
@@ -111,15 +111,15 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (Japanese, DReconnecting(p0)) =>
       "\{p0} に接続できません。再接続中…"
     (English, DArchiveWarning(p0, p1)) =>
-      "Worktree \{p0} has uncommitted changes.\{p1} Archiving deletes this checkout and permanently discards its uncommitted, untracked, and ignored files. Committed work and the branch remain."
+      "Worktree \{p0} has uncommitted changes.\{p1} Archiving deletes this checkout and permanently discards its uncommitted, untracked, and ignored files. Committed work is saved for recovery."
     (Spanish, DArchiveWarning(p0, p1)) =>
-      "El worktree \{p0} tiene cambios sin confirmar.\{p1} Al archivarlo se elimina esta copia de trabajo y se descartan de forma permanente los cambios sin confirmar y los archivos sin seguimiento e ignorados. Se conservan los commits y la rama."
+      "El worktree \{p0} tiene cambios sin confirmar.\{p1} Al archivarlo se elimina esta copia de trabajo y se descartan de forma permanente los cambios sin confirmar y los archivos sin seguimiento e ignorados. Los commits se guardan para su recuperación."
     (SimplifiedChinese, DArchiveWarning(p0, p1)) =>
-      "工作树 \{p0} 中有未提交的更改。\{p1} 归档会删除此检出目录，永久丢弃未提交、未跟踪和已忽略的文件。已提交的内容和分支将被保留。"
+      "工作树 \{p0} 中有未提交的更改。\{p1} 归档会删除此检出目录，永久丢弃未提交、未跟踪和已忽略的文件。已提交的内容将被保存以供恢复。"
     (TraditionalChinese, DArchiveWarning(p0, p1)) =>
-      "工作樹 \{p0} 中有未提交的更改。\{p1} 歸檔會刪除此檢出目錄，永久丟棄未提交、未跟蹤和已忽略的檔案。已提交的內容和分支將被保留。"
+      "工作樹 \{p0} 中有未提交的更改。\{p1} 歸檔會刪除此檢出目錄，永久丟棄未提交、未跟蹤和已忽略的檔案。已提交的內容將被儲存以供恢復。"
     (Japanese, DArchiveWarning(p0, p1)) =>
-      "ワークツリー \{p0} に未コミットの変更があります。\{p1} アーカイブするとこのチェックアウトが削除され、未コミット・未追跡・無視されたファイルは完全に失われます。コミット済みの内容とブランチは保持されます。"
+      "ワークツリー \{p0} に未コミットの変更があります。\{p1} アーカイブするとこのチェックアウトが削除され、未コミット・未追跡・無視されたファイルは完全に失われます。コミット済みの内容は復元用に保存されます。"
     (English, DArchiveQuestion(p0)) => "Archive this \{p0}?"
     (Spanish, DArchiveQuestion(_)) => "¿Archivar esta conversación?"
     (SimplifiedChinese, DArchiveQuestion(_)) => "归档此对话？"

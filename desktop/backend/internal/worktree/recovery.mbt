@@ -1,6 +1,7 @@
 // Detached worktrees keep their commits reachable through private Git refs.
 // The original base remains immutable; the recovery ref tracks the last HEAD
-// saved before checkout removal or administrative pruning.
+// saved by OpenSeek at creation or before removing an existing checkout.
+// Repair never advances it from externally modified worktree metadata.
 
 ///|
 const WorktreeRecoveryPrefix = "refs/openseek/worktrees/"
@@ -38,7 +39,6 @@ fn valid_recovery_ref(name : String, recovery_ref : String) -> Bool {
 
 ///|
 priv struct CheckoutState {
-  head : String?
   lock_reason : String?
 }
 
@@ -66,13 +66,11 @@ async fn checkout_states(dir : @pathx.Absolute) -> Map[String, CheckoutState] {
         None
       }
       if current is Some(name) {
-        states[name] = { head: None, lock_reason: None, }
+        states[name] = { lock_reason: None, }
       }
-    } else if current is Some(name) && states.get(name) is Some(state) {
-      if field is [.. "HEAD ", .. head] {
-        states[name] = { ..state, head: Some(head.to_owned()), }
-      } else if field is [.. "locked ", .. reason] {
-        states[name] = { ..state, lock_reason: Some(reason.to_owned()), }
+    } else if current is Some(name) {
+      if field is [.. "locked ", .. reason] {
+        states[name] = { lock_reason: Some(reason.to_owned()), }
       }
     }
   }
@@ -92,19 +90,16 @@ async fn preserve_worktree_head(
 }
 
 ///|
-/// Git pruning is repository-wide. Save ALL managed detached HEADs first,
-/// including those whose directories were removed by another tool. If saving
-/// fails, leave the metadata intact. A JSON SHA alone would not prevent GC.
-/// Callers hold worktree_registry_lock through the snapshot and the prune.
-async fn prune_worktrees(dir : @pathx.Absolute) -> Unit {
-  let states = checkout_states(dir)
-  for entry in read_worktrees_unlocked(dir) {
-    if entry.checkout is Detached(recovery_ref) &&
-      states.get(entry.name) is Some({ head: Some(head), .. }) {
-      ignore(@gitx.run(dir, ["update-ref", "--no-deref", recovery_ref, head]))
-    }
+/// Forget only this missing checkout's registration. The saved reference is
+/// authoritative even if external commits remain in Git's administrative files.
+/// An external prune may already have removed the registration; that is a no-op.
+async fn remove_missing_checkout(dir : @pathx.Absolute, name : String) -> Unit {
+  guard !@fsx.exists(worktree_dir(dir, name).to_path()) else {
+    raise WorktreeError("worktree \{name} already exists on disk")
   }
-  ignore(@gitx.run(dir, ["worktree", "prune"]))
+  if checkout_states(dir).get(name) is Some(_) {
+    delete_worktree_checkout(dir, name)
+  }
 }
 
 ///|
