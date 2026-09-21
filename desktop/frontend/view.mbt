@@ -1618,7 +1618,6 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
 fn topbar_view(
   dispatch : @cmd.Emit[Msg],
   toggle_terminal : @cmd.Cmd,
-  toggle_right_panel : @cmd.Cmd,
   model : Model,
   conv : Conversation,
 ) -> @html.Html {
@@ -1693,20 +1692,6 @@ fn topbar_view(
         },
         on_click=toggle_terminal,
         icon(icon_terminal),
-      ),
-    )
-  }
-  // Rightmost: the toggle for the whole right-hand panel — only while the
-  // panel is closed; an open panel carries the toggle at the right edge of
-  // its breadcrumb instead, keeping this bar uncrowded. Both spots hug the
-  // window's right edge, so the toggle stays put as the panel opens/closes.
-  if !model.narrow && !model.right_panel_open {
-    items.push(
-      @html.button(
-        class="panel-toggle",
-        title=shell_text(model.locale, ShowPanel),
-        on_click=toggle_right_panel,
-        icon(icon_layout_sidebar_right),
       ),
     )
   }
@@ -1988,9 +1973,7 @@ fn view(
         Onboarding => [onboarding_view(dispatch, model)]
         Transcript(conversation=conv, ..) =>
           [
-            topbar_view(
-              dispatch, toggle_terminal, toggle_right_panel, model, conv,
-            ),
+            topbar_view(dispatch, toggle_terminal, model, conv),
             transcript_html,
             if conv.is_archived_read_only() {
               conv.archived_read_only_view(locale=model.locale, dispatch)
@@ -2019,11 +2002,9 @@ fn view(
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         model.focused,
         terminal_open=terminal_panel_visible,
-        file_panel_open=file_panel_visible,
         narrow=model.narrow,
         @codex.PageActions::{
           toggle_terminal,
-          toggle_files: toggle_right_panel,
           workspace_label: workspace => @resource.label(workspace),
           transcript: transcript_html,
           composer: codex_composer_html,
@@ -2057,6 +2038,26 @@ fn view(
   } else {
     content
   }
+  let panel_available = model.screen is Chat ||
+    (
+      file_ctx(model).placement is Some(placement) &&
+      placement.checkout_root() is Some(_)
+    )
+  let panel_toggle_visible = file_panel_visible ||
+    (
+      !model.narrow &&
+      (
+        model.screen is Codex ||
+        (model.screen is Chat && model.active_conversation() is Some(_))
+      )
+    )
+  let panel_toggle_label = if file_panel_visible {
+    shell_text(model.locale, HidePanel)
+  } else if model.screen is Codex {
+    model.codex.files_toggle_label(locale=model.locale, model.focused)
+  } else {
+    shell_text(model.locale, ShowPanel)
+  }
   let sidebar_toggle_label = if model.sidebar_open {
     @sidebar_messages.text(model.locale, HideSidebar)
   } else {
@@ -2074,6 +2075,21 @@ fn view(
     ),
     sidebar_html,
     @html.div(class=content_class, [
+      // One fixed control owns both states, outside the animated pane tracks.
+      @html.button(
+        class=if panel_toggle_visible {
+          "panel-toggle right-panel-toggle"
+        } else {
+          "panel-toggle right-panel-toggle hidden"
+        },
+        title=panel_toggle_label,
+        attrs=@html.Attrs::build()
+          .aria_label(panel_toggle_label)
+          .aria_expanded(file_panel_visible.to_string())
+          .disabled(!panel_available),
+        on_click=toggle_right_panel,
+        icon(icon_layout_sidebar_right),
+      ),
       @html.main_(
         class=if window_titlebar_drag_strip {
           "window-titlebar-page"

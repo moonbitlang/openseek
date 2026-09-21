@@ -22,6 +22,7 @@ priv enum ShellMessage {
   HideTerminal
   ShowTerminal
   ShowPanel
+  HidePanel
   OpenProject
   ProjectOnboarding
   AddProject
@@ -203,6 +204,11 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, ShowPanel) => "显示面板"
     (TraditionalChinese, ShowPanel) => "顯示面板"
     (Japanese, ShowPanel) => "パネルを表示"
+    (English, HidePanel) => "Hide panel"
+    (Spanish, HidePanel) => "Ocultar panel"
+    (SimplifiedChinese, HidePanel) => "隐藏面板"
+    (TraditionalChinese, HidePanel) => "隱藏面板"
+    (Japanese, HidePanel) => "パネルを非表示"
     (English, OpenProject) => "Open a project"
     (Spanish, OpenProject) => "Abrir un proyecto"
     (SimplifiedChinese, OpenProject) => "打开项目"

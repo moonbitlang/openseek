@@ -473,7 +473,6 @@ fn CodexGitStatus::presentation(
 /// terminal, file-editor, and external-link policy in the root shell.
 pub(all) struct PageActions {
   toggle_terminal : @cmd.Cmd
-  toggle_files : @cmd.Cmd
   workspace_label : (@common.Uri) -> String
   // The root shell supplies the one transcript view shared with OpenSeek.
   // Codex owns the normalized items, but no parallel message/activity DOM.
@@ -495,7 +494,6 @@ pub fn State::page(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   terminal_open~ : Bool,
-  file_panel_open~ : Bool,
   narrow~ : Bool,
   actions : PageActions,
 ) -> Array[@html.Html] {
@@ -570,24 +568,6 @@ pub fn State::page(
         },
         on_click=actions.toggle_terminal,
         icon(icon_terminal),
-      ),
-    )
-  }
-  // An open file panel carries its close toggle in the breadcrumb, matching
-  // the OpenSeek conversation topbar. Without a cwd there is no safe root to
-  // list, so the disabled button explains why no guessed directory is opened.
-  if !narrow && !file_panel_open {
-    topbar.push(
-      @html.button(
-        class="panel-toggle",
-        attrs=@html.Attrs::build().disabled(workspace is None),
-        title=if workspace is Some(_) {
-          ui(locale, ShowFiles)
-        } else {
-          ui(locale, FilesDirectory)
-        },
-        on_click=actions.toggle_files,
-        icon(icon_layout_sidebar_right),
       ),
     )
   }
@@ -873,4 +853,17 @@ test "background Codex activity follows its thread instead of selection" {
     let read = opened.project_conversations(context, "/work/openseek")
     assert_true(read[0].input.run_mark is @conversation.NoRunMark)
   }
+}
+
+///|
+/// Label for the shell-owned file panel control, including unavailable roots.
+pub fn State::files_toggle_label(
+  self : State,
+  channel : @interop.ChannelId,
+  locale? : @i18n.Locale = English,
+) -> String {
+  let workspace = self
+    .active_placement(channel)
+    .bind(placement => placement.checkout_root())
+  ui(locale, if workspace is Some(_) { ShowFiles } else { FilesDirectory })
 }

@@ -556,7 +556,6 @@ fn main {
         browser_reload: emit(BrowserReload),
         browser_open_external: emit(BrowserOpenExternal),
         reveal_file: path => emit(RevealFile(path)),
-        toggle_panel: emit(ToggleRightPanel),
         toggle_menu: emit(ToggleRightPanelMenu),
         toggle_expanded: emit(ToggleRightPanelExpanded),
         close_all_tabs: emit(CloseAllTabs),

@@ -62,7 +62,6 @@ pub fn Msg::worktree_changed(String, String, String, String, Bool) -> Self
 
 pub(all) struct PageActions {
   toggle_terminal : @cmd.Cmd
-  toggle_files : @cmd.Cmd
   workspace_label : (@common.Uri) -> String
   transcript : @html.Html
   composer : @html.Html
@@ -88,6 +87,7 @@ pub fn State::composing_draft(Self) -> Bool
 pub fn State::connection_label(Self, locale? : @i18n.Locale) -> String
 pub fn State::draft_text(Self) -> String
 pub fn State::equal(Self, Self) -> Bool
+pub fn State::files_toggle_label(Self, @interop.ChannelId, locale? : @i18n.Locale) -> String
 pub fn State::from_thread_snapshot(Json) -> Self
 pub fn State::git_details_open(Self) -> Bool
 pub fn State::has_active(Self) -> Bool
@@ -97,7 +97,7 @@ pub fn State::mark_visible_read(Self) -> Self
 pub fn State::model_listing(locale? : @i18n.Locale, Self) -> CodexModelListing
 pub fn State::new_thread_cwd(Self) -> String
 pub fn State::not_equal(Self, Self) -> Bool
-pub fn State::page(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], @interop.ChannelId, terminal_open~ : Bool, file_panel_open~ : Bool, narrow~ : Bool, PageActions) -> Array[@html.Html]
+pub fn State::page(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], @interop.ChannelId, terminal_open~ : Bool, narrow~ : Bool, PageActions) -> Array[@html.Html]
 pub fn State::pending_auth_url(Self) -> String?
 pub fn State::project_activation(Self, SidebarContext, String) -> String?
 pub fn State::project_conversations(locale? : @i18n.Locale, Self, SidebarContext, String) -> Array[CodexProjectRow]

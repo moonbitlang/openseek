@@ -29,6 +29,7 @@ main {
   padding-block: 0;
   padding-inline: var(--topbar-inline-padding);
   padding-inline-start: var(--main-titlebar-leading-inset);
+  padding-inline-end: var(--main-titlebar-trailing-inset);
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
   border-bottom: 1px solid var(--color-separator);
   background: var(--color-bg-surface);
@@ -152,3 +153,21 @@ main {
 .sidebar-run-status.needs-input { color: var(--color-warning); }
 .sidebar-run-status.completed { color: var(--color-text-secondary); }
 .sidebar-run-status.failed { color: var(--color-danger); }
+
+/* The shell owns one panel control across both headers. Reserve its space
+   continuously while the editor track expands instead of adding/removing a
+   flex item at the start of the animation. */
+.right-panel-toggle {
+  position: fixed;
+  inset-block-start: max(
+    0px,
+    calc((var(--topbar-height) - 28px) / 2)
+  );
+  inset-inline-end: var(--panel-toggle-inline-inset);
+  z-index: var(--z-titlebar-control);
+  -webkit-app-region: no-drag;
+}
+
+.right-panel-toggle.hidden {
+  display: none;
+}

@@ -19,7 +19,6 @@ priv enum UiMessage {
   NewTab
   RestorePanel
   ExpandPanel
-  HidePanel
 }
 
 ///|
@@ -112,10 +111,5 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ExpandPanel) => "展开面板"
     (TraditionalChinese, ExpandPanel) => "展開面板"
     (Japanese, ExpandPanel) => "パネルを展開"
-    (English, HidePanel) => "Hide panel"
-    (Spanish, HidePanel) => "Ocultar panel"
-    (SimplifiedChinese, HidePanel) => "隐藏面板"
-    (TraditionalChinese, HidePanel) => "隱藏面板"
-    (Japanese, HidePanel) => "パネルを非表示"
   }
 }

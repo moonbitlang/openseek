@@ -344,6 +344,8 @@ html {
   --sidebar-drawer-width: min(320px, 86vw);
   --sidebar-toggle-size: 28px;
   --topbar-inline-padding: 18px;
+  --panel-toggle-inline-inset: max(18px, var(--native-titlebar-right, 0px));
+  --panel-toggle-reserved-width: calc(var(--panel-toggle-inline-inset) + 28px + 10px);
   --app-header-height: 46px;
   --topbar-height: max(var(--app-header-height), var(--native-titlebar-height, 0px));
   --sidebar-toggle-inline-inset: max(
@@ -427,12 +429,6 @@ html.native-titlebar-overlay .app
   height: var(--topbar-height);
 }
 
-/* Native right controls belong to the rightmost visible header. The fixed
-   sidebar toggle reserves its own leading space on every platform. */
-html.native-titlebar-overlay .app .content:not(.panel-open) .topbar,
-html.native-titlebar-overlay .app .content.panel-open .editor-tabsbar {
-  padding-right: max(var(--topbar-inline-padding), var(--native-titlebar-right, 0px));
-}
 html.native-titlebar-overlay .app .window-titlebar-drag-strip {
   display: block;
   right: var(--native-titlebar-right, 0px);
@@ -442,6 +438,12 @@ html.native-titlebar-overlay .app .window-titlebar-drag-strip {
    opens, so the viewer host element stays in the DOM but takes no
    space. */
 .content {
+  --main-titlebar-trailing-inset: calc(
+    var(--topbar-inline-padding) +
+    (var(--panel-toggle-reserved-width) - var(--topbar-inline-padding)) *
+    (1 - var(--editor-open-progress))
+  );
+
   --editor-restored-width: clamp(360px, var(--editor-width, 50%), calc(100% - 240px));
   /* Expansion fills the remainder beyond the saved width. Closing scales
      the resulting column to zero without changing the saved drag size. */

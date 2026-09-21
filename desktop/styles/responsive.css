@@ -26,6 +26,10 @@
 }
 
 @media (max-width: 760px) {
+  .topbar {
+    padding-inline-end: var(--panel-toggle-inline-inset);
+  }
+
   .quick-open-backdrop {
     padding: 16px;
   }

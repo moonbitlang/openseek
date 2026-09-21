@@ -134,7 +134,6 @@ fn panel_view(
         close_all_tabs=actions.close_all_tabs,
         close_all_tabs_disabled=input.dock.tabs.is_empty(),
         toggle_expanded=actions.toggle_expanded,
-        toggle_panel=actions.toggle_panel,
       ),
       @fileeditor.breadcrumb_view(
         locale~,

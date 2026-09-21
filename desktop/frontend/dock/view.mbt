@@ -188,7 +188,6 @@ pub fn tabs_bar(
   close_all_tabs~ : @cmd.Cmd,
   close_all_tabs_disabled~ : Bool,
   toggle_expanded~ : @cmd.Cmd,
-  toggle_panel~ : @cmd.Cmd,
 ) -> @html.Html {
   let menu : LauncherMenu = { toggle: toggle_menu, dismiss: close_menu, }
   let tabs : Array[@html.Html] = []
@@ -268,12 +267,6 @@ pub fn tabs_bar(
         .aria_pressed(expanded.to_string())
         .on_click(_ => toggle_expanded),
       @icons.icon(if expanded { icon_restore_panel } else { icon_expand_panel }),
-    ),
-    @html.button(
-      class="panel-toggle",
-      title=ui(locale, HidePanel),
-      on_click=toggle_panel,
-      @icons.icon(@icons.icon_layout_sidebar_right),
     ),
   ]
   if menu_open {

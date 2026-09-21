@@ -1,9 +1,6 @@
 
 /* ---------- files panel ---------- */
-/* Topbar icon toggle for the whole right panel, mirroring the left
-   sidebar toggle; `active` highlights it while the panel is open. The
-   run status's `margin-left: auto` right-aligns it, so it needs no auto
-   margin of its own. */
+/* Shared icon button styling for panel controls. */
 .panel-toggle {
   display: grid;
   place-items: center;
@@ -74,9 +71,8 @@ button.panel-toggle:not(:disabled):hover {
 
 /* The editor's top bar, the same height as the topbar so the header
    divider runs continuously across the window: the open-file tabs on
-   the left, the whole-panel toggle hugging the right edge (matching
-   the topbar's toggle position, so it stays put as the panel
-   opens/closes). Always rendered — the editor's child order is
+   the left, with space reserved for the shell's fixed panel toggle
+   on the right. Always rendered — the editor's child order is
    structural (see panel_view). */
 .editor-tabsbar {
   transition: padding-inline-start var(--drawer-duration) var(--drawer-easing);
@@ -85,7 +81,7 @@ button.panel-toggle:not(:disabled):hover {
   gap: 10px;
   flex: 0 0 auto;
   height: var(--topbar-height);
-  padding: 0 18px 0 12px;
+  padding: 0 var(--panel-toggle-reserved-width) 0 12px;
   border-bottom: 1px solid var(--color-separator);
   background: var(--color-bg-surface);
 }
