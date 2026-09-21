@@ -1,6 +1,7 @@
 import {
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/internal/auto_check",
+  "moonbitlang/openseek/agent_tool/internal/diagnostic_guard",
   "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
   "moonbitlang/openseek/agent_tool/internal/line_offset",
   "moonbitlang/openseek/agent_tool/internal/matching",

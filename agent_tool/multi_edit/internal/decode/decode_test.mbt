@@ -91,28 +91,47 @@ test "decode_args rejects wrong field types" {
 }
 
 ///|
-test "decode_args reads revert_when_errors_above and defaults to None" {
+test "decode_args reads revert_if_error_delta_greater_or_equal and defaults to None" {
   let absent = @decode.decode_args({ "edits": [] })
-  assert_true(absent.revert_when_errors_above is None)
+  assert_true(absent.revert_if_error_delta_greater_or_equal is None)
   let present = @decode.decode_args({
     "edits": [],
-    "revert_when_errors_above": 3,
+    "revert_if_error_delta_greater_or_equal": 3,
   })
-  assert_true(present.revert_when_errors_above is Some(3))
-  // Zero is meaningful (revert on any introduced error) and must round-trip.
-  let zero = @decode.decode_args({ "edits": [], "revert_when_errors_above": 0 })
-  assert_true(zero.revert_when_errors_above is Some(0))
+  assert_true(present.revert_if_error_delta_greater_or_equal is Some(3))
+  // Zero requires a net decrease and must round-trip.
+  let zero = @decode.decode_args({
+    "edits": [],
+    "revert_if_error_delta_greater_or_equal": 0,
+  })
+  assert_true(zero.revert_if_error_delta_greater_or_equal is Some(0))
 }
 
 ///|
-test "decode_args rejects a non-integer revert_when_errors_above" {
+test "decode_args rejects a non-integer revert_if_error_delta_greater_or_equal" {
   assert_decode_args_error(
-    { "revert_when_errors_above": 1.5 },
-    "arguments.revert_when_errors_above to be an integer",
+    { "revert_if_error_delta_greater_or_equal": -1 },
+    "arguments.revert_if_error_delta_greater_or_equal to be a non-negative integer",
   )
   assert_decode_args_error(
-    { "revert_when_errors_above": "5" },
-    "arguments.revert_when_errors_above to be an integer",
+    { "revert_if_error_delta_greater_or_equal": 1.5 },
+    "arguments.revert_if_error_delta_greater_or_equal to be a non-negative integer",
+  )
+  assert_decode_args_error(
+    { "revert_if_error_delta_greater_or_equal": "5" },
+    "arguments.revert_if_error_delta_greater_or_equal to be a non-negative integer",
+  )
+}
+
+///|
+test "decode_args rejects legacy diagnostic guard names" {
+  assert_decode_args_error(
+    { "revert_when_errors_above": 10 },
+    "replaced by revert_if_error_delta_greater_or_equal",
+  )
+  assert_decode_args_error(
+    { "revert_when_warnings_above": 0 },
+    "replaced by revert_if_warning_delta_greater_or_equal",
   )
 }
 

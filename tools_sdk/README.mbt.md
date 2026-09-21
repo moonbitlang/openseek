@@ -105,9 +105,11 @@ never depend on an unpinned latest version in generated examples.
 
 ## Warning-fix loop
 
-The host's `edit` tool accepts `revert_if_error_delta_greater_or_equal` and
+The host's `edit` and `multi_edit` tools accept `revert_if_error_delta_greater_or_equal` and
 `revert_if_warning_delta_greater_or_equal`: `moon check` runs before and after
-the write. At `1`, the error guard rejects an increased error total; at `0`, the
+the write. The error default is `5` for `edit` and `10` for `multi_edit`, with a
+host cap of `200`; warnings are unguarded by default. For warning fixes,
+at `1`, the error guard rejects an increased error total; at `0`, the
 warning guard requires a net decrease in warning count (`after - before < 0`).
 Errors can change which packages the compiler reaches, so a lower reported count
 does not guarantee no new problems. Review diagnostics when the baseline has errors.

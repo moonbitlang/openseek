@@ -84,7 +84,17 @@ At least one of `edits` / `edits_file` must yield a non-empty batch.
 | `edits[i].new_string` | string | yes | Replacement text. It must differ from `old_string`. |
 | `edits[i].start_line` | integer | yes | 1-based first line of this edit's search range. The first match at or after this line is replaced. |
 | `edits[i].end_line` | integer | no | Optional 1-based last line of this edit's search range. Defaults to the file end. |
-| `revert_when_warnings_above` | integer | no (off) | Post-write warning guard. `moon check` runs before the batch is written and after it; if the batch introduced more than this many warnings the tree did not have (by diagnostic identity: path, code, message; `0` = any) every file is rolled back and the call returns `is_error` with the introduced sites. If the tree cannot be checked, a warning-guarded batch is not written. |
+| `revert_if_error_delta_greater_or_equal` | integer | no (default `10`) | Revert when `after.error_count - before.error_count >= threshold`. Non-negative, clamped to `0..200`: `0` requires a decrease; `1` allows an unchanged total. |
+| `revert_if_warning_delta_greater_or_equal` | integer | no (off) | Revert when `after.warning_count - before.warning_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. Removing two warnings and introducing one passes at `0`. |
+
+Both guards compare reported count changes over all projects touched by the batch.
+The error default is `10` (`edit` uses `5`); warning protection is off unless
+specified. Checks run before and after writing. An unavailable or incomplete
+baseline refuses the batch, and an unverifiable post-write check rolls it back.
+Errors can expose or hide checked packages, so counts do not prove that no new
+problems exist. Error reverts use the shared `comparability:` analysis; after
+reviewing its evidence, a reach retry uses `delta + 1`, up to the error cap `200`.
+For warning fixes, explicitly use error threshold `1` and warning threshold `0`.
 
 ## Action
 
@@ -100,7 +110,7 @@ original edit index:
 - `"error multi_editing: edits for <file> must be contiguous; it reappears at edit[2] after another file's edits; list all edits for a file together"`
 - `"error: multi_edit requires arguments.edits[0].start_line to be an integer"` — a present field has the wrong type.
 - `"error: multi_edit requires arguments.edits[0] to include start_line (present keys: file, line, new_string, old_string)"` — a required field is absent; the present keys are listed so a misnamed key (here `line` instead of `start_line`) is obvious.
-- `"reverted: applied <n> edit(s) across <m> file(s), but moon check then reported <k> warning(s) the tree did not have (> revert_when_warnings_above=<n>); ..."` — the warning guard rolled the batch back; the body lists the introduced sites.
+- `"reverted: applied <n> edit(s) across <m> file(s), but the warning count changed by <delta> (>= revert_if_warning_delta_greater_or_equal=<threshold>); ..."` — the warning guard rolled the batch back; the body lists newly observed diagnostic sites when present.
 
 Every response also carries `data` (never shown to the model; returned to
 PTC scripts and kept in the transcript): `outcome` is one of `applied`,
@@ -108,18 +118,18 @@ PTC scripts and kept in the transcript): `outcome` is one of `applied`,
 (`path`, `edits`) and `edit_count` once the batch was prepared. An applied
 batch in a MoonBit project adds `check` (counts plus up to 200 error and
 warning sites) and `threshold`; a reverted one adds `reason`
-(`introduced_errors`, `introduced_warnings`, `unverified`), the post-batch
-`check`, for the warning guard `introduced_count` and `removed_count` per
+(`error_delta`, `warning_delta`, `unverified`), the post-batch
+`check`, `introduced_count` and `removed_count` per
 severity (on kept batches too), and for the error guard the comparability `verdict`
 (`over_match`, `breakage`, `inconclusive` with `verdict_reason`,
 `certified_reach`, `plausible_reach`), its site lists, and `reissue_with`
 when a reach verdict names the value that admits the unchanged batch; a
 failed batch adds `failures` (`file`, `index`, `range`, `message`); a
 rejected one adds `parse_errors` (per file: `path`, `introduced`, `errors`).
-`check`, `threshold`, and `baseline` describe the first project the batch
-touches (the error guard's scope); a warning-guarded batch adds `check_all`
-and `baseline_all`, the merged view over every project its guard compared
-(on an applied batch only when more than one project was touched).
+On applied outcomes, `check` and `baseline` retain the first-project view;
+`check_all` and `baseline_all` contain the merged view when multiple projects
+were checked. Both guards decide using that merged view. Error-triggered reverts
+report the merged `check`; warning-triggered reverts retain both views.
 
 ```moonbit check
 ///|

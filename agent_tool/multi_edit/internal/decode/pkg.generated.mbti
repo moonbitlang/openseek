@@ -16,9 +16,9 @@ pub fn decode_edits_json(Json) -> Array[MultiEditItem] raise
 pub struct MultiEditArgs {
   inline : Array[MultiEditItem]
   edits_file : String?
-  revert_when_errors_above : Int?
+  revert_if_error_delta_greater_or_equal : Int?
   revert_on_parse_errors : Bool
-  revert_when_warnings_above : Int?
+  revert_if_warning_delta_greater_or_equal : Int?
 } derive(@debug.Debug)
 
 pub struct MultiEditItem {

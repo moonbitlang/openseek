@@ -5,7 +5,7 @@
 /// depends on it. A batch that FIXES `a` then lets the build reach `b`, and the
 /// count-based guard reads that as "11 newly introduced". The revert report
 /// must carry the evidence (old error gone, new ones elsewhere) and the exact
-/// `revert_when_errors_above` that admits the unchanged batch; that re-issue
+/// `revert_if_error_delta_greater_or_equal` that admits the unchanged batch; that re-issue
 /// must then be kept. `run_multi_edit` comes from multi_edit_test.mbt.
 ///
 /// The edited file is a symlink (`a/a.mbt -> a/source.txt`) under /tmp, the
@@ -42,7 +42,7 @@ async test "multi_edit tells a fix that lets the build reach further from breaka
     assert_true(reverted.is_error)
     assert_true(
       reverted.content.contains(
-        "reported 12 error(s) (11 newly introduced > revert_when_errors_above=10)",
+        "reported 12 error(s) (11 error count change >= revert_if_error_delta_greater_or_equal=10)",
       ),
     )
     // `b` imports `a`, so moon had skipped it while `a` was broken: a reach
@@ -61,17 +61,20 @@ async test "multi_edit tells a fix that lets the build reach further from breaka
     assert_true(reverted.content.contains("b/b.mbt:3:"))
     assert_true(
       reverted.content.contains(
-        "If so: Re-issue the batch UNCHANGED with revert_when_errors_above=11",
+        "If so: Re-issue the batch UNCHANGED with revert_if_error_delta_greater_or_equal=12",
       ),
     )
     assert_false(reverted.content.contains("more precise old_strings"))
     assert_eq(@fs.read_file("\{dir}/a/a.mbt").text(), a_original)
     // The re-issue the report asked for: kept, with the split made explicit.
-    let kept = run_multi_edit({ "edits": [fix], "revert_when_errors_above": 11 })
+    let kept = run_multi_edit({
+      "edits": [fix],
+      "revert_if_error_delta_greater_or_equal": 12,
+    })
     assert_false(kept.is_error)
     assert_true(
       kept.content.contains(
-        "applied with 12 error(s) kept (only 11 newly introduced ≤ revert_when_errors_above=11; the rest pre-existed)",
+        "applied with 12 error(s) kept (error count change 11 < revert_if_error_delta_greater_or_equal=12)",
       ),
     )
     assert_true(@fs.read_file("\{dir}/a/a.mbt").text().contains("  1\n"))

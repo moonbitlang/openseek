@@ -17,10 +17,10 @@ pub struct EditInput {
   start_line : Int
   end_line : Int?
   revert_on_parse_errors : Bool
-  /// Post-write guards (absent = off): after the write, `moon check` runs and
+  /// Post-write error guard (absent = host default 5): `moon check` runs and
   /// the edit is restored if the net error-count change is >= this threshold.
   revert_if_error_delta_greater_or_equal : Int?
-  /// Revert when the net warning-count change is >= this threshold.
+  /// Revert when the net warning-count change is >= this threshold (absent = off).
   revert_if_warning_delta_greater_or_equal : Int?
 } derive(Debug)
 

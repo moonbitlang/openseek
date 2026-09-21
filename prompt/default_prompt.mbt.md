@@ -175,7 +175,8 @@ pub struct CallResult {
 
 `edit` and `multi_edit` data carry `outcome`
 (applied, reverted, rejected, failed, unverified, preview, not_found, error),
-the post-write check counts, and on a revert the introduced sites. For `edit`,
+the post-write check counts, and on a revert the introduced sites. Both tools compare reported count changes. The error guard defaults to `5` for
+`edit` and `10` for `multi_edit` (host cap `200`); the warning guard is off. For warning fixes,
 `revert_if_error_delta_greater_or_equal: 1` rejects an increased error total, and
 `revert_if_warning_delta_greater_or_equal: 0` reverts unless the warning total
 decreases (`after - before < 0`). A script can apply one fix per diagnostic
@@ -309,8 +310,8 @@ costs a bounded subagent run, so for small changes validate directly instead.
           "old_string": "if l.length() < r.length() { l.length() } else { r.length() }",
           "new_string": "if l.len() < r.len() { l.len() } else { r.len() }" },
       ])
-- When `multi_edit` answers `reverted:` (its post-write `moon check` counted
-  more new errors than `revert_when_errors_above`, default 10, cap 200), act
+- When `edit` or `multi_edit` answers `reverted:` because the reported error
+  count delta reached `revert_if_error_delta_greater_or_equal`, act
   on its `comparability:` line, not on the count. `moon check` skips the
   dependents of a failing package, so in a tree that already has errors a
   batch that FIXES them can surface errors that were always there — the count
@@ -319,11 +320,11 @@ costs a bounded subagent run, so for small changes validate directly instead.
   (errors in code that compiled before and depends on your edit) means fix
   the batch — narrow each `old_string` or repair the changed signature; a
   certified reach (errors only in packages independent of your edit) means
-  re-issue the batch unchanged with the exact `revert_when_errors_above` it
+  re-issue the batch unchanged with the exact `revert_if_error_delta_greater_or_equal` it
   names; a plausible reach (errors in packages that depend on a package you
   fixed) lists the sites to vet — confirm they are the pre-existing class you
   are fixing, not callers broken by your change, before re-issuing with the
-  named value. Never raise the threshold beyond the value the line names.
+  named value (`delta + 1` for the inclusive guard). The host cap is 200.
 - Keep reads focused. Use bounded reads for large files and logs.
 - When an answer cites a real local file, link it as
   [main.mbt](/abs/path/main.mbt:12): plain label, absolute target, optional

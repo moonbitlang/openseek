@@ -52,7 +52,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
           "start_line": 14,
         },
       ],
-      "revert_when_warnings_above": 0,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_false(fixed.is_error, msg=fixed.content)
     assert_true(
@@ -87,12 +87,12 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
           "start_line": 14,
         },
       ],
-      "revert_when_warnings_above": 0,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_true(reverted.is_error)
     assert_true(
       reverted.content.contains(
-        "reverted: applied 1 edit(s) across 1 file(s), but moon check then reported 1 warning(s) the tree did not have (> revert_when_warnings_above=0)",
+        "reverted: applied 1 edit(s) across 1 file(s), but the warning count changed by 1 (>= revert_if_warning_delta_greater_or_equal=0)",
       ),
       msg=reverted.content,
     )
@@ -102,7 +102,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       is Some(
         {
           "outcome": "reverted",
-          "reason": "introduced_warnings",
+          "reason": "warning_delta",
           "reach_caveat": false,
           "restore_failures": [],
           "introduced": {
@@ -126,12 +126,12 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
           "start_line": 14,
         },
       ],
-      "revert_when_warnings_above": 1,
+      "revert_if_warning_delta_greater_or_equal": 1,
     })
     assert_true(over.is_error, msg=over.content)
     assert_true(
       over.content.contains(
-        "reported 2 warning(s) the tree did not have (> revert_when_warnings_above=1)",
+        "warning count changed by 2 (>= revert_if_warning_delta_greater_or_equal=1)",
       ),
       msg=over.content,
     )
@@ -147,7 +147,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       fail("unexpected data: \{shown(over.data)}")
     }
     assert_eq(@fs.read_file(path).text(), after_fix)
-    // Exactly one against a tolerance of one: kept, and the counts still
+    // A delta of one is below threshold two: kept, and the counts still
     // quantify the delta on a kept batch.
     let tolerated = run_multi_edit({
       "edits": [
@@ -158,7 +158,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
           "start_line": 14,
         },
       ],
-      "revert_when_warnings_above": 1,
+      "revert_if_warning_delta_greater_or_equal": 2,
     })
     assert_false(tolerated.is_error, msg=tolerated.content)
     guard tolerated.data
@@ -192,7 +192,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       is Some(
         {
           "outcome": "applied",
-          "baseline"? : None,
+          "baseline": { "error_count": Number(0, ..), .. },
           "check": {
             "warning_count": Number(2, ..),
             "warnings": [{ "code": Number(2, ..), .. }, ..],
@@ -220,7 +220,7 @@ async test "the error guard's data names the verdict and the sites" {
           "start_line": 9,
         },
       ],
-      "revert_when_errors_above": 0,
+      "revert_if_error_delta_greater_or_equal": 0,
     })
     assert_true(reverted.is_error)
     assert_true(reverted.content.contains("reverted: applied 1 edit(s)"))
@@ -229,7 +229,7 @@ async test "the error guard's data names the verdict and the sites" {
       is Some(
         {
           "outcome": "reverted",
-          "reason": "introduced_errors",
+          "reason": "error_delta",
           "introduced_errors": Number(1, ..),
           "threshold": Number(0, ..),
           "verdict": "over_match",
@@ -255,15 +255,15 @@ async test "the error guard's data names the verdict and the sites" {
           "start_line": 9,
         },
       ],
-      "revert_when_errors_above": 0,
-      "revert_when_warnings_above": 0,
+      "revert_if_error_delta_greater_or_equal": 0,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_true(both.is_error)
     assert_true(
       both.data
       is Some(
         {
-          "reason": "introduced_errors",
+          "reason": "error_delta",
           "baseline_error_count": Number(0, ..),
           "introduced_count": { "errors": Number(1, ..), .. },
           "removed_count": { "errors": Number(0, ..), .. },
@@ -351,7 +351,7 @@ async test "failed and rejected batches report their problems in data; an unchec
           "start_line": 14,
         },
       ],
-      "revert_when_warnings_above": 0,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_true(unverified.is_error)
     assert_true(
@@ -362,12 +362,12 @@ async test "failed and rejected batches report their problems in data; an unchec
     assert_eq(@fs.read_file(path).text(), original)
     let bad = run_multi_edit({
       "edits": [],
-      "revert_when_warnings_above": "yes",
+      "revert_if_warning_delta_greater_or_equal": "yes",
     })
     assert_true(bad.is_error)
     assert_true(
       bad.content.contains(
-        "arguments.revert_when_warnings_above to be a non-negative integer",
+        "arguments.revert_if_warning_delta_greater_or_equal to be a non-negative integer",
       ),
     )
   })
@@ -377,7 +377,7 @@ async test "failed and rejected batches report their problems in data; an unchec
 /// The guards over a batch that touches two independent projects. Module `b`
 /// starts with one warning of its own; the warning guard compares the merged
 /// picture, the applied result reports it, and the error guard keeps its
-/// arithmetic inside the first project.
+/// arithmetic over all checked projects.
 async test "the guards cover every project a batch touches" {
   @vfs.with_tmpdir(prefix="openseek-multi-edit-guard-projects-", dir => {
     let a = "///|\npub fn f() -> Int {\n  1\n}\n"
@@ -406,14 +406,14 @@ async test "the guards cover every project a batch touches" {
           "start_line": 4,
         },
       ],
-      "revert_when_warnings_above": 0,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_true(reverted.is_error, msg=reverted.content)
     guard reverted.data
       is Some(
         {
           "outcome": "reverted",
-          "reason": "introduced_warnings",
+          "reason": "warning_delta",
           "introduced": { "warnings": [{ "path": String(site), .. }], .. },
           "check": { "warning_count": Number(0, ..), .. },
           "check_all": { "warning_count": Number(2, ..), .. },
@@ -444,11 +444,11 @@ async test "the guards cover every project a batch touches" {
           "start_line": 4,
         },
       ],
-      "revert_when_warnings_above": 0,
+      "revert_if_warning_delta_greater_or_equal": 1,
     })
     assert_false(kept.is_error, msg=kept.content)
     assert_true(
-      kept.content.contains("moon check: ok — 0 errors, 0 warning(s)"),
+      kept.content.contains("moon check: ok — 0 errors, 1 warning(s)"),
       msg=kept.content,
     )
     assert_true(
@@ -468,7 +468,7 @@ async test "the guards cover every project a batch touches" {
       ) else {
       fail("unexpected data: \{shown(kept.data)}")
     }
-    // The error guard stays inside the first project: an error that already
+    // The error guard compares net counts across projects: an error that already
     // exists in `b` must not offset one this batch introduces in `a`.
     @fs.write_file(
       "\{dir}/b/lib/lib.mbt",
@@ -491,12 +491,12 @@ async test "the guards cover every project a batch touches" {
           "start_line": 3,
         },
       ],
-      "revert_when_errors_above": 0,
-      "revert_when_warnings_above": 0,
+      "revert_if_error_delta_greater_or_equal": 0,
+      "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_true(broken.is_error, msg=broken.content)
     assert_true(
-      broken.data is Some({ "reason": "introduced_errors", .. }),
+      broken.data is Some({ "reason": "error_delta", .. }),
       msg=shown(broken.data),
     )
     assert_eq(@fs.read_file("\{dir}/a/lib/lib.mbt").text(), a_now)

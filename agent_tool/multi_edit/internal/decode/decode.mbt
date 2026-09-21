@@ -22,13 +22,13 @@ pub struct MultiEditArgs {
   // The model's requested auto-revert threshold (`None` = host default). The
   // tool clamps it to a host-enforced range, so the model can tighten the
   // guardrail but not raise it past the cap.
-  revert_when_errors_above : Int?
+  revert_if_error_delta_greater_or_equal : Int?
   // Pre-write syntax gate (default true): reject the batch when any edited
   // `.mbt` file would gain new lex/parse errors.
   revert_on_parse_errors : Bool
   // Post-write warning guard (absent = off): roll the batch back when it
-  // introduced more than this many warnings the tree did not have.
-  revert_when_warnings_above : Int?
+  // its reported warning-count change is >= this threshold.
+  revert_if_warning_delta_greater_or_equal : Int?
 } derive(Debug)
 
 ///|
@@ -44,6 +44,19 @@ pub struct MultiEditArgs {
 pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
   match arguments {
     Object(fields) => {
+      for
+        (old_name, replacement) in [
+          ("revert_when_errors_above", "revert_if_error_delta_greater_or_equal"),
+          (
+            "revert_when_warnings_above", "revert_if_warning_delta_greater_or_equal",
+          ),
+        ] {
+        if fields.contains(old_name) {
+          fail(
+            "arguments.\{old_name} was replaced by \{replacement}, which compares the net count change",
+          )
+        }
+      }
       let inline = match fields {
         { "edits": Array(items), .. } => decode_edit_array(items)
         { "edits"? : Some(Null) | None, .. } => []
@@ -54,16 +67,22 @@ pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
         { "edits_file"? : Some(Null) | None, .. } => None
         _ => fail("arguments.edits_file to be a string path")
       }
-      let revert_when_errors_above = match fields {
-        { "revert_when_errors_above": Number(value, ..), .. } => {
+      let revert_if_error_delta_greater_or_equal = match fields {
+        { "revert_if_error_delta_greater_or_equal": Number(value, ..), .. } => {
           let int_value = value.to_int()
-          if int_value.to_double() != value {
-            fail("arguments.revert_when_errors_above to be an integer")
+          if int_value.to_double() != value || int_value < 0 {
+            fail(
+              "arguments.revert_if_error_delta_greater_or_equal to be a non-negative integer",
+            )
           }
           Some(int_value)
         }
-        { "revert_when_errors_above"? : Some(Null) | None, .. } => None
-        _ => fail("arguments.revert_when_errors_above to be an integer")
+        { "revert_if_error_delta_greater_or_equal"? : Some(Null) | None, .. } =>
+          None
+        _ =>
+          fail(
+            "arguments.revert_if_error_delta_greater_or_equal to be a non-negative integer",
+          )
       }
       let revert_on_parse_errors = match fields {
         { "revert_on_parse_errors"? : Some(true) | Some(Null) | None, .. } =>
@@ -71,28 +90,29 @@ pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
         { "revert_on_parse_errors": false, .. } => false
         _ => fail("arguments.revert_on_parse_errors to be a boolean")
       }
-      let revert_when_warnings_above = match fields {
-        { "revert_when_warnings_above": Number(value, ..), .. } => {
+      let revert_if_warning_delta_greater_or_equal = match fields {
+        { "revert_if_warning_delta_greater_or_equal": Number(value, ..), .. } => {
           let int_value = value.to_int()
           if int_value.to_double() != value || int_value < 0 {
             fail(
-              "arguments.revert_when_warnings_above to be a non-negative integer",
+              "arguments.revert_if_warning_delta_greater_or_equal to be a non-negative integer",
             )
           }
           Some(int_value)
         }
-        { "revert_when_warnings_above"? : Some(Null) | None, .. } => None
+        { "revert_if_warning_delta_greater_or_equal"? : Some(Null) | None, .. } =>
+          None
         _ =>
           fail(
-            "arguments.revert_when_warnings_above to be a non-negative integer",
+            "arguments.revert_if_warning_delta_greater_or_equal to be a non-negative integer",
           )
       }
       {
         inline,
         edits_file,
-        revert_when_errors_above,
+        revert_if_error_delta_greater_or_equal,
         revert_on_parse_errors,
-        revert_when_warnings_above,
+        revert_if_warning_delta_greater_or_equal,
       }
     }
     _ => fail("object arguments")

@@ -302,7 +302,7 @@ async fn main {
           "old_string": "if l.length() < r.length() { l.length() } else { r.length() }",
           "new_string": "if l.len() < r.len() { l.len() } else { r.len() }" },
       ])
-- `multi_edit` 返回 `reverted:` 时，说明写入后的 `moon check` 新增错误数超过 `revert_when_errors_above`（默认 10，上限 200）。根据 `comparability:` 行行动，不要只看计数。`moon check` 会跳过失败包的依赖者，所以修复已有错误可能暴露原本就存在的错误，数量增加未必意味着改坏了。该行使用 moon 包图分类：over-match 表示错误位于你修改的文件，breakage 表示此前可编译且依赖本次修改的代码出现错误，这两类都要修复编辑批次，缩小 `old_string` 范围或修正改变的签名；certified reach 表示错误只在与修改无依赖关系的包中，应保持编辑不变，使用提示中指定的 `revert_when_errors_above` 重发；plausible reach 会列出依赖于已修复包的错误位置，先确认它们属于正在修复的原有错误，而非改坏了调用方，再使用指定值重发。绝不要超过该行给出的阈值。
+- `edit` 或 `multi_edit` 返回 `reverted:` 时，错误数量净变化达到了 `revert_if_error_delta_greater_or_equal`（单次编辑默认 5，批量编辑默认 10，上限 200）。两者的 warning guard 默认关闭；专门修 warning 时使用 error 阈值 1、warning 阈值 0。根据 `comparability:` 行行动，不要只看计数。`moon check` 会跳过失败包的依赖者，所以修复已有错误可能暴露原本就存在的错误，数量增加未必意味着改坏了；新错误也可能让后续包不再被检查，导致数量下降。该行使用 moon 包图分类：over-match 表示错误位于你修改的文件，breakage 表示此前可编译且依赖本次修改的代码出现错误，这两类都要修复编辑批次，缩小 `old_string` 范围或修正改变的签名；certified reach 表示错误只在与修改无依赖关系的包中，应保持编辑不变，使用提示中指定的 `revert_if_error_delta_greater_or_equal` 重发；plausible reach 会列出依赖于已修复包的错误位置，先确认它们属于正在修复的原有错误，而非改坏了调用方，再使用指定值重发。重试阈值为净变化加 1，因为 guard 使用 >=；不要仅为绕过保护而提高阈值，上限为 200。
 - 聚焦读取；大文件和日志只读取有限范围。
 
 ### 审阅与委派工具

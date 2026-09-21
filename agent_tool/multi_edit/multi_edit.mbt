@@ -80,27 +80,24 @@ pub fn definition(
           ),
           "examples": ["fixes.json"],
         },
-        "revert_when_errors_above": {
+        "revert_if_error_delta_greater_or_equal": {
           "type": "integer",
           "description": (
-            #|Auto-revert safety net. After the batch is written, `moon check` runs; if
-            #|this batch INTRODUCES more than this many new compile errors (measured
-            #|against the pre-batch error count, so pre-existing errors and all warnings
-            #|are ignored), the entire batch is rolled back to its pre-batch contents and
-            #|the call returns an error listing the first few new errors — so an
-            #|over-matching replace cannot leave a broken tree to untangle. Default 10;
-            #|the host clamps the effective value to 0..200 (0 reverts on any new error).
-            #|A batch that keeps or reduces the error count is never reverted. Caveat:
+            #|Auto-revert safety net, default 10, clamped to 0..200 (edit defaults to 5). Revert
+            #|the entire batch when the reported error count change (after - before)
+            #|is >= this non-negative threshold. 0 requires a decrease; 1 permits an
+            #|unchanged total. Counts are not proof that no new problems exist. Caveat:
             #|moon check skips the dependents of a failing package, so in a tree that
             #|already has errors a batch that FIXES them lets the build reach further
-            #|and report errors that were always there — the count rises without
-            #|breakage. The revert report's `comparability:` line classifies the new
+            #|and report errors that were always there; new errors can also hide unchecked
+            #|packages and lower the count. The revert report's `comparability:` line classifies the new
             #|errors with moon's package graph: inside an edited file (over-match), in
             #|code that compiled cleanly before and depends on the edit (breakage), in
             #|packages independent of the edit (certified reach — it names the exact
             #|value to re-issue the unchanged batch with), or in dependents of a package
             #|the batch fixed (plausible reach — it names the sites to vet first, then
-            #|the value). Raise this only to the value that line names.
+            #|the value). Review those diagnostics before raising the threshold: to admit
+            #|a delta D, the threshold must be at least D + 1 (host maximum 200).
           ),
           "examples": [10],
         },
@@ -114,21 +111,23 @@ pub fn definition(
             #|pre-existing parse errors are ignored — the WHOLE batch is rejected with no
             #|files changed, and the call returns the errors with excerpts of the would-be
             #|content. Type errors never trigger this gate (the post-write
-            #|revert_when_errors_above guard covers those); in .mbt.md only the checked
+            #|revert_if_error_delta_greater_or_equal guard covers those); in .mbt.md only the checked
             #|(`mbt check` / `moonbit check`) fenced blocks are parsed. Set false only to
             #|intentionally produce content that does not parse (e.g. a fixture).
           ),
           "examples": [false],
         },
-        "revert_when_warnings_above": {
+        "revert_if_warning_delta_greater_or_equal": {
           "type": "integer",
           "description": (
             #|Post-write warning guard, off unless given. moon check runs before the batch
-            #|is written (the baseline) and after it; if the batch introduced more than
-            #|this many warnings the tree did not have — counted by diagnostic identity
-            #|(path, code, message), so line shifts never count; 0 reverts on any — every
-            #|file is rolled back and the call returns is_error with the introduced sites.
-            #|Costs one extra moon check; the result's data carries introduced_count and
+            #|is written (the baseline) and after it; revert when the reported warning
+            #|count change (after - before) is >= this non-negative threshold.
+            #|0 requires a decrease; 1 allows an unchanged total. The same rule as edit.
+            #|Errors can change which packages are checked, so a lower count does not
+            #|prove no new problems. Review diagnostics before raising the threshold
+            #|above the observed delta to accept a justified change.
+            #|Shares the error guard's checks; the result's data carries introduced_count and
             #|removed_count per severity. If the tree cannot be checked, a warning-guarded
             #|batch is not written. For a warning-fix loop that needs to know WHICH fix
             #|misfired, prefer one guarded `edit` per diagnostic.
@@ -181,9 +180,9 @@ async fn execute_with_workspace(
   multi_edit_files(
     workspace_root,
     edits,
-    args.revert_when_errors_above,
+    args.revert_if_error_delta_greater_or_equal,
     revert_on_parse_errors=args.revert_on_parse_errors,
-    revert_when_warnings_above=args.revert_when_warnings_above,
+    revert_if_warning_delta_greater_or_equal=args.revert_if_warning_delta_greater_or_equal,
     file_state~,
     write_scope?,
   )
@@ -273,14 +272,14 @@ priv struct PreparedFile {
 ///   parse gate ── would-be content worse than the original? ── reject batch
 ///   apply writes in file order
 ///     └─ IO fault mid-batch ── report with "earlier files may be written"
-///   auto check (source files) ── errors above revert_when_errors_above?
+///   auto check (source files) ── error/warning count delta reaches its threshold?
 ///     └─ revert every written file ── report per-file revert status
 async fn multi_edit_files(
   workspace_root : String,
   edits : Array[@decode.MultiEditItem],
-  revert_when_errors_above : Int?,
+  revert_if_error_delta_greater_or_equal : Int?,
   revert_on_parse_errors~ : Bool,
-  revert_when_warnings_above~ : Int?,
+  revert_if_warning_delta_greater_or_equal~ : Int?,
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
@@ -393,20 +392,13 @@ async fn multi_edit_files(
     parse_gate_batch_rejection(writes) is Some(rejection) {
     return rejection
   }
-  // The warning guard's baseline, measured before anything is written so a
-  // rollback never has to re-measure it. A tree that cannot be checked makes
-  // the guard a promise the tool cannot keep, so the batch is not written.
-  // The projects the guards check from: one representative path per distinct
-  // project any written file — or, for a link, its target — belongs to, in
-  // batch order, so a batch that starts with a README still checks the module
-  // its `.mbt` edits belong to. The error guard reads the first (the
-  // in-project repair case it was built for); the warning guard reads all.
+  // Measure every touched project before writing, using the same scope for
+  // both guards. An unavailable baseline refuses the batch without a write.
   let check_paths = batch_projects(writes)
-  let baseline = if revert_when_warnings_above is Some(_) &&
-    !check_paths.is_empty() {
+  let baseline = if !check_paths.is_empty() {
     fn not_verified(reason : String) -> @agent_tool.ToolAction {
       @agent_tool.respond(
-        "not applied: revert_when_warnings_above was requested, but moon check could not verify the tree (\{reason}); no files were changed",
+        "not applied: a diagnostic guard is active, but moon check could not verify the tree (\{reason}); no files were changed",
         is_error=true,
         brief~,
         data=batch_data("unverified", writes, { "reason": reason.to_json() }),
@@ -414,37 +406,48 @@ async fn multi_edit_files(
     }
 
     match measure_baseline(check_paths) {
-      Measured(baseline) => Some(baseline)
+      Measured(baseline) => {
+        for write in writes {
+          let current = @fs.read_file(write.path).text() catch {
+            error if @async.is_being_cancelled() => raise error
+            error =>
+              return not_verified("could not re-read \{write.path}: \{error}")
+          }
+          if current != write.original_content {
+            return not_verified(
+              "\{write.path} changed during the baseline check; re-read and retry",
+            )
+          }
+        }
+        Some(baseline)
+      }
       Nothing => None
       Refused(reason) => return not_verified(reason)
     }
   } else {
     None
   }
-  // A warning-guarded batch interrupted while being written or checked must
+  // A checked batch interrupted while being written or checked must
   // not stay on disk unverified: put every original back before the
   // cancellation unwinds. Registered before the first write.
   async fn restore_on_unwind() -> Unit {
-    if revert_when_warnings_above is Some(_) && baseline is Some(_) {
+    if baseline is Some(_) {
       @async.protect_from_cancel(() => {
-        write_files(writes, write => write.original_content, write_scope?)
-        |> ignore
+        restore_files(writes, write_scope?) |> ignore
       })
     }
   }
 
   errdefer restore_on_unwind()
-  // A write that fails mid-batch leaves the earlier files written. Unguarded,
-  // that is reported and left (as before); a warning-guarded batch promised
-  // a verified tree, so the files written so far are put back first.
+  // A checked batch that fails mid-write restores the files touched so far.
   let written : Array[PreparedWrite] = []
   async fn write_failed(problem : String) -> @agent_tool.ToolAction {
-    if revert_when_warnings_above is Some(_) && baseline is Some(_) {
+    if baseline is Some(_) {
       let restore_failures = @async.protect_from_cancel(() => {
-        write_files(written, write => write.original_content, write_scope?)
+        restore_files(written, write_scope?)
       })
       return @agent_tool.respond(
-        "error multi_editing \{problem}; the \{written.length()} file(s) touched so far were restored (revert_when_warnings_above)\{restore_note(restore_failures)}",
+        "error multi_editing \{problem}; the \{written.length()} file(s) touched so far were restored (diagnostic guard)\{restore_note(restore_failures)}",
         is_error=true,
         brief~,
         // Only a complete restore is a rollback: with a file the restore
@@ -481,13 +484,8 @@ async fn multi_edit_files(
         return write_failed("\{write.path}: error writing file: \{error}")
     }
   }
-  // The batch is on disk. Run the auto-revert guard from the first written
-  // file's module: it appends `moon check` feedback and, if this batch
-  // introduced too many new errors, rolls the whole batch back. A batch
-  // spanning multiple modules only checks the first module's diagnostics, which
-  // is acceptable for the in-project repair case. `writes` is non-empty here (a
-  // non-empty batch with no failures always renders at least one write), but
-  // match defensively rather than index blindly.
+  // Compare the checked projects again and roll back the batch if either
+  // count delta reaches its threshold. Non-project files have no check.
   let response = if check_paths.is_empty() {
     // No file in a MoonBit project: nothing to check, the batch stands.
     @agent_tool.respond(
@@ -499,9 +497,11 @@ async fn multi_edit_files(
     revert_guarded_response(
       check_paths,
       writes,
-      effective_revert_threshold(revert_when_errors_above),
+      @diagnostic_guard.effective_revert_threshold(
+        revert_if_error_delta_greater_or_equal,
+      ),
       baseline,
-      warnings_guard=revert_when_warnings_above,
+      warnings_guard=revert_if_warning_delta_greater_or_equal,
       write_scope?,
     )
   }
@@ -681,38 +681,7 @@ fn batch_reject_report(
 }
 
 ///|
-/// The host default number of newly introduced errors a batch may cause before
-/// it is auto-reverted. Conservative: a handful of new errors is a likely
-/// over-match, not a transient cross-file gap.
-const DefaultRevertThreshold : Int = 10
-
-///|
-/// The largest threshold the model may request. The model can make the guard
-/// stricter (down to 0 — revert on any new error) and, when a revert report
-/// shows the count delta to be a measurement artifact (see `Comparability`),
-/// raise it to the reported delta so the same batch is admitted — but never
-/// past this cap, so an overconfident call cannot silently disable the net.
-const HostMaxRevertThreshold : Int = 200
-
-///|
-/// Resolve the model's requested threshold against the host policy: absent →
-/// the default; present → clamped to `[0, HostMaxRevertThreshold]`.
-fn effective_revert_threshold(requested : Int?) -> Int {
-  match requested {
-    Some(value) => value.clamp(min=0, max=HostMaxRevertThreshold)
-    None => DefaultRevertThreshold
-  }
-}
-
-///|
-/// The post-write guards over the written batch: the error threshold
-/// (`revert_when_errors_above`) and, when asked for, the warning guard, each
-/// with `moon check` feedback. With a pre-batch `baseline` in hand the error
-/// guard decides without touching the tree; without one it measures the
-/// baseline lazily — only when the after-check already breaches the threshold
-/// — by restoring the originals, re-checking, then either staying reverted or
-/// re-applying. The warning guard always has a baseline: it was measured
-/// before the write, or the batch was not written.
+/// Both guards compare reported count changes over the same checked projects.
 async fn revert_guarded_response(
   check_paths : Array[String],
   writes : Array[PreparedWrite],
@@ -721,233 +690,89 @@ async fn revert_guarded_response(
   warnings_guard~ : Int?,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
-  let summary = success_summary(writes)
-  let brief = success_brief(writes)
-  let check_path = check_paths[0]
-  // `count_errors` folds a run that exited non-zero without an error
-  // diagnostic (a build plan moon could not make) into a zero-error tally;
-  // the error guard has always read it that way. The warning guard promised
-  // a verified batch, so for it that run is no verdict.
-  let first = @auto_check.check(check_path)
-  let after : @auto_check.CheckErrors? = match first {
-    Checked(tally) => Some(tally)
-    Failed(code, tally) =>
-      if warnings_guard is Some(_) && baseline is Some(_) {
-        return reverted_unverified(
-          writes,
-          "moon check exited \{code} without diagnostics after the batch",
-          write_scope?,
-        )
-      } else {
-        Some(tally)
-      }
-    NotApplicable | Unavailable(_) => None
+  guard baseline is Some(before) else {
+    return reverted_unverified(writes, "no pre-write baseline", write_scope?)
   }
-  guard after is Some(after) else {
-    // Not a MoonBit project, or the check could not run. An unguarded batch
-    // is kept exactly as applied, as before this guardrail existed. A
-    // warning-guarded one measured a baseline, so the tree IS checkable and a
-    // check that then fails is not a verdict: roll back rather than keep the
-    // batch unverified.
-    if warnings_guard is Some(_) && baseline is Some(_) {
+  let measured = match measure_baseline(check_paths) {
+    Measured(value) => value
+    Refused(reason) => return reverted_unverified(writes, reason, write_scope?)
+    Nothing =>
       return reverted_unverified(
         writes,
-        "moon check could not verify the tree after the batch",
+        "the checked project is no longer available",
         write_scope?,
       )
+  }
+  let after = measured.all
+  let error_delta = after.error_count - before.all.error_count
+  let delta = @auto_check.introduced(before.all, after)
+  let removed = @auto_check.introduced(after, before.all)
+  let counts = delta_json(delta, removed)
+  if error_delta >= threshold {
+    let collected = @diagnostic_guard.gather_comparability(
+      check_paths[0],
+      Some(before.all),
+      after,
+      writes.map(write => write.path),
+    )
+    // A single package graph cannot certify attribution across modules.
+    let evidence = if check_paths.length() > 1 {
+      { ..collected, graph_available: false, }
+    } else {
+      collected
     }
-    return @agent_tool.respond(
-      summary,
-      brief~,
-      data=batch_data("applied", writes, Map([])),
+    let restore_failures = restore_files(writes, write_scope?)
+    return reverted_by_errors(
+      writes,
+      after,
+      introduced=error_delta,
+      threshold~,
+      restore_failures~,
+      evidence~,
+      counts~,
     )
   }
-  // The error guard.
-  let mut introduced_errors : Int? = None
-  let mut baseline_note = ""
-  let mut baseline_restore_failures : Array[String] = []
-  if after.error_count > threshold {
-    match baseline {
-      Some(before) => {
-        let introduced = after.error_count - before.first.error_count
-        if introduced > threshold {
-          let restore_failures = write_files(
-            writes,
-            write => write.original_content,
-            write_scope?,
-          )
-          let evidence = gather_comparability(
-            check_path,
-            Some(before.first),
-            after,
-            writes,
-          )
-          // The guarded delta, quantified over the first project (the scope
-          // this decision was made in) — a warning-guarded caller expects
-          // the counts on every outcome.
-          let counts = delta_json(
-            @auto_check.introduced(before.first, after),
-            @auto_check.introduced(after, before.first),
-          )
-          return reverted_by_errors(
-            writes,
-            after,
-            introduced~,
-            threshold~,
-            restore_failures~,
-            evidence~,
-            counts~,
-          )
-        }
-        introduced_errors = Some(introduced)
-      }
-      None => {
-        // Suspicious: the post-batch error count is over the line. Measure the
-        // pre-batch baseline by restoring the originals and re-checking, so the
-        // guard fires on errors this batch INTRODUCED, not on ones that were
-        // already there.
-        let restore_failures = write_files(
-          writes,
-          write => write.original_content,
-          write_scope?,
-        )
-        let before = count_errors_or_none(check_path)
-        let before_count = before.map(b => b.error_count).unwrap_or(0)
-        let introduced = after.error_count - before_count
-        if introduced > threshold {
-          // Over the line by count. Stay reverted (the originals are already
-          // back on disk) — but the count alone cannot tell breakage from the
-          // build merely reaching further, so the report carries the
-          // identity/location evidence and, when it points at the latter, the
-          // value that admits this batch.
-          let evidence = gather_comparability(check_path, before, after, writes)
-          return reverted_by_errors(
-            writes,
-            after,
-            introduced~,
-            threshold~,
-            restore_failures~,
-            evidence~,
-          )
-        }
-        // False alarm: the errors were mostly pre-existing. Re-apply and keep
-        // — but claim success only when every file actually made it back. A
-        // failed restore skewed the baseline this decision used, and a failed
-        // re-apply (IO fault, or a path whose resolution fell out of scope
-        // mid-flight) leaves a mixed tree; both must reach the model, not
-        // vanish into a success summary.
-        let reapply_failures = write_files(
-          writes,
-          write => write.new_content,
-          write_scope?,
-        )
-        if reapply_failures.length() > 0 {
-          // Final contents are uncertain: these files may still hold their
-          // pre-batch text.
-          return @agent_tool.respond(
-            "error multi_editing: the batch was kept, but re-applying it did not fully succeed — these files may not hold the batch content: \{reapply_failures.join(", ")}; re-read them before further edits",
-            is_error=true,
-            brief="multi_edit partially re-applied",
-            data=batch_data("error", writes, {
-              "partial": true,
-              "reapply_failures": string_array(reapply_failures),
-              "restore_failures": string_array(restore_failures),
-            }),
-          )
-        }
-        if restore_failures.length() > 0 {
-          // Every final write landed, so the tree holds the batch — but the
-          // baseline this keep decision compared against was measured with
-          // these files unrestored, so the decision itself deserves the caveat.
-          baseline_note = "\nnote: the pre-batch baseline was measured with \{restore_failures.length()} file(s) unrestored (\{restore_failures.join(", ")}), so the introduced-error count may be understated"
-          baseline_restore_failures = restore_failures
-        }
-        introduced_errors = Some(introduced)
-      }
-    }
+  if warnings_guard is Some(limit) &&
+    after.warning_count - before.all.warning_count >= limit {
+    let restore_failures = restore_files(writes, write_scope?)
+    return reverted_by_warnings(
+      writes,
+      before,
+      measured.first,
+      after,
+      delta,
+      removed,
+      limit~,
+      restore_failures~,
+    )
   }
-  // The warning guard: identity comparison against the pre-batch baseline,
-  // over every project the batch touched (the first is already checked).
-  // `after_all` is what a warning-guarded result reports, so a warning that
-  // lives in a later project is not lost from the applied payload.
-  let mut after_all = after
-  let mut delta_counts : Map[String, Json]? = None
-  if warnings_guard is Some(limit) && baseline is Some(before) {
-    let mut all = qualified(check_path, after)
-    for path in check_paths[1:] {
-      match @auto_check.check(path) {
-        Checked(tally) => all = all.merged(qualified(path, tally))
-        NotApplicable => ()
-        Unavailable(reason) =>
-          return reverted_unverified(writes, reason, write_scope?)
-        Failed(code, _) =>
-          return reverted_unverified(
-            writes,
-            "moon check exited \{code} without diagnostics after the batch",
-            write_scope?,
-          )
-      }
-    }
-    after_all = all
-    if all.truncated {
-      return reverted_unverified(writes, TruncatedCapture, write_scope?)
-    }
-    let delta = @auto_check.introduced(before.all, all)
-    let removed = @auto_check.introduced(all, before.all)
-    delta_counts = Some(delta_json(delta, removed))
-    if delta.warnings.length() > limit {
-      let restore_failures = write_files(
-        writes,
-        write => write.original_content,
-        write_scope?,
-      )
-      return reverted_by_warnings(
-        writes,
-        before,
-        after,
-        all,
-        delta,
-        removed,
-        limit~,
-        restore_failures~,
-      )
-    }
-  }
-  // `check` and the check line describe the first project, the one the
-  // error guard's threshold arithmetic is about; a warning-guarded batch
-  // adds the merged view under its own keys so a later project's
-  // diagnostics are neither dropped nor misread as the first project's.
   let extra : Map[String, Json] = {
-    "check": after.to_json(),
+    "check": measured.first.to_json(),
     "threshold": threshold.to_json(),
+    "error_delta": error_delta.to_json(),
+    "baseline": baseline_json(before.first),
   }
-  let mut all_projects_note = ""
-  if delta_counts is Some(counts) {
-    for key, value in counts {
-      extra[key] = value
-    }
+  for key, value in counts {
+    extra[key] = value
   }
-  if warnings_guard is Some(_) && check_paths.length() > 1 {
-    extra["check_all"] = after_all.to_json()
-    all_projects_note = "\nall \{check_paths.length()} project(s): \{after_all.error_count} error(s), \{after_all.warning_count} warning(s)"
+  if check_paths.length() > 1 {
+    extra["check_all"] = after.to_json()
+    extra["baseline_all"] = baseline_json(before.all)
   }
-  if introduced_errors is Some(introduced) {
-    extra["introduced_errors"] = introduced.to_json()
-  }
-  if !baseline_restore_failures.is_empty() {
-    extra["restore_failures"] = string_array(baseline_restore_failures)
-  }
-  if baseline is Some(before) {
-    extra["baseline"] = baseline_json(before.first)
-    if check_paths.length() > 1 {
-      extra["baseline_all"] = baseline_json(before.all)
-    }
+  let caveat = if before.all.error_count > 0 {
+    "\nnote: errors can change which packages moon check reaches; a lower count does not prove no new problems."
+  } else {
+    ""
   }
   @agent_tool.respond(
-    keep_response(summary, after, threshold, introduced?=introduced_errors) +
-    all_projects_note +
-    baseline_note,
-    brief~,
+    keep_response(success_summary(writes), after, threshold, error_delta~) +
+    (if check_paths.length() > 1 {
+      "\nall \{check_paths.length()} project(s): \{after.error_count} error(s), \{after.warning_count} warning(s)"
+    } else {
+      ""
+    }) +
+    caveat,
+    brief=success_brief(writes),
     data=batch_data("applied", writes, extra),
   )
 }
@@ -986,11 +811,8 @@ async fn batch_projects(writes : Array[PreparedWrite]) -> Array[String] {
 }
 
 ///|
-/// The pre-batch measurement the guards compare against. The error guard has
-/// always read one project (the first the batch touches) and its threshold
-/// arithmetic must stay within that project, so its baseline is that
-/// project's tally alone; the warning guard reads every project the batch
-/// touches, so its baseline is all of them merged.
+/// Both guards compare the merged tally; the first-project view is retained
+/// for existing structured result consumers.
 priv struct Baseline {
   first : @auto_check.CheckErrors
   all : @auto_check.CheckErrors
@@ -1010,8 +832,8 @@ priv enum BaselineOutcome {
 /// absolutely), so two projects can each report a `lib/lib.mbt`. Before two
 /// tallies are merged, each relative path is prefixed with its project's
 /// directory, so a warning that moves between projects is not the same
-/// identity in both. The first project's raw tally is kept as is for the
-/// error guard and its comparability evidence, which absolutize themselves.
+/// identity in both. The first project's raw tally is retained for existing
+/// result consumers; both guards compare the merged counts.
 async fn qualified(
   path : String,
   tally : @auto_check.CheckErrors,
@@ -1019,7 +841,7 @@ async fn qualified(
   guard @auto_check.check_cwd(path) is Some(project) else { return tally }
   fn place(site : @auto_check.ErrorSite) -> @auto_check.ErrorSite {
     match site.path {
-      Some(file) if !absolutize(file, None).has_prefix("/") &&
+      Some(file) if !file.has_prefix("/") &&
         !file.has_prefix("\\") &&
         !(file.length() > 1 && file[1:2] == ":") =>
         { ..site, path: Some("\{project}/\{file}"), }
@@ -1052,7 +874,8 @@ async fn measure_baseline(paths : Array[String]) -> BaselineOutcome {
         let placed = qualified(path, tally)
         all = Some(all.map_or(placed, sum => sum.merged(placed)))
       }
-      NotApplicable => ()
+      NotApplicable =>
+        return Refused("a checked project is no longer available")
       Unavailable(reason) => return Refused(reason)
       Failed(code, _) =>
         return Refused("moon check exited \{code} without diagnostics")
@@ -1081,13 +904,9 @@ async fn reverted_unverified(
   reason : String,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
-  let restore_failures = write_files(
-    writes,
-    write => write.original_content,
-    write_scope?,
-  )
+  let restore_failures = restore_files(writes, write_scope?)
   @agent_tool.respond(
-    "reverted: \{reason} (revert_when_warnings_above), so all \{writes.length()} file(s) were rolled back to their pre-batch contents.\{restore_note(restore_failures)}",
+    "reverted: \{reason} (diagnostic guard), so all \{writes.length()} file(s) were rolled back to their pre-batch contents.\{restore_note(restore_failures)}",
     is_error=true,
     brief="multi_edit reverted (unverified)",
     data=batch_data("reverted", writes, {
@@ -1106,36 +925,21 @@ fn reverted_by_errors(
   introduced~ : Int,
   threshold~ : Int,
   restore_failures~ : Array[String],
-  evidence~ : Comparability,
-  counts? : Map[String, Json],
+  evidence~ : @diagnostic_guard.Comparability,
+  counts~ : Map[String, Json],
 ) -> @agent_tool.ToolAction {
-  let verdict = evidence.verdict()
   let extra : Map[String, Json] = {
-    "reason": "introduced_errors",
+    "reason": "error_delta",
     "check": after.to_json(),
     "introduced_errors": introduced.to_json(),
     "threshold": threshold.to_json(),
-    "verdict": verdict.name().to_json(),
-    "new_in_edited": string_array(evidence.new_in_edited),
-    "new_breaking": string_array(evidence.new_breaking),
-    "new_in_dependents": string_array(evidence.new_in_dependents),
-    "new_independent": evidence.new_independent.to_json(),
     "restore_failures": string_array(restore_failures),
   }
-  if counts is Some(counts) {
-    for key, value in counts {
-      extra[key] = value
-    }
+  for key, value in counts {
+    extra[key] = value
   }
-  if verdict is Inconclusive(reason) {
-    extra["verdict_reason"] = reason.to_json()
-  }
-  if evidence.before_count is Some(count) {
-    extra["baseline_error_count"] = count.to_json()
-  }
-  if verdict is (CertifiedReach | PlausibleReach) &&
-    introduced <= HostMaxRevertThreshold {
-    extra["reissue_with"] = introduced.to_json()
+  for key, value in evidence.feedback(delta=introduced) {
+    extra[key] = value
   }
   @agent_tool.respond(
     revert_report(
@@ -1168,7 +972,8 @@ fn reverted_by_warnings(
   let before = baseline.all
   let count = delta.warnings.length()
   let shown = delta.warnings[:count.min(IntroducedDisplayLimit)]
-  let head = "reverted: applied \{total_edit_count(writes)} edit(s) across \{writes.length()} file(s), but moon check then reported \{count} warning(s) the tree did not have (> revert_when_warnings_above=\{limit}); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
+  let warning_delta = after.warning_count - before.warning_count
+  let head = "reverted: applied \{total_edit_count(writes)} edit(s) across \{writes.length()} file(s), but the warning count changed by \{warning_delta} (>= revert_if_warning_delta_greater_or_equal=\{limit}); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
   let listed = "\nintroduced:\n" +
     [ for site in shown => site.line() ].join("\n")
   let more = if count > shown.length() {
@@ -1185,9 +990,9 @@ fn reverted_by_warnings(
   @agent_tool.respond(
     "\{head}\{listed}\{more}\{caveat}\{restore_note(restore_failures)}",
     is_error=true,
-    brief="multi_edit reverted (\{count} new warning(s))",
+    brief="multi_edit reverted (warning delta \{warning_delta})",
     data=batch_data("reverted", writes, {
-      "reason": "introduced_warnings",
+      "reason": "warning_delta",
       "check": after_first.to_json(),
       "check_all": after.to_json(),
       "baseline": baseline_json(baseline.first),
@@ -1297,37 +1102,14 @@ fn baseline_json(before : @auto_check.CheckErrors) -> Json {
 }
 
 ///|
-/// The verdict's name in `data`, one word per outcome.
-fn Verdict::name(self : Verdict) -> String {
-  match self {
-    OverMatch => "over_match"
-    Breakage => "breakage"
-    Inconclusive(_) => "inconclusive"
-    CertifiedReach => "certified_reach"
-    PlausibleReach => "plausible_reach"
-  }
-}
-
-///|
-/// `@auto_check.count_errors`, with cancellation propagated and any other
-/// failure mapped to `None` (fail open — keep the batch unguarded).
-async fn count_errors_or_none(path : String) -> @auto_check.CheckErrors? {
-  @auto_check.count_errors(path) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
-  }
-}
-
-///|
-/// Write `content(write)` to every file, returning the paths that could not be
-/// written (best effort — a restore/re-apply must not raise mid-rollback). A
+/// Write `write.original_content` to every file, returning the paths that could not be
+/// written (best effort — a restore must not raise mid-rollback). A
 /// non-empty result is surfaced in the revert report so a half-restored tree is
 /// never reported as a clean rollback. The containment scope gates these
-/// restore/re-apply writes too — a path whose resolution changed since the
+/// restore writes too — a path whose resolution changed since the
 /// batch was admitted is skipped and reported rather than written blind.
-async fn write_files(
+async fn restore_files(
   writes : Array[PreparedWrite],
-  content : (PreparedWrite) -> String,
   write_scope? : @write_scope.WriteScope,
 ) -> Array[String] {
   let failures : Array[String] = []
@@ -1336,7 +1118,11 @@ async fn write_files(
       failures.push(write.path)
       continue
     }
-    @fs.write_file(write.path, content(write), create_mode=CreateOrTruncate) catch {
+    @fs.write_file(
+      write.path,
+      write.original_content,
+      create_mode=CreateOrTruncate,
+    ) catch {
       error if @async.is_being_cancelled() => raise error
       _ => failures.push(write.path)
     }
@@ -1346,28 +1132,18 @@ async fn write_files(
 
 ///|
 /// The kept-batch response: the success summary plus an honest `moon check`
-/// status line. A batch that still leaves errors is reported as `applied with
-/// N error(s)`, never as clean. `introduced` is `Some` only on the rare
-/// false-alarm path where the post-batch count breached the threshold but the
-/// batch turned out to add few NEW errors (most pre-existed) — then the line
-/// makes the introduced-vs-total split explicit, so a kept total above the
-/// threshold never reads as a contradiction.
+/// status line showing both the remaining errors and the measured count delta.
 fn keep_response(
   summary : String,
   after : @auto_check.CheckErrors,
   threshold : Int,
-  introduced? : Int,
+  error_delta~ : Int,
 ) -> String {
   if after.error_count == 0 {
     return "\{summary}\nmoon check: ok — 0 errors, \{after.warning_count} warning(s)"
   }
   let errors = error_count_label(after)
-  let header = match introduced {
-    Some(introduced) =>
-      "\{summary}\nmoon check: applied with \{errors} error(s) kept (only \{introduced} newly introduced ≤ revert_when_errors_above=\{threshold}; the rest pre-existed), \{after.warning_count} warning(s)"
-    None =>
-      "\{summary}\nmoon check: applied with \{errors} error(s) kept (≤ revert_when_errors_above=\{threshold}), \{after.warning_count} warning(s)"
-  }
+  let header = "\{summary}\nmoon check: applied with \{errors} error(s) kept (error count change \{error_delta} < revert_if_error_delta_greater_or_equal=\{threshold}), \{after.warning_count} warning(s)"
   let first_errors = after.first_errors()
   if first_errors.is_empty() {
     header
@@ -1375,385 +1151,6 @@ fn keep_response(
     "\{header}\n\{first_errors.join("\n")}"
   }
 }
-
-///|
-/// Evidence on whether the pre- and post-batch error counts are comparable.
-///
-/// `moon check` skips the dependents of a failing package, so a batch that
-/// fixes the errors moon stopped at lets the build reach those dependents and
-/// report errors that were always there; the count then rises without
-/// breakage. A count delta cannot tell that from an over-match, but error
-/// identities, locations and moon's package graph can, to a point:
-///
-/// - a new error INSIDE an edited file is an over-match;
-/// - a new error in another file of an edited package that had NO pre-batch
-///   errors, or in a package that depends on such a package, is breakage:
-///   that code compiled cleanly before, so only the batch can have changed it;
-/// - a new error in a package independent of everything edited cannot be
-///   caused by the batch — certified reach;
-/// - a new error in a package that depends on a package the batch FIXED is
-///   ambiguous: moon had skipped that package, so the error may be pre-existing
-///   or a caller broken by a changed signature; only the model can tell.
-///
-/// Every field is evidence; `verdict` turns them into one of five outcomes.
-priv struct Comparability {
-  // The pre-batch run's error count; `None` when that run could not be made
-  // (then every post-batch error was counted as introduced).
-  before_count : Int?
-  // Pre-batch errors (by `ErrorSite::identity`) still reported after.
-  remaining : Int
-  // New errors inside a file this batch wrote — the signature of an over-match.
-  new_in_edited : Array[String]
-  // New errors in code that compiled cleanly before and depends on (or shares
-  // a package with) something this batch edited — caused by the batch.
-  new_breaking : Array[String]
-  // New errors in packages that depend on a package this batch fixed,
-  // including that package's own other files: its tests and siblings were
-  // not necessarily compiled while it was broken. Either surfacing or broken
-  // by the fix.
-  new_in_dependents : Array[String]
-  // New errors in packages independent of everything edited — cannot be
-  // caused by the batch.
-  new_independent : Int
-  // New errors that could not be placed: no path, or a path in no package
-  // moon knows from the checked project.
-  unlocated : Int
-  // Edited files outside every package of the checked project: the check ran
-  // somewhere the batch did not edit, so its silence about them proves nothing.
-  unmapped_edits : Int
-  // A `moon.mod`/`moon.work` edit can change what every package sees; the
-  // package graph then says nothing about causation.
-  module_manifest_edited : Bool
-  // moon produced the package graph the classification above relies on.
-  graph_available : Bool
-  // Either run overflowed the capture budget, so the identity sets are
-  // incomplete and no conclusion is drawn from them.
-  truncated : Bool
-}
-
-///|
-/// What the evidence adds up to, in precedence order: positive proof of
-/// breakage first, then missing information, then the two reach outcomes.
-priv enum Verdict {
-  // New errors inside an edited file.
-  OverMatch
-  // New errors in code that compiled cleanly before and depends on the edit.
-  Breakage
-  // The comparison cannot be trusted either way; carries the reason.
-  Inconclusive(String)
-  // Every new error is in a package independent of the edit.
-  CertifiedReach
-  // Some new errors are in packages that depend on what the batch fixed.
-  PlausibleReach
-} derive(Debug, Eq)
-
-///|
-fn Comparability::verdict(self : Comparability) -> Verdict {
-  if !self.new_in_edited.is_empty() {
-    return OverMatch
-  }
-  if !self.new_breaking.is_empty() {
-    return Breakage
-  }
-  match self.before_count {
-    None =>
-      return Inconclusive(
-        "the pre-batch check could not run, so every post-batch error was counted as introduced",
-      )
-    Some(0) =>
-      return Inconclusive(
-        "the tree checked clean before this batch, so every post-batch error is attributable to it",
-      )
-    Some(_) => ()
-  }
-  if self.truncated {
-    return Inconclusive(
-      "check output was truncated, so the error identities are incomplete",
-    )
-  }
-  if !self.graph_available {
-    return Inconclusive(
-      "moon could not report the package graph, so new errors outside the edited files cannot be attributed",
-    )
-  }
-  if self.module_manifest_edited {
-    return Inconclusive(
-      "the batch edits a module manifest (moon.mod/moon.work), which can change what every package sees",
-    )
-  }
-  if self.unmapped_edits > 0 {
-    return Inconclusive(
-      "\{self.unmapped_edits} edited file(s) lie outside every package of the checked project, so the check never covered them",
-    )
-  }
-  if self.unlocated > 0 {
-    return Inconclusive(
-      "\{self.unlocated} new error(s) could not be placed in any package",
-    )
-  }
-  if self.new_in_dependents.is_empty() {
-    CertifiedReach
-  } else {
-    PlausibleReach
-  }
-}
-
-///|
-/// A write target as moon might name it in a diagnostic. `spellings` are the
-/// path as written, its directory canonicalized with the written name, and
-/// the full realpath — moon reports the canonical directory (on macOS an edit
-/// under `/tmp/…` is diagnosed under `/private/tmp/…`) but the file under the
-/// name it compiled, so an edited `alias.mbt -> source.txt` is diagnosed as
-/// `…/alias.mbt`. `canonical` is the spelling used to find the file's package.
-priv struct EditedTarget {
-  spellings : Array[String]
-  canonical : String
-  // The spellings whose package the edit can change: those moon compiles
-  // (source and manifests) and those a pre-build rule in their package's
-  // manifest names as an input. A README next to the sources is neither.
-  attributable : Array[String]
-}
-
-///|
-/// Resolve every write target's spellings. A path realpath cannot resolve
-/// contributes what it can.
-async fn edited_targets(writes : Array[PreparedWrite]) -> Array[EditedTarget] {
-  let targets : Array[EditedTarget] = []
-  for write in writes {
-    let spellings : Array[String] = [write.path]
-    let mut canonical = write.path
-    if write.path.rev_split_once("/") is Some((dir, name)) && dir != "" {
-      let canonical_dir = @fs.realpath(dir) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => dir.to_owned()
-      }
-      canonical = "\{canonical_dir}/\{name}"
-      spellings.push(canonical)
-    }
-    let resolved : String? = Some(@fs.realpath(write.path)) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => None
-    }
-    if resolved is Some(resolved) {
-      spellings.push(resolved)
-    }
-    let attributable : Array[String] = []
-    for spelling in spellings {
-      if moon_compiles(spelling) || is_build_input(spelling) {
-        attributable.push(spelling)
-      }
-    }
-    targets.push({ spellings, canonical, attributable, })
-  }
-  targets
-}
-
-///|
-/// Whether a file moon does not compile can still change compiled code: a
-/// `dev_build`/pre-build rule in its package's manifest names it as an input
-/// (`moon check` runs those rules). Detected by the file's name appearing in
-/// the manifest text — an over-match here only makes attribution more
-/// conservative, never less.
-async fn is_build_input(path : String) -> Bool {
-  guard path.rev_split_once("/") is Some((dir, name)) && dir != "" else {
-    return false
-  }
-  for manifest in ["moon.pkg", "moon.pkg.json"] {
-    let text = @fs.read_file("\{dir}/\{manifest}").text() catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => continue
-    }
-    if text.contains(name) {
-      return true
-    }
-  }
-  false
-}
-
-///|
-/// Gather the evidence for a batch that breached the threshold: the project
-/// moon checked from (`check_path`'s), its package graph, and the batch's
-/// resolved targets, then classify.
-async fn gather_comparability(
-  check_path : String,
-  before : @auto_check.CheckErrors?,
-  after : @auto_check.CheckErrors,
-  writes : Array[PreparedWrite],
-) -> Comparability {
-  let cwd = @auto_check.check_cwd(check_path)
-  let graph = match cwd {
-    Some(cwd) =>
-      @auto_check.package_graph(cwd) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => None
-      }
-    None => None
-  }
-  comparability(before, after, edited_targets(writes), cwd~, graph~)
-}
-
-///|
-/// Pure classification of the two runs against the batch's targets. `cwd`
-/// absolutizes moon's relative diagnostic paths; `graph` places paths in
-/// packages and answers dependency questions.
-fn comparability(
-  before : @auto_check.CheckErrors?,
-  after : @auto_check.CheckErrors,
-  edited : Array[EditedTarget],
-  cwd~ : String?,
-  graph~ : @auto_check.PackageGraph?,
-) -> Comparability {
-  let seen : Set[String] = Set([])
-  if before is Some(before) {
-    for site in before.errors {
-      seen.add(site.identity())
-    }
-  }
-  let module_manifest_edited = edited.any(target => {
-    let name = target.canonical.rev_after("/").unwrap_or(target.canonical)
-    name == "moon.mod" || name == "moon.work"
-  })
-  // The packages this batch edited, and the subset that had pre-batch errors
-  // (the ones the batch may have fixed, whose dependents moon skipped).
-  let edited_pkgs : Array[Int] = []
-  let mut unmapped_edits = 0
-  if graph is Some(graph) {
-    for target in edited {
-      // Every spelling that moon would compile can name a package: a
-      // symlink's own directory AND its target's — an edited
-      // `a/alias.mbt -> z/z.mbt` changes package `z` too, so `z`'s dependents
-      // must count as depending on the edit. A target moon does not compile
-      // (`a/alias.mbt -> z/source.txt`) changes nothing in `z`. A target with
-      // no compilable spelling at all (a README next to the sources) is
-      // simply not part of the attribution.
-      let compiled = target.attributable
-      if compiled.is_empty() {
-        continue
-      }
-      let mut mapped = false
-      for spelling in compiled {
-        guard graph.package_of(spelling) is Some(pkg) else { continue }
-        mapped = true
-        if !edited_pkgs.contains(pkg) {
-          edited_pkgs.push(pkg)
-        }
-      }
-      if !mapped {
-        unmapped_edits += 1
-      }
-    }
-  }
-  let fixed_pkgs : Array[Int] = []
-  if graph is Some(graph) && before is Some(before) {
-    for site in before.errors {
-      guard site.path is Some(path) else { continue }
-      guard graph.package_of(absolutize(path, cwd)) is Some(pkg) else {
-        continue
-      }
-      if edited_pkgs.contains(pkg) && !fixed_pkgs.contains(pkg) {
-        fixed_pkgs.push(pkg)
-      }
-    }
-  }
-  let mut remaining = 0
-  let mut unlocated = 0
-  let mut new_independent = 0
-  let new_in_edited : Array[String] = []
-  let new_breaking : Array[String] = []
-  let new_in_dependents : Array[String] = []
-  for site in after.errors {
-    if seen.contains(site.identity()) {
-      remaining += 1
-      continue
-    }
-    guard site.path is Some(path) else {
-      unlocated += 1
-      continue
-    }
-    let line = site.line()
-    if edited.any(target => in_edited_file(path, target.spellings)) {
-      new_in_edited.push(line)
-      continue
-    }
-    guard graph is Some(graph) else { continue }
-    guard graph.package_of(absolutize(path, cwd)) is Some(pkg) else {
-      unlocated += 1
-      continue
-    }
-    if edited_pkgs.contains(pkg) {
-      // Another file of an edited package. If the package compiled cleanly
-      // before, that file was compiled with the edit's file and a new error
-      // here is the batch's doing. If the package was broken before, its
-      // blackbox tests (a separate compilation unit that depends on it) and
-      // possibly its siblings were skipped, so the error may be surfacing.
-      if fixed_pkgs.contains(pkg) {
-        new_in_dependents.push(line)
-      } else {
-        new_breaking.push(line)
-      }
-    } else if graph.depends_on(pkg, fixed_pkgs) {
-      new_in_dependents.push(line)
-    } else if graph.depends_on(pkg, edited_pkgs) {
-      new_breaking.push(line)
-    } else {
-      new_independent += 1
-    }
-  }
-  {
-    before_count: before.map(b => b.error_count),
-    remaining,
-    new_in_edited,
-    new_breaking,
-    new_in_dependents,
-    new_independent,
-    unlocated,
-    unmapped_edits,
-    module_manifest_edited,
-    graph_available: graph is Some(_),
-    truncated: after.truncated || before.map(b => b.truncated).unwrap_or(false),
-  }
-}
-
-///|
-/// Whether moon compiles a file under this name: MoonBit source, a doc file
-/// with checked fences, or a manifest that shapes a package or module.
-fn moon_compiles(path : String) -> Bool {
-  if path.has_suffix(".mbt") || path.has_suffix(".mbt.md") {
-    return true
-  }
-  let name = path.rev_after("/").unwrap_or(path)
-  name == "moon.pkg" ||
-  name == "moon.pkg.json" ||
-  name == "moon.mod" ||
-  name == "moon.mod.json" ||
-  name == "moon.work"
-}
-
-///|
-/// moon reports diagnostic paths relative to the checked project or absolute;
-/// make them absolute so they can be placed in a package.
-fn absolutize(path : String, cwd : String?) -> String {
-  let absolute = path.has_prefix("/") || (path.length() > 1 && path[1:2] == ":")
-  match cwd {
-    Some(cwd) if !absolute => "\{cwd}/\{path}"
-    _ => path
-  }
-}
-
-///|
-/// Whether a diagnostic's path (as moon reported it: relative to the checked
-/// project, or absolute and canonical) names one of a target's spellings.
-fn in_edited_file(diagnostic_path : String, spellings : Array[String]) -> Bool {
-  spellings.any(path => {
-    path == diagnostic_path ||
-    path.has_suffix("/\{diagnostic_path}") ||
-    path.has_suffix("\\\{diagnostic_path}")
-  })
-}
-
-///|
-/// How many sites of one class the revert report lists by name.
-const SiteDisplayLimit : Int = 5
 
 ///|
 /// The reverted-batch report: what was applied, how many new errors triggered
@@ -1765,64 +1162,17 @@ fn revert_report(
   introduced~ : Int,
   threshold~ : Int,
   restore_failures~ : Array[String],
-  evidence~ : Comparability,
+  evidence~ : @diagnostic_guard.Comparability,
 ) -> String {
   let total = total_edit_count(writes)
-  let head = "reverted: applied \{total} edit(s) across \{writes.length()} file(s), but moon check then reported \{error_count_label(after)} error(s) (\{introduced} newly introduced > revert_when_errors_above=\{threshold}); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
+  let head = "reverted: applied \{total} edit(s) across \{writes.length()} file(s), but moon check then reported \{error_count_label(after)} error(s) (\{introduced} error count change >= revert_if_error_delta_greater_or_equal=\{threshold}); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
   let first_errors = after.first_errors()
   let errors = if first_errors.is_empty() {
     ""
   } else {
     "\nfirst \{first_errors.length()} error(s):\n\{first_errors.join("\n")}"
   }
-  "\{head}\{errors}\{restore_note(restore_failures)}\n\{comparability_advice(evidence, introduced~)}"
-}
-
-///|
-/// List up to `SiteDisplayLimit` sites of one class, with an overflow note.
-fn site_list(sites : Array[String]) -> String {
-  let limit = sites.length().min(SiteDisplayLimit)
-  let shown = sites[:limit]
-  let more = if sites.length() > shown.length() {
-    "\n… \{sites.length() - shown.length()} more"
-  } else {
-    ""
-  }
-  "\n\{shown.join("\n")}\{more}"
-}
-
-///|
-/// The re-issue instruction for a reach verdict, or why it cannot be given.
-fn reissue_advice(introduced : Int) -> String {
-  if introduced > HostMaxRevertThreshold {
-    "The delta exceeds the host cap of revert_when_errors_above=\{HostMaxRevertThreshold}, so this batch cannot be admitted in one call: split it by package and let each part's check reach further."
-  } else {
-    "Re-issue the batch UNCHANGED with revert_when_errors_above=\{introduced}; it will then be kept and the remaining errors reported."
-  }
-}
-
-///|
-fn comparability_advice(evidence : Comparability, introduced~ : Int) -> String {
-  let narrow = "re-issue with more precise old_strings (include the receiver) and/or smaller batches so a replacement cannot stray onto unintended sites."
-  let pre_batch = match evidence.before_count {
-    Some(count) if evidence.remaining == 0 =>
-      "all \{count} pre-batch error(s) are gone"
-    Some(count) =>
-      "\{evidence.remaining} of \{count} pre-batch error(s) remain (the batch fixed the rest)"
-    None => "no pre-batch baseline"
-  }
-  match evidence.verdict() {
-    OverMatch =>
-      "comparability: \{pre_batch}; \{evidence.new_in_edited.length()} new error(s) sit in files this batch edited (over-match evidence):\{site_list(evidence.new_in_edited)}\n\{narrow}"
-    Breakage =>
-      "comparability: \{pre_batch}; \{evidence.new_breaking.length()} new error(s) are in code that compiled cleanly before this batch and depends on (or shares a package with) what it edited, so the batch caused them — a changed signature or type?\{site_list(evidence.new_breaking)}\nfix the batch rather than raising revert_when_errors_above."
-    Inconclusive(reason) =>
-      "comparability: \{pre_batch}; inconclusive — \{reason}. The count comparison cannot be trusted either way, so the batch stays reverted; \{narrow}"
-    CertifiedReach =>
-      "comparability: \{pre_batch}, and none of the \{evidence.new_independent} new error(s) can be caused by this batch: per moon's package graph they are in packages that depend on nothing it edited, and none is in an edited file. moon check skips the dependents of a failing package, so the pre-batch run stopped short of them and this delta is a measurement artifact, not breakage. \{reissue_advice(introduced)}"
-    PlausibleReach =>
-      "comparability: \{pre_batch}; no new error is in an edited file; \{evidence.new_independent} new error(s) are in packages independent of everything edited (cannot be caused by the batch); \{evidence.new_in_dependents.length()} are in packages that depend on a package this batch FIXED — moon had skipped those packages while their dependency was broken, so each is either a pre-existing error surfacing or a caller broken by a changed signature/type in the fix, and the tool cannot tell which:\{site_list(evidence.new_in_dependents)}\nVerify those sites are the pre-existing class you are fixing (not callers of something this batch changed). If so: \{reissue_advice(introduced)} If not, fix the batch."
-  }
+  "\{head}\{errors}\{restore_note(restore_failures)}\n\{@diagnostic_guard.comparability_advice(evidence, introduced~)}"
 }
 
 ///|
@@ -2127,82 +1477,22 @@ fn site(path : String, loc : String, message : String) -> @auto_check.ErrorSite 
 }
 
 ///|
-fn check_result(
-  errors : Array[@auto_check.ErrorSite],
-  truncated? : Bool = false,
-) -> @auto_check.CheckErrors {
-  {
-    error_count: errors.length(),
-    warning_count: 0,
-    errors,
-    warnings: [],
-    truncated,
-  }
-}
-
-///|
-fn target(path : String) -> EditedTarget {
-  {
-    spellings: [path],
-    canonical: path,
-    attributable: if moon_compiles(path) {
-      [path]
-    } else {
-      []
-    },
-  }
-}
-
-///|
-/// A project at `/r` with packages `x`, `y` (imports `x`), `z` (independent),
-/// `w` (imports `z`), and `q` (imports `x` via a test import).
-fn sample_graph() -> @auto_check.PackageGraph {
-  {
-    dirs: [Some("/r/x"), Some("/r/y"), Some("/r/z"), Some("/r/w"), Some("/r/q")],
-    edges: [(1, 0), (3, 2), (4, 0)],
-  }
-}
-
-///|
-fn classify(
-  before : @auto_check.CheckErrors?,
-  after : @auto_check.CheckErrors,
-  edited : Array[String],
-) -> Comparability {
-  comparability(
-    before,
-    after,
-    edited.map(target),
-    cwd=Some("/r"),
-    graph=Some(sample_graph()),
-  )
-}
-
-///|
 /// Evidence of a clean pre-batch tree: inconclusive, so the report gives the
 /// narrow-your-old_strings advice.
-fn clean_tree_evidence() -> Comparability {
-  classify(
-    Some(check_result([])),
-    check_result([site("z/z.mbt", "1:1-1:2", "e")]),
-    ["/r/x/x.mbt"],
-  )
-}
-
-///|
-test "effective_revert_threshold defaults and clamps to the host policy" {
-  // Absent → host default.
-  assert_eq(effective_revert_threshold(None), DefaultRevertThreshold)
-  // The model may tighten the guard, down to 0 (revert on any new error).
-  assert_eq(effective_revert_threshold(Some(2)), 2)
-  assert_eq(effective_revert_threshold(Some(0)), 0)
-  // A negative request is floored at 0, not treated as "disable".
-  assert_eq(effective_revert_threshold(Some(-3)), 0)
-  // The model cannot raise the guard past the host cap.
-  assert_eq(
-    effective_revert_threshold(Some(HostMaxRevertThreshold + 50)),
-    HostMaxRevertThreshold,
-  )
+fn clean_tree_evidence() -> @diagnostic_guard.Comparability {
+  {
+    before_count: Some(0),
+    remaining: 0,
+    new_in_edited: [],
+    new_breaking: [],
+    new_in_dependents: [],
+    new_independent: 1,
+    unlocated: 0,
+    unmapped_edits: 0,
+    module_manifest_edited: false,
+    graph_available: true,
+    truncated: false,
+  }
 }
 
 ///|
@@ -2216,7 +1506,7 @@ test "keep_response is clean at zero errors and honest below threshold" {
     truncated: false,
   }
   assert_eq(
-    keep_response(summary, clean, 5),
+    keep_response(summary, clean, 5, error_delta=0),
     "\{summary}\nmoon check: ok — 0 errors, 12 warning(s)",
   )
   let kept : @auto_check.CheckErrors = {
@@ -2227,8 +1517,8 @@ test "keep_response is clean at zero errors and honest below threshold" {
     truncated: false,
   }
   assert_eq(
-    keep_response(summary, kept, 5),
-    "\{summary}\nmoon check: applied with 2 error(s) kept (≤ revert_when_errors_above=5), 12 warning(s)\na.mbt:1:1-1:2: boom\na.mbt:4:1-4:2: bang",
+    keep_response(summary, kept, 5, error_delta=2),
+    "\{summary}\nmoon check: applied with 2 error(s) kept (error count change 2 < revert_if_error_delta_greater_or_equal=5), 12 warning(s)\na.mbt:1:1-1:2: boom\na.mbt:4:1-4:2: bang",
   )
 }
 
@@ -2246,8 +1536,8 @@ test "keep_response on the false-alarm path makes the introduced split explicit"
     truncated: false,
   }
   assert_eq(
-    keep_response(summary, after, 5, introduced=1),
-    "\{summary}\nmoon check: applied with 8 error(s) kept (only 1 newly introduced ≤ revert_when_errors_above=5; the rest pre-existed), 0 warning(s)\na.mbt:1:1-1:2: boom",
+    keep_response(summary, after, 5, error_delta=1),
+    "\{summary}\nmoon check: applied with 8 error(s) kept (error count change 1 < revert_if_error_delta_greater_or_equal=5), 0 warning(s)\na.mbt:1:1-1:2: boom",
   )
 }
 
@@ -2271,7 +1561,7 @@ test "revert_report names the introduced count and the first errors" {
   assert_eq(
     report,
     (
-      #|reverted: applied 6 edit(s) across 2 file(s), but moon check then reported 9 error(s) (9 newly introduced > revert_when_errors_above=5); all 2 file(s) were rolled back to their pre-batch contents.
+      #|reverted: applied 6 edit(s) across 2 file(s), but moon check then reported 9 error(s) (9 error count change >= revert_if_error_delta_greater_or_equal=5); all 2 file(s) were rolled back to their pre-batch contents.
       #|first 2 error(s):
       #|a.mbt:1:1-1:2: boom
       #|b.mbt:2:1-2:2: bang
@@ -2299,378 +1589,6 @@ test "revert_report marks a truncated count and a failed restore" {
   )
   assert_true(report.contains("reported ≥400 error(s)"))
   assert_true(report.contains("WARNING: could not restore 1 file(s): a.mbt"))
-}
-
-///|
-/// The issue-#1452 shape: the pre-batch run stopped at 10 errors in the edited
-/// package `x`; the batch fixed all 10, moon then compiled `y` (which imports
-/// `x`), and 87 errors in `y` surfaced. By count that is "77 introduced"; by
-/// the graph it is a reach through a dependent of the fixed package — real
-/// but not certifiable, so the advice names the sites to vet and the value.
-test "comparability calls new errors in dependents of a fixed package a plausible reach" {
-  let before = check_result(
-    [
-      for index in 0..<10 => {
-        site("x/x.mbt", "\{index + 1}:1-1:2", "wanted String")
-      }
-    ],
-  )
-  let after = check_result(
-    [
-      for index in 0..<87 => {
-        site("y/y.mbt", "\{index + 1}:1-1:2", "wanted String")
-      }
-    ],
-  )
-  let evidence = classify(Some(before), after, ["/r/x/x.mbt"])
-  assert_eq(evidence.remaining, 0)
-  assert_eq(evidence.new_in_dependents.length(), 87)
-  assert_eq(evidence.verdict(), PlausibleReach)
-  let advice = comparability_advice(evidence, introduced=77)
-  assert_true(advice.contains("all 10 pre-batch error(s) are gone"))
-  assert_true(advice.contains("depend on a package this batch FIXED"))
-  assert_true(advice.contains("y/y.mbt:1:1-1:2: wanted String"))
-  assert_true(advice.contains("… 82 more"))
-  assert_true(advice.contains("Verify those sites"))
-  assert_true(
-    advice.contains(
-      "If so: Re-issue the batch UNCHANGED with revert_when_errors_above=77",
-    ),
-  )
-  assert_false(advice.contains("more precise old_strings"))
-  // Past the host cap the override cannot reach; say so instead of naming an
-  // unreachable value.
-  let capped = comparability_advice(
-    evidence,
-    introduced=HostMaxRevertThreshold + 1,
-  )
-  assert_true(
-    capped.contains(
-      "exceeds the host cap of revert_when_errors_above=\{HostMaxRevertThreshold}",
-    ),
-  )
-  assert_false(capped.contains("UNCHANGED"))
-}
-
-///|
-test "comparability certifies new errors in packages independent of the edit" {
-  let before = check_result([site("x/x.mbt", "1:1-1:2", "old")])
-  // `z` and `w` import nothing edited; moon reports absolute paths here.
-  let after = check_result([
-    site("/r/z/z.mbt", "3:1-3:2", "e1"),
-    site("/r/w/w.mbt", "4:1-4:2", "e2"),
-  ])
-  let evidence = classify(Some(before), after, ["/r/x/x.mbt"])
-  assert_eq(evidence.new_independent, 2)
-  assert_eq(evidence.verdict(), CertifiedReach)
-  let advice = comparability_advice(evidence, introduced=1)
-  assert_true(
-    advice.contains("none of the 2 new error(s) can be caused by this batch"),
-  )
-  assert_true(
-    advice.contains(
-      "Re-issue the batch UNCHANGED with revert_when_errors_above=1",
-    ),
-  )
-  assert_false(advice.contains("Verify those sites"))
-}
-
-///|
-/// Review finding #3: a batch that fixes most but not all of the errors moon
-/// stopped at must not be told to narrow itself when nothing points at it.
-test "comparability keeps a partial fix on the reach path" {
-  let before = check_result(
-    [
-      for index in 0..<10 => site("x/x.mbt", "\{index + 1}:1-1:2", "old")
-    ],
-  )
-  let after = check_result(
-    [
-      ..[
-        for index in 0..<4 => site("x/x.mbt", "\{index + 1}:1-1:2", "old")
-      ],
-      site("z/z.mbt", "1:1-1:2", "surfaced"),
-    ],
-  )
-  let evidence = classify(Some(before), after, ["/r/x/x.mbt"])
-  assert_eq(evidence.remaining, 4)
-  assert_eq(evidence.verdict(), CertifiedReach)
-  let advice = comparability_advice(evidence, introduced=1)
-  assert_true(
-    advice.contains(
-      "4 of 10 pre-batch error(s) remain (the batch fixed the rest)",
-    ),
-  )
-  assert_false(advice.contains("more precise old_strings"))
-}
-
-///|
-test "comparability calls a break in code that compiled before the batch breakage" {
-  // `x` had no pre-batch errors (the only one was in `z`, and it remains); a
-  // new error in `y`, which imports `x`, can only be the batch's doing. So can
-  // one in another file of `x` itself.
-  let before = check_result([site("z/z.mbt", "1:1-1:2", "unrelated")])
-  let after = check_result([
-    site("z/z.mbt", "1:1-1:2", "unrelated"),
-    site("y/y.mbt", "7:1-7:2", "caller broke"),
-    site("x/other.mbt", "2:1-2:2", "sibling broke"),
-    site("q/q_test.mbt", "5:1-5:2", "test import broke"),
-  ])
-  let evidence = classify(Some(before), after, ["/r/x/x.mbt"])
-  assert_eq(evidence.remaining, 1)
-  assert_eq(evidence.new_breaking, [
-    "y/y.mbt:7:1-7:2: caller broke", "x/other.mbt:2:1-2:2: sibling broke", "q/q_test.mbt:5:1-5:2: test import broke",
-  ])
-  assert_eq(evidence.verdict(), Breakage)
-  let advice = comparability_advice(evidence, introduced=3)
-  assert_true(advice.contains("compiled cleanly before this batch"))
-  assert_true(
-    advice.contains(
-      "fix the batch rather than raising revert_when_errors_above",
-    ),
-  )
-  assert_false(advice.contains("UNCHANGED"))
-}
-
-///|
-/// An edited symlink whose target lives in another package changes that
-/// package too: `a/alias.mbt -> z/z.mbt` makes `w` (imports `z`) a dependent
-/// of the edit, so a new error there is breakage when `z` was clean before.
-test "comparability attributes through an edited symlink's target package" {
-  let before = check_result([site("x/x.mbt", "1:1-1:2", "old")])
-  let after = check_result([site("w/w.mbt", "2:1-2:2", "caller broke")])
-  let link : EditedTarget = {
-    spellings: ["/r/x/alias.mbt", "/r/z/z.mbt"],
-    canonical: "/r/x/alias.mbt",
-    attributable: ["/r/x/alias.mbt", "/r/z/z.mbt"],
-  }
-  let evidence = comparability(
-    Some(before),
-    after,
-    [link],
-    cwd=Some("/r"),
-    graph=Some(sample_graph()),
-  )
-  assert_eq(evidence.new_breaking, ["w/w.mbt:2:1-2:2: caller broke"])
-  assert_eq(evidence.verdict(), Breakage)
-  // A target moon does not compile changes nothing in its package: the same
-  // link resolving to `z/source.txt` leaves `w` independent of the edit.
-  let data_link : EditedTarget = {
-    spellings: ["/r/x/alias.mbt", "/r/z/source.txt"],
-    canonical: "/r/x/alias.mbt",
-    attributable: ["/r/x/alias.mbt"],
-  }
-  let surfaced = comparability(
-    Some(before),
-    check_result([site("w/w.mbt", "2:1-2:2", "surfaced")]),
-    [data_link],
-    cwd=Some("/r"),
-    graph=Some(sample_graph()),
-  )
-  assert_eq(surfaced.new_breaking, [])
-  assert_eq(surfaced.verdict(), CertifiedReach)
-  // …unless that target feeds a pre-build rule in `z` (then `edited_targets`
-  // lists it as attributable), in which case `z` is edited after all.
-  let build_input_link : EditedTarget = {
-    ..data_link,
-    attributable: ["/r/x/alias.mbt", "/r/z/source.txt"],
-  }
-  let generated = comparability(
-    Some(before),
-    check_result([site("w/w.mbt", "2:1-2:2", "caller broke")]),
-    [build_input_link],
-    cwd=Some("/r"),
-    graph=Some(sample_graph()),
-  )
-  assert_eq(generated.verdict(), Breakage)
-  // A non-source file in the batch (a README) neither maps nor counts as
-  // unmapped.
-  let with_readme = classify(Some(before), check_result([]), [
-    "/r/x/x.mbt", "/r/x/README.md",
-  ])
-  assert_eq(with_readme.unmapped_edits, 0)
-}
-
-///|
-/// A fixed package's own test file: its blackbox tests could not compile
-/// while the package was broken, so their errors surfacing is a plausible
-/// reach, not proven breakage.
-test "comparability keeps a fixed package's other files on the plausible path" {
-  let before = check_result([site("x/x.mbt", "1:1-1:2", "old")])
-  let after = check_result(
-    [
-      for index in 0..<12 => {
-        site("x/x_test.mbt", "\{index + 1}:1-1:2", "surfaced")
-      }
-    ],
-  )
-  let evidence = classify(Some(before), after, ["/r/x/x.mbt"])
-  assert_eq(evidence.new_breaking, [])
-  assert_eq(evidence.new_in_dependents.length(), 12)
-  assert_eq(evidence.verdict(), PlausibleReach)
-  assert_true(
-    comparability_advice(evidence, introduced=11).contains(
-      "If so: Re-issue the batch UNCHANGED with revert_when_errors_above=11",
-    ),
-  )
-}
-
-///|
-test "comparability treats new errors inside edited files as an over-match first" {
-  let before = check_result([site("x/x.mbt", "1:1-1:2", "old")])
-  let after = check_result([
-    site("x/x.mbt", "7:1-7:2", "stray"),
-    site("x/x.mbt", "9:1-9:2", "stray"),
-    site("z/z.mbt", "2:1-2:2", "independent"),
-  ])
-  let evidence = classify(Some(before), after, ["/r/x/x.mbt"])
-  assert_eq(evidence.new_in_edited, [
-    "x/x.mbt:7:1-7:2: stray", "x/x.mbt:9:1-9:2: stray",
-  ])
-  assert_eq(evidence.new_independent, 1)
-  assert_eq(evidence.verdict(), OverMatch)
-  let advice = comparability_advice(evidence, introduced=3)
-  assert_true(advice.contains("2 new error(s) sit in files this batch edited"))
-  assert_true(advice.contains("x/x.mbt:9:1-9:2: stray"))
-  assert_true(advice.contains("more precise old_strings"))
-  assert_false(advice.contains("UNCHANGED"))
-}
-
-///|
-/// Review finding #2: a check that ran in a project the batch did not edit
-/// can never see the edited files, so its silence about them proves nothing.
-test "comparability never claims reach when an edited file is outside the checked project" {
-  let before = check_result([site("x/x.mbt", "1:1-1:2", "old")])
-  let after = check_result([site("z/z.mbt", "2:1-2:2", "surfaced")])
-  let evidence = classify(Some(before), after, [
-    "/r/x/x.mbt", "/elsewhere/scripts/tool.mbt",
-  ])
-  assert_eq(evidence.unmapped_edits, 1)
-  assert_true(evidence.verdict() is Inconclusive(_))
-  let advice = comparability_advice(evidence, introduced=1)
-  assert_true(
-    advice.contains(
-      "1 edited file(s) lie outside every package of the checked project",
-    ),
-  )
-  assert_false(advice.contains("UNCHANGED"))
-}
-
-///|
-test "comparability is inconclusive without a baseline, a graph, or complete output" {
-  let elsewhere = check_result([site("z/z.mbt", "1:1-1:2", "surfaced")])
-  let old = check_result([site("x/x.mbt", "1:1-1:2", "old")])
-  // Clean tree: it compiled everything, so the new errors are the batch's.
-  assert_true(clean_tree_evidence().verdict() is Inconclusive(_))
-  assert_true(
-    comparability_advice(clean_tree_evidence(), introduced=1).contains(
-      "checked clean before this batch",
-    ),
-  )
-  // No baseline run at all.
-  let missing = classify(None, elsewhere, ["/r/x/x.mbt"])
-  assert_eq(missing.before_count, None)
-  assert_true(
-    comparability_advice(missing, introduced=1).contains(
-      "pre-batch check could not run",
-    ),
-  )
-  // Same shape as a reach, but the identity sets are partial.
-  let truncated = classify(
-    Some(check_result([site("x/x.mbt", "1:1-1:2", "old")], truncated=true)),
-    elsewhere,
-    ["/r/x/x.mbt"],
-  )
-  assert_true(truncated.truncated)
-  assert_true(
-    comparability_advice(truncated, introduced=1).contains(
-      "error identities are incomplete",
-    ),
-  )
-  // No package graph: nothing outside the edited files can be attributed.
-  let no_graph = comparability(
-    Some(old),
-    elsewhere,
-    [target("/r/x/x.mbt")],
-    cwd=Some("/r"),
-    graph=None,
-  )
-  assert_false(no_graph.graph_available)
-  assert_true(
-    comparability_advice(no_graph, introduced=1).contains(
-      "could not report the package graph",
-    ),
-  )
-  // A module manifest edit can change what every package sees.
-  let manifest = classify(Some(old), elsewhere, ["/r/x/x.mbt", "/r/moon.mod"])
-  assert_true(manifest.module_manifest_edited)
-  assert_true(
-    comparability_advice(manifest, introduced=1).contains(
-      "edits a module manifest",
-    ),
-  )
-  // A new error moon reported without a path, or in no known package, cannot
-  // be placed, so it blocks the reach conclusion rather than counting as
-  // "elsewhere".
-  let nowhere = check_result([
-    { path: None, loc: "2:1-2:2", code: None, message: "nowhere", },
-    site("/outside/o.mbt", "1:1-1:2", "unknown package"),
-  ])
-  let unlocated = classify(Some(old), nowhere, ["/r/x/x.mbt"])
-  assert_eq(unlocated.unlocated, 2)
-  assert_true(
-    comparability_advice(unlocated, introduced=2).contains(
-      "2 new error(s) could not be placed in any package",
-    ),
-  )
-}
-
-///|
-test "comparability compares by error code so a reworded message is not new" {
-  let coded = fn(message : String) -> @auto_check.ErrorSite {
-    { path: Some("x/x.mbt"), loc: "1:1-1:2", code: Some(4014), message, }
-  }
-  let evidence = classify(
-    Some(check_result([coded("old wording")])),
-    check_result([coded("new wording")]),
-    ["/r/x/x.mbt"],
-  )
-  assert_eq(evidence.remaining, 1)
-  assert_eq(evidence.new_in_edited, [])
-}
-
-///|
-test "moon_compiles recognises sources and every manifest flavour" {
-  assert_true(moon_compiles("/r/x/x.mbt"))
-  assert_true(moon_compiles("/r/x/README.mbt.md"))
-  assert_true(moon_compiles("/r/x/moon.pkg"))
-  assert_true(moon_compiles("/r/x/moon.pkg.json"))
-  assert_true(moon_compiles("/r/moon.mod"))
-  assert_true(moon_compiles("/r/moon.mod.json"))
-  assert_true(moon_compiles("/r/moon.work"))
-  assert_false(moon_compiles("/r/x/README.md"))
-  assert_false(moon_compiles("/r/x/source.txt"))
-}
-
-///|
-test "absolutize joins moon's relative paths onto the checked project" {
-  assert_eq(absolutize("x/x.mbt", Some("/r")), "/r/x/x.mbt")
-  assert_eq(absolutize("/private/r/x.mbt", Some("/r")), "/private/r/x.mbt")
-  assert_eq(absolutize("C:\\r\\x.mbt", Some("/r")), "C:\\r\\x.mbt")
-  assert_eq(absolutize("x/x.mbt", None), "x/x.mbt")
-}
-
-///|
-test "in_edited_file matches moon's relative paths against a target's spellings" {
-  let spellings = ["/ws/cmd/openseek/main.mbt", "C:\\ws\\lib\\win.mbt"]
-  assert_true(in_edited_file("cmd/openseek/main.mbt", spellings))
-  assert_true(in_edited_file("/ws/cmd/openseek/main.mbt", spellings))
-  assert_true(in_edited_file("win.mbt", spellings))
-  // A same-named file in another directory is not the edited one.
-  assert_false(in_edited_file("other/main.mbt", spellings))
-  assert_false(
-    in_edited_file("openseek/main.mbt", ["/ws/cmd/xopenseek/main.mbt"]),
-  )
 }
 
 ///|

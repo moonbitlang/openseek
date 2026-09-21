@@ -7,13 +7,13 @@ tool arguments into the typed `MultiEditArgs` consumed by `multi_edit`.
 
 - `MultiEditItem(file, old_string, new_string, start_line, end_line)`: one exact
   line-anchored replacement against `file`; `end_line` is optional.
-- `MultiEditArgs(inline, edits_file, revert_when_errors_above)`: the inline
+- `MultiEditArgs(inline, edits_file, revert_if_error_delta_greater_or_equal)`: the inline
   `edits` array (possibly empty), an optional `edits_file` path, and the model's
   optional auto-revert threshold (`None` = host default). The tool concatenates
   the inline edits with the file's edits and rejects only the combined-empty
   batch.
 - `decode_args(arguments)`: accepts a JSON object with optional `edits` (array),
-  `edits_file` (string), and `revert_when_errors_above` (integer) fields — the
+  `edits_file` (string), and `revert_if_error_delta_greater_or_equal` (integer) fields — the
   first two are independent mono-typed fields, no `oneOf` — and raises focused
   errors for malformed payloads.
 - `decode_edits_json(json)`: parses the bare array read from a response file into
@@ -34,7 +34,8 @@ tool, not the decoder.
 | `edits[i].new_string` | string | yes | Same missing/wrong-type behavior as `file`. |
 | `edits[i].start_line` | integer | yes | Positive 1-based inclusive search start; absent lists the present keys so a misnamed key (e.g. `line`) is obvious. |
 | `edits[i].end_line` | integer | no | Optional positive 1-based inclusive range end; when present, it must be greater than or equal to `start_line`. |
-| `revert_when_errors_above` | integer | no | The model's requested auto-revert threshold; absent leaves it `None` so the tool applies the host default. A non-integer raises `arguments.revert_when_errors_above to be an integer`. |
+| `revert_if_error_delta_greater_or_equal` | integer | no | Non-negative threshold; absent/null is `None`, resolved by the tool to default `10` (cap `200`). |
+| `revert_if_warning_delta_greater_or_equal` | integer | no | Non-negative threshold; absent/null disables the warning guard. |
 
 The decoder does not check whether `old_string` occurs in the file, nor that a
 file's edits are contiguous. The parent tool validates all edit entries against

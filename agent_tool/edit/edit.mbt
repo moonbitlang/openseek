@@ -76,7 +76,8 @@ pub fn definition(
       #|insertion for grouping related code. An edit that would introduce lex/parse errors
       #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
-      #|Diagnostic guards (off unless given) run moon check before and after writing.
+      #|Diagnostic guards run moon check before and after writing. The error-delta
+      #|threshold defaults to 5 (clamped to 0..200); the warning guard defaults off.
       #|revert_if_error_delta_greater_or_equal=1 reverts when the error total increases;
       #|revert_if_warning_delta_greater_or_equal=0 reverts when the warning total does not
       #|decrease (after - before >= 0). Combine them for a warning-fix script.
@@ -85,7 +86,7 @@ pub fn definition(
       #|guarantee no new problems. Review diagnostics before overriding a threshold:
       #|if they support accepting the edit (for example, newly reached existing errors),
       #|retry with an explicit higher threshold. To admit delta D, use a threshold > D.
-      #|Do not raise it merely to bypass a failed guard. Omitted guards are off. For
+      #|Do not raise it merely to bypass a failed guard. For
       #|multiple compiler-feedback fixes in one file, use multi_edit with explicit
       #|line-anchored edits. To change EVERY occurrence of a string, pass
       #|replace_all_preview=true: the file is not modified; instead every match site is
@@ -122,13 +123,15 @@ pub fn definition(
         "revert_if_error_delta_greater_or_equal": {
           "type": "integer",
           "description": (
-            #|Post-write guard, off unless given. Revert when the reported error count
+            #|Post-write guard, default 5, clamped to 0..200. Revert when the reported error count
             #|change (after - before) is >= this non-negative threshold. 0 requires a
             #|decrease; 1 allows an unchanged total. Counts can be misleading when errors
             #|change which packages moon check reaches; a decrease does not prove no new
             #|errors. Diagnostic identities are informational, not part of this guard.
             #|After reviewing diagnostics, you may retry with a higher threshold to
             #|admit an acceptable change; the threshold must exceed the observed delta.
+            #|Error reverts include the same comparability analysis as multi_edit:
+            #|check its evidence and, for reach cases, its suggested retry threshold.
             #|If the baseline check cannot run, a guarded edit is not written.
           ),
           "examples": [1],
@@ -768,7 +771,10 @@ async fn commit_edit(
     return rejection
   }
   let guards : Guards = {
-    errors: input.revert_if_error_delta_greater_or_equal,
+    errors: @diagnostic_guard.effective_revert_threshold(
+      input.revert_if_error_delta_greater_or_equal,
+      default=5,
+    ),
     warnings: input.revert_if_warning_delta_greater_or_equal,
   }
   // The guards' baseline is measured before the write, so nothing has to be
@@ -819,7 +825,7 @@ async fn commit_edit(
     }
   }
 
-  let baseline = if guards.errors is Some(_) || guards.warnings is Some(_) {
+  let baseline = {
     let measured = match check_tree() {
       Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
       Checked(tally) => Some(tally)
@@ -851,8 +857,6 @@ async fn commit_edit(
       )
     }
     measured
-  } else {
-    None
   }
   // Containment re-check at the moment of writing: everything above awaited
   // (the parse gate, the baseline check), and a path component may have been
@@ -1124,10 +1128,10 @@ fn exited_without_diagnostics(code : Int) -> String {
 }
 
 ///|
-/// The post-write guards an edit asked for: how many introduced diagnostics
-/// of each severity it tolerates, or `None` for a guard that is off.
+/// Inclusive count-delta thresholds. The error threshold always has a host
+/// default; the warning threshold is optional.
 priv struct Guards {
-  errors : Int?
+  errors : Int
   warnings : Int?
 }
 
@@ -1157,7 +1161,7 @@ async fn guarded_outcome(
   let removed = @auto_check.introduced(after, before)
   let error_delta = after.error_count - before.error_count
   let warning_delta = after.warning_count - before.warning_count
-  let errors_hit = guards.errors is Some(limit) && error_delta >= limit
+  let errors_hit = error_delta >= guards.errors
   let warnings_hit = guards.warnings is Some(limit) && warning_delta >= limit
   let reach_caveat = before.error_count > 0
   let common : Map[String, Json] = {
@@ -1191,7 +1195,7 @@ async fn guarded_outcome(
   }
   let shown_errors = if errors_hit { sites(delta.errors) } else { [] }
   let shown_warnings = if warnings_hit { sites(delta.warnings) } else { [] }
-  let over_errors = "the error count changed by \{error_delta} (>= revert_if_error_delta_greater_or_equal=\{guards.errors.unwrap_or(0)})"
+  let over_errors = "the error count changed by \{error_delta} (>= revert_if_error_delta_greater_or_equal=\{guards.errors})"
   let over_warnings = "the warning count changed by \{warning_delta} (>= revert_if_warning_delta_greater_or_equal=\{guards.warnings.unwrap_or(0)})"
   let what = match (errors_hit, warnings_hit) {
     (true, true) => "\{over_errors} and \{over_warnings}"
@@ -1207,8 +1211,24 @@ async fn guarded_outcome(
     ],
   ]
   let detail = if listed.is_empty() { "" } else { "\n\{listed.join("\n")}" }
-  let caveat = if reach_caveat {
-    "\{caveat} If this edit fixed an error, re-issue it without the guard and read the check line."
+  let advice = if errors_hit {
+    let projects = check_projects(path)
+    let measured = @diagnostic_guard.gather_comparability(
+      projects.get(0).unwrap_or(path),
+      Some(before),
+      after,
+      [path],
+    )
+    let evidence = if projects.length() > 1 {
+      { ..measured, graph_available: false, }
+    } else {
+      measured
+    }
+    for key, value in evidence.feedback(delta=error_delta) {
+      common[key] = value
+    }
+    "\n" +
+    @diagnostic_guard.comparability_advice(evidence, introduced=error_delta)
   } else {
     ""
   }
@@ -1229,7 +1249,7 @@ async fn guarded_outcome(
     fail_brief~,
     common,
     head=what,
-    detail="\{detail}\{caveat}",
+    detail="\{detail}\{caveat}\{advice}",
     write_scope?,
   )
 }
