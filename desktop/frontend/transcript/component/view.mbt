@@ -326,6 +326,7 @@ fn tool_request_view(
       TraditionalChinese => "🐇 → 後臺"
       Japanese => "🐇 → バックグラウンド"
       English => "🐇 → background"
+      Spanish => "🐇 → segundo plano"
     }
   } else if brief is Some(brief) && !brief.is_blank() {
     tool_display_label(locale~, name, brief)
@@ -367,6 +368,7 @@ fn tool_request_view(
           TraditionalChinese => "失敗"
           Japanese => "失敗"
           English => "failed"
+          Spanish => "falló"
         },
       ),
     )

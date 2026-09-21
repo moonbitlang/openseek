@@ -81,11 +81,14 @@ priv enum ShellMessage {
 fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
   match (locale, message) {
     (English, NewChatLabel) => "New chat"
+    (Spanish, NewChatLabel) => "Nueva conversación"
     (SimplifiedChinese, NewChatLabel) => "新建对话"
     (TraditionalChinese, NewChatLabel) => "新建對話"
     (Japanese, NewChatLabel) => "新しいチャット"
     (English, ArchiveHint) =>
       "Archive — tuck this chat away; its files stay where they are"
+    (Spanish, ArchiveHint) =>
+      "Archivar: guardar esta conversación; sus archivos permanecen donde están"
     (SimplifiedChinese, ArchiveHint) =>
       "归档此对话，文件保留在原处"
     (TraditionalChinese, ArchiveHint) =>
@@ -93,21 +96,27 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, ArchiveHint) =>
       "このチャットをアーカイブし、ファイルはそのまま保持"
     (English, RestoreHint) => "Restore this conversation to the sidebar"
+    (Spanish, RestoreHint) => "Restaurar esta conversación en la barra lateral"
     (SimplifiedChinese, RestoreHint) => "将此对话恢复到侧边栏"
     (TraditionalChinese, RestoreHint) => "將此對話恢復到側邊欄"
     (Japanese, RestoreHint) => "このチャットをサイドバーに復元"
     (English, DeleteArchivedHint) =>
       "Permanently delete this archived conversation"
+    (Spanish, DeleteArchivedHint) =>
+      "Eliminar esta conversación archivada de forma permanente"
     (SimplifiedChinese, DeleteArchivedHint) => "永久删除此归档对话"
     (TraditionalChinese, DeleteArchivedHint) => "永久刪除此歸檔對話"
     (Japanese, DeleteArchivedHint) =>
       "このアーカイブ済みチャットを完全に削除"
     (English, LoadingDevice) => "Loading device…"
+    (Spanish, LoadingDevice) => "Cargando dispositivo…"
     (SimplifiedChinese, LoadingDevice) => "正在加载设备…"
     (TraditionalChinese, LoadingDevice) => "正在載入裝置…"
     (Japanese, LoadingDevice) => "デバイスを読み込み中…"
     (English, NoDevices) =>
       "No devices yet — open SeekMoon and sign in under Settings → Remote access."
+    (Spanish, NoDevices) =>
+      "Aún no hay dispositivos; abre SeekMoon e inicia sesión en Configuración → Acceso remoto."
     (SimplifiedChinese, NoDevices) =>
       "尚无设备，请打开 SeekMoon 并在“设置 → 远程访问”中登录。"
     (TraditionalChinese, NoDevices) =>
@@ -115,6 +124,8 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, NoDevices) =>
       "デバイスがありません。SeekMoon を開き、「設定 → リモートアクセス」からログインしてください。"
     (English, NoOnlineDevice) => "No online device — reconnecting…"
+    (Spanish, NoOnlineDevice) =>
+      "No hay dispositivos en línea; reconectando…"
     (SimplifiedChinese, NoOnlineDevice) =>
       "没有在线设备，正在重新连接…"
     (TraditionalChinese, NoOnlineDevice) =>
@@ -122,24 +133,30 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, NoOnlineDevice) =>
       "オンラインのデバイスがありません。再接続中…"
     (English, UpdateLabel) => "Update"
+    (Spanish, UpdateLabel) => "Actualizar"
     (SimplifiedChinese, UpdateLabel) => "更新"
     (TraditionalChinese, UpdateLabel) => "更新"
     (Japanese, UpdateLabel) => "更新"
     (English, RestartingLabel) => "Restarting…"
+    (Spanish, RestartingLabel) => "Reiniciando…"
     (SimplifiedChinese, RestartingLabel) => "正在重启…"
     (TraditionalChinese, RestartingLabel) => "正在重啟…"
     (Japanese, RestartingLabel) => "再起動中…"
     (English, RestartToUpdateLabel) => "Restart to update"
+    (Spanish, RestartToUpdateLabel) => "Reiniciar para actualizar"
     (SimplifiedChinese, RestartToUpdateLabel) => "重启以更新"
     (TraditionalChinese, RestartToUpdateLabel) => "重啟以更新"
     (Japanese, RestartToUpdateLabel) => "再起動して更新"
     (English, ArchivedReadOnly) => "Archived conversation · Read only"
+    (Spanish, ArchivedReadOnly) => "Conversación archivada · Solo lectura"
     (SimplifiedChinese, ArchivedReadOnly) => "已归档对话 · 只读"
     (TraditionalChinese, ArchivedReadOnly) => "已歸檔對話 · 唯讀"
     (Japanese, ArchivedReadOnly) =>
       "アーカイブ済みチャット · 読み取り専用"
     (English, RestoreBeforeContinue) =>
       "Restore this conversation before continuing it"
+    (Spanish, RestoreBeforeContinue) =>
+      "Restaura esta conversación antes de continuar"
     (SimplifiedChinese, RestoreBeforeContinue) =>
       "恢复此对话后即可继续"
     (TraditionalChinese, RestoreBeforeContinue) =>
@@ -147,43 +164,54 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, RestoreBeforeContinue) =>
       "続行するにはこのチャットを復元してください"
     (English, RestoreLabel) => "Restore"
+    (Spanish, RestoreLabel) => "Restaurar"
     (SimplifiedChinese, RestoreLabel) => "恢复"
     (TraditionalChinese, RestoreLabel) => "恢復"
     (Japanese, RestoreLabel) => "復元"
     (English, ShowDetailed) => "Show detailed conversation"
+    (Spanish, ShowDetailed) => "Mostrar conversación detallada"
     (SimplifiedChinese, ShowDetailed) => "显示完整对话"
     (TraditionalChinese, ShowDetailed) => "顯示完整對話"
     (Japanese, ShowDetailed) => "チャット全体を表示"
     (English, ShowMinimal) => "Show minimal conversation"
+    (Spanish, ShowMinimal) => "Mostrar conversación mínima"
     (SimplifiedChinese, ShowMinimal) => "显示精简对话"
     (TraditionalChinese, ShowMinimal) => "顯示精簡對話"
     (Japanese, ShowMinimal) => "簡易チャットを表示"
     (English, DetailedMode) => "Detailed mode"
+    (Spanish, DetailedMode) => "Modo detallado"
     (SimplifiedChinese, DetailedMode) => "详细模式"
     (TraditionalChinese, DetailedMode) => "詳細模式"
     (Japanese, DetailedMode) => "詳細モード"
     (English, ExportConversation) => "Export conversation"
+    (Spanish, ExportConversation) => "Exportar conversación"
     (SimplifiedChinese, ExportConversation) => "导出对话"
     (TraditionalChinese, ExportConversation) => "匯出對話"
     (Japanese, ExportConversation) => "チャットをエクスポート"
     (English, HideTerminal) => "Hide terminal (Ctrl+`)"
+    (Spanish, HideTerminal) => "Ocultar terminal (Ctrl+`)"
     (SimplifiedChinese, HideTerminal) => "隐藏终端（Ctrl+`）"
     (TraditionalChinese, HideTerminal) => "隱藏終端（Ctrl+`）"
     (Japanese, HideTerminal) => "ターミナルを非表示（Ctrl+`）"
     (English, ShowTerminal) => "Show terminal (Ctrl+`)"
+    (Spanish, ShowTerminal) => "Mostrar terminal (Ctrl+`)"
     (SimplifiedChinese, ShowTerminal) => "显示终端（Ctrl+`）"
     (TraditionalChinese, ShowTerminal) => "顯示終端（Ctrl+`）"
     (Japanese, ShowTerminal) => "ターミナルを表示（Ctrl+`）"
     (English, ShowPanel) => "Show panel"
+    (Spanish, ShowPanel) => "Mostrar panel"
     (SimplifiedChinese, ShowPanel) => "显示面板"
     (TraditionalChinese, ShowPanel) => "顯示面板"
     (Japanese, ShowPanel) => "パネルを表示"
     (English, OpenProject) => "Open a project"
+    (Spanish, OpenProject) => "Abrir un proyecto"
     (SimplifiedChinese, OpenProject) => "打开项目"
     (TraditionalChinese, OpenProject) => "開啟專案"
     (Japanese, OpenProject) => "プロジェクトを開く"
     (English, ProjectOnboarding) =>
       "SeekMoon works inside a project directory. Add one and its first chat opens here."
+    (Spanish, ProjectOnboarding) =>
+      "SeekMoon trabaja dentro de un directorio de proyecto. Añade uno y su primera conversación se abrirá aquí."
     (SimplifiedChinese, ProjectOnboarding) =>
       "SeekMoon 在项目目录中工作。添加项目后，首个对话将在此处打开。"
     (TraditionalChinese, ProjectOnboarding) =>
@@ -191,30 +219,38 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, ProjectOnboarding) =>
       "SeekMoon はプロジェクトのディレクトリで作業します。プロジェクトを追加すると、最初のチャットがここに開きます。"
     (English, AddProject) => "Add a project"
+    (Spanish, AddProject) => "Añadir un proyecto"
     (SimplifiedChinese, AddProject) => "添加项目"
     (TraditionalChinese, AddProject) => "新增專案"
     (Japanese, AddProject) => "プロジェクトを追加"
     (English, OpeningChat) => "Opening a chat…"
+    (Spanish, OpeningChat) => "Abriendo conversación…"
     (SimplifiedChinese, OpeningChat) => "正在打开对话…"
     (TraditionalChinese, OpeningChat) => "正在開啟對話…"
     (Japanese, OpeningChat) => "チャットを開いています…"
     (English, ConnectingDevice) => "Connecting to this device…"
+    (Spanish, ConnectingDevice) => "Conectando con este dispositivo…"
     (SimplifiedChinese, ConnectingDevice) => "正在连接此设备…"
     (TraditionalChinese, ConnectingDevice) => "正在連線此裝置…"
     (Japanese, ConnectingDevice) => "このデバイスに接続中…"
     (English, CheckingSignIn) => "Checking sign-in…"
+    (Spanish, CheckingSignIn) => "Comprobando inicio de sesión…"
     (SimplifiedChinese, CheckingSignIn) => "正在检查登录状态…"
     (TraditionalChinese, CheckingSignIn) => "正在檢查登入狀態…"
     (Japanese, CheckingSignIn) => "ログイン状態を確認中…"
     (English, TryAgain) => "Try again"
+    (Spanish, TryAgain) => "Intentar de nuevo"
     (SimplifiedChinese, TryAgain) => "重试"
     (TraditionalChinese, TryAgain) => "重試"
     (Japanese, TryAgain) => "再試行"
     (English, SignInLabel) => "Sign in"
+    (Spanish, SignInLabel) => "Iniciar sesión"
     (SimplifiedChinese, SignInLabel) => "登录"
     (TraditionalChinese, SignInLabel) => "登入"
     (Japanese, SignInLabel) => "ログイン"
     (English, BrowserAccess) => "Access this SeekMoon device from your browser."
+    (Spanish, BrowserAccess) =>
+      "Accede a este dispositivo SeekMoon desde el navegador."
     (SimplifiedChinese, BrowserAccess) =>
       "通过浏览器访问此 SeekMoon 设备。"
     (TraditionalChinese, BrowserAccess) =>
@@ -222,23 +258,29 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, BrowserAccess) =>
       "ブラウザーからこの SeekMoon デバイスにアクセスします。"
     (English, SignInGitHub) => "Sign in with GitHub"
+    (Spanish, SignInGitHub) => "Iniciar sesión con GitHub"
     (SimplifiedChinese, SignInGitHub) => "使用 GitHub 登录"
     (TraditionalChinese, SignInGitHub) => "使用 GitHub 登入"
     (Japanese, SignInGitHub) => "GitHub でログイン"
     (English, CheckingDevice) => "Checking device…"
+    (Spanish, CheckingDevice) => "Comprobando dispositivo…"
     (SimplifiedChinese, CheckingDevice) => "正在检查设备…"
     (TraditionalChinese, CheckingDevice) => "正在檢查裝置…"
     (Japanese, CheckingDevice) => "デバイスを確認中…"
     (English, CannotLoadDevice) => "Can't load device"
+    (Spanish, CannotLoadDevice) => "No se puede cargar el dispositivo"
     (SimplifiedChinese, CannotLoadDevice) => "无法加载设备"
     (TraditionalChinese, CannotLoadDevice) => "無法載入裝置"
     (Japanese, CannotLoadDevice) => "デバイスを読み込めません"
     (English, WaitingConnection) => "Waiting for this device's connection."
+    (Spanish, WaitingConnection) =>
+      "Esperando la conexión de este dispositivo."
     (SimplifiedChinese, WaitingConnection) => "正在等待此设备连接。"
     (TraditionalChinese, WaitingConnection) => "正在等待此裝置連線。"
     (Japanese, WaitingConnection) =>
       "このデバイスの接続を待機中です。"
     (English, BringOnline) => "Bring this device online, then refresh."
+    (Spanish, BringOnline) => "Conecta este dispositivo y luego actualiza."
     (SimplifiedChinese, BringOnline) =>
       "请将此设备联网，然后刷新。"
     (TraditionalChinese, BringOnline) =>
@@ -246,11 +288,14 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, BringOnline) =>
       "このデバイスをオンラインにしてから更新してください。"
     (English, DeviceUnavailable) => "Device unavailable"
+    (Spanish, DeviceUnavailable) => "Dispositivo no disponible"
     (SimplifiedChinese, DeviceUnavailable) => "设备不可用"
     (TraditionalChinese, DeviceUnavailable) => "裝置不可用"
     (Japanese, DeviceUnavailable) => "デバイスを利用できません"
     (English, DeviceNotInAccount) =>
       "This device is not available to the signed-in account."
+    (Spanish, DeviceNotInAccount) =>
+      "Este dispositivo no está disponible para la cuenta actual."
     (SimplifiedChinese, DeviceNotInAccount) =>
       "当前登录的账户无法访问此设备。"
     (TraditionalChinese, DeviceNotInAccount) =>
@@ -258,15 +303,19 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, DeviceNotInAccount) =>
       "現在のアカウントではこのデバイスにアクセスできません。"
     (English, RefreshLabel) => "Refresh"
+    (Spanish, RefreshLabel) => "Actualizar"
     (SimplifiedChinese, RefreshLabel) => "刷新"
     (TraditionalChinese, RefreshLabel) => "重新整理"
     (Japanese, RefreshLabel) => "更新"
     (English, DeviceLinkRequired) => "Device link required"
+    (Spanish, DeviceLinkRequired) => "Se requiere un enlace de dispositivo"
     (SimplifiedChinese, DeviceLinkRequired) => "需要设备链接"
     (TraditionalChinese, DeviceLinkRequired) => "需要裝置連結"
     (Japanese, DeviceLinkRequired) => "デバイスのリンクが必要です"
     (English, DeviceLinkDescription) =>
       "Open this page from Remote access in SeekMoon so the URL identifies one device."
+    (Spanish, DeviceLinkDescription) =>
+      "Abre esta página desde Acceso remoto en SeekMoon para que la URL identifique un dispositivo."
     (SimplifiedChinese, DeviceLinkDescription) =>
       "请从 SeekMoon 的“远程访问”中打开此页面，以便通过链接识别设备。"
     (TraditionalChinese, DeviceLinkDescription) =>
@@ -274,26 +323,33 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, DeviceLinkDescription) =>
       "SeekMoon の「リモートアクセス」からこのページを開いてください。リンクによってデバイスを識別します。"
     (English, SigningOut) => "Signing out…"
+    (Spanish, SigningOut) => "Cerrando sesión…"
     (SimplifiedChinese, SigningOut) => "正在退出登录…"
     (TraditionalChinese, SigningOut) => "正在退出登入…"
     (Japanese, SigningOut) => "ログアウト中…"
     (English, SignOutLabel) => "Sign out"
+    (Spanish, SignOutLabel) => "Cerrar sesión"
     (SimplifiedChinese, SignOutLabel) => "退出登录"
     (TraditionalChinese, SignOutLabel) => "退出登入"
     (Japanese, SignOutLabel) => "ログアウト"
     (English, LoadingConversation) => "Loading conversation…"
+    (Spanish, LoadingConversation) => "Cargando conversación…"
     (SimplifiedChinese, LoadingConversation) => "正在加载对话…"
     (TraditionalChinese, LoadingConversation) => "正在載入對話…"
     (Japanese, LoadingConversation) => "チャットを読み込み中…"
     (English, CannotLoadConversation) => "Could not load conversation"
+    (Spanish, CannotLoadConversation) => "No se pudo cargar la conversación"
     (SimplifiedChinese, CannotLoadConversation) => "无法加载对话"
     (TraditionalChinese, CannotLoadConversation) => "無法載入對話"
     (Japanese, CannotLoadConversation) => "チャットを読み込めません"
     (English, RetryLabel) => "Retry"
+    (Spanish, RetryLabel) => "Reintentar"
     (SimplifiedChinese, RetryLabel) => "重试"
     (TraditionalChinese, RetryLabel) => "重試"
     (Japanese, RetryLabel) => "再試行"
     (English, ScheduleReadOnly) => "Scheduled task · Read only while running"
+    (Spanish, ScheduleReadOnly) =>
+      "Tarea programada · Solo lectura durante la ejecución"
     (SimplifiedChinese, ScheduleReadOnly) =>
       "定时任务 · 运行期间只读"
     (TraditionalChinese, ScheduleReadOnly) =>
@@ -301,15 +357,19 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, ScheduleReadOnly) =>
       "スケジュールタスク · 実行中は読み取り専用"
     (English, ViewTask) => "View task"
+    (Spanish, ViewTask) => "Ver tarea"
     (SimplifiedChinese, ViewTask) => "查看任务"
     (TraditionalChinese, ViewTask) => "檢視任務"
     (Japanese, ViewTask) => "タスクを表示"
     (English, DisconnectedLabel) => "Disconnected"
+    (Spanish, DisconnectedLabel) => "Desconectado"
     (SimplifiedChinese, DisconnectedLabel) => "已断开连接"
     (TraditionalChinese, DisconnectedLabel) => "已斷開連線"
     (Japanese, DisconnectedLabel) => "切断済み"
     (English, InterruptForUpdate) =>
       "A conversation is still running. Restarting the app interrupts it; the transcript so far is saved."
+    (Spanish, InterruptForUpdate) =>
+      "Hay una conversación en curso. Reiniciar la aplicación la interrumpirá; la transcripción hasta este momento está guardada."
     (SimplifiedChinese, InterruptForUpdate) =>
       "仍有对话正在运行。重启应用会中断运行，已有的对话记录将会保留。"
     (TraditionalChinese, InterruptForUpdate) =>
@@ -317,63 +377,80 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, InterruptForUpdate) =>
       "実行中のチャットがあります。アプリを再起動すると実行が中断されますが、既存のチャット履歴は保持されます。"
     (English, KeepWorking) => "Keep working"
+    (Spanish, KeepWorking) => "Seguir trabajando"
     (SimplifiedChinese, KeepWorking) => "继续工作"
     (TraditionalChinese, KeepWorking) => "繼續工作"
     (Japanese, KeepWorking) => "作業を続行"
     (English, RestartNow) => "Restart now"
+    (Spanish, RestartNow) => "Reiniciar ahora"
     (SimplifiedChinese, RestartNow) => "立即重启"
     (TraditionalChinese, RestartNow) => "立即重啟"
     (Japanese, RestartNow) => "今すぐ再起動"
     (English, SetupDeepSeek) => "Set up your DeepSeek API key"
+    (Spanish, SetupDeepSeek) => "Configura tu clave de API de DeepSeek"
     (SimplifiedChinese, SetupDeepSeek) => "设置 DeepSeek API 密钥"
     (TraditionalChinese, SetupDeepSeek) => "設定 DeepSeek API 金鑰"
     (Japanese, SetupDeepSeek) => "DeepSeek API キーを設定"
     (English, SetupGlm) => "Set up your GLM API key"
+    (Spanish, SetupGlm) => "Configura tu clave de API de GLM"
     (SimplifiedChinese, SetupGlm) => "设置 GLM API 密钥"
     (TraditionalChinese, SetupGlm) => "設定 GLM API 金鑰"
     (Japanese, SetupGlm) => "GLM API キーを設定"
     (English, SetupOpenRouter) => "Set up OpenRouter"
+    (Spanish, SetupOpenRouter) => "Configura OpenRouter"
     (SimplifiedChinese, SetupOpenRouter) => "设置 OpenRouter"
     (TraditionalChinese, SetupOpenRouter) => "設定 OpenRouter"
     (Japanese, SetupOpenRouter) => "OpenRouter を設定"
     (English, SetupEndpoint) => "Set your endpoint URL"
+    (Spanish, SetupEndpoint) => "Configura la URL de tu endpoint"
     (SimplifiedChinese, SetupEndpoint) => "设置端点 URL"
     (TraditionalChinese, SetupEndpoint) => "設定端點 URL"
     (Japanese, SetupEndpoint) => "エンドポイント URL を設定"
     (English, NotNow) => "Not now"
+    (Spanish, NotNow) => "Ahora no"
     (SimplifiedChinese, NotNow) => "暂不设置"
     (TraditionalChinese, NotNow) => "暫不設定"
     (Japanese, NotNow) => "後で設定"
     (English, DismissLabel) => "Dismiss"
+    (Spanish, DismissLabel) => "Descartar"
     (SimplifiedChinese, DismissLabel) => "关闭"
     (TraditionalChinese, DismissLabel) => "關閉"
     (Japanese, DismissLabel) => "閉じる"
     (English, RenameConversation) => "Rename conversation"
+    (Spanish, RenameConversation) => "Cambiar nombre de la conversación"
     (SimplifiedChinese, RenameConversation) => "重命名对话"
     (TraditionalChinese, RenameConversation) => "重新命名對話"
     (Japanese, RenameConversation) => "チャット名を変更"
     (English, CancelLabel) => "Cancel"
+    (Spanish, CancelLabel) => "Cancelar"
     (SimplifiedChinese, CancelLabel) => "取消"
     (TraditionalChinese, CancelLabel) => "取消"
     (Japanese, CancelLabel) => "キャンセル"
     (English, SavingLabel) => "Saving…"
+    (Spanish, SavingLabel) => "Guardando…"
     (SimplifiedChinese, SavingLabel) => "正在保存…"
     (TraditionalChinese, SavingLabel) => "正在儲存…"
     (Japanese, SavingLabel) => "保存中…"
     (English, SaveLabel) => "Save"
+    (Spanish, SaveLabel) => "Guardar"
     (SimplifiedChinese, SaveLabel) => "保存"
     (TraditionalChinese, SaveLabel) => "儲存"
     (Japanese, SaveLabel) => "保存"
     (English, DeleteChatQuestion) => "Permanently delete this chat?"
+    (Spanish, DeleteChatQuestion) =>
+      "¿Eliminar esta conversación de forma permanente?"
     (SimplifiedChinese, DeleteChatQuestion) => "永久删除此对话？"
     (TraditionalChinese, DeleteChatQuestion) => "永久刪除此對話？"
     (Japanese, DeleteChatQuestion) =>
       "このチャットを完全に削除しますか？"
     (English, DeletePermanently) => "Delete permanently"
+    (Spanish, DeletePermanently) => "Eliminar permanentemente"
     (SimplifiedChinese, DeletePermanently) => "永久删除"
     (TraditionalChinese, DeletePermanently) => "永久刪除"
     (Japanese, DeletePermanently) => "完全に削除"
     (English, NoEndpoint) => "No endpoint URL configured — Send is disabled."
+    (Spanish, NoEndpoint) =>
+      "No hay una URL de endpoint configurada; Enviar está deshabilitado."
     (SimplifiedChinese, NoEndpoint) =>
       "尚未设置端点 URL，无法发送。"
     (TraditionalChinese, NoEndpoint) =>
@@ -381,6 +458,8 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, NoEndpoint) =>
       "エンドポイント URL が未設定のため送信できません。"
     (English, NoGlmKey) => "No GLM API key configured — Send is disabled."
+    (Spanish, NoGlmKey) =>
+      "No hay una clave de API de GLM configurada; Enviar está deshabilitado."
     (SimplifiedChinese, NoGlmKey) =>
       "尚未设置 GLM API 密钥，无法发送。"
     (TraditionalChinese, NoGlmKey) =>
@@ -389,6 +468,8 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "GLM API キーが未設定のため送信できません。"
     (English, NoOpenRouterKey) =>
       "No OpenRouter API key configured — Send is disabled."
+    (Spanish, NoOpenRouterKey) =>
+      "No hay una clave de API de OpenRouter configurada; Enviar está deshabilitado."
     (SimplifiedChinese, NoOpenRouterKey) =>
       "尚未设置 OpenRouter API 密钥，无法发送。"
     (TraditionalChinese, NoOpenRouterKey) =>
@@ -397,6 +478,8 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "OpenRouter API キーが未設定のため送信できません。"
     (English, NoDeepSeekKey) =>
       "No DeepSeek API key configured — Send is disabled."
+    (Spanish, NoDeepSeekKey) =>
+      "No hay una clave de API de DeepSeek configurada; Enviar está deshabilitado."
     (SimplifiedChinese, NoDeepSeekKey) =>
       "尚未设置 DeepSeek API 密钥，无法发送。"
     (TraditionalChinese, NoDeepSeekKey) =>
@@ -405,6 +488,8 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "DeepSeek API キーが未設定のため送信できません。"
     (English, CompactContext) =>
       "Summarize and shrink this conversation's context"
+    (Spanish, CompactContext) =>
+      "Resumir y reducir el contexto de esta conversación"
     (SimplifiedChinese, CompactContext) =>
       "总结并压缩此对话的上下文"
     (TraditionalChinese, CompactContext) =>
@@ -412,12 +497,16 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, CompactContext) =>
       "このチャットのコンテキストを要約・圧縮"
     (English, SetGoal) => "Set or clear this conversation's standing goal"
+    (Spanish, SetGoal) =>
+      "Establecer o borrar el objetivo permanente de esta conversación"
     (SimplifiedChinese, SetGoal) => "设置或清除此对话的长期目标"
     (TraditionalChinese, SetGoal) => "設定或清除此對話的長期目標"
     (Japanese, SetGoal) =>
       "このチャットの継続的な目標を設定・解除"
     (English, GoalPlaceholder) =>
       "Describe the standing goal for this conversation — Enter sets it, Esc cancels."
+    (Spanish, GoalPlaceholder) =>
+      "Describe el objetivo permanente de esta conversación; Enter lo establece y Esc cancela."
     (SimplifiedChinese, GoalPlaceholder) =>
       "描述此对话的长期目标，按 Enter 设置，按 Esc 取消。"
     (TraditionalChinese, GoalPlaceholder) =>
@@ -426,6 +515,8 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "このチャットの継続的な目標を入力。Enter で設定、Esc でキャンセル。"
     (English, EditQueuePlaceholder) =>
       "Edit the queued message — Enter saves it."
+    (Spanish, EditQueuePlaceholder) =>
+      "Edita el mensaje en cola; Enter lo guarda."
     (SimplifiedChinese, EditQueuePlaceholder) =>
       "编辑已排队的消息，按 Enter 保存。"
     (TraditionalChinese, EditQueuePlaceholder) =>
@@ -433,6 +524,8 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (Japanese, EditQueuePlaceholder) =>
       "待機中のメッセージを編集。Enter で保存。"
     (English, QueuePlaceholder) => "Queue a follow-up for the next turn."
+    (Spanish, QueuePlaceholder) =>
+      "Añadir un mensaje a la cola para el siguiente turno."
     (SimplifiedChinese, QueuePlaceholder) =>
       "为下一轮任务添加后续消息。"
     (TraditionalChinese, QueuePlaceholder) =>
@@ -441,6 +534,8 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "次のターンへの追加メッセージを入力。"
     (English, SteerPlaceholder) =>
       "Steer the running task — your message joins it at the next step."
+    (Spanish, SteerPlaceholder) =>
+      "Orientar la tarea en curso: tu mensaje se incorporará en el siguiente paso."
     (SimplifiedChinese, SteerPlaceholder) =>
       "引导正在运行的任务，消息将在下一步加入。"
     (TraditionalChinese, SteerPlaceholder) =>
@@ -449,6 +544,8 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "実行中のタスクに指示します。メッセージは次のステップで追加されます。"
     (English, AskPlaceholder) =>
       "Ask SeekMoon to inspect, edit, or explain this workspace."
+    (Spanish, AskPlaceholder) =>
+      "Pide a SeekMoon que examine, edite o explique este espacio de trabajo."
     (SimplifiedChinese, AskPlaceholder) =>
       "让 SeekMoon 检查、编辑或解释此工作区。"
     (TraditionalChinese, AskPlaceholder) =>

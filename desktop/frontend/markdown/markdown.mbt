@@ -687,6 +687,7 @@ fn file_link_node(
       TraditionalChinese => "開啟 \{path}"
       Japanese => "\{path} を開く"
       English => "Open \{path}"
+      Spanish => "Abrir \{path}"
     },
     attrs=@html.Attrs::build().data_set("context-file", path),
     on_click=open(path),

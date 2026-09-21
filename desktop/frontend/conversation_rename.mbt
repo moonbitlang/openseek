@@ -95,6 +95,7 @@ fn rename_conversation(
                 TraditionalChinese => "對話連線不可用"
                 Japanese => "チャットの接続が利用できません"
                 English => "Conversation channel is unavailable"
+                Spanish => "El canal de la conversación no está disponible"
               },
             ),
           ),
@@ -115,6 +116,8 @@ fn rename_conversation(
                     Japanese =>
                       "チャットのワークスペースが利用できません"
                     English => "Conversation workspace is unavailable"
+                    Spanish =>
+                      "El espacio de trabajo de la conversación no está disponible"
                   },
                 ),
               ),
@@ -169,6 +172,8 @@ fn rename_conversation(
                   Japanese =>
                     "このチャットの名前を変更できません"
                   English => "This conversation cannot be renamed"
+                  Spanish =>
+                    "No se puede cambiar el nombre de esta conversación"
                 },
               ),
             ),

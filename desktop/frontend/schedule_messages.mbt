@@ -64,16 +64,21 @@ priv enum UiMessage {
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
     (English, MinutesInteger) => "Enter a whole number of minutes"
+    (Spanish, MinutesInteger) => "Introduce un número entero de minutos"
     (SimplifiedChinese, MinutesInteger) => "请输入整数分钟数"
     (TraditionalChinese, MinutesInteger) => "請輸入整數分鐘數"
     (Japanese, MinutesInteger) => "分数を整数で入力してください"
     (English, TimeoutInteger) => "Enter a whole number for the timeout"
+    (Spanish, TimeoutInteger) =>
+      "Introduce un número entero para el tiempo de espera"
     (SimplifiedChinese, TimeoutInteger) => "请输入整数超时分钟数"
     (TraditionalChinese, TimeoutInteger) => "請輸入整數逾時分鐘數"
     (Japanese, TimeoutInteger) =>
       "タイムアウトの分数を整数で入力してください"
     (English, ScheduleRange) =>
       "Interval: 1–525600 minutes. Timeout: 1–1440 minutes."
+    (Spanish, ScheduleRange) =>
+      "Intervalo: 1–525600 minutos. Tiempo de espera: 1–1440 minutos."
     (SimplifiedChinese, ScheduleRange) =>
       "间隔：1–525600 分钟。超时：1–1440 分钟。"
     (TraditionalChinese, ScheduleRange) =>
@@ -81,12 +86,15 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Japanese, ScheduleRange) =>
       "間隔：1〜525600 分。タイムアウト：1〜1440 分。"
     (English, ScheduleRequired) => "Enter a name and task"
+    (Spanish, ScheduleRequired) => "Introduce un nombre y una tarea"
     (SimplifiedChinese, ScheduleRequired) => "请输入名称和任务"
     (TraditionalChinese, ScheduleRequired) => "請輸入名稱和任務"
     (Japanese, ScheduleRequired) =>
       "名前とタスクを入力してください"
     (English, SessionUnavailable) =>
       "The session record is not available yet, or it has been archived. Check the run status and log."
+    (Spanish, SessionUnavailable) =>
+      "El registro de la sesión aún no está disponible o se ha archivado. Consulta el estado de la ejecución y el registro."
     (SimplifiedChinese, SessionUnavailable) =>
       "会话记录尚不可用，或已被归档。请检查运行状态和日志。"
     (TraditionalChinese, SessionUnavailable) =>
@@ -95,6 +103,8 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "セッションの記録はまだ利用できないか、アーカイブ済みです。実行状態とログを確認してください。"
     (English, LogTooLarge) =>
       "This log is too large to display. Open its saved path with an external viewer."
+    (Spanish, LogTooLarge) =>
+      "Este registro es demasiado grande para mostrarlo. Abre la ruta guardada con un visor externo."
     (SimplifiedChinese, LogTooLarge) =>
       "日志过大，无法显示。请使用外部查看器打开已保存的日志文件。"
     (TraditionalChinese, LogTooLarge) =>
@@ -102,31 +112,39 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Japanese, LogTooLarge) =>
       "ログが大きすぎて表示できません。保存されたログファイルを外部ビューアーで開いてください。"
     (English, LogNotText) => "This log is not a text file"
+    (Spanish, LogNotText) => "Este registro no es un archivo de texto"
     (SimplifiedChinese, LogNotText) => "此日志不是文本文件"
     (TraditionalChinese, LogNotText) => "此日誌不是文字檔案"
     (Japanese, LogNotText) =>
       "このログはテキストファイルではありません"
     (English, RunningLabel) => "Running"
+    (Spanish, RunningLabel) => "En ejecución"
     (SimplifiedChinese, RunningLabel) => "运行中"
     (TraditionalChinese, RunningLabel) => "執行中"
     (Japanese, RunningLabel) => "実行中"
     (English, CompletedLabel) => "Completed"
+    (Spanish, CompletedLabel) => "Completado"
     (SimplifiedChinese, CompletedLabel) => "已完成"
     (TraditionalChinese, CompletedLabel) => "已完成"
     (Japanese, CompletedLabel) => "完了"
     (English, FailedLabel) => "Failed · "
+    (Spanish, FailedLabel) => "Falló · "
     (SimplifiedChinese, FailedLabel) => "失败 · "
     (TraditionalChinese, FailedLabel) => "失敗 · "
     (Japanese, FailedLabel) => "失敗 · "
     (English, StoppedLabel) => "Stopped"
+    (Spanish, StoppedLabel) => "Detenido"
     (SimplifiedChinese, StoppedLabel) => "已停止"
     (TraditionalChinese, StoppedLabel) => "已停止"
     (Japanese, StoppedLabel) => "停止済み"
     (English, TimedOutLabel) => "Timed out"
+    (Spanish, TimedOutLabel) => "Tiempo de espera agotado"
     (SimplifiedChinese, TimedOutLabel) => "已超时"
     (TraditionalChinese, TimedOutLabel) => "已逾時"
     (Japanese, TimedOutLabel) => "タイムアウト"
     (English, InterruptedLabel) => "Interrupted · host stopped; not retried"
+    (Spanish, InterruptedLabel) =>
+      "Interrumpido · host detenido; no se reintentó"
     (SimplifiedChinese, InterruptedLabel) =>
       "已中断 · 主机已停止，未重试"
     (TraditionalChinese, InterruptedLabel) =>
@@ -134,11 +152,14 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Japanese, InterruptedLabel) =>
       "中断済み · ホストが停止したため再試行していません"
     (English, ScheduledTasks) => "Scheduled tasks"
+    (Spanish, ScheduledTasks) => "Tareas programadas"
     (SimplifiedChinese, ScheduledTasks) => "定时任务"
     (TraditionalChinese, ScheduledTasks) => "定時任務"
     (Japanese, ScheduledTasks) => "スケジュールタスク"
     (English, ScheduleDescription) =>
       "Run independent OpenSeek tasks while this host is open. Missed times are skipped. Up to 4 tasks can run together; each plan runs one task at a time."
+    (Spanish, ScheduleDescription) =>
+      "Ejecuta tareas independientes de OpenSeek mientras este host esté abierto. Se omiten las ejecuciones perdidas. Pueden ejecutarse hasta 4 tareas a la vez; cada programación ejecuta una tarea a la vez."
     (SimplifiedChinese, ScheduleDescription) =>
       "在此主机运行期间执行独立的 OpenSeek 任务。已错过的执行时间会跳过。最多可同时运行 4 个任务，每个计划一次运行一个任务。"
     (TraditionalChinese, ScheduleDescription) =>
@@ -146,39 +167,49 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Japanese, ScheduleDescription) =>
       "このホストの起動中に独立した OpenSeek タスクを実行します。過ぎた実行時刻はスキップします。同時に最大 4 タスク、各スケジュールにつき 1 タスクを実行できます。"
     (English, NewSchedule) => "New schedule"
+    (Spanish, NewSchedule) => "Nueva programación"
     (SimplifiedChinese, NewSchedule) => "新建计划"
     (TraditionalChinese, NewSchedule) => "新建計劃"
     (Japanese, NewSchedule) => "新しいスケジュール"
     (English, RefreshLabel) => "Refresh"
+    (Spanish, RefreshLabel) => "Actualizar"
     (SimplifiedChinese, RefreshLabel) => "刷新"
     (TraditionalChinese, RefreshLabel) => "重新整理"
     (Japanese, RefreshLabel) => "更新"
     (English, RunLog) => "Run log"
+    (Spanish, RunLog) => "Registro de ejecución"
     (SimplifiedChinese, RunLog) => "运行日志"
     (TraditionalChinese, RunLog) => "執行日誌"
     (Japanese, RunLog) => "実行ログ"
     (English, CloseLog) => "Close log"
+    (Spanish, CloseLog) => "Cerrar registro"
     (SimplifiedChinese, CloseLog) => "关闭日志"
     (TraditionalChinese, CloseLog) => "關閉日誌"
     (Japanese, CloseLog) => "ログを閉じる"
     (English, AutomaticallyCreate) => "Automatically create"
+    (Spanish, AutomaticallyCreate) => "Crear automáticamente"
     (SimplifiedChinese, AutomaticallyCreate) => "自动创建"
     (TraditionalChinese, AutomaticallyCreate) => "自動建立"
     (Japanese, AutomaticallyCreate) => "自動作成"
     (English, EditSchedule) => "Edit schedule"
+    (Spanish, EditSchedule) => "Editar programación"
     (SimplifiedChinese, EditSchedule) => "编辑计划"
     (TraditionalChinese, EditSchedule) => "編輯計劃"
     (Japanese, EditSchedule) => "スケジュールを編集"
     (English, NameLabel) => "Name"
+    (Spanish, NameLabel) => "Nombre"
     (SimplifiedChinese, NameLabel) => "名称"
     (TraditionalChinese, NameLabel) => "名稱"
     (Japanese, NameLabel) => "名前"
     (English, WorkingDirectory) => "Working directory"
+    (Spanish, WorkingDirectory) => "Directorio de trabajo"
     (SimplifiedChinese, WorkingDirectory) => "工作目录"
     (TraditionalChinese, WorkingDirectory) => "工作目錄"
     (Japanese, WorkingDirectory) => "作業ディレクトリ"
     (English, AutomaticDirectoryDescription) =>
       "OpenSeek creates a dedicated folder on the first run and reuses it to save this task's files and results."
+    (Spanish, AutomaticDirectoryDescription) =>
+      "OpenSeek crea una carpeta dedicada en la primera ejecución y la reutiliza para guardar los archivos y resultados de esta tarea."
     (SimplifiedChinese, AutomaticDirectoryDescription) =>
       "OpenSeek 会在首次运行时创建专用文件夹，并继续用它保存此任务的文件和结果。"
     (TraditionalChinese, AutomaticDirectoryDescription) =>
@@ -187,6 +218,8 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "OpenSeek は初回実行時に専用フォルダーを作成し、以降もタスクのファイルと結果の保存に使用します。"
     (English, ProjectDirectoryDescription) =>
       "This task runs in the selected project folder and can read and update its files."
+    (Spanish, ProjectDirectoryDescription) =>
+      "Esta tarea se ejecuta en la carpeta del proyecto seleccionado y puede leer y actualizar sus archivos."
     (SimplifiedChinese, ProjectDirectoryDescription) =>
       "此任务在所选项目文件夹中运行，可读取和更新其中的文件。"
     (TraditionalChinese, ProjectDirectoryDescription) =>
@@ -194,30 +227,38 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Japanese, ProjectDirectoryDescription) =>
       "このタスクは選択したプロジェクトフォルダーで実行され、その中のファイルを読み取り・更新できます。"
     (English, TaskLabel) => "Task"
+    (Spanish, TaskLabel) => "Tarea"
     (SimplifiedChinese, TaskLabel) => "任务"
     (TraditionalChinese, TaskLabel) => "任務"
     (Japanese, TaskLabel) => "タスク"
     (English, ScheduleLabel) => "Schedule"
+    (Spanish, ScheduleLabel) => "Programación"
     (SimplifiedChinese, ScheduleLabel) => "计划"
     (TraditionalChinese, ScheduleLabel) => "計劃"
     (Japanese, ScheduleLabel) => "スケジュール"
     (English, EveryLabel) => "Every"
+    (Spanish, EveryLabel) => "Cada"
     (SimplifiedChinese, EveryLabel) => "每隔"
     (TraditionalChinese, EveryLabel) => "每隔"
     (Japanese, EveryLabel) => "定期実行"
     (English, OnceIn) => "Once, in"
+    (Spanish, OnceIn) => "Una vez, en"
     (SimplifiedChinese, OnceIn) => "延迟执行一次"
     (TraditionalChinese, OnceIn) => "延遲執行一次"
     (Japanese, OnceIn) => "指定時間後に一度実行"
     (English, MinutesLabel) => "Minutes"
+    (Spanish, MinutesLabel) => "Minutos"
     (SimplifiedChinese, MinutesLabel) => "分钟"
     (TraditionalChinese, MinutesLabel) => "分鐘"
     (Japanese, MinutesLabel) => "分"
     (English, TimeoutMinutes) => "Timeout (minutes)"
+    (Spanish, TimeoutMinutes) => "Tiempo de espera (minutos)"
     (SimplifiedChinese, TimeoutMinutes) => "超时时间（分钟）"
     (TraditionalChinese, TimeoutMinutes) => "逾時時間（分鐘）"
     (Japanese, TimeoutMinutes) => "タイムアウト（分）"
     (English, ModelDefault) => "Model (blank uses host default)"
+    (Spanish, ModelDefault) =>
+      "Modelo (vacío para usar el predeterminado del host)"
     (SimplifiedChinese, ModelDefault) =>
       "模型（留空使用主机默认值）"
     (TraditionalChinese, ModelDefault) =>
@@ -226,6 +267,8 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "モデル（空欄でホストの既定値を使用）"
     (English, SchedulePermissions) =>
       "Uses this host's API settings. Permission escalation is refused in unattended runs."
+    (Spanish, SchedulePermissions) =>
+      "Usa la configuración de API de este host. No se permite ampliar permisos en ejecuciones desatendidas."
     (SimplifiedChinese, SchedulePermissions) =>
       "使用此主机的 API 设置。无人值守运行时不允许提升权限。"
     (TraditionalChinese, SchedulePermissions) =>
@@ -234,6 +277,8 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "このホストの API 設定を使用します。無人実行時の権限昇格は許可されません。"
     (English, RunNowDescription) =>
       "Save and run now executes once immediately without changing the schedule."
+    (Spanish, RunNowDescription) =>
+      "Guardar y ejecutar ahora ejecuta la tarea una vez de inmediato sin cambiar la programación."
     (SimplifiedChinese, RunNowDescription) =>
       "“保存并立即运行”会立即执行一次，不改变计划时间。"
     (TraditionalChinese, RunNowDescription) =>
@@ -241,19 +286,24 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Japanese, RunNowDescription) =>
       "「保存して今すぐ実行」はスケジュール時刻を変更せず、一度実行します。"
     (English, SaveRunNow) => "Save and run now"
+    (Spanish, SaveRunNow) => "Guardar y ejecutar ahora"
     (SimplifiedChinese, SaveRunNow) => "保存并立即运行"
     (TraditionalChinese, SaveRunNow) => "儲存並立即執行"
     (Japanese, SaveRunNow) => "保存して今すぐ実行"
     (English, SaveSchedule) => "Save schedule"
+    (Spanish, SaveSchedule) => "Guardar programación"
     (SimplifiedChinese, SaveSchedule) => "保存计划"
     (TraditionalChinese, SaveSchedule) => "儲存計劃"
     (Japanese, SaveSchedule) => "スケジュールを保存"
     (English, CancelLabel) => "Cancel"
+    (Spanish, CancelLabel) => "Cancelar"
     (SimplifiedChinese, CancelLabel) => "取消"
     (TraditionalChinese, CancelLabel) => "取消"
     (Japanese, CancelLabel) => "キャンセル"
     (English, EmptySchedules) =>
       "No schedules yet. Create one to run a task later or at a fixed interval."
+    (Spanish, EmptySchedules) =>
+      "Aún no hay programaciones. Crea una para ejecutar una tarea más tarde o a intervalos fijos."
     (SimplifiedChinese, EmptySchedules) =>
       "尚无定时计划。创建计划，让任务稍后执行或定期运行。"
     (TraditionalChinese, EmptySchedules) =>
@@ -261,76 +311,95 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Japanese, EmptySchedules) =>
       "スケジュールがありません。タスクを後で、または定期的に実行するスケジュールを作成してください。"
     (English, OnceLabel) => "Once · "
+    (Spanish, OnceLabel) => "Una vez · "
     (SimplifiedChinese, OnceLabel) => "一次 · "
     (TraditionalChinese, OnceLabel) => "一次 · "
     (Japanese, OnceLabel) => "一度 · "
     (English, NextLabel) => "Next: "
+    (Spanish, NextLabel) => "Próxima: "
     (SimplifiedChinese, NextLabel) => "下次："
     (TraditionalChinese, NextLabel) => "下次："
     (Japanese, NextLabel) => "次回："
     (English, WaitingLabel) => "Waiting"
+    (Spanish, WaitingLabel) => "En espera"
     (SimplifiedChinese, WaitingLabel) => "等待中"
     (TraditionalChinese, WaitingLabel) => "等待中"
     (Japanese, WaitingLabel) => "待機中"
     (English, PausedFinished) => "Paused / finished"
+    (Spanish, PausedFinished) => "En pausa / finalizado"
     (SimplifiedChinese, PausedFinished) => "已暂停 / 已结束"
     (TraditionalChinese, PausedFinished) => "已暫停 / 已結束"
     (Japanese, PausedFinished) => "一時停止 / 終了"
     (English, QueuedLabel) => "Queued"
+    (Spanish, QueuedLabel) => "En cola"
     (SimplifiedChinese, QueuedLabel) => "已排队"
     (TraditionalChinese, QueuedLabel) => "已排隊"
     (Japanese, QueuedLabel) => "待機中"
     (English, AutomaticDirectory) => "Automatically created working directory"
+    (Spanish, AutomaticDirectory) =>
+      "Directorio de trabajo creado automáticamente"
     (SimplifiedChinese, AutomaticDirectory) => "自动创建的工作目录"
     (TraditionalChinese, AutomaticDirectory) => "自動建立的工作目錄"
     (Japanese, AutomaticDirectory) =>
       "自動作成された作業ディレクトリ"
     (English, RunNow) => "Run now"
+    (Spanish, RunNow) => "Ejecutar ahora"
     (SimplifiedChinese, RunNow) => "立即运行"
     (TraditionalChinese, RunNow) => "立即執行"
     (Japanese, RunNow) => "今すぐ実行"
     (English, PauseLabel) => "Pause"
+    (Spanish, PauseLabel) => "Pausar"
     (SimplifiedChinese, PauseLabel) => "暂停"
     (TraditionalChinese, PauseLabel) => "暫停"
     (Japanese, PauseLabel) => "一時停止"
     (English, ResumeLabel) => "Resume"
+    (Spanish, ResumeLabel) => "Reanudar"
     (SimplifiedChinese, ResumeLabel) => "继续"
     (TraditionalChinese, ResumeLabel) => "繼續"
     (Japanese, ResumeLabel) => "再開"
     (English, EditLabel) => "Edit"
+    (Spanish, EditLabel) => "Editar"
     (SimplifiedChinese, EditLabel) => "编辑"
     (TraditionalChinese, EditLabel) => "編輯"
     (Japanese, EditLabel) => "編集"
     (English, StopRun) => "Stop run"
+    (Spanish, StopRun) => "Detener ejecución"
     (SimplifiedChinese, StopRun) => "停止运行"
     (TraditionalChinese, StopRun) => "停止執行"
     (Japanese, StopRun) => "実行を停止"
     (English, DeleteLabel) => "Delete"
+    (Spanish, DeleteLabel) => "Eliminar"
     (SimplifiedChinese, DeleteLabel) => "删除"
     (TraditionalChinese, DeleteLabel) => "刪除"
     (Japanese, DeleteLabel) => "削除"
     (English, RunHistory) => "Run history"
+    (Spanish, RunHistory) => "Historial de ejecuciones"
     (SimplifiedChinese, RunHistory) => "运行历史"
     (TraditionalChinese, RunHistory) => "執行歷史"
     (Japanese, RunHistory) => "実行履歴"
     (English, NoRunningTasks) => "No tasks are running."
+    (Spanish, NoRunningTasks) => "No hay tareas en ejecución."
     (SimplifiedChinese, NoRunningTasks) => "没有正在运行的任务。"
     (TraditionalChinese, NoRunningTasks) => "沒有正在執行的任務。"
     (Japanese, NoRunningTasks) => "実行中のタスクはありません。"
     (English, NoFinishedRuns) => "No finished runs yet."
+    (Spanish, NoFinishedRuns) => "Aún no hay ejecuciones finalizadas."
     (SimplifiedChinese, NoFinishedRuns) => "尚无已结束的运行记录。"
     (TraditionalChinese, NoFinishedRuns) => "尚無已結束的執行記錄。"
     (Japanese, NoFinishedRuns) =>
       "終了した実行履歴はまだありません。"
     (English, OpenSession) => "Open session"
+    (Spanish, OpenSession) => "Abrir sesión"
     (SimplifiedChinese, OpenSession) => "打开会话"
     (TraditionalChinese, OpenSession) => "開啟會話"
     (Japanese, OpenSession) => "セッションを開く"
     (English, ViewLog) => "View log"
+    (Spanish, ViewLog) => "Ver registro"
     (SimplifiedChinese, ViewLog) => "查看日志"
     (TraditionalChinese, ViewLog) => "檢視日誌"
     (Japanese, ViewLog) => "ログを表示"
     (English, LogLabel) => "Log: "
+    (Spanish, LogLabel) => "Registro: "
     (SimplifiedChinese, LogLabel) => "日志："
     (TraditionalChinese, LogLabel) => "日誌："
     (Japanese, LogLabel) => "ログ："

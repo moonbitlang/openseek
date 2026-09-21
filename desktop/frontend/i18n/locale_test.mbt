@@ -7,6 +7,7 @@ test "language preference round trips and invalid values stay absent" {
       @i18n.SimplifiedChinese,
       @i18n.TraditionalChinese,
       @i18n.Japanese,
+      @i18n.Spanish,
     ] {
     assert_eq(@i18n.Preference::parse(preference.wire()), Some(preference))
   }
@@ -65,4 +66,17 @@ test "traditional Chinese follows script region order and explicit preference" {
     @i18n.Locale::TraditionalChinese,
   )
   assert_eq(@i18n.Locale::TraditionalChinese.tag(), "zh-Hant")
+}
+
+///|
+test "Spanish matches regional variants and respects preference order" {
+  let system = @i18n.Preference::System
+  for tag in ["es", "es-ES", "es-MX", "es-419", "ES-ar"] {
+    assert_eq(system.resolve([tag]), @i18n.Locale::Spanish)
+  }
+  assert_eq(system.resolve(["fr", "es-MX", "en"]), @i18n.Locale::Spanish)
+  assert_eq(system.resolve(["en", "es"]), @i18n.Locale::English)
+  assert_eq(system.resolve(["ja", "es"]), @i18n.Locale::Japanese)
+  assert_eq(@i18n.Preference::Spanish.resolve(["en"]), @i18n.Locale::Spanish)
+  assert_eq(@i18n.Locale::Spanish.tag(), "es")
 }

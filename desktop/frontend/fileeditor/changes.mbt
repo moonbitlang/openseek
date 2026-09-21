@@ -260,6 +260,8 @@ fn ChangedFile::unselectable_title(
       Japanese =>
         "Git サブモジュールです。個別にチェックアウトを開いてください"
       English => "Git submodule; open its nested checkout separately"
+      Spanish =>
+        "Submódulo de Git; abre su copia de trabajo anidada por separado"
     }
   } else if self.kind is ChangeSymlink {
     match locale {
@@ -268,6 +270,7 @@ fn ChangedFile::unselectable_title(
       Japanese =>
         "Git シンボリックリンクです。リンク先を開く操作は無効です"
       English => "Git symlink; opening its target is disabled"
+      Spanish => "Enlace simbólico de Git; no está permitido abrir su destino"
     }
   } else if self.path.0.has_suffix("/") {
     match locale {
@@ -277,6 +280,8 @@ fn ChangedFile::unselectable_title(
       Japanese =>
         "未追跡のディレクトリです。個別にチェックアウトを開いてください"
       English => "untracked directory; open its nested checkout separately"
+      Spanish =>
+        "directorio sin seguimiento; abre su copia de trabajo anidada por separado"
     }
   } else {
     match locale {
@@ -284,6 +289,7 @@ fn ChangedFile::unselectable_title(
       TraditionalChinese => "無法預覽此更改"
       Japanese => "この変更をプレビューできません"
       English => "change cannot be previewed"
+      Spanish => "no se puede previsualizar el cambio"
     }
   }
   self.status_title() + " — " + reason

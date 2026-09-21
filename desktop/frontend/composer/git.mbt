@@ -290,6 +290,8 @@ fn GitChanges::render(
         TraditionalChinese => "\{counted}，其餘未跟蹤檔案未計入"
         Japanese => "\{counted}、残りの未追跡ファイルは未集計"
         English => "\{counted}, untracked tail uncounted"
+        Spanish =>
+          "\{counted}, sin contar los archivos restantes sin seguimiento"
       },
     )
   } else {
@@ -299,6 +301,7 @@ fn GitChanges::render(
         TraditionalChinese => "其餘未跟蹤檔案未計入"
         Japanese => "残りの未追跡ファイルは未集計"
         English => "untracked tail uncounted"
+        Spanish => "archivos restantes sin seguimiento no contados"
       },
     )
   }

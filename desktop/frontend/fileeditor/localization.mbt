@@ -7,6 +7,7 @@ let viewer_localization : @localization.Localization = @localization.Localizatio
 fn viewer_locale() -> @i18n.Locale {
   match viewer_localization.language() {
     English => English
+    Spanish => Spanish
     SimplifiedChinese => SimplifiedChinese
     TraditionalChinese => TraditionalChinese
     Japanese => Japanese
@@ -19,6 +20,7 @@ pub fn apply_language(locale : @i18n.Locale) -> @cmd.Cmd {
     viewer_localization.set_language(
       match locale {
         English => @localization.English
+        Spanish => @localization.Spanish
         SimplifiedChinese => @localization.SimplifiedChinese
         TraditionalChinese => @localization.TraditionalChinese
         Japanese => @localization.Japanese
@@ -41,7 +43,9 @@ pub fn apply_language(locale : @i18n.Locale) -> @cmd.Cmd {
 fn file_placeholder(markdown : Bool) -> String {
   match (viewer_localization.language(), markdown) {
     (English, false) => "Select a file to view"
+    (Spanish, false) => "Selecciona un archivo para verlo"
     (English, true) => "Select a Markdown file to view"
+    (Spanish, true) => "Selecciona un archivo Markdown para verlo"
     (SimplifiedChinese, false) => "选择要查看的文件"
     (TraditionalChinese, false) => "選擇要檢視的檔案"
     (Japanese, false) => "表示するファイルを選択"

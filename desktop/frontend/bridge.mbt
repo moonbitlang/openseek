@@ -1268,6 +1268,7 @@ fn queue_openseek(
                     Japanese =>
                       "キュー内のメッセージは利用できなくなりました。"
                     English => "The queued message is no longer available."
+                    Spanish => "El mensaje en cola ya no está disponible."
                   },
                 ),
               )
@@ -1280,6 +1281,7 @@ fn queue_openseek(
                     Japanese =>
                       "キュー内のメッセージは利用できなくなりました。"
                     English => "The queued message is no longer available."
+                    Spanish => "El mensaje en cola ya no está disponible."
                   },
                 ),
               )
@@ -1489,6 +1491,7 @@ fn cancel_openseek(
                       TraditionalChinese => "無法取消執行："
                       Japanese => "実行をキャンセルできません："
                       English => "Failed to cancel the run: "
+                      Spanish => "No se pudo cancelar la ejecución: "
                     }) +
                     @interop.bridge_error_text(error),
                 ),
@@ -1546,6 +1549,8 @@ fn approve_openseek(
                   TraditionalChinese => "無法回覆審批請求："
                   Japanese => "承認要求に応答できません："
                   English => "Failed to answer the approval request: "
+                  Spanish =>
+                    "No se pudo responder a la solicitud de aprobación: "
                 }) +
                 @interop.bridge_error_text(error),
               ),
@@ -1571,6 +1576,8 @@ fn approve_openseek(
                   "この承認要求のターンは終了しているため、承認は不要です。"
                 English =>
                   "That approval request is no longer waiting — the turn it belonged to has ended."
+                Spanish =>
+                  "Esta solicitud de aprobación ya no está pendiente: el turno al que pertenecía ha terminado."
               },
             ),
           ),
@@ -1649,6 +1656,7 @@ fn open_codex_config(
                   TraditionalChinese => "Codex 配置："
                   Japanese => "Codex 設定："
                   English => "Codex config: "
+                  Spanish => "Configuración de Codex: "
                 }) +
                 @interop.bridge_error_text(error),
               ),

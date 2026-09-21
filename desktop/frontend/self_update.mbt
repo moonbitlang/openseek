@@ -65,6 +65,7 @@ fn UpdateDownloadProgress::sidebar_label(
         TraditionalChinese => "正在下載 \{percent}%"
         Japanese => "ダウンロード中 \{percent}%"
         English => "Downloading \{percent}%"
+        Spanish => "Descargando \{percent}%"
       }
     None =>
       match locale {
@@ -72,6 +73,7 @@ fn UpdateDownloadProgress::sidebar_label(
         TraditionalChinese => "正在下載…"
         Japanese => "ダウンロード中…"
         English => "Downloading…"
+        Spanish => "Descargando…"
       }
   }
 }

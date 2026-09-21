@@ -625,7 +625,8 @@ fn workbench_update(
         English => SimplifiedChinese
         SimplifiedChinese => TraditionalChinese
         TraditionalChinese => Japanese
-        Japanese => English
+        Japanese => Spanish
+        Spanish => English
       }
       (
         @cmd.custom_cmd(_ => workbench_localization.set_language(ui_language)),
@@ -1271,7 +1272,8 @@ fn view_sidebar(
               English => "中"
               SimplifiedChinese => "繁"
               TraditionalChinese => "日"
-              Japanese => "EN"
+              Japanese => "ES"
+              Spanish => "EN"
             },
           ),
           @html.button(

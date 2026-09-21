@@ -203,6 +203,7 @@ pub fn State::handle(
             TraditionalChinese => "無法建立資料夾：\{message}"
             Japanese => "フォルダーを作成できません：\{message}"
             English => "Cannot create folder: \{message}"
+            Spanish => "No se pudo crear la carpeta: \{message}"
           }
         } else {
           match locale {
@@ -210,6 +211,7 @@ pub fn State::handle(
             TraditionalChinese => "無法開啟資料夾：\{message}"
             Japanese => "フォルダーを開けません：\{message}"
             English => "Cannot open folder: \{message}"
+            Spanish => "No se pudo abrir la carpeta: \{message}"
           }
         }
         (

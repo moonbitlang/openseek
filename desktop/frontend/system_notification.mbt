@@ -54,6 +54,7 @@ fn FinishedSystemNotification::title(
           TraditionalChinese => "任務已完成"
           Japanese => "タスクが完了しました"
           English => "Task finished"
+          Spanish => "Tarea finalizada"
         },
       )
     "cancelled" => None
@@ -65,6 +66,7 @@ fn FinishedSystemNotification::title(
           Japanese =>
             "ステップ数の上限に達したためタスクを停止しました"
           English => "Task stopped at the step limit"
+          Spanish => "La tarea se detuvo al alcanzar el límite de pasos"
         },
       )
     _ =>
@@ -74,6 +76,7 @@ fn FinishedSystemNotification::title(
           TraditionalChinese => "任務失敗"
           Japanese => "タスクが失敗しました"
           English => "Task failed"
+          Spanish => "La tarea falló"
         },
       )
   }
@@ -92,6 +95,7 @@ fn FinishedSystemNotification::body(
       Japanese =>
         "チャットの準備ができました。ご確認ください。"
       English => "The conversation is ready for you."
+      Spanish => "La conversación está lista para ti."
     }
   }
   truncate_notification_body(answer)
@@ -207,6 +211,7 @@ fn ApprovalSystemNotification::title(
     TraditionalChinese => "需要授權"
     Japanese => "許可が必要です"
     English => "Permission required"
+    Spanish => "Se requiere permiso"
   }
 }
 
@@ -222,6 +227,7 @@ fn ApprovalSystemNotification::body(
       Japanese =>
         "\{self.tool_name} が許可を要求しています：\{self.detail}"
       English => "\{self.tool_name} is asking permission to \{self.detail}"
+      Spanish => "\{self.tool_name} solicita permiso para \{self.detail}"
     },
   )
 }

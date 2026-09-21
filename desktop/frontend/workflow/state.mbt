@@ -372,6 +372,7 @@ pub fn row_status(
             TraditionalChinese => "狀態未確定"
             Japanese => "状態未確定"
             English => "unresolved"
+            Spanish => "sin resolver"
           },
           "failed",
         )
@@ -382,6 +383,7 @@ pub fn row_status(
             TraditionalChinese => "執行中"
             Japanese => "実行中"
             English => "running"
+            Spanish => "en ejecución"
           },
           "running",
         )
@@ -393,6 +395,7 @@ pub fn row_status(
           TraditionalChinese => "已完成"
           Japanese => "完了"
           English => "done"
+          Spanish => "completado"
         },
         "done",
       )
@@ -424,6 +427,14 @@ pub fn row_status(
               _ => other.replace_all(old="_", new=" ")
             }
           English => other.replace_all(old="_", new=" ")
+          Spanish =>
+            match other {
+              "failed" => "falló"
+              "timed_out" => "tiempo de espera agotado"
+              "cancelled" | "canceled" => "cancelado"
+              "interrupted" => "interrumpido"
+              _ => other.replace_all(old="_", new=" ")
+            }
         },
         "failed",
       )

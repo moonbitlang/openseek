@@ -30,6 +30,7 @@ pub fn card(
           TraditionalChinese => "計劃已清空"
           Japanese => "計画をクリアしました"
           English => "plan cleared"
+          Spanish => "plan borrado"
         },
       ),
     ])
@@ -153,6 +154,7 @@ fn status_cell(locale? : @i18n.Locale = English, status : Status) -> @html.Html 
           TraditionalChinese => "待處理"
           Japanese => "保留中"
           English => "pending"
+          Spanish => "pendiente"
         },
         "○",
       )
@@ -164,6 +166,7 @@ fn status_cell(locale? : @i18n.Locale = English, status : Status) -> @html.Html 
           TraditionalChinese => "進行中"
           Japanese => "進行中"
           English => "in_progress"
+          Spanish => "en curso"
         },
         "◐",
       )
@@ -175,6 +178,7 @@ fn status_cell(locale? : @i18n.Locale = English, status : Status) -> @html.Html 
           TraditionalChinese => "已完成"
           Japanese => "完了"
           English => "completed"
+          Spanish => "completado"
         },
         "✓",
       )

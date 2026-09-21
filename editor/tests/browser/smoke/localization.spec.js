@@ -28,5 +28,12 @@ test('host language updates a mounted editor and its context menu', async ({ pag
   await expect(page.getByRole('menuitem', { name: /定義へ移動/ })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.locator('[data-action="toggle-ui-language"]').click();
+  await expect(page.getByLabel('Visor de código de solo lectura', { exact: true })).toBeVisible();
+  expect(await page.locator('.view-lines').first().innerText()).toBe(source);
+  await page.locator('.view-line').first().click({ button: 'right' });
+  await expect(page.getByRole('menu', { name: 'Menú contextual del editor', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Ir a la definición/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.locator('[data-action="toggle-ui-language"]').click();
   await expect(page.getByLabel('Readonly code viewer', { exact: true })).toBeVisible();
 });

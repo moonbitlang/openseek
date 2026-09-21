@@ -34,6 +34,12 @@ fn changes_label(
     TraditionalChinese => return "更改 · \{files.length()} 個檔案"
     Japanese => return "変更 · \{files.length()} ファイル"
     English => ()
+    Spanish =>
+      return if files.length() == 1 {
+        "Cambios · 1 archivo"
+      } else {
+        "Cambios · \{files.length()} archivos"
+      }
   }
   "Changes · \{files.length()} \{if files.length() == 1 { "file" } else { "files" }}"
 }

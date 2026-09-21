@@ -31,3 +31,20 @@ test "traditional Chinese updates a shared source and localized labels" {
   binding.dispose()
   source.dispose()
 }
+
+///|
+test "Spanish updates a shared source without affecting another host" {
+  let source = @localization.Localization()
+  let other = @localization.Localization()
+  let labels = []
+  let binding = source.bind(language => {
+    labels.push(@localization.text(language, GoDefinition))
+  })
+  source.set_language(Spanish)
+  assert_eq(labels, ["Go to Definition", "Ir a la definición"])
+  assert_eq(source.text(ReadonlyCode), "Visor de código de solo lectura")
+  assert_eq(other.language(), English)
+  binding.dispose()
+  source.dispose()
+  other.dispose()
+}

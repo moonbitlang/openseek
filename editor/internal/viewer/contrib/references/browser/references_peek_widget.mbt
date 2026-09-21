@@ -81,6 +81,7 @@ pub fn ReferencesPeekWidget::ReferencesPeekWidget(
       TraditionalChinese => "關閉"
       Japanese => "閉じる"
       English => "Close "
+      Spanish => "Cerrar "
     }) +
     references_peek_dialog_label(localization~, mode),
   )
@@ -425,6 +426,7 @@ fn ReferencesPeekWidget::set_result_count(
             TraditionalChinese => "1 個結果"
             Japanese => "1 件の結果"
             English => "1 result"
+            Spanish => "1 resultado"
           }
         } else {
           count.to_string() +
@@ -433,6 +435,7 @@ fn ReferencesPeekWidget::set_result_count(
             TraditionalChinese => " 個結果"
             Japanese => " 件の結果"
             English => " results"
+            Spanish => " resultados"
           })
         },
       )

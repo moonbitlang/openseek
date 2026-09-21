@@ -118,6 +118,7 @@ pub fn page_label(page : PageState, locale? : @i18n.Locale = English) -> String 
         TraditionalChinese => "新標籤頁"
         Japanese => "新しいタブ"
         English => "New Tab"
+        Spanish => "Nueva pestaña"
       }
   }
 }

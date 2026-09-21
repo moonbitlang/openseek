@@ -45,3 +45,14 @@ test "menu wraps selection and exposes the selected row" {
   inspect(current, content="b")
   inspect(menu.shifted(1).shifted(1).shifted(1).selected(), content="0")
 }
+
+///|
+test "Spanish check summaries preserve counts and plural agreement" {
+  let single = @composer.GitChecks(passed=1, failed=1, pending=0)
+  assert_eq(single.summary(locale=@i18n.Spanish), "1 fallida · 1 superada")
+  let multiple = @composer.GitChecks(passed=3, failed=2, pending=4)
+  assert_eq(
+    multiple.summary(locale=@i18n.Spanish),
+    "2 fallidas · 4 en ejecución · 3 superadas",
+  )
+}

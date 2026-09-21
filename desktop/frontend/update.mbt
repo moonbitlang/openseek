@@ -4643,6 +4643,7 @@ fn update_msg(
                     TraditionalChinese => "重新命名失敗："
                     Japanese => "名前を変更できませんでした："
                     English => "Rename failed: "
+                    Spanish => "No se pudo cambiar el nombre: "
                   }) +
                   message,
                 ),
@@ -6049,6 +6050,8 @@ fn update_device_msg(
               "SeekMoon に接続できません。SeekMoon が起動していることを確認して、このページを開き直してください。"
             English =>
               "Can't reach SeekMoon. Make sure SeekMoon is running, then reopen this page."
+            Spanish =>
+              "No se puede conectar con SeekMoon. Comprueba que esté en ejecución y vuelve a abrir esta página."
           },
         )
       } else {
@@ -6248,6 +6251,8 @@ fn update_device_msg(
                 "送信時にタスクが終了したため、メッセージをキューに追加せず入力欄に戻しました。"
               English =>
                 "Message was not queued (the task ended as you sent it) — it is back in the composer."
+              Spanish =>
+                "El mensaje no se añadió a la cola (la tarea terminó mientras lo enviabas); está de nuevo en el cuadro de redacción."
             },
           )
         } else {
@@ -8321,6 +8326,7 @@ fn update_device_msg(
             TraditionalChinese => "無法確認目標是否已送達（"
             Japanese => "目標が届いたか確認できません（"
             English => "Goal delivery could not be confirmed ("
+            Spanish => "No se pudo confirmar la entrega del objetivo ("
           }) +
           message +
           ")" +

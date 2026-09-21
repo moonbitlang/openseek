@@ -168,6 +168,7 @@ fn failure_marker(
             TraditionalChinese => "構建錯誤"
             Japanese => "ビルドエラー"
             English => "build error"
+            Spanish => "error de compilación"
           },
         ),
       )
@@ -180,6 +181,7 @@ fn failure_marker(
             TraditionalChinese => "執行錯誤"
             Japanese => "実行エラー"
             English => "runtime error"
+            Spanish => "error de ejecución"
           },
         ),
       )
@@ -192,6 +194,7 @@ fn failure_marker(
             TraditionalChinese => "失敗"
             Japanese => "失敗"
             English => "failed"
+            Spanish => "falló"
           },
         ),
       )

@@ -83,6 +83,14 @@ fn run_view(
             "未終了"
           }
         English => state
+        Spanish =>
+          if run.closed {
+            "finalizado"
+          } else if running > 0 {
+            "en ejecución"
+          } else {
+            "abierto"
+          }
       },
     ),
     @html.span(
@@ -95,6 +103,12 @@ fn run_view(
           "サブエージェント \{rows.length()}/\{run.child_count}"
         English =>
           "\{rows.length()} of \{run.child_count} subagent\{plural(rows.length())}"
+        Spanish =>
+          if run.child_count == 1 {
+            "\{rows.length()} de \{run.child_count} subagente"
+          } else {
+            "\{rows.length()} de \{run.child_count} subagentes"
+          }
       },
     ),
   ]
@@ -139,6 +153,12 @@ fn row_view(
           TraditionalChinese => "\{row.steps} 步"
           Japanese => "\{row.steps} ステップ"
           English => "\{row.steps} step\{plural(row.steps)}"
+          Spanish =>
+            if row.steps == 1 {
+              "\{row.steps} paso"
+            } else {
+              "\{row.steps} pasos"
+            }
         },
       ),
     )
@@ -167,6 +187,7 @@ fn row_view(
       TraditionalChinese => "開啟 \{row.child}"
       Japanese => "\{row.child} を開く"
       English => "Open \{row.child}"
+      Spanish => "Abrir \{row.child}"
     },
     on_click=(actions.open_child)(row.child),
     [

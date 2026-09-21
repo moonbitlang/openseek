@@ -434,6 +434,7 @@ fn update_schedules(
                         TraditionalChinese => "已記錄的失敗：\n"
                         Japanese => "記録されたエラー：\n"
                         English => "Recorded failure:\n"
+                        Spanish => "Fallo registrado:\n"
                       }) +
                       message +
                       (match model.locale {
@@ -442,6 +443,7 @@ fn update_schedules(
                         Japanese =>
                           "\n\nログを読み取れませんでした：\n"
                         English => "\n\nLog could not be read:\n"
+                        Spanish => "\n\nNo se pudo leer el registro:\n"
                       }) +
                       error,
                     ),

@@ -135,6 +135,7 @@ fn Selection::read(
                   TraditionalChinese => "無法讀取圖片：\{error}"
                   Japanese => "画像を読み取れません：\{error}"
                   English => "Could not read images: \{error}"
+                  Spanish => "No se pudieron leer las imágenes: \{error}"
                 },
               ),
             ),
@@ -161,6 +162,7 @@ async fn Selection::load(
         Japanese =>
           "メッセージには最大 4 枚の画像を添付できます。"
         English => "Attach up to 4 images per message."
+        Spanish => "Adjunta hasta 4 imágenes por mensaje."
       },
     )
   }
@@ -175,6 +177,7 @@ async fn Selection::load(
           Japanese =>
             "画像は 1 枚あたり 5 MiB 以下にしてください：\{file.name()}"
           English => "Each image must be 5 MiB or smaller: \{file.name()}"
+          Spanish => "Cada imagen debe ocupar 5 MiB o menos: \{file.name()}"
         },
       )
     }
@@ -185,6 +188,7 @@ async fn Selection::load(
           TraditionalChinese => "圖片為空：\{file.name()}"
           Japanese => "画像が空です：\{file.name()}"
           English => "Image is empty: \{file.name()}"
+          Spanish => "La imagen está vacía: \{file.name()}"
         },
       )
     }
@@ -200,6 +204,7 @@ async fn Selection::load(
             Japanese =>
               "PNG、JPEG、WebP または GIF の画像を選択してください：\{file.name()}"
             English => "Choose PNG, JPEG, WebP or GIF images: \{file.name()}"
+            Spanish => "Elige imágenes PNG, JPEG, WebP o GIF: \{file.name()}"
           },
         )
     }

@@ -3,7 +3,7 @@
 `Localization` is a host-owned language source for editor controls. Pass one
 source to `ViewerServices` to share a language across code, Markdown and diff
 viewers, or create independent sources for independent embeds. The default is
-English; Simplified Chinese, Traditional Chinese and Japanese are also available.
+English; Simplified Chinese, Traditional Chinese, Japanese and Spanish are also available.
 Document text, provider diagnostics and custom command titles remain owned by
 their producers.
 

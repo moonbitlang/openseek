@@ -189,6 +189,7 @@ fn AgentFeedbackEditorWidget::update_title(
         TraditionalChinese => "\{self.comments.length()} 條評論"
         Japanese => "\{self.comments.length()} 件のコメント"
         English => "\{self.comments.length().to_string()} comments"
+        Spanish => "\{self.comments.length()} comentarios"
       },
     )
   }
@@ -286,6 +287,7 @@ fn AgentFeedbackEditorWidget::build_item(
         TraditionalChinese => "第 \{range.start_line_number} 行"
         Japanese => "\{range.start_line_number} 行"
         English => "Line \{range.start_line_number.to_string()}"
+        Spanish => "Línea \{range.start_line_number}"
       },
     )
   } else {
@@ -298,6 +300,8 @@ fn AgentFeedbackEditorWidget::build_item(
         Japanese => "\{range.start_line_number}〜\{range.end_line_number} 行"
         English =>
           "Lines \{range.start_line_number.to_string()}-\{range.end_line_number.to_string()}"
+        Spanish =>
+          "Líneas \{range.start_line_number}–\{range.end_line_number}"
       },
     )
   }

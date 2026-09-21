@@ -144,6 +144,7 @@ fn extension_label(
         TraditionalChinese => "無副檔名"
         Japanese => "拡張子なし"
         English => "No extension"
+        Spanish => "Sin extensión"
       }
   }
 }

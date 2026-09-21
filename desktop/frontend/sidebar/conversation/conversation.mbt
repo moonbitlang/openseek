@@ -443,6 +443,7 @@ pub fn component(
               TraditionalChinese => "在工作樹 \{name} 中執行"
               Japanese => "ワークツリー \{name} で実行"
               English => "Runs in worktree \{name}"
+              Spanish => "Se ejecuta en el worktree \{name}"
             },
           ),
           @icons.icon(@icons.icon_worktree),

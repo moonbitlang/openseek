@@ -423,6 +423,7 @@ fn definition_no_result_message(
         TraditionalChinese => "未找到“\{word.word}”的定義"
         Japanese => "「\{word.word}」の定義が見つかりません"
         English => "No definition found for '\{word.word}'"
+        Spanish => "No se encontró ninguna definición de «\{word.word}»"
       }
     _ => localization.text(NoDefinition)
   }

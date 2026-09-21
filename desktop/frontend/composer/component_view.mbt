@@ -292,6 +292,7 @@ fn Entry::view(
         if message == "Attach up to 4 images per message." {
           match locale {
             English => message
+            Spanish => "Adjunta hasta 4 imágenes por mensaje."
             SimplifiedChinese => "每条消息最多可附加 4 张图片。"
             TraditionalChinese => "每條訊息最多可附加 4 張圖片。"
             Japanese =>

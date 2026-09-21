@@ -258,3 +258,63 @@ test('Traditional Chinese system startup yields to an explicit saved choice', as
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
   expect(app.pageErrors).toEqual([]);
 });
+
+test('Spanish selection persists and covers feature pages at a narrow viewport', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('#language-select').click();
+  await page.getByRole('option', { name: 'Español', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+  await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Guardar clave de API', exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('es');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.screenshot({ path: testInfo.outputPath('spanish-settings.png') });
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['en-US'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
+  await page.getByRole('button', { name: 'Habilidades', exact: true }).click();
+  await expect(page.getByPlaceholder('Buscar habilidades…')).toBeVisible();
+  await page.getByRole('button', { name: 'Tareas programadas', exact: true }).click();
+  await page.getByRole('button', { name: 'Nueva programación', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Guardar programación', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('spanish-schedule.png') });
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Spanish system preferences preserve the palette and mounted editor contents', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openQuickOpen();
+  const input = page.locator('#quick-open-input');
+  await input.fill('main');
+  const result = page.getByRole('option', { name: /main\.mbt/ });
+  await expect(result).toHaveAttribute('aria-selected', 'true');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['fr', 'es-MX', 'en'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(page.getByRole('dialog', { name: 'Buscar archivos del espacio de trabajo' })).toBeVisible();
+  await expect(input).toHaveValue('main');
+  await expect(input).toBeFocused();
+  await expect(result).toHaveAttribute('aria-selected', 'true');
+  await input.press('Enter');
+  await expect(page.getByLabel('Visor de código de solo lectura', { exact: true })).toBeVisible();
+  const source = await page.locator('.view-lines').first().innerText();
+  await expect(page.getByRole('button', { name: 'Enviar', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['en', 'es-MX'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(page.getByLabel('Readonly code viewer', { exact: true })).toBeVisible();
+  expect(await page.locator('.view-lines').first().innerText()).toBe(source);
+  expect(app.pageErrors).toEqual([]);
+});

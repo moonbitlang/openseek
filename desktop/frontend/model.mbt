@@ -127,8 +127,11 @@ fn OpenSeekReasoning::label(
     (TraditionalChinese, ReasoningMax) => "最高"
     (Japanese, ReasoningMax) => "最大"
     (English, ReasoningOff) => "Off"
+    (Spanish, ReasoningOff) => "Desactivado"
     (English, ReasoningHigh) => "High"
+    (Spanish, ReasoningHigh) => "Alto"
     (English, ReasoningMax) => "Max"
+    (Spanish, ReasoningMax) => "Máximo"
   }
 }
 
@@ -146,6 +149,7 @@ fn OpenSeekReasoning::label_for_model(
       TraditionalChinese => "低"
       Japanese => "低"
       English => "Low"
+      Spanish => "Bajo"
     }
   } else {
     self.label(locale~)
@@ -4366,6 +4370,15 @@ fn RunOutcome::label(
         Unknown(wire) => if wire.is_blank() { "終了済み" } else { wire }
       }
     English => ()
+    Spanish =>
+      return match self {
+        Completed => "Finalizado"
+        ContextYield => "Límite de contexto alcanzado"
+        Aborted => "Cancelado"
+        RunFailed => "Falló"
+        MaxStepsExhausted => "Máximo de pasos alcanzado"
+        Unknown(wire) => if wire.is_blank() { "Terminado" } else { wire }
+      }
   }
   match self {
     Completed => "Finished"
@@ -4464,6 +4477,21 @@ fn Status::label(self : Status, locale? : @i18n.Locale = English) -> String {
         Unavailable(message) => message
       }
     English => ()
+    Spanish =>
+      return match self {
+        WaitingBridge => "Esperando conexión con el puente"
+        Ready => "Listo"
+        SetupRequired => "Se requiere configuración"
+        ApiKeyRequired => "Se requiere una clave de API"
+        Starting => "Iniciando"
+        Running => "En ejecución"
+        Cancelling => "Cancelando"
+        Step(step) => if step is Some(step) { "Paso \{step}" } else { "Paso" }
+        Failed => "Falló"
+        Errored => "Error"
+        Finished(outcome) => outcome.label(locale~)
+        Unavailable(message) => message
+      }
   }
   match self {
     WaitingBridge => "Waiting for bridge"

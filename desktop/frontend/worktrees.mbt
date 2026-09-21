@@ -149,6 +149,8 @@ fn start_in_new_worktree(
                         "デスクトップホストが応答しないため、ワークツリーを作成できません。再試行するか、このチャットをローカルに切り替えてください。"
                       English =>
                         "Couldn’t create the worktree because the desktop host did not respond. Retry, or switch this chat to Local."
+                      Spanish =>
+                        "No se pudo crear el worktree porque el host de escritorio no respondió. Reintenta o cambia esta conversación al modo Local."
                     },
                   ),
                 ),
@@ -170,6 +172,7 @@ fn start_in_new_worktree(
                         Japanese =>
                           "ワークツリーを作成できません。"
                         English => "Couldn’t create the worktree. "
+                        Spanish => "No se pudo crear el worktree. "
                       }) +
                       message,
                   ),
@@ -195,6 +198,8 @@ fn start_in_new_worktree(
                       "ホストからの応答が不完全なため、ワークツリーを作成できません。再試行するか、このチャットをローカルに切り替えてください。"
                     English =>
                       "Couldn’t create the worktree because the host returned an incomplete reply. Retry, or switch this chat to Local."
+                    Spanish =>
+                      "No se pudo crear el worktree porque el host devolvió una respuesta incompleta. Reintenta o cambia esta conversación al modo Local."
                   },
                 ),
               ),
@@ -323,6 +328,8 @@ fn set_goal_in_new_worktree(
                         "デスクトップホストが応答しないため、ワークツリーの作成を確認できません。このチャットはすでに新しいワークツリーに関連付けられている可能性があります。目標は送信されていません。"
                       English =>
                         "Couldn’t confirm worktree creation because the desktop host did not respond. This chat may already be bound to the new worktree; the goal was not sent."
+                      Spanish =>
+                        "No se pudo confirmar la creación del worktree porque el host de escritorio no respondió. Es posible que esta conversación ya esté asociada al nuevo worktree; el objetivo no se envió."
                     },
                   ),
                 ),
@@ -345,6 +352,7 @@ fn set_goal_in_new_worktree(
                         Japanese =>
                           "ワークツリーを作成できません。"
                         English => "Couldn’t create the worktree. "
+                        Spanish => "No se pudo crear el worktree. "
                       }) +
                       message,
                   ),
@@ -369,6 +377,8 @@ fn set_goal_in_new_worktree(
                       "ホストからの応答が不完全なため、ワークツリーを作成できません。目標は送信されていません。"
                     English =>
                       "Couldn’t create the worktree because the host returned an incomplete reply. The goal was not sent."
+                    Spanish =>
+                      "No se pudo crear el worktree porque el host devolvió una respuesta incompleta. El objetivo no se envió."
                   },
                 ),
               ),
@@ -434,6 +444,8 @@ fn repair_worktree_cmd(
                     "デスクトップホストが応答しないため、ワークツリーを修復できません。再試行するか、このチャットをアーカイブしてください。"
                   English =>
                     "Couldn’t repair the worktree because the desktop host did not respond. Retry, or archive this chat."
+                  Spanish =>
+                    "No se pudo reparar el worktree porque el host de escritorio no respondió. Reintenta o archiva esta conversación."
                 },
               ),
             ),
@@ -450,6 +462,7 @@ fn repair_worktree_cmd(
                 TraditionalChinese => "無法修復工作樹。"
                 Japanese => "ワークツリーを修復できません。"
                 English => "Couldn’t repair the worktree. "
+                Spanish => "No se pudo reparar el worktree. "
               }) +
               message,
             ),

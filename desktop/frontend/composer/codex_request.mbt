@@ -484,6 +484,7 @@ fn CodexRequestInput::render(
             TraditionalChinese => "工具要求的 JSON 內容"
             Japanese => "ツールが要求する JSON の内容"
             English => "JSON content required by the tool"
+            Spanish => "Contenido JSON requerido por la herramienta"
           },
           on_input=action_emit.map(value => {
             CodexRequestAnswerChanged(

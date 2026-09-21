@@ -21,14 +21,24 @@ fn tool_display_label(
 ) -> String {
   if name == "goal" {
     for
-      (en, zh, ja) in [
-        ("Goal set", "已设定目标", "目標を設定しました"),
-        ("Goal cleared", "已清除目标", "目標をクリアしました"),
-        ("Goal blocked", "目标受阻", "目標がブロックされました"),
-        ("Goal resumed", "已恢复目标", "目標を再開しました"),
+      (en, zh, ja, es) in [
+        (
+          "Goal set", "已设定目标", "目標を設定しました", "Objetivo establecido",
+        ),
+        (
+          "Goal cleared", "已清除目标", "目標をクリアしました", "Objetivo borrado",
+        ),
+        (
+          "Goal blocked", "目标受阻", "目標がブロックされました",
+          "Objetivo bloqueado",
+        ),
+        (
+          "Goal resumed", "已恢复目标", "目標を再開しました", "Objetivo reanudado",
+        ),
       ] {
       let (localized, separator) = match locale {
         English => (en, ": ")
+        Spanish => (es, ": ")
         SimplifiedChinese => (zh, "：")
         TraditionalChinese => (zh, "：")
         Japanese => (ja, "：")

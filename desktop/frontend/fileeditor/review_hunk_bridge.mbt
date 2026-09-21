@@ -296,6 +296,7 @@ fn install_review_hunk_actions(
             Japanese =>
               "差分ブロック \{index + 1} の確認済みマークを解除"
             English => "Unmark hunk \{index + 1} viewed"
+            Spanish => "Desmarcar bloque \{index + 1} como visto"
           }
         } else {
           match viewer_locale() {
@@ -306,6 +307,7 @@ fn install_review_hunk_actions(
             Japanese =>
               "差分ブロック \{index + 1} を確認済みにする"
             English => "Mark hunk \{index + 1} viewed"
+            Spanish => "Marcar bloque \{index + 1} como visto"
           }
         },
       )

@@ -1020,6 +1020,8 @@ fn reference_accessible_label(
       return "\{display}，位於 \{@base_common.basename_or_authority(reference.uri)} 的第 \{reference.range.start_line_number} 行、第 \{reference.range.start_column} 列"
     Japanese =>
       return "\{display}、\{@base_common.basename_or_authority(reference.uri)} の \{reference.range.start_line_number} 行、\{reference.range.start_column} 列"
+    Spanish =>
+      return "\{display}, en \{@base_common.basename_or_authority(reference.uri)}, línea \{reference.range.start_line_number}, columna \{reference.range.start_column}"
     English => ()
   }
   display +
@@ -1061,6 +1063,17 @@ fn reference_group_accessible_label(
         Some(parent) => result + "、完全なパス：" + parent
       }
     }
+    Spanish => {
+      let result = if count == 1 {
+        "1 resultado en \{basename}"
+      } else {
+        "\{count} resultados en \{basename}"
+      }
+      return match parent {
+        None => result
+        Some(parent) => result + ", ruta completa: " + parent
+      }
+    }
     English => ()
   }
   let result = if count == 1 {
@@ -1084,6 +1097,19 @@ fn reference_results_summary(
   let group_count = model.groups.length()
   if reference_count > 0 {
     match localization.language() {
+      Spanish => {
+        if group_count == 1 {
+          let path = resource_path_label(model.groups[0].uri).unwrap_or(
+            model.groups[0].uri_string,
+          )
+          return if reference_count == 1 {
+            "Se encontró 1 resultado en \{path}"
+          } else {
+            "Se encontraron \{reference_count} resultados en \{path}"
+          }
+        }
+        return "Se encontraron \{reference_count} resultados en \{group_count} archivos"
+      }
       English => ()
       SimplifiedChinese =>
         return if group_count == 1 {

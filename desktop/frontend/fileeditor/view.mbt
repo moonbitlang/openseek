@@ -2130,6 +2130,7 @@ fn mbti_view_toolbar(
           TraditionalChinese => "MBTI 檢視"
           Japanese => "MBTI ビュー"
           English => "MBTI view"
+          Spanish => "Vista MBTI"
         },
       ),
     [
@@ -2363,6 +2364,7 @@ fn review_diff_mode_button(
       TraditionalChinese => "使用" + mode.label(locale~) + "差異"
       Japanese => "使用" + mode.label(locale~) + "差分"
       English => "Use " + mode.label(locale~) + " diff"
+      Spanish => "Usar diferencias de " + mode.label(locale~)
     },
     disabled=!enabled,
     on_click~,
@@ -2375,6 +2377,7 @@ fn review_diff_mode_button(
           TraditionalChinese => "差異"
           Japanese => "差分"
           English => " diff"
+          Spanish => " diferencias"
         }),
       )
       .aria_pressed(active.to_string()),

@@ -487,6 +487,8 @@ pub fn update(
                 "このジョブは現在のエンジンに属していません。履歴を更新してください。"
               English =>
                 "This job no longer belongs to the live engine. Refresh its history."
+              Spanish =>
+                "Este trabajo ya no pertenece al motor activo. Actualiza su historial."
             },
           )
         Ok({ outcome: WrongRuntime, }) =>
@@ -500,6 +502,8 @@ pub fn update(
                 "エンジンが再起動したため、新しい実行環境から古いジョブを停止できません。"
               English =>
                 "The engine restarted; this old job cannot be stopped from the new runtime."
+              Spanish =>
+                "El motor se reinició; no se puede detener este trabajo anterior desde la nueva instancia."
             },
           )
       }

@@ -37,6 +37,7 @@ pub fn rail(
         TraditionalChinese => "\{entry.text}（發生過錯誤）"
         Japanese => "\{entry.text}（エラーあり）"
         English => "\{entry.text} (had errors)"
+        Spanish => "\{entry.text} (con errores)"
       }
     } else {
       entry.text
@@ -79,6 +80,7 @@ pub fn rail(
           TraditionalChinese => "對話概覽"
           Japanese => "チャットの概要"
           English => "Conversation overview"
+          Spanish => "Resumen de la conversación"
         },
       )
       .on_mouseleave(_ => emit(Left)),
@@ -157,6 +159,7 @@ fn preview(
           TraditionalChinese => "發生過錯誤"
           Japanese => "エラーあり"
           English => "had errors"
+          Spanish => "con errores"
         },
       ),
     )

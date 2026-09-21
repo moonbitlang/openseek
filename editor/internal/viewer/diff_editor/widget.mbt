@@ -1711,6 +1711,19 @@ fn navigation_range_announcement(
         "\{side}：\{range.start_line_number}〜\{range.end_line_number_exclusive - 1} 行"
       }
     }
+    Spanish => {
+      let side = if side == "original" { "original" } else { "modificado" }
+      return if range.is_empty() {
+        let kind = if empty_kind == "insertion" {
+          "inserción"
+        } else {
+          "eliminación"
+        }
+        "Punto de \{kind} en la línea \{range.start_line_number} del archivo \{side}"
+      } else {
+        "Archivo \{side}, líneas \{range.start_line_number} a \{range.end_line_number_exclusive - 1}"
+      }
+    }
     English => ()
   }
   if range.is_empty() {
@@ -1734,6 +1747,7 @@ fn diff_navigation_announcement(
       "第 \{target.change_index + 1} 處更改，共 \{target.change_count} 處；"
     Japanese => "変更 \{target.change_index + 1}/\{target.change_count}；"
     English => "Change \{target.change_index + 1} of \{target.change_count}; "
+    Spanish => "Cambio \{target.change_index + 1} de \{target.change_count}; "
   }) +
   navigation_range_announcement(
     language~,

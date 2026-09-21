@@ -25,7 +25,7 @@ Changing locale must be a reactive input change, including for independently
 rendered components. The locale must not change command IDs, protocol fields,
 paths, conversation text or model output.
 
-English, Simplified Chinese, Traditional Chinese and Japanese are built in.
+English, Simplified Chinese, Traditional Chinese, Japanese and Spanish are built in.
 Feature catalogs and dynamic formatters use exhaustive locale matches, so a new language exposes
 missing translations at compile time.
 

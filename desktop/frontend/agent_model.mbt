@@ -220,6 +220,7 @@ fn Model::openseek_model_chip(
       TraditionalChinese => "模型："
       Japanese => "モデル："
       English => "Model: "
+      Spanish => "Modelo: "
     }) +
     conv.engine_model.label(),
   }
@@ -263,6 +264,7 @@ fn Model::openseek_reasoning_chip(
       TraditionalChinese => "推理強度："
       Japanese => "推論の強度："
       English => "Reasoning effort: "
+      Spanish => "Esfuerzo de razonamiento: "
     }) +
     reasoning.label_for_model(locale=self.locale, conv.engine_model),
   })
@@ -293,6 +295,7 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
       TraditionalChinese => "Codex 模型"
       Japanese => "Codex モデル"
       English => "Codex model"
+      Spanish => "Modelo de Codex"
     },
   }
 }

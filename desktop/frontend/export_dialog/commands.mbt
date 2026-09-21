@@ -37,6 +37,7 @@ fn Model::share(
       TraditionalChinese => "分享失敗"
       Japanese => "共有に失敗しました"
       English => "Could not share"
+      Spanish => "No se pudo compartir"
     },
     result => {
       Published(
@@ -67,6 +68,7 @@ fn Model::download(
       TraditionalChinese => "下載失敗"
       Japanese => "ダウンロードに失敗しました"
       English => "Could not download"
+      Spanish => "No se pudo descargar"
     },
     result => Downloaded(generation~, result),
   )
@@ -90,6 +92,7 @@ fn Model::sign_in(
       TraditionalChinese => "登入失敗"
       Japanese => "ログインに失敗しました"
       English => "Could not sign in"
+      Spanish => "No se pudo iniciar sesión"
     },
     result => SignedIn(generation~, result.map(_ => ())),
   )

@@ -87,6 +87,18 @@ pub fn State::reasoning_effort_chip(
 fn reasoning_label(locale : @i18n.Locale, value : String) -> String {
   match locale {
     English => value
+    Spanish =>
+      match value {
+        "none" => "Ninguno"
+        "minimal" => "Mínimo"
+        "low" => "Bajo"
+        "medium" => "Medio"
+        "high" => "Alto"
+        "xhigh" => "Muy alto"
+        "max" => "Máximo"
+        "ultra" => "Ultra"
+        _ => value
+      }
     Japanese =>
       match value {
         "none" => "なし"

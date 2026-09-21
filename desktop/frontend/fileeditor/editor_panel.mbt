@@ -1131,6 +1131,8 @@ fn show_mbti_diagram(resource : @common.Uri, source : String) -> Unit {
           Japanese =>
             "<div class=\"mbti-diagram-error\" role=\"status\">このインターフェースを UML 図として表示できません。詳細はソースを確認してください。</div>"
           English => message
+          Spanish =>
+            "<div class=\"mbti-diagram-error\" role=\"status\">No se pudo representar esta interfaz como un diagrama UML. Consulta el código fuente para más detalles.</div>"
         },
       )
     }
@@ -1192,6 +1194,7 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
             TraditionalChinese => "正在載入依賴圖…"
             Japanese => "依存関係グラフを読み込み中…"
             English => "Loading dependency graph…"
+            Spanish => "Cargando grafo de dependencias…"
           },
         )
       PackageGraphReady(_, source) =>
@@ -1216,6 +1219,8 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
                   "この依存関係グラフを表示できません。詳細はソースを確認してください。"
                 English =>
                   "This dependency graph could not be rendered. View the source for details."
+                Spanish =>
+                  "No se pudo representar este grafo de dependencias. Consulta el código fuente para más detalles."
               },
             )
         }
@@ -1228,6 +1233,7 @@ fn show_package_graph_in_viewer(state : PackageGraphState) -> @cmd.Cmd {
             Japanese =>
               "依存関係グラフを読み込めません：\{message}"
             English => "Could not load dependency graph: \{message}"
+            Spanish => "No se pudo cargar el grafo de dependencias: \{message}"
           },
         )
     }

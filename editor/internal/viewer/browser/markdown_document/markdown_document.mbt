@@ -1174,6 +1174,15 @@ fn MarkdownDocumentView::refresh_localized_labels(
   let count = self.toc_list.get_children().length()
   let (label, title) = match self.localization.language() {
     English => ("Contents, \{count} sections", "Contents · \{count}")
+    Spanish =>
+      (
+        if count == 1 {
+          "Contenido, 1 sección"
+        } else {
+          "Contenido, \{count} secciones"
+        },
+        "Contenido · \{count}",
+      )
     SimplifiedChinese => ("目录，共 \{count} 节", "目录 · \{count}")
     TraditionalChinese => ("目錄，共 \{count} 節", "目錄 · \{count}")
     Japanese => ("目次、\{count} セクション", "目次 · \{count}")

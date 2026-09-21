@@ -169,6 +169,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           TraditionalChinese => "每 \{n} 分鐘"
           Japanese => "\{n} 分ごと"
           English => "Every \{n} min"
+          Spanish => "Cada \{n} min"
         }
       Once(at) => ui(locale, OnceLabel) + schedule_time(locale~, at)
     }

@@ -12,12 +12,14 @@ fn code_copy_button(
       TraditionalChinese => "複製程式碼"
       Japanese => "コードをコピー"
       English => "Copy code"
+      Spanish => "Copiar código"
     },
     label=match locale {
       SimplifiedChinese => "复制代码"
       TraditionalChinese => "複製程式碼"
       Japanese => "コードをコピー"
       English => "Copy code"
+      Spanish => "Copiar código"
     },
   )
 }
@@ -56,6 +58,7 @@ pub fn copy_button(
                 TraditionalChinese => "已複製"
                 Japanese => "コピーしました"
                 English => "Copied"
+                Spanish => "Copiado"
               },
             )
           }),
@@ -72,6 +75,7 @@ pub fn copy_button(
                   Japanese =>
                     "コピーに失敗しました。再試行してください。"
                   English => "Copy failed. Try again."
+                  Spanish => "No se pudo copiar. Inténtalo de nuevo."
                 },
               )
             })

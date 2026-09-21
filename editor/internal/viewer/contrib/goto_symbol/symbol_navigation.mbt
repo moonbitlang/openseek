@@ -473,6 +473,7 @@ fn symbol_navigation_no_result_message(
         TraditionalChinese => "未找到“\{word.word}”的定義"
         Japanese => "「\{word.word}」の定義が見つかりません"
         English => "No definition found for '\{word.word}'"
+        Spanish => "No se encontró ninguna definición de «\{word.word}»"
       }
     (ReferencesQuery, Some(word)) if !word.word.is_empty() =>
       match localization.language() {
@@ -480,6 +481,7 @@ fn symbol_navigation_no_result_message(
         TraditionalChinese => "未找到“\{word.word}”的引用"
         Japanese => "「\{word.word}」の参照が見つかりません"
         English => "No references found for '\{word.word}'"
+        Spanish => "No se encontraron referencias de «\{word.word}»"
       }
     (DefinitionQuery, _) => localization.text(NoDefinition)
     (ReferencesQuery, _) => localization.text(NoReferences)
