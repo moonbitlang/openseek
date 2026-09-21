@@ -69,7 +69,7 @@ gives the arguments. One call takes any number of selectors and returns them
 in order, each under its own heading, so batch every path you already know
 instead of calling once per file:
 
-`mbtx(description="...", filename="@builtin/read.mbtx", args=["moon.mod", "src/main.mbt:120:200", "src/lib.mbt"])`
+mbtx(description="...", filename="@builtin/read.mbtx", args=["moon.mod", "src/main.mbt:120:200", "src/lib.mbt"])
 
 Use the returned text and file-status footers directly
 to do the task, including empty/missing-file checks. List directories only to
@@ -154,7 +154,7 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
 A mbtx script can call the host's own tools. 
 `@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
 JSON object the direct tool takes, forwarded unchanged: validation and
-defaults stay in the host. `edit`, `multi_edit` (`edits` or `edits_file`) and
+defaults stay in the host. `edit`, `multi_edit` and
 `web_search` (when registered) are the tools a script may call; `finish`,
 `goal`, `plan`, the job controls, and a recursive `mbtx` are not.
 
@@ -162,11 +162,18 @@ Reach for them when computation or filtering saves model round trips — read
 the data, compute the replacements, call the tool, verify, print a summary —
 and return to the model when the next decision needs judgment.
 
-A result has `content : String`, `is_error : Bool`, and `data : Json?`. Tool
-errors arrive as results, so handle `is_error` explicitly; only a transport
-failure raises, and a raised mutation MUST NOT be retried automatically
-because its outcome is unknown — re-read the affected files, and never replay
-a script that already made edits. `edit` and `multi_edit` data carry `outcome`
+The SDK exposes this interface:
+
+```
+pub async fn call(String, Json) -> CallResult
+pub struct CallResult {
+  content : String
+  is_error : Bool
+  data : Json?
+}
+```
+
+`edit` and `multi_edit` data carry `outcome`
 (applied, reverted, rejected, failed, unverified, preview, not_found, error),
 the post-write check counts, and on a revert the introduced sites. With
 `revert_when_errors_above` / `revert_when_warnings_above` (0 = any) the host
@@ -176,18 +183,6 @@ and `removed_count`. A script may run `moon check --output-json` itself to
 find its targets:
 
 [share/examples/ptc_guarded_edit.mbtx](../share/examples/ptc_guarded_edit.mbtx)
-
-Search data is `{sources:[{url,title?,snippet?,published_at?}],truncated:Bool}`
-and missing fields are absent, not empty strings. Only what the script prints
-reaches you: print the selected evidence with its URLs, including errors or
-truncation that affect the answer even when filtering successful results.
-
-[share/examples/ptc_search_filter.mbtx](../share/examples/ptc_search_filter.mbtx)
-
-Separate calls are not one atomic batch — `multi_edit` is what validates and
-rolls back a batch.
-
-
 
 ### Orchestration: the `moonbitlang/workflow` package
 

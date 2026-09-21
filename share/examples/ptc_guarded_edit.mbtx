@@ -25,8 +25,7 @@ async fn main {
       @string.from_str(line) catch { _ => fail("start_line must be an integer") }
     _ => 1
   }
-  // `arguments` is the JSON object the direct edit tool takes, forwarded
-  // unchanged; the host validates it. The guards are integer thresholds on
+  // The guards are integer thresholds on
   // the diagnostics the edit introduced, counted by identity so the edit's
   // own line shifts never count: 0 reverts on any, absent means no guard.
   let result = @openseek_tools.call("edit", {
@@ -47,7 +46,7 @@ async fn main {
         "check": { "warning_count": Number(warnings, ..), .. },
         ..
       }
-    ) => println("applied; \{warnings.to_int()} warning(s) remain")
+    ) => println("applied; \{warnings} warning(s) remain")
     Some({ "outcome": "applied", .. }) => println("applied")
     // A revert whose restore failed (a concurrent save, an IO error) leaves
     // the file in an unknown state: report that first, with the host's
@@ -67,7 +66,7 @@ async fn main {
       }
     ) =>
       println(
-        "reverted: \{reason} (\{errors.to_int()} error(s), \{warnings.to_int()} warning(s) introduced)",
+        "reverted: \{reason} (\{errors} error(s), \{warnings} warning(s) introduced)",
       )
     Some({ "outcome": String(outcome), .. }) =>
       println("\{outcome}: \{result.content}")

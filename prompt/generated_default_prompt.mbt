@@ -85,7 +85,7 @@ fn default_prompt() -> String {
     #|in order, each under its own heading, so batch every path you already know
     #|instead of calling once per file:
     #|
-    #|`mbtx(description="...", filename="@builtin/read.mbtx", args=["moon.mod", "src/main.mbt:120:200", "src/lib.mbt"])`
+    #|mbtx(description="...", filename="@builtin/read.mbtx", args=["moon.mod", "src/main.mbt:120:200", "src/lib.mbt"])
     #|
     #|Use the returned text and file-status footers directly
     #|to do the task, including empty/missing-file checks. List directories only to
@@ -278,7 +278,7 @@ fn default_prompt() -> String {
     #|A mbtx script can call the host's own tools. 
     #|`@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
     #|JSON object the direct tool takes, forwarded unchanged: validation and
-    #|defaults stay in the host. `edit`, `multi_edit` (`edits` or `edits_file`) and
+    #|defaults stay in the host. `edit`, `multi_edit` and
     #|`web_search` (when registered) are the tools a script may call; `finish`,
     #|`goal`, `plan`, the job controls, and a recursive `mbtx` are not.
     #|
@@ -286,11 +286,18 @@ fn default_prompt() -> String {
     #|the data, compute the replacements, call the tool, verify, print a summary —
     #|and return to the model when the next decision needs judgment.
     #|
-    #|A result has `content : String`, `is_error : Bool`, and `data : Json?`. Tool
-    #|errors arrive as results, so handle `is_error` explicitly; only a transport
-    #|failure raises, and a raised mutation MUST NOT be retried automatically
-    #|because its outcome is unknown — re-read the affected files, and never replay
-    #|a script that already made edits. `edit` and `multi_edit` data carry `outcome`
+    #|The SDK exposes this interface:
+    #|
+    #|```
+    #|pub async fn call(String, Json) -> CallResult
+    #|pub struct CallResult {
+    #|  content : String
+    #|  is_error : Bool
+    #|  data : Json?
+    #|}
+    #|```
+    #|
+    #|`edit` and `multi_edit` data carry `outcome`
     #|(applied, reverted, rejected, failed, unverified, preview, not_found, error),
     #|the post-write check counts, and on a revert the introduced sites. With
     #|`revert_when_errors_above` / `revert_when_warnings_above` (0 = any) the host
@@ -327,8 +334,7 @@ fn default_prompt() -> String {
     #|      @string.from_str(line) catch { _ => fail("start_line must be an integer") }
     #|    _ => 1
     #|  }
-    #|  // `arguments` is the JSON object the direct edit tool takes, forwarded
-    #|  // unchanged; the host validates it. The guards are integer thresholds on
+    #|  // The guards are integer thresholds on
     #|  // the diagnostics the edit introduced, counted by identity so the edit's
     #|  // own line shifts never count: 0 reverts on any, absent means no guard.
     #|  let result = @openseek_tools.call("edit", {
@@ -349,7 +355,7 @@ fn default_prompt() -> String {
     #|        "check": { "warning_count": Number(warnings, ..), .. },
     #|        ..
     #|      }
-    #|    ) => println("applied; \{warnings.to_int()} warning(s) remain")
+    #|    ) => println("applied; \{warnings} warning(s) remain")
     #|    Some({ "outcome": "applied", .. }) => println("applied")
     #|    // A revert whose restore failed (a concurrent save, an IO error) leaves
     #|    // the file in an unknown state: report that first, with the host's
@@ -369,7 +375,7 @@ fn default_prompt() -> String {
     #|      }
     #|    ) =>
     #|      println(
-    #|        "reverted: \{reason} (\{errors.to_int()} error(s), \{warnings.to_int()} warning(s) introduced)",
+    #|        "reverted: \{reason} (\{errors} error(s), \{warnings} warning(s) introduced)",
     #|      )
     #|    Some({ "outcome": String(outcome), .. }) =>
     #|      println("\{outcome}: \{result.content}")
@@ -379,74 +385,6 @@ fn default_prompt() -> String {
     #|  // kept in the transcript. Every call finishes before main returns.
     #|}
     #|```
-    #|
-    #|Search data is `{sources:[{url,title?,snippet?,published_at?}],truncated:Bool}`
-    #|and missing fields are absent, not empty strings. Only what the script prints
-    #|reaches you: print the selected evidence with its URLs, including errors or
-    #|truncation that affect the answer even when filtering successful results.
-    #|
-    #|```mbtx
-    #|///|
-    #|/// A search from a script, filtered before anything reaches the model: only
-    #|/// printed output enters the context, so the script prints the selected
-    #|/// evidence with its URL and keeps whatever affects the answer, such as a
-    #|/// truncated result set. Arguments: <query> [<domain>]; a source is kept
-    #|/// when its URL contains <domain>. Verified by a host-backed test with a
-    #|/// stub search tool.
-    #|import {
-    #|  "bobzhang/openseek_tools@0.1.0" @tools,
-    #|  "moonbitlang/async",
-    #|  "moonbitlang/core/env",
-    #|}
-    #|
-    #|///|
-    #|async fn main {
-    #|  let args = @env.args()[1:]
-    #|  guard args is [query, ..] else {
-    #|    fail("usage: ptc_search_filter.mbtx <query> [<domain>]")
-    #|  }
-    #|  // An absent option is `None`, not an empty string.
-    #|  let domain : String? = match args {
-    #|    [_, domain, ..] => Some(domain)
-    #|    _ => None
-    #|  }
-    #|  let result = @tools.call("web_search", { "query": query })
-    #|  if result.is_error {
-    #|    println("search failed: \{result.content}")
-    #|    return
-    #|  }
-    #|  // Search data is {sources: [{url, title?, snippet?, published_at?}],
-    #|  // truncated: Bool}. Optional fields are absent, never empty strings, so a
-    #|  // pattern with `..` reads what is there and falls back for the rest.
-    #|  guard result.data
-    #|    is Some({ "sources": Array(sources), "truncated": truncated, .. }) else {
-    #|    println("no structured sources: \{result.content}")
-    #|    return
-    #|  }
-    #|  let mut shown = 0
-    #|  for source in sources {
-    #|    guard source is { "url": String(url), .. } else { continue }
-    #|    if domain is Some(domain) && !url.contains(domain) {
-    #|      continue
-    #|    }
-    #|    let title = match source {
-    #|      { "title": String(title), .. } => title
-    #|      _ => url
-    #|    }
-    #|    println("- \{title} — \{url}")
-    #|    shown += 1
-    #|  }
-    #|  println("\{shown} of \{sources.length()} source(s) shown for \{query}")
-    #|  if truncated is true {
-    #|    println("note: the search results were truncated")
-    #|  }
-    #|}
-    #|```
-    #|
-    #|Separate calls are not one atomic batch — `multi_edit` is what validates and
-    #|rolls back a batch.
-    #|
-    #|
     #|
     #|### Orchestration: the `moonbitlang/workflow` package
     #|
