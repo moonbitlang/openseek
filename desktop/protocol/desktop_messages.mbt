@@ -1100,7 +1100,44 @@ pub(all) struct SessionCommitPayload {
   // path. Session ids are not globally unique across stores, so the
   // broadcast names the store half of the identity beside the id.
   session_root : String
-} derive(Debug, Eq, FromJson, ToJson)
+  // The model the record is configured with as of this commit, read from
+  // the settings the committing append settled in the same locked step. A
+  // client that first meets the session through this commit materializes it
+  // on that model rather than on its own default.
+  model : ConfiguredModel
+} derive(Debug, Eq)
+
+///|
+/// `session`, `sequence`, `event` and `session_root` are required; the
+/// configured model rides in the `model` / `settings_error` pair
+/// (`ConfiguredModel::decode`), so a host that predates it reads as
+/// `Unconfigured`. Unknown fields are ignored.
+pub impl FromJson for SessionCommitPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session commit payload")
+  {
+    session: object.required_string("session"),
+    sequence: object.required_int("sequence"),
+    event: @json.from_json(
+      object.required_json("event"),
+      path=path.add_key("event"),
+    ),
+    session_root: object.required_string("session_root"),
+    model: ConfiguredModel::decode(object),
+  }
+}
+
+///|
+/// The configured model is written as `model`, `settings_error`, or nothing.
+pub impl ToJson for SessionCommitPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "session": Json(self.session),
+    "sequence": Json(self.sequence),
+    "event": ToJson::to_json(self.event),
+    "session_root": Json(self.session_root),
+  }
+  self.model.encode_into(fields)
+  Json(fields)
+}
 
 ///|
 /// One running sub-run's progress, as the host reads it from the child's own

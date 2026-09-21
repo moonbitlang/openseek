@@ -146,6 +146,9 @@ async fn SessionFollower::scan(
         // identity — broadcast it so clients place the session without
         // guessing.
         session_root: self.root.resource_path(),
+        // The settings this commit's append settled — so a client meeting
+        // the session through this commit knows its model.
+        model: configured_model(self.root, self.session),
       }),
     )
     self.watermark = event.sequence

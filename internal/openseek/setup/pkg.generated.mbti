@@ -29,6 +29,8 @@ pub async fn remove_scratch_lab(String) -> Unit
 
 pub async fn resolved_session_id(@argparse.Matches) -> @agent_session.SessionId?
 
+pub fn run_settings(@deepseek.Model) -> Map[String, Json]
+
 pub async fn self_executable() -> String
 
 pub fn session_root(@argparse.Matches, workspace_root? : String) -> String raise

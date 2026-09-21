@@ -181,12 +181,15 @@ async fn run_one_attempt(
       model,
       workspace_root=run_dir,
     )
+    let run_settings = @setup.run_settings(model)
     let completed = @agent.run_turn_with_append(
       api_key~,
       model~,
       session~,
       task~,
-      append_item=(session, item) => store.append(session, item),
+      append_item=(session, item) => {
+        store.append(session, item, settings=run_settings)
+      },
       max_steps?,
       thinking~,
       api_url?,

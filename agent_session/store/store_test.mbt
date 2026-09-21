@@ -175,9 +175,9 @@ async test "an explicit session title overrides the first prompt without rewriti
       User(UserMessage("original first prompt")),
     ),
   )
-  assert_eq(store.title(id), None)
+  assert_true(store.settings(id).is_empty())
   store.set_title(id, "  Renamed conversation  ")
-  assert_eq(store.title(id), Some("Renamed conversation"))
+  assert_eq(store.settings(id).get("title"), Some(Json("Renamed conversation")))
   let listings = store.listings()
   assert_eq(listings.length(), 1)
   assert_eq(listings[0].title(), Some("Renamed conversation"))
@@ -187,6 +187,115 @@ async test "an explicit session title overrides the first prompt without rewriti
     fail("renaming changed the first durable event")
   }
   assert_eq(message.content(), "original first prompt")
+}
+
+///|
+async test "settings keys share one sidecar without overwriting each other" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let id = @agent_session.SessionId("tiered")
+  store.create(Session(id, system_prompt="system"))
+  store.set_setting(id, "model", Json("deepseek-v4-pro"))
+  assert_eq(store.settings(id).get("title"), None)
+  assert_eq(store.settings(id).get("model"), Some(Json("deepseek-v4-pro")))
+  store.set_title(id, "Named")
+  store.set_setting(id, "model", Json("deepseek-v4-flash"))
+  let settings = store.settings(id)
+  assert_eq(settings.get("title"), Some(Json("Named")))
+  assert_eq(settings.get("model"), Some(Json("deepseek-v4-flash")))
+  // The store knows only `title`; other keys are opaque and survive as
+  // written.
+  assert_eq(store.listings()[0].title(), Some("Named"))
+}
+
+///|
+async test "append settles the caller's settings in the same locked step as the event" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let id = @agent_session.SessionId("run")
+  let pro : Map[String, Json] = { "model": Json("deepseek-v4-pro") }
+  let fresh : @agent_session.Session = Session(id, system_prompt="system")
+  assert_false(store.exists(id))
+  // The first append creates the record; its settings land with it.
+  let one = store.append(fresh, User(UserMessage("hello")), settings=pro)
+  assert_eq(one.events().length(), 1)
+  assert_eq(store.settings(id).get("model"), Some(Json("deepseek-v4-pro")))
+  // In step: another append rewrites nothing.
+  let settings_path = "\{store.root()}/sessions/run/settings.json"
+  let stamp = @fs.mtime(settings_path)
+  let two = store.append(one, User(UserMessage("again")), settings=pro)
+  assert_eq(@fs.mtime(settings_path), stamp)
+  // A process running another model corrects the key it owns and leaves
+  // every other key as it was; an append naming no settings touches none.
+  store.set_title(id, "Named")
+  let three = store.append(two, User(UserMessage("once more")), settings={
+    "model": Json("deepseek-v4-flash"),
+  })
+  let four = store.append(three, User(UserMessage("and again")))
+  assert_eq(four.events().length(), 4)
+  let settings = store.settings(id)
+  assert_eq(settings.get("model"), Some(Json("deepseek-v4-flash")))
+  assert_eq(settings.get("title"), Some(Json("Named")))
+  // A compaction summary is a durable event like any other: the compacting
+  // process's settings ride with it.
+  let compacted = store.compact(
+    four,
+    content="summary",
+    from_sequence=1,
+    to_sequence=4,
+    settings={ "model": Json("deepseek-v4-pro") },
+  )
+  assert_eq(compacted.events().length(), 5)
+  assert_eq(store.settings(id).get("model"), Some(Json("deepseek-v4-pro")))
+}
+
+///|
+async test "an unreadable sidecar fails the append before the event is committed" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let id = @agent_session.SessionId("damaged")
+  let one = store.append(
+    Session(id, system_prompt="system"),
+    User(UserMessage("hello")),
+  )
+  @fs.write_file(
+    "\{store.root()}/sessions/damaged/settings.json",
+    "not json",
+    create_mode=CreateOrTruncate,
+  )
+  try
+    store.append(one, User(UserMessage("again")), settings={
+      "model": Json("deepseek-v4-pro"),
+    })
+  catch {
+    _ => ()
+  } noraise {
+    _ => fail("an append settled settings from an unreadable sidecar")
+  }
+  // Nothing was committed, so the caller's snapshot is still current and the
+  // next append — one that asks for no settings — goes through.
+  assert_eq(store.load(id).events().length(), 1)
+  let two = store.append(one, User(UserMessage("again")))
+  assert_eq(two.events().length(), 2)
+}
+
+///|
+async test "a title written by the one-value sidecar is read and then folded in" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let id = @agent_session.SessionId("legacy")
+  store.create(Session(id, system_prompt="system"))
+  let legacy_path = "\{store.root()}/sessions/legacy/session-title"
+  @fs.write_file(legacy_path, "  Old name\n", create_mode=CreateOrTruncate)
+  assert_eq(store.settings(id).get("title"), Some(Json("Old name")))
+  assert_eq(store.listings()[0].title(), Some("Old name"))
+  // The first settings write carries the legacy title across and retires
+  // the old file, so the two can never disagree afterwards.
+  store.set_setting(id, "model", Json("deepseek-v4-pro"))
+  assert_false(@fs.exists(legacy_path))
+  let folded = store.settings(id)
+  assert_eq(folded.get("title"), Some(Json("Old name")))
+  assert_eq(folded.get("model"), Some(Json("deepseek-v4-pro")))
 }
 
 ///|
@@ -207,6 +316,29 @@ async test "session titles reject blank text and missing records" {
     error => assert_true("\{error}".contains("does not exist"))
   } noraise {
     _ => fail("title written for a missing session")
+  }
+  try store.set_setting(missing, "model", Json("x")) catch {
+    error => assert_true("\{error}".contains("does not exist"))
+  } noraise {
+    _ => fail("a setting written for a missing session")
+  }
+}
+
+///|
+async test "a damaged title in the sidecar is an error, not an absent title" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let id = @agent_session.SessionId("damaged")
+  store.create(Session(id, system_prompt="system"))
+  @fs.write_file(
+    "\{store.root()}/sessions/damaged/settings.json",
+    "{\"title\": 3}",
+    create_mode=CreateOrTruncate,
+  )
+  try store.listings() catch {
+    error => assert_true("\{error}".contains("non-blank string"))
+  } noraise {
+    _ => fail("a non-string title was listed")
   }
 }
 

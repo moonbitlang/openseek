@@ -90,6 +90,10 @@ async fn run_serve(
         ),
       )
   }
+  // Every durable append settles the settings this process is the
+  // authority on, so the record always names the model behind its latest
+  // event.
+  let run_settings = @setup.run_settings(model)
   // The live conversation value. `append_item` updates it on every appended
   // event, so even a turn that raises leaves `session` reflecting all the
   // events it recorded before failing.
@@ -254,6 +258,7 @@ async fn run_serve(
         current,
         api_key~,
         model~,
+        settings=run_settings,
         api_url?,
         retry_attempts?,
         retry_backoff_ms?,
@@ -276,7 +281,7 @@ async fn run_serve(
       what : String,
     ) -> Bool {
       session = if store is Some(store) {
-        store.append(session, item) catch {
+        store.append(session, item, settings=run_settings) catch {
           error if @async.is_being_cancelled() ||
             @async.is_cancellation_error(error) => raise error
           error => {
@@ -422,7 +427,7 @@ async fn run_serve(
           on_goal_met?,
           append_item=(current, item) => {
             let next = match store {
-              Some(store) => store.append(current, item)
+              Some(store) => store.append(current, item, settings=run_settings)
               None => current.append(item)
             }
             session = next

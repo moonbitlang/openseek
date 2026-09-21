@@ -123,3 +123,12 @@ pub async fn load_or_new_session(
     fresh()
   }
 }
+
+///|
+/// The settings a run with `model` is the authority on, for
+/// `SessionStore::append(settings=...)`: `model`, as its wire name — the same
+/// string the desktop's chip parses. Settled with every durable append, so
+/// a session's settings always name the model behind its latest event.
+pub fn run_settings(model : @deepseek.Model) -> Map[String, Json] {
+  { "model": Json("\{model}") }
+}

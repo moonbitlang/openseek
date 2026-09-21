@@ -781,6 +781,15 @@ pub fn CompactReply::not_equal(Self, Self) -> Bool
 pub fn CompactReply::to_json(Self) -> Json
 pub fn CompactReply::to_repr(Self) -> @debug.Repr
 
+pub(all) enum ConfiguredModel {
+  Configured(String)
+  Unconfigured
+  Unreadable(String)
+} derive(Eq, @debug.Debug)
+pub fn ConfiguredModel::equal(Self, Self) -> Bool
+pub fn ConfiguredModel::not_equal(Self, Self) -> Bool
+pub fn ConfiguredModel::to_repr(Self) -> @debug.Repr
+
 pub(all) struct ConnectedPayload {
   stage : ConnectedStage
 } derive(Eq, @debug.Debug)
@@ -1407,12 +1416,15 @@ pub fn LoadSessionPayload::to_repr(Self) -> @debug.Repr
 pub(all) struct LoadSessionReply {
   session : SessionDocument
   watermark : Int?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  model : ConfiguredModel
+} derive(Eq, @debug.Debug)
 pub fn LoadSessionReply::equal(Self, Self) -> Bool
 pub fn LoadSessionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LoadSessionReply::not_equal(Self, Self) -> Bool
 pub fn LoadSessionReply::to_json(Self) -> Json
 pub fn LoadSessionReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for LoadSessionReply
+pub impl @json.FromJson for LoadSessionReply
 
 pub(all) struct LspDiagnostic {
   range : LspRange
@@ -2242,12 +2254,15 @@ pub(all) struct SessionCommitPayload {
   sequence : Int
   event : SessionEvent
   session_root : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  model : ConfiguredModel
+} derive(Eq, @debug.Debug)
 pub fn SessionCommitPayload::equal(Self, Self) -> Bool
 pub fn SessionCommitPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionCommitPayload::not_equal(Self, Self) -> Bool
 pub fn SessionCommitPayload::to_json(Self) -> Json
 pub fn SessionCommitPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionCommitPayload
+pub impl @json.FromJson for SessionCommitPayload
 
 pub(all) struct SessionDocument {
   version : Int?

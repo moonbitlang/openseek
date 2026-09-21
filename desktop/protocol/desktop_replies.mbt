@@ -688,10 +688,94 @@ pub(all) struct SessionDocument {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// The model a conversation is set to, as its record's settings report it.
+/// Three answers, because a settings sidecar that cannot be read is neither
+/// a model nor the absence of one: the client must be able to say "damaged"
+/// rather than show its own default as if nothing had ever been configured.
+pub(all) enum ConfiguredModel {
+  // The wire name of the model the conversation's last run kept in its
+  // settings.
+  Configured(String)
+  // No run has configured the record, or the host predates reporting it.
+  Unconfigured
+  // The settings sidecar exists but could not be read; the reason, for
+  // the client to surface.
+  Unreadable(String)
+} derive(Debug, Eq)
+
+///|
 pub(all) struct LoadSessionReply {
   session : SessionDocument
   watermark : Int?
-} derive(Debug, Eq, FromJson, ToJson)
+  model : ConfiguredModel
+} derive(Debug, Eq)
+
+///|
+/// Decode the configured model from the two mutually exclusive fields a
+/// reply or broadcast carries: a string `model` is `Configured`, a string
+/// `settings_error` is `Unreadable`, neither (or `null`) is `Unconfigured`;
+/// both present, or either of another type, is malformed.
+fn ConfiguredModel::decode(
+  object : JsonObject,
+) -> ConfiguredModel raise @json.JsonDecodeError {
+  match
+    (object.optional_string("model"), object.optional_string("settings_error")) {
+    (Some(_), Some(_)) =>
+      raise JsonDecodeError(
+        (
+          object.path.add_key("settings_error"),
+          "a payload names a model or a settings error, not both",
+        ),
+      )
+    (Some(model), None) => Configured(model)
+    (None, Some(reason)) => Unreadable(reason)
+    (None, None) => Unconfigured
+  }
+}
+
+///|
+/// Write the configured model into `fields` as `model`, `settings_error`,
+/// or nothing at all.
+fn ConfiguredModel::encode_into(
+  self : ConfiguredModel,
+  fields : Map[String, Json],
+) -> Unit {
+  match self {
+    Configured(model) => fields["model"] = Json(model)
+    Unreadable(reason) => fields["settings_error"] = Json(reason)
+    Unconfigured => ()
+  }
+}
+
+///|
+/// `session` is required. `watermark` is optional; missing and `null` both
+/// mean the host did not report one. The configured model rides in the
+/// `model` / `settings_error` pair (`ConfiguredModel::decode`). Unknown
+/// fields are ignored.
+pub impl FromJson for LoadSessionReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session load reply")
+  let session : SessionDocument = @json.from_json(
+    object.required_json("session"),
+    path=path.add_key("session"),
+  )
+  {
+    session,
+    watermark: object.optional_int("watermark"),
+    model: ConfiguredModel::decode(object),
+  }
+}
+
+///|
+/// `watermark` is omitted when absent; the configured model is written as
+/// `model`, `settings_error`, or nothing, per `ConfiguredModel`.
+pub impl ToJson for LoadSessionReply with fn to_json(self) {
+  let fields : Map[String, Json] = { "session": self.session.to_json() }
+  if self.watermark is Some(watermark) {
+    fields["watermark"] = Json(watermark)
+  }
+  self.model.encode_into(fields)
+  Json(fields)
+}
 
 ///|
 /// The destination selected by the native save dialog. `None` means the user
@@ -2386,6 +2470,12 @@ pub extend InstalledSkillsReply with Eq::{equal, not_equal}
 
 ///|
 pub extend InstalledSkillsReply with ToJson::{to_json}
+
+///|
+pub extend ConfiguredModel with Debug::{to_repr}
+
+///|
+pub extend ConfiguredModel with Eq::{equal, not_equal}
 
 ///|
 pub extend LoadSessionReply with Debug::{to_repr}

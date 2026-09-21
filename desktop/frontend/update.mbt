@@ -183,11 +183,9 @@ fn open_session_on(
       channel,
       session_id,
       project,
-      // Reopening a stored conversation recovers the tier it was left on,
-      // not whatever was picked last in some other chat.
-      model=model
-        .remembered_model(channel, session_id)
-        .unwrap_or(model.default_model),
+      // A placeholder until the load lands: the reply carries the model the
+      // record's last run used, which then replaces this default.
+      model=model.default_model,
     )
     let conversation = if model.device_state(channel) is Some(dev) {
       {
@@ -253,9 +251,7 @@ fn Model::open_archived_session_on(
           channel,
           session_id,
           workspace,
-          model=self
-            .remembered_model(channel, session_id)
-            .unwrap_or(self.default_model),
+          model=self.default_model,
         ),
         record: ArchivedRecord,
       }
@@ -662,6 +658,7 @@ fn apply_session_snapshot(
   watermark : Int,
   goal : @transcript.GoalStanding?,
   goal_markers : Array[(Int, @transcript.GoalMarker)],
+  recorded_model : @protocol.ConfiguredModel,
   generation : Int,
   activate_on_success : Bool,
 ) -> (@cmd.Cmd, Model) {
@@ -681,14 +678,40 @@ fn apply_session_snapshot(
       "failed to load session \{session}: snapshot watermark moved backwards",
     )
   }
+  // The record says which model it is configured with. That replaces
+  // whatever this page inherited or was told before — unless the user chose
+  // a model here for the next turn, which a re-read of the record must not
+  // undo, or this page's own run is in flight with the model it was sent
+  // with. A name this build does not know still shows as the model the
+  // engine actually ran.
+  let adopt_recorded_model = !conv.model_chosen && !conv.is_running()
   let (conv, gapped) = conv.adopt_snapshot(
     items,
     watermark,
     goal~,
     goal_markers~,
   )
+  let conv = if adopt_recorded_model &&
+    recorded_model is Configured(wire) &&
+    EngineModel::parse(wire) is Some(engine_model) {
+    { ..conv, engine_model, }
+  } else {
+    conv
+  }
   let mut next = model.replace_conversation(conv)
   let commands : Array[@cmd.Cmd] = []
+  // A settings sidecar the host could not read is damage worth saying so
+  // about — the chip is showing a default, not the conversation's model.
+  // Said once, when the user opens the conversation; a background re-read
+  // of the same damage would only repeat it.
+  if activate_on_success && recorded_model is Unreadable(reason) {
+    let (toast, notified) = next.notify_error(
+      dispatch,
+      "Conversation settings unreadable for \{session}: \{reason}",
+    )
+    commands.push(toast)
+    next = notified
+  }
   let owner : @interop.ConversationKey = { channel, session, }
   if activate_on_success &&
     model.loading_conversation is Some(loading_owner) &&
@@ -2086,7 +2109,6 @@ fn update_msg(
       fps_overlay_enabled~,
       minimal_transcript~,
       model=stored,
-      conversation_models=remembered,
       agent~,
       codex_model~,
       codex_effort~,
@@ -2148,7 +2170,6 @@ fn update_msg(
         minimal_transcript,
         default_model,
         default_agent,
-        conversation_models: parse_conversation_models(remembered),
         openseek_reasoning,
         glm_reasoning,
         codex,
@@ -3164,23 +3185,23 @@ fn update_msg(
             // The selector changes the conversation on screen. The tier is
             // pinned to that conversation right away — a chat can be given a
             // tier and left unsent for days — and becomes what the next new
-            // chat starts from. (Starting a run pins it too; see `Started`.)
-            // A turn already in flight keeps the model it was started with;
-            // this takes effect on the next.
+            // chat starts from. The pick becomes durable only when a run
+            // uses it: the engine then keeps it in the conversation's
+            // settings, which is what a reopen reads. A turn already in flight
+            // keeps the model it was started with; this takes effect on the
+            // next.
             guard model.active_conversation() is Some(conv) else {
               return (@cmd.none, model)
             }
-            let next = model
-              .replace_conversation({ ..conv, engine_model, })
-              .remember_model(conv.device, conv.session_id, engine_model)
+            let next = model.replace_conversation({
+              ..conv,
+              engine_model,
+              model_chosen: true,
+            })
             (
               @cmd.batch([
                 save_default_model(engine_model),
                 save_default_agent(OpenSeekAgent),
-                save_conversation_model(
-                  conversation_model_key(conv.device, conv.session_id),
-                  engine_model,
-                ),
               ]),
               {
                 ..next,
@@ -7175,11 +7196,12 @@ fn update_device_msg(
       watermark~,
       goal~,
       goal_markers~,
+      model=recorded_model,
       generation~
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
-        generation, true,
+        recorded_model, generation, true,
       )
     SessionRefreshed(
       session~,
@@ -7187,11 +7209,12 @@ fn update_device_msg(
       watermark~,
       goal~,
       goal_markers~,
+      model=recorded_model,
       generation~
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
-        generation, false,
+        recorded_model, generation, false,
       )
     SessionLoadFailed(session~, message~, generation~) =>
       retry_session_snapshot(
@@ -7207,7 +7230,14 @@ fn update_device_msg(
         false,
         "failed to refresh session \{session}",
       )
-    SessionCommitted(session~, sequence~, ts~, item~, session_root~) => {
+    SessionCommitted(
+      session~,
+      sequence~,
+      ts~,
+      item~,
+      session_root~,
+      model=configured
+    ) => {
       // The commit names its own store — the exact durable identity rather
       // than a guess. Commits do not precede `agent.connected` (readiness
       // precedes every forwarded notification), but if one ever did, the
@@ -7254,7 +7284,9 @@ fn update_device_msg(
       let refresh_sessions = sequence == 1 && !listed && first_commit_unseen
       // A short foreign run can commit and finish before either the session
       // list or run resync reaches this page. Materialize hidden client state
-      // from the commit itself: sequence 1 projects immediately; a later
+      // from the commit itself — on the model the commit reports the record
+      // configured with, so the conversation is born right rather than on
+      // this page's default: sequence 1 projects immediately; a later
       // sequence exposes a gap and follows the normal snapshot recovery path.
       let model = if model.find_conversation(channel, session) is None {
         model.replace_conversation(
@@ -7262,9 +7294,11 @@ fn update_device_msg(
             channel,
             session,
             commit_project,
-            model=model
-              .remembered_model(channel, session)
-              .unwrap_or(model.default_model),
+            model=match configured {
+              Configured(wire) if EngineModel::parse(wire) is Some(reported) =>
+                reported
+              _ => model.default_model
+            },
           ),
         )
       } else {
@@ -7509,13 +7543,9 @@ fn update_device_msg(
             project,
             // A conversation this page is meeting for the first time takes
             // the tier its run is on — better evidence than the default,
-            // and no choice exists yet to contradict it. A remembered choice
-            // still outranks it: that is what the user meant to send next,
-            // while the run may have been started elsewhere. A conversation
-            // the page already holds keeps its own tier — see below.
-            model=model
-              .remembered_model(channel, session)
-              .unwrap_or(selected_model),
+            // and no choice exists yet to contradict it. A conversation the
+            // page already holds keeps a chosen tier — see below.
+            model=selected_model,
           )
         }
       }
@@ -7534,6 +7564,15 @@ fn update_device_msg(
         // none must not move a placement the user chose. That reconcile
         // belongs to the session list.
         None => existing
+      }
+      // A run's model is the conversation's model — unless the user chose
+      // one here for the next turn (a start is always older than the
+      // composer), or this page's own run is in flight with the model it
+      // was sent with.
+      let existing = if existing.model_chosen || existing.is_running() {
+        existing
+      } else {
+        { ..existing, engine_model: selected_model, }
       }
       // An automatically promoted follow-up is still transient until this
       // ordinary Started boundary. Retire its in-memory queue row here; the
@@ -7659,22 +7698,6 @@ fn update_device_msg(
           ),
         )
       }
-      // A run is what makes a conversation durable, so this is where its tier
-      // gets pinned — the chip is not the only way to acquire one. A tier
-      // merely inherited from the page default and then used would otherwise
-      // stay unremembered, and the conversation would come back on whatever
-      // default an unrelated chat has moved to since. Re-pinning the same
-      // tier only reorders the list, so consecutive turns write once.
-      let pinned = updated.remember_model(channel, session, conv.engine_model)
-      if pinned.conversation_models != model.conversation_models {
-        commands.push(
-          save_conversation_model(
-            conversation_model_key(channel, session),
-            conv.engine_model,
-          ),
-        )
-      }
-      let updated = pinned
       // The model rode in on the conversation above; max steps is still one
       // global setting, so sync it only when this start belongs to the
       // conversation on screen. A slow background start (the user switched
@@ -8932,6 +8955,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
   let (_, reconciled) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -8944,6 +8968,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
   let (_, post_finish) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -8993,6 +9018,7 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
   let (_, reconciled) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -9164,6 +9190,7 @@ test "a matching durable commit de-duplicates without mutating the preview" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=1,
       ts=None,
@@ -9193,6 +9220,7 @@ test "a matching durable commit de-duplicates without mutating the preview" {
 test "commit-first reasoning keeps late prefixes and de-duplicates when sealed" {
   let dispatch = test_dispatch()
   let commit = SessionCommitted(
+    model=@protocol.Unconfigured,
     session="desktop-test",
     sequence=1,
     ts=None,
@@ -9234,6 +9262,7 @@ test "a delayed untagged commit cannot truncate a newer reasoning stream" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=1,
       ts=None,
@@ -9642,6 +9671,7 @@ test "finished run reloads the named durable session for an old host" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -9696,6 +9726,7 @@ test "Finished queues one follow-up behind an older in-flight snapshot" {
   let (_, followed) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -9935,6 +9966,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-foreign",
       sequence=1,
       ts=None,
@@ -9997,6 +10029,7 @@ test "a rooted commit places its conversation without waiting for the list" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-foreign",
       sequence=1,
       ts=None,
@@ -10021,6 +10054,7 @@ test "a rooted commit places its conversation without waiting for the list" {
   let (_, registered) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-registered",
       sequence=1,
       ts=None,
@@ -10046,6 +10080,7 @@ test "a rooted commit places its conversation without waiting for the list" {
   let (_, unseen) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-unseen",
       sequence=1,
       ts=None,
@@ -10097,6 +10132,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-shared",
       sequence=1,
       ts=None,
@@ -10111,6 +10147,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
   let (_, same_store) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-listed-only",
       sequence=1,
       ts=None,
@@ -10150,6 +10187,7 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
   let (_, first) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-shared",
       sequence=1,
       ts=None,
@@ -10169,6 +10207,7 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-shared",
       sequence=1,
       ts=None,
@@ -10463,6 +10502,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
   let (_, buffered) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=3,
       ts=None,
@@ -10871,6 +10911,7 @@ test "open session tracks the latest load and ignores stale replies" {
   let (_, after_a) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-a",
@@ -10895,6 +10936,7 @@ test "open session tracks the latest load and ignores stale replies" {
   let (_, after_b) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-b",
@@ -10941,6 +10983,7 @@ test "a restored session keeps the placement its listing named" {
   let (_, restored) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       session~,
       items=[],
       watermark=0,
@@ -11013,6 +11056,7 @@ test "same-id session loads are fenced by channel owner" {
     FromDevice(
       remote,
       SessionLoaded(
+        model=@protocol.Unconfigured,
         goal=None,
         goal_markers=[],
         session="shared",
@@ -11087,6 +11131,7 @@ test "reselecting a synced active session reloads idle external writes" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -11171,6 +11216,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
   let (_, stale) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-pruned",
@@ -11200,6 +11246,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
   let (_, fresh) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-pruned",
@@ -11255,6 +11302,7 @@ test "archive removal and reopening cannot reuse a transcript request token" {
   let (_, stale) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-archived",
@@ -11461,6 +11509,7 @@ test "run semantic errors never duplicate their terminal commit" {
     exit_code=None,
   )
   let terminal = SessionCommitted(
+    model=@protocol.Unconfigured,
     session="desktop-test",
     sequence=1,
     ts=None,
@@ -11567,6 +11616,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   let (_, once) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-stored",
@@ -11579,6 +11629,7 @@ test "session loaded swaps the active conversation onto the stored session" {
   let (_, twice) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-stored",
@@ -11617,6 +11668,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
   let (_, other) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-stored",
@@ -11652,6 +11704,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
   let (_, same) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -12141,6 +12194,7 @@ test "an accepted start response opens the run without Started" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -12720,6 +12774,7 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
   let (_, empty) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -12943,6 +12998,7 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
   let dispatch = test_dispatch()
   let stamped = (session, sequence, ts) => {
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session~,
       sequence~,
       ts=Some(ts),
@@ -12968,6 +13024,7 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
   let (_, drained) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       items=[],
       watermark=0,
@@ -12989,6 +13046,7 @@ test "a canonical user commit never settles a local steer" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=1,
       ts=None,
@@ -13019,6 +13077,7 @@ test "a snapshot never settles a local steer by text" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -13163,6 +13222,7 @@ test "a foreign background run schedules one causal read after Started" {
   let (_, buffered_answer) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session~,
       sequence=2,
       ts=None,
@@ -13198,6 +13258,7 @@ test "a foreign background run schedules one causal read after Started" {
   let (_, buffered_terminal) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session~,
       sequence=3,
       ts=None,
@@ -13209,6 +13270,7 @@ test "a foreign background run schedules one causal read after Started" {
   let (_, buffered_user) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session~,
       sequence=4,
       ts=None,
@@ -13222,6 +13284,7 @@ test "a foreign background run schedules one causal read after Started" {
   let (_, after_old_cut) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       session~,
       items=[],
       watermark=1,
@@ -13239,6 +13302,7 @@ test "a foreign background run schedules one causal read after Started" {
   let (_, causal) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       session~,
       items=[
         {
@@ -13285,6 +13349,7 @@ test "buffered commits are delivery, not applied chronology" {
   let (_, user) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=2,
       ts=None,
@@ -13296,6 +13361,7 @@ test "buffered commits are delivery, not applied chronology" {
   let (_, answer) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=3,
       ts=None,
@@ -13312,6 +13378,7 @@ test "buffered commits are delivery, not applied chronology" {
   let (_, terminal) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=4,
       ts=None,
@@ -13327,6 +13394,7 @@ test "buffered commits are delivery, not applied chronology" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -13469,7 +13537,6 @@ test "loaded UI preferences parse their wire names" {
       fps_overlay_enabled=true,
       minimal_transcript=false,
       model="deepseek-v4-flash",
-      conversation_models="[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
       agent="codex",
       codex_model="gpt-5.4-codex",
       codex_effort="xhigh",
@@ -13485,8 +13552,6 @@ test "loaded UI preferences parse their wire names" {
   assert_true(restored.default_agent is CodexAgent)
   assert_true(restored.openseek_reasoning is ReasoningHigh)
   assert_true(restored.glm_reasoning is ReasoningMax)
-  // The stored conversation outranks the stored default for its own chat.
-  assert_true(restored.active().engine_model is DsPro)
   // Unknown stored values fall back to the defaults.
   let (_, unknown) = update(
     dispatch,
@@ -13498,7 +13563,6 @@ test "loaded UI preferences parse their wire names" {
       fps_overlay_enabled=false,
       minimal_transcript=false,
       model="",
-      conversation_models="not json",
       agent="broken",
       codex_model="",
       codex_effort="",
@@ -13514,8 +13578,6 @@ test "loaded UI preferences parse their wire names" {
   assert_true(unknown.openseek_reasoning is ReasoningHigh)
   assert_true(unknown.glm_reasoning is ReasoningOff)
   assert_true(unknown.default_agent is OpenSeekAgent)
-  // A store that will not parse remembers nothing rather than wedging.
-  assert_eq(unknown.conversation_models.length(), 0)
 }
 
 ///|
@@ -13546,7 +13608,6 @@ test "the model selector switches one conversation, not the app" {
     flash_again.active().engine_model,
   )
   @debug.assert_eq(flash.default_model, flash_again.default_model)
-  @debug.assert_eq(flash.conversation_models, flash_again.conversation_models)
   // The conversation next door keeps the tier it was already on.
   guard flash.find_conversation(@interop.ChannelId::Local, "other-chat")
     is Some(other) else {
@@ -13602,79 +13663,226 @@ test "a start never overrides the tier picked for the next turn" {
 }
 
 ///|
-test "reopening a conversation recovers its own tier, not the last pick" {
+test "a loaded record's recorded model outranks the page default" {
   let dispatch = test_dispatch()
-  // Set the chat on screen to DsFlash, then open a different one and put it
-  // back on DsPro. The second pick moves the default new chats inherit — it
-  // must not follow the first conversation home.
-  let (_, flash) = update(
+  // Opening a stored conversation mints a placeholder on the page default;
+  // the load reply then says which model the record's last run used, and
+  // that is what the reopened chat shows — not what some other chat picked
+  // last.
+  let (_, loading) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
-    test_model(),
+    OpenSession(@interop.ChannelId::Local, "stored-chat"),
+    test_model().with_listed(["stored-chat"]),
   )
-  let other = flash.activate(
-    @interop.ChannelId::Local,
-    "other-chat",
-    @interop.ChannelId::Local.test_project(),
-  )
-  assert_true(other.active().engine_model is DsFlash)
-  let (_, pro) = update(
+  guard loading.find_conversation(@interop.ChannelId::Local, "stored-chat")
+    is Some(placeholder) else {
+    fail("opening minted no placeholder")
+  }
+  assert_true(placeholder.engine_model is DsFlash)
+  let (_, loaded) = update_dev(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-pro"),
-    other,
+    SessionLoaded(
+      model=@protocol.Configured("deepseek-v4-pro"),
+      goal=None,
+      goal_markers=[],
+      session="stored-chat",
+      items=[],
+      watermark=0,
+      generation=1,
+    ),
+    loading,
   )
-  assert_true(pro.default_model is DsPro)
-  // Reopening drops the conversation and mints it again (nothing was sent,
-  // so `activate` does not retain it) — exactly the path that used to hand
-  // back the unrelated default.
-  let reopened = pro.activate(
-    @interop.ChannelId::Local,
-    "desktop-test",
-    @interop.ChannelId::Local.test_project(),
-  )
-  assert_true(reopened.active().engine_model is DsFlash)
+  assert_true(loaded.active().engine_model is DsPro)
+  assert_true(loaded.default_model is DsFlash)
 }
 
 ///|
-test "a run pins an inherited tier the user never clicked for" {
+test "a conversation already shown keeps its own pick across a re-read" {
   let dispatch = test_dispatch()
-  // This chat never touched the chip — it just inherited DsPro and ran. That
-  // still has to pin, or a later toggle elsewhere silently retiers it.
-  let (_, ran) = update_dev(
+  // The chat on screen has content and a fresh chip pick. Re-selecting it
+  // re-reads the store, whose recorded model is the one its last run used
+  // — older than the pick, which is what the user means to send next.
+  let shown = test_model().replace_conversation({
+    ..test_conversation(),
+    watermark: 2,
+    messages: [
+      { kind: User(text="earlier", images=[]), ts: None, sequence: Some(1), },
+    ],
+  })
+  let (_, picked) = update(
+    dispatch,
+    ModelPicked("openseek:deepseek-v4-flash"),
+    shown,
+  )
+  assert_true(picked.active().engine_model is DsFlash)
+  let (reloading, generation) = picked.begin_transcript_reload(picked.active())
+  guard generation is Some(generation) else { fail("no reload began") }
+  let (_, reread) = update_dev(
+    dispatch,
+    SessionLoaded(
+      model=@protocol.Configured("deepseek-v4-pro"),
+      goal=None,
+      goal_markers=[],
+      session="desktop-test",
+      items=[
+        { kind: User(text="earlier", images=[]), ts: None, sequence: Some(1), },
+      ],
+      watermark=2,
+      generation~,
+    ),
+    reloading,
+  )
+  assert_true(reread.active().engine_model is DsFlash)
+}
+
+///|
+test "an unreadable settings sidecar keeps the default and says so" {
+  let dispatch = test_dispatch()
+  let (_, loading) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "stored-chat"),
+    test_model().with_listed(["stored-chat"]),
+  )
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionLoaded(
+      model=@protocol.Unreadable("session settings must be a JSON object"),
+      goal=None,
+      goal_markers=[],
+      session="stored-chat",
+      items=[],
+      watermark=0,
+      generation=1,
+    ),
+    loading,
+  )
+  assert_true(loaded.active().engine_model is DsFlash)
+  inspect(loaded.notifications.length(), content="1")
+  assert_true(
+    loaded.notifications[0].message.contains(
+      "settings unreadable for stored-chat",
+    ),
+  )
+}
+
+///|
+test "a session first met through a commit is born on the model the commit reports" {
+  let dispatch = test_dispatch()
+  // Another client's engine appended to a session this page never opened —
+  // an idle goal marker, or a turn whose Started this page missed. The
+  // commit names the record's model; the page must not substitute its own
+  // default, which is what the next turn from here would then run on.
+  let (_, met) = update_dev(
+    dispatch,
+    SessionCommitted(
+      model=@protocol.Configured("deepseek-v4-pro"),
+      session="foreign-chat",
+      sequence=1,
+      ts=None,
+      item=@protocol.User({
+        content: "hello from elsewhere",
+        submission_id: None,
+      }),
+      session_root=@interop.ChannelId::Local.test_store_root(),
+    ),
+    test_model(),
+  )
+  guard met.find_conversation(@interop.ChannelId::Local, "foreign-chat")
+    is Some(conv) else {
+    fail("the commit materialized no conversation")
+  }
+  assert_true(conv.engine_model is DsPro)
+  assert_false(conv.model_chosen)
+  assert_true(met.default_model is DsFlash)
+}
+
+///|
+test "a start moves an unchosen conversation to the run's model, never a chosen one" {
+  let dispatch = test_dispatch()
+  // The fixture chat inherited its model; a run — this page's own resync
+  // after a reconnect, or another client's — says what it actually runs on.
+  let (_, moved) = update_dev(
     dispatch,
     Started(
       run_id="r1",
       session="desktop-test",
-      model=DsPro,
+      model=DsFlash,
       max_steps=1000,
       session_root=None,
       submission_id=None,
     ),
     test_model(),
   )
-  assert_true(
-    ran.remembered_model(@interop.ChannelId::Local, "desktop-test")
-    is Some(DsPro),
-  )
-  // Another chat moves the page default to DsFlash...
-  let elsewhere = ran.activate(
-    @interop.ChannelId::Local,
-    "other-chat",
-    @interop.ChannelId::Local.test_project(),
-  )
-  let (_, moved) = update(
+  assert_true(moved.active().engine_model is DsFlash)
+  // Once the user has chosen for the next turn, a start is older than the
+  // composer and echoes nothing back.
+  let (_, chosen) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
-    elsewhere,
+    ModelPicked("openseek:deepseek-v4-pro"),
+    test_model(),
   )
-  assert_true(moved.default_model is DsFlash)
-  // ...and the first one still comes back on the tier it ran with.
-  let reopened = moved.activate(
-    @interop.ChannelId::Local,
-    "desktop-test",
-    @interop.ChannelId::Local.test_project(),
+  assert_true(chosen.active().model_chosen)
+  let (_, kept) = update_dev(
+    dispatch,
+    Started(
+      run_id="r2",
+      session="desktop-test",
+      model=DsFlash,
+      max_steps=1000,
+      session_root=None,
+      submission_id=None,
+    ),
+    chosen,
   )
-  assert_true(reopened.active().engine_model is DsPro)
+  assert_true(kept.active().engine_model is DsPro)
+}
+
+///|
+test "a record with no recorded model keeps the placeholder's default" {
+  let dispatch = test_dispatch()
+  let (_, loading) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "stored-chat"),
+    test_model().with_listed(["stored-chat"]),
+  )
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionLoaded(
+      model=@protocol.Unconfigured,
+      goal=None,
+      goal_markers=[],
+      session="stored-chat",
+      items=[],
+      watermark=0,
+      generation=1,
+    ),
+    loading,
+  )
+  assert_true(loaded.active().engine_model is DsFlash)
+}
+
+///|
+test "a recorded model this build does not know still shows as itself" {
+  let dispatch = test_dispatch()
+  let (_, loading) = update(
+    dispatch,
+    OpenSession(@interop.ChannelId::Local, "stored-chat"),
+    test_model().with_listed(["stored-chat"]),
+  )
+  let (_, loaded) = update_dev(
+    dispatch,
+    SessionLoaded(
+      model=@protocol.Configured("deepseek-v5-future"),
+      goal=None,
+      goal_markers=[],
+      session="stored-chat",
+      items=[],
+      watermark=0,
+      generation=1,
+    ),
+    loading,
+  )
+  assert_true(loaded.active().engine_model is Other("deepseek-v5-future"))
 }
 
 ///|
@@ -13808,95 +14016,6 @@ test "Codex threads share the Projects section's project rows" {
   assert_true(project.conversations[1].nested)
   // With the Codex page on screen, its active task claims the activation.
   assert_eq(sections[1].activation, Some("codex-thread-1"))
-}
-
-///|
-test "remembered tiers survive a round trip through storage" {
-  let dispatch = test_dispatch()
-  let (_, chosen) = update(
-    dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
-    test_model(),
-  )
-  let restored = parse_conversation_models(
-    encoded_conversation_models(chosen.conversation_models),
-  )
-  assert_eq(restored, chosen.conversation_models)
-  assert_true(restored is [{ key: "local/desktop-test", model: DsFlash, }])
-}
-
-///|
-test "a write merges into the stored rows instead of replacing them" {
-  // A sibling console tab on the same origin wrote these while this page held
-  // a copy loaded at its own startup. Pinning here must not drop the other
-  // tab's row — that conversation would silently revert to the default.
-  let stored = parse_conversation_models(
-    encoded_conversation_models([
-      { key: "remote.b/sibling-chat", model: DsFlash, },
-      { key: "remote.a/desktop-test", model: DsPro, },
-    ]),
-  )
-  let merged = remembered_with(stored, "remote.a/desktop-test", DsFlash)
-  assert_true(
-    merged
-    is [
-      { key: "remote.a/desktop-test", model: DsFlash, },
-      { key: "remote.b/sibling-chat", model: DsFlash, },
-    ],
-  )
-}
-
-///|
-/// Test-only: the stored spelling of a remembered list, as
-/// `save_conversation_model` writes it.
-fn encoded_conversation_models(
-  entries : Array[StoredConversationModel],
-) -> String {
-  let rows : Array[Json] = entries.map(entry => {
-    "key": entry.key.to_json(),
-    "model": entry.model.wire().to_json(),
-  })
-  rows.to_json().stringify()
-}
-
-///|
-test "the remembered list stays capped, newest first" {
-  let mut model = test_model()
-  // One past the cap, so the first conversation chosen for is the one that
-  // falls off and reverts to the page default.
-  for index in 0..<=ConversationModelsLimit {
-    model = model.remember_model(
-      @interop.ChannelId::Local,
-      "session-\{index}",
-      if index % 2 == 0 {
-        DsFlash
-      } else {
-        DsPro
-      },
-    )
-  }
-  assert_eq(model.conversation_models.length(), ConversationModelsLimit)
-  assert_true(
-    model.remembered_model(@interop.ChannelId::Local, "session-0") is None,
-  )
-  assert_true(
-    model.remembered_model(
-      @interop.ChannelId::Local,
-      "session-\{ConversationModelsLimit}",
-    )
-    is Some(DsFlash),
-  )
-  // Re-choosing an existing conversation moves it, never duplicates it.
-  let again = model.remember_model(
-    @interop.ChannelId::Local,
-    "session-1",
-    DsFlash,
-  )
-  assert_eq(again.conversation_models.length(), ConversationModelsLimit)
-  assert_true(
-    again.remembered_model(@interop.ChannelId::Local, "session-1")
-    is Some(DsFlash),
-  )
 }
 
 ///|
@@ -14187,7 +14306,6 @@ test "the GLM provider aligns only a fresh chat to its model family" {
       fps_overlay_enabled=false,
       minimal_transcript=false,
       model="deepseek-v4-pro",
-      conversation_models="",
       agent="",
       codex_model="",
       codex_effort="",
@@ -15393,6 +15511,7 @@ test "switching same-id archived stores fences the first transcript load" {
   let (_, stale_first) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       session=first_item.id,
       items=[
         {
@@ -15419,6 +15538,7 @@ test "switching same-id archived stores fences the first transcript load" {
   let (_, loaded_second) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       session=second_item.id,
       items=[
         {
@@ -15485,6 +15605,7 @@ test "an archived snapshot stays open across archived-list reconciliation" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session=item.id,
@@ -15563,6 +15684,7 @@ test "unarchiving an open transcript fences its archived snapshot" {
   let (_, stale) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session=item.id,
@@ -15901,6 +16023,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session=deleted_item.id,
       sequence=1,
       ts=None,
@@ -15921,6 +16044,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
   let (_, reconciled) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       session=deleted_item.id,
       items=[],
       watermark=0,
@@ -16402,6 +16526,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
   let (_, stale_archived) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session=item.id,
@@ -18463,6 +18588,7 @@ test "send does not show a prompt until its commit lands" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=1,
       ts=None,
@@ -18491,6 +18617,7 @@ test "a replayed commit at or below the watermark is dropped" {
   let (_, next) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=2,
       ts=None,
@@ -18513,6 +18640,7 @@ test "a commit past the frontier buffers and flips into a reload" {
   let (_, next) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=5,
       ts=None,
@@ -18541,6 +18669,7 @@ test "commits buffer while a reload is in flight" {
   let (_, next) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=3,
       ts=None,
@@ -18579,6 +18708,7 @@ test "a snapshot drains buffered commits in sequence order" {
   let (_, next) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -18624,6 +18754,7 @@ test "a snapshot already containing the buffered commits drops them" {
   let (_, next) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -18657,6 +18788,7 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
   let (_, next) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -18713,6 +18845,7 @@ test "background retries preserve buffered commits until a later success" {
   let (_, retrying) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=2,
       ts=None,
@@ -18729,6 +18862,7 @@ test "background retries preserve buffered commits until a later success" {
   let (_, healed) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -18780,6 +18914,7 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
   let (_, loaded) = update_dev(
     dispatch,
     SessionLoaded(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -18822,6 +18957,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   let (_, stale) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -18846,6 +18982,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
   let (_, lower) = update_dev(
     dispatch,
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       goal=None,
       goal_markers=[],
       session="desktop-test",
@@ -18881,6 +19018,7 @@ test "tool decode semantics wait for their durable error tool result" {
   // The engine records the response with its undecodable call, then the
   // error result that closes it; the semantic event is only news.
   let call = SessionCommitted(
+    model=@protocol.Unconfigured,
     session="desktop-test",
     sequence=1,
     ts=None,
@@ -18893,6 +19031,7 @@ test "tool decode semantics wait for their durable error tool result" {
     session_root=@interop.ChannelId::Local.test_store_root(),
   )
   let result = SessionCommitted(
+    model=@protocol.Unconfigured,
     session="desktop-test",
     sequence=2,
     ts=None,
@@ -18940,6 +19079,7 @@ test "assistant semantic events wait for their durable commit" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=1,
       ts=None,
@@ -19016,6 +19156,7 @@ test "a delayed assistant commit never clears a newer live delta" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=1,
       ts=None,
@@ -19056,6 +19197,7 @@ test "a delayed terminal commit never clears a newer live delta" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=2,
       ts=None,
@@ -19080,6 +19222,7 @@ test "commit-first assistant semantics do not append again" {
   let (_, committed) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-test",
       sequence=1,
       ts=None,
@@ -19114,6 +19257,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
   let (_, next) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
@@ -19135,6 +19279,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
   let (_, repeated) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
@@ -19152,6 +19297,7 @@ test "a gapped commit for an unknown session materializes then reloads" {
   let (_, next) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-gap",
       sequence=3,
       ts=None,
@@ -19191,6 +19337,7 @@ test "a late commit cannot resurrect a locally known archived session" {
   let (_, next) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-archived",
       sequence=1,
       ts=None,
@@ -19220,6 +19367,7 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
   let (_, next) = update_dev(
     dispatch,
     SessionCommitted(
+      model=@protocol.Unconfigured,
       session="desktop-tombstoned",
       sequence=1,
       ts=None,
@@ -20272,6 +20420,7 @@ test "a sub-run's progress refreshes the child transcript on screen" {
   let (_, settled) = update_dev(
     test_dispatch(),
     SessionRefreshed(
+      model=@protocol.Unconfigured,
       session="desktop-test-sr-1",
       items=[
         {

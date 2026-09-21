@@ -28,7 +28,6 @@ fn load_saved_settings(
           minimal_transcript=load_setting(MinimalTranscriptStorageKey) == "true",
           fps_overlay_enabled=load_setting(FpsOverlayStorageKey) == "true",
           model=load_setting(ModelStorageKey),
-          conversation_models=load_setting(ConversationModelsStorageKey),
           agent=load_setting(AgentStorageKey),
           codex_model=load_setting(CodexModelStorageKey),
           codex_effort=load_setting(CodexReasoningEffortStorageKey),
@@ -91,55 +90,6 @@ fn OpenSeekReasoning::save(self : OpenSeekReasoning) -> @cmd.Cmd {
 /// long forced-thinking run.
 fn OpenSeekReasoning::save_for_glm(self : OpenSeekReasoning) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => save_setting(GlmReasoningStorageKey, self.wire()))
-}
-
-///|
-/// Pin one conversation's tier, merging into the rows already stored rather
-/// than writing this page's whole list over them. Relay console pages share
-/// one browser origin, so a second tab holds a copy loaded at its own
-/// startup; dumping that stale copy would delete whatever the other tab has
-/// since chosen for unrelated conversations — a scalar preference next to
-/// this one only races over its own value, but a collection loses rows.
-///
-/// This preserves those rows; it does not make tabs live-consistent. A tab
-/// still learns another's choices only when it reloads, which is the same
-/// staleness every other preference here already has.
-///
-/// The list is written as an array, not an object: newest first is the cap's
-/// eviction order, which an object's key order would not promise.
-fn save_conversation_model(key : String, model : EngineModel) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => {
-    let stored = parse_conversation_models(
-      load_setting(ConversationModelsStorageKey),
-    )
-    let rows : Array[Json] = remembered_with(stored, key, model).map(entry => {
-      "key": entry.key.to_json(),
-      "model": entry.model.wire().to_json(),
-    })
-    save_setting(ConversationModelsStorageKey, rows.to_json().stringify())
-  })
-}
-
-///|
-/// Read them back. Storage is an input boundary shared with older and newer
-/// builds: a store that will not parse degrades to remembering nothing, and a
-/// single malformed row is skipped rather than discarding the rest.
-fn parse_conversation_models(text : String) -> Array[StoredConversationModel] {
-  let entries : Array[StoredConversationModel] = []
-  guard !text.is_blank() else { return entries }
-  let json = @json.parse(text) catch { _ => return entries }
-  guard json is Array(rows) else { return entries }
-  for row in rows {
-    guard entries.length() < ConversationModelsLimit else { break }
-    if row is Object(fields) &&
-      fields.get("key") is Some(String(key)) &&
-      !key.is_empty() &&
-      fields.get("model") is Some(String(wire)) &&
-      EngineModel::parse(wire) is Some(model) {
-      entries.push({ key, model, })
-    }
-  }
-  entries
 }
 
 ///|

@@ -63,9 +63,16 @@ async fn append_compaction_summary(
   summary~ : String,
   from_sequence~ : Int,
   to_sequence~ : Int,
+  settings? : Map[String, Json],
 ) -> @agent_session.Session {
   if store is Some(store) {
-    store.compact(session, content=summary, from_sequence~, to_sequence~)
+    store.compact(
+      session,
+      content=summary,
+      from_sequence~,
+      to_sequence~,
+      settings?,
+    )
   } else {
     session.compact(
       content=summary,
@@ -84,6 +91,9 @@ pub async fn compact_session(
   session : @agent_session.Session,
   api_key~ : String,
   model~ : @deepseek.Model,
+  // The settings the compacting process is the authority on, settled with
+  // the durable summary exactly as a turn's appends settle them.
+  settings? : Map[String, Json],
   api_url? : String,
   retry_attempts? : Int,
   retry_backoff_ms? : Int,
@@ -109,6 +119,7 @@ pub async fn compact_session(
     summary~,
     from_sequence~,
     to_sequence~,
+    settings?,
   )
   @emit.emit(CompactionFinished(from_sequence~, to_sequence~, summary~))
   next

@@ -16,7 +16,7 @@ Each session lives under:
 <root>/sessions/<session-id>/
   openseek_session-<session-id>.jsonl
   session.lock
-  session-title            (only once a user title is set)
+  settings.json            (only once the session is titled or configured)
 ```
 
 `openseek_session-<session-id>.jsonl` is the whole durable session: its first
@@ -30,6 +30,16 @@ self-naming.
 `session.lock` is an implementation detail used to serialize writers and keep a
 reader from seeing a half-updated session. It carries no id suffix: it already
 lives inside the per-id directory and is never collected alongside the jsonl.
+
+`settings.json` is one JSON object: the session's configuration, beside the
+transcript rather than in it. Its keys belong to whoever writes them
+(`set_setting`, or `append(settings=...)`, which settles them in the same
+locked step as the event); the store itself understands only `title`, the
+user-authored display name that `set_title` writes and `listings` reads. A run
+keeps the model it runs with under `model`, which the desktop reads back when
+reopening. `settings(id)` returns the object; a session renamed by a
+build that wrote the retired one-value `session-title` file is still read
+through that file until the first settings write folds it in and removes it.
 
 ## API Shape
 
@@ -303,7 +313,7 @@ let path = store.session_file(@agent_session.SessionId("demo"))
 ## Failure Model
 
 The whole transcript is one file, so there is no cross-file consistency to
-maintain (the optional `session-title` sidecar is replaced atomically under the
+maintain (the optional `settings.json` sidecar is replaced atomically under the
 same lock):
 
 - `append` is a single `O_APPEND` write of one event line. The first durable

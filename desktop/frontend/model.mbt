@@ -167,24 +167,6 @@ fn EngineModel::thinking(
 }
 
 ///|
-/// One conversation's remembered tier. `ConversationKey` is a frontend value
-/// that deliberately never crosses a boundary, so persistence spells the same
-/// identity out itself: the channel's stable URI authority joined to the
-/// session id, which keeps two hosts' identical session ids apart.
-priv struct StoredConversationModel {
-  key : String
-  model : EngineModel
-} derive(Eq, Debug)
-
-///|
-fn conversation_model_key(
-  channel : @interop.ChannelId,
-  session : String,
-) -> String {
-  "\{channel.uri_authority()}/\{session}"
-}
-
-///|
 test "engine models round-trip their wire names" {
   inspect(
     EngineModel::parse("deepseek-v4-pro").unwrap().label(),
@@ -295,21 +277,6 @@ const OpenSeekReasoningStorageKey : String = "openseek.reasoning_effort"
 /// kept apart from DeepSeek's reasoning preference. A user who wants Max for
 /// DeepSeek should not inherit it merely by switching the endpoint to GLM.
 const GlmReasoningStorageKey : String = "openseek.glm_reasoning_effort"
-
-///|
-/// Every conversation whose tier the user has chosen, so reopening one
-/// recovers its own tier instead of inheriting whatever was picked last in
-/// some unrelated chat. Page-local like the rest of this file: the desktop
-/// window and a browser console remember separately, and the host never sees
-/// this. Rows are newest first.
-const ConversationModelsStorageKey : String = "openseek.conversation_models"
-
-///|
-/// How many conversations remember their tier. Conversations are unbounded
-/// and this is one localStorage value, so the list is capped; past the cap
-/// the least recently chosen conversation forgets and opens on the default,
-/// exactly like one the user never chose a tier for.
-const ConversationModelsLimit : Int = 200
 
 ///|
 /// The app's appearance choice. System preference is tracked separately on
@@ -764,14 +731,19 @@ priv struct Conversation {
   // workspace root. Consumed by the create-then-start chain, which sets
   // `worktree` and clears this.
   worktree_mode : Bool
-  // The model this conversation's next turn runs with, chosen on the
-  // composer's chip. Per conversation, not per app: a long refactor can sit
-  // on the high tier while a quick question beside it stays cheap. Born from
-  // the page's `default_model` — or, for a conversation the page first meets
-  // through a live run, from that run's tier. Nothing but the chip changes it
-  // afterwards: a start is always older than the composer, so echoing one
-  // back would undo a choice the user has already made for the next turn.
+  // The model this conversation's next turn runs with. Per conversation,
+  // not per app: a long refactor can sit on the high tier while a quick
+  // question beside it stays cheap. Born from the page's `default_model`,
+  // then kept in step with what the record and its runs report — until the
+  // user chooses on the composer's chip (`model_chosen`).
   engine_model : EngineModel
+  // Whether `engine_model` is the user's own pick on this page's chip, as
+  // opposed to the default it was born with or what the record and its runs
+  // report. Only a pick is protected: a start or a re-read of the record
+  // may replace an inherited or reported model, never a chosen one — a
+  // start is always older than the composer, and a re-read changes nothing
+  // the user did.
+  model_chosen : Bool
   // Root-authored prompt snapshot for submission and delivery recovery. The
   // live textarea value is component-local and is copied here atomically only
   // when the user submits; a rejection may write recovered text back here.
@@ -1366,19 +1338,15 @@ priv struct Model {
   focused : @interop.ChannelId
   // The tier a new conversation is born with: whatever was last picked in
   // the composer, persisted page-locally. The model a turn actually runs
-  // with is the conversation's own `engine_model`, never this.
+  // with is the conversation's own `engine_model`, never this. A reopened
+  // conversation does not inherit it either: the engine keeps the model it
+  // runs with in the record's settings and `session.load` reports it, so
+  // only a conversation no run has ever configured starts from here.
   default_model : EngineModel
   // The agent a new conversation is born with: whichever provider group the
   // unified model chip was last picked from, persisted page-locally. An
   // existing conversation never reads this — its agent is fixed at creation.
   default_agent : AgentChoice
-  // Each conversation's pinned tier, newest first and capped at
-  // `ConversationModelsLimit`. A conversation is pinned when the chip gives
-  // it a tier and when a run makes it durable — an inherited tier that was
-  // actually used counts, or the conversation would come back on whatever
-  // default an unrelated chat has moved to since. Reopening recovers from
-  // here; `default_model` is only for conversations this list has never held.
-  conversation_models : Array[StoredConversationModel]
   // The DeepSeek (and non-GLM custom-model) reasoning choice sent on the next
   // OpenSeek operation. GLM keeps a separate preference below because its
   // forced-thinking low mode is the useful default for ordinary tasks.
@@ -1716,7 +1684,6 @@ priv enum Msg {
     fps_overlay_enabled~ : Bool,
     minimal_transcript~ : Bool,
     model~ : String,
-    conversation_models~ : String,
     agent~ : String,
     codex_model~ : String,
     codex_effort~ : String,
@@ -2207,6 +2174,11 @@ priv enum DeviceMsg {
     watermark~ : Int,
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int, @transcript.GoalMarker)],
+    // The model the record is configured with, if any, or why the host
+    // could not read its settings; a configured model outranks the
+    // placeholder's default so a reopened conversation shows the model it
+    // was actually on.
+    model~ : @protocol.ConfiguredModel,
     generation~ : Int
   )
   // A foreground stored-session read failed. Generation guards stale replies;
@@ -2221,6 +2193,11 @@ priv enum DeviceMsg {
     watermark~ : Int,
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int, @transcript.GoalMarker)],
+    // The model the record is configured with, if any, or why the host
+    // could not read its settings; a configured model outranks the
+    // placeholder's default so a reopened conversation shows the model it
+    // was actually on.
+    model~ : @protocol.ConfiguredModel,
     generation~ : Int
   )
   // A background re-read failed. The generation identifies the exact read,
@@ -2238,7 +2215,10 @@ priv enum DeviceMsg {
     item~ : @protocol.SessionItem,
     // The durable store root the host read this commit from — the store
     // half of the session's identity.
-    session_root~ : @common.Uri
+    session_root~ : @common.Uri,
+    // The model the record is configured with as of this commit, so a
+    // session first met through it materializes on the right model.
+    model~ : @protocol.ConfiguredModel
   )
   // The host's `subrun.progress` broadcast: a running sub-run advanced. Not
   // durable and not lifecycle — the raw stream's brackets own the sub-run's
@@ -2518,6 +2498,7 @@ fn empty_conversation(
     workspace: Project(root=project),
     worktree_mode: false,
     engine_model: model,
+    model_chosen: false,
     task: "",
     mentions: [],
     composer_draft_present: false,
@@ -2614,7 +2595,6 @@ fn initial_model(desktop~ : Bool) -> Model {
     focused: @interop.ChannelId::Local,
     default_model: DsFlash,
     default_agent: OpenSeekAgent,
-    conversation_models: [],
     openseek_reasoning: ReasoningHigh,
     glm_reasoning: ReasoningOff,
     max_steps: DefaultMaxSteps,
@@ -3288,61 +3268,6 @@ fn Model::can_reload_transcript(self : Model, conv : Conversation) -> Bool {
 }
 
 ///|
-/// The tier this conversation was last given, if the page still remembers
-/// one. `None` — never chosen, or dropped by the cap — leaves the caller to
-/// pick its own fallback: the page default usually, a live run's tier when
-/// the conversation is first seen through one.
-fn Model::remembered_model(
-  self : Model,
-  channel : @interop.ChannelId,
-  session : String,
-) -> EngineModel? {
-  let key = conversation_model_key(channel, session)
-  self.conversation_models
-  .iter()
-  .find_first(entry => entry.key == key)
-  .map(entry => entry.model)
-}
-
-///|
-/// Remember a conversation's tier, moving it to the front so the cap drops
-/// whichever conversation the user has gone longest without choosing for.
-fn Model::remember_model(
-  self : Model,
-  channel : @interop.ChannelId,
-  session : String,
-  model : EngineModel,
-) -> Model {
-  {
-    ..self,
-    conversation_models: remembered_with(
-      self.conversation_models,
-      conversation_model_key(channel, session),
-      model,
-    ),
-  }
-}
-
-///|
-/// Move one conversation to the front of a remembered list, dropping the
-/// least recently chosen once the cap is reached. Free-standing because the
-/// durable store folds the same way: a write merges into the rows already
-/// there rather than replacing them (see `save_conversation_model`).
-fn remembered_with(
-  entries : Array[StoredConversationModel],
-  key : String,
-  model : EngineModel,
-) -> Array[StoredConversationModel] {
-  let merged : Array[StoredConversationModel] = [{ key, model, }]
-  for entry in entries {
-    if entry.key != key && merged.length() < ConversationModelsLimit {
-      merged.push(entry)
-    }
-  }
-  merged
-}
-
-///|
 /// The conversation on screen, when there is one. `None` is the state the app
 /// starts in and returns to whenever no project can hold a chat: the registry
 /// has not arrived yet, or every project was detached. A conversation is
@@ -3600,14 +3525,7 @@ fn Model::activate(
   }
   if !found {
     conversations.push(
-      empty_conversation(
-        channel,
-        session_id,
-        project,
-        model=self
-          .remembered_model(channel, session_id)
-          .unwrap_or(self.default_model),
-      ),
+      empty_conversation(channel, session_id, project, model=self.default_model),
     )
   }
   // Activating a conversation is also what moves the UI's focus to its

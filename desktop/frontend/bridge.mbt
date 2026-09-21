@@ -781,6 +781,7 @@ fn session_event_msg(
       ts=payload.event.ts,
       item=payload.event.item,
       session_root~,
+      model=payload.model,
     ),
   )
 }
@@ -1055,6 +1056,7 @@ fn open_session(
           watermark=view.watermark,
           goal=view.goal,
           goal_markers=view.goal_markers,
+          model=view.model,
           generation~,
         ),
       )
@@ -1101,6 +1103,7 @@ fn refresh_session(
           watermark=view.watermark,
           goal=view.goal,
           goal_markers=view.goal_markers,
+          model=view.model,
           generation~,
         ),
       )

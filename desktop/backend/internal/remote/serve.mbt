@@ -425,6 +425,7 @@ async test "readiness precedes the first forwarded hub notification" {
         item: User({ content: "test", submission_id: None, }),
       },
       session_root: "/sessions/global",
+      model: Unconfigured,
     }),
   )
   let notification = subscription.notifications.next()
@@ -597,6 +598,7 @@ test "remote delivery retains streaming runtime and error events" {
           item: User({ content: "test", submission_id: None, }),
         },
         session_root: "/sessions/global",
+        model: Unconfigured,
       }),
     )
     is Some(_),
