@@ -114,6 +114,33 @@ Hosts own every `TextModel`, DOM host, and explicitly supplied
 
 ## Diff editor contract
 
+`DiffEditor::set_line_widgets` reserves measured blocks after one-based model
+lines. Each `DiffLineWidget` keeps its caller-owned DOM node outside the
+editor; `on_layout(Some((client_left, client_top, width)))` positions the
+host's overlay. The editor does not reparent or replace that DOM. Retaining
+node identity across updates preserves native focus and text selection;
+ResizeObserver updates the existing zone and the paired pane spacers.
+Removing a block, replacing models or disposing detaches its observer and
+wheel handler and reports `None`. Wheel input on ordinary block
+content uses the editor's scroll policy; native textareas and code blocks
+retain wheel input while they can scroll in the requested direction.
+
+In split layout original blocks stay on the original pane. In unified layout,
+an original block follows its containing deleted hunk; hosts should label the
+original line in their content. Original unchanged lines map to the modified
+side using all provider mappings, including ignored changes. The host must
+retire or remap anchors when source identities change.
+`set_line_action` installs the gutter add-comment affordance with side and
+one-based model line; `None` hides it. The action sits immediately before the
+code content. Hover tracking continues while disabled, so enabling it reveals
+the current target without another pointer movement; scrolling or replacing
+the model clears that target.
+Neither API knows GitHub, drafts, transport or Markdown.
+`with_automatic_inline` lets hosts keep blocks readable
+below a chosen width. The direct public-Viewer preview and focused browser
+test use `runner.html?scenario=diff-line-widgets` and
+`tests/browser/component/diff_line_widgets.spec.js`.
+
 `DiffEditor` accepts a synchronous `DocumentDiffProvider`. The default line-diff
 provider lives in `viewer/common/diff`. Its result contains one ordered
 `changes` list. Each change carries `kind: Visible | Ignored` and a detailed

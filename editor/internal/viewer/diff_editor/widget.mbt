@@ -53,6 +53,10 @@ pub struct DiffEditorWidget {
   mut original_alignment_geometry : PaneGeometrySnapshot?
   mut modified_alignment_geometry : PaneGeometrySnapshot?
   mut diff_state : DiffState?
+  priv line_widgets : Array[MountedDiffLineWidget]
+  priv mut line_action : ((Bool, Int) -> Unit)?
+  priv mut line_action_button : @rdom.Element?
+  priv mut line_action_target : (Bool, Int)?
   priv mut hunk_action_renderer : ((Int) -> @rdom.Element?)?
   priv hunk_actions : Array[(Int, @rdom.Element)]
   priv mut navigate_from_active_hunk : Bool
@@ -237,6 +241,10 @@ pub fn DiffEditorWidget::create(
     original_alignment_geometry: None,
     modified_alignment_geometry: None,
     diff_state: None,
+    line_widgets: [],
+    line_action: None,
+    line_action_button: None,
+    line_action_target: None,
     hunk_action_renderer: None,
     hunk_actions: [],
     navigate_from_active_hunk: false,
@@ -270,6 +278,7 @@ pub fn DiffEditorWidget::create(
     }),
   )
   widget.install_event_bridges()
+  widget.install_line_action()
   // Establish accessibility/visibility attributes even when the initial host
   // is display:none and therefore has no valid layout transaction yet.
   widget.apply_layout_dom()
@@ -395,6 +404,7 @@ fn DiffEditorWidget::install_event_bridges(self : DiffEditorWidget) -> Unit {
       match self.view_model.get_state() {
         Ready => ()
         NoModel | Pending | Failed => {
+          self.hide_line_action()
           self.diff_state = None
           self.set_active_hunk_index(None)
         }
@@ -1186,6 +1196,7 @@ fn DiffEditorWidget::commit_diff_state(
   generation : Int,
 ) -> Unit {
   let modified_viewport = self.modified_viewport_for_geometry_transaction()
+  self.sync_line_widget_anchors(diff_state)
   let (original_geometry, modified_geometry) = self.capture_alignment_geometry()
   let (original_specs, modified_specs, next_inline_deleted_zones) = match
     (self.layout_state.actual_layout, original_geometry, modified_geometry) {
@@ -1384,6 +1395,9 @@ pub fn DiffEditorWidget::set_model(
   self.pending_layout_modified_viewport = None
   self.set_active_hunk_index(None)
   self.navigate_from_active_hunk = false
+  self.set_line_widgets([])
+  self.set_line_action(None)
+  self.hide_line_action()
   self.clear_hunk_actions()
   self.clear_pending_scroll_echoes()
   self.clear_diff_features_for_transition()
@@ -2107,6 +2121,7 @@ pub fn DiffEditorWidget::dispose(self : DiffEditorWidget) -> Unit {
   if self.disposed {
     return
   }
+  self.set_line_widgets([])
   self.clear_diff_features_for_transition()
   self.disposed = true
   if self.resize_observer is Some(observer) {

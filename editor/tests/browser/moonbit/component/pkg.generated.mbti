@@ -10,6 +10,8 @@ pub fn run_cursor_input_events_test() -> Unit
 
 pub fn run_diff_editor_lifecycle_test() -> Unit
 
+pub fn run_diff_line_widgets_test() -> Unit
+
 pub fn run_diff_markdown_comments_test() -> Unit
 
 pub fn run_initial_size_test() -> Unit

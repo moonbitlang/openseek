@@ -184,6 +184,8 @@ pub fn DiffEditorWidget::reveal_previous_change_without_wrap(Self) -> Bool
 pub fn DiffEditorWidget::select_hunk(Self, Int) -> Unit
 pub fn DiffEditorWidget::set_diff_provider(Self, &@diff.DocumentDiffProvider) -> Unit
 pub fn DiffEditorWidget::set_hunk_action_renderer(Self, ((Int) -> @dom.Element?)?) -> Unit
+pub fn DiffEditorWidget::set_line_action(Self, ((Bool, Int) -> Unit)?) -> Unit
+pub fn DiffEditorWidget::set_line_widgets(Self, Array[DiffLineWidget]) -> Unit
 pub fn DiffEditorWidget::set_model(Self, DiffEditorModelData?) -> DiffEditorModelData?
 pub fn DiffEditorWidget::set_scroll_left(Self, Double) -> Unit
 pub fn DiffEditorWidget::update_options(Self, @code_editor_widget.CodeEditorOptions, DiffEditorOptions) -> Unit
@@ -191,6 +193,13 @@ pub fn DiffEditorWidget::update_options(Self, @code_editor_widget.CodeEditorOpti
 pub(all) struct DiffHunk {
   members : Array[@diff.DetailedLineRangeMapping]
   // private fields
+}
+
+pub(all) struct DiffLineWidget {
+  original : Bool
+  line : Int
+  node : @dom.Element
+  on_layout : ((Double, Double, Double)?) -> Unit
 }
 
 pub struct DiffMapping {

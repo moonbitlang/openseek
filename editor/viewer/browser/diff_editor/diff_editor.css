@@ -469,3 +469,25 @@
   outline: 2px solid var(--vscode-focusBorder);
   outline-offset: 1px;
 }
+
+.moonbit-diff-line-widget { box-sizing: border-box; width: 100%; overflow: hidden; }
+.moonbit-diff-line-action {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: #0969da;
+  color: white;
+  cursor: pointer;
+}
+.moonbit-diff-line-action > .codicon-add {
+  /* Center the glyph's 13px strokes within its 16px icon box. */
+  transform: translate(0.5px, 0.5px);
+}
+.moonbit-diff-line-action[hidden] { display: none; }

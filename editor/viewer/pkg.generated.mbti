@@ -65,6 +65,8 @@ pub fn DiffEditor::reveal_previous_change_without_wrap(Self) -> Bool
 pub fn DiffEditor::select_hunk(Self, Int) -> Unit
 pub fn DiffEditor::set_diff_provider(Self, &@diff.DocumentDiffProvider) -> Unit
 pub fn DiffEditor::set_hunk_action_renderer(Self, ((Int) -> @dom.Element?)?) -> Unit
+pub fn DiffEditor::set_line_action(Self, ((Bool, Int) -> Unit)?) -> Unit
+pub fn DiffEditor::set_line_widgets(Self, Array[DiffLineWidget]) -> Unit
 pub fn DiffEditor::set_model(Self, DiffEditorModel?) -> DiffEditorModel?
 pub fn DiffEditor::set_scroll_left(Self, Double) -> Unit
 pub fn DiffEditor::update_options(Self, DiffEditorOptions) -> Unit
@@ -87,6 +89,7 @@ type DiffEditorOptions
 pub fn DiffEditorOptions::DiffEditorOptions(editor_options? : ViewerOptions, layout? : DiffEditorLayout, automatic_inline? : Bool, automatic_inline_width? : Double, sash_enabled? : Bool, split_ratio? : Double, diff_word_wrap? : DiffWordWrap, overview_ruler? : Bool, render_indicators? : Bool, render_markdown_comments? : Bool, handle_mouse_wheel? : Bool, ignore_trim_whitespace? : Bool) -> Self
 pub fn DiffEditorOptions::default() -> Self
 pub fn DiffEditorOptions::layout(Self) -> DiffEditorLayout
+pub fn DiffEditorOptions::with_automatic_inline(Self, Bool, width? : Double) -> Self
 pub fn DiffEditorOptions::with_editor_options(Self, ViewerOptions) -> Self
 pub fn DiffEditorOptions::with_layout(Self, DiffEditorLayout) -> Self
 pub fn DiffEditorOptions::with_render_indicators(Self, Bool) -> Self
@@ -100,6 +103,13 @@ pub fn DiffEditorRevealEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DiffHunk {
   members : Array[@diff.DetailedLineRangeMapping]
+}
+
+pub(all) struct DiffLineWidget {
+  original : Bool
+  line : Int
+  node : @dom.Element
+  on_layout : ((Double, Double, Double)?) -> Unit
 }
 
 pub(all) enum DiffWordWrap {

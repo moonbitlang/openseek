@@ -16,6 +16,7 @@ fn run_scenario(scenario : String) -> Unit {
     "cursor-input-events" => @component.run_cursor_input_events_test()
     "definition-navigation" => @definition.run_definition_browser_test()
     "diff-editor-lifecycle" => @component.run_diff_editor_lifecycle_test()
+    "diff-line-widgets" => @component.run_diff_line_widgets_test()
     "diff-markdown-comments" => @component.run_diff_markdown_comments_test()
     "folding" => @folding.run_folding_test()
     "folding-nested" => @folding_nested.run_folding_nested_test()

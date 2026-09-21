@@ -5,6 +5,7 @@ import {
   "moonbitlang/editor/internal/viewer/code_editor_widget" @code_widget,
   "moonbitlang/editor/viewer/common/diff",
   "moonbitlang/editor/viewer/common/model",
+  "moonbitlang/editor/viewer/browser" @editor_browser,
   "moonbitlang/editor/viewer/common/view_layout",
   "moonbit-community/rabbita/dom" @rdom,
 }
