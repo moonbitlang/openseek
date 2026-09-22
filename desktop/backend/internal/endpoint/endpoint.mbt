@@ -79,21 +79,6 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex(
 }
 
 ///|
-/// Preserve skill failure details across both local and remote transports.
-pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::skills(
-  command : @commands.Command[Payload, @protocol.SkillCommandReply[Reply]],
-  handler : async (Payload) -> Reply,
-) -> Endpoint {
-  Endpoint(command, payload => {
-    let reply = handler(payload) catch {
-      error if @async.is_being_cancelled() => raise error
-      error => return SkillCommandError("\{error}")
-    }
-    SkillCommandSuccess(reply)
-  })
-}
-
-///|
 /// Construct a Codex endpoint whose handler completes synchronously. Keeping
 /// this separate avoids pretending a synchronous command can suspend merely
 /// to share the Codex error-reply contract.

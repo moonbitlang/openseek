@@ -11,11 +11,11 @@ import {
 }
 
 // Values
-pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketItem]
+pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Result[Array[MarketItem], String]
 
 pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @rabbita.Val[@i18n.Locale], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
 
-pub fn installed_from_reply(@protocol.InstalledSkillsReply) -> Array[InstalledItem]
+pub fn installed_from_reply(@protocol.InstalledSkillsReply) -> Result[Array[InstalledItem], String]
 
 pub fn source_label(MarketItem) -> String
 

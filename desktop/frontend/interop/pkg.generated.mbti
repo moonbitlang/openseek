@@ -49,8 +49,6 @@ pub fn page_ws_origin() -> String?
 
 pub fn session_command_lane(ChannelId, String) -> String
 
-pub async fn[Payload : ToJson, Reply : @json.FromJson] skill_request(ChannelId, @commands.Command[Payload, @protocol.SkillCommandReply[Reply]], Payload) -> Reply
-
 pub fn viewport_width() -> Int?
 
 pub fn ws_close(ChannelId) -> Unit

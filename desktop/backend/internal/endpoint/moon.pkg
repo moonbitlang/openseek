@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/async",
   "moonbit-community/proton",
   "moonbit-community/proton_contract",
   "openseek_desktop/commands",
@@ -8,6 +7,7 @@ import {
 }
 
 import {
+  "moonbitlang/async",
   "moonbitlang/core/debug",
 } for "wbtest"
 

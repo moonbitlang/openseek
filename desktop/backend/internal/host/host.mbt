@@ -297,22 +297,16 @@ pub fn endpoints(
     Endpoint(@commands.moonide_codelens, payload => {
       moonide_codelens_op(state, payload)
     }),
-    @endpoint.Endpoint::skills(@commands.skills_catalog, _ => {
-      skills_catalog_op()
-    }),
-    @endpoint.Endpoint::skills(@commands.skills_content, payload => {
-      skills_content_op(payload)
-    }),
-    @endpoint.Endpoint::skills(@commands.skills_installed_content, payload => {
+    Endpoint(@commands.skills_catalog, _ => skills_catalog_op()),
+    Endpoint(@commands.skills_content, payload => skills_content_op(payload)),
+    Endpoint(@commands.skills_installed_content, payload => {
       installed_skill_content_op(payload)
     }),
-    @endpoint.Endpoint::skills(@commands.skills_installed, _ => {
-      installed_skills_op()
-    }),
-    @endpoint.Endpoint::skills(@commands.skills_install, payload => {
+    Endpoint(@commands.skills_installed, _ => installed_skills_op()),
+    Endpoint(@commands.skills_install, payload => {
       install_skill_op(payload, on_skills_changed)
     }),
-    @endpoint.Endpoint::skills(@commands.skills_uninstall, payload => {
+    Endpoint(@commands.skills_uninstall, payload => {
       uninstall_skill_op(payload, on_skills_changed)
     }),
     Endpoint(@commands.update_check, _ => state.updates.check()),

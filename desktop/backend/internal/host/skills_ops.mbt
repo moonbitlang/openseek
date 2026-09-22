@@ -7,11 +7,12 @@
 ///|
 async fn skills_catalog_op() -> SkillsCatalogReply {
   let skills = @skillmarket.fetch_catalog() catch {
-    @skillmarket.SkillMarketError(message) => raise HostError(message)
-    error => raise error
+    error if @async.is_being_cancelled() => raise error
+    @skillmarket.SkillMarketError(message) => return SkillsCatalogError(message)
+    error => return SkillsCatalogError("\{error}")
   }
-  {
-    skills: [
+  SkillsCatalog(
+    [
       for skill in skills => {
         {
           name: skill.name,
@@ -24,31 +25,35 @@ async fn skills_catalog_op() -> SkillsCatalogReply {
         }
       }
     ],
-  }
+  )
 }
 
 ///|
-async fn skills_content_op(payload : InstallSkillPayload) -> ReadFileReply {
+async fn skills_content_op(
+  payload : InstallSkillPayload,
+) -> @protocol.SkillContentReply {
   let content = @skillmarket.fetch_skill_content(
     module_name=payload.module_name,
     version=payload.version,
     package_path=payload.package_path.unwrap_or(""),
   ) catch {
-    @skillmarket.SkillMarketError(message) => raise HostError(message)
-    error => raise error
+    error if @async.is_being_cancelled() => raise error
+    @skillmarket.SkillMarketError(message) => return SkillContentError(message)
+    error => return SkillContentError("\{error}")
   }
-  Content(content~, absolute="", sig="")
+  SkillContent(content)
 }
 
 ///|
 async fn installed_skill_content_op(
   payload : UninstallSkillPayload,
-) -> ReadFileReply {
+) -> @protocol.SkillContentReply {
   let content = @skillmarket.read_skill_content(payload.id) catch {
-    @skillmarket.SkillMarketError(message) => raise HostError(message)
-    error => raise error
+    error if @async.is_being_cancelled() => raise error
+    @skillmarket.SkillMarketError(message) => return SkillContentError(message)
+    error => return SkillContentError("\{error}")
   }
-  Content(content~, absolute="", sig="")
+  SkillContent(content)
 }
 
 ///|
@@ -62,27 +67,28 @@ async fn install_skill_op(
     package_path=payload.package_path.unwrap_or(""),
     on_committed~,
   ) catch {
-    @skillmarket.SkillMarketError(message) => raise HostError(message)
-    error => raise error
+    error if @async.is_being_cancelled() => raise error
+    @skillmarket.SkillMarketError(message) => return SkillInstallError(message)
+    error => return SkillInstallError("\{error}")
   }
-  {
-    installed: {
-      id: installed.id,
-      name: installed.name,
-      description: installed.description,
-      source: installed.source,
-    },
-  }
+  SkillInstalled({
+    id: installed.id,
+    name: installed.name,
+    description: installed.description,
+    source: installed.source,
+  })
 }
 
 ///|
 async fn installed_skills_op() -> InstalledSkillsReply {
   let skills = @skillmarket.installed_skills() catch {
-    @skillmarket.SkillMarketError(message) => raise HostError(message)
-    error => raise error
+    error if @async.is_being_cancelled() => raise error
+    @skillmarket.SkillMarketError(message) =>
+      return InstalledSkillsError(message)
+    error => return InstalledSkillsError("\{error}")
   }
-  {
-    skills: [
+  InstalledSkills(
+    [
       for skill in skills => {
         {
           id: skill.id,
@@ -92,7 +98,7 @@ async fn installed_skills_op() -> InstalledSkillsReply {
         }
       }
     ],
-  }
+  )
 }
 
 ///|
@@ -101,8 +107,10 @@ async fn uninstall_skill_op(
   on_committed : () -> Unit,
 ) -> UninstallSkillReply {
   @skillmarket.uninstall_skill(payload.id, on_committed~) catch {
-    @skillmarket.SkillMarketError(message) => raise HostError(message)
-    error => raise error
+    error if @async.is_being_cancelled() => raise error
+    @skillmarket.SkillMarketError(message) =>
+      return SkillUninstallError(message)
+    error => return SkillUninstallError("\{error}")
   }
-  { removed: true, }
+  SkillUninstalled
 }

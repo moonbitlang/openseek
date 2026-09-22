@@ -654,12 +654,15 @@ Malformed, unknown, or root-escaping rows are omitted.
 
 Every `skills.*` operation returns failures as `{error: string}` replies,
 preserving the detailed reason across both the local Proton bridge and remote
-JSON-RPC. Successful replies retain the shapes below.
+JSON-RPC. Each operation's concrete reply type owns its success/error variants;
+these are ordinary command replies, with no transport-level wrapper.
 
 | method | params | result |
 |---|---|---|
 | `skills.catalog` | `{}` | `{skills: […]}` — the registry's installable skills |
 | `skills.installed` | `{}` | `{skills: […]}` — the global library's contents |
+| `skills.content` | `{module_name, version, package_path?}` | `{content}` — the published SKILL.md |
+| `skills.installed_content` | `{id}` | `{content}` — the installed SKILL.md |
 | `skills.install` | `{module_name, version, package_path?}` | `{installed}` |
 | `skills.uninstall` | `{id}` | `{removed}` |
 

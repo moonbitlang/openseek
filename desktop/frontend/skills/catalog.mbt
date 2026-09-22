@@ -46,9 +46,13 @@ pub fn source_label(item : MarketItem) -> String {
 /// removed malformed registry rows before constructing this value.
 pub fn catalog_from_reply(
   reply : @protocol.SkillsCatalogReply,
-) -> Array[MarketItem] {
+) -> Result[Array[MarketItem], String] {
+  let entries = match reply {
+    SkillsCatalog(skills) => skills
+    SkillsCatalogError(message) => return Err(message)
+  }
   let items : Array[MarketItem] = []
-  for entry in reply.skills {
+  for entry in entries {
     guard !entry.module_name.is_empty() && !entry.version.is_empty() else {
       continue
     }
@@ -66,16 +70,20 @@ pub fn catalog_from_reply(
       repository: entry.repository,
     })
   }
-  items
+  Ok(items)
 }
 
 ///|
 /// Project a `skills_installed` reply.
 pub fn installed_from_reply(
   reply : @protocol.InstalledSkillsReply,
-) -> Array[InstalledItem] {
+) -> Result[Array[InstalledItem], String] {
+  let entries = match reply {
+    InstalledSkills(skills) => skills
+    InstalledSkillsError(message) => return Err(message)
+  }
   let items : Array[InstalledItem] = []
-  for entry in reply.skills {
+  for entry in entries {
     guard !entry.id.is_empty() else { continue }
     items.push({
       id: entry.id,
@@ -88,7 +96,7 @@ pub fn installed_from_reply(
       source: entry.source,
     })
   }
-  items
+  Ok(items)
 }
 
 ///|

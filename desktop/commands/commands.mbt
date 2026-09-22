@@ -576,37 +576,37 @@ pub let moonide_codelens : Command[
 ///|
 pub let skills_catalog : Command[
   @protocol.EmptyPayload,
-  @protocol.SkillCommandReply[@protocol.SkillsCatalogReply],
+  @protocol.SkillsCatalogReply,
 ] = Command("skills.catalog")
 
 ///|
 pub let skills_content : Command[
   @protocol.InstallSkillPayload,
-  @protocol.SkillCommandReply[@protocol.ReadFileReply],
+  @protocol.SkillContentReply,
 ] = Command("skills.content")
 
 ///|
 pub let skills_installed_content : Command[
   @protocol.UninstallSkillPayload,
-  @protocol.SkillCommandReply[@protocol.ReadFileReply],
+  @protocol.SkillContentReply,
 ] = Command("skills.installed_content")
 
 ///|
 pub let skills_installed : Command[
   @protocol.EmptyPayload,
-  @protocol.SkillCommandReply[@protocol.InstalledSkillsReply],
+  @protocol.InstalledSkillsReply,
 ] = Command("skills.installed")
 
 ///|
 pub let skills_install : Command[
   @protocol.InstallSkillPayload,
-  @protocol.SkillCommandReply[@protocol.InstallSkillReply],
+  @protocol.InstallSkillReply,
 ] = Command("skills.install")
 
 ///|
 pub let skills_uninstall : Command[
   @protocol.UninstallSkillPayload,
-  @protocol.SkillCommandReply[@protocol.UninstallSkillReply],
+  @protocol.UninstallSkillReply,
 ] = Command("skills.uninstall")
 
 ///|

@@ -1017,26 +1017,6 @@ pub(all) struct InstalledSkill {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-pub(all) struct SkillsCatalogReply {
-  skills : Array[MarketSkill]
-} derive(Debug, Eq, FromJson, ToJson)
-
-///|
-pub(all) struct InstalledSkillsReply {
-  skills : Array[InstalledSkill]
-} derive(Debug, Eq, FromJson, ToJson)
-
-///|
-pub(all) struct InstallSkillReply {
-  installed : InstalledSkill
-} derive(Debug, Eq, FromJson, ToJson)
-
-///|
-pub(all) struct UninstallSkillReply {
-  removed : Bool
-} derive(Debug, Eq, FromJson, ToJson)
-
-///|
 /// This branch's whole line delta, measured locally: from where it left the
 /// remote's default branch all the way to the working tree, so committed and
 /// uncommitted work count the same and untracked files are included. `base`

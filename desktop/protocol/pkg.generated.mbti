@@ -1643,14 +1643,17 @@ pub fn InstallSkillPayload::not_equal(Self, Self) -> Bool
 pub fn InstallSkillPayload::to_json(Self) -> Json
 pub fn InstallSkillPayload::to_repr(Self) -> @debug.Repr
 
-pub(all) struct InstallSkillReply {
-  installed : InstalledSkill
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub(all) enum InstallSkillReply {
+  SkillInstalled(InstalledSkill)
+  SkillInstallError(String)
+} derive(Eq, @debug.Debug)
 pub fn InstallSkillReply::equal(Self, Self) -> Bool
 pub fn InstallSkillReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn InstallSkillReply::not_equal(Self, Self) -> Bool
 pub fn InstallSkillReply::to_json(Self) -> Json
 pub fn InstallSkillReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for InstallSkillReply
+pub impl @json.FromJson for InstallSkillReply
 
 pub(all) struct InstalledSkill {
   id : String
@@ -1664,14 +1667,17 @@ pub fn InstalledSkill::not_equal(Self, Self) -> Bool
 pub fn InstalledSkill::to_json(Self) -> Json
 pub fn InstalledSkill::to_repr(Self) -> @debug.Repr
 
-pub(all) struct InstalledSkillsReply {
-  skills : Array[InstalledSkill]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub(all) enum InstalledSkillsReply {
+  InstalledSkills(Array[InstalledSkill])
+  InstalledSkillsError(String)
+} derive(Eq, @debug.Debug)
 pub fn InstalledSkillsReply::equal(Self, Self) -> Bool
 pub fn InstalledSkillsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn InstalledSkillsReply::not_equal(Self, Self) -> Bool
 pub fn InstalledSkillsReply::to_json(Self) -> Json
 pub fn InstalledSkillsReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for InstalledSkillsReply
+pub impl @json.FromJson for InstalledSkillsReply
 
 pub(all) struct JobReadPayload {
   target : JobTarget
@@ -2942,23 +2948,29 @@ pub fn SettingsStatusPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SettingsStatusPayload
 pub impl @json.FromJson for SettingsStatusPayload
 
-pub(all) enum SkillCommandReply[Reply] {
-  SkillCommandSuccess(Reply)
-  SkillCommandError(String)
-}
-pub fn[Reply : @json.FromJson] SkillCommandReply::from_json(Json, @json.JsonPath) -> Self[Reply] raise @json.JsonDecodeError
-pub fn[Reply : ToJson] SkillCommandReply::to_json(Self[Reply]) -> Json
-pub impl[Reply : ToJson] ToJson for SkillCommandReply[Reply]
-pub impl[Reply : @json.FromJson] @json.FromJson for SkillCommandReply[Reply]
+pub(all) enum SkillContentReply {
+  SkillContent(String)
+  SkillContentError(String)
+} derive(Eq, @debug.Debug)
+pub fn SkillContentReply::equal(Self, Self) -> Bool
+pub fn SkillContentReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SkillContentReply::not_equal(Self, Self) -> Bool
+pub fn SkillContentReply::to_json(Self) -> Json
+pub fn SkillContentReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SkillContentReply
+pub impl @json.FromJson for SkillContentReply
 
-pub(all) struct SkillsCatalogReply {
-  skills : Array[MarketSkill]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub(all) enum SkillsCatalogReply {
+  SkillsCatalog(Array[MarketSkill])
+  SkillsCatalogError(String)
+} derive(Eq, @debug.Debug)
 pub fn SkillsCatalogReply::equal(Self, Self) -> Bool
 pub fn SkillsCatalogReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SkillsCatalogReply::not_equal(Self, Self) -> Bool
 pub fn SkillsCatalogReply::to_json(Self) -> Json
 pub fn SkillsCatalogReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SkillsCatalogReply
+pub impl @json.FromJson for SkillsCatalogReply
 
 pub(all) struct StartPayload {
   task : String
@@ -3241,14 +3253,17 @@ pub fn UninstallSkillPayload::not_equal(Self, Self) -> Bool
 pub fn UninstallSkillPayload::to_json(Self) -> Json
 pub fn UninstallSkillPayload::to_repr(Self) -> @debug.Repr
 
-pub(all) struct UninstallSkillReply {
-  removed : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub(all) enum UninstallSkillReply {
+  SkillUninstalled
+  SkillUninstallError(String)
+} derive(Eq, @debug.Debug)
 pub fn UninstallSkillReply::equal(Self, Self) -> Bool
 pub fn UninstallSkillReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UninstallSkillReply::not_equal(Self, Self) -> Bool
 pub fn UninstallSkillReply::to_json(Self) -> Json
 pub fn UninstallSkillReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UninstallSkillReply
+pub impl @json.FromJson for UninstallSkillReply
 
 pub(all) struct UpdateDownloadFailedPayload {
   message : String

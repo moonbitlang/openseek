@@ -30,7 +30,7 @@ fn fetch_catalog(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.skill_request(
+      let reply = @interop.bridge_request(
         channel,
         @commands.skills_catalog,
         @protocol.EmptyPayload::NoPayload,
@@ -44,9 +44,11 @@ fn fetch_catalog(
           return
         }
       }
-      scheduler.add(
-        emit(CatalogLoaded(channel~, items=catalog_from_reply(reply))),
-      )
+      let msg = match catalog_from_reply(reply) {
+        Ok(items) => CatalogLoaded(channel~, items~)
+        Err(message) => CatalogFailed(channel~, message~)
+      }
+      scheduler.add(emit(msg))
     })
     |> ignore
   })
@@ -63,7 +65,7 @@ fn fetch_content(
     @js.Promise::from_async(() => {
       match target {
         Market(item) => {
-          let reply = @interop.skill_request(
+          let reply = @interop.bridge_request(
             channel,
             @commands.skills_content,
             {
@@ -92,7 +94,7 @@ fn fetch_content(
           scheduler.add(emit(preview_reply(request, target, reply)))
         }
         Installed(item) => {
-          let reply = @interop.skill_request(
+          let reply = @interop.bridge_request(
             channel,
             @commands.skills_installed_content,
             { id: item.id, },
@@ -122,12 +124,11 @@ fn fetch_content(
 fn preview_reply(
   request : Int,
   target : PreviewTarget,
-  reply : @protocol.ReadFileReply,
+  reply : @protocol.SkillContentReply,
 ) -> Msg {
   match reply {
-    @protocol.ReadFileReply::Content(content~, ..) =>
-      PreviewLoaded(request~, target~, content~)
-    _ => PreviewFailed(request~, target~, message="SKILL.md is not readable")
+    SkillContent(content) => PreviewLoaded(request~, target~, content~)
+    SkillContentError(message) => PreviewFailed(request~, target~, message~)
   }
 }
 
@@ -152,31 +153,33 @@ fn install(
   let key = source_label(item)
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      ignore(
-        @interop.skill_request(channel, @commands.skills_install, {
-          module_name: item.module_name,
-          version: item.version,
-          package_path: if item.package_path.is_empty() {
-            None
-          } else {
-            Some(item.package_path)
-          },
-        }) catch {
-          error => {
-            scheduler.add(
-              emit(
-                ActionDone(
-                  channel~,
-                  key~,
-                  error=@interop.bridge_error_text(error),
-                ),
-              ),
-            )
-            return
-          }
+      let reply = @interop.bridge_request(channel, @commands.skills_install, {
+        module_name: item.module_name,
+        version: item.version,
+        package_path: if item.package_path.is_empty() {
+          None
+        } else {
+          Some(item.package_path)
         },
-      )
-      scheduler.add(emit(ActionDone(channel~, key~, error="")))
+      }) catch {
+        error => {
+          scheduler.add(
+            emit(
+              ActionDone(
+                channel~,
+                key~,
+                error=@interop.bridge_error_text(error),
+              ),
+            ),
+          )
+          return
+        }
+      }
+      let error = match reply {
+        SkillInstalled(_) => ""
+        SkillInstallError(message) => message
+      }
+      scheduler.add(emit(ActionDone(channel~, key~, error~)))
     })
     |> ignore
   })
@@ -192,23 +195,27 @@ fn uninstall(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      ignore(
-        @interop.skill_request(channel, @commands.skills_uninstall, { id, }) catch {
-          error => {
-            scheduler.add(
-              emit(
-                ActionDone(
-                  channel~,
-                  key=id,
-                  error=@interop.bridge_error_text(error),
-                ),
+      let reply = @interop.bridge_request(channel, @commands.skills_uninstall, {
+        id,
+      }) catch {
+        error => {
+          scheduler.add(
+            emit(
+              ActionDone(
+                channel~,
+                key=id,
+                error=@interop.bridge_error_text(error),
               ),
-            )
-            return
-          }
-        },
-      )
-      scheduler.add(emit(ActionDone(channel~, key=id, error="")))
+            ),
+          )
+          return
+        }
+      }
+      let error = match reply {
+        SkillUninstalled => ""
+        SkillUninstallError(message) => message
+      }
+      scheduler.add(emit(ActionDone(channel~, key=id, error~)))
     })
     |> ignore
   })
