@@ -106,7 +106,6 @@ async fn[T] with_shared_record_lock(
   body : async () -> T,
 ) -> T {
   let lock = @fs.open(path.to_string(), mode=ReadOnly, create_mode=OpenExisting) catch {
-    error if @async.is_being_cancelled() => raise error
     @os_error.OSError(_) as error if error.is_ENOENT() => return body()
     error => raise Unreadable("cannot take the session record's lock: \{error}")
   }
@@ -234,7 +233,6 @@ pub async fn read_text(root : @pathx.Absolute, session : String) -> String {
   let lock = lock_path(root, session)
   with_shared_record_lock(lock, () => {
     @fs.read_file(path.to_string()).text() catch {
-      error if @async.is_being_cancelled() => raise error
       @os_error.OSError(_) as error if error.is_ENOENT() =>
         raise Absent("no durable record at \{path}")
       error => raise Unreadable("cannot read the session record: \{error}")
@@ -247,14 +245,12 @@ pub async fn read_text(root : @pathx.Absolute, session : String) -> String {
 /// on the way. Mutates as it goes; `poll` owns the reset that a failure needs.
 async fn Tail::read_forward(self : Tail) -> Array[@protocol.SessionEvent] {
   let file = @fs.open(self.path.to_string(), mode=ReadOnly) catch {
-    error if @async.is_being_cancelled() => raise error
     @os_error.OSError(_) as error if error.is_ENOENT() =>
       raise Absent("no durable record at \{self.path}")
     error => raise Unreadable("cannot open the session record: \{error}")
   }
   defer file.close()
   let size = file.size() catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise Unreadable("cannot measure the session record: \{error}")
   }
   if size < self.offset || !anchored_at(file, self.offset, self.anchor) {
@@ -265,7 +261,6 @@ async fn Tail::read_forward(self : Tail) -> Array[@protocol.SessionEvent] {
     let remaining = size - self.offset
     let take = @cmp.minimum(remaining, record_chunk_bytes)
     let chunk = file.read_exactly_at(take.to_int(), position=self.offset) catch {
-      error if @async.is_being_cancelled() => raise error
       error => raise Unreadable("cannot read the session record: \{error}")
     }
     self.offset += take
@@ -441,7 +436,6 @@ async fn anchored_at(file : @fs.File, offset : Int64, anchor : Bytes) -> Bool {
     return false
   }
   let seen = file.read_exactly_at(anchor.length(), position=start) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return false
   }
   seen == anchor

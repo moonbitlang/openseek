@@ -137,7 +137,7 @@ pub async fn[X] Service::start(
         }
         Some((program, reader.body(headers)))
       }) catch {
-        error if @async.is_being_cancelled() => raise error
+        @async.TaskCancelled as error => raise error
         _ => {
           send(
             conn,
@@ -207,7 +207,7 @@ pub async fn[X] Service::start(
         })
         task.wait()
       }) catch {
-        error if @async.is_being_cancelled() => raise error
+        @async.TaskCancelled as error => raise error
         error => {
           abandon()
           let response = error_result(
@@ -236,9 +236,6 @@ pub async fn[X] Service::start(
     worker.cancel()
     @async.protect_from_cancel(() => worker.wait() catch { _ => () })
   })
-  // async 0.22: a group-scoped defer must be `nocancel`. `Service::close`
-  // is cancellable, so shield it; the defer still runs while the group
-  // unwinds, and it can no longer be aborted halfway.
   group.add_defer(() => @async.protect_from_cancel(() => service.close()))
   service
 }
@@ -471,14 +468,10 @@ async fn Program::execute(
   arguments : Json,
 ) -> Json {
   let tools = self.service.tools
+  errdefer (if @async.is_being_cancelled() {
+    self.calls[index] = call_entry(name, arguments, "interrupted")
+  })
   let result = try {
-    // async 0.22: a cancellation signal never enters `catch` but still runs
-    // `errdefer`; mark the call interrupted from here so an interrupted
-    // program call cannot be silently retried. The body must stay
-    // suspension-free: it runs unprotected while the task is cancelled.
-    errdefer (if @async.is_being_cancelled() {
-      self.calls[index] = call_entry(name, arguments, "interrupted")
-    })
     self.publish_trace()
     match tools.find(name) {
       None =>
@@ -504,7 +497,7 @@ async fn Program::execute(
       }
     }
   } catch {
-    error if @async.is_being_cancelled() => {
+    @async.TaskCancelled as error => {
       self.calls[index] = call_entry(name, arguments, "interrupted")
       raise error
     }
@@ -602,7 +595,7 @@ async fn Program::deliver_trace(self : Program) -> Unit {
   @async.with_timeout(self.service.trace_timeout_ms, () => {
     (self.on_trace)(self.trace())
   }) catch {
-    error if @async.is_being_cancelled() => raise error
+    @async.TaskCancelled as error => raise error
     error =>
       self.trace_error = Some(@agent_tool.brief_line("\{error}", limit=512))
   }

@@ -23,7 +23,6 @@ async fn browse_directory_op(
   payload : BrowseDirectoryPayload,
 ) -> BrowseDirectoryReply {
   browse_directory_listing(payload) catch {
-    error if @async.is_being_cancelled() => raise error
     HostError(message) => BrowseError(message)
     error => raise error
   }
@@ -65,12 +64,10 @@ async fn browse_directory_listing(
   // In particular, UNC cannot share the resource URI's device authority.
   let encoded_dir = dir.resource_path()
   let kind = @fs.kind(dir.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise HostError("no such directory: \{dir}")
   }
   guard kind is Directory else { raise HostError("not a directory: \{dir}") }
   let names = @fs.readdir(dir.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to list directory: \{error}")
   }
   // Lexicographic, not shortlex — see the note in `read_directory`.
@@ -81,11 +78,7 @@ async fn browse_directory_listing(
       continue
     }
     let child = dir.join((name : @pathx.Relative)).to_string()
-    let is_dir = (@fs.kind(child) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => Unknown
-      })
-      is Directory
+    let is_dir = (@fs.kind(child) catch { _ => Unknown }) is Directory
     if is_dir {
       entries.push(name)
     }
@@ -112,7 +105,6 @@ async fn create_directory_op(
   payload : CreateDirectoryPayload,
 ) -> BrowseDirectoryReply {
   create_directory_listing(payload) catch {
-    error if @async.is_being_cancelled() => raise error
     HostError(message) => BrowseError(message)
     error => raise error
   }
@@ -132,7 +124,6 @@ async fn create_directory_listing(
   }
   let parent = parent.normalize()
   let kind = @fs.kind(parent.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise HostError("no such directory: \{parent}")
   }
   guard kind is Directory else { raise HostError("not a directory: \{parent}") }
@@ -146,7 +137,6 @@ async fn create_directory_listing(
     raise HostError("a folder named “\{name}” already exists")
   }
   @fs.mkdir(target.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to create folder: \{error}")
   }
   browse_directory_listing({ path: Some(target.resource_path()), })
@@ -160,10 +150,7 @@ async fn create_directory_listing(
 async fn windows_drive_list() -> Array[String] {
   let drives : Array[String] = []
   for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
-    let kind = @fs.kind("\{letter}:\\") catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => continue
-    }
+    let kind = @fs.kind("\{letter}:\\") catch { _ => continue }
     if kind is Directory {
       drives.push("\{letter}:")
     }

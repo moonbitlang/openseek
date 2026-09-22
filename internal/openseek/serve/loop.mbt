@@ -201,7 +201,7 @@ async fn run_serve(
           Err(message) => @emit.emit(CommandError(error=message))
         }
       }) catch {
-        error if @async.is_being_cancelled() => raise error
+        @async.TaskCancelled as error => raise error
         // A malformed (non-JSON) line is a controller bug: report it and
         // stop reading commands, which shuts the server down gracefully.
         error => @emit.emit(CommandError(error="command stream: \{error}"))
@@ -257,7 +257,7 @@ async fn run_serve(
         retry_attempts?,
         retry_backoff_ms?,
       ) catch {
-        error if @async.is_being_cancelled() => raise error
+        @async.TaskCancelled as error => raise error
         error => {
           @emit.emit(CompactionFailed(error="\{error}"))
           current
@@ -275,7 +275,7 @@ async fn run_serve(
     ) -> Bool {
       session = if store is Some(store) {
         store.append(session, item) catch {
-          error if @async.is_being_cancelled() => raise error
+          @async.TaskCancelled as error => raise error
           error => {
             @emit.emit(SessionError(error="failed to append \{what}: \{error}"))
             return false
@@ -408,16 +408,10 @@ async fn run_serve(
       submission_id : String?,
     ) -> @async.Task[Unit] {
       group.spawn() <| () => {
-        // async 0.22: a cancellation signal no longer enters `catch`, but it
-        // still runs `errdefer`. Report the aborted run from here so the
-        // controller still learns the turn ended.
-        errdefer (if @async.is_being_cancelled() {
-          @async.protect_from_cancel(() => {
-            @emit.emit(AgentAborted(reason="interrupted"))
-            ignore(steps.try_put(TurnDone(finished=false)) catch { _ => false })
-          })
-          |> ignore
-        })
+        errdefer {
+          @emit.emit(AgentAborted(reason="interrupted"))
+          ignore(steps.try_put(TurnDone(finished=false)) catch { _ => false })
+        }
         let _ = @agent.run_turn_in_scope(
           runtime~,
           scope~,
@@ -443,12 +437,11 @@ async fn run_serve(
           tools~,
         ) catch {
           error => {
-            // The turn died but the session server must not. A pure
-            // cancellation is reported by the `errdefer` above (it runs on
-            // the signal, which never reaches this catch); an error that
-            // arrives while a cancellation is already pending is still an
-            // abort, and any other failure is a terminal TurnFailed.
-            if @async.is_being_cancelled() {
+            // The turn died but the session server must not: a cancelled
+            // turn already appended its Interrupted terminal inside the
+            // loop, and any other failure is reported as a terminal wire
+            // event so the controller can close the run.
+            if error is @async.TaskCancelled {
               @emit.emit(AgentAborted(reason="interrupted"))
             } else {
               @emit.emit(TurnFailed(error="\{error}"))
@@ -467,16 +460,15 @@ async fn run_serve(
 
     fn start_compaction(current : @agent_session.Session) -> @async.Task[Unit] {
       group.spawn() <| () => {
-        // async 0.22: cancellation bypasses `catch` but runs `errdefer`;
-        // report the cancelled compaction and finish the step from here.
-        errdefer (if @async.is_being_cancelled() {
-          @async.protect_from_cancel(() => {
-            @emit.emit(CompactionFailed(error="cancelled"))
-            ignore(steps.try_put(CompactDone(current)) catch { _ => false })
-          })
-          |> ignore
-        })
+        errdefer {
+          @emit.emit(CompactionFailed(error="cancelled"))
+          ignore(steps.try_put(CompactDone(current)) catch { _ => false })
+        }
         let next = compact_and_report(current) catch {
+          @async.TaskCancelled => {
+            @emit.emit(CompactionFailed(error="cancelled"))
+            current
+          }
           error => {
             @emit.emit(CompactionFailed(error="\{error}"))
             current
@@ -522,7 +514,7 @@ async fn run_serve(
 
     serve~: for ;; {
       let step = steps.get() catch {
-        error if @async.is_being_cancelled() => raise error
+        @async.TaskCancelled as error => raise error
         _ => break serve~
       }
       match step {

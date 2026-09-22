@@ -4,10 +4,7 @@
 /// or workspace root. Non-MoonBit paths and paths outside a MoonBit project are
 /// returned unchanged.
 pub async fn append_summary(path : String, content : String) -> String {
-  let summary = auto_check_summary(path) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
-  }
+  let summary = auto_check_summary(path) catch { _ => None }
   match summary {
     Some(summary) => "\{content}\n\{summary}"
     None => content
@@ -25,7 +22,6 @@ async fn auto_check_summary(path : String) -> String? {
       max_output_chars=@moon_check.MaxOutputChars,
     )
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return Some("moon check: failed to run")
   }
   match result {
@@ -315,7 +311,6 @@ pub async fn check(path : String) -> CheckOutcome {
       max_output_chars=MoonCheckJsonMaxOutputChars,
     )
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return Unavailable("failed to run")
   }
   match result {

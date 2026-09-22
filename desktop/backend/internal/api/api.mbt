@@ -571,7 +571,6 @@ pub fn endpoints(
       @engine.attach_workspace(payload.path, workspaces => {
         state.hub.publish(WorkspaceChanged({ workspaces, chat_root, }))
       }) catch {
-        error if @async.is_being_cancelled() => raise error
         @engine.EngineError(message) => WorkspaceError(message)
         @workspaces.WorkspaceError(message) => WorkspaceError(message)
         error => raise error
@@ -582,7 +581,6 @@ pub fn endpoints(
       @engine.detach_workspace(state.manager, payload.path, workspaces => {
         state.hub.publish(WorkspaceChanged({ workspaces, chat_root, }))
       }) catch {
-        error if @async.is_being_cancelled() => raise error
         @engine.EngineError(message) => WorkspaceError(message)
         @workspaces.WorkspaceError(message) => WorkspaceError(message)
         error => raise error
@@ -641,7 +639,6 @@ pub fn endpoints(
           publish_worktree_changed(state, payload.workspace, worktrees)
         },
       ) catch {
-        error if @async.is_being_cancelled() => raise error
         @worktree.WorktreeError(message) => return WorktreeCreateError(message)
         @engine.EngineError(message) => return WorktreeCreateError(message)
         error => raise error

@@ -88,7 +88,6 @@ async fn download(
   let (response, client) = @http.get_stream(url, headers={
     "Accept-Encoding": "identity",
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise UpdateError("update download failed: \{error}")
   }
   defer client.close()
@@ -160,7 +159,6 @@ async fn run_tool(command : String, args : Array[String]) -> Unit {
     args,
     inherit_env=true,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise UpdateError("\{command} failed: \{error}")
   }
   guard code == 0 else {
@@ -177,7 +175,6 @@ async fn team_identifier(app_path : String) -> String? {
     ["-dv", app_path],
     inherit_env=true,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
   guard code == 0 else { return None }

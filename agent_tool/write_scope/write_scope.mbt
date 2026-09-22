@@ -37,7 +37,6 @@ pub async fn WriteScope::create(
   allowed_paths? : Array[String] = [],
 ) -> Result[WriteScope, String] {
   let canonical_root = @fs.realpath(root) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return Err("write scope root does not resolve: \{root}")
   }
   let allowed : Array[Array[String]] = []
@@ -181,7 +180,6 @@ async fn resolve_existing_prefix(path : String) -> String? {
   }
   guard path_exists_no_follow(prefix) else { return None }
   let real = @fs.realpath(if suffix.is_empty() { path } else { prefix }) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
   let mut resolved = @workspace_path.strip_trailing_slash(real)
@@ -220,10 +218,7 @@ fn backslash_is_hostile(path : String) -> Bool {
 
 ///|
 async fn path_exists_no_follow(path : String) -> Bool {
-  let _ = @fs.kind(path, follow_symlink=false) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
+  let _ = @fs.kind(path, follow_symlink=false) catch { _ => return false }
   true
 }
 

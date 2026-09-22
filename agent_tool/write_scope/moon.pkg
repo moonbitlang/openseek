@@ -1,6 +1,5 @@
 import {
   "moonbitlang/openseek/internal/workspace_path",
-  "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/x/path",
 }

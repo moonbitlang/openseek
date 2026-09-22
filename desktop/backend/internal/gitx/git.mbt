@@ -30,7 +30,6 @@ pub async fn output(dir : @pathx.Absolute, args : Array[String]) -> String {
     args,
     cwd=dir.to_string(),
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise GitError("failed to run git: \{error}")
   }
   guard code == 0 else {
@@ -66,7 +65,6 @@ pub async fn probe(dir : @pathx.Absolute, args : Array[String]) -> String? {
     args,
     cwd=dir.to_string(),
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
   guard code == 0 else { return None }

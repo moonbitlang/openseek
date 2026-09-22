@@ -26,10 +26,7 @@ pub impl @jsonrpc.Transport for StdioTransport with fn send(self, message) {
 ///|
 pub impl @jsonrpc.Transport for StdioTransport with fn recv(self) {
   for ;; {
-    let line = self.reader.read_until("\n") catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => None
-    }
+    let line = self.reader.read_until("\n") catch { _ => None }
     guard line is Some(line) else { return None }
     let trimmed = line.trim(chars="\r\n")
     if trimmed == "" {

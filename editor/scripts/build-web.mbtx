@@ -185,7 +185,7 @@ fn css_sources() -> Array[String] {
 
 ///|
 async fn assembled_style_css() -> String {
-  let css = StringBuilder::new()
+  let css = StringBuilder()
   for source in css_sources() {
     css.write_string("/* " + source + " */\n")
     let source_css = @fs.read_file(source).text()

@@ -281,7 +281,6 @@ async test "archive refuses to delete checkout when saving HEAD fails" {
       ignore(owner.archive_checkout(false))
       false
     } catch {
-      error if @async.is_being_cancelled() => raise error
       _ => true
     }
     assert_true(refused)

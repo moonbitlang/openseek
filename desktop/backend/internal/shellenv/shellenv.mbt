@@ -64,7 +64,6 @@ pub async fn apply_login_shell_env(executable : String) -> Unit {
   let result = @async.with_timeout_opt(ProbeTimeoutMs, () => {
     @processx.collect_output_no_stdin(shell, args, extra_env=probe_env)
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       @xlog.warn() <?
         { "message": "shell env probe failed", "error": "\{error}" }

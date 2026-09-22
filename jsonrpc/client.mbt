@@ -179,7 +179,6 @@ pub async fn Client::respond_error(
 /// its inbox.
 async fn Client::enqueue(self : Client, message : Json) -> Unit {
   self.outbox.put(message) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }
@@ -197,18 +196,13 @@ fn Client::try_enqueue(self : Client, message : Json) -> Unit {
 /// until the client closes. A failed send closes the client (so a request never
 /// waits on a reply to a message that could not be sent). Spawn exactly one.
 pub async fn Client::run_writer(self : Client) -> Unit {
-  // Close on every exit, including the cancellation that no longer enters
-  // `catch`: otherwise a cancelled writer leaves `closed` false and every
-  // outstanding request waits for a reply that can never arrive.
   defer self.close()
   while !self.closed {
     let message = self.outbox.get() catch {
-      error if @async.is_being_cancelled() => raise error
       // Outbox closed: the client is shutting down.
       _ => break
     }
     self.transport.send(message) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => break
     }
   }
@@ -237,10 +231,7 @@ pub async fn Client::run_message_pump(self : Client) -> Unit {
 /// Read and route one inbound message (or, for a batch, each element). Returns
 /// `true` once the transport has ended. Cancellation propagates.
 async fn Client::route_next(self : Client) -> Bool {
-  let message = self.transport.recv() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return true
-  }
+  let message = self.transport.recv() catch { _ => return true }
   guard message is Some(message) else { return true }
   // A non-conformant peer may batch replies in a top-level array; route each so
   // the correlated requests are not left hanging.
@@ -275,7 +266,6 @@ async fn Client::dispatch(self : Client, message : Json) -> Unit {
         let accepted : Result[Bool, Error] = try
           (self.on_request)(request)
         catch {
-          error if @async.is_being_cancelled() => raise error
           error => Err(error)
         } noraise {
           value => Ok(value)

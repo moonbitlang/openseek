@@ -1,7 +1,6 @@
 ///|
 async fn remove_toolchain_test_tree(root : @pathx.Absolute) -> Unit {
   @fs.rmdir(root.to_string(), recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }

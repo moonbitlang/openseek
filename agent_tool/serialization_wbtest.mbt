@@ -25,7 +25,7 @@ async test "a file gate grant followed by cancellation cannot enter the mutation
 }
 
 ///|
-/// The cancelled waiter must unwind with the runtime's cancellation error, not
+/// The cancelled waiter must unwind with the runtime's cancellation signal, not
 /// an ordinary failure: a failure would cancel every sibling in its group.
 async test "a cancelled file gate waiter leaves its siblings running" {
   @async.with_task_group(group => {

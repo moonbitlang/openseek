@@ -86,7 +86,6 @@ async fn fetch_response(url : String) -> (Int, &@io.Data) {
   let mut current = url
   for _ in 0..<MaxRedirects {
     let (response, data) = @http.get(current) catch {
-      error if @async.is_being_cancelled() => raise error
       error =>
         raise SkillMarketError("cannot reach the skill registry: \{error}")
     }
@@ -315,7 +314,6 @@ async fn fetch_archive(entry : String, source : ArchiveSource) -> @zip.Archive {
   }
   let limits = archive_limits(bytes.length())
   @zip.read(bytes, limits~, cancelled=@async.is_being_cancelled) catch {
-    error if @async.is_being_cancelled() => raise error
     ZipError(_, message) =>
       raise SkillMarketError(
         "the archive for \{entry} cannot be unpacked: \{message}",

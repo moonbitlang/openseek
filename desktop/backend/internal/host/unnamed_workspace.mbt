@@ -17,7 +17,6 @@ async fn create_unnamed_workspace_op() -> @protocol.BrowseDirectoryReply {
     HostError(message) => return BrowseError(message)
   }
   create_unnamed_workspace_in(root) catch {
-    error if @async.is_being_cancelled() => raise error
     HostError(message) => BrowseError(message)
     error => raise error
   }
@@ -40,7 +39,6 @@ async fn create_unnamed_workspace_in(
       error => raise error
     }
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       raise HostError(
         "could not create the workspace storage directory: \{error}",
@@ -55,7 +53,6 @@ async fn create_unnamed_workspace_in(
     let target = root.join((name : @pathx.Relative))
     let path = target.resource_path()
     @fs.mkdir(target.to_string()) catch {
-      error if @async.is_being_cancelled() => raise error
       @os_error.OSError(_) as error if error.is_EEXIST() => continue
       error =>
         raise HostError("could not create the unnamed workspace: \{error}")
@@ -92,7 +89,6 @@ async fn chat_workspace_root_in(
     }
     Ready(canonical.resource_path())
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => Failed("cannot access workspace storage: \{error}")
   }
 }

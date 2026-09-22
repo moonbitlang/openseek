@@ -215,7 +215,6 @@ async fn execute_with_workspace(
   // A filesystem failure (a missing or unreadable file) is an outcome of
   // this tool, with data, not a raise for the dispatcher to render without.
   edit_file(input, path~, file_state~, write_scope?) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       failure(
         path,
@@ -958,7 +957,6 @@ async fn commit_edit(
     // A read that fails is its own outcome, never a value to compare: an
     // empty candidate must not match a file that is gone.
     let current = @fs.read_file(target).text() catch {
-      error if @async.is_being_cancelled() => raise error
       error =>
         return unknown_effect(
           "could not be read after the post-write check (\{error})",
@@ -1052,15 +1050,11 @@ const TruncatedCapture : String = "moon check produced more output than the capt
 /// outside any MoonBit project are dropped; an unresolvable link is just its
 /// written spelling.
 async fn check_projects(path : String) -> Array[String] {
-  let target = @fs.realpath(path) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => path
-  }
+  let target = @fs.realpath(path) catch { _ => path }
   // Project directories compare by their canonical form: `/tmp/x` and
   // `/private/tmp/x` are one project, not two checks.
   async fn canonical(dir : String) -> String {
     @fs.realpath(dir) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => dir
     }
   }
@@ -1123,7 +1117,6 @@ async fn project_roots(spellings : Array[String]) -> Array[String?] {
 /// when it cannot be resolved (a dangling link is written where it points).
 async fn resolved_target(path : String) -> String {
   @fs.realpath(path) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => path
   }
 }
@@ -1327,7 +1320,6 @@ async fn restore_content(
   // another writer (an editor save) may have changed the file; restoring over
   // that would erase their work. Only the content this edit wrote is undone.
   let current = @fs.read_file(path).text() catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       return Some(
         "cannot read the file to verify it before restoring: \{error}",
@@ -1430,10 +1422,7 @@ async fn parse_gate_rejection(
   // a link named `alias.txt` pointing at `lib/a.mbt` must be gated like the
   // `.mbt` file it really writes (the same class `write`'s overwrite guard
   // handles with realpath).
-  let target = @fs.realpath(path) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => path
-  }
+  let target = @fs.realpath(path) catch { _ => path }
   // Gate under every syncheck kind this file could be classified as. A regular
   // file yields one kind; a symlink that crosses kinds (e.g. `link.mbt ->
   // doc.mbt.md`) yields two, and moon's classification of such a link is
@@ -1441,14 +1430,12 @@ async fn parse_gate_rejection(
   // parse errors — that covers both interpretations. See `gate_paths`.
   for gate_path in @auto_check.gate_paths(path, target) {
     let gate = @auto_check.content_parse_errors(gate_path, new_content) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => None
     }
     guard gate is Some(gate) && gate.errors.length() > 0 else { continue }
     // The edited result has parse errors under this kind; reject only when the
     // edit makes the file WORSE than its original content parsed the same way.
     let before = @auto_check.content_parse_errors(gate_path, original_content) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => None
     }
     // The comparison is only sound against a COMPLETE baseline: a missing one

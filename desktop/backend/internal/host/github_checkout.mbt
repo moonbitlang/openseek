@@ -5,7 +5,6 @@ async fn github_checkout_op(
   // Proton redacts raised handler errors. Carry actionable Git diagnostics in
   // a typed reply so local and remote clients receive the same explanation.
   checkout_pull_request(payload) catch {
-    error if @async.is_being_cancelled() => raise error
     error => github_checkout_failure("\{error}")
   }
 }
@@ -88,7 +87,6 @@ async fn checkout_pull_request(
         metadata.stringify(),
       ])
     } catch {
-      error if @async.is_being_cancelled() => raise error
       error =>
         raise HostError(
           "Checked out PR #\{payload.number} on \{branch}, but could not prepare Review: \{error}",

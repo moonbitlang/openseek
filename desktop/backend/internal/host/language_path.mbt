@@ -41,11 +41,9 @@ async fn LanguagePath::authorized_root(
     raise HostError("root has no directory ownership for this conversation")
   }
   let requested_physical = @fs.realpath(lexical_root.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise HostError("requested language root is unavailable")
   }
   let authorized_physical = @fs.realpath(authorized.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise HostError("authorized language root is unavailable")
   }
   guard @pathx.Path(requested_physical).to_absolute()
@@ -86,11 +84,9 @@ async fn LanguagePath::resolve(
     raise HostError("path is outside root")
   }
   let physical_root_text = @fs.realpath(lexical_root.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise HostError("root is unavailable")
   }
   let physical_file_text = @fs.realpath(lexical_file.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise HostError("path is unavailable")
   }
   guard @pathx.Path(physical_root_text).to_absolute() is Some(physical_root) &&

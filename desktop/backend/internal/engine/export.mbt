@@ -64,7 +64,6 @@ async fn SessionExport::sessions(
   let record_guard = self.manager.begin_record_read(self.session)
   defer self.manager.end_record_read(self.session, record_guard)
   let family = @session_store.family_in(self.root, self.session) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise EngineError("session export failed: \{error}")
   }
   let sessions : Array[@viz_export.Session] = []
@@ -73,7 +72,6 @@ async fn SessionExport::sessions(
       continue
     }
     let events = @session_record.read_text(self.root, entry_id) catch {
-      error if @async.is_being_cancelled() => raise error
       error => raise EngineError("session export failed: \{error}")
     }
     let key = "session-\{sessions.length()}"

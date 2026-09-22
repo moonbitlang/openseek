@@ -146,7 +146,6 @@ async fn WsClientActor::run(self : WsClientActor, url : String) -> Unit {
   let conn = @websocket.Conn::connect(url)
   defer conn.close()
   self.serve(conn) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }
@@ -387,7 +386,6 @@ async fn run_request(
     return error_envelope(id, CodeMethodNotFound, "unknown method '\{method_}'")
   }
   let result = endpoint.invoke(params) catch {
-    error if @async.is_being_cancelled() => raise error
     @json.JsonDecodeError(_) as error =>
       return error_envelope(id, CodeInvalidParams, "\{error}")
     @host.PayloadError(message) =>

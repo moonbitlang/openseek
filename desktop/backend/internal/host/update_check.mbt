@@ -154,7 +154,6 @@ async fn SelfUpdate::download_package(
     downloaded_bytes,
     total_bytes,
   ) => emit(UpdateDownloadProgress({ downloaded_bytes, total_bytes, }))) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       @xlog.warn(category="update") <?
         {
@@ -184,7 +183,6 @@ async fn SelfUpdate::run(
   // instead of accepted work nobody will perform.
   defer self.downloads.close()
   self.cleanup() catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       @xlog.warn(category="update") <?
         { "event": "cleanup_failed", "error": "\{error}" }
@@ -192,7 +190,6 @@ async fn SelfUpdate::run(
   for ;; {
     self.downloads.get()
     try self.download_package(emit) catch {
-      error if @async.is_being_cancelled() => raise error
       error => {
         self.busy = false
         let message = if error is HostError(message) {

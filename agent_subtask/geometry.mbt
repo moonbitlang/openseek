@@ -85,10 +85,7 @@ pub fn Geometry::is_integration_target_for(
 /// realpath when possible; lexical normalization otherwise (a nonexistent
 /// path cannot be part of live geometry, but error messages still read).
 async fn canonical(path : StringView) -> String {
-  let real = @fs.realpath(path) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => path.to_owned()
-  }
+  let real = @fs.realpath(path) catch { _ => path.to_owned() }
   @workspace_path.strip_trailing_slash(real)
 }
 

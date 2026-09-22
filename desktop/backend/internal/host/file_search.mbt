@@ -29,17 +29,11 @@ priv struct FileScanEntry {
 /// File discovery is best-effort: a directory that disappears or becomes
 /// unreadable cannot fail the whole scan, while cancellation still stops it.
 async fn read_sorted_directory(dir : @pathx.Absolute) -> Array[FileScanEntry] {
-  let listing = @fs.opendir(dir.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return []
-  }
+  let listing = @fs.opendir(dir.to_string()) catch { _ => return [] }
   defer listing.close()
   let entries : Array[FileScanEntry] = []
   for ;; {
-    let entry = listing.next() catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => None
-    }
+    let entry = listing.next() catch { _ => None }
     guard entry is Some(entry) else { break }
     entries.push({ name: entry.name, is_dir: entry.is_dir, })
   }
@@ -388,7 +382,6 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
         let outcome = RankSucceeded(
           compute_file_search(snapshot, waiter.query, waiter.max_results),
         ) catch {
-          _ if @async.is_being_cancelled() => return
           error => RankFailed("failed to rank workspace files: \{error}")
         }
         self.requests.put(
@@ -464,7 +457,6 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
                   defer scan_permit.release()
                   ScanSucceeded((self.scan)(root))
                 } catch {
-                  _ if @async.is_being_cancelled() => return
                   error => ScanFailed("failed to index workspace: \{error}")
                 }
                 self.requests.put(

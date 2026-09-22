@@ -218,10 +218,7 @@ pub async fn resume_running(
       "subtask \{name} is \{Repr(entry.state)} — only a captured or committed slice with a kept worktree can be continued",
     )
   }
-  guard (@fs.exists(entry.worker_root) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }) else {
+  guard (@fs.exists(entry.worker_root) catch { _ => false }) else {
     return Err(
       "subtask \{name}'s worktree is gone (\{entry.worker_root}); discard it and launch a fresh slice",
     )

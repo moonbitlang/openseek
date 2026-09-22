@@ -149,7 +149,6 @@ async fn cached_source_write_profile_valid(
 ) -> Bool {
   for watched in cached.watched_dirs {
     let (mtime_s, mtime_ns) = @fs.mtime(watched.path, follow_symlink=false) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => return false
     }
     if mtime_s != watched.mtime_s || mtime_ns != watched.mtime_ns {
@@ -215,7 +214,6 @@ async fn collect_protected_source_tree_profile_scan(
     return false
   }
   let (mtime_s, mtime_ns) = @fs.mtime(dir, follow_symlink=false) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => {
       state.cacheable = false
       return false
@@ -223,7 +221,6 @@ async fn collect_protected_source_tree_profile_scan(
   }
   state.watched_dirs.push({ path: dir, mtime_s, mtime_ns, })
   let entries = @fs.readdir(dir, include_hidden=true) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => {
       state.cacheable = false
       return false
@@ -240,7 +237,6 @@ async fn collect_protected_source_tree_profile_scan(
       continue
     }
     let kind = @fs.kind(child, follow_symlink=false) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => {
         state.cacheable = false
         continue

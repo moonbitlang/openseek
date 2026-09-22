@@ -72,7 +72,6 @@ async fn terminal_open_op(
     state.engine,
     runtime_dir?=state.runtime_dir,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     @moonbit.ToolchainUnavailable as unavailable =>
       raise HostError("\{unavailable}")
     error => raise HostError("could not resolve a MoonBit toolchain: \{error}")

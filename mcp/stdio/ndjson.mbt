@@ -43,10 +43,7 @@ impl @jsonrpc.Transport for NdjsonTransport with fn recv(self) {
   // the "stdout carries only UTF-8 MCP messages" contract) returns `None`, which
   // closes the connection.
   for ;; {
-    let line = self.reader.read_until("\n") catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => None
-    }
+    let line = self.reader.read_until("\n") catch { _ => None }
     guard line is Some(line) else { return None }
     let trimmed = line.trim(chars="\r\n")
     if trimmed == "" {

@@ -316,7 +316,6 @@ async fn gh_json(
     extra_env=git_environment(),
     inherit_env=false,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
   guard code == 0 else { return None }

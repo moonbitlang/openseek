@@ -67,10 +67,8 @@ pub async fn Snapshot::publish(
   timeout_ms? : Int = 240_000,
 ) -> @protocol.SessionShareReply {
   @async.with_timeout(timeout_ms, () => self.send(server_url~, token~)) catch {
-    error if @async.is_being_cancelled() => raise error
     _ =>
       @async.with_timeout(timeout_ms, () => self.send(server_url~, token~)) catch {
-        error if @async.is_being_cancelled() => raise error
         @async.TimeoutError =>
           @protocol.Failed(
             message="The share request timed out. Please try again.",

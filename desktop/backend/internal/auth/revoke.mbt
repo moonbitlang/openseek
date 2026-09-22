@@ -19,7 +19,6 @@ async fn AuthSession::revoke_after_cancelled_exchange(
     let revoke = group.spawn(() => revoke_device(self))
     revoke.wait()
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       @xlog.warn(category="auth") <?
         {

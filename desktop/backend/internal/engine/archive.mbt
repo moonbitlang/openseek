@@ -25,7 +25,6 @@ async fn EngineManager::sweep_archived_deletions_in(
     include_hidden=true,
     sort=true,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       @xlog.warn() <?
         {
@@ -38,7 +37,6 @@ async fn EngineManager::sweep_archived_deletions_in(
   }
   for name in entries {
     @fs.rmdir(deleting.join(name).to_string(), recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
       error =>
         @xlog.warn() <?
           {
@@ -320,7 +318,6 @@ async fn move_session_family(
     }
   }
   @fsx.ensure_dir(destination.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise EngineError("could not create \{destination}: \{error}")
   }
   @async.protect_from_cancel(() => {
@@ -436,7 +433,7 @@ async fn archive_session_commit(
     return Some(refusal)
   }
   // The rename and notification are the commit. Cancellation is delayed only
-  // across this finite section; after it returns normally or raises Cancelled,
+  // across this finite section; before pending cancellation can propagate,
   // every client has already learned every family identity that moved.
   move_session_family(family, to_archive=true, on_committed)
   None
@@ -545,7 +542,6 @@ async fn SessionFamilyMove::delete_archived_records(
     }
   }
   @fsx.ensure_dir(deleting.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       raise EngineError("could not prepare conversation deletion: \{error}")
   }
@@ -611,11 +607,9 @@ async fn move_session_record(
     raise EngineError("a record for this conversation already exists there")
   }
   @fsx.ensure_dir(destination_dir.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise EngineError("could not create \{destination_dir}: \{error}")
   }
   @fs.rename(record.to_string(), destination.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       raise EngineError("could not move the conversation record: \{error}")
   }
@@ -686,7 +680,6 @@ async test "archive refuses a durable record while the pump is stopped" {
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(detail.contains("not connected"))
@@ -737,7 +730,7 @@ async test "archive publishes its move before a cancelled listing reply" {
       request.wait()
       false
     } catch {
-      error if error is @async.TaskCancelled => true
+      @async.TaskCancelled => true
       _ => false
     }
     assert_true(cancelled)
@@ -923,7 +916,6 @@ async test "permanent deletion refuses a live twin in the selected store" {
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(detail.contains("live record"))
@@ -992,7 +984,6 @@ async test "selected archived store is revalidated after detachment" {
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(detail.contains("not a registered workspace"))
@@ -1029,7 +1020,6 @@ async test "a claimed child prevents a partial family archive" {
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(detail.contains("already starting"))

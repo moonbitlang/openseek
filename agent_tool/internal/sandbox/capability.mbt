@@ -74,10 +74,7 @@ pub async fn SandboxedCommand::create_if_available(
   let real_root = @fs.realpath(workspace_root)
   let subtree = match writable_subtree {
     Some(dir) => {
-      let real_dir = @fs.realpath(dir) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => dir
-      }
+      let real_dir = @fs.realpath(dir) catch { _ => dir }
       let normalized = @workspace_path.strip_trailing_slash(
         @path.Path(real_dir).normalize().to_string(),
       )

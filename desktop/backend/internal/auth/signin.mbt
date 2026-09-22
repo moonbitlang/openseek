@@ -41,7 +41,6 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
 
   // The one-shot loopback listener, on an OS-assigned port.
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise AuthError("could not open the sign-in listener: \{error}")
   }
   defer server.close()
@@ -54,7 +53,6 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
   }
   let url = start_url(server_url~, oauth_state~, challenge~, port~, name~)
   let code = @platform.open_url(url) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise AuthError("could not open the system browser: \{error}")
   }
   guard code == 0 else {
@@ -103,20 +101,7 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
       })
       exchanged.val = Some(exchange.wait())
     })
-  }) catch {
-    error if error is @async.TaskCancelled => {
-      // Transport cancellation arrived while the exchange was protected.
-      // The result is now available, so remove the minted device before the
-      // original cancellation escapes.
-      if exchanged.val is Some(session) {
-        @async.protect_from_cancel(() => {
-          session.revoke_after_cancelled_exchange()
-        })
-      }
-      raise error
-    }
-    error => raise error
-  }
+  })
   guard exchanged.val is Some(session) else {
     raise AuthError("the sign-in exchange returned no session")
   }
@@ -138,14 +123,13 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
   // closed during the exchange must not turn that committed sign-in into an
   // auth failure, while task cancellation must still reach the caller.
   respond_html(browser, 200, "OK", sign_in_done_page(url)) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }
 
 ///|
 /// Commit one exchanged session without exposing a token that failed to
-/// persist. `resume_on_cancel` lets the API finish its server-selection
+/// persist. The cancellation shield lets the API finish its server-selection
 /// revalidation and `auth.changed` publication after this point; the next
 /// unprotected suspension still observes the requester's cancellation.
 async fn AuthStore::commit_session(
@@ -183,24 +167,23 @@ async fn wait_for_code(
 ) -> (String, @http.ServerConnection) {
   for ;; {
     let (conn, _) = server.accept()
-    // Close the socket on every per-iteration exit — including the
-    // cancellation that no longer enters `catch` — except when the granted
-    // connection is handed back to the caller.
-    let mut keep = false
-    defer (if !keep { conn.close() })
-    let outcome = serve_callback(conn, oauth_state~) catch {
-      error if @async.is_being_cancelled() => raise error
+    let outcome = try {
+      errdefer conn.close()
+      serve_callback(conn, oauth_state~)
+    } catch {
       // A broken socket must not kill the flow; keep listening.
       _ => continue
     }
     match outcome {
-      Granted(code) => {
-        keep = true
-        return (code, conn)
-      }
-      Denied(reason) =>
+      Granted(code) => return (code, conn)
+      Denied(reason) => {
+        conn.close()
         raise AuthError("the browser declined the sign-in: \{reason}")
-      Stray => continue
+      }
+      Stray => {
+        conn.close()
+        continue
+      }
     }
   }
 }
@@ -351,7 +334,6 @@ async fn exchange_code(
       @http.post("\{origin}/v1/auth/desktop/exchange", body, headers={
         "Content-Type": "application/json",
       }) catch {
-        error if @async.is_being_cancelled() => raise error
         error => raise AuthError("the sign-in exchange failed: \{error}")
       }
     })
@@ -362,7 +344,6 @@ async fn exchange_code(
     raise AuthError("the sign-in exchange answered HTTP \{response.code}")
   }
   let json = data.json() catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise AuthError("the sign-in exchange answered malformed JSON")
   }
   guard json

@@ -199,7 +199,6 @@ async fn load_edits_file(
   let brief = "multi_edit"
   let path = @workspace_path.resolve(workspace_root, spec)
   let text = @fs.read_file(path).text() catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       return Err(
         @agent_tool.respond(
@@ -310,7 +309,6 @@ async fn multi_edit_files(
   let prepared : Array[PreparedFile] = []
   for group in groups {
     let content = @fs.read_file(group.path).text() catch {
-      error if @async.is_being_cancelled() => raise error
       error => {
         failures.push({
           file: group.file,
@@ -409,7 +407,6 @@ async fn multi_edit_files(
       Measured(baseline) => {
         for write in writes {
           let current = @fs.read_file(write.path).text() catch {
-            error if @async.is_being_cancelled() => raise error
             error =>
               return not_verified("could not re-read \{write.path}: \{error}")
           }
@@ -479,7 +476,6 @@ async fn multi_edit_files(
     // cover it.
     written.push(write)
     @fs.write_file(write.path, write.new_content, create_mode=CreateOrTruncate) catch {
-      error if @async.is_being_cancelled() => raise error
       error =>
         return write_failed("\{write.path}: error writing file: \{error}")
     }
@@ -516,7 +512,6 @@ async fn multi_edit_files(
     let seen_digest = @agent_tool.content_digest(write.original_content)
     let new_digest = @agent_tool.content_digest(write.new_content)
     let final_content = @fs.read_file(write.path).text() catch {
-      error if @async.is_being_cancelled() => raise error
       _ => write.new_content
     }
     let final_digest = @agent_tool.content_digest(final_content)
@@ -562,10 +557,7 @@ async fn parse_gate_batch_rejection(
 ) -> @agent_tool.ToolAction? {
   let rejections : Array[FileRejection] = []
   for write in writes {
-    let target = @fs.realpath(write.path) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => write.path
-    }
+    let target = @fs.realpath(write.path) catch { _ => write.path }
     // Gate under every syncheck kind this file could be classified as. A
     // regular file yields one kind; a symlink that crosses kinds (e.g.
     // `link.mbt -> doc.mbt.md`) yields two, and moon's classification of such a
@@ -573,7 +565,6 @@ async fn parse_gate_batch_rejection(
     // See `gate_paths`.
     for gate_path in @auto_check.gate_paths(write.path, target) {
       let gate = @auto_check.content_parse_errors(gate_path, write.new_content) catch {
-        error if @async.is_being_cancelled() => raise error
         _ => None
       }
       guard gate is Some(gate) && gate.errors.length() > 0 else { continue }
@@ -581,7 +572,6 @@ async fn parse_gate_batch_rejection(
         gate_path,
         write.original_content,
       ) catch {
-        error if @async.is_being_cancelled() => raise error
         _ => None
       }
       guard before is Some(before) && !before.truncated else { continue }
@@ -805,10 +795,7 @@ async fn batch_projects(writes : Array[PreparedWrite]) -> Array[String] {
   let representatives : Array[String] = []
   async fn consider(path : String) -> Unit {
     guard @auto_check.check_cwd(path) is Some(dir) else { return }
-    let key = @fs.realpath(dir) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => dir
-    }
+    let key = @fs.realpath(dir) catch { _ => dir }
     if !seen.contains(key) {
       seen[key] = true
       representatives.push(path)
@@ -817,10 +804,7 @@ async fn batch_projects(writes : Array[PreparedWrite]) -> Array[String] {
 
   for write in writes {
     consider(write.path)
-    let target = @fs.realpath(write.path) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => write.path
-    }
+    let target = @fs.realpath(write.path) catch { _ => write.path }
     if target != write.path {
       consider(target)
     }
@@ -1150,7 +1134,6 @@ async fn restore_files(
       write.original_content,
       create_mode=CreateOrTruncate,
     ) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => failures.push(write.path)
     }
   }

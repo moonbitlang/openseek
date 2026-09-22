@@ -310,7 +310,6 @@ async test "worktree remove refuses a running conversation without unmapping it"
       "no error"
     } catch {
       EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
     assert_true(detail.contains("still running"))
@@ -402,7 +401,6 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(refusal.contains("wt") && refusal.contains("gone"))
@@ -421,7 +419,6 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(hinted_refusal.contains("wt") && hinted_refusal.contains("gone"))
@@ -440,7 +437,6 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(

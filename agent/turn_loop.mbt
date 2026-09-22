@@ -127,7 +127,7 @@ let ceiling_skip_note : String = "skipped: the turn is yielding at the context c
 ///     │   └─ close the batch with skip notes ── yield
 ///     └─ tool batch ── handle_tool_calls ── (continue │ done │ budget yield)
 ///   nobreak ── Terminal(Failed("max steps exhausted"))
-///   catch   ── Terminal(Interrupted │ Failed) ── re-raise
+///   errdefer ── Terminal(Interrupted │ Failed) ── propagate exit
 ///
 /// "seal │ continue": finishing consults the checkpoint policy — a turn that
 /// completes at the ceiling checkpoints first, and a steer landing during that
@@ -138,23 +138,9 @@ async fn AgentLoop::run(
   max_steps : Int,
 ) -> @agent_session.Session {
   self.last_session = session
-  try {
-    // async 0.22: a cancellation signal is no longer catchable, but it still
-    // runs `errdefer`. Record the Interrupted terminal here so a cancelled
-    // turn keeps its durable terminal; the `catch` below owns real errors.
-    errdefer (if @async.is_being_cancelled() {
-      @async.protect_from_cancel(() => {
-        let session = self.flush_goal_tombstone(self.last_session) catch {
-          _ => self.last_session
-        }
-        ignore(
-          self.append(session, Terminal(Interrupted("cancelled"))) catch {
-            _ => session
-          },
-        )
-      })
-      |> ignore
-    })
+  let mut failure : Error? = None
+  errdefer @async.protect_from_cancel(() => self.seal_unwinding_turn(failure))
+  let outcome = try {
     for step in 0..<max_steps; session = session {
       let session = self.prepare_step(session)
       let response = self.chat(step)
@@ -304,37 +290,36 @@ async fn AgentLoop::run(
       session
     }
   } catch {
-    error =>
-      // The errdefer above already recorded the Interrupted terminal when the
-      // exit is a cancellation; this catch owns real failures, so a cancelled
-      // turn is never given a second terminal.
-      if @async.is_being_cancelled() {
-        raise error
-      } else {
-        self.seal_unwinding_turn(error)
-      }
+    error => Err(error)
+  } noraise {
+    session => Ok(session)
+  }
+  match outcome {
+    Ok(session) => session
+    Err(error) => {
+      failure = Some(error)
+      raise error
+    }
   }
 }
 
 ///|
-/// Record the failure terminal for a dying turn, then let the error keep
-/// propagating — this never returns normally. Every append here is best
-/// effort: the store may already be gone, and the caller's error outranks
-/// anything that fails on the way out.
-///
-/// A cancelled turn never reaches here: `run`'s errdefer records its
-/// `Interrupted` terminal when the cancellation signal unwinds.
-async fn[T] AgentLoop::seal_unwinding_turn(self : Self, error : Error) -> T {
-  let terminal : @agent_session.SessionItem = Terminal(
-    Failed("agent failed: \{error}"),
-  )
+/// Persist the terminal on either error or cancellation. A cancellation signal
+/// bypasses catch, so the enclosing errdefer owns this protected cleanup.
+/// Every append is best effort: cleanup must not replace the original exit.
+async fn AgentLoop::seal_unwinding_turn(self : Self, failure : Error?) -> Unit {
+  let terminal : @agent_session.SessionItem = if failure is Some(error) &&
+    !(error is @async.TaskCancelled) {
+    Terminal(Failed("agent failed: \{error}"))
+  } else {
+    Terminal(Interrupted("cancelled"))
+  }
   // Best-effort: a goal met in the dying batch keeps its durable clear
   // when the store still accepts appends.
   let session = self.flush_goal_tombstone(self.last_session) catch {
     _ => self.last_session
   }
   ignore(self.append(session, terminal) catch { _ => session })
-  raise error
 }
 
 ///|
@@ -668,7 +653,7 @@ async fn AgentLoop::prefetch_concurrent_results(
       continue
     }
     let call = @agent_tool.AgentToolCall(native) catch {
-      error if @async.is_being_cancelled() => raise error
+      @async.TaskCancelled as error => raise error
       _ => {
         flush()
         continue
@@ -751,12 +736,10 @@ async fn AgentLoop::execute_tool_call(
       } else if last_step || self.at_soft_context_ceiling(response.usage) {
         ("error: cannot wait without budget for another model step", true)
       } else {
-        try {
-          // async 0.22: a cancellation signal no longer enters `catch`, but it
-          // still runs `errdefer`. Record the cancelled tool result from here
-          // (under a shield, so the append survives the cancelled context).
-          errdefer (if @async.is_being_cancelled() {
-            @async.protect_from_cancel(() => {
+        let mut cancelled_child = false
+        errdefer (if @async.is_being_cancelled() || cancelled_child {
+          @async.protect_from_cancel(() => {
+            ignore(
               self.record_tool_result(
                 session,
                 tool_call_id=native_call.id,
@@ -765,12 +748,15 @@ async fn AgentLoop::execute_tool_call(
                 is_error=true,
               ) catch {
                 _ => session
-              }
-            })
-            |> ignore
+              },
+            )
           })
-          self.wait_for_jobs(ids)
-        } catch {
+        })
+        try self.wait_for_jobs(ids) catch {
+          @async.TaskCancelled as error => {
+            cancelled_child = true
+            raise error
+          }
           error => ("error: \{error}", true)
         } noraise {
           content => (content, false)
@@ -1165,7 +1151,7 @@ async fn AgentLoop::run_pending_review(
   // (Pre-launch economy is separate: a replacement observed before this
   // point already cleared the pending slot and no audit was spawned.)
   let notice = callback(goal, baseline) catch {
-    error if @async.is_being_cancelled() => raise error
+    @async.TaskCancelled as error => raise error
     error =>
       Some(
         "[review] unavailable: \{@agent_tool.brief_line("\{error}", limit=200)}",

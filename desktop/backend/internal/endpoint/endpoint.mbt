@@ -72,7 +72,6 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex(
 ) -> Endpoint {
   Endpoint(command, payload => {
     let reply = handler(payload) catch {
-      error if @async.is_being_cancelled() => raise error
       error => return CodexCommandError("\{error}")
     }
     CodexCommandSuccess(reply)

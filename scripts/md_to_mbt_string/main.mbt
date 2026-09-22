@@ -453,7 +453,6 @@ async fn[T] with_tmpdir(f : async (String) -> T) -> T {
   let dir = @fs.tmpdir(prefix="")
   async fn rmdir() {
     @fs.rmdir(dir, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => ()
     }
   }

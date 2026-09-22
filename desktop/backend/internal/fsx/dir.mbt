@@ -4,7 +4,6 @@ struct Directory(@fs.Directory)
 ///|
 pub async fn Directory::try_open(path : @pathx.Path) -> Directory? {
   Some(Directory(@fs.opendir(path.to_string()))) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
 }

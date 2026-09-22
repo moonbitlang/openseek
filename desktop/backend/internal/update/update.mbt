@@ -75,14 +75,12 @@ fn manifest_platform_key() -> String? {
 /// chooses what each is worth showing.
 pub async fn check_for_update(current~ : String) -> UpdateInfo? {
   let (response, data) = @http.get(ManifestUrl) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise Unreachable(reason="\{error}")
   }
   guard response.code == 200 else {
     raise Unreachable(reason="the update server answered HTTP \{response.code}")
   }
   let json = data.json() catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise MalformedManifest(reason="the manifest is not valid JSON")
   }
   newer_update(json, current~, platform_key=manifest_platform_key())
@@ -102,7 +100,6 @@ const BundleReplacementFailureMessage : String = "OpenSeek cannot replace the ap
 async fn bundle_replacement_failure(bundle_path : String) -> String? {
   let parent = @pathx.Path(bundle_path).dirname().to_string()
   let replaceable = (@fs.can_write(parent) && @fs.can_execute(parent)) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => false
   }
   if replaceable {

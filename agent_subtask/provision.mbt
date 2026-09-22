@@ -105,17 +105,13 @@ async fn provision_locked(
   }
   // 4. Keep .worktrees/ out of status noise, idempotently.
   let exclude = "\{geometry.common_git_dir}/info/exclude"
-  let existing_exclude = @fs.read_file(exclude).text() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => ""
-  }
+  let existing_exclude = @fs.read_file(exclude).text() catch { _ => "" }
   if !existing_exclude.split("\n").any(line => line == ".worktrees/") {
     @fs.write_file(
       exclude,
       "\{existing_exclude}\{if existing_exclude == "" || existing_exclude.has_suffix("\n") { "" } else { "\n" }}.worktrees/\n",
       create_mode=CreateOrTruncate,
     ) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => ()
     }
   }
@@ -194,7 +190,6 @@ async fn remove_worktree_and_branch(
   force~ : Bool,
 ) -> Unit {
   @fs.rmdir(entry.worker_root, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
   let _ = git_run(["worktree", "prune"], cwd=origin)
@@ -211,7 +206,6 @@ async fn rollback_provision(geometry : Geometry, entry : SubtaskEntry) -> Unit {
   remove_worktree_and_branch(geometry.origin_root, entry, force=true)
   let dir = registry_dir(geometry.common_git_dir)
   @fs.remove("\{dir}/\{entry.name}--\{entry.nonce}.json") catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }
@@ -228,18 +222,12 @@ fn is_valid_name(name : String) -> Bool {
 /// snapshots). Failure is fine — the worker just pays the download.
 async fn copy_mooncakes(origin : String, worker_root : String) -> Unit {
   let source = "\{origin}/.mooncakes"
-  guard (@fs.exists(source) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }) else {
-    return
-  }
+  guard (@fs.exists(source) catch { _ => false }) else { return }
   let _ = @process.run(
     "cp",
     ["-R", source, "\{worker_root}/.mooncakes"],
     inherit_env=true,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => 1
   }
 }

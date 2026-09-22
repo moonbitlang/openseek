@@ -41,7 +41,6 @@ pub async fn package_graph(cwd : String) -> PackageGraph? {
       max_output_chars=PackageGraphMaxOutputChars,
     )
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
   guard result is Some(output) && !output.output_limit_reached else {
@@ -171,10 +170,8 @@ fn normalize_dir(path : String) -> String {
 /// when unset or unreadable, meaning packages live under the module root.
 async fn module_source_dir(root : String) -> String {
   let modern = @fs.read_file("\{root}/moon.mod").text() catch {
-    error if @async.is_being_cancelled() => raise error
     _ => {
       let legacy = @fs.read_file("\{root}/moon.mod.json").text() catch {
-        error if @async.is_being_cancelled() => raise error
         _ => return ""
       }
       return parse_module_source(legacy, json=true)

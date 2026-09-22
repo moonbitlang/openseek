@@ -46,7 +46,6 @@ pub async fn RelayActor::run(self : RelayActor) -> Unit {
       store.signed_in() &&
       store.session_server() != @engine.remote_server_base(self.state.manager()) {
       store.sign_out() catch {
-        error if @async.is_being_cancelled() => raise error
         error =>
           @xlog.warn(category="remote") <?
             {
@@ -75,7 +74,6 @@ pub async fn RelayActor::run(self : RelayActor) -> Unit {
             @xlog.warn(category="remote") <?
               { "message": "relay refused registration", "error": message }
             store.handle_refusal() catch {
-              error if @async.is_being_cancelled() => raise error
               error =>
                 // The relay already rejected this token. Keep the actor
                 // alive and parked on the cleared in-memory state even if

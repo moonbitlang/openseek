@@ -1,7 +1,6 @@
 import {
   "openseek_desktop/backend/internal/pathx",
   "openseek_desktop/protocol",
-  "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",
   "moonbitlang/core/buffer",

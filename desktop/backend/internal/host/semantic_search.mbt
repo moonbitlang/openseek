@@ -233,7 +233,6 @@ async fn SemanticSearchService::run(
             let outcome = SemanticSearchFinished(
               run_semantic_search(command, root, payload, emit),
             ) catch {
-              _ if @async.is_being_cancelled() => return
               error => SemanticSearchFailed("Semantic search failed: \{error}")
             }
             self.requests.put(Finished(session_key~, generation~, outcome~))
@@ -607,7 +606,6 @@ async fn publish_semantic_progress(
     // when its task group is torn down. Any other delivery failure
     // (wedged outbound queue, closed connection) only costs the partial
     // frames; the authoritative reply still travels the request path.
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }
@@ -634,7 +632,6 @@ async fn run_semantic_search(
     })
   }
   let directory = @fs.opendir(native_root) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       return empty_semantic_search_reply(reply_root, payload.generation, error={
         code: if "\{error}".to_lower().contains("permission") {
@@ -668,7 +665,6 @@ async fn run_semantic_search(
       cancel_handler=@process.hard_cancel(),
       no_wait=true,
     ) catch {
-      error if @async.is_being_cancelled() => raise error
       error => {
         stdout_reader.close()
         stderr_reader.close()
@@ -743,7 +739,6 @@ async fn run_semantic_search(
       )
     }
     let exit_code = process.wait() catch {
-      error if @async.is_being_cancelled() => raise error
       _ if limit_hit => 0
       _ => 2
     }

@@ -316,12 +316,8 @@ pub fn Tools::function_tools(self : Tools) -> Array[@deepseek.ToolDefinition] {
 /// and the turn continues — one boundary that spares every tool from wrapping
 /// each of its own filesystem/IO calls just to report a failure.
 ///
-/// Cancellation is the exception: it is re-raised so the loop can abort the
-/// turn (see the terminal handler in `AgentLoop`, which maps it to
-/// `Interrupted`). That is also why this function stays raise-able rather than
-/// `noraise`: since `async` defaults to raising, marking it `noraise` would
-/// force cancellation to be caught and swallowed here too, and the turn would
-/// no longer be cancellable mid-tool-call.
+/// Cancellation signals propagate without entering catch. A cancelled child
+/// reported by Task::wait also propagates instead of becoming a tool result.
 pub async fn execute_tool_call(
   call : AgentToolCall,
   tools : Tools,
@@ -330,7 +326,7 @@ pub async fn execute_tool_call(
     Some(tool) =>
       tool.execute.run(call.arguments) catch {
         error =>
-          if @async.is_being_cancelled() {
+          if error is @async.TaskCancelled {
             raise error
           } else {
             // Keep the transcript label the local catches used to provide:

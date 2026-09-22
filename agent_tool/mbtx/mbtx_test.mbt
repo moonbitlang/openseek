@@ -811,7 +811,6 @@ async test "network allows outbound use and localhost-only binds" {
       #|    client.close()
       #|    "allowed"
       #|  } catch {
-      #|    error if @async.is_being_cancelled() => raise error
       #|    _ => "refused"
       #|  }
       #|  let wildcard = try {
@@ -819,7 +818,6 @@ async test "network allows outbound use and localhost-only binds" {
       #|    server.close()
       #|    "allowed"
       #|  } catch {
-      #|    error if @async.is_being_cancelled() => raise error
       #|    _ => "refused"
       #|  }
       #|  println("localhost=\{localhost} wildcard=\{wildcard}")

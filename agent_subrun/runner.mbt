@@ -253,7 +253,7 @@ fn reserve_subrun_ordinals(count : Int, first_free~ : Int) -> Int {
 
 ///|
 /// The wire status vocabulary for a terminal (the "cancelled" status has no
-/// terminal — cancellation re-raises — and is emitted at its catch site).
+/// terminal — cancellation re-raises — and is emitted by its errdefer).
 fn status_of(terminal : SubrunTerminal) -> String {
   match terminal {
     Captured => "captured"

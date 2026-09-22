@@ -158,17 +158,11 @@ async fn edited_targets(paths : Array[String]) -> Array[EditedTarget] {
     let spellings : Array[String] = [path]
     let mut canonical = path
     if path.rev_split_once("/") is Some((dir, name)) && dir != "" {
-      let canonical_dir = @fs.realpath(dir) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => dir.to_owned()
-      }
+      let canonical_dir = @fs.realpath(dir) catch { _ => dir.to_owned() }
       canonical = "\{canonical_dir}/\{name}"
       spellings.push(canonical)
     }
-    let resolved : String? = Some(@fs.realpath(path)) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => None
-    }
+    let resolved : String? = Some(@fs.realpath(path)) catch { _ => None }
     if resolved is Some(resolved) {
       spellings.push(resolved)
     }
@@ -195,7 +189,6 @@ async fn is_build_input(path : String) -> Bool {
   }
   for manifest in ["moon.pkg", "moon.pkg.json"] {
     let text = @fs.read_file("\{dir}/\{manifest}").text() catch {
-      error if @async.is_being_cancelled() => raise error
       _ => continue
     }
     if text.contains(name) {
@@ -217,11 +210,7 @@ pub async fn gather_comparability(
 ) -> Comparability {
   let cwd = @auto_check.check_cwd(check_path)
   let graph = match cwd {
-    Some(cwd) =>
-      @auto_check.package_graph(cwd) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => None
-      }
+    Some(cwd) => @auto_check.package_graph(cwd) catch { _ => None }
     None => None
   }
   comparability(before, after, edited_targets(paths), cwd~, graph~)

@@ -106,7 +106,6 @@ async fn MoonCliState::resolve_command(self : MoonCliState) -> ToolSpawnConfig? 
     self.engine,
     runtime_dir?=self.runtime_dir,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     @moonbit.ToolchainUnavailable as unavailable => {
       @xlog.warn() <?
         {
@@ -155,7 +154,6 @@ async fn MoonCliState::run_moon(
     )
     (code, stdout.text(), stderr.text())
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => None
   }
 }
@@ -230,7 +228,6 @@ async fn workspace_module_roots(
     return [workspace_dir]
   }
   let names = @fs.readdir(workspace_dir.to_string(), sort=true) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return []
   }
   // Child directories that are modules, paired with their manifest mtime for
@@ -238,10 +235,7 @@ async fn workspace_module_roots(
   let modules : Array[(@pathx.Absolute, Int64)] = []
   for name in names {
     let child = workspace_dir.join((name : @pathx.Relative))
-    let is_dir = (@fs.kind(child.to_string()) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => Unknown
-      })
+    let is_dir = (@fs.kind(child.to_string()) catch { _ => Unknown })
       is Directory
     guard is_dir else { continue }
     guard manifest_mtime(child) is Some(mtime) else { continue }
@@ -268,10 +262,7 @@ async fn manifest_mtime(dir : @pathx.Absolute) -> Int64? {
   for name in ["moon.mod", "moon.mod.json", "moon.work"] {
     let path = dir.join((name : @pathx.Relative)).to_string()
     guard @fs.exists(path) else { continue }
-    let (seconds, _) = @fs.mtime(path) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => continue
-    }
+    let (seconds, _) = @fs.mtime(path) catch { _ => continue }
     newest = match newest {
       Some(current) => Some(if seconds > current { seconds } else { current })
       None => Some(seconds)

@@ -16,14 +16,12 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
   // Failure text reaches the terminal via stderr, and both the path and the
   // decoder's error can embed configuration strings: keep them terminal-safe.
   let text = @fs.read_file(path).text() catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       fail(
         "cannot read \{@cli.terminal_safe_line(path, limit=200)}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
       )
   }
   let servers = @mcpconfig.decode(@json.parse(text)) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       fail(
         "invalid MCP configuration in \{@cli.terminal_safe_line(path, limit=200)}: \{@cli.terminal_safe_line("\{error}", limit=200)}",

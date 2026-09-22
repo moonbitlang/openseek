@@ -31,7 +31,6 @@ async fn run_capture(
       cwd=cwd.view(),
     )
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
   match outcome {

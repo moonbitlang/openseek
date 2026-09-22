@@ -63,7 +63,6 @@ pub async fn LocalConsole::bind(port~ : Int) -> LocalConsole {
     @socket.Addr::parse("127.0.0.1:\{port}"),
     reuse_addr=true,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       @xlog.warn(category="transport") <?
         {
@@ -297,7 +296,6 @@ async fn serve_ws(
   let ws = @websocket.from_http_server(request, conn)
   defer ws.close()
   WsClientActor(state).serve(ws) catch {
-    error if @async.is_being_cancelled() => raise error
     // The page reloading or the tab closing mid-frame is routine.
     _ => ()
   }
@@ -315,7 +313,6 @@ async fn serve_static(
   // Only an absent file is 404; an unreadable one is the bundle being broken,
   // which the log names and the browser sees as a server failure.
   let body = @fs.read_file("\{root}/\{relative}").binary() catch {
-    error if @async.is_being_cancelled() => raise error
     @os_error.OSError(_) as os_error if os_error.is_ENOENT() => {
       respond_status(conn, 404, "Not Found")
       return

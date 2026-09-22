@@ -36,13 +36,11 @@ pub async fn apply_staged(staged_app~ : String, bundle_path~ : String) -> Unit {
   let aside = aside_path(bundle_path)
   remove_tree(aside)
   @fs.rename(bundle_path, aside) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise UpdateError("cannot move the current app aside: \{error}")
   }
   // /bin/mv rather than rename: the staging directory may sit on another
   // volume than the bundle, and mv falls back to copying there.
   let code = @process.run("mv", [staged_app, bundle_path]) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise move_in_failure(aside, bundle_path, "\{error}")
   }
   guard code == 0 else {
@@ -80,7 +78,6 @@ async fn restore_aside(aside : String, bundle_path : String) -> Bool {
   remove_tree(bundle_path)
   guard !@fs.exists(bundle_path) else { return false }
   @fs.rename(aside, bundle_path) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return false
   }
   true
@@ -99,7 +96,6 @@ pub async fn write_relaunch_marker(
     bundle_path,
     create_mode=CreateOrTruncate,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }
@@ -111,11 +107,9 @@ pub async fn take_relaunch_target(work_dir~ : String) -> String? {
   let marker = relaunch_marker_path(work_dir)
   guard @fs.exists(marker) else { return None }
   let target = @fs.read_file(marker).text().trim().to_owned() catch {
-      error if @async.is_being_cancelled() => raise error
       _ => return None
     }
   @fs.remove(marker) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
   if target.is_empty() {
@@ -137,7 +131,6 @@ pub async fn cleanup_leftovers(
   remove_tree(staging_dir(work_dir))
   remove_tree(aside_path(bundle_path))
   @fs.remove(relaunch_marker_path(work_dir)) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }
@@ -151,12 +144,10 @@ async fn remove_tree(path : String) -> Unit {
   }
   if @fs.kind(path) is Directory {
     @fs.rmdir(path, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => ()
     }
   } else {
     @fs.remove(path) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => ()
     }
   }

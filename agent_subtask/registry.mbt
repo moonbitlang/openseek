@@ -66,7 +66,6 @@ async fn save_entry(
 ) -> Result[Unit, String] {
   let dir = registry_dir(common_git_dir)
   @fs.mkdir(dir, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
   let target = entry_path(common_git_dir, entry)
@@ -76,11 +75,9 @@ async fn save_entry(
     ToJson::to_json(entry).stringify(),
     create_mode=CreateOrTruncate,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => return Err("could not write registry entry: \{error}")
   }
   @fs.rename(temp, target) catch {
-    error if @async.is_being_cancelled() => raise error
     error => return Err("could not commit registry entry: \{error}")
   }
   Ok(())
@@ -96,14 +93,10 @@ pub async fn load_entries(
   let entries : Array[SubtaskEntry] = []
   let skipped : Array[String] = []
   let dir = registry_dir(common_git_dir)
-  let names = @fs.readdir(dir) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return (entries, skipped)
-  }
+  let names = @fs.readdir(dir) catch { _ => return (entries, skipped) }
   for name in names {
     guard name.has_suffix(".json") else { continue }
     let text = @fs.read_file("\{dir}/\{name}").text() catch {
-      error if @async.is_being_cancelled() => raise error
       _ => {
         skipped.push(name)
         continue

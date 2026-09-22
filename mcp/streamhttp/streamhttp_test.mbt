@@ -293,7 +293,6 @@ async test "an http error fails the request fast" {
         "no error raised"
       } catch {
         @jsonrpc.Failed(code~, message~, data=_) => "failed \{code}: \{message}"
-        error if @async.is_being_cancelled() => raise error
         _ => "other error"
       }
     })

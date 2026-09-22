@@ -222,7 +222,6 @@ impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
     defer feed_gate(completion)
     if gate is Some(gate) {
       gate.get() catch {
-        error if @async.is_being_cancelled() => raise error
         // Gate closed with the transport: proceed to fail normally below.
         _ => ()
       }
@@ -241,7 +240,6 @@ impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
 ///|
 impl @jsonrpc.Transport for HttpTransport with fn recv(self) {
   Some(self.inbound.get()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => None
   }
 }
@@ -294,21 +292,13 @@ async fn delete_session(url : String, headers : @http.Headers) -> Unit {
     Some((host, path)) => ("\{scheme}://\{host}", "/\{path}")
     None => (url, "/")
   }
-  let client = @http.Client(origin) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return
-  }
+  let client = @http.Client(origin) catch { _ => return }
   defer client.close()
   client.request(Delete, path, extra_headers=headers) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return
   }
-  let _ = client.end_request() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return
-  }
+  let _ = client.end_request() catch { _ => return }
   client.skip_response_body() catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }
@@ -338,7 +328,6 @@ async fn HttpTransport::run_post(
   let bounded = @async.with_timeout_opt(ExchangeTimeoutMs, () => {
     self.exchange(message, deliver, answered=() => answered)
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       // Fail the pending request fast (the exchange is dead); a notification
       // has nothing to answer.

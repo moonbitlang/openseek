@@ -204,7 +204,7 @@ pub fn definition(
           let program = service.register(on_trace?=on_program_trace)
           errdefer program.close()
           let action = run(Some(program)) catch {
-            error if @async.is_being_cancelled() => raise error
+            @async.TaskCancelled as error => raise error
             error =>
               @agent_tool.respond("PTC program failed: \{error}", is_error=true)
           }
@@ -312,7 +312,6 @@ async fn execute(
           write_scope?,
         )
       }) catch {
-        error if @async.is_being_cancelled() => raise error
         error =>
           return @agent_tool.respond(
             "error: mbtx could not save \{filename}: \{@tool_error.failure_message("\{error}")}",
@@ -334,7 +333,6 @@ async fn execute(
       // Only bundled workflows need this resource lookup and its error handling.
       let resources = if is_bundled_filename(filename) {
         @resources.directory() catch {
-          error if @async.is_being_cancelled() => raise error
           error =>
             return @agent_tool.respond(
               "error: mbtx \{@tool_error.failure_message("\{error}")}",
@@ -345,7 +343,6 @@ async fn execute(
         None
       }
       let path = resolve_filename(workspace_root, filename, resources) catch {
-        error if @async.is_being_cancelled() => raise error
         error =>
           return @agent_tool.respond(
             "error: mbtx \{@tool_error.failure_message("\{error}")}",
@@ -353,7 +350,6 @@ async fn execute(
           )
       }
       let source = read_script_snapshot(file_state, path, resources) catch {
-        error if @async.is_being_cancelled() => raise error
         error => {
           let hint = if is_bundled_filename(filename) {
             " Bundled workflows: @builtin/read.mbtx, @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx, @builtin/ci-watch.mbtx (GitHub CI status), @builtin/fix-deprecations.mbtx (ptc=true; one guarded edit per deprecation site). Agent workflows (subrun=true): @builtin/review.mbtx (independent worktree audit; criteria in args), @builtin/change-review.mbtx, @builtin/repo-map.mbtx. Ordinary filenames select workspace files."
@@ -486,7 +482,6 @@ async fn execute(
   let dir = if job_dir is Some(scratch) {
     let dir = "\{scratch}/snippet-\{@uuid.v7()}"
     @fs.mkdir(dir, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
       _ =>
         return @agent_tool.respond(
           "mbtx: could not create a working directory for the background job.",
@@ -500,7 +495,6 @@ async fn execute(
     // lab writes the caller sanctioned and moon's own build output.
     let dir = "\{lab}/mbtx-\{@uuid.v7()}"
     @fs.mkdir(dir, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
       _ =>
         return @agent_tool.respond(
           "mbtx: could not create a working directory in the scratch lab.",
@@ -512,7 +506,6 @@ async fn execute(
     @fs.tmpdir(prefix="openseek-mbtx-") catch {
       // Let a cancellation propagate to the loop's Interrupted terminal instead of
       // swallowing it into an ordinary tool error.
-      error if @async.is_being_cancelled() => raise error
       _ =>
         return @agent_tool.respond(
           "mbtx: could not create a temporary working directory.",
@@ -552,7 +545,6 @@ async fn execute(
   // filename, so targeting `build` itself collides with `build/snippet.mbtx`.
   let build_dir = "\{dir}/build"
   @fs.mkdir(build_dir) catch {
-    error if @async.is_being_cancelled() => raise error
     _ =>
       return @agent_tool.respond(
         "mbtx: could not create a build directory for the snippet.",
@@ -575,7 +567,6 @@ async fn execute(
   let stage_dir = match key_dir {
     Some(keyed) =>
       open_generation(keyed, generations.get(keyed).unwrap_or(0)) catch {
-        error if @async.is_being_cancelled() => raise error
         _ => build_dir
       }
     None => build_dir
@@ -624,7 +615,6 @@ async fn execute(
   // all foreground and standalone paths still remove the whole container.
   let snippet_tmp = "\{dir}/tmp"
   @fs.mkdir(snippet_tmp) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
   // `cwd` is deliberately NOT a write root: naming where a program runs should
@@ -659,7 +649,6 @@ async fn execute(
   // failed to appear would be refused whole, with nothing to say why.
   if reservation is Some(r) {
     @fs.mkdir(r.dir(), recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => ()
     }
   }
@@ -828,7 +817,6 @@ async fn execute(
             @fs.read_file(built),
             create_mode=CreateOrTruncate,
           ) catch {
-            error if @async.is_being_cancelled() => raise error
             error =>
               return @agent_tool.respond(
                 "mbtx: the build succeeded but its artifact could not be copied out of the session cache (\{error}) — a filesystem fault, not a problem in `source`.",
@@ -1260,7 +1248,6 @@ async fn build_snippet(
     "\{stage_dir}/_build/wasm/debug/build/single/single.wasm",
   )
   let artifact_present = @fs.exists(artifact) catch {
-    error if @async.is_being_cancelled() => raise error
     // A stat FAULT is not absence (AGENTS.md: never fold unrelated errors
     // into the missing case): name the filesystem failure instead of
     // reporting a missing artifact. Either way the run cannot proceed, so
@@ -1538,10 +1525,7 @@ async fn log_shows_denial(
 ) -> Bool {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return false }
   defer file.close()
-  let size = file.size() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
+  let size = file.size() catch { _ => return false }
   let budget = budget_bytes.to_int64()
   if size <= budget * 2 {
     denial_scan_region(file, 0, size, reports_denial)
@@ -1574,10 +1558,7 @@ async fn denial_scan_region(
     } else {
       DenialScanChunkBytes
     }
-    let n = file.read_at(buf, position~, len=want) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => break
-    }
+    let n = file.read_at(buf, position~, len=want) catch { _ => break }
     if n <= 0 {
       break
     }

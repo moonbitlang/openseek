@@ -97,11 +97,7 @@ fn settings_file(runtime_dir : @pathx.Path) -> @pathx.Path {
 async fn load_engine_settings(runtime_dir : @pathx.Path?) -> EngineSettings {
   let fields : Map[String, Json] = Map([])
   if runtime_dir is Some(dir) &&
-    (@fsx.try_read_text(settings_file(dir)) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => None
-    })
-    is Some(text) &&
+    (@fsx.try_read_text(settings_file(dir)) catch { _ => None }) is Some(text) &&
     (@json.parse(text) catch { _ => Json::null() }) is Object(parsed) {
     for key, value in parsed {
       fields[key] = value
@@ -287,19 +283,15 @@ async fn write_settings_file(runtime_dir : @pathx.Path, text : String) -> Unit {
     create_mode=CreateOrTruncate,
     permission=0o600,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise EngineError("could not write engine settings: \{error}")
   }
   @fs.rename(temp.to_string(), target.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => {
       @fsx.remove_if_exists(target) catch {
-        error if @async.is_being_cancelled() => raise error
         error =>
           raise EngineError("could not replace engine settings: \{error}")
       }
       @fs.rename(temp.to_string(), target.to_string()) catch {
-        error if @async.is_being_cancelled() => raise error
         error => raise EngineError("could not save engine settings: \{error}")
       }
     }

@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/async",
   "moonbitlang/async/os_error",
   "moonbitlang/async/fs",
   "openseek_desktop/backend/internal/pathx",
@@ -7,3 +6,7 @@ import {
 }
 
 supported_targets = "+native"
+
+import {
+  "moonbitlang/async",
+} for "wbtest"

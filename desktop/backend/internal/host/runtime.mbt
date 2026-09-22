@@ -54,7 +54,6 @@ pub async fn prepared_runtime_dir(executable : String) -> @pathx.Path? {
   }
   if !exists {
     @fs.mkdir(dir.to_string(), recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => return None
     }
   }

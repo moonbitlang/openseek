@@ -317,7 +317,6 @@ pub async fn Actor::run(self : Actor, emit : (String, Json) -> Unit) -> Unit {
       // App shutdown must still cancel the actor and every owned child. A
       // child-process failure, however, only ends this connection attempt;
       // keeping the loop alive lets the next API input retry the app-server.
-      error if @async.is_being_cancelled() => raise error
       error =>
         self.report_unavailable(
           "Codex app-server stopped unexpectedly: \{error}",
@@ -393,10 +392,7 @@ async fn[G] Actor::run_connection(
     connection.dispatch_input(group, self.reverse_requests, input)
   }
   for ;; {
-    let next = self.next_step(events) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => break
-    }
+    let next = self.next_step(events) catch { _ => break }
     match next {
       Input(input) =>
         connection.dispatch_input(group, self.reverse_requests, input)
@@ -504,17 +500,12 @@ fn[G] Connection::dispatch_input(
   match input {
     Call(method_, params, reply) =>
       group.spawn_bg(allow_failure=true, () => {
-        // The connection task group is cancelled on disconnect. A cancellation
-        // no longer enters `catch`, so settle the API caller from `errdefer`;
-        // otherwise Actor::call waits forever on a reply only this child owned.
-        errdefer (if @async.is_being_cancelled() {
-          @async.protect_from_cancel(() => {
-            let closed = TransportClosed(method_~)
-            closed.log()
-            (reply.try_put(Err(closed)) catch { _ => false }) |> ignore
-          })
-          |> ignore
-        })
+        // Settle the API caller even when disconnect cancels this child.
+        errdefer {
+          let closed = TransportClosed(method_~)
+          closed.log()
+          (reply.try_put(Err(closed)) catch { _ => false }) |> ignore
+        }
         let outcome = try self.request(method_~, params~) catch {
           @jsonrpc.Failed(code~, message~, data~) => {
             let error = JsonRpc(method_~, code~, message~, data~)
@@ -548,14 +539,12 @@ fn[G] Connection::dispatch_input(
         return
       }
       group.spawn_bg(allow_failure=true, () => {
-        errdefer (if @async.is_being_cancelled() {
-          @async.protect_from_cancel(() => {
-            let closed = TransportClosed(method_="serverRequest/respond")
-            closed.log()
-            (reply.try_put(Err(closed)) catch { _ => false }) |> ignore
-          })
-          |> ignore
-        })
+        // Settle the API caller even when disconnect cancels this child.
+        errdefer {
+          let closed = TransportClosed(method_="serverRequest/respond")
+          closed.log()
+          (reply.try_put(Err(closed)) catch { _ => false }) |> ignore
+        }
         let outcome = try {
           self.respond(request, result)
           Ok(Json::empty_object())

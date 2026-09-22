@@ -164,7 +164,6 @@ async test "worktree deletion refuses a replaced checkout" {
     )
     "no error"
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(remove_detail != "no error")
@@ -172,7 +171,6 @@ async test "worktree deletion refuses a replaced checkout" {
     ignore(archive_session(manager, "s-replaced", (_, _) => (), force=true))
     "no error"
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(archive_detail != "no error")

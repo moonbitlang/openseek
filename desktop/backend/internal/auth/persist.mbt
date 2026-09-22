@@ -64,10 +64,7 @@ fn session_from_json(json : Json) -> AuthSession? {
 /// Read the persisted session; absence and corruption both read as signed
 /// out.
 async fn load_session_file(runtime_dir : @pathx.Path) -> AuthSession? {
-  guard (@fsx.try_read_text(auth_file(runtime_dir)) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => None
-    })
+  guard (@fsx.try_read_text(auth_file(runtime_dir)) catch { _ => None })
     is Some(text) else {
     return None
   }
@@ -91,18 +88,14 @@ async fn save_session_file(
     create_mode=CreateOrTruncate,
     permission=0o600,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise AuthError("could not write the sign-in file: \{error}")
   }
   @fs.rename(temp.to_string(), target.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => {
       @fsx.remove_if_exists(target) catch {
-        error if @async.is_being_cancelled() => raise error
         error => raise AuthError("could not replace the sign-in file: \{error}")
       }
       @fs.rename(temp.to_string(), target.to_string()) catch {
-        error if @async.is_being_cancelled() => raise error
         error => raise AuthError("could not save the sign-in file: \{error}")
       }
     }
@@ -122,11 +115,9 @@ async fn delete_session_file(runtime_dir : @pathx.Path) -> Unit {
     create_mode=CreateOrTruncate,
     permission=0o600,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise AuthError("could not clear the sign-in file: \{error}")
   }
   @fsx.remove_if_exists(target) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       @xlog.warn(category="auth") <?
         {

@@ -15,7 +15,6 @@ impl @jsonrpc.Transport for FakeTransport with fn send(self, message) {
 ///|
 impl @jsonrpc.Transport for FakeTransport with fn recv(self) {
   Some(self.inbound.get()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => None
   }
 }

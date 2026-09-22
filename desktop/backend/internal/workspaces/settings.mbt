@@ -41,7 +41,6 @@ async fn read_settings_unlocked(
   workspace : @pathx.Absolute,
 ) -> Map[String, Json] {
   let text = @fsx.try_read_text(settings_file(workspace).to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return {}
   }
   guard text is Some(text) else { return {} }
@@ -99,14 +98,12 @@ async fn write_settings(
 ) -> Unit {
   let store = store_root(workspace)
   @fsx.ensure_dir(store.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not create \{store}: \{error}")
   }
   @fsx.write_text(
     settings_file(workspace).to_path(),
     fields.to_json().stringify(indent=2),
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       raise WorkspaceError("could not save the workspace settings: \{error}")
   }

@@ -13,14 +13,12 @@ async fn[X] resolve_mcp_tools(
 ) -> Array[@agent_tool.AgentToolDefinition] {
   guard config_path is Some(path) else { return [] }
   let text = @fs.read_file(path).text() catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       @emit.emit(McpConfigUnreadable(path~, error="\{error}"))
       return []
     }
   }
   let servers = @mcpconfig.decode(@json.parse(text)) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       @emit.emit(McpConfigInvalid(path~, error="\{error}"))
       return []

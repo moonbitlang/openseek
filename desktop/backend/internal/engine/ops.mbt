@@ -175,7 +175,6 @@ pub fn cancel_run(
 async fn ensure_run_cwd(config : RunConfig) -> Unit {
   if config.cwd is Some(cwd) {
     @fsx.ensure_dir(cwd) catch {
-      error if @async.is_being_cancelled() => raise error
       error =>
         raise EngineError("failed to create working directory \{cwd}: \{error}")
     }
@@ -203,12 +202,8 @@ async fn request_spawn(
       raise error
     }
   })
-  // async 0.21: `protect_from_cancel` no longer raises after resuming a
-  // cancelled shield (the old `resume_on_cancel=false` default), so a
-  // requester cancelled while awaiting this ack would otherwise return
-  // normally and its caller would proceed as if it had not been cancelled.
-  // `pause` re-raises the pending cancellation the moment the shield lifts,
-  // preserving the old observable contract for the caller.
+  // The shield resumes normally even if cancellation arrived while waiting.
+  // Observe that pending cancellation before the caller can proceed.
   @async.pause()
 }
 
@@ -562,7 +557,6 @@ pub fn approve_run(
 async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String {
   let engine = manager.engine
   let (code, stdout, stderr) = @processx.collect_output_no_stdin(engine, args) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise EngineError("failed to run engine: \{error}")
   }
   if code != 0 {
@@ -642,7 +636,6 @@ async fn session_group(
   let output = engine_stdout(manager, [
     "sessions", "list", "--session-root", native_root, "--format", "json",
   ]) catch {
-    error if @async.is_being_cancelled() => raise error
     EngineError(detail) => return failed("session list failed: \{detail}")
     error => return failed("session list failed: \{error}")
   }
@@ -706,7 +699,6 @@ pub async fn load_session(
     raise EngineError("this conversation is archived; unarchive it first")
   }
   let document = @session_record.read_document(root, session) catch {
-    error if @async.is_being_cancelled() => raise error
     // No record here yet. That is this conversation's answer, not a failed
     // read: a turn that died before the engine created the record leaves
     // exactly this state, and a client told "load failed" can only retry a
@@ -776,7 +768,6 @@ pub async fn load_archived_session(
     raise EngineError("no archived record for this conversation")
   }
   let document = @session_record.read_document(root, session) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise EngineError("archived session load failed: \{error}")
   }
   { session: document, watermark: Some(session_max_sequence(document)), }
@@ -1547,7 +1538,6 @@ async test "load rejects a detached workspace hint instead of probing global" {
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(detail.contains("not a registered workspace"))
@@ -1614,7 +1604,6 @@ async test "workspace detach refuses a running conversation without hiding it" {
       "no error"
     } catch {
       EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
     assert_true(detail.contains("still running"))
@@ -1714,7 +1703,6 @@ async test "a goal request is refused before it can reach the wrong engine" {
       "no error"
     } catch {
       EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
   }

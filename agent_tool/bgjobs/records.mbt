@@ -125,7 +125,7 @@ async fn BgJobRuntime::publish_record(
   self.publish_lock.acquire()
   defer self.publish_lock.release()
   // A release can grant the lock to a waiter that was cancelled before it
-  // resumed. Yielding here lets the runtime raise its own cancellation error,
+  // resumed. Yielding here lets the runtime raise its own cancellation signal,
   // so the caller's task group sees a cancellation rather than a failure.
   if @async.is_being_cancelled() {
     @async.pause()
@@ -147,7 +147,7 @@ async fn BgJobRuntime::publish_record(
       None => persist(record)
     }
   } catch {
-    error if @async.is_being_cancelled() => raise error
+    @async.TaskCancelled as error => raise error
     error => job.persistence_error = Some("failed to persist job: \{error}")
   }
   job.announced = true

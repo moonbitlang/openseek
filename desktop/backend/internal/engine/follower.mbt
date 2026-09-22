@@ -180,7 +180,6 @@ async fn SessionFollower::run(
     ignore(follower.tail.poll())
     None
   } catch {
-    error if @async.is_being_cancelled() => raise error
     // No record yet: this is a session's first turn, and watermark 0 is the
     // truth rather than a guess.
     @session_record.Absent(_) => None
@@ -202,7 +201,6 @@ async fn SessionFollower::run(
         Kick => {
           follower.kick_pending = false
           follower.scan(sink) catch {
-            error if @async.is_being_cancelled() => raise error
             error =>
               @xlog.debug() <?
                 {
@@ -219,7 +217,6 @@ async fn SessionFollower::run(
             follower.scan(sink)
             LoadOk(follower.tail.document())
           } catch {
-            error if @async.is_being_cancelled() => raise error
             error => LoadFailed("\{error}")
           }
           // Keep `load_pending` set while draining. Reply queues are fresh
@@ -246,7 +243,6 @@ async fn SessionFollower::run(
             follower.scan(sink)
             None
           } catch {
-            error if @async.is_being_cancelled() => raise error
             error => Some("\{error}")
           }
           reply.put(failure)
@@ -259,7 +255,6 @@ async fn SessionFollower::run(
               follower.scan(sink)
               None
             } catch {
-              error if @async.is_being_cancelled() => raise error
               // A first prompt can be cancelled after a partial stdin write
               // but before the engine creates its durable record. Once the
               // caller has proved the writer exited, a record that was never
@@ -540,7 +535,6 @@ async fn request_follower_load(follower : SessionFollower) -> FollowerLoadReply 
   // queue backpressures here; once accepted, either the current Load scan
   // drains it or this caller schedules the next generation.
   follower.load_requests.put(request) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return LoadStopped
   }
   if request.active && !follower.load_pending {
@@ -565,7 +559,6 @@ async fn await_follower_barrier(follower : SessionFollower) -> Unit {
   }
   let reply : @async.Queue[String?] = Queue(kind=Blocking(1))
   follower.inbox.put(Barrier(reply)) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise EngineError("session follower control queue is closed")
   }
   if reply.get() is Some(detail) {
@@ -758,7 +751,6 @@ async test "an unreadable existing record refuses the spawn baseline" {
       "no error"
     } catch {
       EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
     assert_true(detail.contains("failed to baseline the session record"))
@@ -791,7 +783,6 @@ async test "failed final scan keeps the follower active and propagates" {
       "no error"
     } catch {
       EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
     assert_true(detail.contains("session record"))
@@ -851,7 +842,6 @@ async test "the drain that finally succeeds broadcasts what it could not read" {
     write_damaged_record(root, session)
     stop_follower(manager, session, writer_exited=true) catch {
       EngineError(detail) => assert_true(detail.contains("session record"))
-      error if @async.is_being_cancelled() => raise error
       error => raise error
     }
 
@@ -1049,7 +1039,6 @@ async test "workspace detach drains an orphaned pending follower before commit" 
     write_damaged_record(root, session)
     stop_follower(manager, session, writer_exited=true) catch {
       EngineError(detail) => assert_true(detail.contains("session record"))
-      error if @async.is_being_cancelled() => raise error
       error => raise error
     }
     assert_false(follower.retired)
@@ -1123,7 +1112,6 @@ async test "workspace detach refuses an idle engine whose follower cannot drain"
       "no error"
     } catch {
       EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
     assert_true(detail.contains("session record"))
@@ -1170,7 +1158,6 @@ async test "record stat failure is not mistaken for an empty final drain" {
       "no error"
     } catch {
       EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
     // The reader takes the record's lock first, so ENOTDIR surfaces there —
@@ -1360,7 +1347,7 @@ async test "cancelling follower baseline removes its startup identity" {
       startup.wait()
       false
     } catch {
-      error if error is @async.TaskCancelled => true
+      @async.TaskCancelled => true
       _ => false
     }
     assert_true(cancelled)
@@ -1421,7 +1408,6 @@ async test "stop requires its generation proof when follower identity vanishes" 
         "no error"
       } catch {
         EngineError(detail) => detail
-        error if @async.is_being_cancelled() => raise error
         error => "\{error}"
       }
     })

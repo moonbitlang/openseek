@@ -81,7 +81,6 @@ async test "with_tmpdir cleans up even when the body raises" {
     @fs.write_file("\{dir}/x", "x", create_mode=CreateOrTruncate)
     fail("boom")
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
   assert_true(leaked != "")

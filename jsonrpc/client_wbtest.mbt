@@ -20,7 +20,6 @@ impl Transport for FakeTransport with fn send(self, message) {
 ///|
 impl Transport for FakeTransport with fn recv(self) {
   Some(self.inbound.get()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => None
   }
 }
@@ -52,7 +51,6 @@ impl Transport for SendFailTransport with fn send(self, _message) {
 ///|
 impl Transport for SendFailTransport with fn recv(self) {
   Some(self.inbound.get()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => None
   }
 }
@@ -116,8 +114,7 @@ fn error_for(request : Json, code : Int, message : String) -> Json {
 ///|
 /// Issue a request expected to fail, rendering the outcome as a comparable
 /// string — so an unexpected success is a readable assertion rather than a
-/// hang. The cancellation guard is the easy thing to forget when adding the
-/// next one of these; it lives here now, once.
+/// hang. Cancellation signals propagate past these ordinary error handlers.
 async fn request_outcome(client : Client, method_ : String) -> String {
   try {
     client.request(method_~, params=Json::empty_object()) |> ignore
@@ -125,7 +122,6 @@ async fn request_outcome(client : Client, method_ : String) -> String {
   } catch {
     Failed(code~, message~, data=_) => "failed \{code} \{message}"
     Closed => "closed"
-    error if @async.is_being_cancelled() => raise error
     _ => "other error"
   }
 }

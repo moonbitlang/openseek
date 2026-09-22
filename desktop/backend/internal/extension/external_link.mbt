@@ -35,7 +35,6 @@ pub async fn open_external(
     raise OpenExternalError("Blocked unsupported external link")
   }
   let code = @platform.open_url(payload.url) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise OpenExternalError("Could not open external link: \{error}")
   }
   guard code == 0 else {

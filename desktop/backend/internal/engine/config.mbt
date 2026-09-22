@@ -447,7 +447,6 @@ async test "run config rejects a blank session" {
       "no error"
     } catch {
       EngineError(detail) => detail
-      error if @async.is_being_cancelled() => raise error
       error => "\{error}"
     }
     assert_true(detail.contains("session id must not be empty"))
@@ -523,7 +522,6 @@ async test "host chooses durable placement from workspace state" {
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(unclaimed.contains("has no workspace"))

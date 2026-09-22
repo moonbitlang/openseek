@@ -1,13 +1,13 @@
 import {
   "moonbit-community/proton",
   "moonbit-community/proton_contract",
-  "moonbitlang/async",
   "openseek_desktop/commands",
   "openseek_desktop/protocol",
   "moonbitlang/core/json",
 }
 
 import {
+  "moonbitlang/async",
   "moonbitlang/core/debug",
 } for "wbtest"
 

@@ -44,7 +44,6 @@ pub async fn migrate_global_store() -> Int {
       staging~,
     )
   @fsx.remove_if_exists(staging.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
   moved
@@ -78,7 +77,6 @@ async fn move_records(
   }
   guard !names.is_empty() else { return 0 }
   @fsx.ensure_dir(destination.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return 0
   }
   let mut moved = 0
@@ -110,7 +108,6 @@ async fn move_record(
   staging : @pathx.Absolute,
 ) -> Bool {
   @fs.rename(record.to_string(), destination.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return copy_record(record, destination, staging)
   }
   true
@@ -137,7 +134,6 @@ async fn copy_record(
     @fsx.remove_if_exists(record.to_path())
     true
   } catch {
-    error if @async.is_being_cancelled() => raise error
     _ => false
   }
 }

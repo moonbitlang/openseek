@@ -3,7 +3,6 @@ import {
   "openseek_desktop/backend/internal/fsx",
   "openseek_desktop/backend/internal/pathx",
   "openseek_desktop/backend/internal/workspaces",
-  "moonbitlang/async",
   "moonbitlang/async/fs",
 }
 

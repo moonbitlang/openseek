@@ -74,23 +74,16 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
   if base is Some(root) &&
     @pathx.Path(system_path).to_absolute() is Some(absolute) &&
     absolute.relative_to(root~) is Some(relative) {
-    let kind = Some(@fs.kind(system_path)) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => None
-    }
+    let kind = Some(@fs.kind(system_path)) catch { _ => None }
     if kind is Some(Directory) &&
       should_reveal_checkout_directory(
         system_path,
         is_darwin=@platform.is_darwin(),
       ) {
       let real_root_text = Some(@fs.realpath(root.to_string())) catch {
-        error if @async.is_being_cancelled() => raise error
         _ => None
       }
-      let real_path_text = Some(@fs.realpath(system_path)) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => None
-      }
+      let real_path_text = Some(@fs.realpath(system_path)) catch { _ => None }
       if real_root_text is Some(real_root_text) &&
         real_path_text is Some(real_path_text) &&
         @pathx.Path(real_root_text).to_absolute() is Some(real_root) &&
@@ -101,7 +94,6 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
     }
   }
   let code = @platform.open_path(system_path) catch {
-    error if @async.is_being_cancelled() => raise error
     error => return refusal("Could not open \{system_path}: \{error}")
   }
   guard code == 0 else { return refusal("Could not open \{system_path}") }
@@ -123,7 +115,6 @@ async fn reveal_path_op(payload : OpenPathPayload) -> RevealPathReply {
     MissingPath(path) => return RevealRefused("File does not exist: \{path}")
   }
   let code = @platform.reveal_path(path) catch {
-    error if @async.is_being_cancelled() => raise error
     error => return RevealRefused("Could not show \{path}: \{error}")
   }
   if code == 0 {
@@ -152,10 +143,7 @@ async fn should_reveal_checkout_directory(
 ) -> Bool {
   guard is_darwin && path.has_suffix(".app") else { return true }
   let info_plist = "\{path}/Contents/Info.plist"
-  let info_kind = Some(@fs.kind(info_plist)) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
-  }
+  let info_kind = Some(@fs.kind(info_plist)) catch { _ => None }
   !(info_kind is Some(Regular))
 }
 
@@ -369,10 +357,7 @@ pub async fn ensure_codex_config(home : @pathx.Path?) -> String {
       }
   }
   let config = "\{home_path.0}/config.toml"
-  let existing = Some(@fs.kind(config)) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
-  }
+  let existing = Some(@fs.kind(config)) catch { _ => None }
   match existing {
     Some(Directory) => raise HostError("\{config} is a directory")
     Some(_) => config
@@ -380,11 +365,9 @@ pub async fn ensure_codex_config(home : @pathx.Path?) -> String {
       // Recursive mkdir on an existing directory raises EEXIST; the steady
       // state is not an error here any more than in the home preparation.
       @fs.mkdir(home_path.0, recursive=true) catch {
-        error if @async.is_being_cancelled() => raise error
         _ => ()
       }
       @fs.write_file(config, CodexConfigHeader, create_mode=CreateNew) catch {
-        error if @async.is_being_cancelled() => raise error
         error => raise HostError("Could not create \{config}: \{error}")
       }
       config
@@ -397,7 +380,6 @@ pub async fn ensure_codex_config(home : @pathx.Path?) -> String {
 pub async fn open_codex_config(home : @pathx.Path?) -> Unit {
   let config = ensure_codex_config(home)
   let code = @platform.open_path(config) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("Could not open \{config}: \{error}")
   }
   guard code == 0 else { raise HostError("Could not open \{config}") }

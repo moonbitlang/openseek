@@ -262,7 +262,6 @@ pub async fn Schedules::run(
   @async.with_task_group(group => {
     for ;; {
       let launches = self.take_due() catch {
-        error if @async.is_being_cancelled() => raise error
         error => {
           @xlog.warn() <?
             { "event": "schedules_unavailable", "message": "\{error}" }

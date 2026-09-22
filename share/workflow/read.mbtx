@@ -160,7 +160,6 @@ async fn read(input : Request, body~ : Int, bytes~ : Int) -> (String, Bool) {
     }
     (render(@fs.read_file(input.path).text(), input, body), false)
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       let message = match error {
         ReadError(message) => message

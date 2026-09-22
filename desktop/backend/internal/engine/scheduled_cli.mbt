@@ -33,12 +33,10 @@ async fn Schedules::execute(
         None => TimedOut
       }
     } catch {
-      error if @async.is_being_cancelled() => raise error
       error => Failed("\{error}")
     }
     if self.manager.followers.get(run.session) is Some(follower) {
       stop_follower_instance(self.manager, follower, writer_exited=true) catch {
-        error if @async.is_being_cancelled() => raise error
         error =>
           @xlog.warn() <?
             { "event": "schedule_final_scan_failed", "message": "\{error}" }
@@ -46,7 +44,6 @@ async fn Schedules::execute(
     }
     status
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     error => Failed("\{error}")
   }
   self.processes.remove(run.id)
@@ -87,7 +84,6 @@ async fn Schedules::execute(
         notify(settled)
       }
     }) catch {
-      error if @async.is_being_cancelled() => raise error
       error => {
         @xlog.warn() <?
           { "event": "schedule_result_save_failed", "message": "\{error}" }

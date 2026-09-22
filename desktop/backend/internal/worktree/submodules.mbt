@@ -107,7 +107,6 @@ async test "submodule checkout stops at its hard timeout" {
     "no error"
   } catch {
     WorktreeError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_eq(
@@ -210,7 +209,6 @@ async test "worktree lifecycle mirrors initialized submodules" {
     "no error"
   } catch {
     WorktreeError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(locked_detail.contains("locked"))

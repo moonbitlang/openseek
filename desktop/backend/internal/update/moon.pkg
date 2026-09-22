@@ -1,7 +1,6 @@
 import {
   "openseek_desktop/backend/internal/platform",
   "openseek_desktop/backend/internal/pathx",
-  "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/http",
   "moonbitlang/async/process",
@@ -11,6 +10,7 @@ import {
 }
 
 import {
+  "moonbitlang/async",
   "moonbitlang/async/socket",
 } for "wbtest"
 

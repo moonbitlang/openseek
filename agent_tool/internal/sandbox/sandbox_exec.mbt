@@ -79,7 +79,6 @@ async fn probe_sandbox_exec_available() -> Bool {
     return false
   }
   let probe_dir = @fs.tmpdir(prefix="openseek-sandbox-probe-") catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return false
   }
   // sandbox-exec matches `file-write*` rules against the *realpath* of the
@@ -89,10 +88,7 @@ async fn probe_sandbox_exec_available() -> Bool {
   // probe believe the sandbox was unenforced and disabled it process-wide.
   // Resolve the dir first, exactly like the real source-write profile does for
   // the workspace root.
-  let probe_dir = @fs.realpath(probe_dir) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => probe_dir
-  }
+  let probe_dir = @fs.realpath(probe_dir) catch { _ => probe_dir }
   defer cleanup_sandbox_probe(probe_dir)
   let blocked_path = @path.Path(probe_dir)
     .join(Path("blocked"))
@@ -106,7 +102,6 @@ async fn probe_sandbox_exec_available() -> Bool {
     probe_profile,
     "\{probe_dir}/profile.sb",
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return false
   }
   let noop_exit = run_probe_exit(
@@ -135,7 +130,6 @@ async fn probe_sandbox_exec_available() -> Bool {
 /// plus a follow-up `@fs.exists` check, so the collected bytes are discarded.
 async fn run_probe_exit(program : String, args : Array[String]) -> Int? {
   let (exit_code, _) = @process.collect_output_merged(program, args) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
   Some(exit_code)

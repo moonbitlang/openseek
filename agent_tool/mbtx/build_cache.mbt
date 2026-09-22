@@ -83,7 +83,6 @@ async fn open_generation(key_dir : String, generation : Int) -> String {
   for entry in @fs.readdir(key_dir) {
     if entry.has_prefix("gen-") && entry != name {
       @fs.rmdir("\{key_dir}/\{entry}", recursive=true) catch {
-        error if @async.is_being_cancelled() => raise error
         _ => ()
       }
     }
@@ -114,7 +113,6 @@ async fn stage_source(path : String, source : String) -> Bool {
   // fails for any other reason is carried, not read as a stale file to
   // overwrite. Non-UTF-8 content cannot equal `source`, so it is rewritten.
   let current : String? = try @fs.read_file(path).text() catch {
-    error if @async.is_being_cancelled() => raise error
     @os_error.OSError(_) as error if error.is_ENOENT() => None
     @os_error.OSError(_) as error => raise error
     _ => None

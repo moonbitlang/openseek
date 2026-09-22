@@ -46,8 +46,8 @@ For a project using Proton 0.3.2, add these entries to the existing `import`
 block in `moon.mod`, preserving its other dependencies:
 
 ```text
-"moonbit-community/proton_contract@0.3.2",
-"moonbit-community/proton_ext@0.3.2",
+"moonbit-community/proton_contract@0.3.3",
+"moonbit-community/proton_ext@0.3.3",
 ```
 
 Use these imports and executable settings in `app/moon.pkg`:

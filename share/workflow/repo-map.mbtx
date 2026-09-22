@@ -274,7 +274,6 @@ async fn citation_problem(citation : Json, root : String) -> String? {
       None
     }
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => Some("could not resolve/read citation: \{error}")
   }
 }

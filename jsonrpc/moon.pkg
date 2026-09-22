@@ -3,3 +3,7 @@ import {
 }
 
 supported_targets = "+wasm+native"
+
+import {
+  "moonbitlang/async",
+} for "test"

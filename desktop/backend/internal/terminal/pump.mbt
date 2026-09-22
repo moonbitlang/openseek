@@ -74,7 +74,6 @@ async fn run_session(
       cols=request.cols,
       rows=request.rows,
     ) catch {
-      error if @async.is_being_cancelled() => raise error
       error => {
         request.reply.put(Err(@debug.render(Repr(error))))
         return
@@ -132,7 +131,6 @@ async fn run_session(
           // Cancelling the Windows output task aborts its synchronous pipe
           // read. Treat that requested shutdown as EOF for this session.
           _ if session.closing => 0
-          error if @async.is_being_cancelled() => raise error
           _ => 0
         }
         if n <= 0 {
@@ -159,10 +157,7 @@ async fn run_session(
   // The task group has finished, so the PTY's wait task already holds the
   // natural or cancellation-driven exit result even though its handles are
   // now closed.
-  let code = pty.wait() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => -1
-  }
+  let code = pty.wait() catch { _ => -1 }
   @xlog.debug() <? { "event": "terminal_exit", "id": request.id, "code": code }
   emit(Exited(id=request.id, code~))
 }

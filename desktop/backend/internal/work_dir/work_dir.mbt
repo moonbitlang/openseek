@@ -213,14 +213,8 @@ async fn real_contains(
   boundary : @pathx.Absolute,
   path : @pathx.Absolute,
 ) -> Bool {
-  let real_boundary = @fs.realpath(boundary.0) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return true
-  }
-  let real_path = @fs.realpath(path.0) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return true
-  }
+  let real_boundary = @fs.realpath(boundary.0) catch { _ => return true }
+  let real_path = @fs.realpath(path.0) catch { _ => return true }
   guard @pathx.Path(real_boundary).to_absolute() is Some(real_boundary) else {
     return true
   }

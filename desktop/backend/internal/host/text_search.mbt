@@ -223,7 +223,6 @@ async fn TextSearchService::run(self : TextSearchService) -> Unit {
             let outcome = TextSearchFinished(
               run_text_search(command, root, payload),
             ) catch {
-              _ if @async.is_being_cancelled() => return
               error => TextSearchFailed("Workspace search failed: \{error}")
             }
             self.requests.put(Finished(session_key~, generation~, outcome~))
@@ -1007,7 +1006,6 @@ async fn run_text_search(
     })
   }
   let directory = @fs.opendir(native_root) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       return empty_text_search_reply(reply_root, payload.generation, error={
         code: if "\{error}".to_lower().contains("permission") {
@@ -1042,7 +1040,6 @@ async fn run_text_search(
       cancel_handler=@process.hard_cancel(),
       no_wait=true,
     ) catch {
-      error if @async.is_being_cancelled() => raise error
       error => {
         stdout_reader.close()
         stderr_reader.close()
@@ -1100,7 +1097,6 @@ async fn run_text_search(
       }
     }
     let exit_code = process.wait() catch {
-      error if @async.is_being_cancelled() => raise error
       _ if limit_hit => 0
       _ => 2
     }

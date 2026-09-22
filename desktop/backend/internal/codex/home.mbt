@@ -35,7 +35,6 @@ pub async fn prepared_home(runtime_dir : @pathx.Path) -> @pathx.Path? {
   // Recursive mkdir on an existing directory raises EEXIST; the steady
   // state is "created by an earlier launch", not an error.
   @fs.mkdir(home.to_string(), recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
     @os_error.OSError(_) as os_error if os_error.is_EEXIST() => ()
     error => {
       @xlog.warn(category="codex") <?
@@ -53,7 +52,6 @@ pub async fn prepared_home(runtime_dir : @pathx.Path) -> @pathx.Path? {
   // are the protection boundary there.
   if !(@platform.win32 || @platform.win64) {
     @fs.chmod(home.to_string(), 0o700) catch {
-      error if @async.is_being_cancelled() => raise error
       error =>
         @xlog.warn(category="codex") <?
           {

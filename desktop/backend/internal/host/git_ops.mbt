@@ -377,20 +377,11 @@ async fn untracked_is_countable(
   path : @pathx.Relative,
 ) -> Bool {
   let native = dir.join(path).to_string()
-  let kind = @fs.kind(native, follow_symlink=false) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
+  let kind = @fs.kind(native, follow_symlink=false) catch { _ => return false }
   guard kind is Regular else { return false }
-  let file = @fs.open(native, mode=ReadOnly) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
+  let file = @fs.open(native, mode=ReadOnly) catch { _ => return false }
   defer file.close()
-  let size = file.size() catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return false
-  }
+  let size = file.size() catch { _ => return false }
   size <= MaxUntrackedDiffBytes
 }
 
@@ -413,7 +404,6 @@ async fn git_untracked_numstat(
     extra_env=git_environment(),
     inherit_env=false,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
   guard code <= 1 else { return None }
@@ -453,10 +443,7 @@ fn parse_numstat(output : String) -> GitDiffStat {
 /// command that failed reads as None rather than an empty string, so a caller
 /// whose empty output means "nothing changed" can tell the two apart.
 async fn git_output_opt(dir : String, args : Array[String]) -> String? {
-  let (code, stdout, _) = git_collect(dir, args) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return None
-  }
+  let (code, stdout, _) = git_collect(dir, args) catch { _ => return None }
   guard code == 0 else { return None }
   Some(stdout.text() catch { _ => return None })
 }
@@ -490,10 +477,7 @@ fn git_environment() -> Map[String, String] {
 
 ///|
 async fn git_output(dir : String, args : Array[String]) -> String {
-  let (code, stdout, _) = git_collect(dir, args) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return ""
-  }
+  let (code, stdout, _) = git_collect(dir, args) catch { _ => return "" }
   guard code == 0 else { return "" }
   (stdout.text() catch { _ => "" }).trim().to_owned()
 }
@@ -853,7 +837,6 @@ async fn git_collect(
     extra_env=git_environment(),
     inherit_env=false,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to run Git: \{error}")
   }
 }
@@ -1208,7 +1191,6 @@ async fn git_changes_op(payload : GitChangesPayload) -> GitChangesReply {
           } else {
             let path = root.join((change.path : @pathx.Relative)).to_string()
             let path_kind = @fs.kind(path, follow_symlink=false) catch {
-              error if @async.is_being_cancelled() => raise error
               _ => Unknown
             }
             git_change_with_path_kind(
@@ -1899,7 +1881,6 @@ test "Git single-line output preserves significant path whitespace" {
 /// any other rmdir failure is the test's own tmpdir and is ignored.
 async fn git_test_cleanup(dir : String) -> Unit {
   @fs.rmdir(dir, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }

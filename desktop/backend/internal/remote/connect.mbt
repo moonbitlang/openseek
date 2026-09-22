@@ -36,7 +36,6 @@ async fn RelayActor::run_connector(
 ) -> String {
   for ;; {
     self.connect_once(config) catch {
-      error if @async.is_being_cancelled() => raise error
       RegistrationRefused(message) => {
         self.dropped()
         return message

@@ -26,7 +26,6 @@ async fn moon_package_graph_cwd(
     raise PayloadError("path must name moon.mod")
   }
   let kind = @fs.kind(manifest.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => raise HostError("moon.mod is unavailable")
   }
   guard kind is Regular else {

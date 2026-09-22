@@ -70,7 +70,6 @@ async fn SkillLibrary::recover(self : SkillLibrary) -> Unit {
       let target = self.target(id)
       if @fsx.exists(target) {
         @fsx.rmdir(backup, recursive=true) catch {
-          error if @async.is_being_cancelled() => raise error
           error =>
             raise SkillMarketError(
               "cannot clean the backup for skill \{id}: \{error}",
@@ -78,7 +77,6 @@ async fn SkillLibrary::recover(self : SkillLibrary) -> Unit {
         }
       } else {
         @fs.rename(backup.to_string(), target.to_string(), replace=false) catch {
-          error if @async.is_being_cancelled() => raise error
           error =>
             raise SkillMarketError(
               "cannot restore the backup for skill \{id}: \{error}",
@@ -95,7 +93,6 @@ async fn SkillLibrary::recover(self : SkillLibrary) -> Unit {
         continue
       }
       @fsx.rmdir(self.staging(id), recursive=true) catch {
-        error if @async.is_being_cancelled() => raise error
         error =>
           raise SkillMarketError(
             "cannot clean the staged files for skill \{id}: \{error}",
@@ -111,7 +108,6 @@ async fn SkillLibrary::recover(self : SkillLibrary) -> Unit {
         continue
       }
       @fsx.rmdir(self.trash(id), recursive=true) catch {
-        error if @async.is_being_cancelled() => raise error
         error =>
           raise SkillMarketError(
             "cannot clean the uninstalled skill \{id}: \{error}",
@@ -192,7 +188,6 @@ async fn SkillLibrary::activate(
     // The new target is already authoritative. Cleanup failure is recoverable
     // and must not turn a successful install into a reported failure.
     @fsx.rmdir(backup, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => ()
     }
   }
@@ -220,7 +215,6 @@ async fn SkillLibrary::move_to_trash(
     }
   })
   @fsx.rmdir(trash, recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }

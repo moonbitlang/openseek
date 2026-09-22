@@ -208,7 +208,6 @@ pub async fn write_terminal(
     raise TerminalError("terminal \{id} is not open")
   }
   session.pty.write(data) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise TerminalError(@debug.render(Repr(error)))
   }
 }

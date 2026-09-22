@@ -31,7 +31,6 @@ async fn auth_connect(state : ApiState) -> @protocol.AuthStatusPayload {
     raise @host.HostError("remote access needs the SeekMoon relay origin")
   }
   store.sign_in(server_url~) catch {
-    error if @async.is_being_cancelled() => raise error
     @auth.AuthError(message) => raise @host.HostError(message)
     error => raise @host.HostError("sign-in failed: \{error}")
   }
@@ -70,30 +69,13 @@ async fn auth_disconnect(state : ApiState) -> @protocol.AuthStatusPayload {
   if store.managed_by_env() {
     raise @host.HostError("remote access is configured through the environment")
   }
-  // A cancellation no longer enters `catch`, so the hub must still learn the
-  // cleared state — `sign_out` has already cleared local authority and poked
-  // the supervisor before the cancellation can escape its local transition.
-  errdefer (if @async.is_being_cancelled() {
-    @async.protect_from_cancel(() => {
-      state.hub.publish(AuthChanged(store.status()))
-    })
-    |> ignore
-  })
+  // Local authority is cleared before sign_out can suspend. Publish the
+  // resulting state on success, failure, and cancellation alike.
+  defer state.hub.publish(AuthChanged(store.status()))
   store.sign_out() catch {
-    @auth.AuthError(message) => {
-      // `clear_local_session` clears memory and parks the connector before
-      // it writes the marker. Publish that truthful in-process state even
-      // though the persistence failure must still reach the requester.
-      @async.protect_from_cancel(() => {
-        state.hub.publish(AuthChanged(store.status()))
-      })
-      raise @host.HostError(message)
-    }
+    @auth.AuthError(message) => raise @host.HostError(message)
     error => raise @host.HostError("sign-out failed: \{error}")
   }
-  @async.protect_from_cancel(() => {
-    state.hub.publish(AuthChanged(store.status()))
-  })
   auth_status(state)
 }
 
@@ -116,7 +98,6 @@ async fn sign_out_after_server_switch(state : ApiState) -> Unit {
     return
   }
   store.sign_out() catch {
-    error if @async.is_being_cancelled() => raise error
     @auth.AuthError(message) =>
       @xlog.warn(category="auth") <?
         { "message": "sign-out after server switch failed", "error": message }

@@ -133,19 +133,10 @@ pub async fn content_parse_errors(
   content : String,
 ) -> ParseGate? {
   guard gate_scratch_name(path) is Some(scratch_name) else { return None }
-  let dir = @fs.tmpdir(prefix="openseek-parse-gate-") catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return None
-  }
+  let dir = @fs.tmpdir(prefix="openseek-parse-gate-") catch { _ => return None }
   // Best-effort cleanup on every path; a leaked scratch dir must never turn
   // into a raised error that masks the gate's answer.
-  async fn cleanup() {
-    @fs.rmdir(dir, recursive=true) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => ()
-    }
-  }
-  defer cleanup()
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   try {
     @fs.write_file(
       "\{dir}/\{scratch_name}",
@@ -170,7 +161,6 @@ pub async fn content_parse_errors(
       None => None
     }
   } catch {
-    error if @async.is_being_cancelled() => raise error
     _ => None
   }
 }

@@ -153,10 +153,7 @@ async fn write_file(
   // is an existing-source overwrite to reject and — for the syntax gate below
   // — what KIND the written file really is. A brand-new path has no target, so
   // realpath fails and it falls back to its own name.
-  let target = @fs.realpath(path) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => path
-  }
+  let target = @fs.realpath(path) catch { _ => path }
   // Guard the last unguarded source-write path: `write` is an in-process file
   // write with no sandbox in front of it, so overwriting an existing
   // `.mbt`/`.mbt.md` file here would bypass the line-anchored edit discipline
@@ -183,7 +180,6 @@ async fn write_file(
   if input.revert_on_parse_errors {
     for gate_path in @auto_check.gate_paths(path, target) {
       let gate = @auto_check.content_parse_errors(gate_path, input.content) catch {
-        error if @async.is_being_cancelled() => raise error
         _ => None
       }
       if gate is Some(gate) && gate.errors.length() > 0 {

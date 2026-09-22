@@ -61,7 +61,6 @@ async fn ProjectCatalog::resolve(
     ["worktree", "list", "--porcelain"],
     cwd~,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => {
       guard @fs.exists(cwd) else { return None }
       self.roots[cwd] = cwd

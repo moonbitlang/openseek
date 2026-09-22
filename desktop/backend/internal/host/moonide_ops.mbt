@@ -105,7 +105,6 @@ async fn moonide_spawn_config(state : HostState) -> MoonIdeSpawnConfig {
     state.engine,
     runtime_dir?=state.runtime_dir,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     @moonbit.ToolchainUnavailable as unavailable =>
       raise HostError("\{unavailable}")
     error => raise HostError("could not resolve a MoonBit toolchain: \{error}")
@@ -319,10 +318,7 @@ async fn canonical_moonide_locations(
 ) -> MoonIdeLocationsReply {
   let locations : Array[MoonIdeLocation] = []
   for location in reply.locations {
-    let canonical = @fs.realpath(location.path) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => continue
-    }
+    let canonical = @fs.realpath(location.path) catch { _ => continue }
     guard moonide_client_path(lexical_workspace, physical_workspace, canonical)
       is Some(path) else {
       continue
@@ -378,7 +374,6 @@ async fn moonide_navigation_op(
     inherit_env=config.extra_env is None,
     cwd=request.physical_workspace.to_string(),
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("could not run moon ide: \{error}")
   }
   if code != 0 {
@@ -451,7 +446,6 @@ async fn moonide_codelens_op(
     inherit_env=config.extra_env is None,
     cwd=location.physical_root.to_string(),
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("could not run moon ide codelens: \{error}")
   }
   if code != 0 {

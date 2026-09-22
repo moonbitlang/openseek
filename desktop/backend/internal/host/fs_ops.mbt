@@ -11,7 +11,6 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
     return { entries: [], }
   }
   let names = @fs.readdir(dir.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to list directory: \{error}")
   }
   // Plain lexicographic order, not `readdir(sort=true)`: that sorts with
@@ -21,11 +20,7 @@ async fn read_directory_op(payload : ReadDirPayload) -> ReadDirReply {
   let entries : Array[DirEntry] = []
   for name in names {
     let child = dir.join((name : @pathx.Relative)).to_string()
-    let is_dir = (@fs.kind(child) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => Unknown
-      })
-      is Directory
+    let is_dir = (@fs.kind(child) catch { _ => Unknown }) is Directory
     entries.push({ name, is_dir, })
   }
   // Directories first, then files; the sort above already orders each
@@ -44,7 +39,6 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
   }
   let native = file.to_string()
   let source = @fs.open(native, mode=ReadOnly) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to read file: \{error}")
   }
   defer source.close()
@@ -54,13 +48,11 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
     return Oversized
   }
   let data = source.read_all() catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to read file: \{error}")
   }
   // The change-detection baseline, from the same open handle as the content
   // so the two cannot disagree about which version of the file was read.
   let (seconds, nanos) = source.mtime() catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("failed to read file: \{error}")
   }
   // Classify the bytes already read from this handle. The shared policy trusts
@@ -139,7 +131,6 @@ async fn stat_files_op(payload : StatFilesPayload) -> StatFilesReply {
 /// the stat's.
 async fn file_signature(absolute : String) -> FileSignature {
   let (seconds, nanos) = @fs.mtime(absolute) catch {
-    error if @async.is_being_cancelled() => raise error
     @os_error.OSError(_) as error if error.is_ENOENT() || error.is_ENOTDIR() =>
       return Missing
     error => {

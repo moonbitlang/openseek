@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/x/path",
@@ -9,6 +8,7 @@ import {
 }
 
 import {
+  "moonbitlang/async",
   "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/core/env",
 } for "wbtest"

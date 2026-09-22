@@ -19,7 +19,6 @@ pub async fn is_executable_file(path : @pathx.Path) -> Bool {
     }
     @fs.kind(path.to_string()) is Regular
   } catch {
-    error if @async.is_being_cancelled() => raise error
     _ => false
   }
 }
@@ -27,7 +26,6 @@ pub async fn is_executable_file(path : @pathx.Path) -> Bool {
 ///|
 pub async fn try_read_text(path : @pathx.Path) -> String? {
   Some(@fs.read_file(path.to_string()).text()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => None
   }
 }
@@ -58,7 +56,6 @@ pub async fn write_bytes(path : @pathx.Path, content : Bytes) -> Unit {
 ///|
 pub async fn is_dir(path : @pathx.Path) -> Bool {
   try @fs.kind(path.to_string()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => false
   } noraise {
     kind => kind is Directory

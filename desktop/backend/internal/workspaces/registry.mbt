@@ -49,10 +49,7 @@ fn workspaces_file() -> @pathx.Absolute? {
 /// spelling when resolution fails (the directory vanished), keeping a dead
 /// entry addressable for removal.
 async fn canonical_path(dir : @pathx.Absolute) -> @pathx.Absolute {
-  let resolved = @fs.realpath(dir.0) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => return dir
-  }
+  let resolved = @fs.realpath(dir.0) catch { _ => return dir }
   @pathx.Path(resolved).to_absolute().unwrap_or(dir)
 }
 
@@ -78,7 +75,6 @@ async fn read_registry_unlocked() -> Registry {
   let uninitialized : Registry = { workspaces: [], initialized: false, }
   guard workspaces_file() is Some(file) else { return uninitialized }
   let text = @fsx.try_read_text(file.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return uninitialized
   }
   guard text is Some(text) else { return uninitialized }
@@ -118,7 +114,6 @@ async fn write_registry(registry : Registry) -> Unit {
     raise WorkspaceError("cannot determine a session root: HOME is unavailable")
   }
   @fsx.ensure_dir(root.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not create \{root}: \{error}")
   }
   let json : Json = {
@@ -126,7 +121,6 @@ async fn write_registry(registry : Registry) -> Unit {
     "initialized": registry.initialized.to_json(),
   }
   @fsx.write_text(root.join(WorkspacesFile).to_path(), json.stringify(indent=2)) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not save the workspace list: \{error}")
   }
 }
@@ -185,7 +179,6 @@ pub async fn initialize() -> @pathx.Absolute? {
     raise WorkspaceError("cannot determine the default workspace directory")
   }
   @fsx.ensure_dir(dir.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not create \{dir.0}: \{error}")
   }
   let canonical = canonical_path(dir)
@@ -337,16 +330,12 @@ pub fn store_root(workspace : @pathx.Absolute) -> @pathx.Absolute {
 /// alone. Best-effort: a failure never blocks the caller.
 pub async fn exclude_from_git(dir : @pathx.Absolute, entry : String) -> Unit {
   let git_dir = dir.join(".git")
-  let is_repo = @fsx.is_dir(git_dir.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }
+  let is_repo = @fsx.is_dir(git_dir.to_path()) catch { _ => false }
   guard is_repo else { return }
   let exclude = git_dir.join("info").join("exclude")
-  let existing = (@fsx.try_read_text(exclude.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
-  }).unwrap_or("")
+  let existing = (@fsx.try_read_text(exclude.to_path()) catch { _ => None }).unwrap_or(
+    "",
+  )
   for line in existing.split("\n") {
     let line = line.trim()
     if line == entry || line == "\{entry}/" {
@@ -359,11 +348,9 @@ pub async fn exclude_from_git(dir : @pathx.Absolute, entry : String) -> Unit {
     "\{existing}\n\{entry}/\n"
   }
   @fsx.ensure_dir(git_dir.join("info").to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return
   }
   @fsx.write_text(exclude.to_path(), updated) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ()
   }
 }

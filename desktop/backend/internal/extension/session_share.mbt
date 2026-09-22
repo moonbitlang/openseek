@@ -35,7 +35,6 @@ async fn SessionShare::publish(
     )
     self.upload(snapshot, config)
   } catch {
-    error if @async.is_being_cancelled() => raise error
     @shares.EmptyTitle
     | @shares.EntropyUnavailable
     | @shares.Oversized as refusal => Failed(message="\{refusal}")
@@ -78,7 +77,6 @@ async fn SessionShare::upload(
     // connector; cancellation must not strand the UI on the rejected login.
     defer self.state.publish(AuthChanged(store.status()))
     store.handle_refusal() catch {
-      error if @async.is_being_cancelled() => raise error
       @auth.AuthError(message) =>
         return Failed(
           message="Could not clear the rejected sign-in: \{message}",

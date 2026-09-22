@@ -191,7 +191,6 @@ async fn remove_file(
 /// test, where the gate is never reached).
 async fn recorded_digest(path : String) -> String {
   @agent_tool.content_digest(@fs.read_file(path).text()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => ""
   }
 }

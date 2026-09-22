@@ -14,7 +14,6 @@ async fn archive_refusal(manager : EngineManager, session : String) -> String {
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
 }
@@ -137,7 +136,6 @@ async test "loading a conversation from a detached workspace names that state" {
     "no error"
   } catch {
     EngineError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   debug_inspect(

@@ -328,7 +328,6 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
   for ;; {
     let command = self.commands.get() catch { _ => break }
     self.writer.write(command.command.to_jsonl()) catch {
-      error if @async.is_being_cancelled() => raise error
       error => {
         let reason = "\{command.failure_reason}: \{error}"
         command.settle(Some(EngineError(reason)))
@@ -1196,7 +1195,6 @@ pub async fn EngineActor::run(
   }
   for ;; {
     let _ = self.run_generation(sink) catch {
-      error if @async.is_being_cancelled() => raise error
       error => {
         on_failed("engine host failed: \{error}")
         @async.sleep(EngineActorRestartDelayMs)
@@ -1312,7 +1310,6 @@ async fn[G] handle_spawn_command(
     // Closing stdin requests EOF; do not overlap the old writer with its
     // replacement. Its consumer clears the slot before publishing `exited`.
     old.close_and_wait() catch {
-      error if @async.is_being_cancelled() => raise error
       error => {
         manager.prune_slot(config.session)
         return Some(EngineError("failed to stop old engine: \{error}"))
@@ -1329,7 +1326,6 @@ async fn[G] handle_spawn_command(
   // drain fails is what keeps a predecessor's tail out of the successor's
   // transcript.
   stop_follower(manager, config.session, writer_exited=true) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       manager.prune_slot(config.session)
       return Some(EngineError("failed to start engine: \{error}"))
@@ -1339,7 +1335,6 @@ async fn[G] handle_spawn_command(
     return Some(EngineError("engine host restarted while starting engine"))
   }
   start_serve_engine(sink~, group~, manager~, slot~, config~) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       manager.prune_slot(config.session)
       return Some(EngineError("failed to start engine: \{error}"))
@@ -1591,7 +1586,6 @@ async fn[G] start_serve_engine(
   slot.engine = Some(engine)
   let stderr_task = group.spawn(no_wait=true) <| () => {
     stderr_reader.read_all().text() catch {
-      error if @async.is_being_cancelled() => raise error
       _ => ""
     }
   }
@@ -1629,7 +1623,6 @@ async fn ServeEngine::run(
   stderr_task : @async.Task[String],
 ) -> Unit {
   let code = self.consume(manager, reader) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       @xlog.error() <?
         {
@@ -1655,7 +1648,6 @@ async fn ServeEngine::run(
       // A wait that errors yields no status; absence stays absent rather
       // than becoming a fabricated exit code downstream.
       let code : Int? = try self.process.wait() catch {
-        error if @async.is_being_cancelled() => raise error
         _ => None
       } noraise {
         code => Some(code)
@@ -2033,7 +2025,6 @@ async fn ServeEngine::consume(
     // result is `Cancelled` rather than an exit code; normalize that reaped
     // outcome to -1 so retirement can still publish the EOF latch.
     engine.process.wait() catch {
-      error if @async.is_being_cancelled() => raise error
       _ => -1
     }
   }
@@ -2087,7 +2078,6 @@ async fn ServeEngine::retire(
   // cannot stop a successor.
   if owns_slot && owned_follower is Some(follower) {
     stop_follower_instance(manager, follower, writer_exited=true) catch {
-      error if @async.is_being_cancelled() => raise error
       // A failed drain leaves the follower installed for archive/detach to
       // retry. Nothing else is owed: what this conversation committed is a
       // question the transcript read answers.
@@ -3028,7 +3018,6 @@ async test "engine startup rolls back follower on pre-spawn failure" {
       start_serve_engine(sink~, group~, manager~, slot~, config~)
       false
     } catch {
-      error if @async.is_being_cancelled() => raise error
       _ => true
     }
     assert_true(failed)
@@ -3196,7 +3185,7 @@ async test "cancelled spawn requester holds its claim until pump ack" {
       requester.wait()
       false
     } catch {
-      error if error is @async.TaskCancelled => true
+      @async.TaskCancelled => true
       _ => false
     }
     assert_true(cancelled)

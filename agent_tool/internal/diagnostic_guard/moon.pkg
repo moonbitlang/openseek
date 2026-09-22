@@ -1,6 +1,5 @@
 import {
   "moonbitlang/openseek/agent_tool/internal/auto_check",
-  "moonbitlang/async",
   "moonbitlang/async/fs",
 }
 

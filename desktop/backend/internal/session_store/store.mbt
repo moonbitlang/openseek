@@ -191,7 +191,6 @@ pub async fn family_in(
 ) -> Array[String] {
   let sessions_dir = store.join("sessions")
   let entries = @fs.readdir(sessions_dir.to_string(), sort=true) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise StoreError("could not list session records: \{error}")
   }
   let family : Array[String] = [session]

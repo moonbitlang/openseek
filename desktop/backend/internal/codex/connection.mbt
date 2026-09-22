@@ -98,7 +98,6 @@ pub async fn[X] connect(
     )
     (stdin_writer, stdout_reader, stderr_reader, process)
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       raise CodexError::Unavailable(
         "Could not start \{command} app-server via \{executable}: \{error}",
@@ -162,7 +161,6 @@ pub async fn[X] connect(
         defer stderr_reader.close()
         for ;; {
           let line = stderr_reader.read_until("\n") catch {
-            error if @async.is_being_cancelled() => raise error
             error => {
               @xlog.warn(category="codex") <?
                 {
@@ -195,9 +193,8 @@ pub async fn[X] connect(
       "capabilities": { "experimentalApi": true },
     })
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
-      let error : CodexError = match error {
+      let failure : CodexError = match error {
         @jsonrpc.Failed(code~, message~, data~) =>
           JsonRpc(method_="initialize", code~, message~, data~)
         @jsonrpc.Closed => TransportClosed(method_="initialize")
@@ -208,8 +205,8 @@ pub async fn[X] connect(
           )
         error => RequestFailed(method_="initialize", detail="\{error}")
       }
-      error.log()
-      raise error
+      failure.log()
+      raise failure
     }
   }
   rpc.notify(method_="initialized", params=Json::empty_object())

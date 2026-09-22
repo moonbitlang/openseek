@@ -231,7 +231,6 @@ async fn FsWatchRequest::activate(
         alive: Ref(true),
       }
       let active = target.activate(emit) catch {
-        error if @async.is_being_cancelled() => raise error
         error => {
           target.alive.val = false
           @xlog.warn(category="filesystem") <?
@@ -287,7 +286,6 @@ async fn FsWatchActive::watch(
     // still propagate so replacing this watcher cannot keep the retired child
     // alive.
     let events = self.watcher.wait() catch {
-      error if @async.is_being_cancelled() => raise error
       @os_error.OSError(_) as error if error.is_EINTR() => continue
       error => raise error
     }
@@ -326,7 +324,6 @@ async fn FsWatchActor::run(
     let request = @async.with_task_group(group => {
       group.spawn_bg(() => {
         watcher.watch(emit_changed) catch {
-          error if @async.is_being_cancelled() => raise error
           error => {
             target.alive.val = false
             let message = "File watching stopped: \{error}"

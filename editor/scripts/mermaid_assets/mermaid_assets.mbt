@@ -72,7 +72,6 @@ async fn ensure_cached_archive(cache_dir : String) -> String {
   }
   println("downloading \{MermaidArchiveUrl}")
   let (response, body) = @http.get(MermaidArchiveUrl) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       raise MermaidAssetError(
         "failed to download \{MermaidArchiveUrl}: \{error}",

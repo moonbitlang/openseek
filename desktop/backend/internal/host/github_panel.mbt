@@ -13,7 +13,6 @@ async fn github_command(
     extra_env=git_environment(),
     inherit_env=false,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise HostError("Could not run GitHub CLI: \{error}")
   }
   guard code == 0 else {
@@ -226,7 +225,6 @@ async fn github_list(
       None => (Map([]), Some("GitHub avatar request timed out."))
     }
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => (Map([]), Some("Could not load GitHub avatars: \{error}"))
   }
   let items : Array[@protocol.GithubItem] = []

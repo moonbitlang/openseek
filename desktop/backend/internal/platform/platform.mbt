@@ -80,14 +80,10 @@ pub async fn reveal_path(path : String) -> Int {
 /// the probe fails. `hostname` ships with macOS, Linux, and Windows alike.
 pub async fn machine_hostname() -> String? {
   let (code, output, _) = @processx.collect_output_no_stdin("hostname", []) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return None
   }
   guard code == 0 else { return None }
-  let name = output.text().trim().to_owned() catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => return None
-    }
+  let name = output.text().trim().to_owned() catch { _ => return None }
   guard !name.is_empty() else { return None }
   Some(name)
 }

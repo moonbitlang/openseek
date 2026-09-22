@@ -37,7 +37,6 @@ async fn git_run(
       cwd=cwd.view(),
     )
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     error => return { exit_code: -1, output: "git spawn failed: \{error}", }
   }
   match outcome {

@@ -206,7 +206,6 @@ async fn[X] connect_server(
         ).client()
     }
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       @emit.emit(McpConnectFailed(server=name, error="\{error}"))
       return []
@@ -218,7 +217,6 @@ async fn[X] connect_server(
       tools_for_client(name, client)
     }
   } catch {
-    error if @async.is_being_cancelled() => raise error
     @async.TimeoutError => {
       @emit.emit(McpListToolsTimeout(server=name))
       return []
@@ -284,7 +282,6 @@ async fn call_tool(
   let outcome = @async.with_timeout_opt(CallTimeoutMs, () => {
     client.call_tool(name=tool, arguments=args)
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     error => {
       // The assembled text carries server-supplied strings (the tool name and
       // error message): cap the whole response so it cannot bypass the

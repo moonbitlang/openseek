@@ -235,7 +235,6 @@ async fn github_review_file_op(
       github_review_file(dir, payload.path, payload.base, payload.head),
     )
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       ReviewFileFailed(
         "Could not load this file at the GitHub PR revision. \{error}",
@@ -357,7 +356,6 @@ async fn github_review_op(
         )
     }
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => ReviewLoadFailed("\{error}")
   }
 }
@@ -505,7 +503,6 @@ async fn github_review_mutate_op(
         )
     }
   } catch {
-    error if @async.is_being_cancelled() => raise error
     error => ReviewMutationFailure("\{error}")
   }
 }

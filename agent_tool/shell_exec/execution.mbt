@@ -165,13 +165,18 @@ async fn ShellExecution::monitor(
   errdefer self.set_terminal(Killed)
   let reader_done : @async.Queue[Unit] = Queue(kind=Unbounded)
   @async.with_task_group(reads => {
+    // Revoke dependents before this group joins the output reader, including
+    // when cancellation bypasses the process wait's error handler.
+    errdefer {
+      self.begin_ending()
+      reader.close()
+    }
     reads.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       defer ignore(reader_done.try_put(()) catch { _ => false })
       errdefer self.request_stop()
       for ;; {
         match
           (reader.read_some(max_len=1024) catch {
-            error if @async.is_being_cancelled() => raise error
             error => {
               let message = "failed to read process output: \{error}"
               self.sink.failure = Some(message)
@@ -216,17 +221,7 @@ async fn ShellExecution::monitor(
         Exited(code)
       }
     } catch {
-      error => {
-        if @async.is_being_cancelled() {
-          // Session teardown: the child is being cancelled independently.
-          // Revoke dependents now, before this group joins a reader that may
-          // still be settling a spill-file write.
-          self.begin_ending()
-          reader.close()
-          raise error
-        }
-        Killed
-      }
+      _ => Killed
     }
     self.begin_ending()
     // The child is gone, but the pipe may still hold output it wrote before

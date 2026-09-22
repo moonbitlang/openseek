@@ -57,9 +57,6 @@ async fn export_session(
     error =>
       raise @host.HostError("could not save the conversation export: \{error}")
   }
-  let open_code = @platform.open_path(path) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => -1
-  }
+  let open_code = @platform.open_path(path) catch { _ => -1 }
   { path: Some(path), opened: open_code == 0, }
 }

@@ -279,7 +279,6 @@ async fn main {
       @async.sleep(interval * 1000)
     }
   }) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       fail("CI monitor stopped without a verified successful result: \{error}")
   }

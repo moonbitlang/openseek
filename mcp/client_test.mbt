@@ -16,7 +16,6 @@ impl @jsonrpc.Transport for FakeTransport with fn send(self, message) {
 ///|
 impl @jsonrpc.Transport for FakeTransport with fn recv(self) {
   Some(self.inbound.get()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => None
   }
 }
@@ -167,7 +166,6 @@ async test "initialize rejects an unsupported negotiated protocol version" {
       "no error raised"
     } catch {
       @mcp.Protocol(_) => "protocol"
-      error if @async.is_being_cancelled() => raise error
       _ => "other error"
     }
     assert_eq(outcome, "protocol")
@@ -271,7 +269,6 @@ async test "call_tool raises on a JSON-RPC error reply" {
       "no error raised"
     } catch {
       @jsonrpc.Failed(code~, message~, data=_) => "failed \{code} \{message}"
-      error if @async.is_being_cancelled() => raise error
       _ => "other error"
     }
     assert_eq(outcome, "failed -32602 unknown tool")
@@ -290,7 +287,6 @@ async test "list_tools raises Protocol on a malformed result" {
       "no error raised"
     } catch {
       @mcp.Protocol(_) => "protocol"
-      error if @async.is_being_cancelled() => raise error
       _ => "other error"
     }
     assert_eq(outcome, "protocol")

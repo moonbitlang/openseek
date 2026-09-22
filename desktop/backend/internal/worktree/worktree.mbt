@@ -230,7 +230,6 @@ async fn read_worktrees_unlocked(
   workspace : @pathx.Absolute,
 ) -> Array[WorktreeEntry] {
   let text = @fsx.try_read_text(worktrees_file(workspace).to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => return []
   }
   guard text is Some(text) else { return [] }
@@ -272,7 +271,6 @@ async fn write_worktrees(
 ) -> Unit {
   let store = @workspaces.store_root(workspace)
   @fsx.ensure_dir(store.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorktreeError("could not create \{store}: \{error}")
   }
   let registry : Json = { "worktrees": entries.to_json() }
@@ -287,7 +285,6 @@ async fn write_worktrees(
     registry.stringify(indent=2),
     create_mode=CreateOrTruncate,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorktreeError("could not stage the worktree list: \{error}")
   }
   // `rename` replaces a present destination as one filesystem operation. A
@@ -319,10 +316,7 @@ async fn worktree_infos(
   let infos : Array[WorktreeInfo] = []
   for entry in entries {
     let path = worktree_dir(workspace, entry.name)
-    let present = @fsx.is_dir(path.to_path()) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => false
-    }
+    let present = @fsx.is_dir(path.to_path()) catch { _ => false }
     infos.push({
       name: entry.name,
       branch: entry.checkout.branch(),
@@ -358,10 +352,7 @@ async fn tree_of(workspace : @pathx.Absolute, session : String) -> SessionTree {
   for entry in read_worktrees_unlocked(workspace) {
     guard entry.serves_id(session) else { continue }
     let dir = worktree_dir(workspace, entry.name)
-    let present = @fsx.is_dir(dir.to_path()) catch {
-      error if @async.is_being_cancelled() => raise error
-      _ => false
-    }
+    let present = @fsx.is_dir(dir.to_path()) catch { _ => false }
     return if present { BoundTree(dir) } else { MissingTree(entry.name) }
   }
   WorkspaceRoot
@@ -460,10 +451,7 @@ pub async fn WorktreeOwner::archive_check(
   defer worktree_registry_lock.release()
   guard self.binding_unlocked() is Some((workspace, entry)) else { return None }
   let target = worktree_dir(workspace, entry.name)
-  let present = @fsx.is_dir(target.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }
+  let present = @fsx.is_dir(target.to_path()) catch { _ => false }
   guard present else { return None }
   let status = @gitx.output(target, [
     "status", "--porcelain=v1", "-z", "--untracked-files=all",
@@ -493,10 +481,7 @@ pub async fn WorktreeOwner::archive_checkout(
   guard self.binding_unlocked() is Some((workspace, entry)) else { return None }
   let entries = read_worktrees_unlocked(workspace)
   let target = worktree_dir(workspace, entry.name)
-  let present = @fsx.is_dir(target.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }
+  let present = @fsx.is_dir(target.to_path()) catch { _ => false }
   if present {
     if !force {
       let status = @gitx.output(target, [
@@ -699,7 +684,6 @@ async fn fresh_worktree_name(
       continue
     }
     let occupied = @fsx.exists(worktree_dir(dir, name).to_path()) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => false
     }
     if occupied {
@@ -795,7 +779,6 @@ pub async fn create(
   for entry in entries {
     guard entry.belongs_to(owner) else { continue }
     let present = @fsx.is_dir(worktree_dir(dir, entry.name).to_path()) catch {
-      error if @async.is_being_cancelled() => raise error
       _ => false
     }
     if present {
@@ -837,7 +820,6 @@ pub async fn create(
       true
     } else if global_record is Some(record) {
       @fsx.is_dir(record.to_path()) catch {
-        error if @async.is_being_cancelled() => raise error
         _ => false
       }
     } else {
@@ -870,10 +852,7 @@ pub async fn create(
     raise WorktreeError("worktree \{name} already exists in this workspace")
   }
   let target = worktree_dir(dir, name)
-  let occupied = @fsx.exists(target.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }
+  let occupied = @fsx.exists(target.to_path()) catch { _ => false }
   if occupied {
     raise WorktreeError(
       "\{target} already exists on disk; another tool may own it",
@@ -1094,10 +1073,7 @@ pub async fn remove(
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   let target = worktree_dir(dir, name)
-  let present = @fsx.is_dir(target.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => false
-  }
+  let present = @fsx.is_dir(target.to_path()) catch { _ => false }
   if present {
     if !force {
       let status = @gitx.run(target, ["status", "--porcelain"])
@@ -1279,7 +1255,6 @@ async test "failed worktree registry staging preserves every live row" {
     write_worktrees(root, [])
     false
   } catch {
-    error if @async.is_being_cancelled() => raise error
     _ => true
   }
   assert_true(failed)
@@ -1325,7 +1300,6 @@ async test "attach refuses a linked worktree, keeps main and non-git attachable"
     "no error"
   } catch {
     WorktreeError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
   assert_true(detail.contains("linked git worktree"))
@@ -1523,7 +1497,6 @@ async fn create_refusal(
     "no error"
   } catch {
     WorktreeError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
 }
@@ -1656,7 +1629,6 @@ async fn remove_refusal(
     "no error"
   } catch {
     WorktreeError(detail) => detail
-    error if @async.is_being_cancelled() => raise error
     error => "\{error}"
   }
 }

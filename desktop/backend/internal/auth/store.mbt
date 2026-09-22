@@ -274,14 +274,12 @@ pub async fn AuthStore::sign_out(self : AuthStore) -> Unit {
   guard self.session is Some(session) else { return }
   let mut clear_error : String? = None
   self.clear_local_session() catch {
-    error if @async.is_being_cancelled() => raise error
     AuthError(message) => clear_error = Some(message)
     error => clear_error = Some("\{error}")
   }
   // Even when the local marker could not be written, revoking online may
   // still make the old on-disk credential harmless on the next launch.
   revoke_device(session) catch {
-    error if @async.is_being_cancelled() => raise error
     error =>
       @xlog.warn(category="auth") <?
         { "message": "device revoke failed", "error": "\{error}" }
