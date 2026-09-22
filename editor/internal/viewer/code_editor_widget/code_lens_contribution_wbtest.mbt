@@ -31,9 +31,7 @@ impl @language.CodeLensProvider for BlockingContributionCodeLensProvider with fn
   self.calls.val += 1
   if self.calls.val == 1 {
     self.first_started.release()
-    self.release_first.acquire() catch {
-      _ => return []
-    }
+    self.release_first.acquire()
   }
   self.lenses.copy()
 }

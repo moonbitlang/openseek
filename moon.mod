@@ -3,7 +3,7 @@ name = "moonbitlang/openseek"
 version = "0.3.3"
 
 import {
-  "moonbitlang/async@0.21.1",
+  "moonbitlang/async@0.22.1",
   "moonbitlang/x@0.4.50",
   "moonbitlang/jsonl@0.2.0",
   "moonbitlang/openseek_protocol@0.1.2",

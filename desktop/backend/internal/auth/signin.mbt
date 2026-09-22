@@ -104,7 +104,7 @@ pub async fn AuthStore::sign_in(self : AuthStore, server_url~ : String) -> Unit 
       exchanged.val = Some(exchange.wait())
     })
   }) catch {
-    error if @async.is_cancellation_error(error) => {
+    error if error is @async.TaskCancelled => {
       // Transport cancellation arrived while the exchange was protected.
       // The result is now available, so remove the minted device before the
       // original cancellation escapes.

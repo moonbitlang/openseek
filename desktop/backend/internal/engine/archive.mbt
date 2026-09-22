@@ -737,7 +737,7 @@ async test "archive publishes its move before a cancelled listing reply" {
       request.wait()
       false
     } catch {
-      error if @async.is_cancellation_error(error) => true
+      error if error is @async.TaskCancelled => true
       _ => false
     }
     assert_true(cancelled)

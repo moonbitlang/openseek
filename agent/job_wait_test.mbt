@@ -112,6 +112,16 @@ async fn exercise_job_wait(wake : WaitWake) -> Unit {
         assert_true(
           saved.events().iter().any(e => e.item() is Terminal(Interrupted(_))),
         )
+        // Exactly one terminal closes the cancelled turn: the errdefer's
+        // Interrupted record and the real-failure path must not both append one.
+        assert_eq(
+          saved
+          .events()
+          .iter()
+          .filter(event => event.item() is Terminal(_))
+          .count(),
+          1,
+        )
         assert_true(
           saved
           .events()

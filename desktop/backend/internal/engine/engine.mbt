@@ -3196,7 +3196,7 @@ async test "cancelled spawn requester holds its claim until pump ack" {
       requester.wait()
       false
     } catch {
-      error if @async.is_cancellation_error(error) => true
+      error if error is @async.TaskCancelled => true
       _ => false
     }
     assert_true(cancelled)

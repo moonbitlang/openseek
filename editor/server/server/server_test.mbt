@@ -499,9 +499,7 @@ impl @language.HoverProvider for DelayedHoverProvider with fn provide_hover(
   _token,
 ) {
   self.started.release()
-  self.release_gate.acquire() catch {
-    _ => return None
-  }
+  self.release_gate.acquire()
   let offset = model.get_offset_at(position)
   Some({
     range: model.snapshot.range_of(OffsetRange(offset, offset + 3)),

@@ -330,7 +330,7 @@ pub async fn execute_tool_call(
     Some(tool) =>
       tool.execute.run(call.arguments) catch {
         error =>
-          if @async.is_being_cancelled() || @async.is_cancellation_error(error) {
+          if @async.is_being_cancelled() {
             raise error
           } else {
             // Keep the transcript label the local catches used to provide:

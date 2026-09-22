@@ -204,8 +204,7 @@ pub fn definition(
           let program = service.register(on_trace?=on_program_trace)
           errdefer program.close()
           let action = run(Some(program)) catch {
-            error if @async.is_being_cancelled() ||
-              @async.is_cancellation_error(error) => raise error
+            error if @async.is_being_cancelled() => raise error
             error =>
               @agent_tool.respond("PTC program failed: \{error}", is_error=true)
           }

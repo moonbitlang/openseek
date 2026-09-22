@@ -234,9 +234,7 @@ fn SuspendedHoverParticipant::hover_participant_handle(
     _token,
   ) => {
     self.started.release()
-    self.release_gate.acquire() catch {
-      _ => return []
-    }
+    self.release_gate.acquire()
     self.finished.val = true
     [
       MarkdownHover(

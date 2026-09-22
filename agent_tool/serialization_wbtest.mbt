@@ -52,7 +52,7 @@ async test "a cancelled file gate waiter leaves its siblings running" {
     } noraise {
       _ => None
     }
-    assert_true(error is Some(error) && @async.is_cancellation_error(error))
+    assert_true(error is Some(error) && error is @async.TaskCancelled)
     assert_eq(mutations.val, 0)
     sibling_done.put(())
     sibling.wait()

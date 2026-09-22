@@ -643,7 +643,7 @@ async test "moon check schedule restores running after cancellation" {
     task.cancel()
     let mut cancelled = false
     task.wait() catch {
-      error => cancelled = @async.is_cancellation_error(error)
+      error => cancelled = error is @async.TaskCancelled
     }
     assert_true(cancelled)
     assert_false(diagnostics.running.val)

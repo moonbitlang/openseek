@@ -11,7 +11,7 @@ import {
   "moonbitlang/x@0.4.50",
   "moonbitlang/openseek@0.3.2",
   "openseek_desktop@0.1.5",
-  "moonbitlang/async@0.21.0",
+  "moonbitlang/async@0.22.1",
 }
 
 license = "Apache-2.0"

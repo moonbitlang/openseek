@@ -4,7 +4,7 @@ version = "0.1.0"
 
 import {
   "moonbitlang/openseek@0.3.2",
-  "moonbitlang/async@0.21.0",
+  "moonbitlang/async@0.22.1",
 }
 
 preferred_target = "wasm"

@@ -129,7 +129,7 @@ async fn AgentLoop::checkpoint_at_ceiling(
     covered,
   ) catch {
     error => {
-      if @async.is_being_cancelled() || @async.is_cancellation_error(error) {
+      if @async.is_being_cancelled() {
         raise error
       }
       @emit.emit(AutoCompactionFailed(error="\{error}"))

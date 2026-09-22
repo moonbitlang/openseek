@@ -250,9 +250,7 @@ async test "a superseded definition opener failure cannot overwrite a newer navi
     calls.val += 1
     if call == 0 {
       first_started.release()
-      release_first.acquire() catch {
-        _ => return false
-      }
+      release_first.acquire()
       false
     } else {
       true
@@ -294,9 +292,7 @@ async test "cursor movement suppresses late definition opener failure" {
   let release = @async.Semaphore(1, initial_value=0)
   let opener = @navigation_api.LocationOpenerHandle(open=_request => {
     started.release()
-    release.acquire() catch {
-      _ => return false
-    }
+    release.acquire()
     false
   })
   let services = definition_navigation_services([location], opener~)

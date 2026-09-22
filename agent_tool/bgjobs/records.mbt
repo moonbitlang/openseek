@@ -147,8 +147,7 @@ async fn BgJobRuntime::publish_record(
       None => persist(record)
     }
   } catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      raise error
+    error if @async.is_being_cancelled() => raise error
     error => job.persistence_error = Some("failed to persist job: \{error}")
   }
   job.announced = true

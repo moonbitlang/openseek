@@ -3,7 +3,7 @@ name = "moonbitlang/openseek_protocol"
 version = "0.1.2"
 
 import {
-  "moonbitlang/async@0.21.2",
+  "moonbitlang/async@0.22.1",
 }
 
 readme = "README.mbt.md"

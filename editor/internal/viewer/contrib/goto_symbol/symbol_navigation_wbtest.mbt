@@ -21,7 +21,7 @@ impl @language.DefinitionProvider for SymbolNavigationTestDefinitionProvider wit
     None => ()
   }
   match self.release {
-    Some(release) => release.acquire() catch { _ => return [] }
+    Some(release) => release.acquire()
     None => ()
   }
   self.locations.copy()

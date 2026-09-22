@@ -165,8 +165,7 @@ async fn execute(
     timeout_ms~,
     query,
   ) catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      raise error
+    error if @async.is_being_cancelled() => raise error
     error =>
       return @agent_tool.respond(
         "error: web_search failed: \{error}",

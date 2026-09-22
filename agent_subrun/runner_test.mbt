@@ -198,8 +198,7 @@ async test "external cancellation re-raises out of the runner" {
     let mut reraised = false
     let outcome : @agent_subrun.SubrunResult[String]? = Some(task.wait()) catch {
       error => {
-        reraised = @async.is_cancellation_error(error) ||
-          @async.is_being_cancelled()
+        reraised = error is @async.TaskCancelled || @async.is_being_cancelled()
         None
       }
     }
