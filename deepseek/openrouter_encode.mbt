@@ -24,7 +24,7 @@ pub fn openrouter_encode_chat_request(
     Map(
       [
         ("model", Json(model)),
-        ("messages", ([ for message in messages => message ] : Json)),
+        ("messages", Json(messages)),
         ("stream", Json(stream)),
         ("reasoning", { "effort": effort }),
         ..if response_format is Some(format) {
@@ -34,7 +34,7 @@ pub fn openrouter_encode_chat_request(
           [("stream_options", ({ "include_usage": true } : Json))]
         },
         ..if tools.length() > 0 {
-          [("tools", ([ for tool in tools => tool ] : Json))]
+          [("tools", Json(tools))]
         },
       ],
     ),

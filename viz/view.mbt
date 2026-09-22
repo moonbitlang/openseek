@@ -1773,9 +1773,7 @@ fn render_model(
   if cards.is_empty() {
     return empty_state("The model projection is empty.")
   }
-  let blocks : Array[@html.Html] = [prompt_rail(session, subrun)]
-  blocks.append(cards)
-  @html.div(class="log model-log") <| blocks
+  @html.div(class="log model-log") <| [prompt_rail(session, subrun), ..cards]
 }
 
 ///|

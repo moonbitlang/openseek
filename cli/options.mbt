@@ -26,30 +26,23 @@ pub fn agent_shared_options(
       global~,
       about="API key for the selected chat provider.",
     ),
-    OptionArg(
-      "deepseek-api-key",
-      long="deepseek-api-key",
-      env="DEEPSEEK",
-      default_values=[""],
-      global~,
-      hidden=true,
-    ),
-    OptionArg(
-      "kimi-api-key",
-      long="kimi-api-key",
-      env="KIMI",
-      default_values=[""],
-      global~,
-      hidden=true,
-    ),
-    OptionArg(
-      "glm-api-key",
-      long="glm-api-key",
-      env="GLM",
-      default_values=[""],
-      global~,
-      hidden=true,
-    ),
+    ..[
+      for
+        (name, env) in [
+          ("deepseek-api-key", "DEEPSEEK"),
+          ("kimi-api-key", "KIMI"),
+          ("glm-api-key", "GLM"),
+        ] => {
+        @argparse.OptionArg(
+          name,
+          long=name,
+          env~,
+          default_values=[""],
+          global~,
+          hidden=true,
+        )
+      }
+    ],
     OptionArg(
       "model",
       long="model",

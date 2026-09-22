@@ -234,12 +234,16 @@ pub async fn Client::upload_image(
   guard self.api_url.strip_suffix("/chat/completions") is Some(base) else {
     raise UnsupportedApiUrl
   }
-  let parts : Array[@form_data.Part] = [Text(name="purpose", value="user_data")]
-  if expires_after_seconds is Some(seconds) {
-    parts.push(Text(name="expires_after[anchor]", value="created_at"))
-    parts.push(Text(name="expires_after[seconds]", value=seconds.to_string()))
-  }
-  parts.push(File(name="file", filename~, content_type=media_type, data~))
+  let parts : Array[@form_data.Part] = [
+    Text(name="purpose", value="user_data"),
+    ..if expires_after_seconds is Some(seconds) {
+      [
+        @form_data.Text(name="expires_after[anchor]", value="created_at"),
+        Text(name="expires_after[seconds]", value=seconds.to_string()),
+      ]
+    },
+    File(name="file", filename~, content_type=media_type, data~),
+  ]
   let form = @form_data.FormData(parts)
   @async.with_timeout(timeout_ms, () => {
     let connection = @http.post_stream("\{base}/files", headers={

@@ -67,17 +67,20 @@ fn decode_server(name : String, entry : Json) -> McpServer raise {
   // A present-but-mistyped optional field is a config mistake, not an omission:
   // silently treating `"args": "--flag"` as no args would launch the server
   // wrong. Absent keys stay optional.
-  let args = []
-  if entry is { "args": args_value, .. } {
+  let args = if entry is { "args": args_value, .. } {
     guard args_value is Array(items) else {
       raise Invalid("server `\{name}`: `args` must be an array of strings")
     }
-    for item in items {
-      guard item is String(arg) else {
-        raise Invalid("server `\{name}`: every `args` entry must be a string")
+    [
+      for item in items => {
+        guard item is String(arg) else {
+          raise Invalid("server `\{name}`: every `args` entry must be a string")
+        }
+        arg
       }
-      args.push(arg)
-    }
+    ]
+  } else {
+    []
   }
   let env = decode_string_map(name, entry, "env")
   Stdio(name~, command~, args~, env~)

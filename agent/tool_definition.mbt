@@ -188,8 +188,8 @@ pub async fn[X] build_tools(
   let program_service = @ptc.Service::start(scope.group(), program_tools)
   let program_trace : Ref[Json?] = Ref(None)
   Tools(
-    file_tools +
     [
+      ..file_tools,
       @plan.definition(),
       @goal.definition(),
       // The escalation argument exists for this registry only when the runtime
@@ -220,8 +220,8 @@ pub async fn[X] build_tools(
       @job_stop.definition(bg_runtime),
       @job_wait.definition(),
       @finish.definition(),
-    ] +
-    extras,
+      ..extras,
+    ],
     background_jobs=bg_runtime,
     program_trace~,
   )

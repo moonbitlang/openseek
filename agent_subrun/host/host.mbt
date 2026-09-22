@@ -213,19 +213,21 @@ pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
   // rides argv — it reaches the child through the inherited environment.
   // Per-call `max_steps` is not here either: it rides the request envelope,
   // where the contract already carries it, and `subrun` reads it from there.
-  let child_args = [..self.launch_prefix, "subrun", "{kind}"]
-  if self.model is Some(model) {
-    child_args.push("--model")
-    child_args.push(model)
-  }
-  if self.api_url is Some(url) {
-    child_args.push("--api-url")
-    child_args.push(url)
-  }
-  child_args.push("--session")
-  child_args.push("{child}")
-  child_args.push("--session-root")
-  child_args.push(self.session_root)
+  let child_args = [
+    ..self.launch_prefix,
+    "subrun",
+    "{kind}",
+    ..if self.model is Some(model) {
+      ["--model", model]
+    },
+    ..if self.api_url is Some(url) {
+      ["--api-url", url]
+    },
+    "--session",
+    "{child}",
+    "--session-root",
+    self.session_root,
+  ]
   let handoff : Json = {
     "v": 1,
     "exe": self.exe,

@@ -113,13 +113,13 @@ pub fn merge_skills(
   base : ArrayView[Skill],
   overrides~ : ArrayView[Skill],
 ) -> Array[Skill] {
-  let merged = overrides.to_owned()
   let taken : Set[String] = Set([ for skill in overrides => skill.name ])
-  for skill in base {
-    if !taken.contains(skill.name) {
-      merged.push(skill)
-    }
-  }
+  let merged = [
+    ..overrides,
+    ..[
+      for skill in base if !taken.contains(skill.name) => skill
+    ],
+  ]
   merged.sort_by((a, b) => a.name.compare(b.name))
   merged
 }

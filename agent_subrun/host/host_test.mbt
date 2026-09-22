@@ -191,3 +191,56 @@ test "a runtime-launched engine still produces a handoff the library reads" {
   })
   assert_eq(args[:4], ["/build/wasm/openseek.wasm", "--", "subrun", "{kind}"])
 }
+
+///|
+test "optional model and URL preserve the hosted argv layout" {
+  for
+    (model, api_url, expected) in [
+      (
+        None,
+        None,
+        ["subrun", "{kind}", "--session", "{child}", "--session-root", "/store"],
+      ),
+      (
+        Some("m"),
+        None,
+        [
+          "subrun", "{kind}", "--model", "m", "--session", "{child}", "--session-root",
+          "/store",
+        ],
+      ),
+      (
+        None,
+        Some("u"),
+        [
+          "subrun", "{kind}", "--api-url", "u", "--session", "{child}", "--session-root",
+          "/store",
+        ],
+      ),
+      (
+        Some("m"),
+        Some("u"),
+        [
+          "subrun", "{kind}", "--model", "m", "--api-url", "u", "--session", "{child}",
+          "--session-root", "/store",
+        ],
+      ),
+    ] {
+    let reservation = @host.SubrunInjection(
+      exe="/opt/openseek",
+      session_root="/store",
+      parent="run7",
+      workspace_root="/ws",
+      model?,
+      api_url?,
+      reserve_ordinals=_ => 1,
+    ).reserve()
+    guard reservation.env().get("WORKFLOW_HOST") is Some(raw) else {
+      fail("missing handoff")
+    }
+    guard @json.parse(raw) is { "child_args": args, .. } else {
+      fail("missing argv")
+    }
+    assert_eq(args, Json(expected))
+  }
+}

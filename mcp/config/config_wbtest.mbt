@@ -127,3 +127,26 @@ test "decode rejects mistyped http fields" {
     "mcpServers": { "x": { "url": "http://h/mcp", "headers": [] } },
   })
 }
+
+///|
+test "args preserve repeated values and reject errors before env validation" {
+  let servers = decode({
+    "mcpServers": { "x": { "command": "run", "args": ["a", "b", "a"] } },
+  })
+  guard servers[0] is Stdio(args~, ..) else { fail("expected stdio") }
+  assert_eq(args, ["a", "b", "a"])
+  try
+    decode({
+      "mcpServers": {
+        "x": { "command": "run", "args": ["ok", 1, false], "env": [] },
+      },
+    })
+    |> ignore
+  catch {
+    Invalid(message) =>
+      assert_eq(message, "server `x`: every `args` entry must be a string")
+    error => raise error
+  } noraise {
+    _ => fail("expected invalid args")
+  }
+}

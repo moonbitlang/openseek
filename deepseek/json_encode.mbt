@@ -69,7 +69,7 @@ impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
           [("tool_call_id", Json(tool_call_id))]
         },
         ..if message.tool_calls.length() > 0 {
-          [("tool_calls", ([ for call in message.tool_calls => call ] : Json))]
+          [("tool_calls", Json(message.tool_calls))]
         },
         ..if message.role is Assistant &&
           message.reasoning_content is Some(reasoning) {
@@ -127,7 +127,7 @@ pub fn encode_chat_request(
     Map(
       [
         ("model", Json(Show::to_string(model))),
-        ("messages", ([ for message in messages => message ] : Json)),
+        ("messages", Json(messages)),
         ("stream", Json(stream)),
         ..if response_format is Some(format) {
           [("response_format", ({ "type": "\{format}" } : Json))]
@@ -136,7 +136,7 @@ pub fn encode_chat_request(
           [("stream_options", ({ "include_usage": true } : Json))]
         },
         ..if tools.length() > 0 {
-          [("tools", ([ for tool in tools => tool ] : Json))]
+          [("tools", Json(tools))]
         },
         ..thinking_json_fields(model, thinking),
       ],
