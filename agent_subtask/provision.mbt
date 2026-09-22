@@ -204,8 +204,7 @@ async fn remove_worktree_and_branch(
 /// registry entry, in that order, each best-effort.
 async fn rollback_provision(geometry : Geometry, entry : SubtaskEntry) -> Unit {
   remove_worktree_and_branch(geometry.origin_root, entry, force=true)
-  let dir = registry_dir(geometry.common_git_dir)
-  @fs.remove("\{dir}/\{entry.name}--\{entry.nonce}.json") catch {
+  @fs.remove(entry_path(geometry.common_git_dir, entry)) catch {
     _ => ()
   }
 }

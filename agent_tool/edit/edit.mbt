@@ -1050,15 +1050,7 @@ const TruncatedCapture : String = "moon check hid some diagnostic sites behind i
 /// outside any MoonBit project are dropped; an unresolvable link is just its
 /// written spelling.
 async fn check_projects(path : String) -> Array[String] {
-  let target = @fs.realpath(path) catch { _ => path }
-  // Project directories compare by their canonical form: `/tmp/x` and
-  // `/private/tmp/x` are one project, not two checks.
-  async fn canonical(dir : String) -> String {
-    @fs.realpath(dir) catch {
-      _ => dir
-    }
-  }
-
+  let target = resolved_target(path)
   let own = @auto_check.check_cwd(path)
   let theirs = @auto_check.check_cwd(target)
   let spellings = []
@@ -1069,9 +1061,11 @@ async fn check_projects(path : String) -> Array[String] {
   }
   // The written spelling too, when it belongs to a project of its own (a
   // link inside module a pointing into module b is compiled by both).
+  // Compare canonical project directories: `/tmp/x` and `/private/tmp/x`
+  // are one project, not two checks.
   match (own, theirs) {
     (Some(own_dir), Some(their_dir)) =>
-      if canonical(own_dir) != canonical(their_dir) {
+      if resolved_target(own_dir) != resolved_target(their_dir) {
         spellings.push(path)
       }
     (Some(_), None) => spellings.push(path)
@@ -1422,7 +1416,7 @@ async fn parse_gate_rejection(
   // a link named `alias.txt` pointing at `lib/a.mbt` must be gated like the
   // `.mbt` file it really writes (the same class `write`'s overwrite guard
   // handles with realpath).
-  let target = @fs.realpath(path) catch { _ => path }
+  let target = resolved_target(path)
   // Gate under every syncheck kind this file could be classified as. A regular
   // file yields one kind; a symlink that crosses kinds (e.g. `link.mbt ->
   // doc.mbt.md`) yields two, and moon's classification of such a link is

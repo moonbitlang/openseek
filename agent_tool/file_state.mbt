@@ -121,9 +121,7 @@ pub fn FileStateMap::record_edited(
   seen_digest : String,
   result_digest : String,
 ) -> Unit {
-  let provenance = if self.entries.get(path)
-    is Some({ provenance: Created, digest: stored, }) &&
-    stored == seen_digest {
+  let provenance = if self.created_and_unchanged(path, seen_digest) {
     Created
   } else {
     Modified
@@ -268,3 +266,16 @@ pub extend FileState with Debug::{to_repr}
 #doc(hidden)
 #deprecated
 pub extend FileState with Eq::{equal, not_equal}
+
+///|
+test "targeted edits do not grant Created provenance to other paths" {
+  let state = FileStateMap::FileStateMap()
+  let before = content_digest("before")
+  let after = content_digest("after")
+  state.record_modified("modified", before)
+  for path in ["unknown", "modified"] {
+    state.record_edited(path, before, after)
+    assert_true(state.get(path) is Some(Modified))
+    assert_false(state.created_and_unchanged(path, after))
+  }
+}
