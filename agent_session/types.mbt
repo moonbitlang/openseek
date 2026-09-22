@@ -98,11 +98,11 @@ pub fn SessionId::generated(
 /// exact text that should be replayed as a user-role message in
 /// `Session::chat_messages`.
 ///
-/// `submission_id` is the submitting controller's tag for this prompt,
-/// echoed from the serve `prompt` command so a delivery can be reconciled by
-/// exact id rather than by matching text (two clients can submit identical
-/// text into one session). None for untagged input: steers, TUI and one-shot
-/// prompts, and every record written before the field existed. Encoding
+/// `submission_id` is the submitting controller's tag for this input,
+/// echoed from a serve `prompt` or `steer` command so a delivery can be
+/// reconciled by exact id rather than by matching text (two clients can submit
+/// identical text into one session). None for untagged input, including TUI
+/// and one-shot prompts, and older records without a tag. Encoding
 /// omits it when absent, so untagged lines are byte for byte what this store
 /// has always written.
 struct UserMessage {

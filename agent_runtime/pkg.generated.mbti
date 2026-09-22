@@ -46,8 +46,8 @@ pub(all) enum ApprovalOutcome {
 } derive(Eq, @debug.Debug)
 
 pub(all) enum SteerInput {
-  Prompt(String)
-  Command(String)
+  Prompt(String, submission_id~ : String?)
+  Command(String, submission_id~ : String?)
   Notice(String)
 }
 

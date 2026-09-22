@@ -20,8 +20,8 @@ pub fn prompt(text : String, submission_id? : String) -> @wire.Command {
 ///
 /// `Prompt` is what the host has always meant here — it has no other kind —
 /// and it now says so on the wire instead of relying on the engine's default.
-pub fn steer(text : String) -> @wire.Command {
-  Steer(kind=Prompt, text~)
+pub fn steer(text : String, submission_id? : String) -> @wire.Command {
+  Steer(kind=Prompt, text~, submission_id~)
 }
 
 ///|

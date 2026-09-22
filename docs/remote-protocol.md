@@ -286,7 +286,10 @@ On `agent.start` the host echoes it unchanged in the corresponding
 `agent.started`; on `agent.steer` it is echoed in that submission's eventual
 `steer_applied` or `steer_dropped` event. This identifies the exact live
 submission that owns the returned run or receipt, even when two steers have
-identical text. The `agent.started` echo establishes run ownership but not
+identical text. The host passes the steer ID through the engine command and
+runtime queue; an applied steer records it on its durable `User` item. Receipt
+routing uses that ID only, never message text. Untagged receipts cannot settle
+a tagged pending steer. The `agent.started` echo establishes run ownership but not
 durability—it is emitted before the host writes the prompt. An `agent.start`
 result of `accepted` proves the complete stdin command was written, not that
 the User item reached the store; the durable proof is the `session.event`
@@ -316,7 +319,7 @@ Notifications:
 | method | params |
 |---|---|
 | `agent.started` | `{run_id, submission_id?, session, engine, model, max_steps, session_root?}` — `session_root` is a host-derived durable-store fact, never a client-selected path; the prompt bubble comes from its own `session.event` commit |
-| `agent.event` | `{run_id?, session, event: {…}}` — the engine's event object (`assistant_delta`, `stream_retry`, `tool_result`, `agent_finished`, …); for a correlated steer receipt the host adds its optional `submission_id`. `stream_retry` carries `{attempt, max_attempts, reason}`: it clears only the failed attempt's transient deltas and announces the retry the engine is waiting to make. `run_id` is absent for events emitted before any run of the engine process's lifetime (a compaction on a freshly spawned engine), which route by `session` |
+| `agent.event` | `{run_id?, session, event: {…}}` — the engine's event object (`assistant_delta`, `stream_retry`, `tool_result`, `agent_finished`, …); steer receipts carry the engine-echoed optional `submission_id`. `stream_retry` carries `{attempt, max_attempts, reason}`: it clears only the failed attempt's transient deltas and announces the retry the engine is waiting to make. `run_id` is absent for events emitted before any run of the engine process's lifetime (a compaction on a freshly spawned engine), which route by `session` |
 | `agent.error` | `{message, run_id?, exit_code?, diagnostics?}` |
 | `agent.finished` | `{run_id, status, answer?, exit_code?}` — the run's outcome, published when the engine's stdout event that ends the turn arrives, or at the engine's death for a turn whose event never came (`failed`). The durable record renders the conversation and never settles a run: the two travel independently, so a client may see this before, after, or without the matching `session.event` commit |
 

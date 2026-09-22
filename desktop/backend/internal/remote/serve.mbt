@@ -525,11 +525,7 @@ fn expect_notification(
 /// One run-scoped agent event as `notification_for_client` sees it.
 fn client_frame(event : @wire.Event) -> @protocol.Notification? {
   notification_for_client(
-    AgentEvent({
-      run_id: None,
-      session: "session-1",
-      event: { event, submission_id: None, },
-    }),
+    AgentEvent({ run_id: None, session: "session-1", event: { event, }, }),
   )
 }
 
@@ -573,8 +569,8 @@ test "remote delivery retains streaming runtime and error events" {
     ),
     BackgroundNotice(content="notice"),
     GoalUpdated(goal=Some("goal")),
-    SteerApplied(kind="prompt", content="steered"),
-    SteerDropped(content="late"),
+    SteerApplied(kind="prompt", content="steered", submission_id=None),
+    SteerDropped(content="late", submission_id=None),
     AgentAborted(reason="cancelled"),
     MaxStepsExhausted,
     AgentSetupFailed(error="setup failed"),
@@ -691,7 +687,6 @@ test "remote delivery drops notifications without a session" {
         content="ephemeral result",
         brief=None,
       ),
-      submission_id: None,
     },
   }
   let notification : @protocol.Notification = AgentEvent({ ..event, })

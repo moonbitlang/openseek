@@ -33,7 +33,9 @@ pub(all) enum Command {
   /// later be reconciled by exact id rather than by matching text. Controllers
   /// that do not reconcile deliveries (the TUI) send none.
   Prompt(text~ : String, submission_id~ : String?)
-  Steer(kind~ : SteerKind, text~ : String)
+  /// The tag follows steering through the runtime queue, durable User item,
+  /// and applied/dropped receipt. Untagged controllers send none.
+  Steer(kind~ : SteerKind, text~ : String, submission_id~ : String?)
   Compact
   Cancel
   JobsSnapshot(request_id~ : String)
@@ -69,8 +71,8 @@ pub fn Command::to_json(self : Command) -> Json {
       } else {
         { "command": "prompt", "text": text }
       }
-    Steer(kind~, text~) =>
-      {
+    Steer(kind~, text~, submission_id~) => {
+      let fields : Map[String, Json] = {
         "command": "steer",
         "kind": match kind {
           Prompt => "prompt"
@@ -78,6 +80,11 @@ pub fn Command::to_json(self : Command) -> Json {
         },
         "text": text,
       }
+      if submission_id is Some(id) {
+        fields["submission_id"] = Json(id)
+      }
+      Json(fields)
+    }
     JobsSnapshot(request_id~) =>
       { "command": "jobs_snapshot", "request_id": request_id }
     JobStop(request_id~, generation~, job_id~) =>
@@ -218,20 +225,27 @@ pub fn Command::parse(line : Json) -> Result[Command, String] {
 
 ///|
 fn parse_steer(line : Json) -> Result[Command, String] {
+  let submission_id = match line {
+    { "submission_id": String(id), .. } => Some(id)
+    { "submission_id": _, .. } =>
+      return Err("expected a string \"submission_id\" field")
+    _ => None
+  }
   // `text` is required whatever the kind says, so each arm spells the full
   // shape it accepts: the two kinds are static arms, a present kind that is
   // not one of them is its own refusal, and a steer with no kind at all is a
   // prompt steer (see the rule above) — spelled out, not a fallback tail.
   match line {
     { "kind": "prompt", "text": String(text), .. } =>
-      Ok(Steer(kind=Prompt, text~))
+      Ok(Steer(kind=Prompt, text~, submission_id~))
     { "kind": "command", "text": String(text), .. } =>
-      Ok(Steer(kind=Command, text~))
+      Ok(Steer(kind=Command, text~, submission_id~))
     { "kind": String(other), "text": String(_), .. } =>
       Err("unknown steer kind: \{other}")
     { "kind": _, "text": String(_), .. } =>
       Err("expected a string \"kind\" field")
-    { "text": String(text), .. } => Ok(Steer(kind=Prompt, text~))
+    { "text": String(text), .. } =>
+      Ok(Steer(kind=Prompt, text~, submission_id~))
     _ => Err("expected a string \"text\" field")
   }
 }

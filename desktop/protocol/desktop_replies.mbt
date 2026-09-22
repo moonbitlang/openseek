@@ -1969,22 +1969,14 @@ pub(all) struct OpenExternalReply {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-/// An engine event plus Desktop's optional steer-submission correlation.
+/// An engine event carried by Desktop's stream.
 pub(all) struct AgentStreamEvent {
   event : @wire.Event
-  submission_id : String?
 } derive(Debug, Eq)
 
 ///|
 pub impl ToJson for AgentStreamEvent with fn to_json(self) {
-  let raw = self.event.to_json()
-  guard raw is Object(fields) else { return raw }
-  if self.submission_id is Some(submission_id) {
-    let fields = fields.copy()
-    fields["submission_id"] = Json(submission_id)
-    return Json(fields)
-  }
-  raw
+  self.event.to_json()
 }
 
 ///|
@@ -1992,13 +1984,7 @@ pub impl FromJson for AgentStreamEvent with fn from_json(json, path) {
   guard @wire.parse(json) is Some(event) else {
     raise JsonDecodeError((path, "unknown engine event"))
   }
-  let submission_id = if json is Object(fields) &&
-    fields.get("submission_id") is Some(String(value)) {
-    Some(value)
-  } else {
-    None
-  }
-  { event, submission_id, }
+  { event, }
 }
 
 ///|
@@ -2009,17 +1995,14 @@ pub fn AgentStreamEvent::remote_lifecycle(
   self : AgentStreamEvent,
 ) -> AgentStreamEvent? {
   match self.event {
-    ReasoningMessage(..) =>
-      Some({ ..self, event: ReasoningMessage(content=""), })
-    AssistantMessage(..) =>
-      Some({ ..self, event: AssistantMessage(content=""), })
+    ReasoningMessage(..) => Some({ event: ReasoningMessage(content=""), })
+    AssistantMessage(..) => Some({ event: AssistantMessage(content=""), })
     ToolResult(..)
     | AutoCompactionFinished(..)
     | AgentFinished(..)
     | ContextYield(..) => None
     CompactionFinished(from_sequence~, to_sequence~, ..) =>
       Some({
-        ..self,
         event: CompactionFinished(from_sequence~, to_sequence~, summary=""),
       })
     _ => Some(self)

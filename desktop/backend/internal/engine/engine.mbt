@@ -437,16 +437,10 @@ fn EnginePhase::after_run_close(self : EnginePhase) -> EnginePhase {
 }
 
 ///|
-priv struct TrackedSteer {
-  text : String
-  submission_id : String?
-}
-
-///|
 priv struct SteerRunTracker {
   mut settling_run : String?
-  open_steers : Array[TrackedSteer]
-  settling_steers : Array[TrackedSteer]
+  open_steers : Array[String]
+  settling_steers : Array[String]
 }
 
 ///|
@@ -462,12 +456,11 @@ fn SteerRunTracker::begin_run(self : SteerRunTracker) -> Unit {
 ///|
 fn SteerRunTracker::record_sent(
   self : SteerRunTracker,
-  text : String,
   submission_id : String?,
-) -> TrackedSteer {
-  let entry : TrackedSteer = { text, submission_id, }
-  self.open_steers.push(entry)
-  entry
+) -> Unit {
+  if submission_id is Some(id) {
+    self.open_steers.push(id)
+  }
 }
 
 ///|
@@ -478,8 +471,8 @@ fn SteerRunTracker::record_terminal(
   self.settling_steers.clear()
   if self.open_steers.length() > 0 {
     self.settling_run = Some(run_id)
-    for text in self.open_steers {
-      self.settling_steers.push(text)
+    for id in self.open_steers {
+      self.settling_steers.push(id)
     }
   } else {
     self.settling_run = None
@@ -492,61 +485,50 @@ fn SteerRunTracker::route_event(
   self : SteerRunTracker,
   event : @wire.Event?,
   latest_run : String?,
-) -> (String?, String?) {
+) -> String? {
   match event {
     // The wire kind is authoritative: only "prompt" consumes a desktop
     // steer. Parse defaults an absent kind to "prompt" — the only engines
     // that omit it predate the field and meant prompt.
-    Some(SteerApplied(kind~, content~)) if kind == "prompt" =>
-      self.route_receipt(content, latest_run)
-    Some(SteerDropped(content~)) => self.route_receipt(content, latest_run)
+    Some(SteerApplied(kind="prompt", submission_id~, ..)) =>
+      self.route_receipt(submission_id, latest_run)
+    Some(SteerDropped(submission_id~, ..)) =>
+      self.route_receipt(submission_id, latest_run)
     // serve drains every old prompt receipt before beginning the next step.
     // AgentStep is therefore the explicit boundary after which an absent old
-    // receipt must not steal an equal-text steer from the new run.
+    // receipt no longer needs run ownership retained in memory.
     Some(AgentStep(..)) => {
       self.settling_run = None
       self.settling_steers.clear()
-      (latest_run, None)
+      latest_run
     }
     // Command/notice steer_applied events and unrelated background events may
     // be interleaved between prompt receipts while serve drains its old input
     // queue. They neither consume nor clear prompt correlation state.
-    _ => (latest_run, None)
+    _ => latest_run
   }
 }
 
 ///|
 fn SteerRunTracker::route_receipt(
   self : SteerRunTracker,
-  content : String,
+  submission_id : String?,
   latest_run : String?,
-) -> (String?, String?) {
-  if take_first_tracked_steer(self.settling_steers, content) is Some(entry) {
+) -> String? {
+  guard submission_id is Some(id) else { return latest_run }
+  if self.settling_steers.search_by(tracked => tracked == id) is Some(index) {
+    ignore(self.settling_steers.remove(index))
     let run_id = self.settling_run
     if self.settling_steers.is_empty() {
       self.settling_run = None
     }
-    if run_id is Some(_) {
-      return (run_id, entry.submission_id)
-    }
+    return run_id
   }
-  if take_first_tracked_steer(self.open_steers, content) is Some(entry) {
-    return (latest_run, entry.submission_id)
+  if self.open_steers.search_by(tracked => tracked == id) is Some(index) {
+    ignore(self.open_steers.remove(index))
+    return latest_run
   }
-  (latest_run, None)
-}
-
-///|
-fn take_first_tracked_steer(
-  items : Array[TrackedSteer],
-  text : String,
-) -> TrackedSteer? {
-  for index, entry in items {
-    if entry.text == text {
-      return Some(items.remove(index))
-    }
-  }
-  None
+  latest_run
 }
 
 ///|
@@ -1814,7 +1796,7 @@ async fn ServeEngine::consume(
                       kind=started.kind,
                       label=@workflow.display_label(started.label),
                     )
-                    let (run_id, submission_id) = engine.steer_runs.route_event(
+                    let run_id = engine.steer_runs.route_event(
                       Some(event),
                       engine.phase.latest_run(),
                     )
@@ -1823,7 +1805,7 @@ async fn ServeEngine::consume(
                       StreamEvent({
                         run_id,
                         session: engine.session_key,
-                        event: { event, submission_id, },
+                        event: { event, },
                       }),
                     )
                     if engine.session_root is Some(root) &&
@@ -1861,7 +1843,7 @@ async fn ServeEngine::consume(
                       prompt_tokens=finished.tokens,
                       completion_tokens=0,
                     )
-                    let (run_id, submission_id) = engine.steer_runs.route_event(
+                    let run_id = engine.steer_runs.route_event(
                       Some(event),
                       engine.phase.latest_run(),
                     )
@@ -1870,7 +1852,7 @@ async fn ServeEngine::consume(
                       StreamEvent({
                         run_id,
                         session: engine.session_key,
-                        event: { event, submission_id, },
+                        event: { event, },
                       }),
                     )
                     if probes.get(sr) is Some(probe) {
@@ -1909,7 +1891,7 @@ async fn ServeEngine::consume(
             "the engine finished its turn before this command was written",
           )
         }
-        let (run_id, submission_id) = engine.steer_runs.route_event(
+        let run_id = engine.steer_runs.route_event(
           wire_event,
           engine.phase.latest_run(),
         )
@@ -1936,7 +1918,7 @@ async fn ServeEngine::consume(
                 StreamEvent({
                   run_id,
                   session: engine.session_key,
-                  event: { event, submission_id, },
+                  event: { event, },
                 }),
               )
             }
@@ -2199,10 +2181,7 @@ fn emit_session_error(
     StreamEvent({
       run_id: engine.phase.latest_run(),
       session: engine.session_key,
-      event: {
-        event: (SessionError(error=reason) : @wire.Event),
-        submission_id: None,
-      },
+      event: { event: (SessionError(error=reason) : @wire.Event), },
     }),
   )
 }
@@ -2218,10 +2197,7 @@ fn emit_compaction_failed(
     StreamEvent({
       run_id: engine.phase.latest_run(),
       session: engine.session_key,
-      event: {
-        event: (CompactionFailed(error=reason) : @wire.Event),
-        submission_id: None,
-      },
+      event: { event: (CompactionFailed(error=reason) : @wire.Event), },
     }),
   )
 }
@@ -2697,72 +2673,65 @@ test "terminal closure preserves a queued compaction" {
 test "trailing steer settle events keep the terminal run id" {
   let tracker = SteerRunTracker::SteerRunTracker()
   tracker.begin_run()
-  ignore(tracker.record_sent("old steer", Some("submission-old")))
+  tracker.record_sent(Some("submission-old"))
   tracker.record_terminal("r41")
   tracker.begin_run()
-  ignore(tracker.record_sent("fresh steer", Some("submission-fresh")))
-  let old_drop : @wire.Event? = Some(SteerDropped(content="old steer"))
+  tracker.record_sent(Some("submission-fresh"))
+  let old_drop : @wire.Event? = Some(
+    SteerDropped(content="same", submission_id=Some("submission-old")),
+  )
   let fresh_apply : @wire.Event? = Some(
-    SteerApplied(kind="prompt", content="fresh steer"),
+    SteerApplied(
+      kind="prompt",
+      content="same",
+      submission_id=Some("submission-fresh"),
+    ),
   )
-  assert_eq(
-    tracker.route_event(old_drop, Some("r42")),
-    (Some("r41"), Some("submission-old")),
-  )
-  assert_eq(
-    tracker.route_event(fresh_apply, Some("r42")),
-    (Some("r42"), Some("submission-fresh")),
-  )
+  assert_eq(tracker.route_event(old_drop, Some("r42")), Some("r41"))
+  assert_eq(tracker.route_event(fresh_apply, Some("r42")), Some("r42"))
 }
 
 ///|
-test "equal steer text receipts retain writer-order submission ids" {
-  let tracker = SteerRunTracker::SteerRunTracker()
-  tracker.begin_run()
-  ignore(tracker.record_sent("same", Some("submission-a")))
-  ignore(tracker.record_sent("same", Some("submission-b")))
-  let receipt : @wire.Event? = Some(SteerApplied(kind="prompt", content="same"))
-  let (first_run, first_submission) = tracker.route_event(receipt, Some("r9"))
-  assert_eq(first_run, Some("r9"))
-  let first_event : @protocol.AgentStreamEvent = {
-    event: (SteerApplied(kind="prompt", content="same") : @wire.Event),
-    submission_id: first_submission,
-  }
-  guard first_event.to_json() is Object(first_fields) &&
-    first_fields.get("submission_id") is Some(String(first_id)) else {
-    fail("first receipt did not carry a submission id")
-  }
-  assert_eq(first_id, "submission-a")
-  let (second_run, second_submission) = tracker.route_event(receipt, Some("r9"))
-  assert_eq(second_run, Some("r9"))
-  let second_event : @protocol.AgentStreamEvent = {
-    event: (SteerApplied(kind="prompt", content="same") : @wire.Event),
-    submission_id: second_submission,
-  }
-  guard second_event.to_json() is Object(second_fields) &&
-    second_fields.get("submission_id") is Some(String(second_id)) else {
-    fail("second receipt did not carry a submission id")
-  }
-  assert_eq(second_id, "submission-b")
+test "equal steer text receipts settle by id even out of order" {
+  let tracker = SteerRunTracker()
+  tracker.record_sent(Some("submission-a"))
+  tracker.record_sent(Some("submission-b"))
+  let second : @wire.Event = SteerApplied(
+    kind="prompt",
+    content="same",
+    submission_id=Some("submission-b"),
+  )
+  let first : @wire.Event = SteerApplied(
+    kind="prompt",
+    content="changed text",
+    submission_id=Some("submission-a"),
+  )
+  assert_eq(tracker.route_event(Some(second), Some("r9")), Some("r9"))
+  assert_eq(tracker.open_steers, ["submission-a"])
+  assert_eq(tracker.route_event(Some(first), Some("r9")), Some("r9"))
+  assert_true(tracker.open_steers.is_empty())
+  assert_eq(tracker.route_event(Some(second), Some("r9")), Some("r9"))
 }
 
 ///|
 test "legacy steer receipt does not gain a submission field" {
   let tracker = SteerRunTracker::SteerRunTracker()
   tracker.begin_run()
-  ignore(tracker.record_sent("legacy", None))
+  tracker.record_sent(Some("tagged-legacy-text"))
   let decoded : @wire.Event? = Some(
-    SteerApplied(kind="prompt", content="legacy"),
+    SteerApplied(kind="prompt", content="legacy", submission_id=None),
   )
-  let (_, submission_id) = tracker.route_event(decoded, Some("r11"))
+  assert_eq(tracker.route_event(decoded, Some("r11")), Some("r11"))
   let event : @protocol.AgentStreamEvent = {
-    event: (SteerApplied(kind="prompt", content="legacy") : @wire.Event),
-    submission_id,
+    event: (
+      SteerApplied(kind="prompt", content="legacy", submission_id=None) :
+      @wire.Event),
   }
   guard event.to_json() is Object(fields) else {
     fail("expected receipt object")
   }
   assert_true(fields.get("submission_id") is None)
+  assert_eq(tracker.open_steers, ["tagged-legacy-text"])
 }
 
 ///|
@@ -2805,35 +2774,48 @@ test "started payload omits a missing submission id" {
 test "new turn events clear stale settling state" {
   let tracker = SteerRunTracker::SteerRunTracker()
   tracker.begin_run()
-  ignore(tracker.record_sent("old steer", Some("submission-old")))
+  tracker.record_sent(Some("submission-old"))
   tracker.record_terminal("r7")
   assert_eq(
     tracker.route_event(Some(AgentStep(step=1)), Some("r8")),
-    (Some("r8"), None),
+    Some("r8"),
   )
-  let old_drop : @wire.Event? = Some(SteerDropped(content="old steer"))
-  assert_eq(tracker.route_event(old_drop, Some("r8")), (Some("r8"), None))
+  let old_drop : @wire.Event? = Some(
+    SteerDropped(content="old steer", submission_id=Some("submission-old")),
+  )
+  assert_eq(tracker.route_event(old_drop, Some("r8")), Some("r8"))
 }
 
 ///|
 test "background events do not clear trailing steer receipts" {
   let tracker = SteerRunTracker::SteerRunTracker()
   tracker.begin_run()
-  ignore(tracker.record_sent("first", Some("submission-first")))
-  ignore(tracker.record_sent("second", Some("submission-second")))
+  tracker.record_sent(Some("submission-first"))
+  tracker.record_sent(Some("submission-second"))
   tracker.record_terminal("r-old")
   tracker.begin_run()
-  assert_eq(tracker.route_event(None, Some("r-new")), (Some("r-new"), None))
+  assert_eq(tracker.route_event(None, Some("r-new")), Some("r-new"))
   assert_eq(
     tracker.route_event(
-      Some(SteerApplied(kind="prompt", content="first")),
+      Some(
+        SteerApplied(
+          kind="prompt",
+          content="first",
+          submission_id=Some("submission-first"),
+        ),
+      ),
       Some("r-new"),
     ),
-    (Some("r-old"), Some("submission-first")),
+    Some("r-old"),
   )
   assert_eq(
-    tracker.route_event(Some(SteerDropped(content="second")), Some("r-new")),
-    (Some("r-old"), Some("submission-second")),
+    tracker.route_event(
+      Some(
+        SteerDropped(content="second", submission_id=Some("submission-second")),
+      ),
+      Some("r-new"),
+    ),
+    Some("r-old"),
   )
 }
 
@@ -2841,18 +2823,24 @@ test "background events do not clear trailing steer receipts" {
 test "only prompt steer_applied consumes a desktop steer" {
   let tracker = SteerRunTracker::SteerRunTracker()
   tracker.begin_run()
-  ignore(tracker.record_sent("same", Some("submission-prompt")))
-  let prompt : @wire.Event? = Some(SteerApplied(kind="prompt", content="same"))
+  tracker.record_sent(Some("submission-prompt"))
+  let prompt : @wire.Event? = Some(
+    SteerApplied(
+      kind="prompt",
+      content="same",
+      submission_id=Some("submission-prompt"),
+    ),
+  )
   let command : @wire.Event? = Some(
-    SteerApplied(kind="command", content="same"),
+    SteerApplied(kind="command", content="same", submission_id=None),
   )
-  let notice : @wire.Event? = Some(SteerApplied(kind="notice", content="same"))
-  assert_eq(tracker.route_event(command, Some("r1")), (Some("r1"), None))
-  assert_eq(tracker.route_event(notice, Some("r1")), (Some("r1"), None))
-  assert_eq(
-    tracker.route_event(prompt, Some("r1")),
-    (Some("r1"), Some("submission-prompt")),
+  let notice : @wire.Event? = Some(
+    SteerApplied(kind="notice", content="same", submission_id=None),
   )
+  assert_eq(tracker.route_event(command, Some("r1")), Some("r1"))
+  assert_eq(tracker.route_event(notice, Some("r1")), Some("r1"))
+  assert_eq(tracker.open_steers, ["submission-prompt"])
+  assert_eq(tracker.route_event(prompt, Some("r1")), Some("r1"))
 }
 
 ///|

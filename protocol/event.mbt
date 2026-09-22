@@ -81,8 +81,8 @@ pub(all) enum Event {
   ApprovalResolved(id~ : String, outcome~ : String)
 
   // ── steering ───────────────────────────────────────────────────────────
-  SteerApplied(kind~ : String, content~ : String)
-  SteerDropped(content~ : String)
+  SteerApplied(kind~ : String, content~ : String, submission_id~ : String?)
+  SteerDropped(content~ : String, submission_id~ : String?)
   BackgroundNotice(content~ : String)
 
   // Background execution events are session-scoped and may arrive between turns.

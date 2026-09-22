@@ -433,7 +433,7 @@ pub fn steer_run(
   }
   let submission_id = normalize_submission_id(payload.submission_id)
   guard live.submit(
-    @protocol.steer(payload.text),
+    @protocol.steer(payload.text, submission_id?),
     failure_reason="failed to write steering to the engine",
   ) else {
     return { steered: false, run_id: Some(run_id), }
@@ -448,7 +448,7 @@ pub fn steer_run(
   // produce a durable User plus steer_applied before EOF. The client keeps
   // exact-id ownership, and the trailing receipt or Finished/durable recovery
   // settles it without restoring a duplicate draft.
-  live.steer_runs.record_sent(payload.text, submission_id) |> ignore
+  live.steer_runs.record_sent(submission_id)
   { steered: true, run_id: Some(run_id), }
 }
 
@@ -505,14 +505,14 @@ pub fn queue_run(
       }
       let queued = live.queued_runs[index]
       guard live.submit(
-        @protocol.steer(queued.content),
+        @protocol.steer(queued.content, submission_id=id),
         failure_reason="failed to write steering to the engine",
       ) else {
         return { accepted: false, }
       }
       // The ordinary steer receipt carries this queue id, keeping the
       // transient Steering row attached to the exact promoted input.
-      ignore(live.steer_runs.record_sent(queued.content, Some(id)))
+      live.steer_runs.record_sent(Some(id))
       ignore(live.queued_runs.remove(index))
     }
   }

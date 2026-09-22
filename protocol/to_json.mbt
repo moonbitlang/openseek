@@ -91,9 +91,27 @@ pub fn Event::to_json(self : Event) -> Json {
       }
     ApprovalResolved(id~, outcome~) =>
       { "event": "approval_resolved", "id": id, "outcome": outcome }
-    SteerApplied(kind~, content~) =>
-      { "event": "steer_applied", "kind": kind, "content": content }
-    SteerDropped(content~) => { "event": "steer_dropped", "content": content }
+    SteerApplied(kind~, content~, submission_id~) => {
+      let fields : Map[String, Json] = {
+        "event": "steer_applied",
+        "kind": kind,
+        "content": content,
+      }
+      if submission_id is Some(id) {
+        fields["submission_id"] = Json(id)
+      }
+      Json(fields)
+    }
+    SteerDropped(content~, submission_id~) => {
+      let fields : Map[String, Json] = {
+        "event": "steer_dropped",
+        "content": content,
+      }
+      if submission_id is Some(id) {
+        fields["submission_id"] = Json(id)
+      }
+      Json(fields)
+    }
     BackgroundNotice(content~) =>
       { "event": "background_notice", "content": content }
     GoalUpdated(goal~) => { "event": "goal_updated", "goal": or_null(goal) }

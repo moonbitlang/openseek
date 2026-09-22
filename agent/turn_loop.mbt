@@ -393,11 +393,22 @@ async fn AgentLoop::apply_steer_inputs(
   inputs : ArrayView[@agent_runtime.SteerInput],
 ) -> @agent_session.Session {
   for input in inputs; current = session {
-    let (kind, text, item) : (String, String, @agent_session.SessionItem) = match
-      input {
-      Prompt(text) => ("prompt", text, User(UserMessage(text)))
-      Command(text) => ("command", text, User(UserMessage(text)))
-      Notice(text) => ("notice", text, Runtime(RuntimeNotice(text)))
+    let (kind, text, submission_id, item) : (
+      String,
+      String,
+      String?,
+      @agent_session.SessionItem,
+    ) = match input {
+      Prompt(text, submission_id~) =>
+        ("prompt", text, submission_id, User(UserMessage(text, submission_id?)))
+      Command(text, submission_id~) =>
+        (
+          "command",
+          text,
+          submission_id,
+          User(UserMessage(text, submission_id?)),
+        )
+      Notice(text) => ("notice", text, None, Runtime(RuntimeNotice(text)))
     }
     let next = self.append(current, item)
     // A goal-baseline notice is transport for the durable pairing record:
@@ -410,7 +421,7 @@ async fn AgentLoop::apply_steer_inputs(
       continue next
     }
     self.messages.push(ChatMessage(User, content=[Text(text)]))
-    @emit.emit(SteerApplied(kind~, content=text))
+    @emit.emit(SteerApplied(kind~, content=text, submission_id~))
     if input is Notice(text) {
       self.goal_cadence.observe_notice(text)
     }

@@ -396,6 +396,13 @@ $ printf '{"command":"steer","text":"too late"}\n' | env DEEPSEEK=test-key opens
 "event":"steer_dropped"
 ```
 
+Tagged steering keeps its submission id in the rejection receipt:
+
+```mooncram
+$ printf '{"command":"steer","text":"too late","submission_id":"late-steer"}\n' | env DEEPSEEK=test-key openseek.exe serve 2>/dev/null | grep '"event":"steer_dropped"'
+{"event":"steer_dropped","content":"too late","submission_id":"late-steer"}
+```
+
 `serve` takes no positional; a stray task is rejected by the parser before
 anything runs.
 

@@ -9,19 +9,23 @@ async test "user input wait retains messages and ignores notices and blanks" {
         woke = true
       })
       runtime.queue_steer(Notice("other job finished"))
-      runtime.queue_steer(Prompt(" "))
+      runtime.queue_steer(Prompt(" ", submission_id=None))
       @async.pause()
       assert_false(woke)
-      runtime.queue_steer(Command("user command result"))
+      runtime.queue_steer(Command("user command result", submission_id=None))
       task.wait()
       assert_true(woke)
       let inputs = runtime.drain_steers()
       assert_eq(inputs.length(), 3)
-      assert_true(inputs[2] is Command("user command result"))
+      assert_true(
+        inputs[2] is Command("user command result", submission_id=None),
+      )
       // Input queued before waiting is just as observable.
-      runtime.queue_steer(Prompt("new direction"))
+      runtime.queue_steer(Prompt("new direction", submission_id=None))
       runtime.wait_for_user_input()
-      assert_true(runtime.drain_steers() is [Prompt("new direction")])
+      assert_true(
+        runtime.drain_steers() is [Prompt("new direction", submission_id=None)],
+      )
     })
   })
 }

@@ -22,7 +22,7 @@ pub fn valid_job_component(String) -> Bool
 // Types and methods
 pub(all) enum Command {
   Prompt(text~ : String, submission_id~ : String?)
-  Steer(kind~ : SteerKind, text~ : String)
+  Steer(kind~ : SteerKind, text~ : String, submission_id~ : String?)
   Compact
   Cancel
   JobsSnapshot(request_id~ : String)
@@ -55,8 +55,8 @@ pub(all) enum Event {
   ToolCallDecodeError(tool_call_id~ : String, tool_name~ : String, error~ : String)
   ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String, body~ : String?)
   ApprovalResolved(id~ : String, outcome~ : String)
-  SteerApplied(kind~ : String, content~ : String)
-  SteerDropped(content~ : String)
+  SteerApplied(kind~ : String, content~ : String, submission_id~ : String?)
+  SteerDropped(content~ : String, submission_id~ : String?)
   BackgroundNotice(content~ : String)
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])

@@ -309,7 +309,7 @@ fn @agent_runtime.AgentRuntime::pending_steers(
 ) -> Array[@agent_runtime.SteerInput] {
   [
     for input in runtime.drain_steers() if input
-    is (Prompt(text) | Command(text) | Notice(text)) &&
+    is (Prompt(text, ..) | Command(text, ..) | Notice(text)) &&
     !text.is_blank() => input
   ]
 }

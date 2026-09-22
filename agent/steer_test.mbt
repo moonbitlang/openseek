@@ -32,7 +32,12 @@ async test "queued steering is folded in at the next step boundary" {
     // Steer before the turn starts: the loop drains the steering queue at
     // its first step boundary, so the steered text must reach the model
     // alongside the task (the mock server asserts both are in the body).
-    runtime.queue_steer(Prompt("also rename the file"))
+    runtime.queue_steer(
+      Prompt("also rename the file", submission_id=Some("steer-1")),
+    )
+    runtime.queue_steer(
+      Prompt("also rename the file", submission_id=Some("steer-2")),
+    )
     let session = @agent_session.Session(
       SessionId("steer-test"),
       system_prompt="system",
@@ -52,19 +57,25 @@ async test "queued steering is folded in at the next step boundary" {
       api_url=url,
       tools~,
     )
-    // The steered text is durably part of the conversation: task, steer,
+    // The steered text is durably part of the conversation: task, two identical steers,
     // final response, then the terminal seal.
     let events = result.events()
-    assert_eq(events.length(), 4)
+    assert_eq(events.length(), 5)
     guard events[0].item() is User(task) else { fail("expected task event") }
     assert_eq(task.content(), "do the task")
     guard events[1].item() is User(steer) else { fail("expected steer event") }
     assert_eq(steer.content(), "also rename the file")
-    guard events[2].item() is Assistant(response) else {
+    assert_eq(steer.submission_id(), Some("steer-1"))
+    guard events[2].item() is User(second) else {
+      fail("expected second steer")
+    }
+    assert_eq(second.content(), steer.content())
+    assert_eq(second.submission_id(), Some("steer-2"))
+    guard events[3].item() is Assistant(response) else {
       fail("expected durable final response")
     }
     assert_eq(response.content(), "ok")
-    guard events[3].item() is Terminal(Finished(answer)) else {
+    guard events[4].item() is Terminal(Finished(answer)) else {
       fail("expected finished terminal")
     }
     assert_eq(answer, "ok")
@@ -121,7 +132,7 @@ async test "a steer racing the final call keeps the turn alive" {
         group,
         runtime,
         "local TCP bind unavailable; skipping override test",
-        Prompt("actually, make it rhyme"),
+        Prompt("actually, make it rhyme", submission_id=None),
         expected=["actually, make it rhyme"],
         final_answer="rhymed answer",
       )
@@ -185,7 +196,7 @@ async test "inject racing the final call keeps the turn alive" {
         group,
         runtime,
         "local TCP bind unavailable; skipping inject test",
-        Command(context),
+        Command(context, submission_id=Some("command-context")),
         expected=["<user_shell_command>", "<command>", "exit=0", "_build"],
         final_answer="contextual answer",
       )
@@ -219,6 +230,7 @@ async test "inject racing the final call keeps the turn alive" {
       fail("expected inject")
     }
     assert_eq(inject_message.content(), context)
+    assert_eq(inject_message.submission_id(), Some("command-context"))
     guard events[3].item() is Assistant(response) else {
       fail("expected durable final response")
     }
@@ -236,8 +248,8 @@ async test "blank steering input is dropped at the boundary" {
     guard steer_test_server(group) is Some(url) else { return }
     let runtime = @agent_runtime.AgentRuntime()
     let scope = @agent_runtime.AgentTaskScope(group)
-    runtime.queue_steer(Prompt("   "))
-    runtime.queue_steer(Prompt("also rename the file"))
+    runtime.queue_steer(Prompt("   ", submission_id=None))
+    runtime.queue_steer(Prompt("also rename the file", submission_id=None))
     let session = @agent_session.Session(
       SessionId("steer-blank"),
       system_prompt="system",

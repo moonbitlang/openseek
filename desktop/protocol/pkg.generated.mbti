@@ -20,7 +20,7 @@ pub fn goal_set(String, auto~ : Bool) -> @openseek_protocol.Command
 
 pub fn prompt(String, submission_id? : String) -> @openseek_protocol.Command
 
-pub fn steer(String) -> @openseek_protocol.Command
+pub fn steer(String, submission_id? : String) -> @openseek_protocol.Command
 
 // Errors
 
@@ -51,7 +51,6 @@ pub fn AgentEventPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentStreamEvent {
   event : @openseek_protocol.Event
-  submission_id : String?
 } derive(Eq, @debug.Debug)
 pub fn AgentStreamEvent::equal(Self, Self) -> Bool
 pub fn AgentStreamEvent::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

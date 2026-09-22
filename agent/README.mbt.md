@@ -52,7 +52,7 @@ let persisted = @agent.run_turn_with_append(
   )
 }
 
-runtime.queue_steer(Prompt("also update README"))
+runtime.queue_steer(Prompt("also update README", submission_id=None))
 ```
 
 `run` is the highest-level one-shot entry point. It creates a fresh in-memory
@@ -175,12 +175,12 @@ the runtime's lossless steering queue:
 ///|
 test "queue_steer queues raw text" {
   let runtime = @agent_runtime.AgentRuntime()
-  runtime.queue_steer(Prompt("also run tests"))
-  runtime.queue_steer(Prompt("   "))
+  runtime.queue_steer(Prompt("also run tests", submission_id=None))
+  runtime.queue_steer(Prompt("   ", submission_id=None))
   let drained = runtime.drain_steers()
   assert_eq(drained.length(), 2)
-  assert_true(drained[0] is Prompt("also run tests"))
-  assert_true(drained[1] is Prompt("   "))
+  assert_true(drained[0] is Prompt("also run tests", submission_id=None))
+  assert_true(drained[1] is Prompt("   ", submission_id=None))
 }
 ```
 

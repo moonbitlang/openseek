@@ -179,10 +179,16 @@ pub fn parse(line : Json) -> Event? {
     // meant, and is what every client defaulted to before this package existed.
     "steer_applied" =>
       text(fields, "content").map(content => {
-        SteerApplied(kind=text(fields, "kind").unwrap_or("prompt"), content~)
+        SteerApplied(
+          kind=text(fields, "kind").unwrap_or("prompt"),
+          content~,
+          submission_id=text(fields, "submission_id"),
+        )
       })
     "steer_dropped" =>
-      text(fields, "content").map(content => SteerDropped(content~))
+      text(fields, "content").map(content => {
+        SteerDropped(content~, submission_id=text(fields, "submission_id"))
+      })
     "background_notice" =>
       text(fields, "content").map(content => BackgroundNotice(content~))
     // `goal` is null when the goal was cleared: absent and null are the same

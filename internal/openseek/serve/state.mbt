@@ -172,12 +172,12 @@ fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
   }
   match command {
     Prompt(text~, submission_id~) => Ok(Prompt(text, submission_id~))
-    Steer(kind~, text~) =>
+    Steer(kind~, text~, submission_id~) =>
       Ok(
         Steer(
           match kind {
-            Prompt => Prompt(text)
-            Command => Command(text)
+            Prompt => Prompt(text, submission_id~)
+            Command => Command(text, submission_id~)
           },
         ),
       )

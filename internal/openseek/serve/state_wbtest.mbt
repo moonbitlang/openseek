@@ -48,15 +48,16 @@ test "serve commands decode and reject with actionable errors" {
   )
   assert_true(
     decode_serve_command({ "command": "steer", "text": "left" })
-    is Ok(Steer(Prompt("left"))),
+    is Ok(Steer(Prompt("left", submission_id=None))),
   )
   assert_true(
     decode_serve_command({
       "command": "steer",
       "kind": "prompt",
       "text": "right",
+      "submission_id": "steer-right",
     })
-    is Ok(Steer(Prompt("right"))),
+    is Ok(Steer(Prompt("right", submission_id=Some("steer-right")))),
   )
   assert_true(
     decode_serve_command({
@@ -64,7 +65,7 @@ test "serve commands decode and reject with actionable errors" {
       "kind": "command",
       "text": "<user_shell_command>",
     })
-    is Ok(Steer(Command("<user_shell_command>"))),
+    is Ok(Steer(Command("<user_shell_command>", submission_id=None))),
   )
   assert_true(decode_serve_command({ "command": "compact" }) is Ok(Compact))
   assert_true(decode_serve_command({ "command": "cancel" }) is Ok(Cancel))

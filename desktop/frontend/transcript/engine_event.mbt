@@ -129,10 +129,10 @@ pub fn decode_engine_event(
     AgentAborted(reason~) => Some(AgentAborted(reason))
     MaxStepsExhausted => Some(MaxStepsExhausted)
     AgentSetupFailed(error~) => Some(AgentSetupFailed(error))
-    SteerApplied(content~, ..) =>
-      Some(SteerApplied(content~, submission_id=stream.submission_id))
-    SteerDropped(content~) =>
-      Some(SteerDropped(content~, submission_id=stream.submission_id))
+    SteerApplied(content~, submission_id~, ..) =>
+      Some(SteerApplied(content~, submission_id~))
+    SteerDropped(content~, submission_id~) =>
+      Some(SteerDropped(content~, submission_id~))
     AutoCompactionFinished(summary~, ..) =>
       Some(AutoCompactionFinished(summary))
     CompactionStarted(..) => Some(CompactionStarted)
@@ -214,11 +214,7 @@ fn event_fields(json : Json) -> @desktop_protocol.AgentStreamEvent raise {
   guard @protocol.parse(json) is Some(event) else {
     fail("expected a known engine event")
   }
-  let submission_id = match json {
-    Object(fields) => @jsonx.json_text(fields, "submission_id")
-    _ => None
-  }
-  { event, submission_id, }
+  { event, }
 }
 
 ///|

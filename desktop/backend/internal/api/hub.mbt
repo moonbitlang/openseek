@@ -597,7 +597,6 @@ test "a standing question is replayed until it is answered" {
         detail="run with no sandbox policy",
         body=Some("fn main { println(1) }"),
       ),
-      submission_id: None,
     }),
   )
   guard hub.runs().approvals is [pending] else {
@@ -615,7 +614,6 @@ test "a standing question is replayed until it is answered" {
   hub.publish(
     approval_event("s1", Some("r1"), {
       event: ApprovalResolved(id="ap-1", outcome="allowed_once"),
-      submission_id: None,
     }),
   )
   guard hub.runs().approvals is [] else {
@@ -635,7 +633,6 @@ test "a question does not outlive the engine that asked it" {
       detail="run with no sandbox policy",
       body=None,
     ),
-    submission_id: None,
   })
   // A run that ended without resolving its question: the engine settles its
   // own on the way out, so reaching here means one that could not — a killed
@@ -682,7 +679,6 @@ test "questions from two engines are kept and retired independently" {
           detail="run with no sandbox policy",
           body=Some("// " + session),
         ),
-        submission_id: None,
       }),
     )
   }
@@ -696,7 +692,6 @@ test "questions from two engines are kept and retired independently" {
   hub.publish(
     approval_event("s1", Some("r-s1"), {
       event: ApprovalResolved(id="ap-s1", outcome="allowed_once"),
-      submission_id: None,
     }),
   )
   guard hub.runs().approvals is [survivor] else {
@@ -719,13 +714,11 @@ test "a resolution for a superseded id leaves the standing question" {
         detail="run with no sandbox policy",
         body=None,
       ),
-      submission_id: None,
     }),
   )
   hub.publish(
     approval_event("s1", Some("r1"), {
       event: ApprovalResolved(id="ap-1", outcome="allowed_once"),
-      submission_id: None,
     }),
   )
   guard hub.runs().approvals is [standing] else {

@@ -147,7 +147,7 @@ test "an older engine's steer_applied still decodes" {
       ),
     ),
     content=(
-      #|Some(SteerApplied(kind="prompt", content="go left"))
+      #|Some(SteerApplied(kind="prompt", content="go left", submission_id=None))
     ),
   )
 }
@@ -316,4 +316,33 @@ test "a workflow's brackets survive the wire unchanged" {
   assert_eq(@openseek_protocol.parse(started.to_json()), Some(started))
   let finished : @openseek_protocol.Event = WorkflowFinished(id="wf-5")
   assert_eq(@openseek_protocol.parse(finished.to_json()), Some(finished))
+}
+
+///|
+test "steer receipts round trip submission ids and accept untagged input" {
+  for
+    event in [
+      @openseek_protocol.SteerApplied(
+        kind="prompt",
+        content="same",
+        submission_id=Some("a"),
+      ),
+      SteerDropped(content="same", submission_id=Some("b")),
+    ] {
+    assert_eq(@openseek_protocol.parse(event.to_json()), Some(event))
+  }
+  for missing in [Json::null(), Json(7)] {
+    assert_true(
+      @openseek_protocol.parse({
+        "event": "steer_dropped",
+        "content": "same",
+        "submission_id": missing,
+      })
+      is Some(SteerDropped(content="same", submission_id=None)),
+    )
+  }
+  assert_true(
+    @openseek_protocol.parse({ "event": "steer_dropped", "content": "same" })
+    is Some(SteerDropped(content="same", submission_id=None)),
+  )
 }

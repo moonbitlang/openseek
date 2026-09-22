@@ -99,7 +99,8 @@ async fn exercise_job_wait(wake : WaitWake) -> Unit {
           release.write("RESULT\n")
           release.close()
         }
-        UserInput => runtime.queue_steer(Prompt("NEW-DIRECTION"))
+        UserInput =>
+          runtime.queue_steer(Prompt("NEW-DIRECTION", submission_id=None))
         GoalChange => runtime.queue_steer(Notice("NEW-GOAL"), wake=true)
         Stop => {
           let _ = jobs.stop(id)

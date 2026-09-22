@@ -15,8 +15,8 @@ fn all_commands() -> Array[@openseek_protocol.Command] {
   [
     Prompt(text="do it", submission_id=None),
     Prompt(text="do it exactly once", submission_id=Some("page-1-submission-2")),
-    Steer(kind=Prompt, text="also fix docs"),
-    Steer(kind=Command, text="<user_shell_command>"),
+    Steer(kind=Prompt, text="also fix docs", submission_id=None),
+    Steer(kind=Command, text="<user_shell_command>", submission_id=None),
     JobsSnapshot(request_id="jobs-1"),
     JobStop(request_id="stop-1", generation="runtime-1", job_id="bg-1"),
     Compact,
@@ -81,7 +81,7 @@ test "a steer without a kind is a prompt steer" {
       ),
     ),
     content=(
-      #|Ok(Steer(kind=Prompt, text="go left"))
+      #|Ok(Steer(kind=Prompt, text="go left", submission_id=None))
     ),
   )
 }
@@ -207,4 +207,45 @@ test "a rejected command explains itself in the engine's own words" {
       #|Err("expected a {\"command\": ...} object")
     ),
   )
+}
+
+///|
+test "steer preserves an optional submission id and refuses malformed ids" {
+  let kinds : Array[@openseek_protocol.SteerKind] = [Prompt, Command]
+  for kind in kinds {
+    let command : @openseek_protocol.Command = Steer(
+      kind~,
+      text="same text",
+      submission_id=Some("steer-2"),
+    )
+    assert_eq(@openseek_protocol.Command::parse(command.to_json()), Ok(command))
+  }
+  assert_true(
+    cmd(
+      (
+        #|{"command":"steer","text":"same text","submission_id":"steer-2"}
+      ),
+    )
+    is Ok(Steer(kind=Prompt, text="same text", submission_id=Some("steer-2"))),
+  )
+  for bad in [Json::null(), Json(7), Json(false)] {
+    assert_eq(
+      @openseek_protocol.Command::parse({
+        "command": "steer",
+        "text": "same text",
+        "submission_id": bad,
+      }),
+      Err("expected a string \"submission_id\" field"),
+    )
+  }
+  let untagged : @openseek_protocol.Command = Steer(
+    kind=Prompt,
+    text="same text",
+    submission_id=None,
+  )
+  @debug.assert_eq(untagged.to_json(), {
+    "command": "steer",
+    "kind": "prompt",
+    "text": "same text",
+  })
 }

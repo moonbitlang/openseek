@@ -287,9 +287,16 @@ async fn run_serve(
       true
     }
 
-    async fn append_command_context(text : String, kind : String) -> Unit {
-      if append_idle_item(User(UserMessage(text)), "command context") {
-        @emit.emit(SteerApplied(kind~, content=text))
+    async fn append_command_context(
+      text : String,
+      kind : String,
+      submission_id : String?,
+    ) -> Unit {
+      if append_idle_item(
+          User(UserMessage(text, submission_id?)),
+          "command context",
+        ) {
+        @emit.emit(SteerApplied(kind~, content=text, submission_id~))
       }
     }
 
@@ -354,8 +361,10 @@ async fn run_serve(
       input : @agent_runtime.SteerInput,
     ) -> Unit {
       match input {
-        Prompt(text) => @emit.emit(SteerDropped(content=text))
-        Command(text) => append_command_context(text, "command")
+        Prompt(text, submission_id~) =>
+          @emit.emit(SteerDropped(content=text, submission_id~))
+        Command(text, submission_id~) =>
+          append_command_context(text, "command", submission_id)
         Notice(text) =>
           if @agent_session.parse_goal_baseline(text) is Some(_) {
             // The steer-path baseline landing at idle (its turn ended
@@ -395,7 +404,7 @@ async fn run_serve(
     fn take_context_before_goal() -> Array[@agent_runtime.SteerInput] {
       let inputs = runtime.drain_steers()
       let boundary = inputs
-        .search_by(input => input is Prompt(_))
+        .search_by(input => input is Prompt(_, ..))
         .unwrap_or(inputs.length())
       for input in inputs[boundary:] {
         runtime.queue_steer(input)
@@ -527,24 +536,25 @@ async fn run_serve(
           }
         Wire(Steer(input)) =>
           match input {
-            Prompt(text) =>
+            Prompt(text, submission_id~) =>
               match active_work {
                 // A turn is running, or a prompt is queued ahead of this steer:
                 // the lossless steering queue delivers it at that turn's next
                 // step boundary (or its first, if it has not started yet).
-                Some(ActiveTurn(_)) => runtime.queue_steer(Prompt(text))
+                Some(ActiveTurn(_)) =>
+                  runtime.queue_steer(Prompt(text, submission_id~))
                 Some(ActiveCompact(_)) | None =>
                   if has_pending_prompt(pending) {
-                    runtime.queue_steer(Prompt(text))
+                    runtime.queue_steer(Prompt(text, submission_id~))
                   } else {
                     // An idle (or merely compacting) engine never converts
                     // prompt steering into a prompt: the only way it arrives
                     // here is racing a turn's terminal event through the pipes.
                     // Reject it so the controller can ask for a resubmit.
-                    @emit.emit(SteerDropped(content=text))
+                    @emit.emit(SteerDropped(content=text, submission_id~))
                   }
               }
-            Command(text) =>
+            Command(text, submission_id~) =>
               // Defer to the steering queue whenever any work is active (a turn
               // or a compaction) or a prompt is queued, so the context is
               // appended at the next turn's drain — never written straight into
@@ -553,11 +563,11 @@ async fn run_serve(
               if has_pending_goal(pending) {
                 // Fenced behind the queued goal: wire order must stay
                 // goal-then-context for context sent after the goal.
-                pending.push(PendingContext(Command(text)))
+                pending.push(PendingContext(Command(text, submission_id~)))
               } else if active_work is Some(_) || has_pending_prompt(pending) {
-                runtime.queue_steer(Command(text))
+                runtime.queue_steer(Command(text, submission_id~))
               } else {
-                append_command_context(text, "command")
+                append_command_context(text, "command", submission_id)
               }
             // A notice is engine-internal and never actually arrives over the
             // wire; queue it losslessly for completeness.

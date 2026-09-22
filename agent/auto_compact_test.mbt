@@ -309,7 +309,7 @@ async test "a steer during compact-on-finish continues the turn compacted" {
       if is_checkpoint_request(request) {
         checkpoint_requests.push(request)
         // The steer lands while the compact-on-finish summary is in flight.
-        runtime.queue_steer(Prompt("late steer"))
+        runtime.queue_steer(Prompt("late steer", submission_id=None))
         Body(checkpoint_body("FINISH-SUMMARY"))
       } else {
         main_requests.push(request)
@@ -394,7 +394,7 @@ async test "a failed checkpoint with a late steer yields instead of continuing" 
       if is_checkpoint_request(request) {
         checkpoint_requests.push(request)
         // The steer lands during the summary request — which then FAILS.
-        runtime.queue_steer(Prompt("late steer"))
+        runtime.queue_steer(Prompt("late steer", submission_id=None))
         // Empty summary fails generation client-side without HTTP retries.
         Body(checkpoint_body(""))
       } else {
@@ -719,7 +719,7 @@ async test "a pressured finish tool losing to a steer yields instead" {
       } else {
         main_requests += 1
         // The steer lands while the pressured finish response is in flight.
-        runtime.queue_steer(Prompt("user redirection"))
+        runtime.queue_steer(Prompt("user redirection", submission_id=None))
         Sse(sse_tool_calls([("call_1", "finish")], 900_000))
       }
     }
@@ -848,7 +848,7 @@ async test "a failed checkpoint still yields fail-open" {
         // Empty summary fails generation client-side without HTTP retries.
         Body(checkpoint_body(""))
       } else {
-        runtime.queue_steer(Prompt("user redirection"))
+        runtime.queue_steer(Prompt("user redirection", submission_id=None))
         Sse(sse_tool_call("call_1", "probe", 900_000))
       }
     }
@@ -902,7 +902,7 @@ async test "a steer arriving under pressure survives the checkpoint verbatim" {
       } else {
         main_step += 1
         // The steer lands while the pressured response is in flight.
-        runtime.queue_steer(Prompt("user redirection"))
+        runtime.queue_steer(Prompt("user redirection", submission_id=None))
         Sse(sse_tool_call("call_1", "probe", 900_000))
       }
     }
@@ -1389,7 +1389,7 @@ async test "a steer arriving during the checkpoint request is preserved" {
         checkpoint_requests.push(request)
         // The steer lands while the summary request is being served — after
         // the one-time drain, seconds before the terminal.
-        runtime.queue_steer(Prompt("late steer"))
+        runtime.queue_steer(Prompt("late steer", submission_id=None))
         Body(checkpoint_body("CEILING-SUMMARY"))
       } else {
         Sse(sse_tool_call("call_1", "probe", 900_000))
@@ -1502,7 +1502,7 @@ async test "a steer during a salvaged finish's checkpoint continues once" {
         // The steer lands while the salvaged finish's checkpoint is in
         // flight: the finish converts into a continuation — the remainder is
         // already closed, so it must NOT be closed again or summarized twice.
-        runtime.queue_steer(Prompt("late steer"))
+        runtime.queue_steer(Prompt("late steer", submission_id=None))
         Body(checkpoint_body("SALVAGE-SUMMARY"))
       } else {
         main_requests += 1
