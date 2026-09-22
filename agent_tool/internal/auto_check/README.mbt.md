@@ -82,8 +82,9 @@ async test "the gate parses candidate content that never touches disk" {
 }
 ```
 
-`truncated` marks `errors` a **lower bound**, not a tally. Callers that compare
-error counts before and after a change have to account for that, which is why it
+`truncated` marks `errors` a **window**, not the whole list: moon hid some error
+sites behind its diagnostic limit. The counts stay exact. Callers that compare
+error sites before and after a change have to account for that, which is why it
 is on the struct rather than folded into the error list.
 
 ### `gate_paths` — which input kinds to check
@@ -241,8 +242,10 @@ test "the report is capped at five errors" {
 
 ## `count_errors` — the tally behind a revert
 
-After a write lands, `count_errors` runs `moon check --output-json` from the
-containing module and tallies diagnostics by level. JSON Lines is used rather
+After a write lands, `count_errors` runs `moon check --json` (with a
+diagnostic limit) from the containing module and reads the document's
+`summary` counts, which are complete whatever the limit hid from the list, and
+its `messages` for a build plan moon could not make. The document is used rather
 than the human summary so `level == "error"` can be counted exactly instead of
 inferred from warning-heavy prose.
 
@@ -286,9 +289,9 @@ async test "a real check tallies errors separately from warnings" {
 `errors` holds every error site while `first_errors()` shows at most ten, so a
 revert report can show the shape of an over-match without dumping a broken
 build, and a caller can still tell "the old errors are gone and the new ones are
-elsewhere" from "new errors appeared where I edited". When the capture budget
-overflows, `truncated` is set and the counts and sites become lower bounds —
-which only ever makes a caller's guard fire more readily, never less.
+elsewhere" from "new errors appeared where I edited". When moon's diagnostic
+limit hides error sites, `truncated` is set: the counts stay exact, the sites
+are a window, and a guard that compares sites refuses rather than guesses.
 
 ## `append_summary` — the human-facing tail
 

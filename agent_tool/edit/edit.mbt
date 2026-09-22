@@ -1044,7 +1044,7 @@ async fn commit_edit(
 ///|
 /// Why a guard cannot compare an overflowed capture: the lists are then
 /// windows onto moon's output, and a site can enter one without being new.
-const TruncatedCapture : String = "moon check produced more output than the capture budget, so the guard cannot compare the two runs"
+const TruncatedCapture : String = "moon check hid some error sites behind its diagnostic limit, so the guard cannot compare the two runs"
 
 ///|
 /// The spellings of `path` whose projects a check must cover: the written one
