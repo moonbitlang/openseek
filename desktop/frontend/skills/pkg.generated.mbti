@@ -11,15 +11,18 @@ import {
 }
 
 // Values
-pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Result[Array[MarketItem], String]
+pub fn catalog_from_reply(@protocol.SkillsCatalogReply) -> Array[MarketItem] raise SkillReplyError
 
 pub fn component(@rabbita.Val[Input], @rabbita.Val[State], @rabbita.Val[@i18n.Locale], @cmd.Emit[Msg]) -> @rabbita.Val[@html.Html]
 
-pub fn installed_from_reply(@protocol.InstalledSkillsReply) -> Result[Array[InstalledItem], String]
+pub fn installed_from_reply(@protocol.InstalledSkillsReply) -> Array[InstalledItem] raise SkillReplyError
 
 pub fn source_label(MarketItem) -> String
 
 // Errors
+pub(all) suberror SkillReplyError {
+  SkillReplyError(String)
+}
 
 // Types and methods
 pub(all) struct Input {

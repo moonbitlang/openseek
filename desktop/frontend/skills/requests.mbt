@@ -30,11 +30,14 @@ fn fetch_catalog(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
-        channel,
-        @commands.skills_catalog,
-        @protocol.EmptyPayload::NoPayload,
-      ) catch {
+      let items = try {
+        let reply = @interop.bridge_request(
+          channel,
+          @commands.skills_catalog,
+          @protocol.EmptyPayload::NoPayload,
+        )
+        catalog_from_reply(reply)
+      } catch {
         error => {
           scheduler.add(
             emit(
@@ -44,11 +47,7 @@ fn fetch_catalog(
           return
         }
       }
-      let msg = match catalog_from_reply(reply) {
-        Ok(items) => CatalogLoaded(channel~, items~)
-        Err(message) => CatalogFailed(channel~, message~)
-      }
-      scheduler.add(emit(msg))
+      scheduler.add(emit(CatalogLoaded(channel~, items~)))
     })
     |> ignore
   })
