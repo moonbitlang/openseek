@@ -1969,59 +1969,6 @@ pub(all) struct OpenExternalReply {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-/// An engine event carried by Desktop's stream.
-pub(all) struct AgentStreamEvent {
-  event : @wire.Event
-} derive(Debug, Eq)
-
-///|
-pub impl ToJson for AgentStreamEvent with fn to_json(self) {
-  self.event.to_json()
-}
-
-///|
-pub impl FromJson for AgentStreamEvent with fn from_json(json, path) {
-  guard @wire.parse(json) is Some(event) else {
-    raise JsonDecodeError((path, "unknown engine event"))
-  }
-  { event, }
-}
-
-///|
-/// Keep the transient lifecycle information a remote client needs while
-/// removing durable transcript text that arrives separately as session
-/// commits. `None` means the stream event has no remaining remote purpose.
-pub fn AgentStreamEvent::remote_lifecycle(
-  self : AgentStreamEvent,
-) -> AgentStreamEvent? {
-  match self.event {
-    ReasoningMessage(..) => Some({ event: ReasoningMessage(content=""), })
-    AssistantMessage(..) => Some({ event: AssistantMessage(content=""), })
-    ToolResult(..)
-    | AutoCompactionFinished(..)
-    | AgentFinished(..)
-    | ContextYield(..) => None
-    CompactionFinished(from_sequence~, to_sequence~, ..) =>
-      Some({
-        event: CompactionFinished(from_sequence~, to_sequence~, summary=""),
-      })
-    _ => Some(self)
-  }
-}
-
-///|
-pub extend AgentStreamEvent with Debug::{to_repr}
-
-///|
-pub extend AgentStreamEvent with FromJson::{from_json}
-
-///|
-pub extend AgentStreamEvent with Eq::{equal, not_equal}
-
-///|
-pub extend AgentStreamEvent with ToJson::{to_json}
-
-///|
 pub extend ApplyUpdateReply with Debug::{to_repr}
 
 ///|

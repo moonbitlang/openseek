@@ -1805,7 +1805,7 @@ async fn ServeEngine::consume(
                       StreamEvent({
                         run_id,
                         session: engine.session_key,
-                        event: { event, },
+                        event,
                       }),
                     )
                     if engine.session_root is Some(root) &&
@@ -1852,7 +1852,7 @@ async fn ServeEngine::consume(
                       StreamEvent({
                         run_id,
                         session: engine.session_key,
-                        event: { event, },
+                        event,
                       }),
                     )
                     if probes.get(sr) is Some(probe) {
@@ -1915,11 +1915,7 @@ async fn ServeEngine::consume(
             if !host_reports_terminal_error(event) || run_id is None {
               emit(
                 sink,
-                StreamEvent({
-                  run_id,
-                  session: engine.session_key,
-                  event: { event, },
-                }),
+                StreamEvent({ run_id, session: engine.session_key, event, }),
               )
             }
             match event {
@@ -2181,7 +2177,7 @@ fn emit_session_error(
     StreamEvent({
       run_id: engine.phase.latest_run(),
       session: engine.session_key,
-      event: { event: (SessionError(error=reason) : @wire.Event), },
+      event: SessionError(error=reason),
     }),
   )
 }
@@ -2197,7 +2193,7 @@ fn emit_compaction_failed(
     StreamEvent({
       run_id: engine.phase.latest_run(),
       session: engine.session_key,
-      event: { event: (CompactionFailed(error=reason) : @wire.Event), },
+      event: CompactionFailed(error=reason),
     }),
   )
 }
@@ -2345,8 +2341,7 @@ async test "an engine that dies between turns still reports why" {
     assert_false(emitted.any(event => event is Finished(_)))
     let mut reported = ""
     for event in emitted {
-      if event is StreamEvent(payload) &&
-        payload.event.event is SessionError(error~) {
+      if event is StreamEvent(payload) && payload.event is SessionError(error~) {
         assert_eq(payload.session, "s-idle-death")
         assert_true(payload.run_id is None)
         reported = error
@@ -2722,11 +2717,11 @@ test "legacy steer receipt does not gain a submission field" {
     SteerApplied(kind="prompt", content="legacy", submission_id=None),
   )
   assert_eq(tracker.route_event(decoded, Some("r11")), Some("r11"))
-  let event : @protocol.AgentStreamEvent = {
-    event: (
-      SteerApplied(kind="prompt", content="legacy", submission_id=None) :
-      @wire.Event),
-  }
+  let event : @wire.Event = SteerApplied(
+    kind="prompt",
+    content="legacy",
+    submission_id=None,
+  )
   guard event.to_json() is Object(fields) else {
     fail("expected receipt object")
   }

@@ -344,6 +344,23 @@ fn classify(text : String) -> Inbound {
 }
 
 ///|
+/// Retain transient lifecycle information while dropping durable transcript
+/// duplicates. The original event remains available to local clients.
+fn remote_lifecycle(event : @wire.Event) -> @wire.Event? {
+  match event {
+    ReasoningMessage(..) => Some(ReasoningMessage(content=""))
+    AssistantMessage(..) => Some(AssistantMessage(content=""))
+    ToolResult(..)
+    | AutoCompactionFinished(..)
+    | AgentFinished(..)
+    | ContextYield(..) => None
+    CompactionFinished(from_sequence~, to_sequence~, ..) =>
+      Some(CompactionFinished(from_sequence~, to_sequence~, summary=""))
+    _ => Some(event)
+  }
+}
+
+///|
 /// Apply the remote delivery profile at the WebSocket edge.
 /// Full semantic transcript objects have a canonical `session.event` twin;
 /// deltas, metrics, errors, acknowledgements, and lifecycle state pass
@@ -359,7 +376,7 @@ fn notification_for_client(
       // cannot be reconciled with the session transcript and is not part of
       // the supported remote profile.
       guard !payload.session.is_empty() else { return None }
-      if payload.event.remote_lifecycle() is Some(event) {
+      if remote_lifecycle(payload.event) is Some(event) {
         Some(AgentEvent({ ..payload, event, }))
       } else {
         None
@@ -525,7 +542,7 @@ fn expect_notification(
 /// One run-scoped agent event as `notification_for_client` sees it.
 fn client_frame(event : @wire.Event) -> @protocol.Notification? {
   notification_for_client(
-    AgentEvent({ run_id: None, session: "session-1", event: { event, }, }),
+    AgentEvent({ run_id: None, session: "session-1", event, }),
   )
 }
 
@@ -679,15 +696,13 @@ test "remote delivery drops notifications without a session" {
   let event : @protocol.AgentEventPayload = {
     run_id: None,
     session: "",
-    event: {
-      event: ToolResult(
-        tool_call_id="call-1",
-        tool_name="read",
-        is_error=false,
-        content="ephemeral result",
-        brief=None,
-      ),
-    },
+    event: ToolResult(
+      tool_call_id="call-1",
+      tool_name="read",
+      is_error=false,
+      content="ephemeral result",
+      brief=None,
+    ),
   }
   let notification : @protocol.Notification = AgentEvent({ ..event, })
   assert_true(notification_for_client(notification) is None)

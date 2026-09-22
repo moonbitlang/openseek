@@ -97,10 +97,8 @@ pub(all) enum EngineEvent {
 /// Project the shared typed engine event into the subset rendered by the
 /// transcript. Unknown wire events were rejected before this function; `None`
 /// means a known event that intentionally has no desktop presentation.
-pub fn decode_engine_event(
-  stream : @desktop_protocol.AgentStreamEvent,
-) -> EngineEvent? {
-  match stream.event {
+pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
+  match event {
     JobChanged(..) | JobsSnapshot(..) | JobStopResult(..) => None
     AgentStep(step~) => Some(AgentStep(Some(step)))
     StreamRetry(attempt~, max_attempts~, reason~) =>
@@ -210,11 +208,11 @@ pub fn decode_engine_event(
 }
 
 ///|
-fn event_fields(json : Json) -> @desktop_protocol.AgentStreamEvent raise {
+fn event_fields(json : Json) -> @protocol.Event raise {
   guard @protocol.parse(json) is Some(event) else {
     fail("expected a known engine event")
   }
-  { event, }
+  event
 }
 
 ///|
@@ -287,26 +285,17 @@ test "decode normalizes numbers and unknown events" {
   )
   // Malformed wire events are rejected before the typed projection rather
   // than reaching it with fabricated defaults.
-  let malformed_usage : @desktop_protocol.AgentStreamEvent? = try
-    @json.from_json({
+  assert_true(
+    @protocol.parse({
       "event": "usage",
       "prompt_tokens": 5,
       "completion_tokens": 7,
     })
-  catch {
-    _ => None
-  } noraise {
-    event => Some(event)
-  }
-  assert_true(malformed_usage is None)
-  let malformed_tool : @desktop_protocol.AgentStreamEvent? = try
-    @json.from_json({ "event": "tool_result", "tool_name": "read" })
-  catch {
-    _ => None
-  } noraise {
-    event => Some(event)
-  }
-  assert_true(malformed_tool is None)
+    is None,
+  )
+  assert_true(
+    @protocol.parse({ "event": "tool_result", "tool_name": "read" }) is None,
+  )
   // `brief` is the one genuinely optional field: absent when the tool
   // supplied none (or the call was skipped).
   assert_true(

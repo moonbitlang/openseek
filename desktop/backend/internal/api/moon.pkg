@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek_protocol" @wire,
   "openseek_desktop/backend/internal/auth",
   "openseek_desktop/backend/internal/broadcast",
   "openseek_desktop/commands",

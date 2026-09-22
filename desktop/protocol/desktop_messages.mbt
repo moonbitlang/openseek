@@ -1045,8 +1045,33 @@ pub(all) struct AgentEventPayload {
   // Engine events always belong to the durable session that owns the process;
   // only `run_id` may be absent for between-turn lifecycle events.
   session : String
-  event : AgentStreamEvent
-} derive(Debug, Eq, FromJson, ToJson)
+  event : @wire.Event
+} derive(Debug, Eq)
+
+///|
+/// Session and event are required. A missing or null run id means a
+/// between-turn event; malformed fields are refused and unknown keys ignored.
+pub impl FromJson for AgentEventPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "agent event payload")
+  let session = object.required_string("session")
+  let run_id = object.optional_string("run_id")
+  guard @wire.parse(object.required_json("event")) is Some(event) else {
+    raise JsonDecodeError((path.add_key("event"), "unknown engine event"))
+  }
+  { run_id, session, event, }
+}
+
+///|
+pub impl ToJson for AgentEventPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "session": Json(self.session),
+    "event": self.event.to_json(),
+  }
+  if self.run_id is Some(run_id) {
+    fields["run_id"] = Json(run_id)
+  }
+  Json(fields)
+}
 
 ///|
 /// A host failure report stays decodable even when one of its display fields

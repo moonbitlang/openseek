@@ -262,3 +262,57 @@ test "the runs snapshot requires each of its sections" {
   })
   assert_eq(empty.approvals.length(), 0)
 }
+
+///|
+test "agent events carry the engine submission id without a wrapper" {
+  let json : Json = {
+    "run_id": "run-1",
+    "session": "session-1",
+    "event": {
+      "event": "steer_applied",
+      "kind": "prompt",
+      "content": "same text",
+      "submission_id": "steer-1",
+    },
+  }
+  let payload : @protocol.AgentEventPayload = @json.from_json(json)
+  assert_true(payload.event is SteerApplied(submission_id=Some("steer-1"), ..))
+  @debug.assert_eq(payload.to_json(), json)
+  let between : @protocol.AgentEventPayload = @json.from_json({
+    "session": "session-1",
+    "run_id": null,
+    "event": {
+      "event": "steer_dropped",
+      "content": "late",
+      "submission_id": "steer-2",
+    },
+    "extra": true,
+  })
+  assert_true(between.run_id is None)
+  @debug.assert_eq(between.to_json(), {
+    "session": "session-1",
+    "event": {
+      "event": "steer_dropped",
+      "content": "late",
+      "submission_id": "steer-2",
+    },
+  })
+  let invalids : Array[Json] = [
+    { "session": "session-1" },
+    { "session": "session-1", "event": null },
+    { "session": "session-1", "event": { "event": "unknown" } },
+    { "session": "session-1", "event": { "event": "tool_result" } },
+    { "session": null, "event": { "event": "max_steps_exhausted" } },
+    {
+      "session": "session-1",
+      "run_id": 7,
+      "event": { "event": "max_steps_exhausted" },
+    },
+  ]
+  for invalid in invalids {
+    let decoded : @protocol.AgentEventPayload? = Some(@json.from_json(invalid)) catch {
+      _ => None
+    }
+    assert_true(decoded is None)
+  }
+}

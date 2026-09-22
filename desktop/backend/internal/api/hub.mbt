@@ -142,7 +142,7 @@ fn Hub::track_approval(
   self : Hub,
   payload : @protocol.AgentEventPayload,
 ) -> Unit {
-  match payload.event.event {
+  match payload.event {
     ApprovalRequested(id~, tool_name~, detail~, body~) =>
       self.pending_approvals[payload.session] = {
         id,
@@ -577,7 +577,7 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
 fn approval_event(
   session : String,
   run_id : String?,
-  event : @protocol.AgentStreamEvent,
+  event : @wire.Event,
 ) -> @protocol.Notification {
   AgentEvent({ run_id, session, event, })
 }
@@ -590,14 +590,16 @@ fn approval_event(
 test "a standing question is replayed until it is answered" {
   let hub = Hub::Hub()
   hub.publish(
-    approval_event("s1", Some("r1"), {
-      event: ApprovalRequested(
+    approval_event(
+      "s1",
+      Some("r1"),
+      ApprovalRequested(
         id="ap-1",
         tool_name="mbtx",
         detail="run with no sandbox policy",
         body=Some("fn main { println(1) }"),
       ),
-    }),
+    ),
   )
   guard hub.runs().approvals is [pending] else {
     fail("the question was not retained")
@@ -612,9 +614,11 @@ test "a standing question is replayed until it is answered" {
   // Settled by whoever answered it — this client or another — and gone for
   // everyone at once.
   hub.publish(
-    approval_event("s1", Some("r1"), {
-      event: ApprovalResolved(id="ap-1", outcome="allowed_once"),
-    }),
+    approval_event(
+      "s1",
+      Some("r1"),
+      ApprovalResolved(id="ap-1", outcome="allowed_once"),
+    ),
   )
   guard hub.runs().approvals is [] else {
     fail("an answered question was still replayed")
@@ -626,14 +630,16 @@ test "a standing question is replayed until it is answered" {
 /// being offered to the next client that looks.
 test "a question does not outlive the engine that asked it" {
   let hub = Hub::Hub()
-  let ask = approval_event("s1", Some("r1"), {
-    event: ApprovalRequested(
+  let ask = approval_event(
+    "s1",
+    Some("r1"),
+    ApprovalRequested(
       id="ap-1",
       tool_name="mbtx",
       detail="run with no sandbox policy",
       body=None,
     ),
-  })
+  )
   // A run that ended without resolving its question: the engine settles its
   // own on the way out, so reaching here means one that could not — a killed
   // process emits no `approval_resolved`.
@@ -672,14 +678,16 @@ test "questions from two engines are kept and retired independently" {
   let hub = Hub::Hub()
   for session in ["s1", "s2"] {
     hub.publish(
-      approval_event(session, Some("r-" + session), {
-        event: ApprovalRequested(
+      approval_event(
+        session,
+        Some("r-" + session),
+        ApprovalRequested(
           id="ap-" + session,
           tool_name="mbtx",
           detail="run with no sandbox policy",
           body=Some("// " + session),
         ),
-      }),
+      ),
     )
   }
   guard hub.runs().approvals is [first, second] else {
@@ -690,9 +698,11 @@ test "questions from two engines are kept and retired independently" {
     (first.session == "s2" && second.session == "s1"),
   )
   hub.publish(
-    approval_event("s1", Some("r-s1"), {
-      event: ApprovalResolved(id="ap-s1", outcome="allowed_once"),
-    }),
+    approval_event(
+      "s1",
+      Some("r-s1"),
+      ApprovalResolved(id="ap-s1", outcome="allowed_once"),
+    ),
   )
   guard hub.runs().approvals is [survivor] else {
     fail("resolving one question disturbed the other")
@@ -707,19 +717,23 @@ test "questions from two engines are kept and retired independently" {
 test "a resolution for a superseded id leaves the standing question" {
   let hub = Hub::Hub()
   hub.publish(
-    approval_event("s1", Some("r1"), {
-      event: ApprovalRequested(
+    approval_event(
+      "s1",
+      Some("r1"),
+      ApprovalRequested(
         id="ap-7",
         tool_name="mbtx",
         detail="run with no sandbox policy",
         body=None,
       ),
-    }),
+    ),
   )
   hub.publish(
-    approval_event("s1", Some("r1"), {
-      event: ApprovalResolved(id="ap-1", outcome="allowed_once"),
-    }),
+    approval_event(
+      "s1",
+      Some("r1"),
+      ApprovalResolved(id="ap-1", outcome="allowed_once"),
+    ),
   )
   guard hub.runs().approvals is [standing] else {
     fail("a resolution for another id retired the standing question")

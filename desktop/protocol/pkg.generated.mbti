@@ -41,25 +41,15 @@ pub impl @json.FromJson for AgentErrorPayload
 pub(all) struct AgentEventPayload {
   run_id : String?
   session : String
-  event : AgentStreamEvent
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  event : @openseek_protocol.Event
+} derive(Eq, @debug.Debug)
 pub fn AgentEventPayload::equal(Self, Self) -> Bool
 pub fn AgentEventPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AgentEventPayload::not_equal(Self, Self) -> Bool
 pub fn AgentEventPayload::to_json(Self) -> Json
 pub fn AgentEventPayload::to_repr(Self) -> @debug.Repr
-
-pub(all) struct AgentStreamEvent {
-  event : @openseek_protocol.Event
-} derive(Eq, @debug.Debug)
-pub fn AgentStreamEvent::equal(Self, Self) -> Bool
-pub fn AgentStreamEvent::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn AgentStreamEvent::not_equal(Self, Self) -> Bool
-pub fn AgentStreamEvent::remote_lifecycle(Self) -> Self?
-pub fn AgentStreamEvent::to_json(Self) -> Json
-pub fn AgentStreamEvent::to_repr(Self) -> @debug.Repr
-pub impl ToJson for AgentStreamEvent
-pub impl @json.FromJson for AgentStreamEvent
+pub impl ToJson for AgentEventPayload
+pub impl @json.FromJson for AgentEventPayload
 
 pub(all) struct AppFocusedBrowserReply {
   id : Int?
