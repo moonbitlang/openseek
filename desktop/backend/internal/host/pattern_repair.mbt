@@ -342,8 +342,7 @@ async fn request_pattern_repair_candidate(
     root.0,
     agent_env,
   ) catch {
-    error if @async.is_being_cancelled() || @async.is_cancellation_error(error) =>
-      raise error
+    error if @async.is_being_cancelled() => raise error
     error => return Failed("\{error}", [])
   }
   match process {
