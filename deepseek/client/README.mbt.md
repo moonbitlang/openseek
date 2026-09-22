@@ -78,21 +78,24 @@ let response = client.chat([message])
 
 `ChatMessage` accepts an array of parts and wraps it in `Content`. Use
 `message.content.text()` to concatenate all text fragments without separators,
-skipping files, and `message.content.iter()` to inspect the ordered parts.
+skipping images and files, and `message.content.iter()` to inspect the ordered parts.
 Text-only comparisons can additionally require `content.is_text_only()` so
 file references are not silently discarded. A single text part
 encodes as a plain string for compatibility with existing requests. Other
 user/tool content encodes as an array of content parts. Each `Text(...)`
 part produces `{"type":"text","text":...}`; each `File(file_id=...)` produces
-`{"type":"file","file_id":...}`. Parts retain their order, so text and images
+`{"type":"file","file_id":...}`. `ImageUrl(url=...)` produces
+`{"type":"image_url","image_url":{"url":...}}` and accepts a base64 data URL
+or an image URL. Parts retain their order, so text and images
 can be interleaved. File-only arrays are supported, and tool messages retain
 `tool_call_id`. System/assistant messages concatenate their text parts without
 separators, since those roles require a string. Empty text with assistant tool
-calls still encodes as `null`. Request encoding rejects files on system/assistant
-messages and blank file IDs with `ChatMessageError` before network IO.
+calls still encodes as `null`. Request encoding rejects images/files on
+system/assistant messages and blank file IDs or image URLs with
+`ChatMessageError` before network IO.
 This matches the [Chat Completions content schema](https://api-docs.deepseek.com/api/create-chat-completion/).
-The supported parts currently cover text and uploaded-file references; URL and
-inline file-data parts are not exposed by this package yet.
+For inline images, pass `ImageUrl(url="data:image/png;base64,...")` directly;
+this requires no Files API upload or remote file lifetime management.
 
 The caller must select an image-capable model and an endpoint accepting file
 references; file IDs are scoped to the uploading API key.

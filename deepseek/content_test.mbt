@@ -7,12 +7,75 @@ test "text extraction joins all fragments while iteration preserves files" {
     Text(" process"),
     Text(" exited"),
     File(file_id="file-api-after"),
+    ImageUrl(url="data:image/png;base64,aW1hZ2U="),
   ]
   let message = @deepseek.ChatMessage(User, content=parts)
   assert_eq(message.content.text(), "previous agent process exited")
   assert_true(message.content.contains("previous agent process exited"))
   assert_false(message.content.is_text_only())
   assert_eq(message.content.iter().collect(), parts)
+}
+
+///|
+test "inline image encoding preserves ordered user and tool content" {
+  let url = "data:image/png;base64,aW1hZ2U="
+  for role in [@deepseek.User, Tool("call-image")] {
+    let message = @deepseek.ChatMessage(role, content=[
+      Text("before"),
+      ImageUrl(url~),
+      Text("after"),
+    ])
+    guard @deepseek.encode_chat_request([message])
+      is { "messages": [encoded], .. } else {
+      fail("expected one message")
+    }
+    guard encoded is { "content": parts, .. } else { fail("missing content") }
+    let expected : Json = [
+      { "type": "text", "text": "before" },
+      { "type": "image_url", "image_url": { "url": Json(url) } },
+      { "type": "text", "text": "after" },
+    ]
+    assert_eq(parts, expected)
+    if role is Tool(id) {
+      assert_true(
+        encoded is { "role": "tool", "tool_call_id": String(actual), .. } &&
+        actual == id,
+      )
+    }
+    assert_eq(message.content.text(), "beforeafter")
+    assert_false(message.content.contains("base64"))
+    assert_false(message.content.is_text_only())
+  }
+}
+
+///|
+test "request encoding rejects images for unsupported roles and blank URLs" {
+  for role in [@deepseek.System, Assistant] {
+    try
+      @deepseek.encode_chat_request([
+        ChatMessage(role, content=[
+          ImageUrl(url="data:image/png;base64,aW1hZ2U="),
+        ]),
+      ])
+    catch {
+      ImageContentNotAllowed(actual) => assert_eq(actual, role)
+      error => raise error
+    } noraise {
+      _ => fail("expected unsupported image role")
+    }
+  }
+  for url in ["", " "] {
+    try
+      @deepseek.encode_chat_request([
+        ChatMessage(User, content=[ImageUrl(url~)]),
+      ])
+    catch {
+      EmptyImageUrl => ()
+      error => raise error
+    } noraise {
+      _ => fail("expected blank image URL to fail")
+    }
+  }
 }
 
 ///|

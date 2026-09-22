@@ -15,6 +15,8 @@ pub fn openrouter_encode_chat_request(model~ : DsVariant, thinking~ : ThinkingMo
 pub(all) suberror ChatMessageError {
   FileContentNotAllowed(Role)
   EmptyFileId
+  ImageContentNotAllowed(Role)
+  EmptyImageUrl
 } derive(@debug.Debug)
 pub fn ChatMessageError::to_repr(Self) -> @debug.Repr
 
@@ -45,6 +47,7 @@ pub fn Content::to_repr(Self) -> @debug.Repr
 pub(all) enum ContentPart {
   Text(String)
   File(file_id~ : String)
+  ImageUrl(url~ : String)
 } derive(Eq, @debug.Debug)
 pub fn ContentPart::equal(Self, Self) -> Bool
 pub fn ContentPart::not_equal(Self, Self) -> Bool

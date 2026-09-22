@@ -7,8 +7,8 @@ pub(all) struct Content(Array[ContentPart]) derive(Debug)
 pub extend Content with Debug::{to_repr}
 
 ///|
-/// Concatenates every text part in order, without adding separators. File
-/// references contribute no text. Empty and file-only content yield "" because
+/// Concatenates every text part in order, without adding separators. Images and
+/// file references contribute no text. Empty and image-only content yield "" because
 /// they contain zero text characters; this method does not describe images.
 pub fn Content::text(self : Content) -> String {
   self.0
@@ -16,7 +16,7 @@ pub fn Content::text(self : Content) -> String {
   .filter_map(part => {
     match part {
       Text(text) => Some(text)
-      File(_) => None
+      File(_) | ImageUrl(_) => None
     }
   })
   .join("")
@@ -24,20 +24,20 @@ pub fn Content::text(self : Content) -> String {
 
 ///|
 /// Search the concatenated text, including matches spanning text parts.
-/// File IDs are excluded, just as in `text()`.
+/// File IDs and image URLs are excluded, just as in `text()`.
 pub fn Content::contains(self : Content, pattern : StringView) -> Bool {
   self.text().contains(pattern)
 }
 
 ///|
 /// Whether every part is text. Empty content is text-only. Use this alongside
-/// `text()` when a comparison must not discard file references.
+/// `text()` when a comparison must not discard images or file references.
 pub fn Content::is_text_only(self : Content) -> Bool {
   self.0.all(part => part is Text(_))
 }
 
 ///|
-/// Visits all text and file parts in their original order.
+/// Visits all content parts in their original order.
 pub fn Content::iter(self : Content) -> Iter[ContentPart] {
   self.0.iter()
 }
@@ -48,11 +48,11 @@ pub fn Content::iter(self : Content) -> Iter[ContentPart] {
 /// Text and file parts retain their order, including interleaved text.
 /// `ChatMessage.content` wraps an array of these parts. The encoder
 /// handles the API's string alternative; callers do not choose a wire shape.
-/// This package currently exposes uploaded-file references; the API's URL and
-/// inline file-data alternatives are not yet represented here.
+/// `ImageUrl` accepts an image URL or an inline base64 data URL.
 pub(all) enum ContentPart {
   Text(String)
   File(file_id~ : String)
+  ImageUrl(url~ : String)
 } derive(Debug, Eq)
 
 ///|
@@ -66,6 +66,8 @@ pub extend ContentPart with Eq::{equal, not_equal}
 pub(all) suberror ChatMessageError {
   FileContentNotAllowed(Role)
   EmptyFileId
+  ImageContentNotAllowed(Role)
+  EmptyImageUrl
 } derive(Debug)
 
 ///|
@@ -80,6 +82,12 @@ impl Show for ChatMessageError with fn output(self, logger) {
       )
     EmptyFileId =>
       logger.write_string("file content part requires a nonblank file_id")
+    ImageContentNotAllowed(role) =>
+      logger.write_string(
+        "image content requires a user or tool message, got \{role}",
+      )
+    EmptyImageUrl =>
+      logger.write_string("image content part requires a nonblank URL")
   }
 }
 
@@ -97,6 +105,15 @@ fn ChatMessage::validate_content(
         raise EmptyFileId
       }
     }
+    if part is ImageUrl(url~) {
+      match self.role {
+        User | Tool(_) => ()
+        System | Assistant => raise ImageContentNotAllowed(self.role)
+      }
+      if url.is_blank() {
+        raise EmptyImageUrl
+      }
+    }
   }
 }
 
@@ -105,5 +122,6 @@ impl ToJson for ContentPart with fn to_json(self) {
   match self {
     Text(text) => { "type": "text", "text": Json(text) }
     File(file_id~) => { "type": "file", "file_id": Json(file_id) }
+    ImageUrl(url~) => { "type": "image_url", "image_url": { "url": Json(url) } }
   }
 }

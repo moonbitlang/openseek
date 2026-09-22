@@ -28,7 +28,7 @@ The HTTP client lives in `moonbitlang/openseek/deepseek/client`.
   for wire strings and `Debug` for inspection.
 - `ChatMessage(role, content=[Text(...)], tool_calls?, reasoning_content?)`: one typed
   chat message constructor. `content=[...]` supplies an ordered array of
-  `Text(...)` and `File(file_id=...)` parts for user/tool messages.
+  `Text(...)`, `File(file_id=...)`, and `ImageUrl(url=...)` parts for user/tool messages.
   Request encoders reject invalid content with `ChatMessageError`.
   Use `Assistant` with `tool_calls` for the assistant
   message that must be sent back after DeepSeek requests native tool calls.
