@@ -301,3 +301,30 @@ test "chat response decode rejects malformed choices" {
     _ => fail("expected decode to fail")
   }
 }
+
+///|
+test "present null or empty reasoning suppresses the fallback alias" {
+  for primary in [Json::null(), Json("")] {
+    let response : @deepseek.ChatResponse = @json.from_json({
+      "choices": [
+        {
+          "message": {
+            "content": "done",
+            "reasoning_content": primary,
+            "reasoning": 1,
+          },
+        },
+      ],
+    })
+    assert_eq(response.reasoning_content, "")
+  }
+  try
+    @json.from_json({
+      "choices": [{ "message": { "content": "done", "reasoning": 1 } }],
+    })
+  catch {
+    JsonDecodeError(_) => ()
+  } noraise {
+    (_ : @deepseek.ChatResponse) => fail("invalid alias must not be ignored")
+  }
+}

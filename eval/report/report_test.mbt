@@ -83,3 +83,23 @@ async test "report writes markdown json and html files" {
     assert_true(html.contains("table-wrap"))
   })
 }
+
+///|
+test "HTML logs omit empty paths and preserve order and escaping" {
+  let empty = @report.Report(title="Logs", rows=[
+    ReportRow(index=1, name="no log", success=true),
+  ])
+  assert_false(empty.html().contains("<h2>Logs</h2>"))
+  let report = @report.Report(title="Logs", rows=[
+    ReportRow(index=1, name="first", success=true, log_path="logs/a&b"),
+    ReportRow(index=2, name="no log", success=true),
+    ReportRow(index=3, name="last", success=true, log_path="<last>"),
+  ])
+  assert_true(
+    report
+    .html()
+    .contains(
+      "<h2>Logs</h2><ul><li><code>first</code> trial 1: <code>logs/a&amp;b</code></li><li><code>last</code> trial 3: <code>&lt;last&gt;</code></li></ul>",
+    ),
+  )
+}

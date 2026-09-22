@@ -263,23 +263,16 @@ async fn Client::dispatch(self : Client, message : Json) -> Unit {
       } else if !self.accepts_requests {
         Some(build_error_reply(request.id, MethodNotFound, "Method not found"))
       } else {
-        let accepted : Result[Bool, Error] = try
-          (self.on_request)(request)
-        catch {
-          error => Err(error)
-        } noraise {
-          value => Ok(value)
-        }
-        match accepted {
-          Ok(true) => None
-          // A rejected request means the installed bounded receiver is full.
-          Ok(false) =>
-            Some(build_error_reply(request.id, ServerBusy, "Server busy"))
-          // A handler owns application decoding and queue admission. Contain
-          // either failure here so malformed peer input cannot tear down the
-          // JSON-RPC connection and fail unrelated requests with `Closed`.
-          Err(_) =>
+        try (self.on_request)(request) catch {
+          // Contain handler decoding/admission failures so malformed peer input
+          // cannot tear down the connection and fail unrelated requests.
+          _ =>
             Some(build_error_reply(request.id, InternalError, "Internal error"))
+        } noraise {
+          true => None
+          // A rejected request means the installed bounded receiver is full.
+          false =>
+            Some(build_error_reply(request.id, ServerBusy, "Server busy"))
         }
       }
       // Non-blocking: never let answering a peer stall the read loop or grow the

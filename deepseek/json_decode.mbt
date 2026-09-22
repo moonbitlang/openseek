@@ -85,17 +85,15 @@ fn decode_nullable_string(
   key~ : String,
   path~ : @json.JsonPath,
 ) -> String? raise @json.JsonDecodeError {
-  if fields.get(key) is Some(value) {
-    if value is (String(value) | (Null with value = "")) {
-      Some(value)
-    } else {
-      raise json_decode_error(
+  match fields.get(key) {
+    None => None
+    Some(String(value)) => Some(value)
+    Some(Null) => Some("")
+    Some(_) =>
+      json_decode_error(
         path.add_key(key),
         "ChatResponse::from_json: expected \{key} string",
       )
-    }
-  } else {
-    None
   }
 }
 

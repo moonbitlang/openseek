@@ -209,8 +209,7 @@ pub fn Report::html(self : Report) -> String {
     }
     out.write_string("</div></section>")
   }
-  let log_lines = log_section_lines(self.rows)
-  if log_lines.length() > 0 {
+  if self.rows.any(row => row.log_path != "") {
     out.write_string("<section class=\"logs\"><h2>Logs</h2><ul>")
     for row in self.rows {
       if row.log_path != "" {
