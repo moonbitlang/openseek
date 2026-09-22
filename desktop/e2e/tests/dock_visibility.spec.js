@@ -31,6 +31,22 @@ test('active dock tab stays visible when opening, switching, closing and resizin
   for (let i = 0; i < 8; i++) await openFile(i);
   await expect.poll(() => page.locator('.editor-tabs').evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
   await expectActiveVisible(page);
+  // The close chip is a Codicon centered by the button's grid, so its glyph
+  // box shares the button's center. A text `×` sat on the text baseline
+  // instead, which read about a pixel low.
+  const closeOffsets = await page.locator('.editor-tab .tab-close').evaluateAll(buttons => buttons.map(button => {
+    const chip = button.getBoundingClientRect();
+    const icon = button.querySelector('.icon').getBoundingClientRect();
+    return {
+      x: Math.abs(icon.x + icon.width / 2 - (chip.x + chip.width / 2)),
+      y: Math.abs(icon.y + icon.height / 2 - (chip.y + chip.height / 2)),
+    };
+  }));
+  expect(closeOffsets.length).toBeGreaterThan(0);
+  for (const offset of closeOffsets) {
+    expect(offset.x).toBeLessThanOrEqual(0.5);
+    expect(offset.y).toBeLessThanOrEqual(0.5);
+  }
   await openFile(0);
   await expectActiveVisible(page);
   await openFile(7);

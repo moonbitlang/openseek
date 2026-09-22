@@ -137,7 +137,11 @@ button.panel-toggle:not(:disabled):hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The close affordance is a Codicon centered by this grid, not a text `×`:
+   the SVG box centers exactly, while a glyph's ink sits on the text baseline
+   and so reads about a pixel low. */
 .tab-close {
+  --icon-size: var(--icon-sm);
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -148,8 +152,6 @@ button.panel-toggle:not(:disabled):hover {
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-tight);
   cursor: pointer;
 }
 .editor-tab .tab-close:hover {

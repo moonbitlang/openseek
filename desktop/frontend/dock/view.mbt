@@ -210,11 +210,13 @@ pub fn tabs_bar(
           @html.button(
             class="tab-close",
             title=ui(locale, CloseLabel),
-            attrs=@html.Attrs::build().on_click(event => {
-              event.stop_propagation()
-              dispatch(TabClosed(tab))
-            }),
-            "×",
+            attrs=@html.Attrs::build()
+              .aria_label(ui(locale, CloseLabel))
+              .on_click(event => {
+                event.stop_propagation()
+                dispatch(TabClosed(tab))
+              }),
+            @icons.icon(@icons.icon_close),
           ),
         ],
       ),
