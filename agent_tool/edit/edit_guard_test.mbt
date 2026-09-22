@@ -161,10 +161,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
     assert_true(
       unguarded.data is Some({ "outcome": "applied", "check": _, .. }),
     )
-    assert_true(
-      unguarded.data
-      is Some({ "baseline": { "error_count": Number(0, ..), .. }, .. }),
-    )
+    assert_true(unguarded.data is Some({ "baseline"? : None, .. }))
   })
 }
 
@@ -254,19 +251,26 @@ async test "a guarded edit is not written when moon check cannot verify the tree
     assert_true(
       out.data is Some({ "outcome": "unverified", "reason": String(_), .. }),
     )
-    // The default error guard also refuses an unverifiable baseline.
+    // Without a requested guard, skip the baseline and keep the edit even
+    // when the post-write check cannot verify it.
     let plain = run_edit({
       "path": path,
       "old_string": "length([1, 2, 3])",
       "new_string": "len([1, 2, 3])",
       "start_line": 14,
     })
-    assert_true(plain.is_error, msg=plain.content)
-    assert_true(plain.content.contains("not applied:"), msg=plain.content)
+    assert_false(plain.is_error, msg=plain.content)
     assert_true(
-      plain.data is Some({ "outcome": "unverified", "check"? : None, .. }),
+      plain.content.contains("without diagnostics"),
+      msg=plain.content,
     )
-    assert_eq(@fs.read_file(path).text(), original)
+    assert_true(
+      plain.data is Some({ "outcome": "applied", "baseline"? : None, .. }),
+    )
+    assert_eq(
+      @fs.read_file(path).text(),
+      original.replace_all(old="length([1, 2, 3])", new="len([1, 2, 3])"),
+    )
   })
 }
 

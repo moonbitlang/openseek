@@ -88,7 +88,7 @@ At least one of `edits` / `edits_file` must yield a non-empty batch.
 | `revert_if_warning_delta_greater_or_equal` | integer | no (off) | Revert when `after.warning_count - before.warning_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. Removing two warnings and introducing one passes at `0`. |
 
 Both guards compare reported count changes over all projects touched by the batch.
-The error default is `10` (`edit` uses `5`); warning protection is off unless
+The error default is `10` (`edit` defaults off); warning protection is off unless
 specified. Checks run before and after writing. An unavailable or incomplete
 baseline refuses the batch, and an unverifiable post-write check rolls it back.
 Errors can expose or hide checked packages, so counts do not prove that no new

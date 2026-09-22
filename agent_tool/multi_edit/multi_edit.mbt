@@ -83,7 +83,7 @@ pub fn definition(
         "revert_if_error_delta_greater_or_equal": {
           "type": "integer",
           "description": (
-            #|Auto-revert safety net, default 10 (edit defaults to 5). Revert
+            #|Auto-revert safety net, default 10 (edit defaults off). Revert
             #|the entire batch when the reported error count change (after - before)
             #|is >= this non-negative threshold. 0 requires a decrease; 1 permits an
             #|unchanged total. Counts are not proof that no new problems exist. Caveat:

@@ -76,8 +76,9 @@ pub fn definition(
       #|insertion for grouping related code. An edit that would introduce lex/parse errors
       #|into a syntax-checkable file (.mbt, .mbt.md, moon.mod, moon.pkg) is rejected
       #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors.
-      #|Diagnostic guards run moon check before and after writing. The error-delta
-      #|threshold defaults to 5; the warning guard defaults off.
+      #|Both diagnostic guards default off. When either is enabled, moon check runs
+      #|before and after writing. Otherwise only the post-write check runs, reporting
+      #|diagnostics without reverting the edit.
       #|revert_if_error_delta_greater_or_equal=1 reverts when the error total increases;
       #|revert_if_warning_delta_greater_or_equal=0 reverts when the warning total does not
       #|decrease (after - before >= 0). Combine them for a warning-fix script.
@@ -123,7 +124,7 @@ pub fn definition(
         "revert_if_error_delta_greater_or_equal": {
           "type": "integer",
           "description": (
-            #|Post-write guard, default 5. Revert when the reported error count
+            #|Optional post-write guard, off by default. Revert when the reported error count
             #|change (after - before) is >= this non-negative threshold. 0 requires a
             #|decrease; 1 allows an unchanged total. Counts can be misleading when errors
             #|change which packages moon check reaches; a decrease does not prove no new
@@ -771,7 +772,7 @@ async fn commit_edit(
     return rejection
   }
   let guards : Guards = {
-    errors: input.revert_if_error_delta_greater_or_equal.unwrap_or(5),
+    errors: input.revert_if_error_delta_greater_or_equal,
     warnings: input.revert_if_warning_delta_greater_or_equal,
   }
   // The guards' baseline is measured before the write, so nothing has to be
@@ -822,7 +823,9 @@ async fn commit_edit(
     }
   }
 
-  let baseline = {
+  let baseline = if guards.errors is None && guards.warnings is None {
+    None
+  } else {
     let measured = match check_tree() {
       Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
       Checked(tally) => Some(tally)
@@ -1125,10 +1128,9 @@ fn exited_without_diagnostics(code : Int) -> String {
 }
 
 ///|
-/// Inclusive count-delta thresholds. The error threshold always has a host
-/// default; the warning threshold is optional.
+/// Optional inclusive count-delta thresholds; both are off by default.
 priv struct Guards {
-  errors : Int
+  errors : Int?
   warnings : Int?
 }
 
@@ -1158,7 +1160,7 @@ async fn guarded_outcome(
   let removed = @auto_check.introduced(after, before)
   let error_delta = after.error_count - before.error_count
   let warning_delta = after.warning_count - before.warning_count
-  let errors_hit = error_delta >= guards.errors
+  let errors_hit = guards.errors is Some(limit) && error_delta >= limit
   let warnings_hit = guards.warnings is Some(limit) && warning_delta >= limit
   let reach_caveat = before.error_count > 0
   let common : Map[String, Json] = {
@@ -1192,13 +1194,18 @@ async fn guarded_outcome(
   }
   let shown_errors = if errors_hit { sites(delta.errors) } else { [] }
   let shown_warnings = if warnings_hit { sites(delta.warnings) } else { [] }
-  let over_errors = "the error count changed by \{error_delta} (>= revert_if_error_delta_greater_or_equal=\{guards.errors})"
-  let over_warnings = "the warning count changed by \{warning_delta} (>= revert_if_warning_delta_greater_or_equal=\{guards.warnings.unwrap_or(0)})"
-  let what = match (errors_hit, warnings_hit) {
-    (true, true) => "\{over_errors} and \{over_warnings}"
-    (true, false) => over_errors
-    (false, _) => over_warnings
+  let reasons : Array[String] = []
+  if guards.errors is Some(limit) && errors_hit {
+    reasons.push(
+      "the error count changed by \{error_delta} (>= revert_if_error_delta_greater_or_equal=\{limit})",
+    )
   }
+  if guards.warnings is Some(limit) && warnings_hit {
+    reasons.push(
+      "the warning count changed by \{warning_delta} (>= revert_if_warning_delta_greater_or_equal=\{limit})",
+    )
+  }
+  let what = reasons.join(" and ")
   let listed = [
     ..[
       for site in shown_errors => "error: \{site.line()}"

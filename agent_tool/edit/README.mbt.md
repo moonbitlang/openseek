@@ -72,7 +72,7 @@ and the edit should stay inside a tighter range:
 | `start_line`  | integer | yes | 1-based first line of the search/replace range. The first match at or after this line is replaced. |
 | `end_line`    | integer | no  | 1-based last line of the search/replace range. Defaults to the file end. |
 | `revert_on_parse_errors` | boolean | no (default `true`) | Reject an edit whose result would introduce new lex/parse errors into a syncheck input (`.mbt`, `.mbt.md`, `moon.mod`, `moon.pkg`), leaving the file untouched and returning the errors with excerpts. In `.mbt.md` only the checked fenced blocks are parsed. Set `false` only to intentionally produce non-parsing content. |
-| `revert_if_error_delta_greater_or_equal` | integer | no (default `5`) | Revert when `after.error_count - before.error_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. |
+| `revert_if_error_delta_greater_or_equal` | integer | no (off) | Revert when `after.error_count - before.error_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. |
 | `revert_if_warning_delta_greater_or_equal` | integer | no (off) | Revert when `after.warning_count - before.warning_count >= threshold`. Non-negative: `0` requires a decrease; `1` allows an unchanged total. Removing two warnings and introducing one passes at `0`. |
 | `replace_all_preview` | boolean | no (default `false`) | Preview mode: the file is **not** modified. Every match of `old_string` in the range is listed with surrounding context lines, plus a ready-to-review `multi_edit` edits array (capped at 40 sites; several matches on one line collapse into a single whole-line entry). |
 
@@ -85,7 +85,8 @@ If the diagnostics justify accepting a reverted edit, retry with an explicit
 threshold greater than its observed delta. For example, warning threshold `1`
 admits an unchanged total. Do not raise thresholds merely to bypass a guard.
 The warning-fix combination (error `1`, warning `0`) is a recommendation;
-the error guard defaults to `5` and the warning guard is off.
+both quantity guards default off. With neither requested, only the post-write
+check runs and reports diagnostics without reverting the edit.
 Error-triggered reverts include the same `comparability:` analysis as `multi_edit`:
 edited-file errors, breakage in dependent code, uncertain attribution, or
 previously unreached diagnostics. Reach verdicts include `data.reissue_with = delta + 1`

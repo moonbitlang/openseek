@@ -299,8 +299,8 @@ fn default_prompt() -> String {
     #|
     #|`edit` and `multi_edit` data carry `outcome`
     #|(applied, reverted, rejected, failed, unverified, preview, not_found, error),
-    #|the post-write check counts, and on a revert the introduced sites. Both tools compare reported count changes. The error guard defaults to `5` for
-    #|`edit` and `10` for `multi_edit`; the warning guard is off. For warning fixes,
+    #|the post-write check counts, and on a revert the introduced sites. Both tools compare reported count changes. Both guards default off for `edit`; only its post-write check runs unless a guard is requested.
+    #|`multi_edit` defaults to an error threshold of `10`; its warning guard is off. For warning fixes,
     #|`revert_if_error_delta_greater_or_equal: 1` rejects an increased error total, and
     #|`revert_if_warning_delta_greater_or_equal: 0` reverts unless the warning total
     #|decreases (`after - before < 0`). A script can apply one fix per diagnostic

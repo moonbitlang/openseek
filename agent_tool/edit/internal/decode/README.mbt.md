@@ -30,7 +30,7 @@ package.
 | `end_line` | integer | no | Optional positive 1-based inclusive range end; when present, it must be greater than or equal to `start_line`. |
 | `replace_all_preview` | boolean | no | Defaults to `false`. When `true`, `agent_tool/edit` reports every match in the line range as a reviewable `multi_edit` array instead of applying the edit. |
 | `revert_on_parse_errors` | boolean | no | Defaults to `true`. Honored by `agent_tool/edit` as the parse gate on the written result. |
-| `revert_if_error_delta_greater_or_equal` | integer | no | Non-negative threshold; absent/null is `None`, resolved by the tool to default `5`. |
+| `revert_if_error_delta_greater_or_equal` | integer | no | Non-negative threshold; absent/null disables the error guard. |
 | `revert_if_warning_delta_greater_or_equal` | integer | no | Non-negative threshold; absent/null disables the warning guard. |
 
 Unrecognized keys are ignored. Non-object JSON values raise `object arguments`.

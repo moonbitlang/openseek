@@ -39,13 +39,14 @@ async fn run_guard_case(
 }
 
 ///|
-async test "both tools enforce their default boundary and allow explicit override" {
+async test "edit guards are opt-in and multi_edit retains its default boundary" {
   for batch in [false, true] {
-    let limit = if batch { 10 } else { 5 }
+    let limit = 10
     for
       (count, threshold, kept) in [
         (limit - 1, None, true),
-        (limit, None, false),
+        (limit, None, !batch),
+        (limit, Some(limit), false),
         (limit, Some(limit + 1), true),
         (201, Some(202), true),
       ] {
@@ -63,6 +64,20 @@ async test "both tools enforce their default boundary and allow explicit overrid
         let path = "\{dir}/lib.mbt"
         let result = run_guard_case(batch, path, original, candidate, threshold)
         assert_eq(result.is_error, !kept, msg=result.content)
+        if !batch && threshold is None {
+          assert_true(
+            result.data
+            is Some(
+              {
+                "outcome": "applied",
+                "baseline"? : None,
+                "check": { "error_count": Number(n, ..), .. },
+                ..
+              }
+            ) &&
+            n == count.to_double(),
+          )
+        }
         assert_eq(
           @fs.read_file(path).text(),
           if kept {
@@ -108,7 +123,7 @@ async test "both tools recommend delta plus one for newly reached errors" {
       ]).write_to(dir)
       let path = "\{dir}/a/a.mbt"
       @fs.symlink(target="\{dir}/a/source.txt", path)
-      let result = run_guard_case(batch, path, original, candidate, None)
+      let result = run_guard_case(batch, path, original, candidate, Some(10))
       assert_true(result.is_error, msg=result.content)
       assert_true(
         result.data
