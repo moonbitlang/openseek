@@ -163,7 +163,7 @@ fn append_item_text(
     }
     Tool(result) => {
       write_line(out, result.tool_name())
-      write_line(out, result.content())
+      write_line(out, result.content().text())
     }
     Runtime(notice) => write_line(out, notice.content())
     Terminal(

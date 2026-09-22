@@ -87,7 +87,9 @@ async test "session list json reports titles newest first with husks last" {
       system_prompt="system",
     )
     store.create(
-      older.append(User(UserMessage("  first question\nwith detail  "))),
+      older.append(
+        User(UserMessage(Content([Text("  first question\nwith detail  ")]))),
+      ),
     )
     store.set_title(SessionId("older"), "Renamed conversation")
     let newer : @agent_session.Session = Session(
@@ -150,7 +152,7 @@ async test "session compact command appends summary without api key" {
         SessionId("cli-test"),
         system_prompt="system",
       )
-      .append(User(UserMessage("hello")))
+      .append(User(UserMessage(Content([Text("hello")]))))
       .append(Assistant(AssistantMessage("answer")))
     store.create(session)
     let summary_path = "\{root}/summary.txt"
@@ -186,7 +188,7 @@ async test "session compact file resolves relative to workspace root" {
         SessionId("cli-test"),
         system_prompt="system",
       )
-      .append(User(UserMessage("hello")))
+      .append(User(UserMessage(Content([Text("hello")]))))
       .append(Assistant(AssistantMessage("answer")))
     store.create(session)
     @fs.write_file(

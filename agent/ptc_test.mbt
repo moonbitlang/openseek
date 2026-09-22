@@ -47,7 +47,7 @@ async test "agent PTC stores nested calls while only selected output reaches the
         model=Deepseek(V4Flash),
         api_url=url,
         session=Session(SessionId("ptc-model"), system_prompt="system"),
-        task="search",
+        content=Content([Text("search")]),
         max_steps=3,
         append_item=(session, item) => session.append(item),
       )
@@ -114,7 +114,7 @@ async test "agent cancellation persists interrupted PTC metadata before terminal
         model=Deepseek(V4Flash),
         api_url=url,
         session=Session(SessionId("ptc-cancel"), system_prompt="system"),
-        task="block",
+        content=Content([Text("block")]),
         max_steps=3,
         append_item=(session, item) => {
           items.push(item)

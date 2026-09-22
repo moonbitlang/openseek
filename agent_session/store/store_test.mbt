@@ -31,7 +31,7 @@ async test "store creates and loads a session from one session file" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("hello")))
+    .append(User(UserMessage(Content([Text("hello")]))))
     .append(Terminal(Finished("done")))
   store.create(session)
   assert_true(store.exists(SessionId("s1")))
@@ -134,7 +134,7 @@ async test "store picks the most recently active session as latest" {
   // Appending to the older session makes it the most recently active again.
   @async.sleep(50)
   let first = store.load(SessionId("first"))
-  let _ = store.append(first, User(UserMessage("more")))
+  let _ = store.append(first, User(UserMessage(Content([Text("more")]))))
   guard store.latest() is Some(id) else { fail("expected a latest session") }
   assert_eq(id.value(), "first")
 }
@@ -147,7 +147,9 @@ async test "listings order by recency and keep husk directories visible" {
     SessionId("older"),
     system_prompt="system",
   )
-  store.create(older.append(User(UserMessage("  first\n prompt  here "))))
+  store.create(
+    older.append(User(UserMessage(Content([Text("  first\n prompt  here ")])))),
+  )
   @async.sleep(50)
   store.create(Session(SessionId("newer"), system_prompt="system"))
   // A directory with no session file — e.g. an interrupted creation or an
@@ -172,7 +174,7 @@ async test "an explicit session title overrides the first prompt without rewriti
   let id = @agent_session.SessionId("named")
   store.create(
     @agent_session.Session(id, system_prompt="system").append(
-      User(UserMessage("original first prompt")),
+      User(UserMessage(Content([Text("original first prompt")]))),
     ),
   )
   assert_eq(store.title(id), None)
@@ -186,7 +188,7 @@ async test "an explicit session title overrides the first prompt without rewriti
   guard loaded.events()[0].item() is User(message) else {
     fail("renaming changed the first durable event")
   }
-  assert_eq(message.content(), "original first prompt")
+  assert_eq(message.content().text(), "original first prompt")
 }
 
 ///|
@@ -249,7 +251,7 @@ async test "store appends one event without rewriting the in-memory caller value
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   store.create(session)
-  let next = store.append(session, User(UserMessage("first")))
+  let next = store.append(session, User(UserMessage(Content([Text("first")]))))
   assert_eq(session.events().length(), 0)
   assert_eq(next.events().length(), 1)
   let after = store.append(next, Runtime(RuntimeNotice("update")))
@@ -270,7 +272,7 @@ async test "generic append persists summary events the projection honors" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("first task")))
+    .append(User(UserMessage(Content([Text("first task")]))))
     .append(Terminal(Finished("first answer")))
   store.create(session)
   // Auto-compaction persists through the loop's generic append hook (the
@@ -304,7 +306,7 @@ async test "first append creates the session file with its header" {
   // No create(): the CLI resumes-or-starts sessions whose first durable write
   // is an append. The header line and the first event must land together.
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-  let next = store.append(session, User(UserMessage("first")))
+  let next = store.append(session, User(UserMessage(Content([Text("first")]))))
   assert_eq(next.events().length(), 1)
   let text = @fs.read_file(session_file(store, "s1")).text()
   assert_true(
@@ -326,7 +328,7 @@ async fn race_two_appends(
   session : @agent_session.Session,
 ) -> Unit {
   let items : Array[@agent_session.SessionItem] = [
-    User(UserMessage("first")),
+    User(UserMessage(Content([Text("first")]))),
     Runtime(RuntimeNotice("second")),
   ]
   let results : Array[String] = []
@@ -396,7 +398,10 @@ async test "another store instance's write defeats the fingerprint fast path" {
   let store_b : @store.SessionStore = SessionStore(store_a.root())
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   store_a.create(session)
-  let from_a = store_a.append(session, User(UserMessage("from a")))
+  let from_a = store_a.append(
+    session,
+    User(UserMessage(Content([Text("from a")]))),
+  )
   let loaded_by_b = store_b.load(SessionId("s1"))
   ignore(store_b.append(loaded_by_b, Runtime(RuntimeNotice("from b"))))
   try store_a.append(from_a, Runtime(RuntimeNotice("stale from a"))) catch {
@@ -426,7 +431,9 @@ async test "a same-size rewrite by another store is still detected" {
   // beat between writes to order reliably.
   @async.sleep(50)
   store_b.create(Session(SessionId("s1"), system_prompt="prompt B"))
-  try store_a.append(session, User(UserMessage("stale"))) catch {
+  try
+    store_a.append(session, User(UserMessage(Content([Text("stale")]))))
+  catch {
     error => {
       assert_true("\{error}".contains("stale session snapshot"))
       assert_eq(store_a.load(SessionId("s1")).system_prompt(), "prompt B")
@@ -442,7 +449,7 @@ async test "store rejects stale snapshots before appending" {
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
   store.create(session)
-  ignore(store.append(session, User(UserMessage("first"))))
+  ignore(store.append(session, User(UserMessage(Content([Text("first")])))))
   try store.append(session, Runtime(RuntimeNotice("stale"))) catch {
     error => {
       assert_true("\{error}".contains("stale session snapshot"))
@@ -459,7 +466,7 @@ async test "store rejects divergent snapshots with the same sequence" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
-    User(UserMessage("first")),
+    User(UserMessage(Content([Text("first")]))),
   )
   let divergent = @agent_session.Session(
     SessionId("s1"),
@@ -484,7 +491,7 @@ async test "store rejects non-empty snapshots when the session file is missing" 
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
-    User(UserMessage("hello")),
+    User(UserMessage(Content([Text("hello")]))),
   )
   store.create(session)
   @fs.remove(session_file(store, "s1"))
@@ -512,7 +519,7 @@ async test "store rejects stale snapshots before compacting" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("second")))
   store.create(session)
   ignore(store.append(session, Runtime(RuntimeNotice("new durable tail"))))
@@ -552,7 +559,9 @@ async test "store rejects a session file without a header record" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-  let (_, event) = session.append_event(User(UserMessage("first")))
+  let (_, event) = session.append_event(
+    User(UserMessage(Content([Text("first")]))),
+  )
   @fs.mkdir("\{store.root()}/sessions/s1", recursive=true)
   // A bare event log — the pre-header layout, or a file whose header line was
   // lost — must fail loudly rather than load with a fabricated identity.
@@ -610,7 +619,7 @@ async test "load drops a torn trailing record without mutating the file" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
-    User(UserMessage("first")),
+    User(UserMessage(Content([Text("first")]))),
   )
   store.create(session)
   // A crash mid-append leaves a half-written last line. The uncommitted tail
@@ -628,7 +637,9 @@ async test "load keeps a complete final record that lost only its newline" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-  let (_, event) = session.append_event(User(UserMessage("first")))
+  let (_, event) = session.append_event(
+    User(UserMessage(Content([Text("first")]))),
+  )
   store.create(session)
   // The append was torn exactly at the newline boundary: the record is whole.
   append_raw(store, "s1", ToJson::to_json(event).stringify())
@@ -637,7 +648,7 @@ async test "load keeps a complete final record that lost only its newline" {
   guard loaded.events()[0].item() is User(message) else {
     fail("expected the unterminated user event")
   }
-  assert_eq(message.content(), "first")
+  assert_eq(message.content().text(), "first")
 }
 
 ///|
@@ -645,7 +656,7 @@ async test "append repairs a torn tail before persisting the next event" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
-    User(UserMessage("first")),
+    User(UserMessage(Content([Text("first")]))),
   )
   store.create(session)
   append_raw(store, "s1", "{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi")
@@ -667,7 +678,9 @@ async test "append repairs and keeps a complete unterminated final event" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-  let (_, event) = session.append_event(User(UserMessage("first")))
+  let (_, event) = session.append_event(
+    User(UserMessage(Content([Text("first")]))),
+  )
   store.create(session)
   append_raw(store, "s1", ToJson::to_json(event).stringify())
   let resumed = store.load(SessionId("s1"))
@@ -681,7 +694,7 @@ async test "append repairs and keeps a complete unterminated final event" {
   guard reloaded.events()[0].item() is User(message) else {
     fail("expected the recovered user event to survive the repair")
   }
-  assert_eq(message.content(), "first")
+  assert_eq(message.content().text(), "first")
 }
 
 ///|
@@ -689,7 +702,9 @@ async test "append rejects a stale snapshot against an unterminated durable even
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-  let (_, event) = session.append_event(User(UserMessage("first")))
+  let (_, event) = session.append_event(
+    User(UserMessage(Content([Text("first")]))),
+  )
   store.create(session)
   // Another writer committed an event; only its newline is missing. The
   // pre-commit empty snapshot is stale, and tail repair must not become a
@@ -703,7 +718,7 @@ async test "append rejects a stale snapshot against an unterminated durable even
       guard loaded.events()[0].item() is User(message) else {
         fail("expected the durable user event to survive")
       }
-      assert_eq(message.content(), "first")
+      assert_eq(message.content().text(), "first")
     }
   } noraise {
     _ => fail("stale append onto an unterminated durable event was accepted")
@@ -723,7 +738,7 @@ async test "load tolerates unterminated tails in every torn shape" {
   let one_event = @agent_session.Session(
     SessionId("blank"),
     system_prompt="system",
-  ).append(User(UserMessage("hello")))
+  ).append(User(UserMessage(Content([Text("hello")]))))
   store.create(one_event)
   append_raw(store, "blank", "   ")
   assert_eq(store.load(SessionId("blank")).events().length(), 1)
@@ -749,7 +764,7 @@ async test "load keeps a header-only file that lost its newline" {
   assert_eq(loaded.events().length(), 0)
   assert_eq(loaded.system_prompt(), "system")
   // The next append terminates the header line as it persists the event.
-  ignore(store.append(loaded, User(UserMessage("first"))))
+  ignore(store.append(loaded, User(UserMessage(Content([Text("first")])))))
   let text = @fs.read_file(session_file(store, "s1")).text()
   assert_true(text.has_suffix("\n"))
   assert_eq(store.load(SessionId("s1")).events().length(), 1)
@@ -760,7 +775,7 @@ async test "compact repairs a torn tail before persisting the summary" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("second")))
   store.create(session)
   append_raw(store, "s1", "{\"sequence\":3,\"ts\":0,\"item\":{\"kind\":\"runt")
@@ -787,7 +802,7 @@ async test "latest can resume a session whose newest write was torn" {
   let newest = @agent_session.Session(
     SessionId("newest"),
     system_prompt="system",
-  ).append(User(UserMessage("hello")))
+  ).append(User(UserMessage(Content([Text("hello")]))))
   store.create(newest)
   append_raw(
     store, "newest", "{\"sequence\":2,\"ts\":0,\"item\":{\"kind\":\"assi",
@@ -801,7 +816,7 @@ async test "load still fails on corruption that is not a torn tail" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
-    User(UserMessage("first")),
+    User(UserMessage(Content([Text("first")]))),
   )
   store.create(session)
   // Terminated garbage is interior-style corruption, not an interrupted
@@ -829,7 +844,7 @@ async test "store propagates unreadable session files instead of dropping histor
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
-    User(UserMessage("hello")),
+    User(UserMessage(Content([Text("hello")]))),
   )
   store.create(session)
   let path = session_file(store, "s1")
@@ -887,7 +902,7 @@ async test "store compacts by appending a durable summary" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("second")))
   store.create(session)
   let compacted = store.compact(
@@ -914,4 +929,163 @@ async test "job directory lookup does not create a new session" {
   assert_eq(store.job_logs_dir(id), "\{store.root()}/sessions/not-started/jobs")
   assert_false(store.exists(id))
   assert_eq(store.list().length(), 0)
+}
+
+///|
+async test "single-text records keep the string content understood by old clients" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let session = @agent_session.Session(
+      SessionId("plain"),
+      system_prompt="system",
+    )
+    .append(User(UserMessage(Content([Text("prompt")]))))
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="call", name="read", arguments="{}"),
+        ]),
+      ),
+    )
+    .append(
+      Tool(
+        ToolResult(tool_call_id="call", tool_name="read", content=[
+          Text("result"),
+        ]),
+      ),
+    )
+    .append(Runtime(RuntimeNotice("notice")))
+  store.create(session)
+  let lines = @fs.read_file(session_file(store, "plain"))
+    .text()
+    .split("\n")
+    .to_array()
+  let texts : Array[String] = []
+  for line in lines[1:] {
+    if line.is_empty() {
+      continue
+    }
+    guard @json.parse(line.to_owned())
+      is { "item": { "payload": { "content": content, .. }, .. }, .. } else {
+      fail("missing message content")
+    }
+    // This is the old reader's String decoder, not the new Content decoder.
+    texts.push(@json.from_json(content))
+  }
+  assert_eq(texts, ["prompt", "", "result", "notice"])
+  assert_eq(store.load(SessionId("plain")).events().length(), 4)
+}
+
+///|
+async test "legacy JSONL can append and replay embedded images and text" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  store.create(Session(SessionId("mixed"), system_prompt="system"))
+  let legacy = (
+      #|{"version":1,"id":"mixed","system_prompt":"system"}
+      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"old prompt","submission_id":"old-submission"}}}
+      #|{"sequence":2,"ts":0,"item":{"kind":"assistant","payload":{"content":"old answer","tool_calls":[],"reasoning_content":"old reasoning"}}}
+      #|{"sequence":3,"ts":0,"item":{"kind":"runtime_notice","payload":{"content":"old notice"}}}
+      #|{"sequence":4,"ts":0,"item":{"kind":"tool_result","payload":{"tool_call_id":"old-call","tool_name":"read","content":"old result","is_error":false}}}
+    ) +
+    "\n"
+  @fs.write_file(session_file(store, "mixed"), legacy)
+  let loaded = store.load(SessionId("mixed"))
+  guard loaded.events()[0].item() is User(old_user) else {
+    fail("expected user")
+  }
+  assert_eq(old_user.submission_id(), Some("old-submission"))
+  assert_true(old_user.content().0 is [Text("old prompt")])
+  guard loaded.events()[1].item() is Assistant(old_assistant) else {
+    fail("expected assistant")
+  }
+  assert_eq(old_assistant.reasoning_content(), Some("old reasoning"))
+  assert_eq(old_assistant.content(), "old answer")
+  guard loaded.events()[2].item() is Runtime(old_notice) else {
+    fail("expected notice")
+  }
+  assert_eq(old_notice.content(), "old notice")
+  guard loaded.events()[3].item() is Tool(old_tool) else {
+    fail("expected tool result")
+  }
+  assert_true(old_tool.content().0 is [Text("old result")])
+  let image = @agent_session.Image::from_bytes(
+    @fs.read_file("deepseek/client/testdata/two-colors.png").binary(),
+  )
+  let user = @agent_session.UserMessage(
+    Content([Text("compare "), Image(image), Text(" with "), Image(image)]),
+    submission_id="new-submission",
+  )
+  let appended = store.append(loaded, User(user))
+  let appended = store.append(
+    appended,
+    Assistant(
+      AssistantMessage("", tool_calls=[
+        ToolCall(id="image-call", name="read_image", arguments="{}"),
+      ]),
+    ),
+  )
+  let result = @agent_session.ToolResult(
+    tool_call_id="image-call",
+    tool_name="read_image",
+    content=[Text("result: "), Image(image)],
+  )
+  let _ = store.append(appended, Tool(result))
+  let written = @fs.read_file(session_file(store, "mixed")).text()
+  assert_true(written.has_prefix(legacy))
+  let event = @json.parse(written.split("\n").to_array()[5].to_owned())
+  assert_true(
+    event is { "item": { "payload": { "content": Array(_), .. }, .. }, .. },
+  )
+  let resumed = store.load(SessionId("mixed"))
+  guard resumed.events()[4].item() is User(actual) else {
+    fail("expected mixed user")
+  }
+  assert_eq(actual.content(), user.content())
+  assert_eq(actual.submission_id(), Some("new-submission"))
+  let messages = resumed.chat_messages()
+  assert_eq(
+    messages[messages.length() - 3].content.0,
+    @agent_session.to_deepseek_parts(user.content()),
+  )
+  assert_eq(
+    messages[messages.length() - 1].content.0,
+    @agent_session.to_deepseek_parts(result.content()),
+  )
+  assert_true(messages[messages.length() - 1].role is Tool("image-call"))
+}
+
+///|
+async test "store refuses malformed content parts instead of silently dropping images" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  store.create(Session(SessionId("invalid-content"), system_prompt="system"))
+  append_raw(
+    store,
+    "invalid-content",
+    (
+      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":[{"type":"text","text":"inspect"},{"type":"image","media_type":"image/png","data":123}]}}}
+    ) +
+    "\n",
+  )
+  try store.load(SessionId("invalid-content")) catch {
+    error => assert_true("\{error}".contains("data"))
+  } noraise {
+    _ => fail("malformed image content was accepted")
+  }
+}
+
+///|
+async test "image-only conversations have a nonempty listing preview" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let image = @agent_session.Image::from_bytes(
+    @fs.read_file("deepseek/client/testdata/two-colors.png").binary(),
+  )
+  let session = @agent_session.Session(
+    SessionId("image-only"),
+    system_prompt="system",
+  ).append(User(UserMessage(Content([Image(image)]))))
+  store.create(session)
+  assert_eq(store.listings()[0].first_prompt(), "[Image]")
 }

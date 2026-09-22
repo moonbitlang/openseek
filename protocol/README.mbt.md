@@ -10,7 +10,7 @@ portable:
 
 | Package | Contents | Targets | Deps |
 | --- | --- | --- | --- |
-| `moonbitlang/openseek_protocol` | `Event`, `Usage`, `Command`, `SteerKind`, `to_json`, `parse` | js, wasm, wasm-gc, native | `core/json` |
+| `moonbitlang/openseek_protocol` | `Event`, `Usage`, `Command`, `SteerKind`, `Content`, `Image`, `to_json`, `parse` | js, wasm, wasm-gc, native | `core/json`, `core/encoding` |
 | `moonbitlang/openseek_protocol/emit` | `emit` (`to_json` + stdout writer) | native | `async`, above |
 
 Only the *writer* does I/O, and only a native process can write fd 1
@@ -66,6 +66,12 @@ What that caught, once the readers were made exhaustive:
   engine writes `error`, under a comment claiming "the same wire shape the engine
   emits". One decoder happened to accept both spellings, so nothing noticed.
 
+`SteerApplied.content` carries ordered `Content` parts, including inline images.
+A single text part still serializes as a string; mixed or image-only content
+serializes as an array. Parsing accepts both forms, including legacy string receipts.
+The Session package re-exports the same `Content` and `Image` types for durable
+records, so the protocol module remains independent of the agent.
+
 ## API
 
 ```mbt nocheck
@@ -115,17 +121,22 @@ the engine's decoder happened to default it.
 
 ```mbt nocheck
 // A controller writes a line.
-let line = (Prompt(text="do it") : @protocol.Command).to_jsonl()
+let line = (Prompt(content=Content([Text("do it")]), submission_id=None) : @protocol.Command).to_jsonl()
 
 // The engine reads one back. `Err` is a line it cannot read — and only that:
 // whether a readable command is *acceptable* is the engine's to say, which is
 // why `serve`, not `parse`, refuses a blank goal.
-match @protocol.Command::parse(line) {
-  Ok(Prompt(text~)) => start_turn(text)
+match @protocol.Command::parse(@json.parse(line)) {
+  Ok(Prompt(content~, ..)) => start_turn(content)
   Ok(_) => ()
   Err(message) => report(message)
 }
 ```
+
+Prompt and steer commands carry `Content` directly. Their JSON uses a `content`
+field: one text part becomes a string, while mixed content remains an ordered
+array of text and image blocks, just like session records. The decoder still
+accepts legacy `text` and `images` fields and converts them at this boundary.
 
 One command runs the other way round. `approval_requested` is the only event
 that is a **question**: a tool has blocked and the turn does not advance until

@@ -33,6 +33,11 @@ pub fn FileUploadError::equal(Self, Self) -> Bool
 pub fn FileUploadError::not_equal(Self, Self) -> Bool
 pub fn FileUploadError::to_repr(Self) -> @debug.Repr
 
+pub(all) suberror ImageRequestError {
+  UnsupportedProvider
+} derive(@debug.Debug)
+pub fn ImageRequestError::to_repr(Self) -> @debug.Repr
+
 // Types and methods
 pub struct Client {
   model : @deepseek.Model

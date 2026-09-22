@@ -95,7 +95,7 @@ pub async fn start_run(
   // recognize its own prompt in the record — the host itself never reads it
   // back.
   let submission_id = normalize_submission_id(payload.submission_id)
-  let command = @protocol.prompt(config.task, submission_id?)
+  let command = @protocol.prompt(Content([Text(config.task)]), submission_id?)
   // Submitting, opening the run and announcing it are one synchronous step,
   // with no suspension since the claim check above. That is what makes the
   // ordering hold without a lock: no other request can interleave a command
@@ -433,7 +433,7 @@ pub fn steer_run(
   }
   let submission_id = normalize_submission_id(payload.submission_id)
   guard live.submit(
-    @protocol.steer(payload.text, submission_id?),
+    @protocol.steer(Content([Text(payload.text)]), submission_id?),
     failure_reason="failed to write steering to the engine",
   ) else {
     return { steered: false, run_id: Some(run_id), }
@@ -505,7 +505,7 @@ pub fn queue_run(
       }
       let queued = live.queued_runs[index]
       guard live.submit(
-        @protocol.steer(queued.content, submission_id=id),
+        @protocol.steer(Content([Text(queued.content)]), submission_id=id),
         failure_reason="failed to write steering to the engine",
       ) else {
         return { accepted: false, }

@@ -1965,7 +1965,10 @@ async fn ServeEngine::consume(
               )
               if next_queue is Some(next) &&
                 engine.submit(
-                  @protocol.prompt(next.content, submission_id=next.id),
+                  @protocol.prompt(
+                    Content([Text(next.content)]),
+                    submission_id=next.id,
+                  ),
                   failure_reason="failed to promote queued prompt",
                 ) {
                 ignore(engine.queued_runs.remove(0))
@@ -2541,7 +2544,7 @@ async test "a run's close spares the commands queued to outlive its turn" {
     let steer_ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
     assert_true(
       engine.submit(
-        @protocol.steer("keep going"),
+        @protocol.steer(Content([Text("keep going")])),
         failure_reason="steer",
         ack=steer_ack,
       ),
@@ -2673,12 +2676,15 @@ test "trailing steer settle events keep the terminal run id" {
   tracker.begin_run()
   tracker.record_sent(submission_id="submission-fresh")
   let old_drop : @wire.Event? = Some(
-    SteerDropped(content="same", submission_id=Some("submission-old")),
+    SteerDropped(
+      content=Content([Text("same")]),
+      submission_id=Some("submission-old"),
+    ),
   )
   let fresh_apply : @wire.Event? = Some(
     SteerApplied(
       kind="prompt",
-      content="same",
+      content=Content([Text("same")]),
       submission_id=Some("submission-fresh"),
     ),
   )
@@ -2696,12 +2702,12 @@ test "equal steer text receipts settle by id even out of order" {
   tracker.record_sent(submission_id="submission-b")
   let second : @wire.Event = SteerApplied(
     kind="prompt",
-    content="same",
+    content=Content([Text("same")]),
     submission_id=Some("submission-b"),
   )
   let first : @wire.Event = SteerApplied(
     kind="prompt",
-    content="changed text",
+    content=Content([Text("changed text")]),
     submission_id=Some("submission-a"),
   )
   assert_eq(tracker.route_event(event=second, latest_run="r9"), Some("r9"))
@@ -2717,12 +2723,16 @@ test "legacy steer receipt does not gain a submission field" {
   tracker.begin_run()
   tracker.record_sent(submission_id="tagged-legacy-text")
   let decoded : @wire.Event? = Some(
-    SteerApplied(kind="prompt", content="legacy", submission_id=None),
+    SteerApplied(
+      kind="prompt",
+      content=Content([Text("legacy")]),
+      submission_id=None,
+    ),
   )
   assert_eq(tracker.route_event(event?=decoded, latest_run="r11"), Some("r11"))
   let event : @wire.Event = SteerApplied(
     kind="prompt",
-    content="legacy",
+    content=Content([Text("legacy")]),
     submission_id=None,
   )
   guard event.to_json() is Object(fields) else {
@@ -2779,7 +2789,10 @@ test "new turn events clear stale settling state" {
     Some("r8"),
   )
   let old_drop : @wire.Event? = Some(
-    SteerDropped(content="old steer", submission_id=Some("submission-old")),
+    SteerDropped(
+      content=Content([Text("old steer")]),
+      submission_id=Some("submission-old"),
+    ),
   )
   assert_eq(tracker.route_event(event?=old_drop, latest_run="r8"), Some("r8"))
 }
@@ -2797,7 +2810,7 @@ test "background events do not clear trailing steer receipts" {
     tracker.route_event(
       event=SteerApplied(
         kind="prompt",
-        content="first",
+        content=Content([Text("first")]),
         submission_id=Some("submission-first"),
       ),
       latest_run="r-new",
@@ -2807,7 +2820,7 @@ test "background events do not clear trailing steer receipts" {
   assert_eq(
     tracker.route_event(
       event=SteerDropped(
-        content="second",
+        content=Content([Text("second")]),
         submission_id=Some("submission-second"),
       ),
       latest_run="r-new",
@@ -2824,15 +2837,23 @@ test "only prompt steer_applied consumes a desktop steer" {
   let prompt : @wire.Event? = Some(
     SteerApplied(
       kind="prompt",
-      content="same",
+      content=Content([Text("same")]),
       submission_id=Some("submission-prompt"),
     ),
   )
   let command : @wire.Event? = Some(
-    SteerApplied(kind="command", content="same", submission_id=None),
+    SteerApplied(
+      kind="command",
+      content=Content([Text("same")]),
+      submission_id=None,
+    ),
   )
   let notice : @wire.Event? = Some(
-    SteerApplied(kind="notice", content="same", submission_id=None),
+    SteerApplied(
+      kind="notice",
+      content=Content([Text("same")]),
+      submission_id=None,
+    ),
   )
   assert_eq(tracker.route_event(event?=command, latest_run="r1"), Some("r1"))
   assert_eq(tracker.route_event(event?=notice, latest_run="r1"), Some("r1"))

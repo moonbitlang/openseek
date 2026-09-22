@@ -85,7 +85,7 @@ async test "copy_tree dereferences an in-workspace file symlink" {
 ///|
 test "terminal_summary reads the last terminal" {
   let finished = @agent_session.Session(SessionId("t"), system_prompt="")
-    .append(User(UserMessage("hi")))
+    .append(User(UserMessage(Content([Text("hi")]))))
     .append(Terminal(Finished("done")))
   let (status, detail) = terminal_summary(finished)
   assert_eq(status, "finished")

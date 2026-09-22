@@ -18,11 +18,20 @@ pub fn split_child_session_id(String) -> (String, Int)?
 pub fn valid_job_component(String) -> Bool
 
 // Errors
+pub(all) suberror ImageError {
+  TooLarge
+  InvalidBase64
+  UnsupportedFormat
+  MediaTypeMismatch(expected~ : String, actual~ : String)
+} derive(Eq, @debug.Debug)
+pub fn ImageError::equal(Self, Self) -> Bool
+pub fn ImageError::not_equal(Self, Self) -> Bool
+pub fn ImageError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub(all) enum Command {
-  Prompt(text~ : String, submission_id~ : String?)
-  Steer(kind~ : SteerKind, text~ : String, submission_id~ : String?)
+  Prompt(content~ : Content, submission_id~ : String?)
+  Steer(kind~ : SteerKind, content~ : Content, submission_id~ : String?)
   Compact
   Cancel
   JobsSnapshot(request_id~ : String)
@@ -37,6 +46,29 @@ pub fn Command::parse(Json) -> Result[Self, String]
 pub fn Command::to_json(Self) -> Json
 pub fn Command::to_jsonl(Self) -> String
 pub fn Command::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Content(Array[ContentPart]) derive(Eq, @debug.Debug)
+pub fn Content::contains(Self, StringView) -> Bool
+pub fn Content::equal(Self, Self) -> Bool
+pub fn Content::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Content::is_text_only(Self) -> Bool
+pub fn Content::iter(Self) -> Iter[ContentPart]
+pub fn Content::not_equal(Self, Self) -> Bool
+pub fn Content::text(Self) -> String
+pub fn Content::to_json(Self) -> Json
+pub fn Content::to_repr(Self) -> @debug.Repr
+pub impl ToJson for Content
+pub impl @json.FromJson for Content
+
+pub(all) enum ContentPart {
+  Text(String)
+  Image(Image)
+} derive(Eq, @debug.Debug)
+pub fn ContentPart::equal(Self, Self) -> Bool
+pub fn ContentPart::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ContentPart::not_equal(Self, Self) -> Bool
+pub fn ContentPart::to_repr(Self) -> @debug.Repr
+pub impl @json.FromJson for ContentPart
 
 pub(all) enum Event {
   AgentSetupFailed(error~ : String)
@@ -55,8 +87,8 @@ pub(all) enum Event {
   ToolCallDecodeError(tool_call_id~ : String, tool_name~ : String, error~ : String)
   ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String, body~ : String?)
   ApprovalResolved(id~ : String, outcome~ : String)
-  SteerApplied(kind~ : String, content~ : String, submission_id~ : String?)
-  SteerDropped(content~ : String, submission_id~ : String?)
+  SteerApplied(kind~ : String, content~ : Content, submission_id~ : String?)
+  SteerDropped(content~ : Content, submission_id~ : String?)
   BackgroundNotice(content~ : String)
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
@@ -102,6 +134,19 @@ pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
 pub fn Event::to_json(Self) -> Json
 pub fn Event::to_repr(Self) -> @debug.Repr
+
+pub struct Image {
+  media_type : String
+  bytes : Bytes
+} derive(Eq)
+pub fn Image::data_url(Self) -> String
+pub fn Image::equal(Self, Self) -> Bool
+pub fn Image::from_base64(media_type~ : StringView, StringView) -> Self raise ImageError
+pub fn Image::from_bytes(Bytes) -> Self raise ImageError
+pub fn Image::from_data_url(String) -> Self raise ImageError
+pub fn Image::not_equal(Self, Self) -> Bool
+pub fn Image::to_repr(Self) -> @debug.Repr
+pub impl @debug.Debug for Image
 
 pub(all) enum JobEventKind {
   Started

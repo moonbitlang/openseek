@@ -33,10 +33,16 @@ async test "queued steering is folded in at the next step boundary" {
     // its first step boundary, so the steered text must reach the model
     // alongside the task (the mock server asserts both are in the body).
     runtime.queue_steer(
-      Prompt("also rename the file", submission_id=Some("steer-1")),
+      Prompt(
+        Content([Text("also rename the file")]),
+        submission_id=Some("steer-1"),
+      ),
     )
     runtime.queue_steer(
-      Prompt("also rename the file", submission_id=Some("steer-2")),
+      Prompt(
+        Content([Text("also rename the file")]),
+        submission_id=Some("steer-2"),
+      ),
     )
     let session = @agent_session.Session(
       SessionId("steer-test"),
@@ -51,7 +57,7 @@ async test "queued steering is folded in at the next step boundary" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="do the task",
+      content=Content([Text("do the task")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
       api_url=url,
@@ -62,9 +68,9 @@ async test "queued steering is folded in at the next step boundary" {
     let events = result.events()
     assert_eq(events.length(), 5)
     guard events[0].item() is User(task) else { fail("expected task event") }
-    assert_eq(task.content(), "do the task")
+    assert_eq(task.content().text(), "do the task")
     guard events[1].item() is User(steer) else { fail("expected steer event") }
-    assert_eq(steer.content(), "also rename the file")
+    assert_eq(steer.content().text(), "also rename the file")
     assert_eq(steer.submission_id(), Some("steer-1"))
     guard events[2].item() is User(second) else {
       fail("expected second steer")
@@ -132,7 +138,7 @@ async test "a steer racing the final call keeps the turn alive" {
         group,
         runtime,
         "local TCP bind unavailable; skipping override test",
-        Prompt("actually, make it rhyme", submission_id=None),
+        Prompt(Content([Text("actually, make it rhyme")]), submission_id=None),
         expected=["actually, make it rhyme"],
         final_answer="rhymed answer",
       )
@@ -150,7 +156,7 @@ async test "a steer racing the final call keeps the turn alive" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="write a poem",
+      content=Content([Text("write a poem")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -166,7 +172,7 @@ async test "a steer racing the final call keeps the turn alive" {
     }
     assert_eq(draft.content(), "draft answer")
     guard events[2].item() is User(steer) else { fail("expected steer event") }
-    assert_eq(steer.content(), "actually, make it rhyme")
+    assert_eq(steer.content().text(), "actually, make it rhyme")
     guard events[3].item() is Assistant(response) else {
       fail("expected durable final response")
     }
@@ -214,7 +220,7 @@ async test "inject racing the final call keeps the turn alive" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="inspect files",
+      content=Content([Text("inspect files")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -229,7 +235,7 @@ async test "inject racing the final call keeps the turn alive" {
     guard events[2].item() is User(inject_message) else {
       fail("expected inject")
     }
-    assert_eq(inject_message.content(), context)
+    assert_eq(inject_message.content().text(), context)
     assert_eq(inject_message.submission_id(), Some("command-context"))
     guard events[3].item() is Assistant(response) else {
       fail("expected durable final response")
@@ -248,8 +254,10 @@ async test "blank steering input is dropped at the boundary" {
     guard steer_test_server(group) is Some(url) else { return }
     let runtime = @agent_runtime.AgentRuntime()
     let scope = @agent_runtime.AgentTaskScope(group)
-    runtime.queue_steer(Prompt("   ", submission_id=None))
-    runtime.queue_steer(Prompt("also rename the file", submission_id=None))
+    runtime.queue_steer(Prompt(Content([Text("   ")]), submission_id=None))
+    runtime.queue_steer(
+      Prompt(Content([Text("also rename the file")]), submission_id=None),
+    )
     let session = @agent_session.Session(
       SessionId("steer-blank"),
       system_prompt="system",
@@ -260,7 +268,7 @@ async test "blank steering input is dropped at the boundary" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="do the task",
+      content=Content([Text("do the task")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
       api_url=url,
@@ -473,7 +481,7 @@ async test "a background notice steer is applied as a runtime notice" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="do a task",
+      content=Content([Text("do a task")]),
       append_item=(session, item) => session.append(item),
       max_steps=10,
       api_url=url,
@@ -522,7 +530,7 @@ async test "a runtime notice after a completion preserves the follow-up step" {
         SessionId("notice-after-completion"),
         system_prompt="system",
       ),
-      task="do a task",
+      content=Content([Text("do a task")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,

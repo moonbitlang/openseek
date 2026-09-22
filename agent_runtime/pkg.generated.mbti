@@ -4,6 +4,7 @@ package "moonbitlang/openseek/agent_runtime"
 import {
   "moonbitlang/async",
   "moonbitlang/core/debug",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
@@ -46,10 +47,11 @@ pub(all) enum ApprovalOutcome {
 } derive(Eq, @debug.Debug)
 
 pub(all) enum SteerInput {
-  Prompt(String, submission_id~ : String?)
+  Prompt(@openseek_protocol.Content, submission_id~ : String?)
   Command(String, submission_id~ : String?)
   Notice(String)
 }
+pub fn SteerInput::has_content(Self) -> Bool
 
 // Type aliases
 

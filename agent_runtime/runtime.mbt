@@ -8,7 +8,7 @@
 /// model as user-role content, but consumers may render/acknowledge them
 /// differently.
 pub(all) enum SteerInput {
-  Prompt(String, submission_id~ : String?)
+  Prompt(@agent_session.Content, submission_id~ : String?)
   Command(String, submission_id~ : String?)
   Notice(String)
 }
@@ -153,9 +153,7 @@ pub fn AgentRuntime::queue_steer(
   wake? : Bool = false,
 ) -> Unit {
   ignore(self.steers.try_put(input) catch { _ => false })
-  if input is (Prompt(text, ..) | Command(text, ..) | Notice(text)) &&
-    !text.is_blank() &&
-    (wake || !(input is Notice(_))) {
+  if input.has_content() && (wake || !(input is Notice(_))) {
     self.user_input_pending = true
     self.user_input_changed.broadcast()
   }
@@ -214,17 +212,21 @@ test "runtime stores an explicit workspace root" {
 ///|
 test "steering input survives an event-bus flood" {
   let runtime = AgentRuntime()
-  runtime.queue_steer(Prompt("turn left", submission_id=None))
+  runtime.queue_steer(Prompt(Content([Text("turn left")]), submission_id=None))
   // Flood the lossy event bus far past its capacity: later runtime updates may
   // be ignored, but the steering queue is a separate lossless channel.
   for index in 0..<(default_agent_event_capacity * 3) {
     runtime.emit_event(RuntimeTestEvent("noise \{index}"))
   }
-  runtime.queue_steer(Prompt("turn right", submission_id=None))
+  runtime.queue_steer(Prompt(Content([Text("turn right")]), submission_id=None))
   let steers = runtime.drain_steers()
   assert_eq(steers.length(), 2)
-  assert_true(steers[0] is Prompt("turn left", submission_id=None))
-  assert_true(steers[1] is Prompt("turn right", submission_id=None))
+  assert_true(
+    steers[0] is Prompt(Content([Text("turn left")]), submission_id=None),
+  )
+  assert_true(
+    steers[1] is Prompt(Content([Text("turn right")]), submission_id=None),
+  )
   assert_eq(runtime.drain_steers().length(), 0)
   assert_eq(runtime.drain_events().length(), default_agent_event_capacity)
 }
@@ -234,5 +236,14 @@ async test "task scope exposes structured task group" {
   @async.with_task_group() <| group => {
     let scope = AgentTaskScope(group)
     scope.group().spawn_bg(no_wait=true) <| () => { () }
+  }
+}
+
+///|
+/// Whether this input contains text or an image worth applying.
+pub fn SteerInput::has_content(self : SteerInput) -> Bool {
+  match self {
+    Prompt(content, ..) => !content.is_text_only() || !content.text().is_blank()
+    Command(text, ..) | Notice(text) => !text.is_blank()
   }
 }
