@@ -90,7 +90,6 @@ async fn fetch_response(url : String) -> (Int, &@io.Data) {
   let mut current = url
   for _ in 0..<MaxRedirects {
     let (response, data) = @http.get(current) catch {
-      error if @async.is_being_cancelled() => raise error
       error => raise SkillMarketError("GET \{current} failed: \{error}")
     }
     guard response.code is (301 | 302 | 303 | 307 | 308) &&
