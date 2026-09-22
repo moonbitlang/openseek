@@ -242,15 +242,14 @@ async fn git_branch_base(dir : String, hint? : String) -> (String, String?) {
 }
 
 ///|
-/// The committed branch delta Review should keep visible.
+/// The current branch's merge base with the default branch, including HEAD
+/// when there are no branch commits beyond it.
 /// `head` is the full identity captured by the surrounding snapshot,
 /// rather than the mutable `HEAD` spelling, so a concurrent checkout cannot
 /// choose one branch's fork point and publish another branch's rows.
 ///
-/// A branch still at its default-branch fork point returns `None`. That keeps
-/// the original porcelain status path — and its separate staged/worktree
-/// columns — until there is committed branch work to retain. With no declared
-/// default branch, the caller falls back to the recorded task base or HEAD.
+/// `None` means the boundary could not be determined. The caller chooses
+/// whether a valid HEAD boundary should use porcelain status.
 async fn git_review_branch_base(dir : String, head : String?) -> String? {
   guard head is Some(head) else { return None }
   guard git_base_ref(dir) is Some(base_ref) else { return None }
@@ -258,7 +257,7 @@ async fn git_review_branch_base(dir : String, head : String?) -> String? {
     return None
   }
   let base = git_single_line(output)
-  if base.is_empty() || base == head {
+  if base.is_empty() {
     None
   } else {
     Some(base)
@@ -962,7 +961,14 @@ async fn git_change_snapshot(
   let review_base = if pr_base is Some(_) {
     pr_base
   } else if git_review_branch_base(dir, head) is Some(branch_base) {
-    Some(branch_base)
+    // Ordinary checkouts keep porcelain's staged/worktree columns at HEAD.
+    // Worktrees retain the valid boundary instead of falling back to an old
+    // creation commit and including upstream changes.
+    if worktree_base is None && head == Some(branch_base) {
+      None
+    } else {
+      Some(branch_base)
+    }
   } else {
     worktree_base
   }
@@ -2196,6 +2202,25 @@ async test "checkout reviews retain committed changes and follow rebases" {
   git_test_commit(dir, "upstream")
   let upstream = git_revision_commit(dir, "HEAD").unwrap()
   git_test_run(dir, ["update-ref", "refs/remotes/origin/main", upstream])
+  // At the default tip, the valid HEAD boundary must beat an old task base.
+  let (_, tip_base, _, _, _, _, tip_changes) = git_change_snapshot(
+    dir,
+    "",
+    retries_left=2,
+    worktree_base=first,
+  )
+  assert_eq(tip_base, Some(upstream))
+  assert_true(tip_changes.is_empty())
+  @fs.write_file("\{dir}/review.txt", "pending\n", create_mode=CreateOrTruncate)
+  let (_, pending_base, _, _, _, _, pending_changes) = git_change_snapshot(
+    dir,
+    "",
+    retries_left=2,
+    worktree_base=first,
+  )
+  assert_eq(pending_base, Some(upstream))
+  assert_eq(pending_changes.map(change => change.path), ["review.txt"])
+  git_test_run(dir, ["restore", "review.txt"])
   git_test_run(dir, ["switch", "--detach", second])
   git_test_run(dir, [
     "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
