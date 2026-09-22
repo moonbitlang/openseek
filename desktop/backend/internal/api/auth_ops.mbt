@@ -70,15 +70,16 @@ async fn auth_disconnect(state : ApiState) -> @protocol.AuthStatusPayload {
   if store.managed_by_env() {
     raise @host.HostError("remote access is configured through the environment")
   }
+  // A cancellation no longer enters `catch`, so the hub must still learn the
+  // cleared state — `sign_out` has already cleared local authority and poked
+  // the supervisor before the cancellation can escape its local transition.
+  errdefer (if @async.is_being_cancelled() {
+    @async.protect_from_cancel(() => {
+      state.hub.publish(AuthChanged(store.status()))
+    })
+    |> ignore
+  })
   store.sign_out() catch {
-    error if @async.is_being_cancelled() => {
-      // `sign_out` has already cleared local authority and poked the
-      // supervisor before cancellation can escape its local transition.
-      @async.protect_from_cancel(() => {
-        state.hub.publish(AuthChanged(store.status()))
-      })
-      raise error
-    }
     @auth.AuthError(message) => {
       // `clear_local_session` clears memory and parks the connector before
       // it writes the marker. Publish that truthful in-process state even

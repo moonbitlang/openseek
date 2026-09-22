@@ -197,24 +197,21 @@ fn Client::try_enqueue(self : Client, message : Json) -> Unit {
 /// until the client closes. A failed send closes the client (so a request never
 /// waits on a reply to a message that could not be sent). Spawn exactly one.
 pub async fn Client::run_writer(self : Client) -> Unit {
+  // Close on every exit, including the cancellation that no longer enters
+  // `catch`: otherwise a cancelled writer leaves `closed` false and every
+  // outstanding request waits for a reply that can never arrive.
+  defer self.close()
   while !self.closed {
     let message = self.outbox.get() catch {
-      error if @async.is_being_cancelled() => {
-        self.close()
-        raise error
-      }
+      error if @async.is_being_cancelled() => raise error
       // Outbox closed: the client is shutting down.
       _ => break
     }
     self.transport.send(message) catch {
-      error if @async.is_being_cancelled() => {
-        self.close()
-        raise error
-      }
+      error if @async.is_being_cancelled() => raise error
       _ => break
     }
   }
-  self.close()
 }
 
 ///|

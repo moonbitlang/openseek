@@ -183,27 +183,24 @@ async fn wait_for_code(
 ) -> (String, @http.ServerConnection) {
   for ;; {
     let (conn, _) = server.accept()
+    // Close the socket on every per-iteration exit — including the
+    // cancellation that no longer enters `catch` — except when the granted
+    // connection is handed back to the caller.
+    let mut keep = false
+    defer (if !keep { conn.close() })
     let outcome = serve_callback(conn, oauth_state~) catch {
-      error if @async.is_being_cancelled() => {
-        conn.close()
-        raise error
-      }
+      error if @async.is_being_cancelled() => raise error
       // A broken socket must not kill the flow; keep listening.
-      _ => {
-        conn.close()
-        continue
-      }
+      _ => continue
     }
     match outcome {
-      Granted(code) => return (code, conn)
-      Denied(reason) => {
-        conn.close()
+      Granted(code) => {
+        keep = true
+        return (code, conn)
+      }
+      Denied(reason) =>
         raise AuthError("the browser declined the sign-in: \{reason}")
-      }
-      Stray => {
-        conn.close()
-        continue
-      }
+      Stray => continue
     }
   }
 }

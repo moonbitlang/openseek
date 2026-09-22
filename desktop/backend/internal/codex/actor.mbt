@@ -504,16 +504,18 @@ fn[G] Connection::dispatch_input(
   match input {
     Call(method_, params, reply) =>
       group.spawn_bg(allow_failure=true, () => {
-        let outcome = try self.request(method_~, params~) catch {
-          error if @async.is_being_cancelled() => {
-            // The connection task group is cancelled on disconnect. Settle
-            // the API caller before preserving that cancellation; otherwise
-            // Actor::call waits forever on a reply only this child owned.
+        // The connection task group is cancelled on disconnect. A cancellation
+        // no longer enters `catch`, so settle the API caller from `errdefer`;
+        // otherwise Actor::call waits forever on a reply only this child owned.
+        errdefer (if @async.is_being_cancelled() {
+          @async.protect_from_cancel(() => {
             let closed = TransportClosed(method_~)
             closed.log()
             (reply.try_put(Err(closed)) catch { _ => false }) |> ignore
-            raise error
-          }
+          })
+          |> ignore
+        })
+        let outcome = try self.request(method_~, params~) catch {
           @jsonrpc.Failed(code~, message~, data~) => {
             let error = JsonRpc(method_~, code~, message~, data~)
             error.log()
@@ -546,16 +548,18 @@ fn[G] Connection::dispatch_input(
         return
       }
       group.spawn_bg(allow_failure=true, () => {
+        errdefer (if @async.is_being_cancelled() {
+          @async.protect_from_cancel(() => {
+            let closed = TransportClosed(method_="serverRequest/respond")
+            closed.log()
+            (reply.try_put(Err(closed)) catch { _ => false }) |> ignore
+          })
+          |> ignore
+        })
         let outcome = try {
           self.respond(request, result)
           Ok(Json::empty_object())
         } catch {
-          error if @async.is_being_cancelled() => {
-            let closed = TransportClosed(method_="serverRequest/respond")
-            closed.log()
-            (reply.try_put(Err(closed)) catch { _ => false }) |> ignore
-            raise error
-          }
           error => {
             let error = RequestFailed(
               method_="serverRequest/respond",

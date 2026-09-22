@@ -145,6 +145,7 @@ pub async fn content_parse_errors(
       _ => ()
     }
   }
+  defer cleanup()
   try {
     @fs.write_file(
       "\{dir}/\{scratch_name}",
@@ -169,19 +170,8 @@ pub async fn content_parse_errors(
       None => None
     }
   } catch {
-    error if @async.is_being_cancelled() => {
-      cleanup()
-      raise error
-    }
-    _ => {
-      cleanup()
-      None
-    }
-  } noraise {
-    result => {
-      cleanup()
-      result
-    }
+    error if @async.is_being_cancelled() => raise error
+    _ => None
   }
 }
 
