@@ -15,8 +15,14 @@ pub fn Draft::is_empty(self : Draft) -> Bool {
 /// Keep image input separate from prompt text so Codex receives actual pixels.
 pub fn Draft::user_item(self : Draft) -> @transcript.ItemKind {
   @transcript.User(
-    text=self.prompt(),
-    images=self.images.map(image => image.url),
+    content=Content(
+      [
+        Text(self.prompt()),
+        ..self.images.map(image => {
+          @deepseek.ContentPart::ImageUrl(url=image.url)
+        }),
+      ],
+    ),
   )
 }
 

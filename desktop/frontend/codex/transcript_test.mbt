@@ -41,10 +41,10 @@ test "Codex adapts app-server items to the shared transcript model" {
   })
   let items = state.transcript_items()
   assert_eq(items.length(), 4)
-  guard items[0].kind is @transcript.User(text=prompt, ..) else {
+  guard items[0].kind is @transcript.User(content=prompt) else {
     fail("expected the submitted prompt as the first item")
   }
-  guard @mention_context.parse(prompt) is Some(user) else {
+  guard @mention_context.parse(prompt.text()) is Some(user) else {
     fail("expected the user mention to use the shared display envelope")
   }
   assert_eq(user.task, "inspect this")
@@ -70,7 +70,10 @@ test "Codex adapts app-server items to the shared transcript model" {
     fail("expected the command as the call's arguments")
   }
   assert_true(arguments.contains("moon test"))
-  assert_true(call.outcome is Done(content="test failed", is_error=true, ..))
+  assert_true(
+    call.outcome
+    is Done(content=Content([Text("test failed")]), is_error=true, ..),
+  )
   assert_true(items[2].text() is None)
   assert_true(items[3].kind is @transcript.Failure(_))
   assert_eq(items[3].text(), Some("turn failed"))
@@ -355,11 +358,16 @@ test "Codex history preserves image-only and mixed user messages" {
       ],
     },
   })
-  guard state.transcript_items()[0].kind is @transcript.User(text~, images~) else {
+  guard state.transcript_items()[0].kind is @transcript.User(content~) else {
     fail("expected image content in the user message")
   }
-  assert_eq(text, "Look at this")
-  assert_eq(images, [
-    "data:image/png;base64,YQ==", "data:image/jpeg;base64,Yg==",
-  ])
+  assert_eq(content.text(), "Look at this")
+  assert_true(
+    content.0
+    is [
+      Text("Look at this"),
+      ImageUrl(url="data:image/png;base64,YQ=="),
+      ImageUrl(url="data:image/jpeg;base64,Yg=="),
+    ],
+  )
 }

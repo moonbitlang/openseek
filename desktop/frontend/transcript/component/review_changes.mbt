@@ -17,8 +17,8 @@ priv enum MessageChangesMsg {
 ///|
 fn Block::changes_id(self : Block) -> String? {
   if self.content is Item(item~, anchor=Some(anchor), ..) &&
-    item.kind is User(text=content, ..) &&
-    @mention_context.parse(content) is Some(parsed) &&
+    item.kind is User(content~) &&
+    @mention_context.parse(content.text()) is Some(parsed) &&
     parsed.mentions.any(mention => mention is @mention_context.ReviewChanges(_)) {
     Some(anchor + "-changes")
   } else {

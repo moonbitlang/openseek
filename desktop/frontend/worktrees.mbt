@@ -109,6 +109,7 @@ fn start_in_new_worktree(
   max_steps : String,
   session : String,
   workspace : @common.Uri,
+  images? : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let device_dispatch = dispatch.map((msg : DeviceMsg) => {
@@ -217,6 +218,7 @@ fn start_in_new_worktree(
             ),
           )
           let start = start_payload(
+            images~,
             task,
             selected_model,
             reasoning,
@@ -790,7 +792,9 @@ test "the launch mode toggles only before the conversation begins" {
   let begun = test_model().replace_conversation({
     ..test_conversation(),
     workspace: Project(root=workspace),
-    messages: [{ kind: User(text="hi", images=[]), ts: None, sequence: None, }],
+    messages: [
+      { kind: User(content=Content([Text("hi")])), ts: None, sequence: None, },
+    ],
   })
   let (_, still) = update(dispatch, ToggleWorktreeMode, begun)
   assert_false(still.active().worktree_mode)

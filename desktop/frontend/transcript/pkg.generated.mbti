@@ -3,6 +3,7 @@ package "openseek_desktop/frontend/transcript"
 
 import {
   "moonbitlang/editor/base/common",
+  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
@@ -82,7 +83,7 @@ pub fn GoalStanding::equal(Self, Self) -> Bool
 pub fn GoalStanding::not_equal(Self, Self) -> Bool
 
 pub(all) enum ItemKind {
-  User(text~ : String, images~ : Array[String])
+  User(content~ : @deepseek.Content)
   Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool)
   Answer(String)
   TurnEnd
@@ -130,7 +131,7 @@ pub fn ToolCall::not_equal(Self, Self) -> Bool
 pub(all) enum ToolOutcome {
   Snapshot(content~ : String)
   Pending(output~ : String?)
-  Done(content~ : String, is_error~ : Bool, brief~ : String?)
+  Done(content~ : @deepseek.Content, is_error~ : Bool, brief~ : String?)
 } derive(Eq)
 pub fn ToolOutcome::equal(Self, Self) -> Bool
 pub fn ToolOutcome::not_equal(Self, Self) -> Bool

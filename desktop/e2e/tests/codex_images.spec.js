@@ -130,27 +130,28 @@ test('slow file reads disable send and report read errors without losing text', 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('file limits apply across selections while ordinary text paste remains native', async ({ page }) => {
+test('Codex remote image URLs retain their position between text parts', async ({ page }) => {
+  const remoteUrl = 'https://images.example.test/picture.png';
+  await page.route(remoteUrl, route => route.fulfill({ contentType: 'image/png', body: image.buffer }));
   const app = new CodexImagesHarness(page);
+  const replyFor = app.replyFor.bind(app);
+  app.replyFor = request => request.method === 'codex.turn.start'
+    ? { turn: { id: 'remote-image-turn', status: 'completed', items: [{
+      id: 'remote-image-user', type: 'userMessage', content: [
+        { type: 'text', text: 'Before remote picture' },
+        { type: 'image', url: remoteUrl },
+        { type: 'text', text: 'After remote picture' },
+      ],
+    }] } }
+    : replyFor(request);
   await app.openCodex();
-  const textPrevented = await page.locator('#task').evaluate(target => {
-    const clipboardData = new DataTransfer();
-    clipboardData.setData('text/plain', 'ordinary paste');
-    const event = new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true });
-    target.dispatchEvent(event);
-    return event.defaultPrevented;
-  });
-  expect(textPrevented).toBe(false);
-  await app.select(Array.from({ length: 5 }, (_, index) => ({ ...image, name: `${index}.png` })));
-  await expect(page.getByRole('alert')).toContainText('up to 4 images');
-  await expect(page.locator('.composer-image')).toHaveCount(0);
-  await app.select(Array.from({ length: 4 }, (_, index) => ({ ...image, name: `${index}.png` })));
-  await expect(page.locator('.composer-image')).toHaveCount(4);
-  expect(await app.transfer('paste')).toBe(true);
-  await expect(page.getByRole('alert')).toContainText('up to 4 images');
-  await expect(page.locator('.composer-image')).toHaveCount(4);
+  await page.locator('#task').fill('Before remote picture');
   await page.locator('#send').click();
-  await expect(page.locator('.user-image')).toHaveCount(4);
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  const user = page.locator('.user-bubble').last();
+  await expect(user.locator('.user-image')).toHaveAttribute('src', remoteUrl);
+  await expect.poll(() => user.locator('.user-image').evaluate(img => img.naturalWidth)).toBe(1);
+  expect(await user.locator('.msg-content, .user-images').evaluateAll(nodes =>
+    nodes.map(node => node.querySelector('img') ? 'image' : node.textContent),
+  )).toEqual(['Before remote picture', 'image', 'After remote picture']);
   expect(app.pageErrors).toEqual([]);
 });

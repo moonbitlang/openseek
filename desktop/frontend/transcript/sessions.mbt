@@ -330,18 +330,12 @@ pub fn apply_session_item(
   let mut updated_existing = false
   match item {
     @desktop_protocol.User(payload) => {
-      let content = payload.content.text().trim().to_owned()
-      let images = payload.content
-        .iter()
-        .filter_map(part => {
-          match part {
-            Text(_) => None
-            Image(image) => Some(image.data_url())
-          }
-        })
-        .collect()
-      if !content.is_empty() || !images.is_empty() {
-        items.push({ kind: User(text=content, images~), ts, sequence, })
+      let content = match payload.content.0 {
+        [Text(text)] => @deepseek.Content([Text(text.trim().to_owned())])
+        _ => model_content(payload.content)
+      }
+      if !content.0.all(part => part is Text(text) && text.is_blank()) {
+        items.push({ kind: User(content~), ts, sequence, })
       }
     }
     @desktop_protocol.Assistant(payload) => {
@@ -424,15 +418,7 @@ pub fn apply_session_item(
           },
           children: program_calls(payload.data, call.call_id, origin=Recorded),
           outcome: Done(
-            content=payload.content
-              .iter()
-              .map(part => {
-                match part {
-                  Text(text) => text
-                  Image(image) => "[Image: \{image.media_type}]"
-                }
-              })
-              .join(""),
+            content=model_content(payload.content),
             is_error=payload.is_error,
             brief=payload.brief,
           ),
@@ -901,7 +887,7 @@ test "projected rows carry their event's stamp, tool rows the call's own" {
   guard items[1].kind is Assistant(calls=[call], ..) else {
     fail("expected the response with its one call")
   }
-  assert_true(call.outcome is Done(content="out", ..))
+  assert_true(call.outcome is Done(content=Content([Text("out")]), ..))
   assert_true(items[1].ts is Some(1781144352000))
   assert_true(items[1].sequence is Some(2))
 }
@@ -1032,7 +1018,7 @@ test "tool results fill calls by id without changing call order" {
   assert_true(
     read.outcome
     is Done(
-      content="module contents",
+      content=Content([Text("module contents")]),
       is_error=false,
       brief=Some("read moon.mod")
     ),
@@ -1042,7 +1028,11 @@ test "tool results fill calls by id without changing call order" {
   assert_true(shell.arguments is Some("{\"cmd\":\"moon test\"}"))
   assert_true(
     shell.outcome
-    is Done(content="tests passed", is_error=false, brief=Some("ran moon test")),
+    is Done(
+      content=Content([Text("tests passed")]),
+      is_error=false,
+      brief=Some("ran moon test")
+    ),
   )
 }
 
@@ -1060,7 +1050,7 @@ test "a result no recorded call is waiting for changes nothing" {
   guard items[0].kind is Assistant(calls=[call], ..) else {
     fail("expected the recorded call with its first result")
   }
-  assert_true(call.outcome is Done(content="one", ..))
+  assert_true(call.outcome is Done(content=Content([Text("one")]), ..))
 }
 
 ///|
@@ -1201,3 +1191,16 @@ test "transcript mapping replays a context checkpoint and yield guidance" {
 
 ///|
 pub extend SessionTreeRow with Eq::{equal, not_equal}
+
+///|
+/// Project durable image bytes to inline URLs once, when building the transcript.
+fn model_content(content : @protocol.Content) -> @deepseek.Content {
+  @deepseek.Content(
+    content.0.map(part => {
+      match part {
+        Text(text) => Text(text)
+        Image(image) => ImageUrl(url=image.data_url())
+      }
+    }),
+  )
+}

@@ -41,6 +41,8 @@ pub fn OpenSeekThinking::parse(value : String) -> OpenSeekThinking? {
 
 ///|
 pub(all) struct StartPayload {
+  // Original images as data URLs. The engine persists the bytes before upload.
+  images : Array[String]
   task : String
   // Optional client-minted lifecycle identity echoed with `agent.started`.
   // Blank ids and ids longer than 128 UTF-8 bytes are ignored.
@@ -67,11 +69,13 @@ pub(all) struct CancelPayload {
 
 ///|
 pub(all) struct SteerPayload {
+  // Same inline image representation as StartPayload.
+  images : Array[String]
   text : String
   run_id : String?
   // Optional client-minted lifecycle identity echoed on the steer receipt.
   submission_id : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// One valid mutation of the live follow-up queue. Operation-specific fields
@@ -79,8 +83,8 @@ pub(all) struct SteerPayload {
 /// combination it still has to interpret. The queue belongs to the Desktop
 /// engine process and is never written to the session record.
 pub(all) enum QueueAction {
-  QueueAdd(id~ : String, text~ : String)
-  QueueEdit(id~ : String, text~ : String)
+  QueueAdd(id~ : String, text~ : String, images~ : Array[String])
+  QueueEdit(id~ : String, text~ : String, images~ : Array[String])
   QueueWithdraw(id~ : String)
   QueueSteer(id~ : String)
 } derive(Debug, Eq)

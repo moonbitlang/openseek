@@ -193,6 +193,7 @@ test "Codex resume and turn map full access without a reviewer" {
 test "start and steer payloads preserve submission ids" {
   let start : @protocol.StartPayload = @json.from_json({
     "task": "hello",
+    "images": [],
     "session": "s-start",
     "submission_id": "submission-start",
     "thinking": "high",
@@ -201,6 +202,7 @@ test "start and steer payloads preserve submission ids" {
   assert_eq(start.thinking, Some(ThinkingHigh))
   let steer : @protocol.SteerPayload = @json.from_json({
     "text": "more detail",
+    "images": [],
     "run_id": "r1",
     "submission_id": "submission-steer",
   })
@@ -211,10 +213,14 @@ test "start and steer payloads preserve submission ids" {
 test "start and steer payloads may omit submission ids" {
   let start : @protocol.StartPayload = @json.from_json({
     "task": "hello",
+    "images": [],
     "session": "s-start",
   })
   assert_true(start.submission_id is None)
-  let steer : @protocol.SteerPayload = @json.from_json({ "text": "more detail" })
+  let steer : @protocol.SteerPayload = @json.from_json({
+    "text": "more detail",
+    "images": [],
+  })
   assert_true(steer.submission_id is None)
 }
 
@@ -222,6 +228,7 @@ test "start and steer payloads may omit submission ids" {
 test "client-authored session roots are ignored" {
   let start : @protocol.StartPayload = @json.from_json({
     "task": "hello",
+    "images": [],
     "session": "s-start",
     "session_root": "/client/chosen/store",
   })
@@ -238,7 +245,7 @@ test "client-authored session roots are ignored" {
 ///|
 test "start payload requires a session" {
   let decoded : @protocol.StartPayload? = Some(
-    @json.from_json({ "task": "hello" }),
+    @json.from_json({ "task": "hello", "images": [] }),
   ) catch {
     _ => None
   }

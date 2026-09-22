@@ -12,9 +12,8 @@
 /// absent (a response's prose, a notice's body) is an option, never an empty
 /// string.
 pub(all) enum ItemKind {
-  // Attachments are data on the user message, not a different kind of turn.
-  // Text-only messages have no images; image-only messages have empty text.
-  User(text~ : String, images~ : Array[String])
+  // Preserve the ordered text and image parts through to rendering.
+  User(content~ : @deepseek.Content)
   // One provider response. `reasoning` is the thinking that preceded the
   // prose, `prose` what the model said (absent for a tool-only response), and
   // `calls` the tool calls that followed it, in the model's own order.
@@ -75,7 +74,7 @@ pub(all) enum ToolOutcome {
   // Historical observation of a background call, with no terminal outcome yet.
   Snapshot(content~ : String)
   Pending(output~ : String?)
-  Done(content~ : String, is_error~ : Bool, brief~ : String?)
+  Done(content~ : @deepseek.Content, is_error~ : Bool, brief~ : String?)
 } derive(Eq)
 
 ///|
@@ -98,7 +97,8 @@ pub(all) struct TranscriptItem {
 /// thought or only called tools has none.
 pub fn TranscriptItem::text(self : TranscriptItem) -> String? {
   match self.kind {
-    User(text~, ..) | Answer(text) | Failure(text) | Summary(text) => Some(text)
+    User(content~) => Some(content.text())
+    Answer(text) | Failure(text) | Summary(text) => Some(text)
     Assistant(prose~, ..) => prose
     Notice(body~, ..) => body
     TurnEnd => None
