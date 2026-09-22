@@ -382,6 +382,14 @@ fn AgentLoop::push_finished_message(self : Self, answer : String) -> Unit {
 }
 
 ///|
+priv struct SteerMessage {
+  kind : String
+  text : String
+  submission_id : String?
+  item : @agent_session.SessionItem
+}
+
+///|
 /// Fold steering input into the conversation: each becomes a durable session
 /// item and a model-visible chat message. Prompt/command steering persists as a
 /// user message; a background notice persists as a `RuntimeNotice` (so on resume
@@ -393,24 +401,30 @@ async fn AgentLoop::apply_steer_inputs(
   inputs : ArrayView[@agent_runtime.SteerInput],
 ) -> @agent_session.Session {
   for input in inputs; current = session {
-    let (kind, text, submission_id, item) : (
-      String,
-      String,
-      String?,
-      @agent_session.SessionItem,
-    ) = match input {
+    let steer : SteerMessage = match input {
       Prompt(text, submission_id~) =>
-        ("prompt", text, submission_id, User(UserMessage(text, submission_id?)))
-      Command(text, submission_id~) =>
-        (
-          "command",
+        {
+          kind: "prompt",
           text,
           submission_id,
-          User(UserMessage(text, submission_id?)),
-        )
-      Notice(text) => ("notice", text, None, Runtime(RuntimeNotice(text)))
+          item: User(UserMessage(text, submission_id?)),
+        }
+      Command(text, submission_id~) =>
+        {
+          kind: "command",
+          text,
+          submission_id,
+          item: User(UserMessage(text, submission_id?)),
+        }
+      Notice(text) =>
+        {
+          kind: "notice",
+          text,
+          submission_id: None,
+          item: Runtime(RuntimeNotice(text)),
+        }
     }
-    let next = self.append(current, item)
+    let next = self.append(current, steer.item)
     // A goal-baseline notice is transport for the durable pairing record:
     // it must land in the session (adjacent to its marker) but carries
     // nothing for the model — a commit sha as user input is pure noise —
@@ -420,8 +434,14 @@ async fn AgentLoop::apply_steer_inputs(
       @agent_session.parse_goal_baseline(text) is Some(_) {
       continue next
     }
-    self.messages.push(ChatMessage(User, content=[Text(text)]))
-    @emit.emit(SteerApplied(kind~, content=text, submission_id~))
+    self.messages.push(ChatMessage(User, content=[Text(steer.text)]))
+    @emit.emit(
+      SteerApplied(
+        kind=steer.kind,
+        content=steer.text,
+        submission_id=steer.submission_id,
+      ),
+    )
     if input is Notice(text) {
       self.goal_cadence.observe_notice(text)
     }
