@@ -491,9 +491,9 @@ fn SteerRunTracker::route_event(
     // steer. Parse defaults an absent kind to "prompt" — the only engines
     // that omit it predate the field and meant prompt.
     Some(SteerApplied(kind="prompt", submission_id~, ..)) =>
-      self.route_receipt(submission_id, latest_run)
+      self.route_receipt(submission_id?, latest_run?)
     Some(SteerDropped(submission_id~, ..)) =>
-      self.route_receipt(submission_id, latest_run)
+      self.route_receipt(submission_id?, latest_run?)
     // serve drains every old prompt receipt before beginning the next step.
     // AgentStep is therefore the explicit boundary after which an absent old
     // receipt no longer needs run ownership retained in memory.
@@ -512,8 +512,8 @@ fn SteerRunTracker::route_event(
 ///|
 fn SteerRunTracker::route_receipt(
   self : SteerRunTracker,
-  submission_id : String?,
-  latest_run : String?,
+  submission_id? : String,
+  latest_run? : String,
 ) -> String? {
   guard submission_id is Some(id) else { return latest_run }
   if self.settling_steers.search_by(tracked => tracked == id) is Some(index) {
