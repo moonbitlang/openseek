@@ -1018,6 +1018,16 @@ async fn refresh_sessions_into(
       return
     }
   }
+  // A failed store is not an empty store. Report the host's cause and keep
+  // the last successful inventory instead of replacing it with missing rows.
+  for group in reply.groups {
+    if !group.error.is_empty() {
+      scheduler.add(
+        dispatch(SessionsFailed("\{group.workspace}: \{group.error}")),
+      )
+      return
+    }
+  }
   scheduler.add(
     dispatch(
       SessionsLoaded(
