@@ -448,7 +448,7 @@ pub fn steer_run(
   // produce a durable User plus steer_applied before EOF. The client keeps
   // exact-id ownership, and the trailing receipt or Finished/durable recovery
   // settles it without restoring a duplicate draft.
-  live.steer_runs.record_sent(submission_id)
+  live.steer_runs.record_sent(submission_id?)
   { steered: true, run_id: Some(run_id), }
 }
 
@@ -512,7 +512,7 @@ pub fn queue_run(
       }
       // The ordinary steer receipt carries this queue id, keeping the
       // transient Steering row attached to the exact promoted input.
-      live.steer_runs.record_sent(Some(id))
+      live.steer_runs.record_sent(submission_id=id)
       ignore(live.queued_runs.remove(index))
     }
   }
