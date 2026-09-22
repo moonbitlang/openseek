@@ -242,16 +242,15 @@ async fn git_branch_base(dir : String, hint? : String) -> (String, String?) {
 }
 
 ///|
-/// The committed branch delta an ordinary (non-worktree) Review should keep
-/// visible. `head` is the full identity captured by the surrounding snapshot,
+/// The committed branch delta Review should keep visible.
+/// `head` is the full identity captured by the surrounding snapshot,
 /// rather than the mutable `HEAD` spelling, so a concurrent checkout cannot
 /// choose one branch's fork point and publish another branch's rows.
 ///
 /// A branch still at its default-branch fork point returns `None`. That keeps
 /// the original porcelain status path — and its separate staged/worktree
 /// columns — until there is committed branch work to retain. With no declared
-/// default branch there is no defensible historical boundary, so Review also
-/// stays HEAD-based instead of guessing from commit ancestry.
+/// default branch, the caller falls back to the recorded task base or HEAD.
 async fn git_review_branch_base(dir : String, head : String?) -> String? {
   guard head is Some(head) else { return None }
   guard git_base_ref(dir) is Some(base_ref) else { return None }
@@ -939,17 +938,17 @@ test "Git review revisions accept only full hexadecimal object identities" {
 }
 
 ///|
-/// Read the review inventory while HEAD remains the same. A worktree task uses
-/// its immutable creation commit; an ordinary checkout with committed branch
-/// work uses its default-branch fork point; otherwise Review retains
-/// porcelain's HEAD status. Bracket the snapshot with revision reads and retry
-/// a concurrent commit/checkout instead of relying on the next poll to
-/// self-heal.
+/// Read the review inventory while HEAD remains the same. PR checkout bases
+/// stay pinned; other checkouts prefer their current default-branch fork point
+/// and fall back to the task's creation commit or porcelain's HEAD status.
+/// Bracket the snapshot with revision reads and retry a concurrent
+/// commit/checkout instead of relying on the next poll to self-heal.
 async fn git_change_snapshot(
   dir : String,
   workspace_prefix : String,
   pinned_review_base : String?,
   retries_left : Int,
+  prefer_branch_base? : Bool = false,
 ) -> (
   String?,
   String?,
@@ -960,9 +959,15 @@ async fn git_change_snapshot(
   Array[GitChange],
 ) {
   let head = git_revision_commit(dir, "HEAD")
-  let review_base = match pinned_review_base {
-    Some(base) => Some(base)
-    None => git_review_branch_base(dir, head)
+  let review_base = if prefer_branch_base || pinned_review_base is None {
+    let branch_base = git_review_branch_base(dir, head)
+    if branch_base is Some(_) {
+      branch_base
+    } else {
+      pinned_review_base
+    }
+  } else {
+    pinned_review_base
   }
   let index_metadata = git_index_metadata(dir)
   let known_gitlinks = parse_git_mode_paths(
@@ -1106,6 +1111,7 @@ async fn git_change_snapshot(
         workspace_prefix,
         pinned_review_base,
         retries_left - 1,
+        prefer_branch_base~,
       )
     }
     raise HostError("Git index kept changing while task changes were read")
@@ -1118,6 +1124,7 @@ async fn git_change_snapshot(
         workspace_prefix,
         pinned_review_base,
         retries_left - 1,
+        prefer_branch_base~,
       )
     }
     raise HostError("HEAD kept changing while Git changes were read")
@@ -1160,7 +1167,8 @@ async fn git_changes_op(payload : GitChangesPayload) -> GitChangesReply {
       _ => raise HostError("Git returned a non-UTF-8 workspace prefix")
     },
   )
-  let recorded_base = match github_local_checkout_association(dir) {
+  let pr = github_local_checkout_association(dir)
+  let recorded_base = match pr {
     Some(pr) => Some(pr.base)
     None =>
       @work_dir.session_review_base(
@@ -1188,7 +1196,13 @@ async fn git_changes_op(payload : GitChangesPayload) -> GitChangesReply {
     deleted_gitlinks,
     deleted_symlinks,
     changes,
-  ) = git_change_snapshot(dir, workspace_prefix, pinned_base, 2)
+  ) = git_change_snapshot(
+    dir,
+    workspace_prefix,
+    pinned_base,
+    2,
+    prefer_branch_base=pr is None,
+  )
   let changes = @async.all(
     [
       for change in changes => {
@@ -2132,7 +2146,7 @@ async test "Git recognizes only origin HEAD's branch as the default" {
 }
 
 ///|
-async test "ordinary checkout reviews retain committed branch changes" {
+async test "checkout reviews retain committed changes and follow rebases" {
   let dir = @fs.tmpdir(prefix="openseek-git-root-review-")
   defer git_test_cleanup(dir)
   git_test_run(dir, ["init", "--quiet"])
@@ -2177,6 +2191,57 @@ async test "ordinary checkout reviews retain committed branch changes" {
   assert_eq(after_base, Some(first))
   // Committing must not make an ordinary checkout's Review turn empty.
   assert_eq(after_changes, before_changes)
+  // Rebase onto new upstream work while retaining the task's creation base.
+  git_test_run(dir, ["switch", "--detach", first])
+  @fs.write_file(
+    "\{dir}/upstream.txt",
+    "upstream\n",
+    create_mode=CreateOrTruncate,
+  )
+  git_test_run(dir, ["add", "upstream.txt"])
+  git_test_commit(dir, "upstream")
+  let upstream = git_revision_commit(dir, "HEAD").unwrap()
+  git_test_run(dir, ["update-ref", "refs/remotes/origin/main", upstream])
+  git_test_run(dir, ["switch", "--detach", second])
+  git_test_run(dir, [
+    "-c", "user.name=OpenSeek Test", "-c", "user.email=openseek@example.invalid",
+    "-c", "commit.gpgSign=false", "rebase", "origin/main",
+  ])
+  @fs.write_file(
+    "\{dir}/review.txt",
+    "uncommitted\n",
+    create_mode=CreateOrTruncate,
+  )
+  let (_, rebased_base, _, _, _, _, rebased_changes) = git_change_snapshot(
+    dir,
+    "",
+    Some(first),
+    2,
+    prefer_branch_base=true,
+  )
+  assert_eq(rebased_base, Some(upstream))
+  assert_eq(rebased_changes.map(change => change.path), ["review.txt"])
+  // Explicit PR baselines retain their priority over the default branch.
+  let (_, pinned_base, _, _, _, _, _) = git_change_snapshot(
+    dir,
+    "",
+    Some(first),
+    2,
+  )
+  assert_eq(pinned_base, Some(first))
+  // Without a declared default branch, retain the creation base fallback.
+  git_test_run(dir, ["symbolic-ref", "--delete", "refs/remotes/origin/HEAD"])
+  let (_, fallback_base, _, _, _, _, fallback_changes) = git_change_snapshot(
+    dir,
+    "",
+    Some(first),
+    2,
+    prefer_branch_base=true,
+  )
+  assert_eq(fallback_base, Some(first))
+  assert_eq(fallback_changes.map(change => change.path), [
+    "review.txt", "upstream.txt",
+  ])
 }
 
 ///|
