@@ -339,8 +339,8 @@ async test "failed and rejected batches report their problems in data; an unchec
       fail("unexpected data: \{shown(rejected.data)}")
     }
     assert_eq(@fs.read_file(path).text(), original)
-    // A manifest moon cannot load: with the warning guard requested, nothing
-    // is written.
+    // A manifest moon cannot load: a batch that leaves the plan broken is
+    // rolled back, told why, and told what comes first.
     @fs.write_file("\{dir}/moon.mod", "name = \n", create_mode=CreateOrTruncate)
     let unverified = run_multi_edit({
       "edits": [
@@ -355,11 +355,47 @@ async test "failed and rejected batches report their problems in data; an unchec
     })
     assert_true(unverified.is_error)
     assert_true(
-      unverified.content.contains("not applied:"),
+      unverified.content.contains(
+        "reverted: the build plan fails after the batch",
+      ),
       msg=unverified.content,
     )
-    assert_true(unverified.data is Some({ "outcome": "unverified", .. }))
+    assert_true(
+      unverified.content.contains("Failed to calculate build plan"),
+      msg=unverified.content,
+    )
+    assert_true(
+      unverified.content.contains("repair the build plan first"),
+      msg=unverified.content,
+    )
+    assert_true(unverified.data is Some({ "outcome": "reverted", .. }))
     assert_eq(@fs.read_file(path).text(), original)
+    // The batch that repairs the plan is kept: the tree improved, whatever
+    // its counts, and there was no baseline to compare them against.
+    let repaired = run_multi_edit({
+      "edits": [
+        {
+          "file": "\{dir}/moon.mod",
+          "old_string": "name = ",
+          "new_string": "name = \"tmp/batch_guard\"",
+          "start_line": 1,
+        },
+      ],
+      "revert_if_error_delta_greater_or_equal": 0,
+    })
+    assert_false(repaired.is_error, msg=repaired.content)
+    assert_true(
+      repaired.content.contains("the build plan is computable again"),
+      msg=repaired.content,
+    )
+    assert_true(
+      repaired.data is Some({ "outcome": "applied", "plan_repaired": true, .. }),
+      msg=shown(repaired.data),
+    )
+    assert_eq(
+      @fs.read_file("\{dir}/moon.mod").text(),
+      "name = \"tmp/batch_guard\"\n",
+    )
     let bad = run_multi_edit({
       "edits": [],
       "revert_if_warning_delta_greater_or_equal": "yes",

@@ -701,6 +701,26 @@ async fn revert_guarded_response(
         write_scope?,
       )
   }
+  if measured.plan_failure is Some(reason) {
+    return reverted_unverified(
+      writes,
+      "the build plan fails after the batch (\{reason}); repair the build plan first, before any other edit",
+      write_scope?,
+    )
+  }
+  // No plan before the batch and one now: an improvement whatever the counts
+  // say, with no baseline to compare them against, so the batch is kept and
+  // the check simply reported.
+  if before.plan_failure is Some(reason) {
+    return @agent_tool.respond(
+      "\{success_summary(writes)}\nmoon check: the build plan is computable again (before this batch: \{reason}); \{error_count_label(measured.all)} error(s), \{measured.all.warning_count} warning(s) — the guards had no baseline to compare against",
+      brief=success_brief(writes),
+      data=batch_data("applied", writes, {
+        "check": measured.first.to_json(),
+        "plan_repaired": true,
+      }),
+    )
+  }
   let after = measured.all
   let error_delta = after.error_count - before.all.error_count
   let delta = @auto_check.introduced(before.all, after)
@@ -814,6 +834,11 @@ async fn batch_projects(writes : Array[PreparedWrite]) -> Array[String] {
 priv struct Baseline {
   first : @auto_check.CheckErrors
   all : @auto_check.CheckErrors
+  // Set when moon could not compute a build plan for a checked project (with
+  // its explanation); the tallies are then moon's empty ones. A tree with no
+  // plan is the floor: a batch that makes the plan computable again is kept
+  // as an improvement, and one that leaves it broken is rolled back.
+  plan_failure : String?
 }
 
 ///|
@@ -862,25 +887,29 @@ async fn qualified(
 async fn measure_baseline(paths : Array[String]) -> BaselineOutcome {
   let mut first : @auto_check.CheckErrors? = None
   let mut all : @auto_check.CheckErrors? = None
+  let mut plan_failure : String? = None
   for path in paths {
-    match @auto_check.check(path) {
+    let tally = match @auto_check.check(path) {
       Checked(tally) if tally.truncated => return Refused(TruncatedCapture)
-      Checked(tally) => {
-        if first is None {
-          first = Some(tally)
-        }
-        let placed = qualified(path, tally)
-        all = Some(all.map_or(placed, sum => sum.merged(placed)))
+      Checked(tally) => tally
+      Failed(code, tally, detail) => {
+        plan_failure = Some(
+          "moon check exited \{code} without diagnostics: \{detail}",
+        )
+        tally
       }
       NotApplicable =>
         return Refused("a checked project is no longer available")
       Unavailable(reason) => return Refused(reason)
-      Failed(code, _) =>
-        return Refused("moon check exited \{code} without diagnostics")
     }
+    if first is None {
+      first = Some(tally)
+    }
+    let placed = qualified(path, tally)
+    all = Some(all.map_or(placed, sum => sum.merged(placed)))
   }
   match (first, all) {
-    (Some(first), Some(all)) => Measured({ first, all, })
+    (Some(first), Some(all)) => Measured({ first, all, plan_failure, })
     _ => Nothing
   }
 }

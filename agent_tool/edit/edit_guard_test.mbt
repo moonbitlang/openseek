@@ -247,6 +247,16 @@ async test "a guarded edit is not written when moon check cannot verify the tree
     assert_true(out.is_error)
     assert_true(out.content.contains("not applied:"), msg=out.content)
     assert_true(out.content.contains("without diagnostics"), msg=out.content)
+    // moon's own reason and the way forward, so the agent is not left with a
+    // bare exit code.
+    assert_true(
+      out.content.contains("Failed to calculate build plan"),
+      msg=out.content,
+    )
+    assert_true(
+      out.content.contains("repair the build plan first"),
+      msg=out.content,
+    )
     assert_eq(@fs.read_file(path).text(), original)
     assert_true(
       out.data is Some({ "outcome": "unverified", "reason": String(_), .. }),

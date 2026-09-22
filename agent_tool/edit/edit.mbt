@@ -835,7 +835,10 @@ async fn commit_edit(
       NotApplicable =>
         return not_verified("a project the check covers could not be checked")
       Unavailable(reason) => return not_verified(reason)
-      Failed(code, _) => return not_verified(exited_without_diagnostics(code))
+      Failed(code, _, detail) =>
+        return not_verified(
+          "\{exited_without_diagnostics(code, detail)}; repair the build plan first, before any other edit",
+        )
     }
     // The check took time; the candidate was rendered from the content read
     // before it. If the file changed meanwhile (an editor save), the
@@ -1009,11 +1012,14 @@ async fn commit_edit(
     // An unguarded edit keeps moon check's fail-open behavior: the write
     // stands, and the line says the check did not.
     (Unavailable(reason), None) => keep(Some("moon check: \{reason}"), Map([]))
-    (Failed(code, _), None) =>
-      keep(Some("moon check: \{exited_without_diagnostics(code)}"), Map([]))
+    (Failed(code, _, detail), None) =>
+      keep(
+        Some("moon check: \{exited_without_diagnostics(code, detail)}"),
+        Map([]),
+      )
     (Unavailable(reason), Some(_)) => unverified_after(reason)
-    (Failed(code, _), Some(_)) =>
-      unverified_after(exited_without_diagnostics(code))
+    (Failed(code, _, detail), Some(_)) =>
+      unverified_after(exited_without_diagnostics(code, detail))
     (Checked(tally), None) =>
       keep(Some(check_report(tally)), { "check": tally.summary_json() })
     (Checked(tally), Some(_)) if tally.truncated =>
@@ -1123,8 +1129,8 @@ async fn resolved_target(path : String) -> String {
 }
 
 ///|
-fn exited_without_diagnostics(code : Int) -> String {
-  "exited \{code} without diagnostics"
+fn exited_without_diagnostics(code : Int, detail : String) -> String {
+  "exited \{code} without diagnostics: \{detail}"
 }
 
 ///|

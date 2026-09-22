@@ -42,7 +42,7 @@ pub fn CheckErrors::to_json(Self) -> Json
 pub(all) enum CheckOutcome {
   NotApplicable
   Unavailable(String)
-  Failed(Int, CheckErrors)
+  Failed(Int, CheckErrors, String)
   Checked(CheckErrors)
 }
 

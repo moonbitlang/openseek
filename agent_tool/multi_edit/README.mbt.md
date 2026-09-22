@@ -91,6 +91,9 @@ Both guards compare reported count changes over all projects touched by the batc
 The error default is `10` (`edit` defaults off); warning protection is off unless
 specified. Checks run before and after writing. An unavailable or incomplete
 baseline refuses the batch, and an unverifiable post-write check rolls it back.
+A tree moon cannot compute a build plan for is the floor: the batch is written,
+kept if the plan is computable afterwards (`data.plan_repaired`, no count
+comparison), and rolled back with moon's reason if it still is not.
 Errors can expose or hide checked packages, so counts do not prove that no new
 problems exist. Error reverts use the shared `comparability:` analysis; after
 reviewing its evidence, a reach retry uses `delta + 1`.

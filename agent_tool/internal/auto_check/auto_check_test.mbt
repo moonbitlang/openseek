@@ -211,11 +211,13 @@ async test "check names a failed run; count_errors keeps its tally" {
       "main.mbt": "///|\npub fn f() -> Int {\n  1\n}\n",
     }).write_to(dir)
     let path = "\{dir}/main.mbt"
-    guard @auto_check.check(path) is Failed(code, tally) else {
+    guard @auto_check.check(path) is Failed(code, tally, detail) else {
       fail("expected Failed")
     }
     assert_true(code != 0)
     assert_eq(tally.error_count, 0)
+    // moon's own explanation rides along, so a refusal can name the cause.
+    assert_true(detail.contains("Failed"), msg=detail)
     guard @auto_check.count_errors(path) is Some(counted) else {
       fail("expected the tally")
     }

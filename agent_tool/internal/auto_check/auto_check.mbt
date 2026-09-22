@@ -278,7 +278,7 @@ pub fn CheckErrors::first_errors(self : CheckErrors) -> Array[String] {
 /// batch unguarded, matching `append_summary`'s fail-open behavior.
 pub async fn count_errors(path : String) -> CheckErrors? {
   match check(path) {
-    Checked(tally) | Failed(_, tally) => Some(tally)
+    Checked(tally) | Failed(_, tally, _) => Some(tally)
     NotApplicable | Unavailable(_) => None
   }
 }
@@ -294,9 +294,11 @@ pub(all) enum CheckOutcome {
   Unavailable(String)
   /// moon exited non-zero without reporting a single error diagnostic — a
   /// build plan it could not make (a broken manifest, a missing dependency),
-  /// so the tally says nothing about the tree. Carries the exit code and the
-  /// (error-free) tally for callers that never distinguished this case.
-  Failed(Int, CheckErrors)
+  /// so the tally says nothing about the tree. Carries the exit code, the
+  /// (error-free) tally for callers that never distinguished this case, and
+  /// moon's own explanation (`failure_detail`) so a caller can say WHY the
+  /// plan failed, not only that it did.
+  Failed(Int, CheckErrors, String)
   Checked(CheckErrors)
 }
 
@@ -328,11 +330,37 @@ pub async fn check(path : String) -> CheckOutcome {
       // tally from a failed run is not a clean tree.
       match output.exit_code {
         Some(code) if code != 0 && tally.error_count == 0 && !tally.truncated =>
-          Failed(code, tally)
+          Failed(code, tally, failure_detail(output.text))
         _ => Checked(tally)
       }
     }
     None => Unavailable("timed out")
+  }
+}
+
+///|
+/// How much of moon's failure explanation a `Failed` outcome carries.
+const FailureDetailMaxChars : Int = 300
+
+///|
+/// moon's explanation of a run that produced no diagnostic: the non-JSON
+/// lines of its output (`Error: Failed to calculate build plan`, then the
+/// `Caused by:` chain down to the root cause, e.g. `Cannot find import …`),
+/// trimmed, joined on one line and bounded, so a refusal can name the cause.
+fn failure_detail(text : String) -> String {
+  let lines : Array[String] = []
+  for raw in text.split("\n") {
+    let line = raw.trim().to_owned()
+    if line == "" || line.contains("\"level\"") || line == "Caused by:" {
+      continue
+    }
+    lines.push(line)
+  }
+  let joined = lines.join("; ")
+  if joined.length() > FailureDetailMaxChars {
+    "\{joined[:FailureDetailMaxChars]}…"
+  } else {
+    joined
   }
 }
 
