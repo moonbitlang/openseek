@@ -230,7 +230,7 @@ async test "PR review uses its merge base and association follows the checked ou
     let (_, comparison, _, _, _, _, changes) = git_change_snapshot(
       dir,
       "",
-      2,
+      retries_left=2,
       pr_base=association.base,
     )
     assert_eq(comparison, Some(base))

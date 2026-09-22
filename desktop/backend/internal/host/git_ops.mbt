@@ -946,7 +946,7 @@ test "Git review revisions accept only full hexadecimal object identities" {
 async fn git_change_snapshot(
   dir : String,
   workspace_prefix : String,
-  retries_left : Int,
+  retries_left~ : Int,
   pr_base? : String,
   worktree_base? : String,
 ) -> (
@@ -1106,7 +1106,7 @@ async fn git_change_snapshot(
       return git_change_snapshot(
         dir,
         workspace_prefix,
-        retries_left - 1,
+        retries_left=retries_left - 1,
         pr_base?,
         worktree_base?,
       )
@@ -1119,7 +1119,7 @@ async fn git_change_snapshot(
       return git_change_snapshot(
         dir,
         workspace_prefix,
-        retries_left - 1,
+        retries_left=retries_left - 1,
         pr_base?,
         worktree_base?,
       )
@@ -1192,7 +1192,13 @@ async fn git_changes_op(payload : GitChangesPayload) -> GitChangesReply {
     deleted_gitlinks,
     deleted_symlinks,
     changes,
-  ) = git_change_snapshot(dir, workspace_prefix, 2, pr_base?, worktree_base?)
+  ) = git_change_snapshot(
+    dir,
+    workspace_prefix,
+    retries_left=2,
+    pr_base?,
+    worktree_base?,
+  )
   let changes = @async.all(
     [
       for change in changes => {
@@ -2153,7 +2159,9 @@ async test "checkout reviews retain committed changes and follow rebases" {
   ])
   @fs.write_file("\{dir}/review.txt", "working\n", create_mode=CreateOrTruncate)
   let (before_head, before_base, _, _, _, _, before_changes) = git_change_snapshot(
-    dir, "", 2,
+    dir,
+    "",
+    retries_left=2,
   )
   assert_eq(before_head, Some(first))
   // At the fork point, preserve porcelain's staged/worktree distinction.
@@ -2169,7 +2177,9 @@ async test "checkout reviews retain committed changes and follow rebases" {
   ])
   let second = git_revision_commit(dir, "HEAD").unwrap()
   let (after_head, after_base, _, _, _, _, after_changes) = git_change_snapshot(
-    dir, "", 2,
+    dir,
+    "",
+    retries_left=2,
   )
   assert_eq(after_head, Some(second))
   assert_eq(after_base, Some(first))
@@ -2199,7 +2209,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
   let (_, rebased_base, _, _, _, _, rebased_changes) = git_change_snapshot(
     dir,
     "",
-    2,
+    retries_left=2,
     worktree_base=first,
   )
   assert_eq(rebased_base, Some(upstream))
@@ -2208,7 +2218,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
   let (_, pinned_base, _, _, _, _, _) = git_change_snapshot(
     dir,
     "",
-    2,
+    retries_left=2,
     pr_base=first,
     worktree_base=upstream,
   )
@@ -2218,7 +2228,7 @@ async test "checkout reviews retain committed changes and follow rebases" {
   let (_, fallback_base, _, _, _, _, fallback_changes) = git_change_snapshot(
     dir,
     "",
-    2,
+    retries_left=2,
     worktree_base=first,
   )
   assert_eq(fallback_base, Some(first))
@@ -2255,7 +2265,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
   let (_, _, _, current_symlinks, _, deleted_symlinks, type_changes) = git_change_snapshot(
     dir,
     "",
-    2,
+    retries_left=2,
     worktree_base=first,
   )
   assert_true(current_symlinks.contains("desktop/keep.txt"))
@@ -2276,7 +2286,9 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
   git_test_run(dir, ["restore", "desktop/keep.txt"])
   @fs.write_file("\{dir}/review.txt", "working\n", create_mode=CreateOrTruncate)
   let (snapshot_head, snapshot_base, _, _, _, _, changes) = git_change_snapshot(
-    dir, "", 2,
+    dir,
+    "",
+    retries_left=2,
   )
   assert_eq(snapshot_head, Some(first))
   assert_eq(snapshot_base, None)
@@ -2284,7 +2296,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
   let (_, task_base, _, _, _, _, task_before_commit) = git_change_snapshot(
     dir,
     "",
-    2,
+    retries_left=2,
     worktree_base=first,
   )
   assert_eq(task_base, Some(first))
@@ -2295,13 +2307,17 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
   ])
   let second = git_revision_commit(dir, "HEAD").unwrap()
   assert_true(second != first)
-  let (_, head_base, _, _, _, _, head_changes) = git_change_snapshot(dir, "", 2)
+  let (_, head_base, _, _, _, _, head_changes) = git_change_snapshot(
+    dir,
+    "",
+    retries_left=2,
+  )
   assert_eq(head_base, None)
   assert_true(head_changes.is_empty())
   let (_, _, _, _, _, _, task_changes) = git_change_snapshot(
     dir,
     "",
-    2,
+    retries_left=2,
     worktree_base=first,
   )
   assert_eq(task_changes, task_before_commit)
@@ -2339,7 +2355,7 @@ async test "Git snapshots pair status with HEAD and supplied revisions stay pinn
   let (nested_head, _, _, _, deleted_gitlinks, deleted_symlinks, nested_changes) = git_change_snapshot(
     "\{dir}/desktop",
     "desktop/",
-    2,
+    retries_left=2,
   )
   assert_eq(nested_head, Some(gitlink_head))
   assert_eq(deleted_gitlinks.length(), 1)
