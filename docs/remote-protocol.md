@@ -652,6 +652,10 @@ Malformed, unknown, or root-escaping rows are omitted.
 
 ### skills.*
 
+Every `skills.*` operation returns failures as `{error: string}` replies,
+preserving the detailed reason across both the local Proton bridge and remote
+JSON-RPC. Successful replies retain the shapes below.
+
 | method | params | result |
 |---|---|---|
 | `skills.catalog` | `{}` | `{skills: […]}` — the registry's installable skills |

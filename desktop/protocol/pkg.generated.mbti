@@ -2942,6 +2942,15 @@ pub fn SettingsStatusPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SettingsStatusPayload
 pub impl @json.FromJson for SettingsStatusPayload
 
+pub(all) enum SkillCommandReply[Reply] {
+  SkillCommandSuccess(Reply)
+  SkillCommandError(String)
+}
+pub fn[Reply : @json.FromJson] SkillCommandReply::from_json(Json, @json.JsonPath) -> Self[Reply] raise @json.JsonDecodeError
+pub fn[Reply : ToJson] SkillCommandReply::to_json(Self[Reply]) -> Json
+pub impl[Reply : ToJson] ToJson for SkillCommandReply[Reply]
+pub impl[Reply : @json.FromJson] @json.FromJson for SkillCommandReply[Reply]
+
 pub(all) struct SkillsCatalogReply {
   skills : Array[MarketSkill]
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

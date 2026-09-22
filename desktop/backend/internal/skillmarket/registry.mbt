@@ -3,9 +3,13 @@
 // the digest the download is verified against.
 
 ///|
-/// The registry every fetch defaults to. Overridable per call so tests can
+/// The registry API host. Overridable per call so tests can
 /// run against a local server — there is no user-facing registry setting.
 const DefaultRegistry = "https://mooncakes.io"
+
+///|
+/// Published source files live on a separate host from the registry API.
+const DefaultSourceRegistry = "https://assets.mooncakes.io"
 
 ///|
 /// Keep preview parsing bounded so a malformed or unexpectedly large registry
@@ -86,8 +90,8 @@ async fn fetch_response(url : String) -> (Int, &@io.Data) {
   let mut current = url
   for _ in 0..<MaxRedirects {
     let (response, data) = @http.get(current) catch {
-      error =>
-        raise SkillMarketError("cannot reach the skill registry: \{error}")
+      error if @async.is_being_cancelled() => raise error
+      error => raise SkillMarketError("GET \{current} failed: \{error}")
     }
     guard response.code is (301 | 302 | 303 | 307 | 308) &&
       response.headers.get("Location") is Some(location) else {
@@ -139,14 +143,19 @@ fn redirect_target(
 pub async fn fetch_catalog(
   registry? : String = DefaultRegistry,
 ) -> Array[MarketSkill] {
-  let (code, data) = fetch_response("\{registry}/api/v0/skills")
+  let url = "\{registry}/api/v0/skills"
+  let (code, data) = fetch_response(url)
   guard code == 200 else {
-    raise SkillMarketError("skill catalog request returned HTTP \{code}")
+    raise SkillMarketError("GET \{url} returned HTTP \{code}")
   }
   let json = data.json() catch {
-    _ => raise SkillMarketError("skill registry returned a malformed catalog")
+    error =>
+      raise SkillMarketError("GET \{url}: invalid catalog JSON: \{error}")
   }
-  decode_catalog(json)
+  decode_catalog(json) catch {
+    SkillMarketError(message) =>
+      raise SkillMarketError("GET \{url}: \{message}")
+  }
 }
 
 ///|
@@ -323,7 +332,7 @@ async fn fetch_archive(entry : String, source : ArchiveSource) -> @zip.Archive {
 
 ///|
 /// Fetch the published instructions without changing the local library.
-/// The registry publishes each skill's bare SKILL.md under its assets tree,
+/// The registry publishes each skill's bare SKILL.md under its source tree,
 /// and that one small fetch is the whole preview: an archive can inflate to
 /// arbitrarily much work for the sake of one file, so preview never touches
 /// it, and a 404 already answers "no such skill instructions".
@@ -331,15 +340,18 @@ pub async fn fetch_skill_content(
   module_name~ : String,
   version~ : String,
   package_path~ : String,
-  registry? : String = DefaultRegistry,
+  registry? : String = DefaultSourceRegistry,
 ) -> String {
   let entry = entry_path(module_name, version, package_path)
-  let (code, data) = fetch_response("\{registry}/assets/\{entry}/SKILL.md")
+  let url = "\{registry}/source/\{entry}/SKILL.md"
+  let (code, data) = fetch_response(url)
   if code == 404 {
-    raise SkillMarketError("\{entry} does not publish a SKILL.md")
+    raise SkillMarketError(
+      "GET \{url} returned HTTP 404: \{entry} does not publish a SKILL.md",
+    )
   }
   guard code == 200 else {
-    raise SkillMarketError("SKILL.md request returned HTTP \{code}")
+    raise SkillMarketError("GET \{url} returned HTTP \{code}")
   }
   guard data.binary().length() <= MaxPreviewBytes else {
     raise SkillMarketError("SKILL.md is too large to preview")

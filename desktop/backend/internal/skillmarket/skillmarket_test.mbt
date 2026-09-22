@@ -201,7 +201,8 @@ async fn fake_registry(
           conn.write_string(
             skill_entry_body(base, entry.to_owned(), skill.digest),
           )
-        } else if path == "/assets/acme/widget@1.0.0/SKILL.md" {
+        } else if path == "/source/acme/widget@1.0.0/SKILL.md" ||
+          path == "/source/acme/widget@1.0.0/cmd/run/SKILL.md" {
           // The bare preview asset exists for v1 only; v2 covers the
           // missing-asset refusal.
           conn.send_response(200, "OK")
@@ -346,17 +347,36 @@ async test "a redirect loop on the archive download is refused" {
 }
 
 ///|
-async test "preview fetches the bare SKILL.md from the registry assets tree" {
+async test "preview fetches the bare SKILL.md from the registry source tree" {
   @async.with_task_group() <| group => {
     guard fake_registry(group) is Some(base) else { return }
-    let content = @skillmarket.fetch_skill_content(
-      module_name="acme/widget",
-      version="1.0.0",
-      package_path="",
-      registry=base,
-    )
-    assert_true(content.contains("Build widgets fast."))
-    assert_true(content.contains("Use moon runwasm acme/widget."))
+    for package_path in ["", "cmd/run"] {
+      let content = @skillmarket.fetch_skill_content(
+        module_name="acme/widget",
+        version="1.0.0",
+        package_path~,
+        registry=base,
+      )
+      assert_true(content.contains("Build widgets fast."))
+      assert_true(content.contains("Use moon runwasm acme/widget."))
+    }
+  }
+}
+
+///|
+async test "catalog HTTP errors name the URL and status" {
+  @async.with_task_group() <| group => {
+    guard fake_registry(group) is Some(base) else { return }
+    try @skillmarket.fetch_catalog(registry="\{base}/missing") catch {
+      @skillmarket.SkillMarketError(message) =>
+        assert_eq(
+          message,
+          "GET \{base}/missing/api/v0/skills returned HTTP 404",
+        )
+      error => raise error
+    } noraise {
+      _ => fail("expected a catalog HTTP error")
+    }
   }
 }
 

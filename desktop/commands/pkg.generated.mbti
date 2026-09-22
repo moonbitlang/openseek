@@ -249,17 +249,17 @@ pub let settings_set : Command[@protocol.SettingsSetPayload, @protocol.SettingsS
 
 pub let shell_open_external : Command[@protocol.ExternalLinkPayload, @protocol.OpenExternalReply]
 
-pub let skills_catalog : Command[@protocol.EmptyPayload, @protocol.SkillsCatalogReply]
+pub let skills_catalog : Command[@protocol.EmptyPayload, @protocol.SkillCommandReply[@protocol.SkillsCatalogReply]]
 
-pub let skills_content : Command[@protocol.InstallSkillPayload, @protocol.ReadFileReply]
+pub let skills_content : Command[@protocol.InstallSkillPayload, @protocol.SkillCommandReply[@protocol.ReadFileReply]]
 
-pub let skills_install : Command[@protocol.InstallSkillPayload, @protocol.InstallSkillReply]
+pub let skills_install : Command[@protocol.InstallSkillPayload, @protocol.SkillCommandReply[@protocol.InstallSkillReply]]
 
-pub let skills_installed : Command[@protocol.EmptyPayload, @protocol.InstalledSkillsReply]
+pub let skills_installed : Command[@protocol.EmptyPayload, @protocol.SkillCommandReply[@protocol.InstalledSkillsReply]]
 
-pub let skills_installed_content : Command[@protocol.UninstallSkillPayload, @protocol.ReadFileReply]
+pub let skills_installed_content : Command[@protocol.UninstallSkillPayload, @protocol.SkillCommandReply[@protocol.ReadFileReply]]
 
-pub let skills_uninstall : Command[@protocol.UninstallSkillPayload, @protocol.UninstallSkillReply]
+pub let skills_uninstall : Command[@protocol.UninstallSkillPayload, @protocol.SkillCommandReply[@protocol.UninstallSkillReply]]
 
 pub let terminal_ack : Command[@protocol.TerminalAckPayload, @protocol.EmptyReply]
 

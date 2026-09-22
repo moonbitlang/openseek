@@ -23,6 +23,7 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex_sync(@commands.
 pub async fn Endpoint::invoke(Self, Json) -> Json
 pub fn Endpoint::name(Self) -> String
 pub fn Endpoint::route(Self) -> @proton_contract.ContractRoute
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::skills(@commands.Command[Payload, @protocol.SkillCommandReply[Reply]], async (Payload) -> Reply) -> Self
 pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::sync(@commands.Command[Payload, Reply], (Payload) -> Reply raise) -> Self
 
 type WindowEndpoint

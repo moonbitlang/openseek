@@ -30,7 +30,7 @@ fn fetch_catalog(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
+      let reply = @interop.skill_request(
         channel,
         @commands.skills_catalog,
         @protocol.EmptyPayload::NoPayload,
@@ -63,7 +63,7 @@ fn fetch_content(
     @js.Promise::from_async(() => {
       match target {
         Market(item) => {
-          let reply = @interop.bridge_request(
+          let reply = @interop.skill_request(
             channel,
             @commands.skills_content,
             {
@@ -92,7 +92,7 @@ fn fetch_content(
           scheduler.add(emit(preview_reply(request, target, reply)))
         }
         Installed(item) => {
-          let reply = @interop.bridge_request(
+          let reply = @interop.skill_request(
             channel,
             @commands.skills_installed_content,
             { id: item.id, },
@@ -153,7 +153,7 @@ fn install(
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       ignore(
-        @interop.bridge_request(channel, @commands.skills_install, {
+        @interop.skill_request(channel, @commands.skills_install, {
           module_name: item.module_name,
           version: item.version,
           package_path: if item.package_path.is_empty() {
@@ -193,7 +193,7 @@ fn uninstall(
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       ignore(
-        @interop.bridge_request(channel, @commands.skills_uninstall, { id, }) catch {
+        @interop.skill_request(channel, @commands.skills_uninstall, { id, }) catch {
           error => {
             scheduler.add(
               emit(
