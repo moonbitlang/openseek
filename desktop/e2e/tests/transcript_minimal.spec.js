@@ -1229,6 +1229,21 @@ test('minimal job output and runtime notices preserve recorded text', async ({ p
     await expect(stream.locator('.minimal-note').last()).toHaveText(notice);
     await expect(stream.locator('.minimal-note').last().locator('.minimal-tool-icon > svg')).toBeVisible();
   }
+  // The notice icon belongs to the notice's first text line. A wrapped notice
+  // must not drag it to the block's midline, and top alignment must not leave
+  // it on the block's edge: its cell is one line tall, so compare the icon's
+  // center with the first line box the row's own line-height describes.
+  for (const width of [1440, 640]) {
+    await page.setViewportSize({ width, height: 900 });
+    const offsets = await stream.locator('.minimal-runtime-note:visible').evaluateAll(nodes => nodes.map(node => {
+      const text = node.querySelector('.minimal-note-text').getBoundingClientRect();
+      const icon = node.querySelector(':scope > .minimal-tool-icon > svg').getBoundingClientRect();
+      return icon.y + icon.height / 2 - text.y - parseFloat(getComputedStyle(node).lineHeight) / 2;
+    }));
+    expect(offsets.length).toBe(notices.length);
+    for (const offset of offsets) expect(Math.abs(offset)).toBeLessThanOrEqual(0.5);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   expect(await stream.locator('.minimal-call').evaluateAll(rows => rows.map(row => row.outerHTML))).toEqual(original);
   await expect(stream).not.toContainText('OUTPUT_SENTINEL');
   await page.reload(); await app.openSession();

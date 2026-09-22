@@ -1737,11 +1737,27 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* The notice's own row: its icon and the recorded text, which wraps. Flex, like
+   the activity summary — nothing here needs a third column or a spanning edit
+   preview, so the icon's own `flex: 0 0 14px` applies instead of being replaced
+   by a grid track. Both children align to the row's top, which is what keeps
+   the icon on the text's first line however many lines the text takes. */
 .minimal-runtime-note {
-  display: grid;
-  grid-template-columns: 14px minmax(0, 1fr);
-  align-items: start;
-  column-gap: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.minimal-runtime-note > .minimal-note-text {
+  flex: 1;
+  min-width: 0;
+}
+/* A notice's text wraps, so its icon stays on the first line rather than
+   centering on the whole block. Give the icon cell that line's own height, as
+   the changes header does for its chevron: `1lh` is the row's line-height, so
+   the 14px SVG centers on the first line exactly as a call row's icon does
+   instead of sitting on the block's top edge. */
+.minimal-runtime-note > .minimal-tool-icon {
+  height: 1lh;
 }
 .minimal-tool-status {
   display: inline-flex;

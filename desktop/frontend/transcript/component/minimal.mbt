@@ -617,7 +617,7 @@ fn MinimalActivity::render(
               @icons.icon_comment()
             },
           ),
-          @html.span(text),
+          @html.span(class="minimal-note-text", text),
         ],
       )
     Call(call) =>
