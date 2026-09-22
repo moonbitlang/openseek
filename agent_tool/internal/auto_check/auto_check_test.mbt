@@ -179,6 +179,37 @@ async test "append_summary surfaces failed pre-build despite zero diagnostics" {
 }
 
 ///|
+/// The same failed pre-build under `check`: moon's JSON result calls the run
+/// a failure with no diagnostic and no message, which must read as `Failed`,
+/// never as a clean tree.
+async test "check names a failed pre-build that moon does not message" {
+  @vfs.with_tmpdir(prefix="openseek-auto-check-prebuild-json-", dir => {
+    @vfs.FileSystem({
+      "moon.mod": "name = \"tmp/auto_check_prebuild_json\"\n",
+      "moon.pkg": (
+        #|options(
+        #|  "pre-build": [
+        #|    {
+        #|      "command": "false",
+        #|      "input": [ "in.txt" ],
+        #|      "output": "generated.mbt",
+        #|    },
+        #|  ],
+        #|)
+      ),
+      "in.txt": "",
+      "main.mbt": "pub fn hi() -> Int { 1 }\n",
+    }).write_to(dir)
+    guard @auto_check.check("\{dir}/main.mbt") is Failed(code, tally, detail) else {
+      fail("expected Failed")
+    }
+    assert_true(code != 0)
+    assert_eq(tally.error_count, 0)
+    assert_true(detail.contains("pre-build"), msg=detail)
+  })
+}
+
+///|
 async test "append_summary runs for MoonBit source without local package" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-unpackaged-", dir => {
     @fs.write_file(

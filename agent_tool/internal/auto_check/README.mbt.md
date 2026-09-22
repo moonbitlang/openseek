@@ -82,10 +82,10 @@ async test "the gate parses candidate content that never touches disk" {
 }
 ```
 
-`truncated` marks `errors` a **window**, not the whole list: moon hid some error
+`truncated` marks the site lists a **window**, not the whole: moon hid some
 sites behind its diagnostic limit. The counts stay exact. Callers that compare
-error sites before and after a change have to account for that, which is why it
-is on the struct rather than folded into the error list.
+sites before and after a change have to account for that, which is why it is
+on the struct rather than folded into the lists.
 
 ### `gate_paths` — which input kinds to check
 
@@ -290,8 +290,8 @@ async test "a real check tallies errors separately from warnings" {
 revert report can show the shape of an over-match without dumping a broken
 build, and a caller can still tell "the old errors are gone and the new ones are
 elsewhere" from "new errors appeared where I edited". When moon's diagnostic
-limit hides error sites, `truncated` is set: the counts stay exact, the sites
-are a window, and a guard that compares sites refuses rather than guesses.
+limit hides sites, `truncated` is set: the counts stay exact, the sites are a
+window, and a guard that compares sites refuses rather than guesses.
 
 ## `append_summary` — the human-facing tail
 

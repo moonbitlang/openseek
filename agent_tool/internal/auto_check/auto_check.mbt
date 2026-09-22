@@ -45,9 +45,9 @@ async fn auto_check_summary(path : String) -> String? {
 /// `moon check --json` prints one complete JSON document: the diagnostics,
 /// moon's own messages (a build plan it could not make) and a `summary`
 /// whose counts are complete whatever `--diagnostic-limit` left out of the
-/// list. The guards decide by those counts, so the list only has to be big
-/// enough to carry every error site (errors are listed first) for the
-/// comparability analysis and the sites a result shows.
+/// list. The guards decide by those counts; the list carries the sites the
+/// identity comparisons and the reports use, and a run that overflows it is
+/// marked `truncated` so those comparisons are not mistaken for complete.
 const MoonCheckDiagnosticLimit : Int = 1000
 
 ///|
@@ -128,10 +128,9 @@ pub fn ErrorSite::line(self : ErrorSite) -> String {
 /// A tally of `moon check` diagnostics by severity, with every error and
 /// warning site kept so a caller can compare two runs by identity and
 /// location, not just by count. The counts are moon's own and always
-/// complete; `truncated` means moon hid some ERROR sites behind its
-/// `--diagnostic-limit`, so the error list (and any identity comparison on
-/// it) is a window. Warning sites past the limit are dropped silently: the
-/// guards decide by count, and warning identities are informational.
+/// complete; `truncated` means moon hid some sites behind its
+/// `--diagnostic-limit`, so the lists (and any identity comparison on them)
+/// are a window.
 ///
 /// Not representable here: whether the BUILD stopped early. moon skips the
 /// dependents of a failing package, so a run's error list covers only the
@@ -330,45 +329,55 @@ pub async fn check(path : String) -> CheckOutcome {
   guard parse_check_document(output.text) is Some(document) else {
     return Unavailable("moon check did not produce a JSON result")
   }
-  if document.moon_errors.is_empty() {
-    Checked(document.tally)
+  // A failure that reported no error diagnostic is moon's own: a build plan
+  // it could not make, or a pre-build step that failed (which moon does not
+  // message at all). Either way the tally says nothing about the tree.
+  if document.failed && document.tally.error_count == 0 {
+    let detail = if document.moon_errors.is_empty() {
+      "moon reported failure without a message (a pre-build step may have failed)"
+    } else {
+      document.moon_errors.join("; ")
+    }
+    Failed(output.exit_code.unwrap_or(0), document.tally, detail)
   } else {
-    Failed(
-      output.exit_code.unwrap_or(0),
-      document.tally,
-      document.moon_errors.join("; "),
-    )
+    Checked(document.tally)
   }
 }
 
 ///|
-/// One `moon check --json` document, reduced to what a guard needs: moon's
-/// own errors (a build plan it could not make) and the diagnostic tally.
+/// One `moon check --json` document, reduced to what a guard needs: whether
+/// moon called the run a failure, its own error messages (a build plan it
+/// could not make), and the diagnostic tally.
 priv struct CheckDocument {
+  failed : Bool
   moon_errors : Array[String]
   tally : CheckErrors
 }
 
 ///|
 /// Read a `moon check --json` document. The `summary` counts are complete
-/// whatever `--diagnostic-limit` hid from `diagnostics`; errors are listed
-/// before warnings, so the error sites are complete unless the summary says
-/// some were hidden — the one case that marks the tally `truncated`.
+/// whatever `--diagnostic-limit` hid from `diagnostics`; the tally is marked
+/// `truncated` when the summary says any site was hidden.
 fn parse_check_document(text : String) -> CheckDocument? {
   let json = @json.parse(text) catch { _ => return None }
   guard json
     is {
+      "status": String(status),
       "diagnostics": Array(diagnostics),
       "messages": Array(messages),
       "summary": {
         "diagnostic_errors": Number(error_count, ..),
         "diagnostic_warnings": Number(warning_count, ..),
         "hidden_diagnostic_errors"? : hidden_errors,
+        "hidden_diagnostic_warnings"? : hidden_warnings,
         ..
       },
       ..
     } else {
     return None
+  }
+  fn hid(count : Json?) -> Bool {
+    count is Some(Number(hidden, ..)) && hidden > 0
   }
   let errors : Array[ErrorSite] = []
   let warnings : Array[ErrorSite] = []
@@ -407,13 +416,14 @@ fn parse_check_document(text : String) -> CheckDocument? {
     }
   }
   Some({
+    failed: status != "success",
     moon_errors,
     tally: {
       error_count: error_count.to_int(),
       warning_count: warning_count.to_int(),
       errors,
       warnings,
-      truncated: hidden_errors is Some(Number(hidden, ..)) && hidden > 0,
+      truncated: hid(hidden_errors) || hid(hidden_warnings),
     },
   })
 }
@@ -549,11 +559,29 @@ test "a plan failure document carries moon's message and no diagnostics" {
   guard parse_check_document(text) is Some(parsed) else {
     fail("expected a document")
   }
+  assert_true(parsed.failed)
   assert_eq(parsed.moon_errors, [
     "Failed to calculate build plan: Failed to solve package relationship: Cannot find import 'tmp/broken/nonexistent' in tmp/broken/lib@0.0.0",
   ])
   assert_eq(parsed.tally.error_count, 0)
   assert_eq(parsed.tally.errors, [])
+  // A failed pre-build step: moon calls the run a failure but says nothing
+  // at all, so `failed` is the only signal.
+  let prebuild =
+    #|{"version":1,"status":"failure","diagnostics":[],"messages":[],"summary":{"tasks_executed":null,"moon_errors":0,"moon_warnings":0,"diagnostic_errors":0,"diagnostic_warnings":0}}
+  guard parse_check_document(prebuild) is Some(prebuild) else {
+    fail("expected a document")
+  }
+  assert_true(prebuild.failed)
+  assert_eq(prebuild.moon_errors, [])
+  assert_eq(prebuild.tally.error_count, 0)
+  // Hidden warnings alone also make the lists a window.
+  let hidden_warnings =
+    #|{"version":1,"status":"failure","diagnostics":[],"messages":[],"summary":{"moon_errors":0,"moon_warnings":1,"diagnostic_errors":0,"diagnostic_warnings":12,"hidden_diagnostic_warnings":12}}
+  guard parse_check_document(hidden_warnings) is Some(hidden_warnings) else {
+    fail("expected a document")
+  }
+  assert_true(hidden_warnings.tally.truncated)
   // moon's own warning (e.g. "diagnostic output limited") is not an error.
   let limited =
     #|{"version":1,"status":"failure","diagnostics":[],"messages":[{"$message_type":"moon","level":"warning","message":"diagnostic output limited by --diagnostic-limit: 1 errors and 12 warnings were not displayed."}],"summary":{"moon_errors":0,"moon_warnings":1,"diagnostic_errors":1,"diagnostic_warnings":12,"hidden_diagnostic_errors":1,"hidden_diagnostic_warnings":12}}

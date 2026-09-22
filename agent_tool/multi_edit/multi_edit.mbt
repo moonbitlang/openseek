@@ -917,7 +917,7 @@ async fn measure_baseline(paths : Array[String]) -> BaselineOutcome {
 ///|
 /// Why a guard cannot compare an overflowed capture: the lists are then
 /// windows onto moon's output, and a site can enter one without being new.
-const TruncatedCapture : String = "moon check hid some error sites behind its diagnostic limit, so the guard cannot compare the two runs"
+const TruncatedCapture : String = "moon check hid some diagnostic sites behind its diagnostic limit, so the guard cannot compare the two runs"
 
 ///|
 /// How many introduced sites a warning revert lists, in text and data.
