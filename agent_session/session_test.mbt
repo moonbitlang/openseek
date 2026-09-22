@@ -6,7 +6,7 @@ fn sample_tool_call() -> @deepseek.ToolCall {
 ///|
 test "session append assigns monotonic sequence numbers immutably" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-  let next = session.append(User(UserMessage("hello")))
+  let next = session.append(User(UserMessage(Content([Text("hello")]))))
   assert_eq(session.events().length(), 0)
   assert_eq(next.events().length(), 1)
   assert_eq(next.events()[0].sequence(), 1)
@@ -18,7 +18,9 @@ test "session append assigns monotonic sequence numbers immutably" {
 ///|
 test "session append_event returns the durable event" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-  let (next, event) = session.append_event(User(UserMessage("hello")))
+  let (next, event) = session.append_event(
+    User(UserMessage(Content([Text("hello")]))),
+  )
   assert_eq(session.events().length(), 0)
   assert_eq(next.events().length(), 1)
   assert_eq(event.sequence(), 1)
@@ -31,7 +33,7 @@ test "event timestamps round trip through JSON" {
   // Key order is pinned because the store's event_log_length/hash markers
   // cover the exact serialized text.
   let stamped = @agent_session.Session(SessionId("s1"), system_prompt="p").append(
-    User(UserMessage("hello")),
+    User(UserMessage(Content([Text("hello")]))),
     unix_ms=1781144351123L,
   )
   let line = ToJson::to_json(stamped.events()[0]).stringify()
@@ -46,7 +48,7 @@ test "event timestamps round trip through JSON" {
 
   // Without a clock (purely in-memory appends), the stamp is the 0 sentinel.
   let unstamped = @agent_session.Session(SessionId("s2"), system_prompt="p").append(
-    User(UserMessage("hi")),
+    User(UserMessage(Content([Text("hi")]))),
   )
   assert_eq(unstamped.events()[0].unix_ms(), 0L)
 }
@@ -74,7 +76,7 @@ test "ToolResult brief round-trips when present" {
   let with_brief = @agent_session.ToolResult(
     tool_call_id="call_2",
     tool_name="shell",
-    content="exit=0\na\nb",
+    content=[Text("exit=0\na\nb")],
     brief="ran ls → 2 files",
   )
   let decoded : @agent_session.ToolResult = @json.from_json(
@@ -87,7 +89,7 @@ test "ToolResult brief round-trips when present" {
 ///|
 test "session projects to DeepSeek chat messages" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("inspect")))
+    .append(User(UserMessage(Content([Text("inspect")]))))
     .append(
       Assistant(
         AssistantMessage(
@@ -99,7 +101,9 @@ test "session projects to DeepSeek chat messages" {
     )
     .append(
       Tool(
-        ToolResult(tool_call_id="call_1", tool_name="read", content="README"),
+        ToolResult(tool_call_id="call_1", tool_name="read", content=[
+          Text("README"),
+        ]),
       ),
     )
     .append(Terminal(Finished("done")))
@@ -148,7 +152,7 @@ test "session projects to DeepSeek chat messages" {
 ///|
 test "session JSON round trips typed events" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("hello")))
+    .append(User(UserMessage(Content([Text("hello")]))))
     .append(
       Runtime(RuntimeNotice("\{@agent_session.PlanReminderPrefix}\nrun tests")),
     )
@@ -180,7 +184,7 @@ test "session JSON round trips typed events" {
 test "projection closes unresolved historical tool calls" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(Assistant(AssistantMessage("", tool_calls=[sample_tool_call()])))
-    .append(User(UserMessage("continue")))
+    .append(User(UserMessage(Content([Text("continue")]))))
   let messages = session.chat_messages()
   assert_eq(messages.length(), 4)
   assert_true(messages[1].role is Assistant)
@@ -198,8 +202,8 @@ test "projection skips context-yield terminals" {
   // [system, summary, steer] — the yield status is run metadata, not an
   // assistant answer, and must never read as the reply to the steer.
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("build everything")))
-    .append(User(UserMessage("preserved steer")))
+    .append(User(UserMessage(Content([Text("build everything")]))))
+    .append(User(UserMessage(Content([Text("preserved steer")]))))
     .append(
       Summary(
         SessionSummary(content="checkpoint", from_sequence=1, to_sequence=1),
@@ -222,7 +226,7 @@ test "projection skips context-yield terminals" {
 ///|
 test "projection does not repeat a reasoning-bearing final answer" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("question")))
+    .append(User(UserMessage(Content([Text("question")]))))
     .append(
       Assistant(
         AssistantMessage("answer", reasoning_content="consider the options"),
@@ -240,7 +244,7 @@ test "projection does not repeat a reasoning-bearing final answer" {
 ///|
 test "projection does not repeat a plain final preserved as an assistant" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("question")))
+    .append(User(UserMessage(Content([Text("question")]))))
     .append(Assistant(AssistantMessage("answer")))
     .append(Terminal(Finished("answer")))
   let messages = session.chat_messages()
@@ -253,11 +257,13 @@ test "projection does not repeat a plain final preserved as an assistant" {
 ///|
 test "projection skips compacted assistant tool results" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("inspect")))
+    .append(User(UserMessage(Content([Text("inspect")]))))
     .append(Assistant(AssistantMessage("", tool_calls=[sample_tool_call()])))
     .append(
       Tool(
-        ToolResult(tool_call_id="call_1", tool_name="read", content="README"),
+        ToolResult(tool_call_id="call_1", tool_name="read", content=[
+          Text("README"),
+        ]),
       ),
     )
     .append(
@@ -280,9 +286,9 @@ test "projection skips compacted assistant tool results" {
 ///|
 test "summary events compact covered model context" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("old user")))
+    .append(User(UserMessage(Content([Text("old user")]))))
     .append(Assistant(AssistantMessage("old assistant")))
-    .append(User(UserMessage("recent user")))
+    .append(User(UserMessage(Content([Text("recent user")]))))
     .append(
       Summary(
         SessionSummary(
@@ -311,9 +317,9 @@ test "summary appended mid-turn projects before the uncovered tail" {
   // active turn's task but covers only the prior turn, so projection must
   // put its text where the prior turn stood, ahead of the task.
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("prior task")))
+    .append(User(UserMessage(Content([Text("prior task")]))))
     .append(Terminal(Finished("prior answer")))
-    .append(User(UserMessage("active task")))
+    .append(User(UserMessage(Content([Text("active task")]))))
     .append(
       Summary(
         SessionSummary(
@@ -337,7 +343,7 @@ test "summary appended mid-turn projects before the uncovered tail" {
 ///|
 test "later summary supersedes earlier summary in model context" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(
       Summary(
         SessionSummary(content="first summary", from_sequence=1, to_sequence=1),
@@ -361,7 +367,7 @@ test "later summary supersedes earlier summary in model context" {
 ///|
 test "compact validates and appends summary event" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("second")))
   let compacted = session.compact(
     content="first two events",
@@ -385,7 +391,7 @@ test "compact validates and appends summary event" {
 ///|
 test "summary_item validates without appending" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("second")))
   let item = session.summary_item(
     content="first two events",
@@ -430,7 +436,7 @@ test "a compacted-over set marker re-arms the turn-start reminder" {
   // projection, and the cadence must re-surface the goal instead of
   // trusting the lossy summary.
   let session = @agent_session.Session(SessionId("s1"), system_prompt="sys")
-    .append(User(UserMessage("task")))
+    .append(User(UserMessage(Content([Text("task")]))))
     .append(
       Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nbig objective")),
     )
@@ -446,8 +452,8 @@ test "a summary of later events leaves a fresh set marker verbatim" {
   // The marker stays in the projection (the summary's range starts after
   // it), so the fresh-set suppression still applies: no extra reminder.
   let session = @agent_session.Session(SessionId("s2"), system_prompt="sys")
-    .append(User(UserMessage("task one")))
-    .append(User(UserMessage("task two")))
+    .append(User(UserMessage(Content([Text("task one")]))))
+    .append(User(UserMessage(Content([Text("task two")]))))
     .append(
       Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nbig objective")),
     )
@@ -476,4 +482,33 @@ test "a blocked marker pauses the standing goal without clearing it" {
   )
   guard session.current_goal() is Some(goal) else { fail("goal must stand") }
   assert_false(goal.blocked())
+}
+
+///|
+test "durable content replays mixed content without provider IDs" {
+  let parts : Array[@agent_session.ContentPart] = [
+    Text("before"),
+    Image(
+      @agent_session.Image::from_base64(
+        media_type="image/png",
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+      ),
+    ),
+    Text("after"),
+  ]
+  let user = @agent_session.UserMessage(Content(parts))
+  let expected = @agent_session.to_deepseek_parts(user.content())
+  let session = @agent_session.Session(
+    SessionId("mixed"),
+    system_prompt="system",
+  ).append(User(user))
+  let decoded : @agent_session.SessionEvent = @json.from_json(
+    Json(session.events()[0]),
+  )
+  let resumed = @agent_session.Session(
+    SessionId("resumed"),
+    system_prompt="system",
+  ).append(decoded.item())
+  let messages = resumed.chat_messages()
+  assert_eq(messages[1].content.0, expected)
 }

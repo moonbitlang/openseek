@@ -58,8 +58,8 @@ pub(all) enum EngineEvent {
   // dropped because it raced the turn's end. Current hosts echo the globally
   // unique local submission id; `None` is a legacy lifecycle-only receipt and
   // must never claim a local ledger entry by matching text.
-  SteerApplied(content~ : String, submission_id~ : String?)
-  SteerDropped(content~ : String, submission_id~ : String?)
+  SteerApplied(content~ : @protocol.Content, submission_id~ : String?)
+  SteerDropped(content~ : @protocol.Content, submission_id~ : String?)
   // An automatic checkpoint completed inside the open turn. Unlike the
   // manual lifecycle below, this does not put the conversation into an idle
   // compaction phase.
@@ -354,14 +354,41 @@ test "decode recognizes the steer events" {
         "submission_id": "input-7",
       }),
     )
-    is Some(SteerApplied(content="left", submission_id=Some("input-7"))) else {
+    is Some(
+      SteerApplied(
+        content=Content([Text("left")]),
+        submission_id=Some("input-7")
+      )
+    ) else {
     fail("steer_applied not decoded")
   }
   guard decode_engine_event(
       event_fields({ "event": "steer_dropped", "content": "left" }),
     )
-    is Some(SteerDropped(content="left", submission_id=None)) else {
+    is Some(SteerDropped(content=Content([Text("left")]), submission_id=None)) else {
     fail("steer_dropped not decoded")
+  }
+  let image = @protocol.Image::from_base64(
+    media_type="image/png",
+    "iVBORw0KGgo=",
+  )
+  let content = @protocol.Content([Text("look"), Image(image), Text("here")])
+  for event in ["steer_applied", "steer_dropped"] {
+    let stream = event_fields({
+      "event": event,
+      "kind": "prompt",
+      "content": content,
+      "submission_id": "image-steer",
+    })
+    let forwarded = event_fields(stream.to_json())
+    assert_true(
+      decode_engine_event(forwarded)
+      is Some(
+        SteerApplied(content=actual, submission_id=Some("image-steer"))
+        | SteerDropped(content=actual, submission_id=Some("image-steer"))
+      ) &&
+      actual == content,
+    )
   }
 }
 

@@ -3,7 +3,7 @@ test "tool data persists but never enters model messages" {
   let result = @agent_session.ToolResult(
     tool_call_id="outer",
     tool_name="mbtx",
-    content="selected output",
+    content=[Text("selected output")],
     data={
       "ptc_calls": [
         { "arguments": { "secret_intermediate": "not model context" } },

@@ -54,8 +54,8 @@ pub(all) enum EngineEvent {
   AgentAborted(String)
   MaxStepsExhausted
   AgentSetupFailed(String)
-  SteerApplied(content~ : String, submission_id~ : String?)
-  SteerDropped(content~ : String, submission_id~ : String?)
+  SteerApplied(content~ : @openseek_protocol.Content, submission_id~ : String?)
+  SteerDropped(content~ : @openseek_protocol.Content, submission_id~ : String?)
   AutoCompactionFinished(String)
   CompactionStarted
   CompactionFinished(String)

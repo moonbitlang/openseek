@@ -13,10 +13,21 @@ fn cmd(line : String) -> Result[@openseek_protocol.Command, String] {
 /// spelling the same command differently, which is what they did.
 fn all_commands() -> Array[@openseek_protocol.Command] {
   [
-    Prompt(text="do it", submission_id=None),
-    Prompt(text="do it exactly once", submission_id=Some("page-1-submission-2")),
-    Steer(kind=Prompt, text="also fix docs", submission_id=None),
-    Steer(kind=Command, text="<user_shell_command>", submission_id=None),
+    Prompt(content=Content([Text("do it")]), submission_id=None),
+    Prompt(
+      content=Content([Text("do it exactly once")]),
+      submission_id=Some("page-1-submission-2"),
+    ),
+    Steer(
+      kind=Prompt,
+      content=Content([Text("also fix docs")]),
+      submission_id=None,
+    ),
+    Steer(
+      kind=Command,
+      content=Content([Text("<user_shell_command>")]),
+      submission_id=None,
+    ),
     JobsSnapshot(request_id="jobs-1"),
     JobStop(request_id="stop-1", generation="runtime-1", job_id="bg-1"),
     Compact,
@@ -81,31 +92,40 @@ test "a steer without a kind is a prompt steer" {
       ),
     ),
     content=(
-      #|Ok(Steer(kind=Prompt, text="go left", submission_id=None))
+      #|Ok(
+      #|  Steer(
+      #|    kind=Prompt,
+      #|    content=Content([Text("go left")]),
+      #|    submission_id=None,
+      #|  ),
+      #|)
     ),
   )
 }
 
 ///|
-/// The tag is absent rather than null, so the line an untagged controller
-/// writes is byte for byte what every controller wrote before the field.
+/// The optional correlation tag is omitted rather than encoded as null.
 test "prompt omits submission_id unless the controller tagged it" {
   inspect(
-    (Prompt(text="do it", submission_id=None) : @openseek_protocol.Command)
-    .to_json()
-    .stringify(),
-    content=(
-      #|{"command":"prompt","text":"do it"}
-    ),
-  )
-  inspect(
     (
-      Prompt(text="do it", submission_id=Some("page-1-submission-2")) :
+      Prompt(content=Content([Text("do it")]), submission_id=None) :
       @openseek_protocol.Command)
     .to_json()
     .stringify(),
     content=(
-      #|{"command":"prompt","text":"do it","submission_id":"page-1-submission-2"}
+      #|{"command":"prompt","content":"do it"}
+    ),
+  )
+  inspect(
+    (
+      Prompt(
+        content=Content([Text("do it")]),
+        submission_id=Some("page-1-submission-2"),
+      ) : @openseek_protocol.Command)
+    .to_json()
+    .stringify(),
+    content=(
+      #|{"command":"prompt","content":"do it","submission_id":"page-1-submission-2"}
     ),
   )
 }
@@ -215,7 +235,7 @@ test "steer preserves an optional submission id and refuses malformed ids" {
   for kind in kinds {
     let command : @openseek_protocol.Command = Steer(
       kind~,
-      text="same text",
+      content=Content([Text("same text")]),
       submission_id=Some("steer-2"),
     )
     assert_eq(@openseek_protocol.Command::parse(command.to_json()), Ok(command))
@@ -226,7 +246,13 @@ test "steer preserves an optional submission id and refuses malformed ids" {
         #|{"command":"steer","text":"same text","submission_id":"steer-2"}
       ),
     )
-    is Ok(Steer(kind=Prompt, text="same text", submission_id=Some("steer-2"))),
+    is Ok(
+      Steer(
+        kind=Prompt,
+        content=Content([Text("same text")]),
+        submission_id=Some("steer-2")
+      )
+    ),
   )
   for bad in [Json::null(), Json(7), Json(false)] {
     assert_eq(
@@ -240,12 +266,85 @@ test "steer preserves an optional submission id and refuses malformed ids" {
   }
   let untagged : @openseek_protocol.Command = Steer(
     kind=Prompt,
-    text="same text",
+    content=Content([Text("same text")]),
     submission_id=None,
   )
   @debug.assert_eq(untagged.to_json(), {
     "command": "steer",
     "kind": "prompt",
-    "text": "same text",
+    "content": "same text",
   })
+}
+
+///|
+test "message commands preserve ordered content on the wire" {
+  let image = @openseek_protocol.Image::from_base64(
+    media_type="image/png",
+    "iVBORw0KGgo=",
+  )
+  let content : @openseek_protocol.Content = Content([
+    Text("before"),
+    Image(image),
+    Text("after"),
+  ])
+  for
+    command in [
+      @openseek_protocol.Command::Prompt(content~, submission_id=Some("mixed")),
+      Steer(kind=Prompt, content~, submission_id=Some("mixed-steer")),
+    ] {
+    let json = command.to_json()
+    assert_true(
+      json
+      is {
+        "content": [
+          { "type": "text", "text": "before", .. },
+          {
+            "type": "image",
+            "media_type": "image/png",
+            "data": "iVBORw0KGgo=",
+            ..
+          },
+          { "type": "text", "text": "after", .. },
+        ],
+        ..
+      },
+    )
+    assert_false(json is { "text": _, .. })
+    assert_false(json is { "images": _, .. })
+    assert_eq(@openseek_protocol.Command::parse(json), Ok(command))
+  }
+}
+
+///|
+test "legacy command images decode to content while malformed content is rejected" {
+  for command in ["prompt", "steer"] {
+    let decoded = @openseek_protocol.Command::parse({
+      "command": command,
+      "text": "before",
+      "images": ["data:image/png;base64,iVBORw0KGgo="],
+    })
+    let content = match decoded {
+      Ok(Prompt(content~, ..) | Steer(content~, ..)) => content
+      _ => fail("expected legacy message content")
+    }
+    assert_true(content.0 is [Text("before"), Image(_)])
+    for malformed in [Json::null(), 7, [{ "type": "image", "data": "bad" }]] {
+      assert_true(
+        @openseek_protocol.Command::parse({
+          "command": command,
+          "content": malformed,
+          "text": "fallback",
+        })
+        is Err(_),
+      )
+    }
+    assert_true(
+      @openseek_protocol.Command::parse({
+        "command": command,
+        "text": "",
+        "images": null,
+      })
+      is Err(_),
+    )
+  }
 }

@@ -81,7 +81,10 @@ async test "load_or_new_session defers first durable write until append" {
     assert_eq(created.system_prompt(), grounded_prompt)
     assert_eq(created.events().length(), 0)
     assert_false(store.exists(id))
-    let with_event = store.append(created, User(UserMessage("hello")))
+    let with_event = store.append(
+      created,
+      User(UserMessage(Content([Text("hello")]))),
+    )
     assert_eq(with_event.events().length(), 1)
     @fs.remove(prompt_path)
     let loaded = load_or_new_session(store, id, parsed, Deepseek(V4Pro))
@@ -133,7 +136,7 @@ async test "new durable session header persists project layout" {
       Deepseek(V4Pro),
       workspace_root=real_workspace,
     )
-    let _ = store.append(created, User(UserMessage("hello")))
+    let _ = store.append(created, User(UserMessage(Content([Text("hello")]))))
     let loaded = store.load(id)
     let prompt = loaded.system_prompt()
     assert_true(prompt.contains("Working directory: \{real_workspace}"))
@@ -177,7 +180,10 @@ async test "load_or_new_session recovers empty interrupted session directory" {
     assert_true(grounded_prompt.has_prefix("system\n\n## Environment"))
     assert_eq(session.system_prompt(), grounded_prompt)
     assert_eq(session.events().length(), 0)
-    let with_event = store.append(session, User(UserMessage("hello")))
+    let with_event = store.append(
+      session,
+      User(UserMessage(Content([Text("hello")]))),
+    )
     assert_eq(with_event.events().length(), 1)
   })
 }

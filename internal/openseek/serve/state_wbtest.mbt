@@ -36,7 +36,7 @@ test "serve commands decode and reject with actionable errors" {
   )
   assert_true(
     decode_serve_command({ "command": "prompt", "text": "hi" })
-    is Ok(Prompt("hi", submission_id=None)),
+    is Ok(Prompt(Content([Text("hi")]), submission_id=None)),
   )
   assert_true(
     decode_serve_command({
@@ -44,11 +44,13 @@ test "serve commands decode and reject with actionable errors" {
       "text": "hi",
       "submission_id": "page-1-submission-2",
     })
-    is Ok(Prompt("hi", submission_id=Some("page-1-submission-2"))),
+    is Ok(
+      Prompt(Content([Text("hi")]), submission_id=Some("page-1-submission-2"))
+    ),
   )
   assert_true(
     decode_serve_command({ "command": "steer", "text": "left" })
-    is Ok(Steer(Prompt("left", submission_id=None))),
+    is Ok(Steer(Prompt(Content([Text("left")]), submission_id=None))),
   )
   assert_true(
     decode_serve_command({
@@ -57,7 +59,9 @@ test "serve commands decode and reject with actionable errors" {
       "text": "right",
       "submission_id": "steer-right",
     })
-    is Ok(Steer(Prompt("right", submission_id=Some("steer-right")))),
+    is Ok(
+      Steer(Prompt(Content([Text("right")]), submission_id=Some("steer-right")))
+    ),
   )
   assert_true(
     decode_serve_command({
@@ -161,7 +165,7 @@ test "pending prompt helpers ignore queued compactions and goals" {
   pending.push(PendingCompact)
   pending.push(PendingGoal("[goal]\nship it", [], false, 1, None))
   assert_false(has_pending_prompt(pending))
-  pending.push(PendingPrompt("next", submission_id=None))
+  pending.push(PendingPrompt(Content([Text("next")]), submission_id=None))
   assert_true(has_pending_prompt(pending))
   // Cancel targets the next prompt, never a queued goal update.
   remove_next_pending_prompt(pending)
@@ -218,7 +222,7 @@ test "a context-yield turn chains: finished derivation and standing goal" {
       Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nbig objective")),
     )
     .append(Terminal(Finished("turn one answer")))
-    .append(User(UserMessage("continue")))
+    .append(User(UserMessage(Content([Text("continue")]))))
     .append(
       Summary(
         SessionSummary(content="checkpoint", from_sequence=1, to_sequence=3),
@@ -258,7 +262,7 @@ test "an unblocked goal resumes auto-continuation at the boundary" {
   // change — the whole point of the [goal unblocked] marker.
   let base = @agent_session.Session(SessionId("resume"), system_prompt="system")
     .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nobjective")))
-    .append(User(UserMessage("work")))
+    .append(User(UserMessage(Content([Text("work")]))))
     .append(
       Runtime(RuntimeNotice("\{@agent_session.GoalBlockedPrefix}\nstuck")),
     )
@@ -305,4 +309,42 @@ test "auto-continue requires a finished idle serving turn with budget" {
   assert_false(auto_continues(shutting_down=true))
   assert_false(auto_continues(goal_standing=false))
   assert_false(auto_continues(turns_remaining=0))
+}
+
+///|
+test "serve forwards ordered prompt and steer content without splitting images" {
+  let image = @agent_session.Image::from_base64(
+    media_type="image/png",
+    "iVBORw0KGgo=",
+  )
+  let content : @agent_session.Content = Content([
+    Text("before"),
+    Image(image),
+    Text("after"),
+  ])
+  let prompt = @protocol.Command::Prompt(content~, submission_id=Some("mixed"))
+  assert_true(
+    decode_serve_command(prompt.to_json())
+    is Ok(Prompt(actual, submission_id=Some("mixed"))) &&
+    actual == content,
+  )
+  let steer = @protocol.Command::Steer(
+    kind=Prompt,
+    content~,
+    submission_id=Some("mixed-steer"),
+  )
+  assert_true(
+    decode_serve_command(steer.to_json())
+    is Ok(Steer(Prompt(actual, submission_id=Some("mixed-steer")))) &&
+    actual == content,
+  )
+  let shell = @protocol.Command::Steer(
+    kind=Command,
+    content~,
+    submission_id=None,
+  )
+  assert_true(
+    decode_serve_command(shell.to_json())
+    is Err("command steering does not accept images"),
+  )
 }

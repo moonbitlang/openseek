@@ -18,7 +18,7 @@ fn sample_session() -> @agent_session.Session {
     SessionId("demo"),
     system_prompt="You are a helpful agent.",
   )
-  let s1 = s0.append(User(UserMessage("list the files")))
+  let s1 = s0.append(User(UserMessage(Content([Text("list the files")]))))
   let s2 = s1.append(
     Assistant(
       AssistantMessage(
@@ -32,11 +32,9 @@ fn sample_session() -> @agent_session.Session {
   )
   let s3 = s2.append(
     Tool(
-      ToolResult(
-        tool_call_id="call_1",
-        tool_name="shell",
-        content="README.md\nsrc",
-      ),
+      ToolResult(tool_call_id="call_1", tool_name="shell", content=[
+        Text("README.md\nsrc"),
+      ]),
     ),
   )
   let s4 = s3.append(Runtime(RuntimeNotice("plan reminder: run tests")))
@@ -82,7 +80,7 @@ fn error_tool_session() -> @agent_session.Session {
       ToolResult(
         tool_call_id="c1",
         tool_name="shell",
-        content="boom",
+        content=[Text("boom")],
         is_error=true,
       ),
     ),
@@ -121,7 +119,7 @@ test "mbtx activity and build-error counts follow durable events" {
         ToolResult(
           tool_call_id="b1",
           tool_name="mbtx",
-          content="diag",
+          content=[Text("diag")],
           is_error=true,
           brief="mbtx build",
         ),
@@ -148,7 +146,7 @@ test "mbtx activity and build-error counts follow durable events" {
       ToolResult(
         tool_call_id="ghost",
         tool_name="mbtx",
-        content="diag",
+        content=[Text("diag")],
         is_error=true,
         brief="mbtx build",
       ),
@@ -165,6 +163,42 @@ test "model error count excludes a compacted-away failure raw still shows" {
   // dangling call, so it has no error card to count.
   inspect(@viz.rendered_error_count(compacted, RawLog), content="1")
   inspect(@viz.rendered_error_count(compacted, ModelView), content="0")
+}
+
+///|
+test "model error count includes image results but excludes their synthetic replacements" {
+  let session = @agent_session.Session(
+      SessionId("image-error"),
+      system_prompt="",
+    )
+    .append(
+      Assistant(
+        AssistantMessage("", tool_calls=[
+          ToolCall(id="c1", name="screenshot", arguments="{}"),
+        ]),
+      ),
+    )
+    .append(
+      Tool(
+        ToolResult(
+          tool_call_id="c1",
+          tool_name="screenshot",
+          content=[
+            Image(
+              @agent_session.Image::from_base64(
+                media_type="image/png",
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+              ),
+            ),
+          ],
+          is_error=true,
+        ),
+      ),
+    )
+  assert_eq(@viz.rendered_error_count(session, ModelView), 1)
+  let compacted = compact_second_event(session)
+  assert_eq(@viz.rendered_error_count(compacted, RawLog), 1)
+  assert_eq(@viz.rendered_error_count(compacted, ModelView), 0)
 }
 
 ///|

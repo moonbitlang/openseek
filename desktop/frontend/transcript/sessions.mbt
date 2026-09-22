@@ -330,9 +330,18 @@ pub fn apply_session_item(
   let mut updated_existing = false
   match item {
     @desktop_protocol.User(payload) => {
-      let content = payload.content.trim().to_owned()
-      if !content.is_empty() {
-        items.push({ kind: User(text=content, images=[]), ts, sequence, })
+      let content = payload.content.text().trim().to_owned()
+      let images = payload.content
+        .iter()
+        .filter_map(part => {
+          match part {
+            Text(_) => None
+            Image(image) => Some(image.data_url())
+          }
+        })
+        .collect()
+      if !content.is_empty() || !images.is_empty() {
+        items.push({ kind: User(text=content, images~), ts, sequence, })
       }
     }
     @desktop_protocol.Assistant(payload) => {
@@ -348,7 +357,7 @@ pub fn apply_session_item(
       } else {
         None
       }
-      // The store writes an empty string for a response that said nothing.
+      // Empty visible content contributes no prose to the transcript.
       let prose = if payload.content.is_blank() {
         None
       } else {
@@ -415,7 +424,15 @@ pub fn apply_session_item(
           },
           children: program_calls(payload.data, call.call_id, origin=Recorded),
           outcome: Done(
-            content=payload.content,
+            content=payload.content
+              .iter()
+              .map(part => {
+                match part {
+                  Text(text) => text
+                  Image(image) => "[Image: \{image.media_type}]"
+                }
+              })
+              .join(""),
             is_error=payload.is_error,
             brief=payload.brief,
           ),

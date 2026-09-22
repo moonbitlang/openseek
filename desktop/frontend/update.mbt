@@ -10402,7 +10402,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
       sequence=1,
       ts=None,
       item=@protocol.User({
-        content: "arrived before the list",
+        content: Content([Text("arrived before the list")]),
         submission_id: None,
       }),
       session_root=@interop.ChannelId::Local.test_store_root(),
@@ -10464,7 +10464,7 @@ test "a rooted commit places its conversation without waiting for the list" {
       sequence=1,
       ts=None,
       item=@protocol.User({
-        content: "arrived before the list",
+        content: Content([Text("arrived before the list")]),
         submission_id: None,
       }),
       session_root=store,
@@ -10487,7 +10487,10 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-registered",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     committed,
@@ -10512,7 +10515,10 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-unseen",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_resource(
         "/work/unseen/.openseek",
       ),
@@ -10563,7 +10569,10 @@ test "a commit for an unlisted store refreshes past a same-id row" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=store,
     ),
     model,
@@ -10577,7 +10586,10 @@ test "a commit for an unlisted store refreshes past a same-id row" {
       session="desktop-listed-only",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     committed,
@@ -10616,7 +10628,10 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "listed", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("listed")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -10635,7 +10650,10 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "other project", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("other project")]),
+        submission_id: None,
+      }),
       session_root=store,
     ),
     first,
@@ -10929,7 +10947,10 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.User({ content: "future", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("future")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     refreshing,
@@ -13374,7 +13395,10 @@ test "steer_applied only settles pending UI until its commit" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="go left", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("go left")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     model,
@@ -13393,7 +13417,7 @@ test "a legacy text-only steer receipt cannot claim local ownership" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="go left", submission_id=None),
+      SteerApplied(content=Content([Text("go left")]), submission_id=None),
       session=None,
     ),
     model,
@@ -13409,7 +13433,10 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
       session~,
       sequence~,
       ts=Some(ts),
-      item=@protocol.User({ content: "question", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("question")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     )
   }
@@ -13455,7 +13482,10 @@ test "a canonical user commit never settles a local steer" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "go left", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("go left")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -13504,7 +13534,10 @@ test "steer_dropped settles the pending steer with a visible notice" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(content="go left", submission_id=Some("test-steer-0")),
+      SteerDropped(
+        content=Content([Text("go left")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     model,
@@ -13525,7 +13558,10 @@ test "an identical-text settle removes exactly one pending entry" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="again", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("again")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     model,
@@ -13550,7 +13586,10 @@ test "a late exact applied receipt retracts a run-end unconfirmed notice" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="lost", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("lost")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     finished,
@@ -13568,7 +13607,10 @@ test "a trailing applied receipt for run A settles after run B Started" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="late steer", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("late steer")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     started,
@@ -13589,7 +13631,10 @@ test "a trailing dropped receipt for run A cannot close run B" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(content="late steer", submission_id=Some("test-steer-0")),
+      SteerDropped(
+        content=Content([Text("late steer")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     started,
@@ -13675,7 +13720,10 @@ test "a foreign background run schedules one causal read after Started" {
       session~,
       sequence=4,
       ts=None,
-      item=@protocol.User({ content: "current question", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("current question")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     buffered_terminal,
@@ -13751,7 +13799,10 @@ test "buffered commits are delivery, not applied chronology" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({ content: "current question", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("current question")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -13838,7 +13889,10 @@ test "a trailing applied receipt settles after an empty runs snapshot" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="late applied", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("late applied")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     settled,
@@ -13862,7 +13916,10 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(content="late dropped", submission_id=Some("test-steer-0")),
+      SteerDropped(
+        content=Content([Text("late dropped")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     settled,
@@ -16367,7 +16424,10 @@ test "a new Started incarnation retires its exact deleted tombstone" {
       session=deleted_item.id,
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "new incarnation", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("new incarnation")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     started,
@@ -18968,7 +19028,10 @@ test "send does not show a prompt until its commit lands" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "build the thing", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("build the thing")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     sent,
@@ -18996,7 +19059,10 @@ test "a replayed commit at or below the watermark is dropped" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({ content: "already there", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("already there")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -19018,7 +19084,10 @@ test "a commit past the frontier buffers and flips into a reload" {
       session="desktop-test",
       sequence=5,
       ts=None,
-      item=@protocol.User({ content: "from the future", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("from the future")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -19046,7 +19115,10 @@ test "commits buffer while a reload is in flight" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.User({ content: "mid-reload", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("mid-reload")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -19069,12 +19141,18 @@ test "a snapshot drains buffered commits in sequence order" {
       {
         sequence: 4,
         ts: None,
-        item: @protocol.User({ content: "four", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("four")]),
+          submission_id: None,
+        }),
       },
       {
         sequence: 3,
         ts: None,
-        item: @protocol.User({ content: "three", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("three")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19119,7 +19197,10 @@ test "a snapshot already containing the buffered commits drops them" {
       {
         sequence: 2,
         ts: None,
-        item: @protocol.User({ content: "dup", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("dup")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19152,7 +19233,10 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
       {
         sequence: 9,
         ts: None,
-        item: @protocol.User({ content: "far", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("far")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19189,7 +19273,10 @@ test "background retries preserve buffered commits until a later success" {
       {
         sequence: 3,
         ts: None,
-        item: @protocol.User({ content: "x", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("x")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19218,7 +19305,10 @@ test "background retries preserve buffered commits until a later success" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({ content: "next", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("next")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     failed,
@@ -19260,7 +19350,10 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
       {
         sequence: 2,
         ts: None,
-        item: @protocol.User({ content: "two", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("two")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19315,7 +19408,10 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
         {
           sequence: 6,
           ts: None,
-          item: @protocol.User({ content: "six", submission_id: None, }),
+          item: @protocol.User({
+            content: Content([Text("six")]),
+            submission_id: None,
+          }),
         },
       ],
       reload_after_current=false,
@@ -19402,7 +19498,7 @@ test "tool decode semantics wait for their durable error tool result" {
       data: None,
       tool_call_id: "c1",
       tool_name: "edit",
-      content: "invalid arguments",
+      content: Content([Text("invalid arguments")]),
       is_error: true,
       brief: None,
     }),
@@ -19485,7 +19581,7 @@ test "a committed tool result visibly changes its existing call row" {
       data: None,
       tool_call_id: "c1",
       tool_name: "read",
-      content: "module contents",
+      content: Content([Text("module contents")]),
       is_error: false,
       brief: Some("read moon.mod"),
     }),
@@ -19619,7 +19715,10 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
@@ -19640,7 +19739,10 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     next,
@@ -19657,7 +19759,10 @@ test "a gapped commit for an unknown session materializes then reloads" {
       session="desktop-gap",
       sequence=3,
       ts=None,
-      item=@protocol.User({ content: "third", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("third")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
@@ -19696,7 +19801,10 @@ test "a late commit cannot resurrect a locally known archived session" {
       session="desktop-archived",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "stale", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("stale")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -19725,7 +19833,10 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
       session="desktop-tombstoned",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "stale", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("stale")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,

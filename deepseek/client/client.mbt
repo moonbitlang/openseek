@@ -23,6 +23,20 @@ fn default_api_url_for_model(model : @deepseek.Model) -> String {
 }
 
 ///|
+/// Image content is unsupported by the selected model family or endpoint.
+pub(all) suberror ImageRequestError {
+  UnsupportedProvider
+} derive(Debug)
+
+///|
+pub extend ImageRequestError with Debug::{to_repr}
+
+///|
+impl Show for ImageRequestError with fn output(_self, logger) {
+  logger.write_string("images require a DeepSeek image-capable endpoint")
+}
+
+///|
 /// Route OpenRouter DeepSeek requests to their dedicated encoder for model ids
 /// and reasoning fields. Other endpoints and model families use native encoding.
 fn encode_chat_request_for_endpoint(
@@ -33,7 +47,13 @@ fn encode_chat_request_for_endpoint(
   stream~ : Bool,
   response_format? : @deepseek.ResponseFormat,
   messages : Array[@deepseek.ChatMessage],
-) -> Json raise @deepseek.ChatMessageError {
+) -> Json raise {
+  if (!(model is Deepseek(_)) || api_url == OpenRouterChatCompletionsUrl) &&
+    messages.any(message => {
+      message.content.0.any(part => part is (ImageUrl(_) | File(_)))
+    }) {
+    raise UnsupportedProvider
+  }
   if api_url is OpenRouterChatCompletionsUrl && model is Deepseek(variant) {
     @deepseek.openrouter_encode_chat_request(
       model=variant,

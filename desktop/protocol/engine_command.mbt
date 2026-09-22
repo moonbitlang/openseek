@@ -9,10 +9,13 @@
 // asks for a prompt, not for a variant. They are now one line each.
 
 ///|
-/// Send `text` as a new turn's prompt. `submission_id` is the client's tag
+/// Send `content` as a new turn's prompt. `submission_id` is the client's tag
 /// for the submission, recorded on the turn's durable `User` item.
-pub fn prompt(text : String, submission_id? : String) -> @wire.Command {
-  Prompt(text~, submission_id~)
+pub fn prompt(
+  content : @wire.Content,
+  submission_id? : String,
+) -> @wire.Command {
+  Prompt(content~, submission_id~)
 }
 
 ///|
@@ -20,8 +23,8 @@ pub fn prompt(text : String, submission_id? : String) -> @wire.Command {
 ///
 /// `Prompt` is what the host has always meant here — it has no other kind —
 /// and it now says so on the wire instead of relying on the engine's default.
-pub fn steer(text : String, submission_id? : String) -> @wire.Command {
-  Steer(kind=Prompt, text~, submission_id~)
+pub fn steer(content : @wire.Content, submission_id? : String) -> @wire.Command {
+  Steer(kind=Prompt, content~, submission_id~)
 }
 
 ///|
@@ -69,20 +72,21 @@ pub fn approval(id : String, allow~ : Bool) -> @wire.Command {
 ///|
 test "the host's commands are the protocol's" {
   assert_true(
-    prompt("hello").to_json() is { "command": "prompt", "text": "hello", .. },
+    prompt(Content([Text("hello")])).to_json()
+    is { "command": "prompt", "content": "hello", .. },
   )
   assert_true(
-    prompt("hello", submission_id="page-1-submission-2").to_json()
+    prompt(Content([Text("hello")]), submission_id="page-1-submission-2").to_json()
     is {
       "command": "prompt",
-      "text": "hello",
+      "content": "hello",
       "submission_id": "page-1-submission-2",
       ..
     },
   )
   assert_true(
-    steer("go left").to_json()
-    is { "command": "steer", "kind": "prompt", "text": "go left", .. },
+    steer(Content([Text("go left")])).to_json()
+    is { "command": "steer", "kind": "prompt", "content": "go left", .. },
   )
   assert_true(compact().to_json() is { "command": "compact", .. })
   assert_true(cancel().to_json() is { "command": "cancel", .. })
@@ -109,10 +113,10 @@ test "the host's commands are the protocol's" {
 
 ///|
 test "engine commands encode one json line" {
-  let line = prompt("quote \" newline\n").to_jsonl()
+  let line = prompt(Content([Text("quote \" newline\n")])).to_jsonl()
   assert_true(line.has_suffix("\n"))
   guard @json.parse(line.trim())
-    is { "command": "prompt", "text": "quote \" newline\n", .. } else {
+    is { "command": "prompt", "content": "quote \" newline\n", .. } else {
     fail("prompt command did not round-trip through json")
   }
 }

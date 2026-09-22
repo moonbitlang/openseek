@@ -73,7 +73,7 @@ async test "a standing goal from a prior turn is re-surfaced at turn start" {
         system_prompt="system",
       )
       .append(goal_set_marker("GOAL-MARKER port the decoder"))
-      .append(User(UserMessage("earlier task")))
+      .append(User(UserMessage(Content([Text("earlier task")]))))
       .append(Terminal(Finished("earlier answer")))
     let result = @agent.run_turn_in_scope(
       runtime=AgentRuntime(),
@@ -81,7 +81,7 @@ async test "a standing goal from a prior turn is re-surfaced at turn start" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="next chunk",
+      content=Content([Text("next chunk")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -93,9 +93,10 @@ async test "a standing goal from a prior turn is re-surfaced at turn start" {
     assert_true(bodies[0].contains("GOAL-MARKER port the decoder"))
     assert_true(bodies[1].contains(@agent_session.GoalCheckPrefix))
     // Durable exactly once, after the task.
+    let prefix = @agent_session.GoalReminderPrefix
     let reminders = [
       for event in result.events() if event.item() is Runtime(notice) &&
-      notice.content().has_prefix(@agent_session.GoalReminderPrefix) => notice
+      notice.content().has_prefix(prefix) => notice
     ]
     assert_eq(reminders.length(), 1)
   }
@@ -115,7 +116,7 @@ async test "a freshly set goal is not double-announced" {
         SessionId("goal-fresh-set"),
         system_prompt="system",
       )
-      .append(User(UserMessage("earlier task")))
+      .append(User(UserMessage(Content([Text("earlier task")]))))
       .append(Terminal(Finished("earlier answer")))
       .append(goal_set_marker("GOAL-MARKER fresh objective"))
     let _ = @agent.run_turn_in_scope(
@@ -124,7 +125,7 @@ async test "a freshly set goal is not double-announced" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="get started",
+      content=Content([Text("get started")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -158,7 +159,7 @@ async test "a long turn is reminded exactly once, at the start" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep going",
+      content=Content([Text("keep going")]),
       append_item=(session, item) => session.append(item),
       max_steps=40,
       api_url=url,
@@ -199,7 +200,7 @@ async test "a goal steered in mid-turn is announced once, not reminded" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="start",
+      content=Content([Text("start")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
       api_url=url,
@@ -238,7 +239,7 @@ async test "a cleared goal produces no reminders" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="just answer",
+      content=Content([Text("just answer")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
       api_url=url,

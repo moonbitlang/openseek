@@ -147,7 +147,13 @@ test "an older engine's steer_applied still decodes" {
       ),
     ),
     content=(
-      #|Some(SteerApplied(kind="prompt", content="go left", submission_id=None))
+      #|Some(
+      #|  SteerApplied(
+      #|    kind="prompt",
+      #|    content=Content([Text("go left")]),
+      #|    submission_id=None,
+      #|  ),
+      #|)
     ),
   )
 }
@@ -324,10 +330,10 @@ test "steer receipts round trip submission ids and accept untagged input" {
     event in [
       @openseek_protocol.SteerApplied(
         kind="prompt",
-        content="same",
+        content=Content([Text("same")]),
         submission_id=Some("a"),
       ),
-      SteerDropped(content="same", submission_id=Some("b")),
+      SteerDropped(content=Content([Text("same")]), submission_id=Some("b")),
     ] {
     assert_eq(@openseek_protocol.parse(event.to_json()), Some(event))
   }
@@ -338,11 +344,11 @@ test "steer receipts round trip submission ids and accept untagged input" {
         "content": "same",
         "submission_id": missing,
       })
-      is Some(SteerDropped(content="same", submission_id=None)),
+      is Some(SteerDropped(content=Content([Text("same")]), submission_id=None)),
     )
   }
   assert_true(
     @openseek_protocol.parse({ "event": "steer_dropped", "content": "same" })
-    is Some(SteerDropped(content="same", submission_id=None)),
+    is Some(SteerDropped(content=Content([Text("same")]), submission_id=None)),
   )
 }

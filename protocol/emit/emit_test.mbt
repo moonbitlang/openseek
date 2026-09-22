@@ -111,10 +111,18 @@ fn all_events() -> Array[@protocol.Event] {
     ApprovalResolved(id="ap-1", outcome="allowed_once"),
     ApprovalResolved(id="ap-2", outcome="rejected"),
     ApprovalResolved(id="ap-3", outcome="cancelled"),
-    SteerApplied(kind="prompt", content="also fix docs", submission_id=None),
-    SteerDropped(content="too late", submission_id=None),
-    SteerApplied(kind="prompt", content="same", submission_id=Some("steer-a")),
-    SteerDropped(content="same", submission_id=Some("steer-b")),
+    SteerApplied(
+      kind="prompt",
+      content=Content([Text("also fix docs")]),
+      submission_id=None,
+    ),
+    SteerDropped(content=Content([Text("too late")]), submission_id=None),
+    SteerApplied(
+      kind="prompt",
+      content=Content([Text("same")]),
+      submission_id=Some("steer-a"),
+    ),
+    SteerDropped(content=Content([Text("same")]), submission_id=Some("steer-b")),
     BackgroundNotice(content="job 2 exited"),
     GoalUpdated(goal=Some("ship it")),
     GoalUpdated(goal=None),
@@ -272,5 +280,55 @@ test "the wire line has no log envelope" {
     assert_false(fields.contains("level"))
     assert_false(fields.contains("source"))
     assert_false(fields.contains("category"))
+  }
+}
+
+///|
+test "steer receipts preserve ordered images and legacy text encoding" {
+  defer @emit.close()
+  let image = @protocol.Image::from_base64(
+    media_type="image/png",
+    "iVBORw0KGgo=",
+  )
+  for
+    content in [
+      @protocol.Content([Text("before"), Image(image), Text("after")]),
+      Content([Image(image)]),
+    ] {
+    let events : Array[@protocol.Event] = [
+      SteerApplied(kind="prompt", content~, submission_id=Some("mixed-steer")),
+      SteerDropped(content~, submission_id=Some("mixed-steer")),
+    ]
+    for event in events {
+      let json = @json.parse(wire(event))
+      assert_true(json is { "content": Array(_), .. })
+      assert_eq(@protocol.parse(json), Some(event))
+    }
+  }
+  assert_eq(
+    @json.parse(
+      wire(
+        SteerApplied(
+          kind="prompt",
+          content=Content([Text("old client")]),
+          submission_id=None,
+        ),
+      ),
+    ),
+    { "event": "steer_applied", "kind": "prompt", "content": "old client" },
+  )
+  for
+    invalid in [
+      Json::null(),
+      Json(1),
+      { "type": "text", "text": "wrong shape" },
+      [{ "type": "unknown" }],
+    ] {
+    for event in ["steer_applied", "steer_dropped"] {
+      assert_eq(@protocol.parse({ "event": event, "content": invalid }), None)
+    }
+  }
+  for event in ["steer_applied", "steer_dropped"] {
+    assert_eq(@protocol.parse({ "event": event }), None)
   }
 }

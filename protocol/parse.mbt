@@ -177,18 +177,22 @@ pub fn parse(line : Json) -> Event? {
     // the TUI launches whichever `openseek` is on PATH — so a new reader against
     // an old engine is a real pairing. "prompt" reproduces what those engines
     // meant, and is what every client defaulted to before this package existed.
-    "steer_applied" =>
-      text(fields, "content").map(content => {
+    "steer_applied" => {
+      guard fields.get("content") is Some(value) else { return None }
+      let content : Content = @json.from_json(value) catch { _ => return None }
+      Some(
         SteerApplied(
           kind=text(fields, "kind").unwrap_or("prompt"),
           content~,
           submission_id=text(fields, "submission_id"),
-        )
-      })
-    "steer_dropped" =>
-      text(fields, "content").map(content => {
-        SteerDropped(content~, submission_id=text(fields, "submission_id"))
-      })
+        ),
+      )
+    }
+    "steer_dropped" => {
+      guard fields.get("content") is Some(value) else { return None }
+      let content : Content = @json.from_json(value) catch { _ => return None }
+      Some(SteerDropped(content~, submission_id=text(fields, "submission_id")))
+    }
     "background_notice" =>
       text(fields, "content").map(content => BackgroundNotice(content~))
     // `goal` is null when the goal was cleared: absent and null are the same

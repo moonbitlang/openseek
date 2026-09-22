@@ -75,7 +75,7 @@ async test "agent executes each normal tool call in a response batch" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="run both tools",
+      content=Content([Text("run both tools")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
       api_url=url,
@@ -94,12 +94,12 @@ async test "agent executes each normal tool call in a response batch" {
       fail("expected first tool result")
     }
     assert_eq(first_result.tool_call_id(), "call_first")
-    assert_eq(first_result.content(), "first-result")
+    assert_eq(first_result.content().text(), "first-result")
     guard events[3].item() is Tool(second_result) else {
       fail("expected second tool result")
     }
     assert_eq(second_result.tool_call_id(), "call_second")
-    assert_eq(second_result.content(), "second-result")
+    assert_eq(second_result.content().text(), "second-result")
     guard events[4].item() is Assistant(final_response) else {
       fail("expected durable final response")
     }
@@ -168,7 +168,7 @@ async test "max-step exhaustion preserves continued session state" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="run one tool then exhaust",
+      content=Content([Text("run one tool then exhaust")]),
       append_item=(session, item) => session.append(item),
       max_steps=1,
       api_url=url,
@@ -185,7 +185,7 @@ async test "max-step exhaustion preserves continued session state" {
       fail("expected tool result")
     }
     assert_eq(tool_result.tool_call_id(), "call_continue")
-    assert_eq(tool_result.content(), "continue-result")
+    assert_eq(tool_result.content().text(), "continue-result")
     guard events[3].item() is Terminal(Failed(message)) else {
       fail("expected exhausted terminal")
     }
@@ -227,7 +227,7 @@ async test "agent failure terminal uses the latest persisted session" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=initial,
-      task="run the append failure tool",
+      content=Content([Text("run the append failure tool")]),
       append_item=(session, item) => {
         assert_eq(session.events().length(), persisted.events().length())
         if item is Tool(_) && !rejected_tool_result {

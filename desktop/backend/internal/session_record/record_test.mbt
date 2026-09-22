@@ -198,7 +198,7 @@ async test "an event line longer than one read is folded in whole" {
   let fresh = tail.poll()
   debug_inspect(fresh.map(event => event.sequence), content="[1, 2]")
   guard fresh[0].item is User(payload) else { fail("expected a user item") }
-  inspect(payload.content.length(), content="400000")
+  inspect(payload.content.text().length(), content="400000")
 }
 
 ///|

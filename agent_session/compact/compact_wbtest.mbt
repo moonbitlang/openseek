@@ -5,9 +5,9 @@ test "compaction messages isolate the summarizer from agent instructions" {
       SessionId("s1"),
       system_prompt=agent_system,
     )
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("answer")))
-    .append(User(UserMessage("next")))
+    .append(User(UserMessage(Content([Text("next")]))))
   let messages = compaction_messages(session)
   assert_eq(messages.length(), 5)
   assert_true(messages[0].role is System)
@@ -29,7 +29,7 @@ test "compaction messages isolate the summarizer from agent instructions" {
 ///|
 async test "compaction summary can update an ephemeral session" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system").append(
-    User(UserMessage("first")),
+    User(UserMessage(Content([Text("first")]))),
   )
   let next = append_compaction_summary(
     session,

@@ -2,7 +2,7 @@
 /// One decoded command from the serve-mode controller (e.g. the TUI) on
 /// stdin.
 priv enum ServeCommand {
-  Prompt(String, submission_id~ : String?)
+  Prompt(@agent_session.Content, submission_id~ : String?)
   Steer(@agent_runtime.SteerInput)
   Compact
   Cancel
@@ -94,7 +94,7 @@ fn should_auto_continue(
 ///|
 /// A queued serve-mode operation that must wait for active work to finish.
 priv enum PendingWork {
-  PendingPrompt(String, submission_id~ : String?)
+  PendingPrompt(@agent_session.Content, submission_id~ : String?)
   PendingCompact
   // A goal marker holding its wire-order position behind a compaction: a
   // pending compaction must not cover a goal that arrived after the compact
@@ -171,16 +171,20 @@ fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
     Err(message) => return Err(message)
   }
   match command {
-    Prompt(text~, submission_id~) => Ok(Prompt(text, submission_id~))
-    Steer(kind~, text~, submission_id~) =>
+    Prompt(content~, submission_id~) => Ok(Prompt(content, submission_id~))
+    Steer(kind~, content~, submission_id~) => {
+      if kind is Command && !content.is_text_only() {
+        return Err("command steering does not accept images")
+      }
       Ok(
         Steer(
           match kind {
-            Prompt => Prompt(text, submission_id~)
-            Command => Command(text, submission_id~)
+            Prompt => Prompt(content, submission_id~)
+            Command => Command(content.text(), submission_id~)
           },
         ),
       )
+    }
     JobsSnapshot(request_id~) => Ok(JobsSnapshot(request_id~))
     JobStop(request_id~, generation~, job_id~) =>
       Ok(JobStop(request_id~, generation~, job_id~))

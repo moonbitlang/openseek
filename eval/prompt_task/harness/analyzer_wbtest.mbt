@@ -11,7 +11,7 @@ fn session_events(session : @agent_session.Session) -> String {
 ///|
 fn sample_events() -> String {
   let session = @agent_session.Session(SessionId("trial-01"), system_prompt="")
-    .append(User(UserMessage("build a toml cli")))
+    .append(User(UserMessage(Content([Text("build a toml cli")]))))
     .append(
       Assistant(
         AssistantMessage("I will run moon check", tool_calls=[
@@ -25,11 +25,9 @@ fn sample_events() -> String {
     )
     .append(
       Tool(
-        ToolResult(
-          tool_call_id="call_1",
-          tool_name="mbtx",
-          content="moon check passed",
-        ),
+        ToolResult(tool_call_id="call_1", tool_name="mbtx", content=[
+          Text("moon check passed"),
+        ]),
       ),
     )
     .append(Assistant(AssistantMessage("done")))
@@ -40,7 +38,13 @@ fn sample_events() -> String {
 ///|
 fn assistant_events(session_id : String, content : String) -> String {
   let session = @agent_session.Session(SessionId(session_id), system_prompt="")
-    .append(User(UserMessage("run moon check and moon test before finishing")))
+    .append(
+      User(
+        UserMessage(
+          Content([Text("run moon check and moon test before finishing")]),
+        ),
+      ),
+    )
     .append(Assistant(AssistantMessage(content)))
     .append(Terminal(Finished("done")))
   session_events(session)
@@ -122,7 +126,11 @@ test "behavior counters ignore user task prompt" {
     .append(
       User(
         UserMessage(
-          "run moon check and moon test with @string.from_str and @argparse.command try?",
+          Content([
+            Text(
+              "run moon check and moon test with @string.from_str and @argparse.command try?",
+            ),
+          ]),
         ),
       ),
     )

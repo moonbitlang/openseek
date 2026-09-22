@@ -2085,15 +2085,13 @@ test "session metadata counts steps and total runtime" {
 test "session metadata does not double count finish tool terminals" {
   let parsed = parsed_log(
     @agent_session.Session(SessionId("finish-step"), system_prompt="")
-    .append(User(UserMessage("hi")))
+    .append(User(UserMessage(Content([Text("hi")]))))
     .append(Assistant(AssistantMessage("")))
     .append(
       Tool(
-        ToolResult(
-          tool_call_id="finish_1",
-          tool_name="finish",
-          content="finished: done",
-        ),
+        ToolResult(tool_call_id="finish_1", tool_name="finish", content=[
+          Text("finished: done"),
+        ]),
       ),
     )
     .append(Terminal(Finished("done"))),
@@ -2105,15 +2103,13 @@ test "session metadata does not double count finish tool terminals" {
 test "session metadata counts durable assistant responses" {
   let parsed = parsed_log(
     @agent_session.Session(SessionId("review-on-finish"), system_prompt="")
-    .append(User(UserMessage("hi")))
+    .append(User(UserMessage(Content([Text("hi")]))))
     .append(Assistant(AssistantMessage("")))
     .append(
       Tool(
-        ToolResult(
-          tool_call_id="finish_1",
-          tool_name="submit_report",
-          content="finished: done",
-        ),
+        ToolResult(tool_call_id="finish_1", tool_name="submit_report", content=[
+          Text("finished: done"),
+        ]),
       ),
     )
     .append(Runtime(RuntimeNotice("[review] goal-met audit: clean")))
@@ -2123,15 +2119,13 @@ test "session metadata counts durable assistant responses" {
   inspect(agent_step_count(parsed), content="1")
   let continued = parsed_log(
     @agent_session.Session(SessionId("runtime-continuation"), system_prompt="")
-    .append(User(UserMessage("hi")))
+    .append(User(UserMessage(Content([Text("hi")]))))
     .append(Assistant(AssistantMessage("")))
     .append(
       Tool(
-        ToolResult(
-          tool_call_id="finish_1",
-          tool_name="submit_report",
-          content="finished: first answer",
-        ),
+        ToolResult(tool_call_id="finish_1", tool_name="submit_report", content=[
+          Text("finished: first answer"),
+        ]),
       ),
     )
     .append(Runtime(RuntimeNotice("background job completed")))
@@ -2145,7 +2139,7 @@ test "session metadata counts durable assistant responses" {
 test "session metadata ignores checkpoint replay assistants" {
   let parsed = parsed_log(
     @agent_session.Session(SessionId("checkpoint-replay"), system_prompt="")
-    .append(User(UserMessage("go")))
+    .append(User(UserMessage(Content([Text("go")]))))
     .append(Assistant(AssistantMessage("first")))
     .append(
       Summary(
@@ -2153,7 +2147,7 @@ test "session metadata ignores checkpoint replay assistants" {
       ),
     )
     .append(Assistant(AssistantMessage("first", is_replay=true)))
-    .append(User(UserMessage("continue")))
+    .append(User(UserMessage(Content([Text("continue")]))))
     .append(Assistant(AssistantMessage("second")))
     .append(Terminal(Finished("second"))),
   )
