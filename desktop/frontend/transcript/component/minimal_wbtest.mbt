@@ -14,7 +14,7 @@ test "minimal user boundaries group recorded and streaming assistant content" {
     // Text-only turns use the same User variant with an empty attachment list.
     items=VisibleRow::history([
       {
-        kind: User(text="First question", images=[]),
+        kind: User(content=Content([Text("First question")])),
         ts: None,
         sequence: Some(1),
       },
@@ -38,7 +38,7 @@ test "minimal user boundaries group recorded and streaming assistant content" {
         sequence: Some(2),
       },
       {
-        kind: User(text="Second question", images=[]),
+        kind: User(content=Content([Text("Second question")])),
         ts: None,
         sequence: Some(3),
       },
@@ -120,7 +120,7 @@ test "minimal mbtx retains its description across completion and failure" {
     let completed = MinimalCall::from_tool({
       ..call,
       outcome: Done(
-        content="output",
+        content=Content([Text("output")]),
         is_error=failed,
         brief=Some(if failed { "mbtx (exit=1)" } else { "mbtx (exit=0)" }),
       ),
@@ -141,7 +141,7 @@ test "minimal mbtx falls back safely without a usable description" {
       name: "mbtx",
       arguments,
       outcome: Done(
-        content="output",
+        content=Content([Text("output")]),
         is_error=false,
         brief=Some("mbtx (exit=0)"),
       ),
@@ -180,7 +180,11 @@ test "minimal descriptions share the card payload boundary" {
       )
       let completed = {
         ..call,
-        outcome: Done(content="", is_error=false, brief=Some("Completed work")),
+        outcome: Done(
+          content=Content([Text("")]),
+          is_error=false,
+          brief=Some("Completed work"),
+        ),
       }
       assert_eq(
         MinimalCall::from_tool(completed).caption,
@@ -201,7 +205,11 @@ test "other minimal tools still prefer their result brief" {
     call_id: "read",
     name: "read",
     arguments: Some("{\"description\":\"Read project files\"}"),
-    outcome: Done(content="output", is_error=false, brief=Some("Read moon.mod")),
+    outcome: Done(
+      content=Content([Text("output")]),
+      is_error=false,
+      brief=Some("Read moon.mod"),
+    ),
   }
   let completed = MinimalCall::from_tool(call)
   assert_eq(completed.caption, "Read moon.mod")
@@ -240,7 +248,11 @@ test "folded minimal summaries preview operations independent of their outcome" 
       call_id: name,
       name,
       arguments: None,
-      outcome: Done(content="", is_error=false, brief=Some(brief)),
+      outcome: Done(
+        content=Content([Text("")]),
+        is_error=false,
+        brief=Some(brief),
+      ),
     })
     assert_eq(
       MinimalContent::Activity([Call(settled), Call(next)]).summary(),
@@ -358,7 +370,11 @@ test "job coordination does not take up captions in a work summary" {
       call_id: name,
       name,
       arguments: None,
-      outcome: Done(content="", is_error=false, brief=Some(name)),
+      outcome: Done(
+        content=Content([Text("")]),
+        is_error=false,
+        brief=Some(name),
+      ),
     }
     entries.push(Call(MinimalCall::from_tool(call)))
   }
@@ -381,7 +397,7 @@ test "a minimal shell caption never repeats the command line brief" {
     name: "shell",
     arguments: None,
     outcome: Done(
-      content="output",
+      content=Content([Text("output")]),
       is_error=false,
       brief=Some("private command"),
     ),
@@ -398,7 +414,7 @@ test "OpenSeek and Codex web search names share the search activity" {
       name,
       arguments: None,
       outcome: Done(
-        content="results",
+        content=Content([Text("results")]),
         is_error=false,
         brief=Some("Search results"),
       ),

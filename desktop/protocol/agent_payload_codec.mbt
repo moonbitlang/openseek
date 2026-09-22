@@ -19,6 +19,7 @@ pub impl FromJson for StartPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.start payload")
   {
     task: object.required_string("task"),
+    images: object.required_string_array("images"),
     submission_id: object.optional_string("submission_id"),
     model: object.optional_string("model"),
     thinking: object.optional_thinking("thinking"),
@@ -32,6 +33,7 @@ pub impl FromJson for StartPayload with fn from_json(json, path) {
 pub impl ToJson for StartPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
     "task": self.task.to_json(),
+    "images": Json(self.images),
     "session": self.session.to_json(),
   }
   if self.submission_id is Some(submission_id) {
@@ -57,8 +59,18 @@ pub impl FromJson for QueuePayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.queue payload")
   let id = object.required_string("id")
   let action = match object.required_string("action") {
-    "add" => QueueAdd(id~, text=object.required_string("text"))
-    "edit" => QueueEdit(id~, text=object.required_string("text"))
+    "add" =>
+      QueueAdd(
+        id~,
+        text=object.required_string("text"),
+        images=object.required_string_array("images"),
+      )
+    "edit" =>
+      QueueEdit(
+        id~,
+        text=object.required_string("text"),
+        images=object.required_string_array("images"),
+      )
     "withdraw" => QueueWithdraw(id~)
     "steer" => QueueSteer(id~)
     _ =>
@@ -73,15 +85,17 @@ pub impl FromJson for QueuePayload with fn from_json(json, path) {
 pub impl ToJson for QueuePayload with fn to_json(self) {
   let fields : Map[String, Json] = { "run_id": self.run_id.to_json() }
   match self.action {
-    QueueAdd(id~, text~) => {
+    QueueAdd(id~, text~, images~) => {
       fields["action"] = "add".to_json()
       fields["id"] = id.to_json()
       fields["text"] = text.to_json()
+      fields["images"] = Json(images)
     }
-    QueueEdit(id~, text~) => {
+    QueueEdit(id~, text~, images~) => {
       fields["action"] = "edit".to_json()
       fields["id"] = id.to_json()
       fields["text"] = text.to_json()
+      fields["images"] = Json(images)
     }
     QueueWithdraw(id~) => {
       fields["action"] = "withdraw".to_json()
@@ -296,6 +310,32 @@ pub impl ToJson for PendingApprovalPayload with fn to_json(self) {
   }
   if self.body is Some(body) {
     fields["body"] = body.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SteerPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "agent.steer payload")
+  {
+    text: object.required_string("text"),
+    images: object.required_string_array("images"),
+    run_id: object.optional_string("run_id"),
+    submission_id: object.optional_string("submission_id"),
+  }
+}
+
+///|
+pub impl ToJson for SteerPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "text": Json(self.text),
+    "images": Json(self.images),
+  }
+  if self.run_id is Some(value) {
+    fields["run_id"] = Json(value)
+  }
+  if self.submission_id is Some(value) {
+    fields["submission_id"] = Json(value)
   }
   Json(fields)
 }

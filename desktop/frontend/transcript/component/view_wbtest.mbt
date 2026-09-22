@@ -42,7 +42,7 @@ test "transcript stream children use stable typed keys in display order" {
     items=[
       {
         item: {
-          kind: User(text="question", images=[]),
+          kind: User(content=Content([Text("question")])),
           ts: None,
           sequence: Some(41),
         },
@@ -71,7 +71,11 @@ test "transcript stream children use stable typed keys in display order" {
             calls=[
               {
                 ..call,
-                outcome: Done(content="output", is_error=false, brief=None),
+                outcome: Done(
+                  content=Content([Text("output")]),
+                  is_error=false,
+                  brief=None,
+                ),
               },
             ],
             replay=false,
@@ -89,7 +93,7 @@ test "transcript stream children use stable typed keys in display order" {
 test "the live response is one node, replaced by the durable one" {
   let user : VisibleRow = {
     item: {
-      kind: User(text="question", images=[]),
+      kind: User(content=Content([Text("question")])),
       ts: None,
       sequence: Some(1),
     },
@@ -155,7 +159,7 @@ test "a streaming delta changes only the live block" {
     items=[
       {
         item: {
-          kind: User(text="question", images=[]),
+          kind: User(content=Content([Text("question")])),
           ts: Some(1.0e12),
           sequence: Some(1),
         },

@@ -934,7 +934,7 @@ test "local pinned transitions are pure" {
       items: [
         {
           item: {
-            kind: User(text="new turn", images=[]),
+            kind: User(content=Content([Text("new turn")])),
             ts: None,
             sequence: None,
           },

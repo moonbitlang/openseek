@@ -862,6 +862,7 @@ fn start_openseek(
   max_steps : String,
   session : String,
   workspace~ : @common.Uri,
+  images? : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let payload = start_payload(
@@ -872,6 +873,7 @@ fn start_openseek(
     session,
     submission_id,
     workspace~,
+    images~,
   )
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -952,10 +954,12 @@ fn start_payload(
   session : String,
   submission_id : String,
   workspace~ : @common.Uri,
+  images? : Array[String] = [],
 ) -> @protocol.StartPayload {
   let session = session.trim().to_owned()
   {
     task,
+    images,
     submission_id: Some(submission_id),
     model: Some(selected_model.wire()),
     thinking: selected_model.thinking(reasoning),
@@ -1173,11 +1177,18 @@ fn steer_openseek(
   submission_id : String,
   text : String,
   run_id : String,
+  images? : Array[String] = [],
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let delivered = steer_delivered(channel, text, submission_id, run_id) catch {
+      let delivered = steer_delivered(
+        channel,
+        text,
+        submission_id,
+        run_id,
+        images~,
+      ) catch {
         error => {
           scheduler.add(
             dispatch(
@@ -1207,9 +1218,11 @@ async fn steer_delivered(
   text : String,
   submission_id : String,
   run_id : String,
+  images? : Array[String] = [],
 ) -> Bool {
   let reply = @interop.bridge_request(channel, @commands.agent_steer, {
     text,
+    images,
     run_id: Some(run_id),
     submission_id: Some(submission_id),
   })

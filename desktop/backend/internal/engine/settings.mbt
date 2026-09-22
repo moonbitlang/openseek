@@ -760,6 +760,7 @@ async test "run config resolves the endpoint from the stored provider" {
       custom_api_key: None,
     })
     let config = run_config(manager, {
+      images: [],
       task: "hello",
       submission_id: None,
       model: None,
@@ -788,6 +789,7 @@ async test "run config resolves the endpoint from the stored provider" {
       custom_api_key: None,
     })
     let glm = run_config(manager, {
+      images: [],
       task: "hello",
       submission_id: None,
       model: None,
@@ -808,6 +810,7 @@ async test "run config resolves the endpoint from the stored provider" {
       custom_api_key: None,
     })
     let custom = run_config(manager, {
+      images: [],
       task: "hello",
       submission_id: None,
       model: None,
@@ -884,6 +887,7 @@ async test "a custom provider without a URL refuses to start" {
     })
     let refused = try
       run_config(manager, {
+        images: [],
         task: "hello",
         submission_id: None,
         model: None,

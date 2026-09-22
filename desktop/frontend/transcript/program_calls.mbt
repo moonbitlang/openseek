@@ -58,11 +58,13 @@ pub fn program_calls(
           { "brief": String(value), .. } => Some(value)
           _ => None
         }
-        Done(content~, is_error=flag == true, brief~)
+        Done(content=Content([Text(content)]), is_error=flag == true, brief~)
       }
       _ =>
         Done(
-          content="Program call interrupted; changes may have occurred.",
+          content=Content([
+            Text("Program call interrupted; changes may have occurred."),
+          ]),
           is_error=true,
           brief=None,
         )

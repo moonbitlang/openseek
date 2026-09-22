@@ -22,10 +22,11 @@ test "resumed transcript renders text and inline image thumbnails" {
   let items : Array[@transcript.TranscriptItem] = []
   assert_true(@transcript.apply_session_item(items, item, sequence=1))
   assert_eq(items.length(), 1)
-  assert_eq(items[0].text(), Some("compare  with"))
+  assert_eq(items[0].text(), Some("compare  with "))
   assert_true(
-    items[0].kind is User(images~, ..) &&
-    images.length() == 2 &&
-    images[0].has_prefix("data:image/png;base64,"),
+    items[0].kind is User(content~) &&
+    content.0
+    is [Text("compare "), ImageUrl(url=first), Text(" with "), ImageUrl(..)] &&
+    first.has_prefix("data:image/png;base64,"),
   )
 }

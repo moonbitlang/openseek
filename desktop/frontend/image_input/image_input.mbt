@@ -154,18 +154,6 @@ async fn Selection::load(
   locale? : @i18n.Locale = English,
   self : Selection,
 ) -> Event {
-  if self.0.length() > 4 {
-    return Failed(
-      match locale {
-        SimplifiedChinese => "每条消息最多可附加 4 张图片。"
-        TraditionalChinese => "每條訊息最多可附加 4 張圖片。"
-        Japanese =>
-          "メッセージには最大 4 枚の画像を添付できます。"
-        English => "Attach up to 4 images per message."
-        Spanish => "Adjunta hasta 4 imágenes por mensaje."
-      },
-    )
-  }
   for file in self.0 {
     let blob = file.blob()
     if blob.get_size() > 5 * 1024 * 1024 {

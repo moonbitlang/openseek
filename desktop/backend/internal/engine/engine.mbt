@@ -26,6 +26,7 @@ priv struct ServeEngine {
   // config differs cannot reuse it.
   spec_key : String
   engine_name : String
+  supports_images : Bool
   model : String
   max_steps : Int
   // Owned exclusively by this engine's writer task. No request ever touches
@@ -71,7 +72,7 @@ priv struct ServeEngine {
 priv struct QueuedRun {
   id : String
   run_id : String
-  content : String
+  content : @wire.Content
 }
 
 ///|
@@ -1542,6 +1543,7 @@ async fn[G] start_serve_engine(
     spec_key: engine_fingerprint(config),
     engine_name: config.engine,
     model: config.model,
+    supports_images: config.supports_images(),
     max_steps: config.max_steps,
     writer,
     // Unbounded because submission must never block: a request that could be
@@ -1965,10 +1967,7 @@ async fn ServeEngine::consume(
               )
               if next_queue is Some(next) &&
                 engine.submit(
-                  @protocol.prompt(
-                    Content([Text(next.content)]),
-                    submission_id=next.id,
-                  ),
+                  @protocol.prompt(next.content, submission_id=next.id),
                   failure_reason="failed to promote queued prompt",
                 ) {
                 ignore(engine.queued_runs.remove(0))
@@ -2222,6 +2221,7 @@ fn test_serve_engine(
     spec_key: "test",
     engine_name: "openseek",
     model: "test",
+    supports_images: true,
     max_steps: 10,
     writer,
     commands: Queue(kind=Unbounded),
@@ -2888,7 +2888,7 @@ async test "native engine env has one authoritative bundled moon path" {
   prepare_fake_moonbit_seed(seed, version="0.10.0-test")
   prepare_fake_bundled_moonbit_home(moon_home, version="0.10.0-test")
   let config : RunConfig = {
-    task: "t",
+    content: Content([Text("t")]),
     api_key: "k",
     key_env: "DEEPSEEK",
     api_url: None,
@@ -3007,7 +3007,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
   let sink = EventSink(_ => ())
   let slot : SessionSlot = { pending: None, engine: None, }
   let config : RunConfig = {
-    task: "test",
+    content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",
     api_url: None,
@@ -3122,7 +3122,7 @@ async test "record move waits for readers across pump replacement" {
 ///|
 fn pump_test_config(session : String) -> RunConfig {
   {
-    task: "test",
+    content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",
     api_url: None,

@@ -2246,8 +2246,8 @@ pub impl ToJson for PendingApprovalPayload
 pub impl @json.FromJson for PendingApprovalPayload
 
 pub(all) enum QueueAction {
-  QueueAdd(id~ : String, text~ : String)
-  QueueEdit(id~ : String, text~ : String)
+  QueueAdd(id~ : String, text~ : String, images~ : Array[String])
+  QueueEdit(id~ : String, text~ : String, images~ : Array[String])
   QueueWithdraw(id~ : String)
   QueueSteer(id~ : String)
 } derive(Eq, @debug.Debug)
@@ -2964,6 +2964,7 @@ pub impl ToJson for SkillsCatalogReply
 pub impl @json.FromJson for SkillsCatalogReply
 
 pub(all) struct StartPayload {
+  images : Array[String]
   task : String
   submission_id : String?
   model : String?
@@ -3027,15 +3028,18 @@ pub impl ToJson for StatFilesReply
 pub impl @json.FromJson for StatFilesReply
 
 pub(all) struct SteerPayload {
+  images : Array[String]
   text : String
   run_id : String?
   submission_id : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SteerPayload::equal(Self, Self) -> Bool
 pub fn SteerPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SteerPayload::not_equal(Self, Self) -> Bool
 pub fn SteerPayload::to_json(Self) -> Json
 pub fn SteerPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SteerPayload
+pub impl @json.FromJson for SteerPayload
 
 pub(all) struct SteerReply {
   steered : Bool

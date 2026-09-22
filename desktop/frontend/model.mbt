@@ -784,6 +784,7 @@ priv struct Conversation {
   // recovery can add chips here; ordinary local chip edits stay in the
   // component until submission.
   mentions : Array[Mention]
+  images : Array[@composer.Image]
   // Whether the component-local composer currently holds unsent writing.
   // Only empty/non-empty transitions update this flag; the text itself stays
   // outside the root Model. It keeps a fresh conversation reachable when the
@@ -1011,6 +1012,7 @@ priv struct PendingSteer {
   content : String
   draft : String
   mentions : Array[Mention]
+  images : Array[@composer.Image]
   // The action this particular submission took. The setting may change while
   // it is in flight, so presentation cannot be derived from the current
   // global default.
@@ -1020,6 +1022,7 @@ priv struct PendingSteer {
 ///|
 /// One prompt waiting in the Desktop engine's in-memory follow-up queue.
 priv struct QueuedInput {
+  images : Array[@composer.Image]
   id : String
   content : String
 } derive(Eq)
@@ -1057,6 +1060,7 @@ priv struct PendingPrompt {
   submission_id : String
   draft : String
   mentions : Array[Mention]
+  images : Array[@composer.Image]
 } derive(Eq)
 
 ///|
@@ -2559,6 +2563,7 @@ fn empty_conversation(
     worktree_mode: false,
     engine_model: model,
     task: "",
+    images: [],
     mentions: [],
     composer_draft_present: false,
     workflows: [],
@@ -3729,6 +3734,7 @@ fn Conversation::is_archived_read_only(self : Conversation) -> Bool {
 fn Conversation::draft_empty(self : Conversation) -> Bool {
   self.task.is_blank() &&
   self.mentions.is_empty() &&
+  self.images.is_empty() &&
   !self.composer_draft_present &&
   self.pending_semantic_submission is None &&
   !(self.goal_edit is Some(edit) && !edit.draft.is_blank()) &&
@@ -3739,7 +3745,7 @@ fn Conversation::draft_empty(self : Conversation) -> Bool {
 /// Whether the draft can be submitted. Typed text and explicit mention chips
 /// are both prompt content; a mention-only draft sends its context envelope.
 fn Conversation::draft_sendable(self : Conversation) -> Bool {
-  !self.task.is_blank() || !self.mentions.is_empty()
+  !self.task.is_blank() || !self.mentions.is_empty() || !self.images.is_empty()
 }
 
 ///|
@@ -3886,6 +3892,7 @@ fn Conversation::enqueue_steer(
   draft : String,
   mentions : Array[Mention],
   behavior : FollowupBehavior,
+  images? : Array[@composer.Image] = [],
 ) -> Conversation {
   let pending_steers = self.pending_steers.copy()
   pending_steers.push({
@@ -3894,11 +3901,12 @@ fn Conversation::enqueue_steer(
     content,
     draft,
     mentions: mentions.copy(),
+    images,
     behavior,
   })
   let queued_inputs = if behavior is FollowupQueue {
     let queued_inputs = self.queued_inputs.copy()
-    queued_inputs.push({ id: submission_id, content, })
+    queued_inputs.push({ id: submission_id, content, images, })
     queued_inputs
   } else {
     self.queued_inputs
@@ -4006,6 +4014,7 @@ fn Conversation::restore_submission(
   self : Conversation,
   draft : String,
   submitted_mentions : Array[Mention],
+  submitted_images : Array[@composer.Image],
 ) -> Conversation {
   let task = if self.task.is_empty() {
     draft
@@ -4018,7 +4027,7 @@ fn Conversation::restore_submission(
   for mention in self.mentions {
     mentions.push(mention)
   }
-  { ..self, task, mentions, }
+  { ..self, task, mentions, images: [..submitted_images, ..self.images], }
 }
 
 ///|
@@ -4036,7 +4045,10 @@ fn Conversation::reject_steer(
       let pending_steers = self.pending_steers.copy()
       let _ = pending_steers.remove(index)
       let next = { ..self, pending_steers, }
-      return (next.restore_submission(input.draft, input.mentions), true)
+      return (
+        next.restore_submission(input.draft, input.mentions, input.images),
+        true,
+      )
     }
   }
   (self, false)
@@ -4058,6 +4070,7 @@ fn Conversation::reject_pending_prompt(
     { ..self, pending_prompt: None, }.restore_submission(
       pending.draft,
       pending.mentions,
+      pending.images,
     ),
     true,
   )

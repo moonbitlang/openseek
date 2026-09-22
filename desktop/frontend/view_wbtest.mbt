@@ -65,7 +65,7 @@ test "workflow children fold under live or listed parents before inventory refre
         ..subrun_child_of(page),
         messages: [
           {
-            kind: User(text="The criteria under audit", images=[]),
+            kind: User(content=Content([Text("The criteria under audit")])),
             ts: None,
             sequence: None,
           },

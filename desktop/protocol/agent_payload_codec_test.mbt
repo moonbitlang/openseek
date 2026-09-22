@@ -2,6 +2,7 @@
 test "agent start preserves all engine settings" {
   let payload : @protocol.StartPayload = @json.from_json({
     "task": "inspect",
+    "images": [],
     "submission_id": "submission-1",
     "model": "deepseek-v4-pro",
     "thinking": "max",
@@ -13,6 +14,7 @@ test "agent start preserves all engine settings" {
   assert_eq(payload.thinking, Some(ThinkingMax))
   @debug.assert_eq(payload.to_json(), {
     "task": "inspect",
+    "images": [],
     "submission_id": "submission-1",
     "model": "deepseek-v4-pro",
     "thinking": "max",
@@ -28,13 +30,15 @@ test "queue payloads expose only valid operation-specific data" {
     "action": "add",
     "id": "queue-1",
     "text": "first",
+    "images": [],
     "run_id": "run-1",
   })
-  assert_true(add.action is QueueAdd(id="queue-1", text="first"))
+  assert_true(add.action is QueueAdd(id="queue-1", text="first", images=[]))
   @debug.assert_eq(add.to_json(), {
     "action": "add",
     "id": "queue-1",
     "text": "first",
+    "images": [],
     "run_id": "run-1",
   })
 
@@ -98,7 +102,12 @@ test "agent payload optional fields accept null and encode absence by omission" 
 ///|
 test "agent payload codecs reject malformed known and missing required fields" {
   let malformed_thinking : @protocol.StartPayload? = Some(
-    @json.from_json({ "task": "inspect", "session": "session-1", "thinking": 7 }),
+    @json.from_json({
+      "task": "inspect",
+      "images": [],
+      "session": "session-1",
+      "thinking": 7,
+    }),
   ) catch {
     _ => None
   }
@@ -122,6 +131,7 @@ test "agent payload codecs reject unsupported thinking values uniformly" {
   let start : @protocol.StartPayload? = Some(
     @json.from_json({
       "task": "inspect",
+      "images": [],
       "session": "session-1",
       "thinking": "invalid",
     }),
@@ -144,6 +154,7 @@ test "agent payload codecs reject unsupported thinking values uniformly" {
   let padded : @protocol.StartPayload? = Some(
     @json.from_json({
       "task": "inspect",
+      "images": [],
       "session": "session-1",
       "thinking": " high ",
     }),
@@ -315,4 +326,36 @@ test "agent events carry the engine submission id without a wrapper" {
     }
     assert_true(decoded is None)
   }
+}
+
+///|
+test "start and steer require a typed image array" {
+  for images in [Json::null(), Json("image"), Json([Json(1)])] {
+    let start : @protocol.StartPayload? = Some(
+      @json.from_json({ "task": "", "session": "session", "images": images }),
+    ) catch {
+      _ => None
+    }
+    let steer : @protocol.SteerPayload? = Some(
+      @json.from_json({ "text": "", "images": images }),
+    ) catch {
+      _ => None
+    }
+    assert_true(start is None)
+    assert_true(steer is None)
+  }
+  let missing : @protocol.StartPayload? = Some(
+    @json.from_json({ "task": "", "session": "session" }),
+  ) catch {
+    _ => None
+  }
+  assert_true(missing is None)
+  let input : @protocol.SteerPayload = {
+    text: "",
+    images: ["data:image/png;base64,iVBORw0KGgo="],
+    run_id: Some("run"),
+    submission_id: Some("submission"),
+  }
+  let decoded : @protocol.SteerPayload = @json.from_json(input.to_json())
+  assert_eq(decoded, input)
 }

@@ -1,10 +1,13 @@
 ///|
 /// Wraps an ordered array of message parts. Text extraction and structural
 /// inspection are separate: extracting text does not imply text-only content.
-pub(all) struct Content(Array[ContentPart]) derive(Debug)
+pub(all) struct Content(Array[ContentPart]) derive(Debug, Eq)
 
 ///|
 pub extend Content with Debug::{to_repr}
+
+///|
+pub extend Content with Eq::{equal, not_equal}
 
 ///|
 /// Concatenates every text part in order, without adding separators. Images and
