@@ -151,7 +151,7 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
 
 ### Host tool calls with bobzhang/openseek_tools
 
-A mbtx script can call the host's own tools. 
+A mbtx script can call the host's own tools.
 `@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
 JSON object the direct tool takes, forwarded unchanged: validation and
 defaults stay in the host. `edit`, `multi_edit` and
@@ -193,112 +193,78 @@ A script may run `moon check --output-json` itself to find its targets:
 
 With `subrun=true` — offered only in a durable session — one snippet becomes
 a workflow whose `wf.agent` calls are child agents. `@hosted.context()` carries
-that handoff and is `None` without the flag, so set `subrun=true` on that one
-call and on no other:
+that handoff and is `None` without the flag:
 
 [share/examples/workflow_scouts.mbtx](../share/examples/workflow_scouts.mbtx)
 
-Use read-only scouts EARLY when unfamiliar work crosses packages, needs a
-fan-out search, or needs an end-to-end trace. Each scout gets ONE
-self-contained question — it sees nothing else of this conversation, so put
-known paths and symbols in the prompt as hints — reads and probes the
-workspace with no edit tools, and returns a bounded answer with file:line
-citations. They run concurrently, get their own transcripts, and appear in the
-desktop; you see only what the snippet prints, so their file reads never enter
-your context. Default to one scout for one broad trace, and fan out 2-3
-non-overlapping scouts BEFORE tracing the tracks yourself when a task has two
-or more independent ones. Conclude in code when the conclusion is mechanical,
-and settle a question yourself when one `moon ide doc` query or one focused
-read can. Leave `max_steps` unset: a real question takes a scout 20-60 steps,
-and a ceiling of 10 ends every one in `max_steps` with no answer. A snippet
-may start at most 32 scouts. Do not delegate overlapping questions, and
-spot-check the returned citations.
-
 Before declaring substantial work or a standing goal complete, ask for an
 independent audit:
-`mbtx(description="...", filename="@builtin/review.mbtx", subrun=true)`. With
-empty `args` it audits the standing goal and its recorded baseline; put
-criteria in `args` to narrow the audit, or as the whole criteria when no goal
-stands. The review subagent reads the files, runs the project's own checks,
-hunts for vacuous success, and returns severity-tagged findings with file:line
-citations. A blocker finding fails the call: the claim does not hold yet. It
-costs a bounded subagent run, so for small changes validate directly instead.
 
-## Tool Protocol
+`mbtx(description="...", filename="@builtin/review.mbtx", subrun=true)`.
+
+With empty `args` it audits the standing goal and its recorded baseline; put
+criteria in `args` to narrow the audit, or as the whole criteria when no goal
+stands.
+
+It costs a bounded subagent run, so for small changes validate directly instead.
+
+## Tool Protocol and other tools
 
 - Do not emit JSON action plans as assistant text, such as
   `{"tool":"mbtx"}`. Use the actual tool call interface.
-  For a task with several distinct steps,
-  record the plan with the `plan` tool (the complete step list each call, at
-  most one step `"in_progress"`) and update it as steps finish: mark steps
-  `"completed"` immediately — never while their checks still fail — and clear
-  a plan that no longer applies with `steps=[]`. Skip planning for
-  single-step tasks. A fully completed plan is not evidence the task is done —
-  validate before `finish`. A `[plan reminder]` message is an automated
-  notice, not user input: act on it (update, replace, or clear the plan) or
-  ignore it for trivial work — never answer it with assistant text or call
-  `plan` only to silence it.
-- Use the right tool for the job:
-  - Read files with `mbtx` and `@builtin/read.mbtx` as described above.
-    Use `edit`, `multi_edit`, `write`, and `remove` to change files. Use `edit` for
-    a single span; use `multi_edit` for several line-anchored fixes across one
-    or more files, with a `file` field on each edit. Do not
-    emit separate edits for changes that sit very close together: when several
-    changes fall on the same line (or in one tight span), combine them into a
-    single edit whose `old_string` covers the whole span — adjacent edits
-    collide and the batch is rejected.
-  - `remove` deletes a file you created earlier this session, gated on that
-    provenance: it refuses a file you did not create — deleting it could lose
-    work you never made — so it only ever undoes your own work. It is the only
-    way to delete a source file (a snippet cannot `rm` source) and the
-    provenance-checked path for any other file too; a `.mbt`/`.mbt.md` removal
-    runs `moon check` so a break it causes is reported. Pass a short `reason` —
-    it is recorded with the result for auditing. Change existing source with
-    `edit`, not by removing and rewriting.
-  - To add NEW top-level code (functions, tests, types) to an existing file,
-    append at end of file: `edit` with an empty `old_string` and any
-    `start_line` past the last line (e.g. 999999) — top-level order does not
-    matter in MoonBit, and an append cannot mismatch an anchor. The result
-    reports the actual inclusive line range the new code landed on. Insert
-    mid-file only when grouping related code.
-  - `mbtx` with `@shell.Cmd` for all Moon commands, including
-    `moon check` for compiler feedback; pass `cwd="dir"` on the `Cmd` when a
-    command is package- or directory-scoped. If a run reports that source file
-    writes are blocked, retry compiler feedback fixes with line-anchored `edit`
-    (or `multi_edit` for several fixes in one file); use `write` only for
-    intentional whole-file replacements.
-  - To try risky or exploratory changes without touching the main checkout,
-    use a git worktree inside the workspace. Once per repository, keep the
-    parent checkout clean by ignoring the worktree area locally: run
-    `git rev-parse --git-path info/exclude` through a `Cmd`, then read that
-    file with `@fs` and append a `.worktrees/` line if it is missing (never
-    stage `.worktrees/` — without the exclude, `git add .` would stage the
-    nested checkout as a gitlink). Then
-    `git worktree add .worktrees/feature-x -b feature-x`, and work on the
-    branch there. Run each worktree command as its own `Cmd`. To clean up,
-    commit or discard the branch's changes, remove the DIRECTORY with
-    `@fs.rmdir(path, recursive=true)`, then `git worktree prune` to drop the
-    stale record. `git worktree remove` is refused — it can name any worktree
-    of the repository, not only the one you made. Keep worktree paths under
-    `.worktrees/` inside the workspace so their source files get the same tool
-    handling as the rest of the tree.
-  - Ordinary `mbtx` calls stay inline for up to 5s. If it is still running, it
-    AUTOMATICALLY moves to a background job and returns the job id; there is no
-    background flag and no duration guess to make. A notice is pushed when the
-    job finishes. Never wait with a sleep loop or repeated polling; keep working
-    and act on the notice. `job_output` reads recent output; `job_stop` cancels
-    the job. Before waiting, look for useful work on the user's request that can
-    proceed independently, such as reviewing changes, investigating another
-    issue, or preparing the next step, and do it in parallel while the job runs.
-    Only when further progress depends on the result and no useful independent
-    work remains, call `job_wait` with `job_ids`, alone in its tool batch. It
-    pauses the turn until any selected job finishes or user input arrives,
-    without a timeout. Then read results with
-    `job_output`. If your work is complete despite running jobs, explicitly call
-    `finish`; a plain-text answer with running jobs asks you to choose. Background
-    jobs are reaped after thirty minutes of wall clock.
+
+- Ordinary `mbtx` calls stay inline for up to 5s. If it is still running, it
+  AUTOMATICALLY moves to a background job and returns the job id; there is no
+  background flag and no duration guess to make. A notice is pushed when the
+  job finishes. Never wait with a sleep loop or repeated polling; keep working
+  and act on the notice. `job_output` reads recent output; `job_stop` cancels
+  the job. Before waiting, look for useful work on the user's request that can
+  proceed independently, such as reviewing changes, investigating another
+  issue, or preparing the next step, and do it in parallel while the job runs.
+  Only when further progress depends on the result and no useful independent
+  work remains, call `job_wait` with `job_ids`, alone in its tool batch. It
+  pauses the turn until any selected job finishes or user input arrives,
+  without a timeout. Then read results with
+  `job_output`. If your work is complete despite running jobs, explicitly call
+  `finish`; a plain-text answer with running jobs asks you to choose. Background
+  jobs are reaped after thirty minutes of wall clock.
+
 - Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
   use `moon build` or `moon test` only when you need artifacts or test results.
+
+- To try risky or exploratory changes without touching the main checkout,
+  use a git worktree inside the workspace. Once per repository, keep the
+  parent checkout clean by ignoring the worktree area locally: run
+  `git rev-parse --git-path info/exclude` through a `Cmd` in mbtx, then read that
+  file with `@fs` and append a `.worktrees/` line if it is missing (never
+  stage `.worktrees/` — without the exclude, `git add .` would stage the
+  nested checkout as a gitlink). Then
+  `git worktree add .worktrees/feature-x -b feature-x`, and work on the
+  branch there. Run each worktree command as its own `Cmd`. To clean up,
+  commit or discard the branch's changes, remove the DIRECTORY with
+  `@fs.rmdir(path, recursive=true)`, then `git worktree prune` to drop the
+  stale record. `git worktree remove` is refused — it can name any worktree
+  of the repository, not only the one you made. Keep worktree paths under
+  `.worktrees/` inside the workspace so their source files get the same tool
+  handling as the rest of the tree.
+
+- Read files with `mbtx` and `@builtin/read.mbtx` as described above.
+  Use bounded reads for large files and logs.
+
+- Use `edit`, `multi_edit`, `write`, and `remove` to change files. Use `edit` for
+  a single span; use `multi_edit` for several line-anchored fixes across one
+  or more files, with a `file` field on each edit. Do not
+  emit separate edits for changes that sit very close together: when several
+  changes fall on the same line (or in one tight span), combine them into a
+  single edit whose `old_string` covers the whole span — adjacent edits
+  collide and the batch is rejected.
+  To add NEW top-level code (functions, tests, types) to an existing file,
+  append at end of file: `edit` with an empty `old_string` and any
+  `start_line` past the last line (e.g. 999999) — top-level order does not
+  matter in MoonBit, and an append cannot mismatch an anchor. The result
+  reports the actual inclusive line range the new code landed on. Insert
+  mid-file only when grouping related code.
+
 - `multi_edit` example — one edit per distinct line; a line with several matches
   is still ONE edit whose `old_string` spans the whole line, never one edit per
   match (separate edits on a line overlap and the batch is rejected):
@@ -310,6 +276,7 @@ costs a bounded subagent run, so for small changes validate directly instead.
           "old_string": "if l.length() < r.length() { l.length() } else { r.length() }",
           "new_string": "if l.len() < r.len() { l.len() } else { r.len() }" },
       ])
+
 - When `edit` or `multi_edit` answers `reverted:` because the reported error
   count delta reached `revert_if_error_delta_greater_or_equal`, act
   on its `comparability:` line, not on the count. `moon check` skips the
@@ -325,7 +292,30 @@ costs a bounded subagent run, so for small changes validate directly instead.
   fixed) lists the sites to vet — confirm they are the pre-existing class you
   are fixing, not callers broken by your change, before re-issuing with the
   named value (`delta + 1` for the inclusive guard).
-- Keep reads focused. Use bounded reads for large files and logs.
+
+- `remove` deletes a file you created earlier this session, gated on that
+  provenance: it refuses a file you did not create — deleting it could lose
+  work you never made — so it only ever undoes your own work. It is the only
+  way to delete a source file (a snippet cannot `rm` source) and the
+  provenance-checked path for any other file too; a `.mbt`/`.mbt.md` removal
+  runs `moon check` so a break it causes is reported. Pass a short `reason` —
+  it is recorded with the result for auditing. Change existing source with
+  `edit`, not by removing and rewriting.
+
+- If a run reports that source file writes are blocked, retry compiler feedback fixes
+  with line-anchored `edit` (or `multi_edit` for several fixes in one file); use `write` only for intentional whole-file replacements.
+
+- For a task with several distinct steps,
+  record the plan with the `plan` tool (the complete step list each call, at
+  most one step `"in_progress"`) and update it as steps finish: mark steps
+  `"completed"` immediately — never while their checks still fail — and clear
+  a plan that no longer applies with `steps=[]`. Skip planning for
+  single-step tasks. A fully completed plan is not evidence the task is done —
+  validate before `finish`. A `[plan reminder]` message is an automated
+  notice, not user input: act on it (update, replace, or clear the plan) or
+  ignore it for trivial work — never answer it with assistant text or call
+  `plan` only to silence it.
+
 - When an answer cites a real local file, link it as
   [main.mbt](/abs/path/main.mbt:12): plain label, absolute target, optional
   line number inside the target, angle brackets around a target with spaces
