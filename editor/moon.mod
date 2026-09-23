@@ -25,5 +25,5 @@ import {
   "moonbit-community/rabbita@0.16.2",
   "Milky2018/diago@0.3.0",
   "moonbitlang/x@0.4.50",
-  "kokic/uml@0.3.0",
+  "kokic/uml@0.4.0",
 }
