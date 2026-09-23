@@ -323,17 +323,6 @@ fn render_hover_rows(
 }
 
 ///|
-extern "js" fn replace_hover_contents(
-  contents : @rdom.Element,
-  fragment : @rdom.DocumentFragment,
-) -> Unit =
-  #| (contents, fragment) => {
-  #|   contents.style.paddingBottom = '';
-  #|   contents.textContent = '';
-  #|   contents.appendChild(fragment);
-  #| }
-
-///|
 /// One Markdown participant part is one row with one `.markdown-hover` child
 /// per content, matching Monaco `MarkdownHoverParticipant.renderMarkdown`.
 fn render_markdown_hover_row(
@@ -862,34 +851,38 @@ fn dom_node_page_top(node : @rdom.Element) -> Double {
 }
 
 ///|
-extern "js" fn handle_hover_copy_click(event : @rdom.Event) -> Bool =
-  #| (event) => {
-  #|   const target = event?.target;
-  #|   const button = target?.closest?.(".hover-copy-button");
-  #|   if (!button || !button.closest?.('.monaco-resizable-hover')) {
-  #|     return false;
-  #|   }
-  #|   const row = button.closest(".hover-row");
-  #|   const content = button.getAttribute("data-hover-copy") || row?.innerText || "";
-  #|   try {
-  #|     const write = globalThis.navigator?.clipboard?.writeText;
-  #|     if (typeof write === "function") {
-  #|       write.call(globalThis.navigator.clipboard, content).catch(() => {});
-  #|     }
-  #|   } catch {
-  #|   }
-  #|   return true;
-  #| }
-
-///|
-extern "js" fn hover_mousedown_is_interactive(event : @rdom.Event) -> Bool =
-  #| (event) => {
-  #|   const target = event?.target;
-  #|   return Boolean(target?.closest?.("button, a, input, textarea, select, [role='button'], .hover-copy-button"));
-  #| }
-
-///|
-/// Monaco `dom.getClientArea(editorDomNode.ownerDocument.body).height`
-/// (`resizableContentWidget.ts:81`).
-extern "js" fn body_client_height(node : @rdom.Element) -> Double =
-  #| (node) => node.ownerDocument.body.clientHeight
+fn handle_hover_copy_click(event : @rdom.Event) -> Bool {
+  guard event.target().to_element() is Some(target) else { return false }
+  guard target.closest(".hover-copy-button") is Some(button) else {
+    return false
+  }
+  guard button.closest(".monaco-resizable-hover") is Some(_) else {
+    return false
+  }
+  let content = match button.get_attribute("data-hover-copy") {
+    Some(text) if !text.is_empty() => text
+    _ =>
+      match button.closest(".hover-row") {
+        Some(row) =>
+          match row.to_html_element() {
+            Some(row) => row.get_inner_text()
+            None => ""
+          }
+        None => ""
+      }
+  }
+  // Clipboard access can throw synchronously (missing capability) or reject.
+  // Neither should escape this optional hover action.
+  let promise = @js.Error_::wrap(
+    () => {
+      @js.Value::cast_from(
+        @rdom.window().navigator().clipboard().write_text(content),
+      )
+    },
+    map_ok=value => (value.cast() : @js.Promise[Unit]),
+  ) catch {
+    _ => return true
+  }
+  @js.Promise::from_async(() => promise.wait() catch { _ => () }) |> ignore
+  true
+}

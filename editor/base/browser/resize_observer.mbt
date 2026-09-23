@@ -1,8 +1,4 @@
 ///|
-#external
-priv type NativeResizeObserver
-
-///|
 /// Observes `target` with the `ResizeObserver` constructor from its owning
 /// window. The global constructor is used only by narrow non-browser test DOMs
 /// without `ownerDocument.defaultView`. Creation and `observe` failures are
@@ -27,28 +23,42 @@ pub fn observe_element_resize(
 }
 
 ///|
-extern "js" fn try_observe_element_resize(
+fn try_observe_element_resize(
   target : @rdom.Element,
   notify : () -> Unit,
   observed : (NativeResizeObserver) -> Unit,
-) -> Bool =
-  #| (target, notify, observed) => {
-  #|   const ResizeObserver = target?.ownerDocument?.defaultView?.ResizeObserver
-  #|     ?? globalThis.ResizeObserver;
-  #|   if (typeof ResizeObserver !== 'function') return false;
-  #|   let observer;
-  #|   try {
-  #|     observer = new ResizeObserver(() => notify());
-  #|     observer.observe(target);
-  #|     observed(observer);
-  #|     return true;
-  #|   } catch (_error) {
-  #|     observer?.disconnect?.();
-  #|     return false;
-  #|   }
-  #| }
-
-///|
-extern "js" fn native_resize_observer_disconnect(
-  observer : NativeResizeObserver,
-) -> Unit = "observer => observer.disconnect()"
+) -> Bool {
+  guard resize_observer_class(target).to_option() is Some(observer_class) else {
+    return false
+  }
+  let mut created : NativeResizeObserver? = None
+  @js.Error_::wrap(
+    () => {
+      let observer : NativeResizeObserver = observer_class.new([notify])
+      created = Some(observer)
+      let _ : Unit = @js.Value::cast_from(observer).apply_with_string(
+        "observe",
+        [target],
+      )
+      observed(observer)
+      @js.Value::cast_from(true)
+    },
+    map_ok=value => (value.cast() : Bool),
+  ) catch {
+    _ => {
+      if created is Some(observer) {
+        let value = @js.Value::cast_from(observer)
+        let disconnect : @js.Nullable[@js.Value] = value.get_with_string(
+          "disconnect",
+        )
+        if disconnect.to_option() is Some(_) {
+          let _ : Unit = value.apply_with_string(
+            "disconnect",
+            ([] : FixedArray[@js.Value]),
+          )
+        }
+      }
+      false
+    }
+  }
+}

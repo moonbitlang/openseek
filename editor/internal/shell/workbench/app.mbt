@@ -266,19 +266,32 @@ fn clear_workbench_model() -> Unit {
 }
 
 ///|
-extern "js" fn show_workbench_presentation(kind : String) -> Unit =
-  #| (kind) => {
-  #|   const host = globalThis.document?.querySelector?.('.viewer-host');
-  #|   if (!host) return;
-  #|   for (const node of host.children) {
-  #|     const code = node.classList?.contains('monaco-editor') ?? false;
-  #|     const markdown =
-  #|       node.classList?.contains('moonbit-viewer-markdown-document') ||
-  #|       node.classList?.contains('moonbit-viewer-markdown-empty');
-  #|     if (code) node.hidden = kind !== 'code';
-  #|     if (markdown) node.hidden = kind !== 'markdown';
-  #|   }
-  #| }
+fn show_workbench_presentation(kind : String) -> Unit {
+  let document : @js.Nullable[@rdom.Document] = @js.globalThis.get_with_string(
+    "document",
+  )
+  guard document.to_option() is Some(document) else { return }
+  guard document.query_selector(".viewer-host").to_option() is Some(host) else {
+    return
+  }
+  let children : @js.Value = @js.Value::cast_from(host).get_with_string(
+    "children",
+  )
+  let array : @js.Value = @js.globalThis.get_with_string("Array")
+  let children : FixedArray[@rdom.Element] = array.apply_with_string("from", [
+    children,
+  ])
+  for node in children {
+    if node.matches(".monaco-editor") {
+      @js.Value::cast_from(node).set_with_string("hidden", kind != "code")
+    }
+    if node.matches(
+        ".moonbit-viewer-markdown-document, .moonbit-viewer-markdown-empty",
+      ) {
+      @js.Value::cast_from(node).set_with_string("hidden", kind != "markdown")
+    }
+  }
+}
 
 ///|
 fn install_viewer_event_subscriptions(viewer : @viewer.Viewer) -> Unit {

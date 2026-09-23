@@ -263,17 +263,52 @@ fn comment_card(
 }
 
 ///|
-extern "js" fn relative_date(value : String, locale : String) -> String =
-  #| (value, locale) => {
-  #|   const date = new Date(value);
-  #|   if (!Number.isFinite(date.getTime())) return value;
-  #|   const seconds = Math.max(0, (Date.now() - date.getTime()) / 1000);
-  #|   if (seconds < 60) return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(0, "second");
-  #|   if (seconds < 3600) return new Intl.RelativeTimeFormat(locale).format(-Math.floor(seconds / 60), "minute");
-  #|   if (seconds < 86400) return new Intl.RelativeTimeFormat(locale).format(-Math.floor(seconds / 3600), "hour");
-  #|   if (seconds < 604800) return new Intl.RelativeTimeFormat(locale).format(-Math.floor(seconds / 86400), "day");
-  #|   return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(date);
-  #| }
+fn relative_date(value : String, locale : String) -> String {
+  let date : @js.Value = @js.globalThis.new_with_string("Date", [value])
+  let time : Double = date.apply_with_string(
+    "getTime",
+    ([] : FixedArray[@js.Value]),
+  )
+  if time.is_nan() || time.is_inf() {
+    return value
+  }
+  let date_class : @js.Value = @js.globalThis.get_with_string("Date")
+  let now : Double = date_class.apply_with_string(
+    "now",
+    ([] : FixedArray[@js.Value]),
+  )
+  let seconds = if now < time { 0.0 } else { (now - time) / 1000.0 }
+  let intl : @js.Value = @js.globalThis.get_with_string("Intl")
+  let options = @js.Object::new()
+  if seconds >= 604800.0 {
+    options.set("month", "short")
+    options.set("day", "numeric")
+    options.set("year", "numeric")
+    let formatter : @js.Value = intl.new_with_string("DateTimeFormat", [
+      @js.Value::cast_from(locale),
+      options.to_value(),
+    ])
+    return formatter.apply_with_string("format", [date])
+  }
+  let (amount, unit) = if seconds < 60.0 {
+    options.set("numeric", "auto")
+    (0.0, "second")
+  } else if seconds < 3600.0 {
+    (-(seconds / 60.0).floor(), "minute")
+  } else if seconds < 86400.0 {
+    (-(seconds / 3600.0).floor(), "hour")
+  } else {
+    (-(seconds / 86400.0).floor(), "day")
+  }
+  let formatter : @js.Value = intl.new_with_string("RelativeTimeFormat", [
+    @js.Value::cast_from(locale),
+    options.to_value(),
+  ])
+  formatter.apply_with_string("format", [
+    @js.Value::cast_from(amount),
+    @js.Value::cast_from(unit),
+  ])
+}
 
 ///|
 fn metadata_section(title : String, children : Array[@html.Html]) -> @html.Html {
