@@ -126,7 +126,7 @@ fn TextRenderer::render(self : TextRenderer, event : @protocol.Event) -> String 
       self.answer_streamed = false
     }
     ToolResult(tool_name~, is_error=true, content~, ..) =>
-      self.line(out, "tool error: \{tool_name}: \{content}")
+      self.line(out, "tool error: \{tool_name}: \{first_line(content)}")
     ToolResult(tool_name~, brief~, ..) =>
       self.line(out, "↳ \{brief.unwrap_or(tool_name)}", indent="  ")
     ToolCallDecodeError(tool_name~, error~, ..) =>
@@ -193,15 +193,32 @@ fn TextRenderer::stream_text(
     return
   }
   if self.stream != stream {
+    let after_thinking = self.stream is Thinking
     self.end_stream(out)
+    // A blank line between the reasoning and the answer it leads to.
+    if after_thinking && stream is Answer {
+      out.write_char('\n')
+    }
     if stream is Thinking {
       out.write_string("thinking: ")
       self.mid_line = true
     }
     self.stream = stream
   }
-  out.write_string(safe)
-  self.mid_line = !safe.has_suffix("\n")
+  guard stream is Thinking else {
+    out.write_string(safe)
+    self.mid_line = !safe.has_suffix("\n")
+    return
+  }
+  // Indent every reasoning line after the labeled first one, so only the
+  // answer starts at column 0.
+  for ch in safe {
+    if !self.mid_line && ch != '\n' {
+      out.write_string("  ")
+    }
+    out.write_char(ch)
+    self.mid_line = ch != '\n'
+  }
 }
 
 ///|
@@ -252,6 +269,20 @@ fn TextRenderer::summary(self : TextRenderer, status : String) -> String {
 }
 
 ///|
+/// The first non-blank line of a tool's output: its headline (`mbtx` leads
+/// with what failed and where), where the whole output collapsed onto one
+/// line reads as noise.
+fn first_line(text : String) -> String {
+  for line in text.split("\n") {
+    let line = line.trim()
+    if line != "" {
+      return line.to_owned()
+    }
+  }
+  ""
+}
+
+///|
 /// Model text as the terminal should receive it: newlines and tabs kept, every
 /// other C0/C1 control and DEL dropped, so an ESC in the model's output
 /// renders as nothing rather than as a terminal command.
@@ -280,7 +311,8 @@ test "text rendering streams the answer and summarizes the turn" {
       workspace_root=None,
     ),
     AgentStep(step=1),
-    ReasoningDelta(content="hmm"),
+    ReasoningDelta(content="hmm\n"),
+    ReasoningDelta(content="let me\nthink"),
     AssistantDelta(content="Hi"),
     AssistantDelta(content=" there\u{1b}[31m"),
     AssistantMessage(content="Hi there"),
@@ -314,9 +346,12 @@ test "text rendering streams the answer and summarizes the turn" {
       #|session s1 (/w/.openseek)
       #|--- step 1
       #|thinking: hmm
+      #|  let me
+      #|  think
+      #|
       #|Hi there[31m
       #|  ↳ read moon.mod
-      #|tool error: edit: no match for old_string
+      #|tool error: edit: no match
       #|· goal_updated {"goal":"ship"}
       #|done · 1 step(s) · 100 prompt tokens (60 cached), 7 completion
       #|
