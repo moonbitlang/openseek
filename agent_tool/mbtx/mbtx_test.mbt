@@ -1232,6 +1232,20 @@ async test "warning off keeps error-state diagnostics failing (partial_match)" {
 }
 
 ///|
+async test "rejects an unknown warning value" {
+  let out = run_in(".", { "source": "fn main {  }", "warning": "loud" })
+  assert_true(out.is_error)
+  assert_true(out.content.contains("mbtx requires"))
+}
+
+///|
+async test "rejects non-string source arguments" {
+  let out = run_in(".", { "code": "x" })
+  assert_true(out.is_error)
+  assert_true(out.content.contains("mbtx requires"))
+}
+
+///|
 async test "runs a pure snippet on a non-native target" {
   @vfs.with_tmpdir(ws => {
     let out = run_in(ws, {
