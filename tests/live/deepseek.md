@@ -52,7 +52,7 @@ invoked the `finish` tool with the requested answer (`finished_with_DONE`). The
 count, and a `=~ re"…"` regex match for the answer text.
 
 ```mooncram
-$ printf '%s\n' '{"command":"prompt","text":"Call the finish tool immediately with the answer DONE. Use no other tool."}' | openseek.exe serve --model deepseek-flash --max-steps 3 2>/dev/null \
+$ printf '%s\n' '{"command":"prompt","content":"Call the finish tool immediately with the answer DONE. Use no other tool."}' | openseek.exe serve --model deepseek-flash --max-steps 3 2>/dev/null \
 >   | moon run --target native -e 'import {
 >   "moonbitlang/jsonl@0.2.0",
 >   "moonbitlang/async",
@@ -86,7 +86,7 @@ run, and asserting the full set would break every time the engine grows a new
 event kind.
 
 ```mooncram
-$ printf '%s\n' '{"command":"prompt","text":"Call the finish tool immediately with the answer DONE. Use no other tool."}' | openseek.exe serve --model deepseek-flash --max-steps 3 2>/dev/null \
+$ printf '%s\n' '{"command":"prompt","content":"Call the finish tool immediately with the answer DONE. Use no other tool."}' | openseek.exe serve --model deepseek-flash --max-steps 3 2>/dev/null \
 >   | moon run --target native -e 'import {
 >   "moonbitlang/jsonl@0.2.0",
 >   "moonbitlang/async",
@@ -113,7 +113,7 @@ match the event tag and bind the answer at once, pulling the value straight out
 of the log — here it is exactly what we asked the model to finish with.
 
 ```mooncram
-$ printf '%s\n' '{"command":"prompt","text":"Call the finish tool immediately with the answer DONE. Use no other tool."}' | openseek.exe serve --model deepseek-flash --max-steps 3 2>/dev/null \
+$ printf '%s\n' '{"command":"prompt","content":"Call the finish tool immediately with the answer DONE. Use no other tool."}' | openseek.exe serve --model deepseek-flash --max-steps 3 2>/dev/null \
 >   | moon run --target native -e 'import {
 >   "moonbitlang/jsonl@0.2.0",
 >   "moonbitlang/async",
@@ -139,7 +139,7 @@ its `tool_name`, and use a regex on its `content` to confirm the snippet really
 ran and its output flowed back.
 
 ```mooncram
-$ printf '%s\n' '{"command":"prompt","text":"Use the mbtx tool to run a snippet that prints exactly: openseek-cram. Then call finish with the word done."}' | openseek.exe serve --model deepseek-flash --max-steps 6 2>/dev/null \
+$ printf '%s\n' '{"command":"prompt","content":"Use the mbtx tool to run a snippet that prints exactly: openseek-cram. Then call finish with the word done."}' | openseek.exe serve --model deepseek-flash --max-steps 6 2>/dev/null \
 >   | moon run --target native -e 'import {
 >   "moonbitlang/jsonl@0.2.0",
 >   "moonbitlang/async",
