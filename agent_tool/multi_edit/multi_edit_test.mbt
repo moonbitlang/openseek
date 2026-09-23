@@ -50,7 +50,9 @@ async test "multi_edit applies multiple line-anchored replacements" {
     })
     assert_eq(
       output.content,
-      "ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)",
+      Content([
+        Text("ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)"),
+      ]),
     )
     assert_false(output.is_error)
     assert_eq(
@@ -103,7 +105,11 @@ async test "multi_edit applies a batch spanning several files" {
     assert_false(output.is_error)
     assert_eq(
       output.content,
-      "ok: applied 3 edit(s) across 2 file(s)\n\{first}: 1 edit(s)\n\{second}: 2 edit(s)",
+      Content([
+        Text(
+          "ok: applied 3 edit(s) across 2 file(s)\n\{first}: 1 edit(s)\n\{second}: 2 edit(s)",
+        ),
+      ]),
     )
     assert_eq(@fs.read_file(first).text(), "let a = new_a\n")
     assert_eq(@fs.read_file(second).text(), "let b = new_b\nlet c = new_c\n")
@@ -425,7 +431,11 @@ async test "multi_edit reports all failed edits and leaves file unchanged" {
     assert_true(output.is_error)
     assert_eq(
       output.content,
-      "error multi_editing: 2 problem(s); no changes applied\n\{path} edit[1] line range 1-1: old_string not found\n\{path} edit[2] line range 3-4: old_string and new_string are identical",
+      Content([
+        Text(
+          "error multi_editing: 2 problem(s); no changes applied\n\{path} edit[1] line range 1-1: old_string not found\n\{path} edit[2] line range 3-4: old_string and new_string are identical",
+        ),
+      ]),
     )
     assert_eq(@fs.read_file(path).text(), original)
   })
@@ -458,7 +468,11 @@ async test "multi_edit rejects overlapping replacements and leaves file unchange
     assert_true(output.is_error)
     assert_eq(
       output.content,
-      "error multi_editing: 1 problem(s); no changes applied\n\{path} edit[1] line range 1-1: replacement overlaps edit[0]",
+      Content([
+        Text(
+          "error multi_editing: 1 problem(s); no changes applied\n\{path} edit[1] line range 1-1: replacement overlaps edit[0]",
+        ),
+      ]),
     )
     assert_eq(@fs.read_file(path).text(), original)
   })
@@ -502,7 +516,11 @@ async test "multi_edit rejects invalid arguments" {
   })
   assert_eq(
     output.content,
-    "error: multi_edit requires arguments.edits[0].start_line to be an integer",
+    Content([
+      Text(
+        "error: multi_edit requires arguments.edits[0].start_line to be an integer",
+      ),
+    ]),
   )
   assert_true(output.is_error)
 }
@@ -514,7 +532,11 @@ async test "multi_edit rejects an edit that omits its file" {
   })
   assert_eq(
     output.content,
-    "error: multi_edit requires arguments.edits[0] to include file (present keys: new_string, old_string, start_line)",
+    Content([
+      Text(
+        "error: multi_edit requires arguments.edits[0] to include file (present keys: new_string, old_string, start_line)",
+      ),
+    ]),
   )
   assert_true(output.is_error)
 }
@@ -546,7 +568,9 @@ async test "multi_edit applies a batch from a response file (edits_file)" {
     assert_false(output.is_error)
     assert_eq(
       output.content,
-      "ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)",
+      Content([
+        Text("ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)"),
+      ]),
     )
     assert_eq(@fs.read_file(path).text(), "let a = new_a\nlet b = new_b\n")
   })
@@ -584,7 +608,9 @@ async test "multi_edit concatenates inline edits with an edits_file" {
     assert_false(output.is_error)
     assert_eq(
       output.content,
-      "ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)",
+      Content([
+        Text("ok: applied 2 edit(s) across 1 file(s)\n\{path}: 2 edit(s)"),
+      ]),
     )
     assert_eq(@fs.read_file(path).text(), "let a = new_a\nlet b = new_b\n")
   })

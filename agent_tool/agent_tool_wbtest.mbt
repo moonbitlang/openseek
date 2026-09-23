@@ -96,7 +96,7 @@ async test "execute_tool_call dispatches to async executor" {
   )
   let result = execute_tool_call(call, tools)
   guard result is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "async-hi")
+  assert_eq(output.content, Content([Text("async-hi")]))
   assert_false(output.is_error)
 }
 
@@ -117,7 +117,7 @@ async test "execute_tool_call dispatches to registered executor" {
   )
   let result = execute_tool_call(call, tools)
   guard result is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "hi")
+  assert_eq(output.content, Content([Text("hi")]))
   assert_false(output.is_error)
 }
 

@@ -291,11 +291,11 @@ fn expect_respond(
   match action {
     Respond(output) => {
       if output.is_error != error {
-        return "expected is_error=\{error}, got \{output.is_error}: \{short_text(output.content)}"
+        return "expected is_error=\{error}, got \{output.is_error}: \{short_text(output.content.text())}"
       }
       for probe in contains {
         if !output.content.contains(probe) {
-          return "output missing `\{probe}`: \{short_text(output.content)}"
+          return "output missing `\{probe}`: \{short_text(output.content.text())}"
         }
       }
       ""
@@ -313,7 +313,7 @@ fn expect_finish(action : @agent_tool.ToolAction, expected : String) -> String {
     Control(Abort(reason)) =>
       "expected Finish, got Abort: \{short_text(reason)}"
     Respond(output) =>
-      "expected Finish, got Respond: \{short_text(output.content)}"
+      "expected Finish, got Respond: \{short_text(output.content.text())}"
   }
 }
 

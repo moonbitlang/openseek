@@ -226,7 +226,7 @@ async test "edit tool applies a focused code change through the registry" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_eq(
       output.content,
-      "ok: replaced 1 occurrence(s) at line 2 in \{path}",
+      Content([Text("ok: replaced 1 occurrence(s) at line 2 in \{path}")]),
     )
     assert_false(output.is_error)
     assert_eq(

@@ -321,6 +321,6 @@ async test "build bridges and dispatches tools from an http server" {
       fail("expected a respond action")
     }
     assert_false(output.is_error)
-    assert_eq(output.content, "pong")
+    assert_eq(output.content, Content([Text("pong")]))
   }
 }

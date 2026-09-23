@@ -3,8 +3,8 @@ async test "agent registers the expected tool names" {
   @async.with_task_group() <| group => {
     let tools = @agent.build_tools(AgentRuntime(), AgentTaskScope(group))
     assert_eq([ for t in tools.function_tools() => t.name ], [
-      "edit", "multi_edit", "write", "remove", "plan", "goal", "mbtx", "job_output",
-      "job_stop", "job_wait", "finish",
+      "read_image", "edit", "multi_edit", "write", "remove", "plan", "goal", "mbtx",
+      "job_output", "job_stop", "job_wait", "finish",
     ])
   }
 }
@@ -66,7 +66,7 @@ async test "registered remove uses approval without holding the shared file gate
             tools,
           )
           guard changed is Respond(out) else { fail("expected write response") }
-          assert_false(out.is_error, msg=out.content)
+          assert_false(out.is_error, msg=out.content.text())
           AllowedOnce
         }),
       )
@@ -82,7 +82,7 @@ async test "registered remove uses approval without holding the shared file gate
           tools,
         )
         guard result is Respond(out) else { fail("expected remove response") }
-        assert_eq(out.is_error, !should_delete, msg=out.content)
+        assert_eq(out.is_error, !should_delete, msg=out.content.text())
         assert_eq(@fs.exists("\{dir}/target.txt"), !should_delete)
         if !should_delete {
           assert_true(out.content.contains("changed while awaiting approval"))

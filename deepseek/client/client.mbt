@@ -48,7 +48,7 @@ fn encode_chat_request_for_endpoint(
   response_format? : @deepseek.ResponseFormat,
   messages : Array[@deepseek.ChatMessage],
 ) -> Json raise {
-  if (!(model is Deepseek(_)) || api_url == OpenRouterChatCompletionsUrl) &&
+  if !supports_image_route(model, api_url) &&
     messages.any(message => {
       message.content.0.any(part => part is (ImageUrl(_) | File(_)))
     }) {
@@ -73,6 +73,17 @@ fn encode_chat_request_for_endpoint(
       messages,
     )
   }
+}
+
+///|
+fn supports_image_route(model : @deepseek.Model, api_url : String) -> Bool {
+  model is Deepseek(_) && api_url != OpenRouterChatCompletionsUrl
+}
+
+///|
+/// Whether this client permits image content under the same policy as encoding.
+pub fn Client::supports_image_input(self : Client) -> Bool {
+  supports_image_route(self.model, self.api_url)
 }
 
 ///|

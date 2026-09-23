@@ -4,6 +4,7 @@ package "moonbitlang/openseek/agent_tool/ptc"
 import {
   "moonbitlang/async",
   "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
@@ -16,6 +17,7 @@ pub fn Program::adopted(Self) -> Bool
 pub async fn Program::close(Self) -> Unit
 pub fn Program::env(Self) -> Map[String, String]
 pub fn Program::handoff(Self, String, async (Json) -> Unit) -> Unit
+pub fn Program::image_content(Self) -> Array[@openseek_protocol.ContentPart]
 pub fn Program::interrupted(Self) -> Bool
 pub async fn Program::republish(Self) -> Unit
 pub fn Program::result(Self, @agent_tool.ToolAction) -> @agent_tool.ToolAction
@@ -25,8 +27,8 @@ pub fn Program::trace_error(Self) -> String?
 
 type Service
 pub async fn Service::close(Self) -> Unit
-pub fn Service::register(Self, on_trace? : (Json) -> Unit) -> Program raise
-pub async fn[X] Service::start(@async.TaskGroup[X], @agent_tool.Tools, call_timeout_ms? : Int, trace_timeout_ms? : Int) -> Self
+pub fn Service::register(Self, on_trace? : (Json) -> Unit, on_image_content? : (Array[@openseek_protocol.ContentPart]) -> Unit) -> Program raise
+pub async fn[X] Service::start(@async.TaskGroup[X], @agent_tool.Tools, call_timeout_ms? : Int, trace_timeout_ms? : Int, image_directory? : async () -> String?) -> Self
 
 // Type aliases
 

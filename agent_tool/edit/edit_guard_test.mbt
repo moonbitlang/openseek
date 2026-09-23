@@ -40,7 +40,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "start_line": 14,
       "revert_if_warning_delta_greater_or_equal": 0,
     })
-    assert_false(fixed.is_error, msg=fixed.content)
+    assert_false(fixed.is_error, msg=fixed.content.text())
     assert_true(
       fixed.content.contains("ok: replaced 1 occurrence(s) at line 14"),
     )
@@ -82,7 +82,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       reverted.content.contains(
         "reverted: the warning count changed by 0 (>= revert_if_warning_delta_greater_or_equal=0)",
       ),
-      msg=reverted.content,
+      msg=reverted.content.text(),
     )
     assert_true(reverted.content.contains("warning: "))
     assert_true(reverted.content.contains("Unused variable 'unused'"))
@@ -113,12 +113,12 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "start_line": 14,
       "revert_if_warning_delta_greater_or_equal": 1,
     })
-    assert_true(over.is_error, msg=over.content)
+    assert_true(over.is_error, msg=over.content.text())
     assert_true(
       over.content.contains(
         "warning count changed by 1 (>= revert_if_warning_delta_greater_or_equal=1)",
       ),
-      msg=over.content,
+      msg=over.content.text(),
     )
     assert_true(
       over.data
@@ -133,7 +133,7 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "start_line": 14,
       "revert_if_warning_delta_greater_or_equal": 1,
     })
-    assert_false(tolerated.is_error, msg=tolerated.content)
+    assert_false(tolerated.is_error, msg=tolerated.content.text())
     guard tolerated.data
       is Some(
         {
@@ -152,10 +152,10 @@ async test "the warning guard keeps a fix that removes a warning and reverts one
       "new_string": "  let unused = 0\n  let idle = 1",
       "start_line": 14,
     })
-    assert_false(unguarded.is_error, msg=unguarded.content)
+    assert_false(unguarded.is_error, msg=unguarded.content.text())
     assert_true(
       unguarded.content.contains("moon check: ok — 0 errors, 2 warning(s)"),
-      msg=unguarded.content,
+      msg=unguarded.content.text(),
     )
     assert_true(unguarded.content.contains("Unused variable 'unused'"))
     assert_true(
@@ -182,7 +182,7 @@ async test "the error guard reverts a type-breaking edit and reports the site" {
       reverted.content.contains(
         "reverted: the error count changed by 1 (>= revert_if_error_delta_greater_or_equal=1)",
       ),
-      msg=reverted.content,
+      msg=reverted.content.text(),
     )
     assert_true(reverted.content.contains("error: "))
     assert_eq(@fs.read_file(path).text(), original)
@@ -211,10 +211,10 @@ async test "the error guard reverts a type-breaking edit and reports the site" {
       "new_string": "  \"not an int\"",
       "start_line": 9,
     })
-    assert_false(kept.is_error, msg=kept.content)
+    assert_false(kept.is_error, msg=kept.content.text())
     assert_true(
       kept.content.contains("moon check: 1 error(s), 3 warning(s)"),
-      msg=kept.content,
+      msg=kept.content.text(),
     )
     assert_true(
       kept.data
@@ -245,17 +245,20 @@ async test "a guarded edit is not written when moon check cannot verify the tree
       "revert_if_warning_delta_greater_or_equal": 0,
     })
     assert_true(out.is_error)
-    assert_true(out.content.contains("not applied:"), msg=out.content)
-    assert_true(out.content.contains("without diagnostics"), msg=out.content)
+    assert_true(out.content.contains("not applied:"), msg=out.content.text())
+    assert_true(
+      out.content.contains("without diagnostics"),
+      msg=out.content.text(),
+    )
     // moon's own reason and the way forward, so the agent is not left with a
     // bare exit code.
     assert_true(
       out.content.contains("Failed to calculate build plan"),
-      msg=out.content,
+      msg=out.content.text(),
     )
     assert_true(
       out.content.contains("repair the build plan first"),
-      msg=out.content,
+      msg=out.content.text(),
     )
     assert_eq(@fs.read_file(path).text(), original)
     assert_true(
@@ -269,10 +272,10 @@ async test "a guarded edit is not written when moon check cannot verify the tree
       "new_string": "len([1, 2, 3])",
       "start_line": 14,
     })
-    assert_false(plain.is_error, msg=plain.content)
+    assert_false(plain.is_error, msg=plain.content.text())
     assert_true(
       plain.content.contains("without diagnostics"),
-      msg=plain.content,
+      msg=plain.content.text(),
     )
     assert_true(
       plain.data is Some({ "outcome": "applied", "baseline"? : None, .. }),
@@ -303,7 +306,7 @@ async test "error guard uses an inclusive threshold" {
         "start_line": 9,
         "revert_if_error_delta_greater_or_equal": threshold,
       })
-      assert_eq(output.is_error, !kept, msg=output.content)
+      assert_eq(output.is_error, !kept, msg=output.content.text())
       if kept {
         assert_true(@fs.read_file(path).text().contains(replacement))
       } else {
@@ -330,7 +333,7 @@ async test "error guard compares net counts even when diagnostic identity change
         "new_string": "  \"not an int\"",
         "start_line": 9,
       })
-      assert_false(broken.is_error, msg=broken.content)
+      assert_false(broken.is_error, msg=broken.content.text())
       let original = @fs.read_file(path).text()
       let output = run_edit({
         "path": path,
@@ -339,7 +342,7 @@ async test "error guard compares net counts even when diagnostic identity change
         "start_line": 9,
         "revert_if_error_delta_greater_or_equal": threshold,
       })
-      assert_eq(output.is_error, !kept, msg=output.content)
+      assert_eq(output.is_error, !kept, msg=output.content.text())
       if replacement == "  true" {
         assert_true(
           output.data
@@ -379,7 +382,7 @@ async test "warning guard at zero requires a net decrease" {
         "start_line": 14,
         "revert_if_warning_delta_greater_or_equal": 0,
       })
-      assert_eq(output.is_error, !kept, msg=output.content)
+      assert_eq(output.is_error, !kept, msg=output.content.text())
       if kept {
         assert_true(@fs.read_file(path).text().contains(replacement))
       } else {
@@ -403,7 +406,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "revert_if_error_delta_greater_or_equal": 1,
       "revert_if_warning_delta_greater_or_equal": 0,
     })
-    assert_false(out.is_error, msg=out.content)
+    assert_false(out.is_error, msg=out.content.text())
     assert_false(out.content.contains("moon check"))
     assert_true(
       out.data
@@ -427,7 +430,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
     assert_true(unreadable.is_error)
     assert_true(
       unreadable.content.contains("edit failed"),
-      msg=unreadable.content,
+      msg=unreadable.content.text(),
     )
     assert_true(
       unreadable.data is Some({ "outcome": "error", "path": String(_), .. }),
@@ -456,12 +459,12 @@ async test "guards are moot outside a MoonBit project and data still names the o
         "start_line": 1,
         "revert_if_error_delta_greater_or_equal": value,
       })
-      assert_true(rejected.is_error, msg=rejected.content)
+      assert_true(rejected.is_error, msg=rejected.content.text())
       assert_true(
         rejected.content.contains(
           "arguments.revert_if_error_delta_greater_or_equal to be a non-negative integer",
         ),
-        msg=rejected.content,
+        msg=rejected.content.text(),
       )
     }
     assert_eq(@fs.read_file(path).text(), "new\n")
@@ -472,7 +475,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "start_line": 1,
       "revert_if_error_delta_greater_or_equal": Json::null(),
     })
-    assert_false(off.is_error, msg=off.content)
+    assert_false(off.is_error, msg=off.content.text())
     assert_true(
       off.data is Some({ "outcome": "applied", "baseline"? : None, .. }),
     )
@@ -484,7 +487,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "new_string": "",
       "start_line": 1,
     })
-    assert_false(deleted.is_error, msg=deleted.content)
+    assert_false(deleted.is_error, msg=deleted.content.text())
     assert_true(
       deleted.data
       is Some(
@@ -549,12 +552,12 @@ async test "guards reach a MoonBit target through a link with another name" {
       "start_line": 9,
       "revert_if_error_delta_greater_or_equal": 1,
     })
-    assert_true(reverted.is_error, msg=reverted.content)
+    assert_true(reverted.is_error, msg=reverted.content.text())
     assert_true(
       reverted.data
       is Some({ "outcome": "reverted", "reason": "error_delta", .. }),
       // Distinguish guard failures from check unavailability in CI.
-      msg=reverted.content,
+      msg=reverted.content.text(),
     )
     assert_eq(@fs.read_file(target).text(), original)
   })
@@ -588,7 +591,7 @@ async test "guards check the module of a link's target as well as the link's own
       "start_line": 2,
       "revert_if_error_delta_greater_or_equal": 1,
     })
-    assert_true(reverted.is_error, msg=reverted.content)
+    assert_true(reverted.is_error, msg=reverted.content.text())
     guard reverted.data
       is Some(
         {

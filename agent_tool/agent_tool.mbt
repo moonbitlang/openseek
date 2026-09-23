@@ -85,6 +85,8 @@ pub struct AgentToolDefinition {
   priv owns_file_access : Bool
   /// Human approval must not inherit a program's ordinary execution deadline.
   priv can_request_approval : Bool
+  /// Reject calls before execution when the current route cannot accept images.
+  priv requires_image_input : Bool
 } derive(Debug(ignore=ToolExecutor))
 
 ///|
@@ -100,6 +102,7 @@ pub fn AgentToolDefinition::AgentToolDefinition(
   program_callable? : Bool = false,
   owns_file_access? : Bool = false,
   can_request_approval? : Bool = false,
+  requires_image_input? : Bool = false,
 ) -> AgentToolDefinition {
   {
     name,
@@ -111,6 +114,7 @@ pub fn AgentToolDefinition::AgentToolDefinition(
     program_callable,
     owns_file_access,
     can_request_approval,
+    requires_image_input,
   }
 }
 
@@ -157,8 +161,8 @@ async fn ToolExecutor::run(self : ToolExecutor, arguments : Json) -> ToolAction 
 /// Normal output produced by a tool and sent back to the model as a
 /// `Tool(id)` chat message.
 pub struct ToolOutput {
-  /// Text content sent to the model.
-  content : String
+  /// Ordered text and image parts sent to the model.
+  content : @protocol.Content
   /// Whether the host should treat this as a tool-level error. The content is
   /// still sent to the model so it can recover or choose another action.
   is_error : Bool
@@ -175,12 +179,12 @@ pub struct ToolOutput {
 /// successful tool responses; `brief` is omitted unless the tool supplies a
 /// one-line summary.
 fn ToolOutput::ToolOutput(
-  content : String,
+  content : @protocol.Content,
   is_error? : Bool = false,
   brief? : String,
   data? : Json,
 ) -> ToolOutput {
-  { content, is_error, brief, data, }
+  { content: Content(content.0.copy()), is_error, brief, data, }
 }
 
 ///|
@@ -210,6 +214,17 @@ pub enum ToolAction {
 /// model.
 pub fn respond(
   content : String,
+  is_error? : Bool = false,
+  brief? : String,
+  data? : Json,
+) -> ToolAction {
+  respond_content(Content([Text(content)]), is_error~, brief?, data?)
+}
+
+///|
+/// Build a response preserving the order of all text and image parts.
+pub fn respond_content(
+  content : @protocol.Content,
   is_error? : Bool = false,
   brief? : String,
   data? : Json,
@@ -275,6 +290,8 @@ struct Tools {
   /// Shared execution registry, also used by the loop for wait/finish decisions.
   background_jobs : @bgjobs.BgJobRuntime?
   program_trace : Ref[Json?]
+  program_content : Ref[Array[@protocol.ContentPart]]
+  image_input_supported : Ref[Bool]
 }
 
 ///|
@@ -286,6 +303,8 @@ pub fn Tools::Tools(
   definitions : Array[AgentToolDefinition],
   background_jobs? : @bgjobs.BgJobRuntime,
   program_trace? : Ref[Json?] = Ref(None),
+  program_content? : Ref[Array[@protocol.ContentPart]] = Ref([]),
+  image_input_supported? : Ref[Bool] = Ref(false),
 ) -> Tools raise {
   let by_name : Map[String, AgentToolDefinition] = Map([])
   for definition in definitions {
@@ -294,7 +313,19 @@ pub fn Tools::Tools(
     }
     by_name[definition.name] = definition
   }
-  { by_name, background_jobs, program_trace, }
+  {
+    by_name,
+    background_jobs,
+    program_trace,
+    program_content,
+    image_input_supported,
+  }
+}
+
+///|
+/// Update the route used by both direct tools and the session's PTC registry.
+pub fn Tools::set_image_input_supported(self : Tools, supported : Bool) -> Unit {
+  self.image_input_supported.val = supported
 }
 
 ///|
@@ -336,7 +367,13 @@ pub async fn execute_tool_call(
   tools : Tools,
 ) -> ToolAction noraise {
   match tools.find(call.name) {
-    Some(tool) =>
+    Some(tool) => {
+      guard !tool.requires_image_input || tools.image_input_supported.val else {
+        return respond(
+          "error: this model route does not support image input",
+          is_error=true,
+        )
+      }
       tool.execute.run(call.arguments) catch {
         error => {
           // Keep the transcript label the local catches used to provide:
@@ -350,6 +387,7 @@ pub async fn execute_tool_call(
           respond("error: \{call.name} failed: \{error}", is_error=true, brief?)
         }
       }
+    }
     None => respond("error: unknown tool \{call.name}", is_error=true)
   }
 }
@@ -358,13 +396,13 @@ pub async fn execute_tool_call(
 test "ToolAction helpers build structured actions" {
   let response = respond("ok")
   guard response is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "ok")
+  assert_eq(output.content, Content([Text("ok")]))
   assert_false(output.is_error)
   let error_response = respond("bad", is_error=true)
   guard error_response is Respond(error_output) else {
     fail("expected error Respond")
   }
-  assert_eq(error_output.content, "bad")
+  assert_eq(error_output.content, Content([Text("bad")]))
   assert_true(error_output.is_error)
   let finished = ToolAction::finish("done")
   guard finished is Control(Finish(answer)) else { fail("expected Finish") }
@@ -381,7 +419,7 @@ async test "execute_tool_call reports unknown tool" {
   guard result is Respond(output) else {
     fail("unknown tool should produce Respond")
   }
-  assert_eq(output.content, "error: unknown tool ghost")
+  assert_eq(output.content, Content([Text("error: unknown tool ghost")]))
   assert_true(output.is_error)
 }
 
@@ -445,4 +483,44 @@ pub fn AgentToolDefinition::can_request_approval(
   self : AgentToolDefinition,
 ) -> Bool {
   self.can_request_approval
+}
+
+///|
+/// Take completed foreground PTC images when persisting an interrupted call.
+pub fn Tools::take_program_content(
+  self : Tools,
+) -> Array[@protocol.ContentPart] {
+  let images = self.program_content.val
+  self.program_content.val = []
+  images
+}
+
+///|
+async test "direct and program dispatch share image capability and reject before execution" {
+  let calls = Ref(0)
+  let tools = Tools([
+    AgentToolDefinition(
+      name="image",
+      description="image",
+      schema=JsonSchema({}),
+      program_callable=true,
+      requires_image_input=true,
+      execute=Sync(_ => {
+        calls.val += 1
+        respond("read")
+      }),
+    ),
+  ])
+  let program = tools.program_tools()
+  let call = AgentToolCall::from_arguments("image", {})
+  for enabled in [false, true, false] {
+    tools.set_image_input_supported(enabled)
+    for registry in [tools, program] {
+      guard execute_tool_call(call, registry) is Respond(output) else {
+        fail("expected response")
+      }
+      assert_eq(output.is_error, !enabled)
+    }
+  }
+  assert_eq(calls.val, 2)
 }

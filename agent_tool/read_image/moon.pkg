@@ -1,0 +1,14 @@
+import {
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/internal/workspace_path",
+  "moonbitlang/openseek/agent_tool/internal/image_file",
+}
+
+supported_targets = "+wasm+native"
+
+import {
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/async/fs",
+  "moonbitlang/async",
+  "moonbitlang/openseek_protocol" @protocol,
+} for "test"

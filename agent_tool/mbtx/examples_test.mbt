@@ -57,10 +57,10 @@ async test "ptc_guarded_edit example applies a clean fix and reports a reverted 
           "args": [path, "length([1, 2, 3])", "len([1, 2, 3])", "14"],
         })
       })
-      assert_false(applied.is_error, msg=applied.content)
+      assert_false(applied.is_error, msg=applied.content.text())
       assert_true(
         applied.content.contains("applied; 1 warning(s) remain"),
-        msg=applied.content,
+        msg=applied.content.text(),
       )
       assert_true(
         @fs.read_file(path).text().contains("len([1, 2, 3]) + length([4])"),
@@ -79,12 +79,12 @@ async test "ptc_guarded_edit example applies a clean fix and reports a reverted 
           ],
         })
       })
-      assert_false(reverted.is_error, msg=reverted.content)
+      assert_false(reverted.is_error, msg=reverted.content.text())
       assert_true(
         reverted.content.contains(
           "reverted: the warning count changed by 0 (>= revert_if_warning_delta_greater_or_equal=0)",
         ),
-        msg=reverted.content,
+        msg=reverted.content.text(),
       )
       assert_true(
         @fs.read_file(path).text().contains("len([1, 2, 3]) + length([4])"),
@@ -124,18 +124,18 @@ async test "ptc_search_filter example keeps the selected sources with their URLs
           "args": ["python", "python.org"],
         })
       })
-      assert_false(output.is_error, msg=output.content)
+      assert_false(output.is_error, msg=output.content.text())
       assert_true(
         output.content.contains("- Python docs — https://docs.python.org/3/"),
-        msg=output.content,
+        msg=output.content.text(),
       )
       assert_true(
         output.content.contains("1 of 2 source(s) shown for python"),
-        msg=output.content,
+        msg=output.content.text(),
       )
       assert_true(
         output.content.contains("note: the search results were truncated"),
-        msg=output.content,
+        msg=output.content.text(),
       )
       assert_false(output.content.contains("example.com"))
     })

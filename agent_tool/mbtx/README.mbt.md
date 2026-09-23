@@ -252,7 +252,14 @@ async test "mbtx runs a pure-core probe" {
   debug_inspect(
     action,
     content=(
-      #|Respond({ content: "[1, 4, 9]\n", is_error: false, brief: None, data: None })
+      #|Respond(
+      #|  {
+      #|    content: Content([Text("[1, 4, 9]\n")]),
+      #|    is_error: false,
+      #|    brief: None,
+      #|    data: None,
+      #|  },
+      #|)
     ),
   )
 }
@@ -285,7 +292,14 @@ async test "mbtx reads a workspace file" {
     debug_inspect(
       action,
       content=(
-        #|Respond({ content: "lines=2\n", is_error: false, brief: None, data: None })
+        #|Respond(
+        #|  {
+        #|    content: Content([Text("lines=2\n")]),
+        #|    is_error: false,
+        #|    brief: None,
+        #|    data: None,
+        #|  },
+        #|)
       ),
     )
   })
@@ -305,7 +319,14 @@ async test "mbtx accepts an explicit target" {
   debug_inspect(
     action,
     content=(
-      #|Respond({ content: "42\n", is_error: false, brief: None, data: None })
+      #|Respond(
+      #|  {
+      #|    content: Content([Text("42\n")]),
+      #|    is_error: false,
+      #|    brief: None,
+      #|    data: None,
+      #|  },
+      #|)
     ),
   )
 }
