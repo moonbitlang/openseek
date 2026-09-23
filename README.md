@@ -101,7 +101,7 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `moonbitlang/openseek/jsonrpc` | Duplex JSON-RPC 2.0 client (concurrent requests, notifications, out-of-order replies). | — |
 | `moonbitlang/openseek/mcp` (+ `config`, `stdio`, `streamhttp`, `tools`) | MCP client: `mcp.json` decoding, stdio and Streamable HTTP transports, and the bridge that namespaces server tools into the registry. | — |
 | `moonbitlang/openseek/prompt` | Built-in system prompt text (generated from Markdown) and prompt-selection policy. | `prompt/README.mbt.md` |
-| `moonbitlang/openseek_protocol` | Typed engine event stream (own module): the `openseek run`/`serve` stdout wire contract, decodable on every backend. | `protocol/README.mbt.md` |
+| `moonbitlang/openseek_protocol` | Typed engine event stream (own module): the `openseek serve` stdout wire contract (`openseek run` renders it as text), decodable on every backend. | `protocol/README.mbt.md` |
 | `moonbitlang/openseek_protocol/emit` | Writer for that stream (native or wasm): owns each event's log level. | `protocol/emit/README.mbt.md` |
 | `moonbitlang/openseek/agent` | OpenSeek agent loop (native or wasm) and local tool dispatch. | `agent/README.mbt.md` |
 | `moonbitlang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind `openseek review`. | `agent_review/README.mbt.md` |

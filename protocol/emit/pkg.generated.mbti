@@ -8,6 +8,8 @@ import {
 // Values
 pub fn close() -> Unit
 
+pub async fn drain(async (@openseek_protocol.Event) -> Unit) -> Unit
+
 pub async fn drain_stdout() -> Unit
 
 pub fn emit(@openseek_protocol.Event) -> Unit

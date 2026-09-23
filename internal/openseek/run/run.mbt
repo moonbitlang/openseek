@@ -1,12 +1,12 @@
 ///|
 /// `openseek run [TASK…]` — a headless one-shot agent run (best-of-N under
-/// `--concurrency`), streaming JSONL events on stdout.
+/// `--concurrency`), streaming human-readable progress on stdout.
 pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
-  // Why a single run did not complete. Set inside the logging scope and
+  // Why a single run did not complete. Set inside the output scope and
   // raised only after it: raising in there would cancel the drain before
   // the turn's last events reached stdout.
   let mut incomplete : String? = None
-  @execution.with_jsonl_stdout(() => {
+  @execution.with_text_stdout(() => {
     // --no-session contradicts an explicit --session; reject up front.
     @options.reject_session_contradiction(matches)
     // So is `--approval ask` on a command that reads no commands. Rejected

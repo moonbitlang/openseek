@@ -12,6 +12,6 @@ repository = "https://github.com/moonbitlang/openseek"
 
 license = "Apache-2.0"
 
-description = "Typed engine event stream: the openseek run/serve stdout wire contract."
+description = "Typed engine event stream: the openseek serve stdout wire contract, rendered as text by openseek run."
 
 warnings = "+implicit_impl_as_method+test_unqualified_package"

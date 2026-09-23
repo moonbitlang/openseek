@@ -1,8 +1,9 @@
 # OpenSeek Protocol Writer
 
 `moonbitlang/openseek_protocol/emit` writes an `Event` to the engine's stdout JSONL
-stream — the events the desktop host, the TUI, and any script driving `run` or
-`serve` decode. It is the effectful half of `moonbitlang/openseek_protocol`, the
+stream — the events the desktop host, the TUI, and any script driving `serve`
+decode (`run` drains the same events through a text renderer instead). It is
+the effectful half of `moonbitlang/openseek_protocol`, the
 way `deepseek/client` is the effectful half of `deepseek`: the parent package
 is pure and portable, this one is native-only and does the I/O.
 
@@ -13,8 +14,9 @@ is pure and portable, this one is native-only and does the I/O.
 ```
 
 That is the whole reporting API. The other public functions are plumbing the stdout sink: `open` starts accepting
-events, `drain_stdout` is the one task that writes the queue to fd 1, `close`
-ends the stream at run teardown, and `poll_line` is the in-process read side
+events, `drain_stdout` is the one task that writes the queue to fd 1 as JSONL
+(`drain` is the same task with a caller-chosen writer), `close` ends the stream
+at run teardown, and `poll_line` is the in-process read side
 for a test that owns no fd 1. Until `open`, and again after `close`, `emit`
 drops every event — see below.
 
@@ -59,14 +61,15 @@ it decoded. The CLI links no logger at all anymore.
 
 ## What `emit` does
 
-`emit` serializes `event` and hands the line to the open sink's queue; one drain
-task, spawned by the CLI for the run, owns every write to stdout:
+`emit` hands `event` to the open sink's queue; one drain task, spawned by the
+CLI for the run, owns every write to stdout and chooses the rendering —
+`drain_stdout` writes each event's `to_json` line:
 
 ```mbt nocheck
 ///|
 fn emit(event : Event) -> Unit {
   guard sink.val is Some(queue) else { return }
-  ignore(queue.try_put(event.to_json().stringify()))
+  ignore(queue.try_put(event))
 }
 ```
 
@@ -90,7 +93,8 @@ Four properties are load-bearing:
   accumulate lines forever in a queue nobody reads. So there is no queue until
   `open` installs one, and `close` uninstalls it before closing it. The one
   place that opens is the one place that spawns the drain
-  (`with_jsonl_stdout` in the CLI); nothing else has to remember to close.
+  (`with_jsonl_stdout` or `with_text_stdout` in the CLI); nothing else has to
+  remember to close.
   `open` is synchronous and precedes the spawn, because `spawn_bg` does not
   promise the drain runs before the body's first `emit`.
 

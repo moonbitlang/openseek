@@ -17,7 +17,7 @@ process-level error handling. Command parsing, handlers, and shared setup live u
 [`internal/openseek`](../../internal/openseek/README.md).
 
 ```
-openseek run [options] TASK    run one task headlessly; JSONL events on stdout
+openseek run [options] TASK    run one task headlessly; readable progress on stdout
 openseek serve                 JSONL command server (stdin: prompt/steer/cancel/compact)
 openseek review [--base REF]   read-only code review of REF...HEAD → one JSON report
 openseek mcp                   list configured MCP servers and their tools

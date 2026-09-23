@@ -26,6 +26,8 @@ pub fn build_goal_met_gate(self_exe~ : String, model~ : @deepseek.Model, api_url
 
 pub async fn with_jsonl_stdout(async () -> Unit) -> Unit
 
+pub async fn with_text_stdout(async () -> Unit) -> Unit
+
 // Errors
 
 // Types and methods

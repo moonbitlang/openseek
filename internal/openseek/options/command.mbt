@@ -68,7 +68,7 @@ pub fn root_command() -> @argparse.Command {
     subcommands=[
       Command(
         "run",
-        about="Run one task headlessly; stream JSONL events on stdout.",
+        about="Run one task headlessly; stream its progress as text on stdout.",
         options=[
           ..agent_options(),
           review_deadline_option(),
