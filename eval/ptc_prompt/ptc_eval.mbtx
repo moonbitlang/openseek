@@ -1,0 +1,2182 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/async/semaphore",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/argparse",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "moonbitlang/x/crypto",
+}
+
+// Bounded live PTC evaluations. Credentials are inherited, never recorded.
+// Run from the repository root:
+//
+//   moon run eval/ptc_prompt/ptc_eval.mbtx run --help
+//   moon run eval/ptc_prompt/ptc_eval.mbtx yaml --help
+//   moon test eval/ptc_prompt/ptc_eval.mbtx
+
+///|
+const MODEL = "deepseek-v4-flash"
+
+///|
+const MAX_STEPS = 24
+
+///|
+const HERE = "eval/ptc_prompt"
+
+///|
+const PTC_HEADING = "### Programmatic tool calls\n"
+
+///|
+let run_cases : Array[String] = ["single_edit", "computed_edits", "search"]
+
+// ---------------------------------------------------------------------------
+// Shared process, session, and file helpers
+
+///|
+/// Run `command` with its merged output in `log`; `None` when killed at
+/// `timeout_ms`. The whole process tree is signalled: SIGTERM, then SIGKILL
+/// after `grace_ms`.
+async fn bounded(
+  command : Array[String],
+  cwd : String,
+  env : Map[String, String],
+  log : String,
+  timeout_ms : Int,
+  grace_ms? : Int = 10000,
+) -> Int? {
+  let output = @process.redirect_to_file(log, create_mode=CreateOrTruncate)
+  @async.with_timeout_opt(timeout_ms, () => {
+    @process.run(
+      command[0],
+      command[1:],
+      extra_env=env,
+      inherit_env=false,
+      stdout=output,
+      stderr=output,
+      cwd~,
+      cancel_handler=kill_tree(grace_ms),
+    )
+  })
+}
+
+///|
+/// The engine starts `moon` and snippet runs of its own; signal the tree it
+/// had when the timeout fired, not just the engine.
+fn kill_tree(grace_ms : Int) -> @process.CancellationHandler {
+  pid => {
+    let tree = descendants(pid)
+    signal_all("-TERM", tree)
+    @async.sleep(grace_ms)
+    signal_all("-KILL", tree)
+  }
+}
+
+///|
+async fn descendants(root : Int) -> Array[String] {
+  let listing = @shell.Cmd("ps", ["-A", "-o", "pid=,ppid="]).output().stdout()
+  let children : Map[String, Array[String]] = Map([])
+  for line in listing.split("\n") {
+    guard line.split(" ").filter(f => f != "").map(f => f.to_owned()).collect()
+      is [pid, ppid] else {
+      continue
+    }
+    match children.get(ppid) {
+      Some(siblings) => siblings.push(pid)
+      None => children[ppid] = [pid]
+    }
+  }
+  let tree = ["\{root}"]
+  for i = 0; i < tree.length(); i = i + 1 {
+    tree.append(children.get(tree[i]).unwrap_or([]))
+  }
+  tree
+}
+
+///|
+async fn signal_all(signal : String, pids : Array[String]) -> Unit {
+  // Processes that already exited make `kill` report an error; that is fine.
+  ignore(@shell.Cmd("kill", [signal, ..pids]).output())
+}
+
+///|
+/// The engine's environment: credentials inherited and global skills disabled.
+fn trial_env(workspace : String) -> Map[String, String] {
+  let env = @env.get_env_vars()
+  env["OPENSEEK_GLOBAL_SKILLS_DIR"] = "\{workspace}/.no-global-skills"
+  env
+}
+
+///|
+fn engine_command(
+  engine : String,
+  workspace : String,
+  name : String,
+  prompt : String,
+  task : String,
+  max_steps : Int,
+) -> Array[String] {
+  [
+    engine,
+    "run",
+    "--model",
+    MODEL,
+    "--max-steps",
+    "\{max_steps}",
+    "--dir",
+    workspace,
+    "--session",
+    name,
+    "--system-prompt-file",
+    prompt,
+    task,
+  ]
+}
+
+///|
+fn sha256_hex(data : Bytes) -> String {
+  let digits = "0123456789abcdef".to_array()
+  let hex = StringBuilder()
+  for byte in @crypto.sha256(data) {
+    hex.write_char(digits[byte.to_int() >> 4])
+    hex.write_char(digits[byte.to_int() & 15])
+  }
+  hex.to_string()
+}
+
+///|
+async fn engine_hashes(engines : Map[String, String]) -> Json {
+  let hashes : Map[String, Json] = Map([])
+  for variant, binary in engines {
+    hashes[variant] = sha256_hex(@fs.read_file(binary).binary()).to_json()
+  }
+  hashes.to_json()
+}
+
+///|
+async fn head_commit() -> String {
+  let output = @shell.Cmd("git", ["rev-parse", "HEAD"]).output()
+  output.check()
+  output.stdout().trim().to_owned()
+}
+
+///|
+async fn write_json(path : String, value : Json) -> Unit {
+  @fs.write_file(path, value.stringify(indent=2) + "\n")
+}
+
+///|
+async fn read_json(path : String) -> Json {
+  @json.parse(@fs.read_file(path).text())
+}
+
+///|
+async fn read_text(path : String) -> String {
+  @fs.read_file(path).text()
+}
+
+///|
+/// Byte-exact comparison; a missing file is a mismatch, not an error.
+async fn same_bytes(path : String, expected : String) -> Bool {
+  @fs.exists(path) && @fs.read_file(path).binary() == @utf8.encode(expected[:])
+}
+
+///|
+fn seconds_since(started : Int64) -> Json {
+  let centiseconds = ((@async.now() - started).to_double() / 10.0).round()
+  (centiseconds / 100.0).to_json()
+}
+
+///|
+fn opt_int(value : Int?) -> Json {
+  match value {
+    Some(value) => value.to_json()
+    None => Json::null()
+  }
+}
+
+///|
+fn count(values : Array[Json], matches : (Json) -> Bool) -> Int {
+  values.fold(init=0, (total, value) => {
+    if matches(value) {
+      total + 1
+    } else {
+      total
+    }
+  })
+}
+
+///|
+fn error_message(error : Error) -> String {
+  match error {
+    Failure(message) => message
+    _ => error.to_string()
+  }
+}
+
+///|
+/// Journal items of the named session; without a name, the only session.
+/// Naming the parent matters: a review child leaves a second journal.
+async fn session_items(
+  workspace : String,
+  session_name? : String,
+) -> Array[Json] {
+  let paths = []
+  @fs.walk(workspace, (directory, entries) => {
+    for entry in entries {
+      let wanted = match session_name {
+        Some(name) => entry == "openseek_session-\{name}.jsonl"
+        None =>
+          entry.has_prefix("openseek_session-") && entry.has_suffix(".jsonl")
+      }
+      if wanted {
+        paths.push("\{directory}/\{entry}")
+      }
+    }
+  })
+  guard paths is [path] else {
+    raise Failure("expected one session, got \{paths.length()}")
+  }
+  let items = []
+  for line in read_text(path).split("\n") {
+    if line.trim() == "" {
+      continue
+    }
+    if @json.parse(line.to_owned()) is { "item": item, .. } {
+      items.push(item)
+    }
+  }
+  items
+}
+
+///|
+/// A session split into its parts, with the calls both runners report.
+struct Session {
+  assistants : Array[Json]
+  results : Array[Json]
+  nested : Array[Json]
+  terminals : Array[Json]
+}
+
+///|
+fn Session::new(items : Array[Json]) -> Session {
+  let assistants = []
+  let results = []
+  let nested = []
+  let terminals = []
+  for item in items {
+    match item {
+      { "kind": "assistant", "payload": payload, .. } =>
+        assistants.push(payload)
+      { "kind": "tool_result", "payload": payload, .. } => {
+        results.push(payload)
+        if payload is { "data": { "ptc_calls": Array(calls), .. }, .. } {
+          nested.append(calls)
+        }
+      }
+      { "kind": "terminal", "payload": payload, .. } => terminals.push(payload)
+      _ => ()
+    }
+  }
+  { assistants, results, nested, terminals, }
+}
+
+///|
+fn Session::metrics(self : Session, into : Map[String, Json]) -> Unit {
+  into["steps"] = self.assistants.length().to_json()
+  into["outer_calls"] = self.assistants
+    .fold(init=0, (total, assistant) => {
+      match assistant {
+        { "tool_calls": Array(calls), .. } => total + calls.length()
+        _ => total
+      }
+    })
+    .to_json()
+  into["nested_calls"] = self.nested.length().to_json()
+  into["tool_errors"] = count(self.results, r => r is { "is_error": True, .. }).to_json()
+  into["nested_errors"] = count(self.nested, c => {
+    c is { "result": { "is_error": True, .. }, .. }
+  }).to_json()
+}
+
+///|
+fn Session::finished(self : Session) -> Bool {
+  self.terminals.last() is Some({ "kind": "finished", .. })
+}
+
+///|
+fn Session::final_message(self : Session) -> Json {
+  match self.terminals.last() {
+    Some({ "message": message, .. }) => message
+    _ => Json::null()
+  }
+}
+
+///|
+/// Provider usage summed over the `usage` events of an engine log.
+async fn usage(log : String) -> Json {
+  let mut totals : Map[String, Double]? = None
+  for line in read_text(log).split("\n") {
+    let event = @json.parse(line.to_owned()) catch { _ => continue }
+    guard event is { "event": "usage", "usage": Object(fields), .. } else {
+      continue
+    }
+    let sums = totals.unwrap_or({})
+    totals = Some(sums)
+    for key, value in fields {
+      if value is Number(value, ..) {
+        sums[key] = sums.get(key).unwrap_or(0.0) + value
+      }
+    }
+  }
+  match totals {
+    Some(sums) => sums.to_json()
+    None => Json::null()
+  }
+}
+
+///|
+/// Decode the generated literal, including its expanded references tree.
+async fn generated_prompt(path : String) -> String {
+  read_text(path)
+  .split("\n")
+  .filter_map(line => line.strip_prefix("    #|"))
+  .map(line => line.to_owned())
+  .collect()
+  .join("\n")
+}
+
+///|
+/// Run every job with at most `concurrency` in flight; results keep job order.
+async fn[T] run_pool(
+  concurrency : Int,
+  jobs : Array[async () -> T],
+) -> Array[T] {
+  let slots = @semaphore.Semaphore(concurrency)
+  @async.with_task_group(group => {
+    let tasks = jobs.map(job => {
+      group.spawn(() => {
+        slots.acquire()
+        defer slots.release()
+        job()
+      })
+    })
+    let results = []
+    for task in tasks {
+      results.push(task.wait())
+    }
+    results
+  })
+}
+
+///|
+/// Pair order alternates per repetition so neither variant always launches first.
+fn paired_variants(repeat : Int) -> Array[String] {
+  if repeat % 2 == 1 {
+    ["baseline", "candidate"]
+  } else {
+    ["candidate", "baseline"]
+  }
+}
+
+///|
+fn absolute(path : String) -> String {
+  if path.has_prefix("/") {
+    path
+  } else {
+    "\{@env.current_dir().unwrap()}/\{path}"
+  }
+}
+
+///|
+async fn new_directory(path : String) -> Unit {
+  guard !@fs.exists(path) else { raise Failure("\{path} already exists") }
+  @fs.mkdir(path, recursive=true)
+}
+
+// ---------------------------------------------------------------------------
+// `run`: PTC capability or historical prompt A/B
+
+///|
+struct Fixture {
+  task : String
+  files : Map[String, String]
+  /// Every staged file, with the expected edits applied.
+  expected : Map[String, String]
+}
+
+///|
+fn two_digits(i : Int) -> String {
+  if i < 10 {
+    "0\{i}"
+  } else {
+    "\{i}"
+  }
+}
+
+///|
+fn computed_total() -> Int {
+  let mut total = 0
+  for i in 0..<12 {
+    total += (i + 3) * (107 + 19 * i)
+  }
+  total
+}
+
+///|
+fn fixture(case : String, workspace : String) -> Fixture {
+  let files : Map[String, String] = { "keep.txt": "preserve me\n" }
+  let edits : Map[String, String] = Map([])
+  let task = match case {
+    "single_edit" => {
+      files["note.txt"] = "alpha\nbeta\ngamma\n"
+      edits["note.txt"] = "alpha\ndelta\ngamma\n"
+      "In note.txt replace the unique word beta with delta; preserve every other byte."
+    }
+    "computed_edits" => {
+      let rows = ["file,units,unit_price_cents"]
+      for i in 0..<12 {
+        let name = "items/item-\{two_digits(i)}.txt"
+        let (units, price) = (i + 3, 107 + 19 * i)
+        rows.push("\{name},\{units},\{price}")
+        files[name] = "item=\{two_digits(i)}\ntotal_cents=0\nstatus=keep\n"
+        edits[name] = "item=\{two_digits(i)}\ntotal_cents=\{units * price}\nstatus=keep\n"
+      }
+      files["prices.csv"] = rows.join("\n") + "\n"
+      "Read prices.csv. For each row, set total_cents in the named item file to " +
+      "units * unit_price_cents. Preserve all other bytes and all input files. " +
+      "Report the number of updated files and the sum of their new totals."
+    }
+    _ =>
+      "Use web_search to find official documentation for both topics: Python asyncio.TaskGroup " +
+      "and Rust std::thread::scope. Return a JSON object with exactly the keys python and rust, " +
+      "each holding one or two distinct official documentation URLs found in search results. " +
+      "Do not create files. No prose outside the JSON object in your final answer."
+  }
+  let expected = files.copy()
+  for name, content in edits {
+    expected[name] = content
+  }
+  let task = task +
+    "\nUse the host editing tools for modifications. Preserve keep.txt and unrelated files. " +
+    "Verify the result before finishing. Workspace: \{workspace}"
+  { task, files, expected, }
+}
+
+///|
+async fn Fixture::stage(self : Fixture, workspace : String) -> Unit {
+  for name, content in self.files {
+    if name.rev_find("/") is Some(slash) &&
+      !@fs.exists("\{workspace}/\{name[:slash]}") {
+      @fs.mkdir("\{workspace}/\{name[:slash]}", recursive=true)
+    }
+    @fs.write_file("\{workspace}/\{name}", content)
+  }
+}
+
+///|
+/// The SDK-only baseline predates structured search metadata. Its source
+/// bullets (`- [title](url)`) carry the same URLs the model sees; normalize
+/// that format so provenance scoring does not require a candidate-only feature.
+fn bullet_url(line : StringView) -> String? {
+  guard line.strip_prefix("- [") is Some(rest) &&
+    rest.strip_suffix(")") is Some(body) else {
+    return None
+  }
+  // The title may itself contain `](`: take the last split that yields a URL.
+  let mut end = body.length()
+  while body[:end].rev_find("](") is Some(i) {
+    let url = body[i + 2:]
+    let scheme = if url.has_prefix("https://") {
+      8
+    } else if url.has_prefix("http://") {
+      7
+    } else {
+      0
+    }
+    if scheme > 0 &&
+      url.length() > scheme &&
+      !url
+      .iter()
+      .any(c => c is (' ' | '\t' | '\r' | '\n' | '\u{0B}' | '\u{0C}')) {
+      return Some(url.to_owned())
+    }
+    end = i
+  }
+  None
+}
+
+///|
+fn source_urls(result : Json) -> Set[String] {
+  let urls = Set([])
+  match result {
+    { "data": { "sources": Array(sources), .. }, .. } =>
+      for source in sources {
+        if source is { "url": String(url), .. } {
+          urls.add(url)
+        }
+      }
+    { "content": String(content), .. } =>
+      for line in content.split("\n") {
+        if bullet_url(line) is Some(url) {
+          urls.add(url)
+        }
+      }
+    _ => ()
+  }
+  urls
+}
+
+///|
+fn hostname(url : String) -> String? {
+  guard url.find("://") is Some(i) else { return None }
+  let mut authority = url[i + 3:]
+  for stop in ["/", "?", "#"] {
+    if authority.find(stop) is Some(j) {
+      authority = authority[:j]
+    }
+  }
+  if authority.rev_find("@") is Some(j) {
+    authority = authority[j + 1:]
+  }
+  if authority.find(":") is Some(j) {
+    authority = authority[:j]
+  }
+  Some(authority.to_lower().to_owned())
+}
+
+///|
+/// A provenance/format oracle, not a semantic judge of documentation quality.
+fn search_oracle(session : Session, final_message : Json) -> Bool {
+  let search_results = session.results.filter(r => {
+    r is { "tool_name": "web_search", .. }
+  })
+  for call in session.nested {
+    if call is { "name": "web_search", "result": result, .. } &&
+      result != Json::null() {
+      search_results.push(result)
+    }
+  }
+  let observed = Set([])
+  for result in search_results {
+    for url in source_urls(result) {
+      observed.add(url)
+    }
+  }
+  guard final_message is String(text) else { return false }
+  let answer = @json.parse(text) catch { _ => return false }
+  guard answer is Object(fields) && fields.length() == 2 else { return false }
+  for key, host in { "python": "docs.python.org", "rust": "doc.rust-lang.org" } {
+    guard fields.get(key) is Some(Array(urls)) &&
+      urls.length() is (1..=2) &&
+      urls.iter().all(url => url is String(_)) &&
+      Set::from_array(urls.map(url => url.stringify())).length() ==
+      urls.length() else {
+      return false
+    }
+    for url in urls {
+      guard url is String(url) &&
+        hostname(url) == Some(host) &&
+        observed.contains(url) else {
+        return false
+      }
+    }
+  }
+  let search_calls = count(session.results, r => {
+      r is { "tool_name": "web_search", .. }
+    }) +
+    count(session.nested, c => c is { "name": "web_search", .. })
+  search_calls >= 2
+}
+
+///|
+async fn analyze(
+  case : String,
+  workspace : String,
+  expected : Map[String, String],
+  exit_code : Int?,
+  require_ptc? : Bool = false,
+  session_name? : String,
+) -> Map[String, Json] {
+  let session = Session::new(session_items(workspace, session_name?))
+  let failures : Array[String] = []
+  if require_ptc &&
+    !session.nested
+    .iter()
+    .any(c => c is { "name": "edit" | "multi_edit" | "web_search", .. }) {
+    failures.push("requested PTC was not used")
+  }
+  if exit_code != Some(0) || !session.finished() {
+    failures.push("run did not finish successfully")
+  }
+  for name, content in expected {
+    if !same_bytes("\{workspace}/\{name}", content) {
+      failures.push("byte oracle failed: \{name}")
+    }
+  }
+  let final_message = session.final_message()
+  if case == "search" && !search_oracle(session, final_message) {
+    failures.push("search format/source provenance oracle failed")
+  }
+  if case == "computed_edits" {
+    let reported = match final_message {
+      String(text) =>
+        text.contains("12") &&
+        text.replace_all(old=",", new="").contains("\{computed_total()}")
+      _ => false
+    }
+    if !reported {
+      failures.push("computed summary count/sum missing")
+    }
+  }
+  let result : Map[String, Json] = {
+    "passed": failures.is_empty().to_json(),
+    "failures": failures.to_json(),
+  }
+  session.metrics(result)
+  result["interrupted_calls"] = count(session.nested, c => {
+    !(c is { "status": "done", .. })
+  }).to_json()
+  result["model_tool_output_chars"] = session.results
+    .fold(init=0, (total, r) => {
+      match r {
+        { "content": String(content), .. } => total + content.char_length()
+        _ => total
+      }
+    })
+    .to_json()
+  result["final"] = final_message
+  result
+}
+
+///|
+async fn trial(
+  engine : String,
+  out : String,
+  variant : String,
+  case : String,
+  repeat : Int,
+  timeout_s : Int,
+  require_ptc : Bool,
+) -> Json {
+  let name = "\{case}-\{repeat}-\{variant}"
+  let workspace = "\{out}/workspaces/\{name}"
+  new_directory(workspace)
+  let fixture = fixture(case, workspace)
+  fixture.stage(workspace)
+  let task = if require_ptc {
+    fixture.task +
+    "\nUse mbtx with ptc: true and the bundled tools client for the requested edits or searches."
+  } else {
+    fixture.task
+  }
+  @fs.write_file("\{workspace}/.eval-task.txt", task)
+  let command = engine_command(
+    engine,
+    workspace,
+    name,
+    "\{out}/\{variant}.md",
+    task,
+    MAX_STEPS,
+  )
+  let log = "\{out}/\{name}.log"
+  let started = @async.now()
+  let exit_code = bounded(
+    command,
+    @env.current_dir().unwrap(),
+    trial_env(workspace),
+    log,
+    timeout_s * 1000,
+  )
+  let result : Map[String, Json] = {
+    "name": name.to_json(),
+    "variant": variant.to_json(),
+    "case": case.to_json(),
+    "repeat": repeat.to_json(),
+    "seconds": seconds_since(started),
+    "exit_code": opt_int(exit_code),
+  }
+  try {
+    let analysis = analyze(
+      case,
+      workspace,
+      fixture.expected,
+      exit_code,
+      require_ptc~,
+      session_name=name,
+    )
+    for key, value in analysis {
+      result[key] = value
+    }
+  } catch {
+    error => {
+      result["passed"] = false.to_json()
+      result["failures"] = [error_message(error)].to_json()
+    }
+  }
+  result["usage"] = usage(log)
+  let result = result.to_json()
+  write_json("\{out}/\{name}.json", result)
+  println(result.stringify())
+  result
+}
+
+///|
+async fn reanalyze(out : String) -> Unit {
+  let manifest = read_json("\{out}/manifest.json")
+  let require_ptc = manifest is { "require_ptc": True, .. }
+  let results = []
+  for file in @fs.readdir(out, sort=true) {
+    guard file.has_suffix(".json") && file.split("-").count() >= 3 else {
+      continue
+    }
+    guard read_json("\{out}/\{file}")
+      is Object({ "name": String(name), "case": String(case), .. } as result) else {
+      continue
+    }
+    let workspace = "\{out}/workspaces/\{name}"
+    // Recompute expectations from the fixture definition, never reset a trial.
+    let exit_code = match result.get("exit_code") {
+      Some(Number(code, ..)) => Some(code.to_int())
+      _ => None
+    }
+    let analysis = analyze(
+      case,
+      workspace,
+      fixture(case, workspace).expected,
+      exit_code,
+      require_ptc~,
+      session_name=name,
+    )
+    for key, value in analysis {
+      result[key] = value
+    }
+    result["usage"] = usage("\{out}/\{name}.log")
+    write_json("\{out}/\{file}", result.to_json())
+    results.push(result.to_json())
+  }
+  write_json("\{out}/results.json", results.to_json())
+}
+
+///|
+/// Splice each variant's saved section over the base prompt's PTC section.
+fn splice_variants(
+  base : String,
+  sections : Map[String, String],
+) -> Map[String, String] raise {
+  guard base.find(PTC_HEADING) is Some(start) &&
+    base[start:].find("## Tool Protocol") is Some(offset) else {
+    raise Failure(
+      "the base prompt has no \"### Programmatic tool calls\" section; " +
+      "pass --base-prompt with the historical prompt that had one",
+    )
+  }
+  let end = start + offset
+  sections.map((_, section) => {
+    "\{base[:start]}\{section.trim_end()}\n\n\{base[end:]}"
+  })
+}
+
+///|
+fn run_command() -> @argparse.Command {
+  @argparse.Command(
+    "run",
+    about="Bounded PTC capability or historical prompt A/B.",
+    flags=[
+      @argparse.FlagArg(
+        "prompt-ab",
+        long="prompt-ab",
+        about="Reproduce the historical prompt-only comparison",
+      ),
+      @argparse.FlagArg("analyze-only", long="analyze-only"),
+      @argparse.FlagArg("require-ptc", long="require-ptc"),
+    ],
+    options=[
+      @argparse.OptionArg("engine", long="engine"),
+      @argparse.OptionArg("baseline-engine", long="baseline-engine"),
+      @argparse.OptionArg(
+        "base-prompt",
+        long="base-prompt",
+        about="Base system prompt as plain text (default: decode prompt/generated_default_prompt.mbt from this checkout); --prompt-ab needs one with a PTC section",
+      ),
+      @argparse.OptionArg("out", long="out", required=true),
+      @argparse.OptionArg("runs", long="runs", default_values=["3"]),
+      @argparse.OptionArg("concurrency", long="concurrency", default_values=[
+        "3",
+      ]),
+      @argparse.OptionArg(
+        "timeout",
+        long="timeout",
+        about="Seconds per trial",
+        default_values=["600"],
+      ),
+      @argparse.OptionArg(
+        "cases",
+        long="cases",
+        about="Repeat to select several of single_edit, computed_edits, search (default: all)",
+        action=Append,
+      ),
+    ],
+  )
+}
+
+///|
+async fn main_run(args : @argparse.Matches) -> Unit {
+  let out = absolute(value(args, "out").unwrap())
+  if flag(args, "analyze-only") {
+    reanalyze(out)
+    return
+  }
+  let prompt_ab = flag(args, "prompt-ab")
+  let require_ptc = flag(args, "require-ptc")
+  guard value(args, "engine") is Some(engine) else {
+    usage_error("--engine is required for live trials")
+  }
+  let baseline_engine = value(args, "baseline-engine")
+  if prompt_ab == (baseline_engine is Some(_)) {
+    usage_error(
+      "choose --baseline-engine for capability A/B, or --prompt-ab for historical prompt A/B",
+    )
+  }
+  if baseline_engine is Some(_) && require_ptc {
+    usage_error(
+      "capability A/B must leave tool choice free; do not require PTC from the baseline",
+    )
+  }
+  require_deepseek()
+  let runs = positive(args, "runs")
+  let concurrency = positive(args, "concurrency")
+  let timeout = positive(args, "timeout")
+  let cases = args.values.get("cases").unwrap_or(run_cases)
+  for case in cases {
+    guard run_cases.contains(case) else {
+      usage_error("unknown case \{case}; choose from \{run_cases.join(", ")}")
+    }
+  }
+  let base = match value(args, "base-prompt") {
+    Some(path) => read_text(path)
+    None => generated_prompt("prompt/generated_default_prompt.mbt")
+  }
+  let variants = if prompt_ab {
+    let sections : Map[String, String] = Map([])
+    for variant in ["baseline", "candidate"] {
+      sections[variant] = read_text("\{HERE}/\{variant}.md")
+    }
+    splice_variants(base, sections) catch {
+      error => usage_error(error_message(error))
+    }
+  } else {
+    { "baseline": base, "candidate": base }
+  }
+  new_directory(out)
+  // Trials create their workspaces concurrently; the shared parent comes first.
+  @fs.mkdir("\{out}/workspaces")
+  let prompt_hashes : Map[String, Json] = Map([])
+  for variant, prompt in variants {
+    @fs.write_file("\{out}/\{variant}.md", prompt)
+    prompt_hashes[variant] = sha256_hex(@utf8.encode(prompt[:])).to_json()
+  }
+  let engine = @fs.realpath(engine)
+  let engines = {
+    "candidate": engine,
+    "baseline": match baseline_engine {
+      Some(path) => @fs.realpath(path)
+      None => engine
+    },
+  }
+  let manifest : Json = {
+    "model": MODEL,
+    "experiment": if prompt_ab {
+      "prompt"
+    } else {
+      "capability"
+    },
+    "runs": runs,
+    "max_steps": MAX_STEPS,
+    "concurrency": concurrency,
+    "timeout": timeout,
+    "require_ptc": require_ptc,
+    "cases": cases.to_json(),
+    "prompt_sha256": prompt_hashes.to_json(),
+    "engine_sha256": engine_hashes(engines),
+    "commit": head_commit(),
+  }
+  write_json("\{out}/manifest.json", manifest)
+  let jobs : Array[async () -> Json] = []
+  for repeat in 1..<=runs {
+    for case in cases {
+      for variant in paired_variants(repeat) {
+        jobs.push(() => {
+          trial(
+            engines[variant],
+            out,
+            variant,
+            case,
+            repeat,
+            timeout,
+            require_ptc,
+          )
+        })
+      }
+    }
+  }
+  write_json("\{out}/results.json", run_pool(concurrency, jobs).to_json())
+}
+
+// ---------------------------------------------------------------------------
+// `yaml`: free-choice PTC A/B on a specified YAML subset; independent withheld tests
+
+///|
+const YAML_MODULE = "name = \"ptc_eval/yaml_parser\"\nversion = \"0.1.0\"\npreferred_target = \"native\"\n"
+
+///|
+/// The benchmark keeps a shorter five-second SIGTERM grace.
+const YAML_GRACE_MS = 5000
+
+///|
+let yaml_spec : String =
+  #|Implement a YAML parser in MoonBit in this workspace. Public API:
+  #|  pub fn parse(source : String) -> Json raise
+  #|The root package is ptc_eval/yaml_parser. Replace the provided stub. No external
+  #|parser, subprocess delegation, network dependency, or non-core module dependency.
+  #|Keep implementation in root-package .mbt files. You may split those files,
+  #|import MoonBit core packages, and add your own tests.
+  #|Keep moon.mod and visible_test.mbt unchanged. Run tests before finishing.
+  #|
+  #|Implement this explicit, JSON-compatible YAML subset:
+  #|- One document, optionally bracketed by --- and ... on their own lines; blank
+  #|  lines and # comments; LF or CRLF; an empty document is null. Reject extra documents.
+  #|- Plain scalars: null/Null/NULL/~ and empty values -> null; true/false in any case
+  #|  -> booleans; signed decimal integers and finite decimals/exponents -> numbers;
+  #|  other text -> strings (on/off/yes/no remain strings). Quoted scalars stay strings.
+  #|- Single quotes with doubled quote escapes; double quotes with JSON-style escapes
+  #|  including Unicode \uXXXX. Reject unterminated quotes and invalid escapes.
+  #|- Indented block mappings with string keys; block sequences; nested collections;
+  #|  sequences of mappings and mappings with sequence values. Reject tabs in indentation,
+  #|  inconsistent dedentation, duplicate mapping keys, and a mapping entry without a colon.
+  #|- Flow sequences [a, b] and mappings {key: value}, nested or empty, with quoted
+  #|  strings, comments outside quotes, and an optional trailing comma. Reject missing
+  #|  closing delimiters or a missing mapping value separator.
+  #|- # begins a comment in a plain scalar only at its start or after whitespace.
+  #|  A colon inside a plain scalar is not a mapping separator unless followed by
+  #|  whitespace or end-of-line. Preserve URLs and quoted colons/hash characters.
+  #|- Literal block scalar | and strip-chomp |-; folded scalar > and >-: consecutive
+  #|  nonblank content lines fold to spaces; a blank content line creates a newline.
+  #|  Strip common indentation. Default chomping yields one final newline; '-' none.
+  #|- Reject anchors (&name), aliases (*name), and explicit tags (!tag) rather than
+  #|  silently misinterpreting them. These features, complex keys, merge keys,
+  #|  directives, multiline quoted scalars, and non-finite numbers are outside scope.
+  #|
+  #|The supplied examples are smoke tests. Your final code will be scored against
+  #|independent withheld cases for all requirements above, including malformed input.
+  #|Implement the parser rather than special-casing examples. Use the host editing
+  #|tools to modify source, directly or from mbtx when available. Choose tools freely.
+  #|
+
+// Expected JSON values are authored against the task contract, not the candidate.
+
+///|
+let yaml_visible : Array[(String, String, Json)] = [
+  ("empty", "", null),
+  ("mapping", "name: moon\ncount: 3\n", { "name": "moon", "count": 3 }),
+  ("sequence", "- red\n- blue\n", ["red", "blue"]),
+  ("nested", "outer:\n  inner: true\n", { "outer": { "inner": true } }),
+  (
+    "quoted",
+    "a: 'it''s fine'\nb: \"line\\nnext\"\n",
+    { "a": "it's fine", "b": "line\nnext" },
+  ),
+  ("flow", "{a: [1, false, null], b: {}}", { "a": [1, false, null], "b": {} }),
+]
+
+///|
+let yaml_cases : Array[(String, String, Json)] = [
+  ("comments_document", "# prelude\n---\na: 1 # note\n...\n# end\n", { "a": 1 }),
+  ("crlf", "a:\r\n  - x\r\n  - y\r\n", { "a": ["x", "y"] }),
+  ("null_forms", "[null, Null, NULL, ~]", [null, null, null, null]),
+  (
+    "boolean_strings",
+    "[TRUE, False, true, fAlSe, on, off, yes, no]",
+    [true, false, true, false, "on", "off", "yes", "no"],
+  ),
+  (
+    "numbers",
+    "[0, -12, +7, 1.25, -0.5, 2e3, 3E-2]",
+    [0, -12, 7, 1.25, -0.5, 2000, 0.03],
+  ),
+  ("quoted_types", "[\"true\", '42', \"null\"]", ["true", "42", "null"]),
+  ("empty_values", "a:\nb: ~\nc: null\n", { "a": null, "b": null, "c": null }),
+  (
+    "plain_hash",
+    "a: hello#world\nb: hello # gone\nc: \"# kept\"\n",
+    { "a": "hello#world", "b": "hello", "c": "# kept" },
+  ),
+  (
+    "url",
+    "url: https://example.test/a#frag\ntime: 12:34\n",
+    { "url": "https://example.test/a#frag", "time": "12:34" },
+  ),
+  (
+    "quoted_keys",
+    "\"a:b\": \"x:y#z\"\n' spaced key ': yes\n",
+    { "a:b": "x:y#z", " spaced key ": "yes" },
+  ),
+  (
+    "unicode_escape",
+    "value: \"\\u4e2d\\u6587\\t!\"\n",
+    { "value": "中文\t!" },
+  ),
+  ("quote_escapes", "value: \"a\\\"b\\\\c\\/d\"\n", { "value": "a\"b\\c/d" }),
+  (
+    "nested_blocks",
+    "root:\n  items:\n    - one\n    - two\n  enabled: false\nend: done\n",
+    { "root": { "items": ["one", "two"], "enabled": false }, "end": "done" },
+  ),
+  (
+    "sequence_maps",
+    "- name: alpha\n  value: 1\n- name: beta\n  value: 2\n",
+    [{ "name": "alpha", "value": 1 }, { "name": "beta", "value": 2 }],
+  ),
+  (
+    "sequence_nested_map",
+    "- name: a\n  child:\n    x: 2\n- name: b\n",
+    [{ "name": "a", "child": { "x": 2 } }, { "name": "b" }],
+  ),
+  ("nested_sequences", "-\n  - a\n  - b\n-\n  - c\n", [["a", "b"], ["c"]]),
+  (
+    "flow_nested",
+    "{a: [1, {b: [2, 3]}], c: []}",
+    { "a": [1, { "b": [2, 3] }], "c": [] },
+  ),
+  ("flow_trailing", "[one, {two: 2,},]", ["one", { "two": 2 }]),
+  (
+    "flow_quoted_punctuation",
+    "[\"a,b\", '[x]', {\"k:k\": \"v}v\"}]",
+    ["a,b", "[x]", { "k:k": "v}v" }],
+  ),
+  ("flow_comments", "[1, # comment\n 2, 3]", [1, 2, 3]),
+  (
+    "literal",
+    "text: |\n  alpha\n  beta\nnext: 1\n",
+    { "text": "alpha\nbeta\n", "next": 1 },
+  ),
+  ("literal_strip", "text: |-\n  alpha\n  beta\n", { "text": "alpha\nbeta" }),
+  ("folded", "text: >\n  alpha\n  beta\n", { "text": "alpha beta\n" }),
+  (
+    "folded_paragraph",
+    "text: >-\n  alpha\n\n  beta\n  gamma\n",
+    { "text": "alpha\nbeta gamma" },
+  ),
+  ("literal_hash", "text: |\n  # keep\n  a: b\n", { "text": "# keep\na: b\n" }),
+  ("empty_flow", "{a: {}, b: []}", { "a": {}, "b": [] }),
+  ("scalar_document", "---\nhello world\n...\n", "hello world"),
+  (
+    "indent_four",
+    "a:\n    b:\n        c: 9\nd: 8\n",
+    { "a": { "b": { "c": 9 } }, "d": 8 },
+  ),
+  ("plain_spaces", "text: a  b c\n", { "text": "a  b c" }),
+  (
+    "comments_between",
+    "a:\n  # note\n  b: 1\n\n# outer\nc: 2\n",
+    { "a": { "b": 1 }, "c": 2 },
+  ),
+]
+
+///|
+let yaml_invalid : Array[(String, String)] = [
+  ("unclosed_double", "a: \"oops"),
+  ("unclosed_single", "a: 'oops"),
+  ("invalid_escape", "a: \"\\q\""),
+  ("short_unicode", "a: \"\\u12\""),
+  ("unclosed_sequence", "[1, 2"),
+  ("unclosed_mapping", "{a: 1"),
+  ("missing_flow_colon", "{a 1}"),
+  ("duplicate_block_key", "a: 1\na: 2\n"),
+  ("duplicate_flow_key", "{a: 1, a: 2}"),
+  ("tab_indent", "a:\n\tb: 1\n"),
+  ("bad_dedent", "a:\n    b: 1\n  c: 2\n"),
+  ("missing_block_colon", "a: 1\nbroken line\n"),
+  ("multiple_documents", "---\na: 1\n---\nb: 2\n"),
+  ("anchor", "a: &thing 1\n"),
+  ("alias", "a: *thing\n"),
+  ("tag", "a: !custom value\n"),
+]
+
+///|
+fn yaml_tests(
+  cases : Array[(String, String, Json)],
+  invalid? : Array[(String, String)] = [],
+  prefix? : String = "oracle",
+) -> String {
+  let blocks = []
+  for case in cases {
+    let (name, source, expected) = case
+    blocks.push(
+      "///|\ntest \"\{prefix}:\{name}\" {\n  assert_eq(@yaml_parser.parse(\{source.to_json().stringify()}), (\{expected.stringify()} : Json))\n}\n",
+    )
+  }
+  for case in invalid {
+    let (name, source) = case
+    blocks.push(
+      "///|\ntest \"\{prefix}:\{name}\" {\n  let rejected = try { ignore(@yaml_parser.parse(\{source.to_json().stringify()})); false } catch { _ => true }\n  assert_true(rejected)\n}\n",
+    )
+  }
+  blocks.join("\n")
+}
+
+///|
+fn visible_tests() -> String {
+  yaml_tests(yaml_visible, prefix="visible")
+}
+
+///|
+async fn yaml_fixture(workspace : String) -> Unit {
+  new_directory(workspace)
+  @fs.write_file("\{workspace}/moon.mod", YAML_MODULE)
+  @fs.write_file("\{workspace}/moon.pkg", "")
+  @fs.write_file(
+    "\{workspace}/parse.mbt",
+    "///|\npub fn parse(source : String) -> Json raise {\n  ignore(source)\n  fail(\"Parser not implemented\")\n}\n",
+  )
+  @fs.write_file("\{workspace}/visible_test.mbt", visible_tests())
+  @fs.write_file("\{workspace}/TASK.md", yaml_spec)
+}
+
+///|
+/// Rebuild moon.pkg from the candidate's core imports only.
+///
+/// A package manifest can carry build rules that run shell commands before
+/// `moon test`; none of that reaches the grading project. Only quoted
+/// moonbitlang/core or moonbitlang/x imports (optionally aliased) inside
+/// `import { ... }` blocks survive, however they are laid out; comments are
+/// stripped first so a commented-out entry is not resurrected.
+fn trusted_manifest(candidate : String) -> String {
+  let uncommented = candidate
+    .split("\n")
+    .map(line => {
+      match line.find("//") {
+        Some(i) => line[:i]
+        None => line
+      }
+    })
+    .map(line => line.to_owned())
+    .collect()
+    .join("\n")
+  let imports : Array[String] = []
+  let mut rest = uncommented[:]
+  while import_block(rest) is Some((block, after)) {
+    rest = after
+    for entry in core_imports(block) {
+      if !imports.contains(entry) {
+        imports.push(entry)
+      }
+    }
+  }
+  if imports.is_empty() {
+    return ""
+  }
+  "import {\n\{imports.map(entry => "  \{entry},\n").join("")}}\n"
+}
+
+///|
+fn is_word_char(c : Char) -> Bool {
+  c is ('a'..='z' | 'A'..='Z' | '0'..='9' | '_')
+}
+
+///|
+/// The next `import { ... }` block (`import` as a whole word) and the text after it.
+fn import_block(text : StringView) -> (StringView, StringView)? {
+  let mut from = 0
+  while text[from:].find("import") is Some(offset) {
+    let start = from + offset
+    from = start + 6
+    if start > 0 && is_word_char(text[start - 1:start].get_char(0).unwrap()) {
+      continue
+    }
+    let after = text[from:].trim_start()
+    guard after.strip_prefix("{") is Some(body) else { continue }
+    guard body.find("}") is Some(close) else { return None }
+    return Some((body[:close], body[close + 1:]))
+  }
+  None
+}
+
+///|
+/// Quoted `moonbitlang/core/...` or `moonbitlang/x/...` paths, each with an
+/// optional `@alias` right after it.
+fn core_imports(block : StringView) -> Array[String] {
+  let entries = []
+  let mut rest = block
+  while rest.find("\"") is Some(open) {
+    let quoted = rest[open + 1:]
+    guard quoted.find("\"") is Some(close) else { break }
+    let path = quoted[:close]
+    rest = quoted[close + 1:]
+    guard (
+        path.has_prefix("moonbitlang/core/") ||
+        path.has_prefix("moonbitlang/x/")
+      ) &&
+      path.length() > (if path.has_prefix("moonbitlang/x/") { 14 } else { 17 }) &&
+      path.iter().all(c => is_word_char(c) || c == '/') else {
+      continue
+    }
+    let alias_suffix = {
+      let after = rest.trim_start()
+      match after.strip_prefix("@") {
+        Some(name) if name.get_char(0) is Some('a'..='z' | '_') => {
+          let mut len = 0
+          while len < name.length() &&
+                name.get_char(len) is Some('a'..='z' | '0'..='9' | '_') {
+            len += 1
+          }
+          " @\{name[:len]}"
+        }
+        _ => ""
+      }
+    }
+    entries.push("\"\{path}\"\{alias_suffix}")
+  }
+  entries
+}
+
+///|
+/// Grading runs without any credential in its environment.
+fn grading_env() -> Map[String, String] {
+  let markers = [
+    "DEEPSEEK", "OPENAI", "ANTHROPIC", "KEY", "TOKEN", "SECRET", "PASSWORD",
+  ]
+  let env = @env.get_env_vars()
+  for key in env.keys().collect() {
+    let upper = key.to_upper()
+    if markers.iter().any(marker => upper.contains(marker)) {
+      env.remove(key)
+    }
+  }
+  env
+}
+
+///|
+/// The runner behind the engine and the grader, replaceable in tests.
+type Runner = async (Array[String], String, Map[String, String], String, Int) -> Int?
+
+///|
+async fn yaml_bounded(
+  command : Array[String],
+  cwd : String,
+  env : Map[String, String],
+  log : String,
+  timeout_ms : Int,
+) -> Int? {
+  bounded(command, cwd, env, log, timeout_ms, grace_ms=YAML_GRACE_MS)
+}
+
+///|
+/// The last `Total tests: N, passed: P, failed: F.` summary: `Some(P)`.
+fn passed_count(text : String) -> Int? {
+  guard text.rev_find("Total tests: ") is Some(start) else { return None }
+  let summary = text[start:]
+  guard summary.find(", passed: ") is Some(p) else { return None }
+  let digits = summary[p + 10:]
+  let mut len = 0
+  while digits.get_char(len) is Some('0'..='9') {
+    len += 1
+  }
+  guard len > 0 && digits[len:].has_prefix(", failed: ") else { return None }
+  Some(@string.parse_int(digits[:len])) catch {
+    _ => None
+  }
+}
+
+///|
+/// Names from `("oracle:NAME") failed:` lines in a `moon test` log.
+fn oracle_failures(text : String) -> Array[String] {
+  let names = []
+  let mut rest = text[:]
+  while rest.find("(\"oracle:") is Some(start) {
+    rest = rest[start + 9:]
+    guard rest.find("\"") is Some(close) else { break }
+    if close > 0 && rest[close:].has_prefix("\") failed:") {
+      names.push(rest[:close].to_owned())
+    }
+  }
+  names
+}
+
+///|
+async fn score(
+  workspace : String,
+  grading : String,
+  log : String,
+  runner? : Runner = yaml_bounded,
+) -> Map[String, Json] {
+  @fs.mkdir(grading)
+  // Only root-package implementation and its core imports enter the trusted
+  // grading project. Candidate tests, manifests and build scripts do not.
+  for file in @fs.readdir(workspace, include_hidden=true) {
+    if file.has_suffix(".mbt") &&
+      !file.has_suffix("_test.mbt") &&
+      !file.has_suffix("_wbtest.mbt") {
+      @fs.write_file(
+        "\{grading}/\{file}",
+        @fs.read_file("\{workspace}/\{file}"),
+      )
+    }
+  }
+  @fs.write_file(
+    "\{grading}/moon.pkg",
+    trusted_manifest(read_text("\{workspace}/moon.pkg")),
+  )
+  @fs.write_file("\{grading}/moon.mod", YAML_MODULE)
+  @fs.write_file(
+    "\{grading}/oracle_test.mbt",
+    yaml_tests(yaml_cases, invalid=yaml_invalid),
+  )
+  let code = runner(
+    ["moon", "test", "--target", "native", "--filter", "oracle:*"],
+    grading,
+    grading_env(),
+    log,
+    120_000,
+  )
+  let text = read_text(log)
+  let passed = passed_count(text)
+  let failures = oracle_failures(text)
+  let failed_among = (names : Array[(String, String)]) => {
+    failures.iter().filter(f => names.iter().any(n => n.0 == f)).count()
+  }
+  let valid = yaml_cases.map(c => (c.0, c.1))
+  {
+    "oracle_passed": passed.unwrap_or(0).to_json(),
+    "oracle_total": (yaml_cases.length() + yaml_invalid.length()).to_json(),
+    "oracle_exit_code": opt_int(code),
+    "oracle_failures": failures.to_json(),
+    "valid_passed": (if passed is Some(_) {
+      yaml_cases.length() - failed_among(valid)
+    } else {
+      0
+    }).to_json(),
+    "invalid_passed": (if passed is Some(_) {
+      yaml_invalid.length() - failed_among(yaml_invalid)
+    } else {
+      0
+    }).to_json(),
+    "compile_or_harness_error": (passed is None).to_json(),
+    // Byte-exact: a candidate that only rewrote line endings changed protected bytes.
+    "preserved_fixture": (same_bytes("\{workspace}/moon.mod", YAML_MODULE) &&
+    same_bytes("\{workspace}/visible_test.mbt", visible_tests())).to_json(),
+  }
+}
+
+///|
+async fn yaml_trial(
+  engine : String,
+  out : String,
+  variant : String,
+  repeat : Int,
+  timeout_s : Int,
+  max_steps : Int,
+  runner? : Runner = yaml_bounded,
+  analyze? : async (String, String, Int, Json) -> Json = yaml_analyze_trial,
+) -> Json {
+  let name = "yaml-\{repeat}-\{variant}"
+  let workspace = "\{out}/workspaces/\{name}"
+  yaml_fixture(workspace)
+  let log = "\{out}/\{name}.log"
+  let command = engine_command(
+    engine,
+    workspace,
+    name,
+    "\{out}/\{variant}.md",
+    "Read TASK.md and implement the requested YAML parser completely.",
+    max_steps,
+  )
+  let started = @async.now()
+  let code = runner(
+    command,
+    @env.current_dir().unwrap(),
+    trial_env(workspace),
+    log,
+    timeout_s * 1000,
+  )
+  let execution : Json = {
+    "name": name,
+    "variant": variant,
+    "repeat": repeat,
+    "seconds": seconds_since(started),
+    "exit_code": opt_int(code),
+  }
+  // Checkpoint execution before grading so a scoring error cannot discard it.
+  write_json("\{out}/\{name}-execution.json", execution)
+  let result = analyze(out, variant, repeat, execution)
+  println(result.stringify())
+  result
+}
+
+///|
+/// Execution facts of a trial run by an older runner without a checkpoint.
+async fn recovered_execution(
+  out : String,
+  name : String,
+  variant : String,
+  repeat : Int,
+) -> Json {
+  let checkpoint = "\{out}/\{name}-execution.json"
+  if @fs.exists(checkpoint) {
+    return read_json(checkpoint)
+  }
+  let previous = "\{out}/\{name}.json"
+  if @fs.exists(previous) {
+    guard read_json(previous) is Object(fields) else { return Json::null() }
+    let execution : Map[String, Json] = Map([])
+    for
+      key in [
+        "name", "variant", "repeat", "exit_code", "seconds", "exit_code_unrecorded",
+        "seconds_source",
+      ] {
+      if fields.get(key) is Some(value) {
+        execution[key] = value
+      }
+    }
+    return execution.to_json()
+  }
+  // Recovery for the original reader's child-session ambiguity. Keep OS exit
+  // status unavailable and label reconstructed timing.
+  let log = "\{out}/\{name}.log"
+  // Only macOS `stat` reports a birth time; elsewhere the timing is unavailable.
+  let (modified, _) = @fs.mtime(log)
+  let birth = @shell.Cmd("stat", ["-f", "%B", log], stderr=Discard).output()
+  let born = if birth.exit_code() == 0 {
+    @string.parse_int64(birth.stdout().trim()) catch {
+      _ => -1L
+    }
+  } else {
+    -1L
+  }
+  let (seconds, source) : (Json, String) = if born >= 0L {
+    (
+      (modified - born).to_double().to_json(),
+      "log creation to last write; excludes silent waits",
+    )
+  } else {
+    (Json::null(), "unavailable without execution checkpoint")
+  }
+  {
+    "name": name,
+    "variant": variant,
+    "repeat": repeat,
+    "exit_code": null,
+    "exit_code_unrecorded": true,
+    "seconds": seconds,
+    "seconds_source": source,
+  }
+}
+
+///|
+async fn yaml_analyze_trial(
+  out : String,
+  variant : String,
+  repeat : Int,
+  execution : Json,
+) -> Json {
+  let name = "yaml-\{repeat}-\{variant}"
+  let workspace = "\{out}/workspaces/\{name}"
+  let log = "\{out}/\{name}.log"
+  let result : Map[String, Json] = match execution {
+    Object(fields) => fields.copy()
+    _ => {}
+  }
+  let session = Session::new(session_items(workspace, session_name=name))
+  session.metrics(result)
+  result["final"] = session.terminals.last().unwrap_or(Json::null())
+  result["usage"] = usage(log)
+  let children = []
+  @fs.walk(workspace, (directory, entries) => {
+    for entry in entries {
+      if entry.has_prefix("openseek_session-\{name}-sr-") &&
+        entry.has_suffix(".jsonl") {
+        children.push("\{directory}/\{entry}")
+      }
+    }
+  })
+  let mut child_steps = 0
+  for child in children {
+    for line in read_text(child).split("\n") {
+      if line.trim() != "" &&
+        @json.parse(line.to_owned())
+        is { "item": { "kind": "assistant", .. }, .. } {
+        child_steps += 1
+      }
+    }
+  }
+  result["child_sessions"] = children.length().to_json()
+  result["child_steps"] = child_steps.to_json()
+  result["usage_scope"] = (if children.is_empty() {
+    "parent (no children)"
+  } else {
+    "parent only; child token usage unavailable"
+  }).to_json()
+  let mut grading = "\{out}/\{name}-grading"
+  let mut suffix = 1
+  while @fs.exists(grading) {
+    suffix += 1
+    grading = "\{out}/\{name}-grading-\{suffix}"
+  }
+  for key, value in score(workspace, grading, "\{grading}.log") {
+    result[key] = value
+  }
+  result["passed"] = (result.get("oracle_passed") == result.get("oracle_total") &&
+  result.get("preserved_fixture") == Some(true) &&
+  result.get("oracle_exit_code") == Some(0) &&
+  result.get("exit_code") == Some(0) &&
+  session.finished()).to_json()
+  let result = result.to_json()
+  write_json("\{out}/\{name}.json", result)
+  result
+}
+
+///|
+fn yaml_command() -> @argparse.Command {
+  @argparse.Command(
+    "yaml",
+    about="Free-choice PTC A/B on a specified YAML subset; independent withheld tests.",
+    flags=[@argparse.FlagArg("analyze-only", long="analyze-only")],
+    options=[
+      @argparse.OptionArg("baseline-engine", long="baseline-engine"),
+      @argparse.OptionArg("engine", long="engine"),
+      @argparse.OptionArg("out", long="out", required=true),
+      @argparse.OptionArg("runs", long="runs", default_values=["2"]),
+      @argparse.OptionArg("concurrency", long="concurrency", default_values=[
+        "2",
+      ]),
+      @argparse.OptionArg(
+        "timeout",
+        long="timeout",
+        about="Seconds per trial",
+        default_values=["1800"],
+      ),
+      @argparse.OptionArg("max-steps", long="max-steps", default_values=["128"]),
+    ],
+  )
+}
+
+///|
+async fn main_yaml(args : @argparse.Matches) -> Unit {
+  let out = absolute(value(args, "out").unwrap())
+  if flag(args, "analyze-only") {
+    guard read_json("\{out}/manifest.json") is { "runs": Number(runs, ..), .. } else {
+      raise Failure("manifest.json has no runs")
+    }
+    let results = []
+    for repeat in 1..<=runs.to_int() {
+      for variant in ["baseline", "candidate"] {
+        let name = "yaml-\{repeat}-\{variant}"
+        results.push(
+          yaml_analyze_trial(
+            out,
+            variant,
+            repeat,
+            recovered_execution(out, name, variant, repeat),
+          ),
+        )
+      }
+    }
+    write_json("\{out}/results.json", results.to_json())
+    return
+  }
+  guard value(args, "engine") is Some(engine) &&
+    value(args, "baseline-engine") is Some(baseline_engine) else {
+    usage_error("both engines are required for live trials")
+  }
+  require_deepseek()
+  let runs = positive(args, "runs")
+  let concurrency = positive(args, "concurrency")
+  let timeout = positive(args, "timeout")
+  let max_steps = positive(args, "max-steps")
+  new_directory(out)
+  // Trials create their workspaces concurrently; the shared parent comes first.
+  @fs.mkdir("\{out}/workspaces")
+  let prompt = generated_prompt("prompt/generated_default_prompt.mbt")
+  let engines = {
+    "baseline": @fs.realpath(baseline_engine),
+    "candidate": @fs.realpath(engine),
+  }
+  for variant, _ in engines {
+    @fs.write_file("\{out}/\{variant}.md", prompt)
+  }
+  let manifest : Json = {
+    "experiment": "yaml-parser-capability",
+    "model": MODEL,
+    "runs": runs,
+    "max_steps": max_steps,
+    "timeout": timeout,
+    "concurrency": concurrency,
+    "visible_cases": yaml_visible.length(),
+    "withheld_cases": yaml_cases.length() + yaml_invalid.length(),
+    "prompt_sha256": sha256_hex(@utf8.encode(prompt[:])),
+    "spec_sha256": sha256_hex(@utf8.encode(yaml_spec[:])),
+    "oracle_sha256": sha256_hex(
+      @utf8.encode(yaml_tests(yaml_cases, invalid=yaml_invalid)[:]),
+    ),
+    "engine_sha256": engine_hashes(engines),
+    "commit": head_commit(),
+  }
+  write_json("\{out}/manifest.json", manifest)
+  let jobs : Array[async () -> Json] = []
+  for repeat in 1..<=runs {
+    for variant in paired_variants(repeat) {
+      jobs.push(() => {
+        yaml_trial(engines[variant], out, variant, repeat, timeout, max_steps)
+      })
+    }
+  }
+  write_json("\{out}/results.json", run_pool(concurrency, jobs).to_json())
+}
+
+// ---------------------------------------------------------------------------
+// Command line
+
+///|
+fn flag(args : @argparse.Matches, name : String) -> Bool {
+  args.flags.get(name).unwrap_or(false)
+}
+
+///|
+fn value(args : @argparse.Matches, name : String) -> String? {
+  match args.values.get(name) {
+    Some([.., last]) => Some(last)
+    _ => None
+  }
+}
+
+///|
+fn[T] usage_error(message : String) -> T raise {
+  raise Failure("error: \{message}")
+}
+
+///|
+fn positive(args : @argparse.Matches, name : String) -> Int raise {
+  let text = value(args, name).unwrap()
+  let number = @string.parse_int(text) catch {
+    _ => raise Failure("error: --\{name} must be an integer, got \{text}")
+  }
+  guard number > 0 else { raise Failure("error: --\{name} must be positive") }
+  number
+}
+
+///|
+fn require_deepseek() -> Unit raise {
+  guard @env.get_env_var("DEEPSEEK") is Some(key) && key != "" else {
+    usage_error("export DEEPSEEK before running this live evaluation")
+  }
+}
+
+///|
+async fn main {
+  guard @fs.exists("\{HERE}/baseline.md") &&
+    @fs.exists("prompt/generated_default_prompt.mbt") else {
+    fail("Run this script from the OpenSeek repository root")
+  }
+  let command = @argparse.Command(
+    "ptc_eval",
+    about="Bounded live PTC evaluations. Credentials are inherited, never recorded.",
+    subcommands=[run_command(), yaml_command()],
+    subcommand_required=true,
+  )
+  let args = command.parse(argv=@env.args()[1:])
+  match args.subcommand {
+    Some(("run", matches)) => main_run(matches)
+    Some(("yaml", matches)) => main_yaml(matches)
+    _ => println(command.render_help())
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Offline checks: the live eval cannot pass by merely claiming success, and
+// the benchmark stays isolated. No model calls.
+
+///|
+async fn with_workspace(body : async (String) -> Unit) -> Unit {
+  let workspace = @fs.tmpdir(prefix="ptc-eval-")
+  defer @fs.rmdir(workspace, recursive=true)
+  body(workspace)
+}
+
+///|
+async fn write_session(
+  workspace : String,
+  answer : String,
+  results? : Array[Json] = [],
+) -> Unit {
+  let items : Array[Json] = results.map(r => {
+    "kind": "tool_result",
+    "payload": r,
+  })
+  items.push({
+    "kind": "terminal",
+    "payload": { "kind": "finished", "message": answer.to_json() },
+  })
+  @fs.write_file(
+    "\{workspace}/openseek_session-test.jsonl",
+    items.map(item => ({ "item": item } : Json).stringify()).join("\n"),
+  )
+}
+
+///|
+async fn staged(case : String, workspace : String) -> Map[String, String] {
+  let fixture = fixture(case, workspace)
+  fixture.stage(workspace)
+  fixture.expected
+}
+
+///|
+async fn passes(
+  case : String,
+  workspace : String,
+  expected : Map[String, String],
+  require_ptc? : Bool = false,
+) -> Bool {
+  analyze(case, workspace, expected, Some(0), require_ptc~).get("passed") ==
+  Some(true)
+}
+
+///|
+test "historical prompt A/B splices only the PTC section" {
+  let base = "before\n### Programmatic tool calls\ncurrent SDK guidance\n## Tool Protocol\nafter"
+  let variants = splice_variants(base, {
+    "baseline": "old\n",
+    "candidate": "new  \n",
+  })
+  assert_eq(variants["baseline"], "before\nold\n\n## Tool Protocol\nafter")
+  assert_eq(variants["candidate"], "before\nnew\n\n## Tool Protocol\nafter")
+  let refused = try {
+    ignore(splice_variants("no section here", { "baseline": "old" }))
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(refused)
+}
+
+///|
+async test "named parent session excludes review children" {
+  with_workspace(workspace => {
+    write_session(workspace, "parent done")
+    @fs.write_file(
+      "\{workspace}/openseek_session-test-sr-1.jsonl",
+      (
+        {
+          "item": { "kind": "terminal", "payload": { "message": "child done" } },
+        } : Json).stringify() +
+      "\n",
+    )
+    let ambiguous = try {
+      ignore(session_items(workspace))
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(ambiguous)
+    let items = session_items(workspace, session_name="test")
+    assert_true(
+      items.last() is Some({ "payload": { "message": "parent done", .. }, .. }),
+    )
+  })
+}
+
+///|
+async test "claim without edit fails" {
+  with_workspace(workspace => {
+    let expected = staged("single_edit", workspace)
+    write_session(workspace, "Done")
+    assert_false(passes("single_edit", workspace, expected))
+  })
+}
+
+///|
+async test "correct edit passes but a protected file change fails" {
+  with_workspace(workspace => {
+    let expected = staged("single_edit", workspace)
+    @fs.write_file("\{workspace}/note.txt", expected["note.txt"])
+    write_session(workspace, "Done")
+    assert_true(passes("single_edit", workspace, expected))
+    @fs.write_file("\{workspace}/keep.txt", "changed")
+    assert_false(passes("single_edit", workspace, expected))
+  })
+}
+
+///|
+async test "computed oracle requires every file and the summary" {
+  with_workspace(workspace => {
+    let expected = staged("computed_edits", workspace)
+    for name, content in expected {
+      @fs.write_file("\{workspace}/\{name}", content)
+    }
+    write_session(workspace, "Updated 12 files; total \{computed_total()}")
+    assert_true(passes("computed_edits", workspace, expected))
+    write_session(workspace, "Updated 12 files")
+    assert_false(passes("computed_edits", workspace, expected))
+  })
+}
+
+///|
+let python_doc = "https://docs.python.org/3/library/asyncio-task.html"
+
+///|
+let rust_doc = "https://doc.rust-lang.org/std/thread/fn.scope.html"
+
+///|
+async test "search requires observed urls" {
+  with_workspace(workspace => {
+    let expected = staged("search", workspace)
+    let answer : Json = { "python": [python_doc], "rust": [rust_doc] }
+    write_session(workspace, answer.stringify())
+    assert_false(passes("search", workspace, expected))
+    let search = (tool : String) => {
+      [python_doc, rust_doc].map(url => {
+        (
+          {
+            "tool_name": tool,
+            "content": url,
+            "is_error": false,
+            "data": { "sources": [{ "url": url }] },
+          } : Json)
+      })
+    }
+    write_session(workspace, answer.stringify(), results=search("mbtx"))
+    assert_false(passes("search", workspace, expected))
+    write_session(workspace, answer.stringify(), results=search("web_search"))
+    assert_true(passes("search", workspace, expected))
+  })
+}
+
+///|
+async test "baseline search bullets have equivalent provenance" {
+  with_workspace(workspace => {
+    let expected = staged("search", workspace)
+    let answer : Json = { "python": [python_doc], "rust": [rust_doc] }
+    let results = [python_doc, rust_doc].map(url => {
+      (
+        {
+          "tool_name": "web_search",
+          "content": "Sources:\n- [Official](\{url})\n",
+          "is_error": false,
+        } : Json)
+    })
+    write_session(workspace, answer.stringify(), results~)
+    assert_true(passes("search", workspace, expected))
+  })
+  assert_eq(
+    source_urls({ "content": "Unobserved https://docs.python.org/" }).length(),
+    0,
+  )
+  assert_eq(
+    source_urls({
+      "content": "- [a](https://x.test/1)",
+      "data": { "sources": [] },
+    }).length(),
+    0,
+  )
+}
+
+///|
+test "bullet urls match the whole line" {
+  assert_eq(bullet_url("- [t](https://a.test/x)"), Some("https://a.test/x"))
+  assert_eq(
+    bullet_url("- [see [x](y)](https://a.test/x)"),
+    Some("https://a.test/x"),
+  )
+  assert_eq(bullet_url("- [t](https://a.test/x) tail"), None)
+  assert_eq(bullet_url("- [t](https://a b)"), None)
+  assert_eq(bullet_url("- [t](https://)"), None)
+  assert_eq(bullet_url("- [t](ftp://a.test)"), None)
+  assert_eq(
+    hostname("https://user@Docs.Python.org:443/3/"),
+    Some("docs.python.org"),
+  )
+}
+
+///|
+async test "byte oracle rejects changed line endings" {
+  with_workspace(workspace => {
+    let expected = staged("single_edit", workspace)
+    @fs.write_file(
+      "\{workspace}/note.txt",
+      expected["note.txt"].replace_all(old="\n", new="\r\n"),
+    )
+    write_session(workspace, "Done")
+    assert_false(passes("single_edit", workspace, expected))
+  })
+}
+
+///|
+async test "required PTC cannot pass with only correct files" {
+  with_workspace(workspace => {
+    let expected = staged("single_edit", workspace)
+    @fs.write_file("\{workspace}/note.txt", expected["note.txt"])
+    write_session(workspace, "Done")
+    assert_false(passes("single_edit", workspace, expected, require_ptc=true))
+  })
+}
+
+///|
+async test "nested errors and interruption are counted" {
+  with_workspace(workspace => {
+    let expected = staged("single_edit", workspace)
+    write_session(workspace, "done", results=[
+      {
+        "tool_name": "mbtx",
+        "content": "failed",
+        "is_error": true,
+        "data": {
+          "ptc_calls": [
+            { "name": "edit", "status": "interrupted" },
+            { "name": "edit", "status": "done", "result": { "is_error": true } },
+          ],
+        },
+      },
+    ])
+    let result = analyze("single_edit", workspace, expected, Some(0))
+    assert_eq(
+      (
+        result["nested_calls"],
+        result["nested_errors"],
+        result["interrupted_calls"],
+        result["tool_errors"],
+      ),
+      (2, 1, 1, 1),
+    )
+  })
+}
+
+///|
+async fn run_shell(
+  workspace : String,
+  script : String,
+  timeout_ms : Int,
+  grace_ms? : Int = 10000,
+) -> (Int?, String) {
+  let log = "\{workspace}/run.log"
+  let code = bounded(
+    ["sh", "-c", script],
+    workspace,
+    @env.get_env_vars(),
+    log,
+    timeout_ms,
+    grace_ms~,
+  )
+  (code, read_text(log))
+}
+
+///|
+async test "bounded returns the exit code and output within the timeout" {
+  with_workspace(workspace => {
+    assert_eq(
+      run_shell(workspace, "echo done; exit 3", 30_000),
+      (Some(3), "done\n"),
+    )
+  })
+}
+
+///|
+async test "bounded timeout terminates the process tree" {
+  with_workspace(workspace => {
+    let started = @async.now()
+    assert_eq(
+      run_shell(workspace, "echo up; sleep 60", 500, grace_ms=5000),
+      (None, "up\n"),
+    )
+    assert_true(@async.now() - started < 5000L)
+  })
+}
+
+///|
+async test "bounded grace expiry kills a process tree that ignores SIGTERM" {
+  with_workspace(workspace => {
+    let started = @async.now()
+    let result = run_shell(
+      workspace,
+      "trap '' TERM; echo up; sleep 60",
+      500,
+      grace_ms=500,
+    )
+    assert_eq(result, (None, "up\n"))
+    assert_true(@async.now() - started < 10000L)
+  })
+}
+
+///|
+async test "yaml execution checkpoint survives analysis failure" {
+  with_workspace(root => {
+    let runner : Runner = (command, _, _, _, timeout_ms) => {
+      assert_true(command.contains("--max-steps") && command.contains("128"))
+      assert_eq(timeout_ms, 1_800_000)
+      Some(0)
+    }
+    let failed = try {
+      ignore(
+        yaml_trial("/fake/engine", root, "candidate", 1, 1800, 128, runner~, analyze=(
+          _,
+          _,
+          _,
+          _,
+        ) => raise Failure("analysis failed")),
+      )
+      None
+    } catch {
+      error => Some(error_message(error))
+    }
+    assert_eq(failed, Some("analysis failed"))
+    let checkpoint = read_json("\{root}/yaml-1-candidate-execution.json")
+    assert_true(
+      checkpoint is { "exit_code": 0, "seconds": Number(seconds, ..), .. } &&
+      seconds >= 0.0,
+    )
+  })
+}
+
+///|
+async test "yaml fixture contains only visible tests" {
+  with_workspace(root => {
+    let workspace = "\{root}/workspace"
+    yaml_fixture(workspace)
+    assert_eq(@fs.readdir(workspace, include_hidden=true, sort=true), [
+      "TASK.md", "moon.mod", "moon.pkg", "parse.mbt", "visible_test.mbt",
+    ])
+    assert_false(read_text("\{workspace}/visible_test.mbt").contains("oracle:"))
+    let names = [..yaml_cases.map(c => c.0), ..yaml_invalid.map(c => c.0)]
+    assert_eq(names.length(), 46)
+    assert_eq(Set::from_array(names).length(), 46)
+  })
+}
+
+///|
+fn fake_grader(log_text : String) -> Runner {
+  (_, _, _, log, _) => {
+    @fs.write_file(log, log_text)
+    Some(0)
+  }
+}
+
+///|
+async test "grading excludes candidate tests and uses a trusted manifest" {
+  with_workspace(root => {
+    let (workspace, grading) = ("\{root}/workspace", "\{root}/grading")
+    yaml_fixture(workspace)
+    @fs.write_file("\{workspace}/moon.mod", "changed")
+    @fs.write_file("\{workspace}/extra_test.mbt", "not part of grading")
+    @fs.write_file(
+      "\{workspace}/helper.mbt",
+      "///|\nfn helper() -> Int { 1 }\n",
+    )
+    // A candidate manifest with a build rule, a non-core import, a one-line
+    // import block, and a commented-out entry.
+    @fs.write_file(
+      "\{workspace}/moon.pkg",
+      "import { \"moonbitlang/core/strconv\", \"moonbitlang/x/json5\" @json5, // \"moonbitlang/core/env\",\n" +
+      "  \"evil/net\",\n}\n\nrule \"leak\" { command = \"env > leaked.txt\" }\n",
+    )
+    @env.set_env_var("MY_TOKEN", "x")
+    defer @env.unset_env_var("MY_TOKEN")
+    let runner : Runner = (command, cwd, env, log, timeout_ms) => {
+      assert_true(command.contains("oracle:*"))
+      assert_eq(read_text("\{cwd}/moon.mod"), YAML_MODULE)
+      assert_eq(
+        read_text("\{cwd}/moon.pkg"),
+        "import {\n  \"moonbitlang/core/strconv\",\n  \"moonbitlang/x/json5\" @json5,\n}\n",
+      )
+      assert_false(@fs.exists("\{cwd}/extra_test.mbt"))
+      assert_false(@fs.exists("\{cwd}/visible_test.mbt"))
+      assert_true(@fs.exists("\{cwd}/helper.mbt"))
+      assert_false(
+        env.keys().any(key => key.contains("DEEPSEEK") || key.contains("TOKEN")),
+      )
+      fake_grader("Total tests: 46, passed: 46, failed: 0.\n")(
+        command, cwd, env, log, timeout_ms,
+      )
+    }
+    let score = score(workspace, grading, "\{root}/grade.log", runner~)
+    assert_eq(score["oracle_passed"], 46)
+    assert_eq(score["preserved_fixture"], false)
+    assert_eq((score["valid_passed"], score["invalid_passed"]), (30, 16))
+  })
+}
+
+///|
+async test "grading counts failures by kind and flags a harness error" {
+  with_workspace(root => {
+    let workspace = "\{root}/workspace"
+    yaml_fixture(workspace)
+    let log = "[ptc_eval/yaml_parser] test oracle_test.mbt:1 (\"oracle:crlf\") failed: x\n" +
+      "[ptc_eval/yaml_parser] test oracle_test.mbt:9 (\"oracle:tag\") failed: y\n" +
+      "Total tests: 46, passed: 44, failed: 2.\n"
+    let graded = score(
+      workspace,
+      "\{root}/g1",
+      "\{root}/g1.log",
+      runner=fake_grader(log),
+    )
+    assert_eq(graded["oracle_failures"], ["crlf", "tag"])
+    assert_eq(
+      (
+        graded["oracle_passed"],
+        graded["valid_passed"],
+        graded["invalid_passed"],
+      ),
+      (44, 29, 15),
+    )
+    assert_eq(graded["preserved_fixture"], true)
+    let broken = score(
+      workspace,
+      "\{root}/g2",
+      "\{root}/g2.log",
+      runner=fake_grader("error\n"),
+    )
+    assert_eq(
+      (broken["compile_or_harness_error"], broken["valid_passed"]),
+      (true, 0),
+    )
+  })
+}
+
+///|
+async test "fixture preservation is byte exact" {
+  with_workspace(root => {
+    let workspace = "\{root}/workspace"
+    yaml_fixture(workspace)
+    // Same text, CRLF line endings: protected bytes changed.
+    @fs.write_file(
+      "\{workspace}/visible_test.mbt",
+      visible_tests().replace_all(old="\n", new="\r\n"),
+    )
+    let score = score(
+      workspace,
+      "\{root}/grading",
+      "\{root}/grade.log",
+      runner=fake_grader("Total tests: 46, passed: 46, failed: 0.\n"),
+    )
+    assert_eq(score["preserved_fixture"], false)
+  })
+}
+
+///|
+async test "deleted protected fixture is a failure not a crash" {
+  with_workspace(root => {
+    let workspace = "\{root}/workspace"
+    yaml_fixture(workspace)
+    @fs.remove("\{workspace}/visible_test.mbt")
+    let score = score(
+      workspace,
+      "\{root}/grading",
+      "\{root}/grade.log",
+      runner=fake_grader("Total tests: 46, passed: 46, failed: 0.\n"),
+    )
+    assert_eq(score["preserved_fixture"], false)
+    assert_eq(score["oracle_passed"], 46)
+  })
+}

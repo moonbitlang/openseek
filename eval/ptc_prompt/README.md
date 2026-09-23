@@ -2,10 +2,10 @@
 
 A focused, manual evaluation of tool orchestration guidance using the real
 OpenSeek CLI and `deepseek-v4-flash`. It is not a general MoonBit coding
-benchmark. The small Python standard-library runner stages byte-exact fixtures
-and scores nested PTC metadata, which the general prompt-task harness does not
-currently score. API credentials are inherited from `DEEPSEEK`, never copied
-into commands or reports.
+benchmark. The `ptc_eval.mbtx` script, run from the repository root, stages
+byte-exact fixtures and scores nested PTC metadata, which the general
+prompt-task harness does not currently score. API credentials are inherited
+from `DEEPSEEK`, never copied into commands or reports.
 
 ## Capability A/B
 
@@ -14,7 +14,7 @@ engine from the SDK-only PR (#1518, original host tools) and a candidate from
 the host bridge (#1519). Then compare free tool choice with an identical prompt:
 
 ```sh
-python3 eval/ptc_prompt/run.py \
+moon run eval/ptc_prompt/ptc_eval.mbtx run \
   --baseline-engine /absolute/path/to/sdk-only-openseek \
   --engine /absolute/path/to/ptc-openseek \
   --out .moonagent/eval_runs/ptc_capability_ab --runs 5 --concurrency 3
@@ -28,7 +28,7 @@ The current release comparison is recorded in `capability-results-2026-09-15.md`
 All trials share model, fixture bytes, step cap (24), and timeout (600s). Pair
 launch order alternates across repetitions. Output directories must be new.
 
-Cases:
+Cases (repeat `--cases` to select a subset; all three by default):
 
 - `single_edit`: direct-call control; exact bytes and protected file unchanged.
 - `computed_edits`: calculate twelve replacements from CSV data, preserve input
@@ -51,7 +51,7 @@ To reproduce the original experiment, use an engine built from `c5c1210d2`
 (original PR #1516) and explicitly select `--prompt-ab`:
 
 ```sh
-python3 eval/ptc_prompt/run.py --prompt-ab \
+moon run eval/ptc_prompt/ptc_eval.mbtx run --prompt-ab \
   --engine /absolute/path/to/original-injected-client-openseek \
   --base-prompt /absolute/path/to/original-system-prompt.md \
   --out .moonagent/eval_runs/historical_prompt_ab --runs 3 --concurrency 3
@@ -73,9 +73,9 @@ results. Three repeats are exploratory, not a cross-model guarantee.
 ## Analyze without API calls
 
 ```sh
-python3 eval/ptc_prompt/run.py --analyze-only \
+moon run eval/ptc_prompt/ptc_eval.mbtx run --analyze-only \
   --out .moonagent/eval_runs/ptc_prompt_ab
-python3 -m unittest discover -s eval/ptc_prompt -p 'test_*.py'
+moon test eval/ptc_prompt/ptc_eval.mbtx
 ```
 
 Each trial keeps its raw CLI log, durable session, workspace, and summary JSON.
@@ -93,13 +93,13 @@ Do not promote a prompt merely because it increases PTC usage or wins one run.
 
 ## YAML parser coding comparison
 
-`yaml_benchmark.py` compares the same two engines with free tool choice on a
+The `yaml` subcommand compares the same two engines with free tool choice on a
 larger implementation task. Each fresh MoonBit project contains an API stub,
 a written contract, and six visible smoke tests. The contract defines a
 JSON-compatible YAML subset; it is not a claim of full YAML conformance.
 
 ```sh
-python3 eval/ptc_prompt/yaml_benchmark.py \
+moon run eval/ptc_prompt/ptc_eval.mbtx yaml \
   --baseline-engine /absolute/path/to/sdk-only-openseek \
   --engine /absolute/path/to/ptc-openseek \
   --out /absolute/path/to/new-yaml-results --runs 2 --concurrency 2 \
@@ -114,6 +114,8 @@ oracle cases. The fixture manifest and visible tests must remain unchanged.
 The oracle is authored independently of the generated implementations.
 
 Record byte-identical prompt/spec/oracle hashes and distinct binary hashes.
+The oracle hash of runs made by the retired Python runner differs (its test
+source spelled the same JSON values differently); do not compare it across runners.
 Report valid and invalid cases separately: a parser that rejects everything
 can pass the rejection cases without implementing any parsing. Report tool
 errors, actual PTC use, wall time, and token usage alongside correctness.

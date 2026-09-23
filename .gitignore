@@ -16,7 +16,7 @@ eval/*
 !eval/prompt_task/**
 !eval/ptc_prompt/
 !eval/ptc_prompt/**
-eval/ptc_prompt/__pycache__/
+eval/ptc_prompt/_build/
 !eval/file_edit/
 !eval/file_edit/**
 !eval/report/
