@@ -18,10 +18,7 @@ async fn main {
   }
   let scripts : Array[(String, String)] = []
   for input in inputs {
-    let name = match input.rev_find("/") {
-      Some(i) => input[i + 1:].to_owned()
-      None => input
-    }
+    let name = script_name(input)
     guard scripts.iter().all(script => script.0 != name) else {
       fail("mbtx_bundle: duplicate script name \{name}")
     }
@@ -91,4 +88,32 @@ test "generated source embeds each script under its name" {
       #|
     ),
   )
+}
+
+///|
+/// The basename of `input`, split on either separator so a Windows-style path
+/// works too. The name becomes a quoted match pattern, so it must be a plain
+/// file name.
+fn script_name(input : String) -> String raise {
+  let path = input.replace_all(old="\\", new="/")
+  let name = match path.rev_find("/") {
+    Some(i) => path[i + 1:].to_owned()
+    None => path
+  }
+  guard name =~ re"^[A-Za-z0-9_.\-]+$" else {
+    fail("mbtx_bundle: unsupported script name \{name}")
+  }
+  name
+}
+
+///|
+test "script names split on both separators and must be plain" {
+  assert_eq(script_name("./share/workflow/check.mbtx"), "check.mbtx")
+  assert_eq(script_name("share\\workflow\\check.mbtx"), "check.mbtx")
+  assert_eq(script_name("check.mbtx"), "check.mbtx")
+  try script_name("share/workflow/we\"ird.mbtx") catch {
+    _ => ()
+  } noraise {
+    _ => fail("a name that needs escaping was accepted")
+  }
 }
