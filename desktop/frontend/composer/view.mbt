@@ -952,6 +952,35 @@ fn elapsed_label(span_ms : Double) -> String {
 }
 
 ///|
+/// Reveal the selected row after the new selection has rendered. Scroll only
+/// the popup list so keyboard navigation cannot move the surrounding chat.
+fn reveal_completion_selection() -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      guard @dom.document()
+        .query_selector(".composer .completion-list")
+        .to_option()
+        is Some(list) else {
+        return
+      }
+      guard list.query_selector(".completion-item.selected") is Some(row) else {
+        return
+      }
+      let list_rect = list.get_bounding_client_rect()
+      let row_rect = row.get_bounding_client_rect()
+      let above = row_rect.get_top() - list_rect.get_top()
+      let below = row_rect.get_bottom() - list_rect.get_bottom()
+      if above < 0 {
+        list.set_scroll_top(list.get_scroll_top() + above)
+      } else if below > 0 {
+        list.set_scroll_top(list.get_scroll_top() + below)
+      }
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
 /// One caller-owned completion row rendered inside the composer popup. The
 /// caller keeps the row's action and payload; this view-only value contains
 /// only its two visible strings.
