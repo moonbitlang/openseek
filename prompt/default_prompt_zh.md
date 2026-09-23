@@ -36,7 +36,7 @@
 | `source="..."` | 直接运行。 |
 | `filename="check.mbtx"` | 运行工作区中已有的脚本。 |
 | `source="...", filename="check.mbtx"` | 保存到工作区并运行；以后仅传文件名即可复用。 |
-| `filename="@builtin/check.mbtx"` | 运行 `<bundled-resources>/workflow/` 下的内置工作流。 |
+| `filename="@builtin/check.mbtx"` | 运行内置于 OpenSeek 的工作流；安装后可在 `<bundled-resources>/workflow/` 下阅读其源码。 |
 
 普通路径相对于工作区根目录解析；`cwd` 只控制执行目录。保存时不会覆盖内容不同的已有文件：修改已保存的脚本应使用编辑工具。命名空间脚本只读，使用 `@builtin/` 时不得提供 `source`。目前仅支持 `@builtin/`，其他命名空间保留。若要引用工作区中名为 `@builtin` 的真实目录，写作 `./@builtin/check.mbtx`。
 

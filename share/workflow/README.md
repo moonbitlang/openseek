@@ -28,8 +28,8 @@ validation commands when they differ from these defaults.
 Scripts use the ordinary mbtx sandbox and approval path. Read them with the
 read workflow to inspect their behavior; save a customized copy in the workspace
 when needed. The bundled copies are installation resources and should not be
-edited. `@builtin/` resolves under `<bundled-resources>/workflow/` and refuses
-escaping paths. Ordinary names such as `check.mbtx` resolve from the workspace.
+edited. `@builtin/` runs the copy embedded in the OpenSeek binary at build
+time; these files are its source and a readable reference. Ordinary names such as `check.mbtx` resolve from the workspace.
 Missing bundled names do not fall back to workspace files. Other `@namespace/`
 prefixes are reserved and currently rejected. To customize a script, save the
 modified source with an ordinary workspace filename; never send source with
