@@ -99,33 +99,6 @@ fn mermaid_id_is_available(
 }
 
 ///|
-fn with_resolved_markdown_uri(
-  raw : String,
-  base_uri : String,
-  has_base_uri : Bool,
-  resolved : (String, String) -> Unit,
-) -> Bool {
-  if raw.is_empty() {
-    return false
-  }
-  @js.Error_::wrap(
-    () => {
-      let url : @js.Value = if has_base_uri {
-        @js.globalThis.new_with_string("URL", [raw, base_uri])
-      } else {
-        @js.globalThis.new_with_string("URL", [raw])
-      }
-      let protocol : String = url.get_with_string("protocol")
-      resolved(url.get_with_string("href"), protocol.to_lower())
-      @js.Value::cast_from(true)
-    },
-    map_ok=value => (value.cast() : Bool),
-  ) catch {
-    _ => false
-  }
-}
-
-///|
 fn new_mermaid_id_nonce() -> String {
   let crypto : @js.Nullable[@js.Value] = @js.globalThis.get_with_string(
     "crypto",

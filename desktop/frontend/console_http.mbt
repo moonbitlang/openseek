@@ -9,10 +9,14 @@ fn console_request(
   on_fail : (String) -> Unit,
 ) -> Unit {
   @js.Promise::from_async(() => {
-    let (response, body) = try {
-      let (url, _) = resolve_browser_url(path)
-      @http.request(url, method_, {}, "")
-    } catch {
+    let url = match resolve_browser_url(path) {
+      Ok((url, _)) => url
+      Err(message) => {
+        on_fail(message)
+        return
+      }
+    }
+    let (response, body) = @http.request(url, method_, {}, "") catch {
       error => {
         on_fail(error.to_string())
         return

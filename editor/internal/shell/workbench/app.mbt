@@ -1358,13 +1358,15 @@ let theme_storage_key = "readonly-editor:theme"
 
 ///|
 fn stored_theme() -> String {
-  match storage_get_item(theme_storage_key) {
-    "light" => "light"
+  match @base_browser.local_storage_get(theme_storage_key) {
+    Ok(Some("light")) => "light"
     _ => "dark"
   }
 }
 
 ///|
 fn persist_theme_cmd(theme : String) -> @rabbita.Cmd {
-  @cmd.custom_cmd(_ => storage_set_item(theme_storage_key, theme))
+  @cmd.custom_cmd(_ => {
+    @base_browser.local_storage_set(theme_storage_key, theme) |> ignore
+  })
 }

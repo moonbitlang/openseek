@@ -341,17 +341,18 @@ fn resolve_allowed_markdown_uri(
   has_base_uri : Bool,
   kind : MarkdownUriKind,
 ) -> String {
-  let mut allowed = ""
-  with_resolved_markdown_uri(raw, base_uri, has_base_uri, (href, protocol) => {
-    let accepted = protocol == "http:" ||
-      protocol == "https:" ||
-      (kind == LinkUri && protocol == "mailto:")
-    if accepted {
-      allowed = href
-    }
-  })
-  |> ignore
-  allowed
+  guard !raw.is_empty() else { return "" }
+  let base = if has_base_uri { Some(base_uri) } else { None }
+  guard @base_browser.resolve_url(raw, base?) is Ok((href, protocol)) else {
+    return ""
+  }
+  if protocol == "http:" ||
+    protocol == "https:" ||
+    (kind == LinkUri && protocol == "mailto:") {
+    href
+  } else {
+    ""
+  }
 }
 
 ///|

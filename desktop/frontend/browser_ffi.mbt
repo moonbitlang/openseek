@@ -7,10 +7,6 @@ extern "js" fn browser_language_values() -> FixedArray[String] =
   #|() => typeof navigator === 'undefined' ? [] : Array.from(navigator.languages || [navigator.language]).filter(x => typeof x === 'string')
 
 ///|
-extern "js" fn language_storage() -> @js.Value =
-  #|() => { const storage = globalThis.localStorage; if (!storage) throw new Error('Language preference storage is unavailable'); return storage; }
-
-///|
 extern "js" fn titlebar_overlay_class(
   root : @dom.Element,
   visible : Bool,

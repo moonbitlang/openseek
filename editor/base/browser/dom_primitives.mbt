@@ -192,3 +192,45 @@ extern "js" fn resize_observer_class(
   #|   const ctor = target?.ownerDocument?.defaultView?.ResizeObserver ?? globalThis.ResizeObserver;
   #|   return typeof ctor === 'function' ? ctor : null;
   #| }
+
+///|
+#external
+priv type BrowserStorage
+
+///|
+extern "js" fn browser_local_storage() -> @js.Nullable[BrowserStorage] = "() => globalThis.localStorage ?? null"
+
+///|
+extern "js" fn BrowserStorage::get_item(
+  self : BrowserStorage,
+  key : String,
+) -> @js.Nullable[String] = "(storage, key) => storage.getItem(key)"
+
+///|
+extern "js" fn BrowserStorage::set_item(
+  self : BrowserStorage,
+  key : String,
+  value : String,
+) -> Unit = "(storage, key, value) => storage.setItem(key, value)"
+
+///|
+extern "js" fn BrowserStorage::remove_item(
+  self : BrowserStorage,
+  key : String,
+) -> Unit = "(storage, key) => storage.removeItem(key)"
+
+///|
+#external
+priv type BrowserUrl
+
+///|
+extern "js" fn browser_url(
+  raw : String,
+  base : @js.Optional[String],
+) -> BrowserUrl = "(raw, base) => new URL(raw, base)"
+
+///|
+extern "js" fn BrowserUrl::href(self : BrowserUrl) -> String = "url => url.href"
+
+///|
+extern "js" fn BrowserUrl::protocol(self : BrowserUrl) -> String = "url => url.protocol"
