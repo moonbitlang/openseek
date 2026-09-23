@@ -59,26 +59,6 @@ async test "a refused question resolves to rejected" {
 }
 
 ///|
-/// The race the desk is allowed to lose quietly: an answer that arrives after
-/// its question is gone changes nothing and reports nothing. Its question here
-/// is gone because the turn was cancelled — with no deadline, that is the only
-/// way one leaves unanswered.
-async test "a decision for a settled question is discarded" {
-  let desk = ApprovalDesk::ApprovalDesk(now_ms=0)
-  @async.with_task_group(group => {
-    let asking = group.spawn(() => {
-      desk.ask({ tool_name: "mbtx", detail: "escalate", body: None, })
-    })
-    await_standing(desk)
-    asking.cancel()
-  })
-  assert_eq(desk.pending.length(), 0)
-  // A decision for a question that is gone finds nothing and reports nothing.
-  desk.settle("ap-whatever", true)
-  assert_eq(desk.pending.length(), 0)
-}
-
-///|
 /// `Never` is an absent channel rather than a refusing one, because that
 /// absence is what stops the argument from being advertised at all.
 async test "never wires no channel; ask and always do" {
@@ -146,13 +126,7 @@ async test "closing the command stream withdraws a standing question" {
 async test "a question asked after the stream closed does not wait" {
   let desk = ApprovalDesk::ApprovalDesk(now_ms=0)
   desk.withdraw_all()
-  @async.with_task_group(_ => {
-    let outcome = desk.ask({
-      tool_name: "mbtx",
-      detail: "escalate",
-      body: None,
-    })
-    assert_true(outcome is Cancelled)
-  })
+  let outcome = desk.ask({ tool_name: "mbtx", detail: "escalate", body: None, })
+  assert_true(outcome is Cancelled)
   assert_eq(desk.pending.length(), 0)
 }

@@ -28,7 +28,7 @@ pub fn strip_trailing_slash(path : String) -> String {
 /// without collapsing a filesystem root. The path is not resolved against the
 /// filesystem and `.` or `..` components are not normalized.
 pub fn path_basename(path : String) -> String {
-  let normalized = strip_trailing_slash(path.replace_all(old="\\", new="/"))
+  let normalized = workspace_compare_path(path)
   match normalized.rev_after("/") {
     Some(base) => base.to_owned()
     None => normalized
@@ -62,7 +62,7 @@ fn workspace_compare_path(path : String) -> String {
 ///|
 /// Return the lexical parent of a POSIX or Windows-style path.
 pub fn parent_dir(path : String) -> String? {
-  let normalized = strip_trailing_slash(path.replace_all(old="\\", new="/"))
+  let normalized = workspace_compare_path(path)
   if normalized == "" ||
     normalized == "." ||
     normalized == "/" ||

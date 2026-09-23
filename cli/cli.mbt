@@ -54,9 +54,7 @@ pub fn terminal_safe_line(text : String, limit? : Int = 72) -> String {
         continue true, count + 1
       }
       continue true, count
-    } else if ch.to_int() < 0x20 ||
-      ch.to_int() == 0x7F ||
-      (ch.to_int() >= 0x80 && ch.to_int() <= 0x9F) {
+    } else if ch is ('\u{00}'..='\u{1F}' | '\u{7F}'..='\u{9F}') {
       continue last_was_space, count
     } else {
       out.write_char(ch)

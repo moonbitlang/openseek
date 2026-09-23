@@ -65,14 +65,8 @@ pub async fn probe_dir(dir : String) -> DirProbe {
 /// Remove trailing path separators while preserving filesystem roots.
 pub fn trim_trailing_path_separators(path : String) -> String {
   let mut result = path
-  while !is_path_root(result) {
-    if result.strip_suffix("/") is Some(rest) {
-      result = rest.to_owned()
-    } else if result.strip_suffix("\\") is Some(rest) {
-      result = rest.to_owned()
-    } else {
-      break
-    }
+  while !is_path_root(result) && result[:] is [.. rest, '/' | '\\'] {
+    result = rest.to_owned()
   }
   result
 }

@@ -13,23 +13,23 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
     )
   }
   let workspace_root = @setup.prepare_workspace_root(matches, log_created=false)
+  // The path is CLI input: guard it like every other displayed string (a
+  // longer cap than the metadata's, so real paths stay identifiable).
+  let shown_path = @cli.terminal_safe_line(path, limit=200)
   // Failure text reaches the terminal via stderr, and both the path and the
   // decoder's error can embed configuration strings: keep them terminal-safe.
   let text = @fs.read_file(path).text() catch {
     error =>
       fail(
-        "cannot read \{@cli.terminal_safe_line(path, limit=200)}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
+        "cannot read \{shown_path}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
       )
   }
   let servers = @mcpconfig.decode(@json.parse(text)) catch {
     error =>
       fail(
-        "invalid MCP configuration in \{@cli.terminal_safe_line(path, limit=200)}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
+        "invalid MCP configuration in \{shown_path}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
       )
   }
-  // The path is CLI input: guard it like every other displayed string (a
-  // longer cap than the metadata's, so real paths stay identifiable).
-  let shown_path = @cli.terminal_safe_line(path, limit=200)
   if servers.is_empty() {
     println("\{shown_path}: no servers configured")
     return
@@ -45,14 +45,13 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
       labels[server.name()] = server_label(server)
     }
     for
-      entry in @mcptools.build_grouped(
+      (name, tools) in @mcptools.build_grouped(
         scope,
         servers,
         client_name="openseek",
         client_version=@execution.McpClientVersion,
         workspace_root~,
       ) {
-      let (name, tools) = entry
       let label = labels.get(name).unwrap_or("")
       // The name is a config key — arbitrary JSON text — so guard it like the
       // rest of the displayed metadata.

@@ -167,9 +167,9 @@ async fn session_listing_updated_at_ms(
   store : @store.SessionStore,
   listing : @store.SessionListing,
 ) -> Int64? {
-  let id = listing.id()
-  let stamp = @fs.mtime(store.session_file(id)) catch { _ => return None }
-  let (seconds, nanoseconds) = stamp
+  let (seconds, nanoseconds) = @fs.mtime(store.session_file(listing.id())) catch {
+    _ => return None
+  }
   Some(mtime_to_unix_millis(seconds, nanoseconds))
 }
 

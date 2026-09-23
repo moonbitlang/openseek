@@ -76,8 +76,7 @@ async fn ApprovalDesk::ask(
   // for an answer that cannot come is a turn that never ends. Not announced
   // either: a request nobody can see is not a question.
   guard !self.closed else { return Cancelled }
-  self.next_id += 1
-  let id = "ap-\{self.nonce}-\{self.next_id}"
+  let id = self.announce(ask)
   let replies : @aqueue.Queue[@agent_runtime.ApprovalOutcome] = Queue(
     kind=Unbounded,
   )
@@ -90,6 +89,18 @@ async fn ApprovalDesk::ask(
     self.pending.remove(id)
     @emit.emit(ApprovalResolved(id~, outcome=approval_outcome_word(outcome)))
   }
+  outcome = replies.get()
+  outcome
+}
+
+///|
+/// Allocate the next question id and put the question on the wire.
+fn ApprovalDesk::announce(
+  self : ApprovalDesk,
+  ask : @agent_runtime.ApprovalAsk,
+) -> String {
+  self.next_id += 1
+  let id = "ap-\{self.nonce}-\{self.next_id}"
   @emit.emit(
     ApprovalRequested(
       id~,
@@ -98,8 +109,7 @@ async fn ApprovalDesk::ask(
       body=ask.body,
     ),
   )
-  outcome = replies.get()
-  outcome
+  id
 }
 
 ///|
@@ -161,16 +171,7 @@ pub fn approval_channel(
     Always =>
       Some(
         ApprovalChannel(ask => {
-          desk.next_id += 1
-          let id = "ap-\{desk.nonce}-\{desk.next_id}"
-          @emit.emit(
-            ApprovalRequested(
-              id~,
-              tool_name=ask.tool_name,
-              detail=ask.detail,
-              body=ask.body,
-            ),
-          )
+          let id = desk.announce(ask)
           @emit.emit(ApprovalResolved(id~, outcome="allowed_once"))
           AllowedOnce
         }),
