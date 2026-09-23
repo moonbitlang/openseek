@@ -32,6 +32,15 @@ test "blank workspace paths are refused" {
   fail("a blank workspace path was accepted")
 }
 
+// Tests for the registry's one-time setup. They redirect HOME, which decides
+// both where the default workspace and the registry file land, so they take
+// one lock rather than racing each other's environment.
+
+///|
+/// Mark the platform-gated test alias as used: this binding is `_`-prefixed
+/// (never warned about) and its body is never evaluated.
+let _unused_test_imports : Unit = ignore(@sys.get_env_var)
+
 ///|
 #cfg(not(platform="windows"))
 let registry_env_test_lock : @async.Mutex = Mutex()
