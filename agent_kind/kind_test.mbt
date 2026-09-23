@@ -114,6 +114,7 @@ async fn run_answer_kind(
   url : String,
   session_id : String,
   max_steps? : Int = 8,
+  append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
 ) -> String? {
   @agent_kind.execute_kind(
     session_id~,
@@ -145,6 +146,7 @@ async fn run_answer_kind(
     api_key="test-key",
     model=Deepseek(V4Flash),
     api_url=url,
+    append_item?,
   )
 }
 
@@ -260,32 +262,9 @@ async test "a store-backed append_item persists the child transcript" {
     guard child_test_server(group, handle) is Some(url) else { return }
     let store = @store.SessionStore(@fs.tmpdir(prefix="openseek-subrun-child-"))
     defer @fs.rmdir(store.root(), recursive=true)
-    let value = @agent_kind.execute_kind(
-      session_id="parent-sr-1",
-      system_prompt="You are a test subagent.",
-      task="Answer via the submit tool.",
-      tools=captured => {
-        Tools([
-          @agent_kind.capture_tool(
-            name="submit",
-            description="Submit the final answer.",
-            schema=JsonSchema({ "type": "object" }),
-            parse=args => {
-              match args {
-                { "answer": String(answer), .. } => Ok(answer)
-                _ => Err(["answer must be a string"])
-              }
-            },
-            captured,
-          ),
-        ])
-      },
-      max_steps=8,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
-      api_url=url,
-      append_item=(session, item) => store.append(session, item),
-    )
+    let value = run_answer_kind(url, "parent-sr-1", append_item=(session, item) => {
+      store.append(session, item)
+    })
     assert_true(value is Some("persisted"))
     let loaded = store.load(SessionId("parent-sr-1"))
     assert_eq(loaded.system_prompt(), "You are a test subagent.")
