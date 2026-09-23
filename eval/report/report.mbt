@@ -125,65 +125,45 @@ pub fn Report::html(self : Report) -> String {
   out.write_string(
     "<style>:root{color-scheme:light;--bg:#f7f9fb;--panel:#fff;--text:#1f2328;--muted:#59636e;--line:#d0d7de;--line-soft:#eaeef2;--good:#116329;--bad:#cf222e;--accent:#0969da;--warn:#9a6700}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;font-size:14px;line-height:1.45}main{max-width:1440px;margin:0 auto;padding:28px 24px 44px}h1{margin:0 0 16px;font-size:28px;line-height:1.15}h2{margin:28px 0 12px;font-size:18px}.summary{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;margin:12px 0 20px}.metric,.trial-card{background:var(--panel);border:1px solid var(--line);border-radius:8px}.metric{padding:9px 10px;min-width:140px;max-width:420px}.summary>.metric{flex:1 1 150px}.summary>.metric:last-child{flex-basis:320px}.metric-name{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}.metric code,.detail-list code,td code,.logs code{background:#f6f8fa;border:1px solid var(--line-soft);border-radius:5px;padding:1px 5px;white-space:pre-wrap;overflow-wrap:anywhere}.table-wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}th,td{border-bottom:1px solid var(--line-soft);padding:8px 10px;text-align:left;vertical-align:top}th{background:#f6f8fa;color:#3f4852;font-weight:650;white-space:nowrap}tbody tr:last-child td{border-bottom:0}.pass{color:var(--good);font-weight:700}.fail{color:var(--bad);font-weight:700}.reason-cell,.warning-cell{max-width:360px;overflow-wrap:anywhere}.trial-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}.trial-card{padding:14px}.trial-card header{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}.trial-card h3{margin:0;font-size:16px}.badge{border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700}.badge.pass{background:#dafbe1}.badge.fail{background:#ffebe9}.detail-list{display:grid;grid-template-columns:minmax(120px,180px) 1fr;gap:6px 12px;margin:0}.detail-list dt{color:var(--muted);font-weight:650}.detail-list dd{margin:0;min-width:0}.detail-list dd.long{white-space:pre-wrap;overflow-wrap:anywhere}.detail-list dd.long code{display:block;max-height:180px;overflow:auto}.logs{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 16px}.logs ul{margin:8px 0 0;padding-left:20px}@media(max-width:720px){main{padding:20px 14px}.summary>.metric{flex-basis:100%;max-width:none}.trial-grid{grid-template-columns:1fr}.detail-list{grid-template-columns:1fr}.detail-list dt{margin-top:6px}}</style>",
   )
-  out.write_string("</head><body><main>")
-  out.write_string("<h1>")
-  out.write_string(escape_html(self.title))
-  out.write_string("</h1>")
+  out <+
+    $|</head><body><main><h1>\{escape_html(self.title)}</h1>
   if self.summary.length() > 0 {
-    out.write_string("<div class=\"summary\">")
+    out <+
+      $|<div class="summary">
     for metric in self.summary {
-      out.write_string("<div class=\"metric\"><div class=\"metric-name\">")
-      out.write_string(escape_html(metric.name))
-      out.write_string("</div><code>")
-      out.write_string(escape_html(metric.value))
-      out.write_string("</code></div>")
+      out <+
+        $|<div class="metric"><div class="metric-name">\{escape_html(metric.name)}</div><code>\{escape_html(metric.value)}</code></div>
     }
-    out.write_string("</div>")
+    out <+
+      $|</div>
   }
-  out.write_string("<div class=\"table-wrap\"><table><thead><tr>")
+  out <+
+    $|<div class="table-wrap"><table><thead><tr>
   for column in table_columns(self.metric_columns) {
-    out.write_string("<th>")
-    out.write_string(escape_html(column))
-    out.write_string("</th>")
+    out <+
+      $|<th>\{escape_html(column)}</th>
   }
-  out.write_string("</tr></thead><tbody>")
+  out <+
+    $|</tr></thead><tbody>
   for row in self.rows {
-    out.write_string("<tr><td>")
-    out.write_string(row.index.to_string())
-    out.write_string("</td><td><code>")
-    out.write_string(escape_html(row.name))
-    out.write_string("</code></td><td class=\"")
-    out.write_string(row.verdict())
-    out.write_string("\">")
-    out.write_string(row.verdict())
-    out.write_string("</td>")
+    out <+
+      $|<tr><td>\{row.index}</td><td><code>\{escape_html(row.name)}</code></td><td class="\{row.verdict()}">\{row.verdict()}</td>
     for column in self.metric_columns {
-      out.write_string("<td>")
-      out.write_string(escape_html(row.metric_value(column)))
-      out.write_string("</td>")
+      out <+
+        $|<td>\{escape_html(row.metric_value(column))}</td>
     }
-    out.write_string("<td class=\"reason-cell\">")
-    out.write_string(escape_html(short_cell(row.reason)))
-    out.write_string("</td><td class=\"warning-cell\">")
-    out.write_string(escape_html(short_cell(row.warnings)))
-    out.write_string("</td></tr>")
+    out <+
+      $|<td class="reason-cell">\{escape_html(short_cell(row.reason))}</td><td class="warning-cell">\{escape_html(short_cell(row.warnings))}</td></tr>
   }
-  out.write_string("</tbody></table></div>")
+  out <+
+    $|</tbody></table></div>
   if self.rows.any(row => row.has_details()) {
-    out.write_string(
-      "<section><h2>Trial Details</h2><div class=\"trial-grid\">",
-    )
+    out <+
+      $|<section><h2>Trial Details</h2><div class="trial-grid">
     for row in self.rows {
       if row.has_details() {
-        out.write_string("<article class=\"trial-card\"><header><h3>Trial ")
-        out.write_string(row.index.to_string())
-        out.write_string(": <code>")
-        out.write_string(escape_html(row.name))
-        out.write_string("</code></h3><span class=\"badge ")
-        out.write_string(row.verdict())
-        out.write_string("\">")
-        out.write_string(row.verdict())
-        out.write_string("</span></header><dl class=\"detail-list\">")
+        out <+
+          $|<article class="trial-card"><header><h3>Trial \{row.index}: <code>\{escape_html(row.name)}</code></h3><span class="badge \{row.verdict()}">\{row.verdict()}</span></header><dl class="detail-list">
         write_html_detail(out, "Reason", row.reason, long=true)
         if row.warnings != "" {
           write_html_detail(out, "Warnings", row.warnings, long=true)
@@ -196,27 +176,26 @@ pub fn Report::html(self : Report) -> String {
             long=detail.value.length() > 80,
           )
         }
-        out.write_string("</dl></article>")
+        out <+
+          $|</dl></article>
       }
     }
-    out.write_string("</div></section>")
+    out <+
+      $|</div></section>
   }
   if self.rows.any(row => row.log_path != "") {
-    out.write_string("<section class=\"logs\"><h2>Logs</h2><ul>")
+    out <+
+      $|<section class="logs"><h2>Logs</h2><ul>
     for row in self.rows {
       if row.log_path != "" {
-        out.write_string("<li><code>")
-        out.write_string(escape_html(row.name))
-        out.write_string("</code> trial ")
-        out.write_string(row.index.to_string())
-        out.write_string(": <code>")
-        out.write_string(escape_html(row.log_path))
-        out.write_string("</code></li>")
+        out <+
+          $|<li><code>\{escape_html(row.name)}</code> trial \{row.index}: <code>\{escape_html(row.log_path)}</code></li>
       }
     }
-    out.write_string("</ul></section>")
+    out <+
+      $|</ul></section>
   }
-  out.write_string("</main></body></html>\n")
+  out <+ "</main></body></html>\n"
   out.to_string()
 }
 
