@@ -68,7 +68,7 @@ struct FormData {
 /// Whether `text` holds a C0 control or DEL, which could inject a new multipart
 /// header or part.
 fn has_control_char(text : String) -> Bool {
-  text.iter().any(ch => ch < ' ' || ch == '\u007f')
+  text.any(ch => ch < ' ' || ch == '\u007f')
 }
 
 ///|
@@ -88,24 +88,24 @@ fn Part::encode(self : Part) -> EncodedPart raise FormDataError {
     raise InvalidFieldName
   }
   let headers = StringBuilder()
-  headers.write_string(
-    "Content-Disposition: form-data; name=\"\{quote_param(name)}\"",
-  )
+  headers <+
+    $|Content-Disposition: form-data; name="\{quote_param(name)}"
   if filename is Some(filename) {
     if has_control_char(filename) {
       raise InvalidFilename
     }
-    headers.write_string("; filename=\"\{quote_param(filename)}\"")
+    headers <+
+      $|; filename="\{quote_param(filename)}"
   }
-  headers.write_string("\r\n")
+  headers <+ "\r\n"
   if content_type is Some(content_type) {
     if content_type.is_blank() ||
-      content_type.iter().any(ch => ch < ' ' || ch >= '\u007f') {
+      content_type.any(ch => ch < ' ' || ch >= '\u007f') {
       raise InvalidContentType
     }
-    headers.write_string("Content-Type: \{content_type}\r\n")
+    headers <+ "Content-Type: \{content_type}\r\n"
   }
-  headers.write_string("\r\n")
+  headers <+ "\r\n"
   { headers: @utf8.encode(headers.to_string()), data, }
 }
 
