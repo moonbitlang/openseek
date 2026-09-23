@@ -12,6 +12,13 @@ priv struct WatchedSourceProfileDir {
 priv struct SourceWriteProfileScan {
   literal_paths : Array[String]
   watched_dirs : Array[WatchedSourceProfileDir]
+  cacheable : Bool
+}
+
+///|
+priv struct SourceWriteProfileScanBuilder {
+  literal_paths : Array[String]
+  watched_dirs : Array[WatchedSourceProfileDir]
   mut cacheable : Bool
 }
 
@@ -180,20 +187,24 @@ async fn protected_source_tree_profile_scan(
   let root = @workspace_path.strip_trailing_slash(
     @path.Path(real_workspace_root).normalize().to_string(),
   )
-  let state : SourceWriteProfileScan = {
+  let state : SourceWriteProfileScanBuilder = {
     literal_paths: [],
     watched_dirs: [],
     cacheable: true,
   }
   ignore(collect_protected_source_tree_profile_scan(root, root, state))
-  state
+  {
+    literal_paths: state.literal_paths,
+    watched_dirs: state.watched_dirs,
+    cacheable: state.cacheable,
+  }
 }
 
 ///|
 async fn collect_protected_source_tree_profile_scan(
   root : String,
   dir : String,
-  state : SourceWriteProfileScan,
+  state : SourceWriteProfileScanBuilder,
 ) -> Bool {
   if dir != root &&
     @source_write_policy.is_moon_managed_workspace_path(root, dir) {
