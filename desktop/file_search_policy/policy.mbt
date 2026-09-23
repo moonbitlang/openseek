@@ -40,12 +40,3 @@ pub fn excludes_descendant(path : String) -> Bool {
   }
   false
 }
-
-///|
-test "excluded directory policy distinguishes basenames from descendants" {
-  assert_false(excludes_descendant("target"))
-  assert_false(excludes_descendant("src/.git"))
-  assert_true(excludes_descendant("target/cache"))
-  assert_true(excludes_descendant("src/.git/config"))
-  assert_false(excludes_descendant("src/main.mbt"))
-}

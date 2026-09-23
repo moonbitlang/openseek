@@ -1,11 +1,14 @@
 import {
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol" @protocol,
-  "moonbitlang/core/json",
   "moonbitlang/editor/base/common",
   "openseek_desktop/protocol" @desktop_protocol,
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/resource",
 }
+
+import {
+  "moonbitlang/core/json",
+} for "test"
 
 supported_targets = "js"
