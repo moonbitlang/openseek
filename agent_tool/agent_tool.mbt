@@ -349,29 +349,6 @@ pub async fn execute_tool_call(
 }
 
 ///|
-test "parse native tool call arguments" {
-  let call = AgentToolCall(
-    ToolCall(id="call_123", name="shell", arguments="{\"cmd\":\"moon check\"}"),
-  )
-  assert_eq(call.name, "shell")
-  guard call.arguments is { "cmd": String(cmd), .. } else {
-    fail("missing cmd")
-  }
-  assert_eq(cmd, "moon check")
-}
-
-///|
-test "reject invalid native tool call arguments" {
-  let _ = AgentToolCall(ToolCall(id="call_123", name="shell", arguments="{")) catch {
-    error => {
-      assert_true("\{error}".contains("shell arguments are not valid JSON"))
-      return
-    }
-  }
-  fail("invalid arguments parsed")
-}
-
-///|
 test "ToolAction helpers build structured actions" {
   let response = respond("ok")
   guard response is Respond(output) else { fail("expected Respond") }

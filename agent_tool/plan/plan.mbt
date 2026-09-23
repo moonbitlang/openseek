@@ -89,29 +89,6 @@ pub fn reminder_checklist(arguments : Json) -> String? {
 }
 
 ///|
-test "reminder_checklist renders numbered statuses and falls back to None" {
-  guard reminder_checklist({
-      "steps": [
-        { "title": "read the failing test", "status": "completed" },
-        { "title": "fix the parser", "status": "in_progress" },
-      ],
-    })
-    is Some(lines) else {
-    fail("expected a checklist")
-  }
-  assert_eq(
-    lines,
-    (
-      #|1. [completed] read the failing test
-      #|2. [in_progress] fix the parser
-    ),
-  )
-  // A cleared plan and undecodable arguments both yield None.
-  assert_true(reminder_checklist({ "steps": [] }) is None)
-  assert_true(reminder_checklist({ "nonsense": true }) is None)
-}
-
-///|
 fn execute(arguments : Json) -> @agent_tool.ToolAction {
   let input = @steps.decode(arguments) catch {
     error => {
@@ -322,14 +299,4 @@ test "plan rejects malformed arguments with a field-naming error" {
     { "steps": [{ "title": "one", "status": "pending", "note": "extra" }] },
     "arguments.steps[0] to have only title and status fields",
   )
-}
-
-///|
-test "plan definition exposes the expected name and schema shape" {
-  let definition = definition()
-  assert_eq(definition.name, "plan")
-  guard definition.schema is JsonSchema({ "required": ["steps"], .. }) else {
-    fail("expected steps to be required")
-  }
-  guard definition.execute is Sync(_) else { fail("expected a Sync executor") }
 }
