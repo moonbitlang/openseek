@@ -2,45 +2,6 @@
 // together, separate from application state and interaction policy.
 
 ///|
-extern "js" fn js_fetch(
-  url : String,
-  method_ : String,
-  has_body : Bool,
-  body : String,
-  on_done : (Int, String) -> Unit,
-  on_fail : (String) -> Unit,
-) =
-  #| (url, method, hasBody, body, onDone, onFail) => {
-  #|   const config = { method };
-  #|   if (hasBody) {
-  #|     config.headers = { "Content-Type": "application/json" };
-  #|     config.body = body;
-  #|   }
-  #|   fetch(url, config)
-  #|     .then((response) => response.text().then((text) => onDone(response.status, text)))
-  #|     .catch((error) => onFail(String(error)));
-  #| }
-
-///|
-extern "js" fn open_link_in_browser(url : String) -> Unit =
-  #| (url) => {
-  #|   let parsed;
-  #|   try { parsed = new URL(url, document.baseURI); } catch (_) { return; }
-  #|   if (parsed.protocol === "mailto:") {
-  #|     const anchor = document.createElement("a");
-  #|     anchor.href = parsed.href;
-  #|     anchor.click();
-  #|     return;
-  #|   }
-  #|   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return;
-  #|   const anchor = document.createElement("a");
-  #|   anchor.href = parsed.href;
-  #|   anchor.target = "_blank";
-  #|   anchor.rel = "noopener noreferrer";
-  #|   anchor.click();
-  #| }
-
-///|
 /// Browser preferences are read at startup and when a language is selected.
 extern "js" fn browser_language_values() -> FixedArray[String] =
   #|() => typeof navigator === 'undefined' ? [] : Array.from(navigator.languages || [navigator.language]).filter(x => typeof x === 'string')

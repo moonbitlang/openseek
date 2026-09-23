@@ -33,3 +33,36 @@ fn open_external_link(dispatch : @cmd.Emit[Msg], url : String) -> @cmd.Cmd {
     |> ignore
   })
 }
+
+///|
+/// Use the browser's URL parser to preserve relative URLs and normalization.
+fn resolve_browser_url(url : String) -> (String, String) raise @js.Error_ {
+  @js.Error_::wrap(
+    () => {
+      let base : String = @js.Value::cast_from(@dom.document()).get_with_string(
+        "baseURI",
+      )
+      @js.globalThis.new_with_string("URL", [url, base])
+    },
+    map_ok=parsed => {
+      (parsed.get_with_string("href"), parsed.get_with_string("protocol"))
+    },
+  )
+}
+
+///|
+fn open_link_in_browser(url : String) -> Unit {
+  let (href, protocol) = resolve_browser_url(url) catch { _ => return }
+  guard protocol == "mailto:" || protocol == "http:" || protocol == "https:" else {
+    return
+  }
+  let anchor = @dom.document().create_element("a")
+  anchor.set_attribute("href", href)
+  if protocol != "mailto:" {
+    anchor.set_attribute("target", "_blank")
+    anchor.set_attribute("rel", "noopener noreferrer")
+  }
+  if anchor.to_html_element() is Some(element) {
+    element.click()
+  }
+}

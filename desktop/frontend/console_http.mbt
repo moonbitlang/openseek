@@ -1,18 +1,37 @@
-// The console's account transport: the relay's session-cookie HTTP API.
-// Hand-rolled fetch (rather than rabbita's `@http`) because these flows are
-// status-driven — 401 *is* the signed-out signal, and rabbita's package
-// treats every completed response as success.
+// The console uses the relay's session-cookie HTTP API. Async's browser
+// transport preserves HTTP status codes, including the signed-out 401 signal.
+
+///|
+fn console_request(
+  path : String,
+  method_ : @http.RequestMethod,
+  on_done : (Int, String) -> Unit,
+  on_fail : (String) -> Unit,
+) -> Unit {
+  @js.Promise::from_async(() => {
+    let (response, body) = try {
+      let (url, _) = resolve_browser_url(path)
+      @http.request(url, method_, {}, "")
+    } catch {
+      error => {
+        on_fail(error.to_string())
+        return
+      }
+    }
+    // Response.text() uses replacement characters for malformed UTF-8.
+    on_done(response.code, @utf8.decode_lossy(body.binary(), ignore_bom=true))
+  })
+  |> ignore
+}
 
 ///|
 /// GET `/v1/auth/me`: 200 is a session, 401 is signed out, anything else
 /// is a page-level failure worth a retry button.
 fn fetch_console_me(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_fetch(
+    console_request(
       "/v1/auth/me",
-      "GET",
-      false,
-      "",
+      Get,
       (status, body) => {
         scheduler.add(
           dispatch(
@@ -62,11 +81,9 @@ fn fetch_console_roster(
   generation : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_fetch(
+    console_request(
       "/v1/devices",
-      "GET",
-      false,
-      "",
+      Get,
       (status, body) => {
         scheduler.add(
           dispatch(
@@ -123,11 +140,9 @@ fn sign_out_error(status : Int, body : String) -> String {
 /// POST `/v1/auth/logout`.
 fn sign_out(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    js_fetch(
+    console_request(
       "/v1/auth/logout",
-      "POST",
-      false,
-      "",
+      Post,
       (status, body) => {
         scheduler.add(
           dispatch(

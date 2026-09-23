@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/async/http",
+  "moonbitlang/core/encoding/utf8",
   "openseek_desktop/frontend/sidebar/messages" @sidebar_messages,
   "openseek_desktop/frontend/i18n",
   "moonbitlang/openseek_protocol" @wire,
