@@ -663,6 +663,10 @@ fn Conversation::wants_fresh_worktree(self : Conversation) -> Bool {
 /// flight. It would only leave the chip disagreeing with where the
 /// conversation is being pinned.
 fn Model::can_choose_launch_mode(self : Model, conv : Conversation) -> Bool {
+  if self.device_state(conv.device) is Some(dev) &&
+    dev.is_chat_workspace(conv.project()) {
+    return false
+  }
   guard conv.workspace is Project(root~) &&
     conv.messages.length() == 0 &&
     conv.run is NoRun(..) &&
@@ -692,6 +696,10 @@ fn Model::worktree_control(
   conv : Conversation,
 ) -> @composer.WorktreeControl? {
   guard conv.messages.length() == 0 else { return None }
+  if self.device_state(conv.device) is Some(dev) &&
+    dev.is_chat_workspace(conv.project()) {
+    return None
+  }
   let choice = match conv.workspace {
     Worktree(name~, ..) => @composer.BoundWorktree(name)
     Project(_) if conv.worktree_mode => @composer.FreshWorktree
