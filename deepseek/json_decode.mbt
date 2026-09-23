@@ -102,14 +102,9 @@ fn decode_reasoning_content(
   fields : Map[String, Json],
   path~ : @json.JsonPath,
 ) -> String raise @json.JsonDecodeError {
-  if decode_nullable_string(fields, key="reasoning_content", path~)
-    is Some(reasoning_content) {
-    return reasoning_content
-  } else if decode_nullable_string(fields, key="reasoning", path~)
-    is Some(reasoning_content) {
-    return reasoning_content
-  } else {
-    return ""
+  match decode_nullable_string(fields, key="reasoning_content", path~) {
+    Some(reasoning_content) => reasoning_content
+    None => decode_nullable_string(fields, key="reasoning", path~).unwrap_or("")
   }
 }
 

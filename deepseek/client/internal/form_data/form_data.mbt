@@ -65,32 +65,37 @@ struct FormData {
 }
 
 ///|
+/// Whether `text` holds a C0 control or DEL, which could inject a new multipart
+/// header or part.
+fn has_control_char(text : String) -> Bool {
+  text.iter().any(ch => ch < ' ' || ch == '\u007f')
+}
+
+///|
+/// Escapes quotes and backslashes for a quoted-string parameter.
+fn quote_param(text : String) -> String {
+  text.replace_all(old="\\", new="\\\\").replace_all(old="\"", new="\\\"")
+}
+
+///|
 fn Part::encode(self : Part) -> EncodedPart raise FormDataError {
   let (name, filename, content_type, data) = match self {
     Text(name~, value~) => (name, None, None, @utf8.encode(value))
     File(name~, filename~, content_type~, data~) =>
       (name, Some(filename), Some(content_type), data)
   }
-  if name.is_empty() || name.iter().any(ch => ch < ' ' || ch == '\u007f') {
+  if name.is_empty() || has_control_char(name) {
     raise InvalidFieldName
   }
-  // Quoted-string parameters escape quotes and backslashes. Reject controls
-  // before encoding so values cannot inject a new multipart header or part.
-  let quoted_name = name
-    .replace_all(old="\\", new="\\\\")
-    .replace_all(old="\"", new="\\\"")
   let headers = StringBuilder()
   headers.write_string(
-    "Content-Disposition: form-data; name=\"\{quoted_name}\"",
+    "Content-Disposition: form-data; name=\"\{quote_param(name)}\"",
   )
   if filename is Some(filename) {
-    if filename.iter().any(ch => ch < ' ' || ch == '\u007f') {
+    if has_control_char(filename) {
       raise InvalidFilename
     }
-    let quoted_filename = filename
-      .replace_all(old="\\", new="\\\\")
-      .replace_all(old="\"", new="\\\"")
-    headers.write_string("; filename=\"\{quoted_filename}\"")
+    headers.write_string("; filename=\"\{quote_param(filename)}\"")
   }
   headers.write_string("\r\n")
   if content_type is Some(content_type) {

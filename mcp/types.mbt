@@ -188,13 +188,13 @@ pub fn CallToolResult::render_text(self : CallToolResult) -> String {
     }
     None => text
   }
-} ///|
+}
+
+///|
 /// The string at `key`, or nothing when the field is absent or not a string.
 ///
 /// Only for the fields MCP lets a server omit — every `guard ... else raise
 /// Protocol` in this file stays exactly as strict as it was.
-
-///|
 fn optional_string(json : Json, key : String) -> String? {
   guard json is Object(fields) && fields.get(key) is Some(String(text)) else {
     return None

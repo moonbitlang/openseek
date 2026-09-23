@@ -18,11 +18,9 @@ async fn stream_test_server(
         assert_true(request.headers.get("accept-encoding") is Some("identity"))
         let request_body = body.read_all().text()
         assert_true(request_body.contains("\"stream\":true"))
+        assert_true(request_body.contains("\"include_usage\":true"))
         if kimi_usage {
           assert_true(request_body.contains("\"model\":\"kimi-k2.7-code\""))
-          assert_true(request_body.contains("\"include_usage\":true"))
-        } else {
-          assert_true(request_body.contains("\"include_usage\":true"))
         }
         assert_false(request_body.contains("\"response_format\""))
         conn.send_response(200, "OK", extra_headers={

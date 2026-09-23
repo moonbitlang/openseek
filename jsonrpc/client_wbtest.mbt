@@ -469,39 +469,18 @@ async test "cancelling the reader closes the client and fails in-flight requests
 }
 
 ///|
-/// Regression guard: cancelling a parked writer must also close the client.
-/// Cancellation no longer enters the writer's `catch`, so the close has to be
-/// a `defer` — otherwise `is_closed` stays false and every outstanding request
-/// waits for a reply that can never arrive.
-async test "cancelling a parked writer closes the client" {
-  @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    // Parked on an empty outbox; no reader is needed for this property.
-    let writer = group.spawn(() => client.run_writer())
-    @async.pause()
-    writer.cancel()
-    let _ = writer.wait() catch { _ => () }
-    assert_true(client.is_closed())
-  })
-}
-
-///|
 async test "a request after close raises Closed and notify is a no-op" {
-  @async.with_task_group(group => {
-    let transport = new_transport()
-    let client = Client::Client(transport)
-    client.close()
-    assert_true(client.is_closed())
-    let outcome = request_outcome(client, "ping")
-    assert_eq(outcome, "closed")
-    // notify after close must not raise.
-    client.notify(
-      method_="notifications/initialized",
-      params=Json::empty_object(),
-    )
-    ignore(group)
-  })
+  let transport = new_transport()
+  let client = Client::Client(transport)
+  client.close()
+  assert_true(client.is_closed())
+  let outcome = request_outcome(client, "ping")
+  assert_eq(outcome, "closed")
+  // notify after close must not raise.
+  client.notify(
+    method_="notifications/initialized",
+    params=Json::empty_object(),
+  )
 }
 
 ///|

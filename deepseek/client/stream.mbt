@@ -268,6 +268,16 @@ async fn read_chat_stream(
   }
   let acc = StreamAccumulator::StreamAccumulator()
   let data_lines : Array[String] = []
+  async fn flush() -> Bool {
+    sse.buffered_data = false
+    flush_sse_event(
+      acc,
+      data_lines,
+      on_stream_event~,
+      on_content_delta~,
+      on_reasoning_delta~,
+    )
+  }
   for ;; {
     // An interrupted read — EOF or idle timeout — must flush any buffered event
     // before raising: a `data:` line received without its blank-line terminator
@@ -279,14 +289,7 @@ async fn read_chat_stream(
       Some(Some(raw)) => {
         let trimmed = raw.trim()
         if trimmed.is_empty() {
-          sse.buffered_data = false
-          if flush_sse_event(
-              acc,
-              data_lines,
-              on_stream_event~,
-              on_content_delta~,
-              on_reasoning_delta~,
-            ) {
+          if flush() {
             break
           }
         } else if sse_data_fragment(raw) is Some(data) {
@@ -300,14 +303,7 @@ async fn read_chat_stream(
       Some(None) => StreamEnded
       None => IdleTimeout("DeepSeek stream", idle_timeout_ms)
     }
-    sse.buffered_data = false
-    if flush_sse_event(
-        acc,
-        data_lines,
-        on_stream_event~,
-        on_content_delta~,
-        on_reasoning_delta~,
-      ) {
+    if flush() {
       break
     }
     raise error

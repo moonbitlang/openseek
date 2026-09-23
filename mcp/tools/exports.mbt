@@ -23,14 +23,14 @@ pub async fn tools_for_client(
   // Skip exact repeats of one raw name (a misbehaving server aliasing one
   // method) so they cannot eat the tool budget; `build`'s suffixing stays
   // reserved for *distinct* names that collide after sanitization.
-  let seen_raw : Map[String, Unit] = Map([])
+  let seen_raw : Set[String] = Set([])
   let bridged = []
   for tool in client.list_tools() {
     if seen_raw.contains(tool.name) {
       @emit.emit(McpToolDuplicate(server~, tool=tool.name))
       continue
     }
-    seen_raw[tool.name] = ()
+    seen_raw.add(tool.name)
     bridged.push(bridge_tool(server, client, tool))
   }
   bridged

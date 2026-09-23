@@ -64,7 +64,7 @@ fn cap_name(name : String, limit? : Int = MaxFunctionNameChars) -> String {
 /// A name not yet in `seen`: `name` itself, or the first `<base>-N` variant that
 /// fits the provider cap. Sanitization and capping can make two distinct MCP
 /// tools collide; suffixing keeps both callable instead of dropping one.
-fn uniquify(seen : Map[String, Unit], name : String) -> String {
+fn uniquify(seen : Set[String], name : String) -> String {
   if !seen.contains(name) {
     return name
   }
@@ -120,7 +120,7 @@ pub async fn[X] build_grouped(
 ) -> Array[(String, Array[@agent_tool.AgentToolDefinition])] {
   let groups : Array[(String, Array[@agent_tool.AgentToolDefinition])] = []
   let mut total = 0
-  let seen : Map[String, Unit] = Map([])
+  let seen : Set[String] = Set([])
   for server in servers {
     let mine : Array[@agent_tool.AgentToolDefinition] = []
     groups.push((server.name(), mine))
@@ -150,7 +150,7 @@ pub async fn[X] build_grouped(
       if name != tool.name {
         @emit.emit(McpToolRenamed(from=tool.name, to=name))
       }
-      seen[name] = ()
+      seen.add(name)
       total += 1
       mine.push(
         AgentToolDefinition(

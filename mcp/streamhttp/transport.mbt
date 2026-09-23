@@ -158,15 +158,6 @@ fn feed_gate(completion : @async.Queue[Unit]?) -> Unit {
 }
 
 ///|
-/// Case-insensitive response-header lookup (header names are case-insensitive
-/// on the wire and servers vary).
-fn header_value(headers : @http.Headers, name : String) -> String? {
-  // `Headers` keys are case-insensitive, so a direct lookup covers the
-  // differently-cased wire spellings this scan used to handle manually.
-  headers.get(name)
-}
-
-///|
 impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
   guard !self.closed else { fail("transport closed") }
   // The id this POST must answer (None for a notification or a reply): if the
@@ -374,7 +365,7 @@ async fn HttpTransport::exchange(
   // The spec assigns the session id on the initialize response only; capturing
   // it elsewhere would let a later (or misbehaving) response rebind the session.
   if message is { "method": "initialize", .. } &&
-    header_value(response.headers, "Mcp-Session-Id") is Some(session_id) {
+    response.headers.get("Mcp-Session-Id") is Some(session_id) {
     self.session_id = Some(session_id)
   }
   // < 300: @http follows no redirects, so a 3xx answer is also a dead exchange —
@@ -387,7 +378,8 @@ async fn HttpTransport::exchange(
     fail("MCP endpoint answered HTTP \{response.code}")
   }
   // Media types are case-insensitive on the wire.
-  let content_type = header_value(response.headers, "Content-Type")
+  let content_type = response.headers
+    .get("Content-Type")
     .unwrap_or("")
     .to_lower()
   if content_type.contains("text/event-stream") {

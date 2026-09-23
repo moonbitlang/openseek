@@ -100,13 +100,11 @@ fn decode_http_server(name : String, entry : Json) -> McpServer raise {
   }
   let headers = decode_string_map(name, entry, "headers")
   Http(name~, url~, headers~)
-} ///|
-/// An optional object-of-strings field: absent yields empty, present-but-
-/// mistyped is an error. `env` and `headers` were the same twelve lines twice,
-/// differing only in the field name — which already appeared verbatim inside
-/// both of their error messages.
+}
 
 ///|
+/// An optional object-of-strings field: absent yields empty, present-but-
+/// mistyped is an error.
 fn decode_string_map(
   name : String,
   entry : Json,
