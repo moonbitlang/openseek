@@ -1299,12 +1299,10 @@ fn grading_env() -> Map[String, String] {
     "DEEPSEEK", "OPENAI", "ANTHROPIC", "KEY", "TOKEN", "SECRET", "PASSWORD",
   ]
   let env = @env.get_env_vars()
-  for key in env.keys().collect() {
+  env.retain((key, _) => {
     let upper = key.to_upper()
-    if markers.iter().any(marker => upper.contains(marker)) {
-      env.remove(key)
-    }
-  }
+    !markers.iter().any(marker => upper.contains(marker))
+  })
   env
 }
 
@@ -1480,17 +1478,13 @@ async fn recovered_execution(
   let previous = "\{out}/\{name}.json"
   if @fs.exists(previous) {
     guard read_json(previous) is Object(fields) else { return Json::null() }
-    let execution : Map[String, Json] = Map([])
-    for
-      key in [
-        "name", "variant", "repeat", "exit_code", "seconds", "exit_code_unrecorded",
-        "seconds_source",
-      ] {
-      if fields.get(key) is Some(value) {
-        execution[key] = value
-      }
-    }
-    return execution.to_json()
+    let kept = [
+      "name", "variant", "repeat", "exit_code", "seconds", "exit_code_unrecorded",
+      "seconds_source",
+    ]
+    return (Map <| [
+      for key, value in fields if kept.contains(key) => (key, value)
+    ]).to_json()
   }
   // Recovery for the original reader's child-session ambiguity. Keep OS exit
   // status unavailable and label reconstructed timing.
