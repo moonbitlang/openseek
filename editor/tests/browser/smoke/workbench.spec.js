@@ -149,6 +149,32 @@ test('keeps the explorer compact and exposes an accessible splitter', async ({
     })
   ).toBeLessThan(1);
 
+  // A different pointer must neither resize nor terminate this drag. Cancel
+  // restores the prior inline styles and removes the window listeners.
+  await splitter.evaluate(handle => {
+    document.body.style.cursor = 'crosshair';
+    document.body.style.userSelect = 'text';
+    handle.dispatchEvent(new PointerEvent('pointerdown', {
+      pointerId: 99, button: 0, clientX: 340, bubbles: true,
+    }));
+    window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 98, clientX: 400 }));
+    window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 98 }));
+  });
+  await expect(splitter).toHaveAttribute('aria-valuenow', '340');
+  await expect(page.locator('body')).toHaveCSS('cursor', 'ew-resize');
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 99, clientX: 370 }));
+    window.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 99 }));
+    window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 99, clientX: 400 }));
+  });
+  await expect(splitter).toHaveAttribute('aria-valuenow', '370');
+  await expect(page.locator('body')).toHaveCSS('cursor', 'crosshair');
+  await expect(page.locator('body')).toHaveCSS('user-select', 'text');
+  await splitter.press('Home');
+  await expect(splitter).toHaveAttribute('aria-valuenow', '200');
+  await splitter.press('End');
+  await expect(splitter).toHaveAttribute('aria-valuenow', '420');
+
   await page.setViewportSize({ width: 640, height: 700 });
   await expect(explorer).toHaveCSS('width', '148px');
   await expect(splitter).toBeHidden();
