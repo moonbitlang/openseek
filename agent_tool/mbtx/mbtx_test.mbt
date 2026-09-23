@@ -82,9 +82,9 @@ async test "default prompt reusable check script forwards arguments" {
       "filename": "scripts/check.mbtx",
       "args": ["--deny-warn"],
     })
-    assert_false(saved.is_error, msg=saved.content)
+    assert_false(saved.is_error, msg=saved.content.text())
     let reused = run_in(ws, { "filename": "scripts/check.mbtx" })
-    assert_false(reused.is_error, msg=reused.content)
+    assert_false(reused.is_error, msg=reused.content.text())
     let invalid = run_in(ws, {
       "filename": "scripts/check.mbtx",
       "args": ["--not-a-moon-option"],
@@ -103,11 +103,11 @@ async test "cli_greet example reads process arguments implicitly" {
       "filename": "scripts/greet.mbtx",
       "args": ["--name", "Ada Lovelace"],
     })
-    assert_false(saved.is_error, msg=saved.content)
+    assert_false(saved.is_error, msg=saved.content.text())
     assert_true(saved.content.contains("Hello, Ada Lovelace!\n"))
     let defaults = run_in(ws, { "filename": "scripts/greet.mbtx" })
-    assert_false(defaults.is_error, msg=defaults.content)
-    assert_eq(defaults.content, "Hello, world!\n")
+    assert_false(defaults.is_error, msg=defaults.content.text())
+    assert_eq(defaults.content, Content([Text("Hello, world!\n")]))
     let invalid = run_in(ws, {
       "filename": "scripts/greet.mbtx",
       "args": ["--unknown"],
@@ -129,23 +129,23 @@ async test "script arguments reach inline and reused scripts verbatim on both ru
         $|fn main { println(@env.args()[\{skip}:].to_array().to_json().stringify()) }
       let filename = "args-\{target}.mbtx"
       let inline = run_in(ws, { "source": source, "target": target })
-      assert_false(inline.is_error, msg=inline.content)
-      assert_eq(inline.content, "[]\n")
+      assert_false(inline.is_error, msg=inline.content.text())
+      assert_eq(inline.content, Content([Text("[]\n")]))
       let saved = run_in(ws, {
         "source": source,
         "filename": filename,
         "target": target,
         "args": values,
       })
-      assert_false(saved.is_error, msg=saved.content)
+      assert_false(saved.is_error, msg=saved.content.text())
       assert_true(saved.content.contains(values.to_json().stringify()))
       let reused = run_in(ws, {
         "filename": filename,
         "target": target,
         "args": ["different input"],
       })
-      assert_false(reused.is_error, msg=reused.content)
-      assert_eq(reused.content, "[\"different input\"]\n")
+      assert_false(reused.is_error, msg=reused.content.text())
+      assert_eq(reused.content, Content([Text("[\"different input\"]\n")]))
     }
   })
 }
@@ -158,7 +158,7 @@ async test "save and run creates parents, suggests reuse, and preserves existing
     let source = "fn main { println(42) }"
     let args : Json = { "source": source, "filename": "scripts/check.mbtx" }
     let out = dispatch(tool, args)
-    assert_false(out.is_error, msg=out.content)
+    assert_false(out.is_error, msg=out.content.text())
     assert_true(out.content.contains("42"))
     assert_true(out.content.contains("{\"filename\":\"scripts/check.mbtx\"}"))
     assert_true(out.content.contains("omit source"))
@@ -260,7 +260,7 @@ async test "bundled workflows use cwd and propagate check and test failures" {
     for
       filename in [check_path, test_path, combined_path, json_path, format_path] {
       let out = run_in(ws, { "filename": filename, "cwd": "nested" })
-      assert_false(out.is_error, msg=out.content)
+      assert_false(out.is_error, msg=out.content.text())
     }
     @fs.write_file(
       "\{project}/main_test.mbt",
@@ -268,26 +268,41 @@ async test "bundled workflows use cwd and propagate check and test failures" {
       create_mode=CreateOrTruncate,
     )
     let out = run_in(ws, { "filename": test_path, "cwd": "nested" })
-    assert_true(out.is_error, msg=out.content)
-    assert_true(out.content.contains("moon test failed"), msg=out.content)
+    assert_true(out.is_error, msg=out.content.text())
+    assert_true(
+      out.content.contains("moon test failed"),
+      msg=out.content.text(),
+    )
     let out = run_in(ws, { "filename": combined_path, "cwd": "nested" })
-    assert_true(out.is_error, msg=out.content)
-    assert_true(out.content.contains("moon test failed"), msg=out.content)
+    assert_true(out.is_error, msg=out.content.text())
+    assert_true(
+      out.content.contains("moon test failed"),
+      msg=out.content.text(),
+    )
     @fs.write_file(
       "\{project}/main.mbt",
       "fn broken() -> Int { true }\n",
       create_mode=CreateOrTruncate,
     )
     let out = run_in(ws, { "filename": check_path, "cwd": "nested" })
-    assert_true(out.is_error, msg=out.content)
-    assert_true(out.content.contains("moon check failed"), msg=out.content)
+    assert_true(out.is_error, msg=out.content.text())
+    assert_true(
+      out.content.contains("moon check failed"),
+      msg=out.content.text(),
+    )
     let out = run_in(ws, { "filename": combined_path, "cwd": "nested" })
-    assert_true(out.is_error, msg=out.content)
-    assert_true(out.content.contains("moon check failed"), msg=out.content)
-    assert_false(out.content.contains("moon test failed"), msg=out.content)
+    assert_true(out.is_error, msg=out.content.text())
+    assert_true(
+      out.content.contains("moon check failed"),
+      msg=out.content.text(),
+    )
+    assert_false(
+      out.content.contains("moon test failed"),
+      msg=out.content.text(),
+    )
     let out = run_in(ws, { "filename": json_path, "cwd": "nested" })
-    assert_true(out.is_error, msg=out.content)
-    assert_true(out.content.contains("main.mbt"), msg=out.content)
+    assert_true(out.is_error, msg=out.content.text())
+    assert_true(out.content.contains("main.mbt"), msg=out.content.text())
   })
 }
 
@@ -310,7 +325,7 @@ async test "filename resolves from workspace independently of cwd and is reread"
       create_mode=CreateOrTruncate,
     )
     let out = run_in(ws, { "filename": "./saved script.mbtx", "cwd": "sub" })
-    assert_false(out.is_error, msg=out.content)
+    assert_false(out.is_error, msg=out.content.text())
     assert_true(out.content.contains("saved-script-ok"))
     @fs.write_file(
       path,
@@ -318,7 +333,7 @@ async test "filename resolves from workspace independently of cwd and is reread"
       create_mode=CreateOrTruncate,
     )
     let out = run_in(ws, { "filename": path })
-    assert_false(out.is_error, msg=out.content)
+    assert_false(out.is_error, msg=out.content.text())
     assert_true(out.content.contains("43"))
   })
 }
@@ -352,7 +367,7 @@ async test "saved scripts retain compiler filename and FFI checks" {
     )
     let out = run_in(ws, { "filename": "./broken.mbtx" })
     assert_true(out.is_error)
-    assert_true(out.content.contains("broken.mbtx:1:"), msg=out.content)
+    assert_true(out.content.contains("broken.mbtx:1:"), msg=out.content.text())
     @fs.write_file(
       "\{ws}/ffi.mbtx",
       "extern \"js\" fn escape() -> Unit = \"() => {}\"\nfn main { escape() }",
@@ -369,7 +384,8 @@ async test "surfaces a compile error via moon's own diagnostics" {
   let out = run("fn main { let _x : Int = \"nope\" }")
   assert_true(out.is_error)
   assert_true(
-    out.content.to_lower().contains("type") || out.content.contains("String"),
+    out.content.text().to_lower().contains("type") ||
+    out.content.contains("String"),
   )
   // ...and labeled as the BUILD phase failing: the synchronous build phase
   // returned nonzero, so the program never started — by construction, not by
@@ -877,8 +893,8 @@ async test "read-only snippets can print and read workspace source" {
         #|}
       ),
     })
-    assert_false(output.is_error, msg=output.content)
-    assert_eq(output.content, "1\nsource contents\n")
+    assert_false(output.is_error, msg=output.content.text())
+    assert_eq(output.content, Content([Text("1\nsource contents\n")]))
   })
 }
 
@@ -1108,7 +1124,7 @@ async test "filename approval executes the reviewed snapshot even if the file ch
       "filename": "./approved.mbtx",
       "escalated": true,
     })
-    assert_false(out.is_error, msg=out.content)
+    assert_false(out.is_error, msg=out.content.text())
     assert_true(out.content.contains("approved snapshot"))
     assert_false(out.content.contains("replacement program"))
   })
@@ -1397,7 +1413,7 @@ async test "the refusal scan applies only to a run that did not exit 0" {
   @vfs.with_tmpdir(ws => {
     let quoted = "fn main { println(\"Sandbox policy blocked file write: example\") }"
     let fine = run_in(ws, { "source": quoted })
-    assert_false(fine.is_error, msg=fine.content)
+    assert_false(fine.is_error, msg=fine.content.text())
     assert_true(fine.content.contains("Sandbox policy blocked file write"))
     assert_false(fine.content.contains("mbtx sandbox:"))
     let dying = run_in(ws, {
@@ -1790,7 +1806,7 @@ async test "a hosted snippet may write its own run directory" {
         ),
       )
       if out.is_error {
-        fail("hosted snippet failed:\n\{out.content}")
+        fail("hosted snippet failed:\n\{out.content.text()}")
       }
       assert_true(out.content.contains("wrote"))
       let journal = @fs.read_file("\{store}/run7-wf-1/journal.jsonl").text()
@@ -1826,7 +1842,7 @@ async test "a hosted snippet may NOT write the rest of the session store" {
           #|}
         ),
       )
-      assert_false(out.is_error, msg=out.content)
+      assert_false(out.is_error, msg=out.content.text())
       assert_true(out.content.contains("store refused"))
       assert_true(out.content.contains("Sandbox policy blocked"))
       assert_false(out.content.contains("mbtx sandbox:"))
@@ -1990,7 +2006,7 @@ async test "the run directory is created even when the store root is not there y
         "source": "fn main { println(\"hosted\") }",
         "subrun": true,
       })
-      assert_false(out.is_error, msg=out.content)
+      assert_false(out.is_error, msg=out.content.text())
       assert_eq(issued, @host.block_size)
       assert_true(@fs.exists("\{root}/run7-wf-1"))
     })
@@ -2032,7 +2048,7 @@ async test "a hosted run is announced before it runs and closed on every exit" {
         { "source": "fn main { println(\"hosted\") }", "subrun": true },
         first=700,
       )
-      assert_false(out.is_error, msg=out.content)
+      assert_false(out.is_error, msg=out.content.text())
       guard workflow_lines("wf-700")
         is [
           {
@@ -2085,7 +2101,7 @@ async test "a hosted run is announced before it runs and closed on every exit" {
           #|  println("late")
           #|}
         let output = dispatch(definition, { "source": source, "subrun": true })
-        assert_false(output.is_error, msg=output.content)
+        assert_false(output.is_error, msg=output.content.text())
         assert_true(output.content.contains("moved to the background"))
         guard workflow_lines("wf-900")
           is [{ "event": String("workflow_started"), .. }] else {
@@ -2124,17 +2140,20 @@ async test "CI monitor bundled entry forwards arguments before querying GitHub" 
       "filename": filename,
       "args": ["--help"],
     })
-    assert_false(out.is_error, msg=out.content)
+    assert_false(out.is_error, msg=out.content.text())
     assert_true(
       out.content.contains("Requires authenticated gh"),
-      msg=out.content,
+      msg=out.content.text(),
     )
     let out = run_in(ws, {
       "filename": filename,
       "args": ["--timeout-seconds", "0"],
       "description": "Reject invalid CI monitor timing",
     })
-    assert_true(out.is_error, msg=out.content)
-    assert_true(out.content.contains("Expected seconds"), msg=out.content)
+    assert_true(out.is_error, msg=out.content.text())
+    assert_true(
+      out.content.contains("Expected seconds"),
+      msg=out.content.text(),
+    )
   })
 }

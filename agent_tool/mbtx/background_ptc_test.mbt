@@ -35,7 +35,7 @@ async test "default PTC survives background handoff and persists job-owned edit 
             #|}
           ),
         })
-        assert_false(output.is_error, msg=output.content)
+        assert_false(output.is_error, msg=output.content.text())
         guard jobs.list() is [job] else {
           fail("default PTC did not background")
         }
@@ -106,7 +106,7 @@ async test "stopping a background PTC job joins its active tool before reporting
             #|async fn main { println(@tools.call("block", {}).content) }
           ),
         })
-        assert_false(output.is_error, msg=output.content)
+        assert_false(output.is_error, msg=output.content.text())
         guard jobs.list() is [job] else { fail("missing background job") }
         entered.get()
         assert_true(jobs.stop(job.id))
@@ -148,7 +148,7 @@ async test "explicit PTC opt-out preserves ordinary background execution" {
             #|}
           ),
         })
-        assert_false(output.is_error, msg=output.content)
+        assert_false(output.is_error, msg=output.content.text())
         assert_true(output.data is None)
         guard jobs.list() is [job] else { fail("opt-out did not background") }
         jobs.wait_any([job.id])
@@ -210,7 +210,7 @@ async test "background edits after foreground edits validate stale input and kee
             #|}
           ),
         })
-        assert_false(output.is_error, msg=output.content)
+        assert_false(output.is_error, msg=output.content.text())
         guard jobs.list() is [job] else { fail("missing job") }
         entered.get()
         defer release.put(())
@@ -231,7 +231,7 @@ async test "background edits after foreground edits validate stale input and kee
             #|}
           ),
         })
-        assert_false(output.is_error, msg=output.content)
+        assert_false(output.is_error, msg=output.content.text())
         let foreground_trace = current.val
         release.put(())
         jobs.wait_any([job.id])
@@ -318,7 +318,7 @@ async test "successful process exit with an unfinished RPC is reported as a fail
             #|}
           ),
         })
-        assert_false(output.is_error, msg=output.content)
+        assert_false(output.is_error, msg=output.content.text())
         guard jobs.list() is [job] else { fail("missing job") }
         jobs.wait_any([job.id])
         assert_true(stopped.val)
@@ -392,7 +392,7 @@ async test "handoff failure retains completed mutations and interrupts pending c
           },
         )
         assert_true(blocked.val)
-        assert_true(output.is_error, msg=output.content)
+        assert_true(output.is_error, msg=output.content.text())
         assert_eq(@fs.read_file("\{ws}/note.txt").text(), "after\n")
         assert_true(jobs.list().is_empty())
         assert_true(

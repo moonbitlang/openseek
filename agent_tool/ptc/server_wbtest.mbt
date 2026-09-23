@@ -209,7 +209,10 @@ async test "PTC tool failures are results and do not end the program" {
     )
     @agent_tool.respond("recovered")
   })
-  assert_true(action is Respond({ content: "recovered", is_error: false, .. }))
+  assert_true(
+    action
+    is Respond({ content: Content([Text("recovered")]), is_error: false, .. }),
+  )
 }
 
 ///|

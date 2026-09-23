@@ -383,7 +383,7 @@ async fn AgentLoop::handle_goal_tool_call(
         false,
       )
   }
-  let session = self.record_tool_result(
+  let session = self.record_text_tool_result(
     session,
     tool_call_id=native_call.id,
     tool_name=tool_call.name,

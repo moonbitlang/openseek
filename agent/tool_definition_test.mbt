@@ -3,8 +3,8 @@ async test "agent registers the expected tool names" {
   @async.with_task_group() <| group => {
     let tools = @agent.build_tools(AgentRuntime(), AgentTaskScope(group))
     assert_eq([ for t in tools.function_tools() => t.name ], [
-      "edit", "multi_edit", "write", "remove", "plan", "goal", "mbtx", "job_output",
-      "job_stop", "job_wait", "finish",
+      "read_image", "edit", "multi_edit", "write", "remove", "plan", "goal", "mbtx",
+      "job_output", "job_stop", "job_wait", "finish",
     ])
   }
 }

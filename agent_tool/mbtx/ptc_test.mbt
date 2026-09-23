@@ -43,7 +43,7 @@ async test "PTC real script edits and receives reply without deadlock" {
           ),
         })
       })
-      assert_false(output.is_error, msg=output.content)
+      assert_false(output.is_error, msg=output.content.text())
       assert_true(output.content.contains("reply received"))
       assert_eq(@fs.read_file("\{ws}/note.txt").text(), "final\n")
       assert_true(
@@ -106,7 +106,7 @@ async test "PTC real script preserves imports and structured results" {
           #|}
         ),
       })
-      assert_false(output.is_error, msg=output.content)
+      assert_false(output.is_error, msg=output.content.text())
       assert_true(output.content.contains("https://example.com"))
     })
   })
@@ -138,7 +138,7 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
           { "ptc": true, "filename": "saved.mbtx" },
         ] {
         let output = dispatch(definition, args)
-        assert_false(output.is_error, msg=output.content)
+        assert_false(output.is_error, msg=output.content.text())
         assert_true(output.content.contains("foreground done"))
       }
       assert_eq(@fs.read_file("\{ws}/saved.mbtx").text(), source)
@@ -189,7 +189,7 @@ async test "PTC foreground timeout stops the active host call before returning" 
           },
         )
       })
-      assert_true(output.is_error, msg=output.content)
+      assert_true(output.is_error, msg=output.content.text())
       assert_true(started.val)
       assert_true(stopped.val)
       assert_true(
@@ -212,7 +212,7 @@ async test "PTC leaves the script namespace and source unchanged" {
         @mbtx.definition(workspace_root=ws, program_service=service),
         { "ptc": true, "source": source, "filename": "unchanged.mbtx" },
       )
-      assert_false(output.is_error, msg=output.content)
+      assert_false(output.is_error, msg=output.content.text())
       assert_true(output.content.contains("user-owned name"))
       assert_eq(@fs.read_file("\{ws}/unchanged.mbtx").text(), source)
       // No tool call was made, so no trace is persisted with the result.
@@ -240,7 +240,7 @@ async test "explicit PTC without a session service is an error" {
         { "ptc": false, "source": "fn main { println(1) }" },
       ] {
       let output = dispatch(@mbtx.definition(workspace_root=ws), args)
-      assert_false(output.is_error, msg=output.content)
+      assert_false(output.is_error, msg=output.content.text())
       assert_true(output.data is None)
     }
   })

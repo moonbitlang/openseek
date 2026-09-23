@@ -15,9 +15,9 @@ async test "read workflow batches whole files inclusive ranges empty files and E
         "source.mbt:2:3", "empty", "newline", "source.mbt:99", "space name", "source.mbt:3",
       ],
     })
-    assert_false(out.is_error, msg=out.content)
+    assert_false(out.is_error, msg=out.content.text())
     assert_eq(
-      out.content,
+      out.content.text(),
       (
         #|=== "source.mbt" ===
         #|2 |beta
@@ -45,7 +45,7 @@ async test "read workflow batches whole files inclusive ranges empty files and E
       "filename": filename,
       "args": ["nested/source.mbt:2:2147483647"],
     })
-    assert_false(huge.is_error, msg=huge.content)
+    assert_false(huge.is_error, msg=huge.content.text())
     assert_true(
       huge.content.contains("shown_lines=3 total_lines=4 truncated=false"),
     )
@@ -62,8 +62,8 @@ async test "@builtin/read.mbtx runs the embedded copy with no resources on disk"
       "filename": "@builtin/read.mbtx",
       "args": ["a.txt:2"],
     })
-    assert_false(out.is_error, msg=out.content)
-    assert_true(out.content.contains("2 |two"), msg=out.content)
+    assert_false(out.is_error, msg=out.content.text())
+    assert_true(out.content.contains("2 |two"), msg=out.content.text())
   })
 }
 
@@ -78,7 +78,7 @@ async test "read workflow continues after distinct file errors and fails the cal
       "filename": filename,
       "args": ["missing", "directory", "invalid", "ok"],
     })
-    assert_true(out.is_error, msg=out.content)
+    assert_true(out.is_error, msg=out.content.text())
     assert_true(
       out.content.contains("=== \"missing\" ===\nerror reading file:"),
     )
@@ -106,14 +106,17 @@ async test "read workflow caps Unicode gutters and the whole foreground batch su
       "filename": filename,
       "args": ["--max-output-bytes", "5", "emoji"],
     })
-    assert_false(tiny.is_error, msg=tiny.content)
-    assert_true(tiny.content.contains("1 |A\n<system>"), msg=tiny.content)
+    assert_false(tiny.is_error, msg=tiny.content.text())
+    assert_true(
+      tiny.content.contains("1 |A\n<system>"),
+      msg=tiny.content.text(),
+    )
     assert_true(tiny.content.contains("truncated=true"))
     let gutter = run_in(ws, {
       "filename": filename,
       "args": ["--max-output-bytes", "1", "emoji"],
     })
-    assert_false(gutter.is_error, msg=gutter.content)
+    assert_false(gutter.is_error, msg=gutter.content.text())
     assert_true(
       gutter.content.contains("shown_lines=0 total_lines=1 truncated=true"),
     )
@@ -126,9 +129,12 @@ async test "read workflow caps Unicode gutters and the whole foreground batch su
     assert_true(missing.is_error)
     assert_true(
       missing.content.contains("error reading file:"),
-      msg=missing.content,
+      msg=missing.content.text(),
     )
-    assert_true(missing.content.contains("absent.txt"), msg=missing.content)
+    assert_true(
+      missing.content.contains("absent.txt"),
+      msg=missing.content.text(),
+    )
     // This uses the retained foreground runner, which would STOP at 48000 bytes.
     @async.with_task_group() <| group => {
       let scope = @agent_runtime.AgentTaskScope(group)
@@ -140,10 +146,10 @@ async test "read workflow caps Unicode gutters and the whole foreground batch su
           "args": ["--max-output-bytes", "50000", "large", "large", "emoji"],
         },
       )
-      assert_false(out.is_error, msg=out.content)
+      assert_false(out.is_error, msg=out.content.text())
       assert_true(out.content.contains("truncated=true"))
       assert_true(out.content.contains("skipped_files=2"))
-      assert_true(@utf8.encode(out.content).length() <= 40_000)
+      assert_true(@utf8.encode(out.content.text()).length() <= 40_000)
       assert_false(out.content.contains("STOPPED"))
       assert_false(out.content.contains("�"))
     }
@@ -167,12 +173,12 @@ async test "read workflow errors explain invalid selectors and arguments" {
         [""],
       ] {
       let out = run_in(ws, { "filename": filename, "args": args })
-      assert_true(out.is_error, msg=out.content)
-      assert_true(out.content.contains("error: read "), msg=out.content)
+      assert_true(out.is_error, msg=out.content.text())
+      assert_true(out.content.contains("error: read "), msg=out.content.text())
       assert_false(out.content.contains("Failure("))
     }
     let help = run_in(ws, { "filename": filename, "args": ["--help"] })
-    assert_false(help.is_error, msg=help.content)
+    assert_false(help.is_error, msg=help.content.text())
     assert_true(help.content.contains("inclusive and 1-based"))
   })
 }
@@ -194,7 +200,7 @@ async test "read workflow parses colons from the right and has literal paths" {
       "filename": filename,
       "args": ["C:\\src\\main.mbt:2:2", "--literal", "log:120", "--", "--flag"],
     })
-    assert_false(out.is_error, msg=out.content)
+    assert_false(out.is_error, msg=out.content.text())
     assert_true(out.content.contains("2 |selected"))
     assert_true(out.content.contains("1 |literal"))
     assert_true(out.content.contains("1 |option name"))
@@ -213,7 +219,7 @@ async test "read workflow reads absolute paths and sandbox wording as ordinary s
         "filename": filename,
         "args": [path],
       })
-      assert_false(out.is_error, msg=out.content)
+      assert_false(out.is_error, msg=out.content.text())
       assert_true(out.content.contains("1 |Sandbox policy blocked"))
       assert_true(out.content.contains("3 |x.mbt: Operation not permitted"))
       assert_false(out.content.contains("mbtx sandbox:"))

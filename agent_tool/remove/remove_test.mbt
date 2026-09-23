@@ -41,7 +41,7 @@ async test "remove deletes a file the agent created this session, recording why"
     // The rationale is recorded in the durable result for auditing.
     assert_eq(
       output.content,
-      "ok: removed \{path} (reason: scratch no longer needed)",
+      Content([Text("ok: removed \{path} (reason: scratch no longer needed)")]),
     )
     assert_false(@fs.exists(path))
   })
@@ -214,7 +214,10 @@ async test "remove rejects missing path" {
   let state = @agent_tool.FileStateMap()
   let result = run_remove(state, { "reason": "cleanup" })
   guard result is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "error: remove requires arguments.path")
+  assert_eq(
+    output.content,
+    Content([Text("error: remove requires arguments.path")]),
+  )
   assert_true(output.is_error)
 }
 
@@ -228,7 +231,10 @@ async test "remove rejects a missing reason" {
     // A destructive action must carry a rationale — no delete without one.
     let result = run_remove(state, { "path": path })
     guard result is Respond(output) else { fail("expected Respond") }
-    assert_eq(output.content, "error: remove requires arguments.reason")
+    assert_eq(
+      output.content,
+      Content([Text("error: remove requires arguments.reason")]),
+    )
     assert_true(output.is_error)
     assert_true(@fs.exists(path))
   })
@@ -251,7 +257,11 @@ async test "remove rejects a blank reason" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_eq(
       output.content,
-      "error: remove requires arguments.reason to be a non-empty explanation",
+      Content([
+        Text(
+          "error: remove requires arguments.reason to be a non-empty explanation",
+        ),
+      ]),
     )
     assert_true(output.is_error)
     assert_true(@fs.exists(path))

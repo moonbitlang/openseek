@@ -42,6 +42,7 @@ exercise this exact registry import.
 failures raise `@tools.TransportError` while tool errors are results. The
 PTC-enabled tools and their argument shapes:
 
+- `read_image`, e.g. `{ "path": "chart.png" }`, on image-capable model routes
 - `edit`
 - `multi_edit`, e.g. `{ "edits": edits }` or `{ "edits_file": "edits.json" }`
 - `web_search`, e.g. `{ "query": query }`, when registered
@@ -65,8 +66,17 @@ async fn main {
 ```
 
 Nested arguments and results are stored as metadata on the outer result and
-displayed as nested Desktop tool cards; only printed output enters the next
-model request.
+displayed as nested Desktop tool cards. Text-only results enter the next model
+request when printed. Results containing images are attached automatically to
+the outer result, preserving their text and image order (at most four images
+per program), independently of printed text. The SDK reply remains textual;
+image bytes are carried by the host, never printed as base64. After
+background handoff `job_output` returns those images. Image bytes use separate
+files in the existing job output directory; `ptc_images` metadata contains their
+paths, media types, sizes, and originating call indices, never inline base64.
+Those paths can be reopened with `read_image` after restart. Memory-only hosts
+retain images only for their runtime's lifetime. Repeated job reads return the
+same snapshot; they do not consume images.
 
 ## Lifetime and deadlock prevention
 

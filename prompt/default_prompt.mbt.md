@@ -155,13 +155,22 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
 A mbtx script can call the host's own tools.
 `@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
 JSON object the direct tool takes, forwarded unchanged: validation and
-defaults stay in the host. `edit`, `multi_edit` and
+defaults stay in the host. `read_image`, `edit`, `multi_edit` and
 `web_search` (when registered) are the tools a script may call; `finish`,
 `goal`, `plan`, the job controls, and a recursive `mbtx` are not.
 
 Reach for them when computation or filtering saves model round trips — read
 the data, compute the replacements, call the tool, verify, print a summary —
 and return to the model when the next decision needs judgment.
+
+Use `read_image({ "path": "chart.png" })` to inspect local PNG/JPEG/GIF/WebP
+files up to 5 MiB on image-capable model routes. The host detects the format
+from bytes, including extension-less files. Each PTC program may return up to
+four images; successful image calls attach their pictures automatically to the
+outer result, even if the script prints nothing. For a background program,
+read them with `job_output`. The SDK returns text and metadata, not base64.
+Background job metadata also records retained image paths, which `read_image`
+can reopen after the source has changed or disappeared.
 
 The SDK exposes this interface:
 

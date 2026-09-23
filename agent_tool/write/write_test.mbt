@@ -28,7 +28,10 @@ async test "write resolves relative paths under the workspace root" {
     guard result is Respond(output) else { fail("expected Respond") }
     let path = "\{dir}/note.txt"
     assert_false(output.is_error)
-    assert_eq(output.content, "ok: wrote 1 line (9 chars) to \{path}")
+    assert_eq(
+      output.content,
+      Content([Text("ok: wrote 1 line (9 chars) to \{path}")]),
+    )
     assert_eq(@fs.read_file(path).text(), "workspace")
   })
 }
@@ -145,7 +148,10 @@ async test "write creates missing parent directories" {
     let result = execute({ "path": path, "content": "import {}\n" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)
-    assert_eq(output.content, "ok: wrote 2 lines (10 chars) to \{path}")
+    assert_eq(
+      output.content,
+      Content([Text("ok: wrote 2 lines (10 chars) to \{path}")]),
+    )
     assert_eq(@fs.read_file(path).text(), "import {}\n")
   })
 }
@@ -156,7 +162,10 @@ async test "write creates a file with the given content" {
     let path = "\{dir}/test.txt"
     let result = execute({ "path": path, "content": "hello write" })
     guard result is Respond(output) else { fail("expected Respond") }
-    assert_eq(output.content, "ok: wrote 1 line (11 chars) to \{path}")
+    assert_eq(
+      output.content,
+      Content([Text("ok: wrote 1 line (11 chars) to \{path}")]),
+    )
     assert_false(output.is_error)
     let read_back = @fs.read_file(path).text()
     assert_eq(read_back, "hello write")
@@ -173,7 +182,9 @@ async test "write truncates existing files" {
     // The path already existed, so the result flags the overwrite.
     assert_eq(
       output.content,
-      "ok: wrote 1 line (5 chars) to \{path} (overwrote existing file)",
+      Content([
+        Text("ok: wrote 1 line (5 chars) to \{path} (overwrote existing file)"),
+      ]),
     )
     assert_false(output.is_error)
     let read_back = @fs.read_file(path).text()
@@ -188,13 +199,18 @@ async test "write reports whether it created or overwrote a file" {
     // First write to a fresh path: a plain "created" result, no overwrite note.
     let created = execute({ "path": path, "content": "v1" })
     guard created is Respond(first) else { fail("expected Respond") }
-    assert_eq(first.content, "ok: wrote 1 line (2 chars) to \{path}")
+    assert_eq(
+      first.content,
+      Content([Text("ok: wrote 1 line (2 chars) to \{path}")]),
+    )
     // Writing again clobbers the existing file, which the result now calls out.
     let overwritten = execute({ "path": path, "content": "v2!" })
     guard overwritten is Respond(second) else { fail("expected Respond") }
     assert_eq(
       second.content,
-      "ok: wrote 1 line (3 chars) to \{path} (overwrote existing file)",
+      Content([
+        Text("ok: wrote 1 line (3 chars) to \{path} (overwrote existing file)"),
+      ]),
     )
   })
 }
@@ -208,7 +224,9 @@ async test "write accepts empty content" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_eq(
       output.content,
-      "ok: wrote 0 lines (0 chars) to \{path} (overwrote existing file)",
+      Content([
+        Text("ok: wrote 0 lines (0 chars) to \{path} (overwrote existing file)"),
+      ]),
     )
     assert_false(output.is_error)
     let read_back = @fs.read_file(path).text()
@@ -432,7 +450,10 @@ async test "write rejects missing content" {
   @vfs.with_tmpdir(dir => {
     let result = execute({ "path": "\{dir}/noop.txt" })
     guard result is Respond(output) else { fail("expected Respond") }
-    assert_eq(output.content, "error: write requires arguments.content")
+    assert_eq(
+      output.content,
+      Content([Text("error: write requires arguments.content")]),
+    )
     assert_true(output.is_error)
   })
 }
@@ -441,7 +462,10 @@ async test "write rejects missing content" {
 async test "write rejects missing path" {
   let result = execute({ "content": "stuff" })
   guard result is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "error: write requires arguments.path")
+  assert_eq(
+    output.content,
+    Content([Text("error: write requires arguments.path")]),
+  )
   assert_true(output.is_error)
 }
 
@@ -449,6 +473,9 @@ async test "write rejects missing path" {
 async test "write rejects non-object arguments" {
   let result = execute(Json::null())
   guard result is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "error: write requires object arguments")
+  assert_eq(
+    output.content,
+    Content([Text("error: write requires object arguments")]),
+  )
   assert_true(output.is_error)
 }
