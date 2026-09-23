@@ -10,7 +10,6 @@ import {
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
-  "moonbitlang/core/debug",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
   "moonbitlang/core/string",
@@ -34,5 +33,9 @@ import {
   "openseek_desktop/frontend/transcript",
   "openseek_desktop/frontend/transcript_overview",
 }
+
+import {
+  "moonbitlang/core/debug",
+} for "wbtest"
 
 supported_targets = "js"

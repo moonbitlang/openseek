@@ -531,22 +531,20 @@ fn json_strings(values : Array[String]) -> Json {
 }
 
 ///|
-fn test_injection(issued : Ref[Int]) -> @host.SubrunInjection {
-  SubrunInjection(
-    exe="/opt/openseek",
-    session_root="/store",
-    parent="run7",
-    workspace_root="/ws",
-    reserve_ordinals=count => {
-      let base = issued.val + 1
-      issued.val += count
-      base
-    },
-  )
-}
-
-///|
 test "the reservation reaches the guest, and only its own directory is writable" {
+  fn test_injection(issued : Ref[Int]) -> @host.SubrunInjection {
+    SubrunInjection(
+      exe="/opt/openseek",
+      session_root="/store",
+      parent="run7",
+      workspace_root="/ws",
+      reserve_ordinals=count => {
+        let base = issued.val + 1
+        issued.val += count
+        base
+      },
+    )
+  }
   let injection = test_injection(Ref(0))
   let reservation = injection.reserve()
   // A snippet that tried to redirect its own scratch space cannot: the policy

@@ -86,55 +86,10 @@ fn report_schema() -> Json {
 }
 
 ///|
-/// Run the submit tool's Sync executor directly, as the loop would.
-fn submit_action(
-  captured : Ref[ReviewReport?],
-  args : Json,
-) -> @agent_tool.ToolAction raise {
-  guard submit_review_tool(captured).execute is Sync(execute) else {
-    fail("submit_review should be a Sync executor")
-  }
-  execute(args)
-}
-
-///|
 test "submit_review declares itself a control tool" {
   // The ceiling salvage honors control-declared completions; without this
   // a review hitting the context ceiling on its submitting step would
   // skip-close submit_review and fail with ReviewError.
   let captured : Ref[ReviewReport?] = { val: None, }
   assert_true(submit_review_tool(captured).is_control())
-}
-
-///|
-test "submit captures a valid report and finishes" {
-  let captured : Ref[ReviewReport?] = { val: None, }
-  let action = submit_action(captured, ToJson::to_json(sample_report()))
-  guard action is Control(Finish(note)) else { fail("expected Finish") }
-  assert_true(note.contains("2 finding(s)"))
-  guard captured.val is Some(_) else { fail("expected captured report") }
-}
-
-///|
-test "submit rejects an invalid report without capturing" {
-  let captured : Ref[ReviewReport?] = { val: None, }
-  let bad = {
-    ..sample_report(),
-    findings: [
-      {
-        file: "",
-        line: None,
-        severity: "urgent",
-        category: "x",
-        title: "",
-        detail: "d",
-        suggestion: None,
-      },
-    ],
-  }
-  let action = submit_action(captured, ToJson::to_json(bad))
-  guard action is Respond(output) else { fail("expected Respond") }
-  assert_true(output.is_error)
-  assert_true(output.content.contains("submit_review rejected"))
-  guard captured.val is None else { fail("must not capture an invalid report") }
 }

@@ -131,31 +131,29 @@ fn moonbit_wasm_gc_bundle_probe_path(moon_home : @pathx.Path) -> @pathx.Path {
 }
 
 ///|
-/// Lay a fake completed seed under `root`, including the version stamp that
-/// packaging writes only after it has verified the extracted toolchain.
-async fn write_fake_seed(root : @pathx.Absolute) -> Unit {
-  @fs.mkdir(root.join("bin").to_string(), recursive=true)
-  @fs.mkdir(root.join("lib/core").to_string(), recursive=true)
-  let files = [
-    ("bin/moon", ""),
-    ("bin/moonc", ""),
-    ("lib/core/moon.mod", "{}"),
-    (MoonbitSeedVersionFile, "test-version"),
-  ]
-  for file in files {
-    let (path, content) = file
-    @fs.write_file(
-      root.join(path).to_string(),
-      content,
-      create_mode=CreateOrTruncate,
-    )
-  }
-}
-
-///|
 /// The installed engine and native MoonBit seed always share the canonical
 /// `seekmoon/` resource root, independent of Proton's outer package layout.
 async test "the seed is found in the canonical seekmoon resource tree" {
+  // Lay a fake completed seed under `root`, including the version stamp that
+  // packaging writes only after it has verified the extracted toolchain.
+  async fn write_fake_seed(root : @pathx.Absolute) -> Unit {
+    @fs.mkdir(root.join("bin").to_string(), recursive=true)
+    @fs.mkdir(root.join("lib/core").to_string(), recursive=true)
+    let files = [
+      ("bin/moon", ""),
+      ("bin/moonc", ""),
+      ("lib/core/moon.mod", "{}"),
+      (MoonbitSeedVersionFile, "test-version"),
+    ]
+    for file in files {
+      let (path, content) = file
+      @fs.write_file(
+        root.join(path).to_string(),
+        content,
+        create_mode=CreateOrTruncate,
+      )
+    }
+  }
   let tmp = @pathx.Path(@fs.tmpdir(prefix="openseek-moonbit-seed-layout-")).resolve()
   defer (@fs.rmdir(tmp.to_string(), recursive=true) catch { _ => () })
   let resources = tmp.join("seekmoon")

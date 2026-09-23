@@ -10,12 +10,15 @@ import {
   "moonbit-community/rabbita/nav",
   "moonbit-community/rabbita/sub",
   "moonbit-community/rabbita/url",
-  "moonbitlang/core/debug",
   "moonbitlang/core/cmp",
   "moonbit-community/rabbita/js",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }
+
+import {
+  "moonbitlang/core/debug",
+} for "wbtest"
 
 warnings = "+unnecessary_annotation"
 

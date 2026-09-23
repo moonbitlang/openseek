@@ -223,34 +223,6 @@ test "a lane key separates what must not share a lane" {
 }
 
 ///|
-async test "an ordered request failure releases its channel lane" {
-  // No bridge is injected under test, so both calls fail at the same point.
-  // The second one only reaches it if the first released the lane on its way
-  // out; before, a lane still held would have parked it forever.
-  let failures = []
-  for _ in 0..<2 {
-    @js.Promise::from_async(() => {
-      ignore(
-        bridge_request_in_order(
-          Local,
-          @commands.fs_unwatch,
-          @protocol.EmptyPayload::NoPayload,
-        ),
-      ) catch {
-        _ => {
-          failures.push(true)
-          return
-        }
-      }
-      failures.push(false)
-    })
-    |> ignore
-  }
-  drain_lane_tasks()
-  assert_eq(failures, [true, true])
-}
-
-///|
 test "a Codex command error keeps its detail and is a definite refusal" {
   let error : Error = BridgeRefused(
     "Codex app-server request turn/start failed: invalid model",

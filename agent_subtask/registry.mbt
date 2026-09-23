@@ -152,26 +152,24 @@ fn paths_overlap(a : Array[String], b : Array[String]) -> Bool {
 }
 
 ///|
-fn sample_entry() -> SubtaskEntry {
-  {
-    schema_version: 1,
-    name: "fix-warnings",
-    nonce: "ab12cd",
-    branch: "openseek/fix-warnings--ab12cd",
-    state: Running,
-    base_oid: "0123456789abcdef0123456789abcdef01234567",
-    worker_root: "/repo/.worktrees/fix-warnings",
-    worker_admin_dir: "/repo/.git/worktrees/fix-warnings",
-    allowed_paths: ["lib", "cmd/tool"],
-    parent_session: Some("run-1"),
-    commit_oid: None,
-    origin_head_before: None,
-    conflict_paths: [],
-  }
-}
-
-///|
 test "registry entry round-trips and states classify" {
+  fn sample_entry() -> SubtaskEntry {
+    {
+      schema_version: 1,
+      name: "fix-warnings",
+      nonce: "ab12cd",
+      branch: "openseek/fix-warnings--ab12cd",
+      state: Running,
+      base_oid: "0123456789abcdef0123456789abcdef01234567",
+      worker_root: "/repo/.worktrees/fix-warnings",
+      worker_admin_dir: "/repo/.git/worktrees/fix-warnings",
+      allowed_paths: ["lib", "cmd/tool"],
+      parent_session: Some("run-1"),
+      commit_oid: None,
+      origin_head_before: None,
+      conflict_paths: [],
+    }
+  }
   let entry = sample_entry()
   let parsed : SubtaskEntry = @json.from_json(ToJson::to_json(entry)) catch {
     e => fail("round-trip failed: \{e}")
