@@ -196,38 +196,32 @@ async fn load_edits_file(
   workspace_root : String,
   spec : String,
 ) -> Result[Array[@decode.MultiEditItem], @agent_tool.ToolAction] {
-  let brief = "multi_edit"
+  fn failed(message : String) -> @agent_tool.ToolAction {
+    @agent_tool.respond(message, is_error=true, brief="multi_edit", data={
+      "outcome": "error",
+    })
+  }
+
   let path = @workspace_path.resolve(workspace_root, spec)
   let text = @fs.read_file(path).text() catch {
     error =>
       return Err(
-        @agent_tool.respond(
-          "error: multi_edit could not read edits file \{path}: \{error}",
-          is_error=true,
-          brief~,
-          data={ "outcome": "error" },
-        ),
+        failed("error: multi_edit could not read edits file \{path}: \{error}"),
       )
   }
   let json = @json.parse(text) catch {
     error =>
       return Err(
-        @agent_tool.respond(
+        failed(
           "error: multi_edit edits file \{path} is not valid JSON: \{error}",
-          is_error=true,
-          brief~,
-          data={ "outcome": "error" },
         ),
       )
   }
   let edits = @decode.decode_edits_json(json) catch {
     error =>
       return Err(
-        @agent_tool.respond(
+        failed(
           "error: multi_edit requires \{@tool_error.failure_message("\{error}")} in edits file \{path}",
-          is_error=true,
-          brief~,
-          data={ "outcome": "error" },
         ),
       )
   }
@@ -858,12 +852,8 @@ async fn qualified(
 
   {
     ..tally,
-    errors: [
-      for site in tally.errors => place(site)
-    ],
-    warnings: [
-      for site in tally.warnings => place(site)
-    ],
+    errors: tally.errors.map(place),
+    warnings: tally.warnings.map(place),
   }
 }
 
@@ -998,6 +988,7 @@ fn reverted_by_warnings(
   } else {
     ""
   }
+  let counts = delta_json(delta, removed)
   @agent_tool.respond(
     "\{head}\{listed}\{more}\{caveat}\{restore_note(restore_failures)}",
     is_error=true,
@@ -1008,8 +999,8 @@ fn reverted_by_warnings(
       "check_all": after.to_json(),
       "baseline": baseline_json(baseline.first),
       "baseline_all": baseline_json(before),
-      "introduced_count": delta_json(delta, removed)["introduced_count"],
-      "removed_count": delta_json(delta, removed)["removed_count"],
+      "introduced_count": counts["introduced_count"],
+      "removed_count": counts["removed_count"],
       "reach_caveat": reach_caveat.to_json(),
       "introduced": {
         "errors": [],

@@ -52,46 +52,18 @@ pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
         { "edits_file"? : Some(Null) | None, .. } => None
         _ => fail("arguments.edits_file to be a string path")
       }
-      let revert_if_error_delta_greater_or_equal = match fields {
-        { "revert_if_error_delta_greater_or_equal": Number(value, ..), .. } => {
-          let int_value = value.to_int()
-          if int_value.to_double() != value || int_value < 0 {
-            fail(
-              "arguments.revert_if_error_delta_greater_or_equal to be a non-negative integer",
-            )
-          }
-          Some(int_value)
-        }
-        { "revert_if_error_delta_greater_or_equal"? : Some(Null) | None, .. } =>
-          None
-        _ =>
-          fail(
-            "arguments.revert_if_error_delta_greater_or_equal to be a non-negative integer",
-          )
-      }
+      let revert_if_error_delta_greater_or_equal = optional_threshold(
+        fields, "revert_if_error_delta_greater_or_equal",
+      )
       let revert_on_parse_errors = match fields {
         { "revert_on_parse_errors"? : Some(true) | Some(Null) | None, .. } =>
           true
         { "revert_on_parse_errors": false, .. } => false
         _ => fail("arguments.revert_on_parse_errors to be a boolean")
       }
-      let revert_if_warning_delta_greater_or_equal = match fields {
-        { "revert_if_warning_delta_greater_or_equal": Number(value, ..), .. } => {
-          let int_value = value.to_int()
-          if int_value.to_double() != value || int_value < 0 {
-            fail(
-              "arguments.revert_if_warning_delta_greater_or_equal to be a non-negative integer",
-            )
-          }
-          Some(int_value)
-        }
-        { "revert_if_warning_delta_greater_or_equal"? : Some(Null) | None, .. } =>
-          None
-        _ =>
-          fail(
-            "arguments.revert_if_warning_delta_greater_or_equal to be a non-negative integer",
-          )
-      }
+      let revert_if_warning_delta_greater_or_equal = optional_threshold(
+        fields, "revert_if_warning_delta_greater_or_equal",
+      )
       {
         inline,
         edits_file,
@@ -101,6 +73,23 @@ pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
       }
     }
     _ => fail("object arguments")
+  }
+}
+
+///|
+/// An optional guard threshold: a non-negative integer, or absent (`null` or
+/// missing) for a guard that is off.
+fn optional_threshold(fields : Map[String, Json], name : String) -> Int? raise {
+  match fields.get(name) {
+    Some(Number(value, ..)) => {
+      let int_value = value.to_int()
+      if int_value.to_double() != value || int_value < 0 {
+        fail("arguments.\{name} to be a non-negative integer")
+      }
+      Some(int_value)
+    }
+    Some(Null) | None => None
+    _ => fail("arguments.\{name} to be a non-negative integer")
   }
 }
 

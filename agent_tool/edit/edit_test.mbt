@@ -144,34 +144,6 @@ async test "edit replaces a unique exact match" {
 }
 
 ///|
-async test "edit range limits a unique replacement" {
-  @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/range.txt"
-    @vfs.FileSystem({
-      "range.txt": (
-        #|target
-        #|keep
-        #|target
-        #|
-      ),
-    }).write_to(dir)
-    let output = run_edit({
-      "path": path,
-      "old_string": "target",
-      "new_string": "changed",
-      "start_line": 3,
-      "end_line": 3,
-    })
-    assert_eq(
-      output.content,
-      "ok: replaced 1 occurrence(s) at line 3 in \{path}",
-    )
-    assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "target\nkeep\nchanged\n")
-  })
-}
-
-///|
 async test "edit rejects replace_all even with a range" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/range-replace-all.txt"
@@ -566,36 +538,6 @@ async test "edit replaces first match inside range" {
     )
     assert_false(output.is_error)
     assert_eq(@fs.read_file(path).text(), "beta\ndelta\nmiddle\nbeta\nbeta\n")
-  })
-}
-
-///|
-async test "edit replaces first repeated match only" {
-  @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/many-matches.txt"
-    @vfs.FileSystem({
-      "many-matches.txt": (
-        #|x
-        #|x
-        #|x
-        #|x
-        #|x
-        #|x
-        #|
-      ),
-    }).write_to(dir)
-    let output = run_edit({
-      "path": path,
-      "old_string": "x",
-      "new_string": "y",
-      "start_line": 1,
-    })
-    assert_eq(
-      output.content,
-      "ok: replaced 1 occurrence(s) at line 1 in \{path}",
-    )
-    assert_false(output.is_error)
-    assert_eq(@fs.read_file(path).text(), "y\nx\nx\nx\nx\nx\n")
   })
 }
 

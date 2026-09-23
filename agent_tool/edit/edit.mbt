@@ -806,7 +806,7 @@ async fn commit_edit(
         Checked(tally) =>
           merged = Some(
             match merged {
-              Some(sum) => merge_tallies(sum, tally)
+              Some(sum) => sum.merged(tally)
               None => tally
             },
           )
@@ -1072,22 +1072,6 @@ async fn check_projects(path : String) -> Array[String] {
     _ => ()
   }
   spellings
-}
-
-///|
-/// Two projects' tallies as one: counts add, sites concatenate, and an
-/// overflow on either side overflows the sum.
-fn merge_tallies(
-  a : @auto_check.CheckErrors,
-  b : @auto_check.CheckErrors,
-) -> @auto_check.CheckErrors {
-  {
-    error_count: a.error_count + b.error_count,
-    warning_count: a.warning_count + b.warning_count,
-    errors: [..a.errors, ..b.errors],
-    warnings: [..a.warnings, ..b.warnings],
-    truncated: a.truncated || b.truncated,
-  }
 }
 
 ///|
@@ -1518,11 +1502,9 @@ fn edit_reject_report(
 }
 
 ///|
-#warnings("-unused_field")
 priv struct EditRegion {
   prefix : String
   body : String
-  suffix : String
 }
 
 ///|
@@ -1543,7 +1525,6 @@ fn select_edit_region(
   {
     prefix: content.unsafe_substring(start=0, end=start),
     body: content.unsafe_substring(start~, end~),
-    suffix: content.unsafe_substring(start=end, end=content.length()),
   }
 }
 
@@ -1570,8 +1551,6 @@ fn line_number_at_offset(content : String, offset : Int) -> Int {
     line
   }
 }
-
-///|
 
 ///|
 fn range_detail(input : @decode.EditInput) -> String {
@@ -1625,7 +1604,6 @@ fn old_string_context(
 }
 
 ///|
-/// Find the first character where `expected` and `actual` differ.
 test "inserted_line_span counts the lines the insert occupies" {
   // Newline-terminated: one line per newline.
   assert_eq(inserted_line_span("a\n"), 1)
@@ -1832,5 +1810,3 @@ test "find_quote_normalized_match returns None for no match" {
   assert_eq(@matching.find_quote_normalized_match("abc", "xyz"), None)
   assert_eq(@matching.find_quote_normalized_match("", "x"), None)
 }
-
-///|

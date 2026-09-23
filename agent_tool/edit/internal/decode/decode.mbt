@@ -47,7 +47,7 @@ fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
   let new_string = required_string(fields, "new_string")
   let replace_all = optional_bool(fields, "replace_all", false)
   let replace_all_preview = optional_bool(fields, "replace_all_preview", false)
-  let start_line = required_positive_int(fields, "start_line", "arguments")
+  let start_line = required_positive_int(fields, "start_line")
   let end_line = optional_positive_int_option(fields, "end_line")
   let revert_on_parse_errors = optional_bool(
     fields, "revert_on_parse_errors", true,
@@ -117,13 +117,13 @@ fn optional_bool(
 }
 
 ///|
-fn positive_int(value : Double, name : String, prefix : String) -> Int raise {
+fn positive_int(value : Double, name : String) -> Int raise {
   let int_value = value.to_int()
   if int_value.to_double() != value {
-    fail("\{prefix}.\{name} to be an integer")
+    fail("arguments.\{name} to be an integer")
   }
   if int_value <= 0 {
-    fail("\{prefix}.\{name} to be a positive integer")
+    fail("arguments.\{name} to be a positive integer")
   }
   int_value
 }
@@ -134,7 +134,7 @@ fn optional_positive_int_option(
   name : String,
 ) -> Int? raise {
   match fields.get(name) {
-    Some(Number(value, ..)) => Some(positive_int(value, name, "arguments"))
+    Some(Number(value, ..)) => Some(positive_int(value, name))
     Some(Null) | None => None
     _ => fail("arguments.\{name} to be an integer")
   }
@@ -144,11 +144,10 @@ fn optional_positive_int_option(
 fn required_positive_int(
   fields : Map[String, Json],
   name : String,
-  prefix : String,
 ) -> Int raise {
   match fields.get(name) {
-    Some(Number(value, ..)) => positive_int(value, name, prefix)
-    _ => fail("\{prefix}.\{name} to be an integer")
+    Some(Number(value, ..)) => positive_int(value, name)
+    _ => fail("arguments.\{name} to be an integer")
   }
 }
 
