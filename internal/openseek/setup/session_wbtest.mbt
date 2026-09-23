@@ -190,7 +190,7 @@ async test "new durable session stores AGENTS.md instructions" {
       Deepseek(V4Pro),
       workspace_root=real_workspace,
     )
-    let _ = store.append(created, User(UserMessage("hello")))
+    let _ = store.append(created, User(UserMessage(Content([Text("hello")]))))
     let loaded = store.load(id)
     assert_true(loaded.system_prompt().contains("workspace instructions"))
     @fs.remove("\{workspace}/AGENTS.md")
