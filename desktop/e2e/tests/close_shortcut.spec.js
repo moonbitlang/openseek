@@ -313,3 +313,57 @@ test('web theme follows the browser without querying native appearance', async (
   expect(app.requests.some(r => r.method === 'app.system_appearance')).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('titlebar geometry ignores stale replies and preserves the last valid area on errors', async ({ page }) => {
+  const app = await installDesktop(page);
+  const errors = [];
+  page.on('console', message => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  const root = page.locator('html');
+  const leftInset = () => root.evaluate(element => element.style.getPropertyValue('--native-titlebar-left'));
+  await page.evaluate(() => {
+    window.titlebarArea = { x: 88, y: 0, width: innerWidth - 88, height: 46 };
+    window.desktopEvent('openseek.window.chrome_changed', {});
+  });
+  await expect.poll(leftInset).toBe('88px');
+  await page.evaluate(() => {
+    window.titlebarReads = [];
+    window.__MoonBit__.getTitlebarArea = () => new Promise((resolve, reject) => {
+      window.titlebarReads.push({ resolve, reject });
+    });
+    window.desktopEvent('openseek.window.chrome_changed', {});
+  });
+  await expect.poll(() => page.evaluate(() => window.titlebarReads.length)).toBe(1);
+  await page.evaluate(() => {
+    window.desktopEvent('openseek.window.chrome_changed', {});
+    window.titlebarReads[0].resolve(null);
+  });
+  await expect.poll(() => page.evaluate(() => window.titlebarReads.length)).toBe(2);
+  expect(await leftInset()).toBe('88px');
+  await page.evaluate(() => window.titlebarReads[1].resolve({
+    x: 96, y: 0, width: innerWidth - 96, height: 46,
+  }));
+  await expect.poll(leftInset).toBe('96px');
+  for (const failure of ['reject', 'malformed']) {
+    const before = await page.evaluate(() => window.titlebarReads.length);
+    await page.evaluate(() => window.desktopEvent('openseek.window.chrome_changed', {}));
+    await expect.poll(() => page.evaluate(() => window.titlebarReads.length)).toBe(before + 1);
+    const errorsBefore = errors.length;
+    await page.evaluate(failure => {
+      const read = window.titlebarReads.at(-1);
+      if (failure === 'reject') read.reject(new Error('fixture query failure'));
+      else read.resolve({ x: 0, y: 0, width: 0, height: 46 });
+    }, failure);
+    await expect.poll(() => errors.length).toBe(errorsBefore + 1);
+    expect(await leftInset()).toBe('96px');
+    await expect(root).toHaveClass(/native-titlebar-overlay/);
+  }
+  const before = await page.evaluate(() => window.titlebarReads.length);
+  await page.evaluate(() => window.desktopEvent('openseek.window.chrome_changed', {}));
+  await expect.poll(() => page.evaluate(() => window.titlebarReads.length)).toBe(before + 1);
+  await page.evaluate(() => window.titlebarReads.at(-1).resolve(null));
+  await expect.poll(leftInset).toBe('');
+  await expect(root).not.toHaveClass(/native-titlebar-overlay/);
+  expect(app.pageErrors).toEqual([]);
+});

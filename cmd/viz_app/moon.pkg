@@ -11,6 +11,8 @@ import {
   "moonbit-community/rabbita/sub",
   "moonbit-community/rabbita/url",
   "moonbitlang/core/debug",
+  "moonbitlang/core/cmp",
+  "moonbit-community/rabbita/js",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
 }

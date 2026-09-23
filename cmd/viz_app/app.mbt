@@ -150,10 +150,10 @@ fn should_auto_open(
 ///|
 /// The view mode to start in: an explicit `v=` in the URL hash (a restored
 /// refresh) wins over the standalone/live defaults.
-fn restored_view_mode(hash_view : String, standalone : Bool) -> @viz.ViewMode {
+fn restored_view_mode(hash_view : String?, standalone : Bool) -> @viz.ViewMode {
   match hash_view {
-    "raw" => RawLog
-    "model" => ModelView
+    Some("raw") => RawLog
+    Some("model") => ModelView
     _ => initial_view_mode(standalone)
   }
 }
@@ -173,8 +173,8 @@ fn init_model() -> Model {
     sessions: [],
     selected: None,
     pending_restore_key: match hash_param("s") {
-      "" => None
-      key => Some(key)
+      Some("") | None => None
+      Some(key) => Some(key)
     },
     dropped: None,
     drop_ticket: 0,
@@ -567,190 +567,6 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
 /// `system` defers to the OS via the stylesheet's `prefers-color-scheme` query.
 extern "js" fn set_document_theme(theme : String) -> Unit = "(t) => document.documentElement.setAttribute('data-theme', t)"
 
-// ---- URL-hash position state -------------------------------------------------
-// The hash carries `s=<session key>&v=<raw|model>&seq=<n>` so a refresh (or a
-// shared link) lands back on the same session, view, and step. `seq` is a
-// durable event sequence — the `seq-N` card anchors — so it survives log
-// growth; all writes use replaceState so scrolling never spams history.
-
-///|
-/// One decoded parameter from the location hash, `""` when absent (or when
-/// running without a browser, e.g. under tests).
-extern "js" fn hash_param(name : String) -> String =
-  #|(name) => {
-  #|  if (typeof location === 'undefined') return '';
-  #|  try {
-  #|    return new URLSearchParams(location.hash.slice(1)).get(name) || '';
-  #|  } catch (e) {
-  #|    return '';
-  #|  }
-  #|}
-
-///|
-/// Record the selected session (and current view) in the hash. Switching from
-/// one session to a DIFFERENT one drops the stale `seq=` position;
-/// re-selecting the same one keeps it, and so does the first selection of the
-/// page (no `s=` yet — an auto-opened export restoring `#seq=` relies on it).
-extern "js" fn set_hash_session(key : String, view : String) -> Unit =
-  #|(key, view) => {
-  #|  if (typeof location === 'undefined') return;
-  #|  const params = new URLSearchParams(location.hash.slice(1));
-  #|  const previous = params.get('s');
-  #|  if (previous !== null && previous !== key) params.delete('seq');
-  #|  params.set('s', key);
-  #|  params.set('v', view);
-  #|  history.replaceState(null, '', '#' + params.toString());
-  #|}
-
-///|
-/// Record the active view mode in the hash, keeping session and position.
-extern "js" fn set_hash_view(view : String) -> Unit =
-  #|(view) => {
-  #|  if (typeof location === 'undefined') return;
-  #|  const params = new URLSearchParams(location.hash.slice(1));
-  #|  params.set('v', view);
-  #|  history.replaceState(null, '', '#' + params.toString());
-  #|}
-
-///|
-/// Scroll the log back to the hash's `seq=` position. A large log may take
-/// several frames to commit, so this polls briefly until the `seq-` anchors
-/// exist. The exact anchor may be absent in the current view (compacted away
-/// in the model projection, or a result card that carries a pair id
-/// instead), so the lookup falls back to the nearest following anchor.
-extern "js" fn restore_scroll_to_hash_seq() -> Unit =
-  #|() => {
-  #|  if (typeof location === 'undefined') return;
-  #|  const attempt = (tries) => {
-  #|    const params = new URLSearchParams(location.hash.slice(1));
-  #|    const want = parseInt(params.get('seq') || '', 10);
-  #|    if (!Number.isFinite(want)) return;
-  #|    const el = window.__openseekNearestSeq && window.__openseekNearestSeq(want);
-  #|    if (el) {
-  #|      el.scrollIntoView({ block: 'start' });
-  #|      return;
-  #|    }
-  #|    if (tries > 0) setTimeout(() => attempt(tries - 1), 100);
-  #|  };
-  #|  requestAnimationFrame(() => requestAnimationFrame(() => attempt(50)));
-  #|}
-
-///|
-/// Install the position tracker: a rAF-throttled scroll listener that writes
-/// the topmost visible `seq-` anchor into the hash's `seq=` (replaceState, no
-/// history spam) and moves the scrubber's `current` mark, plus a delegated
-/// click handler that makes `.step-seg` segments jump to their step. Also
-/// defines the shared nearest-anchor lookup `restore_scroll_to_hash_seq` uses.
-extern "js" fn install_position_tracker() -> Unit =
-  #|() => {
-  #|  if (typeof document === 'undefined') return;
-  #|  // Hidden cards (errors-only filter, collapsed turns) report zeroed
-  #|  // rects, which would let the scan pick an anchor no scroll can reveal —
-  #|  // only visible anchors count.
-  #|  const visible = (el) => el && el.getClientRects().length > 0;
-  #|  const anchors = () =>
-  #|    Array.from(document.querySelectorAll('[id^="seq-"]')).filter(visible);
-  #|  window.__openseekNearestSeq = (want) => {
-  #|    const exact = document.getElementById('seq-' + want);
-  #|    if (visible(exact)) return exact;
-  #|    const all = anchors();
-  #|    return all.find((el) => parseInt(el.id.slice(4), 10) >= want) || all[all.length - 1] || null;
-  #|  };
-  #|  const markScrubber = (seq) => {
-  #|    let current = null;
-  #|    for (const seg of document.querySelectorAll('.step-seg')) {
-  #|      seg.classList.remove('current');
-  #|      if (+seg.dataset.seq <= seq) current = seg;
-  #|    }
-  #|    if (current) current.classList.add('current');
-  #|  };
-  #|  let ticking = false;
-  #|  document.addEventListener('scroll', () => {
-  #|    if (ticking) return;
-  #|    ticking = true;
-  #|    requestAnimationFrame(() => {
-  #|      ticking = false;
-  #|      const all = anchors();
-  #|      if (!all.length) return;
-  #|      // The current card: the last anchor at or above the reading line.
-  #|      // The cutoff must sit BELOW the anchors' scroll-margin-top (105px in
-  #|      // the stylesheet): a jump parks its target exactly at the margin,
-  #|      // and a tighter cutoff would record the preceding card instead.
-  #|      let best = null;
-  #|      for (const el of all) {
-  #|        if (el.getBoundingClientRect().top <= 110) best = el;
-  #|        else break;
-  #|      }
-  #|      const seq = (best || all[0]).id.slice(4);
-  #|      const params = new URLSearchParams(location.hash.slice(1));
-  #|      if (params.get('seq') !== seq) {
-  #|        params.set('seq', seq);
-  #|        history.replaceState(null, '', '#' + params.toString());
-  #|      }
-  #|      markScrubber(+seq);
-  #|    });
-  #|  }, { capture: true, passive: true });
-  #|  document.addEventListener('click', (event) => {
-  #|    if (!(event.target instanceof Element)) return;
-  #|    const seg = event.target.closest('.step-seg');
-  #|    if (!seg || !seg.dataset.seq) return;
-  #|    const el = window.__openseekNearestSeq(+seg.dataset.seq);
-  #|    if (!el) return;
-  #|    const params = new URLSearchParams(location.hash.slice(1));
-  #|    params.set('seq', el.id.slice(4));
-  #|    history.replaceState(null, '', '#' + params.toString());
-  #|    el.scrollIntoView({ block: 'start' });
-  #|  });
-  #|  // Prompt-rail ticks are `<a>` nodes, and Rabbita owns those clicks: it
-  #|  // prevents the default jump and dispatches a UrlRequest the app drops
-  #|  // for fragment-only links. The jump is delegated here instead, like the
-  #|  // scrubber's, so it keeps the `#s=…` state hash intact and records the
-  #|  // new position in `seq=` without a history entry.
-  #|  document.addEventListener('click', (event) => {
-  #|    if (!(event.target instanceof Element)) return;
-  #|    const mark = event.target.closest('a.rail-mark');
-  #|    if (!mark) return;
-  #|    event.preventDefault();
-  #|    const href = mark.getAttribute('href') || '';
-  #|    const id = href.startsWith('#') ? href.slice(1) : '';
-  #|    const el = id ? document.getElementById(id) : null;
-  #|    if (!el) return;
-  #|    if (id.startsWith('seq-')) {
-  #|      const params = new URLSearchParams(location.hash.slice(1));
-  #|      params.set('seq', id.slice(4));
-  #|      history.replaceState(null, '', '#' + params.toString());
-  #|    }
-  #|    el.scrollIntoView({ block: 'start' });
-  #|  });
-  #|  // Instant scrubber tooltip: shows each segment's data-label ("Step
-  #|  // N/M[ · has failures]") the moment the pointer touches it — a native
-  #|  // title tooltip would lag behind the OS hover delay while sweeping.
-  #|  const tip = document.createElement('div');
-  #|  tip.className = 'scrubber-tip';
-  #|  tip.style.display = 'none';
-  #|  document.body.appendChild(tip);
-  #|  const hideTip = () => { tip.style.display = 'none'; };
-  #|  document.addEventListener('mouseover', (event) => {
-  #|    if (!(event.target instanceof Element)) return hideTip();
-  #|    const seg = event.target.closest('.step-seg');
-  #|    if (!seg || !seg.dataset.label) return hideTip();
-  #|    tip.textContent = seg.dataset.label;
-  #|    tip.style.display = 'block';
-  #|    const rect = seg.getBoundingClientRect();
-  #|    const x = Math.min(
-  #|      Math.max(rect.left + rect.width / 2 - tip.offsetWidth / 2, 8),
-  #|      window.innerWidth - tip.offsetWidth - 8,
-  #|    );
-  #|    tip.style.left = x + 'px';
-  #|    tip.style.top = (rect.bottom + 6) + 'px';
-  #|  });
-  #|  document.addEventListener('scroll', hideTip, { capture: true, passive: true });
-  #|  // The scrubber sits near the top edge, so the pointer can exit straight
-  #|  // into browser chrome — no further mouseover ever fires to hide the tip.
-  #|  document.addEventListener('mouseleave', hideTip);
-  #|  window.addEventListener('blur', hideTip);
-  #|}
-
 ///|
 fn apply_theme(theme : Theme) -> @cmd.Cmd {
   @cmd.effect(() => set_document_theme(theme.value()))
@@ -884,93 +700,6 @@ extern "js" fn format_unix_ms_utc(milliseconds : Double) -> String =
   #|  const date = new Date(milliseconds);
   #|  if (!Number.isFinite(date.getTime())) return "";
   #|  return date.toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  #|}
-
-///|
-/// Scroll to the next/previous matching visible card relative to the viewport's
-/// centre, not an internal cursor, so manual scrolling changes the jump origin.
-extern "js" fn scroll_to_card_from_viewport(
-  selector : String,
-  direction : Int,
-) -> Unit =
-  #|(selector, direction) => {
-  #|  const els = Array.from(document.querySelectorAll(selector))
-  #|    .filter((el) => el.getClientRects().length > 0);
-  #|  if (!els.length) return;
-  #|  const anchor = window.innerHeight / 2;
-  #|  const epsilon = 1;
-  #|  let index = -1;
-  #|  if (direction >= 0) {
-  #|    index = els.findIndex((el) => el.getBoundingClientRect().top > anchor + epsilon);
-  #|    if (index < 0) index = 0;
-  #|  } else {
-  #|    for (let i = els.length - 1; i >= 0; i--) {
-  #|      if (els[i].getBoundingClientRect().bottom < anchor - epsilon) {
-  #|        index = i;
-  #|        break;
-  #|      }
-  #|    }
-  #|    if (index < 0) index = els.length - 1;
-  #|  }
-  #|  els[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
-  #|}
-
-///|
-/// Open the nearest folded details block in the viewport: failed tool cards,
-/// folded tool-call args, reasoning blocks, or a user-collapsed turn.
-extern "js" fn unfold_nearest_details() -> Unit =
-  #|() => {
-  #|  const candidates = Array.from(document.querySelectorAll(
-  #|    'details.card:not([open]), details.tool-call:not([open]), details.reasoning:not([open]), details.turn:not([open])'
-  #|  )).filter((el) => el.getClientRects().length > 0);
-  #|  if (!candidates.length) return;
-  #|  const anchor = window.innerHeight / 2;
-  #|  const visible = candidates.filter((el) => {
-  #|    const rect = el.getBoundingClientRect();
-  #|    return rect.bottom >= 0 && rect.top <= window.innerHeight;
-  #|  });
-  #|  const pool = visible.length ? visible : candidates;
-  #|  let best = pool[0];
-  #|  let bestDistance = Infinity;
-  #|  for (const el of pool) {
-  #|    const rect = el.getBoundingClientRect();
-  #|    const center = rect.top + rect.height / 2;
-  #|    const distance = Math.abs(center - anchor);
-  #|    if (distance < bestDistance) {
-  #|      best = el;
-  #|      bestDistance = distance;
-  #|    }
-  #|  }
-  #|  best.open = true;
-  #|  best.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  #|}
-
-///|
-/// Install plain `n` / `p` failure jumps and `u` unfold. Text-entry targets and
-/// modified keys are left alone.
-extern "js" fn install_error_shortcuts(
-  next : () -> Unit,
-  previous : () -> Unit,
-  unfold : () -> Unit,
-) -> Unit =
-  #|(next, previous, unfold) => {
-  #|  document.addEventListener('keydown', (event) => {
-  #|    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
-  #|    const target = event.target;
-  #|    const tag = target && target.tagName ? target.tagName.toLowerCase() : '';
-  #|    if (tag === 'input' || tag === 'textarea' || tag === 'select' || (target && target.isContentEditable)) return;
-  #|    const key = event.key.toLowerCase();
-  #|    if (key === 'n') {
-  #|      event.preventDefault();
-  #|      next();
-  #|    } else if (key === 'p') {
-  #|      event.preventDefault();
-  #|      previous();
-  #|    } else if (key === 'u') {
-  #|      event.preventDefault();
-  #|      unfold();
-  #|    }
-  #|  });
   #|}
 
 ///|
@@ -2498,11 +2227,13 @@ test "the hash session key restores the selection on the first listing" {
 /// The hash's `v=` overrides the standalone/live view-mode defaults on
 /// restore; anything else falls through to them.
 test "the hash view mode wins over the defaults" {
-  assert_true(restored_view_mode("raw", false) == RawLog)
-  assert_true(restored_view_mode("model", true) == ModelView)
-  assert_true(restored_view_mode("", true) == RawLog)
-  assert_true(restored_view_mode("", false) == ModelView)
-  assert_true(restored_view_mode("nonsense", false) == ModelView)
+  assert_true(restored_view_mode(Some("raw"), false) == RawLog)
+  assert_true(restored_view_mode(Some("model"), true) == ModelView)
+  assert_true(restored_view_mode(None, true) == RawLog)
+  assert_true(restored_view_mode(None, false) == ModelView)
+  assert_true(restored_view_mode(Some(""), true) == RawLog)
+  assert_true(restored_view_mode(Some(""), false) == ModelView)
+  assert_true(restored_view_mode(Some("nonsense"), false) == ModelView)
   inspect(view_mode_value(RawLog), content="raw")
   inspect(view_mode_value(ModelView), content="model")
 }
