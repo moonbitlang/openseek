@@ -6,7 +6,7 @@ async test "job files survive scope cleanup and a new runtime cannot overwrite t
   let run : async () -> String = () => {
     @async.with_timeout(5000, () => {
       @async.with_task_group(group => {
-        let tools = build_tools(
+        let tools = @agent.build_tools(
           AgentRuntime(),
           AgentTaskScope(group),
           job_log_dir=root,
@@ -100,7 +100,7 @@ async test "constructing session tools does not create a phantom durable session
   let session_dir = "\{root}/sessions/new-session"
   @async.with_task_group(group => {
     ignore(
-      build_tools(
+      @agent.build_tools(
         AgentRuntime(),
         AgentTaskScope(group),
         job_log_dir="\{session_dir}/jobs",
@@ -118,7 +118,7 @@ async test "concurrent first jobs prepare one canonical runtime directory" {
   defer @fs.rmdir(root, recursive=true)
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let tools = build_tools(
+      let tools = @agent.build_tools(
         AgentRuntime(),
         AgentTaskScope(group),
         job_log_dir="\{root}/jobs",
@@ -151,7 +151,7 @@ async test "tiny foreground burst leaves no log files and concurrent noisy jobs 
   defer @fs.rmdir(root, recursive=true)
   @async.with_timeout(15000, () => {
     @async.with_task_group(group => {
-      let tools = build_tools(
+      let tools = @agent.build_tools(
         AgentRuntime(),
         AgentTaskScope(group),
         job_log_dir=root,
@@ -205,7 +205,7 @@ async test "foreground-only runtime generations are removed after shutdown" {
   defer @fs.rmdir(root, recursive=true)
   for _ in 0..<3 {
     @async.with_task_group(group => {
-      let tools = build_tools(
+      let tools = @agent.build_tools(
         AgentRuntime(),
         AgentTaskScope(group),
         job_log_dir=root,
@@ -232,7 +232,7 @@ async test "failed metadata persistence never prunes an adopted job log" {
   let root = @fs.tmpdir(prefix="openseek-keep-failed-metadata-")
   defer @fs.rmdir(root, recursive=true)
   let path = @async.with_task_group(group => {
-    let tools = build_tools(
+    let tools = @agent.build_tools(
       AgentRuntime(),
       AgentTaskScope(group),
       job_log_dir=root,

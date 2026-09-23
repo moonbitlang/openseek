@@ -7,6 +7,10 @@ import {
 
 import {
   "moonbitlang/openseek/internal/openseek/testkit",
+} for "test"
+
+import {
+  "moonbitlang/openseek/internal/openseek/testkit",
 } for "wbtest"
 
 warnings = "+unnecessary_annotation"

@@ -6,7 +6,7 @@ async test "--dir creates a missing final component when its parent exists" {
       argv=["--dir", child, "write", "MoonBit"],
       env={ "DEEPSEEK": "test-key" },
     )
-    let root = prepare_workspace_root(parsed)
+    let root = @setup.prepare_workspace_root(parsed)
     assert_true(@fs.exists(child))
     assert_eq(root, @fs.realpath(child))
   })
@@ -20,7 +20,7 @@ async test "--dir creates a missing final component with trailing separator" {
       argv=["--dir", "\{child}/", "write", "MoonBit"],
       env={ "DEEPSEEK": "test-key" },
     )
-    let root = prepare_workspace_root(parsed)
+    let root = @setup.prepare_workspace_root(parsed)
     assert_true(@fs.exists(child))
     assert_eq(root, @fs.realpath(child))
   })
@@ -28,12 +28,18 @@ async test "--dir creates a missing final component with trailing separator" {
 
 ///|
 test "--dir trailing separator trim preserves roots" {
-  assert_eq(trim_trailing_path_separators("/"), "/")
-  assert_eq(trim_trailing_path_separators("//"), "//")
-  assert_eq(trim_trailing_path_separators("C:\\"), "C:\\")
-  assert_eq(trim_trailing_path_separators("C:/"), "C:/")
-  assert_eq(trim_trailing_path_separators("C:\\workspace\\"), "C:\\workspace")
-  assert_eq(trim_trailing_path_separators("C:/workspace/"), "C:/workspace")
+  assert_eq(@setup.trim_trailing_path_separators("/"), "/")
+  assert_eq(@setup.trim_trailing_path_separators("//"), "//")
+  assert_eq(@setup.trim_trailing_path_separators("C:\\"), "C:\\")
+  assert_eq(@setup.trim_trailing_path_separators("C:/"), "C:/")
+  assert_eq(
+    @setup.trim_trailing_path_separators("C:\\workspace\\"),
+    "C:\\workspace",
+  )
+  assert_eq(
+    @setup.trim_trailing_path_separators("C:/workspace/"),
+    "C:/workspace",
+  )
 }
 
 ///|
@@ -44,7 +50,7 @@ async test "--dir rejects missing parents instead of creating recursively" {
       argv=["--dir", child, "write", "MoonBit"],
       env={ "DEEPSEEK": "test-key" },
     )
-    let _ = prepare_workspace_root(parsed) catch {
+    let _ = @setup.prepare_workspace_root(parsed) catch {
       error => {
         assert_true(
           "\{error}".contains(
@@ -67,7 +73,7 @@ async test "--dir rejects existing non-directories" {
       argv=["--dir", path, "write", "MoonBit"],
       env={ "DEEPSEEK": "test-key" },
     )
-    let _ = prepare_workspace_root(parsed) catch {
+    let _ = @setup.prepare_workspace_root(parsed) catch {
       error => {
         assert_true("\{error}".contains("--dir is not a directory: \{path}"))
         return
@@ -83,7 +89,7 @@ test "session root resolves relative to workspace root" {
     "DEEPSEEK": "test-key",
   })
   assert_eq(
-    session_root(parsed, workspace_root="/tmp/openseek-workspace"),
+    @setup.session_root(parsed, workspace_root="/tmp/openseek-workspace"),
     "/tmp/openseek-workspace/.openseek",
   )
   let custom = @testkit.run_matches(
@@ -91,7 +97,7 @@ test "session root resolves relative to workspace root" {
     env={ "DEEPSEEK": "test-key" },
   )
   assert_eq(
-    session_root(custom, workspace_root="/tmp/openseek-workspace"),
+    @setup.session_root(custom, workspace_root="/tmp/openseek-workspace"),
     "/tmp/openseek-workspace/sessions",
   )
 }

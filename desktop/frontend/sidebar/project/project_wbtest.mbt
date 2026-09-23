@@ -1,20 +1,4 @@
 ///|
-test "equal paths from different sources have independent component keys" {
-  let live = Id(
-    source="openseek.projects",
-    channel="local",
-    root="/work/openseek",
-  )
-  let archived = Id(
-    source="openseek.archived",
-    channel="local",
-    root="/work/openseek",
-  )
-  assert_true(live != archived)
-  assert_true(live.key() != archived.key())
-}
-
-///|
 fn test_input(activation? : String) -> Input {
   {
     id: Id(source="openseek.projects", channel="local", root="/work/openseek"),

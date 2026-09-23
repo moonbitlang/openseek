@@ -4,9 +4,9 @@
 fn try_approval_policy(
   argv : Array[String],
   interactive~ : Bool,
-) -> Result[ApprovalPolicy, String] {
+) -> Result[@execution.ApprovalPolicy, String] {
   Ok(
-    approval_policy(
+    @execution.approval_policy(
       @testkit.run_matches(argv=[..argv, "task"], env=Map([])),
       interactive~,
     ),

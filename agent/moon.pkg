@@ -46,7 +46,3 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
-
-import {
-  "moonbitlang/core/json",
-} for "wbtest"

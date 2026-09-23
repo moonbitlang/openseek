@@ -1,7 +1,7 @@
 ///|
 test "session_root defaults to .openseek beside the workspace" {
   let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env=Map([]))
-  assert_eq(session_root(parsed), ".openseek")
+  assert_eq(@setup.session_root(parsed), ".openseek")
 }
 
 ///|
@@ -9,7 +9,7 @@ async test "one-shot runs record to a generated salted cli session by default" {
   let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
   })
-  guard resolved_session_id(parsed) is Some(id) else {
+  guard @setup.resolved_session_id(parsed) is Some(id) else {
     fail("expected a generated session id")
   }
   assert_true(id.value().has_prefix("cli-"))
@@ -24,7 +24,7 @@ async test "--no-session restores the ephemeral one-shot" {
   let parsed = @testkit.run_matches(argv=["--no-session", "write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
   })
-  assert_true(resolved_session_id(parsed) is None)
+  assert_true(@setup.resolved_session_id(parsed) is None)
 }
 
 ///|
@@ -33,7 +33,7 @@ async test "an explicit --session id is used verbatim" {
     argv=["--session", "demo", "write", "MoonBit"],
     env={ "DEEPSEEK": "test-key" },
   )
-  guard resolved_session_id(parsed) is Some(id) else {
+  guard @setup.resolved_session_id(parsed) is Some(id) else {
     fail("expected the explicit id")
   }
   assert_eq(id.value(), "demo")
@@ -45,7 +45,7 @@ async test "--session with --no-session is a contradiction" {
     argv=["--session", "demo", "--no-session", "write", "MoonBit"],
     env={ "DEEPSEEK": "test-key" },
   )
-  let _ = resolved_session_id(parsed) catch {
+  let _ = @setup.resolved_session_id(parsed) catch {
     error => {
       assert_true("\{error}".contains("--no-session contradicts --session"))
       return
@@ -72,11 +72,14 @@ async test "load_or_new_session defers first durable write until append" {
         "OPENSEEK_GLOBAL_SKILLS_DIR": "\{root}/no-global-skills",
       },
     )
-    let created = load_or_new_session(store, id, parsed, Deepseek(V4Pro))
+    let created = @setup.load_or_new_session(store, id, parsed, Deepseek(V4Pro))
     // The environment block is pinned by the environment-section tests above;
     // what this test owns is that the block reaches the stored prompt behind
     // the `--system-prompt-file` base.
-    let grounded_prompt = configured_system_prompt(parsed, Deepseek(V4Pro))
+    let grounded_prompt = @setup.configured_system_prompt(
+      parsed,
+      Deepseek(V4Pro),
+    )
     assert_true(grounded_prompt.has_prefix("system\n\n## Environment"))
     assert_eq(created.system_prompt(), grounded_prompt)
     assert_eq(created.events().length(), 0)
@@ -87,7 +90,7 @@ async test "load_or_new_session defers first durable write until append" {
     )
     assert_eq(with_event.events().length(), 1)
     @fs.remove(prompt_path)
-    let loaded = load_or_new_session(store, id, parsed, Deepseek(V4Pro))
+    let loaded = @setup.load_or_new_session(store, id, parsed, Deepseek(V4Pro))
     assert_eq(loaded.system_prompt(), grounded_prompt)
     assert_eq(loaded.events().length(), 1)
   })
@@ -129,7 +132,7 @@ async test "new durable session header persists project layout" {
         "OPENSEEK_GLOBAL_SKILLS_DIR": "\{workspace}/no-global-skills",
       },
     )
-    let created = load_or_new_session(
+    let created = @setup.load_or_new_session(
       store,
       id,
       parsed,
@@ -183,7 +186,7 @@ async test "new durable session stores AGENTS.md instructions" {
         "OPENSEEK_GLOBAL_SKILLS_DIR": "\{workspace}/no-global-skills",
       },
     )
-    let created = load_or_new_session(
+    let created = @setup.load_or_new_session(
       store,
       id,
       parsed,
@@ -194,7 +197,7 @@ async test "new durable session stores AGENTS.md instructions" {
     let loaded = store.load(id)
     assert_true(loaded.system_prompt().contains("workspace instructions"))
     @fs.remove("\{workspace}/AGENTS.md")
-    let resumed = load_or_new_session(
+    let resumed = @setup.load_or_new_session(
       store,
       id,
       parsed,
@@ -230,11 +233,14 @@ async test "load_or_new_session recovers empty interrupted session directory" {
       },
     )
     let store = @store.SessionStore(root)
-    let session = load_or_new_session(store, id, parsed, Deepseek(V4Pro))
+    let session = @setup.load_or_new_session(store, id, parsed, Deepseek(V4Pro))
     // The environment block is pinned by the environment-section tests above;
     // what this test owns is that the block reaches the stored prompt behind
     // the `--system-prompt-file` base.
-    let grounded_prompt = configured_system_prompt(parsed, Deepseek(V4Pro))
+    let grounded_prompt = @setup.configured_system_prompt(
+      parsed,
+      Deepseek(V4Pro),
+    )
     assert_true(grounded_prompt.has_prefix("system\n\n## Environment"))
     assert_eq(session.system_prompt(), grounded_prompt)
     assert_eq(session.events().length(), 0)

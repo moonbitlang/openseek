@@ -71,7 +71,7 @@ async test "session cleanup persists a terminal record after cancellation" {
   defer @fs.rmdir(root, recursive=true)
   let path = @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
-      let tools = build_tools(
+      let tools = @agent.build_tools(
         AgentRuntime(),
         AgentTaskScope(group),
         job_log_dir=root,

@@ -1,8 +1,8 @@
 ///|
 #warnings("-alert_unstable")
 #cfg(not(target="js"))
-fn render_search(state : State, input : Input) -> String {
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+fn render_search(state : State, input : @grep_search.Input) -> String {
+  let emit : @cmd.Emit[@grep_search.Msg] = @cmd.Emit(_ => @cmd.none)
   @vdom.server_side_render(() => {
     state.explorer_view(input, emit, (_, _) => @cmd.none).to_virtual_dom()
   })
@@ -11,7 +11,7 @@ fn render_search(state : State, input : Input) -> String {
 ///|
 #cfg(not(target="js"))
 test "Search renders VS Code's Whole Word codicon instead of a text label" {
-  let input : Input = {
+  let input : @grep_search.Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner: { channel: @interop.ChannelId::Local, session: "icons", },
@@ -31,15 +31,15 @@ test "Search view groups files and marks matching UTF-16 slices" {
     session: "view",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = {
+  let input : @grep_search.Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
     root: Some(root),
   }
   let state = State::empty()
-    .handle(QueryChanged("moon"), input)
-    .handle(Submit, input)
+    .handle(@grep_search.QueryChanged("moon"), input)
+    .handle(@grep_search.Submit, input)
   let page = state.page
   let reply : @protocol.SearchTextReply = {
     root: root.path,
@@ -67,7 +67,12 @@ test "Search view groups files and marks matching UTF-16 slices" {
     error: None,
   }
   let ready = state.handle(
-    Loaded(owner~, root=root.path, generation=page.generation, reply~),
+    @grep_search.Loaded(
+      owner~,
+      root=root.path,
+      generation=page.generation,
+      reply~,
+    ),
     input,
   )
   let html = render_search(ready, input)
@@ -86,15 +91,15 @@ test "large Search replies render incrementally without changing totals" {
     session: "large-view",
   }
   let root = @common.Uri::parse("file:///work")
-  let input : Input = {
+  let input : @grep_search.Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
     root: Some(root),
   }
   let state = State::empty()
-    .handle(QueryChanged("moon"), input)
-    .handle(Submit, input)
+    .handle(@grep_search.QueryChanged("moon"), input)
+    .handle(@grep_search.Submit, input)
   let page = state.page
   let result : @protocol.TextSearchMatch = {
     path: "src/main.mbt",
@@ -114,7 +119,12 @@ test "large Search replies render incrementally without changing totals" {
     error: None,
   }
   let ready = state.handle(
-    Loaded(owner~, root=root.path, generation=page.generation, reply~),
+    @grep_search.Loaded(
+      owner~,
+      root=root.path,
+      generation=page.generation,
+      reply~,
+    ),
     input,
   )
   let initial = render_search(ready, input)
@@ -122,7 +132,10 @@ test "large Search replies render incrementally without changing totals" {
   assert_true(initial.contains("Show 1 more results"))
   assert_true(initial.contains("500 of 501 results displayed"))
   assert_eq(initial.split("class=\"search-result-row\"").length(), 501)
-  let expanded = render_search(ready.handle(ShowMore, input), input)
+  let expanded = render_search(
+    ready.handle(@grep_search.ShowMore, input),
+    input,
+  )
   assert_false(expanded.contains("search-show-more"))
   assert_eq(expanded.split("class=\"search-result-row\"").length(), 502)
 }

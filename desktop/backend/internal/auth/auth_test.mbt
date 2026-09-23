@@ -1,0 +1,31 @@
+///|
+test "url derivations" {
+  inspect(
+    @auth.tunnel_url("https://openseek-api.moonbitlang.cn"),
+    content="wss://openseek-api.moonbitlang.cn/v1/tunnel",
+  )
+  inspect(
+    @auth.tunnel_url("http://127.0.0.1:3000/"),
+    content="ws://127.0.0.1:3000/v1/tunnel",
+  )
+  inspect(
+    @auth.device_url("https://relay.example", "d_abc", app_version="0.1.16"),
+    content="https://relay.example/console/releases/v0.1.16/index.html?device=d_abc",
+  )
+  inspect(
+    @auth.device_url(
+      "https://relay.example/",
+      "d_abc",
+      app_version="development",
+    ),
+    content="https://relay.example/console/?device=d_abc",
+  )
+  inspect(
+    @auth.origin_from_relay_url("wss://relay.example/v1/tunnel"),
+    content="https://relay.example",
+  )
+  inspect(
+    @auth.origin_from_relay_url("ws://127.0.0.1:8080/v1/tunnel"),
+    content="http://127.0.0.1:8080",
+  )
+}

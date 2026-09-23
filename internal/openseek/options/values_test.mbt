@@ -6,7 +6,7 @@ test "cli accepts the canonical flash wire name" {
     "DEEPSEEK": "test-key",
     "OPENSEEK_MODEL": "deepseek-flash",
   })
-  let (model, thinking, api_url) = agent_settings(parsed)
+  let (model, thinking, api_url) = @options.agent_settings(parsed)
   assert_true(model is Deepseek(V4Flash))
   assert_eq(model.to_string(), "deepseek-flash")
   assert_eq(model.api_key(parsed.values), Some("test-key"))
@@ -20,7 +20,7 @@ test "cli retry flags override the environment and reject non-positives" {
     argv=["--retry-attempts", "2", "--retry-backoff-ms", "7", "write"],
     env={ "DEEPSEEK": "test-key", "OPENSEEK_RETRY_ATTEMPTS": "9" },
   )
-  assert_eq(retry_overrides(parsed), (Some(2), Some(7)))
+  assert_eq(@options.retry_overrides(parsed), (Some(2), Some(7)))
   // Rejection is checked through the environment: argparse refuses a bare
   // `-1` as a missing value before the parsed string ever reaches here.
   for bad in ["0", "-1", "many"] {
@@ -28,7 +28,7 @@ test "cli retry flags override the environment and reject non-positives" {
       "DEEPSEEK": "test-key",
       "OPENSEEK_RETRY_ATTEMPTS": bad,
     })
-    try ignore(retry_overrides(rejected)) catch {
+    try ignore(@options.retry_overrides(rejected)) catch {
       err =>
         assert_true(
           "\{err}".contains("--retry-attempts must be a positive integer"),
@@ -47,7 +47,7 @@ test "cli exports argv retry overrides into the environment for children" {
     argv=["--retry-attempts", "3", "--retry-backoff-ms", "11", "write"],
     env={ "DEEPSEEK": "test-key" },
   )
-  export_retry_overrides(parsed)
+  @options.export_retry_overrides(parsed)
   assert_eq(@env.get_env_var("OPENSEEK_RETRY_ATTEMPTS"), Some("3"))
   assert_eq(@env.get_env_var("OPENSEEK_RETRY_BACKOFF_MS"), Some("11"))
   @env.unset_env_var("OPENSEEK_RETRY_ATTEMPTS")
@@ -55,7 +55,7 @@ test "cli exports argv retry overrides into the environment for children" {
   // Nothing to carry means nothing written: a child keeps falling back to the
   // client default rather than being pinned to a value nobody asked for.
   let bare = @testkit.run_matches(argv=["write"], env={ "DEEPSEEK": "test-key" })
-  export_retry_overrides(bare)
+  @options.export_retry_overrides(bare)
   assert_eq(@env.get_env_var("OPENSEEK_RETRY_ATTEMPTS"), None)
   assert_eq(@env.get_env_var("OPENSEEK_RETRY_BACKOFF_MS"), None)
 }
@@ -94,7 +94,7 @@ test "agent runs require api key" {
 ///|
 test "agent runs require task text" {
   let parsed = @testkit.run_matches(argv=[], env={ "DEEPSEEK": "test-key" })
-  let _ = task_text(parsed) catch {
+  let _ = @options.task_text(parsed) catch {
     error => {
       assert_true("\{error}".contains("task description is required"))
       return
@@ -109,7 +109,7 @@ test "cli parses max steps option" {
     argv=["--max-steps", "25", "write", "MoonBit"],
     env={ "DEEPSEEK": "test-key" },
   )
-  assert_true(max_steps(parsed) is Some(25))
+  assert_true(@options.max_steps(parsed) is Some(25))
 }
 
 ///|
@@ -118,7 +118,7 @@ test "cli rejects invalid max steps" {
     argv=["--max-steps", "0", "write", "MoonBit"],
     env={ "DEEPSEEK": "test-key" },
   )
-  let _ = max_steps(parsed) catch {
+  let _ = @options.max_steps(parsed) catch {
     error => {
       assert_true("\{error}".contains("--max-steps must be a positive integer"))
       return
@@ -133,7 +133,7 @@ test "cli parses review deadline option" {
     argv=["--review-deadline", "60000", "write", "MoonBit"],
     env={ "DEEPSEEK": "test-key" },
   )
-  assert_true(review_deadline_ms(parsed) is Some(60000))
+  assert_true(@options.review_deadline_ms(parsed) is Some(60000))
 }
 
 ///|
@@ -141,7 +141,7 @@ test "cli defaults review deadline to none" {
   let parsed = @testkit.run_matches(argv=["write", "MoonBit"], env={
     "DEEPSEEK": "test-key",
   })
-  assert_true(review_deadline_ms(parsed) is None)
+  assert_true(@options.review_deadline_ms(parsed) is None)
 }
 
 ///|
@@ -150,7 +150,7 @@ test "cli rejects invalid review deadline" {
     argv=["--review-deadline", "0", "write", "MoonBit"],
     env={ "DEEPSEEK": "test-key" },
   )
-  let _ = review_deadline_ms(parsed) catch {
+  let _ = @options.review_deadline_ms(parsed) catch {
     error => {
       assert_true(
         "\{error}".contains("--review-deadline must be a positive integer"),

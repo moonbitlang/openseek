@@ -3,7 +3,7 @@ test "root command rejects an unknown subcommand" {
   // argparse owns this now (no hand-rolled dispatch): a bare non-subcommand word
   // is refused rather than silently opening the UI as a free-form prompt.
   let outcome = try {
-    root_command().parse(argv=["serv"], env=Map([])) |> ignore
+    @options.root_command().parse(argv=["serv"], env=Map([])) |> ignore
     "parsed"
   } catch {
     e => "\{e}"
@@ -15,7 +15,7 @@ test "root command rejects an unknown subcommand" {
 ///|
 test "bare parse is rejected (no default subcommand)" {
   let outcome = try {
-    root_command().parse(argv=[], env={ "DEEPSEEK": "k" }) |> ignore
+    @options.root_command().parse(argv=[], env={ "DEEPSEEK": "k" }) |> ignore
     "parsed"
   } catch {
     e => "\{e}"
@@ -42,7 +42,7 @@ test "cli rejects unknown options before task text" {
 ///|
 test "cli accepts hyphen-leading task text after option delimiter" {
   let parsed = @testkit.run_matches(argv=["--", "--xxy", "he"], env=Map([]))
-  assert_eq(task_text(parsed), "--xxy he")
+  assert_eq(@options.task_text(parsed), "--xxy he")
 }
 
 ///|
