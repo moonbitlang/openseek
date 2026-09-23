@@ -139,8 +139,11 @@ fn TextRenderer::render(self : TextRenderer, event : @protocol.Event) -> String 
     StreamRetry(attempt~, max_attempts~, reason~) =>
       self.line(out, "retrying (\{attempt}/\{max_attempts}): \{reason}")
     AgentFinished(answer~) => {
-      // The answer is normally the last message, already printed.
-      if !self.fleet && answer != "" && self.last_message != Some(answer) {
+      // The answer is normally the last message, already printed; a `finish`
+      // tool answer has no message, so it is printed here. In a fleet the
+      // last message may be another attempt's, which at worst prints an
+      // answer twice rather than never.
+      if answer != "" && self.last_message != Some(answer) {
         self.block(out, answer)
       }
       self.line(out, self.summary("done"))
@@ -337,12 +340,16 @@ test "fleet text prints whole messages and no mixed per-attempt counts" {
     }),
     AssistantMessage(content="All of A"),
     AgentFinished(answer="All of A"),
+    // A `finish`-tool answer arrives with no message of its own.
+    AgentFinished(answer="B via finish"),
   ]
   inspect(
     events.map(event => renderer.render(event)).join(""),
     content=(
       #|fleet: 2 runs
       #|All of A
+      #|done
+      #|B via finish
       #|done
       #|
     ),
