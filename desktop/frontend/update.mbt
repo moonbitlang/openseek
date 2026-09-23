@@ -5770,6 +5770,13 @@ fn update_msg(
         (@cmd.none, model)
       }
       let (review_cmd, model) = if enter_review {
+        let model = {
+          ..model,
+          file_panel: {
+            ..model.file_panel,
+            github_review: { ..model.file_panel.github_review, enabled: true, },
+          },
+        }
         open_explorer(dispatch, model, ExplorerChanges)
       } else {
         (@cmd.none, model)

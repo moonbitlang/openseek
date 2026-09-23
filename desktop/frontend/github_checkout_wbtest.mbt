@@ -1,6 +1,10 @@
 ///|
-test "initial PR checkout refreshes cached Review from Files and Search" {
-  for mode in [@fileeditor.ExplorerFiles, @fileeditor.ExplorerSearch] {
+test "initial PR checkout refreshes cached Review and enables comments" {
+  for
+    (mode, comments_enabled) in [
+      (@fileeditor.ExplorerFiles, false),
+      (@fileeditor.ExplorerSearch, true),
+    ] {
     let initial = desktop_model()
     let model = {
       ..initial,
@@ -22,6 +26,10 @@ test "initial PR checkout refreshes cached Review from Files and Search" {
         ..initial.file_panel,
         owner: Some(file_ctx(initial).owner),
         explorer_mode: mode,
+        github_review: {
+          ..initial.file_panel.github_review,
+          enabled: comments_enabled,
+        },
         changes: @fileeditor.ChangeListReady(
           repository=true,
           files=[saved_review_file("src/old.mbt")],
@@ -56,6 +64,8 @@ test "initial PR checkout refreshes cached Review from Files and Search" {
     )
     assert_true(refreshing.file_panel.git_graph is @fileeditor.GitGraphLoading)
     assert_true(refreshing.github.review_pending)
+    assert_true(refreshing.file_panel.github_review.enabled)
+    assert_true(refreshing.file_panel.github_review.refresh_pending)
     let (_, opened) = update_msg(
       test_dispatch(),
       review_inventory_reply(refreshing, [saved_review_file("src/new.mbt")]),
@@ -66,5 +76,6 @@ test "initial PR checkout refreshes cached Review from Files and Search" {
       Some(opened.test_file("src/new.mbt")),
     )
     assert_false(opened.github.review_pending)
+    assert_true(opened.file_panel.github_review.enabled)
   }
 }
