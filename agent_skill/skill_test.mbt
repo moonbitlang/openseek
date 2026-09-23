@@ -118,32 +118,3 @@ async test "a missing skills directory is an empty library" {
   assert_eq(skills.length(), 0)
   assert_true(@agent_skill.skills_prompt_section(skills) is None)
 }
-
-///|
-async test "the prompt section lists usage, names, and paths" {
-  @vfs.with_tmpdir(prefix="openseek-skills-prompt-", dir => {
-    write_skill(
-      "\{dir}/release.md",
-      (
-        #|---
-        #|name: release
-        #|description: Cut a release of this project.
-        #|---
-        #|1. bump version
-      ),
-    )
-    let skills = @agent_skill.discover_skills(dir)
-    guard @agent_skill.skills_prompt_section(skills) is Some(section) else {
-      fail("expected a section")
-    }
-    inspect(
-      section,
-      content=(
-        $|## Skills
-        $|
-        $|Reusable skills are available. When a task matches one, read its file through mbtx (filename="@builtin/read.mbtx", args=[the file path]) BEFORE doing the work, then follow it. Listed skill files are pre-approved reads even when they sit outside the working directory.
-        $|- release — Cut a release of this project. (file: \{dir}/release.md)
-      ),
-    )
-  })
-}

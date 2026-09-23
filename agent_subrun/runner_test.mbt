@@ -162,52 +162,6 @@ async test "a report arriving in the cancel grace window still captures" {
 }
 
 ///|
-/// A child that ignores the graceful cancel is terminated after the grace
-/// and reported TimedOut.
-async test "a stalling child times out after deadline and grace" {
-  let script =
-    #|read line
-    #|sleep 60
-  guard can_spawn_sh() else {
-    println("skipped: cannot spawn sh")
-    return
-  }
-  let result = run_script(script, wall_deadline_ms=300)
-  assert_true(result.value() is None)
-  debug_inspect(result.terminal(), content="TimedOut")
-}
-
-///|
-/// External cancellation must RE-RAISE out of run_subrun, never fold into a
-/// terminal. Pinned by awaiting the cancelled task directly: a runner that
-/// swallowed the cancellation would complete with a SubrunResult and fail
-/// this test. (An outer with_timeout_opt cannot pin this — it returns None
-/// whether or not the body re-raised; review finding.)
-async test "external cancellation re-raises out of the runner" {
-  guard can_spawn_sh() else {
-    println("skipped: cannot spawn sh")
-    return
-  }
-  let script =
-    #|read line
-    #|sleep 60
-  @async.with_task_group() <| group => {
-    let task = group.spawn(() => run_script(script, wall_deadline_ms=30_000))
-    @async.sleep(300)
-    task.cancel()
-    let mut reraised = false
-    let outcome : @agent_subrun.SubrunResult[String]? = Some(task.wait()) catch {
-      error => {
-        reraised = error is @async.TaskCancelled
-        None
-      }
-    }
-    assert_true(reraised)
-    assert_true(outcome is None)
-  }
-}
-
-///|
 /// The input pipe must stay OPEN after the write — stdin EOF is the cancel
 /// signal, so a runner that closes it early cancels every child at startup.
 /// Pinned via exit-status classification: this child exits 7 the moment its
@@ -302,6 +256,7 @@ async test "a timed-out run still closes its bracket" {
     wall_deadline_ms=300,
     emit_event=bracket_collector(events),
   )
+  assert_true(result.value() is None)
   debug_inspect(result.terminal(), content="TimedOut")
   guard events is [SubrunStarted(..), SubrunFinished(status="timed_out", ..)] else {
     fail("expected a timed_out pair, got \{Repr(events)}")
@@ -309,6 +264,12 @@ async test "a timed-out run still closes its bracket" {
 }
 
 ///|
+/// External cancellation must RE-RAISE out of run_subrun, never fold into a
+/// terminal. Pinned by awaiting the cancelled task directly: a runner that
+/// swallowed the cancellation would complete with a SubrunResult and fail
+/// this test. (An outer with_timeout_opt cannot pin this — it returns None
+/// whether or not the body re-raised; review finding.)
+///
 /// Cancellation must still close the bracket — emitted BEFORE the re-raise,
 /// so a reader never shows the sub-run as running forever.
 async test "external cancellation closes the bracket before re-raising" {
@@ -330,7 +291,15 @@ async test "external cancellation closes the bracket before re-raising" {
     })
     @async.sleep(300)
     task.cancel()
-    let _ = Some(task.wait()) catch { _ => None }
+    let mut reraised = false
+    let outcome : @agent_subrun.SubrunResult[String]? = Some(task.wait()) catch {
+      error => {
+        reraised = error is @async.TaskCancelled
+        None
+      }
+    }
+    assert_true(reraised)
+    assert_true(outcome is None)
   }
   guard events is [SubrunStarted(..), SubrunFinished(status="cancelled", ..)] else {
     fail("expected a cancelled pair, got \{Repr(events)}")

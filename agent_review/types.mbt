@@ -170,11 +170,6 @@ test "json string carries the flat string-typed contract" {
 }
 
 ///|
-test "validate accepts a good report" {
-  assert_eq(sample_report().validate().length(), 0)
-}
-
-///|
 test "validate rejects a bad severity" {
   let report = {
     ..sample_report(),

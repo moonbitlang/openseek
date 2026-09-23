@@ -112,11 +112,13 @@ pub async fn[T] run_subrun(
 ) -> SubrunResult[T] {
   // Bump the process counter past any child ordinal an earlier engine
   // process already persisted for this parent — monotonic, so it can only
-  // skip ids, never reuse one.
-  if child_session is Some(spec) && subrun_ids.val < spec.first_free - 1 {
-    subrun_ids.val = spec.first_free - 1
+  // skip ids, never reuse one. Without a child session, a floor of 1 is a
+  // no-op.
+  let first_free = match child_session {
+    Some(spec) => spec.first_free
+    None => 1
   }
-  let id = next_subrun_id()
+  let id = "sr-\{reserve_subrun_ordinals(1, first_free~)}"
   // The child persists its own transcript under `<parent>-<id>` when the
   // parent is durable: the id exists only after allocation, so the session
   // argv is the runner's to append, not the caller's.
@@ -221,12 +223,6 @@ pub fn ChildSession::ChildSession(
 /// Per-process monotonic sub-run ids: unique within one engine's stream,
 /// which is all the pairing contract needs.
 let subrun_ids : Ref[Int] = { val: 0, }
-
-///|
-fn next_subrun_id() -> String {
-  subrun_ids.val += 1
-  "sr-\{subrun_ids.val}"
-}
 
 ///|
 /// Reserve `count` consecutive child ordinals from THIS process's counter and

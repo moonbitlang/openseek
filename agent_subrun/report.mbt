@@ -8,19 +8,10 @@ pub fn report_line(report : Json) -> String {
 }
 
 ///|
-/// The report a parent extracts from one child stdout line, or `None` for
-/// every other line (protocol events, stray output).
-fn parse_report_line(line : Json) -> Json? {
-  match line {
-    { "subrun_report": report, .. } => Some(report)
-    _ => None
-  }
-}
-
-///|
-test "report lines round-trip and ordinary lines are not reports" {
+test "report lines round-trip" {
   let report : Json = { "answer": "x" }
-  let line = @json.parse(report_line(report))
-  assert_eq(parse_report_line(line), Some(report))
-  assert_eq(parse_report_line({ "event": "agent_step", "step": 1 }), None)
+  guard @json.parse(report_line(report)) is { "subrun_report": parsed, .. } else {
+    fail("the report line must carry the report")
+  }
+  assert_eq(parsed, report)
 }
