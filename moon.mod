@@ -33,5 +33,5 @@ rule(
 
 rule(
   name: "mbtx_bundle",
-  command: "moon run scripts/mbtx_bundle -- \"$output\" $input",
+  command: "moonx scripts/mbtx_bundle.mbtx \"$output\" $input",
 )

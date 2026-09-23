@@ -1,16 +1,27 @@
 ///|
-/// Usage: mbtx_bundle OUTPUT INPUT...
+import {
+  "moonbitlang/async@0.22.1",
+  "moonbitlang/async@0.22.1/fs",
+  "moonbitlang/async@0.22.1/os_error",
+  "moonbitlang/core/env",
+}
+
+///|
+/// Usage: moonx scripts/mbtx_bundle.mbtx OUTPUT INPUT...
 ///
 /// Embeds each INPUT script into OUTPUT as one arm of `bundled_workflow`,
 /// keyed by its basename — the name after `@builtin/`. The files on disk stay
 /// the editable source; the generated copy is what the binary runs.
 async fn main {
   guard @env.args() is [_, output, .. inputs] && !inputs.is_empty() else {
-    fail("usage: mbtx_bundle OUTPUT INPUT...")
+    fail("usage: mbtx_bundle.mbtx OUTPUT INPUT...")
   }
   let scripts : Array[(String, String)] = []
   for input in inputs {
-    let name = @path.Path(input).basename().to_owned()
+    let name = match input.rev_find("/") {
+      Some(i) => input[i + 1:].to_owned()
+      None => input
+    }
     guard scripts.iter().all(script => script.0 != name) else {
       fail("mbtx_bundle: duplicate script name \{name}")
     }
