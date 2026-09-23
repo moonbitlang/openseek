@@ -538,3 +538,123 @@ test "transcript mapping replays a context checkpoint and yield guidance" {
   }
   assert_eq(items[1].text(), Some("[context ceiling] continue in a new turn"))
 }
+
+///|
+/// The store `listed` rows belong to. Valid by construction; a total fixture
+/// keeps the tree tests free of a synthetic error effect.
+fn listed_workspace(path : String) -> @common.Uri {
+  match @resource.of_path(@interop.ChannelId::Local, path) {
+    Some(root) => root
+    None => @common.Uri::file(path)
+  }
+}
+
+///|
+/// Sidebar entries for `session_tree` tests: only the id distinguishes them.
+fn listed(ids : Array[String]) -> Array[@transcript.SessionListItem] {
+  ids.map(id => {
+    id,
+    title: None,
+    workspace: listed_workspace("/work"),
+    workspace_name: "work",
+    updated_at_ms: None,
+  })
+}
+
+///|
+/// A tree as `parent[child, …]` rows, so a case reads as the sidebar renders.
+fn tree_shape(rows : Array[@transcript.SessionTreeRow]) -> String {
+  rows
+  .map(row => {
+    if row.children.is_empty() {
+      row.item.id
+    } else {
+      "\{row.item.id}[\{row.children.map(child => child.id).join(", ")}]"
+    }
+  })
+  .join(" ")
+}
+
+///|
+test "sub-run transcripts fold under the conversation that launched them" {
+  inspect(
+    tree_shape(
+      @transcript.session_tree(
+        listed(["desktop-a", "desktop-a-sr-1", "desktop-a-sr-2", "desktop-b"]),
+      ),
+    ),
+    content="desktop-a[desktop-a-sr-1, desktop-a-sr-2] desktop-b",
+  )
+}
+
+///|
+test "session trees never fold children across stores" {
+  guard @resource.of_path(@interop.ChannelId::Local, "/project")
+    is Some(project) else {
+    fail("test project path was invalid")
+  }
+  let other_parent = listed(["same"])[0]
+  let project_parent : @transcript.SessionListItem = {
+    ..other_parent,
+    workspace: project,
+    workspace_name: "project",
+  }
+  let project_child : @transcript.SessionListItem = {
+    ..project_parent,
+    id: "same-sr-1",
+  }
+  let rows = @transcript.session_tree([
+    other_parent, project_parent, project_child,
+  ])
+  assert_eq(rows.length(), 2)
+  assert_eq(rows[0].item.workspace, other_parent.workspace)
+  assert_true(rows[0].children.is_empty())
+  assert_eq(rows[1].item.workspace, project)
+  assert_eq(rows[1].children.length(), 1)
+  assert_eq(rows[1].children[0].id, project_child.id)
+  assert_eq(rows[1].children[0].workspace, project_child.workspace)
+}
+
+///|
+test "children sort by sub-run ordinal, not by id text" {
+  // Listed out of order and past `sr-9`, where a lexicographic sort would
+  // put `sr-10` between `sr-1` and `sr-2`.
+  inspect(
+    tree_shape(
+      @transcript.session_tree(listed(["a-sr-10", "a-sr-2", "a", "a-sr-1"])),
+    ),
+    content="a[a-sr-1, a-sr-2, a-sr-10]",
+  )
+}
+
+///|
+test "a child whose parent is not listed keeps its own row" {
+  // The parent is archived (the archived twin is a separate reply), so its
+  // children are all this group holds — they stay visible, in place.
+  inspect(
+    tree_shape(@transcript.session_tree(listed(["a-sr-1", "b", "a-sr-2"]))),
+    content="a-sr-1 b a-sr-2",
+  )
+}
+
+///|
+test "a grandchild folds under the outermost listed ancestor" {
+  inspect(
+    tree_shape(@transcript.session_tree(listed(["a", "a-sr-1", "a-sr-1-sr-2"]))),
+    content="a[a-sr-1, a-sr-1-sr-2]",
+  )
+  // The walk is link by link: with the middle generation missing from the
+  // group, the grandchild keeps a row rather than jumping a gap.
+  inspect(
+    tree_shape(@transcript.session_tree(listed(["a", "a-sr-1-sr-2"]))),
+    content="a a-sr-1-sr-2",
+  )
+}
+
+///|
+test "an id that merely looks like a child keeps its row" {
+  inspect(
+    tree_shape(@transcript.session_tree(listed(["a", "a-sr-x", "a-sr-"]))),
+    content="a a-sr-x a-sr-",
+  )
+}
