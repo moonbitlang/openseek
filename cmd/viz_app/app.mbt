@@ -563,11 +563,6 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
 }
 
 ///|
-/// Set `data-theme` on the document root. `light`/`dark` pick a fixed palette;
-/// `system` defers to the OS via the stylesheet's `prefers-color-scheme` query.
-extern "js" fn set_document_theme(theme : String) -> Unit = "(t) => document.documentElement.setAttribute('data-theme', t)"
-
-///|
 fn apply_theme(theme : Theme) -> @cmd.Cmd {
   @cmd.effect(() => set_document_theme(theme.value()))
 }
@@ -587,16 +582,6 @@ fn fetch_text(
     @http.get(url).expect_text(emit.map(to_msg))
   }
 }
-
-///|
-/// Whether a self-contained export (see `inspect --export`) baked a
-/// response for `url` into `window.__OPENSEEK_DATA__`. False in a normal server
-/// build, where the global is absent and every lookup misses.
-extern "js" fn embedded_has(url : String) -> Bool = "(url) => (typeof window !== 'undefined') && !!window.__OPENSEEK_DATA__ && Object.prototype.hasOwnProperty.call(window.__OPENSEEK_DATA__, url)"
-
-///|
-/// The baked response body for `url`. Only called after `embedded_has` is true.
-extern "js" fn embedded_get(url : String) -> String = "(url) => window.__OPENSEEK_DATA__[url]"
 
 ///|
 /// Switch the viewer to a locally dropped session file. Everything comes from
@@ -671,36 +656,6 @@ fn dropped_display_id(name : String, parsed : @session_log.ParsedLog) -> String 
     None => name
   }
 }
-
-///|
-/// `rabbita/dom` binds `DataTransfer.items` but not `DataTransfer.files`; a
-/// dropped `File` is a `Blob` subtype, which is all the reader needs.
-extern "js" fn data_transfer_file_count(transfer : @dom.DataTransfer) -> Int = "(t) => (t.files ? t.files.length : 0)"
-
-///|
-extern "js" fn data_transfer_file_name(
-  transfer : @dom.DataTransfer,
-  index : Int,
-) -> String = "(t, i) => t.files[i].name"
-
-///|
-extern "js" fn data_transfer_file(
-  transfer : @dom.DataTransfer,
-  index : Int,
-) -> @dom.Blob = "(t, i) => t.files[i]"
-
-///|
-/// Percent-encode the id so session ids containing URL-reserved characters
-/// (spaces, `?`, `#`) reach the server intact; it percent-decodes the segment.
-extern "js" fn encode_uri_component(value : String) -> String = "encodeURIComponent"
-
-///|
-extern "js" fn format_unix_ms_utc(milliseconds : Double) -> String =
-  #|(milliseconds) => {
-  #|  const date = new Date(milliseconds);
-  #|  if (!Number.isFinite(date.getTime())) return "";
-  #|  return date.toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  #|}
 
 ///|
 fn install_shortcuts(emit : @cmd.Emit[Msg]) -> @cmd.Cmd {

@@ -22,17 +22,6 @@ fn focus_path_after_render(select_all : Bool) -> @cmd.Cmd {
 }
 
 ///|
-extern "js" fn focus_path_input(select_all : Bool) -> Unit =
-  #| (selectAll) => {
-  #|   const input = document.getElementById("project-picker-path-input");
-  #|   if (!input) return;
-  #|   input.focus();
-  #|   if (selectAll) return input.select();
-  #|   const end = input.value.length;
-  #|   input.setSelectionRange(end, end);
-  #| }
-
-///|
 /// Keep keyboard completion visible while focus stays in the combobox.
 fn scroll_path_row_after_render(index : Int) -> @cmd.Cmd {
   @cmd.custom_cmd(

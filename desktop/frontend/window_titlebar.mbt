@@ -78,12 +78,6 @@ fn decode_titlebar_area(
 }
 
 ///|
-extern "js" fn titlebar_overlay_class(
-  root : @dom.Element,
-  visible : Bool,
-) -> Unit = "(root, visible) => root.classList.toggle('native-titlebar-overlay', visible)"
-
-///|
 fn publish_titlebar_area(area : TitlebarArea?) -> Unit {
   guard @dom.document().get_document_element() is Some(root) &&
     root.to_html_element() is Some(html) else {
@@ -110,19 +104,6 @@ fn publish_titlebar_area(area : TitlebarArea?) -> Unit {
     }
   }
 }
-
-///|
-// A synchronous bridge throw must become a rejected promise as well.
-extern "js" fn read_titlebar_area(bridge : @js.Value) -> @js.Promise[@js.Value] = "async bridge => await bridge.getTitlebarArea()"
-
-///|
-extern "js" fn subscribe_titlebar_changes(
-  bridge : @js.Value,
-  refresh : () -> Unit,
-) -> () -> Unit = "(bridge, refresh) => bridge.events.on('openseek.window.chrome_changed', refresh)"
-
-///|
-extern "js" fn titlebar_error(message : String) -> Unit = "message => console.error(message)"
 
 ///|
 priv struct TitlebarGeometry {
@@ -210,10 +191,6 @@ fn install_window_titlebar_geometry() -> () -> Unit {
     publish_titlebar_area(None)
   }
 }
-
-///|
-extern "js" fn window_titlebar_overlay_visible() -> Bool =
-  #| () => document.documentElement.classList.contains("native-titlebar-overlay")
 
 ///|
 priv suberror WindowTitlebarSubscription {

@@ -2,18 +2,9 @@
 const LanguageStorageKey : String = "openseek.language"
 
 ///|
-/// Browser preferences are read at startup and when a language is selected.
-extern "js" fn browser_language_values() -> FixedArray[String] =
-  #|() => typeof navigator === 'undefined' ? [] : Array.from(navigator.languages || [navigator.language]).filter(x => typeof x === 'string')
-
-///|
 fn browser_languages() -> Array[String] {
   browser_language_values().iter().collect()
 }
-
-///|
-extern "js" fn language_storage() -> @js.Value =
-  #|() => { const storage = globalThis.localStorage; if (!storage) throw new Error('Language preference storage is unavailable'); return storage; }
 
 ///|
 fn read_language_preference() -> Result[@i18n.Preference?, String] {

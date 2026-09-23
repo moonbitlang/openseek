@@ -1,66 +1,15 @@
-// Browser primitives not exposed by Rabbita. Navigation policy and lifetimes
-// stay below in MoonBit; these bindings only access platform APIs.
-
-///|
-#external
-priv type HashParams
-
-///|
-extern "js" fn read_hash_params() -> @js.Nullable[HashParams] =
-  #| () => typeof location === 'undefined' ? null : new URLSearchParams(location.hash.slice(1))
-
-///|
-extern "js" fn HashParams::get(
-  self : HashParams,
-  key : String,
-) -> @js.Nullable[String] = "(params, key) => params.get(key)"
-
-///|
-extern "js" fn HashParams::set(
-  self : HashParams,
-  key : String,
-  value : String,
-) -> Unit = "(params, key, value) => params.set(key, value)"
-
-///|
-extern "js" fn HashParams::delete(self : HashParams, key : String) -> Unit = "(params, key) => params.delete(key)"
-
-///|
-extern "js" fn HashParams::save(self : HashParams) -> Unit = "params => history.replaceState(null, '', '#' + params.toString())"
-
-///|
-extern "js" fn decimal_prefix(value : String) -> Double = "value => parseInt(value, 10)"
-
-///|
-extern "js" fn browser_number(value : String) -> Double = "Number"
-
-///|
-extern "js" fn toggle_class(
-  element : @dom.Element,
-  name : String,
-  enabled : Bool,
-) -> Unit = "(element, name, enabled) => element.classList.toggle(name, enabled)"
-
-///|
-extern "js" fn element_style(
-  element : @dom.Element,
-) -> @dom.CSSStyleDeclaration = "element => element.style"
-
-///|
-extern "js" fn set_text_content(element : @dom.Element, text : String) -> Unit = "(element, text) => { element.textContent = text; }"
-
-///|
-extern "js" fn element_offset_width(element : @dom.Element) -> Double = "element => element.offsetWidth"
+// Session navigation, scroll tracking, and keyboard behavior. Browser access
+// is isolated in browser_ffi.mbt.
 
 ///|
 fn hash_param(name : String) -> String? {
-  read_hash_params().to_option().bind(params => params.get(name).to_option())
+  read_hash_params().bind(params => params.get(name))
 }
 
 ///|
 fn set_hash_session(key : String, view : String) -> Unit {
-  guard read_hash_params().to_option() is Some(params) else { return }
-  if params.get("s").to_option() is Some(previous) && previous != key {
+  guard read_hash_params() is Some(params) else { return }
+  if params.get("s") is Some(previous) && previous != key {
     params.delete("seq")
   }
   params.set("s", key)
@@ -75,7 +24,7 @@ fn set_hash_view(view : String) -> Unit {
 
 ///|
 fn set_hash_value(key : String, value : String) -> Unit {
-  guard read_hash_params().to_option() is Some(params) else { return }
+  guard read_hash_params() is Some(params) else { return }
   params.set(key, value)
   params.save()
 }

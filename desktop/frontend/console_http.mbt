@@ -4,26 +4,6 @@
 // treats every completed response as success.
 
 ///|
-extern "js" fn js_fetch(
-  url : String,
-  method_ : String,
-  has_body : Bool,
-  body : String,
-  on_done : (Int, String) -> Unit,
-  on_fail : (String) -> Unit,
-) =
-  #| (url, method, hasBody, body, onDone, onFail) => {
-  #|   const config = { method };
-  #|   if (hasBody) {
-  #|     config.headers = { "Content-Type": "application/json" };
-  #|     config.body = body;
-  #|   }
-  #|   fetch(url, config)
-  #|     .then((response) => response.text().then((text) => onDone(response.status, text)))
-  #|     .catch((error) => onFail(String(error)));
-  #| }
-
-///|
 /// GET `/v1/auth/me`: 200 is a session, 401 is signed out, anything else
 /// is a page-level failure worth a retry button.
 fn fetch_console_me(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {

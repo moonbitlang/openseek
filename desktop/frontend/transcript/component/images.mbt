@@ -3,16 +3,6 @@
 // display data for the conversation currently mounted in the page.
 
 ///|
-extern "js" fn image_entry_intersects(
-  entry : @dom.IntersectionObserverEntry,
-) -> Bool = "entry => entry.isIntersecting"
-
-///|
-extern "js" fn image_entry_target(
-  entry : @dom.IntersectionObserverEntry,
-) -> @dom.Element = "entry => entry.target"
-
-///|
 fn transcript_image_observer(
   on_image : (String) -> Unit,
 ) -> @dom.IntersectionObserver {
@@ -134,13 +124,6 @@ fn settle_transcript_image(path : String, source : String?) -> Unit {
     }
   }
 }
-
-///|
-extern "js" fn image_class_toggle(
-  image : @dom.Element,
-  name : String,
-  enabled : Bool,
-) -> Unit = "(image, name, enabled) => image.classList.toggle(name, enabled)"
 
 ///|
 test "image cache starts one read and settles only the pending entry" {

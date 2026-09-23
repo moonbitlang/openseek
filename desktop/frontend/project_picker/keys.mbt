@@ -142,7 +142,3 @@ fn picker_control_target(event : @dom.Event, selector : String) -> Bool {
   target.closest(selector) is Some(control) &&
   control.closest(".picker-modal") is Some(_)
 }
-
-///|
-extern "js" fn clipboard_text(event : @dom.Event) -> @js.Nullable[String] =
-  #| event => event.clipboardData?.getData("text/plain") ?? null
