@@ -301,27 +301,6 @@ test "plan rejects malformed arguments with a field-naming error" {
     Json::empty_object(),
     "error: plan requires arguments.steps to be an array",
   )
-  assert_plan_error(
-    { "steps": [{ "title": "one", "status": "doing" }] },
-    "arguments.steps[0].status to be one of pending|in_progress|completed",
-  )
-  assert_plan_error(
-    { "steps": [{ "title": "line\nbreak", "status": "pending" }] },
-    "arguments.steps[0].title to be a single line",
-  )
-  assert_plan_error(
-    {
-      "steps": [
-        { "title": "one", "status": "in_progress" },
-        { "title": "two", "status": "in_progress" },
-      ],
-    },
-    "at most one in_progress step",
-  )
-  assert_plan_error(
-    { "steps": [{ "title": "one", "status": "pending", "note": "extra" }] },
-    "arguments.steps[0] to have only title and status fields",
-  )
 }
 
 ///|

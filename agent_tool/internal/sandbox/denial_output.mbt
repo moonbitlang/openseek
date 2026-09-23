@@ -65,10 +65,7 @@ fn source_write_denied_in_text(
   fn names_component_bounded(line : StringView, subject : String) -> Bool {
     let needle = "\{subject}/"
     let mut from = 0
-    while true {
-      guard line.view(start_offset=from).find(needle) is Some(offset) else {
-        break
-      }
+    while line.view(start_offset=from).find(needle) is Some(offset) {
       let at = from + offset
       if at == 0 {
         return true

@@ -1078,14 +1078,11 @@ async fn execute(
     sandboxed_command,
     Some(log),
     "",
-    exit_code=match result {
-      Some((exit_code, _)) => Some(exit_code)
-      None => None
-    },
+    exit_code=result.map(r => r.0),
     escalation=approval is Some(_),
     policy_active~,
   )
-  let action = match result {
+  match result {
     Some((exit_code, raw)) => {
       // Rewrite the throwaway temp path to the inline label or saved filename.
       let text = rewrite_temp_paths(raw, [real, build_dir], source_name~)
@@ -1130,7 +1127,6 @@ async fn execute(
       )
     }
   }
-  action
 }
 
 ///|

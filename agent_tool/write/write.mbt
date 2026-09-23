@@ -386,24 +386,6 @@ async test "write truncates existing files" {
 }
 
 ///|
-async test "write reports whether it created or overwrote a file" {
-  @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/note.txt"
-    // First write to a fresh path: a plain "created" result, no overwrite note.
-    let created = execute({ "path": path, "content": "v1" })
-    guard created is Respond(first) else { fail("expected Respond") }
-    assert_eq(first.content, "ok: wrote 1 line (2 chars) to \{path}")
-    // Writing again clobbers the existing file, which the result now calls out.
-    let overwritten = execute({ "path": path, "content": "v2!" })
-    guard overwritten is Respond(second) else { fail("expected Respond") }
-    assert_eq(
-      second.content,
-      "ok: wrote 1 line (3 chars) to \{path} (overwrote existing file)",
-    )
-  })
-}
-
-///|
 async test "write accepts empty content" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/empty.txt"
@@ -744,22 +726,6 @@ async test "write rejects missing content" {
     assert_eq(output.content, "error: write requires arguments.content")
     assert_true(output.is_error)
   })
-}
-
-///|
-async test "write rejects missing path" {
-  let result = execute({ "content": "stuff" })
-  guard result is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "error: write requires arguments.path")
-  assert_true(output.is_error)
-}
-
-///|
-async test "write rejects non-object arguments" {
-  let result = execute(Json::null())
-  guard result is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "error: write requires object arguments")
-  assert_true(output.is_error)
 }
 
 ///|

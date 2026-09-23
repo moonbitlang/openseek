@@ -80,13 +80,6 @@ pub(all) struct ParseGateError {
 } derive(Debug)
 
 ///|
-/// Whether the parse gate applies to `path` — i.e. `moonc syncheck` accepts its
-/// input kind: `.mbt`, `.mbt.md`, or an exact `moon.mod` / `moon.pkg`.
-fn is_gateable_path(path : String) -> Bool {
-  gate_scratch_name(path) is Some(_)
-}
-
-///|
 /// The distinct syncheck input KINDS named by `path` and its resolved symlink
 /// `target`, as representative paths to hand to `content_parse_errors`. Usually
 /// one entry: a regular file (where `target` is the same file), or a symlink
@@ -282,7 +275,7 @@ fn excerpt_for_loc(lines : Array[String], loc : String) -> String {
   let width = "\{last}".length()
   let rendered = [
     for number in first..<=last => {
-      "  \{pad_line_number(number, width)} |\{lines[number - 1]}"
+      "  \{number.to_string().pad_start(width, ' ')} |\{lines[number - 1]}"
     }
   ]
   rendered.join("\n")
@@ -311,11 +304,6 @@ fn loc_line_span(loc : String) -> (Int, Int)? {
     }
     _ => None
   }
-}
-
-///|
-fn pad_line_number(number : Int, width : Int) -> String {
-  "\{number}".pad_start(width, ' ')
 }
 
 ///|
@@ -474,25 +462,25 @@ async test "content_parse_errors gates real content through moonc" {
 }
 
 ///|
-/// `is_gateable_path` matches exactly the input kinds `moonc syncheck` accepts:
+/// `gate_scratch_name` accepts exactly the input kinds `moonc syncheck` accepts:
 /// `.mbt`, `.mbt.md`, and an exact `moon.mod` / `moon.pkg` basename. Nested
 /// config files count; prefixed names (`x.moon.pkg`) and the legacy JSON /
 /// `moon.work` files do not.
-test "is_gateable_path covers syncheck input kinds only" {
-  assert_true(is_gateable_path("lib/a.mbt"))
-  assert_true(is_gateable_path("README.mbt.md"))
-  assert_true(is_gateable_path("moon.mod"))
-  assert_true(is_gateable_path("sub/pkg/moon.pkg"))
+test "gate_scratch_name covers syncheck input kinds only" {
+  assert_true(gate_scratch_name("lib/a.mbt") is Some(_))
+  assert_true(gate_scratch_name("README.mbt.md") is Some(_))
+  assert_true(gate_scratch_name("moon.mod") is Some(_))
+  assert_true(gate_scratch_name("sub/pkg/moon.pkg") is Some(_))
   // Windows separators classify like their POSIX form (shared manifest helpers).
-  assert_true(is_gateable_path("C:\\ws\\pkg\\moon.pkg"))
-  assert_true(is_gateable_path("C:\\ws\\moon.mod"))
+  assert_true(gate_scratch_name("C:\\ws\\pkg\\moon.pkg") is Some(_))
+  assert_true(gate_scratch_name("C:\\ws\\moon.mod") is Some(_))
   // Not syncheck inputs.
-  assert_false(is_gateable_path("notes.md"))
-  assert_false(is_gateable_path("moon.work"))
-  assert_false(is_gateable_path("moon.mod.json"))
-  assert_false(is_gateable_path("moon.pkg.json"))
-  assert_false(is_gateable_path("x.moon.pkg"))
-  assert_false(is_gateable_path("config.json"))
+  assert_true(gate_scratch_name("notes.md") is None)
+  assert_true(gate_scratch_name("moon.work") is None)
+  assert_true(gate_scratch_name("moon.mod.json") is None)
+  assert_true(gate_scratch_name("moon.pkg.json") is None)
+  assert_true(gate_scratch_name("x.moon.pkg") is None)
+  assert_true(gate_scratch_name("config.json") is None)
 }
 
 ///|

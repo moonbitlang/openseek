@@ -14,12 +14,11 @@ fn resolve_filename(
   references : String?,
 ) -> String raise {
   if filename.has_prefix("@") {
-    guard filename.strip_prefix("@builtin/") is Some(name_view) else {
+    guard filename.strip_prefix("@builtin/") is Some(name) else {
       fail(
         "unknown script namespace in \{filename}. Only @builtin/ is supported. Use ./\{filename} for a literal workspace path",
       )
     }
-    let name = name_view
     guard !name.is_empty() &&
       !name.contains("\\") &&
       name

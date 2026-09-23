@@ -98,7 +98,7 @@ async fn RequestReader::body(
   let bytes : Array[Byte] = []
   match (headers.get("content-length"), headers.get("transfer-encoding")) {
     (Some(length), None) => {
-      guard !length.is_empty() && length.iter().all(c => c >= '0' && c <= '9') else {
+      guard !length.is_empty() && length.all(c => c.is_ascii_digit()) else {
         fail("Invalid PTC Content-Length")
       }
       let size = @string.parse_int(length)
@@ -112,14 +112,7 @@ async fn RequestReader::body(
     (None, Some(encoding)) if encoding.to_lower() == "chunked" =>
       for ;; {
         let line = self.line(16)
-        guard !line.is_empty() &&
-          line
-          .iter()
-          .all(c => {
-            (c >= '0' && c <= '9') ||
-            (c >= 'a' && c <= 'f') ||
-            (c >= 'A' && c <= 'F')
-          }) else {
+        guard !line.is_empty() && line.all(c => c.is_ascii_hexdigit()) else {
           fail("Invalid PTC chunk size")
         }
         let size = @string.parse_int(line, base=16)

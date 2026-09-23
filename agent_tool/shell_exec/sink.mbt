@@ -94,10 +94,7 @@ async fn ShellOutputSink::append_chunk(
 ) -> Unit {
   self.lock.acquire()
   defer self.lock.release()
-  let buffer = Buffer()
-  buffer.write_bytes(self.pending)
-  buffer.write_bytes(chunk)
-  let (text, rest, invalid) = split_valid_utf8(buffer.to_bytes())
+  let (text, rest, invalid) = split_valid_utf8(self.pending + chunk)
   self.pending = rest
   if invalid {
     self.had_invalid = true
@@ -387,15 +384,13 @@ fn prefix_chars(text : String, n : Int) -> String {
 /// rather than held for a completion that can never be valid.
 fn split_valid_utf8(bytes : Bytes) -> (String, Bytes, Bool) {
   let end = bytes.length() - incomplete_suffix_len(bytes)
-  let tail = Buffer()
-  tail.write_bytes(bytes[end:])
   // Strict-decode the complete prefix; on invalid bytes fall back to lossy and
   // report it, so the caller can preserve the "binary output" error. A valid
   // prefix (the common case) decodes once.
   let (text, invalid) = (@utf8.decode(bytes[:end]), false) catch {
     _ => (@utf8.decode_lossy(bytes[:end]), true)
   }
-  (text, tail.to_bytes(), invalid)
+  (text, bytes[end:].to_owned(), invalid)
 }
 
 ///|
@@ -460,7 +455,9 @@ async test "small output stays in memory, no file" {
 
 ///|
 async test "output over the inline cap spills; read_all returns everything, head previews" {
-  let path = "/tmp/openseek-sink-spill-1.out"
+  let dir = @fs.tmpdir(prefix="openseek-sink-spill-")
+  defer @fs.rmdir(dir, recursive=true)
+  let path = "\{dir}/spill.out"
   let sink = ShellOutputSink::ShellOutputSink(
     inline_cap=4,
     hard_cap=1000,
@@ -478,7 +475,9 @@ async test "output over the inline cap spills; read_all returns everything, head
 
 ///|
 async test "the spill file is seeded with output buffered before the spill" {
-  let path = "/tmp/openseek-sink-spill-2.out"
+  let dir = @fs.tmpdir(prefix="openseek-sink-seed-")
+  defer @fs.rmdir(dir, recursive=true)
+  let path = "\{dir}/spill.out"
   let sink = ShellOutputSink::ShellOutputSink(
     inline_cap=4,
     hard_cap=1000,

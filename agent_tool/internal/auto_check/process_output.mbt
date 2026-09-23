@@ -78,8 +78,6 @@ async fn read_output_prefix(
             text: text_prefix_by_chars(text, max_output_chars),
             output_limit_reached: true,
           }
-        } else {
-          continue
         }
       }
     }

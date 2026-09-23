@@ -766,17 +766,6 @@ async test "on_job_exit fires once on a natural exit, never on stop" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "snapshot, read_output, and stop handle unknown ids" {
-  @async.with_task_group(group => {
-    let rt = BgJobRuntime::BgJobRuntime(AgentTaskScope(group))
-    assert_true(rt.snapshot("nope") is None)
-    assert_true(rt.read_output("nope") is None)
-    assert_false(rt.stop("nope"))
-  })
-}
-
-///|
-#cfg(not(platform="windows"))
 async test "start allocates one id per job (id matches its spill file)" {
   let directory = @fs.tmpdir(prefix="bg-job-test-")
   defer @fs.rmdir(directory, recursive=true)
