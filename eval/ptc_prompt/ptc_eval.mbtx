@@ -318,25 +318,70 @@ fn Session::final_message(self : Session) -> Json {
 }
 
 ///|
-/// Provider usage summed over the `usage` events of an engine log.
+/// Provider usage summed over an engine log.
 async fn usage(log : String) -> Json {
+  usage_of(read_text(log))
+}
+
+///|
+/// Provider usage in engine log `text`: `openseek run` ends a turn with one
+/// text summary line (`done · 2 step(s) · 100 prompt tokens (60 cached), 7
+/// completion`); engines built before it streamed JSONL `usage` events, and
+/// the eval compares both. `null` when the log reports none.
+fn usage_of(text : String) -> Json {
   let mut totals : Map[String, Double]? = None
-  for line in read_text(log).split("\n") {
+  fn add(counts : Array[(String, Double)]) {
+    let sums = totals.unwrap_or({})
+    totals = Some(sums)
+    for count in counts {
+      sums[count.0] = sums.get(count.0).unwrap_or(0.0) + count.1
+    }
+  }
+  for line in text.split("\n") {
+    if summary_usage(line) is Some((prompt, cached, completion)) {
+      add([
+        ("prompt_tokens", prompt),
+        ("completion_tokens", completion),
+        ("total_tokens", prompt + completion),
+        ("prompt_cache_hit_tokens", cached),
+        ("prompt_cache_miss_tokens", prompt - cached),
+      ])
+      continue
+    }
     let event = @json.parse(line.to_owned()) catch { _ => continue }
     guard event is { "event": "usage", "usage": Object(fields), .. } else {
       continue
     }
-    let sums = totals.unwrap_or({})
-    totals = Some(sums)
-    for key, value in fields {
-      if value is Number(value, ..) {
-        sums[key] = sums.get(key).unwrap_or(0.0) + value
-      }
-    }
+    add(
+      fields
+      .iter()
+      .filter_map(field => {
+        guard field.1 is Number(value, ..) else { None }
+        Some((field.0, value))
+      })
+      .collect(),
+    )
   }
   match totals {
     Some(sums) => sums.to_json()
     None => Json::null()
+  }
+}
+
+///|
+/// `(prompt, cached, completion)` from a `run` summary line, which ends a
+/// turn as `done` or `stopped: …`.
+fn summary_usage(line : StringView) -> (Double, Double, Double)? {
+  guard line.split(" · ").collect() is [status, _, tokens] &&
+    (status == "done" || status.has_prefix("stopped: ")) &&
+    tokens.strip_suffix(" completion") is Some(tokens) &&
+    tokens.split(" prompt tokens (").collect() is [prompt, rest] &&
+    rest.split(" cached), ").collect() is [cached, completion] else {
+    return None
+  }
+  let parse = (text : StringView) => @string.parse_int(text).to_double()
+  Some((parse(prompt), parse(cached), parse(completion))) catch {
+    _ => None
   }
 }
 
@@ -2234,4 +2279,32 @@ async test "deleted protected fixture is a failure not a crash" {
     assert_eq(score["preserved_fixture"], false)
     assert_eq(score["oracle_passed"], 46)
   })
+}
+
+///|
+test "usage reads the run summary line and older JSONL usage events" {
+  assert_eq(
+    usage_of(
+      "--- step 1\nDONE\ndone · 2 step(s) · 100 prompt tokens (60 cached), 7 completion\n",
+    ),
+    {
+      "prompt_tokens": 100.0,
+      "completion_tokens": 7.0,
+      "total_tokens": 107.0,
+      "prompt_cache_hit_tokens": 60.0,
+      "prompt_cache_miss_tokens": 40.0,
+    },
+  )
+  let event = "{\"event\":\"usage\",\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1}}"
+  assert_eq(usage_of("\{event}\n\{event}\n42\n"), {
+    "prompt_tokens": 6.0,
+    "completion_tokens": 2.0,
+  })
+  assert_eq(usage_of("error: connection refused\n"), Json::null())
+  assert_eq(
+    summary_usage(
+      "done · 1 step(s) · x prompt tokens (1 cached), 1 completion",
+    ),
+    None,
+  )
 }

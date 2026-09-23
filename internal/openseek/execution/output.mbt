@@ -105,7 +105,10 @@ fn TextRenderer::render(self : TextRenderer, event : @protocol.Event) -> String 
       self.steps = step
       self.line(out, "--- step \{step}")
     }
-    ReasoningDelta(content~) => self.stream_text(out, Thinking, content)
+    ReasoningDelta(content~) =>
+      if !self.fleet {
+        self.stream_text(out, Thinking, content)
+      }
     AssistantDelta(content~) =>
       if !self.fleet {
         self.answer_streamed = true
@@ -137,7 +140,7 @@ fn TextRenderer::render(self : TextRenderer, event : @protocol.Event) -> String 
       self.line(out, "retrying (\{attempt}/\{max_attempts}): \{reason}")
     AgentFinished(answer~) => {
       // The answer is normally the last message, already printed.
-      if answer != "" && self.last_message != Some(answer) {
+      if !self.fleet && answer != "" && self.last_message != Some(answer) {
         self.block(out, answer)
       }
       self.line(out, self.summary("done"))
@@ -180,7 +183,10 @@ fn TextRenderer::stream_text(
   stream : Stream,
   text : String,
 ) -> Unit {
-  if text == "" {
+  // Track the cursor from what is written: a dropped trailing control must
+  // not make a line that ended read as unfinished.
+  let safe = terminal_safe_text(text)
+  if safe == "" {
     return
   }
   if self.stream != stream {
@@ -191,8 +197,8 @@ fn TextRenderer::stream_text(
     }
     self.stream = stream
   }
-  out.write_string(terminal_safe_text(text))
-  self.mid_line = !text.has_suffix("\n")
+  out.write_string(safe)
+  self.mid_line = !safe.has_suffix("\n")
 }
 
 ///|
@@ -233,7 +239,12 @@ fn TextRenderer::block(
 }
 
 ///|
+/// The closing line of a turn. A fleet's counters mix every attempt, so there
+/// it is the bare status; the fleet summary on stderr reports each attempt.
 fn TextRenderer::summary(self : TextRenderer, status : String) -> String {
+  if self.fleet {
+    return status
+  }
   "\{status} · \{self.steps} step(s) · \{self.prompt_tokens} prompt tokens (\{self.cached_tokens} cached), \{self.completion_tokens} completion"
 }
 
@@ -311,11 +322,19 @@ test "text rendering streams the answer and summarizes the turn" {
 }
 
 ///|
-test "fleet text prints whole messages instead of interleaved deltas" {
+test "fleet text prints whole messages and no mixed per-attempt counts" {
   let renderer = TextRenderer()
   let events : Array[@protocol.Event] = [
     FleetStarted(runs=2, task="t"),
+    ReasoningDelta(content="thinking A"),
     AssistantDelta(content="A"),
+    Usage(usage={
+      prompt_tokens: 5,
+      completion_tokens: 1,
+      total_tokens: 6,
+      prompt_cache_hit_tokens: 0,
+      prompt_cache_miss_tokens: 5,
+    }),
     AssistantMessage(content="All of A"),
     AgentFinished(answer="All of A"),
   ]
@@ -324,7 +343,25 @@ test "fleet text prints whole messages instead of interleaved deltas" {
     content=(
       #|fleet: 2 runs
       #|All of A
-      #|done · 0 step(s) · 0 prompt tokens (0 cached), 0 completion
+      #|done
+      #|
+    ),
+  )
+}
+
+///|
+test "a dropped trailing control does not leave the line open" {
+  let renderer = TextRenderer()
+  let events : Array[@protocol.Event] = [
+    AssistantDelta(content="hello\n\u{1b}"),
+    AssistantDelta(content="\u{1b}"),
+    AgentStep(step=2),
+  ]
+  inspect(
+    events.map(event => renderer.render(event)).join(""),
+    content=(
+      #|hello
+      #|--- step 2
       #|
     ),
   )

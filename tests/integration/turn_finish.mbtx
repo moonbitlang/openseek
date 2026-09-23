@@ -122,6 +122,8 @@ async fn run_case(
   let snapshot_ready = @cond_var.Cond()
   let mut requests = 0
   let events : Array[Json] = []
+  // `run` prints text for a person, not the JSONL event stream `serve` writes.
+  let text_lines : Array[String] = []
   let environment = { "DEEPSEEK": "test", "OPENSEEK_RETRY_ATTEMPTS": "1" }
   @async.with_timeout(120000, () => {
     @async.with_task_group(group => {
@@ -309,6 +311,10 @@ async fn run_case(
         writer.close()
       }
       while reader.read_until("\n") is Some(line) {
+        if !serve {
+          text_lines.push(line)
+          continue
+        }
         if !line.has_prefix("{") {
           continue
         }
@@ -458,22 +464,23 @@ async fn run_case(
       }
     })
   })
-  let finishes = events.filter(e => has_event(e, "agent_finished"))
-  assert_eq(finishes.length(), 1)
-  assert_eq(
-    string_field(finishes[0], "answer"),
+  let answer = if read {
+    "checked the read workflow"
+  } else {
+    "checked the background result"
+  }
+  if !serve {
+    // One finished turn: its answer, then its closing summary line.
+    assert_eq(text_lines.filter(line => line.has_prefix("done · ")).length(), 1)
+    assert_true(text_lines.contains(answer))
+    assert_true(!text_lines.any(line => line.has_prefix("tool error: ")))
     if read {
-      "checked the read workflow"
-    } else {
-      "checked the background result"
-    },
-  )
-  if read {
-    let results = events.filter(e => {
-      e is { "event": "tool_result", "tool_name": "mbtx", .. }
-    })
-    assert_eq(results.length(), 1)
-    assert_eq(field(results[0], "is_error"), false)
+      assert_eq(text_lines.filter(line => line.has_prefix("  ↳ ")).length(), 1)
+    }
+  } else {
+    let finishes = events.filter(e => has_event(e, "agent_finished"))
+    assert_eq(finishes.length(), 1)
+    assert_eq(string_field(finishes[0], "answer"), answer)
   }
   println(
     if read {
