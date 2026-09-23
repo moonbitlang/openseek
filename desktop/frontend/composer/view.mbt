@@ -601,7 +601,7 @@ fn PermissionControl::render(
           class="codex-permission-button-label",
           self.mode.short_label(locale~),
         ),
-        @html.span(class="codex-permission-chevron", "⌄"),
+        @html.span(class="codex-permission-chevron", ""),
       ],
     ),
   ]

@@ -1304,7 +1304,7 @@ html:is(
 .review-section-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   flex: 0 0 auto;
   width: 100%;
   min-height: 30px;
@@ -1336,13 +1336,22 @@ button.review-section-header:hover,
   white-space: nowrap;
 }
 
-.review-section-chevron {
-  display: inline-block;
+.review-section-header > .explorer-count {
+  margin-left: 4px;
+}
+
+.review-section-chevron,
+.git-graph-chevron {
+  display: flex;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
   transform: rotate(90deg);
   transition: transform 120ms ease;
 }
 
-.review-section.collapsed .review-section-chevron {
+.review-section.collapsed .review-section-chevron,
+.git-graph-section.collapsed .git-graph-chevron {
   transform: rotate(0deg);
 }
 
@@ -1401,19 +1410,6 @@ html.is-resizing-review * {
 
 .git-graph-collapse:hover {
   background: transparent;
-}
-
-.git-graph-chevron {
-  display: flex;
-  flex: 0 0 16px;
-  width: 16px;
-  height: 16px;
-  transform: rotate(90deg);
-  transition: transform 120ms ease;
-}
-
-.git-graph-section.collapsed .git-graph-chevron {
-  transform: rotate(0deg);
 }
 
 .git-graph-title {

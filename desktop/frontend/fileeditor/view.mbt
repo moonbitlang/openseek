@@ -712,7 +712,10 @@ fn review_git_sections(
               .aria_expanded((!state.changes_collapsed).to_string())
               .aria_controls("review-changes-body"),
             [
-              @html.span(class="review-section-chevron", "›"),
+              @html.span(
+                class="review-section-chevron",
+                icon_git_chevron_right(),
+              ),
               @html.span(class="review-section-title", ui(locale, ChangesLabel)),
               change_count(state.changes),
             ],
