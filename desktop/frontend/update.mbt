@@ -6241,7 +6241,10 @@ fn update_device_msg(
       }
     InstalledSkillsFailed(message) =>
       if channel == model.focused {
-        (@cmd.none, { ..model, skills: model.skills.with_notice(message), })
+        (
+          @cmd.none,
+          { ..model, skills: model.skills.with_library_error(message), },
+        )
       } else {
         (@cmd.none, model)
       }
@@ -17304,7 +17307,9 @@ test "an unreadable library becomes the focused page's notice" {
     FromDevice(Local, InstalledSkillsFailed("library unreadable")),
     paired,
   )
-  assert_true(noticed.skills == paired.skills.with_notice("library unreadable"))
+  assert_true(
+    noticed.skills == paired.skills.with_library_error("library unreadable"),
+  )
 
   // The page is the focused host's; a background device says nothing on it.
   let (_, quiet) = update(

@@ -167,7 +167,7 @@ fn install(
               ActionDone(
                 channel~,
                 action~,
-                error=@interop.bridge_error_text(error),
+                error=Some(@interop.bridge_error_text(error)),
               ),
             ),
           )
@@ -175,8 +175,8 @@ fn install(
         }
       }
       let error = match reply {
-        SkillInstalled(_) => ""
-        SkillInstallError(message) => message
+        SkillInstalled(_) => None
+        SkillInstallError(message) => Some(message)
       }
       scheduler.add(emit(ActionDone(channel~, action~, error~)))
     })
@@ -204,7 +204,7 @@ fn uninstall(
               ActionDone(
                 channel~,
                 action~,
-                error=@interop.bridge_error_text(error),
+                error=Some(@interop.bridge_error_text(error)),
               ),
             ),
           )
@@ -212,8 +212,8 @@ fn uninstall(
         }
       }
       let error = match reply {
-        SkillUninstalled => ""
-        SkillUninstallError(message) => message
+        SkillUninstalled => None
+        SkillUninstallError(message) => Some(message)
       }
       scheduler.add(emit(ActionDone(channel~, action~, error~)))
     })

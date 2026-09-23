@@ -17,16 +17,30 @@ priv enum Catalog {
 /// Everything the page alone can see. The catalog is fetched when the page
 /// opens and kept until the user refreshes it; `busy` holds the entries with
 /// an install or uninstall in flight, retaining its source even after the
-/// library changes; `notice` is the last failure to show.
+/// library changes; notices retain the scope of each failure.
 struct State {
   catalog : Catalog
   query : String
   busy : Array[PendingSkillAction]
-  notice : String
+  notices : Array[Notice]
   preview : Preview
   preview_cache : Map[String, String]
   list_scroll_top : Double
 } derive(Eq)
+
+///|
+priv enum Notice {
+  SkillActionFailed(action~ : PendingSkillAction, message~ : String)
+  LibraryLoadFailed(String)
+} derive(Eq)
+
+///|
+fn Notice::belongs_to(self : Notice, source : String) -> Bool {
+  match self {
+    SkillActionFailed(action~, ..) => action.source() == source
+    LibraryLoadFailed(_) => false
+  }
+}
 
 ///|
 /// Retain the source until the request settles, even if a library notification
@@ -78,7 +92,7 @@ pub fn State::empty() -> State {
     catalog: Idle,
     query: "",
     busy: [],
-    notice: "",
+    notices: [],
     preview: Closed,
     preview_cache: Map([]),
     list_scroll_top: 0.0,
@@ -95,12 +109,12 @@ pub(all) enum Msg {
   // Capture the source alongside the library id before the entry disappears.
   Uninstall(InstalledItem)
   // An install or uninstall settled: `action` is the operation to release, and
-  // a non-empty `error` becomes the page's notice (a success reports the
+  // an `error` becomes a notice for that skill (a success reports the
   // library change to the root instead).
   ActionDone(
     channel~ : @interop.ChannelId,
     action~ : PendingSkillAction,
-    error~ : String
+    error~ : String?
   )
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)
@@ -112,9 +126,9 @@ pub(all) enum Msg {
 
 ///|
 /// Open the page. The catalog is fetched once per app run (and again after a
-/// failure, a manual refresh, or a device switch during loading); a notice
-/// left over from the previous visit is dropped. The installed library is
-/// refreshed by the root, which owns it.
+/// failure, a manual refresh, or a device switch during loading). Only the
+/// library loading error is cleared: operation errors belong to their skills.
+/// The installed library is refreshed by the root, which owns it.
 pub fn State::opening(
   self : State,
   emit : @cmd.Emit[Msg],
@@ -134,15 +148,18 @@ pub fn State::opening(
       }
     current => (@cmd.none, current)
   }
-  (cmd, { ..self, catalog, notice: "", })
+  let notices = self.notices.filter(notice => notice is SkillActionFailed(..))
+  (cmd, { ..self, catalog, notices, })
 }
 
 ///|
 /// Show a failure the page did not cause. The root-owned library refresh is
 /// the only such source: the page has no other way to learn that the list
 /// under "Installed" could not be read.
-pub fn State::with_notice(self : State, message : String) -> State {
-  { ..self, notice: message, }
+pub fn State::with_library_error(self : State, message : String) -> State {
+  let notices = self.notices.filter(notice => notice is SkillActionFailed(..))
+  notices.push(LibraryLoadFailed(message))
+  { ..self, notices, }
 }
 
 ///|
@@ -160,18 +177,14 @@ pub fn State::handle(
         Some(content) =>
           (
             @cmd.none,
-            {
-              ..self,
-              notice: "",
-              preview: Ready(target~, request=0, content~),
-            },
+            { ..self, preview: Ready(target~, request=0, content~), },
             None,
           )
         None => {
           let request = preview_request_id(self.preview) + 1
           (
             fetch_content(emit, input.channel, request, target),
-            { ..self, notice: "", preview: Loading(target~, request~), },
+            { ..self, preview: Loading(target~, request~), },
             None,
           )
         }
@@ -183,18 +196,14 @@ pub fn State::handle(
         Some(content) =>
           (
             @cmd.none,
-            {
-              ..self,
-              notice: "",
-              preview: Ready(target~, request=0, content~),
-            },
+            { ..self, preview: Ready(target~, request=0, content~), },
             None,
           )
         None => {
           let request = preview_request_id(self.preview) + 1
           (
             fetch_installed_content(emit, input.channel, request, item),
-            { ..self, notice: "", preview: Loading(target~, request~), },
+            { ..self, preview: Loading(target~, request~), },
             None,
           )
         }
@@ -271,7 +280,11 @@ pub fn State::handle(
         busy.push(Installing(source~))
         (
           install(emit, input.channel, item),
-          { ..self, busy, notice: "", },
+          {
+            ..self,
+            busy,
+            notices: self.notices.filter(notice => !notice.belongs_to(source)),
+          },
           None,
         )
       }
@@ -284,7 +297,13 @@ pub fn State::handle(
         busy.push(Uninstalling(source=item.source, id=item.id))
         (
           uninstall(emit, input.channel, item),
-          { ..self, busy, notice: "", },
+          {
+            ..self,
+            busy,
+            notices: self.notices.filter(notice => {
+              !notice.belongs_to(item.source)
+            }),
+          },
           None,
         )
       }
@@ -297,12 +316,17 @@ pub fn State::handle(
       guard channel == input.channel else {
         return (@cmd.none, { ..self, busy, }, None)
       }
-      if error.is_empty() {
-        // The library changed; what the page shows must come from disk, not
-        // from a client-side guess.
-        (@cmd.none, { ..self, busy, }, Some(LibraryChanged(channel~)))
-      } else {
-        (@cmd.none, { ..self, busy, notice: error, }, None)
+      match error {
+        None =>
+          // The library changed; what the page shows must come from disk.
+          (@cmd.none, { ..self, busy, }, Some(LibraryChanged(channel~)))
+        Some(message) => {
+          let notices = self.notices.filter(notice => {
+            !notice.belongs_to(action.source())
+          })
+          notices.push(SkillActionFailed(action~, message~))
+          (@cmd.none, { ..self, busy, notices, }, None)
+        }
       }
     }
   }

@@ -2,6 +2,34 @@
 // so the whole page can be rendered in a test from constant values.
 
 ///|
+/// The list aggregates notices; a detail shows only its skill's operation
+/// failures. Library loading errors apply to either view.
+fn notice_views(state : State, target : PreviewTarget?) -> Array[@html.Html] {
+  let nodes : Array[@html.Html] = []
+  for notice in state.notices {
+    let message = match notice {
+      LibraryLoadFailed(message) => message
+      SkillActionFailed(action~, message~) =>
+        match target {
+          Some(target) => {
+            let source = match target {
+              Market(item) => source_label(item)
+              Installed(item) => item.source
+            }
+            if !notice.belongs_to(source) {
+              continue
+            }
+            message
+          }
+          None => "\{action.source()}: \{message}"
+        }
+    }
+    nodes.push(@html.div(class="skills-notice danger", message))
+  }
+  nodes
+}
+
+///|
 fn PendingSkillAction::label(self : PendingSkillAction) -> UiMessage {
   match self {
     Installing(..) => Installing
@@ -213,11 +241,7 @@ fn detail_shell(
         @html.h1(preview_name(target)),
         @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
         detail_action(locale~, target, state, input, emit),
-        if state.notice.is_empty() {
-          @html.nothing
-        } else {
-          @html.div(class="skills-notice danger", state.notice)
-        },
+        @html.div(notice_views(state, Some(target))),
       ]),
       @html.div(class="skill-detail-card", [
         @html.div(class="skill-file-bar", [
@@ -381,8 +405,8 @@ fn list_page(
       ],
     ),
   ]
-  if !state.notice.is_empty() {
-    sections.push(@html.div(class="skills-notice danger", state.notice))
+  for notice in notice_views(state, None) {
+    sections.push(notice)
   }
   let installed_rows : Array[@html.Html] = []
   for skill in input.installed {

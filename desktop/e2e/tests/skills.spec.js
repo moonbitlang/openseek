@@ -151,7 +151,7 @@ for (const removing of [false, true]) {
 }
 
 for (const targetInstalled of [false, true]) {
-  test(`opening ${targetInstalled ? 'installed' : 'catalog'} details clears another skill's error, including cached previews`, async ({ page }) => {
+  test(`opening ${targetInstalled ? 'installed' : 'catalog'} details hides another skill's error, including cached previews`, async ({ page }) => {
     const app = new SkillsHarness(page, true);
     const other = { ...market, name: 'widget', module_name: 'acme/widget' };
     app.catalogSkills.push(other);
@@ -177,6 +177,55 @@ for (const targetInstalled of [false, true]) {
         await page.locator('.skill-summary').filter({ hasText: 'wayfinder' }).first().click();
       }
     }
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+for (const removing of [false, true]) {
+  test(`late ${removing ? 'uninstall' : 'install'} errors stay with their skill across navigation and retry`, async ({ page }) => {
+    const app = new SkillsHarness(page, removing);
+    app.catalogSkills.push({ ...market, name: 'widget', module_name: 'acme/widget' });
+    const method = removing ? 'skills.uninstall' : 'skills.install';
+    const actionName = removing ? 'Uninstall' : 'Install skill';
+    const replyFor = app.replyFor.bind(app);
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    let failWayfinder = true;
+    app.replyFor = request => {
+      if (request.method === 'skills.install' && request.params.module_name === 'acme/widget') {
+        return { error: 'Widget install failed' };
+      }
+      if (request.method === method && failWayfinder) return pending;
+      return replyFor(request);
+    };
+    await app.openDetails();
+    const detail = page.locator('.skill-detail-page');
+    const back = page.getByRole('button', { name: '← Back to skills', exact: true });
+    await detail.getByRole('button', { name: actionName, exact: true }).click();
+    await expect(detail.locator('.skill-detail-action')).toBeDisabled();
+    await back.click();
+    await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
+    await expect(page.locator('.skill-detail-header h1')).toHaveText('widget');
+    await detail.getByRole('button', { name: 'Install skill', exact: true }).click();
+    await expect(detail.locator('.skills-notice')).toHaveText('Widget install failed');
+    release({ error: 'Wayfinder operation failed after navigation' });
+    await back.click();
+    await expect(page.locator('.skills-notice')).toHaveCount(2);
+    await expect(page.locator('.skills-notice').filter({ hasText: 'Wayfinder operation failed' })).toContainText(installed.source);
+    await expect(page.locator('.skills-notice').filter({ hasText: 'Widget install failed' })).toContainText('acme/widget@0.1.0');
+    // A late completion cannot overwrite B's error, including cached navigation.
+    await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
+    await expect(detail.locator('.skills-notice')).toHaveText('Widget install failed');
+    await back.click();
+    await page.locator('.skill-summary').filter({ hasText: 'wayfinder' }).first().click();
+    await expect(detail.locator('.skills-notice')).toHaveText('Wayfinder operation failed after navigation');
+    failWayfinder = false;
+    await detail.getByRole('button', { name: actionName, exact: true }).click();
+    await expect(detail.getByRole('button', { name: removing ? 'Install skill' : 'Uninstall', exact: true })).toBeEnabled();
+    await expect(detail.locator('.skills-notice')).toHaveCount(0);
+    await back.click();
+    await expect(page.locator('.skills-notice')).toHaveCount(1);
+    await expect(page.locator('.skills-notice')).toContainText('Widget install failed');
     expect(app.pageErrors).toEqual([]);
   });
 }

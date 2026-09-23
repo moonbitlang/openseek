@@ -149,7 +149,7 @@ test "a settled install releases its entry and asks for a library re-read" {
     @skills.ActionDone(
       channel=@interop.ChannelId::Local,
       action=@skills.Installing(source="acme/widget@1.0.0"),
-      error="",
+      error=None,
     ),
     input(),
   )
@@ -169,7 +169,7 @@ test "a settled install releases its entry and asks for a library re-read" {
     @skills.ActionDone(
       channel=@interop.ChannelId::Local,
       action=@skills.Installing(source="acme/widget@1.0.0"),
-      error="digest mismatch",
+      error=Some("digest mismatch"),
     ),
     input(),
   )
@@ -196,7 +196,7 @@ test "a result from another device settles without a local outcome" {
     @skills.ActionDone(
       channel=other_device(),
       action=@skills.Installing(source="acme/widget@1.0.0"),
-      error="digest mismatch",
+      error=Some("digest mismatch"),
     ),
     input(),
   )
@@ -331,7 +331,7 @@ test "an install blocks uninstall after a library refresh until completion" {
   let completion = @skills.ActionDone(
     channel=@interop.ChannelId::Local,
     action=@skills.Installing(source=skill.source),
-    error="",
+    error=None,
   )
   let (_, done, _) = blocked.handle(emit(), completion, refreshed)
   let (_, done_again, _) = blocked.handle(emit(), completion, refreshed)
@@ -387,7 +387,7 @@ test "an uninstall retains its source after removal and releases only itself" {
     @skills.ActionDone(
       channel=@interop.ChannelId::Local,
       action=@skills.Installing(source=@skills.source_label(other)),
-      error="",
+      error=None,
     ),
     input(),
   )
@@ -397,7 +397,7 @@ test "an uninstall retains its source after removal and releases only itself" {
     @skills.ActionDone(
       channel=@interop.ChannelId::Local,
       action=@skills.Uninstalling(source=skill.source, id=skill.id),
-      error="cleanup failed",
+      error=Some("cleanup failed"),
     ),
     input(),
   )
@@ -411,7 +411,7 @@ test "an uninstall retains its source after removal and releases only itself" {
 }
 
 ///|
-test "opening either kind of detail clears the previous notice without mutating state" {
+test "detail navigation preserves library errors without mutating state" {
   let skill : @skills.InstalledItem = {
     id: "acme-widget",
     name: "widget",
@@ -419,7 +419,7 @@ test "opening either kind of detail clears the previous notice without mutating 
     source: "acme/widget@1.0.0",
   }
   let clean = @skills.State::empty()
-  let failed = clean.with_notice("another skill could not be removed")
+  let failed = clean.with_library_error("library unreadable")
   for
     msg in [
       @skills.PreviewMarket(market_item()),
@@ -428,10 +428,8 @@ test "opening either kind of detail clears the previous notice without mutating 
     let (_, expected, _) = clean.handle(emit(), msg, input())
     let (_, opened, _) = failed.handle(emit(), msg, input())
     let (_, repeated, _) = failed.handle(emit(), msg, input())
-    assert_true(opened == expected)
+    assert_true(opened == expected.with_library_error("library unreadable"))
     assert_true(opened == repeated)
-    assert_true(
-      failed == clean.with_notice("another skill could not be removed"),
-    )
+    assert_true(failed == clean.with_library_error("library unreadable"))
   }
 }
