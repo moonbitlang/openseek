@@ -191,6 +191,20 @@ class Build {
       await this.commandRun("tar", ["-xf", cached, "-C", extracted, "--strip-components=1"]);
     }
 
+    // xterm 5.5's DOM WidthCache divides an integer offsetWidth by 32.
+    // That rounded-down glyph width adds excess letter spacing to every
+    // cell, clipping the last glyph even with inherited tracking reset.
+    // Preserve fractional CSS pixels; fail explicitly if a version upgrade
+    // changes the pinned implementation this patch targets.
+    const xtermPath = join(work, WebArchives.xterm.path, "lib/xterm.js");
+    const xtermSource = await readFile(xtermPath, "utf8");
+    const measurement = "i.textContent=e.repeat(32),i.offsetWidth/32";
+    if (xtermSource.split(measurement).length !== 2) {
+      throw new Error("xterm WidthCache measurement changed; revisit the subpixel width patch");
+    }
+    await writeFile(xtermPath, xtermSource.replace(measurement,
+      "i.textContent=e.repeat(32),i.getBoundingClientRect().width/32"));
+
     const esbuild = this.host.esbuild;
     const esbuildArchive = join(vendor, "cache", `esbuild-${esbuild.package}-${EsbuildVersion}.tgz`);
     await this.download(
