@@ -5774,7 +5774,10 @@ fn update_msg(
           ..model,
           file_panel: {
             ..model.file_panel,
-            github_review: { ..model.file_panel.github_review, enabled: true, },
+            github_review: {
+              ..model.file_panel.github_review.reset_checkout(),
+              enabled: true,
+            },
           },
         }
         open_explorer(dispatch, model, ExplorerChanges)

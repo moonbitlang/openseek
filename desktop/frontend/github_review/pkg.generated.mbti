@@ -85,6 +85,7 @@ pub fn State::draft_body(Self, @protocol.GithubDraftTarget) -> String
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::reset_checkout(Self) -> Self
 
 // Type aliases
 
