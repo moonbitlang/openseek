@@ -114,8 +114,6 @@ oracle cases. The fixture manifest and visible tests must remain unchanged.
 The oracle is authored independently of the generated implementations.
 
 Record byte-identical prompt/spec/oracle hashes and distinct binary hashes.
-The oracle hash of runs made by the retired Python runner differs (its test
-source spelled the same JSON values differently); do not compare it across runners.
 Report valid and invalid cases separately: a parser that rejects everything
 can pass the rejection cases without implementing any parsing. Report tool
 errors, actual PTC use, wall time, and token usage alongside correctness.

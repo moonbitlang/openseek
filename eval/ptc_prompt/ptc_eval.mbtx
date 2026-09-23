@@ -1109,6 +1109,53 @@ let yaml_invalid : Array[(String, String)] = [
 ]
 
 ///|
+/// JSON text spelled as Python's `json.dumps(value, ensure_ascii=False)`, so
+/// the generated fixture and oracle are byte-identical to those of the
+/// retired Python runner and its saved runs still regrade as preserved.
+/// Integral numbers print as Python ints; a `repr`, when present, wins.
+fn python_json(value : Json) -> String {
+  match value {
+    Null => "null"
+    True => "true"
+    False => "false"
+    Number(_, repr=Some(repr)) => repr
+    Number(n, ..) =>
+      if n == n.floor() && n.abs() < 1.0e15 {
+        n.to_int64().to_string()
+      } else {
+        n.to_string()
+      }
+    String(text) => {
+      let quoted = StringBuilder()
+      quoted.write_char('"')
+      for c in text {
+        match c {
+          '"' => quoted.write_string("\\\"")
+          '\\' => quoted.write_string("\\\\")
+          '\n' => quoted.write_string("\\n")
+          '\r' => quoted.write_string("\\r")
+          '\t' => quoted.write_string("\\t")
+          '\b' => quoted.write_string("\\b")
+          '\u{0C}' => quoted.write_string("\\f")
+          c if c.to_int() < 0x20 => {
+            let digits = "0123456789abcdef".to_array()
+            quoted.write_string("\\u00")
+            quoted.write_char(digits[c.to_int() >> 4])
+            quoted.write_char(digits[c.to_int() & 15])
+          }
+          c => quoted.write_char(c)
+        }
+      }
+      quoted.write_char('"')
+      quoted.to_string()
+    }
+    Array(items) => "[\{items.map(python_json).join(", ")}]"
+    Object(fields) =>
+      "{\{fields.iter().map(field => "\{python_json(field.0.to_json())}: \{python_json(field.1)}").collect().join(", ")}}"
+  }
+}
+
+///|
 fn yaml_tests(
   cases : Array[(String, String, Json)],
   invalid? : Array[(String, String)] = [],
@@ -1118,13 +1165,13 @@ fn yaml_tests(
   for case in cases {
     let (name, source, expected) = case
     blocks.push(
-      "///|\ntest \"\{prefix}:\{name}\" {\n  assert_eq(@yaml_parser.parse(\{source.to_json().stringify()}), (\{expected.stringify()} : Json))\n}\n",
+      "///|\ntest \"\{prefix}:\{name}\" {\n  assert_eq(@yaml_parser.parse(\{python_json(source.to_json())}), (\{python_json(expected)} : Json))\n}\n",
     )
   }
   for case in invalid {
     let (name, source) = case
     blocks.push(
-      "///|\ntest \"\{prefix}:\{name}\" {\n  let rejected = try { ignore(@yaml_parser.parse(\{source.to_json().stringify()})); false } catch { _ => true }\n  assert_true(rejected)\n}\n",
+      "///|\ntest \"\{prefix}:\{name}\" {\n  let rejected = try { ignore(@yaml_parser.parse(\{python_json(source.to_json())})); false } catch { _ => true }\n  assert_true(rejected)\n}\n",
     )
   }
   blocks.join("\n")
@@ -2038,6 +2085,20 @@ async test "yaml execution checkpoint survives analysis failure" {
       seconds >= 0.0,
     )
   })
+}
+
+///|
+test "generated tests are byte-identical to the retired Python runner's" {
+  // Digests of the Python `tests(...)` output: saved runs regrade with
+  // `preserved_fixture` intact and keep comparable oracle hashes.
+  assert_eq(
+    sha256_hex(@utf8.encode(visible_tests()[:])),
+    "e52ee55e1b9f7c9d9c8f62c07226ac9438d3c45e0d888337b8fbb170064a50b8",
+  )
+  assert_eq(
+    sha256_hex(@utf8.encode(yaml_tests(yaml_cases, invalid=yaml_invalid)[:])),
+    "ae7b92e6449ec3117f82493e00e2b09f670e19bcb423f09d279b775ba6575635",
+  )
 }
 
 ///|
