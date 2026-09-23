@@ -15,6 +15,20 @@ pub struct CaptureOutcome {
 }
 
 ///|
+/// Persist `entry` in `state` and report the capture outcome.
+async fn settle(
+  geometry : Geometry,
+  entry : SubtaskEntry,
+  state : SubtaskState,
+  evidence : Array[String],
+  defects : Array[String],
+) -> CaptureOutcome {
+  let entry = { ..entry, state, }
+  let _ = save_entry(geometry.common_git_dir, entry)
+  { entry, evidence, defects, }
+}
+
+///|
 /// Validate and (when clean) commit a finished worker's changes on its
 /// subtask branch; see the file comment for the full sequence.
 pub async fn capture(
@@ -55,9 +69,7 @@ pub async fn capture(
     // A clean tree with a FAILED validation (e.g. HEAD moved off the base)
     // is abnormal, not a no-op: the worktree may hold the only reference
     // to whatever happened — keep it and report.
-    let entry = { ..entry, state: Captured, }
-    let _ = save_entry(geometry.common_git_dir, entry)
-    return { entry, evidence, defects, }
+    return settle(geometry, entry, Captured, evidence, defects)
   }
   if changes.is_empty() && entry.commit_oid is Some(prior) {
     // A resumed worker that added nothing new: the prior capture still
@@ -67,10 +79,8 @@ pub async fn capture(
     // surface now, not as a later integrate refusal.
     match git_require(["rev-parse", "refs/heads/\{entry.branch}"], cwd=worker) {
       Ok(tip) if tip.trim() == prior => {
-        let entry = { ..entry, state: Committed, }
-        let _ = save_entry(geometry.common_git_dir, entry)
         evidence.push("no additional changes since the prior capture \{prior}")
-        return { entry, evidence, defects, }
+        return settle(geometry, entry, Committed, evidence, defects)
       }
       Ok(tip) =>
         defects.push(
@@ -78,18 +88,14 @@ pub async fn capture(
         )
       Err(reason) => defects.push(reason)
     }
-    let entry = { ..entry, state: Captured, }
-    let _ = save_entry(geometry.common_git_dir, entry)
-    return { entry, evidence, defects, }
+    return settle(geometry, entry, Captured, evidence, defects)
   }
   if changes.is_empty() {
     // Terminal means undiscoverable by lifecycle actions, so the worktree
     // and branch must go NOW or they leak (and block reusing the name).
     remove_worktree_and_branch(geometry.origin_root, entry, force=true)
-    let entry = { ..entry, state: NoChanges, }
-    let _ = save_entry(geometry.common_git_dir, entry)
     evidence.push("no changes in the worker tree; worktree and branch removed")
-    return { entry, evidence, defects, }
+    return settle(geometry, entry, NoChanges, evidence, defects)
   }
   evidence.push("\{changes.length()} changed path(s)")
   let violations = scope_violations(changes, entry.allowed_paths)
@@ -99,9 +105,7 @@ pub async fn capture(
     )
   }
   if !defects.is_empty() {
-    let entry = { ..entry, state: Captured, }
-    let _ = save_entry(geometry.common_git_dir, entry)
-    return { entry, evidence, defects, }
+    return settle(geometry, entry, Captured, evidence, defects)
   }
   // Stage, pin the immutable tree, and validate the TREE OBJECT itself.
   match git_require(["add", "-A"], cwd=worker) {
@@ -145,9 +149,7 @@ pub async fn capture(
     raw => defects.push("git diff --raw failed: \{raw.output.trim()}")
   }
   if !defects.is_empty() {
-    let entry = { ..entry, state: Captured, }
-    let _ = save_entry(geometry.common_git_dir, entry)
-    return { entry, evidence, defects, }
+    return settle(geometry, entry, Captured, evidence, defects)
   }
   // Commit EXACTLY the validated tree; then move the branch ref to it,
   // guarded by the expected old value (the pin).

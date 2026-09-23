@@ -27,17 +27,11 @@ pub async fn resolve_geometry(
   guard probe.exit_code == 0 else {
     return Err("subtask needs a git repository: \{probe.output.trim()}")
   }
-  let lines = probe.output
-    .trim()
-    .to_owned()
-    .split("\n")
-    .map(l => l.to_owned())
-    .collect()
-  guard lines.length() == 2 else {
+  guard probe.output.trim().split("\n").collect() is [toplevel, common] else {
     return Err("unexpected rev-parse output: \{probe.output}")
   }
-  let toplevel = canonical(lines[0])
-  let common = canonical(absolutize_against(lines[1], toplevel))
+  let toplevel = canonical(toplevel)
+  let common = canonical(absolutize_against(common.to_owned(), toplevel))
   let workspace = canonical(workspace_root)
   guard workspace == toplevel else {
     return Err(

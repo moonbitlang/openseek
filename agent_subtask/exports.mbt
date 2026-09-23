@@ -35,56 +35,38 @@ async fn integrate_continue_locked(
 ) -> IntegrateOutcome {
   let entry = reload_entry(geometry.common_git_dir, entry)
   guard geometry.is_integration_target_for(entry) else {
-    return {
+    return refused(
       entry,
-      result: "refused",
-      detail: [
-        "subtask \{entry.name} belongs to a different worktree; continue the integration from the worktree that launched it",
-      ],
-    }
+      "subtask \{entry.name} belongs to a different worktree; continue the integration from the worktree that launched it",
+    )
   }
   guard entry.state is Conflicted && entry.commit_oid is Some(commit_oid) else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["subtask \{entry.name} has no conflicted integration"],
-    }
+    return refused(entry, "subtask \{entry.name} has no conflicted integration")
   }
-  let merge_head = git_run(
-    ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
-    cwd=origin,
-  )
-  guard merge_head.exit_code == 0 && merge_head.output.trim() == commit_oid else {
-    return {
+  guard merge_in_progress_of(origin, commit_oid) else {
+    return refused(
       entry,
-      result: "refused",
-      detail: [
-        "no merge of \{commit_oid} is in progress — the conflicted state is stale",
-      ],
-    }
+      "no merge of \{commit_oid} is in progress — the conflicted state is stale",
+    )
   }
   match entry.origin_head_before {
     Some(before) =>
       match git_require(["rev-parse", "HEAD"], cwd=origin) {
         Ok(head) =>
           if head.trim() != before {
-            return {
-              entry,
-              result: "refused",
-              detail: ["origin HEAD moved during the conflicted window"],
-            }
+            return refused(
+              entry, "origin HEAD moved during the conflicted window",
+            )
           }
-        Err(reason) => return { entry, result: "refused", detail: [reason], }
+        Err(reason) => return refused(entry, reason)
       }
     None => ()
   }
   let unmerged = git_run(["ls-files", "-u", "-z"], cwd=origin)
   if unmerged.exit_code == 0 && unmerged.output != "" {
-    return {
-      entry,
-      result: "refused",
-      detail: ["unresolved conflict entries remain; resolve them all first"],
-    }
+    return refused(
+      entry, "unresolved conflict entries remain; resolve them all first",
+    )
   }
   // The staged resolution may only touch the slice's scope plus the
   // recorded conflict set — a stray `git add -A` must not smuggle
@@ -94,11 +76,7 @@ async fn integrate_continue_locked(
     cwd=origin,
   )
   guard staged.exit_code == 0 else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["git diff --cached failed: \{staged.output.trim()}"],
-    }
+    return refused(entry, "git diff --cached failed: \{staged.output.trim()}")
   }
   let permitted = entry.allowed_paths + entry.conflict_paths
   let strays = scope_violations(
@@ -106,13 +84,10 @@ async fn integrate_continue_locked(
     permitted,
   )
   if !strays.is_empty() {
-    return {
+    return refused(
       entry,
-      result: "refused",
-      detail: [
-        "the staged resolution touches paths outside the slice and its conflict set: \{strays.join(", ")}; unstage them first",
-      ],
-    }
+      "the staged resolution touches paths outside the slice and its conflict set: \{strays.join(", ")}; unstage them first",
+    )
   }
   match
     git_require(
@@ -123,7 +98,7 @@ async fn integrate_continue_locked(
       cwd=origin,
     ) {
     Ok(_) => ()
-    Err(reason) => return { entry, result: "refused", detail: [reason], }
+    Err(reason) => return refused(entry, reason)
   }
   let entry = { ..entry, state: Integrated, }
   let _ = save_entry(geometry.common_git_dir, entry)
@@ -145,35 +120,20 @@ pub async fn integrate_abort(
   defer mutex.release()
   let entry = reload_entry(geometry.common_git_dir, entry)
   guard geometry.is_integration_target_for(entry) else {
-    return {
+    return refused(
       entry,
-      result: "refused",
-      detail: [
-        "subtask \{entry.name} belongs to a different worktree; abort the integration from the worktree that launched it",
-      ],
-    }
+      "subtask \{entry.name} belongs to a different worktree; abort the integration from the worktree that launched it",
+    )
   }
   guard entry.state is Conflicted && entry.commit_oid is Some(commit_oid) else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["subtask \{entry.name} has no conflicted integration"],
-    }
+    return refused(entry, "subtask \{entry.name} has no conflicted integration")
   }
-  let merge_head = git_run(
-    ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
-    cwd=origin,
-  )
-  guard merge_head.exit_code == 0 && merge_head.output.trim() == commit_oid else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["no merge of \{commit_oid} is in progress"],
-    }
+  guard merge_in_progress_of(origin, commit_oid) else {
+    return refused(entry, "no merge of \{commit_oid} is in progress")
   }
   match git_require(["merge", "--abort"], cwd=origin) {
     Ok(_) => ()
-    Err(reason) => return { entry, result: "refused", detail: [reason], }
+    Err(reason) => return refused(entry, reason)
   }
   let entry = { ..entry, state: Committed, }
   let _ = save_entry(geometry.common_git_dir, entry)

@@ -12,6 +12,21 @@ pub struct IntegrateOutcome {
 }
 
 ///|
+fn refused(entry : SubtaskEntry, reason : String) -> IntegrateOutcome {
+  { entry, result: "refused", detail: [reason], }
+}
+
+///|
+/// Whether a merge of exactly `commit_oid` is in progress in `origin`.
+async fn merge_in_progress_of(origin : String, commit_oid : String) -> Bool {
+  let merge_head = git_run(
+    ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
+    cwd=origin,
+  )
+  merge_head.exit_code == 0 && merge_head.output.trim() == commit_oid
+}
+
+///|
 /// The merge flag set: hooks and signing neutralized, no rerere recording
 /// or autostash, ignored files protected, merge by EXACT commit OID.
 fn merge_args(entry : SubtaskEntry, commit_oid : String) -> Array[String] {
@@ -72,46 +87,35 @@ async fn integrate_locked(
 ) -> IntegrateOutcome {
   let entry = reload_entry(geometry.common_git_dir, entry)
   guard geometry.is_integration_target_for(entry) else {
-    return {
+    return refused(
       entry,
-      result: "refused",
-      detail: [
-        "subtask \{entry.name} belongs to a different worktree; integrate it from the worktree that launched it",
-      ],
-    }
+      "subtask \{entry.name} belongs to a different worktree; integrate it from the worktree that launched it",
+    )
   }
   guard entry.state is Committed && entry.commit_oid is Some(commit_oid) else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["subtask \{entry.name} is not in a committed state"],
-    }
+    return refused(entry, "subtask \{entry.name} is not in a committed state")
   }
   // The branch must still point at the validated commit, and that commit
   // must descend from the recorded base.
   match git_require(["rev-parse", entry.branch], cwd=origin) {
     Ok(tip) =>
       if tip.trim() != commit_oid {
-        return {
+        return refused(
           entry,
-          result: "refused",
-          detail: [
-            "branch \{entry.branch} moved (\{tip.trim()} != validated \{commit_oid})",
-          ],
-        }
+          "branch \{entry.branch} moved (\{tip.trim()} != validated \{commit_oid})",
+        )
       }
-    Err(reason) => return { entry, result: "refused", detail: [reason], }
+    Err(reason) => return refused(entry, reason)
   }
   if git_run(
       ["merge-base", "--is-ancestor", entry.base_oid, commit_oid],
       cwd=origin,
     ).exit_code !=
     0 {
-    return {
+    return refused(
       entry,
-      result: "refused",
-      detail: ["\{commit_oid} does not descend from the recorded base"],
-    }
+      "\{commit_oid} does not descend from the recorded base",
+    )
   }
   // Origin gate: no staged changes, no unstaged changes to tracked files.
   // Gitlink dirt (a chronically-drifting submodule pointer) is carved out:
@@ -121,26 +125,19 @@ async fn integrate_locked(
     cwd=origin,
   )
   guard status.exit_code == 0 else {
-    return {
-      entry,
-      result: "refused",
-      detail: ["git status failed: \{status.output.trim()}"],
-    }
+    return refused(entry, "git status failed: \{status.output.trim()}")
   }
   for change in parse_status_z(status.output) {
     if change.kind != "??" {
-      return {
+      return refused(
         entry,
-        result: "refused",
-        detail: [
-          "the origin has uncommitted tracked changes (\{change.path}); commit or stash them before integrating",
-        ],
-      }
+        "the origin has uncommitted tracked changes (\{change.path}); commit or stash them before integrating",
+      )
     }
   }
   let head_before = match git_require(["rev-parse", "HEAD"], cwd=origin) {
     Ok(output) => output.trim().to_owned()
-    Err(reason) => return { entry, result: "refused", detail: [reason], }
+    Err(reason) => return refused(entry, reason)
   }
   let entry = { ..entry, origin_head_before: Some(head_before), }
   let _ = save_entry(geometry.common_git_dir, entry)
@@ -186,11 +183,10 @@ async fn integrate_locked(
     if merge_head.output.trim() == commit_oid {
       let _ = git_run(["merge", "--abort"], cwd=origin)
     }
-    return {
+    return refused(
       entry,
-      result: "refused",
-      detail: ["merge did not complete cleanly: \{merge.output.trim()}"],
-    }
+      "merge did not complete cleanly: \{merge.output.trim()}",
+    )
   }
   // No merge in progress: either it completed or it never started.
   let head_after = git_run(["rev-parse", "HEAD"], cwd=origin)
@@ -206,11 +202,7 @@ async fn integrate_locked(
       detail: ["merged \{commit_oid} into \{head_after.output.trim()}"],
     }
   }
-  {
-    entry,
-    result: "refused",
-    detail: ["merge did not land: \{merge.output.trim()}"],
-  }
+  refused(entry, "merge did not land: \{merge.output.trim()}")
 }
 
 ///|
@@ -235,14 +227,9 @@ pub async fn discard(
       "subtask \{entry.name} belongs to a different worktree; discard it from the worktree that launched it",
     )
   }
-  if entry.commit_oid is Some(commit_oid) {
-    let merge_head = git_run(
-      ["rev-parse", "-q", "--verify", "MERGE_HEAD"],
-      cwd=origin,
-    )
-    if merge_head.exit_code == 0 && merge_head.output.trim() == commit_oid {
-      return Err("a merge of this subtask is in progress; abort it first")
-    }
+  if entry.commit_oid is Some(commit_oid) &&
+    merge_in_progress_of(origin, commit_oid) {
+    return Err("a merge of this subtask is in progress; abort it first")
   }
   remove_worktree_and_branch(origin, entry, force=true)
   let entry = { ..entry, state: Discarded, }
