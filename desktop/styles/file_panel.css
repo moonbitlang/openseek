@@ -3356,6 +3356,15 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   position: absolute;
   right: 6px;
   top: 3px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.moonbit-diff-hunk-action[data-hovered] .review-hunk-context,
+.review-hunk-context:hover,
+.review-hunk-context:has(:focus-visible),
+.review-hunk-context:has(.review-hunk-context-menu:not([hidden])) {
+  opacity: 1;
   pointer-events: auto;
 }
 

@@ -219,6 +219,9 @@ Hunk actions are host-owned DOM elements installed with
 `set_hunk_action_renderer`; the widget reserves a 24px gutter before both panes'
 line numbers and positions compact actions using both panes' changed
 ranges, including pure deletions, and forwards wheel input to the scroll owner.
+The wrapper carries `data-hovered` while the pointer is over its hunk's rendered
+geometry. Hosts can reveal actions with this signal while keeping the hunk
+overlay transparent to code-selection pointer events.
 The renderer returns a focusable action root and must tolerate being called
 again after diff or layout changes. Review coverage remains host policy.
 Manual scrolling selects the hunk nearest the viewport center without moving

@@ -11,10 +11,29 @@ async function openReview(page, app) {
 
 const contextButtons = page => page.locator('.review-hunk-context-button:visible');
 
+async function hoverContextHunk(page, button) {
+  await expect(async () => {
+    await expect(button).toBeVisible();
+    const bounds = await button.evaluate(node =>
+      node.closest('.moonbit-diff-hunk-action').getBoundingClientRect().toJSON());
+    expect(bounds.width).toBeGreaterThan(0);
+    expect(bounds.height).toBeGreaterThan(0);
+    // File switches can replace the hunk after it becomes visible. Re-read its
+    // geometry on retry, then hover the code beneath the overlay.
+    await page.mouse.move(bounds.x + bounds.width * 0.7, bounds.y + Math.min(bounds.height / 2, 8));
+    await expect(button.locator('..')).toHaveCSS('opacity', '1', { timeout: 250 });
+  }).toPass({ timeout: 5000 });
+}
+
+async function clickHunkContext(page, button = contextButtons(page).first()) {
+  await hoverContextHunk(page, button);
+  await button.click();
+}
+
 test('selected changes retain their preview during live language switching', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await openReview(page, app);
-  await contextButtons(page).first().click();
+  await clickHunkContext(page);
   const chip = page.locator('.composer-changes .changes-chip .mention-jump');
   await chip.click();
   const region = page.locator('.composer-changes .editor-diff-preview');
@@ -68,7 +87,7 @@ test('composer script previews pin one coordinate and sign while code scrolls', 
   await app.openSession();
   await app.openReview();
   await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: scripts\/example\.mbtx/ }).click();
-  await contextButtons(page).first().click();
+  await clickHunkContext(page);
   await page.setViewportSize({ width: 1060, height: 800 });
   await page.locator('.composer-changes .changes-chip .mention-jump').click();
   const popup = page.getByRole('dialog', { name: 'Selected changes' });
@@ -116,9 +135,18 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await openReview(page, app);
   const first = contextButtons(page).first();
   await expect(first).toHaveText('Add to context');
-  await first.click();
+  const context = first.locator('..');
+  await expect(context).toHaveCSS('opacity', '0');
+  await expect(context).toHaveCSS('pointer-events', 'none');
+  await hoverContextHunk(page, first);
+  await page.mouse.move(0, 0);
+  await expect(context).toHaveCSS('opacity', '0');
+  await clickHunkContext(page, first);
   await expect(first).toHaveText('In context');
   await expect(first).toBeFocused();
+  await page.mouse.move(0, 0);
+  await expect(context).toHaveCSS('opacity', '0');
+  await expect(context).toHaveCSS('pointer-events', 'none');
   await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: 'Mark hunk viewed', exact: true }).click();
   await expect(first).toHaveText('In context');
@@ -148,7 +176,7 @@ test('review hunk context stays independent and sends only selected snapshots', 
   await expect(chip).toHaveCount(0);
   await expect(first).toHaveText('Add to context');
   await expect(page.locator('#task')).toHaveValue('Extract the selected change');
-  await first.click();
+  await clickHunkContext(page, first);
   await expect(chip).toContainText('Changes · 1 file');
   await page.getByTitle('Send', { exact: true }).click();
   await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task).toContain('<review_changes workspace=');
@@ -215,7 +243,7 @@ test('review context survives regrouping and a partial group changes only on exp
   await openReview(page, app);
   await page.getByRole('button', { name: 'Token diff', exact: true }).click();
   await expect(contextButtons(page)).toHaveCount(2);
-  await contextButtons(page).first().click();
+  await clickHunkContext(page);
   await expect(contextButtons(page).first()).toHaveText('In context');
   await expect(contextButtons(page).last()).toHaveText('Add to context');
   await page.getByRole('button', { name: 'Line diff', exact: true }).click();
@@ -230,7 +258,7 @@ test('review context survives regrouping and a partial group changes only on exp
   // before opening the hunk menu, whose outside-focus listener would close it.
   await expect(popup).toBeHidden();
   await expect(page.locator('.composer-changes .changes-chip .mention-jump')).toBeFocused();
-  await contextButtons(page).click();
+  await clickHunkContext(page, contextButtons(page));
   await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeVisible();
   const menu = page.getByRole('menu');
   const sash = await page.locator('.moonbit-diff-editor-sash:visible').boundingBox();
@@ -249,11 +277,11 @@ test('review context survives regrouping and a partial group changes only on exp
   await page.getByRole('button', { name: 'Tree diff', exact: true }).click();
   await expect(contextButtons(page)).toHaveCount(2);
   for (const button of await contextButtons(page).all()) await expect(button).toHaveText('In context');
-  await contextButtons(page).last().click();
+  await clickHunkContext(page, contextButtons(page).last());
   await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   await expect(contextButtons(page)).toHaveCount(1);
   await expect(contextButtons(page)).toHaveText('Partly in context');
-  await contextButtons(page).click();
+  await clickHunkContext(page, contextButtons(page));
   await page.getByRole('menuitem', { name: 'Remove included changes' }).click();
   await expect(page.locator('.composer-changes .changes-chip')).toHaveCount(0);
   await expect(contextButtons(page)).toHaveText('Add to context');
@@ -273,9 +301,9 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   await app.openReview();
   const files = page.locator('#review-changes-body');
   await files.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-  await contextButtons(page).first().click();
+  await clickHunkContext(page);
   await files.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
-  await contextButtons(page).first().click();
+  await clickHunkContext(page);
   const chip = page.locator('.composer-changes .changes-chip .mention-jump');
   await expect(chip).toContainText('Changes · 2 files');
   await chip.click();
