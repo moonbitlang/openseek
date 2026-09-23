@@ -1,23 +1,23 @@
 ///|
-/// DOM-bound diagrams belong to the transcript subscription, outside Model.
+/// DOM-bound diagram renderers for transcript Markdown.
 /// Even synchronous D2 compilation runs only when a source/container changes,
 /// never on unrelated Rabbita view updates.
-priv enum TranscriptDiagramRenderer {
+priv enum MarkdownDiagramRenderer {
   Diago
   Mermaid(@editor_viewer.MermaidDiagram)
 }
 
 ///|
-priv struct TranscriptDiagram {
+priv struct MarkdownDiagram {
   element : @dom.Element
   source : String
   language : String
-  renderer : TranscriptDiagramRenderer
+  renderer : MarkdownDiagramRenderer
   mut dark_mode : Bool
 }
 
 ///|
-fn TranscriptDiagram::dispose(self : Self) -> Unit {
+fn MarkdownDiagram::dispose(self : Self) -> Unit {
   match self.renderer {
     Diago => ()
     Mermaid(diagram) => diagram.dispose()
@@ -25,16 +25,16 @@ fn TranscriptDiagram::dispose(self : Self) -> Unit {
 }
 
 ///|
-fn TranscriptDomMount::refresh_diagrams(
+pub fn DiagramRenderers::refresh(
   self : Self,
   root : @dom.Element,
+  dark_mode~ : Bool,
 ) -> Unit {
   let elements = root.query_selector_all("[data-transcript-diagram]")
-  let dark_mode = root.get_attribute("data-transcript-theme") is Some("dark")
-  let retained : Array[TranscriptDiagram] = []
+  let retained : Array[MarkdownDiagram] = []
   // Dispose removed/reused targets first, invalidating their pending Mermaid
   // work before any new diagram is installed into the same container.
-  for entry in self.rendered_diagrams {
+  for entry in self.rendered {
     if elements
       .iter()
       .any(element => {
@@ -73,7 +73,7 @@ fn TranscriptDomMount::refresh_diagrams(
     } else {
       let renderer = match language {
         "mermaid" =>
-          TranscriptDiagramRenderer::Mermaid(
+          MarkdownDiagramRenderer::Mermaid(
             @editor_viewer.MermaidDiagram(
               element,
               source,
@@ -96,5 +96,24 @@ fn TranscriptDomMount::refresh_diagrams(
       retained.push({ element, source, language, dark_mode, renderer, })
     }
   }
-  self.rendered_diagrams = retained
+  self.rendered = retained
+}
+
+///|
+pub struct DiagramRenderers {
+  priv mut rendered : Array[MarkdownDiagram]
+  priv on_size_changed : () -> Unit
+}
+
+///|
+pub fn DiagramRenderers::DiagramRenderers(on_size_changed : () -> Unit) -> Self {
+  { rendered: [], on_size_changed, }
+}
+
+///|
+pub fn DiagramRenderers::dispose(self : Self) -> Unit {
+  for entry in self.rendered {
+    entry.dispose()
+  }
+  self.rendered = []
 }

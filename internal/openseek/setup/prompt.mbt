@@ -1,5 +1,6 @@
 ///|
-/// Assemble the selected prompt, skills, and workspace environment in cache-friendly order.
+/// Assemble the selected prompt, project instructions, skills, and workspace
+/// environment in cache-friendly order.
 pub async fn configured_system_prompt(
   matches : @argparse.Matches,
   model : @deepseek.Model,
@@ -66,6 +67,10 @@ pub async fn configured_system_prompt(
   if @resources.directory() is Some(dir) {
     prompt <+ "\n\nBundled resources: \{dir}"
   }
+  let agents_section = agents_prompt_section(cwd)
+  if agents_section is Some(section) {
+    prompt <+ "\n\n\{section}"
+  }
   // Workspace skills join the per-project tail after the environment
   // section: like the cwd they vary per project (and change when skills are
   // edited), so they must sit after all globally shared text to keep it
@@ -78,6 +83,34 @@ pub async fn configured_system_prompt(
     prompt <+ "\n\n\{section}"
   }
   prompt.to_string()
+}
+
+///|
+/// Read `AGENTS.md` from the workspace and each ancestor directory. The
+/// resulting section is ordered from the oldest ancestor to the workspace so
+/// more specific instructions appear later, matching Pi's context layering.
+async fn agents_prompt_section(workspace_root : String) -> String? {
+  let files : Array[(String, String)] = []
+  let mut current = Some(workspace_root)
+  while current is Some(dir) {
+    let path = @workspace_path.join_child(dir, "AGENTS.md")
+    if @fs.exists(path) && @fs.kind(path) is Regular {
+      // AGENTS files may start with a UTF-8 BOM; keep only the document text.
+      files.push(
+        (path, @utf8.decode(@fs.read_file(path).binary(), ignore_bom=true)),
+      )
+    }
+    current = @workspace_path.parent_dir(dir)
+  }
+  guard files.length() > 0 else { return None }
+  let entries = files
+    .rev()
+    .map(file => {
+      let (path, content) = file
+      "<project_instructions path=\"\{path}\">\n\{content}\n</project_instructions>"
+    })
+  let joined = entries.join("\n\n")
+  Some("Project-specific instructions and guidelines:\n\n\{joined}")
 }
 
 ///|

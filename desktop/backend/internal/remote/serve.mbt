@@ -437,7 +437,7 @@ async test "readiness precedes the first forwarded hub notification" {
       event: {
         sequence: 1,
         ts: None,
-        item: User({ content: "test", submission_id: None, }),
+        item: User({ content: Content([Text("test")]), submission_id: None, }),
       },
       session_root: "/sessions/global",
     }),
@@ -586,8 +586,12 @@ test "remote delivery retains streaming runtime and error events" {
     ),
     BackgroundNotice(content="notice"),
     GoalUpdated(goal=Some("goal")),
-    SteerApplied(kind="prompt", content="steered", submission_id=None),
-    SteerDropped(content="late", submission_id=None),
+    SteerApplied(
+      kind="prompt",
+      content=Content([Text("steered")]),
+      submission_id=None,
+    ),
+    SteerDropped(content=Content([Text("late")]), submission_id=None),
     AgentAborted(reason="cancelled"),
     MaxStepsExhausted,
     AgentSetupFailed(error="setup failed"),
@@ -605,7 +609,7 @@ test "remote delivery retains streaming runtime and error events" {
         event: {
           sequence: 1,
           ts: None,
-          item: User({ content: "test", submission_id: None, }),
+          item: User({ content: Content([Text("test")]), submission_id: None, }),
         },
         session_root: "/sessions/global",
       }),

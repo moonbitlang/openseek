@@ -19,6 +19,19 @@ fn injection(issued : Ref[Int], model? : String) -> @host.SubrunInjection {
 }
 
 ///|
+/// What `moonbitlang/workflow/hosted` reads when the guest environment carries
+/// `raw` as its handoff; the process environment is restored afterwards.
+fn hosted_context(raw : String) -> @hosted.Context? {
+  let previous = @env.get_env_var("WORKFLOW_HOST")
+  @env.set_env_var("WORKFLOW_HOST", raw)
+  defer (match previous {
+    Some(value) => @env.set_env_var("WORKFLOW_HOST", value)
+    None => @env.unset_env_var("WORKFLOW_HOST")
+  })
+  @hosted.context()
+}
+
+///|
 test "blocks are disjoint and come from the allocator" {
   let injection = injection(Ref(8))
   let first = injection.reserve()
@@ -51,13 +64,7 @@ test "what this host writes is what the library reads" {
   }
   assert_eq(reservation.env().length(), 1)
   let document = @json.parse(raw)
-  let previous = @env.get_env_var("WORKFLOW_HOST")
-  @env.set_env_var("WORKFLOW_HOST", raw)
-  defer (match previous {
-    Some(value) => @env.set_env_var("WORKFLOW_HOST", value)
-    None => @env.unset_env_var("WORKFLOW_HOST")
-  })
-  guard @hosted.context() is Some(ctx) else {
+  guard hosted_context(raw) is Some(ctx) else {
     fail("the library must accept what this host wrote")
   }
   assert_eq(ctx.child_capacity(), @host.block_size)
@@ -169,13 +176,7 @@ test "a runtime-launched engine still produces a handoff the library reads" {
   guard injection.reserve().env().get("WORKFLOW_HOST") is Some(raw) else {
     fail("the handoff variable must be set")
   }
-  let previous = @env.get_env_var("WORKFLOW_HOST")
-  @env.set_env_var("WORKFLOW_HOST", raw)
-  defer (match previous {
-    Some(value) => @env.set_env_var("WORKFLOW_HOST", value)
-    None => @env.unset_env_var("WORKFLOW_HOST")
-  })
-  guard @hosted.context() is Some(_) else {
+  guard hosted_context(raw) is Some(_) else {
     fail("the library must accept what this host wrote")
   }
   guard @json.parse(raw)

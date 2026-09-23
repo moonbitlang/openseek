@@ -82,7 +82,11 @@ test "transcript row identities key by event sequence" {
   let conv = {
     ..test_conversation(),
     messages: [
-      { kind: User(text="question", images=[]), ts: None, sequence: Some(41), },
+      {
+        kind: User(content=Content([Text("question")])),
+        ts: None,
+        sequence: Some(41),
+      },
       {
         kind: Assistant(
           reasoning=None,

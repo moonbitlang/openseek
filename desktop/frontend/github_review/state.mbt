@@ -52,6 +52,21 @@ pub fn State::empty() -> State {
 }
 
 ///|
+/// Retire the previous PR immediately, before asynchronous checkout discovery
+/// catches up. Keep request generations monotonic so late replies stay stale.
+pub fn State::reset_checkout(self : State) -> State {
+  {
+    ..State::empty(),
+    checkout: self.checkout,
+    path: self.path,
+    enabled: self.enabled,
+    epoch: self.epoch + 1,
+    file_epoch: self.file_epoch + 1,
+    mutation_epoch: self.mutation_epoch + 1,
+  }
+}
+
+///|
 pub(all) enum Msg {
   CheckAvailability
   Toggle
@@ -97,15 +112,7 @@ pub fn reconcile(
       current.current_url() != Some(review.url)
     )
   let next = if changed {
-    {
-      ..State::empty(),
-      checkout: current.scope,
-      path,
-      enabled: state.enabled,
-      epoch: state.epoch + 1,
-      file_epoch: state.file_epoch + 1,
-      mutation_epoch: state.mutation_epoch + 1,
-    }
+    { ..state.reset_checkout(), checkout: current.scope, path, }
   } else if state.path != path {
     {
       ..state,

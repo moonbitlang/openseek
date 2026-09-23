@@ -2,6 +2,42 @@
 // so the whole page can be rendered in a test from constant values.
 
 ///|
+/// The list aggregates notices; a detail shows only its skill's operation
+/// failures. Library loading errors apply to either view.
+fn notice_views(state : State, target : PreviewTarget?) -> Array[@html.Html] {
+  let nodes : Array[@html.Html] = []
+  for notice in state.notices {
+    let message = match notice {
+      LibraryLoadFailed(message) => message
+      SkillActionFailed(action~, message~) =>
+        match target {
+          Some(target) => {
+            let source = match target {
+              Market(item) => source_label(item)
+              Installed(item) => item.source
+            }
+            if !notice.belongs_to(source) {
+              continue
+            }
+            message
+          }
+          None => "\{action.source()}: \{message}"
+        }
+    }
+    nodes.push(@html.div(class="skills-notice danger", message))
+  }
+  nodes
+}
+
+///|
+fn PendingSkillAction::label(self : PendingSkillAction) -> UiMessage {
+  match self {
+    Installing(..) => Installing
+    Uninstalling(..) => Removing
+  }
+}
+
+///|
 /// One local-library row: name, description, and — for registry installs
 /// only — the source tag and the uninstall button. Hand-written skills are
 /// listed so the user sees everything the engine advertises, but the app
@@ -41,15 +77,15 @@ fn installed_row(
       ]),
     )
   } else {
-    let busy = state.busy.contains(skill.id)
+    let pending = state.pending_action(skill.source)
     children.push(
       @html.div(class="skill-actions", [
         @html.button(
           class="button secondary skill-action",
-          disabled=busy,
-          on_click=emit(Uninstall(skill.id)),
-          if busy {
-            ui(locale, Removing)
+          disabled=pending is Some(_),
+          on_click=emit(Uninstall(skill)),
+          if pending is Some(action) {
+            ui(locale, action.label())
           } else {
             ui(locale, Uninstall)
           },
@@ -73,7 +109,7 @@ fn market_row(
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   let source = source_label(item)
-  let busy = state.busy.contains(source)
+  let pending = state.pending_action(source)
   let installed = input.has_installed(source)
   let info : Array[@html.Html] = [@html.div(class="skill-name", item.name)]
   if !item.description.is_blank() {
@@ -93,10 +129,10 @@ fn market_row(
     @html.div(class="skill-actions", [
       @html.button(
         class="button secondary skill-action",
-        disabled=busy,
+        disabled=pending is Some(_),
         on_click=emit(Install(item)),
-        if busy {
-          ui(locale, Installing)
+        if pending is Some(action) {
+          ui(locale, action.label())
         } else {
           ui(locale, Install)
         },
@@ -205,6 +241,7 @@ fn detail_shell(
         @html.h1(preview_name(target)),
         @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
         detail_action(locale~, target, state, input, emit),
+        @html.div(notice_views(state, Some(target))),
       ]),
       @html.div(class="skill-detail-card", [
         @html.div(class="skill-file-bar", [
@@ -263,41 +300,69 @@ fn detail_action(
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
+  // The preview target records where the document came from. Resolve actions
+  // against the live library instead of treating that snapshot as an install.
+  guard detail_action_target(target, state, input) is Some(target) else {
+    return @html.span(class="skill-meta", ui(locale, NotInstalled))
+  }
   match target {
     Market(item) => {
-      let key = source_label(item)
-      let busy = state.busy.contains(key)
-      if input.has_installed(key) {
-        @html.span(class="skill-check ok", ui(locale, InstalledCheck))
-      } else {
-        @html.button(
-          class="button primary skill-detail-action",
-          disabled=busy,
-          on_click=emit(Install(item)),
-          if busy {
-            ui(locale, Installing)
-          } else {
-            ui(locale, InstallSkill)
-          },
-        )
-      }
+      let pending = state.pending_action(source_label(item))
+      @html.button(
+        class="button primary skill-detail-action",
+        disabled=pending is Some(_),
+        on_click=emit(Install(item)),
+        if pending is Some(action) {
+          ui(locale, action.label())
+        } else {
+          ui(locale, InstallSkill)
+        },
+      )
     }
     Installed(item) =>
       if item.source.is_empty() {
         @html.span(class="skill-check ok", ui(locale, HandWrittenSkill))
       } else {
-        let busy = state.busy.contains(item.id)
+        let pending = state.pending_action(item.source)
         @html.button(
           class="button secondary skill-detail-action",
-          disabled=busy,
-          on_click=emit(Uninstall(item.id)),
-          if busy {
-            ui(locale, Removing)
+          disabled=pending is Some(_),
+          on_click=emit(Uninstall(item)),
+          if pending is Some(action) {
+            ui(locale, action.label())
           } else {
             ui(locale, Uninstall)
           },
         )
       }
+  }
+}
+
+///|
+fn detail_action_target(
+  target : PreviewTarget,
+  state : State,
+  input : Input,
+) -> PreviewTarget? {
+  match target {
+    Market(item) => Some(preview_target_for_market(input.installed, item))
+    Installed(item) => {
+      for installed in input.installed {
+        if installed.id == item.id && installed.source == item.source {
+          return Some(Installed(installed))
+        }
+      }
+      // Keep the same detail page usable after uninstall, when its version
+      // still exists in the catalog. Never send an id from a removed snapshot.
+      if state.catalog is Ready(items) {
+        for market in items {
+          if source_label(market) == item.source {
+            return Some(Market(market))
+          }
+        }
+      }
+      None
+    }
   }
 }
 
@@ -340,8 +405,8 @@ fn list_page(
       ],
     ),
   ]
-  if !state.notice.is_empty() {
-    sections.push(@html.div(class="skills-notice danger", state.notice))
+  for notice in notice_views(state, None) {
+    sections.push(notice)
   }
   let installed_rows : Array[@html.Html] = []
   for skill in input.installed {

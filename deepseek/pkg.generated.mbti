@@ -37,10 +37,12 @@ pub struct ChatResponse {
 } derive(@debug.Debug)
 pub impl @json.FromJson for ChatResponse
 
-pub(all) struct Content(Array[ContentPart]) derive(@debug.Debug)
+pub(all) struct Content(Array[ContentPart]) derive(Eq, @debug.Debug)
 pub fn Content::contains(Self, StringView) -> Bool
+pub fn Content::equal(Self, Self) -> Bool
 pub fn Content::is_text_only(Self) -> Bool
 pub fn Content::iter(Self) -> Iter[ContentPart]
+pub fn Content::not_equal(Self, Self) -> Bool
 pub fn Content::text(Self) -> String
 pub fn Content::to_repr(Self) -> @debug.Repr
 

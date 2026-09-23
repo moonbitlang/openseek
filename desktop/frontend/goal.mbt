@@ -1157,7 +1157,7 @@ test "a goal on an unbound worktree conversation creates the worktree first" {
       ..unbound,
       messages: [
         {
-          kind: User(text="already talking", images=[]),
+          kind: User(content=Content([Text("already talking")])),
           ts: None,
           sequence: None,
         },

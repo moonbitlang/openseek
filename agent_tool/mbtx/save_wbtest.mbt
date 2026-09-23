@@ -1,19 +1,4 @@
 ///|
-#cfg(not(platform="windows"))
-async test "builtin namespace refuses symlinks outside its root" {
-  @vfs.with_tmpdir(root => {
-    @fs.mkdir("\{root}/workflow")
-    @fs.write_file("\{root}/outside.mbtx", "fn main {}")
-    @fs.symlink(target="\{root}/outside.mbtx", "\{root}/workflow/escape.mbtx")
-    try check_builtin_containment("\{root}/workflow/escape.mbtx", root) catch {
-      error => assert_true(error.to_string().contains("inside @builtin/"))
-    } noraise {
-      _ => fail("namespace escape accepted")
-    }
-  })
-}
-
-///|
 async test "saved script reads wait for a shared edit and rollback to settle" {
   @vfs.with_tmpdir(ws => {
     @async.with_timeout(3000, () => {
@@ -31,7 +16,7 @@ async test "saved script reads wait for a shared edit and rollback to settle" {
           })
         })
         entered.get()
-        let read = group.spawn(() => read_script_snapshot(state, path, None))
+        let read = group.spawn(() => read_script_snapshot(state, path))
         assert_true(@async.with_timeout_opt(50, () => read.wait()) is None)
         release.put(())
         edit.wait()

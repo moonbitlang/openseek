@@ -45,10 +45,10 @@ fn conversation_title(
 ) -> String {
   // Titles follow the committed user transcript.
   for item in conv.messages {
-    if item.kind is User(text=prompt, ..) {
+    if item.kind is User(content=prompt) {
       // A prompt sent with chips titles by what was typed (or, chips alone,
       // by their labels) — never by the raw `<user_mentions>` envelope.
-      let title = user_display_text(prompt).trim().to_owned()
+      let title = user_display_text(prompt.text()).trim().to_owned()
       if !title.is_empty() {
         return title
       }

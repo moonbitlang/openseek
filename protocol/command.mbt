@@ -32,10 +32,10 @@ pub(all) enum Command {
   /// engine records it on the turn's durable `User` item, so a delivery can
   /// later be reconciled by exact id rather than by matching text. Controllers
   /// that do not reconcile deliveries (the TUI) send none.
-  Prompt(text~ : String, submission_id~ : String?)
+  Prompt(content~ : Content, submission_id~ : String?)
   /// The tag follows steering through the runtime queue, durable User item,
   /// and applied/dropped receipt. Untagged controllers send none.
-  Steer(kind~ : SteerKind, text~ : String, submission_id~ : String?)
+  Steer(kind~ : SteerKind, content~ : Content, submission_id~ : String?)
   Compact
   Cancel
   JobsSnapshot(request_id~ : String)
@@ -62,23 +62,20 @@ pub(all) enum Command {
 /// The command as the line a controller writes.
 pub fn Command::to_json(self : Command) -> Json {
   match self {
-    // Like `auto` below, the tag is written only when present: omission is
-    // what an untagged prompt has always looked like on this wire, so the
-    // common line stays byte for byte what every controller has written.
-    Prompt(text~, submission_id~) =>
+    Prompt(content~, submission_id~) =>
       if submission_id is Some(id) {
-        { "command": "prompt", "text": text, "submission_id": id }
+        { "command": "prompt", "content": content, "submission_id": id }
       } else {
-        { "command": "prompt", "text": text }
+        { "command": "prompt", "content": content }
       }
-    Steer(kind~, text~, submission_id~) => {
+    Steer(kind~, content~, submission_id~) => {
       let fields : Map[String, Json] = {
         "command": "steer",
         "kind": match kind {
           Prompt => "prompt"
           Command => "command"
         },
-        "text": text,
+        "content": content,
       }
       if submission_id is Some(id) {
         fields["submission_id"] = Json(id)
@@ -150,24 +147,24 @@ pub fn Command::to_json(self : Command) -> Json {
 ///    It is a flag with a default, not a value that can go missing.
 ///
 /// The distinction matters because only (1) is about talking to an old
-/// binary. A field that is merely unread — `text` on a command nobody
-/// inspects — is still required: its absence means the line is not what it
-/// claims.
+/// binary. Message commands require `content`; the legacy `text` field is
+/// accepted at the decoding boundary for existing controllers.
 pub fn Command::parse(line : Json) -> Result[Command, String] {
   match line {
-    {
-      "command": "prompt",
-      "text": String(text),
-      "submission_id": String(id),
-      ..
-    } => Ok(Prompt(text~, submission_id=Some(id)))
-    { "command": "prompt", "text": String(_), "submission_id": _, .. } =>
-      Err("expected a string \"submission_id\" field")
-    // An untagged prompt: see the absence rule above.
-    { "command": "prompt", "text": String(text), .. } =>
-      Ok(Prompt(text~, submission_id=None))
+    { "command": "prompt", .. } => {
+      let content = match parse_command_content(line) {
+        Ok(content) => content
+        Err(error) => return Err(error)
+      }
+      let submission_id = match line {
+        { "submission_id": String(id), .. } => Some(id)
+        { "submission_id": _, .. } =>
+          return Err("expected a string \"submission_id\" field")
+        _ => None
+      }
+      Ok(Prompt(content~, submission_id~))
+    }
     { "command": "steer", .. } => parse_steer(line)
-    { "command": "prompt", .. } => Err("expected a string \"text\" field")
     { "command": "jobs_snapshot", "request_id": String(request_id), .. } if !request_id.is_empty() =>
       Ok(JobsSnapshot(request_id~))
     {
@@ -231,21 +228,49 @@ fn parse_steer(line : Json) -> Result[Command, String] {
       return Err("expected a string \"submission_id\" field")
     _ => None
   }
-  // `text` is required whatever the kind says, so each arm spells the full
-  // shape it accepts: the two kinds are static arms, a present kind that is
-  // not one of them is its own refusal, and a steer with no kind at all is a
-  // prompt steer (see the rule above) — spelled out, not a fallback tail.
+  let content = match parse_command_content(line) {
+    Ok(content) => content
+    Err(error) => return Err(error)
+  }
   match line {
-    { "kind": "prompt", "text": String(text), .. } =>
-      Ok(Steer(kind=Prompt, text~, submission_id~))
-    { "kind": "command", "text": String(text), .. } =>
-      Ok(Steer(kind=Command, text~, submission_id~))
-    { "kind": String(other), "text": String(_), .. } =>
-      Err("unknown steer kind: \{other}")
-    { "kind": _, "text": String(_), .. } =>
-      Err("expected a string \"kind\" field")
-    { "text": String(text), .. } =>
-      Ok(Steer(kind=Prompt, text~, submission_id~))
+    { "kind": "prompt", .. } => Ok(Steer(kind=Prompt, content~, submission_id~))
+    { "kind": "command", .. } =>
+      Ok(Steer(kind=Command, content~, submission_id~))
+    { "kind": String(other), .. } => Err("unknown steer kind: \{other}")
+    { "kind": _, .. } => Err("expected a string \"kind\" field")
+    _ => Ok(Steer(kind=Prompt, content~, submission_id~))
+  }
+}
+
+///|
+/// Current commands carry content directly. Legacy text and image URL fields
+/// are accepted only at this boundary; a malformed content field never falls
+/// back to the old representation.
+fn parse_command_content(line : Json) -> Result[Content, String] {
+  match line {
+    { "content": value, .. } => {
+      let content : Content = @json.from_json(value) catch {
+        error => return Err("invalid content: \{error}")
+      }
+      Ok(content)
+    }
+    { "text": String(text), .. } => {
+      let urls : Array[String] = match line {
+        { "images": value, .. } =>
+          @json.from_json(value) catch {
+            _ => return Err("expected an array of image URLs")
+          }
+        _ => []
+      }
+      let parts : Array[ContentPart] = [Text(text)]
+      for url in urls {
+        let image = Image::from_data_url(url) catch {
+          error => return Err("\{error}")
+        }
+        parts.push(Image(image))
+      }
+      Ok(Content(parts))
+    }
     _ => Err("expected a string \"text\" field")
   }
 }

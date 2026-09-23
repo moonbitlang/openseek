@@ -3,6 +3,7 @@ package "openseek_desktop/frontend/markdown"
 
 import {
   "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/i18n",
 }
@@ -12,11 +13,17 @@ pub fn copy_button(locale? : @i18n.Locale, String, class~ : String, title~ : Str
 
 pub fn linkified_text_nodes(String) -> Array[@html.Html]
 
-pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd, web_source? : String) -> Array[@html.Html]
+pub fn markdown_nodes(locale? : @i18n.Locale, String, open_file? : (String) -> @cmd.Cmd) -> Array[@html.Html]
 
 // Errors
 
 // Types and methods
+pub struct DiagramRenderers {
+  // private fields
+}
+pub fn DiagramRenderers::DiagramRenderers(() -> Unit) -> Self
+pub fn DiagramRenderers::dispose(Self) -> Unit
+pub fn DiagramRenderers::refresh(Self, @dom.Element, dark_mode~ : Bool) -> Unit
 
 // Type aliases
 

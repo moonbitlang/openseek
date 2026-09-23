@@ -59,8 +59,8 @@ pub(all) enum Msg {
   CatalogLoaded(channel~ : @interop.ChannelId, items~ : Array[MarketItem])
   CatalogFailed(channel~ : @interop.ChannelId, message~ : String)
   Install(MarketItem)
-  Uninstall(String)
-  ActionDone(channel~ : @interop.ChannelId, key~ : String, error~ : String)
+  Uninstall(InstalledItem)
+  ActionDone(channel~ : @interop.ChannelId, action~ : PendingSkillAction, error~ : String?)
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)
   PreviewLoaded(request~ : Int, target~ : PreviewTarget, content~ : String)
@@ -74,6 +74,13 @@ pub enum Outcome {
 } derive(Eq)
 pub fn Outcome::equal(Self, Self) -> Bool
 pub fn Outcome::not_equal(Self, Self) -> Bool
+
+pub(all) enum PendingSkillAction {
+  Installing(source~ : String)
+  Uninstalling(source~ : String, id~ : String)
+} derive(Eq)
+pub fn PendingSkillAction::equal(Self, Self) -> Bool
+pub fn PendingSkillAction::not_equal(Self, Self) -> Bool
 
 type Preview derive(Eq)
 pub fn Preview::equal(Self, Self) -> Bool
@@ -89,7 +96,7 @@ pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self, Outcome?)
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::opening(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)
-pub fn State::with_notice(Self, String) -> Self
+pub fn State::with_library_error(Self, String) -> Self
 
 // Type aliases
 

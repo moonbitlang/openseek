@@ -227,3 +227,16 @@ async test "realworld web_search surfaces an auth failure from the live endpoint
   guard output.brief is Some(brief) else { fail("expected a brief") }
   assert_true(brief.contains("(failed)"))
 }
+
+///|
+test "web_search definition exposes the expected name and schema shape" {
+  let definition = @web_search.definition(api_key="k")
+  assert_eq(definition.name, "web_search")
+  assert_true(definition.is_concurrent_safe())
+  guard definition.schema is JsonSchema({ "required": ["query"], .. }) else {
+    fail("expected query to be required")
+  }
+  guard definition.execute is Async(_) else {
+    fail("expected an async executor")
+  }
+}

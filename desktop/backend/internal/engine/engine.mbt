@@ -26,6 +26,7 @@ priv struct ServeEngine {
   // config differs cannot reuse it.
   spec_key : String
   engine_name : String
+  supports_images : Bool
   model : String
   max_steps : Int
   // Owned exclusively by this engine's writer task. No request ever touches
@@ -71,7 +72,7 @@ priv struct ServeEngine {
 priv struct QueuedRun {
   id : String
   run_id : String
-  content : String
+  content : @wire.Content
 }
 
 ///|
@@ -1542,6 +1543,7 @@ async fn[G] start_serve_engine(
     spec_key: engine_fingerprint(config),
     engine_name: config.engine,
     model: config.model,
+    supports_images: config.supports_images(),
     max_steps: config.max_steps,
     writer,
     // Unbounded because submission must never block: a request that could be
@@ -2219,6 +2221,7 @@ fn test_serve_engine(
     spec_key: "test",
     engine_name: "openseek",
     model: "test",
+    supports_images: true,
     max_steps: 10,
     writer,
     commands: Queue(kind=Unbounded),
@@ -2541,7 +2544,7 @@ async test "a run's close spares the commands queued to outlive its turn" {
     let steer_ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
     assert_true(
       engine.submit(
-        @protocol.steer("keep going"),
+        @protocol.steer(Content([Text("keep going")])),
         failure_reason="steer",
         ack=steer_ack,
       ),
@@ -2673,12 +2676,15 @@ test "trailing steer settle events keep the terminal run id" {
   tracker.begin_run()
   tracker.record_sent(submission_id="submission-fresh")
   let old_drop : @wire.Event? = Some(
-    SteerDropped(content="same", submission_id=Some("submission-old")),
+    SteerDropped(
+      content=Content([Text("same")]),
+      submission_id=Some("submission-old"),
+    ),
   )
   let fresh_apply : @wire.Event? = Some(
     SteerApplied(
       kind="prompt",
-      content="same",
+      content=Content([Text("same")]),
       submission_id=Some("submission-fresh"),
     ),
   )
@@ -2696,12 +2702,12 @@ test "equal steer text receipts settle by id even out of order" {
   tracker.record_sent(submission_id="submission-b")
   let second : @wire.Event = SteerApplied(
     kind="prompt",
-    content="same",
+    content=Content([Text("same")]),
     submission_id=Some("submission-b"),
   )
   let first : @wire.Event = SteerApplied(
     kind="prompt",
-    content="changed text",
+    content=Content([Text("changed text")]),
     submission_id=Some("submission-a"),
   )
   assert_eq(tracker.route_event(event=second, latest_run="r9"), Some("r9"))
@@ -2717,12 +2723,16 @@ test "legacy steer receipt does not gain a submission field" {
   tracker.begin_run()
   tracker.record_sent(submission_id="tagged-legacy-text")
   let decoded : @wire.Event? = Some(
-    SteerApplied(kind="prompt", content="legacy", submission_id=None),
+    SteerApplied(
+      kind="prompt",
+      content=Content([Text("legacy")]),
+      submission_id=None,
+    ),
   )
   assert_eq(tracker.route_event(event?=decoded, latest_run="r11"), Some("r11"))
   let event : @wire.Event = SteerApplied(
     kind="prompt",
-    content="legacy",
+    content=Content([Text("legacy")]),
     submission_id=None,
   )
   guard event.to_json() is Object(fields) else {
@@ -2779,7 +2789,10 @@ test "new turn events clear stale settling state" {
     Some("r8"),
   )
   let old_drop : @wire.Event? = Some(
-    SteerDropped(content="old steer", submission_id=Some("submission-old")),
+    SteerDropped(
+      content=Content([Text("old steer")]),
+      submission_id=Some("submission-old"),
+    ),
   )
   assert_eq(tracker.route_event(event?=old_drop, latest_run="r8"), Some("r8"))
 }
@@ -2797,7 +2810,7 @@ test "background events do not clear trailing steer receipts" {
     tracker.route_event(
       event=SteerApplied(
         kind="prompt",
-        content="first",
+        content=Content([Text("first")]),
         submission_id=Some("submission-first"),
       ),
       latest_run="r-new",
@@ -2807,7 +2820,7 @@ test "background events do not clear trailing steer receipts" {
   assert_eq(
     tracker.route_event(
       event=SteerDropped(
-        content="second",
+        content=Content([Text("second")]),
         submission_id=Some("submission-second"),
       ),
       latest_run="r-new",
@@ -2824,15 +2837,23 @@ test "only prompt steer_applied consumes a desktop steer" {
   let prompt : @wire.Event? = Some(
     SteerApplied(
       kind="prompt",
-      content="same",
+      content=Content([Text("same")]),
       submission_id=Some("submission-prompt"),
     ),
   )
   let command : @wire.Event? = Some(
-    SteerApplied(kind="command", content="same", submission_id=None),
+    SteerApplied(
+      kind="command",
+      content=Content([Text("same")]),
+      submission_id=None,
+    ),
   )
   let notice : @wire.Event? = Some(
-    SteerApplied(kind="notice", content="same", submission_id=None),
+    SteerApplied(
+      kind="notice",
+      content=Content([Text("same")]),
+      submission_id=None,
+    ),
   )
   assert_eq(tracker.route_event(event?=command, latest_run="r1"), Some("r1"))
   assert_eq(tracker.route_event(event?=notice, latest_run="r1"), Some("r1"))
@@ -2867,7 +2888,7 @@ async test "native engine env has one authoritative bundled moon path" {
   prepare_fake_moonbit_seed(seed, version="0.10.0-test")
   prepare_fake_bundled_moonbit_home(moon_home, version="0.10.0-test")
   let config : RunConfig = {
-    task: "t",
+    content: Content([Text("t")]),
     api_key: "k",
     key_env: "DEEPSEEK",
     api_url: None,
@@ -2986,7 +3007,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
   let sink = EventSink(_ => ())
   let slot : SessionSlot = { pending: None, engine: None, }
   let config : RunConfig = {
-    task: "test",
+    content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",
     api_url: None,
@@ -3101,7 +3122,7 @@ async test "record move waits for readers across pump replacement" {
 ///|
 fn pump_test_config(session : String) -> RunConfig {
   {
-    task: "test",
+    content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",
     api_url: None,

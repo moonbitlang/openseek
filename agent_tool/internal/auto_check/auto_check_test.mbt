@@ -263,3 +263,21 @@ async test "check names a failed run; count_errors keeps its tally" {
     assert_true(@auto_check.check("\{dir}/notes.txt") is NotApplicable)
   })
 }
+
+///|
+test "identity prefers path:loc#code and falls back to the rendered line" {
+  let coded : @auto_check.ErrorSite = {
+    path: Some("a.mbt"),
+    loc: "1:1-1:2",
+    code: Some(4014),
+    message: "Expr Type Mismatch",
+  }
+  assert_eq(coded.identity(), "a.mbt:1:1-1:2#4014")
+  // A reworded message keeps the identity.
+  assert_eq(
+    { ..coded, message: "Type mismatch (new wording)", }.identity(),
+    coded.identity(),
+  )
+  let uncoded : @auto_check.ErrorSite = { ..coded, code: None, }
+  assert_eq(uncoded.identity(), "a.mbt:1:1-1:2: Expr Type Mismatch")
+}

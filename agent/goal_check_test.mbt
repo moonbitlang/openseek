@@ -102,7 +102,7 @@ async test "a finish attempt with a standing goal gets one goal check" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=answered_goal_session("goal-check-final"),
-      task="do the next chunk",
+      content=Content([Text("do the next chunk")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -120,9 +120,10 @@ async test "a finish attempt with a standing goal gets one goal check" {
       fail("expected finished terminal")
     }
     assert_eq(answer, "premature answer")
+    let prefix = @agent_session.GoalCheckPrefix
     let checks = [
       for event in events if event.item() is Runtime(notice) &&
-      notice.content().has_prefix(@agent_session.GoalCheckPrefix) => notice
+      notice.content().has_prefix(prefix) => notice
     ]
     assert_eq(checks.length(), 1)
     // Both provider responses are preserved as ordinary assistant messages.
@@ -174,7 +175,7 @@ async test "a finish tool call mid-batch closes the batch before the check" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=answered_goal_session("goal-check-batch"),
-      task="do the next chunk",
+      content=Content([Text("do the next chunk")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -244,7 +245,7 @@ async test "checkpoint replay provenance distinguishes a same-text follow-up" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=answered_goal_session("goal-check-replay-provenance"),
-      task="finish carefully",
+      content=Content([Text("finish carefully")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -295,7 +296,7 @@ async test "a check on the reminder boundary is not buried by a reminder" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=answered_goal_session("goal-check-boundary"),
-      task="grind through it",
+      content=Content([Text("grind through it")]),
       append_item=(session, item) => session.append(item),
       max_steps=40,
       api_url=url,
@@ -335,7 +336,7 @@ async test "no goal or a cleared goal never triggers the check" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=cleared,
-      task="just answer",
+      content=Content([Text("just answer")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
       api_url=url,
@@ -370,7 +371,7 @@ async test "a goal check at the ceiling checkpoints first" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="do the big task",
+      content=Content([Text("do the big task")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
     )
@@ -436,7 +437,7 @@ async test "a pressured goal-met-then-finish batch salvages both" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="wrap it all up",
+      content=Content([Text("wrap it all up")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools~,

@@ -56,7 +56,8 @@ Saving refuses to overwrite different existing content: change a saved script
 with `edit`, not by saving over it.
 
 `mbtx(description="...", filename="@builtin/check.mbtx")` runs a workflow
-shipped under `<bundled-resources>/workflow/`. Namespaced
+built into OpenSeek; its source is readable under
+`<bundled-resources>/workflow/` when installed. Namespaced
 scripts are read-only: never supply `source` with `@builtin/`. Only
 `@builtin/` is supported today; other namespaces are reserved. Use
 `./path/check.mbtx` for a literal workspace path.

@@ -130,9 +130,9 @@ fn group_turns(
 /// steering (extra `User` events before the terminal) stays a single turn.
 test "group_turns keeps steering messages within one turn" {
   let s = @agent_session.Session(SessionId("g"), system_prompt="")
-    .append(User(UserMessage("do the thing")))
+    .append(User(UserMessage(Content([Text("do the thing")]))))
     .append(Assistant(AssistantMessage("working")))
-    .append(User(UserMessage("actually, also this")))
+    .append(User(UserMessage(Content([Text("actually, also this")]))))
     .append(Assistant(AssistantMessage("ok")))
     .append(Terminal(Finished("done")))
   let turns = group_turns(s.events())
@@ -145,11 +145,11 @@ test "group_turns keeps steering messages within one turn" {
 /// (cut off mid-flight) becomes its own final group.
 test "group_turns splits on terminals and keeps an unterminated tail" {
   let s = @agent_session.Session(SessionId("g"), system_prompt="")
-    .append(User(UserMessage("one")))
+    .append(User(UserMessage(Content([Text("one")]))))
     .append(Terminal(Finished("first")))
-    .append(User(UserMessage("two")))
+    .append(User(UserMessage(Content([Text("two")]))))
     .append(Terminal(Finished("second")))
-    .append(User(UserMessage("three (still running)")))
+    .append(User(UserMessage(Content([Text("three (still running)")]))))
   let turns = group_turns(s.events())
   inspect(turns.length(), content="3")
   inspect(turns[0].length(), content="2")
@@ -307,10 +307,10 @@ fn format_span_total_seconds(span_ms : Int64) -> String {
 fn turn_preview(turn : Array[@agent_session.SessionEvent]) -> String {
   for event in turn {
     if event.item() is User(message) {
-      return if message.content() == @agent_session.GoalContinuePrompt {
+      return if message.content().text() == @agent_session.GoalContinuePrompt {
         "↻ auto-continue"
       } else {
-        truncate(one_line(message.content()), 80)
+        truncate(one_line(message.content().text()), 80)
       }
     }
   }
@@ -320,9 +320,11 @@ fn turn_preview(turn : Array[@agent_session.SessionEvent]) -> String {
 ///|
 test "an auto-continued turn is named rather than previewed" {
   let session = @agent_session.Session(SessionId("t"), system_prompt="")
-    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(
+      User(UserMessage(Content([Text(@agent_session.GoalContinuePrompt)]))),
+    )
     .append(Terminal(Finished("done")))
-    .append(User(UserMessage("now do the other thing")))
+    .append(User(UserMessage(Content([Text("now do the other thing")]))))
     .append(Terminal(Finished("done again")))
   let turns = group_turns(session.events())
   inspect(turn_preview(turns[0]), content="↻ auto-continue")
@@ -332,10 +334,12 @@ test "an auto-continued turn is named rather than previewed" {
 ///|
 test "the turn header counts only the steers a person typed" {
   let session = @agent_session.Session(SessionId("t"), system_prompt="")
-    .append(User(UserMessage("start")))
+    .append(User(UserMessage(Content([Text("start")]))))
     .append(Assistant(AssistantMessage("working")))
-    .append(User(UserMessage("actually, also this")))
-    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(User(UserMessage(Content([Text("actually, also this")]))))
+    .append(
+      User(UserMessage(Content([Text(@agent_session.GoalContinuePrompt)]))),
+    )
     .append(Terminal(Finished("done")))
   let turns = group_turns(session.events())
   // The opening prompt is not a steer, and the engine's prompt never is.
@@ -356,7 +360,7 @@ fn count_turn_steers(turn : Array[@agent_session.SessionEvent]) -> Int {
       seen_first = true
       continue
     }
-    if user_input(message.content(), delegated=false) is Typed {
+    if user_input(message.content().text(), delegated=false) is Typed {
       steers += 1
     }
   }
@@ -468,10 +472,10 @@ fn event_card(
   match event.item() {
     User(message) => {
       let (kind, label) = user_input(
-        message.content(),
+        message.content().text(),
         delegated=subrun.delegated,
       ).card_style()
-      card(kind, label, seq, time~, [text_block(message.content())])
+      card(kind, label, seq, time~, model_content_view(message.content()))
     }
     Assistant(message) =>
       assistant_card(
@@ -1374,7 +1378,11 @@ fn tool_card(
     },
   ]
   let body : Array[@html.Html] = [
-    tool_result_content(Some(result), result.content()),
+    ..if result.content().is_text_only() {
+      [tool_result_content(Some(result), result.content().text())]
+    } else {
+      model_content_view(result.content())
+    },
     ..if child_id is Some(id) && subrun.children.get(id) is Some(child) {
       [subrun_transcript(child)]
     },
@@ -1565,11 +1573,11 @@ fn prompt_marks(
   for event in session.events() {
     match event.item() {
       User(message) =>
-        if user_input(message.content(), delegated~) is Typed {
+        if user_input(message.content().text(), delegated~) is Typed {
           marks.push({
             seq: event.sequence(),
             time: wall_clock_label(event.unix_ms()),
-            text: message.content(),
+            text: message.content().text(),
             errors: 0,
             reply: "",
           })
@@ -1691,22 +1699,24 @@ test "wall_clock_label converts unix ms to a civil UTC stamp" {
 /// auto-continue prompt) contribute no mark at all.
 test "prompt_marks segments errors and replies by typed prompt" {
   let s = @agent_session.Session(SessionId("rail"), system_prompt="")
-    .append(User(UserMessage("ship the feature")))
+    .append(User(UserMessage(Content([Text("ship the feature")]))))
     .append(Assistant(AssistantMessage("Starting on it.")))
     .append(
       Tool(
         ToolResult(
           tool_call_id="c1",
           tool_name="shell",
-          content="boom",
+          content=[Text("boom")],
           is_error=true,
         ),
       ),
     )
-    .append(User(UserMessage("also fix the docs")))
+    .append(User(UserMessage(Content([Text("also fix the docs")]))))
     .append(Assistant(AssistantMessage("Docs updated.")))
     .append(Terminal(Finished("done")))
-    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(
+      User(UserMessage(Content([Text(@agent_session.GoalContinuePrompt)]))),
+    )
     .append(Terminal(Finished("done again")))
   let marks = prompt_marks(s, delegated=false)
   inspect(marks.length(), content="2")
@@ -2037,16 +2047,18 @@ test "model-view user cards keep the caption of the event behind them" {
       system_prompt="sys",
     )
     .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nship it")))
-    .append(User(UserMessage("do the thing")))
+    .append(User(UserMessage(Content([Text("do the thing")]))))
     .append(Assistant(AssistantMessage("on it")))
     .append(
       Summary(SessionSummary(content="covered", from_sequence=1, to_sequence=3)),
     )
-    .append(User(UserMessage(@agent_session.GoalContinuePrompt)))
+    .append(
+      User(UserMessage(Content([Text(@agent_session.GoalContinuePrompt)]))),
+    )
     .append(
       Runtime(RuntimeNotice("\{@agent_session.GoalReminderPrefix}\nship it")),
     )
-    .append(User(UserMessage("one more thing")))
+    .append(User(UserMessage(Content([Text("one more thing")]))))
     .append(Terminal(Finished("done")))
   let messages = session.chat_messages()
   let origins = model_message_origins(session)
@@ -2093,7 +2105,7 @@ test "message origins stay aligned with the projection" {
       system_prompt="sys",
     )
     .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nobjective")))
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(
       Assistant(
         AssistantMessage("calling", tool_calls=[
@@ -2104,11 +2116,11 @@ test "message origins stay aligned with the projection" {
     // No result for `dangling`: the projection heals it with a synthetic tool
     // message that no durable event backs.
     .append(Terminal(Finished("first answer")))
-    .append(User(UserMessage("second")))
+    .append(User(UserMessage(Content([Text("second")]))))
     .append(Assistant(AssistantMessage("answer")))
     // Repeats the assistant final, so it projects no extra message.
     .append(Terminal(Finished("answer")))
-    .append(User(UserMessage("third")))
+    .append(User(UserMessage(Content([Text("third")]))))
     .append(
       Summary(SessionSummary(content="covered", from_sequence=8, to_sequence=8)),
     )
@@ -2130,10 +2142,10 @@ test "message origins stay aligned with the projection" {
 ///|
 test "model metadata omits an assistant final's duplicate terminal" {
   let session = @agent_session.Session(SessionId("labels"), system_prompt="")
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(Assistant(AssistantMessage("answer")))
     .append(Terminal(Finished("answer")))
-    .append(User(UserMessage("second")))
+    .append(User(UserMessage(Content([Text("second")]))))
     .append(Terminal(Finished("done")))
   let messages = session.chat_messages()
   let anchors = model_message_anchor_seqs(session)
@@ -2417,15 +2429,19 @@ fn model_failed_call_ids(
 }
 
 ///|
-/// Renders the provider's ordered content without treating a file ID as a URL.
-fn model_content_view(content : @deepseek.Content) -> Array[@html.Html] {
+/// Renders ordered session content without exposing base64 as transcript text.
+fn model_content_view(content : @agent_session.Content) -> Array[@html.Html] {
   content
   .iter()
   .filter_map(part => {
     match part {
       Text(text) => if text.is_blank() { None } else { Some(text_block(text)) }
-      File(file_id~) => Some(text_block("Image file: \{file_id}"))
-      ImageUrl(_) => Some(text_block("[Image]"))
+      Image(image) =>
+        Some(
+          text_block(
+            "[Image: \{image.media_type}, \{image.bytes.length()} bytes]",
+          ),
+        )
     }
   })
   .collect()
@@ -2454,7 +2470,7 @@ fn message_card(
             "System prompt",
             time~,
           ),
-          ..model_content_view(message.content),
+          ..request_content_view(message.content),
         ],
       ]
     User => {
@@ -2517,8 +2533,8 @@ fn message_card(
 
 ///|
 /// The durable `ToolResult` the model view is allowed to surface for a projected
-/// tool message: the one looked up by id whose text matches all projected text
-/// fragments, with no file parts to lose in the comparison. The projection
+/// tool message: the one looked up by id whose full projected content matches,
+/// including the order and contents of text and image parts. The projection
 /// skips results covered by a later summary and heals a
 /// dangling call with a synthetic message; in those cases the looked-up result
 /// is not what the model saw, so the content guard rejects it (returns `None`)
@@ -2530,8 +2546,8 @@ fn model_shown_result(
 ) -> @agent_session.ToolResult? {
   guard message.role is Tool(id) else { return None }
   match tool_results.get(id) {
-    Some(result) if message.content.is_text_only() &&
-      message.content.text() == result.content() => Some(result)
+    Some(result) if message.content.0 ==
+      @agent_session.to_deepseek_parts(result.content()) => Some(result)
     _ => None
   }
 }
@@ -2712,7 +2728,7 @@ fn model_tool_card(
       ..if message.content.is_text_only() {
         [tool_result_content(shown, message.content.text())]
       } else {
-        model_content_view(message.content)
+        request_content_view(message.content)
       },
     ],
   ]
@@ -2740,7 +2756,7 @@ fn model_card(
         ],
       ]
     },
-    ..model_content_view(message.content),
+    ..request_content_view(message.content),
     ..if !message.tool_calls.is_empty() {
       [
         @html.div(class="tool-calls") <| [
@@ -3095,3 +3111,18 @@ pub extend ViewMode with Debug::{to_repr}
 #doc(hidden)
 #deprecated
 pub extend ViewMode with Eq::{equal, not_equal}
+
+///|
+/// Render provider content without exposing image URLs or base64 payloads.
+fn request_content_view(content : @deepseek.Content) -> Array[@html.Html] {
+  content
+  .iter()
+  .filter_map(part => {
+    match part {
+      Text(text) => if text.is_blank() { None } else { Some(text_block(text)) }
+      File(file_id~) => Some(text_block("Image file: \{file_id}"))
+      ImageUrl(_) => Some(text_block("[Image]"))
+    }
+  })
+  .collect()
+}

@@ -125,11 +125,6 @@ test "explore report round-trips through json" {
 }
 
 ///|
-test "validate accepts a good report" {
-  assert_eq(sample_report().validate().length(), 0)
-}
-
-///|
 test "validate rejects empties and oversizes" {
   assert_true({ ..sample_report(), answer: "  ", }.validate().length() > 0)
   assert_true({ ..sample_report(), schema_version: 2, }.validate().length() > 0)

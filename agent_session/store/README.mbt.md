@@ -23,6 +23,11 @@ Each session lives under:
 line is a header record (`{"version":1,"id":...,"system_prompt":...}`) and
 every following line is one typed `SessionEvent`. Events are append-only.
 Loading replays the event lines into an immutable `agent_session.Session`.
+Message `content` is written as a string for one text part, and as an ordered
+array for all other content, including images. Loading accepts both forms,
+including files mixing strings and arrays.
+Normal append leaves existing complete lines unchanged; full snapshot writes
+and torn-tail repair use the same string-or-array encoding.
 The file name carries the session id so files collected out of their
 directories — for cross-session visualization or comparison — stay
 self-naming.
@@ -40,7 +45,7 @@ let store = @store.SessionStore(".openseek")
 
 store.create(session) // create or replace a complete session
 let session = store.load(@agent_session.SessionId("demo"))
-let session = store.append(session, User(UserMessage("hello")))
+let session = store.append(session, User(UserMessage(Content([Text("hello")]))))
 let session = store.compact(
   session,
   content="summary text",
@@ -93,7 +98,7 @@ async test "create and load a complete session" {
         SessionId("demo"),
         system_prompt="system",
       )
-      .append(User(UserMessage("hello")))
+      .append(User(UserMessage(Content([Text("hello")]))))
       .append(Terminal(Finished("done")))
 
     store.create(session)
@@ -109,7 +114,7 @@ async test "create and load a complete session" {
         #|      {
         #|        sequence: 1,
         #|        ts: 0,
-        #|        item: User({ content: "hello", submission_id: None }),
+        #|        item: User({ content: Content([Text("hello")]), submission_id: None }),
         #|      },
         #|      { sequence: 2, ts: 0, item: Terminal(Finished("done")) },
         #|    ]>,
@@ -131,9 +136,9 @@ The store stamps appended events with the current wall clock. To keep the
 example stable, these snapshots show projected `ChatMessage` values rather than
 stored events, while still showing the resumed conversation shape.
 `content` wraps an ordered array of parts: plain text has one `Text` element,
-while multimodal requests interleave text and file references in the same array.
+while multimodal requests interleave text and images in the same array.
 Use `content.text()` when an assertion concerns all text rather than part shape.
-String-versus-array JSON encoding belongs to the provider request encoder.
+Single text parts serialize as strings; other content serializes as arrays.
 
 ```mbt check
 ///|
@@ -146,7 +151,10 @@ async test "append saves progress and load resumes it" {
     )
 
     store.create(session)
-    let session = store.append(session, User(UserMessage("inspect README")))
+    let session = store.append(
+      session,
+      User(UserMessage(Content([Text("inspect README")]))),
+    )
     ignore(store.append(session, Terminal(Finished("done"))))
 
     let loaded = store.load(SessionId("demo"))
@@ -194,8 +202,10 @@ async test "append rejects a stale in-memory session" {
     )
 
     store.create(session)
-    ignore(store.append(session, User(UserMessage("first"))))
-    let result = try store.append(session, User(UserMessage("stale"))) catch {
+    ignore(store.append(session, User(UserMessage(Content([Text("first")])))))
+    let result = try
+      store.append(session, User(UserMessage(Content([Text("stale")]))))
+    catch {
       error => "error: \{error}".contains("stale session snapshot")
     } noraise {
       _ => false
@@ -226,7 +236,7 @@ async test "compact appends a durable summary" {
         SessionId("demo"),
         system_prompt="system",
       )
-      .append(User(UserMessage("old user")))
+      .append(User(UserMessage(Content([Text("old user")]))))
       .append(Assistant(AssistantMessage("old assistant")))
 
     store.create(session)

@@ -15,7 +15,7 @@ fn plan_call(
     name: "plan",
     arguments: Some(arguments),
     outcome: if has_result {
-      Done(content="", is_error~, brief=None)
+      Done(content=Content([Text("")]), is_error~, brief=None)
     } else {
       Pending(output=None)
     },
@@ -31,7 +31,11 @@ fn unpaired_result() -> @transcript.ToolCall {
     children: [],
     name: "plan",
     arguments: None,
-    outcome: Done(content="Plan updated.", is_error=false, brief=None),
+    outcome: Done(
+      content=Content([Text("Plan updated.")]),
+      is_error=false,
+      brief=None,
+    ),
   }
 }
 
@@ -130,7 +134,7 @@ test "classify names every state a plan call can be observed in" {
       children: [],
       name: "shell",
       arguments: Some("{}"),
-      outcome: Done(content="", is_error=false, brief=None),
+      outcome: Done(content=Content([Text("")]), is_error=false, brief=None),
     })
     is None,
   )

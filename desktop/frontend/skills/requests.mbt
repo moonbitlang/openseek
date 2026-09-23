@@ -143,13 +143,13 @@ fn fetch_installed_content(
 
 ///|
 /// Install one catalog entry into the global skills library. Settles with an
-/// `ActionDone` either way; the busy key is the entry's source label.
+/// `ActionDone` either way, carrying the operation that started the request.
 fn install(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   item : MarketItem,
 ) -> @cmd.Cmd {
-  let key = source_label(item)
+  let action = PendingSkillAction::Installing(source=source_label(item))
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(channel, @commands.skills_install, {
@@ -166,8 +166,8 @@ fn install(
             emit(
               ActionDone(
                 channel~,
-                key~,
-                error=@interop.bridge_error_text(error),
+                action~,
+                error=Some(@interop.bridge_error_text(error)),
               ),
             ),
           )
@@ -175,35 +175,36 @@ fn install(
         }
       }
       let error = match reply {
-        SkillInstalled(_) => ""
-        SkillInstallError(message) => message
+        SkillInstalled(_) => None
+        SkillInstallError(message) => Some(message)
       }
-      scheduler.add(emit(ActionDone(channel~, key~, error~)))
+      scheduler.add(emit(ActionDone(channel~, action~, error~)))
     })
     |> ignore
   })
 }
 
 ///|
-/// Remove one registry-installed skill from the library; the busy key is
-/// the library entry's id.
+/// Remove one registry-installed skill from the library. The pending
+/// operation retains its source after the library entry disappears.
 fn uninstall(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  id : String,
+  item : InstalledItem,
 ) -> @cmd.Cmd {
+  let action = Uninstalling(source=item.source, id=item.id)
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(channel, @commands.skills_uninstall, {
-        id,
+        id: item.id,
       }) catch {
         error => {
           scheduler.add(
             emit(
               ActionDone(
                 channel~,
-                key=id,
-                error=@interop.bridge_error_text(error),
+                action~,
+                error=Some(@interop.bridge_error_text(error)),
               ),
             ),
           )
@@ -211,10 +212,10 @@ fn uninstall(
         }
       }
       let error = match reply {
-        SkillUninstalled => ""
-        SkillUninstallError(message) => message
+        SkillUninstalled => None
+        SkillUninstallError(message) => Some(message)
       }
-      scheduler.add(emit(ActionDone(channel~, key=id, error~)))
+      scheduler.add(emit(ActionDone(channel~, action~, error~)))
     })
     |> ignore
   })

@@ -168,7 +168,7 @@ fn notice_view(
     pending=false,
     is_error~,
     brief~,
-    body,
+    body.map(text => @deepseek.Content([Text(text)])),
     tool_call_tabs_key(label, sequence),
   )
   rows.push(@html.div(class="activity-work", { "notice": row }))
@@ -482,15 +482,21 @@ fn tool_result_view(
   }
   let (pending, is_error, brief, output) = match call.outcome {
     Snapshot(content~) =>
-      (false, false, Some(ui(locale, SnapshotLabel)), Some(content))
-    Pending(output~) => (true, false, None, output)
+      (
+        false,
+        false,
+        Some(ui(locale, SnapshotLabel)),
+        Some(@deepseek.Content([Text(content)])),
+      )
+    Pending(output~) =>
+      (true, false, None, output.map(text => @deepseek.Content([Text(text)])))
     // An empty result still gets its row; it just has nothing to expand.
     Done(content~, is_error~, brief~) =>
       (
         false,
         is_error,
         brief,
-        if content.is_blank() {
+        if content.0.all(part => part is Text(text) && text.is_blank()) {
           None
         } else {
           Some(content)
@@ -522,7 +528,7 @@ fn result_row_view(
   pending~ : Bool,
   is_error~ : Bool,
   brief~ : String?,
-  output : String?,
+  output : @deepseek.Content?,
   key : String,
   subrun? : SubrunLink,
   status? : ToolStatus,
@@ -562,21 +568,32 @@ fn result_row_view(
       body.push(subrun_chip(locale~, child, link.open))
     }
   }
-  if output is Some(text) {
-    let output = tool_output_tabs(locale~, name, text)
-    if output is [tab] {
-      body.push(
-        @html.div(class="tool-call-section", [
-          @html.div(class="tool-call-section-label", tab.label),
-          tab.body,
-        ]),
-      )
-    } else if output.length() > 1 {
-      body.push(
-        @html.div(class="tool-call-section", [
-          tool_call_tabs(locale~, "\{key}-result", output),
-        ]),
-      )
+  if output is Some(content) {
+    for index, part in content.0 {
+      match part {
+        ImageUrl(url~) => body.push(image_content_view(locale~, url))
+        File(file_id~) =>
+          body.push(
+            @html.div(class="tool-call-section", "Image file: " + file_id),
+          )
+        Text(text) => {
+          let output = tool_output_tabs(locale~, name, text)
+          if output is [tab] {
+            body.push(
+              @html.div(class="tool-call-section", [
+                @html.div(class="tool-call-section-label", tab.label),
+                tab.body,
+              ]),
+            )
+          } else if output.length() > 1 {
+            body.push(
+              @html.div(class="tool-call-section", [
+                tool_call_tabs(locale~, "\{key}-result-\{index}", output),
+              ]),
+            )
+          }
+        }
+      }
     }
   }
   if body.is_empty() {
@@ -719,16 +736,13 @@ fn speaker_label(name : String) -> @html.Html {
 /// buttons — above the typed text; anything else is plain text. A chip with a
 /// resolved location jumps the editor panel there via `on_jump`, when the
 /// caller wires one.
-fn user_message_view(
-  locale? : @i18n.Locale = English,
+fn user_text_nodes(
+  locale~ : @i18n.Locale,
   content : String,
-  images? : Array[String] = [],
-  sent_at? : Double,
-  anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
   changes? : @review_changes.Control,
-) -> @html.Html {
-  let body : Array[@html.Html] = [speaker_label(ui(locale, YouLabel))]
+) -> Array[@html.Html] {
+  let body : Array[@html.Html] = []
   match @mention_context.parse(content) {
     Some(parsed) => {
       let chips : Array[@html.Html] = []
@@ -791,28 +805,52 @@ fn user_message_view(
     None =>
       body.push(@html.div(class="msg-content", inline_code_nodes(content)))
   }
-  // Image sources are separate from user prose. Never interpret a supplied
-  // image URL as HTML or let it become an arbitrary executable URL scheme.
-  let pictures : Array[@html.Html] = []
-  for url in images {
-    if url.has_prefix("data:image/png;base64,") ||
-      url.has_prefix("data:image/jpeg;base64,") ||
-      url.has_prefix("data:image/webp;base64,") ||
-      url.has_prefix("data:image/gif;base64,") ||
-      url.has_prefix("https://") ||
-      url.has_prefix("http://") {
-      pictures.push(
-        @html.img(
-          src=url,
-          alt=ui(locale, AttachedImage),
-          loading="lazy",
-          class="user-image",
-        ),
-      )
-    }
+  body
+}
+
+///|
+fn image_content_view(locale~ : @i18n.Locale, url : String) -> @html.Html {
+  if url.has_prefix("data:image/png;base64,") ||
+    url.has_prefix("data:image/jpeg;base64,") ||
+    url.has_prefix("data:image/webp;base64,") ||
+    url.has_prefix("data:image/gif;base64,") ||
+    url.has_prefix("https://") ||
+    url.has_prefix("http://") {
+    @html.div(class="user-images", [
+      @html.img(
+        src=url,
+        alt=ui(locale, AttachedImage),
+        loading="lazy",
+        class="user-image",
+      ),
+    ])
+  } else {
+    @html.nothing
   }
-  if !pictures.is_empty() {
-    body.push(@html.div(class="user-images", pictures))
+}
+
+///|
+fn user_message_view(
+  locale? : @i18n.Locale = English,
+  content : @deepseek.Content,
+  sent_at? : Double,
+  anchor? : String,
+  on_jump? : (@mention_context.Target) -> @cmd.Cmd,
+  changes? : @review_changes.Control,
+) -> @html.Html {
+  let body : Array[@html.Html] = [speaker_label(ui(locale, YouLabel))]
+  for part in content.0 {
+    match part {
+      Text(text) =>
+        for node in user_text_nodes(locale~, text, on_jump?, changes?) {
+          body.push(node)
+        }
+      ImageUrl(url~) => body.push(image_content_view(locale~, url))
+      File(file_id~) =>
+        body.push(
+          @html.div(class="tool-call-section", "Image file: " + file_id),
+        )
+    }
   }
   let actions : Array[@html.Html] = []
   if sent_at is Some(ts) {
@@ -826,11 +864,12 @@ fn user_message_view(
       )
     }
   }
-  if !content.is_empty() {
+  let text = content.text()
+  if !text.is_empty() {
     actions.push(
       @markdown.copy_button(
         locale~,
-        content,
+        text,
         class="message-copy",
         title=ui(locale, CopyMessage),
         label=ui(locale, CopyUserMessage),
@@ -966,11 +1005,10 @@ fn transcript_item_view(
   subrun? : SubrunLink,
 ) -> @html.Html {
   match item.kind {
-    User(text=prompt, images~) =>
+    User(content~) =>
       user_message_view(
         locale~,
-        prompt,
-        images~,
+        content,
         sent_at?=item.ts,
         anchor?,
         on_jump?,

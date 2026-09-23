@@ -78,8 +78,11 @@ pub fn session_from_parse(
   id~ : String,
   system_prompt~ : String,
 ) -> @agent_session.Session {
-  let session_id : @agent_session.SessionId = SessionId(id)
-  Session(session_id, system_prompt~, events=@vector.from_array(parsed.events))
+  Session(
+    SessionId(id),
+    system_prompt~,
+    events=@vector.from_array(parsed.events),
+  )
 }
 
 ///|

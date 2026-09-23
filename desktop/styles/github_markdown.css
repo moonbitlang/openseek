@@ -1,0 +1,100 @@
+/* GitHub's bodyHTML is shared by PR conversations and Review threads. */
+:is(.github-detail .markdown, .github-review-markdown) {
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+:is(.github-detail .markdown, .github-review-markdown) :is(h4, h5, h6) {
+  margin: 1em 0 .5em;
+  font-weight: 600;
+}
+:is(.github-detail .markdown, .github-review-markdown) :is(details, dl) { margin: .8em 0; }
+:is(.github-detail .markdown, .github-review-markdown) summary {
+  display: list-item;
+  cursor: pointer;
+}
+:is(.github-detail .markdown, .github-review-markdown) summary:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+:is(.github-detail .markdown, .github-review-markdown) details[open] > summary { margin-bottom: .5em; }
+:is(.github-detail .markdown, .github-review-markdown) dt { font-weight: 600; }
+:is(.github-detail .markdown, .github-review-markdown) dd { margin: .25em 0 .75em 2em; }
+:is(.github-detail .markdown, .github-review-markdown) :is(tt, kbd, samp) { font-family: var(--font-family-mono); }
+:is(.github-detail .markdown, .github-review-markdown) kbd {
+  padding: 2px 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-shadow: inset 0 -1px var(--color-border);
+  background: var(--color-bg-subtle);
+  font-size: .85em;
+}
+:is(.github-detail .markdown, .github-review-markdown) mark {
+  color: inherit;
+  background: light-dark(#fff1a8, #635313);
+}
+:is(.github-detail .markdown, .github-review-markdown) :is(img, video, picture) {
+  max-width: 100%;
+  object-fit: contain;
+}
+:is(.github-detail .markdown, .github-review-markdown) :is(img, video) {
+  height: auto;
+  max-height: min(70vh, 640px);
+  vertical-align: middle;
+}
+:is(.github-detail .markdown, .github-review-markdown) video { display: block; }
+:is(.github-detail .markdown, .github-review-markdown) picture { display: inline-block; }
+:is(.github-detail .markdown, .github-review-markdown) relative-time { font-variant-numeric: tabular-nums; }
+/* HTML presentational attributes remain effective despite shared table CSS. */
+:is(.github-detail .markdown, .github-review-markdown) [align="left"] { text-align: left; }
+:is(.github-detail .markdown, .github-review-markdown) [align="center"] { text-align: center; }
+:is(.github-detail .markdown, .github-review-markdown) [align="right"] { text-align: right; }
+:is(.github-detail .markdown, .github-review-markdown) [align="justify"] { text-align: justify; }
+
+/* GitHub emits these wrappers, anchors and disabled task-list controls. */
+.github-html-body markdown-accessiblity-table { display: block; max-width: 100%; }
+.github-html-body themed-picture { display: inline-block; max-width: 100%; }
+.github-html-body .markdown-heading { position: relative; }
+.github-html-body .markdown-heading > :is(h1, h2, h3, h4, h5, h6) { padding-right: 1.25em; }
+.github-html-body .markdown-heading > .anchor {
+  position: absolute;
+  top: .25em;
+  right: 0;
+  display: inline-flex;
+  color: var(--color-text-muted);
+  opacity: 0;
+}
+.github-html-body .markdown-heading:hover > .anchor,
+.github-html-body .markdown-heading > .anchor:focus-visible { opacity: 1; }
+.github-html-body .octicon { display: inline-block; vertical-align: text-bottom; fill: currentColor; }
+.github-html-body .task-list-item { list-style-type: none; }
+.github-html-body .task-list-item-checkbox { margin: 0 .35em .2em -1.4em; vertical-align: middle; }
+.github-html-body .user-mention { font-weight: 600; }
+.github-html-body .markdown-alert {
+  margin: 1em 0;
+  padding: .5em 1em;
+  border-left: 4px solid var(--github-alert-color, var(--color-focus-ring));
+}
+.github-html-body .markdown-alert > .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  margin-top: 0;
+  color: var(--github-alert-color, var(--color-focus-ring));
+  font-weight: 600;
+}
+.github-html-body .markdown-alert-tip { --github-alert-color: var(--color-success); }
+.github-html-body .markdown-alert-important { --github-alert-color: light-dark(#8250df, #a371f7); }
+.github-html-body .markdown-alert-warning { --github-alert-color: var(--color-warning); }
+.github-html-body .markdown-alert-caution { --github-alert-color: var(--color-danger); }
+
+/* Use the syntax spans supplied by GitHub, without local tokenization. */
+.github-html-body .pl-c { color: var(--color-text-muted); }
+.github-html-body .pl-k { color: light-dark(#cf222e, #ff7b72); }
+.github-html-body :is(.pl-c1, .pl-s .pl-v) { color: light-dark(#0550ae, #79c0ff); }
+.github-html-body :is(.pl-e, .pl-en) { color: light-dark(#8250df, #d2a8ff); }
+.github-html-body :is(.pl-s, .pl-pds, .pl-sr) { color: light-dark(#0a3069, #a5d6ff); }
+.github-html-body :is(.pl-v, .pl-smw) { color: light-dark(#953800, #ffa657); }
+.github-html-body :is(.pl-ent, .pl-gi) { color: light-dark(#116329, #7ee787); }
+.github-html-body .pl-gd { color: light-dark(#82071e, #ffa198); }

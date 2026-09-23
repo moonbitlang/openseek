@@ -5,6 +5,7 @@ priv enum UiMessage {
   HandWritten
   Removing
   Uninstall
+  NotInstalled
   InstalledCheck
   Installing
   Install
@@ -50,6 +51,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Uninstall) => "卸载"
     (TraditionalChinese, Uninstall) => "解除安裝"
     (Japanese, Uninstall) => "アンインストール"
+    (English, NotInstalled) => "Not installed"
+    (Spanish, NotInstalled) => "No instalada"
+    (SimplifiedChinese, NotInstalled) => "未安装"
+    (TraditionalChinese, NotInstalled) => "未安裝"
+    (Japanese, NotInstalled) => "未インストール"
     (English, InstalledCheck) => "✓ Installed"
     (Spanish, InstalledCheck) => "✓ Instalada"
     (SimplifiedChinese, InstalledCheck) => "✓ 已安装"

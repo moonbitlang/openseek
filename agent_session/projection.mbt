@@ -47,7 +47,9 @@ fn append_item_message(
 ) -> Unit {
   match item {
     User(message) =>
-      messages.push(ChatMessage(User, content=[Text(message.content())]))
+      messages.push(
+        ChatMessage(User, content=to_deepseek_parts(message.content())),
+      )
     Runtime(notice) =>
       messages.push(ChatMessage(User, content=[Text(notice.content())]))
     Summary(summary) =>
@@ -65,9 +67,10 @@ fn append_item_message(
       )
     Tool(result) =>
       messages.push(
-        ChatMessage(Tool(result.tool_call_id()), content=[
-          Text(result.content()),
-        ]),
+        ChatMessage(
+          Tool(result.tool_call_id()),
+          content=to_deepseek_parts(result.content()),
+        ),
       )
     Terminal(terminal) =>
       if terminal_model_message(terminal) is Some(content) {
@@ -120,7 +123,7 @@ fn is_covered_by_later_summary(
 }
 
 ///|
-/// Project the durable session log into DeepSeek chat messages.
+/// Project the durable session log into DeepSeek messages with inline image data URLs.
 ///
 /// The first returned message is always the session's system prompt. Remaining
 /// messages are derived from events in log order after applying repair and

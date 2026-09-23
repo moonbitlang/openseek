@@ -6,6 +6,7 @@ import {
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
   "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
@@ -32,6 +33,8 @@ pub fn goal_baseline_notice(sha~ : String, dirty~ : Bool) -> String
 pub fn goal_marker(String) -> GoalMarker?
 
 pub fn parse_goal_baseline(String) -> GoalBaseline?
+
+pub fn to_deepseek_parts(@openseek_protocol.Content) -> Array[@deepseek.ContentPart]
 
 // Errors
 
@@ -110,9 +113,9 @@ pub fn StandingGoal::set_sequence(Self) -> Int
 pub fn StandingGoal::text(Self) -> String
 
 type ToolResult derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn ToolResult::ToolResult(tool_call_id~ : String, tool_name~ : String, content~ : String, is_error? : Bool, brief? : String, data? : Json) -> Self
+pub fn ToolResult::ToolResult(tool_call_id~ : String, tool_name~ : String, content~ : Array[@openseek_protocol.ContentPart], is_error? : Bool, brief? : String, data? : Json) -> Self
 pub fn ToolResult::brief(Self) -> String?
-pub fn ToolResult::content(Self) -> String
+pub fn ToolResult::content(Self) -> @openseek_protocol.Content
 pub fn ToolResult::data(Self) -> Json?
 pub fn ToolResult::is_error(Self) -> Bool
 pub fn ToolResult::tool_call_id(Self) -> String
@@ -127,10 +130,17 @@ pub(all) enum TurnTerminal {
 pub impl @json.FromJson for TurnTerminal
 
 type UserMessage derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn UserMessage::UserMessage(String, submission_id? : String) -> Self
-pub fn UserMessage::content(Self) -> String
+pub fn UserMessage::UserMessage(@openseek_protocol.Content, submission_id? : String) -> Self
+pub fn UserMessage::content(Self) -> @openseek_protocol.Content
 pub fn UserMessage::submission_id(Self) -> String?
 
 // Type aliases
+pub using @openseek_protocol {type Content}
+
+pub using @openseek_protocol {type ContentPart}
+
+pub using @openseek_protocol {type Image}
+
+pub using @openseek_protocol {type ImageError}
 
 // Traits

@@ -3,13 +3,14 @@ test "GitHub review comments preserve large IDs, deleted authors and permissions
   for id in [Json::number(9000000001.0), Json::string("9000000001")] {
     let comment = github_review_comment({
       "fullDatabaseId": id,
-      "body": "**test**",
+      "bodyHTML": "<p><strong>test</strong></p>",
       "url": "https://github.com/o/r/pull/1#discussion_r9000000001",
       "author": Json::null(),
       "createdAt": "2026-09-20T01:00:00Z",
       "viewerCanDelete": true,
     })
     assert_eq(comment.id, "9000000001")
+    assert_eq(comment.body_html, "<p><strong>test</strong></p>")
     assert_eq(comment.author, None)
     assert_eq(comment.avatar_url, None)
     assert_true(comment.can_delete)

@@ -559,19 +559,6 @@ test "format_output renders the empty outcome as no results" {
 }
 
 ///|
-test "web_search definition exposes the expected name and schema shape" {
-  let definition = definition(api_key="k")
-  assert_eq(definition.name, "web_search")
-  assert_true(definition.is_concurrent_safe())
-  guard definition.schema is JsonSchema({ "required": ["query"], .. }) else {
-    fail("expected query to be required")
-  }
-  guard definition.execute is Async(_) else {
-    fail("expected an async executor")
-  }
-}
-
-///|
 test "error_detail extracts the provider message and caps raw bodies" {
   assert_eq(
     error_detail("{\"error\":{\"type\":\"auth\",\"message\":\"invalid key\"}}"),

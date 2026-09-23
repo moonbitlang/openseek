@@ -293,10 +293,12 @@ async fn run_serve(
       submission_id : String?,
     ) -> Unit {
       if append_idle_item(
-          User(UserMessage(text, submission_id?)),
+          User(UserMessage(Content([Text(text)]), submission_id?)),
           "command context",
         ) {
-        @emit.emit(SteerApplied(kind~, content=text, submission_id~))
+        @emit.emit(
+          SteerApplied(kind~, content=Content([Text(text)]), submission_id~),
+        )
       }
     }
 
@@ -361,8 +363,8 @@ async fn run_serve(
       input : @agent_runtime.SteerInput,
     ) -> Unit {
       match input {
-        Prompt(text, submission_id~) =>
-          @emit.emit(SteerDropped(content=text, submission_id~))
+        Prompt(content, submission_id~) =>
+          @emit.emit(SteerDropped(content~, submission_id~))
         Command(text, submission_id~) =>
           append_command_context(text, "command", submission_id)
         Notice(text) =>
@@ -413,7 +415,7 @@ async fn run_serve(
     }
 
     fn start_turn(
-      task_text : String,
+      content : @agent_session.Content,
       submission_id : String?,
     ) -> @async.Task[Unit] {
       group.spawn() <| () => {
@@ -427,7 +429,7 @@ async fn run_serve(
           api_key~,
           model~,
           session~,
-          task=task_text,
+          content~,
           submission_id?,
           on_goal_met?,
           append_item=(current, item) => {
@@ -492,8 +494,8 @@ async fn run_serve(
       // arms (context, goal markers) keep draining in arrival order.
       while active_work is None && pending.length() > 0 {
         match pending.remove(0) {
-          PendingPrompt(text, submission_id~) =>
-            active_work = Some(ActiveTurn(start_turn(text, submission_id)))
+          PendingPrompt(content, submission_id~) =>
+            active_work = Some(ActiveTurn(start_turn(content, submission_id)))
           PendingCompact =>
             active_work = Some(ActiveCompact(start_compaction(session)))
           // Instant work: append the goal at its ordered position and keep
@@ -527,31 +529,30 @@ async fn run_serve(
         _ => break serve~
       }
       match step {
-        Wire(Prompt(text, submission_id~)) =>
+        Wire(Prompt(content, submission_id~)) =>
           match active_work {
             // One turn at a time: extra prompts wait their wire-order turn.
-            Some(_) => pending.push(PendingPrompt(text, submission_id~))
+            Some(_) => pending.push(PendingPrompt(content, submission_id~))
             None =>
-              active_work = Some(ActiveTurn(start_turn(text, submission_id)))
+              active_work = Some(ActiveTurn(start_turn(content, submission_id)))
           }
         Wire(Steer(input)) =>
           match input {
-            Prompt(text, submission_id~) =>
+            Prompt(content, submission_id~) =>
               match active_work {
                 // A turn is running, or a prompt is queued ahead of this steer:
                 // the lossless steering queue delivers it at that turn's next
                 // step boundary (or its first, if it has not started yet).
-                Some(ActiveTurn(_)) =>
-                  runtime.queue_steer(Prompt(text, submission_id~))
+                Some(ActiveTurn(_)) => runtime.queue_steer(input)
                 Some(ActiveCompact(_)) | None =>
                   if has_pending_prompt(pending) {
-                    runtime.queue_steer(Prompt(text, submission_id~))
+                    runtime.queue_steer(input)
                   } else {
                     // An idle (or merely compacting) engine never converts
                     // prompt steering into a prompt: the only way it arrives
                     // here is racing a turn's terminal event through the pipes.
                     // Reject it so the controller can ask for a resubmit.
-                    @emit.emit(SteerDropped(content=text, submission_id~))
+                    @emit.emit(SteerDropped(content~, submission_id~))
                   }
               }
             Command(text, submission_id~) =>
@@ -737,7 +738,9 @@ async fn run_serve(
             ) {
             goal_turns_remaining -= 1
             @emit.emit(GoalContinue(remaining=goal_turns_remaining))
-            active_work = Some(ActiveTurn(start_turn(GoalContinuePrompt, None)))
+            active_work = Some(
+              ActiveTurn(start_turn(Content([Text(GoalContinuePrompt)]), None)),
+            )
           } else if armed &&
             finished &&
             !shutting_down &&

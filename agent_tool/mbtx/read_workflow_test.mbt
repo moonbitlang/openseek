@@ -53,6 +53,21 @@ async test "read workflow batches whole files inclusive ranges empty files and E
 }
 
 ///|
+async test "@builtin/read.mbtx runs the embedded copy with no resources on disk" {
+  // The test executable has no `../share` beside it, so this only passes when
+  // the bundled workflow comes from the binary rather than an installation.
+  @vfs.with_tmpdir(ws => {
+    @vfs.FileSystem({ "a.txt": "one\ntwo\n" }).write_to(ws)
+    let out = run_in(ws, {
+      "filename": "@builtin/read.mbtx",
+      "args": ["a.txt:2"],
+    })
+    assert_false(out.is_error, msg=out.content)
+    assert_true(out.content.contains("2 |two"), msg=out.content)
+  })
+}
+
+///|
 async test "read workflow continues after distinct file errors and fails the call" {
   let filename = @fs.realpath("share/workflow/read.mbtx")
   @vfs.with_tmpdir(ws => {

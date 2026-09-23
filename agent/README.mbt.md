@@ -46,13 +46,13 @@ let persisted = @agent.run_turn_with_append(
     api_key~,
     model=Deepseek(V4Pro),
     session~,
-    task="continue",
+    content=Content([Text("continue")]),
     append_item=(session, item) => session.append(item),
     tools~,
   )
 }
 
-runtime.queue_steer(Prompt("also update README", submission_id=None))
+runtime.queue_steer(Prompt(Content([Text("also update README")]), submission_id=None))
 ```
 
 `run` is the highest-level one-shot entry point. It creates a fresh in-memory
@@ -175,12 +175,16 @@ the runtime's lossless steering queue:
 ///|
 test "queue_steer queues raw text" {
   let runtime = @agent_runtime.AgentRuntime()
-  runtime.queue_steer(Prompt("also run tests", submission_id=None))
-  runtime.queue_steer(Prompt("   ", submission_id=None))
+  runtime.queue_steer(
+    Prompt(Content([Text("also run tests")]), submission_id=None),
+  )
+  runtime.queue_steer(Prompt(Content([Text("   ")]), submission_id=None))
   let drained = runtime.drain_steers()
   assert_eq(drained.length(), 2)
-  assert_true(drained[0] is Prompt("also run tests", submission_id=None))
-  assert_true(drained[1] is Prompt("   ", submission_id=None))
+  assert_true(
+    drained[0] is Prompt(Content([Text("also run tests")]), submission_id=None),
+  )
+  assert_true(drained[1] is Prompt(Content([Text("   ")]), submission_id=None))
 }
 ```
 
@@ -216,7 +220,7 @@ async test "zero step run_turn_with_append appends user then failure terminal" {
     [
       for event in result.events() => {
         match event.item() {
-          User(message) => "user:\{message.content()}"
+          User(message) => "user:\{message.content().text()}"
           Terminal(Failed(message)) => "failed:\{message}"
           _ => "other"
         }
@@ -249,7 +253,7 @@ async test "run_turn_with_append calls the persistence hook for each item" {
     append_item=(session, item) => {
       appended.push(
         match item {
-          User(message) => "user:\{message.content()}"
+          User(message) => "user:\{message.content().text()}"
           Terminal(Failed(message)) => "failed:\{message}"
           _ => "other"
         },

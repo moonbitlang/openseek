@@ -220,15 +220,7 @@ async test "run_child refuses malformed input without a model call" {
 
 ///|
 test "worker input parse validates every field" {
-  let good : Json = {
-    "task": "t",
-    "worker_root": "/w",
-    "worker_admin_dir": "/g/a",
-    "deny_roots": ["/g"],
-    "allowed_paths": ["lib"],
-    "base_oid": "abc",
-  }
-  guard @agent_worker.WorkerInput::parse(good) is Ok(parsed) else {
+  guard @agent_worker.WorkerInput::parse(variant()) is Ok(parsed) else {
     fail("expected a valid input")
   }
   assert_eq(parsed.allowed_paths, ["lib"])

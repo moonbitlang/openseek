@@ -77,6 +77,12 @@ const WebArchives = {
     sha: "ff48c94a0a0458b377a5187ad01407184d2a182e6476c2015b7068ff58355fae",
     path: "mermaid",
   },
+  relativeTime: {
+    filename: "relative-time-element-5.3.1.tgz",
+    url: "https://registry.npmjs.org/@github/relative-time-element/-/relative-time-element-5.3.1.tgz",
+    sha: "d99f62cc01067eb749b2807d620fce2f1782cd87af986beb9baa5cdc5ee2d4bc",
+    path: "relative-time",
+  },
 };
 
 class Build {
@@ -191,6 +197,20 @@ class Build {
       await this.commandRun("tar", ["-xf", cached, "-C", extracted, "--strip-components=1"]);
     }
 
+    // xterm 5.5's DOM WidthCache divides an integer offsetWidth by 32.
+    // That rounded-down glyph width adds excess letter spacing to every
+    // cell, clipping the last glyph even with inherited tracking reset.
+    // Preserve fractional CSS pixels; fail explicitly if a version upgrade
+    // changes the pinned implementation this patch targets.
+    const xtermPath = join(work, WebArchives.xterm.path, "lib/xterm.js");
+    const xtermSource = await readFile(xtermPath, "utf8");
+    const measurement = "i.textContent=e.repeat(32),i.offsetWidth/32";
+    if (xtermSource.split(measurement).length !== 2) {
+      throw new Error("xterm WidthCache measurement changed; revisit the subpixel width patch");
+    }
+    await writeFile(xtermPath, xtermSource.replace(measurement,
+      "i.textContent=e.repeat(32),i.getBoundingClientRect().width/32"));
+
     const esbuild = this.host.esbuild;
     const esbuildArchive = join(vendor, "cache", `esbuild-${esbuild.package}-${EsbuildVersion}.tgz`);
     await this.download(
@@ -229,6 +249,8 @@ class Build {
     await cp(join(work, "mermaid/dist/mermaid.esm.min.mjs"), join(mermaid, "mermaid.esm.min.mjs"));
     await cp(join(work, "mermaid/dist/chunks/mermaid.esm.min"), join(mermaid, "chunks/mermaid.esm.min"), { recursive: true });
     await cp(join(work, "mermaid/LICENSE"), join(mermaid, "LICENSE"));
+    await cp(join(work, "relative-time/dist/bundle.js"), join(output, "relative-time.js"));
+    await cp(join(work, "relative-time/LICENSE"), join(output, "relative-time.LICENSE"));
   }
 
   async web(profile, browser = false) {
@@ -272,7 +294,7 @@ class Build {
 
   async sharedWeb(output) {
     const generated = join(this.desktop, "target/web");
-    for (const name of ["app.css", "viewer.css", "xterm.js", "xterm.css"]) {
+    for (const name of ["app.css", "viewer.css", "xterm.js", "xterm.css", "relative-time.js", "relative-time.LICENSE"]) {
       await cp(join(generated, name), join(output, name));
     }
     await cp(join(this.repo, "editor/viewer/browser/view/codicon/codicon.ttf"), join(output, "codicon.ttf"));

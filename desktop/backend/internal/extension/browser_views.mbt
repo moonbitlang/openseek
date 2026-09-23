@@ -505,15 +505,6 @@ test "browser page theme bridge uses only opted-in theme conventions" {
 }
 
 ///|
-test "view names round-trip and reject foreign views" {
-  assert_true(browser_view_id("browser-3") == Some(3))
-  assert_true(browser_view_id("browser-42") == Some(42))
-  assert_true(browser_view_id("browser-") is None)
-  assert_true(browser_view_id("sidebar") is None)
-  assert_true(browser_view_id("browser-x") is None)
-}
-
-///|
 test "browser page urls are web-only" {
   assert_true(allowed_page_url("http://127.0.0.1:5173/"))
   assert_true(allowed_page_url("https://github.com/"))

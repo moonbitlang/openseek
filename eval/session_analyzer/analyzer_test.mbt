@@ -1,7 +1,7 @@
 ///|
 fn sample_session() -> @agent_session.Session {
   @agent_session.Session(SessionId("trial-01"), system_prompt="")
-  .append(User(UserMessage("build a toml cli")))
+  .append(User(UserMessage(Content([Text("build a toml cli")]))))
   .append(
     Assistant(
       AssistantMessage("I will run moon check", tool_calls=[
@@ -11,7 +11,9 @@ fn sample_session() -> @agent_session.Session {
   )
   .append(
     Tool(
-      ToolResult(tool_call_id="call_1", tool_name="mbtx", content="exit=0\nok"),
+      ToolResult(tool_call_id="call_1", tool_name="mbtx", content=[
+        Text("exit=0\nok"),
+      ]),
     ),
   )
   .append(
@@ -27,7 +29,7 @@ test "a checkpoint between finish result and terminal keeps step attribution" {
       SessionId("compact-on-finish"),
       system_prompt="",
     )
-    .append(User(UserMessage("wrap it up")))
+    .append(User(UserMessage(Content([Text("wrap it up")]))))
     .append(
       Assistant(
         AssistantMessage("finishing", tool_calls=[
@@ -37,11 +39,9 @@ test "a checkpoint between finish result and terminal keeps step attribution" {
     )
     .append(
       Tool(
-        ToolResult(
-          tool_call_id="call_1",
-          tool_name="finish",
-          content="finished: done",
-        ),
+        ToolResult(tool_call_id="call_1", tool_name="finish", content=[
+          Text("finished: done"),
+        ]),
       ),
     )
     .append(
@@ -52,7 +52,11 @@ test "a checkpoint between finish result and terminal keeps step attribution" {
         ToolResult(
           tool_call_id="call_2",
           tool_name="probe",
-          content="skipped: an earlier finish tool call ended the batch before this call ran",
+          content=[
+            Text(
+              "skipped: an earlier finish tool call ended the batch before this call ran",
+            ),
+          ],
           is_error=true,
         ),
       ),
@@ -75,15 +79,13 @@ test "only durable assistant responses count as steps" {
       SessionId("review-on-finish"),
       system_prompt="",
     )
-    .append(User(UserMessage("wrap it up")))
+    .append(User(UserMessage(Content([Text("wrap it up")]))))
     .append(Assistant(AssistantMessage("")))
     .append(
       Tool(
-        ToolResult(
-          tool_call_id="call_finish",
-          tool_name="submit_report",
-          content="finished: done",
-        ),
+        ToolResult(tool_call_id="call_finish", tool_name="submit_report", content=[
+          Text("finished: done"),
+        ]),
       ),
     )
     .append(Runtime(RuntimeNotice("[review] goal-met audit: clean")))
@@ -96,15 +98,13 @@ test "only durable assistant responses count as steps" {
       SessionId("runtime-continuation"),
       system_prompt="",
     )
-    .append(User(UserMessage("wrap it up")))
+    .append(User(UserMessage(Content([Text("wrap it up")]))))
     .append(Assistant(AssistantMessage("")))
     .append(
       Tool(
-        ToolResult(
-          tool_call_id="call_finish",
-          tool_name="submit_report",
-          content="finished: first answer",
-        ),
+        ToolResult(tool_call_id="call_finish", tool_name="submit_report", content=[
+          Text("finished: first answer"),
+        ]),
       ),
     )
     .append(Runtime(RuntimeNotice("background job completed")))
@@ -121,7 +121,7 @@ test "a context-yield terminal is not task success" {
       SessionId("ceiling-yield"),
       system_prompt="",
     )
-    .append(User(UserMessage("build everything")))
+    .append(User(UserMessage(Content([Text("build everything")]))))
     .append(
       Assistant(
         AssistantMessage("working", tool_calls=[
@@ -130,7 +130,9 @@ test "a context-yield terminal is not task success" {
       ),
     )
     .append(
-      Tool(ToolResult(tool_call_id="call_1", tool_name="mbtx", content="ok")),
+      Tool(
+        ToolResult(tool_call_id="call_1", tool_name="mbtx", content=[Text("ok")]),
+      ),
     )
     .append(
       Summary(
@@ -169,7 +171,7 @@ test "session analyzer counts typed events" {
 /// two shapes differ only in whether the assistant message carries reasoning.
 fn final_pair_session(reasoning_content? : String) -> @agent_session.Session {
   @agent_session.Session(SessionId("reasoning-final"), system_prompt="")
-  .append(User(UserMessage("question")))
+  .append(User(UserMessage(Content([Text("question")]))))
   .append(Assistant(AssistantMessage("unique-answer", reasoning_content?)))
   .append(Terminal(Finished("unique-answer")))
 }
@@ -198,9 +200,9 @@ test "latest non-finished terminal determines success" {
       SessionId("multi-turn"),
       system_prompt="",
     )
-    .append(User(UserMessage("first")))
+    .append(User(UserMessage(Content([Text("first")]))))
     .append(Terminal(Finished("done")))
-    .append(User(UserMessage("second")))
+    .append(User(UserMessage(Content([Text("second")]))))
     .append(Terminal(Failed("agent failed")))
   let result = @session_analyzer.analyze_session(session)
   assert_false(result.success)
@@ -215,7 +217,7 @@ test "finish tool terminal does not double count a model step" {
       SessionId("trial-finish"),
       system_prompt="",
     )
-    .append(User(UserMessage("finish")))
+    .append(User(UserMessage(Content([Text("finish")]))))
     .append(
       Assistant(
         AssistantMessage("", tool_calls=[
@@ -229,11 +231,9 @@ test "finish tool terminal does not double count a model step" {
     )
     .append(
       Tool(
-        ToolResult(
-          tool_call_id="call_finish",
-          tool_name="finish",
-          content="finished: done",
-        ),
+        ToolResult(tool_call_id="call_finish", tool_name="finish", content=[
+          Text("finished: done"),
+        ]),
       ),
     )
     .append(Terminal(Finished("done")))
@@ -249,7 +249,7 @@ test "checkpoint replay assistants do not add model steps" {
       SessionId("checkpoint-replay"),
       system_prompt="",
     )
-    .append(User(UserMessage("finish and keep going")))
+    .append(User(UserMessage(Content([Text("finish and keep going")]))))
     .append(
       Assistant(
         AssistantMessage("", tool_calls=[
@@ -263,11 +263,9 @@ test "checkpoint replay assistants do not add model steps" {
     )
     .append(
       Tool(
-        ToolResult(
-          tool_call_id="call_finish",
-          tool_name="finish",
-          content="finished: first answer",
-        ),
+        ToolResult(tool_call_id="call_finish", tool_name="finish", content=[
+          Text("finished: first answer"),
+        ]),
       ),
     )
     .append(
@@ -276,7 +274,7 @@ test "checkpoint replay assistants do not add model steps" {
       ),
     )
     .append(Assistant(AssistantMessage("first answer", is_replay=true)))
-    .append(User(UserMessage("late steer")))
+    .append(User(UserMessage(Content([Text("late steer")]))))
     .append(Assistant(AssistantMessage("second answer")))
     .append(Terminal(Finished("second answer")))
   let result = @session_analyzer.analyze_session(session)
@@ -297,7 +295,11 @@ test "transcript text ignores user prompts and summaries" {
     .append(
       User(
         UserMessage(
-          "run moon check and moon test with @string.from_str and @argparse.command try?",
+          Content([
+            Text(
+              "run moon check and moon test with @string.from_str and @argparse.command try?",
+            ),
+          ]),
         ),
       ),
     )

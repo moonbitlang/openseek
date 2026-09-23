@@ -153,4 +153,6 @@ html.is-resizing-terminal * {
 .terminal-instance .xterm {
   height: 100%;
   padding: 8px 12px 14px;
+  /* Keep body tracking out of xterm's hidden glyph-width measurements. */
+  letter-spacing: normal;
 }

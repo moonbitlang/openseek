@@ -453,7 +453,7 @@ test "a new goal observed after met drops the stale tombstone" {
 fn blocked_goal_session() -> @agent_session.Session {
   @agent_session.Session(SessionId("blocked"), system_prompt="sys")
   .append(Runtime(RuntimeNotice("\{@agent_session.GoalPrefix}\nship it")))
-  .append(User(UserMessage("work")))
+  .append(User(UserMessage(Content([Text("work")]))))
   .append(Runtime(RuntimeNotice("\{@agent_session.GoalBlockedPrefix}\nstuck")))
 }
 

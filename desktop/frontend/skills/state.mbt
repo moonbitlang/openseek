@@ -16,17 +16,59 @@ priv enum Catalog {
 ///|
 /// Everything the page alone can see. The catalog is fetched when the page
 /// opens and kept until the user refreshes it; `busy` holds the entries with
-/// an install or uninstall in flight, keyed by the catalog entry's source
-/// label or the installed entry's id; `notice` is the last failure to show.
+/// an install or uninstall in flight, retaining its source even after the
+/// library changes; notices retain the scope of each failure.
 struct State {
   catalog : Catalog
   query : String
-  busy : Array[String]
-  notice : String
+  busy : Array[PendingSkillAction]
+  notices : Array[Notice]
   preview : Preview
   preview_cache : Map[String, String]
   list_scroll_top : Double
 } derive(Eq)
+
+///|
+priv enum Notice {
+  SkillActionFailed(action~ : PendingSkillAction, message~ : String)
+  LibraryLoadFailed(String)
+} derive(Eq)
+
+///|
+fn Notice::belongs_to(self : Notice, source : String) -> Bool {
+  match self {
+    SkillActionFailed(action~, ..) => action.source() == source
+    LibraryLoadFailed(_) => false
+  }
+}
+
+///|
+/// Retain the source until the request settles, even if a library notification
+/// replaces the action or removes the installed entry first.
+pub(all) enum PendingSkillAction {
+  Installing(source~ : String)
+  Uninstalling(source~ : String, id~ : String)
+} derive(Eq)
+
+///|
+pub extend PendingSkillAction with Eq::{equal, not_equal}
+
+///|
+fn PendingSkillAction::source(self : PendingSkillAction) -> String {
+  match self {
+    Installing(source~) | Uninstalling(source~, ..) => source
+  }
+}
+
+///|
+fn State::pending_action(self : State, source : String) -> PendingSkillAction? {
+  for action in self.busy {
+    if action.source() == source {
+      return Some(action)
+    }
+  }
+  None
+}
 
 ///|
 enum Preview {
@@ -50,7 +92,7 @@ pub fn State::empty() -> State {
     catalog: Idle,
     query: "",
     busy: [],
-    notice: "",
+    notices: [],
     preview: Closed,
     preview_cache: Map([]),
     list_scroll_top: 0.0,
@@ -64,12 +106,16 @@ pub(all) enum Msg {
   CatalogLoaded(channel~ : @interop.ChannelId, items~ : Array[MarketItem])
   CatalogFailed(channel~ : @interop.ChannelId, message~ : String)
   Install(MarketItem)
-  // Uninstall by library entry id; only registry installs get the button.
-  Uninstall(String)
-  // An install or uninstall settled: `key` is the busy entry to release, and
-  // a non-empty `error` becomes the page's notice (a success reports the
+  // Capture the source alongside the library id before the entry disappears.
+  Uninstall(InstalledItem)
+  // An install or uninstall settled: `action` is the operation to release, and
+  // an `error` becomes a notice for that skill (a success reports the
   // library change to the root instead).
-  ActionDone(channel~ : @interop.ChannelId, key~ : String, error~ : String)
+  ActionDone(
+    channel~ : @interop.ChannelId,
+    action~ : PendingSkillAction,
+    error~ : String?
+  )
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)
   PreviewLoaded(request~ : Int, target~ : PreviewTarget, content~ : String)
@@ -80,9 +126,9 @@ pub(all) enum Msg {
 
 ///|
 /// Open the page. The catalog is fetched once per app run (and again after a
-/// failure, a manual refresh, or a device switch during loading); a notice
-/// left over from the previous visit is dropped. The installed library is
-/// refreshed by the root, which owns it.
+/// failure, a manual refresh, or a device switch during loading). Only the
+/// library loading error is cleared: operation errors belong to their skills.
+/// The installed library is refreshed by the root, which owns it.
 pub fn State::opening(
   self : State,
   emit : @cmd.Emit[Msg],
@@ -102,15 +148,18 @@ pub fn State::opening(
       }
     current => (@cmd.none, current)
   }
-  (cmd, { ..self, catalog, notice: "", })
+  let notices = self.notices.filter(notice => notice is SkillActionFailed(..))
+  (cmd, { ..self, catalog, notices, })
 }
 
 ///|
 /// Show a failure the page did not cause. The root-owned library refresh is
 /// the only such source: the page has no other way to learn that the list
 /// under "Installed" could not be read.
-pub fn State::with_notice(self : State, message : String) -> State {
-  { ..self, notice: message, }
+pub fn State::with_library_error(self : State, message : String) -> State {
+  let notices = self.notices.filter(notice => notice is SkillActionFailed(..))
+  notices.push(LibraryLoadFailed(message))
+  { ..self, notices, }
 }
 
 ///|
@@ -222,34 +271,44 @@ pub fn State::handle(
       (@cmd.none, { ..self, catalog: Failed(message), }, None)
     }
     Install(item) => {
-      let key = source_label(item)
-      if self.busy.contains(key) {
-        // A second click while the first install is in flight.
+      let source = source_label(item)
+      if self.pending_action(source) is Some(_) {
+        // Block either direction while an operation on this source is in flight.
         (@cmd.none, self, None)
       } else {
         let busy = self.busy.copy()
-        busy.push(key)
+        busy.push(Installing(source~))
         (
           install(emit, input.channel, item),
-          { ..self, busy, notice: "", },
+          {
+            ..self,
+            busy,
+            notices: self.notices.filter(notice => !notice.belongs_to(source)),
+          },
           None,
         )
       }
     }
-    Uninstall(id) =>
-      if self.busy.contains(id) {
+    Uninstall(item) =>
+      if item.source.is_empty() || self.pending_action(item.source) is Some(_) {
         (@cmd.none, self, None)
       } else {
         let busy = self.busy.copy()
-        busy.push(id)
+        busy.push(Uninstalling(source=item.source, id=item.id))
         (
-          uninstall(emit, input.channel, id),
-          { ..self, busy, notice: "", },
+          uninstall(emit, input.channel, item),
+          {
+            ..self,
+            busy,
+            notices: self.notices.filter(notice => {
+              !notice.belongs_to(item.source)
+            }),
+          },
           None,
         )
       }
-    ActionDone(channel~, key~, error~) => {
-      let busy = self.busy.filter(entry => entry != key)
+    ActionDone(channel~, action~, error~) => {
+      let busy = self.busy.filter(entry => entry != action)
       // A result that outlived a focus switch belongs to its old host: it
       // releases its busy entry, but it neither refreshes the library on
       // screen nor speaks for the page's notice. That host refetches when it
@@ -257,12 +316,17 @@ pub fn State::handle(
       guard channel == input.channel else {
         return (@cmd.none, { ..self, busy, }, None)
       }
-      if error.is_empty() {
-        // The library changed; what the page shows must come from disk, not
-        // from a client-side guess.
-        (@cmd.none, { ..self, busy, }, Some(LibraryChanged(channel~)))
-      } else {
-        (@cmd.none, { ..self, busy, notice: error, }, None)
+      match error {
+        None =>
+          // The library changed; what the page shows must come from disk.
+          (@cmd.none, { ..self, busy, }, Some(LibraryChanged(channel~)))
+        Some(message) => {
+          let notices = self.notices.filter(notice => {
+            !notice.belongs_to(action.source())
+          })
+          notices.push(SkillActionFailed(action~, message~))
+          (@cmd.none, { ..self, busy, notices, }, None)
+        }
       }
     }
   }

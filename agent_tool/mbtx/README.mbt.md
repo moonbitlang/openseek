@@ -96,10 +96,11 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   then the program including its own `main`. Use `async fn main` for
   filesystem/stdio work.
 - `filename` (string): a `.mbtx` script name or path. Ordinary names, including
-  `check.mbtx`, resolve from the workspace root. `@builtin/check.mbtx` resolves
-  under `<bundled-resources>/workflow/`. Other namespaces are reserved for future
-  use and currently rejected. Paths cannot escape the namespace root, including
-  through symlinks. Use `./@builtin/check.mbtx` for a literal workspace path;
+  `check.mbtx`, resolve from the workspace root. `@builtin/check.mbtx` runs the
+  copy of `share/workflow/check.mbtx` embedded in the binary at build time
+  (`generated_bundled_workflows.mbt`), so bundled workflows need no files beside
+  the executable. Other namespaces are reserved for future use and currently
+  rejected. Use `./@builtin/check.mbtx` for a literal workspace path;
   absolute paths remain absolute. There is no fallback between locations.
   Supply at least one of these two fields. `cwd` does not change resolution. A filename-only call
   reads the current file once and compiles that snapshot through the same

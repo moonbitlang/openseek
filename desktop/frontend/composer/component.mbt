@@ -603,24 +603,16 @@ fn Model::update(
           { ..target, image_reads: target.image_reads + 1, image_error: None, }
         @image_input.Ready(images) => {
           guard target.image_reads > 0 else { return (self, @cmd.none) }
-          if target.draft.images.length() + images.length() > 4 {
-            {
-              ..target,
-              image_reads: target.image_reads - 1,
-              image_error: Some("Attach up to 4 images per message."),
-            }
-          } else {
-            {
-              ..target,
-              image_reads: target.image_reads - 1,
-              draft: {
-                ..target.draft,
-                images: [
-                  ..target.draft.images,
-                  ..images.map(image => { name: image.0, url: image.1, }),
-                ],
-              },
-            }
+          {
+            ..target,
+            image_reads: target.image_reads - 1,
+            draft: {
+              ..target.draft,
+              images: [
+                ..target.draft.images,
+                ..images.map(image => { name: image.0, url: image.1, }),
+              ],
+            },
           }
         }
         @image_input.Failed(message) => {

@@ -148,8 +148,8 @@ test "a settled install releases its entry and asks for a library re-read" {
     emit(),
     @skills.ActionDone(
       channel=@interop.ChannelId::Local,
-      key="acme/widget@1.0.0",
-      error="",
+      action=@skills.Installing(source="acme/widget@1.0.0"),
+      error=None,
     ),
     input(),
   )
@@ -168,8 +168,8 @@ test "a settled install releases its entry and asks for a library re-read" {
     emit(),
     @skills.ActionDone(
       channel=@interop.ChannelId::Local,
-      key="acme/widget@1.0.0",
-      error="digest mismatch",
+      action=@skills.Installing(source="acme/widget@1.0.0"),
+      error=Some("digest mismatch"),
     ),
     input(),
   )
@@ -195,8 +195,8 @@ test "a result from another device settles without a local outcome" {
     emit(),
     @skills.ActionDone(
       channel=other_device(),
-      key="acme/widget@1.0.0",
-      error="digest mismatch",
+      action=@skills.Installing(source="acme/widget@1.0.0"),
+      error=Some("digest mismatch"),
     ),
     input(),
   )
@@ -218,12 +218,12 @@ test "uninstall is keyed by the library id and deduplicated" {
   ]
   let (_, busy, _) = @skills.State::empty().handle(
     emit(),
-    @skills.Uninstall("acme-widget"),
+    @skills.Uninstall(installed[0]),
     input(installed~),
   )
   let (_, again, _) = busy.handle(
     emit(),
-    @skills.Uninstall("acme-widget"),
+    @skills.Uninstall(installed[0]),
     input(installed~),
   )
   assert_true(again == busy)
@@ -303,4 +303,133 @@ test "installed skill replies decode, with name falling back to id" {
   assert_eq(widget.source, "acme/widget@1.0.0")
   assert_eq(handmade.name, "handmade")
   assert_eq(handmade.source, "")
+}
+
+///|
+test "an install blocks uninstall after a library refresh until completion" {
+  let skill : @skills.InstalledItem = {
+    id: "acme-widget",
+    name: "widget",
+    description: "",
+    source: "acme/widget@1.0.0",
+  }
+  let initial = @skills.State::empty()
+  let (_, busy, _) = initial.handle(
+    emit(),
+    @skills.Install(market_item()),
+    input(),
+  )
+  let (_, repeated, _) = initial.handle(
+    emit(),
+    @skills.Install(market_item()),
+    input(),
+  )
+  assert_true(busy == repeated)
+  let refreshed = input(installed=[skill])
+  let (_, blocked, _) = busy.handle(emit(), @skills.Uninstall(skill), refreshed)
+  assert_true(blocked == busy)
+  let completion = @skills.ActionDone(
+    channel=@interop.ChannelId::Local,
+    action=@skills.Installing(source=skill.source),
+    error=None,
+  )
+  let (_, done, _) = blocked.handle(emit(), completion, refreshed)
+  let (_, done_again, _) = blocked.handle(emit(), completion, refreshed)
+  assert_true(done == done_again)
+  let (_, removing, _) = done.handle(
+    emit(),
+    @skills.Uninstall(skill),
+    refreshed,
+  )
+  assert_false(removing == done)
+}
+
+///|
+test "an uninstall retains its source after removal and releases only itself" {
+  let skill : @skills.InstalledItem = {
+    id: "acme-widget",
+    name: "widget",
+    description: "",
+    source: "acme/widget@1.0.0",
+  }
+  let initial = @skills.State::empty()
+  let before = input(installed=[skill])
+  let (_, busy, _) = initial.handle(emit(), @skills.Uninstall(skill), before)
+  let (_, repeated, _) = initial.handle(
+    emit(),
+    @skills.Uninstall(skill),
+    before,
+  )
+  assert_true(busy == repeated)
+  // The refreshed library no longer contains the uninstalled skill.
+  let (_, blocked, _) = busy.handle(
+    emit(),
+    @skills.Install(market_item()),
+    input(),
+  )
+  assert_true(blocked == busy)
+  let (_, duplicate, _) = blocked.handle(
+    emit(),
+    @skills.Uninstall(skill),
+    input(),
+  )
+  assert_true(duplicate == busy)
+  // An unrelated skill remains actionable, and finishing it cannot release this one.
+  let other = market_item(package_path="other")
+  let (_, concurrent, _) = blocked.handle(
+    emit(),
+    @skills.Install(other),
+    input(),
+  )
+  assert_false(concurrent == blocked)
+  let (_, other_done, _) = concurrent.handle(
+    emit(),
+    @skills.ActionDone(
+      channel=@interop.ChannelId::Local,
+      action=@skills.Installing(source=@skills.source_label(other)),
+      error=None,
+    ),
+    input(),
+  )
+  assert_true(other_done == busy)
+  let (_, done, outcome) = other_done.handle(
+    emit(),
+    @skills.ActionDone(
+      channel=@interop.ChannelId::Local,
+      action=@skills.Uninstalling(source=skill.source, id=skill.id),
+      error=Some("cleanup failed"),
+    ),
+    input(),
+  )
+  assert_true(outcome is None)
+  let (_, installing, _) = done.handle(
+    emit(),
+    @skills.Install(market_item()),
+    input(),
+  )
+  assert_false(installing == done)
+}
+
+///|
+test "detail navigation preserves library errors without mutating state" {
+  let skill : @skills.InstalledItem = {
+    id: "acme-widget",
+    name: "widget",
+    description: "",
+    source: "acme/widget@1.0.0",
+  }
+  let clean = @skills.State::empty()
+  let failed = clean.with_library_error("library unreadable")
+  for
+    msg in [
+      @skills.PreviewMarket(market_item()),
+      @skills.PreviewInstalled(skill),
+    ] {
+    let (_, expected, _) = clean.handle(emit(), msg, input())
+    let (_, opened, _) = failed.handle(emit(), msg, input())
+    let (_, repeated, _) = failed.handle(emit(), msg, input())
+    assert_true(opened == expected.with_library_error("library unreadable"))
+    assert_true(opened == repeated)
+    assert_true(failed == clean.with_library_error("library unreadable"))
+  }
 }

@@ -47,8 +47,14 @@ async fn run_pattern_repair_validator(
   pattern~ : String,
   workspace_root~ : String,
 ) -> Unit {
-  let args = validator.prefix_args.copy()
-  args.append(["dump", "--expr", pattern, "--strict-check", "--exit-code"])
+  let args = [
+    ..validator.prefix_args,
+    "dump",
+    "--expr",
+    pattern,
+    "--strict-check",
+    "--exit-code",
+  ]
   let (code, stdout, stderr) = try {
     let (stdin_reader, stdin_writer) = @process.write_to_process()
     stdin_writer.close()
@@ -66,12 +72,10 @@ async fn run_pattern_repair_validator(
     _ => raise Unavailable
   }
   if code != 0 {
-    let detail = if !stderr.text().trim().is_empty() {
-      stderr.text()
-    } else {
-      stdout.text()
+    let detail = match stderr.text().trim() {
+      "" => stdout.text().trim().to_owned()
+      detail => detail.to_owned()
     }
-    let detail = detail.trim().to_owned()
     let diagnostic = if detail.is_empty() {
       "Pattern validation failed without a diagnostic."
     } else if detail.length() > MaxPatternValidationDiagnosticUnits {

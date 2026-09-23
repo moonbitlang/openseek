@@ -6,7 +6,6 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
     "cleanup failed: \{error}"
   } else {
     match snapshot.status {
-      Exited(0) => "exit=0"
       Exited(code) => "exit=\{code}"
       Stopped =>
         if snapshot.output_error is Some(error) {
@@ -229,8 +228,9 @@ pub async fn[X] build_tools(
 
 ///|
 /// The mbtx fixture these tests share: a session temp dir, a job runtime that
-/// spills into it, and an mbtx bound to both. The handoff bound is injected so
-/// a test does not have to outwait the real one.
+/// spills into it, and an mbtx bound to both. The temp dir is removed when the
+/// group ends. The handoff bound is injected so a test does not have to outwait
+/// the real one.
 async fn[X] mbtx_fixture(
   group : @async.TaskGroup[X],
   prefix~ : String,
@@ -238,6 +238,13 @@ async fn[X] mbtx_fixture(
   approval? : @agent_runtime.ApprovalChannel,
 ) -> (String, @bgjobs.BgJobRuntime, @agent_tool.AgentToolDefinition) {
   let spill_dir = @fs.tmpdir(prefix~)
+  group.add_defer(() => {
+    @async.protect_from_cancel(() => {
+      @fs.rmdir(spill_dir, recursive=true) catch {
+        _ => ()
+      }
+    })
+  })
   let bg_runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), spill_dir~)
   let mbtx = @mbtx.definition(
     workspace_root=".",
@@ -263,36 +270,11 @@ async fn run_async_tool(
 }
 
 ///|
-async test "agent registers the expected tool names" {
-  @async.with_task_group() <| group => {
-    let tools = build_tools(AgentRuntime(), AgentTaskScope(group))
-    let function_tools = tools.function_tools()
-    assert_eq(function_tools.length(), 11)
-    let names = [ for t in function_tools => t.name ]
-    assert_true(names.contains("job_output"))
-    assert_true(names.contains("job_stop"))
-    assert_true(names.contains("job_wait"))
-    assert_false(names.contains("read"))
-    assert_true(names.contains("edit"))
-    assert_true(names.contains("multi_edit"))
-    assert_true(names.contains("write"))
-    assert_true(names.contains("remove"))
-    assert_true(names.contains("plan"))
-    assert_true(names.contains("goal"))
-    assert_true(names.contains("mbtx"))
-    assert_true(names.contains("finish"))
-    assert_false(names.contains("moon_check"))
-    assert_false(names.contains("moon_cmd"))
-    assert_false(names.contains("moon_ide"))
-  }
-}
-
-///|
 /// A compile error reached inside the foreground grace reports inline, with
 /// the throwaway path rewritten to `source:LINE:COL`.
 async test "a compile error reached inside the grace reports inline" {
   @async.with_task_group(group => {
-    let (spill_dir, _, mbtx) = mbtx_fixture(
+    let (_, _, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-compile-inline-",
       auto_background_after_ms=60_000,
@@ -306,9 +288,6 @@ async test "a compile error reached inside the grace reports inline" {
     // The diagnostic points at the model's own input.
     assert_true(output.content.contains("source:"))
     assert_false(output.content.contains("openseek-compile-inline-"))
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -319,7 +298,7 @@ async test "a compile error reached inside the grace reports inline" {
 /// later nonzero exit reads as the program's own.
 async test "a handoff carries build warnings and the build-ok label" {
   @async.with_task_group(group => {
-    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+    let (_, bg_runtime, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-handoff-warn-",
       auto_background_after_ms=1500,
@@ -347,9 +326,6 @@ async test "a handoff carries build warnings and the build-ok label" {
     assert_eq(job.description, Some("Check compiler warnings"))
     assert_true(background_notice_text(job).contains("Check compiler warnings"))
     let _ = bg_runtime.stop(job.id)
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -362,7 +338,7 @@ async test "a handoff carries build warnings and the build-ok label" {
 /// adopts is always a running program.
 async test "a compile error never becomes a job, whatever the grace" {
   @async.with_task_group(group => {
-    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+    let (_, bg_runtime, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-compile-job-",
       auto_background_after_ms=1,
@@ -378,9 +354,6 @@ async test "a compile error never becomes a job, whatever the grace" {
     assert_true(output.content.contains("source:"))
     assert_false(output.content.contains("openseek-compile-job-"))
     assert_true(bg_runtime.list() is [])
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -428,10 +401,32 @@ async test "a handed-off job cleans builds but keeps result files until teardown
     // wait_any includes launcher cleanup and completion publication.
     assert_false(@fs.exists(build_dir))
     assert_true(@fs.exists("\{call_dir}/tmp"))
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
+}
+
+///|
+/// Run `arguments` through `mbtx`, expect a handoff, wait for the job, and
+/// check job_output reports the guest's policy-like text as ordinary output
+/// rather than as a refusal from a policy that was not active.
+#callsite(autofill(loc))
+async fn assert_handoff_keeps_guest_marker(
+  mbtx : @agent_tool.AgentToolDefinition,
+  bg_runtime : @bgjobs.BgJobRuntime,
+  arguments : Json,
+  loc~ : SourceLoc,
+) -> Unit {
+  let action = run_async_tool(mbtx, arguments)
+  guard action is Respond(output) else { fail("expected Respond", loc~) }
+  assert_true(output.content.contains("moved to the background"), loc~)
+  guard bg_runtime.list() is [job, ..] else { fail("no job registered", loc~) }
+  @async.with_timeout(30_000, () => bg_runtime.wait_any([job.id]))
+  let read = run_async_tool(@job_output.definition(bg_runtime), {
+    "job_id": job.id,
+  })
+  guard read is Respond(result) else { fail("expected Respond", loc~) }
+  assert_false(result.is_error, loc~)
+  assert_true(result.content.contains("Sandbox policy blocked"), loc~)
+  assert_false(result.content.contains("mbtx sandbox:"), loc~)
 }
 
 ///|
@@ -440,7 +435,7 @@ async test "a handed-off job cleans builds but keeps result files until teardown
 /// as a refusal from a policy that was not present.
 async test "an escalated handed-off job does not invent a policy refusal" {
   @async.with_task_group(group => {
-    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+    let (_, bg_runtime, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-escalated-job-",
       auto_background_after_ms=1,
@@ -453,21 +448,10 @@ async test "an escalated handed-off job does not invent a policy refusal" {
       #|  @async.sleep(100)
       #|  println("Sandbox policy blocked file write: example")
       #|}
-    let action = run_async_tool(mbtx, { "source": source, "escalated": true })
-    guard action is Respond(output) else { fail("expected Respond") }
-    assert_true(output.content.contains("moved to the background"))
-    guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
-    @async.with_timeout(30_000, () => bg_runtime.wait_any([job.id]))
-    let read = run_async_tool(@job_output.definition(bg_runtime), {
-      "job_id": job.id,
+    assert_handoff_keeps_guest_marker(mbtx, bg_runtime, {
+      "source": source,
+      "escalated": true,
     })
-    guard read is Respond(result) else { fail("expected Respond") }
-    assert_false(result.is_error)
-    assert_true(result.content.contains("Sandbox policy blocked"))
-    assert_false(result.content.contains("mbtx sandbox:"))
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -477,7 +461,7 @@ async test "an escalated handed-off job does not invent a policy refusal" {
 /// of a policy that was never active.
 async test "a non-wasm handed-off job does not invent a policy refusal" {
   @async.with_task_group(group => {
-    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+    let (_, bg_runtime, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-js-job-",
       auto_background_after_ms=1,
@@ -486,21 +470,10 @@ async test "a non-wasm handed-off job does not invent a policy refusal" {
       #|fn main {
       #|  println("Sandbox policy blocked file write: example")
       #|}
-    let action = run_async_tool(mbtx, { "source": source, "target": "js" })
-    guard action is Respond(output) else { fail("expected Respond") }
-    assert_true(output.content.contains("moved to the background"))
-    guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
-    @async.with_timeout(30_000, () => bg_runtime.wait_any([job.id]))
-    let read = run_async_tool(@job_output.definition(bg_runtime), {
-      "job_id": job.id,
+    assert_handoff_keeps_guest_marker(mbtx, bg_runtime, {
+      "source": source,
+      "target": "js",
     })
-    guard read is Respond(result) else { fail("expected Respond") }
-    assert_false(result.is_error)
-    assert_true(result.content.contains("Sandbox policy blocked"))
-    assert_false(result.content.contains("mbtx sandbox:"))
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -510,7 +483,7 @@ async test "a non-wasm handed-off job does not invent a policy refusal" {
 /// classified.
 async test "a non-wasm inline run does not invent a policy refusal" {
   @async.with_task_group(group => {
-    let (spill_dir, _, mbtx) = mbtx_fixture(
+    let (_, _, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-js-inline-",
       auto_background_after_ms=60_000,
@@ -525,9 +498,6 @@ async test "a non-wasm inline run does not invent a policy refusal" {
     assert_false(output.content.contains("moved to the background"))
     assert_true(output.content.contains("Sandbox policy blocked"))
     assert_false(output.content.contains("mbtx sandbox:"))
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -537,7 +507,7 @@ async test "a non-wasm inline run does not invent a policy refusal" {
 /// before continuing as a job.
 async test "an automatically handed-off snippet reads EOF on stdin" {
   @async.with_task_group(group => {
-    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+    let (_, bg_runtime, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-jobs-stdin-",
       auto_background_after_ms=1500,
@@ -574,9 +544,6 @@ async test "an automatically handed-off snippet reads EOF on stdin" {
     guard read is Respond(job) else { fail("expected Respond") }
     assert_true(job.content.contains("got=false"))
     let _ = bg_runtime.stop(bg_runtime.list()[0].id)
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -587,7 +554,7 @@ async test "an automatically handed-off snippet reads EOF on stdin" {
 /// so the test does not have to outwait the real one.
 async test "a foreground run past its deadline becomes a job instead of dying" {
   @async.with_task_group(group => {
-    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+    let (_, bg_runtime, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-jobs-test-",
       auto_background_after_ms=1500,
@@ -608,9 +575,6 @@ async test "a foreground run past its deadline becomes a job instead of dying" {
     guard bg_runtime.list() is [job, ..] else { fail("no job was registered") }
     assert_true(job.status is Running)
     let _ = bg_runtime.stop(job.id)
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -623,7 +587,7 @@ async test "binary output waits for the real exit instead of abandoning it" {
   @async.with_task_group(group => {
     // This test is about waiting for the real exit, not the production 5s
     // handoff threshold. Keep cold dependency builds safely inside its premise.
-    let (spill_dir, _, mbtx) = mbtx_fixture(
+    let (_, _, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-binary-inline-",
       auto_background_after_ms=60_000,
@@ -644,9 +608,6 @@ async test "binary output waits for the real exit instead of abandoning it" {
     // The real exit code, not the -1 an abandoned execution would report.
     assert_true(output.content.contains("exited 3"))
     assert_true(output.content.contains("non-UTF-8"))
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -657,7 +618,7 @@ async test "binary output waits for the real exit instead of abandoning it" {
 /// the recovery must also say to read the reduced result inside that snippet.
 async test "the inline output cap gives actionable retry guidance" {
   @async.with_task_group(group => {
-    let (spill_dir, _, mbtx) = mbtx_fixture(
+    let (_, _, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-inline-cap-",
       auto_background_after_ms=60_000,
@@ -671,9 +632,6 @@ async test "the inline output cap gives actionable retry guidance" {
     assert_true(output.content.contains("Retrying the same call"))
     assert_true(output.content.contains("stdout=ToFile(path)"))
     assert_true(output.content.contains("same snippet read the file"))
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -685,7 +643,7 @@ async test "the inline output cap gives actionable retry guidance" {
 /// expiry detaches like any other long run.
 async test "binary output does not escape the deadline" {
   @async.with_task_group(group => {
-    let (spill_dir, bg_runtime, mbtx) = mbtx_fixture(
+    let (_, bg_runtime, mbtx) = mbtx_fixture(
       group,
       prefix="openseek-jobs-binary-",
       auto_background_after_ms=1500,
@@ -702,9 +660,6 @@ async test "binary output does not escape the deadline" {
     assert_true(output.content.contains("moved to the background as job"))
     guard bg_runtime.list() is [job, ..] else { fail("no job was registered") }
     let _ = bg_runtime.stop(job.id)
-    @fs.rmdir(spill_dir, recursive=true) catch {
-      _ => ()
-    }
   })
 }
 
@@ -748,37 +703,5 @@ async test "a finished background job queues a notice and wakes the controller" 
     assert_true(woke)
     let steers = runtime.drain_steers()
     assert_true(steers.any(s => s is Notice(_)))
-  })
-}
-
-///|
-/// A turn built by `run_turn_with_append` offers `escalated` only when the
-/// caller hands it a channel — which is the plumbing best-of-N runs were
-/// missing. `openseek run --concurrency N --approval always` parsed the flag,
-/// discarded it, and built every attempt's runtime without one, so the
-/// argument was never advertised and the option was silently inert.
-///
-/// The registry is what proves it: the field's presence in `mbtx`'s
-/// schema is decided by the runtime's channel, so asserting on the schema
-/// asserts the whole chain from this parameter down.
-async test "a turn advertises escalation exactly when it is given a channel" {
-  @async.with_task_group(group => {
-    let confined = build_tools(AgentRuntime(), AgentTaskScope(group))
-    guard confined.find("mbtx") is Some(tool) else { fail("mbtx tool missing") }
-    let JsonSchema(schema) = tool.schema
-    guard schema is { "properties": Object(properties), .. } else {
-      fail("expected an object schema")
-    }
-    assert_false(properties.contains("escalated"))
-    let asking = build_tools(
-      AgentRuntime(approval=ApprovalChannel(_ => Rejected)),
-      AgentTaskScope(group),
-    )
-    guard asking.find("mbtx") is Some(tool) else { fail("mbtx tool missing") }
-    let JsonSchema(schema) = tool.schema
-    guard schema is { "properties": Object(properties), .. } else {
-      fail("expected an object schema")
-    }
-    assert_true(properties.contains("escalated"))
   })
 }

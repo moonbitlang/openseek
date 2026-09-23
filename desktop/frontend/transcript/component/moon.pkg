@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/deepseek",
   "openseek_desktop/frontend/i18n",
   "moonbitlang/openseek/agent_tool/edit_diff",
   "moonbitlang/openseek/agent_tool/mbtx/html" @read_html,
@@ -19,7 +20,6 @@ import {
   "moonbitlang/editor/syntax/lang_javascript",
   "moonbitlang/editor/syntax/lang_json",
   "moonbitlang/editor/syntax/lang_moon_config",
-  "moonbitlang/editor/viewer" @editor_viewer,
   "moonbitlang/editor/viewer/html" @syntax_html,
   "moonbitlang/editor/viewer/browser/diagram_viewport",
   "openseek_desktop/commands",
