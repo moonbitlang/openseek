@@ -54,21 +54,21 @@ const DevelopmentProduct = "SeekMoonDev";
 // dependency graph during an application build.
 const WebArchives = {
   xterm: {
-    filename: "xterm-5.5.0.tgz",
-    url: "https://registry.npmjs.org/@xterm/xterm/-/xterm-5.5.0.tgz",
-    sha: "bd954fa721872170188cc5d7e83e88db3c83c9a18a4e8d24c2783d26491f59d2",
+    filename: "xterm-6.1.0-beta.304.tgz",
+    url: "https://registry.npmjs.org/@xterm/xterm/-/xterm-6.1.0-beta.304.tgz",
+    sha: "78a0c76c5bc068b55c9eedf892b87f784dd7226cac429815460e14e479362ea4",
     path: "node_modules/@xterm/xterm",
   },
   fit: {
-    filename: "addon-fit-0.10.0.tgz",
-    url: "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.10.0.tgz",
-    sha: "917ac44972453d5eed52edc1e50260c76398ce48cf2290c2e60671102bba0b33",
+    filename: "addon-fit-0.12.0-beta.301.tgz",
+    url: "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.12.0-beta.301.tgz",
+    sha: "308544bafa603957b889d4a7a78284bb09feedabecdbf9d5a4054ee8c591019d",
     path: "node_modules/@xterm/addon-fit",
   },
   webLinks: {
-    filename: "addon-web-links-0.11.0.tgz",
-    url: "https://registry.npmjs.org/@xterm/addon-web-links/-/addon-web-links-0.11.0.tgz",
-    sha: "cad54687a1447f87cd8dd9ce454d4d657d18cc7179e9179908f391b4512f74a0",
+    filename: "addon-web-links-0.13.0-beta.301.tgz",
+    url: "https://registry.npmjs.org/@xterm/addon-web-links/-/addon-web-links-0.13.0-beta.301.tgz",
+    sha: "673cbe9787e0a1c71d27752b72fb76a8115eac77cc9fbc824d5e11bc2a50c9d3",
     path: "node_modules/@xterm/addon-web-links",
   },
   mermaid: {
@@ -196,20 +196,6 @@ class Build {
       await mkdir(extracted, { recursive: true });
       await this.commandRun("tar", ["-xf", cached, "-C", extracted, "--strip-components=1"]);
     }
-
-    // xterm 5.5's DOM WidthCache divides an integer offsetWidth by 32.
-    // That rounded-down glyph width adds excess letter spacing to every
-    // cell, clipping the last glyph even with inherited tracking reset.
-    // Preserve fractional CSS pixels; fail explicitly if a version upgrade
-    // changes the pinned implementation this patch targets.
-    const xtermPath = join(work, WebArchives.xterm.path, "lib/xterm.js");
-    const xtermSource = await readFile(xtermPath, "utf8");
-    const measurement = "i.textContent=e.repeat(32),i.offsetWidth/32";
-    if (xtermSource.split(measurement).length !== 2) {
-      throw new Error("xterm WidthCache measurement changed; revisit the subpixel width patch");
-    }
-    await writeFile(xtermPath, xtermSource.replace(measurement,
-      "i.textContent=e.repeat(32),i.getBoundingClientRect().width/32"));
 
     const esbuild = this.host.esbuild;
     const esbuildArchive = join(vendor, "cache", `esbuild-${esbuild.package}-${EsbuildVersion}.tgz`);
