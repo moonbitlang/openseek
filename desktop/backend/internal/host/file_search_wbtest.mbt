@@ -13,6 +13,7 @@ async test "file scan keeps lexicographic DFS and skips ignored directories" {
         [
           test_scan_entry(".claude", true),
           test_scan_entry(".git", true),
+          test_scan_entry("empty", true),
           test_scan_entry("linked-dir", false),
           test_scan_entry("src", true),
           test_scan_entry("z.mbt", false),
@@ -23,10 +24,17 @@ async test "file scan keeps lexicographic DFS and skips ignored directories" {
           test_scan_entry("node_modules", true),
           test_scan_entry("z.mbt", false),
         ]
+      path if path == root.join(Relative("empty")).to_string() => []
       _ => fail("unexpected directory read")
     }
   })
   assert_eq(snapshot.files, ["linked-dir", "src/a.mbt", "src/z.mbt", "z.mbt"])
+  assert_eq(snapshot.directories, ["empty", "src"])
+  let empty = compute_file_search(snapshot, "empty", 512)
+  assert_eq(empty.files, [])
+  assert_eq(empty.directories, ["empty"])
+  let src = compute_file_search(snapshot, "src/", 512)
+  assert_eq(src.directories, ["src"])
 }
 
 ///|

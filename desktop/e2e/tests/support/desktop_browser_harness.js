@@ -96,6 +96,7 @@ export class DesktopBrowserHarness {
       ].join('\n'),
     };
     this.searchFiles = ['src/main.mbt', 'README.md'];
+    this.searchDirectories = ['src'];
     // `moon.package_graph` returns the command's JSON verbatim. The default
     // UML filter keeps branching nodes, so the fixture has one package with
     // two source dependencies and exercises the real renderer path.
@@ -826,6 +827,7 @@ export class DesktopBrowserHarness {
       case 'fs.search_files':
         return {
           files: [...this.searchFiles],
+          directories: [...this.searchDirectories],
           from_cache: false,
           limit_hit: false,
           cancelled: false,

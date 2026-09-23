@@ -37,3 +37,26 @@ test "search applies the caller's result cap" {
   assert_eq(search.rank("").length(), 200)
   assert_eq(search.rank("file", limit=512).length(), 512)
 }
+
+///|
+test "composer directory candidates retain labels without entering Quick Open" {
+  let search = @files.Search(
+    [
+      Relative("src/main.mbt"),
+      Relative("src/"),
+      Relative("empty/"),
+      Relative("src/nested/"),
+    ],
+    [],
+    None,
+  )
+  assert_eq(search.rank("").map(item => item.path.0), ["src/main.mbt"])
+  let nested = search.rank("nested", include_directories=true)
+  assert_eq(nested.length(), 1)
+  assert_eq(nested[0].name, "nested/")
+  assert_eq(nested[0].path.0, "src/nested/")
+  assert_eq(
+    search.rank("empty/", include_directories=true).map(item => item.name),
+    ["empty/"],
+  )
+}

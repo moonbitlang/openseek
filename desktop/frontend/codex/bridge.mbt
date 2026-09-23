@@ -726,6 +726,7 @@ fn State::prompt_text(self : State) -> String {
 fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
   match mention.ref_ {
     @mention_context.File(path~)
+    | @mention_context.Directory(path~)
     | @mention_context.SemanticSearchArtifact({ path, .. }) => {
       let name = match [..path.split("/")] {
         [] => path

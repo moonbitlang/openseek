@@ -70,6 +70,7 @@ pub(all) enum MentionRef {
   ReviewChanges(ReviewChanges)
   Skill(name~ : String)
   File(path~ : String)
+  Directory(path~ : String)
   Symbol(name~ : String, file~ : String, line~ : Int)
   SemanticSearch(SemanticSearchReference)
   SemanticSearchArtifact(SemanticSearchArtifact)

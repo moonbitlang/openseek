@@ -55,6 +55,7 @@ pub(all) enum MentionRef {
   ReviewChanges(ReviewChanges)
   Skill(name~ : String)
   File(path~ : String)
+  Directory(path~ : String)
   Symbol(name~ : String, file~ : String, line~ : Int)
   SemanticSearch(SemanticSearchReference)
   SemanticSearchArtifact(SemanticSearchArtifact)
@@ -202,7 +203,7 @@ pub fn glyph(mention : MentionRef) -> String {
   match mention {
     ReviewChanges(_) => "⑂"
     Skill(_) => "$"
-    File(_) => "@"
+    File(_) | Directory(_) => "@"
     Symbol(_) => "#"
     SemanticSearch(_) | SemanticSearchArtifact(_) => "⌕"
     Annotation(_) => "✎"
@@ -216,6 +217,7 @@ pub fn label(mention : MentionRef) -> String {
     ReviewChanges(changes) => "Changes · \{changes.source.file}"
     Skill(name~) => name
     File(path~) => path
+    Directory(path~) => "\{path}/"
     Symbol(name~, ..) => name
     SemanticSearch(reference) => {
       let pattern_count = reference.patterns.length()
@@ -235,7 +237,7 @@ pub fn label(mention : MentionRef) -> String {
 /// Resolve a mention into the working-file location its chip may open.
 pub fn target(mention : MentionRef) -> Target? {
   match mention {
-    ReviewChanges(_) | Skill(_) => None
+    ReviewChanges(_) | Skill(_) | Directory(_) => None
     File(path~) => Some({ file: path, range: None, annotation: None, })
     Symbol(file~, line~, ..) =>
       if file.is_empty() {
@@ -330,6 +332,10 @@ fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
     Skill(name~) => {
       let name = MentionAttribute::encode(name).wire
       parts <+ "<skill name=\"\{name}\"/>\n"
+    }
+    Directory(path~) => {
+      let path = MentionAttribute::encode(path).wire
+      parts <+ "<directory path=\"\{path}\"/>\n"
     }
     File(path~) => {
       let path = MentionAttribute::encode(path).wire
@@ -494,6 +500,13 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
     if skill_pattern.execute(line) is Some(matched) {
       guard matched.named_group("name") is Some(name) else { return None }
       mentions.push(Skill(name=MentionAttribute::decode(name.to_owned())))
+      index += 1
+      continue
+    }
+    if line =~ (re"^<directory path=\"", after=rest) &&
+      rest =~ (re"^[^\"]+" as path, after=tail) &&
+      tail == "\"/>" {
+      mentions.push(Directory(path=MentionAttribute::decode(path.to_owned())))
       index += 1
       continue
     }

@@ -299,3 +299,18 @@ test "parse takes the last opener when the task text spells one" {
   assert_eq(parsed.task, "quoting the marker:\n<user_mentions>")
   @debug.assert_eq(parsed.mentions, [Skill(name="review-pr")])
 }
+
+///|
+test "directory mentions round trip without a file jump target" {
+  let directory : @mention_context.MentionRef = Directory(path="src/a&b")
+  let encoded = @mention_context.encode([directory], "Inspect")
+  assert_true(encoded.contains("<directory path=\"src/a&amp;b\"/>"))
+  guard @mention_context.parse(encoded) is Some(parsed) else {
+    fail("round trip failed")
+  }
+  assert_eq(parsed.task, "Inspect")
+  @debug.assert_eq(parsed.mentions, [directory])
+  assert_eq(@mention_context.label(directory), "src/a&b/")
+  assert_eq(@mention_context.glyph(directory), "@")
+  @debug.assert_eq(@mention_context.target(directory), None)
+}
