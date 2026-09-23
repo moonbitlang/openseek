@@ -17,8 +17,11 @@ async fn main {
     scripts.push((name, @fs.read_file(input).text()))
   }
   let source = generated_source(scripts)
-  let current = @fs.read_file(output).text() catch { _ => "" }
-  if current == source {
+  let current : String? = Some(@fs.read_file(output).text()) catch {
+    @os_error.OSError(_) as error if error.is_ENOENT() => None
+    error => raise error
+  }
+  if current == Some(source) {
     return
   }
   let tmp = "\{output}.tmp"
