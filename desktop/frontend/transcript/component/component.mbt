@@ -734,7 +734,7 @@ priv struct TranscriptObservers {
 priv struct TranscriptDomMount {
   mut element : @dom.Element?
   mut diagrams : @diagram_viewport.DiagramViewports?
-  mut rendered_diagrams : Array[TranscriptDiagram]
+  renderers : @markdown.DiagramRenderers
   images : @dom.IntersectionObserver
   on_size_changed : () -> Unit
 }
@@ -747,7 +747,7 @@ fn TranscriptDomMount::TranscriptDomMount(
   {
     element: None,
     diagrams: None,
-    rendered_diagrams: [],
+    renderers: @markdown.DiagramRenderers(on_size_changed),
     images: transcript_image_observer(on_image),
     on_size_changed,
   }
@@ -772,17 +772,17 @@ fn TranscriptDomMount::is_same_element(
 /// and requests a bounded host read once an image enters the viewport.
 fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
   self.images.disconnect()
-  for entry in self.rendered_diagrams {
-    entry.dispose()
-  }
-  self.rendered_diagrams = []
+  self.renderers.dispose()
   if self.diagrams is Some(diagrams) {
     diagrams.dispose()
   }
   self.diagrams = None
   self.element = next
   if next is Some(element) {
-    self.refresh_diagrams(element)
+    self.renderers.refresh(
+      element,
+      dark_mode=element.get_attribute("data-transcript-theme") is Some("dark"),
+    )
     self.diagrams = Some(
       @diagram_viewport.DiagramViewports(element, self.on_size_changed),
     )
@@ -793,7 +793,10 @@ fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
 ///|
 fn TranscriptDomMount::refresh_content(self : Self) -> Unit {
   if self.element is Some(element) {
-    self.refresh_diagrams(element)
+    self.renderers.refresh(
+      element,
+      dark_mode=element.get_attribute("data-transcript-theme") is Some("dark"),
+    )
   }
   if self.diagrams is Some(diagrams) {
     diagrams.refresh()

@@ -20,7 +20,6 @@ import {
   "moonbitlang/editor/syntax/lang_javascript",
   "moonbitlang/editor/syntax/lang_json",
   "moonbitlang/editor/syntax/lang_moon_config",
-  "moonbitlang/editor/viewer" @editor_viewer,
   "moonbitlang/editor/viewer/html" @syntax_html,
   "moonbitlang/editor/viewer/browser/diagram_viewport",
   "openseek_desktop/commands",
