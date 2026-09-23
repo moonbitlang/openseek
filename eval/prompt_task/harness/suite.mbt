@@ -300,29 +300,21 @@ fn parse_problems(
   fields : Map[String, Json],
   base_dir : String,
 ) -> Array[ProblemSpec] raise {
-  match fields.get("problems") {
-    Some(Array(items)) =>
-      [
-        for item in items => ProblemSpec::from_json(item, base_dir)
-      ]
-    Some(_) => fail("suite problems must be an array")
-    None => fail("suite problems is missing")
-  }
+  array_field(fields, "problems", label="suite problems", item => {
+    ProblemSpec::from_json(item, base_dir)
+  })
 }
 
 ///|
 fn ProblemSpec::from_json(json : Json, base_dir : String) -> ProblemSpec raise {
   let fields = object_fields(json, "suite problem")
   let id = string_field(fields, "id")
-  let probes : Array[ValidationProbeSpec] = match
-    fields.get("validation_probes") {
-    Some(Array(items)) =>
-      [
-        for item in items => ValidationProbeSpec::from_json(item)
-      ]
-    Some(_) => fail("suite problem validation_probes must be an array")
-    None => fail("suite problem validation_probes is missing")
-  }
+  let probes = array_field(
+    fields,
+    "validation_probes",
+    label="suite problem validation_probes",
+    ValidationProbeSpec::from_json,
+  )
   guard probes.length() > 0 else {
     fail("suite problem validation_probes must not be empty")
   }
@@ -567,37 +559,33 @@ fn SuiteManifest::from_json(json : Json) -> SuiteManifest raise {
 fn suite_manifest_problems(
   fields : Map[String, Json],
 ) -> Array[ProblemSpec] raise {
-  match fields.get("problems") {
-    Some(Array(items)) =>
-      [
-        for item in items => ProblemSpec::from_manifest_json(item)
-      ]
-    Some(_) => fail("suite manifest problems must be an array")
-    None => fail("suite manifest problems is missing")
-  }
+  array_field(
+    fields,
+    "problems",
+    label="suite manifest problems",
+    ProblemSpec::from_manifest_json,
+  )
 }
 
 ///|
 fn suite_manifest_combos(fields : Map[String, Json]) -> Array[ComboRun] raise {
-  match fields.get("combos") {
-    Some(Array(items)) => [ for item in items => ComboRun::from_json(item) ]
-    Some(_) => fail("suite manifest combos must be an array")
-    None => fail("suite manifest combos is missing")
-  }
+  array_field(
+    fields,
+    "combos",
+    label="suite manifest combos",
+    ComboRun::from_json,
+  )
 }
 
 ///|
 fn ProblemSpec::from_manifest_json(json : Json) -> ProblemSpec raise {
   let fields = object_fields(json, "suite manifest problem")
-  let probes : Array[ValidationProbeSpec] = match
-    fields.get("validation_probes") {
-    Some(Array(items)) =>
-      [
-        for item in items => ValidationProbeSpec::from_json(item)
-      ]
-    Some(_) => fail("suite manifest problem validation_probes must be an array")
-    None => fail("suite manifest problem validation_probes is missing")
-  }
+  let probes = array_field(
+    fields,
+    "validation_probes",
+    label="suite manifest problem validation_probes",
+    ValidationProbeSpec::from_json,
+  )
   ProblemSpec(
     id=string_field(fields, "id"),
     prompt_label=string_field(fields, "prompt_label"),
@@ -624,19 +612,12 @@ fn string_array_field(
   fields : Map[String, Json],
   key : String,
 ) -> Array[String] raise {
-  match fields.get(key) {
-    Some(Array(items)) =>
-      [
-        for item in items => {
-          match item {
-            String(value) => value
-            _ => fail("\{key} entries must be strings")
-          }
-        }
-      ]
-    Some(_) => fail("\{key} must be an array")
-    None => fail("\{key} is missing")
-  }
+  array_field(fields, key, label=key, item => {
+    match item {
+      String(value) => value
+      _ => fail("\{key} entries must be strings")
+    }
+  })
 }
 
 ///|
@@ -716,6 +697,7 @@ fn suite_report_row(
   suite_out_dir~ : String,
   index~ : Int,
 ) -> @report.ReportRow {
+  let output = relative_artifact_path(suite_out_dir, report.out_dir)
   ReportRow(
     index=index + 1,
     name=report.prompt_label,
@@ -733,20 +715,9 @@ fn suite_report_row(
     ],
     details=[
       Metric(name="Task File", value=report.task_file),
-      Metric(
-        name="Combo Report",
-        value=relative_artifact_path(suite_out_dir, report.out_dir) +
-          "/report.html",
-      ),
-      Metric(
-        name="Combo Markdown",
-        value=relative_artifact_path(suite_out_dir, report.out_dir) +
-          "/report.md",
-      ),
-      Metric(
-        name="Output",
-        value=relative_artifact_path(suite_out_dir, report.out_dir),
-      ),
+      Metric(name="Combo Report", value="\{output}/report.html"),
+      Metric(name="Combo Markdown", value="\{output}/report.md"),
+      Metric(name="Output", value=output),
     ],
   )
 }

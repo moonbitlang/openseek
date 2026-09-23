@@ -10,7 +10,5 @@
 /// the tool layer itself. The package's own test driver is the intended
 /// caller — this export IS the harness entry point.
 pub async fn run_harness() -> @report.Report {
-  @async.with_task_group() <| group => {
-    run_harness_with_runtime(AgentRuntime(), AgentTaskScope(group))
-  }
+  run_harness_with_runtime(AgentRuntime())
 }

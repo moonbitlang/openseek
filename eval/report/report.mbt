@@ -141,15 +141,7 @@ pub fn Report::html(self : Report) -> String {
     out.write_string("</div>")
   }
   out.write_string("<div class=\"table-wrap\"><table><thead><tr>")
-  let columns : Array[String] = [
-    "#",
-    "Case",
-    "Result",
-    ..self.metric_columns,
-    "Reason",
-    "Warnings",
-  ]
-  for column in columns {
+  for column in table_columns(self.metric_columns) {
     out.write_string("<th>")
     out.write_string(escape_html(column))
     out.write_string("</th>")
@@ -161,9 +153,9 @@ pub fn Report::html(self : Report) -> String {
     out.write_string("</td><td><code>")
     out.write_string(escape_html(row.name))
     out.write_string("</code></td><td class=\"")
-    out.write_string(if row.success { "pass" } else { "fail" })
+    out.write_string(row.verdict())
     out.write_string("\">")
-    out.write_string(if row.success { "pass" } else { "fail" })
+    out.write_string(row.verdict())
     out.write_string("</td>")
     for column in self.metric_columns {
       out.write_string("<td>")
@@ -188,9 +180,9 @@ pub fn Report::html(self : Report) -> String {
         out.write_string(": <code>")
         out.write_string(escape_html(row.name))
         out.write_string("</code></h3><span class=\"badge ")
-        out.write_string(if row.success { "pass" } else { "fail" })
+        out.write_string(row.verdict())
         out.write_string("\">")
-        out.write_string(if row.success { "pass" } else { "fail" })
+        out.write_string(row.verdict())
         out.write_string("</span></header><dl class=\"detail-list\">")
         write_html_detail(out, "Reason", row.reason, long=true)
         if row.warnings != "" {
@@ -270,11 +262,13 @@ fn ReportRow::to_json(self : ReportRow) -> Json {
 }
 
 ///|
+fn table_columns(metric_columns : Array[String]) -> Array[String] {
+  ["#", "Case", "Result", ..metric_columns, "Reason", "Warnings"]
+}
+
+///|
 fn table_header(metric_columns : Array[String]) -> String {
-  let cells : Array[String] = [
-    "#", "Case", "Result", ..metric_columns, "Reason", "Warnings",
-  ]
-  "| \{cells.join(" | ")} |"
+  "| \{table_columns(metric_columns).join(" | ")} |"
 }
 
 ///|
@@ -290,11 +284,7 @@ fn ReportRow::markdown_row(
   let cells : Array[String] = [
     self.index.to_string(),
     "`\{escape_table_cell(self.name)}`",
-    if self.success {
-      "pass"
-    } else {
-      "fail"
-    },
+    self.verdict(),
   ]
   for column in metric_columns {
     cells.push(escape_table_cell(self.metric_value(column)))
@@ -302,6 +292,16 @@ fn ReportRow::markdown_row(
   cells.push(escape_table_cell(short_cell(self.reason)))
   cells.push(escape_table_cell(short_cell(self.warnings)))
   "| \{cells.join(" | ")} |"
+}
+
+///|
+/// The row's verdict as display text, shared by every renderer.
+fn ReportRow::verdict(self : ReportRow) -> String {
+  if self.success {
+    "pass"
+  } else {
+    "fail"
+  }
 }
 
 ///|
@@ -332,7 +332,7 @@ fn detail_section_lines(rows : Array[ReportRow]) -> Array[String] {
       }
       lines.push("### Trial \{row.index}: `\{row.name}`")
       lines.push("")
-      lines.push("- result: `\{if row.success { "pass" } else { "fail" }}`")
+      lines.push("- result: `\{row.verdict()}`")
       lines.push("- reason:")
       append_markdown_code_block(lines, row.reason)
       if row.warnings != "" {

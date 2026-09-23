@@ -3,8 +3,6 @@
 ///
 /// The fields mirror the two HTTP responses consumed by `cmd/viz_app`: the
 /// session-list row and the raw JSONL envelope for that row.
-/// The fields mirror the two HTTP responses consumed by `cmd/viz_app`: the
-/// session-list row and the raw JSONL envelope for that row.
 struct Session {
   key : String
   id : String
@@ -93,7 +91,8 @@ pub fn StandaloneExport::render_json(
   self : StandaloneExport,
   json : String,
 ) -> String raise {
-  let blob = self.escape_json_for_html(json)
+  // Escape HTML script-data transitions while preserving the decoded JSON text.
+  let blob = json.replace_all(old="<", new="\\u003c")
   let bundle = self.escape_script_close(self.bundle_js)
   let scripts = "<script>window.__OPENSEEK_DATA__ = \{blob};</script>\n<script>\n\{bundle}\n</script>"
   let marker = "<script src=\"/viz_app.js\"></script>"
@@ -122,16 +121,6 @@ pub fn StandaloneExport::json(
     )
   }
   data.to_json().stringify()
-}
-
-///|
-/// Escape HTML script-data transitions while preserving the decoded JSON text.
-fn StandaloneExport::escape_json_for_html(
-  self : StandaloneExport,
-  json : String,
-) -> String {
-  let _ = self
-  json.replace_all(old="<", new="\\u003c")
 }
 
 ///|

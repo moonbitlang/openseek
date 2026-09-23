@@ -91,11 +91,7 @@ async fn expand_example_links(markdown : String, base_dir : String) -> String {
           "\{base_dir}/\{target}"
         }
         let text = @fs.read_file(path).text()
-        let body = if text.has_suffix("\n") {
-          text[:text.length() - 1]
-        } else {
-          text[:]
-        }
+        let body = text.strip_suffix("\n").unwrap_or(text[:])
         out.write_string("```mbtx\n\{body}\n```")
       }
       None => out.write_string(line.to_owned())

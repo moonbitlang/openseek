@@ -1,9 +1,8 @@
 ///|
 async fn run_harness_with_runtime(
   runtime : @agent_runtime.AgentRuntime,
-  scope : @agent_runtime.AgentTaskScope[@report.Report],
 ) -> @report.Report {
-  let tools = tool_definitions(runtime, scope) catch {
+  let tools = tool_definitions(runtime) catch {
     error =>
       return build_report([
         row(
@@ -30,10 +29,7 @@ async fn run_harness_with_runtime(
 ///|
 fn tool_definitions(
   runtime : @agent_runtime.AgentRuntime,
-  scope : @agent_runtime.AgentTaskScope[@report.Report],
 ) -> @agent_tool.Tools raise {
-  // The harness runs each snippet in the foreground; it needs no job scope.
-  ignore(scope)
   Tools([
     @write.definition(),
     @edit.definition(),
