@@ -1662,6 +1662,7 @@ fn covering_overlay(model : Model) -> Bool {
   model.project_picker is Some(_) ||
   model.export_dialog.is_open() ||
   model.archive_confirm is Some(_) ||
+  model.codex.archive_confirmation_open() ||
   model.archived_delete_confirm is Some(_) ||
   model.quick_open.is_open() ||
   model.api_setup_open ||

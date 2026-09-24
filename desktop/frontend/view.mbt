@@ -2166,6 +2166,12 @@ fn view(
       }.render(locale=model.locale),
     )
   }
+  if model.codex.archive_confirmation(
+      dispatch.map(msg => Codex(channel=model.focused, msg)),
+    )
+    is Some(dialog) {
+    children.push(dialog.render(locale=model.locale))
+  }
   if model.archived_delete_confirm is Some(confirm) {
     children.push(archived_delete_modal(locale=model.locale, dispatch, confirm))
   }
