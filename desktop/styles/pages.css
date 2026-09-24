@@ -317,6 +317,21 @@ h2 {
   font-size: var(--font-size-md);
 }
 
+.setting-control .setting-font-size-slider {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--color-accent);
+}
+
+.setting-font-size-value {
+  min-width: 4ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
 .setting-select {
   width: 100%;
 }

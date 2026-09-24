@@ -1321,7 +1321,6 @@ priv enum SelectMenu {
   FollowupBehaviorMenu
   ThemeMenu
   LanguageMenu
-  FontSizeMenu
   NotificationCornerMenu
   TreeLayoutMenu
   ProjectMenu

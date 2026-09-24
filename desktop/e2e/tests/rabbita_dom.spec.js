@@ -1894,15 +1894,20 @@ test('settings change and preserve the visible font size', async ({ page }) => {
   await app.goto();
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const fontSize = page.getByRole('button', { name: 'Font size' });
-  await fontSize.click();
-  await page.getByRole('option', { name: '12px' }).click();
+  const fontSize = page.getByRole('slider', { name: 'Font size' });
+  await expect(fontSize).toHaveValue('14');
+  await fontSize.focus();
+  await fontSize.press('ArrowRight');
+  await expect(fontSize).toHaveValue('15');
+  await expect(fontSize).toHaveAttribute('aria-valuetext', '15px');
+  await expect(page.locator('.setting-font-size-value')).toHaveText('15px');
+  await fontSize.press('Home');
+  await expect(fontSize).toHaveValue('12');
   await expect.poll(() => page.evaluate(() =>
     getComputedStyle(document.body).fontSize))
     .toBe('12px');
 
-  await fontSize.click();
-  await page.getByRole('option', { name: '18px' }).click();
+  await fontSize.fill('18');
   await expect.poll(() => page.evaluate(() =>
     getComputedStyle(document.body).fontSize))
     .toBe('18px');
