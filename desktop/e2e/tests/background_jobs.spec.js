@@ -406,8 +406,7 @@ test('font size settings scale Jobs with the transcript', async ({ page }, testI
   await page.screenshot({ path: testInfo.outputPath('jobs-font-default.png'), fullPage: true });
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Font size', exact: true }).click();
-  await page.getByRole('option', { name: '18px', exact: true }).click();
+  await page.getByRole('slider', { name: 'Font size', exact: true }).fill('18');
   await app.openSession();
   await expect(prose).toHaveCSS('font-size', '18px');
   await expect(command).toHaveCSS('font-size', '18px');
@@ -433,8 +432,7 @@ test('font size settings scale Jobs with the transcript', async ({ page }, testI
   await page.screenshot({ path: testInfo.outputPath('jobs-font-large-dark.png'), fullPage: true });
 
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Font size', exact: true }).click();
-  await page.getByRole('option', { name: '12px', exact: true }).click();
+  await page.getByRole('slider', { name: 'Font size', exact: true }).fill('12');
   await app.openSession();
   await expect(command).toHaveCSS('font-size', '12px');
   await expect(output).toHaveCSS('font-size', '11px');

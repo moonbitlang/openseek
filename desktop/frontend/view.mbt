@@ -1401,23 +1401,31 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @settings.row(
         @settings.text(locale, FontSize),
         [
-          FontSizeMenu.setting_control(
-            dispatch,
-            model,
-            id="font-size-select",
-            options=[
-              { value: "12", label: "12px", },
-              { value: "13", label: "13px", },
-              { value: "14", label: "14px", },
-              { value: "15", label: "15px", },
-              { value: "16", label: "16px", },
-              { value: "17", label: "17px", },
-              { value: "18", label: "18px", },
-            ],
-            selected=model.app_font_size.wire(),
-            aria_label=@settings.text(locale, FontSize),
-            change=dispatch.map(value => FontSizeChanged(value)),
+          @html.input(
+            input_type=@html.InputType::Range,
+            id="font-size-slider",
+            list="font-size-ticks",
+            class="setting-font-size-slider",
+            min=AppFontSizeMinPixels,
+            max=AppFontSizeMaxPixels,
+            step=1,
+            value=model.app_font_size.wire(),
+            on_input=dispatch.map(value => FontSizeChanged(value)),
+            attrs=@html.Attrs::build()
+              .aria_label(@settings.text(locale, FontSize))
+              .aria_valuetext("\{model.app_font_size.wire()}px"),
           ),
+          @html.datalist(
+            id="font-size-ticks",
+            [
+              for size in AppFontSizeMinPixels..<(AppFontSizeMaxPixels + 1) => {
+                @html.option(value=size.to_string(), "")
+              }
+            ],
+          ),
+          @html.span(class="setting-font-size-value", [
+            @html.text("\{model.app_font_size.wire()}px"),
+          ]),
         ],
         desc=@settings.text(locale, FontSizeDescription),
       ),
