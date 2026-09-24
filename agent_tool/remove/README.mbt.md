@@ -13,8 +13,10 @@ the agent does not supply a hash or an approval flag.
 - Nonempty directories require approval, showing the recursive file and subdirectory
   counts. Hidden files and empty subdirectories are included.
 - Missing files, workspace roots and their ancestors, symlinks (including inside
-  a directory), special files, and targets outside a worker's write scope are
-  rejected without requesting approval.
+  a directory), and special files are rejected without requesting approval.
+- Valid targets outside a configured write scope require one-shot approval.
+  The grant names only the captured entries; it never authorizes an entire
+  subtree or changes the scope for later calls.
 
 ## Approval and concurrency
 

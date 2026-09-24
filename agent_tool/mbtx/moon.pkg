@@ -56,6 +56,8 @@ import {
   "moonbitlang/openseek/agent_tool/edit",
   "moonbitlang/openseek/agent_tool/multi_edit",
   "moonbitlang/openseek_protocol/emit",
+  "moonbitlang/openseek/agent_tool/write",
+  "moonbitlang/openseek/agent_tool/remove",
 } for "test"
 
 import {

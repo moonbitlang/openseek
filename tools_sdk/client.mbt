@@ -6,12 +6,22 @@
 /// OPENSEEK_PTC capability. Never retries. Missing/invalid capabilities fail
 /// before sending a request; cancellation propagates to the caller.
 pub async fn call(name : String, arguments : Json) -> CallResult {
-  let (url, token) = decode_handoff(@env.get_env_var("OPENSEEK_PTC"))
-  request(url, token, name, arguments)
+  let (url, token, approval_tools) = decode_handoff(
+    @env.get_env_var("OPENSEEK_PTC"),
+  )
+  request(
+    url,
+    token,
+    name,
+    arguments,
+    wait_for_approval=approval_tools.contains(name),
+  )
 }
 
 ///|
-fn decode_handoff(raw : String?) -> (String, String) raise TransportError {
+fn decode_handoff(
+  raw : String?,
+) -> (String, String, Array[String]) raise TransportError {
   guard raw is Some(raw) else {
     raise TransportError("No PTC host. Run with mbtx(ptc=true).")
   }
@@ -21,7 +31,14 @@ fn decode_handoff(raw : String?) -> (String, String) raise TransportError {
   guard json is { "version": 1, "url": String(url), "token": String(token), .. } else {
     raise TransportError("Invalid PTC host handoff")
   }
-  (url, token)
+  let approval_tools : Array[String] = match json {
+    { "approval_tools": Array(names), .. } =>
+      [
+        for name in names if name is String(name) => name
+      ]
+    _ => []
+  }
+  (url, token, approval_tools)
 }
 
 ///|
@@ -30,10 +47,12 @@ async fn request(
   token : String,
   name : String,
   arguments : Json,
+  wait_for_approval? : Bool = false,
+  timeout_ms? : Int = 125000,
 ) -> CallResult {
   let request : Json = { "version": 1, "name": name, "arguments": arguments }
   // No retries: a lost response does not prove an edit failed to execute.
-  let result = @async.with_timeout(125000, () => {
+  async fn send() -> Json {
     let (response, body) = @http.post(url, request, headers={
       "Authorization": "Bearer \{token}",
     })
@@ -43,7 +62,16 @@ async fn request(
       )
     }
     body.json()
-  }) catch {
+  }
+  // The host identifies calls that can wait for human input. Ordinary calls
+  // retain their transport deadline; caller cancellation always propagates.
+  let result = try {
+    if wait_for_approval {
+      send()
+    } else {
+      @async.with_timeout(timeout_ms, send)
+    }
+  } catch {
     @async.TaskCancelled as error => raise error
     TransportError(message) => raise TransportError(message)
     _ =>

@@ -47,9 +47,8 @@ syntax gate: the content is parsed standalone (`moonc syncheck` in a scratch
 file, no project context needed), and content with lex/parse errors is rejected
 before anything — parent directories included — is created on disk. The call
 fails with the errors and numbered excerpts synthesized from the rejected
-content. A non-parsing file is never a valid intermediate state, and `write`
-refuses to overwrite existing source, so the natural retry is another `write`
-with corrected content. Three or more parse errors switch the retry hint to
+content. A syntax failure cannot be approved; retry `write` with corrected
+content. Replacing existing source additionally requires approval. Three or more parse errors switch the retry hint to
 writing a smaller skeleton first and growing it with `edit`. Type errors never
 trigger the gate — they can be a legitimate transient state during multi-file
 work; in `.mbt.md` only the checked (`mbt check` / `moonbit check`) fenced blocks
@@ -142,3 +141,19 @@ async test "write tool updates an implementation note through the registry" {
   })
 }
 ```
+
+## Scoped operation approval
+
+Direct and PTC calls use the same executor and file-operation gate. A valid
+operation outside a configured write scope can request one-shot approval when
+a channel is present. Parameter, matching, manifest, and syntax failures do not
+request approval. The prompt shows the operation and proposed content; affected
+paths, canonical destinations, and file contents are rechecked after the wait.
+The wait releases the file gate. Approval grants only the exact targets for
+this call, including its guarded rollback, without changing future permissions.
+Without a channel, an out-of-scope operation remains blocked.
+
+Replacing existing `.mbt`/`.mbt.md` source requires the same one-shot operation
+approval, including when addressed through a differently named symlink. The
+candidate is syntax-checked before asking, and the original target/content is
+rechecked afterwards. Without an approval channel, use `edit`/`multi_edit`.

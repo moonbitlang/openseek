@@ -145,3 +145,11 @@ makes the first match at `start_line` exactly that occurrence, and working
 bottom-up per file and right to left per line keeps every remaining span
 valid without a second check. `share/workflow/fix-deprecations.mbtx` is this
 loop for deprecation warnings that name a bare replacement.
+
+## Approval waits
+
+The host may list `approval_tools` in the capability. SDK 0.2.0 waits for these
+calls without its ordinary 125-second deadline; caller cancellation still
+propagates. Other calls, and calls to older hosts without that metadata, retain
+the deadline. Published SDK 0.1.0 does not recognize this metadata and still
+times out after 125 seconds, so long approval waits require the updated SDK.

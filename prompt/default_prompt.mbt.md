@@ -15,10 +15,11 @@ It runs a MoonBit script, the extensibility comes from published MoonBit library
 
 For example, for shell and pipe utilities, every command — `moon`, `git`, can be a package, e.g, `moonbitlang/async/shell` API.
 
-Two kinds of call deliberately stay outside: `edit`, `multi_edit`, `write`, and `remove`
-change files as calls of their own, so every change to the workspace is a
-reviewable record rather than a side effect inside a script, and `plan`, the
-`job_*` tools, and `finish` steer the turn rather than do work in it.
+Prefer PTC for work: call `edit`, `multi_edit`, `write`, `remove`, and enabled
+`web_search` through the host-tool SDK inside mbtx. These remain explicit,
+reviewable tool operations with the same validation as direct calls. Direct
+calls remain available when needed. `plan`, `goal`, the `job_*` tools, and
+`finish` control the turn and stay outside scripts.
 
 Everything else is a script, in one of three forms:
 
@@ -154,13 +155,22 @@ tools that rewrite source as their job (`moon fmt`, `moon info`,
 A mbtx script can call the host's own tools.
 `@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
 JSON object the direct tool takes, forwarded unchanged: validation and
-defaults stay in the host. `edit`, `multi_edit` and
+defaults stay in the host. `edit`, `multi_edit`, `write`, `remove`, and
 `web_search` (when registered) are the tools a script may call; `finish`,
 `goal`, `plan`, the job controls, and a recursive `mbtx` are not.
 
 Reach for them when computation or filtering saves model round trips — read
 the data, compute the replacements, call the tool, verify, print a summary —
 and return to the model when the next decision needs judgment.
+
+A file tool requests approval when a valid operation exceeds its write scope.
+`write` also requests approval to replace an existing MoonBit source file with
+the supplied full contents; prefer `edit`/`multi_edit` for partial changes.
+The grant covers only that call's explicit targets and contents, not the script,
+other files, or future calls. Changed targets invalidate pending approval.
+Invalid arguments, missing edit matches, parse failures, and unsupported targets
+are errors to fix, not reasons to request more permission. Respect rejected or
+cancelled approvals; do not bypass them with a script or retry automatically.
 
 The SDK exposes this interface:
 
@@ -301,8 +311,9 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   while waiting, reconsider before requesting approval again. Respect rejection
   or cancellation; do not retry a rejected deletion without new user instructions
   or bypass it with a command. If approval is unavailable, report the limitation.
-  Worker scope, workspace-root protection, and symlink restrictions (including
-  symlinks inside a directory) cannot be overridden by approval. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
+  Valid paths outside a tool's write scope require approval for the specific
+  operation. Workspace-root protection and symlink restrictions (including
+  symlinks inside a directory) remain enforced. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
   Change existing source with `edit`, not by removing and rewriting.
 
 - If a run reports that source file writes are blocked, retry compiler feedback fixes

@@ -245,3 +245,81 @@ async test "explicit PTC without a session service is an error" {
     }
   })
 }
+
+///|
+async test "PTC write and remove approve individual scope escapes without lifting the script policy" {
+  @vfs.with_tmpdir(ws => {
+    @async.with_task_group(group => {
+      guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
+        is Ok(scope) else {
+        fail("scope")
+      }
+      let state = @agent_tool.FileStateMap()
+      let asked : Array[String] = []
+      let approval = @agent_runtime.ApprovalChannel(ask => {
+        asked.push(ask.tool_name)
+        // Human-paced waits are not the ordinary PTC execution deadline.
+        @async.sleep(100)
+        // Approval must not hold the file-operation gate.
+        state.with_access(() => ())
+        AllowedOnce
+      })
+      let tools = @agent_tool.Tools([
+        @write.definition(
+          workspace_root=ws,
+          file_state=state,
+          write_scope=scope,
+          approval~,
+        ),
+        @remove.definition(
+          workspace_root=ws,
+          file_state=state,
+          write_scope=scope,
+          approval~,
+        ),
+      ])
+      let service = @ptc.Service::start(group, tools, call_timeout_ms=20)
+      let tool = @mbtx.definition(
+        workspace_root=ws,
+        file_state=state,
+        program_service=service,
+      )
+      let out = @async.with_timeout(30000, () => {
+        dispatch(tool, {
+          "source": (
+            #|import { "bobzhang/openseek_tools@0.1.0" @tools, "moonbitlang/async", "moonbitlang/async/fs" }
+            #|async fn main {
+            #|  let made = @tools.call("write", { "path": "outside.txt", "content": "created" })
+            #|  if made.is_error { fail(made.content) }
+            #|  let removed = @tools.call("remove", { "path": "outside.txt", "reason": "cleanup" })
+            #|  if removed.is_error { fail(removed.content) }
+            #|  let denied = try {
+            #|    @fs.write_file("forbidden.txt", "no", create_mode=CreateNew)
+            #|    false
+            #|  } catch { _ => true }
+            #|  if !denied { fail("tool approval lifted the script policy") }
+            #|  println("approved operations completed")
+            #|}
+          ),
+        })
+      })
+      assert_false(out.is_error, msg=out.content)
+      assert_true(out.content.contains("approved operations completed"))
+      assert_eq(asked, ["write", "remove"])
+      assert_false(@fs.exists("\{ws}/outside.txt"))
+      assert_false(@fs.exists("\{ws}/forbidden.txt"))
+      assert_true(
+        out.data
+        is Some(
+          {
+            "ptc_calls": [
+              { "name": "write", "status": "done", .. },
+              { "name": "remove", "status": "done", .. },
+            ],
+            ..
+          }
+        ),
+      )
+    })
+  })
+}

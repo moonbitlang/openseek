@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_tool/internal/permission"
+
+import {
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/write_scope",
+}
+
+// Values
+pub async fn authorize(Array[String], tool_name~ : String, arguments~ : Json, file_state~ : @agent_tool.FileStateMap, write_scope? : @write_scope.WriteScope, approval? : @agent_runtime.ApprovalChannel, reason? : String) -> @write_scope.WriteScope?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

@@ -199,6 +199,13 @@ pub async fn[X] Service::start(
       errdefer abandon()
       let result = @async.with_task_group(waiters => {
         waiters.spawn_bg(no_wait=true, () => {
+          // Approval-capable tools use the same human-paced lifetime as
+          // direct calls. Session/program cancellation still revokes and joins
+          // them; their own validation/check deadlines remain in force.
+          if service.tools.find(name) is Some(tool) &&
+            tool.can_request_approval() {
+            return
+          }
           @async.sleep(service.call_timeout_ms)
           // Revoke at expiry, before the waiter unwinds and a granted
           // executor gets a chance to resume.
@@ -301,6 +308,15 @@ pub fn Program::env(self : Program) -> Map[String, String] {
         "version": 1,
         "url": "http://127.0.0.1:\{self.service.server.addr.port()}/call",
         "token": self.token,
+        "approval_tools": Json(
+          [
+            for tool in self.service.tools.function_tools() if self.service.tools.find(
+              tool.name,
+            )
+            is Some(definition) &&
+            definition.can_request_approval() => tool.name.to_json()
+          ],
+        ),
       } : Json).stringify(),
   }
 }

@@ -12,8 +12,11 @@ pub fn definition(
   workspace_root? : String = ".",
   file_state? : @agent_tool.FileStateMap = FileStateMap(),
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
+    owns_file_access=true,
+    can_request_approval=approval is Some(_),
     program_callable=true,
     name="multi_edit",
     description=(
@@ -137,12 +140,15 @@ pub fn definition(
       },
     }),
     execute=Async(arguments => {
-      execute_with_workspace(
-        workspace_root,
-        file_state,
-        arguments,
-        write_scope?,
-      )
+      file_state.with_access(() => {
+        execute_with_workspace(
+          workspace_root,
+          file_state,
+          arguments,
+          write_scope?,
+          approval?,
+        )
+      })
     }),
   )
 }
@@ -153,6 +159,7 @@ async fn execute_with_workspace(
   file_state : @agent_tool.FileStateMap,
   arguments : Json,
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
   let args = @decode.decode_args(arguments) catch {
     error =>
@@ -185,6 +192,7 @@ async fn execute_with_workspace(
     revert_if_warning_delta_greater_or_equal=args.revert_if_warning_delta_greater_or_equal,
     file_state~,
     write_scope?,
+    approval?,
   )
 }
 
@@ -275,6 +283,7 @@ async fn multi_edit_files(
   revert_if_warning_delta_greater_or_equal~ : Int?,
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
   let brief = "multi_edit"
   // Resolve every edit's path up front and key contiguity and grouping on the
@@ -338,18 +347,10 @@ async fn multi_edit_files(
   let writes : Array[PreparedWrite] = []
   for prepared_file in prepared {
     let new_content = apply_plans(prepared_file.content, prepared_file.plans)
-    let guard_message = match
-      @manifest_error.write_error(prepared_file.path, new_content) {
-      Some(message) => Some(message)
-      None =>
-        if write_scope is Some(scope) {
-          scope
-          .deny_reason(prepared_file.path)
-          .map(reason => "write blocked: \{reason}")
-        } else {
-          None
-        }
-    }
+    let guard_message = @manifest_error.write_error(
+      prepared_file.path,
+      new_content,
+    )
     match guard_message {
       Some(message) =>
         failures.push({
@@ -383,6 +384,41 @@ async fn multi_edit_files(
   if revert_on_parse_errors &&
     parse_gate_batch_rejection(writes) is Some(rejection) {
     return rejection
+  }
+  let write_scope = @permission.authorize(
+    writes.map(write => write.path),
+    tool_name="multi_edit",
+    arguments={
+      "files": Json(
+        writes.map(write => {
+          (
+            {
+              "path": write.path,
+              "old_content": write.original_content,
+              "new_content": write.new_content,
+            } : Json)
+        }),
+      ),
+    },
+    file_state~,
+    write_scope?,
+    approval?,
+  ) catch {
+    error =>
+      return @agent_tool.respond(
+        @tool_error.failure_message("\{error}"),
+        is_error=true,
+        data={ "outcome": "error" },
+      )
+  }
+  for write in writes {
+    guard @fs.read_file(write.path).text() == write.original_content else {
+      return @agent_tool.respond(
+        "file changed before editing: \{write.path}; re-read and retry",
+        is_error=true,
+        data={ "outcome": "error" },
+      )
+    }
   }
   // Measure every touched project before writing, using the same scope for
   // both guards. An unavailable baseline refuses the batch without a write.
