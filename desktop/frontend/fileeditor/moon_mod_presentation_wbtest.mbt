@@ -224,7 +224,7 @@ test "positioned moon.mod opens source and close forgets all graph state" {
 }
 
 ///|
-test "reviewed and historical moon.mod views remain source-only" {
+test "working moon.mod review retains its dependency graph but history excludes it" {
   let (state, ctx, path) = moon_mod_test_state()
   let (_, state) = update(
     test_emit(),
@@ -244,17 +244,42 @@ test "reviewed and historical moon.mod views remain source-only" {
     }),
   }
   let reviewed = { ..state, docs, }
-  assert_false(moon_mod_view_available(reviewed, ctx))
-  assert_false(uses_package_diagram_surface(reviewed, ctx))
+  assert_true(moon_mod_view_available(reviewed, ctx))
+  assert_true(uses_package_diagram_surface(reviewed, ctx))
   let (_, after_toggle) = update(
     test_emit(),
     MoonModViewModeSelected(MoonModSource),
     reviewed,
     ctx,
   )
-  assert_true(after_toggle == reviewed)
+  assert_false(uses_package_diagram_surface(after_toggle, ctx))
   let (after_sync, _) = sync(test_emit(), reviewed, ctx)
-  assert_true(after_sync.package_graphs.get(test_file(path.0)) is None)
+  assert_true(
+    after_sync.package_graphs.get(test_file(path.0))
+    is Some(PackageGraphLoading(_)),
+  )
+  let (_, diff) = update(test_emit(), ToggleReviewDiff, after_sync, ctx)
+  assert_true(file_diff_selected(diff, ctx))
+  assert_false(uses_package_diagram_surface(diff, ctx))
+  let (_, graph) = update(
+    test_emit(),
+    MoonModViewModeSelected(MoonModDependencies),
+    diff,
+    ctx,
+  )
+  let (_, repeated) = update(
+    test_emit(),
+    MoonModViewModeSelected(MoonModDependencies),
+    diff,
+    ctx,
+  )
+  assert_true(graph == repeated)
+  assert_true(uses_package_diagram_surface(graph, ctx))
+  assert_true(graph.package_graphs == after_sync.package_graphs)
+  assert_true(
+    graph.docs[test_file(path.0)].review
+    is Some({ baseline: ReviewContent(_), view_mode: ReviewSource, .. }),
+  )
 
   let history = {
     ..ctx,
@@ -309,4 +334,42 @@ test "watcher baseline invalidates a graph cached across its observation gap" {
     ctx,
   )
   assert_true(invalidated.package_graphs.get(test_file(path.0)) is None)
+}
+
+///|
+test "a late graph reply retains Diff and a deleted manifest cannot select a graph" {
+  let (state, ctx, path) = moon_mod_test_state()
+  let file = test_file(path.0)
+  let docs = state.docs.copy()
+  docs[file] = reviewed_doc(path, test_modified_change(path))
+  let graphs = state.package_graphs.copy()
+  graphs[file] = PackageGraphLoading(1)
+  let state = { ..state, docs, package_graphs: graphs, }
+  let (_, ready) = update(
+    test_emit(),
+    PackageGraphRequestLoaded(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      path=file,
+      generation=1,
+      source="graph",
+    ),
+    state,
+    ctx,
+  )
+  assert_true(ready.package_graphs[file] is PackageGraphReady(1, "graph"))
+  assert_true(file_diff_selected(ready, ctx))
+  assert_false(uses_package_diagram_surface(ready, ctx))
+  assert_true(ready.docs == state.docs)
+  let docs = ready.docs.copy()
+  docs[file] = { ..docs[file], state: TabDeleted, }
+  let deleted = { ..ready, docs, }
+  let (_, after) = update(
+    test_emit(),
+    MoonModViewModeSelected(MoonModDependencies),
+    deleted,
+    ctx,
+  )
+  assert_true(after == deleted)
+  assert_false(moon_mod_view_available(deleted, ctx))
 }
