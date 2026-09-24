@@ -260,7 +260,11 @@ fn CodeEditorWidget::create_references_controller(
       },
       mount: (root, anchor) => self.mount_code_references_peek(root, anchor),
       reveal_anchor: anchor => self.reveal_references_peek_anchor(anchor),
-      restore_source_focus: () => self.focus(),
+      restore_source_focus: anchor => {
+        if self.symbol_navigation_source_is_current(anchor) {
+          self.focus()
+        }
+      },
       open_location: (location, mode, source) => {
         self.open_peek_location(location, mode, source)
       },

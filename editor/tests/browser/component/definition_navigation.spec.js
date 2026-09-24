@@ -403,8 +403,8 @@ test('definition link preserves plain selection, paints only while armed, and na
 
 for (const dismiss of ['close button', 'Escape']) {
   // Real pointer/keyboard input verifies that moving the outer editor's cursor
-  // leaves the mounted Peek dismissible through both native event paths.
-  test(`Definitions ${dismiss} still closes after the source cursor moves`, async ({
+  // leaves Peek dismissible and restores source focus through both event paths.
+  test(`Definitions ${dismiss} closes and restores focus after the source cursor moves`, async ({
     page,
   }, testInfo) => {
     const reporter = await mountDefinitionFixture(page, testInfo);
@@ -430,6 +430,7 @@ for (const dismiss of ['close button', 'Escape']) {
       }
 
       await expect(page.locator(peek)).toHaveCount(0);
+      await expect(page.locator(outerEditor)).toBeFocused();
       expect((await state(page)).position).toEqual(movedPosition);
     } finally {
       reporter.dispose();

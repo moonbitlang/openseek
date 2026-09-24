@@ -98,7 +98,8 @@ pub(all) struct ReferencesPeekHost {
   is_anchor_current : (@goto_symbol.SymbolNavigationAnchor) -> Bool
   mount : (@rdom.Element, @goto_symbol.SymbolNavigationAnchor) -> ReferencesPeekMount?
   reveal_anchor : (@goto_symbol.SymbolNavigationAnchor) -> Unit
-  restore_source_focus : () -> Unit
+  // Revalidate the source surface/model without requiring the original cursor.
+  restore_source_focus : (@goto_symbol.SymbolNavigationAnchor) -> Unit
   open_location : async (
     @language.Location,
     @navigation_api.OpenLocationMode,
@@ -1046,9 +1047,9 @@ pub fn ReferencesController::close(
     !self.disposed &&
     self.generation == closing_generation &&
     self.phase == PeekClosed &&
-    anchor is Some(anchor) &&
-    self.anchor_is_current(anchor) {
-    (self.host.restore_source_focus)()
+    anchor is Some(anchor) {
+    // Disposal callbacks may have replaced the source, so the host checks now.
+    (self.host.restore_source_focus)(anchor)
   }
 }
 

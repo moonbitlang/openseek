@@ -79,7 +79,14 @@ fn ReferencesControllerTestHost::host(
       )
     },
     reveal_anchor: _anchor => self.reveal_count.val += 1,
-    restore_source_focus: () => self.restore_focus_count.val += 1,
+    restore_source_focus: anchor => {
+      if self.current.val &&
+        anchor.model().same(self.source_model) &&
+        anchor.surface_generation() == self.surface_generation.val &&
+        anchor.model_is_current() {
+        self.restore_focus_count.val += 1
+      }
+    },
     open_location: (location, _mode, _source) => {
       self.opened_resources.push(location.uri.to_string())
       true
@@ -308,6 +315,7 @@ async test "widget dismissal outlives its anchor but cannot close a replacement 
   assert_eq(controller.phase(), PeekClosed)
   assert_eq(host.mount_dispose_count.val, 1)
   assert_eq(previews.dispose_count.val, 1)
+  assert_eq(host.restore_focus_count.val, 0)
 
   assert_true(
     controller.toggle_locations(
@@ -324,10 +332,52 @@ async test "widget dismissal outlives its anchor but cannot close a replacement 
   assert_true(controller.phase() is PeekShown(_, _))
   assert_eq(host.mount_dispose_count.val, 1)
   assert_eq(previews.dispose_count.val, 1)
+  assert_eq(host.restore_focus_count.val, 0)
   (new_widget.callbacks.on_close)()
   assert_eq(controller.phase(), PeekClosed)
   assert_eq(host.mount_dispose_count.val, 2)
   assert_eq(previews.dispose_count.val, 2)
+  assert_eq(host.restore_focus_count.val, 1)
+  browser.flush_animation_frames()
+}
+
+///|
+async test "source replacement during preview disposal suppresses stale focus restoration" {
+  let browser = install_references_peek_test_browser()
+  defer browser.dispose()
+  let model = references_controller_test_model(
+    "file:///replace-focus-source.mbt",
+  )
+  defer model.dispose()
+  let surface_generation = Ref(1)
+  let host = references_controller_test_host(model, surface_generation)
+  let previews = ReferencesControllerTestPreviewLog()
+  let tasks = ReferencesControllerTestTasks()
+  let controller = ReferencesController(
+    host.host(),
+    previews.factory(),
+    resolver?=None,
+    task => tasks.schedule(task),
+  )
+  defer controller.dispose()
+  let location : @language.Location = {
+    uri: model.uri,
+    range: Range(1, 14, 1, 20),
+  }
+  assert_true(
+    controller.toggle_locations(
+      references_controller_test_anchor(model, surface_generation.val),
+      Definitions,
+      [location],
+    ),
+  )
+  tasks.run_all()
+  previews.on_dispose.val = Some(() => surface_generation.val += 1)
+  controller.close(restore_focus=true)
+  assert_eq(controller.phase(), PeekClosed)
+  assert_eq(previews.dispose_count.val, 1)
+  assert_eq(host.mount_dispose_count.val, 1)
+  assert_eq(host.restore_focus_count.val, 0)
   browser.flush_animation_frames()
 }
 

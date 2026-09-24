@@ -228,14 +228,22 @@ fn CodeEditorWidget::symbol_navigation_anchor_at(
 }
 
 ///|
-fn CodeEditorWidget::symbol_navigation_anchor_is_current(
+fn CodeEditorWidget::symbol_navigation_source_is_current(
   self : CodeEditorWidget,
   anchor : @goto_symbol.SymbolNavigationAnchor,
 ) -> Bool {
   guard !self.disposed && self.get_model() is Some(model) else { return false }
   anchor.surface_generation() == self.model_slot.generation &&
   anchor.model().same(model) &&
-  anchor.model_is_current() &&
+  anchor.model_is_current()
+}
+
+///|
+fn CodeEditorWidget::symbol_navigation_anchor_is_current(
+  self : CodeEditorWidget,
+  anchor : @goto_symbol.SymbolNavigationAnchor,
+) -> Bool {
+  self.symbol_navigation_source_is_current(anchor) &&
   self.get_position() is Some(position) &&
   position == anchor.position()
 }

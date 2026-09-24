@@ -108,7 +108,11 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
               bridge.reveal_anchor(anchor)
             }
           },
-          restore_source_focus: () => viewer.focus(),
+          restore_source_focus: anchor => {
+            if anchor_is_current(anchor) {
+              viewer.focus()
+            }
+          },
           // `open_location` is async, so its body stays a match rather than
           // moving into a non-async `map_or` closure.
           open_location: (location, mode, _source) => {

@@ -31,7 +31,7 @@ pub(all) struct ReferencesPeekHost {
   is_anchor_current : (@goto_symbol.SymbolNavigationAnchor) -> Bool
   mount : (@dom.Element, @goto_symbol.SymbolNavigationAnchor) -> ReferencesPeekMount?
   reveal_anchor : (@goto_symbol.SymbolNavigationAnchor) -> Unit
-  restore_source_focus : () -> Unit
+  restore_source_focus : (@goto_symbol.SymbolNavigationAnchor) -> Unit
   open_location : async (@language.Location, @navigation_api.OpenLocationMode, String) -> Bool noraise
   show_message : (@goto_symbol.SymbolNavigationAnchor, String) -> Unit
 }
