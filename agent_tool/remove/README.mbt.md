@@ -1,6 +1,6 @@
 # Remove Tool
 
-`remove(path, reason)` deletes a regular file. The arguments are unchanged;
+`remove(path, reason)` deletes a regular file or recursively deletes a directory. The arguments are unchanged;
 the agent does not supply a hash or an approval flag.
 
 - Files recorded as created by this session whose contents still match the
@@ -8,14 +8,17 @@ the agent does not supply a hash or an approval flag.
 - Existing files, files made by external commands, and files changed since the
   agent last wrote them require one-shot approval through `ApprovalChannel`.
   The question shows the path, the agent's reason, and why approval is needed.
-- Missing files, directories, final-component symlinks, and targets outside a
-  worker's write scope are rejected without requesting approval.
+- Directories always require approval, showing the recursive file and subdirectory
+  counts. Hidden files and empty subdirectories are included.
+- Missing files, workspace roots and their ancestors, symlinks (including inside
+  a directory), special files, and targets outside a worker's write scope are
+  rejected without requesting approval.
 
 ## Approval and concurrency
 
 The channel uses the existing session permission policy: `ask` waits for the
 controller, `always` grants automatically, and `never` provides no channel.
-Rejection, cancellation, or an absent/unavailable channel leaves the file intact.
+Rejection, cancellation, or an absent/unavailable channel leaves the target intact.
 Workers currently have no approval channel; they report the blocked deletion
 to their parent instead of bypassing confinement.
 
@@ -23,7 +26,15 @@ A grant is used only by this call for the file's captured canonical path and
 raw-byte SHA-256. After approval, the tool rechecks the scope, kind, location,
 and contents. A changed version is refused; a later request needs fresh
 approval. Matching bytes identify a content version, not a filesystem object.
-There is no atomic compare-and-unlink against external writers.
+For directories, the captured version includes every entry's path, kind,
+canonical location, and each regular file's raw-byte digest. Added, removed,
+renamed, or changed entries invalidate the grant before deletion starts.
+
+There is no atomic compare-and-unlink against external writers. After validating
+all entries, directory deletion proceeds in postorder, checking each entry again
+and using non-recursive directory removal. A concurrent change or filesystem
+failure during deletion can leave a partially removed tree; it never expands
+the approved list to include newly added files.
 
 The definition owns its locking through `FileStateMap::with_access`: the initial
 check and automatic deletion share one locked phase; approval waits outside

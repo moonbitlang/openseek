@@ -1,6 +1,6 @@
 ///|
-/// Remove unchanged files created by this session automatically. Other regular
-/// files require a one-shot approval for their current location and contents.
+/// Remove unchanged files created by this session automatically. Other files
+/// and directories require one-shot approval for their location and contents.
 /// This definition owns its file-state locking; do not wrap it in `serialize`.
 pub fn definition(
   workspace_root? : String = ".",
@@ -11,13 +11,15 @@ pub fn definition(
   AgentToolDefinition(
     name="remove",
     description=(
-      #|Delete a regular file, with a non-empty reason recorded in the result.
+      #|Delete a file or recursively delete a directory, with a non-empty reason.
       #|Unchanged files created by this session are removed automatically. Other
-      #|files require approval through the session's permission channel. If approval
-      #|is unavailable, rejected, or cancelled, the file is kept. Approval applies
-      #|only to this deletion; a file changed while waiting must be reconsidered
-      #|and approved again. Directories, symlinks, and paths outside the worker's
-      #|write scope are refused without asking. Do not bypass a refusal with mbtx.
+      #|files and all directories require approval through the permission channel.
+      #|If approval is unavailable, rejected, or cancelled, the target is kept.
+      #|A file or tree changed while waiting must be reconsidered
+      #|and approved again. Directory approval covers the whole captured tree.
+      #|Workspace roots and their ancestors, symlinks (including inside a tree),
+      #|special files, and paths outside the worker's write scope are refused.
+      #|Do not bypass a refusal with mbtx.
       #|Deleting .mbt/.mbt.md also runs moon check and reports its feedback.
     ),
     schema=JsonSchema({
@@ -27,9 +29,8 @@ pub fn definition(
         "reason": {
           "type": "string",
           "description": (
-            #|A short, non-empty explanation of why this file is being deleted, recorded
-            #|in the result so a destructive action can be audited later. A blank reason
-            #|is rejected.
+            #|A short, non-empty explanation of why this file or directory is being
+            #|deleted, recorded in the result for auditing. A blank reason is rejected.
           ),
         },
       },
@@ -54,9 +55,21 @@ priv struct FileVersion {
 } derive(Eq)
 
 ///|
+priv enum NodeVersion {
+  File(FileVersion)
+  Directory(String)
+} derive(Eq)
+
+///|
+priv struct RemovalVersion {
+  // Postorder: children precede their directory, and the target is last.
+  entries : Array[(String, NodeVersion)]
+} derive(Eq)
+
+///|
 priv enum Removal {
   Finished(@agent_tool.ToolAction)
-  NeedsApproval(FileVersion, String)
+  NeedsApproval(RemovalVersion, String)
 }
 
 ///|
@@ -88,11 +101,17 @@ async fn execute_with_workspace(
   let path = @workspace_path.resolve(workspace_root, input.path)
   try {
     let decision = file_state.with_access(() => {
-      let version = inspect_file(path, write_scope?)
-      if file_state.created_and_unchanged(path, version.digest) {
+      let version = inspect_target(path, workspace_root, write_scope?)
+      if version.entries is [(_, File(file))] &&
+        file_state.created_and_unchanged(path, file.digest) {
         Finished(delete_file(path, input.reason, file_state, write_scope?))
       } else {
-        let why = if file_state.get(path) is Some(Created) {
+        let why = if version.entries.last() is Some((_, Directory(_))) {
+          let files = version.entries
+            .filter(entry => entry.1 is File(_))
+            .length()
+          "recursive directory deletion: \{files} files and \{version.entries.length() - files - 1} subdirectories; all contents will be removed"
+        } else if file_state.get(path) is Some(Created) {
           "the file's content has changed since the agent last wrote it"
         } else {
           "the file is not recorded as created by the agent this session"
@@ -115,27 +134,38 @@ async fn execute_with_workspace(
     let body : Json = { "path": path, "reason": input.reason }
     let outcome = channel.ask({
       tool_name: "remove",
-      detail: "delete this one file: \{why}. This grants no other deletions or sandbox changes.",
+      detail: "delete this target: \{why}. This grants no other deletions or sandbox changes.",
       body: Some(body.stringify()),
     })
     match outcome {
       AllowedOnce =>
         file_state.with_access(() => {
-          let current = inspect_file(path, write_scope?)
+          let current = inspect_target(path, workspace_root, write_scope?)
           guard current == version else {
             return removal_error(
-              path, "file changed while awaiting approval; deletion refused. Reconsider and request approval again",
+              path, "file or directory changed while awaiting approval; deletion refused. Reconsider and request approval again",
             )
           }
-          delete_file(path, input.reason, file_state, write_scope?)
+          if version.entries.last() is Some((_, Directory(_))) {
+            delete_directory(
+              path,
+              input.reason,
+              version,
+              file_state,
+              write_scope?,
+            )
+          } else {
+            delete_file(path, input.reason, file_state, write_scope?)
+          }
         })
       Rejected =>
         removal_error(
-          path, "deletion approval rejected; file kept. Do not retry without new user instructions",
+          path, "deletion approval rejected; target kept. Do not retry without new user instructions",
         )
-      Cancelled => removal_error(path, "deletion approval cancelled; file kept")
+      Cancelled =>
+        removal_error(path, "deletion approval cancelled; target kept")
       Unavailable =>
-        removal_error(path, "deletion approval unavailable; file kept")
+        removal_error(path, "deletion approval unavailable; target kept")
     }
   } catch {
     error => removal_error(path, @tool_error.failure_message("\{error}"))
@@ -143,22 +173,81 @@ async fn execute_with_workspace(
 }
 
 ///|
-/// Approval never overrides scope or file-kind restrictions. Hash raw bytes so
-/// binary files can be approved without decoding them as text.
-async fn inspect_file(
+/// Approval never overrides scope or kind restrictions. Hash complete raw bytes.
+async fn inspect_node(
   path : String,
   write_scope? : @write_scope.WriteScope,
-) -> FileVersion {
+) -> NodeVersion {
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
     fail("write blocked: \{reason}")
   }
   guard @fs.exists(path) else { fail("no such file") }
-  guard @fs.kind(path, follow_symlink=false) is Regular else {
-    fail("not a regular file; remove deletes regular files")
+  match @fs.kind(path, follow_symlink=false) {
+    Regular => {
+      let canonical = @fs.realpath(path)
+      let bytes = @fs.read_file(path).binary()
+      File({
+        canonical,
+        digest: @crypto.bytes_to_hex_string(@crypto.sha256(bytes)),
+      })
+    }
+    Directory => Directory(@fs.realpath(path))
+    _ =>
+      fail(
+        "not a regular file or directory; symlinks and special files cannot be removed",
+      )
   }
-  let canonical = @fs.realpath(path)
-  let bytes = @fs.read_file(path).binary()
-  { canonical, digest: @crypto.bytes_to_hex_string(@crypto.sha256(bytes)), }
+}
+
+///|
+async fn inspect_target(
+  path : String,
+  workspace_root : String,
+  write_scope? : @write_scope.WriteScope,
+) -> RemovalVersion {
+  let entries = []
+  let root = @fs.realpath(workspace_root)
+  async fn visit(path : String) -> Unit {
+    let node = inspect_node(path, write_scope?)
+    if node is Directory(canonical) {
+      // This also protects filesystem roots and aliases of workspace ancestors.
+      if @workspace_path.is_under_workspace_root(canonical, root) {
+        fail("cannot remove the workspace root or its ancestors")
+      }
+      for name in @fs.readdir(path, include_hidden=true, sort=true) {
+        visit(@workspace_path.join_child(path, name))
+      }
+    }
+    entries.push((path, node))
+  }
+  visit(path)
+  { entries, }
+}
+
+///|
+async fn delete_directory(
+  path : String,
+  reason : String,
+  version : RemovalVersion,
+  file_state : @agent_tool.FileStateMap,
+  write_scope? : @write_scope.WriteScope,
+) -> @agent_tool.ToolAction {
+  // Delete only the reviewed entries. Never use recursive rmdir, which could
+  // silently include new files added by an external writer after the recheck.
+  for (entry, expected) in version.entries {
+    guard inspect_node(entry, write_scope?) == expected else {
+      fail("directory changed during deletion; remaining entries were kept")
+    }
+    match expected {
+      File(_) => @fs.remove(entry)
+      Directory(_) => @fs.rmdir(entry)
+    }
+    file_state.forget(entry)
+  }
+  @agent_tool.respond(
+    "ok: recursively removed \{path} (reason: \{reason})",
+    brief=@agent_tool.brief_line("removed \{path}"),
+  )
 }
 
 ///|

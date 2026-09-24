@@ -154,7 +154,7 @@ async test "remove reports a missing file" {
 }
 
 ///|
-async test "remove refuses a directory" {
+async test "remove keeps a directory without an approval channel" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/pkg.mbt"
     @fs.mkdir(path, recursive=true)
@@ -163,7 +163,7 @@ async test "remove refuses a directory" {
     let result = run_remove(state, { "path": path, "reason": "cleanup" })
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
-    assert_true(output.content.contains("not a regular file"))
+    assert_true(output.content.contains("no approval channel"))
     assert_true(@fs.exists(path))
   })
 }

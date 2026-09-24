@@ -154,7 +154,7 @@ async test "approval rechecks file kind and worker scope" {
 }
 
 ///|
-async test "directories symlinks and out-of-scope files never request approval" {
+async test "symlinks and out-of-scope files never request approval" {
   @vfs.with_tmpdir(dir => {
     @fs.mkdir("\{dir}/allowed")
     @fs.mkdir("\{dir}/allowed/directory")
@@ -170,7 +170,7 @@ async test "directories symlinks and out-of-scope files never request approval" 
       approval=ApprovalChannel(_ => fail("must not ask")),
     )
     guard definition.execute is Async(run) else { fail("expected async") }
-    for path in ["outside", "allowed/directory", "allowed/link"] {
+    for path in ["outside", "allowed/link"] {
       guard run({ "path": path, "reason": "cleanup" }) is Respond(out) else {
         fail("expected response")
       }

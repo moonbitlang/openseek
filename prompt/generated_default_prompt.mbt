@@ -518,15 +518,15 @@ fn default_prompt() -> String {
     #|  are fixing, not callers broken by your change, before re-issuing with the
     #|  named value (`delta + 1` for the inclusive guard).
     #|
-    #|- Use `remove(path, reason)` for task-related file deletions. Unchanged files
-    #|  created by this session are deleted automatically; other regular files request
+    #|- Use `remove(path, reason)` for task-related file and directory deletions. Unchanged files
+    #|  created by this session are deleted automatically; other regular files and all directories request
     #|  approval through the session's permission channel. The tool presents the path
-    #|  and your reason. A grant applies only to this deletion; if the file changes
+    #|  and your reason, plus file and subdirectory counts for recursive deletion. A grant applies only to this deletion; if the file or directory contents change
     #|  while waiting, reconsider before requesting approval again. Respect rejection
     #|  or cancellation; do not retry a rejected deletion without new user instructions
     #|  or bypass it with a command. If approval is unavailable, report the limitation.
-    #|  Worker scope, directory, and symlink restrictions cannot be overridden by
-    #|  approval. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
+    #|  Worker scope, workspace-root protection, and symlink restrictions (including
+    #|  symlinks inside a directory) cannot be overridden by approval. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
     #|  Change existing source with `edit`, not by removing and rewriting.
     #|
     #|- If a run reports that source file writes are blocked, retry compiler feedback fixes
