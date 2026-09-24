@@ -57,8 +57,8 @@ for (const provider of ['OpenSeek', 'Codex']) {
     if (provider === 'Codex') {
       await expect.poll(() => app.requests.find(r => r.method === 'codex.turn.start')?.params.input)
         .toEqual(expect.arrayContaining([
-          { type: 'mention', name: 'nested', path: 'src/nested' },
-          { type: 'mention', name: 'empty', path: 'empty' },
+          { type: 'text', text: '<user_mentions>\n<directory path="src/nested"/>\n</user_mentions>' },
+          { type: 'text', text: '<user_mentions>\n<directory path="empty"/>\n</user_mentions>' },
         ]));
     } else {
       await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task)
@@ -88,5 +88,55 @@ test('directory completion searches beyond the bounded initial index', async ({ 
   await directory.click();
   await expect(page.locator('.mention-chip')).toContainText('late/empty/');
   expect(app.requests.some(r => r.method === 'fs.search_files' && r.params.query === 'late/empty/')).toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Codex directory mentions retain their identity in returned and reopened history', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.searchFiles = ['src/main.mbt'];
+  app.searchDirectories = ['empty'];
+  app.codexModels = [{ id: 'gpt-test', displayName: 'Codex directories', isDefault: true }];
+  const thread = {
+    id: 'codex-thread-e2e', cwd: '/workspace', projectRoot: '/workspace',
+    preview: 'Codex directory history', updatedAt: 2, turns: [],
+  };
+  const replyFor = app.replyFor.bind(app);
+  app.replyFor = request => {
+    if (request.method === 'codex.turn.start') {
+      // Echo the actual submitted input, then serve it again after a reload.
+      const turn = { id: 'directory-turn', status: 'completed', items: [
+        { id: 'directory-user', type: 'userMessage', content: request.params.input },
+      ] };
+      thread.turns = [turn];
+      return { turn };
+    }
+    if (request.method === 'codex.thread.list') {
+      return { data: !request.params.archived && thread.turns.length ? [thread] : [] };
+    }
+    if (request.method === 'codex.thread.history.read') return { thread };
+    return replyFor(request);
+  };
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Model', exact: true }).click();
+  await page.getByRole('option', { name: 'Codex directories', exact: true }).click();
+  const composer = page.getByRole('textbox', { name: 'Ask Codex to inspect, edit, or explain this workspace.', exact: true });
+  for (const path of ['empty/', 'src/main.mbt']) {
+    await composer.fill(`@${path}`);
+    await expect(page.locator('.completion-item')).toHaveCount(1);
+    await composer.press('Tab');
+  }
+  await page.getByTitle('Send', { exact: true }).click();
+  const labels = page.locator('.user-bubble .mention-label');
+  await expect(labels).toHaveText(['empty/', 'main.mbt']);
+  await expect(page.locator('.user-bubble .mention-jump')).toHaveCount(1);
+  await page.locator('.user-bubble .mention-body').click();
+  await page.reload();
+  await page.getByText('Codex directory history', { exact: true }).first().click();
+  await expect(labels).toHaveText(['empty/', 'main.mbt']);
+  await expect(page.locator('.user-bubble .mention-jump')).toHaveCount(1);
+  await page.locator('.user-bubble .mention-body').click();
+  expect(app.requests.some(r => r.method === 'codex.thread.history.read')).toBe(true);
+  expect(app.requests.some(r => r.method === 'fs.read_file' && r.params.path.endsWith('/empty'))).toBe(false);
   expect(app.pageErrors).toEqual([]);
 });
