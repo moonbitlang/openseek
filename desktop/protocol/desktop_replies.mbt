@@ -226,6 +226,9 @@ pub(all) struct RunsReply {
   /// Questions still waiting for an answer. Empty for a host with none, and
   /// for every engine that never asks.
   approvals : Array[PendingApprovalPayload]
+  /// The follow-up queue of every open run that has one. Like `approvals`,
+  /// live host state a rejoining client cannot rebuild from the record.
+  queues : Array[QueueChangedPayload]
 } derive(Debug, Eq)
 
 ///|

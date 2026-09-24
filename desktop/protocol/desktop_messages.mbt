@@ -96,6 +96,28 @@ pub(all) struct QueuePayload {
 } derive(Debug, Eq)
 
 ///|
+/// One prompt waiting in a running turn's follow-up queue, as the host holds
+/// it. `id` is the client-minted submission id the prompt was queued under;
+/// it becomes the promoted run's `submission_id`.
+pub(all) struct QueuedInputPayload {
+  id : String
+  content : String
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
+/// The complete follow-up queue of one open run, published whenever it
+/// changes and replayed in `agent.runs`. The queue belongs to the host's
+/// engine process and never reaches the session record, so — like a standing
+/// approval — a client that was not there when it changed can learn it only
+/// from the host. Always the whole list: the mutation that caused it is not
+/// interesting, the queue's current state is.
+pub(all) struct QueueChangedPayload {
+  session : String
+  run_id : String
+  queued : Array[QueuedInputPayload]
+} derive(Debug, Eq, FromJson, ToJson)
+
+///|
 /// One answer to an engine's `approval_requested`, addressed by the id that
 /// event carried. `run_id` guards the same race a steer's does: a decision
 /// minted against one run must not settle a question in the next.
@@ -1891,6 +1913,30 @@ pub extend KnownRunPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend KnownRunPayload with ToJson::{to_json}
+
+///|
+pub extend QueuedInputPayload with Debug::{to_repr}
+
+///|
+pub extend QueuedInputPayload with FromJson::{from_json}
+
+///|
+pub extend QueuedInputPayload with Eq::{equal, not_equal}
+
+///|
+pub extend QueuedInputPayload with ToJson::{to_json}
+
+///|
+pub extend QueueChangedPayload with Debug::{to_repr}
+
+///|
+pub extend QueueChangedPayload with FromJson::{from_json}
+
+///|
+pub extend QueueChangedPayload with Eq::{equal, not_equal}
+
+///|
+pub extend QueueChangedPayload with ToJson::{to_json}
 
 ///|
 pub extend LoadSessionPayload with Debug::{to_repr}

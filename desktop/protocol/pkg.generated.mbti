@@ -2048,6 +2048,7 @@ pub(all) enum Notification {
   AgentEvent(AgentEventPayload)
   AgentError(AgentErrorPayload)
   AgentFinished(FinishedPayload)
+  AgentQueueChanged(QueueChangedPayload)
   SessionEvent(SessionCommitPayload)
   SubrunProgress(SubrunProgressPayload)
   WorkflowEntry(WorkflowEntryPayload)
@@ -2085,6 +2086,7 @@ pub(all) enum NotificationKind {
   AgentEvent
   AgentError
   AgentFinished
+  AgentQueueChanged
   SessionEvent
   SubrunProgress
   WorkflowEntry
@@ -2255,6 +2257,17 @@ pub fn QueueAction::equal(Self, Self) -> Bool
 pub fn QueueAction::not_equal(Self, Self) -> Bool
 pub fn QueueAction::to_repr(Self) -> @debug.Repr
 
+pub(all) struct QueueChangedPayload {
+  session : String
+  run_id : String
+  queued : Array[QueuedInputPayload]
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn QueueChangedPayload::equal(Self, Self) -> Bool
+pub fn QueueChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QueueChangedPayload::not_equal(Self, Self) -> Bool
+pub fn QueueChangedPayload::to_json(Self) -> Json
+pub fn QueueChangedPayload::to_repr(Self) -> @debug.Repr
+
 pub(all) struct QueuePayload {
   action : QueueAction
   run_id : String
@@ -2277,6 +2290,16 @@ pub fn QueueReply::to_json(Self) -> Json
 pub fn QueueReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for QueueReply
 pub impl @json.FromJson for QueueReply
+
+pub(all) struct QueuedInputPayload {
+  id : String
+  content : String
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn QueuedInputPayload::equal(Self, Self) -> Bool
+pub fn QueuedInputPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn QueuedInputPayload::not_equal(Self, Self) -> Bool
+pub fn QueuedInputPayload::to_json(Self) -> Json
+pub fn QueuedInputPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReadDirPayload {
   path : String
@@ -2360,6 +2383,7 @@ pub(all) struct RunsReply {
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
   approvals : Array[PendingApprovalPayload]
+  queues : Array[QueueChangedPayload]
 } derive(Eq, @debug.Debug)
 pub fn RunsReply::equal(Self, Self) -> Bool
 pub fn RunsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

@@ -182,6 +182,17 @@ fn device_msg(
     AgentEvent(payload) => engine_msg(payload)
     AgentError(payload) => error_msg(payload)
     AgentFinished(payload) => finished_msg(payload)
+    AgentQueueChanged(payload) =>
+      Some(
+        QueueChanged(
+          session=payload.session,
+          run_id=payload.run_id,
+          queued=payload.queued.map(item => {
+            id: item.id,
+            content: item.content,
+          }),
+        ),
+      )
     SessionEvent(payload) => session_event_msg(channel, payload)
     SubrunProgress(payload) =>
       Some(
@@ -614,12 +625,20 @@ fn fetch_runs(
           },
         })
       }
+      // Queues come back unfiltered like questions: what an open run will do
+      // next is the business of whoever is looking at that session.
+      let recovered_queues : Array[RecoveredQueue] = reply.queues.map(queue => {
+        session: queue.session,
+        run_id: queue.run_id,
+        queued: queue.queued.map(item => { id: item.id, content: item.content, }),
+      })
       scheduler.add(
         dispatch(
           RunsLoaded(
             runs=recovered,
             settled=recovered_settlements,
             approvals=recovered_approvals,
+            queues=recovered_queues,
             live~,
             frontier~,
             connection_generation~,

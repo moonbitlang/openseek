@@ -304,6 +304,7 @@ fn runs_loaded_with_approvals(
       runs=[],
       settled=[],
       approvals~,
+      queues=[],
       live~,
       frontier~,
       connection_generation=0,
@@ -581,6 +582,7 @@ test "a session missing from the frontier still gets its question" {
             },
           },
         ],
+        queues=[],
         live=[run_id],
         // Captured before this page knew the conversation.
         frontier=[],
@@ -647,6 +649,7 @@ test "a question survives a run handoff inside one snapshot" {
             },
           },
         ],
+        queues=[],
         live=["r-successor"],
         frontier=[
           {
