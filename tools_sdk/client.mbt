@@ -44,7 +44,7 @@ async fn request(
     }
     body.json()
   }) catch {
-    TransportError(message) => raise TransportError(message)
+    TransportError::_ as error => raise error
     _ =>
       raise TransportError(
         "PTC connection failed, timed out, or returned invalid JSON; execution outcome may be unknown",

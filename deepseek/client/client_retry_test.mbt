@@ -341,3 +341,26 @@ async test "streaming chat never retries after a tool-call-only delta" {
     fail("expected truncated stream error")
   }
 }
+
+///|
+/// A URL the HTTP client cannot even parse is a caller error, not a transient
+/// one: every `URIParseError` fails the first attempt without a retry.
+async test "chat does not retry an unparseable endpoint URL" {
+  let retries = Ref(0)
+  let client = retry_client("ftp://127.0.0.1/chat/completions", attempts=3)
+  let message = try {
+    ignore(
+      client.chat(
+        [ChatMessage(User, content=[Text("hello")])],
+        stream=StreamHandler(on_content_delta=_ => (), on_retry=(_, _, _) => {
+          retries.val += 1
+        }),
+      ),
+    )
+    "succeeded"
+  } catch {
+    error => "\{error}"
+  }
+  assert_eq(retries.val, 0)
+  assert_true(message.contains("cannot be retried automatically"))
+}
