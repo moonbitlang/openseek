@@ -48,11 +48,13 @@ test('hunk context follows the hovered split pane and expands only over its icon
       panes: rect(editor.querySelector('.moonbit-diff-editor-panes')),
     };
   });
-  const hoverHunkSide = async side => {
+  const hoverHunkSide = async (side, narrowPane = false) => {
     await expect(async () => {
       const bounds = await geometry();
       const pane = bounds[side];
-      await page.mouse.move(pane.x + pane.width * 0.7,
+      // At the minimum split width even the collapsed icon covers most of
+      // the pane. Its left inset remains a hunk-only pointer target.
+      await page.mouse.move(pane.x + (narrowPane ? 1 : pane.width * 0.7),
         bounds.hunk.y + Math.max(1, bounds.hunk.height - 4));
       await expect(control).toHaveCSS('opacity', '1', { timeout: 250 });
       const hovered = await geometry();
@@ -60,8 +62,7 @@ test('hunk context follows the hovered split pane and expands only over its icon
       // gutter. The review sidebar and the opposite pane are not valid anchors.
       expect(hovered.button.x).toBeGreaterThanOrEqual(pane.x);
       expect(hovered.button.x - pane.x).toBeLessThanOrEqual(8);
-      expect(hovered.button.y - hovered.hunk.y).toBeGreaterThanOrEqual(0);
-      expect(hovered.button.y - hovered.hunk.y).toBeLessThanOrEqual(8);
+      expect(hovered.button.y).toBeCloseTo(hovered.hunk.y, 1);
     }).toPass({ timeout: 5000 });
     await expect(label).toHaveCSS('opacity', '0');
     await expect.poll(async () => (await geometry()).button.width).toBeLessThanOrEqual(36);
@@ -92,7 +93,7 @@ test('hunk context follows the hovered split pane and expands only over its icon
   await expect.poll(async () => (await geometry()).modified.x)
     .toBeLessThan(sashBounds.x - 40);
   await hoverHunkSide('modified');
-  await hoverHunkSide('original');
+  await hoverHunkSide('original', true);
   await button.hover();
   await expect(label).toHaveCSS('opacity', '1');
   const expanded = await geometry();

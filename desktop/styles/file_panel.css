@@ -3355,7 +3355,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .review-hunk-context {
   position: absolute;
   left: calc(var(--diff-hunk-hover-left) + 2px);
-  top: 3px;
+  top: 0;
   opacity: 0;
   pointer-events: none;
 }
