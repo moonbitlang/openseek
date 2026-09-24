@@ -274,7 +274,9 @@ pub fn ReferencesController::toggle_locations(
     mode,
     {
       on_close: () => {
-        if self.session_is_current(generation) {
+        // Dismissal belongs to this session even after the source cursor moves.
+        // A callback from a replaced session must not close the new Peek.
+        if !self.disposed && self.generation == generation {
           self.close(restore_focus=true)
         }
       },

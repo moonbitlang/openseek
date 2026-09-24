@@ -401,6 +401,42 @@ test('definition link preserves plain selection, paints only while armed, and na
   }
 });
 
+for (const dismiss of ['close button', 'Escape']) {
+  // Real pointer/keyboard input verifies that moving the outer editor's cursor
+  // leaves the mounted Peek dismissible through both native event paths.
+  test(`Definitions ${dismiss} still closes after the source cursor moves`, async ({
+    page,
+  }, testInfo) => {
+    const reporter = await mountDefinitionFixture(page, testInfo);
+    try {
+      const anchor = await referencePoint(page);
+      await page.mouse.click(anchor.x, anchor.y);
+      const originalPosition = (await state(page)).position;
+      await page.keyboard.press('Alt+F12');
+      await expect(page.locator(preview)).toContainText('definition_alpha');
+
+      const source = await textRange(page, outerEditor, 1, 'definition_alpha');
+      await page.mouse.click(source.x, source.y);
+      const movedPosition = (await state(page)).position;
+      expect(movedPosition).not.toEqual(originalPosition);
+      await expect(page.locator(peek)).toBeVisible();
+
+      if (dismiss === 'close button') {
+        await page.locator(`${peek} .moonbit-viewer-references-peek-close`).click();
+      } else {
+        const target = await textRange(page, preview, 1, 'definition_alpha');
+        await page.mouse.click(target.x, target.y);
+        await page.keyboard.press('Escape');
+      }
+
+      await expect(page.locator(peek)).toHaveCount(0);
+      expect((await state(page)).position).toEqual(movedPosition);
+    } finally {
+      reporter.dispose();
+    }
+  });
+}
+
 test('F4 replaces a multi-definition preview without losing preview focus', async ({
   page,
 }, testInfo) => {

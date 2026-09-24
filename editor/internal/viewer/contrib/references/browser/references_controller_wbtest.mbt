@@ -272,6 +272,66 @@ async test "controller toggles one surface session and replaces previews in plac
 }
 
 ///|
+async test "widget dismissal outlives its anchor but cannot close a replacement session" {
+  let browser = install_references_peek_test_browser()
+  defer browser.dispose()
+  let model = references_controller_test_model("file:///dismiss-source.mbt")
+  defer model.dispose()
+  let surface_generation = Ref(1)
+  let host = references_controller_test_host(model, surface_generation)
+  let previews = ReferencesControllerTestPreviewLog()
+  let tasks = ReferencesControllerTestTasks()
+  let controller = ReferencesController(
+    host.host(),
+    previews.factory(),
+    resolver?=None,
+    task => tasks.schedule(task),
+  )
+  defer controller.dispose()
+  let location : @language.Location = {
+    uri: model.uri,
+    range: Range(1, 14, 1, 20),
+  }
+  assert_true(
+    controller.toggle_locations(
+      references_controller_test_anchor(model, surface_generation.val),
+      Definitions,
+      [location],
+    ),
+  )
+  tasks.run_all()
+  guard controller.widget is Some(old_widget) else {
+    fail("expected an open Peek widget")
+  }
+  surface_generation.val += 1
+  (old_widget.callbacks.on_close)()
+  assert_eq(controller.phase(), PeekClosed)
+  assert_eq(host.mount_dispose_count.val, 1)
+  assert_eq(previews.dispose_count.val, 1)
+
+  assert_true(
+    controller.toggle_locations(
+      references_controller_test_anchor(model, surface_generation.val),
+      Definitions,
+      [location],
+    ),
+  )
+  tasks.run_all()
+  guard controller.widget is Some(new_widget) else {
+    fail("expected a replacement Peek widget")
+  }
+  (old_widget.callbacks.on_close)()
+  assert_true(controller.phase() is PeekShown(_, _))
+  assert_eq(host.mount_dispose_count.val, 1)
+  assert_eq(previews.dispose_count.val, 1)
+  (new_widget.callbacks.on_close)()
+  assert_eq(controller.phase(), PeekClosed)
+  assert_eq(host.mount_dispose_count.val, 2)
+  assert_eq(previews.dispose_count.val, 2)
+  browser.flush_animation_frames()
+}
+
+///|
 async test "separate controllers keep Code and Markdown-like sessions isolated" {
   let browser = install_references_peek_test_browser()
   defer browser.dispose()
