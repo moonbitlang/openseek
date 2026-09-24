@@ -222,6 +222,12 @@ ranges, including pure deletions, and forwards wheel input to the scroll owner.
 The wrapper carries `data-hovered` while the pointer is over its hunk's rendered
 geometry. Hosts can reveal actions with this signal while keeping the hunk
 overlay transparent to code-selection pointer events.
+`data-hovered-side` records the last hovered pane (`original` or `modified`),
+and `--diff-hunk-hover-left` gives that pane's left edge relative to the wrapper.
+`--diff-hunk-width` gives the wrapper's width for keeping popups within the hunk.
+Inline uses the unified hunk's left edge. The anchor follows pane resizing and
+stays stable while interacting with an action or popup, including focus restored
+after an action rerender.
 The renderer returns a focusable action root and must tolerate being called
 again after diff or layout changes. Review coverage remains host policy.
 Manual scrolling selects the hunk nearest the viewport center without moving

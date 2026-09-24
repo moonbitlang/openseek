@@ -3308,8 +3308,8 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   color: var(--color-text-secondary);
 }
 
-/* Viewed remains a gutter control; the independent context action sits on
-   the upper right of the same widget-owned hunk geometry. */
+/* Viewed remains a gutter control; the context action follows the hovered
+   pane's hunk anchor supplied by the diff widget. */
 .moonbit-diff-hunk-action:has(.review-hunk-actions) {
   width: auto;
   right: 18px;
@@ -3354,7 +3354,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 
 .review-hunk-context {
   position: absolute;
-  right: 6px;
+  left: calc(var(--diff-hunk-hover-left) + 2px);
   top: 3px;
   opacity: 0;
   pointer-events: none;
@@ -3369,11 +3369,12 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 
 .review-hunk-context-button {
-  display: flex;
+  display: grid;
+  grid-template-columns: 14px 0fr;
   align-items: center;
-  gap: 6px;
+  column-gap: 0;
   height: 27px;
-  padding: 0 10px;
+  padding: 0 6px;
   border-radius: 16px;
   border: 1px solid color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
   background: var(--color-bg-surface);
@@ -3383,21 +3384,50 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   box-shadow: 0 1px 3px #0002;
   cursor: pointer;
   white-space: nowrap;
+  transition: grid-template-columns 160ms ease, column-gap 160ms ease, padding 160ms ease;
+}
+
+.review-hunk-context-label {
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.review-hunk-context-button:is(:hover, :focus-visible, [aria-expanded="true"]) {
+  grid-template-columns: 14px 1fr;
+  column-gap: 6px;
+  padding: 0 10px;
+}
+
+.review-hunk-context-button:is(:hover, :focus-visible, [aria-expanded="true"]) .review-hunk-context-label {
+  opacity: 1;
 }
 
 .review-hunk-context-button:hover {
   background: var(--color-bg-subtle);
 }
 
-.review-hunk-context-button[aria-pressed="mixed"]::after {
+.review-hunk-context-button[aria-pressed="mixed"] .review-hunk-context-label::after {
   content: "⌄";
+  margin-left: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-hunk-context-button,
+  .review-hunk-context-label {
+    transition: none;
+  }
 }
 
 .review-hunk-context-menu {
   position: absolute;
-  right: 0;
+  left: 0;
   top: calc(100% + 5px);
-  min-width: 205px;
+  width: max-content;
+  min-width: min(205px, var(--diff-hunk-width));
+  max-width: var(--diff-hunk-width);
+  transform: translateX(min(0px, calc(var(--diff-hunk-width) - var(--diff-hunk-hover-left) - 2px - 100%)));
   padding: 4px;
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border);
@@ -3407,6 +3437,16 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 
 .review-hunk-context-menu[hidden] {
   display: none;
+}
+
+/* Keep pointer travel across the visual gap inside the anchored menu. */
+.review-hunk-context-menu::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -6px;
+  height: 6px;
 }
 
 .review-hunk-context-menu button {
@@ -3436,8 +3476,10 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
   z-index: 1;
 }
 
+.moonbit-diff-hunk-action:has(.review-hunk-context:hover),
+.moonbit-diff-hunk-action:has(.review-hunk-context :focus-visible),
 .moonbit-diff-hunk-action:has(.review-hunk-context-menu:not([hidden])) {
-  /* The split-pane resize handle uses 20; it must not cover menu actions. */
+  /* The split-pane resize handle uses 20; expanded actions may cross it. */
   z-index: 21;
 }
 /* GitHub review threads share the existing Review shell and diff geometry. */

@@ -44,6 +44,15 @@ fn DiffEditorWidget::clear_hunk_actions(self : DiffEditorWidget) -> Unit {
 ///|
 fn DiffEditorWidget::install_hunk_action_hover(self : DiffEditorWidget) -> Unit {
   let update_pointer = fn(event : @rdom.Event) {
+    // Actions can extend across the split divider. Keep their anchor stable
+    // while the pointer moves through an action or its popup.
+    if @base_browser.event_target_has_matching_ancestor(
+        event,
+        self.root,
+        ".moonbit-diff-hunk-action",
+      ) {
+      return
+    }
     guard event.to_mouse_event() is Some(mouse) else { return }
     self.hunk_pointer_position = Some(
       (mouse.get_client_x(), mouse.get_client_y()),
@@ -87,7 +96,13 @@ fn DiffEditorWidget::update_hunk_action_hover(self : DiffEditorWidget) -> Unit {
       x < rect.get_right() &&
       y >= rect.get_top() &&
       y < rect.get_bottom() {
-      Some(y - rect.get_top())
+      let side = if self.layout_state.actual_layout == SideBySide &&
+        x >= self.modified_host.get_bounding_client_rect().get_left() {
+        "modified"
+      } else {
+        "original"
+      }
+      Some((y - rect.get_top(), side))
     } else {
       None
     }
@@ -97,7 +112,7 @@ fn DiffEditorWidget::update_hunk_action_hover(self : DiffEditorWidget) -> Unit {
   for (index, node) in self.hunk_actions {
     let hovered = if !matched &&
       !node.has_attribute("hidden") &&
-      offset is Some(y) {
+      offset is Some((y, _)) {
       hunks
       .get(index)
       .bind(hunk => self.hunk_viewport_bounds(hunk))
@@ -111,6 +126,11 @@ fn DiffEditorWidget::update_hunk_action_hover(self : DiffEditorWidget) -> Unit {
     }
     if hovered {
       matched = true
+      if offset is Some((_, side)) &&
+        node.get_attribute("data-hovered-side") != Some(side) {
+        node.set_attribute("data-hovered-side", side)
+        self.layout_hunk_action_anchor(node)
+      }
       if !node.has_attribute("data-hovered") {
         node.set_attribute("data-hovered", "true")
       }
@@ -122,7 +142,7 @@ fn DiffEditorWidget::update_hunk_action_hover(self : DiffEditorWidget) -> Unit {
 
 ///|
 fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
-  let mut focused : (Int, Int?)? = None
+  let mut focused : (Int, Int?, String?)? = None
   for (index, node) in self.hunk_actions {
     if @base_browser.element_contains_active_element(node) {
       focused = Some(
@@ -133,6 +153,7 @@ fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
           ].search_by(button => {
             @base_browser.element_contains_active_element(button)
           }),
+          node.get_attribute("data-hovered-side"),
         ),
       )
     }
@@ -152,8 +173,11 @@ fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
       wrapper.append_child(content.as_node())
       self.root.append_child(wrapper.as_node())
       self.hunk_actions.push((index, wrapper))
-      if focused is Some((focused_index, action_index)) &&
+      if focused is Some((focused_index, action_index, side)) &&
         focused_index == index {
+        if side is Some(side) {
+          wrapper.set_attribute("data-hovered-side", side)
+        }
         let action = action_index
           .bind(index => {
             [
@@ -166,6 +190,29 @@ fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
     }
   }
   self.layout_hunk_actions()
+}
+
+///|
+/// The anchor is relative to the action wrapper so hosts can keep other hunk
+/// controls in the shared gutter while placing an action in the hovered pane.
+fn DiffEditorWidget::layout_hunk_action_anchor(
+  self : DiffEditorWidget,
+  node : @rdom.Element,
+) -> Unit {
+  let pane = if self.layout_state.actual_layout == SideBySide &&
+    node.get_attribute("data-hovered-side") == Some("modified") {
+    self.modified_host
+  } else {
+    self.original_host
+  }
+  let bounds = node.get_bounding_client_rect()
+  let left = pane.get_bounding_client_rect().get_left() - bounds.get_left()
+  @base_browser.set_style_property(node, "--diff-hunk-hover-left", "\{left}px")
+  @base_browser.set_style_property(
+    node,
+    "--diff-hunk-width",
+    "\{bounds.get_width()}px",
+  )
 }
 
 ///|
@@ -229,6 +276,7 @@ fn DiffEditorWidget::layout_hunk_actions(self : DiffEditorWidget) -> Unit {
           "\{bottom - top.max(0.0)}px",
         )
         @base_browser.set_style_property(node, "top", "\{top.max(0.0)}px")
+        self.layout_hunk_action_anchor(node)
       }
       _ => node.set_attribute("hidden", "")
     }
