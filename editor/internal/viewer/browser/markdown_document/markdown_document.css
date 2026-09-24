@@ -119,26 +119,6 @@
   margin-bottom: 0;
 }
 
-.moonbit-viewer-markdown-feedback-add {
-  position: absolute;
-  z-index: 100;
-  pointer-events: auto;
-  padding: 5px 10px;
-  border: 1px solid var(--vscode-editorWidget-border, #454545);
-  border-radius: 5px;
-  background: var(--vscode-button-background, #007acc);
-  color: var(--vscode-button-foreground, #fff);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
-}
-
-.moonbit-viewer-markdown-feedback-add:focus-visible {
-  outline: 2px solid var(--vscode-focusBorder, #007acc);
-  outline-offset: 2px;
-}
-
 .moonbit-viewer-markdown-document-article > :is(h1, h2, h3, h4, h5, h6) {
   margin-block: 32px 12px;
 }

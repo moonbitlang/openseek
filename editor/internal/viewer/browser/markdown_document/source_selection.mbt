@@ -5,15 +5,29 @@ pub struct MarkdownSourceSelection {
   source_range : @base_common.OffsetRange
   source_model_version : Int
   projection_generation : Int
+  prefer_below : Bool
   priv dom_range : MarkdownSelectionRange
 }
 
 ///|
-/// Measure the retained native range again after scrolling or resizing.
-pub fn MarkdownSourceSelection::client_rect(
+/// Measure the active selection endpoint, retaining the direction captured when
+/// the selection was made. The zero-width rect keeps a wrapped selection pinned
+/// to its final text fragment rather than the enclosing range's right edge.
+pub fn MarkdownSourceSelection::anchor_client_rect(
   self : MarkdownSourceSelection,
 ) -> @rdom.DOMRect {
-  markdown_selection_rect(self.dom_range)
+  markdown_selection_anchor_rect(self.dom_range, self.prefer_below)
+}
+
+///|
+/// A dismissed selection stays dismissed until a native boundary or direction
+/// changes. Block source ranges alone cannot distinguish selections in one block.
+pub fn MarkdownSourceSelection::same_dom_range(
+  self : MarkdownSourceSelection,
+  other : MarkdownSourceSelection,
+) -> Bool {
+  self.prefer_below == other.prefer_below &&
+  markdown_selection_ranges_equal(self.dom_range, other.dom_range)
 }
 
 ///|
@@ -48,6 +62,24 @@ extern "js" fn markdown_selection_range(
   #| }
 
 ///|
+extern "js" fn markdown_selection_prefers_below(
+  article : @rdom.Element,
+  range : MarkdownSelectionRange,
+) -> Bool =
+  #| (article, range) => {
+  #|   const selection = article.ownerDocument.getSelection();
+  #|   return !(selection.anchorNode === range.endContainer && selection.anchorOffset === range.endOffset);
+  #| }
+
+///|
+extern "js" fn markdown_selection_ranges_equal(
+  a : MarkdownSelectionRange,
+  b : MarkdownSelectionRange,
+) -> Bool =
+  #| (a, b) => a.startContainer === b.startContainer && a.startOffset === b.startOffset
+  #|   && a.endContainer === b.endContainer && a.endOffset === b.endOffset
+
+///|
 /// Browser Range intersection and text/image enumeration only. Source ownership
 /// and block selection policy remain in MoonBit below.
 extern "js" fn markdown_selected_content_nodes(
@@ -73,9 +105,38 @@ extern "js" fn markdown_selected_content_nodes(
   #| }
 
 ///|
-extern "js" fn markdown_selection_rect(
+extern "js" fn markdown_selection_anchor_rect(
   range : MarkdownSelectionRange,
-) -> @rdom.DOMRect = "range => range.getBoundingClientRect()"
+  prefer_below : Bool,
+) -> @rdom.DOMRect =
+  #| (range, preferBelow) => {
+  #|   const endpoint = range.cloneRange();
+  #|   endpoint.collapse(!preferBelow);
+  #|   const caret = Array.from(endpoint.getClientRects()).find(rect => rect.height > 0);
+  #|   if (caret) return caret;
+  #|   // Element boundaries (including selected images) may have no caret rect.
+  #|   const root = range.commonAncestorContainer;
+  #|   const doc = root.ownerDocument;
+  #|   const walker = doc.createTreeWalker(root, 5);
+  #|   let anchor = null;
+  #|   for (let node = root; node; node = walker.nextNode()) {
+  #|     const image = node.nodeType === 1 && node.tagName === "IMG";
+  #|     if (node.nodeType !== 3 && !image) continue;
+  #|     if (!range.intersectsNode(node)) continue;
+  #|     const contents = doc.createRange();
+  #|     if (image) contents.selectNode(node); else contents.selectNodeContents(node);
+  #|     const selected = range.cloneRange();
+  #|     if (selected.compareBoundaryPoints(0, contents) < 0) selected.setStart(contents.startContainer, contents.startOffset);
+  #|     if (selected.compareBoundaryPoints(2, contents) > 0) selected.setEnd(contents.endContainer, contents.endOffset);
+  #|     if (selected.collapsed) continue;
+  #|     const rects = Array.from(selected.getClientRects()).filter(rect => rect.height > 0);
+  #|     if (rects.length === 0) continue;
+  #|     anchor = preferBelow ? rects[rects.length - 1] : rects[0];
+  #|     if (!preferBelow) break;
+  #|   }
+  #|   const rect = anchor || range.getBoundingClientRect();
+  #|   return new DOMRect(preferBelow ? rect.right : rect.left, rect.top, 0, rect.height);
+  #| }
 
 ///|
 fn MarkdownDocumentView::source_owner(
@@ -142,6 +203,7 @@ pub fn MarkdownDocumentView::source_selection(
     source_range,
     source_model_version: self.source_model_version,
     projection_generation: self.projection_generation,
+    prefer_below: markdown_selection_prefers_below(self.article, native_range),
     dom_range: native_range,
   })
 }

@@ -212,8 +212,15 @@ features. Its `MarkdownResourceKind` is explicit and is never inferred inside
 the widget.
 
 When `ViewerServices.agent_feedback` enables the resource, selecting rendered
-Markdown shows **Add Feedback**. The shared composer keeps **Add** in the host's
-batch and **Apply** submits through its existing service. Selection resolves
+Markdown opens the shared feedback composer when the selection gesture ends,
+without taking document focus. Clicking the input or pressing Ctrl/Cmd+I focuses
+it. Empty drafts follow new selections; non-empty drafts retain their original
+source target. Cancelled or submitted selections do not reopen on scroll or
+refocus. The composer follows the active selection endpoint and stays within
+the viewport; Markdown has no gutter add button.
+
+The shared composer keeps **Add** in the host's batch and **Apply** submits
+through its existing service. Selection resolves
 renderer-emitted node IDs to enclosing Markdown source blocks, including the
 original markup. A cross-block selection uses one source range covering those
 blocks. Lists and tables may use their containing block; character-accurate
