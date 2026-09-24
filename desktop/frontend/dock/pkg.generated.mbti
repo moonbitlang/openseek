@@ -43,7 +43,7 @@ pub fn resolve_pick(State, @common.Uri) -> State
 
 pub fn sync(State, @interop.ConversationKey) -> State
 
-pub fn tab_menu(State, String, @cmd.Emit[Msg], @cmd.Emit[CloseSelection]) -> @action_menu.Definition?
+pub fn tab_menu(locale? : @i18n.Locale, State, String, @cmd.Emit[Msg], @cmd.Emit[CloseSelection]) -> @action_menu.Definition?
 
 pub fn tabs_bar(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, close_menu~ : @cmd.Cmd, close_tabs~ : @cmd.Emit[CloseSelection], toggle_expanded~ : @cmd.Cmd) -> @html.Html
 

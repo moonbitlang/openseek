@@ -52,6 +52,7 @@ fn tab_menu_target(state : State, tab : DockTab) -> String {
 
 ///|
 pub fn tab_menu(
+  locale? : @i18n.Locale = English,
   state : State,
   target : String,
   dispatch : @cmd.Emit[Msg],
@@ -65,8 +66,8 @@ pub fn tab_menu(
   }
   let entries : Array[@action_menu.Entry] = [
     Action({
-      label: "Close",
-      title: "Close this tab",
+      label: ui(locale, CloseLabel),
+      title: ui(locale, CloseTabHint),
       icon: None,
       enabled: true,
       destructive: false,
@@ -76,10 +77,10 @@ pub fn tab_menu(
   ]
   for
     (label, selection) in [
-      ("Close Others", Others(tab)),
-      ("Close to the Left", ToLeft(tab)),
-      ("Close to the Right", ToRight(tab)),
-      ("Close All", All),
+      (ui(locale, CloseOthers), Others(tab)),
+      (ui(locale, CloseToLeft), ToLeft(tab)),
+      (ui(locale, CloseToRight), ToRight(tab)),
+      (ui(locale, CloseAllLabel), All),
     ] {
     entries.push(
       Action({
@@ -92,5 +93,5 @@ pub fn tab_menu(
       }),
     )
   }
-  Some({ label: "Tab actions", entries, })
+  Some({ label: ui(locale, TabActions), entries, })
 }

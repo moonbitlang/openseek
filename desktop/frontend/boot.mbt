@@ -558,6 +558,7 @@ fn main {
         toggle_menu: emit(ToggleRightPanelMenu),
         toggle_expanded: emit(ToggleRightPanelExpanded),
         close_tabs: emit.map(selection => CloseDockTabs(selection)),
+        tab_menu_changed: emit.map(open => DockTabMenuChanged(open)),
         close_menu: emit(CloseRightPanelMenu),
       },
     )

@@ -158,3 +158,102 @@ test('tab and sidebar menus replace each other without changing selection', asyn
   await expect(page.locator('.content.panel-open > .editor')).toBeFocused();
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const gesture of ['right-click', 'keyboard']) {
+  test(`opening a tab menu by ${gesture} dismisses the plus launcher`, async ({ page }) => {
+    const app = await openTabs(page, ['alpha']);
+    await page.locator('.tab-add').click();
+    await expect(page.locator('.dock-menu')).toBeVisible();
+    const tab = page.locator('.editor-tab').first();
+    if (gesture === 'right-click') await tab.click({ button: 'right' });
+    else {
+      await tab.focus();
+      await page.keyboard.press('Shift+F10');
+    }
+    await expect(page.getByRole('menu', { name: 'Tab actions' })).toBeVisible();
+    await expect(page.locator('.dock-menu')).toBeHidden();
+    await page.keyboard.press('Escape');
+    await page.locator('.tab-add').click();
+    await expect(page.locator('.dock-menu')).toBeVisible();
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+test('open tab menu follows live locale changes', async ({ page }) => {
+  const app = await openTabs(page, ['alpha', 'bravo']);
+  await page.locator('.editor-tab').first().click({ button: 'right' });
+  for (const [locale, label, closeTitle, items] of [
+    ['zh-CN', '标签页操作', '关闭此标签页', ['关闭', '关闭其他标签页', '关闭左侧标签页', '关闭右侧标签页', '关闭所有标签页']],
+    ['zh-TW', '標籤頁操作', '關閉此標籤頁', ['關閉', '關閉其他標籤頁', '關閉左側標籤頁', '關閉右側標籤頁', '關閉所有標籤頁']],
+    ['ja', 'タブの操作', 'このタブを閉じる', ['閉じる', '他のタブを閉じる', '左側のタブを閉じる', '右側のタブを閉じる', 'すべて閉じる']],
+    ['es', 'Acciones de pestaña', 'Cerrar esta pestaña', ['Cerrar', 'Cerrar las demás pestañas', 'Cerrar pestañas a la izquierda', 'Cerrar pestañas a la derecha', 'Cerrar todas']],
+    ['en', 'Tab actions', 'Close this tab', ['Close', 'Close Others', 'Close to the Left', 'Close to the Right', 'Close All']],
+  ]) {
+    await page.evaluate(locale => {
+      Object.defineProperty(navigator, 'languages', { configurable: true, value: [locale] });
+      window.dispatchEvent(new Event('languagechange'));
+    }, locale);
+    const menu = page.getByRole('menu', { name: label, exact: true });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitem')).toHaveText(items);
+    await expect(menu.getByRole('menuitem').first()).toHaveAttribute('title', closeTitle);
+    await expect(menu).toBeFocused();
+  }
+  expect(app.pageErrors).toEqual([]);
+});
+
+// Exercise the real frontend visibility commands with a simulated Proton
+// transport. This does not launch a native CEF window.
+test('tab menu hides and restores the native browser view through the host bridge', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await page.exposeFunction('dockDesktopRequest', request => {
+    app.requests.push(request);
+    if (request.method === 'app.system_appearance') return { dark: false };
+    return app.replyFor(request);
+  });
+  await page.addInitScript(() => {
+    const listeners = new Map();
+    const events = { on(name, callback) {
+      const callbacks = listeners.get(name) || new Set();
+      listeners.set(name, callbacks);
+      callbacks.add(callback);
+      return () => callbacks.delete(callback);
+    } };
+    window.__MoonBit__ = {
+      getTitlebarArea: async () => null,
+      app: events, events,
+      openseek: new Proxy({}, { get: (_, method) => async params => {
+        if (method === 'host.connect') {
+          for (const callback of listeners.get('openseek.agent.connected') || []) {
+            callback({ payload: { stage: 'serving' } });
+          }
+        }
+        return window.dockDesktopRequest({ method, params });
+      } }),
+    };
+  });
+  await page.goto('/dist/browser/index.html');
+  await app.openSession();
+  await app.openReview();
+  await page.locator('.tab-add').click();
+  await page.locator('.dock-menu').getByRole('menuitem', { name: 'Browse', exact: true }).click();
+  await page.locator('#browser-address-input').fill('https://example.com');
+  await page.locator('#browser-address-input').press('Enter');
+  const visible = () => app.requests.filter(r => r.method === 'browser.set_visible').at(-1)?.params.visible;
+  await expect.poll(visible).toBe(true);
+  const tab = page.locator('.editor-tab.active');
+  const menu = page.getByRole('menu', { name: 'Tab actions' });
+  for (const dismiss of ['escape', 'outside', 'resize', 'action']) {
+    await tab.click({ button: 'right' });
+    await expect(menu).toBeVisible();
+    await expect.poll(visible).toBe(false);
+    if (dismiss === 'escape') await page.keyboard.press('Escape');
+    else if (dismiss === 'outside') await page.locator('#task').click();
+    else if (dismiss === 'resize') await page.setViewportSize({ width: 1300, height: 900 });
+    else await menu.getByRole('menuitem', { name: 'Close Others', exact: true }).click();
+    await expect(menu).toBeHidden();
+    await expect.poll(visible).toBe(true);
+  }
+  expect(app.pageErrors).toEqual([]);
+});

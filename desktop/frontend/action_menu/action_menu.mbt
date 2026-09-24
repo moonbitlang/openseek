@@ -702,11 +702,14 @@ fn focus_subscription(
 
 ///|
 /// Own one WebView menu surface. Rows only dispatch stable targets; the
-/// resolver supplies current labels, enabled state, and commands.
+/// resolver supplies current labels, enabled state, and commands. Hosts may
+/// observe visibility to coordinate overlays such as native browser views.
 pub fn[Input : Eq] component(
   input : @rabbita.Val[Input],
   resolve : (Input, String) -> Definition?,
+  on_open_change? : @cmd.Emit[Bool],
 ) -> @rabbita.Val[@html.Html] {
+  let notify_open = on_open_change.unwrap_or(_ => @cmd.none)
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, _) => ({ menu: None, }, @cmd.none),
@@ -716,7 +719,13 @@ pub fn[Input : Eq] component(
           if next.anchor is Button &&
             state.menu is Some(current) &&
             current.target == next.target {
-            return ({ menu: None, }, set_trigger_open(next.target, false))
+            return (
+              { menu: None, },
+              @cmd.batch([
+                set_trigger_open(next.target, false),
+                notify_open(false),
+              ]),
+            )
           }
           guard resolve(input, next.target) is Some(definition) &&
             definition.enabled_indices() is [_, ..] else {
@@ -726,7 +735,7 @@ pub fn[Input : Eq] component(
               Some(current) => set_trigger_open(current.target, false)
               None => @cmd.none
             }
-            return ({ menu: None, }, command)
+            return ({ menu: None, }, @cmd.batch([command, notify_open(false)]))
           }
           let close_previous = match state.menu {
             Some(current) if current.target != next.target =>
@@ -736,6 +745,7 @@ pub fn[Input : Eq] component(
           (
             { menu: Some(next), },
             @cmd.batch([
+              notify_open(true),
               close_previous,
               set_trigger_open(next.target, true),
               position(next.target, next.anchor),
@@ -748,7 +758,7 @@ pub fn[Input : Eq] component(
             Some(current) => set_trigger_open(current.target, false)
             None => @cmd.none
           }
-          ({ menu: None, }, command)
+          ({ menu: None, }, @cmd.batch([command, notify_open(false)]))
         }
       }
     },

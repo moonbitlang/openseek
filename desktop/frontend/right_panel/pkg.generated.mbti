@@ -45,6 +45,7 @@ pub(all) struct Actions {
   toggle_expanded : @cmd.Cmd
   close_tabs : @cmd.Emit[@dock.CloseSelection]
   close_menu : @cmd.Cmd
+  tab_menu_changed : @cmd.Emit[Bool]
 }
 
 type Input derive(Eq)

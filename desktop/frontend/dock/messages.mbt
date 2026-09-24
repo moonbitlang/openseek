@@ -1,4 +1,4 @@
-// Feature-owned UI messages; both locales are exhaustive.
+// Feature-owned UI messages; all locales are exhaustive.
 
 ///|
 priv enum UiMessage {
@@ -16,6 +16,12 @@ priv enum UiMessage {
   JobsLabel
   JobsHint
   CloseLabel
+  CloseTabHint
+  CloseOthers
+  CloseToLeft
+  CloseToRight
+  CloseAllLabel
+  TabActions
   CloseAllTabs
   NewTab
   RestorePanel
@@ -93,6 +99,36 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, JobsHint) => "檢視後臺命令及其日誌"
     (Japanese, JobsHint) =>
       "バックグラウンドコマンドとログを表示"
+    (English, CloseTabHint) => "Close this tab"
+    (Spanish, CloseTabHint) => "Cerrar esta pestaña"
+    (SimplifiedChinese, CloseTabHint) => "关闭此标签页"
+    (TraditionalChinese, CloseTabHint) => "關閉此標籤頁"
+    (Japanese, CloseTabHint) => "このタブを閉じる"
+    (English, CloseOthers) => "Close Others"
+    (Spanish, CloseOthers) => "Cerrar las demás pestañas"
+    (SimplifiedChinese, CloseOthers) => "关闭其他标签页"
+    (TraditionalChinese, CloseOthers) => "關閉其他標籤頁"
+    (Japanese, CloseOthers) => "他のタブを閉じる"
+    (English, CloseToLeft) => "Close to the Left"
+    (Spanish, CloseToLeft) => "Cerrar pestañas a la izquierda"
+    (SimplifiedChinese, CloseToLeft) => "关闭左侧标签页"
+    (TraditionalChinese, CloseToLeft) => "關閉左側標籤頁"
+    (Japanese, CloseToLeft) => "左側のタブを閉じる"
+    (English, CloseToRight) => "Close to the Right"
+    (Spanish, CloseToRight) => "Cerrar pestañas a la derecha"
+    (SimplifiedChinese, CloseToRight) => "关闭右侧标签页"
+    (TraditionalChinese, CloseToRight) => "關閉右側標籤頁"
+    (Japanese, CloseToRight) => "右側のタブを閉じる"
+    (English, CloseAllLabel) => "Close All"
+    (Spanish, CloseAllLabel) => "Cerrar todas"
+    (SimplifiedChinese, CloseAllLabel) => "关闭所有标签页"
+    (TraditionalChinese, CloseAllLabel) => "關閉所有標籤頁"
+    (Japanese, CloseAllLabel) => "すべて閉じる"
+    (English, TabActions) => "Tab actions"
+    (Spanish, TabActions) => "Acciones de pestaña"
+    (SimplifiedChinese, TabActions) => "标签页操作"
+    (TraditionalChinese, TabActions) => "標籤頁操作"
+    (Japanese, TabActions) => "タブの操作"
     (English, CloseLabel) => "Close"
     (Spanish, CloseLabel) => "Cerrar"
     (SimplifiedChinese, CloseLabel) => "关闭"

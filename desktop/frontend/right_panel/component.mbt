@@ -77,6 +77,7 @@ pub(all) struct Actions {
   toggle_expanded : @cmd.Cmd
   close_tabs : @cmd.Emit[@dock.CloseSelection]
   close_menu : @cmd.Cmd
+  tab_menu_changed : @cmd.Emit[Bool]
 }
 
 ///|
@@ -94,10 +95,21 @@ pub fn component(
       input.file_panel,
     )
   })
-  let tab_menu = @action_menu.component(input, (input, target) => {
-    @dock.tab_menu(input.dock, target, actions.dock, actions.close_tabs)
-  })
   let localized_input = input.map2(locale, (input, locale) => (input, locale))
+  let tab_menu = @action_menu.component(
+    localized_input,
+    (localized, target) => {
+      let (input, locale) = localized
+      @dock.tab_menu(
+        locale~,
+        input.dock,
+        target,
+        actions.dock,
+        actions.close_tabs,
+      )
+    },
+    on_open_change=actions.tab_menu_changed,
+  )
   localized_input.view3(semantic_review, tab_menu, (
     localized,
     semantic_review,

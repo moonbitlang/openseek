@@ -1675,9 +1675,9 @@ fn covering_overlay(model : Model) -> Bool {
 /// tab's, once it has a URL (a blank tab has no view yet) — and only while
 /// the pane is actually visible and uncovered. Native views z-order above
 /// all HTML, so anything the frontend draws over the pane area — the `+`
-/// launcher popup, the narrow layout's sidebar drawer, a custom select, the
-/// composer's Git popover, and every
-/// `covering_overlay` — must hide the view rather than fight it.
+/// launcher popup, a dock tab menu, the narrow layout's sidebar drawer, a
+/// custom select, the composer's Git popover, and every `covering_overlay` —
+/// must hide the view rather than fight it.
 fn desired_browser_view(model : Model) -> Int? {
   let conversation_screen = model.screen is Chat || model.screen is Codex
   let git_details_open = match model.screen {
@@ -1689,6 +1689,7 @@ fn desired_browser_view(model : Model) -> Int? {
     conversation_screen &&
     model.right_panel_open &&
     !model.right_panel_menu_open &&
+    !model.dock_tab_menu_open &&
     model.select_menu is None &&
     !git_details_open &&
     !covering_overlay(model) else {
@@ -5319,6 +5320,19 @@ fn update_msg(
     }
     CloseRightPanelMenu =>
       (@cmd.none, { ..model, right_panel_menu_open: false, })
+    DockTabMenuChanged(open) =>
+      (
+        @cmd.none,
+        {
+          ..model,
+          dock_tab_menu_open: open,
+          right_panel_menu_open: if open {
+            false
+          } else {
+            model.right_panel_menu_open
+          },
+        },
+      )
     CloseDockTabs(selection) => close_dock_tabs(dispatch, model, selection)
     OpenGoalEditor => {
       guard model.active_conversation() is Some(conv) else {
