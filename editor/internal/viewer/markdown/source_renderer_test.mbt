@@ -50,6 +50,33 @@ test "source block rendering preserves cmark content and safe rendering" {
 }
 
 ///|
+test "cancelled tasks close strikethrough before the following task" {
+  // cmark 0.4.5 shares the malformed closing tag. Assert the valid structure
+  // directly instead of using its ordinary rendering as the oracle.
+  for
+    (separator, cancelled, pending) in [
+      ("\n", "cancelled <em>item</em>", "pending"),
+      ("\n\n", "\n<p>cancelled <em>item</em></p>\n", "\n<p>pending</p>\n"),
+    ] {
+    let rendered = @markdown.render_markdown(
+      "- [~] cancelled *item*\{separator}- [ ] pending",
+      source_mapping=true,
+    )
+    let mut html = rendered.html
+    for anchor in rendered.projection.block_anchors {
+      html = html.replace_all(
+        old=" data-markdown-node-id=\"\{anchor.node_id}\"",
+        new="",
+      )
+    }
+    assert_eq(
+      html,
+      "<ul>\n<li><div class=\"task\"><input type=\"checkbox\" disabled><del>\{cancelled}</del></div></li>\n<li><div class=\"task\"><input type=\"checkbox\" disabled><div>\{pending}</div></div></li>\n</ul>\n",
+    )
+  }
+}
+
+///|
 test "identical rendered paragraphs retain distinct source identities" {
   let source = "same\n\n<div>omitted</div>\n\nsame"
   let rendered = @markdown.render_markdown(source, source_mapping=true)

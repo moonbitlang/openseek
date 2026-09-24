@@ -187,7 +187,7 @@ fn markdown_source_list_item(
       c.b.write_string(
         "<div class=\"task\"><input type=\"checkbox\" disabled><del>",
       )
-      "<del></div></li>\n"
+      "</del></div></li>\n"
     }
   }
   markdown_source_item_block(tight~, c, i.v.block)
