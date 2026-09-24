@@ -7,11 +7,12 @@ priv struct MarkdownViewerWidgetFeedbackBridge {
   model : @model.TextModel
   attach_generation : Int
   service : @agent_feedback_api.AgentFeedbackHandle
-  button : @rdom.Element
   input : @agent_feedback_browser.AgentFeedbackInputWidget
   listeners : Array[@base_common.Disposable]
   mut target : @markdown_document.MarkdownSourceSelection?
-  mut editing : Bool
+  mut dismissed_target : @markdown_document.MarkdownSourceSelection?
+  mut visible : Bool
+  mut mouse_down : Bool
   mut disposed : Bool
 }
 
@@ -23,11 +24,6 @@ fn MarkdownViewerWidgetFeedbackBridge::MarkdownViewerWidgetFeedbackBridge(
   attach_generation : Int,
   service : @agent_feedback_api.AgentFeedbackHandle,
 ) -> MarkdownViewerWidgetFeedbackBridge {
-  let button = @rdom.document().create_element("button")
-  button.set_attribute("type", "button")
-  button.set_attribute("class", "moonbit-viewer-markdown-feedback-add")
-  button.set_attribute("data-markdown-feedback-add", "true")
-  button.set_attribute("style", "display:none")
   let mut slot : MarkdownViewerWidgetFeedbackBridge? = None
   let input = @agent_feedback_browser.AgentFeedbackInputWidget(
     localization=viewer.services.localization,
@@ -41,7 +37,7 @@ fn MarkdownViewerWidgetFeedbackBridge::MarkdownViewerWidgetFeedbackBridge(
         }
       },
       on_layout: () => if slot is Some(bridge) { bridge.layout() },
-      on_blur_empty: () => if slot is Some(bridge) { bridge.hide() },
+      on_blur_empty: () => if slot is Some(bridge) { bridge.auto_hide() },
       content_width: () => view.root().get_bounding_client_rect().get_width(),
     },
   )
@@ -51,15 +47,15 @@ fn MarkdownViewerWidgetFeedbackBridge::MarkdownViewerWidgetFeedbackBridge(
     model,
     attach_generation,
     service,
-    button,
     input,
     listeners: [],
     target: None,
-    editing: false,
+    dismissed_target: None,
+    visible: false,
+    mouse_down: false,
     disposed: false,
   }
   slot = Some(bridge)
-  view.overlay_mount().append_child(button.as_node())
   view.overlay_mount().append_child(input.get_dom_node().as_node())
   bridge
 }
@@ -113,31 +109,50 @@ fn MarkdownViewerWidgetFeedbackBridge::activate(
       )
     }),
   )
-  self.listen(self.view.root(), "mouseup", _ => self.selection_changed())
-  self.listen(self.view.viewport(), "scroll", _ => {
-    if self.editing {
-      self.layout()
-    } else {
-      self.selection_changed()
-    }
-  })
-  self.listen(self.button, "mousedown", event => event.prevent_default())
-  self.listen(self.button, "click", event => {
-    event.prevent_default()
-    event.stop_propagation()
-    guard self.target is Some(target) && self.target_is_current(target) else {
-      self.hide()
+  self.listen(self.view.root(), "mousedown", event => {
+    if @base_browser.event_target_has_matching_ancestor(
+        event,
+        self.view.root(),
+        "button, input, textarea, select",
+      ) {
+      self.auto_hide()
       return
     }
-    self.editing = true
-    self.button.set_attribute("style", "display:none")
-    self.input.show()
-    self.layout()
-    self.input.focus_input()
+    self.mouse_down = true
+    self.auto_hide()
+    // A deliberate new selection may target the same text as the last one.
+    self.dismissed_target = None
+  })
+  // The pointer can finish a drag outside the document viewport.
+  let mouse_up : @rdom.Listener = _ => {
+    if self.mouse_down {
+      self.mouse_down = false
+      self.selection_changed()
+    }
+  }
+  @rdom.document().add_event_listener("mouseup", mouse_up)
+  self.listeners.push(
+    @base_common.Disposable::from(() => {
+      @rdom.document().remove_event_listener("mouseup", mouse_up)
+    }),
+  )
+  self.listen(self.view.viewport(), "scroll", _ => {
+    if self.visible {
+      self.layout()
+    }
   })
   self.listen(self.view.root(), "keydown", event => {
-    if event.to_keyboard_event() is Some(key) && key.key() == "Escape" {
+    guard self.visible && event.to_keyboard_event() is Some(key) else { return }
+    if key.key() == "Escape" {
+      event.prevent_default()
       self.hide()
+    } else if key.key() == "i" &&
+      (key.ctrl_key() || key.meta_key()) &&
+      !key.shift_key() &&
+      !key.alt_key() {
+      event.prevent_default()
+      event.stop_propagation()
+      self.input.focus_input()
     }
   })
   self.listeners.push(
@@ -157,50 +172,70 @@ fn MarkdownViewerWidgetFeedbackBridge::selection_changed(
     self.hide()
     return
   }
-  if self.editing {
+  if self.mouse_down ||
+    !@base_browser.element_contains_active_element(self.view.root()) ||
+    @base_browser.element_contains_active_element(self.input.get_dom_node()) ||
+    self.view
+    .root()
+    .query_selector("button:focus, input:focus, textarea:focus, select:focus")
+    is Some(_) {
     return
   }
-  self.target = self.view.source_selection()
-  if self.target is Some(_) {
-    self.button.set_inner_html(
-      self.viewer.services.localization.text(AddFeedback),
-    )
-    self.button.set_attribute("style", "display:block")
-    self.layout()
-  } else {
-    self.button.set_attribute("style", "display:none")
+  // Match the code editor: only a non-empty draft pins the source target.
+  if self.visible && self.input.has_text() {
+    return
   }
+  guard self.view.source_selection() is Some(target) else {
+    self.auto_hide()
+    return
+  }
+  if self.dismissed_target is Some(dismissed) &&
+    target.same_dom_range(dismissed) {
+    return
+  }
+  self.dismissed_target = None
+  self.target = Some(target)
+  self.visible = true
+  self.input.set_placeholder(
+    self.viewer.services.localization.text(AddFeedback),
+  )
+  self.input.clear_input()
+  self.input.show()
+  self.layout()
+  // Keep document focus so copy and keyboard selection continue to work.
+  // The shared input is focused by a click or Ctrl/Cmd+I, as in code views.
 }
 
 ///|
 fn MarkdownViewerWidgetFeedbackBridge::layout(
   self : MarkdownViewerWidgetFeedbackBridge,
 ) -> Unit {
+  guard self.visible else { return }
   guard self.target is Some(target) && self.target_is_current(target) else {
     self.hide()
     return
   }
   let root = self.view.root().get_bounding_client_rect()
-  let box = if self.editing { self.input.get_dom_node() } else { self.button }
-  let size = box.get_bounding_client_rect()
-  let selected = target.client_rect()
-  let left = (selected.get_right() - root.get_left() - size.get_width())
-    .max(8.0)
-    .min((root.get_width() - size.get_width() - 8.0).max(8.0))
-  let below = selected.get_bottom() - root.get_top() + 6.0
-  let top = if below + size.get_height() <= root.get_height() {
+  let width = self.input.measured_width()
+  let height = self.input.measured_height()
+  let anchor = target.anchor_client_rect()
+  let left = (anchor.get_left() - root.get_left())
+    .max(0.0)
+    .min((root.get_width() - width).max(0.0))
+  let below = anchor.get_bottom() - root.get_top()
+  let above = anchor.get_top() - root.get_top() - height
+  let top = if target.prefer_below {
+    if below + height > root.get_height() {
+      above
+    } else {
+      below
+    }
+  } else if above < 0.0 {
     below
   } else {
-    (selected.get_top() - root.get_top() - size.get_height() - 6.0).max(8.0)
+    above
   }
-  if self.editing {
-    self.input.set_position(top, left)
-  } else {
-    self.button.set_attribute(
-      "style",
-      "display:block;top:\{top}px;left:\{left}px",
-    )
-  }
+  self.input.set_position(top.min(root.get_height() - height).max(0.0), left)
 }
 
 ///|
@@ -208,7 +243,7 @@ fn MarkdownViewerWidgetFeedbackBridge::submit(
   self : MarkdownViewerWidgetFeedbackBridge,
   apply : Bool,
 ) -> Unit {
-  guard self.editing &&
+  guard self.visible &&
     self.target is Some(target) &&
     self.target_is_current(target) else {
     self.hide()
@@ -235,11 +270,30 @@ fn MarkdownViewerWidgetFeedbackBridge::submit(
 fn MarkdownViewerWidgetFeedbackBridge::hide(
   self : MarkdownViewerWidgetFeedbackBridge,
 ) -> Unit {
+  guard self.visible else { return }
+  let dismissed = match self.view.source_selection() {
+    Some(current) => Some(current)
+    None => self.target
+  }
+  if dismissed is Some(target) {
+    // Native Selection may survive textarea focus and editor refocus. Do not
+    // reopen it on the resulting selectionchange event. A typed draft may
+    // still refer to an earlier range than the current native selection.
+    self.dismissed_target = Some(target)
+  }
   self.target = None
-  self.editing = false
-  self.button.set_attribute("style", "display:none")
+  self.visible = false
   self.input.hide()
   self.input.clear_input()
+}
+
+///|
+fn MarkdownViewerWidgetFeedbackBridge::auto_hide(
+  self : MarkdownViewerWidgetFeedbackBridge,
+) -> Unit {
+  if !self.input.has_text() {
+    self.hide()
+  }
 }
 
 ///|
@@ -254,6 +308,5 @@ fn MarkdownViewerWidgetFeedbackBridge::dispose(
   while self.listeners.length() > 0 {
     self.listeners.remove(self.listeners.length() - 1).dispose()
   }
-  @base_browser.remove_element(self.button)
   @base_browser.remove_element(self.input.get_dom_node())
 }

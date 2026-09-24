@@ -75,9 +75,11 @@ pub struct MarkdownSourceSelection {
   source_range : @common.OffsetRange
   source_model_version : Int
   projection_generation : Int
+  prefer_below : Bool
   // private fields
 }
-pub fn MarkdownSourceSelection::client_rect(Self) -> @dom.DOMRect
+pub fn MarkdownSourceSelection::anchor_client_rect(Self) -> @dom.DOMRect
+pub fn MarkdownSourceSelection::same_dom_range(Self, Self) -> Bool
 
 pub(all) struct MarkdownTocBarEntry {
   depth : Int

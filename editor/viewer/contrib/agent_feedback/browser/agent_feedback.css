@@ -44,6 +44,7 @@
 
 .agent-feedback-input-widget {
   position: absolute;
+  font-family: var(--editor-font-family, var(--monaco-monospace-font, monospace));
   z-index: 10000;
   pointer-events: auto;
   background-color: var(--vscode-panel-background, var(--vscode-editorWidget-background));
