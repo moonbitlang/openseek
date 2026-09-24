@@ -133,6 +133,20 @@ test "comment controls consume shared discovery without loading discussions unti
       !open,
     )
     assert_false(ready.loading)
+    assert_true(
+      status_view(
+        locale=English,
+        ready,
+        emit,
+        false,
+        [],
+        [],
+        update_pr=@cmd.none,
+        updating=false,
+        current~,
+      ) ==
+      @html.nothing,
+    )
     let (_, toggled) = review_update(emit, Toggle, ready, current~)
     assert_eq(toggled.enabled, open)
     assert_eq(toggled.loading, open)
