@@ -44,9 +44,9 @@ priv struct ReviewHunkActionInput {
 } derive(Eq)
 
 ///|
-let review_hunk_action_inputs : Ref[
-  Array[(@viewer.DiffEditor, ReviewHunkActionInput)],
-] = Ref([])
+let review_hunk_action_inputs : Array[
+  (@viewer.DiffEditor, ReviewHunkActionInput),
+] = []
 
 ///|
 fn current_review_hunk_bridge_target(
@@ -274,7 +274,8 @@ fn sync_review_hunk_actions(state : State) -> Unit {
   }
   // Retain only this sync's live editors; switching surfaces or disposing a
   // semantic section must not keep its editor or renderer inputs alive.
-  review_hunk_action_inputs.val = installed
+  review_hunk_action_inputs.clear()
+  review_hunk_action_inputs.append(installed)
 }
 
 ///|
@@ -297,7 +298,7 @@ fn install_review_hunk_actions(
     source: state.review_source(target.change),
     context: state.review_context,
   }
-  for (previous_editor, previous_input) in review_hunk_action_inputs.val {
+  for (previous_editor, previous_input) in review_hunk_action_inputs {
     if physical_equal(previous_editor, editor) && previous_input == input {
       return (editor, input)
     }
