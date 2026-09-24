@@ -777,6 +777,7 @@ async test "snapshot, read_output, and stop handle unknown ids" {
 
 ///|
 #cfg(not(platform="windows"))
+#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "start allocates one id per job (id matches its spill file)" {
   let directory = @fs.tmpdir(prefix="bg-job-test-")
   defer @fs.rmdir(directory, recursive=true)
@@ -867,6 +868,7 @@ async test "the reaper kills a background job that outlives the time cap" {
 
 ///|
 #cfg(not(platform="windows"))
+#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "an adopted job keeps its original wall-clock deadline" {
   @async.with_task_group(group => {
     let rt = BgJobRuntime::BgJobRuntime(

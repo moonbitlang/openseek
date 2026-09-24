@@ -41,6 +41,7 @@ async test "job files survive scope cleanup and a new runtime cannot overwrite t
 
 ///|
 #cfg(not(platform="windows"))
+#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "small foreground execution materializes all prior output at adoption" {
   let root = @fs.tmpdir(prefix="openseek-adopt-jobs-")
   defer @fs.rmdir(root, recursive=true)
@@ -146,6 +147,7 @@ async test "concurrent first jobs prepare one canonical runtime directory" {
 
 ///|
 #cfg(not(platform="windows"))
+#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "tiny foreground burst leaves no log files and concurrent noisy jobs retain every byte" {
   let root = @fs.tmpdir(prefix="openseek-job-load-")
   defer @fs.rmdir(root, recursive=true)

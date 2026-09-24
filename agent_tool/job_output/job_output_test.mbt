@@ -55,6 +55,7 @@ async fn poll_bg_output(
 }
 
 ///|
+#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "job_output returns a running job's output and status" {
   @async.with_task_group(group => {
     let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))

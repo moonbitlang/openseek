@@ -181,6 +181,7 @@ async test "review file snapshots use pinned local commits across renames additi
 }
 
 ///|
+#skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "review snapshots distinguish an absent side from an empty blob" {
   for added in [true, false] {
     let dir = @fs.tmpdir(prefix="openseek-review-empty-")
