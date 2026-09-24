@@ -1,6 +1,6 @@
 ///|
 import {
-  "moonbitlang/async@0.22.1",
+  "moonbitlang/async@0.22.4",
   "moonbitlang/core/env",
   "moonbitlang/workflow@0.7.1",
   "moonbitlang/workflow@0.7.1/hosted",

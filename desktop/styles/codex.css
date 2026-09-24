@@ -213,11 +213,6 @@
   font-weight: 700;
 }
 
-.codex-permission-chevron {
-  color: var(--color-text-muted);
-  transform: translateY(-1px);
-}
-
 .codex-permission-control.danger .codex-permission-button {
   background: var(--color-danger-soft);
   color: var(--color-danger);

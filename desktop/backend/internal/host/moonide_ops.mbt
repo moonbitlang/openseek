@@ -399,19 +399,32 @@ async fn moonide_navigation_op(
 }
 
 ///|
+async fn moonide_navigation_reply(
+  state : HostState,
+  query : MoonIdeQuery,
+  payload : MoonIdeNavigationPayload,
+) -> @protocol.MoonIdeNavigationReply {
+  let reply = moonide_navigation_op(state, query, payload) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => return NavigationError("\{error}")
+  }
+  NavigationLocations(reply)
+}
+
+///|
 async fn moonide_definition_op(
   state : HostState,
   payload : MoonIdeNavigationPayload,
-) -> MoonIdeLocationsReply {
-  moonide_navigation_op(state, Definition, payload)
+) -> @protocol.MoonIdeNavigationReply {
+  moonide_navigation_reply(state, Definition, payload)
 }
 
 ///|
 async fn moonide_references_op(
   state : HostState,
   payload : MoonIdeNavigationPayload,
-) -> MoonIdeLocationsReply {
-  moonide_navigation_op(state, References, payload)
+) -> @protocol.MoonIdeNavigationReply {
+  moonide_navigation_reply(state, References, payload)
 }
 
 ///|

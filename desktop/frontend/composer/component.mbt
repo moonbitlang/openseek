@@ -698,7 +698,7 @@ fn Model::update(
       } else {
         entry
       }
-      (self.with_entry(next), @cmd.none)
+      (self.with_entry(next), reveal_completion_selection())
     }
     CompletionDismiss =>
       (self.with_entry({ ..entry, completion: None, }), @cmd.none)

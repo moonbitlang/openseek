@@ -237,6 +237,11 @@ async fn github_checkout_status(
       raise HostError("GitHub returned an invalid current pull request.")
     }
     Some(result)
+  } else if github_checkout_git(dir.0, ["remote"]).trim().is_empty() {
+    // A local-only checkout has no repository for gh to discover. This is an
+    // ordinary absence, while Git failures and GitHub query failures remain
+    // errors. A saved PR URL above can still be checked without a remote.
+    None
   } else {
     let result = query(["pr", "status", "--json", "url,state"])
     guard result is Object(object) else {

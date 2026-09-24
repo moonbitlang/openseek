@@ -8,7 +8,7 @@ import {
   "moonbit-community/pty@0.4.1",
   "moonbit-community/flate@0.7.1",
   "moonbitlang/x@0.4.50",
-  "moonbitlang/async@0.22.1",
+  "moonbitlang/async@0.22.4",
   "moonbit-community/proton@0.3.3",
   "moonbit-community/proton_ext@0.3.3",
   "tonyfettes/platform@0.1.1",

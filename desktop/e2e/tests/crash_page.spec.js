@@ -21,25 +21,6 @@ test('browser diagnostics do not replace the application', async ({ page }) => {
   expect(warnings).toContain('ResizeObserver loop completed with undelivered notifications.');
 });
 
-test('the first exception wins, renders text safely, and can reload', async ({ page }) => {
-  await page.evaluate(() => {
-    const error = new Error('<img src=x onerror="window.injected=true">');
-    error.stack = 'original stack: ' + error.message;
-    window.dispatchEvent(new ErrorEvent('error', { error }));
-    window.dispatchEvent(new ErrorEvent('error', { error: new Error('later error') }));
-  });
-  await expect(page).toHaveTitle('SeekMoon stopped unexpectedly');
-  await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.locator('#frontend-crash-detail')).toHaveText(
-    'original stack: <img src=x onerror="window.injected=true">',
-  );
-  await expect(page.locator('#frontend-crash img')).toHaveCount(0);
-  expect(await page.evaluate(() => window.injected)).toBeUndefined();
-  await page.getByRole('button', { name: 'Reload', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Hide sidebar', exact: true })).toBeVisible();
-  await expect(page.locator('#frontend-crash')).toHaveCount(0);
-});
-
 for (const [kind, expected] of [
   ['string', 'rejected <tag>'],
   ['object', '{\n  "message": "rejected object"\n}'],

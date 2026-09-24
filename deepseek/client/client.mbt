@@ -242,11 +242,7 @@ async fn[T] Client::with_retries(
     max_retry=self.retry_attempts - 1,
     fatal_error=error => {
       let stopped = bail(error)
-      let fatal = stopped ||
-        error is @async.TaskCancelled ||
-        error is Failure::Failure(_) ||
-        error is @http.URIParseError::InvalidFormat ||
-        error is @http.URIParseError::UnsupportedProtocol(_)
+      let fatal = stopped || error is (Failure::_ | @http.URIParseError::_)
       if progress is Some(progress) {
         progress.stop_reason = if stopped {
           StreamStarted
@@ -317,7 +313,6 @@ pub async fn Client::chat(
             }
           },
         ) catch {
-          @async.TaskCancelled as error => raise error
           error => fail(progress.failure_message(self, error))
         }
       }

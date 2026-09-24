@@ -60,6 +60,7 @@ pub struct DiffEditorWidget {
   priv mut line_action_target : (Bool, Int)?
   priv mut hunk_action_renderer : ((Int) -> @rdom.Element?)?
   priv hunk_actions : Array[(Int, @rdom.Element)]
+  priv mut hunk_pointer_position : (Double, Double)?
   priv mut navigate_from_active_hunk : Bool
   priv mut active_hunk_index : Int?
   priv did_change_active_hunk : @base_common.Emitter[Int?]
@@ -249,6 +250,7 @@ pub fn DiffEditorWidget::create(
     line_action_target: None,
     hunk_action_renderer: None,
     hunk_actions: [],
+    hunk_pointer_position: None,
     navigate_from_active_hunk: false,
     active_hunk_index: None,
     did_change_active_hunk: Emitter(),
@@ -281,6 +283,7 @@ pub fn DiffEditorWidget::create(
   )
   widget.install_event_bridges()
   widget.install_line_action()
+  widget.install_hunk_action_hover()
   // Establish accessibility/visibility attributes even when the initial host
   // is display:none and therefore has no valid layout transaction yet.
   widget.apply_layout_dom()
@@ -2179,6 +2182,7 @@ pub fn DiffEditorWidget::dispose(self : DiffEditorWidget) -> Unit {
   self.clear_pending_scroll_echoes()
   self.clear_hunk_actions()
   self.hunk_action_renderer = None
+  self.hunk_pointer_position = None
   self.did_change_active_hunk.dispose()
   self.did_change_content_height.dispose()
   self.did_reveal_change.dispose()

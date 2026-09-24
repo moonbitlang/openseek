@@ -819,7 +819,8 @@
   color: var(--color-text-primary);
 }
 .composer-model-glyph,
-.composer-model-chevron {
+.composer-model-chevron,
+.codex-permission-chevron {
   flex: none;
   color: var(--color-text-muted);
 }
@@ -835,7 +836,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.composer-model-chevron {
+.composer-model-chevron,
+.codex-permission-chevron {
   width: 5px;
   height: 5px;
   margin: -3px 1px 0 3px;

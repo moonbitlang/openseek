@@ -1,4 +1,21 @@
 ///|
+async test "current PR status skips GitHub for a local checkout without remotes" {
+  let dir = @fs.tmpdir(prefix="openseek-local-pr-status-")
+  let _ = {
+    defer git_test_cleanup(dir)
+    git_test_run(dir, ["init", "--quiet"])
+    let root = @pathx.Absolute::from_uri_path(dir).unwrap()
+    let branch = github_checkout_branch(dir).unwrap()
+    let status = github_checkout_status(root, _ => {
+      fail("A local checkout without remotes must not query GitHub")
+    })
+    assert_eq(status.branch, Some(branch))
+    assert_eq(status.pull_request_url, None)
+    assert_false(status.has_open_pull_request)
+  }
+}
+
+///|
 #skip("flaky: moonbitlang/async 0.22.x raises EAGAIN on a spurious process-read wake-up; unskip after bumping to a release with moonbitlang/async#634")
 async test "current PR status verifies remote lifecycle even for saved branch associations" {
   let dir = @fs.tmpdir(prefix="openseek-pr-status-")
@@ -12,8 +29,12 @@ async test "current PR status verifies remote lifecycle even for saved branch as
     let branch = github_checkout_branch(dir).unwrap()
     let base = git_revision_commit(dir, "HEAD").unwrap()
     let url = "https://github.example/owner/repo/pull/42"
+    git_test_run(dir, [
+      "remote", "add", "origin", "https://github.example/owner/repo.git",
+    ])
     for saved in [false, true] {
       if saved {
+        git_test_run(dir, ["remote", "remove", "origin"])
         let metadata : Json = { "url": url, "base": base }
         git_test_run(dir, [
           "config",

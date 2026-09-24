@@ -1347,7 +1347,7 @@ async test "cancelling follower baseline removes its startup identity" {
       startup.wait()
       false
     } catch {
-      @async.TaskCancelled => true
+      @async.WaitedTaskAlreadyCancelled => true
       _ => false
     }
     assert_true(cancelled)

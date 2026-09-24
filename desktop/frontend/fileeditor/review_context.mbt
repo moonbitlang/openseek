@@ -280,7 +280,10 @@ fn append_review_context_action(
   button.set_inner_html(
     "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" aria-hidden=\"true\"><path d=\"M21 11 12 20a6 6 0 0 1-8-8L14 2a4 4 0 0 1 6 6L9 19a2 2 0 0 1-3-3L16 6\"/></svg>",
   )
-  button.append_child(@dom.document().create_text_node(label).as_node())
+  let label_element = @dom.document().create_element("span")
+  label_element.set_attribute("class", "review-hunk-context-label")
+  label_element.append_child(@dom.document().create_text_node(label).as_node())
+  button.append_child(label_element.as_node())
   control.append_child(button.as_node())
   if coverage is @mention_context.PartlyIncluded {
     button.set_attribute("aria-haspopup", "menu")

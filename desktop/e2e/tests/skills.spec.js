@@ -52,6 +52,9 @@ class SkillsHarness extends DesktopBrowserHarness {
     await this.goto();
     await this.page.getByRole('button', { name: 'Skills', exact: true }).click();
     const summaries = this.page.locator('.skill-summary');
+    // Installed rows render above the catalog, and each list arrives by its
+    // own RPC. Until both have, first() and last() can name the same row.
+    await expect(summaries).toHaveCount(this.installedSkills.length + this.catalogSkills.length);
     await (fromCatalog ? summaries.last() : summaries.first()).click();
     await expect(this.page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
   }
