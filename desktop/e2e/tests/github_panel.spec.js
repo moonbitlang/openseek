@@ -28,8 +28,8 @@ test('GitHub inventory, PR details and checkout follow live language changes', a
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  // Opening Changes leaves the resource strip empty; use its launcher.
+  await page.locator('.dock-launcher').getByRole('button', { name: /^GitHub / }).click();
   const panel = page.locator('.github-panel');
   await panel.locator('.github-item-open').click();
   const languages = [
@@ -99,8 +99,8 @@ test('GitHub dock keeps both inventories scrollable and disclosures keyboard acc
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menu', { name: 'New tab', exact: true }).getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  // Opening Changes leaves the resource strip empty; use its launcher.
+  await page.locator('.dock-launcher').getByRole('button', { name: /^GitHub / }).click();
   const panel = page.locator('.github-panel');
   await expect(panel).toBeVisible();
   await expect(page.locator('.editor-tab.active')).toContainText('GitHub');
@@ -161,8 +161,8 @@ test('avatar errors retain the inventory and retry clears the warning', async ({
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  // Opening Changes leaves the resource strip empty; use its launcher.
+  await page.locator('.dock-launcher').getByRole('button', { name: /^GitHub / }).click();
   const pulls = page.locator('.github-pulls');
   await expect(pulls.locator('.github-item')).toHaveCount(1);
   await expect(pulls.getByRole('alert')).toContainText('offline');
@@ -200,8 +200,8 @@ test('PR checkout supports keyboard choices, failure notifications and opens Rev
   await app.goto();
   await app.openSession();
   await app.openReview();
-  await page.getByTitle('New tab', { exact: true }).click();
-  await page.getByRole('menu', { name: 'New tab', exact: true }).getByRole('menuitem', { name: 'GitHub', exact: true }).click();
+  // Opening Changes leaves the resource strip empty; use its launcher.
+  await page.locator('.dock-launcher').getByRole('button', { name: /^GitHub / }).click();
   const panel = page.locator('.github-panel');
   const row = panel.locator('.github-pulls .github-item');
   const checkout = row.getByRole('button', { name: 'Check out PR #42 locally', exact: true });

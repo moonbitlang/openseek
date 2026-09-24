@@ -64,8 +64,23 @@ test "initial PR checkout refreshes cached Review and enables comments" {
     )
     assert_true(refreshing.file_panel.git_graph is @fileeditor.GitGraphLoading)
     assert_true(refreshing.github.review_pending)
+    assert_true(refreshing.dock == model.dock)
     assert_true(refreshing.file_panel.github_review.enabled)
     assert_true(refreshing.file_panel.github_review.refresh_pending)
+    // Navigating to another resource while checkout loads must win over the
+    // automatic first-file reveal, even though Changes remains visible.
+    let (_, workflows) = update_msg(
+      test_dispatch(),
+      WorkflowsRequested,
+      refreshing,
+    )
+    let (_, retained) = update_msg(
+      test_dispatch(),
+      review_inventory_reply(workflows, [saved_review_file("src/new.mbt")]),
+      workflows,
+    )
+    assert_true(retained.dock == workflows.dock)
+    assert_false(retained.github.review_pending)
     let (_, opened) = update_msg(
       test_dispatch(),
       review_inventory_reply(refreshing, [saved_review_file("src/new.mbt")]),

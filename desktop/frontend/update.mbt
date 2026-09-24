@@ -869,9 +869,8 @@ fn Model::begin_editor_navigation(self : Model) -> Model {
 }
 
 ///|
-/// Open the shared Explorer picker on one of its three inventories. Dock and
-/// panel visibility belong to the shell; inventory selection, focus, and any
-/// host-backed refresh belong to fileeditor.
+/// Reveal an Explorer inventory without replacing the active document or
+/// creating a placeholder tab. Inventory focus and refresh stay in fileeditor.
 fn open_explorer(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -882,7 +881,6 @@ fn open_explorer(
   let next = {
     ..model,
     screen,
-    dock: @dock.open_picker(model.dock),
     right_panel_open: true,
     right_panel_menu_open: false,
     // Invoking any Explorer inventory is an explicit request to keep it next
@@ -896,43 +894,38 @@ fn open_explorer(
     next.file_panel,
     file_ctx(next),
   )
-  // Opening the picker hides the focused launcher. Hand focus to the panel
-  // first; inventory-specific commands can then focus their own input.
-  (@cmd.batch([focus_dock_after_render(), cmd]), { ..next, file_panel, })
+  (cmd, { ..next, file_panel, })
 }
 
 ///|
 /// Reveal a transcript-linked directory in the editor's Files tree. Keep an
-/// active file visible beside the tree; otherwise activate the picker body so
-/// the reveal has a visible home. `RevealDirectory` expands the ancestors;
-/// transcript navigation additionally expands the target itself, without
-/// toggling an already-open row closed.
+/// active tab visible beside the tree. Unlike a breadcrumb click, this must
+/// reveal Files even when the navigator was collapsed or another inventory
+/// was selected. Expand the target without toggling an open row closed.
 fn reveal_local_directory(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   path : @pathx.Relative,
 ) -> (@cmd.Cmd, Model) {
-  let dock = match model.dock.active {
-    Some(File(_)) | Some(FilePicker) => model.dock
-    None
-    | Some(Browser(_))
-    | Some(GitDiff(_))
-    | Some(Workflows)
-    | Some(Jobs)
-    | Some(Github) => @dock.open_picker(model.dock)
-  }
   let model = {
     ..model,
-    dock,
     right_panel_open: true,
     right_panel_menu_open: false,
+    file_panel: { ..model.file_panel, tree_open: true, },
   }
-  let (cmd, panel) = @fileeditor.update(
+  let (inventory_cmd, panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
-    @fileeditor.RevealDirectory(path),
+    @fileeditor.ExplorerModeSelected(ExplorerFiles),
     model.file_panel,
     file_ctx(model),
   )
+  let (cmd, panel) = @fileeditor.update(
+    dispatch.map(msg => FileEditor(msg)),
+    @fileeditor.RevealDirectory(path),
+    panel,
+    file_ctx(model),
+  )
+  let cmd = @cmd.batch([inventory_cmd, cmd])
   let model = { ..model, file_panel: panel, }
   if path.is_root() || panel.expanded.contains(path) {
     return (cmd, model)
@@ -1017,13 +1010,7 @@ fn open_editor_at(
   }
   guard resource is Some(resource) else { return (@cmd.none, model) }
   let had_active = @dock.active_file(dock) is Some(_)
-  // An explicit open while the picker is the active tab fulfills it, the
-  // same as a pick from its tree.
-  let dock = if dock.active is Some(FilePicker) {
-    @dock.resolve_pick(dock, resource)
-  } else {
-    @dock.open_file(dock, resource)
-  }
+  let dock = @dock.open_file(dock, resource)
   let model = {
     ..model,
     dock,
@@ -1556,10 +1543,11 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     .map(conv => conv.engine_model)
     .unwrap_or(model.default_model)
   let file_body_visible = match model.dock.active {
-    Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
+    Some(File(_)) | Some(GitDiff(_)) => true
     None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) | Some(Github) =>
       false
   }
+  let navigator_visible = model.file_panel.tree_open
   {
     // Keep the real identity even while placement is unresolved or missing.
     // Both panel packages use the typed checkout state to park host work; the
@@ -1580,11 +1568,13 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // The dock's projection: strip membership and the active tab are the
     // dock's truth, handed to the file subsystem read-only.
     // The dock preference survives Skills/Settings navigation, and an open
-    // dock can instead show its browser or empty-strip launcher. CSS hides the
-    // file body in all three cases. Report actual visibility so the file
-    // subsystem parks its workspace watches and Changes refreshes off-screen.
+    // dock can instead show its browser or empty-strip launcher. Its full-height
+    // navigator still needs workspace watches while visible beside those tabs.
     panel_open: model.right_panel_open &&
-    (model.screen is Codex || (model.screen is Chat && file_body_visible)),
+    (
+      model.screen is Codex ||
+      (model.screen is Chat && (file_body_visible || navigator_visible))
+    ),
     open_files: @dock.file_paths(model.dock),
     active_file: @dock.active_file(model.dock),
     open_history_diffs: @dock.history_diffs(model.dock),
@@ -1690,6 +1680,7 @@ fn desired_browser_view(model : Model) -> Int? {
     model.right_panel_open &&
     !model.right_panel_menu_open &&
     !model.dock_tab_menu_open &&
+    !(model.narrow && model.file_panel.tree_open) &&
     model.select_menu is None &&
     !git_details_open &&
     !covering_overlay(model) else {
@@ -3078,8 +3069,7 @@ fn update_msg(
       (clear_feedback, model.replace_conversation({ ..conv, mentions, }))
     }
     // Search rows use the same ordinary positioned-open path as definition,
-    // mention, and Quick Open navigation. An active picker is fulfilled in
-    // place; an already-open file is activated.
+    // mention, and Quick Open navigation, reusing any existing file tab.
     FileEditor(@fileeditor.SearchMatchSelected(path~, range~)) =>
       open_editor_at(dispatch, model, path, Some(range))
     SemanticSelectionMaterialized(owner~, submission_id~, artifact~) => {
@@ -3216,14 +3206,7 @@ fn update_msg(
       }
       let model = model.begin_editor_navigation()
       let had_active = @dock.active_file(model.dock) is Some(_)
-      // A pick made from the active FilePicker tab fulfills it: the picker
-      // is replaced in place (or the already-open tab activates and the
-      // picker closes). Any other tree click opens tabs as before.
-      let dock = if model.dock.active is Some(FilePicker) {
-        @dock.resolve_pick(model.dock, resource)
-      } else {
-        @dock.open_file(model.dock, resource)
-      }
+      let dock = @dock.open_file(model.dock, resource)
       let model = { ..model, dock, }
       let (cmd, panel) = @fileeditor.open_document(
         dispatch.map(msg => FileEditor(msg)),
@@ -3251,11 +3234,7 @@ fn update_msg(
       }
       let model = model.begin_editor_navigation()
       let had_active = @dock.active_file(model.dock) is Some(_)
-      let dock = if model.dock.active is Some(FilePicker) {
-        @dock.resolve_pick(model.dock, resource)
-      } else {
-        @dock.open_file(model.dock, resource)
-      }
+      let dock = @dock.open_file(model.dock, resource)
       let model = { ..model, dock, }
       let (cmd, panel) = @fileeditor.open_changed_document(
         dispatch.map(msg => FileEditor(msg)),
@@ -5490,7 +5469,8 @@ fn update_msg(
         }
         // Only the Review navigation initiated by checkout may open a file.
         // A newer user selection wins while the snapshot is being fetched.
-        if next.dock.active is Some(FilePicker) &&
+        if next.dock.active is Some(Github) &&
+          next.file_panel.tree_open &&
           next.file_panel.explorer_mode is ExplorerChanges &&
           files
           .iter()
@@ -5520,7 +5500,8 @@ fn update_msg(
       // Only a real non-empty -> empty strip transition closes the panel.
       // An already-empty panel is the launcher surface, so a stale close must
       // leave it open. Reset the other visibility bits just like the explicit
-      // panel toggle does, keeping the root-owned panel state consistent.
+      // panel toggle does. Only an empty dock prepares the navigator for the
+      // next opening; having no next file can still mean Browser or Workflows.
       let model = if !before.tabs.is_empty() && dock.tabs.is_empty() {
         {
           ..model,
@@ -5528,6 +5509,7 @@ fn update_msg(
           right_panel_open: false,
           right_panel_menu_open: false,
           right_panel_expanded: false,
+          file_panel: { ..model.file_panel, tree_open: true, },
         }
       } else {
         { ..model, dock, }
@@ -5692,9 +5674,9 @@ fn update_msg(
                   (@cmd.batch(cmds), model)
                 }
               }
-              // Neither tab owns a document: closing one while active hands
+              // Workflows owns no document: closing it while active hands
               // focus to a neighbouring file or diff, and otherwise nothing.
-              FilePicker | Workflows | Jobs | Github =>
+              Workflows | Jobs | Github =>
                 if was_active && next_file is Some(path) {
                   let (cmd, panel) = @fileeditor.activate(
                     femit,
@@ -5752,7 +5734,16 @@ fn update_msg(
       let dock = @dock.open_browser(model.dock, id)
       (
         focus_browser_address(),
-        { ..model, preview, dock, right_panel_menu_open: false, },
+        {
+          ..model,
+          preview,
+          dock,
+          right_panel_menu_open: false,
+          file_panel: {
+            ..model.file_panel,
+            tree_open: model.file_panel.tree_open && !model.narrow,
+          },
+        },
       )
     }
     ExplorerRequested(mode) => open_explorer(dispatch, model, mode)
@@ -5834,6 +5825,10 @@ fn update_msg(
         {
           ..model,
           dock: @dock.open_github(model.dock),
+          file_panel: {
+            ..model.file_panel,
+            tree_open: model.file_panel.tree_open && !model.narrow,
+          },
           right_panel_open: true,
           right_panel_menu_open: false,
         },
@@ -5844,6 +5839,10 @@ fn update_msg(
         {
           ..model,
           dock: @dock.open_jobs(model.dock),
+          file_panel: {
+            ..model.file_panel,
+            tree_open: model.file_panel.tree_open && !model.narrow,
+          },
           right_panel_open: true,
           right_panel_menu_open: false,
         },
@@ -5854,6 +5853,10 @@ fn update_msg(
         {
           ..model,
           dock: @dock.open_workflows(model.dock),
+          file_panel: {
+            ..model.file_panel,
+            tree_open: model.file_panel.tree_open && !model.narrow,
+          },
           right_panel_open: true,
           right_panel_menu_open: false,
         },
@@ -5982,6 +5985,26 @@ fn update_msg(
         model,
       )
     }
+    CloseWorkspaceNavigator => {
+      guard model.is_desktop &&
+        model.right_panel_open &&
+        model.file_panel.tree_open else {
+        return (@cmd.none, model)
+      }
+      if model.dock.tabs.is_empty() {
+        return update_msg(dispatch, ToggleRightPanel, model)
+      }
+      // Focus belongs to the navigator, selection to the resource. Dismiss
+      // only the former and restore focus to the retained resource region.
+      // This is local layout state, even while its checkout is unavailable.
+      (
+        @cmd.batch([
+          @fileeditor.request_viewer_remeasure(),
+          focus_dock_after_render(),
+        ]),
+        { ..model, file_panel: { ..model.file_panel, tree_open: false, }, },
+      )
+    }
     CloseActiveDockTab => {
       guard model.is_desktop else { return (@cmd.none, model) }
       match model.dock.active {
@@ -5989,6 +6012,10 @@ fn update_msg(
           let (cmd, model) = update_msg(dispatch, Dock(TabClosed(tab)), model)
           (@cmd.batch([cmd, focus_dock_after_render()]), model)
         }
+        // Navigator launchers do not create a tab. Close still dismisses
+        // their region when keyboard focus is inside the empty dock.
+        None if model.right_panel_open =>
+          update_msg(dispatch, ToggleRightPanel, model)
         None => (@cmd.none, model)
       }
     }
@@ -6078,6 +6105,13 @@ fn update_msg(
         // shared token before either branch so its delayed reply cannot put a
         // file back over the URL the user chose later.
         let model = model.begin_editor_navigation()
+        let model = {
+          ..model,
+          file_panel: {
+            ..model.file_panel,
+            tree_open: model.file_panel.tree_open && !model.narrow,
+          },
+        }
         // The scan is over this strip's tabs, not the global page map: a
         // parked conversation may hold the same URL, and matching its page
         // first would shadow this strip's own tab forever.
@@ -15890,7 +15924,9 @@ test "right-panel menu closes without reopening on a second dismissal" {
   // for a tab that is already gone must not collapse that surface.
   let (_, empty) = update(
     dispatch,
-    Dock(TabClosed(@dock.DockTab::FilePicker)),
+    Dock(
+      TabClosed(@dock.DockTab::File(path=@common.Uri::file("/work/closed.mbt"))),
+    ),
     docked,
   )
   assert_true(empty.right_panel_open)
@@ -17551,7 +17587,7 @@ test "installed skills replies are scoped to their source device" {
 }
 
 ///|
-test "file editor context reports the file body actual visibility" {
+test "file editor context includes the independent visible navigator" {
   let model = test_model()
   let path = @pathx.Relative("src/main.mbt")
   let file_model = {
@@ -17565,11 +17601,6 @@ test "file editor context reports the file body actual visibility" {
   }
   assert_true(file_ctx(file_model).panel_open)
   assert_false(file_ctx({ ..file_model, right_panel_open: false, }).panel_open)
-  let picker_model = {
-    ..file_model,
-    dock: { ..file_model.dock, tabs: [FilePicker], active: Some(FilePicker), },
-  }
-  assert_true(file_ctx(picker_model).panel_open)
   let browser_model = {
     ..file_model,
     dock: {
@@ -17578,12 +17609,24 @@ test "file editor context reports the file body actual visibility" {
       active: Some(Browser(id=1)),
     },
   }
-  assert_false(file_ctx(browser_model).panel_open)
+  assert_true(file_ctx(browser_model).panel_open)
+  assert_false(
+    file_ctx({
+      ..browser_model,
+      file_panel: { ..browser_model.file_panel, tree_open: false, },
+    }).panel_open,
+  )
   let launcher_model = {
     ..file_model,
     dock: { ..file_model.dock, tabs: [], active: None, },
   }
-  assert_false(file_ctx(launcher_model).panel_open)
+  assert_true(file_ctx(launcher_model).panel_open)
+  assert_false(
+    file_ctx({
+      ..launcher_model,
+      file_panel: { ..launcher_model.file_panel, tree_open: false, },
+    }).panel_open,
+  )
   assert_false(file_ctx({ ..file_model, screen: Skills, }).panel_open)
   assert_false(file_ctx({ ..file_model, screen: Settings, }).panel_open)
 }
@@ -17673,13 +17716,62 @@ test "resolved transcript files and directories stay in the right panel" {
   let directory_msg = OpenDirectoryAt(owner~, generation=1, path="src")
   let (_, directory) = update(dispatch, directory_msg, directory_pending)
   assert_true(directory.right_panel_open)
-  assert_true(directory.dock.active is Some(FilePicker))
+  assert_true(directory.dock.active is None)
+  assert_true(directory.dock.tabs.is_empty())
   assert_true(directory.file_panel.tree_open)
   assert_true(directory.file_panel.highlighted is Some(Relative("src")))
   assert_true(directory.file_panel.expanded.contains(Relative("src")))
   // Repeating the same link is a reveal, not the row's collapse toggle.
   let (_, repeated) = update(dispatch, directory_msg, directory)
   assert_true(repeated.file_panel.expanded.contains(Relative("src")))
+}
+
+///|
+test "transcript directories reopen Files without replacing dock destinations" {
+  let dispatch = test_dispatch()
+  for active in [None, Some(@dock.Browser(id=1)), Some(@dock.Workflows)] {
+    for mode in [@fileeditor.ExplorerFiles, ExplorerChanges, ExplorerSearch] {
+      for path in ["src", ""] {
+        let model = test_model()
+        let model = {
+          ..model,
+          right_panel_open: false,
+          dock: {
+            ..model.dock,
+            active,
+            tabs: match active {
+              Some(tab) => [tab]
+              None => []
+            },
+          },
+          file_panel: {
+            ..model.file_panel,
+            tree_open: false,
+            explorer_mode: mode,
+          },
+        }
+        let (_, pending) = update(dispatch, OpenFile(path), model)
+        let (_, revealed) = update(
+          dispatch,
+          OpenDirectoryAt(
+            owner={ channel: Local, session: "desktop-test", },
+            generation=pending.file_panel.file_link_generation,
+            path~,
+          ),
+          pending,
+        )
+        assert_true(revealed.right_panel_open)
+        assert_true(revealed.file_panel.tree_open)
+        assert_true(revealed.file_panel.explorer_mode is ExplorerFiles)
+        assert_true(revealed.dock == pending.dock)
+        assert_true(revealed.file_panel.highlighted == Some(Relative(path)))
+        assert_true(
+          path.is_empty() ||
+          revealed.file_panel.expanded.contains(Relative(path)),
+        )
+      }
+    }
+  }
 }
 
 ///|
@@ -20148,13 +20240,11 @@ test "launcher rows open Browser and all Explorer destinations" {
   assert_true(page.url is None)
   assert_false(page.loading)
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerFiles), model)
-  assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(model.dock.active is Some(@dock.DockTab::Browser(id=1)))
   assert_true(model.file_panel.explorer_mode is ExplorerFiles)
-  assert_true(
-    model.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
-  )
+  assert_true(model.dock.tabs == [@dock.DockTab::Browser(id=1)])
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerChanges), model)
-  assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(model.dock.active is Some(@dock.DockTab::Browser(id=1)))
   assert_true(model.file_panel.explorer_mode is ExplorerChanges)
   assert_true(model.file_panel.changes is ChangeListLoading(_))
   // Files is an explicit destination even after Review selected Changes.
@@ -20166,20 +20256,121 @@ test "launcher rows open Browser and all Explorer destinations" {
 }
 
 ///|
+test "closing a file preserves the promoted non-file tab and navigator preference" {
+  let dispatch = test_dispatch()
+  let path = @pathx.Relative("src/main.mbt")
+  let file = @interop.ChannelId::Local.test_resource("/work/src/main.mbt")
+  for
+    request in [
+      ExternalLinkClicked("https://example.test/"),
+      WorkflowsRequested,
+      JobsRequested,
+      GithubRequested,
+    ] {
+    for narrow in [false, true] {
+      let (_, destination) = update(dispatch, request, {
+        ..desktop_model(),
+        narrow,
+        sidebar_open: false,
+        right_panel_open: true,
+      })
+      if narrow {
+        assert_false(destination.file_panel.tree_open)
+      }
+      let successor = destination.dock.active
+      let (_, opened) = update(
+        dispatch,
+        FileEditor(FileSelected(path~, name="main.mbt")),
+        destination,
+      )
+      for tree_open in [false, true] {
+        let (_, closed) = update(
+          dispatch,
+          Dock(TabClosed(@dock.File(path=file))),
+          { ..opened, file_panel: { ..opened.file_panel, tree_open, }, },
+        )
+        assert_true(closed.dock.active == successor)
+        assert_eq(closed.dock.tabs.length(), 1)
+        assert_true(closed.right_panel_open)
+        assert_eq(closed.file_panel.tree_open, tree_open)
+        assert_false(closed.file_panel.docs.contains(file))
+        if successor is Some(@dock.Browser(id~)) && !(narrow && tree_open) {
+          assert_eq(desired_browser_view(closed), Some(id))
+        }
+      }
+    }
+  }
+}
+
+///|
+test "closing the last dock tab prepares the navigator for reopening" {
+  let dispatch = test_dispatch()
+  for
+    request in [
+      BrowserTabRequested,
+      WorkflowsRequested,
+      JobsRequested,
+      GithubRequested,
+      FileEditor(FileSelected(path=Relative("src/main.mbt"), name="main.mbt")),
+    ] {
+    let (_, opened) = update(dispatch, request, {
+      ..desktop_model(),
+      narrow: true,
+      right_panel_open: true,
+    })
+    guard opened.dock.active is Some(tab) else { fail("expected an open tab") }
+    let (_, closed) = update(dispatch, Dock(TabClosed(tab)), opened)
+    assert_true(closed.dock.active is None)
+    assert_false(closed.right_panel_open)
+    assert_true(closed.file_panel.tree_open)
+    let (_, reopened) = update(dispatch, ToggleRightPanel, closed)
+    assert_true(reopened.right_panel_open)
+    assert_true(reopened.file_panel.tree_open)
+  }
+}
+
+///|
+test "closing a narrow navigator restores the retained native browser" {
+  let dispatch = test_dispatch()
+  let (_, browser) = update(
+    dispatch,
+    ExternalLinkClicked("https://example.test/"),
+    { ..desktop_model(), narrow: true, sidebar_open: false, },
+  )
+  let (_, navigator) = update(
+    dispatch,
+    ExplorerRequested(ExplorerSearch),
+    browser,
+  )
+  assert_true(desired_browser_view(navigator) is None)
+  let (_, closed) = update(dispatch, CloseWorkspaceNavigator, navigator)
+  assert_false(closed.file_panel.tree_open)
+  assert_true(closed.right_panel_open)
+  assert_true(closed.dock.tabs == browser.dock.tabs)
+  assert_true(closed.dock.active == browser.dock.active)
+  assert_eq(desired_browser_view(closed), @dock.active_browser(browser.dock))
+  // A queued duplicate dismissal must not reopen the navigator or close a tab.
+  let (_, repeated) = update(dispatch, CloseWorkspaceNavigator, closed)
+  assert_false(repeated.file_panel.tree_open)
+  assert_true(repeated.right_panel_open)
+  assert_true(repeated.dock.tabs == browser.dock.tabs)
+}
+
+///|
 test "CloseDockTabs All keeps the empty launcher at the chosen panel size" {
   let dispatch = test_dispatch()
   let (_, browser) = update(dispatch, BrowserTabRequested, {
     ..desktop_model(),
     right_panel_open: true,
   })
-  let (_, mixed) = update(dispatch, ExplorerRequested(ExplorerFiles), browser)
+  let (_, mixed) = update(dispatch, WorkflowsRequested, browser)
   let mixed = {
     ..mixed,
     right_panel_menu_open: true,
     right_panel_expanded: true,
   }
   assert_true(
-    mixed.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
+    mixed.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::Workflows],
   )
   let (_, closed) = update(dispatch, CloseDockTabs(All), mixed)
   assert_true(closed.dock.tabs.is_empty())
@@ -20200,27 +20391,27 @@ test "CloseDockTabs All keeps the empty launcher at the chosen panel size" {
 test "relative tab close preserves survivors and tears down only selected pages" {
   let dispatch = test_dispatch()
   let (_, first) = update(dispatch, BrowserTabRequested, desktop_model())
-  let (_, picker) = update(dispatch, ExplorerRequested(ExplorerFiles), first)
-  let (_, second) = update(dispatch, BrowserTabRequested, picker)
+  let (_, jobs) = update(dispatch, JobsRequested, first)
+  let (_, second) = update(dispatch, BrowserTabRequested, jobs)
   let mixed = { ..second, right_panel_expanded: true, }
-  let (_, left) = update(dispatch, CloseDockTabs(ToLeft(FilePicker)), mixed)
+  let (_, left) = update(dispatch, CloseDockTabs(ToLeft(Jobs)), mixed)
   assert_true(
-    left.dock.tabs == [@dock.DockTab::FilePicker, @dock.DockTab::Browser(id=2)],
+    left.dock.tabs == [@dock.DockTab::Jobs, @dock.DockTab::Browser(id=2)],
   )
   assert_true(left.dock.active == Some(@dock.DockTab::Browser(id=2)))
   assert_true(@preview.page(left.preview, 1) is None)
   assert_true(@preview.page(left.preview, 2) is Some(_))
   assert_true(left.right_panel_expanded)
-  let (_, right) = update(dispatch, CloseDockTabs(ToRight(FilePicker)), mixed)
+  let (_, right) = update(dispatch, CloseDockTabs(ToRight(Jobs)), mixed)
   assert_true(
-    right.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
+    right.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::Jobs],
   )
-  assert_true(right.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(right.dock.active == Some(@dock.DockTab::Jobs))
   assert_true(@preview.page(right.preview, 1) is Some(_))
   assert_true(@preview.page(right.preview, 2) is None)
-  let (_, others) = update(dispatch, CloseDockTabs(Others(FilePicker)), mixed)
-  assert_true(others.dock.tabs == [@dock.DockTab::FilePicker])
-  assert_true(others.dock.active == Some(@dock.DockTab::FilePicker))
+  let (_, others) = update(dispatch, CloseDockTabs(Others(Jobs)), mixed)
+  assert_true(others.dock.tabs == [@dock.DockTab::Jobs])
+  assert_true(others.dock.active == Some(@dock.DockTab::Jobs))
   assert_true(@preview.page(others.preview, 1) is None)
   assert_true(@preview.page(others.preview, 2) is None)
   assert_true(others.right_panel_open)
@@ -20228,7 +20419,7 @@ test "relative tab close preserves survivors and tears down only selected pages"
 }
 
 ///|
-test "a tree pick fulfills the active picker in place" {
+test "a tree selection opens a file without a placeholder tab" {
   let dispatch = test_dispatch()
   let model = desktop_model()
   let (_, model) = update(dispatch, ToggleRightPanel, model)
@@ -20728,7 +20919,7 @@ test "navigating an already-placed tab re-places its view" {
 }
 
 ///|
-test "Search reuses the picker and keeps a request when its Explorer tab leaves" {
+test "Search creates no tab and keeps its request when the navigator changes" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
     dispatch,
@@ -20736,20 +20927,20 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
     desktop_model(),
   )
   assert_true(opened.right_panel_open)
-  assert_true(opened.dock.active is Some(@dock.DockTab::FilePicker))
-  assert_true(opened.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(opened.dock.active is None)
+  assert_true(opened.dock.tabs.is_empty())
   assert_true(opened.file_panel.explorer_mode is ExplorerSearch)
   assert_true(opened.file_panel.tree_open)
-  let (_, reopened_picker) = update(
+  let (_, reopened_search) = update(
     dispatch,
     ExplorerRequested(ExplorerSearch),
     opened,
   )
-  assert_true(reopened_picker.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(reopened_search.dock.tabs.is_empty())
   let (_, edited) = update(
     dispatch,
     FileEditor(Search(@grep_search.QueryChanged("moon"))),
-    reopened_picker,
+    reopened_search,
   )
   let (_, running) = update(
     dispatch,
@@ -20762,12 +20953,12 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
     running,
   )
   let (_, reopened) = update(dispatch, ExplorerRequested(ExplorerSearch), files)
-  assert_true(reopened.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(reopened.dock.tabs.is_empty())
   assert_true(reopened.file_panel.explorer_mode is ExplorerSearch)
 }
 
 ///|
-test "a Search result fulfills the picker while preserving Search beside the file" {
+test "a Search result reuses its file tab and preserves the navigator" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
     dispatch,
@@ -20796,21 +20987,18 @@ test "a Search result fulfills the picker while preserving Search beside the fil
     is Some({ review: None, state: TabLoading, .. }),
   )
 
-  // Opening Search again appends the one shared picker. Picking the already
-  // open file removes that picker and activates the existing file tab.
-  let (_, picker) = update(
+  // Reopening Search leaves the file tab selected. Selecting its result
+  // again reuses the same tab.
+  let (_, search) = update(
     dispatch,
     ExplorerRequested(ExplorerSearch),
     selected,
   )
-  assert_true(
-    picker.dock.tabs ==
-    [@dock.DockTab::File(path=file), @dock.DockTab::FilePicker],
-  )
+  assert_true(search.dock.tabs == [@dock.DockTab::File(path=file)])
   let (_, reused) = update(
     dispatch,
     FileEditor(SearchMatchSelected(path=path.0, range~)),
-    picker,
+    search,
   )
   assert_true(reused.dock.tabs == [@dock.DockTab::File(path=file)])
   assert_true(@dock.active_file(reused.dock) == Some(file))
@@ -21508,4 +21696,34 @@ fn open_loaded_review_context(
       file_panel: opened.file_panel.with_review_context_reveal(selection),
     },
   )
+}
+
+///|
+test "narrow navigator covers the native browser without replacing its tab" {
+  let dispatch = test_dispatch()
+  let (_, browser) = update(
+    dispatch,
+    ExternalLinkClicked("https://example.test/"),
+    { ..desktop_model(), narrow: true, sidebar_open: false, },
+  )
+  assert_false(browser.file_panel.tree_open)
+  let rect : @preview.Rect = { x: 0, y: 100, width: 350, height: 600, }
+  let (_, shown) = update(dispatch, BrowserPaneMeasured(rect~), browser)
+  assert_true(shown.browser_pane.shown is Some(1))
+  let (_, navigator) = update(
+    dispatch,
+    ExplorerRequested(ExplorerSearch),
+    shown,
+  )
+  assert_true(navigator.dock == shown.dock)
+  assert_true(navigator.browser_pane.shown is None)
+  let (_, stale) = update(dispatch, BrowserPaneMeasured(rect~), navigator)
+  assert_true(stale.browser_pane.shown is None)
+  let (_, hidden) = update(
+    dispatch,
+    FileEditor(@fileeditor.ToggleTree),
+    navigator,
+  )
+  let (_, restored) = update(dispatch, BrowserPaneMeasured(rect~), hidden)
+  assert_true(restored.browser_pane.shown is Some(1))
 }
