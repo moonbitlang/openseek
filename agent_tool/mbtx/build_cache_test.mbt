@@ -153,19 +153,36 @@ async test "cache: a build stopped mid-way retires its generation" {
     @fs.mkdir(spill)
     let definition = @mbtx.definition(workspace_root=ws, job_dir=spill)
     // The stop must land while the BUILD is running for there to be anything
-    // to retire: a cold build of a script importing `moonbitlang/async` takes
-    // several hundred milliseconds, and what precedes it a few, so a bound in
-    // between lands inside the build.
+    // to retire. A fixed delay cannot promise that: on a slow runner the
+    // setup before the build outlasted it, and the stop retired nothing. So
+    // the stop waits for `moon` itself to create the target dir, which it
+    // does within tens of milliseconds of a cold build of a script importing
+    // `moonbitlang/async` that takes several hundred.
     let slow =
       #|import { "moonbitlang/async" }
       #|
       #|async fn main {
       #|  println(1)
       #|}
-    let stopped = @async.with_timeout_opt(200, () => {
-      dispatch(definition, { "source": slow })
+    @async.with_task_group(group => {
+      let build = group.spawn(
+        () => dispatch(definition, { "source": slow }),
+        allow_failure=true,
+      )
+      while !@fs.exists("\{spill}/mbtx-cache/snippet/gen-0/_build") {
+        if build.try_wait() is Some(out) {
+          fail("the build finished before it could be stopped: \{out.content}")
+        }
+        @async.sleep(5)
+      }
+      build.cancel()
+      let error = try build.wait() catch {
+        error => Some(error)
+      } noraise {
+        _ => None
+      }
+      assert_true(error is Some(error) && error is @async.TaskCancelled)
     })
-    assert_true(stopped is None)
     let ok = dispatch(definition, { "source": "fn main { println(1) }" })
     assert_false(ok.is_error, msg=ok.content)
     assert_true(ok.content.contains("1"))
