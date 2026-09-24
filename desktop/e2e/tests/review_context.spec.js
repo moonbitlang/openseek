@@ -293,6 +293,37 @@ test('review context survives regrouping and a partial group changes only on exp
   expect(app.pageErrors).toEqual([]);
 });
 
+test('unchanged Git polling preserves an open hunk context menu and its focus', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const old = 'fn first() -> Int { 1 }\n\nfn second() -> Int { 2 }\n';
+  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = old;
+  app.workingFiles['src/main.mbt'] = old.replace('{ 1 }', '{ 10 }').replace('{ 2 }', '{ 20 }');
+  await openReview(page, app);
+  await page.getByRole('button', { name: 'Token diff', exact: true }).click();
+  await expect(contextButtons(page)).toHaveCount(2);
+  await clickHunkContext(page);
+  await expect(contextButtons(page).first()).toHaveText('In context');
+  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
+  await expect(contextButtons(page)).toHaveText('Partly in context');
+  await clickHunkContext(page);
+  const item = page.getByRole('menuitem', { name: 'Remove included changes', exact: true });
+  await page.keyboard.press('ArrowUp');
+  await expect(item).toBeFocused();
+  const originalItem = await item.elementHandle();
+  const polls = () => app.requests.filter(request => request.method === 'git.changes').length;
+  const before = polls();
+  // A second request means the preceding response settled and rearmed the
+  // real polling subscription. No fixed sleep or disabled background refresh.
+  await expect.poll(polls, { timeout: 10_000 }).toBeGreaterThan(before + 1);
+  expect(await originalItem.evaluate(node => node.isConnected)).toBe(true);
+  await expect(item).toBeVisible();
+  await expect(item).toBeFocused();
+  await item.click();
+  await expect(contextButtons(page)).toHaveText('Add to context');
+  await expect(page.locator('.composer-changes .changes-chip')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('Codex composer groups multiple files and preserves deletion context on send', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
