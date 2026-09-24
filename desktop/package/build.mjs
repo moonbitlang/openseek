@@ -54,21 +54,21 @@ const DevelopmentProduct = "SeekMoonDev";
 // dependency graph during an application build.
 const WebArchives = {
   xterm: {
-    filename: "xterm-5.5.0.tgz",
-    url: "https://registry.npmjs.org/@xterm/xterm/-/xterm-5.5.0.tgz",
-    sha: "bd954fa721872170188cc5d7e83e88db3c83c9a18a4e8d24c2783d26491f59d2",
+    filename: "xterm-6.1.0-beta.304.tgz",
+    url: "https://registry.npmjs.org/@xterm/xterm/-/xterm-6.1.0-beta.304.tgz",
+    sha: "78a0c76c5bc068b55c9eedf892b87f784dd7226cac429815460e14e479362ea4",
     path: "node_modules/@xterm/xterm",
   },
   fit: {
-    filename: "addon-fit-0.10.0.tgz",
-    url: "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.10.0.tgz",
-    sha: "917ac44972453d5eed52edc1e50260c76398ce48cf2290c2e60671102bba0b33",
+    filename: "addon-fit-0.12.0-beta.301.tgz",
+    url: "https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.12.0-beta.301.tgz",
+    sha: "308544bafa603957b889d4a7a78284bb09feedabecdbf9d5a4054ee8c591019d",
     path: "node_modules/@xterm/addon-fit",
   },
   webLinks: {
-    filename: "addon-web-links-0.11.0.tgz",
-    url: "https://registry.npmjs.org/@xterm/addon-web-links/-/addon-web-links-0.11.0.tgz",
-    sha: "cad54687a1447f87cd8dd9ce454d4d657d18cc7179e9179908f391b4512f74a0",
+    filename: "addon-web-links-0.13.0-beta.301.tgz",
+    url: "https://registry.npmjs.org/@xterm/addon-web-links/-/addon-web-links-0.13.0-beta.301.tgz",
+    sha: "673cbe9787e0a1c71d27752b72fb76a8115eac77cc9fbc824d5e11bc2a50c9d3",
     path: "node_modules/@xterm/addon-web-links",
   },
   mermaid: {
@@ -76,6 +76,12 @@ const WebArchives = {
     url: "https://registry.npmjs.org/mermaid/-/mermaid-11.16.0.tgz",
     sha: "ff48c94a0a0458b377a5187ad01407184d2a182e6476c2015b7068ff58355fae",
     path: "mermaid",
+  },
+  relativeTime: {
+    filename: "relative-time-element-5.3.1.tgz",
+    url: "https://registry.npmjs.org/@github/relative-time-element/-/relative-time-element-5.3.1.tgz",
+    sha: "d99f62cc01067eb749b2807d620fce2f1782cd87af986beb9baa5cdc5ee2d4bc",
+    path: "relative-time",
   },
 };
 
@@ -229,6 +235,8 @@ class Build {
     await cp(join(work, "mermaid/dist/mermaid.esm.min.mjs"), join(mermaid, "mermaid.esm.min.mjs"));
     await cp(join(work, "mermaid/dist/chunks/mermaid.esm.min"), join(mermaid, "chunks/mermaid.esm.min"), { recursive: true });
     await cp(join(work, "mermaid/LICENSE"), join(mermaid, "LICENSE"));
+    await cp(join(work, "relative-time/dist/bundle.js"), join(output, "relative-time.js"));
+    await cp(join(work, "relative-time/LICENSE"), join(output, "relative-time.LICENSE"));
   }
 
   async web(profile, browser = false) {
@@ -272,7 +280,7 @@ class Build {
 
   async sharedWeb(output) {
     const generated = join(this.desktop, "target/web");
-    for (const name of ["app.css", "viewer.css", "xterm.js", "xterm.css"]) {
+    for (const name of ["app.css", "viewer.css", "xterm.js", "xterm.css", "relative-time.js", "relative-time.LICENSE"]) {
       await cp(join(generated, name), join(output, name));
     }
     await cp(join(this.repo, "editor/viewer/browser/view/codicon/codicon.ttf"), join(output, "codicon.ttf"));

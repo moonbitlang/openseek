@@ -153,4 +153,11 @@ html.is-resizing-terminal * {
 .terminal-instance .xterm {
   height: 100%;
   padding: 8px 12px 14px;
+  /* Keep body tracking out of xterm's hidden glyph-width measurements. */
+  letter-spacing: normal;
+}
+/* The viewport also covers the padding; use xterm's live theme background
+   instead of the vendor stylesheet's default black. */
+.terminal-instance .xterm:not(.allow-transparency) .xterm-viewport {
+  background-color: inherit;
 }

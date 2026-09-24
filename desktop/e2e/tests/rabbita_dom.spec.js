@@ -1177,6 +1177,8 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
             '[Bundled guide](/Users/me/Library/Application%20Support/SeekMoon/gmachine-3.md)',
             '[Unsafe](javascript:alert(1))',
             '![Fixture image](diagram.png)',
+            '![Repeated image](diagram.png)',
+            '![Unavailable image](missing-image.png)',
           ].join('\n\n'),
         },
       },
@@ -1195,6 +1197,13 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
     request.method === 'fs.read_file' && request.params?.path === 'diagram.png'))
     .toMatchObject({ params: { root: '/workspace' } });
   await expect(image).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
+  await expect(markdown.locator('img[alt="Repeated image"]'))
+    .toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=');
+  await expect(markdown.locator('img[alt="Unavailable image"]')).toHaveClass(/unavailable/);
+  await expect(markdown.locator('img[data-transcript-image]')).toHaveCount(0);
+  expect(app.requests.filter(request => request.method === 'fs.read_file' &&
+    request.params?.path === 'diagram.png')).toHaveLength(1);
+
 
   const external = markdown.getByRole('link', { name: 'External docs' });
   await expect(external).toHaveAttribute('target', '_blank');
@@ -2514,3 +2523,38 @@ for (const layout of ['Split', 'Unified']) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('project picker capture preserves focused controls and is removed on close', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  const open = page.getByRole('button', { name: 'Add a project', exact: true });
+  const picker = page.getByRole('dialog', { name: 'Add a project', exact: true });
+  for (let i = 0; i < 2; i++) {
+    await open.click();
+    await expect(picker).toBeVisible();
+    await page.keyboard.press('Control+l');
+    const path = page.locator('#project-picker-path-input');
+    await expect(path).toBeFocused();
+    // Escape belongs to the focused editor first, not to the modal capture.
+    await path.press('Escape');
+    await expect(path).toBeHidden();
+    await expect(picker).toBeVisible();
+    // Enter on Cancel must activate that button, not register the directory.
+    const cancel = picker.getByRole('button', { name: 'Cancel', exact: true });
+    await cancel.focus();
+    await cancel.press('Enter');
+    await expect(picker).toBeHidden();
+  }
+  expect(app.requests.filter(request => request.method === 'workspace.add')).toHaveLength(0);
+  // A removed capture listener must not consume later key or paste events.
+  const handled = await page.evaluate(() => {
+    const key = new KeyboardEvent('keydown', { key: 'l', ctrlKey: true, bubbles: true, cancelable: true });
+    const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+    document.dispatchEvent(key);
+    document.dispatchEvent(paste);
+    return [key.defaultPrevented, paste.defaultPrevented];
+  });
+  expect(handled).toEqual([false, false]);
+  expect(app.pageErrors).toEqual([]);
+});

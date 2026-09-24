@@ -94,25 +94,23 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] codex_request(
 }
 
 ///|
-/// Keep local Proton method entry ordered even though its bridge dispatches
-/// requests in separate native tasks. The per-channel lane below already
-/// serializes callers; this promise tail also keeps ordering at the JS/native
-/// handoff if that implementation detail changes.
-extern "js" fn js_ordered_method_promise(
+/// Keep the native handoff serialized even if a preceding request rejects.
+fn js_ordered_method_promise(
   target : @js.Value,
   name : String,
   payload : @js.Value,
-) -> @js.Promise[@js.Value] =
-  #| (() => {
-  #|   let tail = Promise.resolve();
-  #|   return (target, name, payload) => {
-  #|     const request = tail
-  #|       .catch(() => undefined)
-  #|       .then(() => target[name](payload));
-  #|     tail = request.catch(() => undefined);
-  #|     return request;
-  #|   };
-  #| })()
+) -> @js.Promise[@js.Value] {
+  let recover : () -> @js.Value = () => {
+    @js.Value::cast_from((@js.Optional::undefined() : @js.Optional[Unit]))
+  }
+  let ready : @js.Value = ordered_method_tail.val.apply_with_string("catch", [
+    recover,
+  ])
+  let invoke : () -> @js.Value = () => target.apply_with_string(name, [payload])
+  let request : @js.Value = ready.apply_with_string("then", [invoke])
+  ordered_method_tail.val = request.apply_with_string("catch", [recover])
+  request.cast()
+}
 
 ///|
 /// The ordered-request lanes, keyed by the scope the ordering is about. This
@@ -225,34 +223,6 @@ test "a lane key separates what must not share a lane" {
 }
 
 ///|
-async test "an ordered request failure releases its channel lane" {
-  // No bridge is injected under test, so both calls fail at the same point.
-  // The second one only reaches it if the first released the lane on its way
-  // out; before, a lane still held would have parked it forever.
-  let failures = []
-  for _ in 0..<2 {
-    @js.Promise::from_async(() => {
-      ignore(
-        bridge_request_in_order(
-          Local,
-          @commands.fs_unwatch,
-          @protocol.EmptyPayload::NoPayload,
-        ),
-      ) catch {
-        _ => {
-          failures.push(true)
-          return
-        }
-      }
-      failures.push(false)
-    })
-    |> ignore
-  }
-  drain_lane_tasks()
-  assert_eq(failures, [true, true])
-}
-
-///|
 test "a Codex command error keeps its detail and is a definite refusal" {
   let error : Error = BridgeRefused(
     "Codex app-server request turn/start failed: invalid model",
@@ -342,4 +312,10 @@ pub fn bridge_error_is_definite(error : Error) -> Bool {
 fn browser_rpc_error_is_definite(value : @js.Value) -> Bool {
   js_prop(value, "__openseek_rpc_rejection") is Some(marker) &&
   (@js.Cast::into(marker) : Bool?) is Some(true)
+}
+
+///|
+let ordered_method_tail : Ref[@js.Value] = {
+  let promise : @js.Value = @js.globalThis.get_with_string("Promise")
+  Ref(promise.apply_with_string("resolve", ([] : FixedArray[@js.Value])))
 }

@@ -235,45 +235,27 @@
   left: 0;
   right: 0;
   bottom: calc(100% + 8px);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-surface);
-  box-shadow: var(--shadow-overlay);
   overflow: hidden;
   z-index: 20;
 }
 .completion-hint {
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--color-border-subtle);
+  padding: 5px 9px 4px;
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 600;
 }
 .completion-list {
   max-height: 240px;
   overflow-y: auto;
-  padding: 4px;
+  overscroll-behavior: contain;
 }
 .completion-item {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 7px 10px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.completion-item.selected {
-  background: var(--color-accent-soft);
+  font-size: var(--font-size-sm);
 }
 .completion-label {
   flex: none;
-  color: var(--color-text-primary);
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-md);
-}
-.completion-item.selected .completion-label {
-  color: var(--color-accent-strong);
 }
 .completion-detail {
   flex: 1;
@@ -286,7 +268,7 @@
 }
 /* state line for a # menu whose results are still loading or empty */
 .completion-empty {
-  padding: 7px 10px;
+  padding: 7px 9px;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }

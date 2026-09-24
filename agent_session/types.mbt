@@ -95,7 +95,7 @@ pub fn SessionId::generated(
 /// User-authored model input for one conversational event.
 ///
 /// A `UserMessage` is durable data, not a UI transcript item. It records the
-/// exact text that should be replayed as a user-role message in
+/// ordered content that should be replayed as a user-role message in
 /// `Session::chat_messages`.
 ///
 /// `submission_id` is the submitting controller's tag for this input,
@@ -103,10 +103,10 @@ pub fn SessionId::generated(
 /// reconciled by exact id rather than by matching text (two clients can submit
 /// identical text into one session). None for untagged input, including TUI
 /// and one-shot prompts, and older records without a tag. Encoding
-/// omits it when absent, so untagged lines are byte for byte what this store
-/// has always written.
+/// omits it when absent. Single text content is written as a string; mixed
+/// content is written as an ordered array. Both forms are accepted on read.
 struct UserMessage {
-  content : String
+  content : Content
   submission_id : String?
 } derive(Eq, Debug, ToJson, FromJson)
 
@@ -128,20 +128,20 @@ fn SessionToolCall::to_deepseek(self : SessionToolCall) -> @deepseek.ToolCall {
 }
 
 ///|
-/// Wrap one user prompt exactly as supplied.
+/// Wrap ordered user content exactly as supplied.
 ///
 /// The constructor does not trim, normalize, or reject empty content. Empty
 /// messages are preserved because they may be meaningful to a caller or test.
 pub fn UserMessage::UserMessage(
-  content : String,
+  content : Content,
   submission_id? : String,
 ) -> UserMessage {
   { content, submission_id, }
 }
 
 ///|
-/// Return the prompt text exactly as stored.
-pub fn UserMessage::content(self : UserMessage) -> String {
+/// Return the stored prompt parts; use `.text()` for text extraction.
+pub fn UserMessage::content(self : UserMessage) -> Content {
   self.content
 }
 
@@ -244,7 +244,7 @@ pub fn AssistantMessage::is_replay(self : AssistantMessage) -> Bool {
 struct ToolResult {
   tool_call_id : String
   tool_name : String
-  content : String
+  content : Content
   is_error : Bool
   brief : String?
   /// Machine-readable output and nested PTC trace, excluded from model projection.
@@ -258,7 +258,7 @@ struct ToolResult {
 /// answers. `tool_name` is retained for diagnostics and listing/debug output.
 /// `content` is exactly what will be replayed to the model. `is_error`
 /// classifies the content for callers, but the DeepSeek projection currently
-/// sends the same text shape either way.
+/// preserves the same ordered content either way.
 ///
 /// `brief` is an optional one-line, human-readable summary of what the call did
 /// (e.g. `ran ls → 12 files`), for display only — it is never replayed to the
@@ -268,12 +268,12 @@ struct ToolResult {
 pub fn ToolResult::ToolResult(
   tool_call_id~ : String,
   tool_name~ : String,
-  content~ : String,
+  content~ : Array[ContentPart],
   is_error? : Bool = false,
   brief? : String,
   data? : Json,
 ) -> ToolResult {
-  { tool_call_id, tool_name, content, is_error, brief, data, }
+  { tool_call_id, tool_name, content: Content(content), is_error, brief, data, }
 }
 
 ///|
@@ -287,9 +287,9 @@ pub fn ToolResult::tool_name(self : ToolResult) -> String {
 ///|
 /// Return the tool output that will be replayed to the model.
 ///
-/// When `is_error` is true, this string is the error report rather than a
+/// When `is_error` is true, this content is the error report rather than a
 /// successful result.
-pub fn ToolResult::content(self : ToolResult) -> String {
+pub fn ToolResult::content(self : ToolResult) -> Content {
   self.content
 }
 

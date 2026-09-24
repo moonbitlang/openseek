@@ -984,9 +984,9 @@ fn CompletionView::render(
     rows.push(
       @html.div(
         class=if index == self.selected {
-          "completion-item selected"
+          "menu-option completion-item selected"
         } else {
-          "completion-item"
+          "menu-option completion-item"
         },
         attrs=@html.Attrs::build().on_mousedown(event => {
           event.prevent_default()
@@ -1002,7 +1002,7 @@ fn CompletionView::render(
   if rows.is_empty() {
     rows.push(@html.div(class="completion-empty", self.empty))
   }
-  @html.div(class="completion-menu", [
+  @html.div(class="menu-surface completion-menu", [
     @html.div(class="completion-hint", self.hint),
     @html.div(class="completion-list", rows),
   ])

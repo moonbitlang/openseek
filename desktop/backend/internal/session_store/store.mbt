@@ -209,23 +209,6 @@ pub async fn family_in(
 // archive ops are.
 
 ///|
-test "session ids are accepted as store record names" {
-  assert_true(safe_session_id("desktop-20260611-093045-123"))
-  assert_true(safe_session_id("my-cli-session"))
-  assert_true(safe_session_id("a.b"))
-}
-
-///|
-test "session ids that could escape their root are refused" {
-  assert_false(safe_session_id(""))
-  assert_false(safe_session_id("."))
-  assert_false(safe_session_id(".."))
-  assert_false(safe_session_id("a/b"))
-  assert_false(safe_session_id("a\\b"))
-  assert_false(safe_session_id("../escape"))
-}
-
-///|
 test "sub-run descent follows the structural suffix, not a text prefix" {
   assert_true(is_descendant("chat-sr-1", "chat"))
   assert_true(is_descendant("chat-sr-1-sr-2", "chat"))

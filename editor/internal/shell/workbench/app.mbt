@@ -266,19 +266,32 @@ fn clear_workbench_model() -> Unit {
 }
 
 ///|
-extern "js" fn show_workbench_presentation(kind : String) -> Unit =
-  #| (kind) => {
-  #|   const host = globalThis.document?.querySelector?.('.viewer-host');
-  #|   if (!host) return;
-  #|   for (const node of host.children) {
-  #|     const code = node.classList?.contains('monaco-editor') ?? false;
-  #|     const markdown =
-  #|       node.classList?.contains('moonbit-viewer-markdown-document') ||
-  #|       node.classList?.contains('moonbit-viewer-markdown-empty');
-  #|     if (code) node.hidden = kind !== 'code';
-  #|     if (markdown) node.hidden = kind !== 'markdown';
-  #|   }
-  #| }
+fn show_workbench_presentation(kind : String) -> Unit {
+  let document : @js.Nullable[@rdom.Document] = @js.globalThis.get_with_string(
+    "document",
+  )
+  guard document.to_option() is Some(document) else { return }
+  guard document.query_selector(".viewer-host").to_option() is Some(host) else {
+    return
+  }
+  let children : @js.Value = @js.Value::cast_from(host).get_with_string(
+    "children",
+  )
+  let array : @js.Value = @js.globalThis.get_with_string("Array")
+  let children : FixedArray[@rdom.Element] = array.apply_with_string("from", [
+    children,
+  ])
+  for node in children {
+    if node.matches(".monaco-editor") {
+      @js.Value::cast_from(node).set_with_string("hidden", kind != "code")
+    }
+    if node.matches(
+        ".moonbit-viewer-markdown-document, .moonbit-viewer-markdown-empty",
+      ) {
+      @js.Value::cast_from(node).set_with_string("hidden", kind != "markdown")
+    }
+  }
+}
 
 ///|
 fn install_viewer_event_subscriptions(viewer : @viewer.Viewer) -> Unit {
@@ -423,102 +436,6 @@ fn install_workbench_resize_hooks() -> Unit {
   })
   explorer_resize_dispose.val = Some(install_explorer_resize_handle())
 }
-
-///|
-/// Installs the pointer and keyboard branches of the accessible Explorer
-/// splitter. Width is stored on the grid rather than the sidebar element, so
-/// the mobile grid can override it without fighting a native inline width.
-extern "js" fn install_explorer_resize_handle() -> () -> Unit =
-  #| () => {
-  #|   const main = globalThis.document?.querySelector?.('.editor-main');
-  #|   const sidebar = globalThis.document?.querySelector?.('#workspace-explorer');
-  #|   const handle = globalThis.document?.querySelector?.('[data-action="resize-explorer"]');
-  #|   if (!main || !sidebar || !handle) return () => {};
-  #|   const ownerWindow = handle.ownerDocument?.defaultView ?? globalThis;
-  #|   const minWidth = 200;
-  #|   const maximumWidth = () => Math.max(
-  #|     minWidth,
-  #|     Math.min(420, Math.floor((ownerWindow.innerWidth || 840) * 0.5)),
-  #|   );
-  #|   const isMobile = () => ownerWindow.matchMedia?.('(max-width: 680px)').matches ?? false;
-  #|   let width = Math.round(Number.parseFloat(
-  #|     ownerWindow.getComputedStyle?.(main).getPropertyValue('--explorer-width'),
-  #|   )) || 280;
-  #|   let activePointerId = null;
-  #|   let startX = 0;
-  #|   let startWidth = width;
-  #|   let savedCursor = '';
-  #|   let savedUserSelect = '';
-  #|   const applyWidth = (next) => {
-  #|     width = Math.max(minWidth, Math.min(maximumWidth(), Math.round(next)));
-  #|     main.style.setProperty('--explorer-width', `${width}px`);
-  #|     handle.setAttribute('aria-valuenow', String(width));
-  #|     handle.setAttribute('aria-valuemax', String(maximumWidth()));
-  #|   };
-  #|   const finishDrag = (event) => {
-  #|     if (activePointerId === null) return;
-  #|     if (event?.pointerId !== undefined && event.pointerId !== activePointerId) return;
-  #|     try { handle.releasePointerCapture?.(activePointerId); } catch (_error) {}
-  #|     activePointerId = null;
-  #|     ownerWindow.removeEventListener('pointermove', moveDrag);
-  #|     ownerWindow.removeEventListener('pointerup', finishDrag);
-  #|     ownerWindow.removeEventListener('pointercancel', finishDrag);
-  #|     handle.ownerDocument.body.style.cursor = savedCursor;
-  #|     handle.ownerDocument.body.style.userSelect = savedUserSelect;
-  #|   };
-  #|   const moveDrag = (event) => {
-  #|     if (event.pointerId !== activePointerId) return;
-  #|     applyWidth(startWidth + event.clientX - startX);
-  #|   };
-  #|   const startDrag = (event) => {
-  #|     if (event.button !== 0 || isMobile()) return;
-  #|     event.preventDefault();
-  #|     activePointerId = event.pointerId;
-  #|     startX = event.clientX;
-  #|     startWidth = width;
-  #|     savedCursor = handle.ownerDocument.body.style.cursor;
-  #|     savedUserSelect = handle.ownerDocument.body.style.userSelect;
-  #|     handle.ownerDocument.body.style.cursor = 'ew-resize';
-  #|     handle.ownerDocument.body.style.userSelect = 'none';
-  #|     try { handle.setPointerCapture?.(event.pointerId); } catch (_error) {}
-  #|     ownerWindow.addEventListener('pointermove', moveDrag);
-  #|     ownerWindow.addEventListener('pointerup', finishDrag);
-  #|     ownerWindow.addEventListener('pointercancel', finishDrag);
-  #|   };
-  #|   const onKeyDown = (event) => {
-  #|     let next = width;
-  #|     if (event.key === 'ArrowLeft') next -= 10;
-  #|     else if (event.key === 'ArrowRight') next += 10;
-  #|     else if (event.key === 'Home') next = minWidth;
-  #|     else if (event.key === 'End') next = maximumWidth();
-  #|     else return;
-  #|     event.preventDefault();
-  #|     applyWidth(next);
-  #|   };
-  #|   const onWindowResize = () => {
-  #|     if (isMobile()) {
-  #|       handle.setAttribute('aria-valuemax', String(Math.max(width, maximumWidth())));
-  #|     } else {
-  #|       applyWidth(width);
-  #|     }
-  #|   };
-  #|   if (isMobile()) {
-  #|     main.style.setProperty('--explorer-width', `${width}px`);
-  #|     handle.setAttribute('aria-valuenow', String(width));
-  #|     handle.setAttribute('aria-valuemax', String(Math.max(width, maximumWidth())));
-  #|   } else {
-  #|     applyWidth(width);
-  #|   }
-  #|   handle.addEventListener('pointerdown', startDrag);
-  #|   handle.addEventListener('keydown', onKeyDown);
-  #|   ownerWindow.addEventListener('resize', onWindowResize);
-  #|   return () => {
-  #|     finishDrag();
-  #|     handle.removeEventListener('pointerdown', startDrag);
-  #|     handle.removeEventListener('keydown', onKeyDown);
-  #|     ownerWindow.removeEventListener('resize', onWindowResize);
-  #|   };
-  #| }
 
 ///|
 /// Lifts a plain viewer call into the shell's command system.
@@ -1441,13 +1358,15 @@ let theme_storage_key = "readonly-editor:theme"
 
 ///|
 fn stored_theme() -> String {
-  match storage_get_item(theme_storage_key) {
-    "light" => "light"
+  match @base_browser.local_storage_get(theme_storage_key) {
+    Ok(Some("light")) => "light"
     _ => "dark"
   }
 }
 
 ///|
 fn persist_theme_cmd(theme : String) -> @rabbita.Cmd {
-  @cmd.custom_cmd(_ => storage_set_item(theme_storage_key, theme))
+  @cmd.custom_cmd(_ => {
+    @base_browser.local_storage_set(theme_storage_key, theme) |> ignore
+  })
 }

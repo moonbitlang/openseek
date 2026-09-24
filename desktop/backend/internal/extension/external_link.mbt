@@ -53,14 +53,3 @@ test "external link policy allows browser schemes only" {
   assert_false(allowed_external_url("proton://app/"))
   assert_false(allowed_external_url("https://"))
 }
-
-///|
-test "external link opener is absent from the relay method catalog" {
-  let state = @api.ApiState(engine="unused")
-  let connection = @host.HostConnection()
-  assert_false(
-    @api.endpoints(state, connection).any(endpoint => {
-      endpoint.name() == @commands.shell_open_external.name()
-    }),
-  )
-}

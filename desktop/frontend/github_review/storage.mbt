@@ -78,30 +78,17 @@ async fn remove_sent_draft(
 
 ///|
 fn load_browser_drafts(url : String) -> Result[Array[GithubDraft], Failure] {
-  try {
-    let value = @js.Error_::wrap(
-      () => @js.globalThis.get_with_string("localStorage"),
-      map_ok=value => value,
-    )
-    guard !value.is_null() && !value.is_undefined() else {
-      return Err(StorageUnavailable)
-    }
-    let storage = value
-    let raw : String? = @js.Error_::wrap(
-      () => {
-        storage.apply_with_string("getItem", [
-          @js.Value::cast_from(drafts_storage_key(url)),
-        ])
-      },
-      map_ok=value => if value.is_null() { None } else { Some(value.cast()) },
-    )
-    Ok(
-      match raw {
-        None => []
-        Some(raw) => @json.from_json(@json.parse(raw))
-      },
-    )
-  } catch {
+  let raw = match @base_browser.local_storage_get(drafts_storage_key(url)) {
+    Ok(raw) => raw
+    Err(Unavailable) => return Err(StorageUnavailable)
+    Err(AccessFailed(message)) => return Err(RestoreDraftsFailed(message))
+  }
+  Ok(
+    match raw {
+      None => []
+      Some(raw) => @json.from_json(@json.parse(raw))
+    },
+  ) catch {
     error => Err(RestoreDraftsFailed(error.to_string()))
   }
 }
@@ -111,32 +98,17 @@ fn store_browser_drafts(
   url : String,
   drafts : Array[GithubDraft],
 ) -> Result[Unit, Failure] {
-  try {
-    let value = @js.Error_::wrap(
-      () => @js.globalThis.get_with_string("localStorage"),
-      map_ok=value => value,
+  let result = if drafts.is_empty() {
+    @base_browser.local_storage_remove(drafts_storage_key(url))
+  } else {
+    @base_browser.local_storage_set(
+      drafts_storage_key(url),
+      drafts.to_json().stringify(),
     )
-    guard !value.is_null() && !value.is_undefined() else {
-      return Err(StorageUnavailable)
-    }
-    let storage = value
-    @js.Error_::wrap(
-      () => {
-        if drafts.is_empty() {
-          storage.apply_with_string("removeItem", [
-            @js.Value::cast_from(drafts_storage_key(url)),
-          ])
-        } else {
-          storage.apply_with_string("setItem", [
-            @js.Value::cast_from(drafts_storage_key(url)),
-            @js.Value::cast_from(drafts.to_json().stringify()),
-          ])
-        }
-      },
-      map_ok=_ => (),
-    )
-    Ok(())
-  } catch {
-    error => Err(SaveDraftsFailed(error.to_string()))
+  }
+  match result {
+    Ok(_) => Ok(())
+    Err(Unavailable) => Err(StorageUnavailable)
+    Err(AccessFailed(message)) => Err(SaveDraftsFailed(message))
   }
 }

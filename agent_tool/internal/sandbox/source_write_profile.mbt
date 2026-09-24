@@ -242,12 +242,9 @@ async fn collect_protected_source_tree_profile_scan(
         continue
       }
     }
-    match kind {
-      Directory =>
-        if collect_protected_source_tree_profile_scan(root, child, state) {
-          contains_protected = true
-        }
-      _ => ()
+    if kind is Directory &&
+      collect_protected_source_tree_profile_scan(root, child, state) {
+      contains_protected = true
     }
   }
   if contains_protected && dir != root {

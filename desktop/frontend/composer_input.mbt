@@ -118,7 +118,10 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   if !steering.is_empty() {
     context.push(
       @composer.PendingSteerPanel(
-        items=steering.map(steer => user_display_text(steer.content)),
+        items=steering.map(steer => {
+          user_display_text(steer.content) +
+          (if steer.images.is_empty() { "" } else { " [Image]" })
+        }),
       ),
     )
   }
@@ -133,7 +136,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     })
     queued_items.push({
       id: item.id,
-      content: user_display_text(item.content),
+      content: user_display_text(item.content) +
+      (if item.images.is_empty() { "" } else { " [Image]" }),
       state: if queueing {
         @composer.Queueing
       } else {
@@ -173,7 +177,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   let file_index = self.composer_file_index()
   {
     identity,
-    draft: { images: [], task: conv.task, mentions: conv.mentions, },
+    draft: { images: conv.images, task: conv.task, mentions: conv.mentions, },
     // The outer run heartbeat and child-run lanes are both typed live status,
     // rendered by the composer above the draft rather than persisted into the
     // transcript.
@@ -209,7 +213,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     active_file: self.active_workspace_file(),
     file_index,
     presentation: {
-      images_enabled: false,
+      images_enabled: conv.engine_model is (DsPro | DsFlash) &&
+      self.api_provider is (Deepseek | Custom),
       context,
       status,
       placeholder: if conv.goal_edit is Some(_) {

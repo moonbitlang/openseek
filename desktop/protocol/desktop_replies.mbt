@@ -369,14 +369,13 @@ pub(all) struct SessionToolCall {
 /// reconciled by exact id instead of by matching text, since two clients can
 /// submit identical text into one session.
 pub(all) struct SessionUserMessage {
-  content : String
+  content : @wire.Content
   submission_id : String?
 } derive(Debug, Eq)
 
 ///|
-/// Omit an absent tag rather than writing `null`, matching what the store
-/// itself writes: an untagged prompt is byte for byte the line every record
-/// held before the field existed.
+/// Omit an absent tag rather than writing `null`, matching the store.
+/// One text part stays a string; mixed content preserves its ordered parts.
 pub impl ToJson for SessionUserMessage with fn to_json(self) {
   let fields = { "content": Json(self.content) }
   if self.submission_id is Some(submission_id) {
@@ -400,9 +399,13 @@ pub impl FromJson for SessionUserMessage with fn from_json(json, path) {
   guard json is Object(fields) else {
     raise JsonDecodeError((path, "expected a user message"))
   }
-  guard fields.get("content") is Some(String(content)) else {
+  guard fields.get("content") is Some(raw_content) else {
     raise JsonDecodeError((path.add_key("content"), "expected message content"))
   }
+  let content : @wire.Content = @json.from_json(
+    raw_content,
+    path=path.add_key("content"),
+  )
   let submission_id = if fields.get("submission_id") is Some(String(value)) {
     Some(value)
   } else {
@@ -445,9 +448,13 @@ pub impl FromJson for SessionAssistantMessage with fn from_json(json, path) {
   guard json is Object(fields) else {
     raise JsonDecodeError((path, "expected an assistant message"))
   }
-  guard fields.get("content") is Some(String(content)) else {
+  guard fields.get("content") is Some(raw_content) else {
     raise JsonDecodeError((path.add_key("content"), "expected message content"))
   }
+  let content : String = @json.from_json(
+    raw_content,
+    path=path.add_key("content"),
+  )
   let tool_calls = match fields.get("tool_calls") {
     None | Some(Null) => None
     Some(value) => Some(@json.from_json(value, path=path.add_key("tool_calls")))
@@ -470,7 +477,7 @@ pub impl FromJson for SessionAssistantMessage with fn from_json(json, path) {
 pub(all) struct SessionToolResult {
   tool_call_id : String
   tool_name : String
-  content : String
+  content : @wire.Content
   is_error : Bool
   brief : String?
   data : Json?
@@ -517,11 +524,15 @@ pub impl FromJson for SessionToolResult with fn from_json(json, path) {
   guard fields.get("tool_name") is Some(String(tool_name)) else {
     raise JsonDecodeError((path.add_key("tool_name"), "expected tool name"))
   }
-  guard fields.get("content") is Some(String(content)) else {
+  guard fields.get("content") is Some(raw_content) else {
     raise JsonDecodeError(
       (path.add_key("content"), "expected tool result content"),
     )
   }
+  let content : @wire.Content = @json.from_json(
+    raw_content,
+    path=path.add_key("content"),
+  )
   let is_error = match fields.get("is_error") {
     Some(True) => true
     Some(False) => false
@@ -545,7 +556,23 @@ pub impl FromJson for SessionToolResult with fn from_json(json, path) {
 ///|
 pub(all) struct SessionRuntimeNotice {
   content : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for SessionRuntimeNotice with fn to_json(self) {
+  { "content": self.content }
+}
+
+///|
+pub impl FromJson for SessionRuntimeNotice with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected a runtime notice"))
+  }
+  guard fields.get("content") is Some(String(content)) else {
+    raise JsonDecodeError((path.add_key("content"), "expected notice text"))
+  }
+  { content, }
+}
 
 ///|
 pub(all) struct SessionSummary {

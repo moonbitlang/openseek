@@ -9,7 +9,7 @@ async test "user input wait retains messages and ignores notices and blanks" {
         woke = true
       })
       runtime.queue_steer(Notice("other job finished"))
-      runtime.queue_steer(Prompt(" ", submission_id=None))
+      runtime.queue_steer(Prompt(Content([Text(" ")]), submission_id=None))
       @async.pause()
       assert_false(woke)
       runtime.queue_steer(Command("user command result", submission_id=None))
@@ -21,10 +21,13 @@ async test "user input wait retains messages and ignores notices and blanks" {
         inputs[2] is Command("user command result", submission_id=None),
       )
       // Input queued before waiting is just as observable.
-      runtime.queue_steer(Prompt("new direction", submission_id=None))
+      runtime.queue_steer(
+        Prompt(Content([Text("new direction")]), submission_id=None),
+      )
       runtime.wait_for_user_input()
       assert_true(
-        runtime.drain_steers() is [Prompt("new direction", submission_id=None)],
+        runtime.drain_steers()
+        is [Prompt(Content([Text("new direction")]), submission_id=None)],
       )
     })
   })

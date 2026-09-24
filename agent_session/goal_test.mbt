@@ -6,7 +6,7 @@ fn goal_set_notice(text : String) -> @agent_session.SessionItem {
 ///|
 test "current_goal is none without markers" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("hello")))
+    .append(User(UserMessage(Content([Text("hello")]))))
     .append(
       Runtime(RuntimeNotice("\{@agent_session.PlanReminderPrefix}\nplan")),
     )
@@ -17,7 +17,7 @@ test "current_goal is none without markers" {
 test "current_goal returns the last set marker" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(goal_set_notice("port the decoder"))
-    .append(User(UserMessage("start with the parser")))
+    .append(User(UserMessage(Content([Text("start with the parser")]))))
   guard session.current_goal() is Some(goal) else { fail("expected a goal") }
   assert_eq(goal.text(), "port the decoder")
   assert_false(goal.answered_since_set())
@@ -89,7 +89,7 @@ test "multiline goal text survives the scan" {
 test "a compaction summary covering the set marker does not hide the goal" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
     .append(goal_set_notice("long objective"))
-    .append(User(UserMessage("work on it")))
+    .append(User(UserMessage(Content([Text("work on it")]))))
     .append(Assistant(AssistantMessage("progress")))
     .compact(content="summary of the work", from_sequence=1, to_sequence=3)
   guard session.current_goal() is Some(goal) else { fail("expected a goal") }
@@ -163,7 +163,7 @@ test "a set marker without an adjacent baseline has none" {
         ),
       ),
     )
-    .append(User(UserMessage("interleaved")))
+    .append(User(UserMessage(Content([Text("interleaved")]))))
     .append(Runtime(RuntimeNotice("[goal]\nship it")))
   assert_true(session.current_goal_baseline() is None)
 }

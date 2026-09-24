@@ -45,7 +45,7 @@ async test "goal met defers the tombstone to a batch-safe boundary" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-met"),
-      task="finish the objective",
+      content=Content([Text("finish the objective")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -68,7 +68,7 @@ async test "goal met defers the tombstone to a batch-safe boundary" {
           goal_seq = event.sequence()
         }
         Tool(tool_result) if tool_result.tool_call_id() == "call_probe" => {
-          assert_eq(tool_result.content(), "probe-result")
+          assert_eq(tool_result.content().text(), "probe-result")
           probe_seq = event.sequence()
         }
         Runtime(notice) if notice.content() == @agent_session.GoalClearedNotice =>
@@ -106,7 +106,7 @@ async test "goal met in the final batch flushes before the terminal" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-met-final"),
-      task="finish the objective",
+      content=Content([Text("finish the objective")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -140,7 +140,7 @@ async test "goal continuing stands in for the finish check" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-continuing"),
-      task="do a slice",
+      content=Content([Text("do a slice")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,
@@ -180,7 +180,7 @@ async test "goal calls without a standing goal or remaining are errors" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="try the goal tool",
+      content=Content([Text("try the goal tool")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
       api_url=url,
@@ -220,7 +220,7 @@ async test "goal met flushes its tombstone on non-finish terminals" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-max-steps"),
-      task="finish the objective",
+      content=Content([Text("finish the objective")]),
       append_item=(session, item) => session.append(item),
       max_steps=1,
       api_url=url,
@@ -253,7 +253,7 @@ async test "the goal check names the goal tool when registered" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-check-text"),
-      task="do the next chunk",
+      content=Content([Text("do the next chunk")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
       api_url=url,

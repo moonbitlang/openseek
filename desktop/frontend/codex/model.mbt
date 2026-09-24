@@ -2453,46 +2453,7 @@ fn CodexItem::text(
   let streamed = self.streamed
   guard self.value is Object(fields) else { return self.value.stringify() }
   match self.kind {
-    "userMessage" => {
-      let parts : Array[String] = []
-      let mentions : Array[@mention_context.MentionRef] = []
-      if fields.get("content") is Some(Array(values)) {
-        for value in values {
-          if value is Object(input) &&
-            @jsonx.json_text(input, "text") is Some(text) {
-            // Editor annotations are sent as one shared mention envelope in a
-            // text input. Unwrap each one before combining it with native
-            // app-server file mentions for the shared transcript renderer.
-            match @mention_context.parse(text) {
-              Some(parsed) => {
-                if !parsed.task.is_empty() {
-                  parts.push(parsed.task)
-                }
-                for mention in parsed.mentions {
-                  mentions.push(mention)
-                }
-              }
-              None => parts.push(text)
-            }
-          } else if value is Object(input) &&
-            @jsonx.json_text(input, "type") is Some("mention") &&
-            @jsonx.json_text(input, "path") is Some(path) {
-            // This envelope is presentation-only. Codex still sends and
-            // stores native `UserInput::Mention` values; adapting them here
-            // lets the shared transcript rebuild the same chips its composer
-            // showed without changing the app-server payload.
-            mentions.push(
-              @mention_context.Symbol(
-                name=@jsonx.json_text(input, "name").unwrap_or(path),
-                file=path,
-                line=0,
-              ),
-            )
-          }
-        }
-      }
-      @mention_context.encode(mentions, parts.join("\n"))
-    }
+    "userMessage" => self.user_content().text()
     "agentMessage" | "plan" => {
       let text = @jsonx.json_text(fields, "text").unwrap_or("")
       if text.is_empty() {
@@ -2576,20 +2537,7 @@ fn CodexItem::transcript_item(
     )
   }
   let kind = match self.kind {
-    "userMessage" => {
-      let images : Array[String] = []
-      if self.value is Object(fields) &&
-        fields.get("content") is Some(Array(content)) {
-        for value in content {
-          if value is Object(input) &&
-            input.get("type") is Some(String("image")) &&
-            input.get("url") is Some(String(url)) {
-            images.push(url)
-          }
-        }
-      }
-      @transcript.User(text=self.text(locale~), images~)
-    }
+    "userMessage" => @transcript.User(content=self.user_content())
     "agentMessage" | "plan" => response(None, Some(self.text(locale~)), [])
     "reasoning" => response(Some(self.text(locale~)), None, [])
     "contextCompaction" => @transcript.Summary(self.text(locale~))
@@ -2599,7 +2547,7 @@ fn CodexItem::transcript_item(
       let output = self.tool_output()
       let outcome : @transcript.ToolOutcome = if self.tool_has_result() {
         Done(
-          content=output,
+          content=Content([Text(output)]),
           is_error=self.tool_failed(),
           brief=self.tool_brief(locale~),
         )
@@ -3416,4 +3364,55 @@ pub fn State::with_review_changes(
     images: self.images,
   }
   { ..self, mentions: draft.with_review_changes(selection, adding~).mentions, }
+}
+
+///|
+fn CodexItem::user_content(self : CodexItem) -> @deepseek.Content {
+  guard self.value is Object(fields) else {
+    return @deepseek.Content([Text(self.value.stringify())])
+  }
+  guard fields.get("content") is Some(Array(values)) else {
+    return @deepseek.Content([])
+  }
+  let content : Array[@deepseek.ContentPart] = []
+  let texts : Array[String] = []
+  let mentions : Array[@mention_context.MentionRef] = []
+  let flush_text = () => {
+    if !texts.is_empty() || !mentions.is_empty() {
+      content.push(Text(@mention_context.encode(mentions, texts.join("\n"))))
+      texts.clear()
+      mentions.clear()
+    }
+  }
+  for value in values {
+    guard value is Object(input) else { continue }
+    if @jsonx.json_text(input, "text") is Some(text) {
+      match @mention_context.parse(text) {
+        Some(parsed) => {
+          if !parsed.task.is_empty() {
+            texts.push(parsed.task)
+          }
+          for mention in parsed.mentions {
+            mentions.push(mention)
+          }
+        }
+        None => texts.push(text)
+      }
+    } else if @jsonx.json_text(input, "type") is Some("image") &&
+      @jsonx.json_text(input, "url") is Some(url) {
+      flush_text()
+      content.push(ImageUrl(url~))
+    } else if @jsonx.json_text(input, "type") is Some("mention") &&
+      @jsonx.json_text(input, "path") is Some(path) {
+      mentions.push(
+        @mention_context.Symbol(
+          name=@jsonx.json_text(input, "name").unwrap_or(path),
+          file=path,
+          line=0,
+        ),
+      )
+    }
+  }
+  flush_text()
+  @deepseek.Content(content)
 }

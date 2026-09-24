@@ -581,17 +581,17 @@ test "session_max_sequence is the snapshot's watermark" {
       {
         sequence: 5,
         ts: None,
-        item: User({ content: "five", submission_id: None, }),
+        item: User({ content: Content([Text("five")]), submission_id: None, }),
       },
       {
         sequence: 9,
         ts: None,
-        item: User({ content: "nine", submission_id: None, }),
+        item: User({ content: Content([Text("nine")]), submission_id: None, }),
       },
       {
         sequence: 7,
         ts: None,
-        item: User({ content: "seven", submission_id: None, }),
+        item: User({ content: Content([Text("seven")]), submission_id: None, }),
       },
     ]),
   }
@@ -655,7 +655,7 @@ fn follower_test_config(
   root : @pathx.Absolute,
 ) -> RunConfig {
   {
-    task: "test",
+    content: Content([Text("test")]),
     api_key: "test",
     key_env: "DEEPSEEK",
     api_url: None,

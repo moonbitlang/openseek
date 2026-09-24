@@ -109,6 +109,7 @@ fn start_in_new_worktree(
   max_steps : String,
   session : String,
   workspace : @common.Uri,
+  images? : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let device_dispatch = dispatch.map((msg : DeviceMsg) => {
@@ -217,6 +218,7 @@ fn start_in_new_worktree(
             ),
           )
           let start = start_payload(
+            images~,
             task,
             selected_model,
             reasoning,
@@ -663,6 +665,10 @@ fn Conversation::wants_fresh_worktree(self : Conversation) -> Bool {
 /// flight. It would only leave the chip disagreeing with where the
 /// conversation is being pinned.
 fn Model::can_choose_launch_mode(self : Model, conv : Conversation) -> Bool {
+  if self.device_state(conv.device) is Some(dev) &&
+    dev.is_chat_workspace(conv.project()) {
+    return false
+  }
   guard conv.workspace is Project(root~) &&
     conv.messages.length() == 0 &&
     conv.run is NoRun(..) &&
@@ -692,6 +698,10 @@ fn Model::worktree_control(
   conv : Conversation,
 ) -> @composer.WorktreeControl? {
   guard conv.messages.length() == 0 else { return None }
+  if self.device_state(conv.device) is Some(dev) &&
+    dev.is_chat_workspace(conv.project()) {
+    return None
+  }
   let choice = match conv.workspace {
     Worktree(name~, ..) => @composer.BoundWorktree(name)
     Project(_) if conv.worktree_mode => @composer.FreshWorktree
@@ -782,7 +792,9 @@ test "the launch mode toggles only before the conversation begins" {
   let begun = test_model().replace_conversation({
     ..test_conversation(),
     workspace: Project(root=workspace),
-    messages: [{ kind: User(text="hi", images=[]), ts: None, sequence: None, }],
+    messages: [
+      { kind: User(content=Content([Text("hi")])), ts: None, sequence: None, },
+    ],
   })
   let (_, still) = update(dispatch, ToggleWorktreeMode, begun)
   assert_false(still.active().worktree_mode)

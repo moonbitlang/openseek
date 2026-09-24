@@ -993,105 +993,31 @@ fn context_menu_viewport_size(element : @rdom.Element) -> ContextMenuSize {
 }
 
 ///|
-extern "js" fn append_context_menu_to_body(element : @rdom.Element) -> Bool =
-  #| (element) => {
-  #|   const body = element?.ownerDocument?.body ?? globalThis.document?.body;
-  #|   if (!body) return false;
-  #|   body.appendChild(element);
-  #|   return true;
-  #| }
-
-///|
-extern "js" fn context_menu_active_element(
-  element : @rdom.Element,
-) -> @rdom.Element =
-  #| (element) => element?.ownerDocument?.activeElement ?? element
-
-///|
-extern "js" fn context_menu_has_active_element(element : @rdom.Element) -> Bool =
-  #| (element) => Boolean(element?.ownerDocument?.activeElement)
-
-///|
-extern "js" fn context_menu_event_inside(
-  event : @rdom.Event,
-  element : @rdom.Element,
-) -> Bool =
-  #| (event, element) => {
-  #|   const target = event?.target;
-  #|   return Boolean(target && element?.contains?.(target));
-  #| }
-
-///|
-extern "js" fn context_menu_viewport_width(element : @rdom.Element) -> Double =
-  #| (element) => {
-  #|   const doc = element?.ownerDocument;
-  #|   const win = doc?.defaultView ?? globalThis.window;
-  #|   return win?.visualViewport?.width
-  #|     ?? win?.innerWidth
-  #|     ?? doc?.documentElement?.clientWidth
-  #|     ?? doc?.body?.clientWidth
-  #|     ?? 0;
-  #| }
-
-///|
-extern "js" fn context_menu_viewport_height(element : @rdom.Element) -> Double =
-  #| (element) => {
-  #|   const doc = element?.ownerDocument;
-  #|   const win = doc?.defaultView ?? globalThis.window;
-  #|   return win?.visualViewport?.height
-  #|     ?? win?.innerHeight
-  #|     ?? doc?.documentElement?.clientHeight
-  #|     ?? doc?.body?.clientHeight
-  #|     ?? 0;
-  #| }
-
-///|
-extern "js" fn context_menu_add_window_blur_listener(
-  element : @rdom.Element,
-  listener : () -> Unit,
-) -> Unit =
-  #| (element, listener) => {
-  #|   (element?.ownerDocument?.defaultView ?? globalThis.window)
-  #|     ?.addEventListener?.('blur', listener);
-  #| }
-
-///|
-extern "js" fn context_menu_remove_window_blur_listener(
-  element : @rdom.Element,
-  listener : () -> Unit,
-) -> Unit =
-  #| (element, listener) => {
-  #|   (element?.ownerDocument?.defaultView ?? globalThis.window)
-  #|     ?.removeEventListener?.('blur', listener);
-  #| }
-
-///|
-/// Copies only the inherited theme tokens consumed by this detached body-level
-/// overlay. `getComputedStyle` is the missing browser primitive; the token
-/// list is presentation data, not command policy.
-extern "js" fn copy_context_menu_theme(
+/// Copy inherited tokens to the detached body-level menu, using its source realm.
+fn copy_context_menu_theme(
   target : @rdom.Element,
   source : @rdom.Element,
-) -> Unit =
-  #| (target, source) => {
-  #|   const win = source?.ownerDocument?.defaultView ?? globalThis.window;
-  #|   if (!win?.getComputedStyle || !target?.style) return;
-  #|   const style = win.getComputedStyle(source);
-  #|   for (const name of [
-  #|     '--vscode-menu-background',
-  #|     '--vscode-menu-foreground',
-  #|     '--vscode-menu-selectionBackground',
-  #|     '--vscode-menu-selectionForeground',
-  #|     '--vscode-menu-selectionBorder',
-  #|     '--vscode-menu-separatorBackground',
-  #|     '--vscode-menu-border',
-  #|     '--vscode-shadow-lg',
-  #|     '--vscode-widget-shadow',
-  #|     '--vscode-cornerRadius-medium',
-  #|     '--vscode-cornerRadius-large',
-  #|     '--ui-font-family'
-  #|   ]) {
-  #|     const value = style.getPropertyValue(name);
-  #|     if (value) target.style.setProperty(name, value);
-  #|   }
-  #| }
+) -> Unit {
+  let document : @js.Value = @js.Value::cast_from(source).get_with_string(
+    "ownerDocument",
+  )
+  let window : @js.Nullable[@rdom.Window] = document.get_with_string(
+    "defaultView",
+  )
+  let style = window
+    .to_option()
+    .unwrap_or(@rdom.window())
+    .get_computed_style(source)
+  for
+    name in [
+      "--vscode-menu-background", "--vscode-menu-foreground", "--vscode-menu-selectionBackground",
+      "--vscode-menu-selectionForeground", "--vscode-menu-selectionBorder", "--vscode-menu-separatorBackground",
+      "--vscode-menu-border", "--vscode-shadow-lg", "--vscode-widget-shadow", "--vscode-cornerRadius-medium",
+      "--vscode-cornerRadius-large", "--ui-font-family",
+    ] {
+    let value = style.get_property_value(name)
+    if !value.is_empty() {
+      @base_browser.set_style_property(target, name, value)
+    }
+  }
+}

@@ -27,7 +27,7 @@ pub impl ToJson for GithubPullRequestPayload with fn to_json(self) {
 ///|
 pub(all) struct GithubComment {
   author : String?
-  body : String
+  body_html : String
   url : String
   created_at : String
 } derive(Eq, Debug)
@@ -37,7 +37,7 @@ pub impl FromJson for GithubComment with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "GitHub comment")
   {
     author: object.optional_string("author"),
-    body: object.required_string("body"),
+    body_html: object.required_string("body_html"),
     url: object.required_string("url"),
     created_at: object.required_string("created_at"),
   }
@@ -46,7 +46,7 @@ pub impl FromJson for GithubComment with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubComment with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "body": self.body.to_json(),
+    "body_html": self.body_html.to_json(),
     "url": self.url.to_json(),
     "created_at": self.created_at.to_json(),
   }
@@ -115,7 +115,7 @@ pub(all) struct GithubPullRequestDetail {
   item : GithubItem
   state : String
   mergeable : String
-  body : String
+  body_html : String
   base : String
   head : String
   additions : Int
@@ -140,7 +140,7 @@ pub impl FromJson for GithubPullRequestDetail with fn from_json(json, path) {
     ),
     state: object.required_string("state"),
     mergeable: object.required_string("mergeable"),
-    body: object.required_string("body"),
+    body_html: object.required_string("body_html"),
     base: object.required_string("base"),
     head: object.required_string("head"),
     additions: object.required_int("additions"),
@@ -162,7 +162,7 @@ pub impl ToJson for GithubPullRequestDetail with fn to_json(self) {
     "item": self.item.to_json(),
     "state": self.state,
     "mergeable": self.mergeable,
-    "body": self.body,
+    "body_html": self.body_html,
     "base": self.base,
     "head": self.head,
     "additions": self.additions,

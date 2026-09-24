@@ -88,9 +88,10 @@ fn comment_view(
           @html.nothing
         },
       ]),
-      @html.div(
-        class="github-review-markdown markdown",
-        @markdown.markdown_nodes(comment.body, web_source=comment.url),
+      @github.body_view(
+        comment.body_html,
+        comment.url,
+        class="github-review-markdown",
       ),
       if state.deleting == Some(comment.id) {
         @html.div(

@@ -1,86 +1,54 @@
 # Remove Tool
 
-`remove` deletes a file the agent created earlier this session, gated on that
-provenance and carrying a required rationale for the audit trail. It is the
-delete verb of the tool-mediated file API: `write` and
-`edit`/`multi_edit` already exist, but there was no in-workflow way to delete a
-file — and a `git rm` spawned from an `mbtx` snippet checks no provenance at
-all (a snippet's own writes stay in its temp dir, so a spawned child is the
-only unprovenanced deletion route).
+`remove(path, reason)` deletes a regular file or recursively deletes a directory. The arguments are unchanged;
+the agent does not supply a hash or an approval flag.
 
-`remove` deletes a path **only** when the session's
-[`FileStateMap`](../file_state.mbt) records it as `Created` — one the agent
-itself created this session — so removing it merely undoes the agent's own
-work. A pre-existing file (one the agent never created, or only modified) is
-refused.
+- Files recorded as created by this session whose contents still match the
+  recorded digest are deleted automatically.
+- Existing files, files made by external commands, and files changed since the
+  agent last wrote them require one-shot approval through `ApprovalChannel`.
+  The question shows the path, the agent's reason, and why approval is needed.
+- Empty directories are deleted automatically using non-recursive `rmdir`;
+  if an entry appears before removal, it fails without deleting that entry.
+- Nonempty directories require approval, showing the recursive file and subdirectory
+  counts. Hidden files and empty subdirectories are included.
+- Missing files, workspace roots and their ancestors, symlinks (including inside
+  a directory), special files, and targets outside a worker's write scope are
+  rejected without requesting approval.
 
-## Design Rationale
+## Approval and concurrency
 
-The gate is provenance, not file type. `remove` handles any file the agent
-created, source or not, and it is the *provenance-checked* path where a
-`git rm` spawned from an `mbtx` snippet is not. Deleting a
-`.mbt`/`.mbt.md` file runs module `moon check` and appends the feedback, so a
-break the deletion causes surfaces in the result exactly as it does after
-`write`/`edit`.
+The channel uses the existing session permission policy: `ask` waits for the
+controller, `always` grants automatically, and `never` provides no channel.
+Rejection, cancellation, or an absent/unavailable channel leaves the target intact.
+Workers currently have no approval channel; they report the blocked deletion
+to their parent instead of bypassing confinement.
 
-Because deletion is irreversible, every call carries a `reason`. The rationale
-is recorded in the (durable) success message — `ok: removed <path> (reason:
-…)` — so a destructive action can be audited after the fact.
+A grant is used only by this call for the file's captured canonical path and
+raw-byte SHA-256. After approval, the tool rechecks the scope, kind, location,
+and contents. A changed version is refused; a later request needs fresh
+approval. Matching bytes identify a content version, not a filesystem object.
+For directories, the captured version includes every entry's path, kind,
+canonical location, and each regular file's raw-byte digest. Added, removed,
+renamed, or changed entries invalidate the grant before deletion starts.
 
-## Safety Model
+There is no atomic compare-and-unlink against external writers. After validating
+all entries, directory deletion proceeds in postorder, checking each entry again
+and using non-recursive directory removal. A concurrent change or filesystem
+failure during deletion can leave a partially removed tree; it never expands
+the approved list to include newly added files.
 
-`Created` alone is not a delete capability (see the
-[`FileStateMap`](../file_state.mbt) docs). Three guards gate a removal:
+The definition owns its locking through `FileStateMap::with_access`: the initial
+check and automatic deletion share one locked phase; approval waits outside
+the lock; the recheck and approved deletion share another. Do not wrap this
+definition in `FileStateMap::serialize`, which would hold the lock during the
+human interaction and deadlock other file tools.
 
-- **Content revalidation.** The gate is `created_and_unchanged`, which pairs the
-  `Created` provenance with a content digest (SHA-256) of what the agent last
-  wrote. `remove` reads the file back at delete time, hashes it, and refuses on a
-  mismatch, so a path *rebound to different content* since the agent wrote it — a
-  `git checkout -- x.mbt` restoring a tracked file the agent had recreated, or a
-  `mv` onto the path — is not deleted. And a targeted `edit` cannot launder a
-  rebind: `record_edited` downgrades a `Created` file whose pre-edit content is
-  not what the agent last wrote. A read failure at delete time also refuses.
-- **Forget on delete.** After a successful removal the provenance is dropped
-  (`FileStateMap::forget`), so a path recreated after a removal reads as unknown
-  and a second `remove` refuses it.
-- **No symlink following.** The regular-file check uses `follow_symlink=false`,
-  so a path replaced by a symlink is refused rather than followed to its target.
-
-The digest is captured from the content the tools already hold in memory — so
-identity capture never stats the filesystem and never races cancellation — and,
-being a content *version*, it cannot collide the way coarse-resolution or
-`mv`-preserved mtimes can. A different file with byte-identical content passes,
-which is harmless (deleting identical bytes deletes the agent's own content).
-Keys are the exact resolved path `write` used, so an unrecognized spelling reads
-as unknown and is conservatively refused rather than risking a wrong-file
-deletion.
-
-## Arguments
-
-| Name     | Type   | Required | Notes |
-| -------- | ------ | -------- | ----- |
-| `path`   | string | yes | Filesystem path. Relative paths resolve against the workspace root. Must name an existing regular file the agent created this session. |
-| `reason` | string | yes | A short, **non-empty** explanation of why the file is being deleted, recorded with the result for auditing. A blank (whitespace-only) reason is rejected. |
-
-## Action
-
-The action is always `Respond(ToolOutput(...))`; the agent loop forwards
-`ToolOutput.content` to the model. `is_error` is `false` on success and `true`
-otherwise. The body has one of these shapes:
-
-- `"ok: removed <path> (reason: <reason>)"` — the file was deleted. When the
-  target is a `.mbt`/`.mbt.md` file inside a MoonBit module, bounded module-root
-  `moon check` feedback is appended after the success line, starting with
-  `"moon check:"`.
-- `"error removing <path>: not created by the agent this session — ..."` — the
-  gate refused: the file is pre-existing, or the agent only modified it.
-- `"error removing <path>: no such file"` / `"... not a regular file; remove
-  deletes regular files"` — the path is missing, a directory, or a symlink.
-- `"error removing <path>: <error>"` — the unlink itself failed (e.g. permission
-  denied).
-- `"error: remove requires arguments.path"` / `"... arguments.reason"` /
-  `"... arguments.reason to be a non-empty explanation"` / `"... object
-  arguments"` — invalid payload.
+A successful deletion clears provenance and records the nonblank `reason` in
+the response. Deleting `.mbt`/`.mbt.md` files also appends bounded `moon check`
+feedback. Errors return `is_error=true` and distinguish rejected, cancelled,
+unavailable, changed-file, and filesystem failures. This tool does not create
+recovery backups.
 
 ## Examples
 
@@ -136,7 +104,7 @@ async test "remove deletes an agent-created file through the registry" {
 
 ```moonbit check
 ///|
-async test "remove refuses a file the agent did not create" {
+async test "remove refuses an existing file without an approval channel" {
   @vfs.with_tmpdir(prefix="openseek-remove-readme-refuse-", dir => {
     let path = "\{dir}/lib.mbt"
     @vfs.FileSystem({ "lib.mbt": "pub fn g() -> Int { 0 }\n" }).write_to(dir)
@@ -154,7 +122,9 @@ async test "remove refuses a file the agent did not create" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
-      output.content.contains("not created by the agent this session"),
+      output.content.contains(
+        "not recorded as created by the agent this session",
+      ),
     )
     // The file is untouched.
     assert_true(@fs.exists(path))

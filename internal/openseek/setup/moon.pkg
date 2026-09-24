@@ -7,6 +7,7 @@ import {
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol/emit",
   "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",
   "moonbitlang/x/path",
@@ -19,6 +20,10 @@ import {
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/openseek/internal/openseek/testkit",
+} for "test"
+
+import {
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
 } for "wbtest"
 
 warnings = "+unnecessary_annotation"

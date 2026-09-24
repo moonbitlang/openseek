@@ -262,7 +262,7 @@ test "semantic wrapping keeps astral UTF-16 text and fails closed on isolated su
 }
 
 ///|
-test "semantic wrapping tokenizes the whole block before splitting lines" {
+test "semantic line rendering preserves tokenization state across lines" {
   let registration = @syntax.tokenization_registry.register("moonbit", StatefulMarkdownFenceTokenizer::{
   })
   defer registration.dispose()
@@ -285,17 +285,21 @@ test "semantic wrapping tokenizes the whole block before splitting lines" {
 }
 
 ///|
-test "semantic wrapper fails closed when shared tokenizer line shape drifts" {
+test "empty semantic fences do not create a synthetic source line" {
   let block = projected_document_code_block(
     (
       #|```mbt check
-      #|let exact = 1
       #|```
     ),
   )
-  let malformed =
-    #|<div class="monaco-tokenized-source"><span class="mtk1">wrong</span></div>
-  assert_eq(render_semantic_tokenized_code_lines(block, malformed), malformed)
+  let html = render_markdown_document_code_block(
+    block,
+    Some("moonbit"),
+    MoonBitMarkdown,
+  )
+  assert_true(html.contains("data-markdown-semantic=\"moonbit-check\""))
+  assert_false(html.contains("data-markdown-code-line="))
+  assert_true(html.contains("<div class=\"monaco-tokenized-source\"></div>"))
 }
 
 ///|

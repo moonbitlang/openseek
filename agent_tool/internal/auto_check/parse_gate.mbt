@@ -80,13 +80,6 @@ pub(all) struct ParseGateError {
 } derive(Debug)
 
 ///|
-/// Whether the parse gate applies to `path` — i.e. `moonc syncheck` accepts its
-/// input kind: `.mbt`, `.mbt.md`, or an exact `moon.mod` / `moon.pkg`.
-fn is_gateable_path(path : String) -> Bool {
-  gate_scratch_name(path) is Some(_)
-}
-
-///|
 /// The distinct syncheck input KINDS named by `path` and its resolved symlink
 /// `target`, as representative paths to hand to `content_parse_errors`. Usually
 /// one entry: a regular file (where `target` is the same file), or a symlink
@@ -282,7 +275,7 @@ fn excerpt_for_loc(lines : Array[String], loc : String) -> String {
   let width = "\{last}".length()
   let rendered = [
     for number in first..<=last => {
-      "  \{pad_line_number(number, width)} |\{lines[number - 1]}"
+      "  \{number.to_string().pad_start(width, ' ')} |\{lines[number - 1]}"
     }
   ]
   rendered.join("\n")
@@ -311,11 +304,6 @@ fn loc_line_span(loc : String) -> (Int, Int)? {
     }
     _ => None
   }
-}
-
-///|
-fn pad_line_number(number : Int, width : Int) -> String {
-  "\{number}".pad_start(width, ' ')
 }
 
 ///|
@@ -359,56 +347,6 @@ test "decide_parse_gate splits errors, clean, and cannot-run" {
 }
 
 ///|
-test "format_parse_gate_errors synthesizes numbered excerpts from content" {
-  let content =
-    #|///|
-    #|pub fn f() -> Int {
-    #|  let x =
-    #|}
-  let formatted = format_parse_gate_errors("lib/a.mbt", content, [
-    {
-      loc: "4:1-4:2",
-      message: "Parse error, unexpected token `}`.",
-      context: "",
-    },
-  ])
-  assert_eq(formatted.length(), 1)
-  assert_eq(
-    formatted[0],
-    (
-      #|lib/a.mbt:4:1-4:2: Parse error, unexpected token `}`.
-      #|  3 |  let x =
-      #|  4 |}
-    ),
-  )
-}
-
-///|
-test "format_parse_gate_errors prefers the compiler's own context excerpt" {
-  // The compiler context wins over synthesis; the content lines would say
-  // otherwise, proving which source was used.
-  let formatted = format_parse_gate_errors("lib/a.mbt", "unrelated\ncontent", [
-    {
-      loc: "4:1-4:2",
-      message: "Parse error, unexpected token `}`.",
-      context: (
-        #|3 |  let x =
-        #|4 |}
-        #|
-      ),
-    },
-  ])
-  assert_eq(
-    formatted[0],
-    (
-      #|lib/a.mbt:4:1-4:2: Parse error, unexpected token `}`.
-      #|  3 |  let x =
-      #|  4 |}
-    ),
-  )
-}
-
-///|
 test "format_parse_gate_errors caps at the display limit and handles bad locs" {
   let errors = [
     for index in 0..<9 => {
@@ -434,117 +372,25 @@ test "format_parse_gate_errors caps at the display limit and handles bad locs" {
 }
 
 ///|
-/// Real-moonc round trips: unlike `moon check`, the standalone gate can run
-/// inside `moon test` safely (no project build lock is involved).
-async test "content_parse_errors gates real content through moonc" {
-  guard content_parse_errors("a.mbt", "///|\npub fn ok() -> Int {\n  42\n}\n")
-    is Some(clean) else {
-    fail("expected the gate to run (is moonc on PATH?)")
-  }
-  assert_eq(clean.errors.length(), 0)
-  assert_false(clean.truncated)
-  let bad_content = "///|\npub fn bad() -> Int {\n  let x =\n}\n"
-  guard content_parse_errors("a.mbt", bad_content) is Some(gate) else {
-    fail("expected the gate to run (is moonc on PATH?)")
-  }
-  assert_true(gate.errors.length() > 0)
-  assert_true(gate.errors[0].message.contains("Parse error"))
-  // Whether the diagnostic carries moonc's own `context` excerpt is
-  // toolchain-dependent (nightly emits one, stable omits the field), so
-  // assert the gate's actual contract instead: the formatted report always
-  // shows a numbered excerpt under the header — the compiler's when present,
-  // synthesized from the content via the diagnostic's loc otherwise.
-  let formatted = format_parse_gate_errors(
-    "candidate.mbt",
-    bad_content,
-    gate.errors,
-  )
-  assert_true(formatted.length() > 0)
-  assert_true(formatted[0].contains("\n  "))
-  // moonc EXITS 0 when its parser recovers from an error (e.g. `&mut` in a
-  // parameter type), so the gate must trust captured diagnostics, never the
-  // exit code — this content must still be rejected.
-  guard content_parse_errors(
-      "a.mbt", "///|\nfn f(input : String, pos : &mut Int) -> Unit {\n  ignore(input)\n}\n",
-    )
-    is Some(recovered) else {
-    fail("expected the gate to run (is moonc on PATH?)")
-  }
-  assert_true(recovered.errors.length() > 0)
-}
-
-///|
-/// `is_gateable_path` matches exactly the input kinds `moonc syncheck` accepts:
+/// `gate_scratch_name` accepts exactly the input kinds `moonc syncheck` accepts:
 /// `.mbt`, `.mbt.md`, and an exact `moon.mod` / `moon.pkg` basename. Nested
 /// config files count; prefixed names (`x.moon.pkg`) and the legacy JSON /
 /// `moon.work` files do not.
-test "is_gateable_path covers syncheck input kinds only" {
-  assert_true(is_gateable_path("lib/a.mbt"))
-  assert_true(is_gateable_path("README.mbt.md"))
-  assert_true(is_gateable_path("moon.mod"))
-  assert_true(is_gateable_path("sub/pkg/moon.pkg"))
+test "gate_scratch_name covers syncheck input kinds only" {
+  assert_true(gate_scratch_name("lib/a.mbt") is Some(_))
+  assert_true(gate_scratch_name("README.mbt.md") is Some(_))
+  assert_true(gate_scratch_name("moon.mod") is Some(_))
+  assert_true(gate_scratch_name("sub/pkg/moon.pkg") is Some(_))
   // Windows separators classify like their POSIX form (shared manifest helpers).
-  assert_true(is_gateable_path("C:\\ws\\pkg\\moon.pkg"))
-  assert_true(is_gateable_path("C:\\ws\\moon.mod"))
+  assert_true(gate_scratch_name("C:\\ws\\pkg\\moon.pkg") is Some(_))
+  assert_true(gate_scratch_name("C:\\ws\\moon.mod") is Some(_))
   // Not syncheck inputs.
-  assert_false(is_gateable_path("notes.md"))
-  assert_false(is_gateable_path("moon.work"))
-  assert_false(is_gateable_path("moon.mod.json"))
-  assert_false(is_gateable_path("moon.pkg.json"))
-  assert_false(is_gateable_path("x.moon.pkg"))
-  assert_false(is_gateable_path("config.json"))
-}
-
-///|
-/// Real-syncheck round trips for the non-`.mbt` kinds. `.mbt.md` gates only the
-/// checked fenced blocks: a broken ` ```mbt check ` block is rejected, while the
-/// same break behind a plain (unchecked) fence is not, matching moon's own
-/// extraction. `moon.mod` / `moon.pkg` gate the textual config grammar.
-async test "content_parse_errors gates .mbt.md, moon.mod and moon.pkg" {
-  let checked_bad =
-    #|# Title
-    #|
-    #|```mbt check
-    #|///|
-    #|pub fn bad() -> Int {
-    #|  let x =
-    #|}
-    #|```
-  guard content_parse_errors("README.mbt.md", checked_bad) is Some(md) else {
-    fail("expected the gate to run (is moonc on PATH?)")
-  }
-  assert_true(md.errors.length() > 0)
-  assert_true(md.errors[0].message.contains("Parse error"))
-  // The same break behind a plain fence is display-only: syncheck skips it.
-  let plain_bad = checked_bad.replace(old="```mbt check", new="```mbt")
-  guard content_parse_errors("README.mbt.md", plain_bad) is Some(plain) else {
-    fail("expected the gate to run (is moonc on PATH?)")
-  }
-  assert_eq(plain.errors.length(), 0)
-  // Textual moon.mod / moon.pkg: clean parses, then real lex/parse breakage.
-  guard content_parse_errors(
-      "moon.mod", "name = \"me/proj\"\nversion = \"0.1.0\"\n",
-    )
-    is Some(mod_ok) else {
-    fail("expected the gate to run (is moonc on PATH?)")
-  }
-  assert_eq(mod_ok.errors.length(), 0)
-  guard content_parse_errors("moon.mod", "name = \"me/proj\n") is Some(mod_bad) else {
-    fail("expected the gate to run (is moonc on PATH?)")
-  }
-  assert_true(mod_bad.errors.length() > 0)
-  guard content_parse_errors("moon.pkg", "import {\n  \"me/proj/lib\",\n}\n")
-    is Some(pkg_ok) else {
-    fail("expected the gate to run (is moonc on PATH?)")
-  }
-  assert_eq(pkg_ok.errors.length(), 0)
-  guard content_parse_errors("moon.pkg", "import {\n  \"me/proj/lib\"\n")
-    is Some(pkg_bad) else {
-    fail("expected the gate to run (is moonc on PATH?)")
-  }
-  assert_true(pkg_bad.errors.length() > 0)
-  // A non-syncheck path never runs the gate — the caller fails open.
-  assert_true(content_parse_errors("moon.work", "members = [ ]\n") is None)
+  assert_true(gate_scratch_name("notes.md") is None)
+  assert_true(gate_scratch_name("moon.work") is None)
+  assert_true(gate_scratch_name("moon.mod.json") is None)
+  assert_true(gate_scratch_name("moon.pkg.json") is None)
+  assert_true(gate_scratch_name("x.moon.pkg") is None)
+  assert_true(gate_scratch_name("config.json") is None)
 }
 
 ///|

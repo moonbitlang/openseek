@@ -38,6 +38,7 @@ test('Chats creates directly without a picker and restores titled chats outside 
   await expectInChats(page.locator('.conversation-row').filter({ hasText: /^New chat$/ }));
   await expect(page.locator('.workspace-row')).toHaveCount(0);
   await expect(page.locator('.empty-title')).toHaveText('What should we build?');
+  await expect(page.locator('.composer-worktree')).toHaveCount(0);
 
   const title = 'Help me organize these notes';
   app.sessionEvents = [{ sequence: 1, item: { kind: 'user', payload: { content: title } } }];
@@ -45,6 +46,7 @@ test('Chats creates directly without a picker and restores titled chats outside 
   await page.getByTitle('Send', { exact: true }).click();
   await expect.poll(() => app.requests.find(request => request.method === 'agent.start')).toBeTruthy();
   const start = app.requests.find(request => request.method === 'agent.start');
+  expect(app.requests.some(request => request.method === 'worktree.create')).toBe(false);
   await expectInChats(page.locator('.conversation-row').filter({ hasText: title }));
   app.liveSessions = [{ id: start.params.session, title, updated_at_ms: 1 }];
   app.sessionGroups = sessions => ({ groups: [{ workspace, name: 'Unnamed workspace', session_root: `${workspace}/.openseek`, sessions, error: '' }] });
@@ -82,6 +84,12 @@ test('a user project named Unnamed workspace remains in Projects', async ({ page
   await app.goto();
   await expect(page.getByRole('button', { name: 'Unnamed workspace', exact: true })).toBeVisible();
   await expect(chatsHeader(page)).toBeVisible();
+  const launchMode = page.locator('button.composer-worktree');
+  await expect(launchMode).toHaveText('Local');
+  await launchMode.click();
+  await expect(launchMode).toHaveText('Worktree');
+  await launchMode.click();
+  await expect(launchMode).toHaveText('Local');
   expect(app.pageErrors).toEqual([]);
 });
 

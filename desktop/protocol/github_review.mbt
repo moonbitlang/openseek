@@ -123,7 +123,7 @@ pub impl ToJson for GithubReviewMutationReply with fn to_json(self) {
 ///|
 pub(all) struct GithubReviewComment {
   id : String
-  body : String
+  body_html : String
   url : String
   author : String?
   avatar_url : String?
@@ -136,7 +136,7 @@ pub impl FromJson for GithubReviewComment with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "GithubReviewComment")
   {
     id: object.required_string("id"),
-    body: object.required_string("body"),
+    body_html: object.required_string("body_html"),
     url: object.required_string("url"),
     author: object.optional_string("author"),
     avatar_url: object.optional_string("avatar_url"),
@@ -149,7 +149,7 @@ pub impl FromJson for GithubReviewComment with fn from_json(json, path) {
 pub impl ToJson for GithubReviewComment with fn to_json(self) {
   let fields : Map[String, Json] = {
     "id": self.id.to_json(),
-    "body": self.body.to_json(),
+    "body_html": self.body_html.to_json(),
     "url": self.url.to_json(),
     "created_at": self.created_at.to_json(),
     "can_delete": self.can_delete.to_json(),

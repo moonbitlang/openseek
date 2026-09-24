@@ -87,7 +87,7 @@ async fn run_task_turn(
         api_key~,
         model~,
         session~,
-        task~,
+        content=Content([Text(task)]),
         append_item=(current, item) => {
           let next = append_item(current, item)
           latest_session = next

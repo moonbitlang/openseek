@@ -314,20 +314,25 @@ fn extra_editor_class_name(
 }
 
 ///|
-/// Runtime browser facts use the same UA predicates as VS Code's
-/// `base/browser/browser.ts`.  `0` is the non-Safari/non-WebKit-WebView arm,
-/// `1` Safari, and `2` native WebKit WebView.
-extern "js" fn editor_browser_kind() -> Int =
-  #| () => {
-  #|   if (typeof navigator === "undefined") return 0;
-  #|   const userAgent = navigator.userAgent || "";
-  #|   const isWebKit = userAgent.indexOf("AppleWebKit") >= 0;
-  #|   const isChrome = userAgent.indexOf("Chrome") >= 0;
-  #|   const isSafari = !isChrome && userAgent.indexOf("Safari") >= 0;
-  #|   if (isSafari) return 1;
-  #|   if (!isChrome && isWebKit) return 2;
-  #|   return 0;
-  #| }
+/// Preserve the VS Code Safari and native WebKit WebView UA predicates.
+fn editor_browser_kind() -> Int {
+  let navigator : @js.Nullable[@js.Value] = @js.globalThis.get_with_string(
+    "navigator",
+  )
+  guard navigator.to_option() is Some(navigator) else { return 0 }
+  let agent : @js.Nullable[String] = navigator.get_with_string("userAgent")
+  guard agent.to_option() is Some(agent) else { return 0 }
+  if agent.contains("Chrome") {
+    return 0
+  }
+  if agent.contains("Safari") {
+    return 1
+  }
+  if agent.contains("AppleWebKit") {
+    return 2
+  }
+  0
+}
 
 ///|
 /// The empty-state root classes for the Viewer-owned no-model placeholder

@@ -127,19 +127,34 @@ pub fn tokenize_to_string(
     if i > 0 {
       result.write_string("<br/>")
     }
-    let tokens = tokenize_encoded(line)
-    @tokens.LineTokens::convert_to_end_offset(tokens, line.length())
-    let line_tokens = @tokens.LineTokens(tokens, line, codec)
-    let view_line_tokens = line_tokens.inflate()
-    let mut start_offset = 0
-    for j in 0..<view_line_tokens.get_count() {
-      let type_ = view_line_tokens.get_class_name(j)
-      let end_index = view_line_tokens.get_end_offset(j)
-      result <+
-        $|<span class="\{type_}">\{@base_common.escape(line[start_offset:end_index].to_owned())}</span>
-      start_offset = end_index
-    }
+    result.write_string(
+      tokenize_line_to_string(line, codec, tokenize_encoded(line)),
+    )
   }
   result.write_string("</div>")
+  result.to_string()
+}
+
+///|
+/// Renders one line as escaped class-based token spans without changing its
+/// whitespace or adding a line wrapper. Consumes the encoded token array by
+/// converting its start offsets to end offsets in place.
+pub fn tokenize_line_to_string(
+  line : String,
+  codec : @services.LanguageIdCodec,
+  tokens : Array[UInt],
+) -> String {
+  @tokens.LineTokens::convert_to_end_offset(tokens, line.length())
+  let line_tokens = @tokens.LineTokens(tokens, line, codec)
+  let view_line_tokens = line_tokens.inflate()
+  let result = StringBuilder()
+  let mut start_offset = 0
+  for j in 0..<view_line_tokens.get_count() {
+    let type_ = view_line_tokens.get_class_name(j)
+    let end_index = view_line_tokens.get_end_offset(j)
+    result <+
+      $|<span class="\{type_}">\{@base_common.escape(line[start_offset:end_index].to_owned())}</span>
+    start_offset = end_index
+  }
   result.to_string()
 }

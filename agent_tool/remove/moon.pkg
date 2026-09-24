@@ -1,14 +1,19 @@
 import {
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/x/crypto",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/internal/auto_check",
   "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
   "moonbitlang/openseek/agent_tool/write_scope",
   "moonbitlang/openseek/agent_tool/remove/internal/decode",
   "moonbitlang/openseek/internal/workspace_path",
-  "moonbitlang/openseek/testkit/filesystem" @vfs,
-  "moonbitlang/async",
   "moonbitlang/async/fs",
 }
+
+import {
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/async",
+} for "test"
 
 warnings = "+unnecessary_annotation"
 

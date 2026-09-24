@@ -21,7 +21,7 @@ fn github_review_identity(url : String) -> GithubReviewIdentity raise {
 }
 
 ///|
-const GithubReviewCommentFields : String = "fullDatabaseId body url author{login avatarUrl} createdAt viewerCanDelete"
+const GithubReviewCommentFields : String = "fullDatabaseId bodyHTML url author{login avatarUrl} createdAt viewerCanDelete"
 
 ///|
 const GithubReviewThreadFields : String = "id path side:diffSide line original_line:originalLine resolved:isResolved outdated:isOutdated can_reply:viewerCanReply can_resolve:viewerCanResolve can_unresolve:viewerCanUnresolve"
@@ -31,7 +31,7 @@ fn github_review_comment(raw : Json) -> @protocol.GithubReviewComment raise {
   guard raw
     is {
       "fullDatabaseId": database_id,
-      "body": String(body),
+      "bodyHTML": String(body_html),
       "url": String(url),
       "author": author,
       "createdAt": String(created_at),
@@ -56,7 +56,7 @@ fn github_review_comment(raw : Json) -> @protocol.GithubReviewComment raise {
   }
   {
     id,
-    body,
+    body_html,
     url,
     author,
     avatar_url,
@@ -106,11 +106,16 @@ async fn github_review_graphql(
   ]
   args.append(fields)
   let raw = github_panel_json(gh, dir, args)
+  github_graphql_data(raw)
+}
+
+///|
+fn github_graphql_data(raw : Json) -> Json raise {
   if raw is { "errors": Array(errors), .. } && !errors.is_empty() {
-    raise HostError("GitHub review request failed: \{Json(errors).stringify()}")
+    raise HostError("GitHub request failed: \{Json(errors).stringify()}")
   }
   guard raw is { "data": data, .. } else {
-    raise HostError("GitHub omitted the review response.")
+    raise HostError("GitHub omitted the GraphQL response.")
   }
   data
 }

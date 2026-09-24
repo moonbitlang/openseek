@@ -23,7 +23,7 @@ let root = runtime.workspace_root()
 runtime.emit_event(MyToolUpdate("done"))
 let events = runtime.drain_events()
 
-runtime.queue_steer(Prompt("also check tests", submission_id=None))
+runtime.queue_steer(Prompt(Content([Text("also check tests")]), submission_id=None))
 let steers = runtime.drain_steers()
 
 @async.with_task_group() <| group => {
@@ -144,17 +144,19 @@ whitespace-only steering is the agent loop's responsibility.
 ///|
 test "steering drains losslessly and raw" {
   let runtime = @agent_runtime.AgentRuntime()
-  runtime.queue_steer(Prompt("turn left", submission_id=None))
+  runtime.queue_steer(Prompt(Content([Text("turn left")]), submission_id=None))
   for index in 0..<(@agent_runtime.default_agent_event_capacity * 3) {
     runtime.emit_event(ReadmeFloodEvent(index))
   }
-  runtime.queue_steer(Prompt("", submission_id=None))
+  runtime.queue_steer(Prompt(Content([Text("")]), submission_id=None))
   runtime.queue_steer(Command(" turn right ", submission_id=None))
 
   let drained = runtime.drain_steers()
   assert_eq(drained.length(), 3)
-  assert_true(drained[0] is Prompt("turn left", submission_id=None))
-  assert_true(drained[1] is Prompt("", submission_id=None))
+  assert_true(
+    drained[0] is Prompt(Content([Text("turn left")]), submission_id=None),
+  )
+  assert_true(drained[1] is Prompt(Content([Text("")]), submission_id=None))
   assert_true(drained[2] is Command(" turn right ", submission_id=None))
   assert_eq(runtime.drain_steers().length(), 0)
 }

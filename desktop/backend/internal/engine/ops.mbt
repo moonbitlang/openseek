@@ -95,7 +95,7 @@ pub async fn start_run(
   // recognize its own prompt in the record — the host itself never reads it
   // back.
   let submission_id = normalize_submission_id(payload.submission_id)
-  let command = @protocol.prompt(config.task, submission_id?)
+  let command = @protocol.prompt(config.content, submission_id?)
   // Submitting, opening the run and announcing it are one synchronous step,
   // with no suspension since the claim check above. That is what makes the
   // ordering hold without a lock: no other request can interleave a command
@@ -415,13 +415,12 @@ pub async fn goal_run(
 /// rides that serve engine's lossless steering queue and is folded into the
 /// conversation at the turn's next step boundary, where the engine echoes it
 /// back as a `steer_applied` event (or `steer_dropped` if it raced the turn's
-/// end). Blank text is refused: the engine filters blanks without emitting
-/// any settling event, which would leave a phantom acknowledgment.
+/// end). Empty input is refused; image-only input is an ordinary prompt.
 pub fn steer_run(
   manager : EngineManager,
   payload : @protocol.SteerPayload,
 ) -> SteerReply {
-  guard !payload.text.is_blank() else {
+  guard !payload.text.is_blank() || !payload.images.is_empty() else {
     return { steered: false, run_id: None, }
   }
   guard open_run_engine(manager, run_id?=payload.run_id) is Some(live) &&
@@ -431,9 +430,15 @@ pub fn steer_run(
   if payload.run_id is Some(expected) && run_id != expected {
     return { steered: false, run_id: None, }
   }
+  if !payload.images.is_empty() && !live.supports_images {
+    return { steered: false, run_id: Some(run_id), }
+  }
+  let content = prompt_content(payload.text, payload.images) catch {
+    _ => return { steered: false, run_id: Some(run_id), }
+  }
   let submission_id = normalize_submission_id(payload.submission_id)
   guard live.submit(
-    @protocol.steer(payload.text, submission_id?),
+    @protocol.steer(content, submission_id?),
     failure_reason="failed to write steering to the engine",
   ) else {
     return { steered: false, run_id: Some(run_id), }
@@ -475,23 +480,39 @@ pub fn queue_run(
     return { accepted: false, }
   }
   match payload.action {
-    QueueAdd(text~, ..) => {
+    QueueAdd(text~, images~, ..) => {
       guard !(live.phase is Running(compact_queued=true, ..)) else {
         return { accepted: false, }
       }
-      guard !text.is_blank() else { return { accepted: false, } }
+      if !images.is_empty() && !live.supports_images {
+        return { accepted: false, }
+      }
+      let content = prompt_content(text, images) catch {
+        _ => return { accepted: false, }
+      }
+      guard !text.is_blank() || !images.is_empty() else {
+        return { accepted: false, }
+      }
       guard !live.queued_runs.any(queued => queued.id == id) else {
         return { accepted: false, }
       }
-      live.queued_runs.push({ id, run_id: mint_run_id(), content: text, })
+      live.queued_runs.push({ id, run_id: mint_run_id(), content, })
     }
-    QueueEdit(text~, ..) => {
-      guard !text.is_blank() else { return { accepted: false, } }
+    QueueEdit(text~, images~, ..) => {
+      if !images.is_empty() && !live.supports_images {
+        return { accepted: false, }
+      }
+      let content = prompt_content(text, images) catch {
+        _ => return { accepted: false, }
+      }
+      guard !text.is_blank() || !images.is_empty() else {
+        return { accepted: false, }
+      }
       guard live.queued_runs.search_by(queued => queued.id == id) is Some(index) else {
         return { accepted: false, }
       }
       let queued = live.queued_runs[index]
-      live.queued_runs[index] = { ..queued, content: text, }
+      live.queued_runs[index] = { ..queued, content, }
     }
     QueueWithdraw(..) => {
       guard live.queued_runs.search_by(queued => queued.id == id) is Some(index) else {
@@ -970,6 +991,7 @@ fn test_start_payload(
   submission_id? : String,
 ) -> @protocol.StartPayload {
   {
+    images: [],
     task,
     submission_id,
     model: None,
@@ -1225,15 +1247,29 @@ async test "setup failure retires the writer before an immediate next start" {
     assert_eq(second.status, "accepted")
     assert_true(@fsx.exists(old_done))
     assert_false(@fsx.exists(overlapped))
+    // The spawn counter is written before the fake engine commits its
+    // terminal record. Wait for that append to finish before cancelling the
+    // shell, or its mkdir child can race recursive workspace cleanup.
     assert_true(
-      @async.with_timeout_opt(1000, () => {
-        while @fs.read_file(count.to_string()).text() != "2" {
+      @async.with_timeout_opt(3000, () => {
+        while !has_finished_run(emitted, second.run_id) {
           @async.sleep(1)
         }
       })
       is Some(_),
     )
     assert_eq(@fs.read_file(count.to_string()).text(), "2")
+    // Let the second run finish before teardown: its engine commits its
+    // terminal record under the workspace, and a commit still in flight would
+    // race the recursive removal of the test directory.
+    assert_true(
+      @async.with_timeout_opt(3000, () => {
+        while !has_finished_run(emitted, second.run_id) {
+          @async.sleep(1)
+        }
+      })
+      is Some(_),
+    )
     let first_finishes = for event in emitted; first_finishes = 0 {
       if event is Finished(payload) && payload.run_id == first {
         continue first_finishes + 1
@@ -1243,6 +1279,7 @@ async test "setup failure retires the writer before an immediate next start" {
       first_finishes
     }
     assert_eq(first_finishes, 1)
+    assert_true(has_finished_run(emitted, second.run_id))
     group.return_immediately(())
   })
 }

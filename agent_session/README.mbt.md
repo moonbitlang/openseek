@@ -2,7 +2,7 @@
 
 `moonbitlang/openseek/agent_session` is the typed, provider-aware conversation
 state for resumable OpenSeek agents. It owns the durable event log and the
-projection from that log into DeepSeek chat messages.
+projection from that log into model history before provider-specific request encoding.
 
 It is intentionally separate from the TUI transcript model. A `Session` is the
 canonical process-independent record of what happened; the TUI transcript is a
@@ -30,6 +30,41 @@ timestamp, and one `SessionItem` payload:
 
 Appending never mutates the receiver. It returns a new session that shares the
 old log structure.
+
+User and tool message content uses
+`Content(Array[ContentPart])`, with ordered `Text(text)` and `Image(image)`
+parts. Constructors accept arrays; `.content().text()` concatenates text parts
+when a caller needs plain text. Projection preserves the full ordered content.
+Assistant content, runtime notices, summaries, reasoning, and terminal status
+text remain strings.
+
+JSON encoding writes a single `Text` part as a string, preserving compatibility
+with older readers for those records. Empty content, multiple text parts, and
+content containing images use arrays. Readers accept both forms; strings decode
+as one `Text` part. An image part has the shape
+`{"type":"image","media_type":"image/png","data":"<canonical padded base64>"}`.
+Image constructors retain original bytes, check PNG/JPEG/GIF/WebP signatures and
+limit decoded size to 5 MiB. They do not decode pixels, resize, or re-encode.
+Malformed base64 and mismatched MIME types fail decoding; unknown parts are not
+silently dropped. Provider-only `file` parts are not durable content: an expired
+provider ID cannot recover the original bytes. Legacy string records remain
+readable.
+
+`Content`, `ContentPart`, and `Image` are re-exported from the shared protocol
+module; `SteerApplied` receipts preserve the same ordered content.
+
+`Session::chat_messages()` returns `@deepseek.ChatMessage` values, projecting
+images into `image_url` parts containing base64 data URLs while preserving part
+order and stored history. `deepseek/client` checks image support when encoding
+each request; the DeepSeek encoder restricts images to user/tool roles.
+Both normal turns and resumed sessions send the image bytes directly; no Files
+API upload, provider ID, expiry handling, or upload cache is involved. Images
+never require their original filesystem path or a separate attachment directory.
+
+The agent loop and compaction call the provider client directly. Desktop
+accepts selected, pasted, or dropped images, carries them through initial prompts,
+steering and queued follow-ups, and renders thumbnails from durable history.
+Rejected submissions restore their images to the owning conversation draft.
 
 ## Architecture Diagrams
 
@@ -94,12 +129,12 @@ classDiagram
   }
 
   class UserMessage {
-    -String content
-    +content() String
+    -Content content
+    +content() Content
   }
 
   class AssistantMessage {
-    -String content
+    -Content content
     -SessionToolCall[] tool_calls
     -String? reasoning_content
     +tool_calls() ToolCall[]
@@ -108,13 +143,13 @@ classDiagram
   class ToolResult {
     -String tool_call_id
     -String tool_name
-    -String content
+    -Content content
     -Bool is_error
     -String? brief
   }
 
   class RuntimeNotice {
-    -String content
+    -Content content
   }
 
   class SessionSummary {
@@ -148,7 +183,7 @@ test "append leaves the original session unchanged" {
   let session = @agent_session.Session(
     SessionId("example"),
     system_prompt="system",
-  ).append(User(UserMessage("hello")))
+  ).append(User(UserMessage(Content([Text("hello")]))))
   debug_inspect(
     session,
     content=(
@@ -160,7 +195,7 @@ test "append leaves the original session unchanged" {
       #|      {
       #|        sequence: 1,
       #|        ts: 0,
-      #|        item: User({ content: "hello", submission_id: None }),
+      #|        item: User({ content: Content([Text("hello")]), submission_id: None }),
       #|      },
       #|    ]>,
       #|  last_sequence: 1,
@@ -177,7 +212,9 @@ example before appending it to an on-disk JSONL log:
 ///|
 test "append_event returns the durable event" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-  let (next, event) = session.append_event(User(UserMessage("hello")))
+  let (next, event) = session.append_event(
+    User(UserMessage(Content([Text("hello")]))),
+  )
   debug_inspect(next.last_sequence(), content="1")
   debug_inspect(
     event,
@@ -185,7 +222,7 @@ test "append_event returns the durable event" {
       #|{
       #|  sequence: 1,
       #|  ts: 0,
-      #|  item: User({ content: "hello", submission_id: None }),
+      #|  item: User({ content: Content([Text("hello")]), submission_id: None }),
       #|}
     ),
   )
@@ -250,11 +287,13 @@ test "project a session into DeepSeek messages" {
     arguments="{\"path\":\"README.md\"}",
   )
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("inspect")))
+    .append(User(UserMessage(Content([Text("inspect")]))))
     .append(Assistant(AssistantMessage("", tool_calls=[call])))
     .append(
       Tool(
-        ToolResult(tool_call_id="call_1", tool_name="read", content="README"),
+        ToolResult(tool_call_id="call_1", tool_name="read", content=[
+          Text("README"),
+        ]),
       ),
     )
     .append(Terminal(Finished("done")))
@@ -318,7 +357,7 @@ source_events=<from>..<to>
 ///|
 test "summary replaces covered events in model projection only" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("old user")))
+    .append(User(UserMessage(Content([Text("old user")]))))
     .append(Assistant(AssistantMessage("old assistant")))
     .compact(
       content="old user and assistant discussed README",
@@ -336,7 +375,7 @@ test "summary replaces covered events in model projection only" {
       #|      {
       #|        sequence: 1,
       #|        ts: 0,
-      #|        item: User({ content: "old user", submission_id: None }),
+      #|        item: User({ content: Content([Text("old user")]), submission_id: None }),
       #|      },
       #|      {
       #|        sequence: 2,
@@ -493,7 +532,7 @@ The package exposes:
 ///|
 test "session JSON round-trips events" {
   let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
-    .append(User(UserMessage("hello")))
+    .append(User(UserMessage(Content([Text("hello")]))))
     .append(Terminal(Finished("done")))
 
   let decoded : @agent_session.Session = @json.from_json(Json(session))
@@ -508,7 +547,7 @@ test "session JSON round-trips events" {
       #|      {
       #|        sequence: 1,
       #|        ts: 0,
-      #|        item: User({ content: "hello", submission_id: None }),
+      #|        item: User({ content: Content([Text("hello")]), submission_id: None }),
       #|      },
       #|      { sequence: 2, ts: 0, item: Terminal(Finished("done")) },
       #|    ]>,

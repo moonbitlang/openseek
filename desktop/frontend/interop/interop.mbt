@@ -1,6 +1,6 @@
 // Shared helpers for talking to the page's JavaScript through rabbita's
-// typed `@js` values. Together with `@dom` they are the frontend's whole
-// interop surface: no frontend package embeds raw JavaScript.
+// typed `@js` values. Native capabilities without an existing typed binding
+// keep thin FFI declarations alongside their owning browser adapters.
 
 ///|
 /// `value[key]`, with JS `undefined` and `null` both folded to `None`.

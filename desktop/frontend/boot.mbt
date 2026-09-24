@@ -477,14 +477,13 @@ fn main {
               emit.map((_ : Unit) => AppToggleMaximizedRequested),
             ),
           )
-          // The embedded Viewer owns foreign DOM below `.viewer-host`.
-          // Only Desktop intercepts those anchors for its native Browser tabs.
-          subs.push(
-            viewer_external_link_subscription(
-              emit.map(url => ExternalLinkClicked(url)),
-            ),
-          )
         }
+        subs.push(
+          rendered_external_link_subscription(
+            include_viewer=model.is_desktop,
+            emit.map(url => ExternalLinkClicked(url)),
+          ),
+        )
         // Rabbita captures ordinary clicks on its `@html.a` nodes on both
         // hosts. Always handle their URL requests: Desktop uses its dock,
         // while the browser console opens a new browser tab.

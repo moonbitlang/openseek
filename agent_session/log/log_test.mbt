@@ -4,7 +4,7 @@ fn sample_session() -> @agent_session.Session {
     SessionId("demo"),
     system_prompt="You are a helpful agent.",
   )
-  let s1 = s0.append(User(UserMessage("list the files")))
+  let s1 = s0.append(User(UserMessage(Content([Text("list the files")]))))
   let s2 = s1.append(
     Assistant(
       AssistantMessage(
@@ -18,11 +18,9 @@ fn sample_session() -> @agent_session.Session {
   )
   let s3 = s2.append(
     Tool(
-      ToolResult(
-        tool_call_id="call_1",
-        tool_name="shell",
-        content="README.md\nsrc",
-      ),
+      ToolResult(tool_call_id="call_1", tool_name="shell", content=[
+        Text("README.md\nsrc"),
+      ]),
     ),
   )
   let s4 = s3.append(Runtime(RuntimeNotice("plan reminder: run tests")))
@@ -53,7 +51,7 @@ test "parse round-trips every event kind" {
       #|    {
       #|      sequence: 1,
       #|      ts: 0,
-      #|      item: User({ content: "list the files", submission_id: None }),
+      #|      item: User({ content: Content([Text("list the files")]), submission_id: None }),
       #|    },
       #|    {
       #|      sequence: 2,
@@ -74,7 +72,7 @@ test "parse round-trips every event kind" {
       #|        {
       #|          tool_call_id: "call_1",
       #|          tool_name: "shell",
-      #|          content: "README.md\nsrc",
+      #|          content: Content([Text("README.md\nsrc")]),
       #|          is_error: false,
       #|          brief: None,
       #|          data: None,
@@ -113,7 +111,7 @@ test "parse tolerates a truncated final line" {
       #|    {
       #|      sequence: 1,
       #|      ts: 0,
-      #|      item: User({ content: "hi", submission_id: None }),
+      #|      item: User({ content: Content([Text("hi")]), submission_id: None }),
       #|    },
       #|  ],
       #|  errors: [],
@@ -138,7 +136,7 @@ test "parse records a bad interior line without aborting" {
       #|  {
       #|    sequence: 1,
       #|    ts: 0,
-      #|    item: User({ content: "hi", submission_id: None }),
+      #|    item: User({ content: Content([Text("hi")]), submission_id: None }),
       #|  },
       #|  { sequence: 2, ts: 0, item: Terminal(Finished("done")) },
       #|]

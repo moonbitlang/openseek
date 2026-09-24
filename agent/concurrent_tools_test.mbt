@@ -43,7 +43,7 @@ fn probe_tool(
 fn probe_results(session : @agent_session.Session) -> Array[String] {
   [
     for event in session.events() if event.item() is Tool(result) &&
-    result.tool_name() == "probe" => result.content()
+    result.tool_name() == "probe" => result.content().text()
   ]
 }
 
@@ -68,7 +68,7 @@ async test "adjacent concurrent-safe calls overlap and keep result order" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=Session(SessionId("concurrent-probes"), system_prompt="system"),
-      task="probe twice",
+      content=Content([Text("probe twice")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
       api_url=url,
@@ -99,7 +99,7 @@ async test "unflagged adjacent calls stay sequential" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=Session(SessionId("sequential-probes"), system_prompt="system"),
-      task="probe twice",
+      content=Content([Text("probe twice")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
       api_url=url,
@@ -131,7 +131,7 @@ async test "no prefetch behind a batch-sealing control call" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session=Session(SessionId("sealed-batch"), system_prompt="system"),
-      task="finish immediately",
+      content=Content([Text("finish immediately")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
       api_url=url,

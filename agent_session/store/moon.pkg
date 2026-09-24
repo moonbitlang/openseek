@@ -10,6 +10,10 @@ import {
 
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek/client",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
   "moonbitlang/async",
   "moonbitlang/async/fs",
 } for "test"

@@ -9,13 +9,8 @@ fn assert_idle_adapter_path(
   expects_native : Bool,
 ) -> Unit raise {
   let target = new_idle_target(has_request_idle, has_cancel_idle)
-  let adapter = create_tokenization_idle_adapter_js(target)
-  let cancel = run_tokenization_idle_adapter_js(
-    adapter,
-    _deadline => (),
-    false,
-    0.0,
-  )
+  let adapter = create_tokenization_idle_adapter(target)
+  let cancel = run_tokenization_idle_adapter(adapter, _deadline => (), None)
   if expects_native {
     assert_eq(idle_target_request_count(target), 1)
     assert_eq(idle_target_timeout_count(target), 0)
@@ -38,13 +33,12 @@ test "BIA feature detection uses native idle only when both APIs are functions" 
 ///|
 test "BIA adapter selects once and the global wrapper is asynchronous cancellable idle" {
   let target = new_idle_target(false, false)
-  let adapter = create_tokenization_idle_adapter_js(target)
+  let adapter = create_tokenization_idle_adapter(target)
   idle_target_install_native_api(target)
-  let local_cancel = run_tokenization_idle_adapter_js(
+  let local_cancel = run_tokenization_idle_adapter(
     adapter,
     _deadline => abort("once-selected fallback must be canceled"),
-    false,
-    0.0,
+    None,
   )
   // Adding both native functions after construction cannot change the chosen
   // fallback implementation.
@@ -65,19 +59,18 @@ test "BIA adapter selects once and the global wrapper is asynchronous cancellabl
 ///|
 test "BIA native idle forwards absent and numeric timeout and cancels exact handle once" {
   let target = new_idle_target(true, true)
-  let adapter = create_tokenization_idle_adapter_js(target)
+  let adapter = create_tokenization_idle_adapter(target)
   let delivered = Ref(0)
   let remaining = Ref(-1.0)
   let did_timeout = Ref(true)
-  let absent = run_tokenization_idle_adapter_js(
+  let absent = run_tokenization_idle_adapter(
     adapter,
     deadline => {
       delivered.val += 1
-      remaining.val = browser_idle_deadline_time_remaining_js(deadline)
+      remaining.val = browser_idle_deadline_time_remaining(deadline)
       did_timeout.val = browser_idle_deadline_did_timeout_js(deadline)
     },
-    false,
-    0.0,
+    None,
   )
   assert_eq(idle_target_request_count(target), 1)
   assert_false(idle_target_request_had_options(target, 0))
@@ -91,11 +84,10 @@ test "BIA native idle forwards absent and numeric timeout and cancels exact hand
   assert_eq(idle_target_cancel_count(target), 1)
   assert_eq(idle_target_canceled_handle(target, 0), 41)
 
-  let present = run_tokenization_idle_adapter_js(
+  let present = run_tokenization_idle_adapter(
     adapter,
     _deadline => (),
-    true,
-    37.0,
+    Some(37.0),
   )
   assert_eq(idle_target_request_count(target), 2)
   assert_true(idle_target_request_had_options(target, 1))
@@ -111,25 +103,24 @@ test "BIA native idle forwards absent and numeric timeout and cancels exact hand
 test "BIA fallback schedules zero-timeout and freezes a plus-15ms deadline" {
   let target = new_idle_target(false, false)
   idle_target_set_now(target, 100.0)
-  let adapter = create_tokenization_idle_adapter_js(target)
+  let adapter = create_tokenization_idle_adapter(target)
   let remaining : Array[Double] = []
   let did_timeout = Ref(false)
   let mut frozen = false
-  let cancel = run_tokenization_idle_adapter_js(
+  let cancel = run_tokenization_idle_adapter(
     adapter,
     deadline => {
       did_timeout.val = browser_idle_deadline_did_timeout_js(deadline)
       frozen = browser_idle_deadline_is_frozen_js(deadline)
-      remaining.push(browser_idle_deadline_time_remaining_js(deadline))
+      remaining.push(browser_idle_deadline_time_remaining(deadline))
       idle_target_set_now(target, 114.0)
-      remaining.push(browser_idle_deadline_time_remaining_js(deadline))
+      remaining.push(browser_idle_deadline_time_remaining(deadline))
       idle_target_set_now(target, 115.0)
-      remaining.push(browser_idle_deadline_time_remaining_js(deadline))
+      remaining.push(browser_idle_deadline_time_remaining(deadline))
       idle_target_set_now(target, 116.0)
-      remaining.push(browser_idle_deadline_time_remaining_js(deadline))
+      remaining.push(browser_idle_deadline_time_remaining(deadline))
     },
-    false,
-    0.0,
+    None,
   )
   assert_eq(idle_target_timeout_count(target), 1)
   assert_eq(idle_target_timeout_delay(target, 0), 0)
@@ -148,13 +139,12 @@ test "BIA fallback schedules zero-timeout and freezes a plus-15ms deadline" {
 ///|
 test "BIA fallback cancellation is inert idempotent and leaves timeout callback harmless" {
   let target = new_idle_target(false, false)
-  let adapter = create_tokenization_idle_adapter_js(target)
+  let adapter = create_tokenization_idle_adapter(target)
   let delivered = Ref(0)
-  let cancel = run_tokenization_idle_adapter_js(
+  let cancel = run_tokenization_idle_adapter(
     adapter,
     _deadline => delivered.val += 1,
-    false,
-    0.0,
+    None,
   )
   assert_eq(idle_target_timeout_count(target), 1)
   cancel()

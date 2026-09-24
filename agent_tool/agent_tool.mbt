@@ -314,61 +314,36 @@ pub fn Tools::function_tools(self : Tools) -> Array[@deepseek.ToolDefinition] {
 /// A tool's own execution failure is caught HERE and turned into an error
 /// `ToolAction`, so the model sees it as an ordinary (recoverable) tool result
 /// and the turn continues — one boundary that spares every tool from wrapping
-/// each of its own filesystem/IO calls just to report a failure.
+/// each of its own filesystem/IO calls just to report a failure. `noraise`
+/// makes the compiler hold that contract: every error a tool raises ends here,
+/// including `@async.TaskCancelled` from a `Task::wait` on a child task the
+/// tool saw cancelled — that is the tool's failure, not the turn's.
 ///
-/// Cancellation signals propagate without entering catch. A cancelled child
-/// reported by Task::wait also propagates instead of becoming a tool result.
+/// Deliberately NOT `nocancel`: cancelling the caller (a user interrupt, a
+/// deadline, PTC revoking a call) is a separate signal that bypasses `catch`
+/// and unwinds through the tool's `defer`/`errdefer`, so the call stays
+/// interruptible.
 pub async fn execute_tool_call(
   call : AgentToolCall,
   tools : Tools,
-) -> ToolAction {
+) -> ToolAction noraise {
   match tools.find(call.name) {
     Some(tool) =>
       tool.execute.run(call.arguments) catch {
-        error =>
-          if error is @async.TaskCancelled {
-            raise error
-          } else {
-            // Keep the transcript label the local catches used to provide:
-            // most file tools carry a `path` argument, so the brief can still
-            // name the file the failed call was about.
-            let brief = match call.arguments {
-              { "path": String(path), .. } =>
-                Some("\{call.name} \{brief_basename(path)}")
-              _ => None
-            }
-            respond(
-              "error: \{call.name} failed: \{error}",
-              is_error=true,
-              brief?,
-            )
+        error => {
+          // Keep the transcript label the local catches used to provide:
+          // most file tools carry a `path` argument, so the brief can still
+          // name the file the failed call was about.
+          let brief = match call.arguments {
+            { "path": String(path), .. } =>
+              Some("\{call.name} \{brief_basename(path)}")
+            _ => None
           }
+          respond("error: \{call.name} failed: \{error}", is_error=true, brief?)
+        }
       }
     None => respond("error: unknown tool \{call.name}", is_error=true)
   }
-}
-
-///|
-test "parse native tool call arguments" {
-  let call = AgentToolCall(
-    ToolCall(id="call_123", name="shell", arguments="{\"cmd\":\"moon check\"}"),
-  )
-  assert_eq(call.name, "shell")
-  guard call.arguments is { "cmd": String(cmd), .. } else {
-    fail("missing cmd")
-  }
-  assert_eq(cmd, "moon check")
-}
-
-///|
-test "reject invalid native tool call arguments" {
-  let _ = AgentToolCall(ToolCall(id="call_123", name="shell", arguments="{")) catch {
-    error => {
-      assert_true("\{error}".contains("shell arguments are not valid JSON"))
-      return
-    }
-  }
-  fail("invalid arguments parsed")
 }
 
 ///|
@@ -392,41 +367,6 @@ test "ToolAction helpers build structured actions" {
 }
 
 ///|
-/// One minimal registry entry for the dispatch tests. The privileges
-/// (`control`, `concurrent_safe`) are the constructor's own defaults, so no
-/// test below has to restate them just to build an ordinary tool.
-fn test_tool(
-  name? : String = "echo",
-  description? : String = "Echo.",
-  schema? : Json = { "type": "object" },
-  execute? : ToolExecutor = Sync(_args => respond("ok")),
-) -> AgentToolDefinition {
-  AgentToolDefinition(name~, description~, schema=JsonSchema(schema), execute~)
-}
-
-///|
-test "Tools::find returns the registered definition by name" {
-  let tools = Tools([test_tool()])
-  guard tools.find("echo") is Some(definition) else { fail("missing echo") }
-  assert_eq(definition.name, "echo")
-  assert_true(tools.find("ghost") is None)
-}
-
-///|
-test "Tools::Tools raises on duplicate tool names" {
-  let _ = Tools([
-    test_tool(description="First.", execute=Sync(_args => respond("first"))),
-    test_tool(description="Second.", execute=Sync(_args => respond("second"))),
-  ]) catch {
-    error => {
-      assert_true("\{error}".contains("duplicate tool name: echo"))
-      return
-    }
-  }
-  fail("expected duplicate to raise")
-}
-
-///|
 async test "execute_tool_call reports unknown tool" {
   let call = AgentToolCall(ToolCall(id="call_1", name="ghost", arguments="{}"))
   let result = execute_tool_call(call, Tools([]))
@@ -438,123 +378,10 @@ async test "execute_tool_call reports unknown tool" {
 }
 
 ///|
-async test "execute_tool_call dispatches to registered executor" {
-  let tools = Tools([
-    test_tool(
-      execute=Sync(args => {
-        match args {
-          { "value": String(v), .. } => respond(v)
-          _ => respond("no value", is_error=true)
-        }
-      }),
-    ),
-  ])
-  let call = AgentToolCall(
-    ToolCall(id="call_1", name="echo", arguments="{\"value\":\"hi\"}"),
-  )
-  let result = execute_tool_call(call, tools)
-  guard result is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "hi")
-  assert_false(output.is_error)
-}
-
-///|
-async fn async_echo(args : Json) -> ToolAction {
-  @async.pause()
-  match args {
-    { "value": String(v), .. } => respond(v)
-    _ => respond("no value", is_error=true)
-  }
-}
-
-///|
-async test "execute_tool_call dispatches to async executor" {
-  let tools = Tools([
-    test_tool(description="Async echo.", execute=Async(async_echo)),
-  ])
-  let call = AgentToolCall(
-    ToolCall(id="call_1", name="echo", arguments="{\"value\":\"async-hi\"}"),
-  )
-  let result = execute_tool_call(call, tools)
-  guard result is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "async-hi")
-  assert_false(output.is_error)
-}
-
-///|
-async test "execute_tool_call turns a tool failure into a recoverable error result" {
-  // Local to the test on purpose: an always-failing executor must not be
-  // callable from anywhere else in the package.
-  async fn async_boom(_args : Json) -> ToolAction {
-    @async.pause()
-    fail("disk on fire")
-  }
-
-  let tools = Tools([
-    test_tool(
-      name="boom",
-      description="Always fails.",
-      execute=Async(async_boom),
-    ),
-  ])
-  let call = AgentToolCall(ToolCall(id="call_1", name="boom", arguments="{}"))
-  // The tool's failure is caught at the dispatch boundary and returned as an
-  // error action the model can react to — the turn is NOT aborted.
-  let result = execute_tool_call(call, tools)
-  guard result is Respond(output) else { fail("expected Respond") }
-  assert_true(output.is_error)
-  assert_true(output.content.contains("boom failed"))
-}
-
-///|
-test "Tools::function_tools preserves description and schema" {
-  let tools = Tools([
-    test_tool(description="Echo what comes in.", schema={
-      "type": "object",
-      "properties": Json::empty_object(),
-    }),
-  ])
-  let function_tools = tools.function_tools()
-  assert_eq(function_tools.length(), 1)
-  assert_eq(function_tools[0].name, "echo")
-  assert_eq(function_tools[0].description, "Echo what comes in.")
-  let text = function_tools[0].parameters.stringify()
-  assert_true(text.contains("\"type\":\"object\""))
-  assert_true(text.contains("\"properties\""))
-}
-
-///|
 test "Tools::Tools accepts an empty registry" {
   let tools = Tools([])
   assert_eq(tools.function_tools().length(), 0)
   assert_true(tools.find("anything") is None)
-}
-
-///|
-test "Tools::function_tools yields one entry per definition" {
-  let tools = Tools([
-    test_tool(
-      name="first",
-      description="First.",
-      execute=Sync(_args => respond("1")),
-    ),
-    test_tool(
-      name="second",
-      description="Second.",
-      execute=Sync(_args => respond("2")),
-    ),
-    test_tool(
-      name="third",
-      description="Third.",
-      execute=Sync(_args => respond("3")),
-    ),
-  ])
-  let function_tools = tools.function_tools()
-  assert_eq(function_tools.length(), 3)
-  let names = [ for t in function_tools => t.name ]
-  assert_true(names.contains("first"))
-  assert_true(names.contains("second"))
-  assert_true(names.contains("third"))
 }
 
 ///|

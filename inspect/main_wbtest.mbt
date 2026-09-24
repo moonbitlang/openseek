@@ -270,7 +270,23 @@ async test "session listing uses jsonl files and ignores junk entries" {
     source_store.create(Session(SessionId("flat-a"), system_prompt=""))
     source_store.create(
       @agent_session.Session(SessionId("flat-b"), system_prompt="").append(
-        User(UserMessage("copied prompt")),
+        User(UserMessage(Content([Text("copied prompt")]))),
+      ),
+    )
+    source_store.create(
+      @agent_session.Session(SessionId("image-only"), system_prompt="").append(
+        User(
+          UserMessage(
+            Content([
+              Image(
+                @agent_session.Image::from_base64(
+                  media_type="image/png",
+                  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==",
+                ),
+              ),
+            ]),
+          ),
+        ),
       ),
     )
     let sessions = "\{root}/.openseek/sessions"
@@ -286,6 +302,11 @@ async test "session listing uses jsonl files and ignores junk entries" {
       create_mode=CreateOrTruncate,
     )
     @fs.write_file(
+      "\{sessions}/openseek_session-image-only.jsonl",
+      @fs.read_file(source_store.session_file(SessionId("image-only"))).text(),
+      create_mode=CreateOrTruncate,
+    )
+    @fs.write_file(
       "\{sessions}/.DS_Store",
       "not a session",
       create_mode=CreateOrTruncate,
@@ -297,6 +318,7 @@ async test "session listing uses jsonl files and ignores junk entries" {
     assert_true(text.contains("\"id\":\"flat-a\""))
     assert_true(text.contains("\"id\":\"flat-b\""))
     assert_true(text.contains("\"first_prompt\":\"copied prompt\""))
+    assert_true(text.contains("\"first_prompt\":\"[Image]\""))
     assert_true(!text.contains(".DS_Store"))
     assert_true(!text.contains("tui-20260705-131715-289"))
     let load = session_path_reply(catalog, "flat-a")
@@ -430,7 +452,7 @@ async test "raw session file route decodes the file segment like the key" {
     let store = @store.SessionStore("\{root}/.openseek")
     // An id with a space forces percent-encoding in both URL segments.
     let session = @agent_session.Session(SessionId("run 1"), system_prompt="").append(
-      User(UserMessage("hi")),
+      User(UserMessage(Content([Text("hi")]))),
     )
     store.create(session)
     let catalog : SessionCatalog = { roots: [marker_root(root, ".openseek")], }
@@ -447,7 +469,7 @@ async test "session_envelope_reply includes event log byte size" {
   @vfs.with_tmpdir(prefix="openseek-viz-envelope-", root => {
     let store = @store.SessionStore("\{root}/.openseek")
     let session = @agent_session.Session(SessionId("demo"), system_prompt="").append(
-      User(UserMessage("hi")),
+      User(UserMessage(Content([Text("hi")]))),
     )
     store.create(session)
     let reply = session_envelope_reply(store.session_file(SessionId("demo")))

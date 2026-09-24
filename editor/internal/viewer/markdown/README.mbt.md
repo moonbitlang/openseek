@@ -5,6 +5,8 @@ Multi-target safe Markdown-to-HTML conversion shared by browser features.
 The package owns the cmark boundary. One parse with `layout=true` and
 `locs=true` supplies both safe HTML and a `MarkdownDocumentProjection`, so the
 rendered document and its source facts cannot describe different parses.
+During that parse, cmark node IDs associate renderer callbacks with the already
+built code-block projections; these IDs do not persist across parses.
 Callers must pass the exact LF-normalized `TextSnapshot::get_value`; this
 package does not create a second coordinate space by normalizing input itself.
 The current cmark inline cleaner cannot safely consume an isolated low
@@ -204,6 +206,11 @@ override -> cmark: no
 or active model language, threads tokenizer state across lines, and emits the
 existing `monaco-tokenized-source`/`mtk*` classes. Hover and whole-line Markdown
 comments both use that owner.
+
+`render_tokenized_code_lines` uses the same stateful tokenizer but consumes
+exactly the projected lines. Its callback receives each line's source facts
+and escaped token HTML, allowing the document view to emit source-bearing
+rows directly without adding a synthetic trailing line.
 
 ## Sections
 

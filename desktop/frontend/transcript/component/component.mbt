@@ -734,7 +734,7 @@ priv struct TranscriptObservers {
 priv struct TranscriptDomMount {
   mut element : @dom.Element?
   mut diagrams : @diagram_viewport.DiagramViewports?
-  mut rendered_diagrams : Array[TranscriptDiagram]
+  renderers : @markdown.DiagramRenderers
   images : @dom.IntersectionObserver
   on_size_changed : () -> Unit
 }
@@ -747,7 +747,7 @@ fn TranscriptDomMount::TranscriptDomMount(
   {
     element: None,
     diagrams: None,
-    rendered_diagrams: [],
+    renderers: @markdown.DiagramRenderers(on_size_changed),
     images: transcript_image_observer(on_image),
     on_size_changed,
   }
@@ -772,17 +772,17 @@ fn TranscriptDomMount::is_same_element(
 /// and requests a bounded host read once an image enters the viewport.
 fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
   self.images.disconnect()
-  for entry in self.rendered_diagrams {
-    entry.dispose()
-  }
-  self.rendered_diagrams = []
+  self.renderers.dispose()
   if self.diagrams is Some(diagrams) {
     diagrams.dispose()
   }
   self.diagrams = None
   self.element = next
   if next is Some(element) {
-    self.refresh_diagrams(element)
+    self.renderers.refresh(
+      element,
+      dark_mode=element.get_attribute("data-transcript-theme") is Some("dark"),
+    )
     self.diagrams = Some(
       @diagram_viewport.DiagramViewports(element, self.on_size_changed),
     )
@@ -793,7 +793,10 @@ fn TranscriptDomMount::replace(self : Self, next : @dom.Element?) -> Unit {
 ///|
 fn TranscriptDomMount::refresh_content(self : Self) -> Unit {
   if self.element is Some(element) {
-    self.refresh_diagrams(element)
+    self.renderers.refresh(
+      element,
+      dark_mode=element.get_attribute("data-transcript-theme") is Some("dark"),
+    )
   }
   if self.diagrams is Some(diagrams) {
     diagrams.refresh()
@@ -881,84 +884,6 @@ fn TranscriptObservers::disconnect(self : Self) -> Unit {
   self.content.disconnect()
   self.resize.disconnect()
   self.mount.dispose()
-}
-
-///|
-/// The neutral local-OpenSeek input the component tests below start from;
-/// each test names only the fields it varies, with struct update.
-fn base_input() -> Input {
-  Input(
-    source=OpenSeek,
-    focused=Local,
-    active_session="desktop-test",
-    current_project=None,
-    projects=[],
-    can_choose_project=false,
-    project_menu_open=false,
-    project_query="",
-    root=None,
-    items=[],
-    streaming_response=None,
-    streaming_identity="idle",
-  )
-}
-
-///|
-/// The pinned model matching `base_input()`.
-fn pinned_model(input : Input) -> Model {
-  {
-    pinned: true,
-    overview: @transcript_overview.State::empty(),
-    image_owner: input.image_owner(),
-    images: ImageCache::empty(),
-  }
-}
-
-///|
-test "local pinned transitions are pure" {
-  let input = base_input()
-  let state = pinned_model(input)
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let (first, _) = state.update(input, Pinned(false), emit)
-  let (second, _) = state.update(input, Pinned(false), emit)
-  assert_false(first.pinned)
-  assert_false(second.pinned)
-  // Content growth never re-pins by itself: only the reader's scroll or an
-  // explicit jump does. Another client's User item must not impersonate a
-  // local send.
-  let (grown, _) = first.update(input, ContentRendered, emit)
-  assert_false(grown.pinned)
-  let (received, _) = first.update(
-    {
-      ..input,
-      items: [
-        {
-          item: {
-            kind: User(text="new turn", images=[]),
-            ts: None,
-            sequence: None,
-          },
-          identity: "l0",
-        },
-      ],
-    },
-    ContentRendered,
-    emit,
-  )
-  assert_false(received.pinned)
-  let (jumped, _) = grown.update(input, JumpToLatest, emit)
-  assert_true(jumped.pinned)
-}
-
-///|
-test "an overview click unpins and highlights inside the component" {
-  let key = @transcript_overview.Durable(3)
-  let input = base_input()
-  let state = pinned_model(input)
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let (next, _) = state.update(input, Overview(Clicked(key)), emit)
-  assert_false(next.pinned)
-  @debug.assert_eq(next.overview.active, Some(key))
 }
 
 ///|

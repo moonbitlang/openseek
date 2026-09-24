@@ -28,6 +28,7 @@ import {
 }
 
 import {
+  "moonbitlang/async/fs",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/bgjobs",
   "moonbitlang/openseek/agent_tool/job_wait",
@@ -45,7 +46,3 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
-
-import {
-  "moonbitlang/core/json",
-} for "wbtest"

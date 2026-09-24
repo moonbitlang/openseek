@@ -384,7 +384,7 @@ fn AgentLoop::push_finished_message(self : Self, answer : String) -> Unit {
 ///|
 priv struct SteerMessage {
   kind : String
-  text : String
+  content : @agent_session.Content
   submission_id : String?
   item : @agent_session.SessionItem
 }
@@ -402,24 +402,24 @@ async fn AgentLoop::apply_steer_inputs(
 ) -> @agent_session.Session {
   for input in inputs; current = session {
     let steer : SteerMessage = match input {
-      Prompt(text, submission_id~) =>
+      Prompt(content, submission_id~) =>
         {
           kind: "prompt",
-          text,
+          content,
           submission_id,
-          item: User(UserMessage(text, submission_id?)),
+          item: User(UserMessage(content, submission_id?)),
         }
       Command(text, submission_id~) =>
         {
           kind: "command",
-          text,
+          content: Content([Text(text)]),
           submission_id,
-          item: User(UserMessage(text, submission_id?)),
+          item: User(UserMessage(Content([Text(text)]), submission_id?)),
         }
       Notice(text) =>
         {
           kind: "notice",
-          text,
+          content: Content([Text(text)]),
           submission_id: None,
           item: Runtime(RuntimeNotice(text)),
         }
@@ -434,11 +434,13 @@ async fn AgentLoop::apply_steer_inputs(
       @agent_session.parse_goal_baseline(text) is Some(_) {
       continue next
     }
-    self.messages.push(ChatMessage(User, content=[Text(steer.text)]))
+    self.messages.push(
+      ChatMessage(User, content=@agent_session.to_deepseek_parts(steer.content)),
+    )
     @emit.emit(
       SteerApplied(
         kind=steer.kind,
-        content=steer.text,
+        content=steer.content,
         submission_id=steer.submission_id,
       ),
     )
@@ -878,7 +880,7 @@ async fn AgentLoop::execute_tool_call(
           ToolResult(
             tool_call_id=native_call.id,
             tool_name=tool_call.name,
-            content="aborted: \{reason}",
+            content=[Text("aborted: \{reason}")],
             is_error=true,
           ),
         ),
@@ -1091,7 +1093,7 @@ let tool_result_truncation_marker : String = "\n[truncated: result exceeded the 
 /// last event is not one — the batch budget's accounting unit.
 fn recorded_result_chars(session : @agent_session.Session) -> Int64 {
   if session.events().peek() is Some(event) && event.item() is Tool(result) {
-    result.content().length().to_int64()
+    result.content().text().length().to_int64()
   } else {
     0
   }
@@ -1141,7 +1143,14 @@ async fn AgentLoop::record_tool_result(
   let session = self.append(
     session,
     Tool(
-      ToolResult(tool_call_id~, tool_name~, content~, is_error~, brief?, data?),
+      ToolResult(
+        tool_call_id~,
+        tool_name~,
+        content=[Text(content)],
+        is_error~,
+        brief?,
+        data?,
+      ),
     ),
   )
   self.messages.push(ChatMessage(Tool(tool_call_id), content=[Text(content)]))

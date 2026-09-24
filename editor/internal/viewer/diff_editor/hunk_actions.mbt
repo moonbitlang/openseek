@@ -42,8 +42,107 @@ fn DiffEditorWidget::clear_hunk_actions(self : DiffEditorWidget) -> Unit {
 }
 
 ///|
+fn DiffEditorWidget::install_hunk_action_hover(self : DiffEditorWidget) -> Unit {
+  let update_pointer = fn(event : @rdom.Event) {
+    // Actions can extend across the split divider. Keep their anchor stable
+    // while the pointer moves through an action or its popup.
+    if @base_browser.event_target_has_matching_ancestor(
+        event,
+        self.root,
+        ".moonbit-diff-hunk-action",
+      ) {
+      return
+    }
+    guard event.to_mouse_event() is Some(mouse) else { return }
+    self.hunk_pointer_position = Some(
+      (mouse.get_client_x(), mouse.get_client_y()),
+    )
+    self.update_hunk_action_hover()
+  }
+  self.listen(self.root.as_event_target(), "pointerenter", update_pointer)
+  self.listen(self.root.as_event_target(), "pointermove", update_pointer)
+  self.listen(self.root.as_event_target(), "pointerleave", _ => {
+    self.hunk_pointer_position = None
+    self.update_hunk_action_hover()
+  })
+  // Outer-scroll hosts move the entire widget without scrolling either pane.
+  let document = @rdom.document().as_event_target()
+  let on_scroll : @rdom.Listener = _ => {
+    if self.hunk_pointer_position is Some(_) {
+      self.update_hunk_action_hover()
+    }
+  }
+  document.add_event_listener_with_options("scroll", on_scroll, capture=true)
+  self.lifetime.push(
+    @base_common.Disposable::from(() => {
+      document.remove_event_listener_with_options(
+        "scroll",
+        on_scroll,
+        capture=true,
+      )
+    }),
+  )
+}
+
+///|
+/// Hit-test the rendered hunk geometry without making its overlay intercept
+/// pointer events intended for code selection. Hosts own the action's styling.
+fn DiffEditorWidget::update_hunk_action_hover(self : DiffEditorWidget) -> Unit {
+  guard !self.hunk_actions.is_empty() else { return }
+  let offset = self.hunk_pointer_position.bind(position => {
+    let (x, y) = position
+    let rect = self.root.get_bounding_client_rect()
+    if x >= rect.get_left() &&
+      x < rect.get_right() &&
+      y >= rect.get_top() &&
+      y < rect.get_bottom() {
+      let side = if self.layout_state.actual_layout == SideBySide &&
+        x >= self.modified_host.get_bounding_client_rect().get_left() {
+        "modified"
+      } else {
+        "original"
+      }
+      Some((y - rect.get_top(), side))
+    } else {
+      None
+    }
+  })
+  let hunks = self.get_hunks()
+  let mut matched = false
+  for (index, node) in self.hunk_actions {
+    let hovered = if !matched &&
+      !node.has_attribute("hidden") &&
+      offset is Some((y, _)) {
+      hunks
+      .get(index)
+      .bind(hunk => self.hunk_viewport_bounds(hunk))
+      .map(bounds => {
+        let (top, bottom) = bounds
+        y >= top && y < bottom
+      })
+      .unwrap_or(false)
+    } else {
+      false
+    }
+    if hovered {
+      matched = true
+      if offset is Some((_, side)) &&
+        node.get_attribute("data-hovered-side") != Some(side) {
+        node.set_attribute("data-hovered-side", side)
+        self.layout_hunk_action_anchor(node)
+      }
+      if !node.has_attribute("data-hovered") {
+        node.set_attribute("data-hovered", "true")
+      }
+    } else if node.has_attribute("data-hovered") {
+      node.remove_attribute("data-hovered")
+    }
+  }
+}
+
+///|
 fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
-  let mut focused : (Int, Int?)? = None
+  let mut focused : (Int, Int?, String?)? = None
   for (index, node) in self.hunk_actions {
     if @base_browser.element_contains_active_element(node) {
       focused = Some(
@@ -54,6 +153,7 @@ fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
           ].search_by(button => {
             @base_browser.element_contains_active_element(button)
           }),
+          node.get_attribute("data-hovered-side"),
         ),
       )
     }
@@ -73,8 +173,11 @@ fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
       wrapper.append_child(content.as_node())
       self.root.append_child(wrapper.as_node())
       self.hunk_actions.push((index, wrapper))
-      if focused is Some((focused_index, action_index)) &&
+      if focused is Some((focused_index, action_index, side)) &&
         focused_index == index {
+        if side is Some(side) {
+          wrapper.set_attribute("data-hovered-side", side)
+        }
         let action = action_index
           .bind(index => {
             [
@@ -90,6 +193,29 @@ fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
 }
 
 ///|
+/// The anchor is relative to the action wrapper so hosts can keep other hunk
+/// controls in the shared gutter while placing an action in the hovered pane.
+fn DiffEditorWidget::layout_hunk_action_anchor(
+  self : DiffEditorWidget,
+  node : @rdom.Element,
+) -> Unit {
+  let pane = if self.layout_state.actual_layout == SideBySide &&
+    node.get_attribute("data-hovered-side") == Some("modified") {
+    self.modified_host
+  } else {
+    self.original_host
+  }
+  let bounds = node.get_bounding_client_rect()
+  let left = pane.get_bounding_client_rect().get_left() - bounds.get_left()
+  @base_browser.set_style_property(node, "--diff-hunk-hover-left", "\{left}px")
+  @base_browser.set_style_property(
+    node,
+    "--diff-hunk-width",
+    "\{bounds.get_width()}px",
+  )
+}
+
+///|
 /// Pixel bounds relative to the widget viewport, also usable by outer-scroll
 /// hosts. Original lines retain deletion geometry in both Split and Inline.
 pub fn DiffEditorWidget::get_hunk_viewport_bounds(
@@ -98,7 +224,15 @@ pub fn DiffEditorWidget::get_hunk_viewport_bounds(
 ) -> (Double, Double)? {
   let hunks = self.get_hunks()
   guard index >= 0 && index < hunks.length() else { return None }
-  let mapping = hunks[index].reveal_mapping
+  self.hunk_viewport_bounds(hunks[index])
+}
+
+///|
+fn DiffEditorWidget::hunk_viewport_bounds(
+  self : DiffEditorWidget,
+  hunk : DiffHunk,
+) -> (Double, Double)? {
+  let mapping = hunk.reveal_mapping
   let mut bounds : (Double, Double)? = None
   for
     (pane, range) in [
@@ -142,10 +276,12 @@ fn DiffEditorWidget::layout_hunk_actions(self : DiffEditorWidget) -> Unit {
           "\{bottom - top.max(0.0)}px",
         )
         @base_browser.set_style_property(node, "top", "\{top.max(0.0)}px")
+        self.layout_hunk_action_anchor(node)
       }
       _ => node.set_attribute("hidden", "")
     }
   }
+  self.update_hunk_action_hover()
 }
 
 ///|

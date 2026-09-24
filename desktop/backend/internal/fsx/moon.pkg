@@ -5,8 +5,8 @@ import {
   "tonyfettes/platform",
 }
 
-supported_targets = "+native"
-
 import {
   "moonbitlang/async",
-} for "wbtest"
+} for "test"
+
+supported_targets = "+native"

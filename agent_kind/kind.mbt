@@ -48,7 +48,7 @@ pub async fn[T] execute_kind(
       api_key~,
       model~,
       session~,
-      task~,
+      content=Content([Text(task)]),
       append_item=append,
       max_steps~,
       thinking~,

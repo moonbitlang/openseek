@@ -48,7 +48,8 @@ pub async fn generate_compaction_summary(
   client~ : @client.Client,
   session : @agent_session.Session,
 ) -> String {
-  let response = client.chat(compaction_messages(session))
+  let messages = compaction_messages(session)
+  let response = client.chat(messages)
   let summary = response.content.trim().to_owned()
   if summary.is_empty() {
     fail("compaction summary was empty")

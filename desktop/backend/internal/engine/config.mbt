@@ -16,7 +16,7 @@ const PlaceholderApiKey = "unused"
 
 ///|
 priv struct RunConfig {
-  task : String
+  content : @wire.Content
   api_key : String
   // The environment variable that carries `api_key` to the engine; see
   // `key_env_for`.
@@ -152,12 +152,15 @@ async fn run_config(
   payload : @protocol.StartPayload,
 ) -> RunConfig {
   let task = payload.task.trim().to_owned()
-  guard !task.is_empty() else { raise EngineError("task must not be empty") }
+  let content = prompt_content(task, payload.images)
+  guard !task.is_empty() || !payload.images.is_empty() else {
+    raise EngineError("task must not be empty")
+  }
   let session = payload.session.trim().to_owned()
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
   }
-  serve_config(
+  let config = serve_config(
     task,
     manager,
     model?=payload.model,
@@ -166,6 +169,10 @@ async fn run_config(
     session~,
     workspace?=payload.workspace,
   )
+  if !payload.images.is_empty() && !config.supports_images() {
+    raise EngineError("Images require a DeepSeek image-capable endpoint")
+  }
+  { ..config, content, }
 }
 
 ///|
@@ -277,7 +284,7 @@ async fn serve_config(
       @env.get("OPENSEEK_MODEL").unwrap_or(settings.provider.default_model())
   }
   {
-    task,
+    content: Content([Text(task)]),
     api_key: endpoint.api_key,
     key_env: key_env_for(settings.provider, model),
     api_url: endpoint.api_url,
@@ -320,7 +327,7 @@ fn engine_fingerprint(config : RunConfig) -> String {
 ///|
 test "a different endpoint cannot reuse a live engine process" {
   let base : RunConfig = {
-    task: "t",
+    content: Content([Text("t")]),
     api_key: "k",
     key_env: "DEEPSEEK",
     api_url: None,
@@ -343,7 +350,7 @@ test "a different endpoint cannot reuse a live engine process" {
   )
   assert_eq(
     engine_fingerprint(base),
-    engine_fingerprint({ ..base, task: "u", }),
+    engine_fingerprint({ ..base, content: Content([Text("u")]), }),
   )
   // cwd is part of the fingerprint: a session bound to a worktree can never
   // reuse a serve process rooted elsewhere (and vice versa).
@@ -416,6 +423,7 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
     custom_api_key: None,
   })
   let config = run_config(manager, {
+    images: [],
     task: "hello",
     submission_id: None,
     model: None,
@@ -435,6 +443,7 @@ async test "run config rejects a blank session" {
     let detail = try {
       ignore(
         run_config(manager, {
+          images: [],
           task: "hello",
           submission_id: None,
           model: None,
@@ -491,6 +500,7 @@ async test "host chooses durable placement from workspace state" {
   )
   let manager = new_engine_manager("openseek")
   let config = run_config(manager, {
+    images: [],
     task: "resume",
     submission_id: None,
     model: None,
@@ -510,6 +520,7 @@ async test "host chooses durable placement from workspace state" {
   let unclaimed = try {
     ignore(
       run_config(manager, {
+        images: [],
         task: "fresh",
         submission_id: None,
         model: None,
@@ -526,6 +537,7 @@ async test "host chooses durable placement from workspace state" {
   }
   assert_true(unclaimed.contains("has no workspace"))
   let attached = run_config(manager, {
+    images: [],
     task: "attached",
     submission_id: None,
     model: None,
@@ -539,4 +551,25 @@ async test "host chooses durable placement from workspace state" {
     Some(workspace + "/.openseek"),
   )
   assert_eq(attached.cwd.map(cwd => cwd.to_string()), Some(workspace))
+}
+
+///|
+fn prompt_content(
+  text : String,
+  images : Array[String],
+) -> @wire.Content raise EngineError {
+  let parts : Array[@wire.ContentPart] = [Text(text)]
+  for url in images {
+    let image = @wire.Image::from_data_url(url) catch {
+      error => raise EngineError("Invalid image: \{@debug.Repr(error)}")
+    }
+    parts.push(Image(image))
+  }
+  Content(parts)
+}
+
+///|
+fn RunConfig::supports_images(self : RunConfig) -> Bool {
+  self.model.has_prefix("deepseek-") &&
+  self.api_url != Some("https://openrouter.ai/api/v1/chat/completions")
 }

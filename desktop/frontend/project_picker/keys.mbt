@@ -45,7 +45,7 @@ fn project_picker_capture_loader(
         },
       )
       Some({
-        unload: _ => remove_project_picker_capture(listeners),
+        unload: _ => listeners(),
         update_tagger: payload => {
           guard payload is ProjectPickerCapture(next) else { return }
           emit = next
@@ -77,53 +77,68 @@ fn capture_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
 /// keyboard users. Focus anywhere behind the backdrop still yields to the
 /// picker. The inline new-folder input keeps Enter, Escape, and paste so it can
 /// submit, cancel, and edit normally; every other paste is a direct path jump.
-extern "js" fn add_project_picker_capture(
+fn add_project_picker_capture(
   on_confirm : () -> Unit,
   on_escape : () -> Unit,
   on_edit_path : () -> Unit,
   on_paste : (String) -> Unit,
-) -> @js.Value =
-  #| (onConfirm, onEscape, onEditPath, onPaste) => {
-  #|   const keydown = (event) => {
-  #|     if (event.isComposing || event.repeat) return;
-  #|     const editPath = (event.metaKey || event.ctrlKey) &&
-  #|       !event.altKey && !event.shiftKey && event.key.toLowerCase() === "l";
-  #|     if (editPath) {
-  #|       event.preventDefault();
-  #|       event.stopPropagation();
-  #|       onEditPath();
-  #|       return;
-  #|     }
-  #|     if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-  #|     if (event.key === "Enter") {
-  #|       const control = event.target?.closest?.("button, a, input, select, textarea");
-  #|       if (control && control.closest(".picker-modal")) return;
-  #|       event.preventDefault();
-  #|       event.stopPropagation();
-  #|       onConfirm();
-  #|     } else if (event.key === "Escape") {
-  #|       const editor = event.target?.closest?.("input, textarea");
-  #|       if (editor && editor.closest(".picker-modal")) return;
-  #|       event.preventDefault();
-  #|       event.stopPropagation();
-  #|       onEscape();
-  #|     }
-  #|   };
-  #|   const paste = (event) => {
-  #|     const control = event.target?.closest?.("input, textarea");
-  #|     if (control && control.closest(".picker-modal")) return;
-  #|     event.preventDefault();
-  #|     event.stopPropagation();
-  #|     onPaste(event.clipboardData?.getData("text/plain") ?? "");
-  #|   };
-  #|   document.addEventListener("keydown", keydown, true);
-  #|   document.addEventListener("paste", paste, true);
-  #|   return { keydown, paste };
-  #| }
+) -> () -> Unit {
+  let keydown : @dom.Listener = event => {
+    guard event.to_keyboard_event() is Some(key) else { return }
+    if key.is_composing() || key.repeat() {
+      return
+    }
+    let action = if (key.meta_key() || key.ctrl_key()) &&
+      !key.alt_key() &&
+      !key.shift_key() &&
+      key.key().to_lower() == "l" {
+      on_edit_path
+    } else {
+      if key.ctrl_key() || key.meta_key() || key.alt_key() || key.shift_key() {
+        return
+      }
+      match key.key() {
+        "Enter" => {
+          if picker_control_target(event, "button, a, input, select, textarea") {
+            return
+          }
+          on_confirm
+        }
+        "Escape" => {
+          if picker_control_target(event, "input, textarea") {
+            return
+          }
+          on_escape
+        }
+        _ => return
+      }
+    }
+    event.prevent_default()
+    event.stop_propagation()
+    action()
+  }
+  let paste : @dom.Listener = event => {
+    if picker_control_target(event, "input, textarea") {
+      return
+    }
+    event.prevent_default()
+    event.stop_propagation()
+    if clipboard_text(event).to_option() is Some(text) {
+      on_paste(text)
+    }
+  }
+  let target = @dom.document().as_event_target()
+  target.add_event_listener_with_options("keydown", keydown, capture=true)
+  target.add_event_listener_with_options("paste", paste, capture=true)
+  () => {
+    target.remove_event_listener_with_options("keydown", keydown, capture=true)
+    target.remove_event_listener_with_options("paste", paste, capture=true)
+  }
+}
 
 ///|
-extern "js" fn remove_project_picker_capture(listeners : @js.Value) -> Unit =
-  #| (listeners) => {
-  #|   document.removeEventListener("keydown", listeners.keydown, true);
-  #|   document.removeEventListener("paste", listeners.paste, true);
-  #| }
+fn picker_control_target(event : @dom.Event, selector : String) -> Bool {
+  event.target().to_element() is Some(target) &&
+  target.closest(selector) is Some(control) &&
+  control.closest(".picker-modal") is Some(_)
+}

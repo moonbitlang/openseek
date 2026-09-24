@@ -41,15 +41,14 @@ test "unknown session items preserve their complete wire object" {
 
 ///|
 test "a durable prompt keeps its text whatever the submission tag looks like" {
-  // Untagged encodes exactly as every record written before the field
-  // existed: the key is absent, not null.
+  // An absent submission tag is omitted rather than encoded as null.
   let untagged : @protocol.SessionUserMessage = {
-    content: "hello",
+    content: Content([Text("hello")]),
     submission_id: None,
   }
   @debug.assert_eq(untagged.to_json(), { "content": "hello" })
   let tagged : @protocol.SessionUserMessage = {
-    content: "hello",
+    content: Content([Text("hello")]),
     submission_id: Some("sub-1"),
   }
   @debug.assert_eq(tagged.to_json(), {
@@ -69,7 +68,7 @@ test "a durable prompt keeps its text whatever the submission tag looks like" {
         { "content": "hello", "annotated_by_a_newer_store": true },
       ] : Array[Json]) {
     let decoded : @protocol.SessionUserMessage = @json.from_json(absent)
-    assert_eq(decoded.content, "hello")
+    assert_eq(decoded.content.text(), "hello")
     assert_eq(decoded.submission_id, None)
   }
   let carried : @protocol.SessionUserMessage = @json.from_json({
@@ -147,7 +146,7 @@ test "durable tool results explicitly encode their optional brief" {
     data: None,
     tool_call_id: "call-1",
     tool_name: "read",
-    content: "contents",
+    content: Content([Text("contents")]),
     is_error: false,
     brief: None,
   }
@@ -176,7 +175,7 @@ test "durable tool result data round-trips and null reads as absent" {
     data: Some({ "sources": [{ "url": "https://example.com" }] }),
     tool_call_id: "call-2",
     tool_name: "web_search",
-    content: "Sources:",
+    content: Content([Text("Sources:")]),
     is_error: false,
     brief: None,
   }

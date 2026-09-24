@@ -14,16 +14,7 @@ async fn github_pull_request_op(
     )
   }
   let reply = @async.with_timeout_opt(20000, () => {
-    let raw = github_panel_json(gh, dir, [
-      "pr",
-      "view",
-      payload.number.to_string(),
-      "--repo",
-      payload.repository_url,
-      "--json",
-      "number,title,url,author,isDraft,state,body,baseRefName,headRefName,additions,deletions,changedFiles,comments,statusCheckRollup,createdAt,reviewRequests,latestReviews,assignees,labels,milestone,mergeable",
-    ])
-    github_pull_request_detail(raw)
+    github_pull_request(payload, args => github_panel_json(gh, dir, args))
   })
   match reply {
     Some(reply) => reply
@@ -32,6 +23,91 @@ async fn github_pull_request_op(
         "GitHub request timed out. Check your connection and retry.",
       )
   }
+}
+
+///|
+async fn github_pull_request(
+  payload : @protocol.GithubPullRequestPayload,
+  query : async (Array[String]) -> Json,
+) -> @protocol.GithubPullRequestDetail {
+  // gh supplies the existing metadata shape, but its JSON field selection
+  // does not expose bodyHTML. Fetch every displayed body through GraphQL.
+  let raw = query([
+    "pr",
+    "view",
+    payload.number.to_string(),
+    "--repo",
+    payload.repository_url,
+    "--json",
+    "number,title,url,author,isDraft,state,baseRefName,headRefName,additions,deletions,changedFiles,statusCheckRollup,createdAt,reviewRequests,latestReviews,assignees,labels,milestone,mergeable",
+  ])
+  guard raw is { "url": String(url), .. } else {
+    raise HostError("GitHub returned invalid pull request details.")
+  }
+  let identity = github_review_identity(url)
+  let (body_html, comments) = github_pull_request_content(identity, query)
+  github_pull_request_detail(raw, body_html, comments)
+}
+
+///|
+async fn github_pull_request_content(
+  identity : GithubReviewIdentity,
+  query : async (Array[String]) -> Json,
+) -> (String, Array[@protocol.GithubComment]) {
+  let query_text = "query($owner:String!,$repo:String!,$number:Int!,$after:String){repository(owner:$owner,name:$repo){pullRequest(number:$number){bodyHTML comments(first:100,after:$after){nodes{author{login} bodyHTML url createdAt} pageInfo{hasNextPage endCursor}}}}}"
+  let comments : Array[@protocol.GithubComment] = []
+  let seen : Array[String] = []
+  let mut body_html : String? = None
+  let mut cursor : String? = None
+  while true {
+    let args = [
+      "api",
+      "graphql",
+      "--hostname",
+      identity.host,
+      "-f",
+      "query=\{query_text}",
+      "-f",
+      "owner=\{identity.owner}",
+      "-f",
+      "repo=\{identity.repo}",
+      "-F",
+      "number=\{identity.number}",
+    ]
+    if cursor is Some(after) {
+      args.append(["-f", "after=\{after}"])
+    }
+    let data = github_graphql_data(query(args))
+    guard data
+      is {
+        "repository": {
+          "pullRequest": { "bodyHTML": String(html), "comments": page, .. },
+          ..
+        },
+        ..
+      } else {
+      raise HostError("GitHub returned invalid pull request content.")
+    }
+    if body_html is None {
+      body_html = Some(html)
+    }
+    let (nodes, next) = github_review_page(page)
+    comments.append(nodes.map(github_detail_comment))
+    match next {
+      None => break
+      Some(after) => {
+        guard !seen.contains(after) else {
+          raise HostError("GitHub repeated a comment page. Refresh to retry.")
+        }
+        seen.push(after)
+        cursor = next
+      }
+    }
+  }
+  guard body_html is Some(body_html) else {
+    raise HostError("GitHub omitted the pull request body.")
+  }
+  (body_html, comments)
 }
 
 ///|
@@ -48,14 +124,14 @@ fn github_detail_comment(raw : Json) -> @protocol.GithubComment raise {
   guard raw
     is {
       "author": author,
-      "body": String(body),
+      "bodyHTML": String(body_html),
       "url": String(url),
       "createdAt": String(created_at),
       ..
     } else {
     raise HostError("GitHub returned an invalid comment.")
   }
-  { author: github_comment_author(author), body, url, created_at, }
+  { author: github_comment_author(author), body_html, url, created_at, }
 }
 
 ///|
@@ -116,19 +192,19 @@ fn github_detail_check(raw : Json) -> @protocol.GithubCheck raise {
 ///|
 fn github_pull_request_detail(
   raw : Json,
+  body_html : String,
+  comments : Array[@protocol.GithubComment],
 ) -> @protocol.GithubPullRequestDetail raise {
   let item = github_panel_item(raw, AllOpen, Map([]))
   guard raw
     is {
       "state": String(state),
       "mergeable": String(mergeable),
-      "body": String(body),
       "baseRefName": String(base),
       "headRefName": String(head),
       "additions": additions,
       "deletions": deletions,
       "changedFiles": changed_files,
-      "comments": Array(raw_comments),
       "statusCheckRollup": rollup,
       "createdAt": String(created_at),
       "reviewRequests": Array(requests),
@@ -149,13 +225,13 @@ fn github_pull_request_detail(
     item,
     state,
     mergeable,
-    body,
+    body_html,
     base,
     head,
     additions: @json.from_json(additions),
     deletions: @json.from_json(deletions),
     changed_files: @json.from_json(changed_files),
-    comments: raw_comments.map(github_detail_comment),
+    comments,
     checks: raw_checks.map(github_detail_check),
     created_at,
     reviewers: github_detail_reviewers(reviews, requests),

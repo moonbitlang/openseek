@@ -109,3 +109,12 @@ TEA framework packages. The complete API is `pkg.generated.mbti`.
 moon test --target js base/browser
 just test-browser-smoke
 ```
+
+## Browser storage and URLs
+
+`local_storage_get`, `local_storage_set`, and `local_storage_remove` share a
+small typed binding. Reads distinguish an absent key from an empty value;
+`StorageFailure` distinguishes unavailable storage from an access failure.
+Callers own fallback and reporting policy. No JavaScript error type escapes
+these APIs. `resolve_url` likewise returns a normalized URL and protocol or
+a diagnostic from the browser parser.

@@ -3,6 +3,7 @@ package "moonbitlang/editor/base/browser"
 
 import {
   "moonbit-community/rabbita/dom",
+  "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
 }
 
@@ -35,6 +36,12 @@ pub fn event_target_is(@dom.Event, @dom.Element) -> Bool
 
 pub fn focus_prevent_scroll(@dom.Element) -> Unit
 
+pub fn local_storage_get(String) -> Result[String?, StorageFailure]
+
+pub fn local_storage_remove(String) -> Result[Unit, StorageFailure]
+
+pub fn local_storage_set(String, String) -> Result[Unit, StorageFailure]
+
 pub fn monotonic_now_ms() -> Double
 
 pub fn mouse_event_pointer_id(@dom.MouseEvent) -> Int
@@ -48,6 +55,8 @@ pub fn queue_microtask(() -> Unit) -> Unit
 pub fn remove_element(@dom.Element) -> Unit
 
 pub fn remove_style_property(@dom.Element, String) -> Unit
+
+pub fn resolve_url(String, base? : String) -> Result[(String, String), String]
 
 pub fn run_at_this_or_schedule_at_next_animation_frame(() -> Unit, priority? : Int) -> @common.Disposable
 
@@ -102,6 +111,13 @@ pub struct StandardMouseEvent {
   default_prevented : Bool
 }
 pub fn StandardMouseEvent::StandardMouseEvent(@dom.MouseEvent) -> Self
+
+pub(all) enum StorageFailure {
+  Unavailable
+  AccessFailed(String)
+} derive(@debug.Debug)
+#deprecated
+pub fn StorageFailure::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

@@ -223,14 +223,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, SaveQueued) => "保存排队消息"
     (TraditionalChinese, SaveQueued) => "儲存排隊訊息"
     (Japanese, SaveQueued) => "待機中のメッセージを保存"
-    (English, AttachHint) => "Attach up to 4 images, 5 MiB each"
-    (Spanish, AttachHint) => "Adjuntar hasta 4 imágenes de 5 MiB cada una"
-    (SimplifiedChinese, AttachHint) =>
-      "最多添加 4 张图片，每张不超过 5 MiB"
-    (TraditionalChinese, AttachHint) =>
-      "最多新增 4 張圖片，每張不超過 5 MiB"
-    (Japanese, AttachHint) =>
-      "最大 4 枚、1 枚あたり 5 MiB 以下の画像を追加"
+    (English, AttachHint) => "Attach images, 5 MiB each"
+    (Spanish, AttachHint) => "Adjuntar imágenes de hasta 5 MiB cada una"
+    (SimplifiedChinese, AttachHint) => "添加图片，每张不超过 5 MiB"
+    (TraditionalChinese, AttachHint) => "新增圖片，每張不超過 5 MiB"
+    (Japanese, AttachHint) => "1 枚あたり 5 MiB 以下の画像を追加"
     (English, AttachImages) => "Attach images"
     (Spanish, AttachImages) => "Adjuntar imágenes"
     (SimplifiedChinese, AttachImages) => "添加图片"

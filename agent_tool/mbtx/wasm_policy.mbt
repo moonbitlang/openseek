@@ -202,12 +202,15 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // to `@fs`.
   //
   // `cat`, `ls`, `head`, `tail`, `wc`, `sort`, `uniq`, `grep`, `printf`,
-  // `echo`, `pwd`, `date`, `which` and `uname` were dropped rather than listed.
+  // `echo`, `pwd`, `date` and `which` were dropped rather than listed.
   // Each is a line of MoonBit (`@fs`, string operations, `@env`) that works on
   // every platform, whereas the POSIX binaries do not exist on Windows — so
   // listing them offers the model a path that silently disappears there. It
   // would also cut against this tool's own advice, which is to capture
   // `out.stdout` and filter it in MoonBit instead of reaching for grep and awk.
+  // Proton CLI probes the machine architecture with `uname -m`. This may be
+  // unavailable on Windows.
+  ("uname", ["-m"]),
   ("diff", []),
   ("rg", []),
   // NOT listed: the general-purpose runners (`sh`, `bash`, `zsh`, `env`,
@@ -414,7 +417,7 @@ fn wasm_policy_document(
   // tools make the edits, and the commands whose job is to rewrite source
   // (`moon fmt`, `moon info`, `git checkout`) are child processes, which no `fs`
   // rule here reaches. What granting the workspace did buy was a documented way
-  // around `remove`'s provenance check — `remove_path`, `rename_path` and
+  // around `remove`'s provenance and approval checks — `remove_path`, `rename_path` and
   // `rmdir_path` are all gated on `fs.write`, so a snippet could delete a file
   // the guarded tool exists to refuse.
   //
@@ -531,22 +534,20 @@ fn json_strings(values : Array[String]) -> Json {
 }
 
 ///|
-fn test_injection(issued : Ref[Int]) -> @host.SubrunInjection {
-  SubrunInjection(
-    exe="/opt/openseek",
-    session_root="/store",
-    parent="run7",
-    workspace_root="/ws",
-    reserve_ordinals=count => {
-      let base = issued.val + 1
-      issued.val += count
-      base
-    },
-  )
-}
-
-///|
 test "the reservation reaches the guest, and only its own directory is writable" {
+  fn test_injection(issued : Ref[Int]) -> @host.SubrunInjection {
+    SubrunInjection(
+      exe="/opt/openseek",
+      session_root="/store",
+      parent="run7",
+      workspace_root="/ws",
+      reserve_ordinals=count => {
+        let base = issued.val + 1
+        issued.val += count
+        base
+      },
+    )
+  }
   let injection = test_injection(Ref(0))
   let reservation = injection.reserve()
   // A snippet that tried to redirect its own scratch space cannot: the policy

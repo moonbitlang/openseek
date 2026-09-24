@@ -73,7 +73,7 @@ async fn exercise_job_wait(wake : WaitWake) -> Unit {
             api_key="test",
             model=Deepseek(V4Flash),
             session=saved,
-            task="process the result",
+            content=Content([Text("process the result")]),
             tools~,
             api_url=url,
             max_steps=3,
@@ -100,7 +100,9 @@ async fn exercise_job_wait(wake : WaitWake) -> Unit {
           release.close()
         }
         UserInput =>
-          runtime.queue_steer(Prompt("NEW-DIRECTION", submission_id=None))
+          runtime.queue_steer(
+            Prompt(Content([Text("NEW-DIRECTION")]), submission_id=None),
+          )
         GoalChange => runtime.queue_steer(Notice("NEW-GOAL"), wake=true)
         Stop => {
           let _ = jobs.stop(id)
@@ -246,7 +248,7 @@ async fn exercise_plain_finish(existing : Bool) -> Unit {
       api_key="test",
       model=Deepseek(V4Flash),
       session=Session(SessionId("finish-live-job"), system_prompt="system"),
-      task="start server",
+      content=Content([Text("start server")]),
       api_url=url,
       max_steps=3,
       tools=Tools(
@@ -315,7 +317,7 @@ async test "job_wait unknown ids return a tool error and let the model recover" 
       api_key="test",
       model=Deepseek(V4Flash),
       session=Session(SessionId("wait-invalid"), system_prompt="system"),
-      task="test",
+      content=Content([Text("test")]),
       api_url=url,
       max_steps=2,
       tools=Tools([@job_wait.definition()], background_jobs=jobs),
@@ -345,7 +347,7 @@ async test "job_wait in the last model step records an error rather than waiting
       api_key="test",
       model=Deepseek(V4Flash),
       session=Session(SessionId("wait-budget"), system_prompt="system"),
-      task="test",
+      content=Content([Text("test")]),
       api_url=url,
       max_steps=1,
       tools=Tools([@job_wait.definition()]),
@@ -408,7 +410,7 @@ async test "mixed job_wait batch returns an error and executes the following too
       api_key="test",
       model=Deepseek(V4Flash),
       session=Session(SessionId("wait-mixed"), system_prompt="system"),
-      task="test",
+      content=Content([Text("test")]),
       api_url=url,
       max_steps=2,
       tools=Tools([@job_wait.definition(), @finish.definition()]),

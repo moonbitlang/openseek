@@ -217,7 +217,7 @@ async test "pressure on a tool-call response yields immediately" {
         SessionId("yield-tool-batch"),
         system_prompt="system",
       )
-      .append(User(UserMessage("prior question")))
+      .append(User(UserMessage(Content([Text("prior question")]))))
       .append(Terminal(Finished("prior answer")))
     let result = @agent.run_turn_in_scope(
       runtime=AgentRuntime(),
@@ -225,7 +225,7 @@ async test "pressure on a tool-call response yields immediately" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=probe_tools(["result-1"]),
@@ -279,7 +279,7 @@ async test "a final answer at pressure checkpoints then finishes normally" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="answer briefly",
+      content=Content([Text("answer briefly")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
     )
@@ -309,7 +309,9 @@ async test "a steer during compact-on-finish continues the turn compacted" {
       if is_checkpoint_request(request) {
         checkpoint_requests.push(request)
         // The steer lands while the compact-on-finish summary is in flight.
-        runtime.queue_steer(Prompt("late steer", submission_id=None))
+        runtime.queue_steer(
+          Prompt(Content([Text("late steer")]), submission_id=None),
+        )
         Body(checkpoint_body("FINISH-SUMMARY"))
       } else {
         main_requests.push(request)
@@ -335,7 +337,7 @@ async test "a steer during compact-on-finish continues the turn compacted" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="answer briefly",
+      content=Content([Text("answer briefly")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
     )
@@ -370,7 +372,7 @@ async test "a steer during compact-on-finish continues the turn compacted" {
             message.reasoning_content() is Some("ceiling reasoning trace"),
           )
         }
-        User(message) if message.content() == "late steer" =>
+        User(message) if message.content().text() == "late steer" =>
           steer_sequence = event.sequence()
         _ => ()
       }
@@ -394,7 +396,9 @@ async test "a failed checkpoint with a late steer yields instead of continuing" 
       if is_checkpoint_request(request) {
         checkpoint_requests.push(request)
         // The steer lands during the summary request — which then FAILS.
-        runtime.queue_steer(Prompt("late steer", submission_id=None))
+        runtime.queue_steer(
+          Prompt(Content([Text("late steer")]), submission_id=None),
+        )
         // Empty summary fails generation client-side without HTTP retries.
         Body(checkpoint_body(""))
       } else {
@@ -413,7 +417,7 @@ async test "a failed checkpoint with a late steer yields instead of continuing" 
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="answer briefly",
+      content=Content([Text("answer briefly")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
     )
@@ -429,7 +433,8 @@ async test "a failed checkpoint with a late steer yields instead of continuing" 
       match event.item() {
         Assistant(message) if message.content() == "really done" =>
           answer_kept = true
-        User(message) if message.content() == "late steer" => steer_kept = true
+        User(message) if message.content().text() == "late steer" =>
+          steer_kept = true
         _ => ()
       }
     }
@@ -477,7 +482,7 @@ async test "a non-control finish shadow is skip-closed at the ceiling" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools~,
@@ -487,7 +492,7 @@ async test "a non-control finish shadow is skip-closed at the ceiling" {
     for event in result.events() {
       if event.item() is Tool(tool_result) {
         // Never executed: the only result is the ceiling skip note.
-        assert_true(tool_result.content() != "shadow ran anyway")
+        assert_true(tool_result.content().text() != "shadow ran anyway")
         assert_true(tool_result.is_error())
         assert_true(
           tool_result.content().contains("yielding at the context ceiling"),
@@ -528,7 +533,7 @@ async test "a pressured finish batch salvages the completion" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="wrap it up",
+      content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=finish_and_probe_tools(),
@@ -550,7 +555,7 @@ async test "a pressured finish batch salvages the completion" {
       if event.item() is Tool(tool_result) {
         // Neither probe may execute: their results could grow the
         // checkpoint request and cannot change the decided answer.
-        assert_true(tool_result.content() != "result-1")
+        assert_true(tool_result.content().text() != "result-1")
         if tool_result.content().contains("finished: wrapped: all done") {
           finish_result = true
         }
@@ -614,7 +619,7 @@ async test "a pressured custom control completion is salvaged at the ceiling" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="wrap it up",
+      content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools~,
@@ -628,7 +633,7 @@ async test "a pressured custom control completion is salvaged at the ceiling" {
       if event.item() is Tool(tool_result) {
         // The probe may not execute: its result could grow the checkpoint
         // request and cannot change the decided answer.
-        assert_true(tool_result.content() != "result-1")
+        assert_true(tool_result.content().text() != "result-1")
         if tool_result.tool_name() == "submit_report" {
           completion_recorded = true
         }
@@ -678,7 +683,7 @@ async test "a lone control verdict without a finish executes then yields" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools~,
@@ -689,8 +694,8 @@ async test "a lone control verdict without a finish executes then yields" {
     let mut probe_skipped = false
     for event in result.events() {
       if event.item() is Tool(tool_result) {
-        assert_true(tool_result.content() != "result-1")
-        if tool_result.content() == "verdict recorded" {
+        assert_true(tool_result.content().text() != "result-1")
+        if tool_result.content().text() == "verdict recorded" {
           assert_false(tool_result.is_error())
           verdict_recorded = true
         }
@@ -719,7 +724,9 @@ async test "a pressured finish tool losing to a steer yields instead" {
       } else {
         main_requests += 1
         // The steer lands while the pressured finish response is in flight.
-        runtime.queue_steer(Prompt("user redirection", submission_id=None))
+        runtime.queue_steer(
+          Prompt(Content([Text("user redirection")]), submission_id=None),
+        )
         Sse(sse_tool_calls([("call_1", "finish")], 900_000))
       }
     }
@@ -734,7 +741,7 @@ async test "a pressured finish tool losing to a steer yields instead" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="wrap it up",
+      content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=finish_and_probe_tools(),
@@ -750,7 +757,7 @@ async test "a pressured finish tool losing to a steer yields instead" {
     let mut summary_to = -1
     for event in result.events() {
       match event.item() {
-        User(message) if message.content() == "user redirection" =>
+        User(message) if message.content().text() == "user redirection" =>
           steer_sequence = event.sequence()
         Summary(summary) => summary_to = summary.to_sequence()
         _ => ()
@@ -787,7 +794,7 @@ async test "a failing checkpoint on a pressured finish keeps the real answer" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="answer briefly",
+      content=Content([Text("answer briefly")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
     )
@@ -827,7 +834,7 @@ async test "below the soft ceiling nothing yields" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="do a thing",
+      content=Content([Text("do a thing")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=probe_tools(["result-1"]),
@@ -848,7 +855,9 @@ async test "a failed checkpoint still yields fail-open" {
         // Empty summary fails generation client-side without HTTP retries.
         Body(checkpoint_body(""))
       } else {
-        runtime.queue_steer(Prompt("user redirection", submission_id=None))
+        runtime.queue_steer(
+          Prompt(Content([Text("user redirection")]), submission_id=None),
+        )
         Sse(sse_tool_call("call_1", "probe", 900_000))
       }
     }
@@ -863,7 +872,7 @@ async test "a failed checkpoint still yields fail-open" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=probe_tools(["result-1"]),
@@ -881,7 +890,7 @@ async test "a failed checkpoint still yields fail-open" {
     for event in result.events() {
       assert_false(event.item() is Summary(_))
       if event.item() is User(message) &&
-        message.content() == "user redirection" {
+        message.content().text() == "user redirection" {
         steer_persisted = true
       }
     }
@@ -902,7 +911,9 @@ async test "a steer arriving under pressure survives the checkpoint verbatim" {
       } else {
         main_step += 1
         // The steer lands while the pressured response is in flight.
-        runtime.queue_steer(Prompt("user redirection", submission_id=None))
+        runtime.queue_steer(
+          Prompt(Content([Text("user redirection")]), submission_id=None),
+        )
         Sse(sse_tool_call("call_1", "probe", 900_000))
       }
     }
@@ -917,7 +928,7 @@ async test "a steer arriving under pressure survives the checkpoint verbatim" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=probe_tools(["result-1"]),
@@ -938,7 +949,7 @@ async test "a steer arriving under pressure survives the checkpoint verbatim" {
     let mut summary_to = -1
     for event in result.events() {
       match event.item() {
-        User(message) if message.content() == "user redirection" =>
+        User(message) if message.content().text() == "user redirection" =>
           steer_sequence = event.sequence()
         Summary(summary) => {
           summary_sequence = event.sequence()
@@ -982,7 +993,7 @@ async test "pressure on the last allowed step yields at the ceiling not as exhau
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="one pressured step",
+      content=Content([Text("one pressured step")]),
       append_item=(session, item) => session.append(item),
       max_steps=1,
       api_url=url,
@@ -1015,7 +1026,7 @@ async test "an explicit single-step bound still exhausts without pressure" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="one step only",
+      content=Content([Text("one step only")]),
       append_item=(session, item) => session.append(item),
       max_steps=1,
       api_url=url,
@@ -1056,7 +1067,7 @@ async test "a soft-ceiling batch executes then yields gracefully" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=probe_tools(["result-1"]),
@@ -1074,7 +1085,7 @@ async test "a soft-ceiling batch executes then yields gracefully" {
     for event in result.events() {
       if event.item() is Tool(tool_result) {
         assert_false(tool_result.is_error())
-        if tool_result.content() == "result-1" {
+        if tool_result.content().text() == "result-1" {
           executed = true
         }
       }
@@ -1150,7 +1161,7 @@ async test "a budget trip salvages a finish in the remainder" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=flood_and_finish_tools(59_000),
@@ -1165,7 +1176,7 @@ async test "a budget trip salvages a finish in the remainder" {
     let mut finish_result = false
     for event in result.events() {
       if event.item() is Tool(tool_result) {
-        if tool_result.content().length() == 59_000 {
+        if tool_result.content().text().length() == 59_000 {
           executed_floods += 1
         }
         if tool_result.is_error() &&
@@ -1212,7 +1223,7 @@ async test "the running budget stops an overflowing batch mid-way" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=flood_tools(59_000),
@@ -1227,7 +1238,7 @@ async test "the running budget stops an overflowing batch mid-way" {
           tool_result.content().contains("yielding at the context ceiling") {
           skipped += 1
         } else {
-          assert_eq(tool_result.content().length(), 59_000)
+          assert_eq(tool_result.content().text().length(), 59_000)
           executed += 1
         }
       }
@@ -1267,7 +1278,7 @@ async test "a below-soft batch with huge results yields instead of overflowing" 
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=flood_tools(59_000),
@@ -1319,7 +1330,7 @@ async test "a finish tool in the soft band compacts and finishes normally" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="wrap it up",
+      content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=finish_and_probe_tools(),
@@ -1357,7 +1368,7 @@ async test "a failing checkpoint after a soft batch keeps its results" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=probe_tools(["result-1"]),
@@ -1368,7 +1379,7 @@ async test "a failing checkpoint after a soft batch keeps its results" {
     for event in result.events() {
       assert_false(event.item() is Summary(_))
       if event.item() is Tool(tool_result) &&
-        tool_result.content() == "result-1" {
+        tool_result.content().text() == "result-1" {
         executed = true
       }
     }
@@ -1389,7 +1400,9 @@ async test "a steer arriving during the checkpoint request is preserved" {
         checkpoint_requests.push(request)
         // The steer lands while the summary request is being served — after
         // the one-time drain, seconds before the terminal.
-        runtime.queue_steer(Prompt("late steer", submission_id=None))
+        runtime.queue_steer(
+          Prompt(Content([Text("late steer")]), submission_id=None),
+        )
         Body(checkpoint_body("CEILING-SUMMARY"))
       } else {
         Sse(sse_tool_call("call_1", "probe", 900_000))
@@ -1406,7 +1419,7 @@ async test "a steer arriving during the checkpoint request is preserved" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="keep grinding",
+      content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=probe_tools(["result-1"]),
@@ -1417,7 +1430,7 @@ async test "a steer arriving during the checkpoint request is preserved" {
     let mut summary_sequence = 0
     for event in result.events() {
       match event.item() {
-        User(message) if message.content() == "late steer" =>
+        User(message) if message.content().text() == "late steer" =>
           steer_sequence = event.sequence()
         Summary(_) => summary_sequence = event.sequence()
         _ => ()
@@ -1464,7 +1477,7 @@ async test "a budget-tripped salvaged finish still checkpoints" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="wrap it up",
+      content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=flood_and_finish_tools(59_000),
@@ -1480,7 +1493,7 @@ async test "a budget-tripped salvaged finish still checkpoints" {
       if event.item() is Tool(tool_result) {
         if tool_result.is_error() {
           skipped += 1
-        } else if tool_result.content().length() == 59_000 {
+        } else if tool_result.content().text().length() == 59_000 {
           executed += 1
         }
       }
@@ -1502,7 +1515,9 @@ async test "a steer during a salvaged finish's checkpoint continues once" {
         // The steer lands while the salvaged finish's checkpoint is in
         // flight: the finish converts into a continuation — the remainder is
         // already closed, so it must NOT be closed again or summarized twice.
-        runtime.queue_steer(Prompt("late steer", submission_id=None))
+        runtime.queue_steer(
+          Prompt(Content([Text("late steer")]), submission_id=None),
+        )
         Body(checkpoint_body("SALVAGE-SUMMARY"))
       } else {
         main_requests += 1
@@ -1524,7 +1539,7 @@ async test "a steer during a salvaged finish's checkpoint continues once" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="wrap it up",
+      content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=flood_and_finish_tools(59_000),
@@ -1547,7 +1562,7 @@ async test "a steer during a salvaged finish's checkpoint continues once" {
             tool_result.content().contains("yielding at the context ceiling") {
             skip_notes += 1
           }
-        User(message) if message.content() == "late steer" =>
+        User(message) if message.content().text() == "late steer" =>
           steer_present = true
         _ => ()
       }
@@ -1586,7 +1601,7 @@ async test "an oversized tool result is clamped at the loop" {
       api_key="test-key",
       model=Deepseek(V4Flash),
       session~,
-      task="flood me",
+      content=Content([Text("flood me")]),
       append_item=(session, item) => session.append(item),
       api_url=url,
       tools=flood_tools(70_000),
@@ -1597,7 +1612,7 @@ async test "an oversized tool result is clamped at the loop" {
         // The 70K result was clamped to AT MOST the 60K cap — marker
         // included — so the bound the soft-tier batch budget relies on is
         // exact for EVERY tool, not just the self-clamping in-tree ones.
-        assert_true(tool_result.content().length() <= 60_000)
+        assert_true(tool_result.content().text().length() <= 60_000)
         assert_true(tool_result.content().contains("[truncated:"))
         clamped = true
       }

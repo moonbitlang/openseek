@@ -118,26 +118,6 @@ extern "js" fn disable_markdown_input(element : @rdom.Element) -> Unit =
   #| }
 
 ///|
-/// URL parsing and base resolution are browser capabilities. MoonBit decides
-/// which returned protocols are allowed for links and images.
-extern "js" fn with_resolved_markdown_uri(
-  raw : String,
-  base_uri : String,
-  has_base_uri : Bool,
-  resolved : (String, String) -> Unit,
-) -> Bool =
-  #| (raw, baseUri, hasBaseUri, resolved) => {
-  #|   if (!raw) return false;
-  #|   try {
-  #|     const url = hasBaseUri ? new URL(raw, baseUri) : new URL(raw);
-  #|     resolved(url.href, url.protocol.toLowerCase());
-  #|     return true;
-  #|   } catch (_error) {
-  #|     return false;
-  #|   }
-  #| }
-
-///|
 extern "js" fn markdown_event_button(event : @rdom.Event) -> Int = "(event) => event.button === undefined ? -1 : Number(event.button)"
 
 ///|
@@ -183,74 +163,6 @@ extern "js" fn get_or_create_shared_mermaid_runtime(
   #| }
 
 ///|
-/// Loading validates the exact Mermaid API surface before exposing it to the
-/// MoonBit-owned runtime.
-extern "js" fn start_mermaid_module_load(
-  loader : MermaidModuleLoader,
-  url : String,
-  loaded : (MermaidApi) -> Unit,
-  failed : () -> Unit,
-) -> Unit =
-  #| (loader, url, loaded, failed) => {
-  #|   Promise.resolve()
-  #|     .then(() => loader(url))
-  #|     .then(
-  #|       (module) => {
-  #|         const mermaid = module && module.default;
-  #|         if (
-  #|           !mermaid ||
-  #|           typeof mermaid.initialize !== "function" ||
-  #|           typeof mermaid.render !== "function"
-  #|         ) {
-  #|           failed();
-  #|           return;
-  #|         }
-  #|         loaded(mermaid);
-  #|       },
-  #|       () => failed(),
-  #|     );
-  #| }
-
-///|
-/// Promise adaptation and the Mermaid object/config calls remain at the JS
-/// capability boundary; queueing and result ownership remain in MoonBit.
-extern "js" fn start_mermaid_api_render(
-  mermaid : MermaidApi,
-  theme : String,
-  id : String,
-  source : String,
-  rendered : (MermaidRenderResult) -> Unit,
-  failed : () -> Unit,
-  settled : () -> Unit,
-) -> Unit =
-  #| (mermaid, theme, id, source, rendered, failed, settled) => {
-  #|   Promise.resolve()
-  #|     .then(() => {
-  #|       mermaid.initialize({
-  #|         startOnLoad: false,
-  #|         securityLevel: "strict",
-  #|         suppressErrorRendering: true,
-  #|         theme,
-  #|         secure: [
-  #|           "secure",
-  #|           "securityLevel",
-  #|           "startOnLoad",
-  #|           "maxTextSize",
-  #|           "suppressErrorRendering",
-  #|           "maxEdges",
-  #|           "theme",
-  #|           "darkMode",
-  #|           "themeVariables",
-  #|           "themeCSS",
-  #|         ],
-  #|       });
-  #|       return mermaid.render(id, source);
-  #|     })
-  #|     .then(rendered, failed)
-  #|     .then(settled, settled);
-  #| }
-
-///|
 extern "js" fn with_mermaid_render_svg(
   result : MermaidRenderResult,
   commit : (String) -> Unit,
@@ -276,32 +188,13 @@ extern "js" fn try_bind_mermaid_result(
   #| }
 
 ///|
-extern "js" fn new_mermaid_id_nonce() -> String =
-  #| () => {
-  #|   const crypto = globalThis.crypto;
-  #|   if (crypto && typeof crypto.randomUUID === "function") {
-  #|     return crypto.randomUUID();
-  #|   }
-  #|   if (crypto && typeof crypto.getRandomValues === "function") {
-  #|     const words = crypto.getRandomValues(new Uint32Array(4));
-  #|     return Array.from(words, (word) => word.toString(36)).join("-");
-  #|   }
-  #|   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  #| }
+extern "js" fn is_js_function(value : @js.Value) -> Bool = "value => typeof value === 'function'"
 
 ///|
-extern "js" fn mermaid_id_is_available(
-  owner_document : @rdom.Document,
+extern "js" fn document_id_is_available(
+  document : @rdom.Document,
   id : String,
-) -> Bool =
-  #| (ownerDocument, id) => {
-  #|   const documents = Array.from(
-  #|     new Set([ownerDocument, globalThis.document].filter(Boolean)),
-  #|   );
-  #|   return documents.every((document) => {
-  #|     if (typeof document.getElementById !== "function") return true;
-  #|     return !document.getElementById(id) &&
-  #|       !document.getElementById(`d${id}`) &&
-  #|       !document.getElementById(`i${id}`);
-  #|   });
-  #| }
+) -> Bool = "(doc, id) => typeof doc?.getElementById !== 'function' || !doc.getElementById(id)"
+
+///|
+extern "js" fn same_document(a : @rdom.Document, b : @rdom.Document) -> Bool = "(a, b) => a === b"

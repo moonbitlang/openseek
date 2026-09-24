@@ -2219,30 +2219,33 @@ fn update_msg(
       openseek_effort~,
       glm_effort~
     ) => {
-      let theme = Theme::parse(theme, model.theme)
-      let app_font_size = AppFontSize::parse(font_size, model.app_font_size)
+      let theme = theme
+        .map(value => Theme::parse(value, model.theme))
+        .unwrap_or(model.theme)
+      let app_font_size = font_size
+        .map(value => AppFontSize::parse(value, model.app_font_size))
+        .unwrap_or(model.app_font_size)
       // Startup runs before any conversation exists, so adopting the stored
       // tiers here is enough — every conversation minted afterwards reads
       // them.
-      let default_model = EngineModel::parse(stored).unwrap_or(
-        model.default_model,
-      )
-      let default_agent = AgentChoice::parse(agent).unwrap_or(
-        model.default_agent,
-      )
-      let openseek_reasoning = OpenSeekReasoning::parse(openseek_effort).unwrap_or(
-        model.openseek_reasoning,
-      )
-      let glm_reasoning = OpenSeekReasoning::parse(glm_effort).unwrap_or(
-        model.glm_reasoning,
-      )
+      let default_model = stored
+        .bind(value => EngineModel::parse(value))
+        .unwrap_or(model.default_model)
+      let default_agent = agent
+        .bind(AgentChoice::parse)
+        .unwrap_or(model.default_agent)
+      let openseek_reasoning = openseek_effort
+        .bind(OpenSeekReasoning::parse)
+        .unwrap_or(model.openseek_reasoning)
+      let glm_reasoning = glm_effort
+        .bind(OpenSeekReasoning::parse)
+        .unwrap_or(model.glm_reasoning)
       // The stored Codex pick seeds Codex's own selection state. When the
       // catalog arrives, `with_models` keeps this id if it is still listed
       // and otherwise falls back to the catalog default — exactly the
       // semantics a stale stored preference should have.
-      let (codex_cmd, codex) = if codex_model.is_blank() {
-        (@cmd.none, model.codex)
-      } else {
+      let (codex_cmd, codex) = if codex_model is Some(codex_model) &&
+        !codex_model.is_blank() {
         @codex.update(
           locale=model.locale,
           dispatch.map(msg => Codex(channel=model.focused, msg)),
@@ -2251,10 +2254,11 @@ fn update_msg(
           model.focused,
           url => open_external_link(dispatch, url),
         )
-      }
-      let (codex_effort_cmd, codex) = if codex_effort.is_blank() {
-        (@cmd.none, codex)
       } else {
+        (@cmd.none, model.codex)
+      }
+      let (codex_effort_cmd, codex) = if codex_effort is Some(codex_effort) &&
+        !codex_effort.is_blank() {
         @codex.update(
           locale=model.locale,
           dispatch.map(msg => Codex(channel=model.focused, msg)),
@@ -2263,18 +2267,26 @@ fn update_msg(
           model.focused,
           url => open_external_link(dispatch, url),
         )
+      } else {
+        (@cmd.none, codex)
       }
       let next = {
         ..model,
-        notification_corner: NotificationCorner::parse(notification_corner),
-        tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
+        notification_corner: notification_corner
+        .map(NotificationCorner::parse)
+        .unwrap_or(model.notification_corner),
+        tree_layout: tree_layout
+        .map(@fileeditor.TreeLayout::parse)
+        .unwrap_or(model.tree_layout),
         theme,
         app_font_size,
         fps_overlay_enabled,
         minimal_transcript,
         default_model,
         default_agent,
-        conversation_models: parse_conversation_models(remembered),
+        conversation_models: remembered
+        .map(parse_conversation_models)
+        .unwrap_or([]),
         openseek_reasoning,
         glm_reasoning,
         codex,
@@ -2458,6 +2470,7 @@ fn update_msg(
                 model.replace_conversation({
                   ..conv,
                   task: user_display_text(item.content),
+                  images: item.images,
                   mentions: [],
                   composer_draft_present: true,
                   queue_edit_id: Some(id),
@@ -2481,6 +2494,7 @@ fn update_msg(
                 user_display_text(item.content),
                 [],
                 FollowupSteer,
+                images=item.images,
               )
               (
                 queue_openseek(
@@ -2517,6 +2531,7 @@ fn update_msg(
                   model.replace_conversation({
                     ..conv,
                     task: "",
+                    images: [],
                     mentions: [],
                     composer_draft_present: false,
                     queue_edit_id: None,
@@ -2564,6 +2579,7 @@ fn update_msg(
             ..model.replace_conversation({
               ..conv,
               task: draft.task,
+              images: draft.images,
               mentions: draft.mentions,
               composer_draft_present: true,
             }),
@@ -2606,6 +2622,13 @@ fn update_msg(
                 ..conv,
                 task,
                 mentions,
+                images: if !present &&
+                  cleared_source is Some(source) &&
+                  conv.images == source.images {
+                  []
+                } else {
+                  conv.images
+                },
                 composer_draft_present: present,
               }),
             )
@@ -2619,7 +2642,7 @@ fn update_msg(
           let mut draft : @composer.Draft = {
             task: conv.task,
             mentions: conv.mentions,
-            images: [],
+            images: conv.images,
           }
           for selection in selections {
             draft = draft.with_review_changes(selection, adding=false)
@@ -2880,7 +2903,7 @@ fn update_msg(
       let draft : @composer.Draft = {
         task: conv.task,
         mentions: conv.mentions,
-        images: [],
+        images: conv.images,
       }
       (
         @cmd.none,
@@ -2921,7 +2944,7 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let mentions = @composer.Draft::{
-          images: [],
+          images: conv.images,
           task: conv.task,
           mentions: conv.mentions,
         }.with_mention({
@@ -3026,7 +3049,7 @@ fn update_msg(
         return (clear_feedback, model)
       }
       let mentions = @composer.Draft::{
-          images: [],
+          images: conv.images,
           task: conv.task,
           mentions: conv.mentions,
         }.with_mention({
@@ -4144,7 +4167,7 @@ fn update_msg(
       // `<user_mentions>` envelope. The envelope is itself valid prompt
       // content, so an explicitly attached chip can be sent without text.
       let task = @composer.Draft::{
-          images: [],
+          images: conv.images,
           task: conv.task,
           mentions: conv.mentions,
         }
@@ -4206,7 +4229,11 @@ fn update_msg(
                 dispatch,
                 model.focused,
                 conv.session_id,
-                @protocol.QueueEdit(id~, text=task),
+                @protocol.QueueEdit(
+                  id~,
+                  text=task,
+                  images=conv.images.map(image => image.url),
+                ),
                 run_id,
               ),
               // Keep the edit in the composer until the in-memory mutation is
@@ -4222,6 +4249,7 @@ fn update_msg(
             conv.task,
             conv.mentions,
             followup_behavior,
+            images=conv.images,
           )
           let command = if followup_behavior is FollowupQueue {
             queue_openseek(
@@ -4229,7 +4257,11 @@ fn update_msg(
               dispatch,
               model.focused,
               conv.session_id,
-              @protocol.QueueAdd(id=submission_id, text=task),
+              @protocol.QueueAdd(
+                id=submission_id,
+                text=task,
+                images=conv.images.map(image => image.url),
+              ),
               run_id,
             )
           } else {
@@ -4240,6 +4272,7 @@ fn update_msg(
               submission_id,
               task,
               run_id,
+              images=conv.images.map(image => image.url),
             )
           }
           (
@@ -4248,6 +4281,7 @@ fn update_msg(
               ..model.replace_conversation({
                 ..conv,
                 task: "",
+                images: [],
                 mentions: [],
                 composer_draft_present: false,
               }),
@@ -4278,11 +4312,13 @@ fn update_msg(
             submission_id,
             draft: conv.task,
             mentions: conv.mentions.copy(),
+            images: conv.images,
           }),
         }
         let next = {
           ..conv,
           task: "",
+          images: [],
           mentions: [],
           composer_draft_present: false,
           run: Starting(submission_id~),
@@ -4313,6 +4349,7 @@ fn update_msg(
             model.max_steps,
             conv.session_id,
             workspace,
+            images=conv.images.map(image => image.url),
           )
         } else {
           start_openseek(
@@ -4325,6 +4362,7 @@ fn update_msg(
             model.max_steps,
             conv.session_id,
             workspace=conv.project(),
+            images=conv.images.map(image => image.url),
           )
         }
         // Re-pin now, before the durable User item arrives, so the early
@@ -5744,6 +5782,16 @@ fn update_msg(
         (@cmd.none, model)
       }
       let (review_cmd, model) = if enter_review {
+        let model = {
+          ..model,
+          file_panel: {
+            ..model.file_panel,
+            github_review: {
+              ..model.file_panel.github_review.reset_checkout(),
+              enabled: true,
+            },
+          },
+        }
         open_explorer(dispatch, model, ExplorerChanges)
       } else {
         (@cmd.none, model)
@@ -6241,7 +6289,10 @@ fn update_device_msg(
       }
     InstalledSkillsFailed(message) =>
       if channel == model.focused {
-        (@cmd.none, { ..model, skills: model.skills.with_notice(message), })
+        (
+          @cmd.none,
+          { ..model, skills: model.skills.with_library_error(message), },
+        )
       } else {
         (@cmd.none, model)
       }
@@ -6638,18 +6689,23 @@ fn update_device_msg(
           let (next, _) = conv.acknowledge_steer(id, Some(run_id))
           next
         }
-        @protocol.QueueEdit(id~, text=content) => {
+        @protocol.QueueEdit(id~, text=content, images~) => {
           guard conv.queued_inputs.search_by(item => item.id == id)
             is Some(index) else {
             return (@cmd.none, model)
           }
           let queued_inputs = conv.queued_inputs.copy()
-          queued_inputs[index] = { id, content, }
+          queued_inputs[index] = {
+            id,
+            content,
+            images: images.map(url => { name: "Image", url, }),
+          }
           if conv.queue_edit_id is Some(queued_id) && queued_id == id {
             {
               ..conv,
               queued_inputs,
               task: "",
+              images: [],
               mentions: [],
               composer_draft_present: false,
               queue_edit_id: None,
@@ -9361,7 +9417,12 @@ fn with_pending_prompt(
 ) -> Conversation {
   {
     ..conv,
-    pending_prompt: Some({ submission_id: id, draft: text, mentions: [], }),
+    pending_prompt: Some({
+      images: [],
+      submission_id: id,
+      draft: text,
+      mentions: [],
+    }),
   }
 }
 
@@ -10109,7 +10170,11 @@ test "finished run reloads the named durable session for an old host" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User(text="question", images=[]), ts: None, sequence: None, },
+        {
+          kind: User(content=Content([Text("question")])),
+          ts: None,
+          sequence: None,
+        },
         {
           kind: Assistant(
             reasoning=None,
@@ -10313,7 +10378,9 @@ test "session rotation activates a fresh conversation, keeping the old one" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..running_conversation(),
-    messages: [{ kind: User(text="hi", images=[]), ts: None, sequence: None, }],
+    messages: [
+      { kind: User(content=Content([Text("hi")])), ts: None, sequence: None, },
+    ],
   })
   let (_, next) = update(
     dispatch,
@@ -10402,7 +10469,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
       sequence=1,
       ts=None,
       item=@protocol.User({
-        content: "arrived before the list",
+        content: Content([Text("arrived before the list")]),
         submission_id: None,
       }),
       session_root=@interop.ChannelId::Local.test_store_root(),
@@ -10464,7 +10531,7 @@ test "a rooted commit places its conversation without waiting for the list" {
       sequence=1,
       ts=None,
       item=@protocol.User({
-        content: "arrived before the list",
+        content: Content([Text("arrived before the list")]),
         submission_id: None,
       }),
       session_root=store,
@@ -10487,7 +10554,10 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-registered",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     committed,
@@ -10512,7 +10582,10 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-unseen",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_resource(
         "/work/unseen/.openseek",
       ),
@@ -10563,7 +10636,10 @@ test "a commit for an unlisted store refreshes past a same-id row" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=store,
     ),
     model,
@@ -10577,7 +10653,10 @@ test "a commit for an unlisted store refreshes past a same-id row" {
       session="desktop-listed-only",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     committed,
@@ -10616,7 +10695,10 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "listed", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("listed")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -10635,7 +10717,10 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "other project", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("other project")]),
+        submission_id: None,
+      }),
       session_root=store,
     ),
     first,
@@ -10793,7 +10878,9 @@ test "sessions failure pops a toast without touching the transcript" {
   let dispatch = test_dispatch()
   let model = test_model().replace_conversation({
     ..test_conversation(),
-    messages: [{ kind: User(text="hi", images=[]), ts: None, sequence: None, }],
+    messages: [
+      { kind: User(content=Content([Text("hi")])), ts: None, sequence: None, },
+    ],
   })
   let (_, next) = update_dev(dispatch, SessionsFailed("engine exploded"), model)
   inspect(next.notifications.length(), content="1")
@@ -10866,7 +10953,7 @@ test "open session keeps live state on screen while re-reading the store" {
     run: Open(run_id="r9", stage=Opened),
     messages: [
       {
-        kind: User(text="background task", images=[]),
+        kind: User(content=Content([Text("background task")])),
         ts: None,
         sequence: None,
       },
@@ -10915,7 +11002,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     messages: [
-      { kind: User(text="kept", images=[]), ts: None, sequence: None, },
+      { kind: User(content=Content([Text("kept")])), ts: None, sequence: None, },
     ],
     watermark: 1,
   })
@@ -10929,7 +11016,10 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.User({ content: "future", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("future")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     refreshing,
@@ -11329,7 +11419,11 @@ test "open session tracks the latest load and ignores stale replies" {
     is Some({ channel: Local, session: "desktop-b", }),
   )
   let a_items : Array[@transcript.TranscriptItem] = [
-    { kind: User(text="old selection", images=[]), ts: None, sequence: None, },
+    {
+      kind: User(content=Content([Text("old selection")])),
+      ts: None,
+      sequence: None,
+    },
   ]
   let (_, after_a) = update_dev(
     dispatch,
@@ -11350,7 +11444,7 @@ test "open session tracks the latest load and ignores stale replies" {
   )
   let b_items : Array[@transcript.TranscriptItem] = [
     {
-      kind: User(text="latest selection", images=[]),
+      kind: User(content=Content([Text("latest selection")])),
       ts: None,
       sequence: None,
     },
@@ -11439,13 +11533,21 @@ test "same-id session loads are fenced by channel owner" {
       @interop.ChannelId::Local.test_project(),
     ),
     messages: [
-      { kind: User(text="local", images=[]), ts: None, sequence: None, },
+      {
+        kind: User(content=Content([Text("local")])),
+        ts: None,
+        sequence: None,
+      },
     ],
   }
   let remote_conv = {
     ..empty_conversation(remote, "shared", remote.test_project()),
     messages: [
-      { kind: User(text="remote", images=[]), ts: None, sequence: None, },
+      {
+        kind: User(content=Content([Text("remote")])),
+        ts: None,
+        sequence: None,
+      },
     ],
   }
   let model = {
@@ -11639,7 +11741,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
       session="desktop-pruned",
       items=[
         {
-          kind: User(text="late old snapshot", images=[]),
+          kind: User(content=Content([Text("late old snapshot")])),
           ts: None,
           sequence: None,
         },
@@ -11668,7 +11770,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
       session="desktop-pruned",
       items=[
         {
-          kind: User(text="fresh snapshot", images=[]),
+          kind: User(content=Content([Text("fresh snapshot")])),
           ts: None,
           sequence: None,
         },
@@ -11723,7 +11825,7 @@ test "archive removal and reopening cannot reuse a transcript request token" {
       session="desktop-archived",
       items=[
         {
-          kind: User(text="late archived snapshot", images=[]),
+          kind: User(content=Content([Text("late archived snapshot")])),
           ts: None,
           sequence: None,
         },
@@ -11986,7 +12088,11 @@ test "session loaded swaps the active conversation onto the stored session" {
     .replace_conversation({
       ..test_conversation(),
       messages: [
-        { kind: User(text="old chat", images=[]), ts: None, sequence: None, },
+        {
+          kind: User(content=Content([Text("old chat")])),
+          ts: None,
+          sequence: None,
+        },
       ],
       turn: {
         ..test_conversation().turn,
@@ -12014,7 +12120,11 @@ test "session loaded swaps the active conversation onto the stored session" {
     model,
   )
   let items : Array[@transcript.TranscriptItem] = [
-    { kind: User(text="stored question", images=[]), ts: None, sequence: None, },
+    {
+      kind: User(content=Content([Text("stored question")])),
+      ts: None,
+      sequence: None,
+    },
     {
       kind: Assistant(
         reasoning=None,
@@ -12069,7 +12179,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
   let dispatch = test_dispatch()
   let model = running_model().with_listed(["desktop-stored"])
   let items : Array[@transcript.TranscriptItem] = [
-    { kind: User(text="stored", images=[]), ts: None, sequence: None, },
+    { kind: User(content=Content([Text("stored")])), ts: None, sequence: None, },
   ]
   // The active conversation runs; loading some other stored session is fine.
   let (_, loading_other) = update(
@@ -12609,7 +12719,7 @@ test "an accepted start response opens the run without Started" {
       session="desktop-test",
       items=[
         {
-          kind: User(text="external prompt", images=[]),
+          kind: User(content=Content([Text("external prompt")])),
           ts: None,
           sequence: None,
         },
@@ -12624,7 +12734,11 @@ test "an accepted start response opens the run without Started" {
           ts: None,
           sequence: None,
         },
-        { kind: User(text="prompt", images=[]), ts: None, sequence: None, },
+        {
+          kind: User(content=Content([Text("prompt")])),
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=4,
       generation=1,
@@ -13263,7 +13377,7 @@ test "a background run finishes without disturbing the conversation on screen" {
     run: Open(run_id="r8", stage=Opened),
     messages: [
       {
-        kind: User(text="background ask", images=[]),
+        kind: User(content=Content([Text("background ask")])),
         ts: None,
         sequence: None,
       },
@@ -13374,7 +13488,10 @@ test "steer_applied only settles pending UI until its commit" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="go left", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("go left")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     model,
@@ -13393,7 +13510,7 @@ test "a legacy text-only steer receipt cannot claim local ownership" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="go left", submission_id=None),
+      SteerApplied(content=Content([Text("go left")]), submission_id=None),
       session=None,
     ),
     model,
@@ -13409,7 +13526,10 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
       session~,
       sequence~,
       ts=Some(ts),
-      item=@protocol.User({ content: "question", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("question")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     )
   }
@@ -13455,7 +13575,10 @@ test "a canonical user commit never settles a local steer" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "go left", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("go left")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -13471,7 +13594,11 @@ test "a snapshot never settles a local steer by text" {
     {
       ..running_conversation(),
       messages: [
-        { kind: User(text="same", images=[]), ts: None, sequence: None, },
+        {
+          kind: User(content=Content([Text("same")])),
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark: 1,
       sync: test_reloading([]),
@@ -13485,7 +13612,13 @@ test "a snapshot never settles a local steer by text" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User(text="same", images=[]), ts: None, sequence: None, }],
+      items=[
+        {
+          kind: User(content=Content([Text("same")])),
+          ts: None,
+          sequence: None,
+        },
+      ],
       watermark=1,
       generation=1,
     ),
@@ -13504,7 +13637,10 @@ test "steer_dropped settles the pending steer with a visible notice" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(content="go left", submission_id=Some("test-steer-0")),
+      SteerDropped(
+        content=Content([Text("go left")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     model,
@@ -13525,7 +13661,10 @@ test "an identical-text settle removes exactly one pending entry" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="again", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("again")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     model,
@@ -13550,7 +13689,10 @@ test "a late exact applied receipt retracts a run-end unconfirmed notice" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="lost", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("lost")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     finished,
@@ -13568,7 +13710,10 @@ test "a trailing applied receipt for run A settles after run B Started" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="late steer", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("late steer")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     started,
@@ -13589,7 +13734,10 @@ test "a trailing dropped receipt for run A cannot close run B" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(content="late steer", submission_id=Some("test-steer-0")),
+      SteerDropped(
+        content=Content([Text("late steer")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     started,
@@ -13675,7 +13823,10 @@ test "a foreign background run schedules one causal read after Started" {
       session~,
       sequence=4,
       ts=None,
-      item=@protocol.User({ content: "current question", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("current question")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     buffered_terminal,
@@ -13716,7 +13867,7 @@ test "a foreign background run schedules one causal read after Started" {
           sequence: None,
         },
         {
-          kind: User(text="current question", images=[]),
+          kind: User(content=Content([Text("current question")])),
           ts: None,
           sequence: None,
         },
@@ -13751,7 +13902,10 @@ test "buffered commits are delivery, not applied chronology" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({ content: "current question", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("current question")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -13838,7 +13992,10 @@ test "a trailing applied receipt settles after an empty runs snapshot" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerApplied(content="late applied", submission_id=Some("test-steer-0")),
+      SteerApplied(
+        content=Content([Text("late applied")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     settled,
@@ -13862,7 +14019,10 @@ test "a trailing dropped receipt after an empty runs snapshot changes nothing" {
     dispatch,
     Engine(
       Some("r7"),
-      SteerDropped(content="late dropped", submission_id=Some("test-steer-0")),
+      SteerDropped(
+        content=Content([Text("late dropped")]),
+        submission_id=Some("test-steer-0"),
+      ),
       session=None,
     ),
     settled,
@@ -13925,19 +14085,21 @@ test "loaded UI preferences parse their wire names" {
   let (_, restored) = update(
     dispatch,
     SettingsLoaded(
-      notification_corner="top-left",
-      tree_layout="",
-      theme="dark",
-      font_size="15",
+      notification_corner=Some("top-left"),
+      tree_layout=None,
+      theme=Some("dark"),
+      font_size=Some("15"),
       fps_overlay_enabled=true,
       minimal_transcript=false,
-      model="deepseek-v4-flash",
-      conversation_models="[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
-      agent="codex",
-      codex_model="gpt-5.4-codex",
-      codex_effort="xhigh",
-      openseek_effort="high",
-      glm_effort="max",
+      model=Some("deepseek-v4-flash"),
+      conversation_models=Some(
+        "[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
+      ),
+      agent=Some("codex"),
+      codex_model=Some("gpt-5.4-codex"),
+      codex_effort=Some("xhigh"),
+      openseek_effort=Some("high"),
+      glm_effort=Some("max"),
     ),
     test_model(),
   )
@@ -13954,19 +14116,19 @@ test "loaded UI preferences parse their wire names" {
   let (_, unknown) = update(
     dispatch,
     SettingsLoaded(
-      notification_corner="",
-      tree_layout="",
-      theme="broken",
-      font_size="broken",
+      notification_corner=None,
+      tree_layout=None,
+      theme=Some("broken"),
+      font_size=Some("broken"),
       fps_overlay_enabled=false,
       minimal_transcript=false,
-      model="",
-      conversation_models="not json",
-      agent="broken",
-      codex_model="",
-      codex_effort="",
-      openseek_effort="broken",
-      glm_effort="broken",
+      model=None,
+      conversation_models=Some("not json"),
+      agent=Some("broken"),
+      codex_model=None,
+      codex_effort=None,
+      openseek_effort=Some("broken"),
+      glm_effort=Some("broken"),
     ),
     test_model(),
   )
@@ -14643,19 +14805,19 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   let (_, preferences_after_host) = update(
     dispatch,
     SettingsLoaded(
-      notification_corner="",
-      tree_layout="",
-      theme="",
-      font_size="",
+      notification_corner=None,
+      tree_layout=None,
+      theme=None,
+      font_size=None,
       fps_overlay_enabled=false,
       minimal_transcript=false,
-      model="deepseek-v4-pro",
-      conversation_models="",
-      agent="",
-      codex_model="",
-      codex_effort="",
-      openseek_effort="",
-      glm_effort="",
+      model=Some("deepseek-v4-pro"),
+      conversation_models=None,
+      agent=None,
+      codex_model=None,
+      codex_effort=None,
+      openseek_effort=None,
+      glm_effort=None,
     ),
     restored,
   )
@@ -16367,7 +16529,10 @@ test "a new Started incarnation retires its exact deleted tombstone" {
       session=deleted_item.id,
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "new incarnation", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("new incarnation")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     started,
@@ -16660,6 +16825,7 @@ test "archiving a pending start discards its composer without ownership" {
   let pending = {
     ..test_conversation(),
     pending_prompt: Some({
+      images: [],
       submission_id: "pending-start",
       draft: "original draft",
       mentions: [sent_mention],
@@ -16733,13 +16899,21 @@ test "a background archive removes only its channel's same-id conversation" {
       @interop.ChannelId::Local.test_project(),
     ),
     messages: [
-      { kind: User(text="local", images=[]), ts: None, sequence: None, },
+      {
+        kind: User(content=Content([Text("local")])),
+        ts: None,
+        sequence: None,
+      },
     ],
   }
   let remote_conv = {
     ..empty_conversation(remote, "shared", remote.test_project()),
     messages: [
-      { kind: User(text="remote", images=[]), ts: None, sequence: None, },
+      {
+        kind: User(content=Content([Text("remote")])),
+        ts: None,
+        sequence: None,
+      },
     ],
   }
   let model = {
@@ -17304,7 +17478,9 @@ test "an unreadable library becomes the focused page's notice" {
     FromDevice(Local, InstalledSkillsFailed("library unreadable")),
     paired,
   )
-  assert_true(noticed.skills == paired.skills.with_notice("library unreadable"))
+  assert_true(
+    noticed.skills == paired.skills.with_library_error("library unreadable"),
+  )
 
   // The page is the focused host's; a background device says nothing on it.
   let (_, quiet) = update(
@@ -18021,7 +18197,7 @@ test "Codex original-side diff feedback queues in the Codex draft" {
   )
   let queued = applied.codex.transcript_items()
   assert_eq(queued.length(), 1)
-  guard queued[0].kind is @transcript.User(text=prompt, ..) else {
+  guard queued[0].kind is @transcript.User(content=prompt) else {
     fail("expected the queued feedback as a user prompt")
   }
   assert_true(prompt.contains("side=\"original\""))
@@ -18163,7 +18339,7 @@ test "Codex ApplyAllFeedback steers the running task through its composer" {
   )
   let queued = applied.codex.transcript_items()
   assert_eq(queued.length(), 1)
-  guard queued[0].kind is @transcript.User(text=prompt, ..) else {
+  guard queued[0].kind is @transcript.User(content=prompt) else {
     fail("expected the queued comment as a user prompt")
   }
   assert_true(prompt.contains("<user_mentions>"))
@@ -18968,7 +19144,10 @@ test "send does not show a prompt until its commit lands" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "build the thing", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("build the thing")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     sent,
@@ -18986,7 +19165,11 @@ test "a replayed commit at or below the watermark is dropped" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     messages: [
-      { kind: User(text="already there", images=[]), ts: None, sequence: None, },
+      {
+        kind: User(content=Content([Text("already there")])),
+        ts: None,
+        sequence: None,
+      },
     ],
     watermark: 2,
   })
@@ -18996,7 +19179,10 @@ test "a replayed commit at or below the watermark is dropped" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({ content: "already there", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("already there")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -19018,7 +19204,10 @@ test "a commit past the frontier buffers and flips into a reload" {
       session="desktop-test",
       sequence=5,
       ts=None,
-      item=@protocol.User({ content: "from the future", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("from the future")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -19046,7 +19235,10 @@ test "commits buffer while a reload is in flight" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.User({ content: "mid-reload", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("mid-reload")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -19069,12 +19261,18 @@ test "a snapshot drains buffered commits in sequence order" {
       {
         sequence: 4,
         ts: None,
-        item: @protocol.User({ content: "four", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("four")]),
+          submission_id: None,
+        }),
       },
       {
         sequence: 3,
         ts: None,
-        item: @protocol.User({ content: "three", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("three")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19085,7 +19283,11 @@ test "a snapshot drains buffered commits in sequence order" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User(text="one", images=[]), ts: None, sequence: None, },
+        {
+          kind: User(content=Content([Text("one")])),
+          ts: None,
+          sequence: None,
+        },
         {
           kind: Assistant(
             reasoning=None,
@@ -19119,7 +19321,10 @@ test "a snapshot already containing the buffered commits drops them" {
       {
         sequence: 2,
         ts: None,
-        item: @protocol.User({ content: "dup", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("dup")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19130,8 +19335,16 @@ test "a snapshot already containing the buffered commits drops them" {
       goal_markers=[],
       session="desktop-test",
       items=[
-        { kind: User(text="one", images=[]), ts: None, sequence: None, },
-        { kind: User(text="dup", images=[]), ts: None, sequence: None, },
+        {
+          kind: User(content=Content([Text("one")])),
+          ts: None,
+          sequence: None,
+        },
+        {
+          kind: User(content=Content([Text("dup")])),
+          ts: None,
+          sequence: None,
+        },
       ],
       watermark=2,
       generation=1,
@@ -19152,7 +19365,10 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
       {
         sequence: 9,
         ts: None,
-        item: @protocol.User({ content: "far", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("far")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19162,7 +19378,13 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User(text="one", images=[]), ts: None, sequence: None, }],
+      items=[
+        {
+          kind: User(content=Content([Text("one")])),
+          ts: None,
+          sequence: None,
+        },
+      ],
       watermark=2,
       generation=1,
     ),
@@ -19182,14 +19404,17 @@ test "background retries preserve buffered commits until a later success" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     messages: [
-      { kind: User(text="kept", images=[]), ts: None, sequence: None, },
+      { kind: User(content=Content([Text("kept")])), ts: None, sequence: None, },
     ],
     watermark: 1,
     sync: test_reloading([
       {
         sequence: 3,
         ts: None,
-        item: @protocol.User({ content: "x", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("x")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19218,7 +19443,10 @@ test "background retries preserve buffered commits until a later success" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({ content: "next", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("next")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     failed,
@@ -19234,7 +19462,13 @@ test "background retries preserve buffered commits until a later success" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User(text="kept", images=[]), ts: None, sequence: None, }],
+      items=[
+        {
+          kind: User(content=Content([Text("kept")])),
+          ts: None,
+          sequence: None,
+        },
+      ],
       watermark=1,
       generation=2,
     ),
@@ -19253,14 +19487,17 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
   let model = test_model().replace_conversation({
     ..test_conversation(),
     messages: [
-      { kind: User(text="kept", images=[]), ts: None, sequence: None, },
+      { kind: User(content=Content([Text("kept")])), ts: None, sequence: None, },
     ],
     watermark: 1,
     sync: ReloadFailed(generation=1, buffered=[
       {
         sequence: 2,
         ts: None,
-        item: @protocol.User({ content: "two", submission_id: None, }),
+        item: @protocol.User({
+          content: Content([Text("two")]),
+          submission_id: None,
+        }),
       },
     ]),
   })
@@ -19285,7 +19522,13 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
       goal=None,
       goal_markers=[],
       session="desktop-test",
-      items=[{ kind: User(text="kept", images=[]), ts: None, sequence: None, }],
+      items=[
+        {
+          kind: User(content=Content([Text("kept")])),
+          ts: None,
+          sequence: None,
+        },
+      ],
       watermark=1,
       generation=2,
     ),
@@ -19305,7 +19548,11 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
     ..test_conversation(),
     workspace: Project(root=current_root),
     messages: [
-      { kind: User(text="current", images=[]), ts: None, sequence: None, },
+      {
+        kind: User(content=Content([Text("current")])),
+        ts: None,
+        sequence: None,
+      },
     ],
     watermark: 5,
     sync: Reloading(
@@ -19315,7 +19562,10 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
         {
           sequence: 6,
           ts: None,
-          item: @protocol.User({ content: "six", submission_id: None, }),
+          item: @protocol.User({
+            content: Content([Text("six")]),
+            submission_id: None,
+          }),
         },
       ],
       reload_after_current=false,
@@ -19329,7 +19579,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
       session="desktop-test",
       items=[
         {
-          kind: User(text="stale generation", images=[]),
+          kind: User(content=Content([Text("stale generation")])),
           ts: None,
           sequence: None,
         },
@@ -19353,7 +19603,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
       session="desktop-test",
       items=[
         {
-          kind: User(text="older snapshot", images=[]),
+          kind: User(content=Content([Text("older snapshot")])),
           ts: None,
           sequence: None,
         },
@@ -19402,7 +19652,7 @@ test "tool decode semantics wait for their durable error tool result" {
       data: None,
       tool_call_id: "c1",
       tool_name: "edit",
-      content: "invalid arguments",
+      content: Content([Text("invalid arguments")]),
       is_error: true,
       brief: None,
     }),
@@ -19417,7 +19667,8 @@ test "tool decode semantics wait for their durable error tool result" {
     fail("expected the response carrying the failed call")
   }
   assert_true(
-    edit.outcome is Done(content="invalid arguments", is_error=true, ..),
+    edit.outcome
+    is Done(content=Content([Text("invalid arguments")]), is_error=true, ..),
   )
   let (_, called_first) = update_dev(dispatch, call, running_model())
   let (_, committed_first) = update_dev(dispatch, result, called_first)
@@ -19485,7 +19736,7 @@ test "a committed tool result visibly changes its existing call row" {
       data: None,
       tool_call_id: "c1",
       tool_name: "read",
-      content: "module contents",
+      content: Content([Text("module contents")]),
       is_error: false,
       brief: Some("read moon.mod"),
     }),
@@ -19497,7 +19748,11 @@ test "a committed tool result visibly changes its existing call row" {
   }
   assert_true(
     call.outcome
-    is Done(content="module contents", brief=Some("read moon.mod"), ..),
+    is Done(
+      content=Content([Text("module contents")]),
+      brief=Some("read moon.mod"),
+      ..
+    ),
   )
 }
 
@@ -19547,7 +19802,11 @@ test "a delayed terminal commit never clears a newer live delta" {
   let model = running_model().replace_conversation({
     ..running_conversation(),
     messages: [
-      { kind: User(text="older prompt", images=[]), ts: None, sequence: None, },
+      {
+        kind: User(content=Content([Text("older prompt")])),
+        ts: None,
+        sequence: None,
+      },
     ],
     watermark: 1,
     turn: {
@@ -19619,7 +19878,10 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
@@ -19640,7 +19902,10 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "hi", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("hi")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     next,
@@ -19657,7 +19922,10 @@ test "a gapped commit for an unknown session materializes then reloads" {
       session="desktop-gap",
       sequence=3,
       ts=None,
-      item=@protocol.User({ content: "third", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("third")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     test_model(),
@@ -19696,7 +19964,10 @@ test "a late commit cannot resurrect a locally known archived session" {
       session="desktop-archived",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "stale", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("stale")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -19725,7 +19996,10 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
       session="desktop-tombstoned",
       sequence=1,
       ts=None,
-      item=@protocol.User({ content: "stale", submission_id: None, }),
+      item=@protocol.User({
+        content: Content([Text("stale")]),
+        submission_id: None,
+      }),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,

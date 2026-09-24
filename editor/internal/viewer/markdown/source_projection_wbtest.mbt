@@ -36,7 +36,12 @@ test "projection keeps zero and identical code blocks distinct with full fence i
     #|```mbt check
     #|same()
     #|```
-  let projection = render_markdown(source).projection
+  let rendered_blocks : Array[MarkdownCodeBlock] = []
+  let projection = render_markdown(source, code_block_renderer=fn(block, _) {
+      rendered_blocks.push(block)
+      "<pre>same()</pre>"
+    }).projection
+  assert_eq(rendered_blocks, projection.code_blocks)
   assert_eq(projection.code_blocks.length(), 2)
   let first = projection.code_blocks[0]
   let second = projection.code_blocks[1]
