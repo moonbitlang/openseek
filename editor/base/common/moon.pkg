@@ -1,3 +1,7 @@
+import {
+  "moonbitlang/core/encoding/percent",
+}
+
 options(
   targets: {
     "platform_js.mbt": [ "js" ],

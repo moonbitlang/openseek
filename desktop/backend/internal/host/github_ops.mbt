@@ -362,28 +362,7 @@ async fn resolve_gh() -> @pathx.Absolute? {
 /// `+` in branch names, each of which means something else in a URL, while `/`
 /// is left alone because a namespaced branch really is a multi-segment path.
 fn encode_url_path(path : String) -> String {
-  let encoded = StringBuilder()
-  for char in path {
-    if is_url_path_plain(char) {
-      encoded <+ "\{char}"
-    } else {
-      for byte in @utf8.encode("\{char}") {
-        let value = byte.to_int()
-        encoded <+ "%"
-        if value < 16 {
-          encoded <+ "0"
-        }
-        encoded <+ "\{value.to_string(radix=16).to_upper()}"
-      }
-    }
-  }
-  encoded.to_string()
-}
-
-///|
-/// RFC 3986's unreserved set, plus the separator a branch path uses.
-fn is_url_path_plain(char : Char) -> Bool {
-  char is ('a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '.' | '_' | '~' | '/')
+  path.split("/").map(segment => @percent.encode(segment)).join("/")
 }
 
 ///|

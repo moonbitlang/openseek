@@ -12,7 +12,7 @@ import {
   "moonbit-community/rabbita/url",
   "moonbitlang/core/cmp",
   "moonbit-community/rabbita/js",
-  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/encoding/percent",
   "moonbitlang/core/json",
 }
 

@@ -3,9 +3,10 @@
 /// Reviewed deviations from the pinned Monaco implementation:
 /// - D3: the RFC3986 appendix-B regex and `_rEncodedAsHex` become hand-rolled
 ///   scanners with identical accept/capture semantics.
-/// - D4: JS `encodeURIComponent`/`decodeURIComponent` are reimplemented as
-///   UTF-8 percent transcoding (uppercase hex). A lone surrogate aborts the
-///   way JS throws `URIError`; invalid `%` sequences / invalid UTF-8 fail so
+/// - D4: JS `encodeURIComponent` is reimplemented as UTF-8 percent
+///   transcoding (uppercase hex); a lone surrogate aborts the way JS throws
+///   `URIError`. JS `decodeURIComponent` is `@percent.decode`, which raises on
+///   exactly the inputs that make the JS builtin throw, so
 ///   `decode_uri_component_graceful` keeps the raw text.
 /// - D5: Monaco's abstract `URI` + caching subclass `Uri` collapse into one
 ///   struct with `mut` cache fields; `Eq`/`Hash`/`Debug` are manual over the
@@ -817,109 +818,11 @@ fn last_index_of_char(s : String, code : Int) -> Int {
 }
 
 ///|
-/// Internal decode failure — only used to drive
-/// `decode_uri_component_graceful`'s keep-raw fallback (D4).
-priv suberror UriDecodeError {
-  UriDecodeError(String)
-}
-
-///|
-fn hex_digit_value(code : Int) -> Int raise UriDecodeError {
-  if code >= '0'.to_int() && code <= '9'.to_int() {
-    code - '0'.to_int()
-  } else if code >= 'A'.to_int() && code <= 'F'.to_int() {
-    code - 'A'.to_int() + 10
-  } else if code >= 'a'.to_int() && code <= 'f'.to_int() {
-    code - 'a'.to_int() + 10
-  } else {
-    raise UriDecodeError("URI malformed")
-  }
-}
-
-///|
-/// Reads a `%XX` escape starting at `at`: `%` plus two hex digits.
-fn read_percent_byte(s : String, at : Int) -> Int raise UriDecodeError {
-  if at + 2 >= s.length() || s[at].to_int() != '%'.to_int() {
-    raise UriDecodeError("URI malformed")
-  }
-  (hex_digit_value(s[at + 1].to_int()) << 4) |
-  hex_digit_value(s[at + 2].to_int())
-}
-
-///|
-/// JS `decodeURIComponent` reimplemented as strict UTF-8 percent
-/// transcoding (D4): invalid `%` sequences, invalid/overlong UTF-8, and
-/// surrogate/out-of-range code points all fail, exactly the inputs that make
-/// the JS builtin throw `URIError`.
-fn decode_uri_component(str : String) -> String raise UriDecodeError {
-  let sb = StringBuilder()
-  let len = str.length()
-  let mut i = 0
-  let mut chunk_start = 0
-  while i < len {
-    if str[i].to_int() == '%'.to_int() {
-      sb.write_string(js_slice(str, chunk_start, end=i))
-      let byte0 = read_percent_byte(str, i)
-      if byte0 < 0x80 {
-        sb.write_char(Int::unsafe_to_char(byte0))
-        i += 3
-      } else {
-        // multi-byte sequence: every continuation must itself be a
-        // percent-escape (a literal char in between makes JS throw)
-        let (extra, min_second, max_second) = if byte0 >= 0xC2 && byte0 <= 0xDF {
-          (1, 0x80, 0xBF)
-        } else if byte0 == 0xE0 {
-          (2, 0xA0, 0xBF)
-        } else if byte0 >= 0xE1 && byte0 <= 0xEC {
-          (2, 0x80, 0xBF)
-        } else if byte0 == 0xED {
-          (2, 0x80, 0x9F)
-        } else if byte0 >= 0xEE && byte0 <= 0xEF {
-          (2, 0x80, 0xBF)
-        } else if byte0 == 0xF0 {
-          (3, 0x90, 0xBF)
-        } else if byte0 >= 0xF1 && byte0 <= 0xF3 {
-          (3, 0x80, 0xBF)
-        } else if byte0 == 0xF4 {
-          (3, 0x80, 0x8F)
-        } else {
-          raise UriDecodeError("URI malformed")
-        }
-        let mut code_point = match extra {
-          1 => byte0 & 0x1F
-          2 => byte0 & 0x0F
-          _ => byte0 & 0x07
-        }
-        for k in 1..<=extra {
-          let cont = read_percent_byte(str, i + 3 * k)
-          let (min, max) = if k == 1 {
-            (min_second, max_second)
-          } else {
-            (0x80, 0xBF)
-          }
-          if cont < min || cont > max {
-            raise UriDecodeError("URI malformed")
-          }
-          code_point = (code_point << 6) | (cont & 0x3F)
-        }
-        sb.write_char(Int::unsafe_to_char(code_point))
-        i += 3 * (extra + 1)
-      }
-      chunk_start = i
-    } else {
-      i += 1
-    }
-  }
-  sb.write_string(js_slice(str, chunk_start))
-  sb.to_string()
-}
-
-///|
 /// `decodeURIComponentGraceful` (uri.ts:728): decode; on failure keep the
 /// raw 3-char prefix and retry the rest recursively.
 fn decode_uri_component_graceful(str : String) -> String {
-  decode_uri_component(str) catch {
-    UriDecodeError(_) =>
+  @percent.decode(str) catch {
+    Malformed(_) =>
       if str.length() > 3 {
         js_slice(str, 0, end=3) +
         decode_uri_component_graceful(js_slice(str, 3))

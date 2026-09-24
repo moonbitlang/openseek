@@ -278,3 +278,22 @@ test "the hash session key restores the selection on the first listing" {
   let (_, kept) = update(emit, SessionsFetched(Ok(listing)), busy)
   debug_inspect(kept.selected, content="Some(\"k1\")")
 }
+
+///|
+/// A literal `+` in an `s=` key is a space, while an escaped `%2B` stays a
+/// plus; malformed escapes and invalid UTF-8 reject the key.
+test "hash session keys decode plus signs and reject malformed escapes" {
+  fn key(fragment : String) -> String? raise MalformedHashSessionKey {
+    HashSessionKey::from_fragment(fragment).map(key => key.0)
+  }
+
+  assert_eq(key("x=1&s=a+b%2Bc%20%E4%B8%AD"), Some("a b+c 中"))
+  assert_eq(key("x=1"), None)
+  for malformed in ["s=%", "s=%zz", "s=%FF"] {
+    try key(malformed) catch {
+      MalformedHashSessionKey => ()
+    } noraise {
+      _ => fail("expected \{malformed} to be rejected")
+    }
+  }
+}

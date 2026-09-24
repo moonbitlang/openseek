@@ -737,44 +737,12 @@ fn HashSessionKey::from_fragment(
 fn HashSessionKey::decode(
   encoded : StringView,
 ) -> HashSessionKey raise MalformedHashSessionKey {
-  let bytes = Buffer(size_hint=encoded.length())
-  for remaining = encoded {
-    match remaining {
-      [] => {
-        let value = @utf8.decode(bytes.to_bytes()) catch {
-          _ => raise MalformedHashSessionKey
-        }
-        break HashSessionKey(value)
-      }
-      ['%', high, low, .. rest] => {
-        guard HashSessionKey::hex_value(high) is Some(high) &&
-          HashSessionKey::hex_value(low) is Some(low) else {
-          raise MalformedHashSessionKey
-        }
-        bytes.write_byte((high * 16 + low).to_byte())
-        continue rest
-      }
-      ['%', ..] => raise MalformedHashSessionKey
-      ['+', .. rest] => {
-        bytes.write_byte(b' ')
-        continue rest
-      }
-      [character, .. rest] => {
-        bytes.write_char_utf8(character)
-        continue rest
-      }
-    }
+  // A literal `+` is a space; an escaped `%2B` is not, so `+` is replaced
+  // before escapes are decoded.
+  let value = @percent.decode(encoded.replace_all(old="+", new=" ")) catch {
+    Malformed(_) => raise MalformedHashSessionKey
   }
-}
-
-///|
-fn HashSessionKey::hex_value(character : Char) -> Int? {
-  match character {
-    '0'..='9' => Some(character.to_int() - 0x30)
-    'A'..='F' => Some(character.to_int() - 0x41 + 10)
-    'a'..='f' => Some(character.to_int() - 0x61 + 10)
-    _ => None
-  }
+  HashSessionKey(value)
 }
 
 ///|

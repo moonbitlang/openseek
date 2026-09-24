@@ -308,14 +308,15 @@ async fn build_reply(
 /// `/api/sessions/` route prefix. A key is either legacy `<id>` for the first
 /// matching file, or an opaque key returned by `/api/sessions`. Both segments
 /// are percent-decoded — ids containing URL-reserved characters (spaces, `?`,
-/// `#`) must decode in both positions to resolve the right session. The
+/// `#`) must decode in both positions to resolve the right session. `+` stays
+/// literal, as it is in a path segment, and malformed escapes stay verbatim. The
 /// resolved path always comes from the catalog scan, never from the URL file
 /// segment.
 async fn session_path_reply(catalog : SessionCatalog, rest : String) -> Reply {
   let (key, file) = match rest.split_once("/") {
-    None => (percent_decode(rest), None)
+    None => (@percent.decode_lossy(rest), None)
     Some((key, file)) =>
-      (percent_decode("\{key}"), Some(percent_decode("\{file}")))
+      (@percent.decode_lossy(key), Some(@percent.decode_lossy(file)))
   }
   let row = match catalog.lookup(key) {
     Some(found) => found
@@ -1064,50 +1065,6 @@ fn strip_query(path : String) -> String {
   match path.split_once("?") {
     Some((path, _)) => "\{path}"
     None => path
-  }
-}
-
-///|
-/// Percent-decode a URL path segment (`%XX` → byte), assembling the decoded
-/// bytes and interpreting them as UTF-8. Non-`%` characters pass through as
-/// their own UTF-8 bytes. `+` is left as-is (it is literal in path segments).
-/// A malformed `%` escape is left verbatim, and undecodable bytes fall back to
-/// the original string.
-fn percent_decode(s : String) -> String {
-  let chars = s.to_array()
-  let bytes : Array[Byte] = []
-  for i = 0 {
-    match chars[i:] {
-      [] => break
-      // A complete %XX escape needs two hex digits after the percent: the
-      // view pattern checks the remaining length, the guard checks the
-      // digits, and a truncated or malformed escape falls through to the
-      // verbatim arm.
-      ['%', high, low, ..] if hex_val(high) is Some(h) &&
-        hex_val(low) is Some(l) => {
-        bytes.push(((h * 16 + l) & 0xff).to_byte())
-        continue i + 3
-      }
-      [c, ..] => {
-        for byte in @utf8.encode(c.to_string()) {
-          bytes.push(byte)
-        }
-        continue i + 1
-      }
-    }
-  }
-  @utf8.decode(Bytes::from_array(bytes)) catch {
-    _ => s
-  }
-}
-
-///|
-fn hex_val(c : Char) -> Int? {
-  match c {
-    '0'..='9' => Some(c.to_int() - '0')
-    'a'..='f' => Some(c.to_int() - 'a' + 10)
-    'A'..='F' => Some(c.to_int() - 'A' + 10)
-    _ => None
   }
 }
 
