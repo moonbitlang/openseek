@@ -149,8 +149,8 @@ async test "execute_tool_call turns a tool failure into a recoverable error resu
 ///|
 async test "execute_tool_call reports a cancelled child task as a tool error" {
   // `Task::wait` on a task someone else cancelled raises the ordinary
-  // `TaskCancelled` error; the caller itself is not cancelled, so the tool
-  // failed and the turn goes on.
+  // `WaitedTaskAlreadyCancelled` error; the caller itself is not cancelled,
+  // so the tool failed and the turn goes on.
   async fn wait_cancelled_child(_args : Json) -> ToolAction {
     @async.with_task_group(group => {
       let child = group.spawn(() => @async.sleep(10_000))
@@ -168,7 +168,7 @@ async test "execute_tool_call reports a cancelled child task as a tool error" {
     fail("expected Respond")
   }
   assert_true(output.is_error)
-  assert_true(output.content.contains("TaskCancelled"))
+  assert_true(output.content.contains("WaitedTaskAlreadyCancelled"))
 }
 
 ///|

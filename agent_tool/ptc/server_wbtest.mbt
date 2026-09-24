@@ -10,7 +10,7 @@ async fn run(
     let registration = service.register(on_trace~)
     defer registration.close()
     let action = program(registration.env()) catch {
-      @async.TaskCancelled as error => raise error
+      @async.WaitedTaskAlreadyCancelled as error => raise error
       error =>
         @agent_tool.respond("PTC program failed: \{error}", is_error=true)
     }

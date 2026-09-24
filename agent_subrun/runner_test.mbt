@@ -294,7 +294,7 @@ async test "external cancellation closes the bracket before re-raising" {
     let mut reraised = false
     let outcome : @agent_subrun.SubrunResult[String]? = Some(task.wait()) catch {
       error => {
-        reraised = error is @async.TaskCancelled
+        reraised = error is @async.WaitedTaskAlreadyCancelled
         None
       }
     }

@@ -309,7 +309,7 @@ async fn AgentLoop::run(
 /// Every append is best effort: cleanup must not replace the original exit.
 async fn AgentLoop::seal_unwinding_turn(self : Self, failure : Error?) -> Unit {
   let terminal : @agent_session.SessionItem = if failure is Some(error) &&
-    !(error is @async.TaskCancelled) {
+    !(error is @async.WaitedTaskAlreadyCancelled) {
     Terminal(Failed("agent failed: \{error}"))
   } else {
     Terminal(Interrupted("cancelled"))
@@ -686,7 +686,7 @@ async fn AgentLoop::prefetch_concurrent_results(
       continue
     }
     let call = @agent_tool.AgentToolCall(native) catch {
-      @async.TaskCancelled as error => raise error
+      @async.WaitedTaskAlreadyCancelled as error => raise error
       _ => {
         flush()
         continue
@@ -786,7 +786,7 @@ async fn AgentLoop::execute_tool_call(
           })
         })
         try self.wait_for_jobs(ids) catch {
-          @async.TaskCancelled as error => {
+          @async.WaitedTaskAlreadyCancelled as error => {
             cancelled_child = true
             raise error
           }
@@ -1191,7 +1191,7 @@ async fn AgentLoop::run_pending_review(
   // (Pre-launch economy is separate: a replacement observed before this
   // point already cleared the pending slot and no audit was spawned.)
   let notice = callback(goal, baseline) catch {
-    @async.TaskCancelled as error => raise error
+    @async.WaitedTaskAlreadyCancelled as error => raise error
     error =>
       Some(
         "[review] unavailable: \{@agent_tool.brief_line("\{error}", limit=200)}",

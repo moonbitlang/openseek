@@ -14,5 +14,5 @@ warnings = "+prefer_readonly_array+implicit_impl_as_method+test_unqualified_pack
 
 import {
   "moonbitlang/editor@0.4.5",
-  "moonbitlang/async@0.22.1",
+  "moonbitlang/async@0.22.4",
 }

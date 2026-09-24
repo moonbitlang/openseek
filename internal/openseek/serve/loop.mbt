@@ -201,7 +201,7 @@ async fn run_serve(
           Err(message) => @emit.emit(CommandError(error=message))
         }
       }) catch {
-        @async.TaskCancelled as error => raise error
+        @async.WaitedTaskAlreadyCancelled as error => raise error
         // A malformed (non-JSON) line is a controller bug: report it and
         // stop reading commands, which shuts the server down gracefully.
         error => @emit.emit(CommandError(error="command stream: \{error}"))
@@ -257,7 +257,7 @@ async fn run_serve(
         retry_attempts?,
         retry_backoff_ms?,
       ) catch {
-        @async.TaskCancelled as error => raise error
+        @async.WaitedTaskAlreadyCancelled as error => raise error
         error => {
           @emit.emit(CompactionFailed(error="\{error}"))
           current
@@ -275,7 +275,7 @@ async fn run_serve(
     ) -> Bool {
       session = if store is Some(store) {
         store.append(session, item) catch {
-          @async.TaskCancelled as error => raise error
+          @async.WaitedTaskAlreadyCancelled as error => raise error
           error => {
             @emit.emit(SessionError(error="failed to append \{what}: \{error}"))
             return false
@@ -452,7 +452,7 @@ async fn run_serve(
             // turn already appended its Interrupted terminal inside the
             // loop, and any other failure is reported as a terminal wire
             // event so the controller can close the run.
-            if error is @async.TaskCancelled {
+            if error is @async.WaitedTaskAlreadyCancelled {
               @emit.emit(AgentAborted(reason="interrupted"))
             } else {
               @emit.emit(TurnFailed(error="\{error}"))
@@ -476,7 +476,7 @@ async fn run_serve(
           ignore(steps.try_put(CompactDone(current)) catch { _ => false })
         }
         let next = compact_and_report(current) catch {
-          @async.TaskCancelled => {
+          @async.WaitedTaskAlreadyCancelled => {
             @emit.emit(CompactionFailed(error="cancelled"))
             current
           }
@@ -525,7 +525,7 @@ async fn run_serve(
 
     serve~: for ;; {
       let step = steps.get() catch {
-        @async.TaskCancelled as error => raise error
+        @async.WaitedTaskAlreadyCancelled as error => raise error
         _ => break serve~
       }
       match step {

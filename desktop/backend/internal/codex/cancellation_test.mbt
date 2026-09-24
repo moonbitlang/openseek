@@ -42,7 +42,7 @@ async test "cancelling the Codex actor settles an in-flight API call" {
       started.get()
       running.cancel()
       try running.wait() catch {
-        @async.TaskCancelled => ()
+        @async.WaitedTaskAlreadyCancelled => ()
         error => raise error
       } noraise {
         _ => fail("actor should propagate cancellation")

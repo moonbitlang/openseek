@@ -243,7 +243,7 @@ async fn[T] Client::with_retries(
     fatal_error=error => {
       let stopped = bail(error)
       let fatal = stopped ||
-        error is @async.TaskCancelled ||
+        error is @async.WaitedTaskAlreadyCancelled ||
         error is Failure::Failure(_) ||
         error is @http.URIParseError::InvalidFormat ||
         error is @http.URIParseError::UnsupportedProtocol(_)
@@ -317,7 +317,7 @@ pub async fn Client::chat(
             }
           },
         ) catch {
-          @async.TaskCancelled as error => raise error
+          @async.WaitedTaskAlreadyCancelled as error => raise error
           error => fail(progress.failure_message(self, error))
         }
       }

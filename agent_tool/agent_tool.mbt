@@ -316,7 +316,7 @@ pub fn Tools::function_tools(self : Tools) -> Array[@deepseek.ToolDefinition] {
 /// and the turn continues — one boundary that spares every tool from wrapping
 /// each of its own filesystem/IO calls just to report a failure. `noraise`
 /// makes the compiler hold that contract: every error a tool raises ends here,
-/// including `@async.TaskCancelled` from a `Task::wait` on a child task the
+/// including `@async.WaitedTaskAlreadyCancelled` from a `Task::wait` on a child task the
 /// tool saw cancelled — that is the tool's failure, not the turn's.
 ///
 /// Deliberately NOT `nocancel`: cancelling the caller (a user interrupt, a

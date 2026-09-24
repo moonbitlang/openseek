@@ -147,7 +147,7 @@ async fn BgJobRuntime::publish_record(
       None => persist(record)
     }
   } catch {
-    @async.TaskCancelled as error => raise error
+    @async.WaitedTaskAlreadyCancelled as error => raise error
     error => job.persistence_error = Some("failed to persist job: \{error}")
   }
   job.announced = true

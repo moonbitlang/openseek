@@ -50,7 +50,7 @@ async test "cancelling a blocked writer closes the client and settles its reques
       ignore(transport.sent.get())
       writer.cancel()
       try writer.wait() catch {
-        @async.TaskCancelled => ()
+        @async.WaitedTaskAlreadyCancelled => ()
         error => raise error
       } noraise {
         _ => fail("writer should propagate cancellation")

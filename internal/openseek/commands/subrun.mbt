@@ -84,7 +84,7 @@ pub async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
         dispatch_kind(
           kind, input, ceiling, matches, model, thinking, api_url, workspace_root,
         ) catch {
-          @async.TaskCancelled as error => raise error
+          @async.WaitedTaskAlreadyCancelled as error => raise error
           error => {
             @emit.emit(TurnFailed(error="subrun \{kind} failed: \{error}"))
             None
@@ -103,7 +103,7 @@ pub async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
       report = work.wait() catch {
         // Parent-initiated cancel (stdin EOF): exit without a report; the
         // parent is already classifying the run from what it observed.
-        @async.TaskCancelled => None
+        @async.WaitedTaskAlreadyCancelled => None
         error => raise error
       }
     }

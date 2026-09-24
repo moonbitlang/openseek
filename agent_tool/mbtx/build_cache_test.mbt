@@ -181,7 +181,9 @@ async test "cache: a build stopped mid-way retires its generation" {
       } noraise {
         _ => None
       }
-      assert_true(error is Some(error) && error is @async.TaskCancelled)
+      assert_true(
+        error is Some(error) && error is @async.WaitedTaskAlreadyCancelled,
+      )
     })
     let ok = dispatch(definition, { "source": "fn main { println(1) }" })
     assert_false(ok.is_error, msg=ok.content)

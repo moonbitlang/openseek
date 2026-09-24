@@ -165,7 +165,7 @@ async fn execute(
     timeout_ms~,
     query,
   ) catch {
-    @async.TaskCancelled as error => raise error
+    @async.WaitedTaskAlreadyCancelled as error => raise error
     error =>
       return @agent_tool.respond(
         "error: web_search failed: \{error}",
