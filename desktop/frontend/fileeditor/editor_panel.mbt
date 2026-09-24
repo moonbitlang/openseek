@@ -305,6 +305,27 @@ fn working_feedback_model(
 }
 
 ///|
+/// Rendered selections provide their visible text while the source range only
+/// locates the enclosing block. Source editors still quote their exact range.
+fn working_feedback_message(
+  file : @pathx.Relative,
+  model : @model.TextModel,
+  feedback : @agent_feedback_api.AgentFeedback,
+) -> Msg {
+  EditorCommentAdded(
+    resource=ModelUri(feedback.resource.to_string()),
+    file~,
+    range=feedback.range,
+    quote=match feedback.selected_text {
+      Some(selected) => selected
+      None => model.get_value_in_range(feedback.range)
+    },
+    comment=feedback.text,
+    feedback_id=feedback.id,
+  )
+}
+
+///|
 /// Register syntax highlighting for the languages the panel can recognize.
 /// MoonBit source and standalone `.mbtx` scripts share a tokenizer and language
 /// services. Files of any other type render as plain text.
@@ -443,7 +464,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
             return
           }
           // Each presentation owns its model; rich Markdown detaches the code
-          // source Viewer. Preserve source Markdown in the annotation quote.
+          // source Viewer. Resolve its model for source-location ownership.
           let markdown_model = viewer_state.markdown_viewer.bind(editor => {
             editor.get_model()
           })
@@ -458,16 +479,7 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
             )
             is Some(model) {
             scheduler.add(
-              dispatch(
-                EditorCommentAdded(
-                  resource=ModelUri(event.feedback.resource.to_string()),
-                  file~,
-                  range=event.feedback.range,
-                  quote=model.get_value_in_range(event.feedback.range),
-                  comment=event.feedback.text,
-                  feedback_id=event.feedback.id,
-                ),
-              ),
+              dispatch(working_feedback_message(file, model, event.feedback)),
             )
             return
           }

@@ -56,7 +56,7 @@ async function feedbackFacts(page) {
   return page.evaluate(() => globalThis.__markdownFeedbackControls.getFeedback());
 }
 
-test('rendered emphasis adds feedback for its complete Markdown paragraph', async ({ page }) => {
+test('rendered emphasis quotes only selected text while locating its complete source paragraph', async ({ page }) => {
   await openFixture(page);
   await openComposer(page, '自动保存');
   await page.locator(input).fill('说明自动保存的时机');
@@ -67,6 +67,7 @@ test('rendered emphasis adds feedback for its complete Markdown paragraph', asyn
   expect(facts.submitted).toBe(0);
   expect(facts.items[0]).toMatchObject({
     text: '说明自动保存的时机',
+    selected_text: '自动保存',
     resource: 'inmemory://component/feedback.md',
     submitted: false,
   });
@@ -75,7 +76,7 @@ test('rendered emphasis adds feedback for its complete Markdown paragraph', asyn
   await expect(page.locator(input)).not.toBeVisible();
 });
 
-test('selection across paragraphs applies feedback for the complete source span', async ({ page }) => {
+test('cross-paragraph feedback keeps exact rendered text and a complete source span', async ({ page }) => {
   await openFixture(page);
   await openComposer(page, '自动保存', '独立说明');
   await page.locator(input).fill('合并这两段说明');
@@ -84,12 +85,16 @@ test('selection across paragraphs applies feedback for the complete source span'
   await expect.poll(async () => (await feedbackFacts(page)).submitted).toBe(1);
   const facts = await feedbackFacts(page);
   expect(facts.items).toHaveLength(1);
-  expect(facts.items[0]).toMatchObject({ text: '合并这两段说明', submitted: true });
+  expect(facts.items[0]).toMatchObject({
+    text: '合并这两段说明',
+    selected_text: '自动保存，也支持手动保存。\n\n第二段包含 独立说明',
+    submitted: true,
+  });
   expect(facts.items[0].range.slice(0, 2)).toEqual([3, 1]);
   expect(facts.items[0].source.trimEnd()).toBe(`${firstParagraph}\n\n${secondParagraph}`);
 });
 
-test('nested lists, table cells, code blocks, and image selections retain useful source context', async ({ page }) => {
+test('lists, tables, code, and images preserve their selected text independently of source ranges', async ({ page }) => {
   await openFixture(page);
   const cases = [
     { text: 'review target', source: 'Nested **review target** has details.' },
@@ -102,6 +107,7 @@ test('nested lists, table cells, code blocks, and image selections retain useful
     await page.locator('.agent-feedback-input-action-add').click();
     await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(index + 1);
     const saved = (await feedbackFacts(page)).items[index];
+    expect(saved.selected_text).toBe(item.text);
     expect(saved.source).toContain(item.source);
     expect(saved.source).not.toContain('Unselected tail paragraph');
     expect(saved.source).not.toContain(firstParagraph);
@@ -128,7 +134,11 @@ test('nested lists, table cells, code blocks, and image selections retain useful
   await page.locator(input).fill('Explain this image');
   await page.locator('.agent-feedback-input-action-add').click();
   await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(4);
-  expect((await feedbackFacts(page)).items[3].source.trimEnd()).toBe(
+  const savedImage = (await feedbackFacts(page)).items[3];
+  // An image-only native selection has text "", distinct from a selection
+  // with no supplied text. Do not replace it with Markdown or image alt text.
+  expect(savedImage.selected_text).toBe('');
+  expect(savedImage.source.trimEnd()).toBe(
     '![Feedback image](https://example.test/browser-tests/feedback-fixture.svg)',
   );
 });
@@ -167,6 +177,7 @@ for (const change of ['setSource', 'replaceSameUri']) {
     await page.locator('.agent-feedback-input-action-add').click();
     await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
     const saved = (await feedbackFacts(page)).items[0];
+    expect(saved.selected_text).toBe('replacement selection');
     expect(saved.source.trimEnd()).toBe('New **replacement selection** has fresh context.');
     expect(saved.range.slice(0, 2)).toEqual([3, 1]);
   });
@@ -223,7 +234,7 @@ test('mouse selection opens after release, preserves document focus, and support
   await expect(page.locator(input)).not.toBeVisible();
 });
 
-test('empty drafts follow reselection, typed drafts keep their source, and dismissed selections stay closed', async ({ page }) => {
+test('empty drafts follow reselection, typed drafts keep source and selected text, and dismissed selections stay closed', async ({ page }) => {
   await openFixture(page);
   await page.evaluate(() => {
     const controls = globalThis.__markdownFeedbackControls;
@@ -240,6 +251,7 @@ test('empty drafts follow reselection, typed drafts keep their source, and dismi
   });
   await page.locator('.agent-feedback-input-action-add').click();
   await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
+  expect((await feedbackFacts(page)).items[0].selected_text).toBe('独立说明');
   expect((await feedbackFacts(page)).items[0].source.trimEnd()).toBe(secondParagraph);
   // The dismissed UI must suppress the live selection, even when a typed
   // draft was pinned to a different source block. Refocus/selection events

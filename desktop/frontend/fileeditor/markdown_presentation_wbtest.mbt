@@ -53,7 +53,7 @@ test "Markdown source feedback falls back to the modified diff kernel" {
 }
 
 ///|
-test "rendered Markdown feedback resolves its source model and preserves Markdown quote" {
+test "rendered Markdown feedback resolves its source model" {
   let source = feedback_test_model(
     "file", "/README.md", "# Title\n\nPlease **keep** this.\n\nAfter.",
   )
@@ -74,13 +74,58 @@ test "rendered Markdown feedback resolves its source model and preserves Markdow
       source.uri,
     )
     assert_true(resolved is Some(model) && model.same(source))
-    assert_eq(
-      resolved.map(model => model.get_value_in_range(@common.Range(3, 1, 3, 22))),
-      Some("Please **keep** this."),
-    )
   }
   assert_true(
     working_feedback_model(None, Some(markdown), Some(pair), original.uri)
     is None,
   )
+}
+
+///|
+test "working feedback keeps rendered selection text separate from source range" {
+  let source = feedback_test_model(
+    "file", "/README.md", "# Title\n\nPlease **keep** this.\n\nAfter.",
+  )
+  defer source.dispose()
+  let range = @common.Range(3, 1, 3, 22)
+  let service = @feedback.DesktopFeedbackService()
+  let messages : Array[Msg] = []
+  service.on_did_add_feedback(event => {
+    messages.push(
+      working_feedback_message(Relative("README.md"), source, event.feedback),
+    )
+  })
+  |> ignore
+  // Empty visible text is still an explicit selection (for example an image).
+  // Only source feedback without a rendered selection quotes the model range.
+  for
+    (selected_text, expected) in [
+      (Some("keep"), "keep"),
+      (Some(""), ""),
+      (None, "Please **keep** this."),
+    ] {
+    messages.clear()
+    let feedback = service
+      .agent_feedback_handle()
+      .add_feedback(source.uri, range, "make this clearer", selected_text?)
+    guard messages[:]
+      is [
+        EditorCommentAdded(
+          resource~,
+          file~,
+          range=actual_range,
+          quote~,
+          comment~,
+          feedback_id~
+        ),
+      ] else {
+      fail("expected one working-file annotation")
+    }
+    assert_eq(resource.0, source.uri.to_string())
+    assert_eq(file, Relative("README.md"))
+    assert_eq(actual_range, range)
+    assert_eq(quote, expected)
+    assert_eq(comment, "make this clearer")
+    assert_eq(feedback_id, feedback.id)
+  }
 }

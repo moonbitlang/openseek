@@ -257,6 +257,7 @@ fn MarkdownViewerWidgetFeedbackBridge::submit(
     self.model.uri,
     Range(start.line_number, start.column, end.line_number, end.column),
     text,
+    selected_text=target.selected_text,
   )
   |> ignore
   self.hide()

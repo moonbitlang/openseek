@@ -3,6 +3,7 @@
 /// The browser's character offsets deliberately do not become source offsets.
 pub struct MarkdownSourceSelection {
   source_range : @base_common.OffsetRange
+  selected_text : String
   source_model_version : Int
   projection_generation : Int
   prefer_below : Bool
@@ -70,6 +71,12 @@ extern "js" fn markdown_selection_prefers_below(
   #|   const selection = article.ownerDocument.getSelection();
   #|   return !(selection.anchorNode === range.endContainer && selection.anchorOffset === range.endOffset);
   #| }
+
+///|
+/// Capture the browser's rendered selection before focus moves to the input.
+/// Selection.toString preserves rendered block breaks, unlike Range.toString.
+extern "js" fn markdown_selection_text(article : @rdom.Element) -> String =
+  #| article => article.ownerDocument.getSelection().toString()
 
 ///|
 extern "js" fn markdown_selection_ranges_equal(
@@ -201,6 +208,7 @@ pub fn MarkdownDocumentView::source_selection(
   }
   Some({
     source_range,
+    selected_text: markdown_selection_text(self.article),
     source_model_version: self.source_model_version,
     projection_generation: self.projection_generation,
     prefer_below: markdown_selection_prefers_below(self.article, native_range),

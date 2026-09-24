@@ -22,6 +22,12 @@ flowchart TB
 The package owns no model, provider, marker store, or request policy. Root and
 the hover browser package own those higher-level contracts.
 
+Feedback selection captures two independent values: the enclosing source
+range resolved through node IDs, and the exact rendered text returned by the
+browser's native Selection. The text is captured before feedback input takes
+focus and remains attached to that selection; the source range is a location
+hint, not a request to expand the quote to a whole source block.
+
 ```mbt nocheck
 // MarkdownViewer installs this as its rich-document presentation.
 let document_view = MarkdownDocumentView::new(host, model_source)

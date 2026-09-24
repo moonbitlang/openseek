@@ -114,6 +114,7 @@ fn seed_item(
     text,
     resource: uri,
     range: Range(line, 1, line, 8),
+    selected_text: None,
     kind: UserReview,
     replies: [],
     state: Accepted,

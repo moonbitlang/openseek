@@ -73,6 +73,7 @@ pub struct MarkdownSemanticPointerHit {
 
 pub struct MarkdownSourceSelection {
   source_range : @common.OffsetRange
+  selected_text : String
   source_model_version : Int
   projection_generation : Int
   prefer_below : Bool

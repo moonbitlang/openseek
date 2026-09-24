@@ -62,8 +62,8 @@ pub fn DesktopFeedbackService::agent_feedback_handle(
     get_navigation_bearing=(resource, item_ids) => {
       self.get_navigation_bearing(resource, item_ids)
     },
-    add_feedback=(resource, range, text, kind, state) => {
-      self.add_feedback(resource, range, text, kind?, state?)
+    add_feedback=(resource, range, text, kind, state, selected_text) => {
+      self.add_feedback(resource, range, text, kind?, state?, selected_text?)
     },
     mark_feedback_submitted=resource => self.mark_feedback_submitted(resource),
     remove_feedback=(resource, feedback_id) => {
@@ -199,12 +199,14 @@ pub fn DesktopFeedbackService::add_feedback(
   text : String,
   kind? : @agent_feedback_api.AgentFeedbackKind = UserReview,
   state? : @agent_feedback_api.AgentFeedbackState = Accepted,
+  selected_text? : String,
 ) -> @agent_feedback_api.AgentFeedback {
   let feedback : @agent_feedback_api.AgentFeedback = {
     id: "viewer-feedback-" + self.next_feedback_handle.to_string(),
     text,
     resource,
     range,
+    selected_text,
     kind,
     replies: [],
     state,
