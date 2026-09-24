@@ -15,7 +15,7 @@ pub fn brief_line(String, limit? : Int) -> String
 
 pub fn content_digest(String) -> String
 
-pub async fn execute_tool_call(AgentToolCall, Tools) -> ToolAction
+pub async fn execute_tool_call(AgentToolCall, Tools) -> ToolAction noraise
 
 pub fn respond(String, is_error? : Bool, brief? : String, data? : Json) -> ToolAction
 

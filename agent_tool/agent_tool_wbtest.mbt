@@ -145,3 +145,49 @@ async test "execute_tool_call turns a tool failure into a recoverable error resu
   assert_true(output.is_error)
   assert_true(output.content.contains("boom failed"))
 }
+
+///|
+async test "execute_tool_call reports a cancelled child task as a tool error" {
+  // `Task::wait` on a task someone else cancelled raises the ordinary
+  // `TaskCancelled` error; the caller itself is not cancelled, so the tool
+  // failed and the turn goes on.
+  async fn wait_cancelled_child(_args : Json) -> ToolAction {
+    @async.with_task_group(group => {
+      let child = group.spawn(() => @async.sleep(10_000))
+      child.cancel()
+      child.wait()
+      respond("unreachable")
+    })
+  }
+
+  let tools = Tools([
+    test_tool(name="child", execute=Async(wait_cancelled_child)),
+  ])
+  let call = AgentToolCall(ToolCall(id="call_1", name="child", arguments="{}"))
+  guard execute_tool_call(call, tools) is Respond(output) else {
+    fail("expected Respond")
+  }
+  assert_true(output.is_error)
+  assert_true(output.content.contains("TaskCancelled"))
+}
+
+///|
+async test "execute_tool_call stays interruptible by its caller" {
+  let unwound = Ref(false)
+  let tools = Tools([
+    test_tool(
+      name="slow",
+      execute=Async(_args => {
+        defer {
+          unwound.val = true
+        }
+        @async.sleep(10_000)
+        respond("unreachable")
+      }),
+    ),
+  ])
+  let call = AgentToolCall(ToolCall(id="call_1", name="slow", arguments="{}"))
+  let result = @async.with_timeout_opt(10, () => execute_tool_call(call, tools))
+  assert_true(result is None)
+  assert_true(unwound.val)
+}

@@ -314,35 +314,33 @@ pub fn Tools::function_tools(self : Tools) -> Array[@deepseek.ToolDefinition] {
 /// A tool's own execution failure is caught HERE and turned into an error
 /// `ToolAction`, so the model sees it as an ordinary (recoverable) tool result
 /// and the turn continues — one boundary that spares every tool from wrapping
-/// each of its own filesystem/IO calls just to report a failure.
+/// each of its own filesystem/IO calls just to report a failure. `noraise`
+/// makes the compiler hold that contract: every error a tool raises ends here,
+/// including `@async.TaskCancelled` from a `Task::wait` on a child task the
+/// tool saw cancelled — that is the tool's failure, not the turn's.
 ///
-/// Cancellation signals propagate without entering catch. A cancelled child
-/// reported by Task::wait also propagates instead of becoming a tool result.
+/// Deliberately NOT `nocancel`: cancelling the caller (a user interrupt, a
+/// deadline, PTC revoking a call) is a separate signal that bypasses `catch`
+/// and unwinds through the tool's `defer`/`errdefer`, so the call stays
+/// interruptible.
 pub async fn execute_tool_call(
   call : AgentToolCall,
   tools : Tools,
-) -> ToolAction {
+) -> ToolAction noraise {
   match tools.find(call.name) {
     Some(tool) =>
       tool.execute.run(call.arguments) catch {
-        error =>
-          if error is @async.TaskCancelled {
-            raise error
-          } else {
-            // Keep the transcript label the local catches used to provide:
-            // most file tools carry a `path` argument, so the brief can still
-            // name the file the failed call was about.
-            let brief = match call.arguments {
-              { "path": String(path), .. } =>
-                Some("\{call.name} \{brief_basename(path)}")
-              _ => None
-            }
-            respond(
-              "error: \{call.name} failed: \{error}",
-              is_error=true,
-              brief?,
-            )
+        error => {
+          // Keep the transcript label the local catches used to provide:
+          // most file tools carry a `path` argument, so the brief can still
+          // name the file the failed call was about.
+          let brief = match call.arguments {
+            { "path": String(path), .. } =>
+              Some("\{call.name} \{brief_basename(path)}")
+            _ => None
           }
+          respond("error: \{call.name} failed: \{error}", is_error=true, brief?)
+        }
       }
     None => respond("error: unknown tool \{call.name}", is_error=true)
   }
