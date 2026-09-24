@@ -196,15 +196,29 @@ fn register_moon_ide_navigation_providers(
 }
 
 ///|
+priv suberror NavigationRequestError {
+  NavigationRequestError(String)
+}
+
+///|
+impl Show for NavigationRequestError with fn output(self, logger) {
+  let NavigationRequestError(message) = self
+  logger.write_string(message)
+}
+
+///|
 async fn request_moon_ide_locations(
   channel : @interop.ChannelId,
   command : @commands.Command[
     @protocol.MoonIdeNavigationPayload,
-    @protocol.MoonIdeLocationsReply,
+    @protocol.MoonIdeNavigationReply,
   ],
   payload : @protocol.MoonIdeNavigationPayload,
 ) -> Array[@language.Location] {
-  let reply = @interop.bridge_request(channel, command, payload)
+  let reply = match @interop.bridge_request(channel, command, payload) {
+    NavigationLocations(reply) => reply
+    NavigationError(message) => raise NavigationRequestError(message)
+  }
   MoonIdeProjection::{ reply, channel, }.to_viewer()
 }
 

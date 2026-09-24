@@ -649,8 +649,8 @@ Malformed, unknown, or root-escaping rows are omitted.
 
 | method | params | result |
 |---|---|---|
-| `moonide.definition` | `{session, root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
-| `moonide.references` | `{session, root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{locations: [{path, start_line, start_column, end_line, end_column}]}` — absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
+| `moonide.definition` | `{session, root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{kind:"locations", locations: [{path, start_line, start_column, end_line, end_column}]}` or `{kind:"error", message}` — operational failures preserve their diagnostic text; absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
+| `moonide.references` | `{session, root, path, line, column}` (`root` absolute, `path` relative; positive 1-based position) | `{kind:"locations", locations: [{path, start_line, start_column, end_line, end_column}]}` or `{kind:"error", message}` — operational failures preserve their diagnostic text; absolute paths under the supplied lexical root, with Moon IDE's numeric ranges |
 | `moonide.codelens` | `{session, root, path}` (`root` absolute, `path` relative) | `{lenses: [{range, title, action}]}` — `range` and `action.position` use zero-based LSP coordinates. `action` is either `{kind:"local", position, locations}` with canonical one-based locations, or `{kind:"outside", position}` |
 
 ### skills.*

@@ -211,9 +211,9 @@ pub let moon_package_graph : Command[@protocol.MoonPackageGraphPayload, @protoco
 
 pub let moonide_codelens : Command[@protocol.MoonIdeCodeLensPayload, @protocol.MoonIdeCodeLensReply]
 
-pub let moonide_definition : Command[@protocol.MoonIdeNavigationPayload, @protocol.MoonIdeLocationsReply]
+pub let moonide_definition : Command[@protocol.MoonIdeNavigationPayload, @protocol.MoonIdeNavigationReply]
 
-pub let moonide_references : Command[@protocol.MoonIdeNavigationPayload, @protocol.MoonIdeLocationsReply]
+pub let moonide_references : Command[@protocol.MoonIdeNavigationPayload, @protocol.MoonIdeNavigationReply]
 
 pub let pattern_repair : Command[@protocol.PatternRepairPayload, @protocol.PatternRepairReply]
 

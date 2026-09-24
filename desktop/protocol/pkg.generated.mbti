@@ -2017,6 +2017,18 @@ pub fn MoonIdeNavigationPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for MoonIdeNavigationPayload
 pub impl @json.FromJson for MoonIdeNavigationPayload
 
+pub(all) enum MoonIdeNavigationReply {
+  NavigationLocations(MoonIdeLocationsReply)
+  NavigationError(String)
+} derive(Eq, @debug.Debug)
+pub fn MoonIdeNavigationReply::equal(Self, Self) -> Bool
+pub fn MoonIdeNavigationReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn MoonIdeNavigationReply::not_equal(Self, Self) -> Bool
+pub fn MoonIdeNavigationReply::to_json(Self) -> Json
+pub fn MoonIdeNavigationReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for MoonIdeNavigationReply
+pub impl @json.FromJson for MoonIdeNavigationReply
+
 pub(all) struct MoonPackageGraphPayload {
   session : String
   root : String

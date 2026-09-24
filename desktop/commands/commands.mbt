@@ -553,13 +553,13 @@ pub let lsp_workspace_symbols : Command[
 ///|
 pub let moonide_definition : Command[
   @protocol.MoonIdeNavigationPayload,
-  @protocol.MoonIdeLocationsReply,
+  @protocol.MoonIdeNavigationReply,
 ] = Command("moonide.definition")
 
 ///|
 pub let moonide_references : Command[
   @protocol.MoonIdeNavigationPayload,
-  @protocol.MoonIdeLocationsReply,
+  @protocol.MoonIdeNavigationReply,
 ] = Command("moonide.references")
 
 ///|
