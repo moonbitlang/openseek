@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/action_menu",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/pathx",
@@ -42,13 +43,24 @@ pub fn resolve_pick(State, @common.Uri) -> State
 
 pub fn sync(State, @interop.ConversationKey) -> State
 
-pub fn tabs_bar(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, close_menu~ : @cmd.Cmd, close_all_tabs~ : @cmd.Cmd, close_all_tabs_disabled~ : Bool, toggle_expanded~ : @cmd.Cmd) -> @html.Html
+pub fn tab_menu(locale? : @i18n.Locale, State, String, @cmd.Emit[Msg], @cmd.Emit[CloseSelection]) -> @action_menu.Definition?
+
+pub fn tabs_bar(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, close_menu~ : @cmd.Cmd, close_tabs~ : @cmd.Emit[CloseSelection], toggle_expanded~ : @cmd.Cmd) -> @html.Html
+
+pub fn tabs_to_close(State, CloseSelection) -> Array[DockTab]
 
 pub fn update(Msg, State) -> State
 
 // Errors
 
 // Types and methods
+pub(all) enum CloseSelection {
+  All
+  Others(DockTab)
+  ToLeft(DockTab)
+  ToRight(DockTab)
+}
+
 pub(all) enum DockTab {
   File(path~ : @common.Uri)
   GitDiff(diff~ : GitHistoryDiff)

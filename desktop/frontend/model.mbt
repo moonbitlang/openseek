@@ -1498,6 +1498,8 @@ priv struct Model {
   // The right-panel component receives these values as read-only input.
   right_panel_open : Bool
   right_panel_menu_open : Bool
+  // Reported by the tab-menu component so native views yield to its surface.
+  dock_tab_menu_open : Bool
   right_panel_expanded : Bool
   // Terminal tabs and their connection snapshots affect both the component
   // view and root layout. The root owns the opaque state once so neither side
@@ -2078,9 +2080,9 @@ priv enum Msg {
   ToggleRightPanelMenu
   ToggleRightPanelExpanded
   CloseRightPanelMenu
-  // Close every dock tab through its ordinary teardown path, then keep the
-  // empty panel open on the New Tab launcher.
-  CloseAllTabs
+  DockTabMenuChanged(Bool)
+  // Close a selection through ordinary teardown; All keeps the launcher open.
+  CloseDockTabs(@dock.CloseSelection)
   // The composer's goal-editing mode over the active conversation: open
   // (prefilled with the mirrored standing goal), edit its draft, send a
   // set/clear to the engine, or dismiss. Each acts on the conversation on
@@ -2697,6 +2699,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     sidebar_open: !narrow,
     right_panel_open: false,
     right_panel_menu_open: false,
+    dock_tab_menu_open: false,
     right_panel_expanded: false,
     jobs: @jobs.State::empty(),
     github: @github.State::empty(),

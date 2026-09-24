@@ -11,7 +11,7 @@ import {
 // Values
 pub fn button_attrs(String) -> @html.Attrs
 
-pub fn[Input : Eq] component(@rabbita.Val[Input], (Input, String) -> Definition?) -> @rabbita.Val[@html.Html]
+pub fn[Input : Eq] component(@rabbita.Val[Input], (Input, String) -> Definition?, on_open_change? : @cmd.Emit[Bool]) -> @rabbita.Val[@html.Html]
 
 pub fn context_attrs(String) -> @html.Attrs
 

@@ -43,8 +43,9 @@ pub(all) struct Actions {
   reveal_file : (String) -> @cmd.Cmd
   toggle_menu : @cmd.Cmd
   toggle_expanded : @cmd.Cmd
-  close_all_tabs : @cmd.Cmd
+  close_tabs : @cmd.Emit[@dock.CloseSelection]
   close_menu : @cmd.Cmd
+  tab_menu_changed : @cmd.Emit[Bool]
 }
 
 type Input derive(Eq)
