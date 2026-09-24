@@ -273,13 +273,21 @@ fn render_markdown_document_code_block(
   active_language_id : String?,
   resource_kind : @markdown_core.MarkdownResourceKind,
 ) -> String {
-  let fallback = @markdown_core.render_tokenized_code_block(
-    code_block, active_language_id,
-  )
   let tokenized = if code_block.is_moonbit_check_fence(resource_kind) {
-    render_semantic_tokenized_code_lines(code_block, fallback)
+    @markdown_core.render_tokenized_code_lines(code_block, active_language_id, (
+      line_index,
+      code_line,
+      html,
+    ) => {
+      render_semantic_tokenized_code_line(
+        code_block.block_index,
+        line_index,
+        code_line,
+        html,
+      )
+    })
   } else {
-    fallback
+    @markdown_core.render_tokenized_code_block(code_block, active_language_id)
   }
   let body = match code_block.language_id {
     Some("mermaid") =>
@@ -304,51 +312,22 @@ fn render_markdown_document_code_block(
 }
 
 ///|
-/// Wraps exactly the source-bearing projected lines after the whole block has
-/// already been tokenized. This preserves the tokenizer's cross-line state
-/// while dropping only `_tokenizeToString`'s synthetic final empty segment
-/// caused by the code block's mandatory trailing newline.
-fn render_semantic_tokenized_code_lines(
-  code_block : @markdown_core.MarkdownCodeBlock,
+fn render_semantic_tokenized_code_line(
+  block_index : Int,
+  line_index : Int,
+  code_line : @markdown_core.MarkdownCodeLine,
   tokenized : String,
 ) -> String {
-  let prefix = "<div class=\"monaco-tokenized-source\">"
-  let suffix = "</div>"
-  let inner = match tokenized.strip_prefix(prefix) {
-    Some(body) =>
-      match body.strip_suffix(suffix) {
-        Some(inner_view) => inner_view.to_owned()
-        None => return tokenized
-      }
-    None => return tokenized
+  let phrase_divider_attributes = if markdown_semantic_line_is_phrase_divider(
+      code_line,
+    ) {
+    " data-markdown-phrase-divider=\"true\" role=\"separator\" aria-label=\"MoonBit item separator\""
+  } else {
+    ""
   }
-  let rendered_lines = split_tokenized_code_lines(inner)
-  // `MarkdownCodeBlock::code` ends in one source newline. The shared
-  // tokenizer must therefore produce exactly the projected lines plus one
-  // final empty segment. Any future renderer-shape drift disables semantic
-  // line markup rather than guessing at source coordinates.
-  guard rendered_lines.length() == code_block.code_lines.length() + 1 &&
-    tokenized_line_segment_is_empty(rendered_lines[rendered_lines.length() - 1]) else {
-    return tokenized
-  }
-  let result = StringBuilder()
-  result.write_string(prefix)
-  for line_index, code_line in code_block.code_lines {
-    if line_index > 0 {
-      result.write_string("<br/>")
-    }
-    let phrase_divider_attributes = if markdown_semantic_line_is_phrase_divider(
-        code_line,
-      ) {
-      " data-markdown-phrase-divider=\"true\" role=\"separator\" aria-label=\"MoonBit item separator\""
-    } else {
-      ""
-    }
-    result <+
-      $|<span class="moonbit-viewer-markdown-code-line" data-markdown-block-index="\{code_block.block_index}" data-markdown-code-line="\{line_index}" data-markdown-source-line="\{code_line.source_line_number}" data-markdown-source-start="\{code_line.source_range.start}" data-markdown-source-end="\{code_line.source_range.end_exclusive}"\{phrase_divider_attributes}>\{rendered_lines[line_index]}</span>
-  }
-  result.write_string(suffix)
-  result.to_string()
+  (
+    $|<span class="moonbit-viewer-markdown-code-line" data-markdown-block-index="\{block_index}" data-markdown-code-line="\{line_index}" data-markdown-source-line="\{code_line.source_line_number}" data-markdown-source-start="\{code_line.source_range.start}" data-markdown-source-end="\{code_line.source_range.end_exclusive}"\{phrase_divider_attributes}>\{tokenized}</span>
+  )
 }
 
 ///|
@@ -376,42 +355,6 @@ fn markdown_semantic_line_is_phrase_divider(
     }
   }
   true
-}
-
-///|
-/// The shared tokenizer represents an empty line as one empty token span, not
-/// an empty string. Recognize only that reviewed shape; arbitrary markup is
-/// not accepted as the synthetic trailing line.
-fn tokenized_line_segment_is_empty(segment : String) -> Bool {
-  guard segment.has_prefix("<span class=\"") &&
-    segment.split_once("\">") is Some((_, content)) else {
-    return false
-  }
-  content == "</span>"
-}
-
-///|
-/// Deterministic split that retains leading, adjacent, and trailing empty
-/// lines. Core `String::split` intentionally drops the final empty item, but
-/// here that item is the reviewed tokenizer-shape sentinel.
-fn split_tokenized_code_lines(inner : String) -> Array[String] {
-  let separator = "<br/>"
-  let result : Array[String] = []
-  let mut start = 0
-  while start <= inner.length() {
-    let remainder = inner[start:]
-    match remainder.find(separator) {
-      Some(relative) => {
-        result.push(inner[start:start + relative].to_owned())
-        start = start + relative + separator.length()
-      }
-      None => {
-        result.push(inner[start:].to_owned())
-        break
-      }
-    }
-  }
-  result
 }
 
 ///|

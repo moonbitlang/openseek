@@ -385,6 +385,10 @@ deliberate because token metadata is interpreted process-wide.
 
 ## Token HTML
 
+`tokenize_line_to_string` emits escaped class-based spans for one line of
+encoded tokens, preserving its whitespace and leaving wrappers to the caller.
+It is shared by whole-text HTML rendering and source-aware Markdown rows.
+
 `tokenize_line_to_html` and `tokenize_to_string` port
 `vs/editor/common/languages/textToHtmlTokenizer.ts`.
 

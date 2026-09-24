@@ -62,16 +62,12 @@ pub fn render_markdown(
     layout=true,
     locs=true,
   )
-  let projection = markdown_document_projection(doc)
+  let (projection, code_blocks_by_id) = markdown_document_projection(doc)
   let code_override = @cmark_renderer.Renderer::new(block=fn(ctx, block) {
     match block {
       CodeBlock(node) => {
         saw_code_block.val = true
-        guard markdown_offset_range(node.meta.loc) is Some(source_range) &&
-          markdown_code_block_index(projection, source_range)
-          is Some(block_index) &&
-          markdown_code_block_from_cmark(node.v, node.meta.loc, block_index)
-          is Some(code_block) else {
+        guard code_blocks_by_id.get(node.meta.id) is Some(code_block) else {
           return false
         }
         if render_diagram_code_block(code_block) is Some(html) {

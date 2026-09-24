@@ -44,8 +44,9 @@ features. Compiler-recognized `mbt check` fences additionally expose one
 source-bearing DOM row per projected code line. Each row retains the exact
 `MarkdownCodeLine`, block source range, and rendered element; synthetic
 Markdown indentation remains outside the semantic text boundary. Tokenization
-runs over the whole fence before it is split into rows, preserving cross-line
-tokenizer state. A cardinality or decoded-text mismatch fails closed by
+consumes the projected lines in order, preserving cross-line tokenizer state,
+and each row receives its source attributes while its token HTML is emitted.
+A cardinality or decoded-text mismatch fails closed by
 removing the semantic attributes and registry entry.
 An exact source-bearing, column-zero `///|` row is additionally presented as a
 full-width horizontal item divider. Its tokenized text remains in the DOM and
