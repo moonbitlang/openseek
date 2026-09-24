@@ -28,8 +28,7 @@ async fn Schedules::execute(
           timeout_ms.unwrap_or(entry.spec.timeout_minutes * 60000),
           () => self.run_cli(group, entry.spec, run, sink?, on_workspaces?),
         ) {
-        Some(0) => scheduled_session_result(run)
-        Some(code) => Failed("CLI exited with code \{code}; see the run log")
+        Some(code) => scheduled_session_result(run, exit_code=code)
         None => TimedOut
       }
     } catch {
@@ -188,33 +187,44 @@ async fn[G] Schedules::run_cli(
 }
 
 ///|
-// CLI exit zero alone is not task success: max-steps and setup failures also
-// settle a durable turn. Reuse that terminal record instead of parsing logs.
+// The CLI exits non-zero whenever its turn did not complete, so the exit code
+// alone cannot say why. The session's durable terminal can: reuse it instead of
+// parsing logs, and fall back to the exit code only when the turn has none.
 async fn scheduled_session_result(
   run : @protocol.ScheduleRun,
+  exit_code~ : Int,
 ) -> @protocol.ScheduleRunStatus {
   guard @pathx.Absolute::from_uri_path(run.workspace) is Some(workspace) else {
     raise EngineError("Invalid scheduled workspace")
   }
   let store = @store.SessionStore(@workspaces.store_root(workspace).to_string())
-  let session = store.load(SessionId(run.session))
-  let mut result : @protocol.ScheduleRunStatus? = None
-  for event in session.events() {
-    if event.item() is Terminal(terminal) {
-      result = Some(
-        match terminal {
-          // A context yield counted as success while it was saved as
-          // `finished`; kept so this refactor changes no scheduled status.
-          Finished(_) | ContextYield(_) => Succeeded
-          MaxStepsExhausted => Failed(@agent_session.MaxStepsExhaustedMessage)
-          Failed(message) | Aborted(message) => Failed(message)
-          Interrupted(_) => Interrupted
-        },
-      )
+  // A CLI that failed before its first append left no session: that is a
+  // turn without a terminal, and the exit code explains it. Any other load
+  // failure is real and still raises.
+  let terminal = store.load(SessionId(run.session)).last_terminal() catch {
+      @os_error.OSError(_) as error if error.is_ENOENT() => None
+      error => raise error
     }
-  }
-  match result {
-    Some(result) => result
-    None => Failed("CLI exited without a completed session; see the run log")
+  schedule_run_status(terminal, exit_code~)
+}
+
+///|
+fn schedule_run_status(
+  terminal : @agent_session.TurnTerminal?,
+  exit_code~ : Int,
+) -> @protocol.ScheduleRunStatus {
+  match terminal {
+    Some(Finished(_)) if exit_code == 0 => Succeeded
+    Some(Interrupted(_)) => Interrupted
+    Some(ContextYield(_)) =>
+      Failed(
+        "Stopped at the model's context window before the task was done; see the run log",
+      )
+    Some(MaxStepsExhausted) => Failed(@agent_session.MaxStepsExhaustedMessage)
+    Some(Failed(message)) | Some(Aborted(message)) => Failed(message)
+    None if exit_code == 0 =>
+      Failed("CLI exited without a completed session; see the run log")
+    Some(Finished(_)) | None =>
+      Failed("CLI exited with code \{exit_code}; see the run log")
   }
 }

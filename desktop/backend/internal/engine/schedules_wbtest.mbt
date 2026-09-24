@@ -22,6 +22,29 @@ fn schedule_fixture(
 }
 
 ///|
+async test "a scheduled run that left no session reports its exit code" {
+  let folder = @fs.tmpdir(prefix="schedules-no-session-")
+  defer @fs.rmdir(folder, recursive=true)
+  let run : @protocol.ScheduleRun = {
+    id: "r",
+    schedule_id: "s",
+    name: "s",
+    // The run record holds a resource path (`/c:/…` on Windows), not a
+    // native one.
+    workspace: @pathx.Path(@fs.realpath(folder)).resolve().resource_path(),
+    session: "scheduled-r",
+    started_at: 1000,
+    finished_at: None,
+    status: Running,
+    log_path: "/runtime/r.log",
+  }
+  assert_eq(
+    scheduled_session_result(run, exit_code=3),
+    Failed("CLI exited with code 3; see the run log"),
+  )
+}
+
+///|
 test "schedule recovery skips downtime without delaying a future deadline" {
   let future = schedule_fixture("future", 180000, Every(1))
   let missed = schedule_fixture("missed", 1000, Every(1))
@@ -403,4 +426,35 @@ async test "schedule setup failure creates a readable diagnostic log" {
   service.execute(entry, run)
   assert_true(service.list().runs[0].status is Failed(_))
   assert_true(@fsx.read_text(Path(run.log_path)).contains("Failed:"))
+}
+
+///|
+test "scheduled run status reads the turn outcome whatever the exit code" {
+  assert_eq(schedule_run_status(Some(Finished("done")), exit_code=0), Succeeded)
+  // The CLI exits 1 for an incomplete turn; the reason comes from the session.
+  assert_eq(
+    schedule_run_status(Some(MaxStepsExhausted), exit_code=1),
+    Failed("max steps exhausted"),
+  )
+  assert_eq(
+    schedule_run_status(Some(Aborted("gave up")), exit_code=1),
+    Failed("gave up"),
+  )
+  assert_eq(
+    schedule_run_status(Some(Interrupted("cancelled")), exit_code=1),
+    Interrupted,
+  )
+  assert_true(
+    schedule_run_status(Some(ContextYield("[context ceiling] x")), exit_code=1)
+    is Failed(_),
+  )
+  // No terminal: only the exit code is left to report.
+  assert_eq(
+    schedule_run_status(None, exit_code=3),
+    Failed("CLI exited with code 3; see the run log"),
+  )
+  assert_eq(
+    schedule_run_status(None, exit_code=0),
+    Failed("CLI exited without a completed session; see the run log"),
+  )
 }
