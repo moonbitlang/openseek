@@ -318,84 +318,16 @@ h2 {
 }
 
 .setting-control .setting-font-size-slider {
-  appearance: none;
   flex: 1;
   min-width: 0;
-  height: 32px;
   margin: 0;
   padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  --slider-track: linear-gradient(to right,
-    var(--color-accent) 0 var(--slider-progress),
-    var(--color-border) var(--slider-progress) 100%);
-}
-
-.setting-font-size-slider::-webkit-slider-runnable-track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--slider-track);
-}
-
-.setting-font-size-slider::-moz-range-track {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--slider-track);
-}
-
-.setting-font-size-slider::-webkit-slider-thumb {
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  margin-top: -6px;
-  border: 2px solid var(--color-accent);
-  border-radius: 50%;
-  background: var(--color-bg-surface);
-  box-shadow: 0 1px 3px #0003;
-}
-
-.setting-font-size-slider::-moz-range-thumb {
-  box-sizing: border-box;
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--color-accent);
-  border-radius: 50%;
-  background: var(--color-bg-surface);
-  box-shadow: 0 1px 3px #0003;
-}
-
-.setting-font-size-slider:focus-visible {
-  outline: none;
-}
-
-.setting-font-size-slider:focus-visible::-webkit-slider-thumb {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
-}
-
-.setting-font-size-slider:focus-visible::-moz-range-thumb {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
-}
-
-.setting-font-size-slider:hover,
-.setting-font-size-slider:active {
-  --color-accent: var(--color-accent-strong);
+  accent-color: var(--color-accent);
 }
 
 .setting-font-size-value {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 5ch;
-  height: 30px;
-  margin-left: 8px;
-  padding: 0 8px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-subtle);
-  font-size: var(--font-size-sm);
+  min-width: 4ch;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-primary);
 }

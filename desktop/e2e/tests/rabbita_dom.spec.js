@@ -1888,7 +1888,7 @@ test('a failed first conversation load keeps selection and can retry', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('settings change and preserve the visible font size', async ({ page }, testInfo) => {
+test('settings change and preserve the visible font size', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -1901,11 +1901,6 @@ test('settings change and preserve the visible font size', async ({ page }, test
   await expect(fontSize).toHaveValue('15');
   await expect(fontSize).toHaveAttribute('aria-valuetext', '15px');
   await expect(page.locator('.setting-font-size-value')).toHaveText('15px');
-  const fontRow = page.locator('.setting-row').filter({ has: fontSize });
-  for (const colorScheme of ['light', 'dark']) {
-    await page.emulateMedia({ colorScheme });
-    await fontRow.screenshot({ path: testInfo.outputPath(`font-slider-${colorScheme}.png`) });
-  }
   await fontSize.press('Home');
   await expect(fontSize).toHaveValue('12');
   await expect.poll(() => page.evaluate(() =>
