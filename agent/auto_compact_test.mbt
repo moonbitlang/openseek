@@ -150,6 +150,21 @@ fn finished_answer(
 }
 
 ///|
+/// The notice of the session's closing `ContextYield` terminal, failing the
+/// test when the turn ended any other way.
+#callsite(autofill(loc))
+fn yield_notice(
+  result : @agent_session.Session,
+  loc~ : SourceLoc,
+) -> String raise {
+  guard result.events().peek() is Some(last) &&
+    last.item() is Terminal(ContextYield(notice)) else {
+    fail("expected context-yield terminal", loc~)
+  }
+  notice
+}
+
+///|
 /// The latest checkpoint summary before the terminal, failing the test when it
 /// is missing. A no-tool final response is persisted between the two.
 #callsite(autofill(loc))
@@ -236,7 +251,7 @@ async test "pressure on a tool-call response yields immediately" {
     // terminal.
     assert_eq(main_step, 1)
     assert_eq(checkpoint_requests.length(), 1)
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
     let events = result.events()
     let count = events.length()
     let summary = summary_before_terminal(result)
@@ -440,7 +455,7 @@ async test "a failed checkpoint with a late steer yields instead of continuing" 
     }
     assert_true(answer_kept)
     assert_true(steer_kept)
-    let answer = finished_answer(result)
+    let answer = yield_notice(result)
     assert_true(answer.contains("[context ceiling]"))
     assert_true(answer.contains("checkpoint attempt failed"))
   }
@@ -499,7 +514,7 @@ async test "a non-control finish shadow is skip-closed at the ceiling" {
         )
       }
     }
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
   }
 }
 
@@ -707,7 +722,7 @@ async test "a lone control verdict without a finish executes then yields" {
     }
     assert_true(verdict_recorded)
     assert_true(probe_skipped)
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
   }
 }
 
@@ -766,7 +781,7 @@ async test "a pressured finish tool losing to a steer yields instead" {
     assert_true(steer_sequence > 0)
     assert_true(summary_to > 0)
     assert_true(summary_to < steer_sequence)
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
   }
 }
 
@@ -880,7 +895,7 @@ async test "a failed checkpoint still yields fail-open" {
     // The turn still ends at the ceiling — uncompacted — so the next turn's
     // pressure retries the checkpoint instead of stranding this one.
     assert_eq(checkpoint_requests.length(), 1)
-    let answer = finished_answer(result)
+    let answer = yield_notice(result)
     assert_true(answer.contains("[context ceiling]"))
     // Honest fail-open: the terminal must not claim a checkpoint exists.
     assert_true(answer.contains("checkpoint attempt failed"))
@@ -966,7 +981,7 @@ async test "a steer arriving under pressure survives the checkpoint verbatim" {
     // before the summary request is even sent — a cancellation mid-request
     // must not lose already-drained input).
     assert_true(steer_sequence < summary_sequence)
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
   }
 }
 
@@ -1002,7 +1017,7 @@ async test "pressure on the last allowed step yields at the ceiling not as exhau
     // Context beats steps: the pressured response yields in its own
     // iteration, so the step bound is never the one to end the turn.
     assert_eq(checkpoint_requests.length(), 1)
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
   }
 }
 
@@ -1033,11 +1048,10 @@ async test "an explicit single-step bound still exhausts without pressure" {
       tools=probe_tools(["result-1"]),
     )
     assert_eq(main_step, 1)
-    guard result.events().peek() is Some(last) &&
-      last.item() is Terminal(Failed(message)) else {
-      fail("expected exhaustion terminal")
-    }
-    assert_true(message.contains("max steps exhausted"))
+    assert_true(
+      result.events().peek() is Some(last) &&
+      last.item() is Terminal(MaxStepsExhausted),
+    )
   }
 }
 
@@ -1076,7 +1090,7 @@ async test "a soft-ceiling batch executes then yields gracefully" {
     // and the turn still ended at the boundary with a checkpoint.
     assert_eq(main_requests, 1)
     assert_eq(checkpoint_requests.length(), 1)
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
     let summary = summary_before_terminal(result)
     assert_eq(summary.content(), "SOFT-SUMMARY")
     // The executed result is inside the covered range.
@@ -1246,7 +1260,7 @@ async test "the running budget stops an overflowing batch mid-way" {
     // The executed prefix is covered by the checkpoint; the rest waits.
     assert_eq(executed, 3)
     assert_eq(skipped, 3)
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
   }
 }
 
@@ -1301,7 +1315,7 @@ async test "a below-soft batch with huge results yields instead of overflowing" 
     }
     assert_eq(executed, 4)
     assert_eq(skipped, 2)
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
   }
 }
 
@@ -1384,7 +1398,7 @@ async test "a failing checkpoint after a soft batch keeps its results" {
       }
     }
     assert_true(executed)
-    let answer = finished_answer(result)
+    let answer = yield_notice(result)
     assert_true(answer.contains("[context ceiling]"))
     assert_true(answer.contains("checkpoint attempt failed"))
   }
@@ -1438,7 +1452,7 @@ async test "a steer arriving during the checkpoint request is preserved" {
     }
     assert_true(summary_sequence > 0)
     assert_true(steer_sequence > summary_sequence)
-    assert_true(finished_answer(result).contains("[context ceiling]"))
+    assert_true(yield_notice(result).contains("[context ceiling]"))
   }
 }
 

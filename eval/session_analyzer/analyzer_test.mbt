@@ -141,7 +141,7 @@ test "a context-yield terminal is not task success" {
     )
     .append(
       Terminal(
-        Finished(
+        ContextYield(
           "\{@agent_session.ContextYieldAnswerPrefix} continue in a new turn",
         ),
       ),

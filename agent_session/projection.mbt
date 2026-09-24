@@ -21,21 +21,19 @@ fn agent_status_message(label : String, reason : String) -> String? {
 ///|
 fn terminal_model_message(terminal : TurnTerminal) -> String? {
   match terminal {
-    Finished(answer) =>
-      // A context-yield terminal is synthetic run status, not something the
-      // assistant said: replaying it would make the model read its own
-      // ceiling notice as a prior answer — and, worse, as the "reply" to a
-      // steer preserved past the checkpoint, so the steer looks handled.
-      // The resumed turn starts from the checkpoint summary and any
-      // preserved user input alone. (Raw-log consumers still see the
-      // terminal; only the model-facing projection skips it.)
-      if answer.is_blank() || answer.has_prefix(ContextYieldAnswerPrefix) {
-        None
-      } else {
-        Some(answer)
-      }
+    Finished(answer) => if answer.is_blank() { None } else { Some(answer) }
+    // A context-yield terminal is synthetic run status, not something the
+    // assistant said: replaying it would make the model read its own
+    // ceiling notice as a prior answer — and, worse, as the "reply" to a
+    // steer preserved past the checkpoint, so the steer looks handled.
+    // The resumed turn starts from the checkpoint summary and any
+    // preserved user input alone. (Raw-log consumers still see the
+    // terminal; only the model-facing projection skips it.)
+    ContextYield(_) => None
     Aborted(reason) => agent_status_message("[agent aborted]", reason)
     Interrupted(reason) => agent_status_message("[agent interrupted]", reason)
+    MaxStepsExhausted =>
+      agent_status_message("[agent failed]", MaxStepsExhaustedMessage)
     Failed(reason) => agent_status_message("[agent failed]", reason)
   }
 }
@@ -137,11 +135,11 @@ fn is_covered_by_later_summary(
 /// - pending tool calls are closed with synthetic tool-error messages before a
 ///   non-tool event or at the end of projection;
 /// - `Terminal(Finished(text))` becomes a final assistant message when `text`
-///   is non-blank, is not a context-yield status (see
-///   `ContextYieldAnswerPrefix`), and the preceding Assistant did not already
-///   preserve the same final answer;
-/// - `Terminal(Aborted|Interrupted|Failed)` becomes an assistant status
-///   message, preserving any non-blank reason.
+///   is non-blank and the preceding Assistant did not already preserve the
+///   same final answer;
+/// - `Terminal(ContextYield(_))` is skipped: it is run status, not an answer;
+/// - `Terminal(Aborted|Interrupted|MaxStepsExhausted|Failed)` becomes an
+///   assistant status message, preserving any non-blank reason.
 ///
 /// This method is a read-only projection. It never mutates the session and never
 /// removes durable events.

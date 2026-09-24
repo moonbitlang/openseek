@@ -227,8 +227,9 @@ async test "goal met flushes its tombstone on non-finish terminals" {
       tools=goal_tools_with_probe(),
     )
     let events = result.events()
-    guard events.peek() is Some(last) && last.item() is Terminal(Failed(_)) else {
-      fail("expected max-steps failure terminal")
+    guard events.peek() is Some(last) &&
+      last.item() is Terminal(MaxStepsExhausted) else {
+      fail("expected max-steps terminal")
     }
     // The durable clear landed before the terminal: the next turn must not
     // resurrect a goal the tool result says was met.

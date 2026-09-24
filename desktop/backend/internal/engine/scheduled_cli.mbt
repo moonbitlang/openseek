@@ -203,7 +203,10 @@ async fn scheduled_session_result(
     if event.item() is Terminal(terminal) {
       result = Some(
         match terminal {
-          Finished(_) => Succeeded
+          // A context yield counted as success while it was saved as
+          // `finished`; kept so this refactor changes no scheduled status.
+          Finished(_) | ContextYield(_) => Succeeded
+          MaxStepsExhausted => Failed(@agent_session.MaxStepsExhaustedMessage)
           Failed(message) | Aborted(message) => Failed(message)
           Interrupted(_) => Interrupted
         },

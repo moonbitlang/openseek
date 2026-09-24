@@ -42,16 +42,19 @@ priv struct TerminalOutcome {
 ///|
 fn terminal_outcome(terminal : @agent_session.TurnTerminal) -> TerminalOutcome {
   match terminal {
-    Finished(message) =>
-      // A context-ceiling yield is durably Finished (replay/chaining) but NOT
-      // task success: the work was checkpointed mid-flight.
-      if message.has_prefix(@agent_session.ContextYieldAnswerPrefix) {
-        { status: "context_yield", message, success: false, }
-      } else {
-        { status: "finished", message, success: true, }
-      }
+    Finished(message) => { status: "finished", message, success: true, }
+    // A context-ceiling yield is NOT task success: the work was checkpointed
+    // mid-flight.
+    ContextYield(message) =>
+      { status: "context_yield", message, success: false, }
     Aborted(message) => { status: "aborted", message, success: false, }
     Interrupted(message) => { status: "interrupted", message, success: false, }
+    MaxStepsExhausted =>
+      {
+        status: "failed",
+        message: @agent_session.MaxStepsExhaustedMessage,
+        success: false,
+      }
     Failed(message) => { status: "failed", message, success: false, }
   }
 }
@@ -168,10 +171,13 @@ fn append_item_text(
     Runtime(notice) => write_line(out, notice.content())
     Terminal(
       Finished(message)
+      | ContextYield(message)
       | Aborted(message)
       | Interrupted(message)
       | Failed(message)
     ) => write_line(out, message)
+    Terminal(MaxStepsExhausted) =>
+      write_line(out, @agent_session.MaxStepsExhaustedMessage)
   }
 }
 

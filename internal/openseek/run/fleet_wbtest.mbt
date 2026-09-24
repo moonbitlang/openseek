@@ -83,15 +83,19 @@ async test "copy_tree dereferences an in-workspace file symlink" {
 }
 
 ///|
-test "terminal_summary reads the last terminal" {
+test "terminal_summary keeps the summary vocabulary" {
   let finished = @agent_session.Session(SessionId("t"), system_prompt="")
     .append(User(UserMessage(Content([Text("hi")]))))
     .append(Terminal(Finished("done")))
-  let (status, detail) = terminal_summary(finished)
+  let (status, detail) = terminal_summary(finished.last_terminal())
   assert_eq(status, "finished")
   assert_eq(detail, "done")
-  let none = @agent_session.Session(SessionId("e"), system_prompt="")
-  let (no_status, _) = terminal_summary(none)
+  let (yielded, _) = terminal_summary(Some(ContextYield("[context ceiling]")))
+  assert_eq(yielded, "finished")
+  let (exhausted, message) = terminal_summary(Some(MaxStepsExhausted))
+  assert_eq(exhausted, "failed")
+  assert_eq(message, "max steps exhausted")
+  let (no_status, _) = terminal_summary(None)
   assert_eq(no_status, "(no terminal)")
 }
 

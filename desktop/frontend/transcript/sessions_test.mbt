@@ -540,6 +540,25 @@ test "transcript mapping replays a context checkpoint and yield guidance" {
 }
 
 ///|
+test "transcript mapping renders the dedicated terminal kinds like their older forms" {
+  // Newer engines save a yield and step exhaustion as their own kinds; the
+  // transcript reads the same as for the `finished`/`failed` forms above.
+  let events =
+    #|{"sequence":1,"item":{"kind":"terminal","payload":{"kind":"context_yield","message":"[context ceiling] continue in a new turn"}}},
+    #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"max_steps_exhausted"}}}
+  let items = transcript_from_session(session_reply(events))
+  inspect(items.length(), content="2")
+  guard items[0].kind is @transcript.Answer(_) else {
+    fail("expected context-yield guidance")
+  }
+  assert_eq(items[0].text(), Some("[context ceiling] continue in a new turn"))
+  guard items[1].kind is @transcript.Failure(_) else {
+    fail("expected error bubble")
+  }
+  assert_eq(items[1].text(), Some("max steps exhausted"))
+}
+
+///|
 /// The store `listed` rows belong to. Valid by construction; a total fixture
 /// keeps the tree tests free of a synthetic error effect.
 fn listed_workspace(path : String) -> @common.Uri {

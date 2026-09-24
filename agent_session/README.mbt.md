@@ -26,7 +26,8 @@ timestamp, and one `SessionItem` payload:
 - `Tool`: local tool result for one assistant tool call.
 - `Runtime`: runtime notice injected into model context, such as a plan reminder.
 - `Summary`: durable compaction record for a covered event range.
-- `Terminal`: how a turn ended: finished, aborted, interrupted, or failed.
+- `Terminal`: how a turn ended: finished, yielded at the context ceiling,
+  aborted, interrupted, out of steps, or failed.
 
 Appending never mutates the receiver. It returns a new session that shares the
 old log structure.
@@ -161,8 +162,10 @@ classDiagram
   class TurnTerminal {
     <<tagged union>>
     Finished(String)
+    ContextYield(String)
     Aborted(String)
     Interrupted(String)
+    MaxStepsExhausted
     Failed(String)
   }
 
@@ -241,10 +244,10 @@ compaction rules are applied:
   tool calls.
 - `Tool` events are emitted only when they answer a pending assistant tool call.
 - `Terminal(Finished(...))` becomes a final assistant message when non-empty,
-  unless it is a context-yield notice (carrying `ContextYieldAnswerPrefix`) or
-  repeats the immediately preceding Assistant message — either is dropped from
-  the model-facing projection. Failed, aborted, and interrupted terminals
-  become assistant-status messages.
+  unless it repeats the immediately preceding Assistant message.
+  `Terminal(ContextYield(...))` is run status and never reaches the model.
+  Failed, out-of-steps, aborted, and interrupted terminals become
+  assistant-status messages.
 - A dangling assistant tool call is closed with a synthetic tool error before
   the next non-tool event, keeping the protocol-valid replay shape.
 
@@ -445,6 +448,15 @@ The store layout is:
 `openseek_session-<session-id>.jsonl` holds the whole session: a header record
 (`{"version":1,"id":...,"system_prompt":...}`) on the first line, then one
 append-only event per line. Loading replays the event lines into a `Session`.
+
+Every build must load the logs earlier builds wrote; the frozen
+`store/testdata/session-v1.jsonl` pins that. Older builds are not expected to
+read newer logs. Adding a kind, such as the `context_yield` and
+`max_steps_exhausted` terminals, does not bump `version`: each line names its
+own kind, and the decoder keeps reading the older encodings. A current
+`finished` or `failed` message that reads like one of those encodings is saved
+with `"verbatim": true` so it is not reinterpreted. `version` changes only when
+the same bytes would mean something different.
 
 ```mermaid
 flowchart TB

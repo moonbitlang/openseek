@@ -26,6 +26,8 @@ pub const GoalReminderPrefix : String = "[goal reminder]"
 
 pub const GoalUnblockedNotice : String = "[goal unblocked]"
 
+pub const MaxStepsExhaustedMessage : String = "max steps exhausted"
+
 pub const PlanReminderPrefix : String = "[plan reminder]"
 
 pub fn goal_baseline_notice(sha~ : String, dirty~ : Bool) -> String
@@ -73,6 +75,7 @@ pub fn Session::current_goal_baseline(Self) -> GoalBaseline?
 pub fn Session::events(Self) -> @vector.Vector[SessionEvent]
 pub fn Session::id(Self) -> SessionId
 pub fn Session::last_sequence(Self) -> Int
+pub fn Session::last_terminal(Self) -> TurnTerminal?
 pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> SessionItem raise
 pub fn Session::system_prompt(Self) -> String
 pub impl ToJson for Session
@@ -123,8 +126,10 @@ pub fn ToolResult::tool_name(Self) -> String
 
 pub(all) enum TurnTerminal {
   Finished(String)
+  ContextYield(String)
   Aborted(String)
   Interrupted(String)
+  MaxStepsExhausted
   Failed(String)
 } derive(Eq, @debug.Debug)
 pub impl @json.FromJson for TurnTerminal

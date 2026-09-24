@@ -1,19 +1,16 @@
 ///|
-/// The answer prefix every context-yield terminal carries. A turn that ends
-/// at the model's context ceiling is persisted as `Terminal(Finished(...))`
-/// — a distinct terminal kind would break old readers (the decoder is
-/// strict) and continuation machinery chains finished turns — so this
-/// prefix is how durable-log consumers distinguish a ceiling yield from
-/// task success. Lives here, next to the session model, because it is a
-/// raw-log contract: analyzers, fleet classification, and replay tooling
-/// all match on it.
-///
-/// Known, accepted limitation: a real answer that happens to START with
-/// this text (e.g. a task asking the model to echo it) classifies as a
-/// yield. The collision fails toward NOT-success — never false success —
-/// and the durable format has no terminal-metadata side channel, so a
-/// spoof-proof sentinel is not worth the format change.
+/// The text every context-yield notice starts with. New logs record a yield
+/// as its own `TurnTerminal::ContextYield`; older logs saved it as a
+/// `finished` terminal whose answer starts with this prefix, and the decoder
+/// still reads those as `ContextYield`.
 pub const ContextYieldAnswerPrefix : String = "[context ceiling]"
+
+///|
+/// The status text for a `TurnTerminal::MaxStepsExhausted`, wherever a
+/// terminal is shown as a status and message. Older logs saved step
+/// exhaustion as a `failed` terminal with exactly this message, and the
+/// decoder still reads those as `MaxStepsExhausted`.
+pub const MaxStepsExhaustedMessage : String = "max steps exhausted"
 
 ///|
 /// Stable identifier for one OpenSeek conversation.
@@ -361,15 +358,17 @@ pub fn SessionSummary::to_sequence(self : SessionSummary) -> Int {
 ///|
 /// How an agent turn ended.
 ///
-/// `Finished` carries the final assistant answer. `Aborted` carries the
-/// agent's own abort reason. `Interrupted` carries an external cancellation
-/// reason. `Failed` carries the failure message. In a complete turn, the last
-/// event is exactly one `Terminal`; if a session ends without one, replay is
-/// seeing a turn that was cut off mid-flight.
+/// Only `Finished` means the task ran to completion. In a complete turn, the
+/// last event is exactly one `Terminal`; if a session ends without one,
+/// replay is seeing a turn that was cut off mid-flight.
 pub(all) enum TurnTerminal {
   /// The agent completed normally and produced a final assistant answer.
   /// Non-blank text projects as an assistant message for later turns.
   Finished(String)
+  /// The turn reached the model's context window and was checkpointed; the
+  /// work is not necessarily complete, and a new turn continues it. Carries
+  /// the yield notice, which never projects to the model.
+  ContextYield(String)
   /// The agent intentionally stopped before normal completion, usually because
   /// a control tool requested abort. The reason projects as an assistant status
   /// message.
@@ -377,6 +376,9 @@ pub(all) enum TurnTerminal {
   /// The turn was externally cancelled, for example by task cancellation or
   /// user interruption. The reason projects as an assistant status message.
   Interrupted(String)
+  /// The step budget ran out before the model finished. Projects as the
+  /// same assistant status message as a `Failed("max steps exhausted")`.
+  MaxStepsExhausted
   /// The turn ended because an unexpected error escaped the agent loop. The
   /// failure message projects as an assistant status message.
   Failed(String)
@@ -555,6 +557,23 @@ pub fn Session::events(self : Session) -> @vector.Vector[SessionEvent] {
 /// snapshots before appending.
 pub fn Session::last_sequence(self : Session) -> Int {
   self.last_sequence
+}
+
+///|
+/// How the session's latest turn ended: its last `Terminal`, unless a later
+/// `User` item opened a turn that has not been sealed yet. `None` when the
+/// latest turn has no terminal (it was cut off, or is still running), so a
+/// cut-off turn never reports the previous turn's ending.
+pub fn Session::last_terminal(self : Session) -> TurnTerminal? {
+  let events = self.events
+  for i in (events.length() - 1)>=..0 {
+    match events[i].item {
+      Terminal(terminal) => return Some(terminal)
+      User(_) => return None
+      _ => ()
+    }
+  }
+  None
 }
 
 ///|

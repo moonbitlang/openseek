@@ -562,6 +562,15 @@ fn SessionTerminalProjection::append_to(
       }
       return false
     }
+    // The yield notice renders as its own bubble, as it did when yields
+    // were saved as `finished`.
+    @desktop_protocol.ContextYield(message) => {
+      match message.trim().to_owned() {
+        "" => items.push({ kind: TurnEnd, ts, sequence, })
+        message => items.push({ kind: Answer(message), ts, sequence, })
+      }
+      return false
+    }
     @desktop_protocol.Aborted(message) =>
       match message.trim().to_owned() {
         "" => "aborted"
@@ -572,6 +581,7 @@ fn SessionTerminalProjection::append_to(
         "" => "cancelled"
         message => "cancelled: \{message}"
       }
+    @desktop_protocol.MaxStepsExhausted => "max steps exhausted"
     @desktop_protocol.Failed(message) =>
       match message.trim().to_owned() {
         "" => "failed"

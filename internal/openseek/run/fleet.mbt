@@ -103,8 +103,8 @@ async fn run_fleet(
 
 ///|
 /// Outcome of one fleet attempt, for the summary. `ok` is true only for a
-/// `finished` terminal; everything else (aborted/interrupted/failed/no terminal,
-/// or a thrown error) is a non-success.
+/// completed turn; everything else (a context yield, aborted/interrupted/failed,
+/// no terminal, or a thrown error) is a non-success.
 priv struct AttemptOutcome {
   index : Int
   dir : String
@@ -195,17 +195,18 @@ async fn run_one_attempt(
       workspace_root=run_dir,
       approval?,
     )
-    let (status, detail) = terminal_summary(completed)
+    let terminal = completed.last_terminal()
+    let (status, detail) = terminal_summary(terminal)
     {
       index,
       dir: run_dir,
       session: id.value(),
       status,
       detail,
-      // A context-ceiling yield is durably Finished (replay/chaining) but is
-      // not task success for a one-shot fleet run.
-      ok: status == "finished" &&
-      !detail.has_prefix(@agent_session.ContextYieldAnswerPrefix),
+      // Only a completed turn is task success: a context-ceiling yield also
+      // reads as `finished` in the summary, but its work was checkpointed
+      // mid-flight.
+      ok: terminal is Some(Finished(_)),
     }
   } catch {
     error =>
@@ -223,20 +224,20 @@ async fn run_one_attempt(
 }
 
 ///|
-/// The terminal status and message of a finished run, read from its last
-/// `Terminal` event. `("(no terminal)", "")` when the run recorded none.
-fn terminal_summary(session : @agent_session.Session) -> (String, String) {
-  session
-  .events()
-  .fold(init=("(no terminal)", ""), (out, event) => {
-    match event.item() {
-      Terminal(Finished(answer)) => ("finished", answer)
-      Terminal(Aborted(reason)) => ("aborted", reason)
-      Terminal(Interrupted(reason)) => ("interrupted", reason)
-      Terminal(Failed(message)) => ("failed", message)
-      _ => out
-    }
-  })
+/// The summary status and message for a run's latest terminal.
+/// `("(no terminal)", "")` when its latest turn recorded none.
+fn terminal_summary(
+  terminal : @agent_session.TurnTerminal?,
+) -> (String, String) {
+  match terminal {
+    Some(Finished(answer)) | Some(ContextYield(answer)) => ("finished", answer)
+    Some(Aborted(reason)) => ("aborted", reason)
+    Some(Interrupted(reason)) => ("interrupted", reason)
+    Some(MaxStepsExhausted) =>
+      ("failed", @agent_session.MaxStepsExhaustedMessage)
+    Some(Failed(message)) => ("failed", message)
+    None => ("(no terminal)", "")
+  }
 }
 
 ///|

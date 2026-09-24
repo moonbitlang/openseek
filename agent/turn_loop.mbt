@@ -126,7 +126,7 @@ let ceiling_skip_note : String = "skipped: the turn is yielding at the context c
 ///     │   ├─ salvaged ── (done │ continue │ yield)
 ///     │   └─ close the batch with skip notes ── yield
 ///     └─ tool batch ── handle_tool_calls ── (continue │ done │ budget yield)
-///   nobreak ── Terminal(Failed("max steps exhausted"))
+///   nobreak ── Terminal(MaxStepsExhausted)
 ///   errdefer ── Terminal(Interrupted │ Failed) ── propagate exit
 ///
 /// "seal │ continue": finishing consults the checkpoint policy — a turn that
@@ -282,10 +282,7 @@ async fn AgentLoop::run(
     } nobreak {
       // A goal met in the last step's batch still needs its durable clear.
       let session = self.flush_goal_tombstone(session)
-      let session = self.append(
-        session,
-        Terminal(Failed("max steps exhausted")),
-      )
+      let session = self.append(session, Terminal(MaxStepsExhausted))
       @emit.emit(MaxStepsExhausted)
       session
     }

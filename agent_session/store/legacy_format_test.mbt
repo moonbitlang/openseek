@@ -64,15 +64,15 @@ async test "a frozen version-1 session file still loads" {
         to_sequence=7,
       ),
     ),
-    // A context-ceiling yield: saved as `finished` with the yield prefix.
+    // A context-ceiling yield, saved as `finished` with the yield prefix.
     Terminal(
-      Finished(
+      ContextYield(
         "[context ceiling] This turn reached the model's context window and was checkpointed.",
       ),
     ),
     User(UserMessage(Content([Text("continue")]))),
-    // Step exhaustion: saved as `failed` with this exact message.
-    Terminal(Failed("max steps exhausted")),
+    // Step exhaustion, saved as `failed` with this exact message.
+    Terminal(MaxStepsExhausted),
     User(UserMessage(Content([Text("again")]))),
     Terminal(Failed("agent failed: boom")),
     User(UserMessage(Content([Text("stop it")]))),
@@ -95,4 +95,27 @@ async test "the lenient log parser reads the frozen version-1 file cleanly" {
   assert_eq(parsed.errors, [])
   assert_false(parsed.partial_tail)
   assert_eq(parsed.events.length(), 18)
+}
+
+///|
+async test "a current terminal whose text matches an older encoding round-trips" {
+  // A real answer may start with the yield prefix, and a real failure may
+  // read "max steps exhausted". Reloading must not turn them into the
+  // dedicated variants, or the store's stale-snapshot check rejects the
+  // next append of the unchanged session.
+  let store = @store.SessionStore(@fs.tmpdir(prefix="openseek-verbatim-"))
+  defer @fs.rmdir(store.root(), recursive=true)
+  let session = @agent_session.Session(SessionId("s1"), system_prompt="system")
+    .append(User(UserMessage(Content([Text("echo the marker")]))))
+    .append(Terminal(Finished("[context ceiling] echoed on request")))
+    .append(User(UserMessage(Content([Text("fail on purpose")]))))
+    .append(Terminal(Failed("max steps exhausted")))
+  store.create(session)
+  let loaded = @store.SessionStore(store.root()).load(SessionId("s1"))
+  assert_eq(loaded.events(), session.events())
+  let appended = @store.SessionStore(store.root()).append(
+    session,
+    User(UserMessage(Content([Text("next")]))),
+  )
+  assert_eq(appended.last_sequence(), 5)
 }

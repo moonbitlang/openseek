@@ -362,7 +362,7 @@ async test "job_wait in the last model step records an error rather than waiting
     )
     assert_true(
       result.events().peek() is Some(e) &&
-      e.item() is Terminal(Failed("max steps exhausted")),
+      e.item() is Terminal(MaxStepsExhausted),
     )
   })
 }

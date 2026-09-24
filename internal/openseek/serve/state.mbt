@@ -70,6 +70,15 @@ fn goal_auto_armed(
 }
 
 ///|
+/// Whether the session's latest event seals a turn the auto-continue policy
+/// counts as cleanly finished: a completed turn, or a context yield, whose
+/// work continues in a new turn.
+fn turn_finished(session : @agent_session.Session) -> Bool {
+  session.events().peek() is Some(event) &&
+  event.item() is Terminal(Finished(_) | ContextYield(_))
+}
+
+///|
 /// Whether the engine should start another turn toward the standing goal.
 /// Pure so the policy is unit-testable: only a cleanly finished turn on a
 /// fully idle, still-serving engine with a standing goal and budget left

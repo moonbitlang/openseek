@@ -186,10 +186,7 @@ async test "max-step exhaustion preserves continued session state" {
     }
     assert_eq(tool_result.tool_call_id(), "call_continue")
     assert_eq(tool_result.content().text(), "continue-result")
-    guard events[3].item() is Terminal(Failed(message)) else {
-      fail("expected exhausted terminal")
-    }
-    assert_eq(message, "max steps exhausted")
+    assert_true(events[3].item() is Terminal(MaxStepsExhausted))
   }
 }
 

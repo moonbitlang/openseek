@@ -2858,8 +2858,10 @@ pub fn SessionSummary::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SessionTerminal {
   Finished(String)
+  ContextYield(String)
   Aborted(String)
   Interrupted(String)
+  MaxStepsExhausted
   Failed(String)
 } derive(Eq, @debug.Debug)
 pub fn SessionTerminal::equal(Self, Self) -> Bool

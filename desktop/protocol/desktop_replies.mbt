@@ -582,10 +582,15 @@ pub(all) struct SessionSummary {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
+/// Mirrors the engine's `TurnTerminal` storage kinds. Logs written before
+/// `context_yield` and `max_steps_exhausted` existed saved those endings as
+/// `finished` and `failed`; they decode as such here and render the same.
 pub(all) enum SessionTerminal {
   Finished(String)
+  ContextYield(String)
   Aborted(String)
   Interrupted(String)
+  MaxStepsExhausted
   Failed(String)
 } derive(Debug, Eq)
 
@@ -593,24 +598,33 @@ pub(all) enum SessionTerminal {
 pub impl ToJson for SessionTerminal with fn to_json(self) {
   match self {
     Finished(message) => { "kind": "finished", "message": message }
+    ContextYield(message) => { "kind": "context_yield", "message": message }
     Aborted(message) => { "kind": "aborted", "message": message }
     Interrupted(message) => { "kind": "interrupted", "message": message }
+    MaxStepsExhausted => { "kind": "max_steps_exhausted" }
     Failed(message) => { "kind": "failed", "message": message }
   }
 }
 
 ///|
 pub impl FromJson for SessionTerminal with fn from_json(json, path) {
-  guard json is Object(fields) &&
-    fields.get("kind") is Some(String(kind_)) &&
-    fields.get("message") is Some(String(message)) else {
+  guard json is Object(fields) && fields.get("kind") is Some(String(kind_)) else {
     raise JsonDecodeError((path, "expected session terminal"))
   }
+  fn message() -> String raise @json.JsonDecodeError {
+    guard fields.get("message") is Some(String(message)) else {
+      raise JsonDecodeError((path, "expected session terminal"))
+    }
+    message
+  }
+
   match kind_ {
-    "finished" => Finished(message)
-    "aborted" => Aborted(message)
-    "interrupted" => Interrupted(message)
-    "failed" => Failed(message)
+    "finished" => Finished(message())
+    "context_yield" => ContextYield(message())
+    "aborted" => Aborted(message())
+    "interrupted" => Interrupted(message())
+    "max_steps_exhausted" => MaxStepsExhausted
+    "failed" => Failed(message())
     _ => raise JsonDecodeError((path.add_key("kind"), "unknown terminal kind"))
   }
 }

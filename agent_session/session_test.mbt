@@ -211,7 +211,7 @@ test "projection skips context-yield terminals" {
     )
     .append(
       Terminal(
-        Finished(
+        ContextYield(
           "\{@agent_session.ContextYieldAnswerPrefix} continue in a new turn",
         ),
       ),

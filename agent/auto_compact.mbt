@@ -181,20 +181,18 @@ async fn AgentLoop::yield_at_context_ceiling(
 }
 
 ///|
-/// Seal a context yield: the `Finished` terminal for replay and chaining,
-/// but `context_yield` — not `agent_finished` — on the wire, so live
-/// consumers never read a mid-task ceiling yield as task success.
+/// Seal a context yield: a `ContextYield` terminal in the log and
+/// `context_yield` — not `agent_finished` — on the wire, so neither a log
+/// reader nor a live consumer reads a mid-task ceiling yield as task success.
 async fn AgentLoop::finish_context_yield(
   self : Self,
   session : @agent_session.Session,
   to_sequence : Int,
   compacted~ : Bool,
 ) -> @agent_session.Session {
-  // Built FROM the shared prefix so the durable-log contract
-  // (@agent_session.ContextYieldAnswerPrefix) can never drift from the
-  // answer actually persisted — and honest about whether a checkpoint
-  // actually exists (fail-open must not promise a summary that was never
-  // appended).
+  // Starts with the shared prefix, as every yield notice does — and honest
+  // about whether a checkpoint actually exists (fail-open must not promise a
+  // summary that was never appended).
   let answer = if compacted {
     @agent_session.ContextYieldAnswerPrefix +
     " This turn reached the model's context window and was checkpointed. " +
@@ -206,7 +204,7 @@ async fn AgentLoop::finish_context_yield(
     "attempt failed, so the turn ended uncompacted. Continue in a new " +
     "turn — its pressure retries the checkpoint."
   }
-  let session = self.append(session, Terminal(Finished(answer)))
+  let session = self.append(session, Terminal(ContextYield(answer)))
   // No push_finished_message: the yield status is not an assistant message
   // — the model-facing projection skips it too (the loop ends here, but the
   // buffer must never disagree with Session::chat_messages).

@@ -203,7 +203,7 @@ without a network dependency:
 
 ```mbt check
 ///|
-async test "zero step run_turn_with_append appends user then failure terminal" {
+async test "zero step run_turn_with_append appends user then exhausted terminal" {
   let session = @agent_session.Session(
     SessionId("readme-turn"),
     system_prompt="system",
@@ -221,13 +221,13 @@ async test "zero step run_turn_with_append appends user then failure terminal" {
       for event in result.events() => {
         match event.item() {
           User(message) => "user:\{message.content().text()}"
-          Terminal(Failed(message)) => "failed:\{message}"
+          Terminal(MaxStepsExhausted) => "max_steps_exhausted"
           _ => "other"
         }
       }
     ],
     content=(
-      #|["user:hello", "failed:max steps exhausted"]
+      #|["user:hello", "max_steps_exhausted"]
     ),
   )
 }
@@ -254,7 +254,7 @@ async test "run_turn_with_append calls the persistence hook for each item" {
       appended.push(
         match item {
           User(message) => "user:\{message.content().text()}"
-          Terminal(Failed(message)) => "failed:\{message}"
+          Terminal(MaxStepsExhausted) => "max_steps_exhausted"
           _ => "other"
         },
       )
@@ -265,7 +265,7 @@ async test "run_turn_with_append calls the persistence hook for each item" {
   debug_inspect(
     appended,
     content=(
-      #|["user:persist me", "failed:max steps exhausted"]
+      #|["user:persist me", "max_steps_exhausted"]
     ),
   )
   debug_inspect(result.last_sequence(), content="2")

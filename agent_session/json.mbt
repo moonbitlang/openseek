@@ -68,20 +68,34 @@ pub impl FromJson for SessionId with fn from_json(
 ///|
 /// Encode a terminal status as `{ "kind": ..., "message": ... }`.
 ///
-/// `kind` is one of `finished`, `aborted`, `interrupted`, or `failed`. The
-/// variant payload is stored in `message`.
+/// `kind` is one of `finished`, `context_yield`, `aborted`, `interrupted`,
+/// `max_steps_exhausted`, or `failed`. The variant payload is stored in
+/// `message`; `max_steps_exhausted` has none. A `finished` or `failed`
+/// message that reads like an older yield or step-exhaustion encoding is
+/// marked `"verbatim": true`, so it decodes back unchanged.
 impl ToJson for TurnTerminal with fn to_json(terminal : TurnTerminal) -> Json {
-  let (kind, message) = match terminal {
-    Finished(message) => ("finished", message)
-    Aborted(message) => ("aborted", message)
-    Interrupted(message) => ("interrupted", message)
-    Failed(message) => ("failed", message)
+  match terminal {
+    Finished(message) if message.has_prefix(ContextYieldAnswerPrefix) =>
+      { "kind": "finished", "message": message, "verbatim": true }
+    Finished(message) => { "kind": "finished", "message": message }
+    ContextYield(message) => { "kind": "context_yield", "message": message }
+    Aborted(message) => { "kind": "aborted", "message": message }
+    Interrupted(message) => { "kind": "interrupted", "message": message }
+    MaxStepsExhausted => { "kind": "max_steps_exhausted" }
+    Failed(message) if message == MaxStepsExhaustedMessage =>
+      { "kind": "failed", "message": message, "verbatim": true }
+    Failed(message) => { "kind": "failed", "message": message }
   }
-  { "kind": kind, "message": message }
 }
 
 ///|
 /// Decode a terminal status from `{ "kind": ..., "message": ... }`.
+///
+/// Older logs had no `context_yield` or `max_steps_exhausted` kinds: they
+/// saved a yield as `finished` with a `ContextYieldAnswerPrefix` message and
+/// step exhaustion as `failed` with `"max steps exhausted"`. Both still decode
+/// to the dedicated variants, unless the line is marked `"verbatim": true`:
+/// current builds mark a real answer or failure that happens to read that way.
 ///
 /// Missing or non-string fields raise `JsonDecodeError`. Unknown `kind` values
 /// also raise, so persisted data cannot silently turn into the wrong terminal
@@ -91,12 +105,28 @@ pub impl FromJson for TurnTerminal with fn from_json(
   path : @json.JsonPath,
 ) -> TurnTerminal {
   let fields = expect_object(json, path)
-  let message = string_field(fields, path, "message")
+  let message = () => string_field(fields, path, "message")
+  let verbatim = match fields.get("verbatim") {
+    None | Some(False) => false
+    Some(True) => true
+    Some(_) => json_decode_error(path.add_key("verbatim"), "expected bool")
+  }
   match string_field(fields, path, "kind") {
-    "finished" => Finished(message)
-    "aborted" => Aborted(message)
-    "interrupted" => Interrupted(message)
-    "failed" => Failed(message)
+    "finished" =>
+      match message() {
+        answer if !verbatim && answer.has_prefix(ContextYieldAnswerPrefix) =>
+          ContextYield(answer)
+        answer => Finished(answer)
+      }
+    "context_yield" => ContextYield(message())
+    "aborted" => Aborted(message())
+    "interrupted" => Interrupted(message())
+    "max_steps_exhausted" => MaxStepsExhausted
+    "failed" =>
+      match message() {
+        MaxStepsExhaustedMessage if !verbatim => MaxStepsExhausted
+        failure => Failed(failure)
+      }
     other =>
       json_decode_error(path.add_key("kind"), "unknown terminal kind: \{other}")
   }

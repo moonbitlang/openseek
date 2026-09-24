@@ -456,8 +456,7 @@ async fn run_serve(
         }
         // The auto-continue policy keys off a cleanly finished turn; the live
         // `session` var already holds every append this turn made.
-        let finished = session.events().peek() is Some(event) &&
-          event.item() is Terminal(Finished(_))
+        let finished = turn_finished(session)
         ignore(steps.try_put(TurnDone(finished~)) catch { _ => false })
       }
     }

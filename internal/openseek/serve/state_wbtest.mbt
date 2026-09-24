@@ -209,11 +209,10 @@ test "promotion requires a marker newer than the command baseline" {
 ///|
 test "a context-yield turn chains: finished derivation and standing goal" {
   // The whole PR-B contract in one place: a turn that ended at the context
-  // ceiling is durably Terminal(Finished(...)), so serve derives
-  // finished=true from the last event exactly as for a real completion —
+  // ceiling counts as finished for serve exactly as a real completion does —
   // and the goal marker, covered by the checkpoint summary or not, still
   // stands in the raw log. Auto-continue therefore chains one turn per
-  // context window with no yield-specific code.
+  // context window.
   let session = @agent_session.Session(
       SessionId("yield-chains"),
       system_prompt="system",
@@ -230,13 +229,12 @@ test "a context-yield turn chains: finished derivation and standing goal" {
     )
     .append(
       Terminal(
-        Finished(
+        ContextYield(
           "\{@agent_session.ContextYieldAnswerPrefix} continue in a new turn",
         ),
       ),
     )
-  let finished = session.events().peek() is Some(event) &&
-    event.item() is Terminal(Finished(_))
+  let finished = turn_finished(session)
   assert_true(finished)
   guard session.current_goal() is Some(goal) else {
     fail("the goal must survive the checkpoint")
