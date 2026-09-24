@@ -61,7 +61,7 @@ test "projection keeps zero and identical code blocks distinct with full fence i
 }
 
 ///|
-test "root-element ordinals ignore omitted blocks and nested anchors" {
+test "root node identities ignore omitted blocks and preserve nested anchors" {
   let source =
     #|first
     #|
@@ -76,30 +76,34 @@ test "root-element ordinals ignore omitted blocks and nested anchors" {
     #|```mbt
     #|x
     #|```
-  let rendered = render_markdown(source)
+  let rendered = render_markdown(source, source_mapping=true)
   assert_true(rendered.html.contains("CommonMark HTML block omitted"))
-  let ordinals : Array[Int] = []
-  let mut nested_anchor_count = 0
-  for anchor in rendered.projection.block_anchors {
-    match anchor.rendered_element_index {
-      Some(index) => ordinals.push(index)
-      None => nested_anchor_count += 1
-    }
+  let roots = rendered.projection.block_anchors.filter(anchor => {
+    anchor.is_root_element
+  })
+  assert_eq(roots.length(), 4)
+  for root in roots {
+    assert_true(rendered.html.contains(markdown_node_attribute(root.node_id)))
+    assert_eq(
+      rendered.projection.source_range_for_node(root.node_id),
+      Some(root.source_range),
+    )
   }
-  assert_eq(ordinals, [0, 1, 2, 3])
-  assert_true(nested_anchor_count >= 2)
-  let code_block = rendered.projection.code_blocks[0]
-  let code_element_index = for
-    anchor in rendered.projection.block_anchors
-    code_element_index = (None : Int?) {
-    if anchor.source_range.equals(code_block.block_source_range) {
-      continue anchor.rendered_element_index
-    }
-    continue code_element_index
-  } nobreak {
-    code_element_index
-  }
-  assert_eq(code_element_index, Some(3))
+  let nested = rendered.projection.block_anchors.filter(anchor => {
+    !anchor.is_root_element
+  })
+  assert_eq(nested.length(), 2)
+  assert_eq(
+    source[nested[1].source_range.start:nested[1].source_range.end_exclusive],
+    "quoted",
+  )
+  assert_true(
+    rendered.html.contains(markdown_node_attribute(nested[1].node_id)),
+  )
+  assert_eq(
+    roots[3].source_range,
+    rendered.projection.code_blocks[0].block_source_range,
+  )
 }
 
 ///|
@@ -423,9 +427,20 @@ test "TextSnapshot normalization gives CRLF lone-CR and LF one projection space"
   let mixed = "before\r\n```mbt check\rone\r\ntwo\r```"
   let normalized = @model.TextSnapshot(mixed).get_value()
   assert_eq(normalized, lf)
-  assert_eq(
-    render_markdown(normalized).projection,
-    render_markdown(lf).projection,
-  )
+  let normalized_projection = render_markdown(normalized).projection
+  let lf_projection = render_markdown(lf).projection
+  assert_eq(normalized_projection.code_blocks, lf_projection.code_blocks)
+  let anchor_facts = fn(projection : MarkdownDocumentProjection) {
+    projection.block_anchors.map(anchor => {
+      (
+        anchor.index,
+        anchor.source_range,
+        anchor.is_root_element,
+        anchor.heading_level,
+        anchor.heading_text,
+      )
+    })
+  }
+  assert_eq(anchor_facts(normalized_projection), anchor_facts(lf_projection))
   assert_false(normalized.contains("\r"))
 }

@@ -74,6 +74,7 @@
     pre,
     table,
     img,
+    .moonbit-viewer-markdown-source-block,
     .moonbit-viewer-markdown-code-block,
     .moonbit-viewer-markdown-diagram
   ) {
@@ -94,6 +95,7 @@
     hr,
     table,
     details,
+    .moonbit-viewer-markdown-source-block,
     .moonbit-viewer-markdown-code-block,
     .moonbit-viewer-markdown-diagram
   ) {
@@ -107,6 +109,34 @@
   > .moonbit-viewer-markdown-code-block
   > .moonbit-viewer-markdown-diagram {
   margin-bottom: 0;
+}
+
+.moonbit-viewer-markdown-source-block > :first-child {
+  margin-top: 0;
+}
+
+.moonbit-viewer-markdown-source-block > :last-child {
+  margin-bottom: 0;
+}
+
+.moonbit-viewer-markdown-feedback-add {
+  position: absolute;
+  z-index: 100;
+  pointer-events: auto;
+  padding: 5px 10px;
+  border: 1px solid var(--vscode-editorWidget-border, #454545);
+  border-radius: 5px;
+  background: var(--vscode-button-background, #007acc);
+  color: var(--vscode-button-foreground, #fff);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
+}
+
+.moonbit-viewer-markdown-feedback-add:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #007acc);
+  outline-offset: 2px;
 }
 
 .moonbit-viewer-markdown-document-article > :is(h1, h2, h3, h4, h5, h6) {
@@ -315,9 +345,8 @@
   outline-offset: 2px;
 }
 
-/* Pinned table-of-contents panel. A sibling of the viewport, never an article
-   child: article child indexes are projection ordinals the folding and
-   source-anchor machinery depends on. */
+/* Pinned table-of-contents panel. A sibling of the viewport, outside the
+   source-bearing article content. */
 /* Overlaid, not in flow: the panel must never move the viewport. The hover
    overlay and caret math assume the viewport starts at the root's top, and a
    panel in normal flow would also clip the 100%-height viewport at the bottom

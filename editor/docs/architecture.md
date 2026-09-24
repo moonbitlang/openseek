@@ -50,7 +50,7 @@ package nor knows about Markdown or diff presentation policy.
 
 `MarkdownViewer` wraps `internal/viewer/markdown_viewer.MarkdownViewerWidget`.
 It directly owns `MarkdownDocumentView` and its Markdown-specific hover,
-definition, folding, projection, and native scroll lifetimes. The host supplies
+definition, folding, projection, feedback, and native scroll lifetimes. The host supplies
 `OrdinaryMarkdown` or `MoonBitMarkdown` explicitly; the widget never infers a
 presentation from URI or language id.
 
@@ -251,7 +251,13 @@ js-only. Concrete browser runtime packages live below the module-private
   same-parse source projection. Only compiler-recognized fenced rows receive
   semantic source boundaries; cross-line tokenization state is preserved, and
   decoded-text or row-cardinality mismatches fail closed. The package owns no
-  model, provider, marker store, or request policy. It also owns semantic DOM
+  model, provider, marker store, or request policy. Rendered blocks carry cmark
+  node IDs from the same parse as their source projection. Native text selections
+  resolve to their nearest marked ancestors and return enclosing source ranges;
+  DOM child order is not a source identity. The Markdown widget pins a selection
+  to its model attachment/version and projection generation, then forwards source
+  coordinates through the existing feedback handle and shared input composer.
+  The host owns annotation source quotes and submission. The document also owns semantic DOM
   caret-to-source mapping, exact projected-range span construction, and one
   shared diagram-viewport lifetime for its replaceable article; root and the
   hover browser package own the higher-level feature contracts.
