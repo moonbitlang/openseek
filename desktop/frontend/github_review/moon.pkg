@@ -11,7 +11,6 @@ import {
   "openseek_desktop/commands",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/icons",
-  "openseek_desktop/frontend/markdown",
 }
 
 supported_targets = "js"

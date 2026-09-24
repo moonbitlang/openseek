@@ -121,47 +121,116 @@ pub extern "js" fn event_target_is(
   #| (event, element) => event?.target === element
 
 ///|
-/// Whether the event target is inside an ancestor matching `selector`, with
-/// that matching ancestor itself contained by `boundary`. Text-node targets
-/// start at their parent element. Invalid selectors and narrow test DOMs are
-/// treated as misses rather than escaping the input boundary.
-pub extern "js" fn event_target_has_matching_ancestor(
+pub fn event_target_has_matching_ancestor(
   event : @rdom.Event,
   boundary : @rdom.Element,
   selector : String,
-) -> Bool =
-  #| (event, boundary, selector) => {
-  #|   const target = event?.target;
-  #|   const element = target?.nodeType === 1 ? target : target?.parentElement;
-  #|   try {
-  #|     const match = element?.closest?.(selector);
-  #|     return Boolean(match && boundary?.contains?.(match));
-  #|   } catch {
-  #|     return false;
-  #|   }
-  #| }
+) -> Bool {
+  node_has_matching_ancestor(
+    @js.Value::cast_from(event).get_with_string("target"),
+    boundary,
+    selector,
+  )
+}
 
 ///|
-/// Whether either endpoint of the owner document's non-collapsed native DOM
-/// selection is inside an ancestor matching `selector`, bounded by
-/// `boundary`. Both endpoints are checked deliberately: a selection crossing
-/// into or out of caller-owned DOM must remain under the browser's copy path.
-pub extern "js" fn native_selection_has_endpoint_in_matching_ancestor(
+pub fn native_selection_has_endpoint_in_matching_ancestor(
+  boundary : @rdom.Element,
+  selector : String,
+) -> Bool {
+  let selection = owner_native_selection(boundary)
+  guard selection.to_option() is Some(selection) else { return false }
+  let collapsed : Bool = selection.get_with_string("isCollapsed")
+  if collapsed {
+    return false
+  }
+  node_has_matching_ancestor(
+    selection.get_with_string("anchorNode"),
+    boundary,
+    selector,
+  ) ||
+  node_has_matching_ancestor(
+    selection.get_with_string("focusNode"),
+    boundary,
+    selector,
+  )
+}
+
+///|
+extern "js" fn owner_native_selection(
+  boundary : @rdom.Element,
+) -> @js.Nullable[@js.Value] = "boundary => boundary?.ownerDocument?.getSelection?.()"
+
+///|
+extern "js" fn node_has_matching_ancestor(
+  node : @js.Value,
   boundary : @rdom.Element,
   selector : String,
 ) -> Bool =
-  #| (boundary, selector) => {
-  #|   const selection = boundary?.ownerDocument?.getSelection?.();
-  #|   if (!selection || selection.isCollapsed) return false;
-  #|   const endpointMatches = (node) => {
-  #|     const element = node?.nodeType === 1 ? node : node?.parentElement;
-  #|     try {
-  #|       const match = element?.closest?.(selector);
-  #|       return Boolean(match && boundary?.contains?.(match));
-  #|     } catch {
-  #|       return false;
-  #|     }
-  #|   };
-  #|   return endpointMatches(selection.anchorNode) ||
-  #|     endpointMatches(selection.focusNode);
+  #| (node, boundary, selector) => {
+  #|   const element = node?.nodeType === 1 ? node : node?.parentElement;
+  #|   try {
+  #|     const match = element?.closest?.(selector);
+  #|     return Boolean(match && boundary?.contains?.(match));
+  #|   } catch { return false; }
   #| }
+
+///|
+#external
+priv type NativeResizeObserver
+
+///|
+extern "js" fn native_resize_observer_disconnect(
+  observer : NativeResizeObserver,
+) -> Unit = "observer => observer.disconnect()"
+
+///|
+extern "js" fn resize_observer_class(
+  target : @rdom.Element,
+) -> @js.Nullable[@js.Value] =
+  #| target => {
+  #|   const ctor = target?.ownerDocument?.defaultView?.ResizeObserver ?? globalThis.ResizeObserver;
+  #|   return typeof ctor === 'function' ? ctor : null;
+  #| }
+
+///|
+#external
+priv type BrowserStorage
+
+///|
+extern "js" fn browser_local_storage() -> @js.Nullable[BrowserStorage] = "() => globalThis.localStorage ?? null"
+
+///|
+extern "js" fn BrowserStorage::get_item(
+  self : BrowserStorage,
+  key : String,
+) -> @js.Nullable[String] = "(storage, key) => storage.getItem(key)"
+
+///|
+extern "js" fn BrowserStorage::set_item(
+  self : BrowserStorage,
+  key : String,
+  value : String,
+) -> Unit = "(storage, key, value) => storage.setItem(key, value)"
+
+///|
+extern "js" fn BrowserStorage::remove_item(
+  self : BrowserStorage,
+  key : String,
+) -> Unit = "(storage, key) => storage.removeItem(key)"
+
+///|
+#external
+priv type BrowserUrl
+
+///|
+extern "js" fn browser_url(
+  raw : String,
+  base : @js.Optional[String],
+) -> BrowserUrl = "(raw, base) => new URL(raw, base)"
+
+///|
+extern "js" fn BrowserUrl::href(self : BrowserUrl) -> String = "url => url.href"
+
+///|
+extern "js" fn BrowserUrl::protocol(self : BrowserUrl) -> String = "url => url.protocol"

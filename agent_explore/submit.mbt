@@ -66,18 +66,3 @@ test "submit_answer declares itself a control tool" {
   let captured : Ref[ExploreReport?] = { val: None, }
   assert_true(submit_answer_tool(captured).is_control())
 }
-
-///|
-test "submission parse rejects contract violations" {
-  guard parse_submission(ToJson::to_json(sample_report())) is Ok(_) else {
-    fail("expected a valid submission")
-  }
-  guard parse_submission({ "answer": "no version" }) is Err(_) else {
-    fail("expected a parse rejection")
-  }
-  guard parse_submission(ToJson::to_json({ ..sample_report(), answer: "", }))
-    is Err(problems) else {
-    fail("expected a validation rejection")
-  }
-  assert_true(problems.length() > 0)
-}

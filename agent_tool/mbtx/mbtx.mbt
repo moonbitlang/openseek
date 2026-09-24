@@ -321,7 +321,7 @@ async fn execute(
       saved.val = Some(filename)
       // The same resolution `save_script` used; a script that could be saved
       // resolves, so a failure here only costs the cache its dedicated dir.
-      let path = try resolve_filename(workspace_root, filename, None) catch {
+      let path = try resolve_filename(workspace_root, filename) catch {
         _ => None
       } noraise {
         path => Some(path)
@@ -329,40 +329,34 @@ async fn execute(
       (source, filename, path)
     }
     File(filename) => {
-      // Resolve once for both namespace lookup and its read-only boundary.
-      // Only bundled workflows need this resource lookup and its error handling.
-      let resources = if is_bundled_filename(filename) {
-        @resources.directory() catch {
-          error =>
-            return @agent_tool.respond(
-              "error: mbtx \{@tool_error.failure_message("\{error}")}",
-              is_error=true,
-            )
-        }
-      } else {
-        None
-      }
-      let path = resolve_filename(workspace_root, filename, resources) catch {
+      let bundled = bundled_source(filename) catch {
         error =>
           return @agent_tool.respond(
             "error: mbtx \{@tool_error.failure_message("\{error}")}",
             is_error=true,
           )
       }
-      let source = read_script_snapshot(file_state, path, resources) catch {
-        error => {
-          let hint = if is_bundled_filename(filename) {
-            " Bundled workflows: @builtin/read.mbtx, @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx, @builtin/ci-watch.mbtx (GitHub CI status), @builtin/fix-deprecations.mbtx (ptc=true; one guarded edit per deprecation site). Agent workflows (subrun=true): @builtin/review.mbtx (independent worktree audit; criteria in args), @builtin/change-review.mbtx, @builtin/repo-map.mbtx. Ordinary filenames select workspace files."
-          } else {
-            " filename alone must name an existing readable script. To save a new workspace script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd."
-          }
-          return @agent_tool.respond(
-            "error: mbtx could not read filename \{filename}: \{error}\{hint}",
-            is_error=true,
-          )
+      // A bundled workflow is keyed by its name: the embedded source cannot
+      // change within one binary, and so within one session's cache.
+      if bundled is Some(source) {
+        (source, filename, Some(filename))
+      } else {
+        let path = resolve_filename(workspace_root, filename) catch {
+          error =>
+            return @agent_tool.respond(
+              "error: mbtx \{@tool_error.failure_message("\{error}")}",
+              is_error=true,
+            )
         }
+        let source = read_script_snapshot(file_state, path) catch {
+          error =>
+            return @agent_tool.respond(
+              "error: mbtx could not read filename \{filename}: \{error} filename alone must name an existing readable script. To save a new workspace script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd.",
+              is_error=true,
+            )
+        }
+        (source, filename, Some(path))
       }
-      (source, filename, Some(path))
     }
   }
   // Refuse FFI (`extern`), the one construct no mbtx target runs sandboxed.
@@ -1630,7 +1624,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
             {
               "type": "string",
               "minLength": 1,
-              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx resolves under <bundled-resources>/workflow/. Alone: read and run. With source: save and run inside the workspace, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
+              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx runs the workflow built into OpenSeek (source readable under <bundled-resources>/workflow/). Alone: read and run. With source: save and run inside the workspace, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
             },
           ),
           (
@@ -1826,7 +1820,6 @@ fn description(
     #|option-like filenames. Headings, numbered lines and footers report each file,
     #|including empty files; errors fail the call but remaining files still return.
     #|Follow truncated/skipped_files with focused reads. args=["--help"] gives budgets.
-    #|Without bundled resources, use a bounded inline @fs.read_file program.
     #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
     #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
     #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).
@@ -1994,12 +1987,6 @@ fn description(
 async fn read_script_snapshot(
   state : @agent_tool.FileStateMap,
   path : String,
-  builtin_root : String?,
 ) -> String {
-  state.with_access(() => {
-    if builtin_root is Some(root) {
-      check_builtin_containment(path, root)
-    }
-    @fs.read_file(path).text()
-  })
+  state.with_access(() => @fs.read_file(path).text())
 }

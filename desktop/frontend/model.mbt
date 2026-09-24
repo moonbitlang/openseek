@@ -1738,19 +1738,19 @@ priv enum Msg {
   // settings are the host's (`HostSettingsLoaded`); only page-local looks
   // live here.
   SettingsLoaded(
-    notification_corner~ : String,
-    tree_layout~ : String,
-    theme~ : String,
-    font_size~ : String,
+    notification_corner~ : String?,
+    tree_layout~ : String?,
+    theme~ : String?,
+    font_size~ : String?,
     fps_overlay_enabled~ : Bool,
     minimal_transcript~ : Bool,
-    model~ : String,
-    conversation_models~ : String,
-    agent~ : String,
-    codex_model~ : String,
-    codex_effort~ : String,
-    openseek_effort~ : String,
-    glm_effort~ : String
+    model~ : String?,
+    conversation_models~ : String?,
+    agent~ : String?,
+    codex_model~ : String?,
+    codex_effort~ : String?,
+    openseek_effort~ : String?,
+    glm_effort~ : String?
   )
   // Deliberate actions emitted by the component-local input composer. Raw
   // keystrokes never enter this root message loop.

@@ -145,20 +145,29 @@ $ cat > answer.mbt <<'EOF'
 > EOF
 ```
 
-`moonx "$CHECK"` fails. Compiler diagnostics go to stderr; the workflow's failure
-message appears on stdout. `(glob)` matches the runtime's source location and
-the compiler's exit code, while `[1]` checks the script's own exit status.
+`moonx "$CHECK"` fails with nothing on stdout: the compiler diagnostics and the
+workflow's failure message both go to stderr, so the failure message is its
+last line. `[1]` checks the script's own exit status, and `(glob)` matches the
+runtime's source location and the compiler's exit code.
 
 ```mooncram
-$ moonx "$CHECK"
-Failure(* FAILED: moon check failed (exit=*)) (glob)
+$ moonx "$CHECK" 2> check.err
 [1]
+```
+
+```mooncram
+$ tail -n 1 check.err
+Failure(* FAILED: moon check failed (exit=*)) (glob)
 ```
 
 `moonx "$CHECK_TEST"` also fails at the check step, without printing a test summary:
 
 ```mooncram
-$ moonx "$CHECK_TEST"
-Failure(* FAILED: moon check failed (exit=*)) (glob)
+$ moonx "$CHECK_TEST" 2> check-test.err
 [1]
+```
+
+```mooncram
+$ tail -n 1 check-test.err
+Failure(* FAILED: moon check failed (exit=*)) (glob)
 ```

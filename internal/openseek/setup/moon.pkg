@@ -20,6 +20,10 @@ import {
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/openseek/internal/openseek/testkit",
+} for "test"
+
+import {
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
 } for "wbtest"
 
 warnings = "+unnecessary_annotation"

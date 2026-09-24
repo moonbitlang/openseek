@@ -487,3 +487,36 @@ test("a subagent transcript's task is not captioned as the user's", async ({ pag
   await expect(page.locator('.card.user.typed')).toHaveCount(0);
   expect(viewer.pageErrors).toEqual([]);
 });
+
+test('scrubber navigation preserves hash state and clamps its transient tooltip', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 500 });
+  const viewer = new VizBrowserHarness(page);
+  viewer.events = viewer.eventLog(Array.from({ length: 30 }, (_, i) => ({
+    sequence: i * 2 + 2,
+    item: { kind: 'assistant', payload: { content: `Step ${i + 1}`, tool_calls: [] } },
+  })));
+  await viewer.install();
+  // Sequence 3 is absent: restore to the following visible anchor, not the top.
+  await viewer.goto('#s=viz-1&v=raw&seq=3&extra=keep');
+  await expect(page.locator('#seq-4')).toBeInViewport();
+  const segments = page.locator('.step-seg');
+  await expect(segments).toHaveCount(30);
+  const tip = page.locator('.scrubber-tip');
+  for (const segment of [segments.first(), segments.last()]) {
+    await segment.hover();
+    await expect(tip).toBeVisible();
+    await expect(tip).toHaveText(await segment.getAttribute('data-label'));
+    const bounds = await tip.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(7);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(893);
+  }
+  const historyLength = await page.evaluate(() => history.length);
+  await segments.last().click();
+  await expect(page.locator('#seq-60')).toBeInViewport();
+  await expect(tip).toBeHidden();
+  const hash = await page.evaluate(() => Object.fromEntries(new URLSearchParams(location.hash.slice(1))));
+  expect(hash).toMatchObject({ s: 'viz-1', v: 'raw', extra: 'keep' });
+  expect(await page.evaluate(() => history.length)).toBe(historyLength);
+  await expect(page.locator('.step-seg.current')).toHaveCount(1);
+  expect(viewer.pageErrors).toEqual([]);
+});

@@ -215,18 +215,21 @@ fn bullet_lists_verb(bullet : String, verb : String) -> Bool {
 ///|
 /// The single-token verbs a bullet lists, split back out of the rendered
 /// prose. The verb list runs to whichever comes first: the `, plus ` that
-/// introduces the grouped multi-token prefixes, or the `. ` that ends the
-/// sentence and starts the note — so neither a grouped prefix nor a note's
-/// own commas can be mistaken for a verb.
+/// introduces the grouped multi-token prefixes, or the `.` that ends the
+/// sentence, even when no note follows — so neither a grouped prefix nor a
+/// note's own commas can be mistaken for a verb.
 fn spawn_verbs(bullet : String) -> Array[String] {
   let mut cut = bullet.length()
-  for marker in [", plus ", ". "] {
+  for marker in [", plus ", "."] {
     if bullet.find(marker) is Some(index) && index < cut {
       cut = index
     }
   }
+  // A bullet without a note ends at its closing period, not at `. `.
+  let list = bullet[:cut]
+  let list = if list is [.. head, '.'] { head } else { list }
   [
-    for part in bullet[:cut].split(", ").collect() => part.to_owned()
+    for part in list.split(", ").collect() => part.to_owned()
   ]
 }
 

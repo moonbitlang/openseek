@@ -1247,15 +1247,29 @@ async test "setup failure retires the writer before an immediate next start" {
     assert_eq(second.status, "accepted")
     assert_true(@fsx.exists(old_done))
     assert_false(@fsx.exists(overlapped))
+    // The spawn counter is written before the fake engine commits its
+    // terminal record. Wait for that append to finish before cancelling the
+    // shell, or its mkdir child can race recursive workspace cleanup.
     assert_true(
-      @async.with_timeout_opt(1000, () => {
-        while @fs.read_file(count.to_string()).text() != "2" {
+      @async.with_timeout_opt(3000, () => {
+        while !has_finished_run(emitted, second.run_id) {
           @async.sleep(1)
         }
       })
       is Some(_),
     )
     assert_eq(@fs.read_file(count.to_string()).text(), "2")
+    // Let the second run finish before teardown: its engine commits its
+    // terminal record under the workspace, and a commit still in flight would
+    // race the recursive removal of the test directory.
+    assert_true(
+      @async.with_timeout_opt(3000, () => {
+        while !has_finished_run(emitted, second.run_id) {
+          @async.sleep(1)
+        }
+      })
+      is Some(_),
+    )
     let first_finishes = for event in emitted; first_finishes = 0 {
       if event is Finished(payload) && payload.run_id == first {
         continue first_finishes + 1
@@ -1265,6 +1279,7 @@ async test "setup failure retires the writer before an immediate next start" {
       first_finishes
     }
     assert_eq(first_finishes, 1)
+    assert_true(has_finished_run(emitted, second.run_id))
     group.return_immediately(())
   })
 }

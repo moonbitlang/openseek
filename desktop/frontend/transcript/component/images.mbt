@@ -3,23 +3,23 @@
 // display data for the conversation currently mounted in the page.
 
 ///|
-/// Rabbita wraps `IntersectionObserver::observe/unobserve/disconnect` but not
-/// the entry fields this callback reads (`isIntersecting`, `target.dataset`),
-/// so only construction stays JS. The observer it returns is the ordinary
-/// `@dom.IntersectionObserver`. Only transcript-local placeholders are
-/// observed, and each one is unobserved before its path is sent back to
-/// MoonBit, so a slow host read cannot produce repeated requests.
-extern "js" fn transcript_image_observer(
+fn transcript_image_observer(
   on_image : (String) -> Unit,
-) -> @dom.IntersectionObserver =
-  #| (onImage) => new IntersectionObserver((entries, observer) => {
-  #|   for (const entry of entries) {
-  #|     if (!entry.isIntersecting) continue;
-  #|     observer.unobserve(entry.target);
-  #|     const path = entry.target.dataset.transcriptImage;
-  #|     if (path) onImage(path);
-  #|   }
-  #| })
+) -> @dom.IntersectionObserver {
+  @dom.IntersectionObserver::new((entries, observer) => {
+    for entry in entries {
+      if !image_entry_intersects(entry) {
+        continue
+      }
+      let target = image_entry_target(entry)
+      observer.unobserve(target)
+      if target.get_attribute("data-transcript-image") is Some(path) &&
+        path != "" {
+        on_image(path)
+      }
+    }
+  })
+}
 
 ///|
 /// Observe every image placeholder currently rendered under `transcript`.
@@ -98,8 +98,8 @@ fn ImageCache::apply_after_render(self : ImageCache) -> @cmd.Cmd {
     _ => {
       for path, state in self.0 {
         match state {
-          ImageReady(source) => settle_transcript_image(path, source)
-          ImageUnavailable => settle_transcript_image(path, "")
+          ImageReady(source) => settle_transcript_image(path, Some(source))
+          ImageUnavailable => settle_transcript_image(path, None)
           ImageLoading => ()
         }
       }
@@ -109,19 +109,21 @@ fn ImageCache::apply_after_render(self : ImageCache) -> @cmd.Cmd {
 }
 
 ///|
-/// Settle every rendered occurrence of one path. An empty source means the
-/// bounded host read failed or the bytes were not a supported raster image;
-/// removing the marker prevents the viewport observer from retrying forever.
-extern "js" fn settle_transcript_image(path : String, source : String) -> Unit =
-  #| (path, source) => {
-  #|   for (const image of document.querySelectorAll("img[data-transcript-image]")) {
-  #|     if (image.dataset.transcriptImage !== path) continue;
-  #|     image.removeAttribute("data-transcript-image");
-  #|     image.classList.remove("pending");
-  #|     if (source) image.src = source;
-  #|     else image.classList.add("unavailable");
-  #|   }
-  #| }
+/// Remove the pending marker after either a successful read or a failure so
+/// the viewport observer does not keep retrying an unavailable image.
+fn settle_transcript_image(path : String, source : String?) -> Unit {
+  for image in @dom.document().query_selector_all("img[data-transcript-image]") {
+    if image.get_attribute("data-transcript-image") != Some(path) {
+      continue
+    }
+    image.remove_attribute("data-transcript-image")
+    image_class_toggle(image, "pending", false)
+    match source {
+      Some(source) => image.set_attribute("src", source)
+      None => image_class_toggle(image, "unavailable", true)
+    }
+  }
+}
 
 ///|
 test "image cache starts one read and settles only the pending entry" {

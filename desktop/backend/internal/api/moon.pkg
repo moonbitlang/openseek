@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/openseek_protocol" @wire,
   "openseek_desktop/backend/internal/auth",
   "openseek_desktop/backend/internal/broadcast",
   "openseek_desktop/commands",
@@ -18,6 +17,10 @@ import {
   "tonyfettes/platform",
   "tonyfettes/xlog",
 }
+
+import {
+  "moonbitlang/openseek_protocol" @wire,
+} for "wbtest"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

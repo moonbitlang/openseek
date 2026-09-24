@@ -46,7 +46,11 @@ fn persist_feedback_items(
   for item in services.agent_feedback_handle.get_feedback(resource) {
     items.push(feedback_item_to_json(item))
   }
-  storage_set_item(feedback_storage_key(resource), Json(items).stringify())
+  @base_browser.local_storage_set(
+    feedback_storage_key(resource),
+    Json(items).stringify(),
+  )
+  |> ignore
 }
 
 ///|
@@ -87,8 +91,8 @@ fn restore_feedback_items(
   guard services.agent_feedback_handle.get_feedback(resource).is_empty() else {
     return
   }
-  let raw = storage_get_item(feedback_storage_key(resource))
-  guard raw != "" else { return }
+  let raw = @base_browser.local_storage_get(feedback_storage_key(resource))
+  guard raw is Ok(Some(raw)) else { return }
   let parsed = @json.parse(raw) catch { _ => return }
   guard parsed is Array(entries) else { return }
   let items : Array[@agent_feedback_api.AgentFeedback] = []

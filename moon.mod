@@ -30,3 +30,8 @@ rule(
   name: "md_to_mbt_string",
   command: "moon run scripts/md_to_mbt_string -- \"$input\" \"$output\"",
 )
+
+rule(
+  name: "mbtx_bundle",
+  command: "moonx scripts/mbtx_bundle.mbtx \"$output\" $input",
+)

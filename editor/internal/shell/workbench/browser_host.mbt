@@ -1,68 +1,44 @@
 ///|
-/// Installs browser globals used by the reference app and Playwright harness.
-extern "js" fn install_host_capabilities() -> Unit =
-  #| () => {
-  #|   if (typeof globalThis.__readonlyEditorEvent !== "function") {
-  #|     globalThis.__readonlyEditorEvent = (name, payload) => {
-  #|       // Log the raw JSON string: console object previews truncate
-  #|       // after a handful of properties, which silently drops payload
-  #|       // keys from harness transcripts.
-  #|       console.info("[readonly-editor]", name, payload);
-  #|     };
-  #|   }
-  #| }
+/// Publish raw JSON strings so console previews cannot truncate event payloads.
+fn install_host_capabilities() -> Unit {
+  let callback : @js.Value = @js.globalThis.get_with_string(
+    "__readonlyEditorEvent",
+  )
+  if !host_js_function(callback) {
+    @js.globalThis.set_with_string("__readonlyEditorEvent", (
+      name : String,
+      payload : String,
+    ) => {
+      let console : @js.Value = @js.globalThis.get_with_string("console")
+      let _ : Unit = console.apply_with_string("info", [
+        "[readonly-editor]", name, payload,
+      ])
+    })
+  }
+}
 
 ///|
-/// Publishes the current model JSON on harness globals.
-extern "js" fn set_current_model(payload : String) -> Unit =
-  #| (payload) => {
-  #|   try {
-  #|     const model = JSON.parse(payload);
-  #|     globalThis.__readonlyEditorModel = model;
-  #|     globalThis.__readonlyEditorDocument = model;
-  #|     globalThis.__readonlyEditorSource = typeof model.text === "string" ? model.text : "";
-  #|   } catch (error) {
-  #|     console.error("[readonly-editor]", "model:state-error", error);
-  #|   }
-  #| }
-
-///|
-/// WebSocket endpoint for the current page's native remote protocol server.
-extern "js" fn protocol_websocket_url() -> String =
-  #| () => {
-  #|   const location = globalThis.location;
-  #|   const protocol = location?.protocol === "https:" ? "wss:" : "ws:";
-  #|   const host = location?.host || "127.0.0.1:5173";
-  #|   return `${protocol}//${host}/protocol`;
-  #| }
-
-///|
-/// Emits one harness/browser observability event.
-extern "js" fn emit_host_event(name : String, payload : String) -> Unit =
-  #| (name, payload) => {
-  #|   if (typeof globalThis.__readonlyEditorEvent === "function") {
-  #|     globalThis.__readonlyEditorEvent(name, payload);
-  #|   }
-  #| }
-
-///|
-/// Best-effort local storage read; returns empty string when unavailable.
-extern "js" fn storage_get_item(key : String) -> String =
-  #| (key) => {
-  #|   try {
-  #|     return globalThis.localStorage?.getItem(key) ?? "";
-  #|   } catch {
-  #|     return "";
-  #|   }
-  #| }
-
-///|
-/// Best-effort local storage write; private browsing failures are ignored.
-extern "js" fn storage_set_item(key : String, value : String) -> Unit =
-  #| (key, value) => {
-  #|   try {
-  #|     globalThis.localStorage?.setItem(key, value);
-  #|   } catch {
-  #|     // Persistence is best-effort; private browsing may deny storage.
-  #|   }
-  #| }
+fn set_current_model(payload : String) -> Unit {
+  let model = @js.Value::from_json_string(payload) catch {
+    error => {
+      let console : @js.Value = @js.globalThis.get_with_string("console")
+      let _ : Unit = console.apply_with_string("error", [
+        "[readonly-editor]",
+        "model:state-error",
+        error.to_string(),
+      ])
+      return
+    }
+  }
+  @js.globalThis.set_with_string("__readonlyEditorModel", model)
+  @js.globalThis.set_with_string("__readonlyEditorDocument", model)
+  let text : @js.Value = model.get_with_string("text")
+  @js.globalThis.set_with_string(
+    "__readonlyEditorSource",
+    if text.is_string() {
+      (text.cast() : String)
+    } else {
+      ""
+    },
+  )
+}

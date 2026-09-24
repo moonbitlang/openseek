@@ -10,6 +10,8 @@ import {
 }
 
 // Values
+pub fn body_view(String, String, class? : String) -> @html.Html
+
 pub fn checkout_dialog(locale~ : @i18n.Locale, State, @cmd.Emit[Msg]) -> @html.Html
 
 pub fn checkout_notification(locale~ : @i18n.Locale, State, @cmd.Emit[Msg]) -> @html.Html

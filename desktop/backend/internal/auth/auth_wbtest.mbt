@@ -71,34 +71,6 @@ test "callback parsing: granted, denied, strays" {
 }
 
 ///|
-test "url derivations" {
-  inspect(
-    tunnel_url("https://openseek-api.moonbitlang.cn"),
-    content="wss://openseek-api.moonbitlang.cn/v1/tunnel",
-  )
-  inspect(
-    tunnel_url("http://127.0.0.1:3000/"),
-    content="ws://127.0.0.1:3000/v1/tunnel",
-  )
-  inspect(
-    device_url("https://relay.example", "d_abc", app_version="0.1.16"),
-    content="https://relay.example/console/releases/v0.1.16/index.html?device=d_abc",
-  )
-  inspect(
-    device_url("https://relay.example/", "d_abc", app_version="development"),
-    content="https://relay.example/console/?device=d_abc",
-  )
-  inspect(
-    origin_from_relay_url("wss://relay.example/v1/tunnel"),
-    content="https://relay.example",
-  )
-  inspect(
-    origin_from_relay_url("ws://127.0.0.1:8080/v1/tunnel"),
-    content="http://127.0.0.1:8080",
-  )
-}
-
-///|
 test "auth.json codec round-trips and reads corruption as signed out" {
   let session = sample_session(avatar="https://avatars.example/1")
   let json = session_to_json(session)

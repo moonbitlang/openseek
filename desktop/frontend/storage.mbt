@@ -1,9 +1,8 @@
 // Page-local UI preferences persisted in the webview's localStorage. Access
 // is guarded — a webview profile may deny storage — and a denied store just
 // means the defaults come back next launch.
-// The older preferences below share load_setting/save_setting: read errors become
-// the absent-value spelling, and write errors are discarded without a result
-// message. Their in-memory controls can update even when persistence fails.
+// Appearance preferences deliberately keep defaults on read failures and keep
+// in-memory changes on write failures. The shared storage binding retains errors.
 // Language uses language.mbt's explicit Result/optional read and reports failures.
 //
 // The engine endpoint settings (provider, URLs, API keys) are NOT here: they
@@ -25,8 +24,9 @@ fn load_saved_settings(
           tree_layout=load_setting(TreeLayoutStorageKey),
           theme=load_setting(ThemeStorageKey),
           font_size=load_setting(AppFontSizeStorageKey),
-          minimal_transcript=load_setting(MinimalTranscriptStorageKey) == "true",
-          fps_overlay_enabled=load_setting(FpsOverlayStorageKey) == "true",
+          minimal_transcript=load_setting(MinimalTranscriptStorageKey) ==
+            Some("true"),
+          fps_overlay_enabled=load_setting(FpsOverlayStorageKey) == Some("true"),
           model=load_setting(ModelStorageKey),
           conversation_models=load_setting(ConversationModelsStorageKey),
           agent=load_setting(AgentStorageKey),
@@ -109,9 +109,9 @@ fn OpenSeekReasoning::save_for_glm(self : OpenSeekReasoning) -> @cmd.Cmd {
 /// eviction order, which an object's key order would not promise.
 fn save_conversation_model(key : String, model : EngineModel) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
-    let stored = parse_conversation_models(
-      load_setting(ConversationModelsStorageKey),
-    )
+    let stored = load_setting(ConversationModelsStorageKey)
+      .map(parse_conversation_models)
+      .unwrap_or([])
     let rows : Array[Json] = remembered_with(stored, key, model).map(entry => {
       "key": entry.key.to_json(),
       "model": entry.model.wire().to_json(),
@@ -156,37 +156,18 @@ fn AppFontSize::save(self : AppFontSize) -> @cmd.Cmd {
 }
 
 ///|
-fn load_setting(storage_key : String) -> String {
-  @js.Error_::wrap(
-    () => {
-      guard @interop.js_prop(@js.globalThis, "localStorage") is Some(storage) else {
-        return @js.Value::cast_from("")
-      }
-      storage.apply_with_string("getItem", [@js.Value::cast_from(storage_key)])
-    },
-    // getItem returns null for a key that was never stored.
-    map_ok=value => if value.is_null() { "" } else { value.cast() },
-  ) catch {
-    _ => ""
+fn load_setting(storage_key : String) -> String? {
+  // Appearance preferences are best-effort; the UI keeps its defaults when
+  // the browser denies storage. Durable drafts use a reporting policy instead.
+  match @base_browser.local_storage_get(storage_key) {
+    Ok(value) => value
+    Err(_) => None
   }
 }
 
 ///|
 fn save_setting(storage_key : String, value : String) -> Unit {
-  @js.Error_::wrap(
-    () => {
-      guard @interop.js_prop(@js.globalThis, "localStorage") is Some(storage) else {
-        return @js.Value::cast_from(())
-      }
-      storage.apply_with_string("setItem", [
-        @js.Value::cast_from(storage_key),
-        @js.Value::cast_from(value),
-      ])
-    },
-    map_ok=_ => (),
-  ) catch {
-    _ => ()
-  }
+  @base_browser.local_storage_set(storage_key, value) |> ignore
 }
 
 ///|

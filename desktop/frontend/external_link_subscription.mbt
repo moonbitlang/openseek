@@ -1,22 +1,22 @@
-// The embedded editor mounts its own DOM below `.viewer-host`, outside
-// Rabbita's virtual tree. Its Markdown anchors therefore cannot reach
-// `@sub.on_url_request`; a desktop-only document subscription forwards those
-// ordinary left-clicks into the same root message as Rabbita-owned links.
+// GitHub bodyHTML and the embedded editor mount DOM outside Rabbita's virtual
+// tree. Their anchors cannot reach `@sub.on_url_request`; this subscription
+// forwards ordinary left-clicks into the same message as Rabbita-owned links.
 // Modified clicks stay with Chromium so Proton's native new-window policy can
 // hand them to the system browser.
 
 ///|
-priv suberror ViewerExternalLinkSubscription {
-  ViewerExternalLinkSubscription(@cmd.Emit[String])
+priv suberror RenderedExternalLinkSubscription {
+  RenderedExternalLinkSubscription(Bool, @cmd.Emit[String])
 }
 
 ///|
-fn viewer_external_link_sub_loader(
+fn rendered_external_link_sub_loader(
   payload : Error,
   scheduler : &Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    ViewerExternalLinkSubscription(emit) => {
+    RenderedExternalLinkSubscription(include_viewer, emit) => {
+      let mut include_viewer = include_viewer
       let mut emit = emit
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
@@ -27,7 +27,10 @@ fn viewer_external_link_sub_loader(
           !mouse.get_meta_key() &&
           event.target().to_element() is Some(element) &&
           element.closest("a[href]") is Some(anchor) &&
-          anchor.closest(".viewer-host") is Some(_) &&
+          (
+            anchor.closest(".github-html-body") is Some(_) ||
+            (include_viewer && anchor.closest(".viewer-host") is Some(_))
+          ) &&
           !anchor.has_attribute("download") &&
           anchor.get_property("href").to_option() is Some(url) &&
           (
@@ -50,7 +53,10 @@ fn viewer_external_link_sub_loader(
           )
         },
         update_tagger: payload => {
-          guard payload is ViewerExternalLinkSubscription(next) else { return }
+          guard payload is RenderedExternalLinkSubscription(next_viewer, next) else {
+            return
+          }
+          include_viewer = next_viewer
           emit = next
         },
       })
@@ -60,15 +66,18 @@ fn viewer_external_link_sub_loader(
 }
 
 ///|
-/// Capture ordinary link clicks created imperatively by the embedded Viewer.
-/// The selector is intentionally limited to `.viewer-host`: Rabbita-owned
-/// anchors elsewhere already have their own URL-request handler and must not
-/// dispatch twice. Ctrl/Cmd-clicks remain native new-window requests.
-fn viewer_external_link_subscription(emit : @cmd.Emit[String]) -> @sub.Sub {
+/// GitHub HTML links use the same navigation on desktop and browser consoles.
+/// Viewer capture remains desktop-only. Restrict capture to these opaque DOM
+/// roots so Rabbita-owned anchors never dispatch twice; modified clicks remain
+/// native new-window requests.
+fn rendered_external_link_subscription(
+  include_viewer~ : Bool,
+  emit : @cmd.Emit[String],
+) -> @sub.Sub {
   @sub.custom_sub(
-    "viewer-external-link-capture",
+    "rendered-external-link-capture",
     Global,
-    ViewerExternalLinkSubscription(emit),
-    viewer_external_link_sub_loader,
+    RenderedExternalLinkSubscription(include_viewer, emit),
+    rendered_external_link_sub_loader,
   )
 }

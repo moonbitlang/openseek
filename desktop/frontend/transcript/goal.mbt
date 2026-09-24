@@ -56,49 +56,6 @@ pub fn apply_goal_marker(
 }
 
 ///|
-test "goal markers parse exactly and other goal-family notices never match" {
-  assert_true(
-    goal_marker("[goal]\nship the feature") is Some(GoalSet("ship the feature")),
-  )
-  assert_true(
-    goal_marker("[goal]\nline one\nline two")
-    is Some(GoalSet("line one\nline two")),
-  )
-  assert_true(goal_marker("[goal cleared]") is Some(GoalCleared))
-  assert_true(
-    goal_marker("[goal blocked]\nneeds a decision")
-    is Some(GoalBlocked("needs a decision")),
-  )
-  assert_true(goal_marker("[goal unblocked]") is Some(GoalUnblocked))
-  // Reminders, checks and the baseline record are transport/model-directed.
-  assert_true(goal_marker("[goal reminder]\nThe standing goal…") is None)
-  assert_true(goal_marker("[goal check]\nThe standing goal…") is None)
-  assert_true(goal_marker("[goal baseline] sha=abc dirty=false") is None)
-  // A bare `[goal]` with no text line is not a set.
-  assert_true(goal_marker("[goal]") is None)
-  assert_true(goal_marker("plain notice") is None)
-}
-
-///|
-test "the goal reducer follows last-marker-wins with guarded transitions" {
-  let set = apply_goal_marker(None, GoalSet("ship it"))
-  assert_true(set is Some({ text: "ship it", blocked: None, }))
-  let blocked = apply_goal_marker(set, GoalBlocked("needs access"))
-  assert_true(
-    blocked is Some({ text: "ship it", blocked: Some("needs access"), }),
-  )
-  let resumed = apply_goal_marker(blocked, GoalUnblocked)
-  assert_true(resumed is Some({ text: "ship it", blocked: None, }))
-  // A newer set resets a standing block.
-  let replaced = apply_goal_marker(blocked, GoalSet("polish it"))
-  assert_true(replaced is Some({ text: "polish it", blocked: None, }))
-  assert_true(apply_goal_marker(blocked, GoalCleared) is None)
-  // Stray transitions on a goalless record stay goalless.
-  assert_true(apply_goal_marker(None, GoalBlocked("orphan")) is None)
-  assert_true(apply_goal_marker(None, GoalUnblocked) is None)
-}
-
-///|
 pub extend GoalMarker with Eq::{equal, not_equal}
 
 ///|

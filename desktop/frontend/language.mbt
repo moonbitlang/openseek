@@ -2,34 +2,16 @@
 const LanguageStorageKey : String = "openseek.language"
 
 ///|
-/// Browser preferences are read at startup and when a language is selected.
-extern "js" fn browser_language_values() -> FixedArray[String] =
-  #|() => typeof navigator === 'undefined' ? [] : Array.from(navigator.languages || [navigator.language]).filter(x => typeof x === 'string')
-
-///|
 fn browser_languages() -> Array[String] {
   browser_language_values().iter().collect()
 }
 
 ///|
-extern "js" fn language_storage() -> @js.Value =
-  #|() => { const storage = globalThis.localStorage; if (!storage) throw new Error('Language preference storage is unavailable'); return storage; }
-
-///|
 fn read_language_preference() -> Result[@i18n.Preference?, String] {
-  @js.Error_::wrap(
-    () => {
-      let storage = language_storage()
-      storage.apply_with_string("getItem", [
-        @js.Value::cast_from(LanguageStorageKey),
-      ])
-    },
-    map_ok=value => {
-      let stored : String? = @js.Cast::into(value)
-      Ok(stored.bind(value => @i18n.Preference::parse(value)))
-    },
-  ) catch {
-    error => Err(error.to_string())
+  match @base_browser.local_storage_get(LanguageStorageKey) {
+    Ok(stored) => Ok(stored.bind(@i18n.Preference::parse))
+    Err(Unavailable) => Err("Language preference storage is unavailable")
+    Err(AccessFailed(message)) => Err(message)
   }
 }
 
@@ -59,17 +41,16 @@ fn save_language(
     })
   }
   @cmd.custom_cmd(scheduler => {
-    @js.Error_::wrap(
-      () => {
-        let storage = language_storage()
-        storage.apply_with_string("setItem", [
-          @js.Value::cast_from(LanguageStorageKey),
-          @js.Value::cast_from(language.wire()),
-        ])
-      },
-      map_ok=_ => (),
-    ) catch {
-      error => scheduler.add(dispatch(LanguageStorageFailed(error.to_string())))
+    match @base_browser.local_storage_set(LanguageStorageKey, language.wire()) {
+      Ok(_) => ()
+      Err(Unavailable) =>
+        scheduler.add(
+          dispatch(
+            LanguageStorageFailed("Language preference storage is unavailable"),
+          ),
+        )
+      Err(AccessFailed(message)) =>
+        scheduler.add(dispatch(LanguageStorageFailed(message)))
     }
   })
 }

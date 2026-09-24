@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/editor/base/browser" @base_browser,
+  "moonbit-community/rabbita/js",
   "moonbitlang/editor/base/common" @base_common,
   "moonbitlang/editor/internal/viewer/markdown" @markdown_core,
   "moonbit-community/rabbita/dom" @rdom,

@@ -155,3 +155,18 @@ test('Codex remote image URLs retain their position between text parts', async (
   )).toEqual(['Before remote picture', 'image', 'After remote picture']);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('canceling the file picker removes its input and permits another selection', async ({ page }) => {
+  const app = new CodexImagesHarness(page);
+  await app.openCodex();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Attach images', exact: true }).click();
+  const input = (await chooser).element();
+  await input.evaluate(element => element.dispatchEvent(new Event('cancel')));
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+  await expect(page.locator('.composer-image')).toHaveCount(0);
+  await app.select(image);
+  await expect(page.locator('.composer-image')).toHaveCount(1);
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});

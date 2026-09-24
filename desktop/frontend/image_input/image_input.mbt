@@ -14,65 +14,92 @@ priv type BrowserFile
 priv struct Selection(FixedArray[BrowserFile])
 
 ///|
-extern "js" fn BrowserFile::name(self : BrowserFile) -> String =
-  #| file => file.name
+fn BrowserFile::name(self : BrowserFile) -> String {
+  @js.Value::cast_from(self).get_with_string("name")
+}
 
 ///|
-extern "js" fn BrowserFile::blob(self : BrowserFile) -> @dom.Blob =
-  #| file => file
+fn BrowserFile::blob(self : BrowserFile) -> @dom.Blob {
+  @js.Value::cast_from(self).cast()
+}
 
 ///|
-/// A one-shot native picker owns its change/cancel listeners. File inputs emit
-/// ordinary Event, which Rabbita's InputEvent-only Attrs::on_change rejects.
-extern "js" fn Selection::pick(
-  on_files : (FixedArray[BrowserFile]) -> Unit,
-) -> Unit =
-  #| onFiles => {
-  #|   const input = document.createElement('input');
-  #|   input.type = 'file';
-  #|   input.accept = 'image/png,image/jpeg,image/webp,image/gif';
-  #|   input.multiple = true;
-  #|   input.hidden = true;
-  #|   input.addEventListener('change', () => {
-  #|     const files = Array.from(input.files || []);
-  #|     input.remove();
-  #|     onFiles(files);
-  #|   }, { once: true });
-  #|   input.addEventListener('cancel', () => input.remove(), { once: true });
-  #|   document.body.append(input);
-  #|   input.click();
-  #| }
+/// Listen to ordinary Event: Rabbita's view-level on_change expects InputEvent.
+fn Selection::pick(on_files : (FixedArray[BrowserFile]) -> Unit) -> Unit {
+  let input = @dom.document().create_element("input")
+  input.set_attribute("type", "file")
+  input.set_attribute("accept", "image/png,image/jpeg,image/webp,image/gif")
+  input.set_attribute("multiple", "")
+  input.set_attribute("hidden", "")
+  input.add_event_listener_with_options(
+    "change",
+    _ => {
+      let files = browser_files(@js.Value::cast_from(input))
+      remove_file_input(input)
+      on_files(files)
+    },
+    once=true,
+  )
+  input.add_event_listener_with_options(
+    "cancel",
+    _ => remove_file_input(input),
+    once=true,
+  )
+  if @dom.document().get_body() is Some(body) {
+    body.append_child(input.as_node())
+  }
+  if input.to_html_element() is Some(element) {
+    element.click()
+  }
+}
 
 ///|
-/// Snapshot DataTransfer and prevent the default synchronously in the DOM
-/// callback. A returned command runs too late to prevent native paste/drop.
-extern "js" fn Selection::pasted(
-  event : @dom.ClipboardEvent,
-) -> FixedArray[BrowserFile] =
-  #| event => {
-  #|   const files = Array.from(event.clipboardData?.files || []);
-  #|   if (files.length) event.preventDefault();
-  #|   return files;
-  #| }
+/// Snapshot files and prevent default synchronously, before dispatching a command.
+fn Selection::pasted(event : @dom.ClipboardEvent) -> FixedArray[BrowserFile] {
+  let data : @js.Nullable[@js.Value] = @js.Value::cast_from(event).get_with_string(
+    "clipboardData",
+  )
+  let files = match data.to_option() {
+    Some(data) => browser_files(data)
+    None => []
+  }
+  if files.length() > 0 {
+    event.prevent_default()
+  }
+  files
+}
 
 ///|
-extern "js" fn Selection::dropped(
-  event : @dom.DragEvent,
-) -> FixedArray[BrowserFile] =
-  #| event => {
-  #|   const files = Array.from(event.dataTransfer?.files || []);
-  #|   if (files.length) event.preventDefault();
-  #|   return files;
-  #| }
+/// Snapshot files and prevent default synchronously, before dispatching a command.
+fn Selection::dropped(event : @dom.DragEvent) -> FixedArray[BrowserFile] {
+  let data : @js.Nullable[@js.Value] = @js.Value::cast_from(event).get_with_string(
+    "dataTransfer",
+  )
+  let files = match data.to_option() {
+    Some(data) => browser_files(data)
+    None => []
+  }
+  if files.length() > 0 {
+    event.prevent_default()
+  }
+  files
+}
 
 ///|
-extern "js" fn Selection::dragged(event : @dom.DragEvent) -> Unit =
-  #| event => {
-  #|   if (Array.from(event.dataTransfer?.types || []).includes('Files')) {
-  #|     event.preventDefault();
-  #|     event.dataTransfer.dropEffect = 'copy';
-  #|   }
-  #| }
+fn Selection::dragged(event : @dom.DragEvent) -> Unit {
+  let data : @js.Nullable[@js.Value] = @js.Value::cast_from(event).get_with_string(
+    "dataTransfer",
+  )
+  guard data.to_option() is Some(data) else { return }
+  let types : @js.Nullable[@js.Value] = data.get_with_string("types")
+  guard types.to_option() is Some(types) else { return }
+  let array : @js.Value = @js.globalThis.get_with_string("Array")
+  let types : FixedArray[String] = array.apply_with_string("from", [types])
+  if types.iter().any(t => t == "Files") {
+    event.prevent_default()
+    data.set_with_string("dropEffect", "copy")
+  }
+}
 
 ///|
 /// Open only when this command executes in response to the user's click.
@@ -206,4 +233,20 @@ async fn Selection::load(
     )
   }
   Ready(images)
+}
+
+///|
+fn browser_files(source : @js.Value) -> FixedArray[BrowserFile] {
+  let files : @js.Nullable[@js.Value] = source.get_with_string("files")
+  guard files.to_option() is Some(files) else { return [] }
+  let array : @js.Value = @js.globalThis.get_with_string("Array")
+  array.apply_with_string("from", [files])
+}
+
+///|
+fn remove_file_input(input : @dom.Element) -> Unit {
+  let _ : Unit = @js.Value::cast_from(input).apply_with_string(
+    "remove",
+    ([] : FixedArray[@js.Value]),
+  )
 }

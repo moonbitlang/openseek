@@ -2219,30 +2219,33 @@ fn update_msg(
       openseek_effort~,
       glm_effort~
     ) => {
-      let theme = Theme::parse(theme, model.theme)
-      let app_font_size = AppFontSize::parse(font_size, model.app_font_size)
+      let theme = theme
+        .map(value => Theme::parse(value, model.theme))
+        .unwrap_or(model.theme)
+      let app_font_size = font_size
+        .map(value => AppFontSize::parse(value, model.app_font_size))
+        .unwrap_or(model.app_font_size)
       // Startup runs before any conversation exists, so adopting the stored
       // tiers here is enough — every conversation minted afterwards reads
       // them.
-      let default_model = EngineModel::parse(stored).unwrap_or(
-        model.default_model,
-      )
-      let default_agent = AgentChoice::parse(agent).unwrap_or(
-        model.default_agent,
-      )
-      let openseek_reasoning = OpenSeekReasoning::parse(openseek_effort).unwrap_or(
-        model.openseek_reasoning,
-      )
-      let glm_reasoning = OpenSeekReasoning::parse(glm_effort).unwrap_or(
-        model.glm_reasoning,
-      )
+      let default_model = stored
+        .bind(value => EngineModel::parse(value))
+        .unwrap_or(model.default_model)
+      let default_agent = agent
+        .bind(AgentChoice::parse)
+        .unwrap_or(model.default_agent)
+      let openseek_reasoning = openseek_effort
+        .bind(OpenSeekReasoning::parse)
+        .unwrap_or(model.openseek_reasoning)
+      let glm_reasoning = glm_effort
+        .bind(OpenSeekReasoning::parse)
+        .unwrap_or(model.glm_reasoning)
       // The stored Codex pick seeds Codex's own selection state. When the
       // catalog arrives, `with_models` keeps this id if it is still listed
       // and otherwise falls back to the catalog default — exactly the
       // semantics a stale stored preference should have.
-      let (codex_cmd, codex) = if codex_model.is_blank() {
-        (@cmd.none, model.codex)
-      } else {
+      let (codex_cmd, codex) = if codex_model is Some(codex_model) &&
+        !codex_model.is_blank() {
         @codex.update(
           locale=model.locale,
           dispatch.map(msg => Codex(channel=model.focused, msg)),
@@ -2251,10 +2254,11 @@ fn update_msg(
           model.focused,
           url => open_external_link(dispatch, url),
         )
-      }
-      let (codex_effort_cmd, codex) = if codex_effort.is_blank() {
-        (@cmd.none, codex)
       } else {
+        (@cmd.none, model.codex)
+      }
+      let (codex_effort_cmd, codex) = if codex_effort is Some(codex_effort) &&
+        !codex_effort.is_blank() {
         @codex.update(
           locale=model.locale,
           dispatch.map(msg => Codex(channel=model.focused, msg)),
@@ -2263,18 +2267,26 @@ fn update_msg(
           model.focused,
           url => open_external_link(dispatch, url),
         )
+      } else {
+        (@cmd.none, codex)
       }
       let next = {
         ..model,
-        notification_corner: NotificationCorner::parse(notification_corner),
-        tree_layout: @fileeditor.TreeLayout::parse(tree_layout),
+        notification_corner: notification_corner
+        .map(NotificationCorner::parse)
+        .unwrap_or(model.notification_corner),
+        tree_layout: tree_layout
+        .map(@fileeditor.TreeLayout::parse)
+        .unwrap_or(model.tree_layout),
         theme,
         app_font_size,
         fps_overlay_enabled,
         minimal_transcript,
         default_model,
         default_agent,
-        conversation_models: parse_conversation_models(remembered),
+        conversation_models: remembered
+        .map(parse_conversation_models)
+        .unwrap_or([]),
         openseek_reasoning,
         glm_reasoning,
         codex,
@@ -5770,6 +5782,16 @@ fn update_msg(
         (@cmd.none, model)
       }
       let (review_cmd, model) = if enter_review {
+        let model = {
+          ..model,
+          file_panel: {
+            ..model.file_panel,
+            github_review: {
+              ..model.file_panel.github_review.reset_checkout(),
+              enabled: true,
+            },
+          },
+        }
         open_explorer(dispatch, model, ExplorerChanges)
       } else {
         (@cmd.none, model)
@@ -14063,19 +14085,21 @@ test "loaded UI preferences parse their wire names" {
   let (_, restored) = update(
     dispatch,
     SettingsLoaded(
-      notification_corner="top-left",
-      tree_layout="",
-      theme="dark",
-      font_size="15",
+      notification_corner=Some("top-left"),
+      tree_layout=None,
+      theme=Some("dark"),
+      font_size=Some("15"),
       fps_overlay_enabled=true,
       minimal_transcript=false,
-      model="deepseek-v4-flash",
-      conversation_models="[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
-      agent="codex",
-      codex_model="gpt-5.4-codex",
-      codex_effort="xhigh",
-      openseek_effort="high",
-      glm_effort="max",
+      model=Some("deepseek-v4-flash"),
+      conversation_models=Some(
+        "[{\"key\":\"local/desktop-test\",\"model\":\"deepseek-v4-pro\"}]",
+      ),
+      agent=Some("codex"),
+      codex_model=Some("gpt-5.4-codex"),
+      codex_effort=Some("xhigh"),
+      openseek_effort=Some("high"),
+      glm_effort=Some("max"),
     ),
     test_model(),
   )
@@ -14092,19 +14116,19 @@ test "loaded UI preferences parse their wire names" {
   let (_, unknown) = update(
     dispatch,
     SettingsLoaded(
-      notification_corner="",
-      tree_layout="",
-      theme="broken",
-      font_size="broken",
+      notification_corner=None,
+      tree_layout=None,
+      theme=Some("broken"),
+      font_size=Some("broken"),
       fps_overlay_enabled=false,
       minimal_transcript=false,
-      model="",
-      conversation_models="not json",
-      agent="broken",
-      codex_model="",
-      codex_effort="",
-      openseek_effort="broken",
-      glm_effort="broken",
+      model=None,
+      conversation_models=Some("not json"),
+      agent=Some("broken"),
+      codex_model=None,
+      codex_effort=None,
+      openseek_effort=Some("broken"),
+      glm_effort=Some("broken"),
     ),
     test_model(),
   )
@@ -14781,19 +14805,19 @@ test "the GLM provider aligns only a fresh chat to its model family" {
   let (_, preferences_after_host) = update(
     dispatch,
     SettingsLoaded(
-      notification_corner="",
-      tree_layout="",
-      theme="",
-      font_size="",
+      notification_corner=None,
+      tree_layout=None,
+      theme=None,
+      font_size=None,
       fps_overlay_enabled=false,
       minimal_transcript=false,
-      model="deepseek-v4-pro",
-      conversation_models="",
-      agent="",
-      codex_model="",
-      codex_effort="",
-      openseek_effort="",
-      glm_effort="",
+      model=Some("deepseek-v4-pro"),
+      conversation_models=None,
+      agent=None,
+      codex_model=None,
+      codex_effort=None,
+      openseek_effort=None,
+      glm_effort=None,
     ),
     restored,
   )

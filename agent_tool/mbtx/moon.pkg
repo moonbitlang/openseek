@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/openseek/resources",
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/agent_tool/internal/uuid",
   "moonbitlang/openseek/agent_tool",
@@ -19,6 +18,26 @@ import {
   "moonbitlang/async/os_error",
   "moonbitlang/openseek_protocol/emit",
 }
+
+// The bundled workflows run from this embedded copy; `share/workflow/` stays
+// the editable source and an installation's readable reference.
+dev_build(
+  rule: "mbtx_bundle",
+  input: [
+    "../../share/workflow/change-review.mbtx",
+    "../../share/workflow/check-json.mbtx",
+    "../../share/workflow/check-test.mbtx",
+    "../../share/workflow/check.mbtx",
+    "../../share/workflow/ci-watch.mbtx",
+    "../../share/workflow/fix-deprecations.mbtx",
+    "../../share/workflow/info-fmt.mbtx",
+    "../../share/workflow/read.mbtx",
+    "../../share/workflow/repo-map.mbtx",
+    "../../share/workflow/review.mbtx",
+    "../../share/workflow/test.mbtx",
+  ],
+  output: "generated_bundled_workflows.mbt",
+)
 
 warnings = "+unnecessary_annotation"
 

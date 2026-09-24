@@ -1,0 +1,119 @@
+///|
+import {
+  "moonbitlang/async@0.22.1",
+  "moonbitlang/async@0.22.1/fs",
+  "moonbitlang/async@0.22.1/os_error",
+  "moonbitlang/core/env",
+}
+
+///|
+/// Usage: moonx scripts/mbtx_bundle.mbtx OUTPUT INPUT...
+///
+/// Embeds each INPUT script into OUTPUT as one arm of `bundled_workflow`,
+/// keyed by its basename — the name after `@builtin/`. The files on disk stay
+/// the editable source; the generated copy is what the binary runs.
+async fn main {
+  guard @env.args() is [_, output, .. inputs] && !inputs.is_empty() else {
+    fail("usage: mbtx_bundle.mbtx OUTPUT INPUT...")
+  }
+  let scripts : Array[(String, String)] = []
+  for input in inputs {
+    let name = script_name(input)
+    guard scripts.iter().all(script => script.0 != name) else {
+      fail("mbtx_bundle: duplicate script name \{name}")
+    }
+    scripts.push((name, @fs.read_file(input).text()))
+  }
+  let source = generated_source(scripts)
+  let current : String? = Some(@fs.read_file(output).text()) catch {
+    @os_error.OSError(_) as error if error.is_ENOENT() => None
+    error => raise error
+  }
+  if current == Some(source) {
+    return
+  }
+  let tmp = "\{output}.tmp"
+  @fs.write_file(tmp, source, create_mode=CreateOrTruncate)
+  @fs.rename(tmp, output, replace=true)
+}
+
+///|
+fn generated_source(scripts : Array[(String, String)]) -> String {
+  let out = StringBuilder()
+  out.write_string(
+    (
+      $|// Generated from share/workflow/*.mbtx by moon dev_build. DO NOT EDIT.
+      $|
+      $|///|
+      $|/// The source of the bundled workflow `@builtin/<name>`, or `None`.
+      $|fn bundled_workflow(name : StringView) -> String? {
+      $|  match name {
+      $|
+    ),
+  )
+  for script in scripts {
+    let (name, text) = script
+    out.write_string("    \"\{name}\" =>\n      Some(\n        (\n")
+    for line in text.replace_all(old="\r\n", new="\n").split("\n") {
+      out.write_string("          #|\{line}\n")
+    }
+    out.write_string("        ),\n      )\n")
+  }
+  out.write_string("    _ => None\n  }\n}\n")
+  out.to_string()
+}
+
+///|
+test "generated source embeds each script under its name" {
+  inspect(
+    generated_source([("a.mbtx", "fn main {\n}\n")]),
+    content=(
+      #|// Generated from share/workflow/*.mbtx by moon dev_build. DO NOT EDIT.
+      #|
+      #|///|
+      #|/// The source of the bundled workflow `@builtin/<name>`, or `None`.
+      #|fn bundled_workflow(name : StringView) -> String? {
+      #|  match name {
+      #|    "a.mbtx" =>
+      #|      Some(
+      #|        (
+      #|          #|fn main {
+      #|          #|}
+      #|          #|
+      #|        ),
+      #|      )
+      #|    _ => None
+      #|  }
+      #|}
+      #|
+    ),
+  )
+}
+
+///|
+/// The basename of `input`, split on either separator so a Windows-style path
+/// works too. The name becomes a quoted match pattern, so it must be a plain
+/// file name.
+fn script_name(input : String) -> String raise {
+  let path = input.replace_all(old="\\", new="/")
+  let name = match path.rev_find("/") {
+    Some(i) => path[i + 1:].to_owned()
+    None => path
+  }
+  guard name =~ re"^[A-Za-z0-9_.\-]+$" else {
+    fail("mbtx_bundle: unsupported script name \{name}")
+  }
+  name
+}
+
+///|
+test "script names split on both separators and must be plain" {
+  assert_eq(script_name("./share/workflow/check.mbtx"), "check.mbtx")
+  assert_eq(script_name("share\\workflow\\check.mbtx"), "check.mbtx")
+  assert_eq(script_name("check.mbtx"), "check.mbtx")
+  try script_name("share/workflow/we\"ird.mbtx") catch {
+    _ => ()
+  } noraise {
+    _ => fail("a name that needs escaping was accepted")
+  }
+}

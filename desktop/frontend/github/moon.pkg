@@ -1,11 +1,11 @@
 import {
+  "moonbit-community/rabbita/js",
   "openseek_desktop/frontend/i18n",
   "moonbitlang/core/string",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/interop",
-  "openseek_desktop/frontend/markdown",
   "openseek_desktop/commands",
   "openseek_desktop/protocol",
 }

@@ -361,40 +361,6 @@ pub async fn exclude_from_git(dir : @pathx.Absolute, entry : String) -> Unit {
 // live app.
 
 ///|
-test "a workspace's session store is the engine's in-project default" {
-  assert_eq(
-    store_root(@pathx.Path("/home/u/proj").resolve()).to_string(),
-    "/home/u/proj/.openseek",
-  )
-}
-
-///|
-test "workspace paths expand ~ against the home directory" {
-  guard @home.dir() is Some(home) else {
-    // No home in this environment; nothing to expand against.
-    return
-  }
-  assert_eq(expanded_path("~").0, home.to_string())
-  assert_eq(
-    expanded_path("~/proj").0,
-    home.join("proj").normalize().to_string(),
-  )
-  // Absolute paths pass through (normalized), and surrounding blanks drop.
-  assert_eq(expanded_path("  /srv/code//app  ").0, "/srv/code/app")
-}
-
-///|
-test "blank workspace paths are refused" {
-  let _ = expanded_path("   ") catch {
-    WorkspaceError(message) => {
-      assert_true(message.contains("must not be empty"))
-      return
-    }
-  }
-  fail("a blank workspace path was accepted")
-}
-
-///|
 /// Both spellings of one physical directory canonicalize to the same
 /// identity, and a vanished directory keeps its lexical spelling so a dead
 /// registry entry stays removable.

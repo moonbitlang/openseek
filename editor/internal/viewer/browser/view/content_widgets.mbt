@@ -1018,40 +1018,6 @@ fn safe_invoke_after_render(
 }
 
 ///|
-/// Monaco `_getMaxWidth`: use the widget node's owner document/window, never
-/// the ambient global window. JavaScript `||` intentionally treats a zero
-/// `innerWidth` as unavailable before the two offset-width fallbacks.
-extern "js" fn owner_document_max_width(
-  element : @rdom.Element,
-  allow_editor_overflow : Bool,
-  content_width : Double,
-) -> Double =
-  #| (element, allowOverflow, contentWidth) => {
-  #|   if (!allowOverflow) return contentWidth;
-  #|   const doc = element.ownerDocument;
-  #|   const win = doc?.defaultView;
-  #|   return (win?.innerWidth || doc?.documentElement?.offsetWidth || doc?.body?.offsetWidth || 0);
-  #| }
-
-///|
-/// Owner-window page scroll with the source's exact `defaultView ?? 0`
-/// fallback for detached documents.
-extern "js" fn owner_window_scroll_x(element : @rdom.Element) -> Double =
-  #| (element) => element?.ownerDocument?.defaultView?.scrollX ?? 0
-
-///|
-extern "js" fn owner_window_scroll_y(element : @rdom.Element) -> Double =
-  #| (element) => element?.ownerDocument?.defaultView?.scrollY ?? 0
-
-///|
-extern "js" fn dom_helper_window_scroll_x(element : @rdom.Element) -> Double =
-  #| (element) => (element?.ownerDocument?.defaultView ?? globalThis.window)?.scrollX ?? 0
-
-///|
-extern "js" fn dom_helper_window_scroll_y(element : @rdom.Element) -> Double =
-  #| (element) => (element?.ownerDocument?.defaultView ?? globalThis.window)?.scrollY ?? 0
-
-///|
 /// Monaco `dom.getClientArea(elDocument.body)`: the page box the overflowing
 /// placement is clamped to.
 fn body_client_area(node : @rdom.Element) -> (Double, Double) {
@@ -1059,42 +1025,90 @@ fn body_client_area(node : @rdom.Element) -> (Double, Double) {
 }
 
 ///|
-extern "js" fn body_client_width(node : @rdom.Element) -> Double =
-  #| (node) => {
-  #|   const doc = node.ownerDocument;
-  #|   const win = doc?.defaultView;
-  #|   // `getClientArea(doc.body)` sees a detached body as a non-main-body
-  #|   // element after `getWindow` falls back, and returns its client box
-  #|   // immediately — including an exact zero.
-  #|   if (!win) return doc?.body?.clientWidth ?? 0;
-  #|   const userAgent = globalThis.navigator?.userAgent ?? '';
-  #|   const isIOS = (
-  #|     userAgent.includes('Macintosh') ||
-  #|     userAgent.includes('iPad') ||
-  #|     userAgent.includes('iPhone')
-  #|   ) && (globalThis.navigator?.maxTouchPoints ?? 0) > 0;
-  #|   if (isIOS && win.visualViewport) return win.visualViewport.width;
-  #|   if (win?.innerWidth && win?.innerHeight) return win.innerWidth;
-  #|   if (doc?.body?.clientWidth && doc?.body?.clientHeight) return doc.body.clientWidth;
-  #|   if (doc?.documentElement?.clientWidth && doc?.documentElement?.clientHeight) return doc.documentElement.clientWidth;
-  #|   throw new Error('Unable to figure out browser width and height');
-  #| }
+fn body_client_width(node : @rdom.Element) -> Double {
+  body_client_dimension(node, horizontal=true)
+}
 
 ///|
-extern "js" fn body_client_height(node : @rdom.Element) -> Double =
-  #| (node) => {
-  #|   const doc = node.ownerDocument;
-  #|   const win = doc?.defaultView;
-  #|   if (!win) return doc?.body?.clientHeight ?? 0;
-  #|   const userAgent = globalThis.navigator?.userAgent ?? '';
-  #|   const isIOS = (
-  #|     userAgent.includes('Macintosh') ||
-  #|     userAgent.includes('iPad') ||
-  #|     userAgent.includes('iPhone')
-  #|   ) && (globalThis.navigator?.maxTouchPoints ?? 0) > 0;
-  #|   if (isIOS && win.visualViewport) return win.visualViewport.height;
-  #|   if (win?.innerWidth && win?.innerHeight) return win.innerHeight;
-  #|   if (doc?.body?.clientWidth && doc?.body?.clientHeight) return doc.body.clientHeight;
-  #|   if (doc?.documentElement?.clientWidth && doc?.documentElement?.clientHeight) return doc.documentElement.clientHeight;
-  #|   throw new Error('Unable to figure out browser width and height');
-  #| }
+fn body_client_height(node : @rdom.Element) -> Double {
+  body_client_dimension(node, horizontal=false)
+}
+
+///|
+/// Preserve getClientArea's fallback order, including detached-body zero sizes.
+fn body_client_dimension(node : @rdom.Element, horizontal~ : Bool) -> Double {
+  let document : @js.Nullable[@js.Value] = @js.Value::cast_from(node).get_with_string(
+    "ownerDocument",
+  )
+  let body : @js.Nullable[@js.Value] = optional_dom_property(document, "body").cast()
+  let window : @js.Nullable[@js.Value] = optional_dom_property(
+    document, "defaultView",
+  ).cast()
+  let axis = if horizontal { "clientWidth" } else { "clientHeight" }
+  guard window.to_option() is Some(window) else {
+    let size : @js.Nullable[Double] = optional_dom_property(body, axis).cast()
+    return size.to_option().unwrap_or(0.0)
+  }
+  let navigator : @js.Nullable[@js.Value] = @js.globalThis.get_with_string(
+    "navigator",
+  )
+  let agent : @js.Nullable[String] = optional_dom_property(
+    navigator, "userAgent",
+  ).cast()
+  let touches : @js.Nullable[Double] = optional_dom_property(
+    navigator, "maxTouchPoints",
+  ).cast()
+  let is_ios = match agent.to_option() {
+    Some(agent) =>
+      (
+        agent.contains("Macintosh") ||
+        agent.contains("iPad") ||
+        agent.contains("iPhone")
+      ) &&
+      touches.to_option().unwrap_or(0.0) > 0.0
+    None => false
+  }
+  let visual : @js.Nullable[@js.Value] = window.get_with_string(
+    "visualViewport",
+  )
+  if is_ios && visual.to_option() is Some(visual) {
+    return visual.get_with_string(if horizontal { "width" } else { "height" })
+  }
+  for
+    (candidate, width_key, height_key) in [
+      (@js.Nullable::from_option(Some(window)), "innerWidth", "innerHeight"),
+      (body, "clientWidth", "clientHeight"),
+      (
+        optional_dom_property(document, "documentElement").cast(),
+        "clientWidth",
+        "clientHeight",
+      ),
+    ] {
+    let width : @js.Nullable[Double] = optional_dom_property(
+      candidate, width_key,
+    ).cast()
+    let height : @js.Nullable[Double] = optional_dom_property(
+      candidate, height_key,
+    ).cast()
+    if width.to_option() is Some(width) &&
+      height.to_option() is Some(height) &&
+      width != 0.0 &&
+      height != 0.0 &&
+      !width.is_nan() &&
+      !height.is_nan() {
+      return if horizontal { width } else { height }
+    }
+  }
+  unavailable_client_area()
+}
+
+///|
+fn optional_dom_property(
+  value : @js.Nullable[@js.Value],
+  key : String,
+) -> @js.Value {
+  match value.to_option() {
+    Some(value) => value.get_with_string(key)
+    None => @js.Value::cast_from((@js.Nullable::null() : @js.Nullable[Unit]))
+  }
+}
