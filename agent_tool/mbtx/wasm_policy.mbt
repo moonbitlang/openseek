@@ -208,9 +208,10 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // listing them offers the model a path that silently disappears there. It
   // would also cut against this tool's own advice, which is to capture
   // `out.stdout` and filter it in MoonBit instead of reaching for grep and awk.
-  // `uname` is the exception: system identification is useful for diagnosing
-  // platform-specific behavior. It may be unavailable on Windows.
-  ("uname", []),
+  // `uname -m -a` is useful for diagnosing platform-specific behavior while
+  // keeping the admitted argument prefix specific. It may be unavailable on
+  // Windows.
+  ("uname", ["-m", "-a"]),
   ("diff", []),
   ("rg", []),
   // NOT listed: the general-purpose runners (`sh`, `bash`, `zsh`, `env`,
