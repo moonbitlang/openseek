@@ -68,20 +68,17 @@ fn one_step_run(root : String, url : String) -> @argparse.Matches raise {
 }
 
 ///|
-async test "a single run that completes exits successfully" {
-  @vfs.with_tmpdir(prefix="openseek-run-complete-", root => {
+/// Both cases in ONE test: each run opens the process-wide event sink and
+/// drains it to stdout, and two runs from concurrently scheduled async tests
+/// would write stdout at the same time.
+async test "a single run exits successfully only when its turn completes" {
+  @vfs.with_tmpdir(prefix="openseek-run-exit-", root => {
     @async.with_task_group() <| group => {
       guard scripted_provider(group, { "content": "done" }) is Some(url) else {
         return
       }
-      @run.run_task_command(one_step_run(root, url))
+      @run.run_task_command(one_step_run("\{root}/complete", url))
     }
-  })
-}
-
-///|
-async test "a single run that does not complete fails like a fleet run" {
-  @vfs.with_tmpdir(prefix="openseek-run-incomplete-", root => {
     @async.with_task_group() <| group => {
       // A tool call in the only step: the step budget runs out before the
       // model can answer.
@@ -96,7 +93,7 @@ async test "a single run that does not complete fails like a fleet run" {
         ],
       }
       guard scripted_provider(group, delta) is Some(url) else { return }
-      let _ = @run.run_task_command(one_step_run(root, url)) catch {
+      let _ = @run.run_task_command(one_step_run("\{root}/incomplete", url)) catch {
         error => {
           assert_true(
             "\{error}".contains("run did not complete: max steps exhausted"),
