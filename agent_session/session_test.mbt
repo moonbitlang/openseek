@@ -72,6 +72,34 @@ test "assistant checkpoint replay provenance is durable and sparse" {
 }
 
 ///|
+test "assistant usage is durable, sparse, and optional in older logs" {
+  // A message from a log written before usage was recorded still decodes.
+  let older : @agent_session.AssistantMessage = @json.from_json(
+    @json.parse("{\"content\":\"answer\",\"tool_calls\":[]}"),
+  )
+  assert_eq(older.usage(), None)
+  assert_false(ToJson::to_json(older).stringify().contains("usage"))
+  let line = "{\"content\":\"answer\",\"tool_calls\":[],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":10,\"total_tokens\":110,\"prompt_cache_hit_tokens\":60,\"prompt_cache_miss_tokens\":40}}"
+  let recorded : @agent_session.AssistantMessage = @json.from_json(
+    @json.parse(line),
+  )
+  assert_eq(
+    recorded.usage(),
+    Some({
+      prompt_tokens: 100,
+      completion_tokens: 10,
+      total_tokens: 110,
+      prompt_cache_hit_tokens: 60,
+      prompt_cache_miss_tokens: 40,
+    }),
+  )
+  let round_trip : @agent_session.AssistantMessage = @json.from_json(
+    ToJson::to_json(recorded),
+  )
+  assert_eq(round_trip, recorded)
+}
+
+///|
 test "ToolResult brief round-trips when present" {
   let with_brief = @agent_session.ToolResult(
     tool_call_id="call_2",

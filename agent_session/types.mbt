@@ -162,7 +162,34 @@ struct AssistantMessage {
   // True only when a checkpoint re-appends an answer that an earlier durable
   // provider step already owns. Absent on ordinary messages.
   is_replay : Bool?
+  // The provider response's token usage, on the first durable record of that
+  // response only. Absent on replays and on logs written before it existed.
+  usage : TokenUsage?
 } derive(Eq, Debug, ToJson, FromJson)
+
+///|
+/// Token counts for one provider response, as its durable `AssistantMessage`
+/// records them. The fields and JSON match the `usage` event, so a reader of
+/// the session log can account for a run without its event stream: summed
+/// over a turn's messages, they equal the turn's `usage` events.
+pub(all) struct TokenUsage {
+  prompt_tokens : Int
+  completion_tokens : Int
+  total_tokens : Int
+  prompt_cache_hit_tokens : Int
+  prompt_cache_miss_tokens : Int
+} derive(Eq, Debug, ToJson, FromJson)
+
+///|
+fn TokenUsage::from_deepseek(usage : @deepseek.Usage) -> TokenUsage {
+  {
+    prompt_tokens: usage.prompt_tokens,
+    completion_tokens: usage.completion_tokens,
+    total_tokens: usage.total_tokens,
+    prompt_cache_hit_tokens: usage.prompt_cache_hit_tokens,
+    prompt_cache_miss_tokens: usage.prompt_cache_miss_tokens,
+  }
+}
 
 ///|
 /// Build an assistant event payload from model response parts.
@@ -190,7 +217,25 @@ pub fn AssistantMessage::AssistantMessage(
     } else {
       None
     },
+    usage: None,
   }
+}
+
+///|
+/// The same message, recording the token usage of the provider response it
+/// is the first durable record of.
+pub fn AssistantMessage::with_usage(
+  self : AssistantMessage,
+  usage : @deepseek.Usage,
+) -> AssistantMessage {
+  { ..self, usage: Some(TokenUsage::from_deepseek(usage)), }
+}
+
+///|
+/// The provider response's token usage, when this message is its first
+/// durable record. `None` on replays and on messages from older logs.
+pub fn AssistantMessage::usage(self : AssistantMessage) -> TokenUsage? {
+  self.usage
 }
 
 ///|
@@ -693,6 +738,26 @@ pub extend AssistantMessage with Eq::{equal, not_equal}
 #doc(hidden)
 #deprecated
 pub extend AssistantMessage with ToJson::{to_json}
+
+///|
+#doc(hidden)
+#deprecated
+pub extend TokenUsage with Debug::{to_repr}
+
+///|
+#doc(hidden)
+#deprecated
+pub extend TokenUsage with FromJson::{from_json}
+
+///|
+#doc(hidden)
+#deprecated
+pub extend TokenUsage with Eq::{equal, not_equal}
+
+///|
+#doc(hidden)
+#deprecated
+pub extend TokenUsage with ToJson::{to_json}
 
 ///|
 #doc(hidden)

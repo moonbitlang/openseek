@@ -389,6 +389,7 @@ test "summary replaces covered events in model projection only" {
       #|            tool_calls: [],
       #|            reasoning_content: None,
       #|            is_replay: None,
+      #|            usage: None,
       #|          },
       #|        ),
       #|      },

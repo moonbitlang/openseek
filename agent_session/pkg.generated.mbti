@@ -47,6 +47,8 @@ pub fn AssistantMessage::content(Self) -> String
 pub fn AssistantMessage::is_replay(Self) -> Bool
 pub fn AssistantMessage::reasoning_content(Self) -> String?
 pub fn AssistantMessage::tool_calls(Self) -> Array[@deepseek.ToolCall]
+pub fn AssistantMessage::usage(Self) -> TokenUsage?
+pub fn AssistantMessage::with_usage(Self, @deepseek.Usage) -> Self
 
 pub(all) struct GoalBaseline {
   sha : String
@@ -114,6 +116,14 @@ pub fn StandingGoal::answered_since_set(Self) -> Bool
 pub fn StandingGoal::blocked(Self) -> Bool
 pub fn StandingGoal::set_sequence(Self) -> Int
 pub fn StandingGoal::text(Self) -> String
+
+pub(all) struct TokenUsage {
+  prompt_tokens : Int
+  completion_tokens : Int
+  total_tokens : Int
+  prompt_cache_hit_tokens : Int
+  prompt_cache_miss_tokens : Int
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 type ToolResult derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ToolResult::ToolResult(tool_call_id~ : String, tool_name~ : String, content~ : Array[@openseek_protocol.ContentPart], is_error? : Bool, brief? : String, data? : Json) -> Self

@@ -25,6 +25,10 @@ priv struct AgentLoop {
   /// handler uses it to persist a terminal failure/interruption even when the
   /// local loop state is behind the last durable session.
   mut last_session : @agent_session.Session
+  /// The latest provider response's usage, until `append` records it on the
+  /// first non-replay `Assistant` item — so every `usage` event lands in the
+  /// log exactly once, whichever path records the response.
+  mut unrecorded_usage : @deepseek.Usage?
 }
 
 ///|
@@ -60,6 +64,7 @@ fn AgentLoop::AgentLoop(
         definition.is_control(),
     ),
     last_session: session,
+    unrecorded_usage: None,
   }
 }
 
@@ -323,6 +328,13 @@ async fn AgentLoop::append(
   session : @agent_session.Session,
   item : @agent_session.SessionItem,
 ) -> @agent_session.Session {
+  let item : @agent_session.SessionItem = match (item, self.unrecorded_usage) {
+    (Assistant(message), Some(usage)) if !message.is_replay() => {
+      self.unrecorded_usage = None
+      Assistant(message.with_usage(usage))
+    }
+    _ => item
+  }
   let next = (self.append_item)(session, item)
   self.last_session = next
   next
@@ -509,6 +521,7 @@ async fn AgentLoop::chat(self : Self, step : Int) -> @deepseek.ChatResponse {
       },
     ),
   )
+  self.unrecorded_usage = Some(response.usage)
   response.log_and_reasoning_content()
 }
 

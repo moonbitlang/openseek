@@ -62,6 +62,7 @@ test "parse round-trips every event kind" {
       #|          tool_calls: [{ id: "call_1", name: "shell", arguments: "{\"cmd\":\"ls\"}" }],
       #|          reasoning_content: Some("The user wants a directory listing."),
       #|          is_replay: None,
+      #|          usage: None,
       #|        },
       #|      ),
       #|    },
