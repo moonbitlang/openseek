@@ -211,6 +211,19 @@ folding, source reveal, content-size/scroll/model events, and rich document
 features. Its `MarkdownResourceKind` is explicit and is never inferred inside
 the widget.
 
+When `ViewerServices.agent_feedback` enables the resource, selecting rendered
+Markdown shows **Add Feedback**. The shared composer keeps **Add** in the host's
+batch and **Apply** submits through its existing service. Selection resolves
+renderer-emitted node IDs to enclosing Markdown source blocks, including the
+original markup. A cross-block selection uses one source range covering those
+blocks. Lists and tables may use their containing block; character-accurate
+rendered-text mapping is not required. The same parse produces the IDs, HTML,
+and source ranges. IDs are transient; feedback stores source coordinates.
+Changing content, replacing the model (even at the same URI/version), changing
+the rendered projection, or detaching the viewer retires the pending target.
+Hosts extracting annotation quotes must use the active Markdown model, just as
+they use the code model for source selections.
+
 `DiffEditor` owns the model pair, provider/options, layout, focus, current diff
 state, update event, paired content-height event, and next/previous change
 navigation. The height event is published only after both panes' alignment

@@ -104,6 +104,7 @@ fn ViewerServices::markdown_services(
     localization=self.code_services().localization(),
     languages=self.languages(),
     markers=Decorations(self.marker_decorations()),
+    agent_feedback=self.code_services().agent_feedback(),
     location_opener?=self.location_opener(),
     text_model_resolver?=self.text_model_resolver(),
     resource_path_label=self.inner.resource_path_label(),

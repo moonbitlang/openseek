@@ -13,6 +13,8 @@ pub(all) struct MarkdownRenderOptions {
   action_handler : ((String) -> Unit)?
   code_block_renderer : ((@markdown_core.MarkdownCodeBlock, String?) -> String)?
   on_size_changed : (() -> Unit)?
+  code_block_renderer_owns_source_root : Bool
+  source_mapping : Bool
   allow_remote_images : Bool
   mermaid_theme : MermaidTheme?
 }
@@ -27,6 +29,8 @@ pub fn MarkdownRenderOptions::MarkdownRenderOptions(
   action_handler? : (String) -> Unit,
   code_block_renderer? : (@markdown_core.MarkdownCodeBlock, String?) -> String,
   on_size_changed? : () -> Unit,
+  code_block_renderer_owns_source_root? : Bool = false,
+  source_mapping? : Bool = false,
   allow_remote_images? : Bool = false,
   mermaid_theme? : MermaidTheme,
 ) -> MarkdownRenderOptions {
@@ -36,6 +40,8 @@ pub fn MarkdownRenderOptions::MarkdownRenderOptions(
     action_handler,
     code_block_renderer,
     on_size_changed,
+    code_block_renderer_owns_source_root,
+    source_mapping,
     allow_remote_images,
     mermaid_theme,
   }
@@ -103,6 +109,8 @@ fn render_markdown_with_mermaid_loader(
 ) -> RenderedMarkdown {
   let converted = @markdown_core.render_markdown(
     markdown,
+    code_block_renderer_owns_source_root=options.code_block_renderer_owns_source_root,
+    source_mapping=options.source_mapping,
     language_id?=options.language_id,
     code_block_renderer?=options.code_block_renderer,
   )
