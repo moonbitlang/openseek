@@ -17,6 +17,9 @@ flowchart LR
 
 Feedback is per resource. Mutations and reads flow through the callback handle;
 the concrete service retains only host-owned lifecycle and snapshot setters.
+The optional `selected_text` snapshot stays with the item through acceptance,
+comment edits, replies, and submission. The service preserves both absent and
+explicitly empty snapshots without substituting source content.
 
 ```mbt check
 ///|
@@ -103,6 +106,7 @@ fn feedback_at(
     text,
     resource: @base_common.Uri::parse("file:///src/main.mbt"),
     range: Range(line, 1, line, 4),
+    selected_text: None,
     kind: UserReview,
     replies: [],
     state: Created,

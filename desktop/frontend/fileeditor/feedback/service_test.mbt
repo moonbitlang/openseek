@@ -23,8 +23,10 @@ test "Desktop feedback backing implements every stateful handle mutation" {
   let service = @feedback.DesktopFeedbackService()
   let resource = @common.Uri::parse("file:///workspace/lib.mbt")
   let mut submitted_ids : Array[String] = []
+  let mut submitted_selection : String? = None
   service.on_did_submit_feedback(event => {
     submitted_ids = event.items.map(item => item.id)
+    submitted_selection = event.items[0].selected_text
   })
   |> ignore
   let handle = service.agent_feedback_handle()
@@ -33,6 +35,7 @@ test "Desktop feedback backing implements every stateful handle mutation" {
     Range(4, 2, 4, 8),
     "draft",
     state=Created,
+    selected_text="selected phrase",
   )
   handle.accept_feedback(resource, item.id)
   handle.update_feedback(resource, item.id, "reworded")
@@ -43,6 +46,9 @@ test "Desktop feedback backing implements every stateful handle mutation" {
   assert_eq(stored.map(item => item.replies), Some(["done"]))
   assert_eq(stored.map(item => item.state), Some(Submitted))
   assert_eq(submitted_ids, [item.id])
+  assert_eq(submitted_selection, Some("selected phrase"))
+  assert_eq(item.selected_text, Some("selected phrase"))
+  assert_eq(item.text, "draft")
   let navigation_id = "agentFeedback:" + item.id
   handle.set_navigation_anchor(resource, Some(navigation_id))
   let bearing = handle.get_navigation_bearing(resource, [navigation_id])

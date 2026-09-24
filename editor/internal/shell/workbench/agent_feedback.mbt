@@ -57,6 +57,9 @@ fn persist_feedback_items(
 fn feedback_item_to_json(item : @agent_feedback_api.AgentFeedback) -> Json {
   let fields : Map[String, Json] = Map([])
   fields["text"] = item.text.to_json()
+  if item.selected_text is Some(selected_text) {
+    fields["selected_text"] = selected_text.to_json()
+  }
   fields["range"] = Json([
     item.range.start_line_number.to_json(),
     item.range.start_column.to_json(),
@@ -132,6 +135,11 @@ fn feedback_item_from_json(
     { "state": String("resolved"), .. } => Resolved
     _ => Accepted
   }
+  let selected_text = match value {
+    { "selected_text": String(text), .. } => Some(text)
+    { "selected_text": _, .. } => return None
+    _ => None
+  }
   let replies : Array[String] = []
   if value is { "replies": Array(reply_items), .. } {
     for reply in reply_items {
@@ -146,6 +154,7 @@ fn feedback_item_from_json(
     text,
     resource,
     range: Range(sl.to_int(), sc.to_int(), el.to_int(), ec.to_int()),
+    selected_text,
     kind,
     replies,
     state,

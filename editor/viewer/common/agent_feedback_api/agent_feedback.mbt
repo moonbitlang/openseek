@@ -23,11 +23,15 @@ pub(all) enum AgentFeedbackState {
 ///|
 /// One file-scoped feedback item. `range` is expressed in model coordinates;
 /// mutations replace the stored value so change events remain observable.
+/// `selected_text` preserves the user's rendered selection when it differs
+/// from that source range. `None` means no snapshot was supplied; `Some("")`
+/// is a captured selection with no text, such as an image-only selection.
 pub(all) struct AgentFeedback {
   id : String
   text : String
   resource : @base_common.Uri
   range : @base_common.Range
+  selected_text : String?
   kind : AgentFeedbackKind
   replies : Array[String]
   state : AgentFeedbackState

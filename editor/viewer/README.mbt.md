@@ -215,21 +215,24 @@ When `ViewerServices.agent_feedback` enables the resource, selecting rendered
 Markdown opens the shared feedback composer when the selection gesture ends,
 without taking document focus. Clicking the input or pressing Ctrl/Cmd+I focuses
 it. Empty drafts follow new selections; non-empty drafts retain their original
-source target. Cancelled or submitted selections do not reopen on scroll or
-refocus. The composer follows the active selection endpoint and stays within
-the viewport; Markdown has no gutter add button.
+source target and selected text. Cancelled or submitted selections do not reopen
+on scroll or refocus. The composer follows the active selection endpoint and
+stays within the viewport; Markdown has no gutter add button.
 
 The shared composer keeps **Add** in the host's batch and **Apply** submits
-through its existing service. Selection resolves
-renderer-emitted node IDs to enclosing Markdown source blocks, including the
-original markup. A cross-block selection uses one source range covering those
-blocks. Lists and tables may use their containing block; character-accurate
-rendered-text mapping is not required. The same parse produces the IDs, HTML,
-and source ranges. IDs are transient; feedback stores source coordinates.
+through its existing service. Selection resolves renderer-emitted node IDs to
+enclosing Markdown source blocks for location. A cross-block selection uses one
+source range covering those blocks. Lists and tables may use their containing
+block; character-accurate rendered-text mapping is not required. The same parse
+produces the IDs, HTML, and source ranges. IDs are transient; feedback stores
+source coordinates and an immutable snapshot of the browser's selected text.
+Hosts use this
+`selected_text` snapshot as the annotation quote instead of expanding it to
+the enclosing source paragraph. File and line coordinates let the agent read
+additional source context when needed. An image-only selection has an empty
+text snapshot; it must not be replaced with unrelated source text.
 Changing content, replacing the model (even at the same URI/version), changing
 the rendered projection, or detaching the viewer retires the pending target.
-Hosts extracting annotation quotes must use the active Markdown model, just as
-they use the code model for source selections.
 
 `DiffEditor` owns the model pair, provider/options, layout, focus, current diff
 state, update event, paired content-height event, and next/previous change

@@ -81,6 +81,10 @@ pub fn run_markdown_feedback_test() -> Unit {
           let range = item.range
           Json({
             "text": item.text.to_json(),
+            "selected_text": match item.selected_text {
+              Some(text) => text.to_json()
+              None => Json::null()
+            },
             "resource": item.resource.to_string().to_json(),
             "range": Json([
               range.start_line_number.to_json(),
