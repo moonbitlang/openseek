@@ -105,7 +105,7 @@ test('Review loads changed files and preserves its interactive diff workflow', a
     request.params?.path === 'src/main.mbt' &&
     request.params?.revision === app.gitBaseline))
     .toBeTruthy();
-  const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
+  const reviewToolbar = page.getByRole('toolbar', { name: 'Comparison algorithm' });
   await expect(reviewToolbar.getByRole('button', { name: 'Token diff' })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -120,12 +120,12 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   await expect(ignoreComments).toBeDisabled();
   await expect(ignoreTests).toBeDisabled();
 
-  await reviewToolbar.getByRole('button', { name: 'File view' }).click();
-  await expect(reviewToolbar.getByRole('button', { name: 'File view' })).toHaveAttribute(
+  await page.getByRole('group', { name: 'File view' }).getByRole('button', { name: 'Content', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'File view' }).getByRole('button', { name: 'Content', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await reviewToolbar.getByRole('button', { name: 'Line diff' }).click();
+  await page.getByRole('group', { name: 'File view' }).getByRole('button', { name: 'Diff', exact: true }).click();
 
   await reviewToolbar.getByRole('button', { name: 'Token diff' }).click();
   await expect(reviewToolbar.getByRole('button', { name: 'Token diff' })).toHaveAttribute(
@@ -273,7 +273,7 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
     await app.openReview();
     const changes = page.locator('#review-changes-body');
     await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    const mode = page.getByRole('toolbar', { name: 'Review mode' });
+    const mode = page.getByRole('toolbar', { name: 'Comparison algorithm' });
     const line = mode.getByRole('button', { name: 'Line diff' });
     const layout = page.getByRole('group', { name: 'Diff layout' });
     const split = layout.getByRole('button', { name: 'Split diff layout' });
@@ -409,7 +409,7 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   const changes = page.locator('#review-changes-body');
   await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
 
-  await page.getByRole('toolbar', { name: 'Review mode' })
+  await page.getByRole('toolbar', { name: 'Comparison algorithm' })
     .getByRole('button', { name: 'Line diff' }).click();
   const navigation = page.getByRole('group', { name: 'Diff change navigation' });
   const position = navigation.locator('.review-hunk-position');
@@ -449,7 +449,7 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   // Semantic review is a MultiDiff surface. Its counter is global across the
   // section-local editors, while file completion still projects into each
   // section's current hunk.
-  const reviewToolbar = page.getByRole('toolbar', { name: 'Review mode' });
+  const reviewToolbar = page.getByRole('toolbar', { name: 'Comparison algorithm' });
   await reviewToolbar.getByRole('button', { name: 'Token diff' }).click();
   await expect(reviewToolbar.getByRole('button', { name: 'Token diff' }))
     .toHaveAttribute('aria-pressed', 'true');
@@ -511,30 +511,30 @@ test('Review routes Markdown source and keeps non-MoonBit comparisons on Line di
   await app.openReview();
 
   await page.getByRole('treeitem', { name: /View diff: docs\/Guide\.MD/ }).click();
-  const toolbar = page.getByRole('toolbar', { name: 'Review mode' });
-  await expect(toolbar.getByRole('button')).toHaveText(['File', 'Line']);
-  await expect(toolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+  const toolbar = page.getByRole('group', { name: 'File view' });
+  await expect(toolbar.getByRole('button')).toHaveText(['Content', 'Diff']);
+  await expect(toolbar.getByRole('button', { name: 'Diff', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
   await expect(page.getByRole('button', { name: 'Ignore comments' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Ignore tests' })).toHaveCount(0);
 
-  await toolbar.getByRole('button', { name: 'File view' }).click();
+  await toolbar.getByRole('button', { name: 'Content', exact: true }).click();
   await expect(
     page.getByLabel('Readonly Markdown viewer')
       .getByText('Working tree documentation.', { exact: true }),
   ).toBeVisible();
 
-  await toolbar.getByRole('button', { name: 'Line diff' }).click();
-  await expect(toolbar.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
+  await toolbar.getByRole('button', { name: 'Diff', exact: true }).click();
+  await expect(toolbar.getByRole('button', { name: 'Diff', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
   expect(app.pageErrors).toEqual([]);
 });
 
-test('ordinary MBTI files default to source, render UML on demand, and reviews keep source surfaces', async ({ page }) => {
+test('MBTI files default to Source and retain Diagram, Source, and Diff in one chip', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const path = 'api/pkg.generated.mbti';
   const working = [
@@ -569,7 +569,7 @@ test('ordinary MBTI files default to source, render UML on demand, and reviews k
   await page.getByRole('option', { name: /pkg\.generated\.mbti/ }).click();
 
   const diagram = page.locator('#mbti-diagram-host');
-  const view = page.getByRole('group', { name: 'MBTI view' });
+  const view = page.getByRole('group', { name: 'File view' });
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText('Point');
   await expect(view.getByRole('button', { name: 'Source' })).toHaveAttribute(
@@ -612,17 +612,21 @@ test('ordinary MBTI files default to source, render UML on demand, and reviews k
 
   await app.openReview();
   await page.getByRole('treeitem', { name: /View diff: api\/pkg\.generated\.mbti/ }).click();
-  await expect(page.getByRole('group', { name: 'MBTI view' })).toHaveCount(0);
+  await expect(view.getByRole('button')).toHaveText(['Diagram', 'Source', 'Diff']);
+  await expect(view.getByRole('button', { name: 'Diff', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(diagram).toBeHidden();
-  const review = page.getByRole('toolbar', { name: 'Review mode' });
-  await expect(review.getByRole('button', { name: 'Line diff' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  await review.getByRole('button', { name: 'File view' }).click();
-  await expect(page.locator('#viewer-host')).toBeVisible();
-  await expect(page.locator('#viewer-host')).toContainText('Point');
-  await expect(diagram).toBeHidden();
+  const tab = await page.locator('.editor-tab').filter({ hasText: 'pkg.generated.mbti' }).elementHandle();
+  for (const label of ['Source', 'Diagram', 'Diff', 'Diagram', 'Source', 'Diff']) {
+    const button = view.getByRole('button', { name: label, exact: true });
+    await button.focus();
+    await page.keyboard.press('Space');
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(view.locator('[aria-pressed="true"]')).toHaveCount(1);
+    await expect(page.locator(label === 'Diagram' ? '#mbti-diagram-host' : label === 'Diff' ? '#diff-editor-host' : '#viewer-host')).toBeVisible();
+    if (label === 'Diagram') await expect(diagram.locator('svg')).toContainText('Point');
+    if (label === 'Source') await expect(page.locator('#viewer-host')).toContainText('Point');
+    expect(await tab.evaluate(node => node.isConnected)).toBe(true);
+  }
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -644,7 +648,7 @@ test('ordinary moon.mod defaults to source and loads its package graph on demand
   await page.getByRole('option', { name: /moon\.mod/ }).click();
 
   const diagram = page.locator('#package-diagram-host');
-  const view = page.getByRole('group', { name: 'Moon module view' });
+  const view = page.getByRole('group', { name: 'File view' });
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText('example/app');
   await expect(view.getByRole('button', { name: 'Source' })).toHaveAttribute(
@@ -2792,7 +2796,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     await app.openSession();
     await app.openReview();
     await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    const toolbar = page.getByRole('toolbar', { name: 'Review mode' });
+    const toolbar = page.getByRole('toolbar', { name: 'Comparison algorithm' });
     await toolbar.getByRole('button', { name: `${mode} diff` }).click();
     const position = page.locator('.review-hunk-position');
     await expect(position).toHaveText('Change 1 of 2');
@@ -2831,7 +2835,7 @@ for (const mode of ['Token', 'Tree']) {
     await app.openSession();
     await app.openReview();
     await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    await page.getByRole('toolbar', { name: 'Review mode' }).getByRole('button', { name: `${mode} diff` }).click();
+    await page.getByRole('toolbar', { name: 'Comparison algorithm' }).getByRole('button', { name: `${mode} diff` }).click();
     const sections = page.locator('.semantic-diff-entry');
     const headers = sections.locator('.semantic-entry-header-content');
     await expect(sections).toHaveCount(2);

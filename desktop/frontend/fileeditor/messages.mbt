@@ -53,15 +53,13 @@ priv enum UiMessage {
   WorkspaceLabel
   DiagramLabel
   SourceLabel
-  MoonModuleView
   DependencyGraph
   LineLabel
   TokenLabel
   TreeLabel
-  ShowFile
   FileView
-  FileLabel
-  ReviewMode
+  ContentLabel
+  DiffLabel
   ComparisonAlgorithm
   AvailableDiff
   AvailableTokenTree
@@ -456,11 +454,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, SourceLabel) => "源码"
     (TraditionalChinese, SourceLabel) => "原始碼"
     (Japanese, SourceLabel) => "ソース"
-    (English, MoonModuleView) => "Moon module view"
-    (Spanish, MoonModuleView) => "Vista de módulo MoonBit"
-    (SimplifiedChinese, MoonModuleView) => "Moon 模块视图"
-    (TraditionalChinese, MoonModuleView) => "Moon 模組檢視"
-    (Japanese, MoonModuleView) => "Moon モジュールビュー"
     (English, DependencyGraph) => "Dependency graph"
     (Spanish, DependencyGraph) => "Grafo de dependencias"
     (SimplifiedChinese, DependencyGraph) => "依赖图"
@@ -481,26 +474,21 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, TreeLabel) => "语法树"
     (TraditionalChinese, TreeLabel) => "語法樹"
     (Japanese, TreeLabel) => "構文木"
-    (English, ShowFile) => "Show file"
-    (Spanish, ShowFile) => "Mostrar archivo"
-    (SimplifiedChinese, ShowFile) => "显示文件"
-    (TraditionalChinese, ShowFile) => "顯示檔案"
-    (Japanese, ShowFile) => "ファイルを表示"
     (English, FileView) => "File view"
     (Spanish, FileView) => "Vista de archivo"
     (SimplifiedChinese, FileView) => "文件视图"
     (TraditionalChinese, FileView) => "檔案檢視"
     (Japanese, FileView) => "ファイルビュー"
-    (English, FileLabel) => "File"
-    (Spanish, FileLabel) => "Archivo"
-    (SimplifiedChinese, FileLabel) => "文件"
-    (TraditionalChinese, FileLabel) => "檔案"
-    (Japanese, FileLabel) => "ファイル"
-    (English, ReviewMode) => "Review mode"
-    (Spanish, ReviewMode) => "Modo de revisión"
-    (SimplifiedChinese, ReviewMode) => "审阅模式"
-    (TraditionalChinese, ReviewMode) => "審閱模式"
-    (Japanese, ReviewMode) => "レビューモード"
+    (English, ContentLabel) => "Content"
+    (SimplifiedChinese, ContentLabel) => "内容"
+    (TraditionalChinese, ContentLabel) => "內容"
+    (Japanese, ContentLabel) => "内容"
+    (Spanish, ContentLabel) => "Contenido"
+    (English, DiffLabel) => "Diff"
+    (SimplifiedChinese, DiffLabel) => "差异"
+    (TraditionalChinese, DiffLabel) => "差異"
+    (Japanese, DiffLabel) => "差分"
+    (Spanish, DiffLabel) => "Diferencias"
     (English, ComparisonAlgorithm) => "Comparison algorithm"
     (Spanish, ComparisonAlgorithm) => "Algoritmo de comparación"
     (SimplifiedChinese, ComparisonAlgorithm) => "比较算法"
