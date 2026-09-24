@@ -825,6 +825,13 @@ fn default_prompt() -> String {
     #|`proton_cli`, read `<bundled-resources>/desktop-proton/README.md`: it carries
     #|the commands, the `proton.project.json` rules, and the CEF runtime policy.
     #|
+    #|## Web Frontend and Full-Stack Applications
+    #|
+    #|For MoonBit browser UI and full-stack web tasks, read
+    #|`<bundled-resources>/frontend-rabbita/README.md` before scaffolding or choosing
+    #|Rabbita APIs. It covers the Warren frontend workflow and the
+    #|`fullstack-moonbit` reference for Rabbita + Moonback.
+    #|
     #|## Syntax And API Discipline
     #|
     #|- Use `moon ide doc` before guessing unfamiliar APIs. Query symbols,
@@ -1165,7 +1172,8 @@ fn default_prompt() -> String {
     #|Treat it as the authoritative source for language,
     #|standard-library, toolchain, and tutorial facts; look facts up instead of guessing.
     #|`desktop-proton/README.md` covers the Proton CLI workflow for native desktop
-    #|applications, and `moongrep/README.md` the structural-search tool.
+    #|applications, `frontend-rabbita/README.md` covers browser UIs and full-stack web
+    #|applications, and `moongrep/README.md` covers the structural-search tool.
     #|
     #|Directory layout relative to `Bundled resources`:
     #|

@@ -11,6 +11,8 @@ an environment override or a working-directory fallback. The prompt's
   moved out of the system prompt and read on demand.
 - `examples/`: verified `.mbtx` examples inlined into the system prompt by
   `md_to_mbt_string`; CI type-checks and runs them.
+- `frontend-rabbita/`: OpenSeek-maintained reference for MoonBit browser UIs
+  and full-stack web applications with Rabbita, read on demand.
 - `moongrep/`: OpenSeek-maintained reference for the structural search and
   lint tool, moved out of the system prompt and read on demand.
 - `workflow/`: OpenSeek-maintained scripts, packaged for future agent integration.
