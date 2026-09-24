@@ -417,7 +417,7 @@ fn wasm_policy_document(
   // tools make the edits, and the commands whose job is to rewrite source
   // (`moon fmt`, `moon info`, `git checkout`) are child processes, which no `fs`
   // rule here reaches. What granting the workspace did buy was a documented way
-  // around `remove`'s provenance check — `remove_path`, `rename_path` and
+  // around `remove`'s provenance and approval checks — `remove_path`, `rename_path` and
   // `rmdir_path` are all gated on `fs.write`, so a snippet could delete a file
   // the guarded tool exists to refuse.
   //

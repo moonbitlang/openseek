@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/x/crypto",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/internal/auto_check",
   "moonbitlang/openseek/agent_tool/internal/error" @tool_error,

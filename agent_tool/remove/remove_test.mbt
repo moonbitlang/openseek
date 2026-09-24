@@ -15,8 +15,9 @@ async fn recorded_digest(path : String) -> String {
 async fn run_remove(
   file_state : @agent_tool.FileStateMap,
   arguments : Json,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
-  match @remove.definition(file_state~).execute {
+  match @remove.definition(file_state~, approval?).execute {
     Async(run) => run(arguments)
     Sync(_) => fail("remove tool should be async")
   }
@@ -90,7 +91,9 @@ async test "remove refuses a pre-existing file it did not create" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
-      output.content.contains("not created by the agent this session"),
+      output.content.contains(
+        "not recorded as created by the agent this session",
+      ),
     )
     assert_true(@fs.exists(path))
   })
@@ -107,7 +110,9 @@ async test "remove refuses a file the agent only modified" {
     guard result is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
-      output.content.contains("not created by the agent this session"),
+      output.content.contains(
+        "not recorded as created by the agent this session",
+      ),
     )
     assert_true(@fs.exists(path))
   })
@@ -182,7 +187,9 @@ async test "remove refuses a path recreated after an earlier removal" {
     guard second is Respond(output) else { fail("expected Respond") }
     assert_true(output.is_error)
     assert_true(
-      output.content.contains("not created by the agent this session"),
+      output.content.contains(
+        "not recorded as created by the agent this session",
+      ),
     )
     assert_true(@fs.exists(path))
   })

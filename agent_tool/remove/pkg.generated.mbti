@@ -2,12 +2,13 @@
 package "moonbitlang/openseek/agent_tool/remove"
 
 import {
+  "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/write_scope",
 }
 
 // Values
-pub fn definition(workspace_root? : String, file_state? : @agent_tool.FileStateMap, write_scope? : @write_scope.WriteScope) -> @agent_tool.AgentToolDefinition
+pub fn definition(workspace_root? : String, file_state? : @agent_tool.FileStateMap, write_scope? : @write_scope.WriteScope, approval? : @agent_runtime.ApprovalChannel) -> @agent_tool.AgentToolDefinition
 
 // Errors
 

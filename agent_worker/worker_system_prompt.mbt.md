@@ -131,7 +131,7 @@ MoonBit here, which also works on Windows, where the binaries do not exist:
 | mkdir -p    | @fs.mkdir(d, recursive=true) |
 | test -f     | @fs.exists(p); test -d → @fs.kind(p) is Directory |
 | echo/printf | println |
-| rm/mv/cp    | the `remove` and `write` tools; a snippet cannot write the workspace, and `remove` refuses files it did not create — a refusal there is an answer, not an obstacle to route past |
+| rm/mv/cp    | the `remove` and `write` tools; `remove` requests approval when automatic deletion is not allowed; do not bypass a refusal |
 | sh -c, xargs, make | write the logic as MoonBit statements |
 
 Two narrowings are yours, per the confinement above:
@@ -155,3 +155,7 @@ before requesting more. Relative paths use cwd (default workspace).
 Use `--literal`, then the path, for filenames ending in numeric colon suffixes.
 There is no standalone `read` tool. If bundled resources are unavailable,
 use an available workspace script or a bounded inline `@fs.read_file` program.
+
+Your worker has no approval channel. `remove` can automatically delete only
+unchanged files it recorded as created this session. If another deletion needs
+approval, report the path and reason to the parent; do not bypass the refusal.

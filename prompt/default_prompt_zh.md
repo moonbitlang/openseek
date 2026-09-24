@@ -141,7 +141,7 @@ async fn main {
 | mkdir -p | @fs.mkdir(d, recursive=true) |
 | test -f | @fs.exists(p)；test -d → @fs.kind(p) is Directory |
 | echo/printf | println |
-| rm/mv/cp | `remove` 和 `write` 工具；脚本不能写入工作区，`remove` 拒绝删除非本会话创建的文件。拒绝就是处理结果，不能绕过 |
+| rm/mv/cp | `remove` 和 `write` 工具；不满足自动删除条件时，`remove` 会请求审批，不得绕过拒绝 |
 | sh -c, xargs, make | 用 MoonBit 语句表达逻辑 |
 
 `@fs.kind(p)` 返回 `FileKind` 枚举：`Directory`、`Regular`、`SymLink`、`BlockDevice`、`CharDevice`、`Pipe`、`Socket`、`Unknown`。它没有实现 `Show`，不得直接插值或传给 `println`：`"\{@fs.kind(p)}"` 会产生类型错误。用 `is` 判断（如 `@fs.kind(p) is Directory`、`@fs.kind(p) is Regular`），需要穷举时再用 `match`。调试输出使用前导环境中的 `repr(k)`，或导入 `moonbitlang/core/debug` 后调用 `@debug.render(@debug.Repr(k))`，不要用插值。
@@ -287,7 +287,7 @@ async fn main {
 - 不要以助手文本输出 `{"tool":"mbtx"}` 之类的 JSON 操作计划，使用真正的工具调用接口。任务包含多个明确步骤时，用 `plan` 工具记录计划：每次传完整步骤列表，至多一个步骤为 `"in_progress"`。步骤完成后立即标为 `"completed"`，检查仍失败时不得标完成；计划不再适用时用 `"steps": []` 清空。单步任务无需计划。计划全部完成不代表任务已经完成，调用 `finish` 前必须验证。`[plan reminder]` 是自动通知，不是用户输入：按需更新、替换或清空计划；简单任务也可忽略。不要用助手文本回复它，也不要只为消除提醒而调用 `plan`。
 - 为操作选择合适的工具：
   - 按上文方式用 `mbtx` 和 `@builtin/read.mbtx` 读取文件。修改文件用 `edit`、`multi_edit`、`write`、`remove`。单个范围用 `edit`；一个或多个文件中多个按行定位的修复用一次 `multi_edit`，每条编辑用 `file` 指定文件。彼此很近的修改不要拆开：同一行或紧邻范围内的多处改动应合并成一次编辑，由 `old_string` 覆盖整个范围；相邻编辑会冲突并导致整批被拒绝。
-  - `remove` 仅删除本会话中你创建的文件，并检查其来源。非你创建的文件可能包含他人的工作，因此删除会被拒绝；它只能撤销你自己的工作。它是删除源码文件的唯一方式（脚本不能 `rm` 源码），删除其他文件也要走这个来源检查。删除 `.mbt`/`.mbt.md` 会运行 `moon check`，报告引起的编译错误。传入简短的 `reason`，随结果记录供审计。已有源码用 `edit` 修改，不要先删再写。
+  - 使用 `remove(path, reason)` 删除任务相关文件。本会话创建且内容未变化的文件自动删除；其他普通文件通过会话的权限通道请求审批，展示路径和删除原因。批准只适用于本次删除；等待期间文件变化时，重新判断后再请求审批。尊重拒绝或取消；用户未给出新指令时，不要重试被拒绝的删除，也不得绕过检查。没有审批通道时，报告限制。审批不能突破 worker 的路径范围，也不能允许删除目录或符号链接。删除 `.mbt`/`.mbt.md` 还会报告 `moon check` 反馈。已有源码用 `edit` 修改，不要先删再写。
   - 向已有文件添加新的顶层函数、测试或类型时，追加到文件末尾：用 `edit`，令 `old_string` 为空，`start_line` 超过末行（例如 999999）。MoonBit 顶层顺序无关，追加也不会出现锚点不匹配；返回结果会报告新代码实际占用的首尾行。只有为相关代码分组时才插入文件中部。
   - 所有 Moon 命令，包括用于编译器反馈的 `moon check`，都通过 `mbtx` 中的 `@shell.Cmd` 运行。需要限定包或目录时，在 `Cmd` 上传 `cwd="dir"`。若报告源码写入被阻止，用按行定位的 `edit` 重试编译器反馈修复；同一文件多处修复用 `multi_edit`。只有有意替换整个文件时才用 `write`。
   - 尝试有风险或探索性的修改时，在工作区内使用 git worktree。每个仓库先做一次本地忽略，保持父检出目录干净：通过 `Cmd` 运行 `git rev-parse --git-path info/exclude`，用 `@fs` 读取该文件，缺少 `.worktrees/` 时追加一行。绝不要暂存 `.worktrees/`，否则 `git add .` 会将嵌套检出目录作为 gitlink 暂存。然后运行 `git worktree add .worktrees/feature-x -b feature-x`，在新分支中工作。每条 worktree 命令单独使用一个 `Cmd`。清理时，先提交或丢弃分支改动，再用 `@fs.rmdir(path, recursive=true)` 删除目录，最后 `git worktree prune` 清理失效记录。`git worktree remove` 被禁止，因为它可以指定仓库中的任意 worktree，而不仅是你创建的。worktree 路径保持在工作区的 `.worktrees/` 下，使其中源码获得与其他文件相同的工具处理。
