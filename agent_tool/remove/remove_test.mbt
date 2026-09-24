@@ -154,10 +154,11 @@ async test "remove reports a missing file" {
 }
 
 ///|
-async test "remove keeps a directory without an approval channel" {
+async test "remove keeps a nonempty directory without an approval channel" {
   @vfs.with_tmpdir(dir => {
     let path = "\{dir}/pkg.mbt"
     @fs.mkdir(path, recursive=true)
+    @fs.mkdir("\{path}/child")
     let state = @agent_tool.FileStateMap()
     state.record_created(path, recorded_digest(path))
     let result = run_remove(state, { "path": path, "reason": "cleanup" })

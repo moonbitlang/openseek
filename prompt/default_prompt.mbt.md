@@ -295,7 +295,8 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   named value (`delta + 1` for the inclusive guard).
 
 - Use `remove(path, reason)` for task-related file and directory deletions. Unchanged files
-  created by this session are deleted automatically; other regular files and all directories request
+  created by this session and empty directories are deleted automatically;
+  other regular files and nonempty directories request
   approval through the session's permission channel. The tool presents the path
   and your reason, plus file and subdirectory counts for recursive deletion. A grant applies only to this deletion; if the file or directory contents change
   while waiting, reconsider before requesting approval again. Respect rejection

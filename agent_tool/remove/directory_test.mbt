@@ -31,10 +31,11 @@ async test "directory approval describes and removes a complete tree including h
 }
 
 ///|
-async test "empty directory still requires approval and all denial outcomes preserve it" {
+async test "nonempty directory requires approval and all denial outcomes preserve it" {
   @vfs.with_tmpdir(dir => {
-    let path = "\{dir}/empty"
+    let path = "\{dir}/tree"
     @fs.mkdir(path)
+    @fs.mkdir("\{path}/empty-child")
     for outcome in [@agent_runtime.Rejected, Cancelled, Unavailable] {
       let result = run_remove(
         FileStateMap(),
@@ -166,5 +167,27 @@ async test "directory approval cannot authorize a redirected parent with identic
     assert_true(out.content.contains("changed while awaiting approval"))
     assert_eq(@fs.read_file("\{dir}/first/tree/a").text(), "same")
     assert_eq(@fs.read_file("\{dir}/second/tree/a").text(), "same")
+  })
+}
+
+///|
+async test "empty directories are removed without asking even when a channel is present" {
+  @vfs.with_tmpdir(dir => {
+    for with_channel in [false, true] {
+      let path = "\{dir}/empty"
+      @fs.mkdir(path)
+      let result = run_remove(
+        FileStateMap(),
+        { "path": path, "reason": "cleanup empty directory" },
+        approval?=if with_channel {
+          Some(ApprovalChannel(_ => fail("must not ask")))
+        } else {
+          None
+        },
+      )
+      guard result is Respond(out) else { fail("expected response") }
+      assert_false(out.is_error, msg=out.content)
+      assert_false(@fs.exists(path))
+    }
   })
 }

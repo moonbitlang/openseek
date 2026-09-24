@@ -1,6 +1,6 @@
 ///|
-/// Remove unchanged files created by this session automatically. Other files
-/// and directories require one-shot approval for their location and contents.
+/// Remove unchanged session-created files and empty directories automatically.
+/// Other targets require one-shot approval for their location and contents.
 /// This definition owns its file-state locking; do not wrap it in `serialize`.
 pub fn definition(
   workspace_root? : String = ".",
@@ -12,8 +12,8 @@ pub fn definition(
     name="remove",
     description=(
       #|Delete a file or recursively delete a directory, with a non-empty reason.
-      #|Unchanged files created by this session are removed automatically. Other
-      #|files and all directories require approval through the permission channel.
+      #|Unchanged session-created files and empty directories are removed automatically.
+      #|Other files and nonempty directories require approval through the permission channel.
       #|If approval is unavailable, rejected, or cancelled, the target is kept.
       #|A file or tree changed while waiting must be reconsidered
       #|and approved again. Directory approval covers the whole captured tree.
@@ -105,6 +105,17 @@ async fn execute_with_workspace(
       if version.entries is [(_, File(file))] &&
         file_state.created_and_unchanged(path, file.digest) {
         Finished(delete_file(path, input.reason, file_state, write_scope?))
+      } else if version.entries is [(_, Directory(_))] {
+        // Non-recursive rmdir fails if a file appears after inspection.
+        Finished(
+          delete_directory(
+            path,
+            input.reason,
+            version,
+            file_state,
+            write_scope?,
+          ),
+        )
       } else {
         let why = if version.entries.last() is Some((_, Directory(_))) {
           let files = version.entries
