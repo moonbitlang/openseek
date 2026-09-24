@@ -2,6 +2,10 @@
 /// `openseek run [TASK…]` — a headless one-shot agent run (best-of-N under
 /// `--concurrency`), streaming JSONL events on stdout.
 pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
+  // Why a single run did not complete. Set inside the logging scope and
+  // raised only after it: raising in there would cancel the drain before
+  // the turn's last events reached stdout.
+  let mut incomplete : String? = None
   @execution.with_jsonl_stdout(() => {
     // --no-session contradicts an explicit --session; reject up front.
     @options.reject_session_contradiction(matches)
@@ -48,7 +52,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
     let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
     let max_steps = @options.max_steps(matches)
     let task = @options.task_text(matches)
-    match @setup.resolved_session_id(matches) {
+    let terminal = match @setup.resolved_session_id(matches) {
       None => {
         let system_prompt_text = @setup.configured_system_prompt(
           matches,
@@ -123,7 +127,30 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
         )
       }
     }
+    incomplete = incomplete_reason(terminal)
   })
+  // Like fleet mode, whose run fails unless some attempt completed.
+  if incomplete is Some(reason) {
+    fail("run did not complete: \{reason}")
+  }
+}
+
+///|
+/// Why a turn that ended with `terminal` did not complete its task, or `None`
+/// when it did.
+fn incomplete_reason(terminal : @agent_session.TurnTerminal?) -> String? {
+  match terminal {
+    Some(Finished(_)) => None
+    Some(ContextYield(_)) =>
+      Some(
+        "the turn reached the model's context window and was checkpointed before the task was done",
+      )
+    Some(MaxStepsExhausted) => Some(@agent_session.MaxStepsExhaustedMessage)
+    Some(Aborted(reason)) => Some("aborted: \{reason}")
+    Some(Interrupted(reason)) => Some("interrupted: \{reason}")
+    Some(Failed(message)) => Some(message)
+    None => Some("the turn recorded no terminal")
+  }
 }
 
 ///|

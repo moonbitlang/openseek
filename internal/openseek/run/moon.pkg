@@ -22,6 +22,8 @@ import {
 import {
   "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/openseek/internal/openseek/testkit",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
 } for "test"
 
 import {

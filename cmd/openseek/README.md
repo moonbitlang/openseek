@@ -49,6 +49,11 @@ be supplied with
 window instead of a step count. `--api-url` can also be supplied
 with `OPENSEEK_API_URL`; when omitted, OpenSeek uses the official endpoint for
 the model's provider.
+The run exits non-zero unless its turn completes: running out of steps,
+stopping at the model's context window, an agent abort, and a failure each end
+with `error: run did not complete: …` on stderr, after the last JSONL event. A
+fleet run (`--concurrency`) exits non-zero unless at least one attempt
+completes.
 `--dir` defaults to `.` and becomes the workspace root for relative prompt
 files, sessions, workspace skills, and agent tools. If the directory itself is
 missing but its parent exists, OpenSeek creates that final component and logs a

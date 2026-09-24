@@ -2,7 +2,7 @@
 /// One headless turn with its own runtime, task group, and tool registry —
 /// including any configured MCP servers' tools, exactly as `serve` wires them.
 /// The MCP connections live on the turn's task group and are torn down when the
-/// turn's `with_task_group` ends.
+/// turn's `with_task_group` ends. Returns how the turn ended.
 async fn run_task_turn(
   matches : @argparse.Matches,
   session : @agent_session.Session,
@@ -20,7 +20,7 @@ async fn run_task_turn(
   approval_policy~ : @execution.ApprovalPolicy,
   child_session? : @agent_subrun.ChildSession,
   job_log_dir? : String,
-) -> Unit {
+) -> @agent_session.TurnTerminal? {
   @async.with_task_group() <| group => {
     // `run` reads no commands, so there is nobody to ask: `--approval ask` is
     // refused where `run_task_command` reads it, and the surviving
@@ -80,27 +80,25 @@ async fn run_task_turn(
     } else {
       None
     }
-    ignore(
-      @agent.run_turn_in_scope(
-        runtime~,
-        scope~,
-        api_key~,
-        model~,
-        session~,
-        content=Content([Text(task)]),
-        append_item=(current, item) => {
-          let next = append_item(current, item)
-          latest_session = next
-          next
-        },
-        max_steps?,
-        thinking~,
-        api_url?,
-        retry_attempts?,
-        retry_backoff_ms?,
-        tools~,
-        on_goal_met?,
-      ),
-    )
+    @agent.run_turn_in_scope(
+      runtime~,
+      scope~,
+      api_key~,
+      model~,
+      session~,
+      content=Content([Text(task)]),
+      append_item=(current, item) => {
+        let next = append_item(current, item)
+        latest_session = next
+        next
+      },
+      max_steps?,
+      thinking~,
+      api_url?,
+      retry_attempts?,
+      retry_backoff_ms?,
+      tools~,
+      on_goal_met?,
+    ).last_terminal()
   }
 }
