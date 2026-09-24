@@ -1405,6 +1405,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             input_type=@html.InputType::Range,
             id="font-size-slider",
             class="setting-font-size-slider",
+            style=[
+              "--slider-progress: \{(model.app_font_size.base_pixels() - AppFontSizeMinPixels) * 100 / (AppFontSizeMaxPixels - AppFontSizeMinPixels)}%",
+            ],
             min=AppFontSizeMinPixels,
             max=AppFontSizeMaxPixels,
             step=1,
