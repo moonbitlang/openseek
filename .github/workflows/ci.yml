@@ -68,7 +68,7 @@ jobs:
 
       - name: Restore Proton runtime
         id: cef-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.proton/store
@@ -82,7 +82,7 @@ jobs:
 
       - name: Save Proton runtime
         if: github.event_name == 'push' && steps.cef-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             ~/.proton/store
@@ -148,7 +148,7 @@ jobs:
       - name: Restore Proton runtime
         if: matrix.target != 'wasm'
         id: cef-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.proton/store
@@ -222,7 +222,7 @@ jobs:
           matrix.moonbit-channel == 'stable' &&
           matrix.target == 'native' &&
           steps.cef-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: |
             ~/.proton/store
@@ -285,7 +285,7 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -305,7 +305,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Restore Proton runtime
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.proton/store
@@ -342,7 +342,7 @@ jobs:
 
       - name: Upload Playwright report
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: viz-playwright-report
           path: |
