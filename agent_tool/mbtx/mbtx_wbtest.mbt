@@ -225,8 +225,11 @@ fn spawn_verbs(bullet : String) -> Array[String] {
       cut = index
     }
   }
+  // A bullet without a note ends at its closing period, not at `. `.
+  let list = bullet[:cut]
+  let list = if list is [.. head, '.'] { head } else { list }
   [
-    for part in bullet[:cut].split(", ").collect() => part.to_owned()
+    for part in list.split(", ").collect() => part.to_owned()
   ]
 }
 
