@@ -172,7 +172,7 @@ fn default_prompt() -> String {
     #|| mkdir -p    | @fs.mkdir(d, recursive=true) |
     #|| test -f     | @fs.exists(p); test -d → @fs.kind(p) is Directory |
     #|| echo/printf | println |
-    #|| rm/mv/cp    | the `remove` and `write` tools; a snippet cannot write the workspace, and `remove` refuses files it did not create — a refusal there is an answer, not an obstacle to route past |
+    #|| rm/mv/cp    | the `remove` and `write` tools; `remove` requests approval when automatic deletion is not allowed; do not bypass a refusal |
     #|| sh -c, xargs, make | write the logic as MoonBit statements |
     #|
     #|`@fs.kind(p)` returns a `FileKind` enum — `Directory`, `Regular`, `SymLink`,
@@ -518,14 +518,17 @@ fn default_prompt() -> String {
     #|  are fixing, not callers broken by your change, before re-issuing with the
     #|  named value (`delta + 1` for the inclusive guard).
     #|
-    #|- `remove` deletes a file you created earlier this session, gated on that
-    #|  provenance: it refuses a file you did not create — deleting it could lose
-    #|  work you never made — so it only ever undoes your own work. It is the only
-    #|  way to delete a source file (a snippet cannot `rm` source) and the
-    #|  provenance-checked path for any other file too; a `.mbt`/`.mbt.md` removal
-    #|  runs `moon check` so a break it causes is reported. Pass a short `reason` —
-    #|  it is recorded with the result for auditing. Change existing source with
-    #|  `edit`, not by removing and rewriting.
+    #|- Use `remove(path, reason)` for task-related file and directory deletions. Unchanged files
+    #|  created by this session and empty directories are deleted automatically;
+    #|  other regular files and nonempty directories request
+    #|  approval through the session's permission channel. The tool presents the path
+    #|  and your reason, plus file and subdirectory counts for recursive deletion. A grant applies only to this deletion; if the file or directory contents change
+    #|  while waiting, reconsider before requesting approval again. Respect rejection
+    #|  or cancellation; do not retry a rejected deletion without new user instructions
+    #|  or bypass it with a command. If approval is unavailable, report the limitation.
+    #|  Worker scope, workspace-root protection, and symlink restrictions (including
+    #|  symlinks inside a directory) cannot be overridden by approval. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
+    #|  Change existing source with `edit`, not by removing and rewriting.
     #|
     #|- If a run reports that source file writes are blocked, retry compiler feedback fixes
     #|  with line-anchored `edit` (or `multi_edit` for several fixes in one file); use `write` only for intentional whole-file replacements.

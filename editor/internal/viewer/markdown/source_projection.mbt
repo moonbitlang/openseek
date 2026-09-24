@@ -125,13 +125,18 @@ fn empty_markdown_document_projection() -> MarkdownDocumentProjection {
 priv struct MarkdownProjectionBuilder {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
+  code_blocks_by_id : Map[Int, MarkdownCodeBlock]
 }
 
 ///|
-fn markdown_document_projection(doc : @cmark.Doc) -> MarkdownDocumentProjection {
+/// Retains cmark identities only until the same parsed document is rendered.
+fn markdown_document_projection(
+  doc : @cmark.Doc,
+) -> (MarkdownDocumentProjection, Map[Int, MarkdownCodeBlock]) {
   let builder : MarkdownProjectionBuilder = {
     block_anchors: [],
     code_blocks: [],
+    code_blocks_by_id: Map([]),
   }
   let rendered_element_indices = markdown_rendered_element_indices(doc)
   let folder = @cmark.Folder::new(block=fn(
@@ -160,13 +165,17 @@ fn markdown_document_projection(doc : @cmark.Doc) -> MarkdownDocumentProjection 
       )
       is Some(code_block) {
       builder.code_blocks.push(code_block)
+      builder.code_blocks_by_id[node.meta.id] = code_block
     }
     @cmark.Folder::none(folder, builder, block)
   })
   let _ = folder.fold_doc(builder, doc) catch {
-    _ => return empty_markdown_document_projection()
+    _ => return (empty_markdown_document_projection(), Map([]))
   }
-  { block_anchors: builder.block_anchors, code_blocks: builder.code_blocks, }
+  (
+    { block_anchors: builder.block_anchors, code_blocks: builder.code_blocks, },
+    builder.code_blocks_by_id,
+  )
 }
 
 ///|
@@ -373,19 +382,6 @@ fn markdown_code_line_from_source_facts(
     source_range,
     displayed_boundary_to_source_offset: boundary_map,
   }
-}
-
-///|
-fn markdown_code_block_index(
-  projection : MarkdownDocumentProjection,
-  source_range : @common.OffsetRange,
-) -> Int? {
-  for code_block in projection.code_blocks {
-    if code_block.block_source_range.equals(source_range) {
-      return Some(code_block.block_index)
-    }
-  }
-  None
 }
 
 ///|

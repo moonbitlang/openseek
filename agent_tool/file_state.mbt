@@ -142,9 +142,8 @@ pub fn FileStateMap::get(self : FileStateMap, path : String) -> FileState? {
 ///|
 /// Whether the agent created `path` this session AND the file there now still has
 /// the content the agent last wrote — `current_digest` matches the recorded
-/// digest. This is the gate `remove` uses (it hashes the bytes it reads back and
-/// passes them here): it refuses when the path was never created by the agent or
-/// when its content differs from what the agent wrote (rebound since).
+/// digest. `remove` uses this to allow automatic deletion; other files need
+/// approval rather than being treated as unchanged agent-created content.
 pub fn FileStateMap::created_and_unchanged(
   self : FileStateMap,
   path : String,
@@ -213,7 +212,7 @@ test "an edit keeps Created only when it saw the agent's own content" {
   assert_true(ok.get("a.mbt") is Some(Created))
   assert_true(ok.created_and_unchanged("a.mbt", edited))
   // Rebound-then-edited: the tool read foreign content (not what the agent
-  // wrote), so Created is downgraded and the file is no longer deletable.
+  // wrote), so Created is downgraded and deletion now needs approval.
   let rebound = FileStateMap::FileStateMap()
   rebound.record_created("a.mbt", created)
   rebound.record_edited("a.mbt", foreign, after_foreign)

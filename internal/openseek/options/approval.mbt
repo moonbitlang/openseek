@@ -9,6 +9,6 @@ fn approval_option() -> @argparse.OptionArg {
     long="approval",
     env="OPENSEEK_APPROVAL",
     default_values=["never"],
-    about="What happens when a tool asks permission to run without its sandbox: never (default; refuse without asking, and do not offer the argument to the model), ask (prompt the controller over the command stream and wait), always (grant without asking).",
+    about="What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking).",
   )
 }

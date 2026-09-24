@@ -146,7 +146,7 @@ pub async fn run_child(
     worker_admin_dir: input.worker_admin_dir,
   }
   // One provenance map across every file tool, as the main registry wires
-  // it: remove's created-only gate and edit's rebind detection only work
+  // it: remove's automatic-deletion gate and edit's rebind detection only work
   // when all four tools share the record.
   let file_state = @agent_tool.FileStateMap()
   let report = @agent_kind.execute_kind(

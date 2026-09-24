@@ -115,7 +115,7 @@ calls `@agent.run`, but that decision lives outside the `agent` package.
 - `edit`: replace exact text in a file;
 - `multi_edit`: apply several explicit line-anchored replacements to one file;
 - `write`: overwrite a file;
-- `remove`: delete a file the agent itself created earlier in the session;
+- `remove`: delete an unchanged agent-created file, or request approval for other regular files;
 - `plan`: record or replace the step-by-step plan for a multi-step task;
 - `goal`: report standing-goal status (`met`, `continuing`, or `blocked`;
   `met` clears the goal — setting one is the serve `goal` command's job);

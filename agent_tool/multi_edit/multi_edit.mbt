@@ -513,7 +513,7 @@ async fn multi_edit_files(
     // applied `new_content` (kept), or the `original_content` (rolled back by the
     // revert guard). If it is neither, an external writer changed the file during
     // the guard's `moon check` window — leave any prior entry untouched (its
-    // recorded digest will not match the replacement, so `remove` refuses) rather
+    // recorded digest will not match the replacement, so `remove` requires approval) rather
     // than bless the external content as the agent's.
     if final_digest == new_digest || final_digest == seen_digest {
       file_state.record_edited(write.path, seen_digest, final_digest)

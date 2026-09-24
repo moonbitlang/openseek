@@ -40,3 +40,63 @@ async test "a turn advertises escalation exactly when it is given a channel" {
     assert_true(properties.contains("escalated"))
   })
 }
+
+///|
+async test "registered remove uses approval without holding the shared file gate" {
+  @async.with_timeout(5000, () => {
+    let dir = @fs.tmpdir(prefix="openseek-remove-approval-")
+    defer @fs.rmdir(dir, recursive=true)
+    @async.with_task_group(group => {
+      let registered : Ref[@agent_tool.Tools?] = Ref(None)
+      let mut asks = 0
+      let runtime = @agent_runtime.AgentRuntime(
+        workspace_root=dir,
+        approval=ApprovalChannel(ask => {
+          assert_eq(ask.tool_name, "remove")
+          asks += 1
+          guard registered.val is Some(tools) else { fail("registry missing") }
+          // Use the actual serialized write tool while remove is awaiting its
+          // answer. An outer serialize around remove would deadlock here.
+          let path = if asks == 1 { "other.txt" } else { "target.txt" }
+          let changed = @agent_tool.execute_tool_call(
+            @agent_tool.AgentToolCall::from_arguments("write", {
+              "path": path,
+              "content": "written while waiting",
+            }),
+            tools,
+          )
+          guard changed is Respond(out) else { fail("expected write response") }
+          assert_false(out.is_error, msg=out.content)
+          AllowedOnce
+        }),
+      )
+      let tools = @agent.build_tools(runtime, AgentTaskScope(group))
+      registered.val = Some(tools)
+      for should_delete in [true, false] {
+        @fs.write_file("\{dir}/target.txt", "existing", create_mode=CreateNew)
+        let result = @agent_tool.execute_tool_call(
+          @agent_tool.AgentToolCall::from_arguments("remove", {
+            "path": "target.txt",
+            "reason": "remove obsolete file",
+          }),
+          tools,
+        )
+        guard result is Respond(out) else { fail("expected remove response") }
+        assert_eq(out.is_error, !should_delete, msg=out.content)
+        assert_eq(@fs.exists("\{dir}/target.txt"), !should_delete)
+        if !should_delete {
+          assert_true(out.content.contains("changed while awaiting approval"))
+          assert_eq(
+            @fs.read_file("\{dir}/target.txt").text(),
+            "written while waiting",
+          )
+        }
+      }
+      assert_eq(asks, 2)
+      assert_eq(
+        @fs.read_file("\{dir}/other.txt").text(),
+        "written while waiting",
+      )
+    })
+  })
+}

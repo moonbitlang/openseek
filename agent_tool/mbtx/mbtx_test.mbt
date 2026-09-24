@@ -604,7 +604,7 @@ async test "a refused spawn gets guidance that fits a refused spawn" {
 ///
 /// Deletion is the case that matters: moonrun gates `remove`, `rename` and
 /// `rmdir` on `fs.write` too, so granting the workspace was a documented way
-/// around `remove`'s refusal to delete a file it did not create.
+/// around `remove`'s approval requirement for files it did not create.
 ///
 /// Ungated: this is the policy's own `fs.write` rule, which moonrun applies on
 /// every platform, so there is no host where it may be skipped.

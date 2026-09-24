@@ -115,7 +115,7 @@ fn explore_system_prompt() -> String {
     #|| mkdir -p    | @fs.mkdir(d, recursive=true) |
     #|| test -f     | @fs.exists(p); test -d → @fs.kind(p) is Directory |
     #|| echo/printf | println |
-    #|| rm/mv/cp    | the `remove` and `write` tools; a snippet cannot write the workspace, and `remove` refuses files it did not create — a refusal there is an answer, not an obstacle to route past |
+    #|| rm/mv/cp    | the `remove` and `write` tools; `remove` requests approval when automatic deletion is not allowed; do not bypass a refusal |
     #|| sh -c, xargs, make | write the logic as MoonBit statements |
     #|
     #|A snippet is bound by the same rule as the rest of your work: the scratch lab

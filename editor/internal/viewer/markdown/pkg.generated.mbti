@@ -27,6 +27,8 @@ pub fn render_package_dep_diagram_svg(String) -> String?
 
 pub fn render_tokenized_code_block(MarkdownCodeBlock, String?) -> String
 
+pub fn render_tokenized_code_lines(MarkdownCodeBlock, String?, (Int, MarkdownCodeLine, String) -> String) -> String
+
 pub fn render_uml_diagram_svg(String) -> String?
 
 // Errors

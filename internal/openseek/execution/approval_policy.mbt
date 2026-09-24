@@ -6,8 +6,8 @@
 /// offered to the model at all.
 pub enum ApprovalPolicy {
   Ask
-  /// No channel is wired, so the tools that would ask do not offer the
-  /// argument that asks. The stance for unattended runs.
+  /// No channel is wired. Tools refuse actions needing approval, and mbtx
+  /// omits its escalation argument. The stance for unattended runs.
   Never
   /// Grant without showing it to anyone, but still announced on the wire, so
   /// the transcript records what was auto-granted.

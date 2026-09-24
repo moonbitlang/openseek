@@ -29,7 +29,7 @@ pub(all) enum ApprovalOutcome {
 /// decided on.
 ///
 /// No field names the tool CALL. Only one asking call can be in flight at a
-/// time — escalation belongs to `mbtx`, which is not `concurrent_safe`
+/// time — `mbtx` and `remove` are not `concurrent_safe`
 /// — so nothing needs pairing. A tool family that asks and admits adjacent
 /// concurrency would need the call id here.
 pub(all) struct ApprovalAsk {
@@ -39,7 +39,7 @@ pub(all) struct ApprovalAsk {
   /// never by the model: a model-authored justification is prose that can
   /// misdescribe the code beneath it, which is why the code is carried too.
   detail : String
-  /// What would be RUN, verbatim.
+  /// The requested operation: snippet source or the target path and rationale.
   body : String?
 } derive(Eq, Debug)
 
@@ -66,9 +66,9 @@ pub async fn ApprovalChannel::ask(
 /// can answer one.
 ///
 /// One accessor, because its two readers want the same fact in two forms and
-/// must never disagree: a tool REGISTRY reads the presence to decide whether
-/// the arguments that ask are advertised at all, and the asking tool reads the
-/// payload. `None` is the fail-closed default.
+/// must never disagree: a tool REGISTRY passes it to tools that can ask,
+/// and the asking tool reads the payload. `mbtx` also uses its presence to
+/// decide whether to advertise its escalation argument. `None` is the fail-closed default.
 pub fn AgentRuntime::approval_channel(self : AgentRuntime) -> ApprovalChannel? {
   self.approval
 }
