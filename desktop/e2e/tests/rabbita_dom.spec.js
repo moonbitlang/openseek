@@ -1888,7 +1888,7 @@ test('a failed first conversation load keeps selection and can retry', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('settings change and preserve the visible font size', async ({ page }) => {
+test('settings change and preserve the visible font size', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -1896,6 +1896,12 @@ test('settings change and preserve the visible font size', async ({ page }) => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const fontSize = page.getByRole('slider', { name: 'Font size' });
   await expect(fontSize).toHaveValue('14');
+  await expect(fontSize).toHaveAttribute('list', 'font-size-ticks');
+  expect(await page.locator('#font-size-ticks option').evaluateAll(options =>
+    options.map(option => option.value))).toEqual(['12', '13', '14', '15', '16', '17', '18']);
+  await page.locator('.setting-row').filter({ has: fontSize }).screenshot({
+    path: testInfo.outputPath('font-slider-ticks.png'),
+  });
   await fontSize.focus();
   await fontSize.press('ArrowRight');
   await expect(fontSize).toHaveValue('15');

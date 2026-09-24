@@ -1404,6 +1404,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.input(
             input_type=@html.InputType::Range,
             id="font-size-slider",
+            list="font-size-ticks",
             class="setting-font-size-slider",
             min=AppFontSizeMinPixels,
             max=AppFontSizeMaxPixels,
@@ -1413,6 +1414,14 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             attrs=@html.Attrs::build()
               .aria_label(@settings.text(locale, FontSize))
               .aria_valuetext("\{model.app_font_size.wire()}px"),
+          ),
+          @html.datalist(
+            id="font-size-ticks",
+            [
+              for size in AppFontSizeMinPixels..<(AppFontSizeMaxPixels + 1) => {
+                @html.option(value=size.to_string(), "")
+              }
+            ],
           ),
           @html.span(class="setting-font-size-value", [
             @html.text("\{model.app_font_size.wire()}px"),
