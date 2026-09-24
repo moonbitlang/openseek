@@ -53,6 +53,7 @@ fn tool_display_label(
   }
   let glyph = match name {
     "mbtx" => "🐇"
+    "read_image" => "🖼️"
     "edit" => "✏️"
     "multi_edit" => "📝"
     // The job tools act on one background process; `job_wait` wears the same

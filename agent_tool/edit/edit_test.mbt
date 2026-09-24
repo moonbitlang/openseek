@@ -134,7 +134,7 @@ async test "edit replaces a unique exact match" {
     })
     assert_eq(
       output.content,
-      "ok: replaced 1 occurrence(s) at line 2 in \{path}",
+      Content([Text("ok: replaced 1 occurrence(s) at line 2 in \{path}")]),
     )
     assert_false(output.is_error)
     guard output.brief is Some(brief) else { fail("expected a brief") }
@@ -166,7 +166,11 @@ async test "edit rejects replace_all even with a range" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: replace_all=true is no longer supported; use replace_all_preview=true to review every match as a multi_edit edits array, or multi_edit with explicit line-anchored edits",
+      Content([
+        Text(
+          "error editing \{path}: replace_all=true is no longer supported; use replace_all_preview=true to review every match as a multi_edit edits array, or multi_edit with explicit line-anchored edits",
+        ),
+      ]),
     )
     assert_true(output.is_error)
     assert_eq(
@@ -197,7 +201,7 @@ async test "edit resolves relative paths under the workspace root" {
     assert_false(output.is_error)
     assert_eq(
       output.content,
-      "ok: replaced 1 occurrence(s) at line 1 in \{path}",
+      Content([Text("ok: replaced 1 occurrence(s) at line 1 in \{path}")]),
     )
     assert_eq(@fs.read_file(path).text(), "after")
   })
@@ -236,7 +240,7 @@ async test "edit rejects malformed arguments and names the offending field" {
       let output = run_edit(arguments)
       assert_eq(
         output.content,
-        "error: edit requires \{expected}",
+        Content([Text("error: edit requires \{expected}")]),
         msg=expected,
       )
       assert_true(output.is_error, msg=expected)
@@ -382,7 +386,9 @@ async test "edit rejects empty old_string and new_string" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string and new_string are both empty",
+      Content([
+        Text("error editing \{path}: old_string and new_string are both empty"),
+      ]),
     )
     assert_true(output.is_error)
   })
@@ -401,7 +407,11 @@ async test "edit rejects identical replacement" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string and new_string are identical\n\n─── file context ───────────────────────────────\n```\n > 1 | content\n > 2 | \n > 3 | \n```\n\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
+      Content([
+        Text(
+          "error editing \{path}: old_string and new_string are identical\n\n─── file context ───────────────────────────────\n```\n > 1 | content\n > 2 | \n > 3 | \n```\n\n(old_string matches new_string exactly — the file at that location may already contain this text; re-read the file and adjust the edit)",
+        ),
+      ]),
     )
     assert_true(output.is_error)
   })
@@ -460,7 +470,11 @@ async test "edit rejects missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found from line 1\n\n─── file context ───────────────────────────────\n```\n > 1 | alpha\n > 2 | \n > 3 | \n```\n",
+      Content([
+        Text(
+          "error editing \{path}: old_string not found from line 1\n\n─── file context ───────────────────────────────\n```\n > 1 | alpha\n > 2 | \n > 3 | \n```\n",
+        ),
+      ]),
     )
     assert_true(output.is_error)
   })
@@ -482,7 +496,11 @@ async test "edit reports range for missing match" {
     })
     assert_eq(
       output.content,
-      "error editing \{path}: old_string not found in line range 2-2\n\n─── file context ───────────────────────────────\n```\n   1 | alpha\n > 2 | beta\n   3 | alpha\n   4 | \n```\n",
+      Content([
+        Text(
+          "error editing \{path}: old_string not found in line range 2-2\n\n─── file context ───────────────────────────────\n```\n   1 | alpha\n > 2 | beta\n   3 | alpha\n   4 | \n```\n",
+        ),
+      ]),
     )
     assert_true(output.is_error)
     assert_eq(@fs.read_file(path).text(), "alpha\nbeta\nalpha\n")
@@ -504,7 +522,7 @@ async test "edit replaces first match from start line" {
     })
     assert_eq(
       output.content,
-      "ok: replaced 1 occurrence(s) at line 1 in \{path}",
+      Content([Text("ok: replaced 1 occurrence(s) at line 1 in \{path}")]),
     )
     assert_false(output.is_error)
     assert_eq(@fs.read_file(path).text(), "alpha delta\nmiddle\nbeta")
@@ -534,7 +552,7 @@ async test "edit replaces first match inside range" {
     })
     assert_eq(
       output.content,
-      "ok: replaced 1 occurrence(s) at line 2 in \{path}",
+      Content([Text("ok: replaced 1 occurrence(s) at line 2 in \{path}")]),
     )
     assert_false(output.is_error)
     assert_eq(@fs.read_file(path).text(), "beta\ndelta\nmiddle\nbeta\nbeta\n")
@@ -555,7 +573,9 @@ async test "edit rejects non-boolean replace_all" {
     })
     assert_eq(
       output.content,
-      "error: edit requires arguments.replace_all to be a boolean",
+      Content([
+        Text("error: edit requires arguments.replace_all to be a boolean"),
+      ]),
     )
     assert_true(output.is_error)
   })
@@ -723,7 +743,7 @@ async test "replace_all_preview lists every site and round-trips into multi_edit
     assert_eq(@fs.read_file(path).text(), original)
     // extract the emitted edits array, then DROP the middle site (line 2) —
     // the selection step is the feature's point
-    let entries = preview_edits(preview.content)
+    let entries = preview_edits(preview.content.text())
     assert_eq(entries.length(), 3)
     let selected : Array[Json] = []
     for entry in entries {
@@ -969,7 +989,7 @@ async test "the entries array stays parseable under the result cap" {
     })
     assert_false(preview.is_error)
     assert_true(preview.content.contains("omitted to keep the array parseable"))
-    let entries = preview_edits(preview.content)
+    let entries = preview_edits(preview.content.text())
     assert_true(entries.length() > 0)
     assert_true(entries.length() < 40)
   })

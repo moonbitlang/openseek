@@ -40,5 +40,6 @@ pub fn Tools::program_tools(self : Tools) -> Tools raise {
     [
       for tool in self.by_name.values() if tool.is_program_callable() => tool
     ],
+    image_input_supported=self.image_input_supported,
   )
 }

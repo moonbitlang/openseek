@@ -54,7 +54,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       ],
       "revert_if_warning_delta_greater_or_equal": 0,
     })
-    assert_false(fixed.is_error, msg=fixed.content)
+    assert_false(fixed.is_error, msg=fixed.content.text())
     assert_true(
       fixed.content.contains("moon check: ok — 0 errors, 0 warning(s)"),
     )
@@ -94,7 +94,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       reverted.content.contains(
         "reverted: applied 1 edit(s) across 1 file(s), but the warning count changed by 1 (>= revert_if_warning_delta_greater_or_equal=0)",
       ),
-      msg=reverted.content,
+      msg=reverted.content.text(),
     )
     assert_true(reverted.content.contains("Unused variable 'unused'"))
     assert_eq(@fs.read_file(path).text(), after_fix)
@@ -128,12 +128,12 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       ],
       "revert_if_warning_delta_greater_or_equal": 1,
     })
-    assert_true(over.is_error, msg=over.content)
+    assert_true(over.is_error, msg=over.content.text())
     assert_true(
       over.content.contains(
         "warning count changed by 2 (>= revert_if_warning_delta_greater_or_equal=1)",
       ),
-      msg=over.content,
+      msg=over.content.text(),
     )
     guard over.data
       is Some(
@@ -160,7 +160,7 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
       ],
       "revert_if_warning_delta_greater_or_equal": 2,
     })
-    assert_false(tolerated.is_error, msg=tolerated.content)
+    assert_false(tolerated.is_error, msg=tolerated.content.text())
     guard tolerated.data
       is Some(
         {
@@ -183,10 +183,10 @@ async test "the warning guard keeps a batch that removes warnings and rolls back
         },
       ],
     })
-    assert_false(unguarded.is_error, msg=unguarded.content)
+    assert_false(unguarded.is_error, msg=unguarded.content.text())
     assert_true(
       unguarded.content.contains("moon check: ok — 0 errors, 2 warning(s)"),
-      msg=unguarded.content,
+      msg=unguarded.content.text(),
     )
     guard unguarded.data
       is Some(
@@ -358,15 +358,15 @@ async test "failed and rejected batches report their problems in data; an unchec
       unverified.content.contains(
         "reverted: the build plan fails after the batch",
       ),
-      msg=unverified.content,
+      msg=unverified.content.text(),
     )
     assert_true(
       unverified.content.contains("Failed to calculate build plan"),
-      msg=unverified.content,
+      msg=unverified.content.text(),
     )
     assert_true(
       unverified.content.contains("repair the build plan first"),
-      msg=unverified.content,
+      msg=unverified.content.text(),
     )
     assert_true(unverified.data is Some({ "outcome": "reverted", .. }))
     assert_eq(@fs.read_file(path).text(), original)
@@ -383,10 +383,10 @@ async test "failed and rejected batches report their problems in data; an unchec
       ],
       "revert_if_error_delta_greater_or_equal": 0,
     })
-    assert_false(repaired.is_error, msg=repaired.content)
+    assert_false(repaired.is_error, msg=repaired.content.text())
     assert_true(
       repaired.content.contains("the build plan is computable again"),
-      msg=repaired.content,
+      msg=repaired.content.text(),
     )
     assert_true(
       repaired.data is Some({ "outcome": "applied", "plan_repaired": true, .. }),
@@ -444,7 +444,7 @@ async test "the guards cover every project a batch touches" {
       ],
       "revert_if_warning_delta_greater_or_equal": 0,
     })
-    assert_true(reverted.is_error, msg=reverted.content)
+    assert_true(reverted.is_error, msg=reverted.content.text())
     guard reverted.data
       is Some(
         {
@@ -482,14 +482,14 @@ async test "the guards cover every project a batch touches" {
       ],
       "revert_if_warning_delta_greater_or_equal": 1,
     })
-    assert_false(kept.is_error, msg=kept.content)
+    assert_false(kept.is_error, msg=kept.content.text())
     assert_true(
       kept.content.contains("moon check: ok — 0 errors, 1 warning(s)"),
-      msg=kept.content,
+      msg=kept.content.text(),
     )
     assert_true(
       kept.content.contains("all 2 project(s): 0 error(s), 1 warning(s)"),
-      msg=kept.content,
+      msg=kept.content.text(),
     )
     guard kept.data
       is Some(
@@ -530,7 +530,7 @@ async test "the guards cover every project a batch touches" {
       "revert_if_error_delta_greater_or_equal": 0,
       "revert_if_warning_delta_greater_or_equal": 0,
     })
-    assert_true(broken.is_error, msg=broken.content)
+    assert_true(broken.is_error, msg=broken.content.text())
     assert_true(
       broken.data is Some({ "reason": "error_delta", .. }),
       msg=shown(broken.data),

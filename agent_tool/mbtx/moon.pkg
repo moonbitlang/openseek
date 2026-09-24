@@ -17,6 +17,7 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async/os_error",
   "moonbitlang/openseek_protocol/emit",
+  "moonbitlang/openseek_protocol" @protocol,
 }
 
 // The bundled workflows run from this embedded copy; `share/workflow/` stays
@@ -46,6 +47,7 @@ supported_targets = "+wasm+native"
 import {
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/agent_tool/job_output",
+  "moonbitlang/openseek/agent_tool/read_image",
   "moonbitlang/openseek_protocol",
   "moonbitlang/async",
   "moonbitlang/core/json",

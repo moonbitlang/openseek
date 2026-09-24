@@ -135,7 +135,9 @@ async test "write tool updates an implementation note through the registry" {
     // The note already existed, so the result flags the overwrite.
     assert_eq(
       output.content,
-      "ok: wrote 1 line (11 chars) to \{path} (overwrote existing file)",
+      Content([
+        Text("ok: wrote 1 line (11 chars) to \{path} (overwrote existing file)"),
+      ]),
     )
     assert_false(output.is_error)
     assert_eq(@fs.read_file(path).text(), "tests green")

@@ -51,7 +51,7 @@ fn assert_plan(
 ) -> Unit raise {
   guard execute(arguments) is Respond(output) else { fail("expected Respond") }
   assert_false(output.is_error)
-  assert_eq(output.content, content)
+  assert_eq(output.content, Content([Text(content)]))
   guard output.brief is Some(actual_brief) else { fail("expected a brief") }
   assert_eq(actual_brief, brief)
 }
@@ -64,7 +64,7 @@ fn assert_plan_error(arguments : Json, expected : String) -> Unit raise {
   assert_true(output.is_error)
   assert_true(
     output.content.contains(expected),
-    msg="\{output.content} should contain \{expected}",
+    msg="\{output.content.text()} should contain \{expected}",
   )
 }
 

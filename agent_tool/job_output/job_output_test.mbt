@@ -107,7 +107,7 @@ async test "job_output windows a large job's output and notes truncation" {
     // recent (tail) output — here the end of the sequence.
     assert_true(output.content.contains("truncated=true"))
     assert_true(output.content.contains("20000"))
-    assert_true(output.content.char_length() < 80000)
+    assert_true(output.content.text().char_length() < 80000)
     @fs.rmdir(dir, recursive=true) catch {
       _ => ()
     }
@@ -293,7 +293,7 @@ async test "a terminal job finds a policy refusal before the displayed tail" {
     )
     poll_bg_terminal(bg, quiet)
     let fine = run_job_output(bg, { "job_id": quiet })
-    assert_false(fine.is_error, msg=fine.content)
+    assert_false(fine.is_error, msg=fine.content.text())
     assert_false(fine.content.contains("mbtx sandbox:"))
     @fs.rmdir(dir, recursive=true) catch {
       _ => ()
@@ -317,7 +317,7 @@ async test "offset pages through retained output from the start" {
     // shows, and the footer says which window this is.
     let head = run_job_output(bg, { "job_id": id, "offset": 0 })
     assert_false(head.is_error)
-    assert_true(head.content.has_prefix("1\n2\n3\n"))
+    assert_true(head.content.text().has_prefix("1\n2\n3\n"))
     assert_true(head.content.contains("window_offset=0"))
     assert_true(head.content.contains("truncated=true"))
     assert_false(head.content.contains("\n20000\n"))
@@ -325,11 +325,11 @@ async test "offset pages through retained output from the start" {
     let next = run_job_output(bg, { "job_id": id, "offset": 12000 })
     let full = bg.read_output(id).unwrap_or("")
     let expected = full.view(start_offset=12000, end_offset=12040)
-    assert_true(next.content.has_prefix(expected))
+    assert_true(next.content.text().has_prefix(expected))
     assert_true(next.content.contains("window_offset=12000"))
     // Past the end: nothing but the footer. Negative: refused.
     let past = run_job_output(bg, { "job_id": id, "offset": 10_000_000 })
-    assert_true(past.content.has_prefix("<system>"))
+    assert_true(past.content.text().has_prefix("<system>"))
     let bad = run_job_output(bg, { "job_id": id, "offset": -1 })
     assert_true(bad.is_error)
     // Without offset the tail is still what a poll gets.

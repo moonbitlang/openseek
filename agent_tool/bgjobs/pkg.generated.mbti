@@ -16,11 +16,12 @@ import {
 // Types and methods
 type BgJobRuntime
 pub fn[X] BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope[X], spill_dir? : String, persistent_logs? : Bool, prepare_output_dir? : async () -> String, hard_output_cap? : Int, hard_timeout_ms? : Int, on_job_exit? : (BgJobSnapshot) -> Unit, on_job_event? : (@openseek_protocol.JobEventKind, @openseek_protocol.JobRecord) -> Unit) -> Self
-pub async fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, description? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit, data? : () -> Json) -> String
+pub async fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, description? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit, data? : () -> Json, image_content? : () -> Array[@openseek_protocol.ContentPart]) -> String
 pub async fn BgJobRuntime::finalize(Self) -> Unit
 pub fn BgJobRuntime::generation(Self) -> String
 pub fn BgJobRuntime::list(Self) -> Array[BgJobSnapshot]
 pub async fn BgJobRuntime::metadata_changed(Self, String) -> Unit
+pub async fn BgJobRuntime::output_directory(Self) -> String?
 pub fn BgJobRuntime::pending(Self) -> Array[BgJobSnapshot]
 pub async fn BgJobRuntime::read_output(Self, String) -> String?
 pub async fn BgJobRuntime::read_output_tail(Self, String, Int) -> String?
@@ -33,6 +34,7 @@ pub async fn BgJobRuntime::terminal_denial_feedback(Self, String) -> String?
 pub async fn BgJobRuntime::wait_any(Self, Array[String]) -> Unit
 
 pub struct BgJobSnapshot {
+  image_content : Array[@openseek_protocol.ContentPart]
   data : Json?
   cleanup_error : String?
   id : String

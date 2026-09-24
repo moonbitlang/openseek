@@ -63,7 +63,7 @@ async test "edit guards are opt-in and multi_edit retains its default boundary" 
         ]).write_to(dir)
         let path = "\{dir}/lib.mbt"
         let result = run_guard_case(batch, path, original, candidate, threshold)
-        assert_eq(result.is_error, !kept, msg=result.content)
+        assert_eq(result.is_error, !kept, msg=result.content.text())
         if !batch && threshold is None {
           assert_true(
             result.data
@@ -124,20 +124,20 @@ async test "both tools recommend delta plus one for newly reached errors" {
       let path = "\{dir}/a/a.mbt"
       @fs.symlink(target="\{dir}/a/source.txt", path)
       let result = run_guard_case(batch, path, original, candidate, Some(10))
-      assert_true(result.is_error, msg=result.content)
+      assert_true(result.is_error, msg=result.content.text())
       assert_true(
         result.data
         is Some(
           { "verdict": "plausible_reach", "reissue_with": Number(12, ..), .. }
         ),
-        msg=result.content,
+        msg=result.content.text(),
       )
       assert_true(
         result.content.contains("revert_if_error_delta_greater_or_equal=12"),
       )
       assert_eq(@fs.read_file(path).text(), original)
       let retried = run_guard_case(batch, path, original, candidate, Some(12))
-      assert_false(retried.is_error, msg=retried.content)
+      assert_false(retried.is_error, msg=retried.content.text())
       assert_eq(@fs.read_file(path).text(), candidate)
     })
   }

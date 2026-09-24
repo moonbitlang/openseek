@@ -24,7 +24,8 @@ Read files through `mbtx` using `filename="@builtin/read.mbtx"` and
 - `AgentToolDefinition(name~, description~, schema~, execute~)`: define one local
   tool and its executor.
 - `ToolExecutor`: wrap synchronous or asynchronous executors.
-- `ToolOutput(content, is_error?)`: normal tool output sent back to the model.
+- `ToolOutput.content`: ordered `Content(Array[ContentPart])`, preserving text and images.
+- `respond(String, ...)`: text convenience; `respond_content(Content, ...)`: mixed content.
 - `ToolAction`: either `Respond(ToolOutput)` or `Control(AgentControl)`.
 - `AgentControl`: loop-level control such as `Finish(answer)` or
   `Abort(reason)`.
@@ -97,12 +98,12 @@ step to decide what to do.
 test "tool action helpers" {
   let response = @agent_tool.respond("ok")
   guard response is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, "ok")
+  assert_eq(output.content, Content([Text("ok")]))
   assert_false(output.is_error)
 
   let failed = @agent_tool.respond("bad", is_error=true)
   guard failed is Respond(error_output) else { fail("expected Respond") }
-  assert_eq(error_output.content, "bad")
+  assert_eq(error_output.content, Content([Text("bad")]))
   assert_true(error_output.is_error)
 
   let done = @agent_tool.ToolAction::finish("done")

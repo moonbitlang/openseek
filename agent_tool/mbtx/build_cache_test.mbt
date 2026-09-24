@@ -17,12 +17,12 @@ async test "cache: consecutive inline snippets each run their own program" {
     let alice = dispatch(definition, {
       "source": "fn main { println(\"I AM ALICE\") }",
     })
-    assert_false(alice.is_error, msg=alice.content)
+    assert_false(alice.is_error, msg=alice.content.text())
     assert_true(alice.content.contains("I AM ALICE"))
     let bob = dispatch(definition, {
       "source": "fn main { println(\"I AM BOB\") }",
     })
-    assert_false(bob.is_error, msg=bob.content)
+    assert_false(bob.is_error, msg=bob.content.text())
     assert_true(bob.content.contains("I AM BOB"))
     assert_false(bob.content.contains("ALICE"))
     // An exact repeat is the one inline case moon can serve as a no-op.
@@ -54,7 +54,7 @@ async test "cache: a named script builds in one keyed dir and follows edits" {
     let v1 = "fn main { println(\"hello v1\") }"
     @fs.write_file("\{ws}/scripts/hello.mbtx", v1, create_mode=CreateOrTruncate)
     let first = dispatch(definition, { "filename": "scripts/hello.mbtx" })
-    assert_false(first.is_error, msg=first.content)
+    assert_false(first.is_error, msg=first.content.text())
     assert_true(first.content.contains("hello v1"))
     let second = dispatch(definition, { "filename": "scripts/hello.mbtx" })
     assert_true(second.content.contains("hello v1"))
@@ -74,7 +74,7 @@ async test "cache: a named script builds in one keyed dir and follows edits" {
     let v2 = "fn main { println(\"hello v2\") }"
     @fs.write_file("\{ws}/scripts/hello.mbtx", v2, create_mode=CreateOrTruncate)
     let third = dispatch(definition, { "filename": "scripts/hello.mbtx" })
-    assert_true(third.content.contains("hello v2"), msg=third.content)
+    assert_true(third.content.contains("hello v2"), msg=third.content.text())
     assert_false(third.content.contains("v1"))
     assert_eq(@fs.read_file("\{stage}/snippet.mbtx").text(), v2)
     assert_eq(
@@ -109,9 +109,9 @@ async test "cache: same basename at different paths keys separately" {
     let a = dispatch(definition, { "filename": "a/run.mbtx" })
     let b = dispatch(definition, { "filename": "b/run.mbtx" })
     let a_again = dispatch(definition, { "filename": "a/run.mbtx" })
-    assert_true(a.content.contains("from a"), msg=a.content)
-    assert_true(b.content.contains("from b"), msg=b.content)
-    assert_true(a_again.content.contains("from a"), msg=a_again.content)
+    assert_true(a.content.contains("from a"), msg=a.content.text())
+    assert_true(b.content.contains("from b"), msg=b.content.text())
+    assert_true(a_again.content.contains("from a"), msg=a_again.content.text())
     assert_eq(
       @fs.readdir("\{spill}/mbtx-cache")
       .filter(name => name.has_prefix("named-run.mbtx-"))
@@ -133,9 +133,9 @@ async test "cache: build errors are reported against the source, not the cache" 
       "source": "fn main { let x : Int = \"not an int\" }",
     })
     assert_true(out.is_error)
-    assert_true(out.content.contains("BUILD failed"), msg=out.content)
-    assert_false(out.content.contains("mbtx-cache"), msg=out.content)
-    assert_false(out.content.contains("snippet.mbtx"), msg=out.content)
+    assert_true(out.content.contains("BUILD failed"), msg=out.content.text())
+    assert_false(out.content.contains("mbtx-cache"), msg=out.content.text())
+    assert_false(out.content.contains("snippet.mbtx"), msg=out.content.text())
   })
 }
 
@@ -167,12 +167,12 @@ async test "cache: a build stopped mid-way retires its generation" {
     })
     assert_true(stopped is None)
     let ok = dispatch(definition, { "source": "fn main { println(1) }" })
-    assert_false(ok.is_error, msg=ok.content)
+    assert_false(ok.is_error, msg=ok.content.text())
     assert_true(ok.content.contains("1"))
     assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/gen-1/_build"))
     // Once retired, the cache serves the next call as usual, in place.
     let again = dispatch(definition, { "source": "fn main { println(2) }" })
-    assert_true(again.content.contains("2"), msg=again.content)
+    assert_true(again.content.contains("2"), msg=again.content.text())
     assert_true(@fs.exists("\{spill}/mbtx-cache/snippet/gen-1/_build"))
     // The retired generation is swept best-effort by each later call, and
     // the sweep is allowed to lose to a compiler the stop orphaned — that is
@@ -218,11 +218,11 @@ async test "cache: requested warnings survive an unchanged script" {
     let definition = @mbtx.definition(workspace_root=ws, job_dir=spill)
     let source = "fn main { let unused = 1; println(\"ran\") }"
     let first = dispatch(definition, { "source": source, "warning": "on" })
-    assert_false(first.is_error, msg=first.content)
-    assert_true(first.content.contains("nused"), msg=first.content)
+    assert_false(first.is_error, msg=first.content.text())
+    assert_true(first.content.contains("nused"), msg=first.content.text())
     let second = dispatch(definition, { "source": source, "warning": "on" })
-    assert_false(second.is_error, msg=second.content)
-    assert_true(second.content.contains("nused"), msg=second.content)
+    assert_false(second.is_error, msg=second.content.text())
+    assert_true(second.content.contains("nused"), msg=second.content.text())
     assert_true(second.content.contains("ran"))
   })
 }
@@ -251,7 +251,7 @@ async test "cache: a detached job's cleanup keeps the cache and its own run" {
         #|  println("late")
         #|}
       let output = dispatch(definition, { "source": source })
-      assert_false(output.is_error, msg=output.content)
+      assert_false(output.is_error, msg=output.content.text())
       assert_true(output.content.contains("moved to the background"))
       let dirs = @fs.readdir(spill).filter(name => name.has_prefix("snippet-"))
       assert_eq(dirs.length(), 1)
@@ -262,7 +262,7 @@ async test "cache: a detached job's cleanup keeps the cache and its own run" {
       let other = dispatch(definition, {
         "source": "fn main { println(\"other\") }",
       })
-      assert_false(other.is_error, msg=other.content)
+      assert_false(other.is_error, msg=other.content.text())
       // The job's per-call build dir is reclaimed when it ends...
       let mut reclaimed = false
       for _ in 0..<200 {
@@ -281,7 +281,7 @@ async test "cache: a detached job's cleanup keeps the cache and its own run" {
       let after = dispatch(definition, {
         "source": "fn main { println(\"after\") }",
       })
-      assert_false(after.is_error, msg=after.content)
+      assert_false(after.is_error, msg=after.content.text())
     }
   })
 }
