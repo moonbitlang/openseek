@@ -27,6 +27,28 @@ priv struct ReviewHunkBridgeTarget {
 let review_hunk_bridge_target : Ref[ReviewHunkBridgeTarget?] = Ref(None)
 
 ///|
+// These are the renderer's inputs, not the whole editor state: a settled Git
+// poll or an unrelated message must not replace a live action/menu subtree.
+priv struct ReviewHunkActionInput {
+  owner : @interop.ConversationKey
+  change : ChangedFile
+  review_generation : Int
+  surface_generation : Int
+  locale : @i18n.Locale
+  section : (String, @moon_diff_provider.SemanticReviewSection)?
+  ready : Bool
+  file_changes : ReviewHunk?
+  progress : ReviewFileProgress?
+  source : @mention_context.ReviewSource?
+  context : Array[@mention_context.ReviewChanges]
+} derive(Eq)
+
+///|
+let review_hunk_action_inputs : Ref[
+  Array[(@viewer.DiffEditor, ReviewHunkActionInput)],
+] = Ref([])
+
+///|
 fn current_review_hunk_bridge_target(
   state : State,
   ctx : Ctx,
@@ -227,26 +249,32 @@ fn publish_semantic_review_active_hunk(
 ///|
 fn sync_review_hunk_actions(state : State) -> Unit {
   let target = review_hunk_bridge_target.val
+  let installed = []
   if target is Some(target) {
     reveal_pending_review_context(state, target)
   }
   if mounted_diff_editor() is Some(editor) {
     if target is Some(target) && target.surface is ReviewLineSurface {
-      install_review_hunk_actions(state, target, editor, None)
+      installed.push(install_review_hunk_actions(state, target, editor, None))
     } else {
       editor.set_hunk_action_renderer(None)
     }
   }
   if target is Some(target) && target.surface is ReviewSemanticSurface {
     for key, entry in semantic_review_editors {
-      install_review_hunk_actions(
-        state,
-        target,
-        entry.editor,
-        Some((key, entry.section)),
+      installed.push(
+        install_review_hunk_actions(
+          state,
+          target,
+          entry.editor,
+          Some((key, entry.section)),
+        ),
       )
     }
   }
+  // Retain only this sync's live editors; switching surfaces or disposing a
+  // semantic section must not keep its editor or renderer inputs alive.
+  review_hunk_action_inputs.val = installed
 }
 
 ///|
@@ -255,7 +283,25 @@ fn install_review_hunk_actions(
   target : ReviewHunkBridgeTarget,
   editor : @viewer.DiffEditor,
   section : (String, @moon_diff_provider.SemanticReviewSection)?,
-) -> Unit {
+) -> (@viewer.DiffEditor, ReviewHunkActionInput) {
+  let input : ReviewHunkActionInput = {
+    owner: target.owner,
+    change: target.change,
+    review_generation: target.review_generation,
+    surface_generation: target.surface_generation,
+    locale: viewer_locale(),
+    section,
+    ready: editor.is_diff_up_to_date(),
+    file_changes: mounted_diff_editor().bind(projected_review_file_changes),
+    progress: state.review_file_progress(target.change),
+    source: state.review_source(target.change),
+    context: state.review_context,
+  }
+  for (previous_editor, previous_input) in review_hunk_action_inputs.val {
+    if physical_equal(previous_editor, editor) && previous_input == input {
+      return (editor, input)
+    }
+  }
   editor.set_hunk_action_renderer(
     Some(index => {
       guard editor.is_diff_up_to_date() else { return None }
@@ -386,6 +432,7 @@ fn install_review_hunk_actions(
       Some(actions)
     }),
   )
+  (editor, input)
 }
 
 ///|
