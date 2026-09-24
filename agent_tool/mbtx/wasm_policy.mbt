@@ -202,12 +202,15 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // to `@fs`.
   //
   // `cat`, `ls`, `head`, `tail`, `wc`, `sort`, `uniq`, `grep`, `printf`,
-  // `echo`, `pwd`, `date`, `which` and `uname` were dropped rather than listed.
+  // `echo`, `pwd`, `date` and `which` were dropped rather than listed.
   // Each is a line of MoonBit (`@fs`, string operations, `@env`) that works on
   // every platform, whereas the POSIX binaries do not exist on Windows — so
   // listing them offers the model a path that silently disappears there. It
   // would also cut against this tool's own advice, which is to capture
   // `out.stdout` and filter it in MoonBit instead of reaching for grep and awk.
+  // `uname` is the exception: system identification is useful for diagnosing
+  // platform-specific behavior. It may be unavailable on Windows.
+  ("uname", []),
   ("diff", []),
   ("rg", []),
   // NOT listed: the general-purpose runners (`sh`, `bash`, `zsh`, `env`,
