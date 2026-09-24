@@ -44,7 +44,6 @@ async fn request(
     }
     body.json()
   }) catch {
-    @async.WaitedTaskAlreadyCancelled as error => raise error
     TransportError(message) => raise TransportError(message)
     _ =>
       raise TransportError(

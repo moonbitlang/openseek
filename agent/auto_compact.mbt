@@ -113,7 +113,7 @@ fn AgentLoop::next_call_fits(
 /// session is returned uncompacted — a guardrail must not strand the turn —
 /// and the next pressured step retries. The summary APPEND stays outside
 /// the catch so a durability failure propagates like every other append.
-/// Cancellation re-raises. The Bool reports whether a Summary was actually
+/// Cancellation bypasses the catch and unwinds. The Bool reports whether a Summary was actually
 /// appended, so callers never claim a checkpoint that does not exist.
 async fn AgentLoop::checkpoint_at_ceiling(
   self : Self,
@@ -129,9 +129,6 @@ async fn AgentLoop::checkpoint_at_ceiling(
     covered,
   ) catch {
     error => {
-      if error is @async.WaitedTaskAlreadyCancelled {
-        raise error
-      }
       @emit.emit(AutoCompactionFailed(error="\{error}"))
       return (session, false)
     }

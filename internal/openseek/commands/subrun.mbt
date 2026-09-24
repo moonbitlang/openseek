@@ -77,14 +77,13 @@ pub async fn run_subrun_command(matches : @argparse.Matches) -> Unit {
       // Failures are caught INSIDE the task: a spawned task's failure
       // cancels the group body, so a catch around `work.wait()` observes
       // only the ambient cancellation and can never see the real error
-      // (adversarial-review finding). In here, cancellation still
-      // re-raises; every real error becomes the TurnFailed event the
-      // parent classifies on, and the task completes normally.
+      // (adversarial-review finding). In here, cancellation bypasses the
+      // catch and unwinds; every real error becomes the TurnFailed event
+      // the parent classifies on, and the task completes normally.
       let work = group.spawn(() => {
         dispatch_kind(
           kind, input, ceiling, matches, model, thinking, api_url, workspace_root,
         ) catch {
-          @async.WaitedTaskAlreadyCancelled as error => raise error
           error => {
             @emit.emit(TurnFailed(error="subrun \{kind} failed: \{error}"))
             None

@@ -201,7 +201,6 @@ async fn run_serve(
           Err(message) => @emit.emit(CommandError(error=message))
         }
       }) catch {
-        @async.WaitedTaskAlreadyCancelled as error => raise error
         // A malformed (non-JSON) line is a controller bug: report it and
         // stop reading commands, which shuts the server down gracefully.
         error => @emit.emit(CommandError(error="command stream: \{error}"))
@@ -247,7 +246,7 @@ async fn run_serve(
     }
     async fn compact_and_report(
       current : @agent_session.Session,
-    ) -> @agent_session.Session {
+    ) -> @agent_session.Session noraise {
       @compact.compact_session(
         store?,
         current,
@@ -257,7 +256,6 @@ async fn run_serve(
         retry_attempts?,
         retry_backoff_ms?,
       ) catch {
-        @async.WaitedTaskAlreadyCancelled as error => raise error
         error => {
           @emit.emit(CompactionFailed(error="\{error}"))
           current
@@ -275,7 +273,6 @@ async fn run_serve(
     ) -> Bool {
       session = if store is Some(store) {
         store.append(session, item) catch {
-          @async.WaitedTaskAlreadyCancelled as error => raise error
           error => {
             @emit.emit(SessionError(error="failed to append \{what}: \{error}"))
             return false
@@ -448,15 +445,11 @@ async fn run_serve(
           tools~,
         ) catch {
           error => {
-            // The turn died but the session server must not: a cancelled
-            // turn already appended its Interrupted terminal inside the
-            // loop, and any other failure is reported as a terminal wire
-            // event so the controller can close the run.
-            if error is @async.WaitedTaskAlreadyCancelled {
-              @emit.emit(AgentAborted(reason="interrupted"))
-            } else {
-              @emit.emit(TurnFailed(error="\{error}"))
-            }
+            // The turn died but the session server must not: the failure is
+            // reported as a terminal wire event so the controller can close
+            // the run. (A cancelled turn never gets here — cancellation
+            // bypasses catch and the errdefer above reports it.)
+            @emit.emit(TurnFailed(error="\{error}"))
             ignore(steps.try_put(TurnDone(finished=false)) catch { _ => false })
             return
           }
@@ -475,16 +468,7 @@ async fn run_serve(
           @emit.emit(CompactionFailed(error="cancelled"))
           ignore(steps.try_put(CompactDone(current)) catch { _ => false })
         }
-        let next = compact_and_report(current) catch {
-          @async.WaitedTaskAlreadyCancelled => {
-            @emit.emit(CompactionFailed(error="cancelled"))
-            current
-          }
-          error => {
-            @emit.emit(CompactionFailed(error="\{error}"))
-            current
-          }
-        }
+        let next = compact_and_report(current)
         ignore(steps.try_put(CompactDone(next)) catch { _ => false })
       }
     }
@@ -524,10 +508,7 @@ async fn run_serve(
     }
 
     serve~: for ;; {
-      let step = steps.get() catch {
-        @async.WaitedTaskAlreadyCancelled as error => raise error
-        _ => break serve~
-      }
+      let step = steps.get() catch { _ => break serve~ }
       match step {
         Wire(Prompt(content, submission_id~)) =>
           match active_work {

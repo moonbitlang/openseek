@@ -10,7 +10,6 @@ async fn run(
     let registration = service.register(on_trace~)
     defer registration.close()
     let action = program(registration.env()) catch {
-      @async.WaitedTaskAlreadyCancelled as error => raise error
       error =>
         @agent_tool.respond("PTC program failed: \{error}", is_error=true)
     }
@@ -196,6 +195,37 @@ async test "PTC cancellation joins handlers releases shared state and retains in
   assert_true(
     trace.val is Some({ "ptc_calls": [{ "status": "interrupted", .. }], .. }),
   )
+}
+
+///|
+async test "PTC answers a call revoked by program close with an error result" {
+  let started : @async.Queue[Unit] = Queue(kind=Unbounded)
+  let tool = leaf(
+    name="block",
+    execute=Async(_ => {
+      started.put(())
+      @async.sleep(60000)
+      @agent_tool.respond("should not finish")
+    }),
+  )
+  @async.with_timeout(3000, () => {
+    @async.with_task_group(group => {
+      let service = Service::start(group, Tools([tool]))
+      let program = service.register()
+      // The handler's `Task::wait` on the revoked executor raises the ordinary
+      // `WaitedTaskAlreadyCancelled` error; the client still gets a reply.
+      let pending = group.spawn(
+        () => request(program.env(), "block", {}),
+        allow_failure=true,
+      )
+      started.get()
+      program.close()
+      assert_true(
+        pending.wait() is { "is_error": true, "content": String(message), .. } &&
+        message.contains("PTC call failed"),
+      )
+    })
+  })
 }
 
 ///|

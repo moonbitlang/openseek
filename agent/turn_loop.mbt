@@ -308,11 +308,9 @@ async fn AgentLoop::run(
 /// bypasses catch, so the enclosing errdefer owns this protected cleanup.
 /// Every append is best effort: cleanup must not replace the original exit.
 async fn AgentLoop::seal_unwinding_turn(self : Self, failure : Error?) -> Unit {
-  let terminal : @agent_session.SessionItem = if failure is Some(error) &&
-    !(error is @async.WaitedTaskAlreadyCancelled) {
-    Terminal(Failed("agent failed: \{error}"))
-  } else {
-    Terminal(Interrupted("cancelled"))
+  let terminal : @agent_session.SessionItem = match failure {
+    Some(error) => Terminal(Failed("agent failed: \{error}"))
+    None => Terminal(Interrupted("cancelled"))
   }
   // Best-effort: a goal met in the dying batch keeps its durable clear
   // when the store still accepts appends.
@@ -686,7 +684,6 @@ async fn AgentLoop::prefetch_concurrent_results(
       continue
     }
     let call = @agent_tool.AgentToolCall(native) catch {
-      @async.WaitedTaskAlreadyCancelled as error => raise error
       _ => {
         flush()
         continue
@@ -769,8 +766,7 @@ async fn AgentLoop::execute_tool_call(
       } else if last_step || self.at_soft_context_ceiling(response.usage) {
         ("error: cannot wait without budget for another model step", true)
       } else {
-        let mut cancelled_child = false
-        errdefer (if @async.is_being_cancelled() || cancelled_child {
+        errdefer (if @async.is_being_cancelled() {
           @async.protect_from_cancel(() => {
             ignore(
               self.record_tool_result(
@@ -786,10 +782,6 @@ async fn AgentLoop::execute_tool_call(
           })
         })
         try self.wait_for_jobs(ids) catch {
-          @async.WaitedTaskAlreadyCancelled as error => {
-            cancelled_child = true
-            raise error
-          }
           error => ("error: \{error}", true)
         } noraise {
           content => (content, false)
@@ -1172,8 +1164,8 @@ async fn AgentLoop::record_tool_result(
 /// synthetic (its reasoning lives on the batch's covered assistant
 /// message; re-attaching it would duplicate what Kimi preserves there).
 /// Run the owed goal-met review, if any, and append its notice. A no-op
-/// without a pending review or a callback. Failure folding: external
-/// cancellation re-raises; any other reviewer failure becomes an
+/// without a pending review or a callback. Failure folding: cancellation
+/// bypasses the catch and unwinds; any reviewer failure becomes an
 /// `[review] unavailable` notice — the gate is advisory and must never
 /// break the turn.
 async fn AgentLoop::run_pending_review(
@@ -1191,7 +1183,6 @@ async fn AgentLoop::run_pending_review(
   // (Pre-launch economy is separate: a replacement observed before this
   // point already cleared the pending slot and no audit was spawned.)
   let notice = callback(goal, baseline) catch {
-    @async.WaitedTaskAlreadyCancelled as error => raise error
     error =>
       Some(
         "[review] unavailable: \{@agent_tool.brief_line("\{error}", limit=200)}",

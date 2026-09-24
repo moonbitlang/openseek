@@ -137,7 +137,6 @@ pub async fn[X] Service::start(
         }
         Some((program, reader.body(headers)))
       }) catch {
-        @async.WaitedTaskAlreadyCancelled as error => raise error
         _ => {
           send(
             conn,
@@ -207,7 +206,6 @@ pub async fn[X] Service::start(
         })
         task.wait()
       }) catch {
-        @async.WaitedTaskAlreadyCancelled as error => raise error
         error => {
           abandon()
           let response = error_result(
@@ -497,10 +495,6 @@ async fn Program::execute(
       }
     }
   } catch {
-    @async.WaitedTaskAlreadyCancelled as error => {
-      self.calls[index] = call_entry(name, arguments, "interrupted")
-      raise error
-    }
     error => @agent_tool.respond("PTC tool failed: \{error}", is_error=true)
   }
   let response = match result {
@@ -595,7 +589,6 @@ async fn Program::deliver_trace(self : Program) -> Unit {
   @async.with_timeout(self.service.trace_timeout_ms, () => {
     (self.on_trace)(self.trace())
   }) catch {
-    @async.WaitedTaskAlreadyCancelled as error => raise error
     error =>
       self.trace_error = Some(@agent_tool.brief_line("\{error}", limit=512))
   }
