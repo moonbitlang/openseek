@@ -5,10 +5,14 @@ import {
   "moonbitlang/openseek/agent_subrun",
   "moonbitlang/core/argparse",
   "moonbitlang/async",
+  "moonbitlang/openseek/cli",
   "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
   "moonbitlang/openseek_protocol/emit",
   "moonbitlang/core/env",
   "moonbitlang/openseek/internal/openseek/execution",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
   "moonbitlang/openseek/internal/openseek/options",
   "moonbitlang/openseek/internal/openseek/setup",
   "moonbitlang/openseek/agent_session/store",
@@ -19,8 +23,13 @@ import {
   "moonbitlang/openseek/internal/openseek/testkit",
   "moonbitlang/async/http",
   "moonbitlang/async/socket",
-  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
 } for "test"
+
+import {
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/internal/openseek/testkit",
+} for "wbtest"
 
 warnings = "+unnecessary_annotation"
 

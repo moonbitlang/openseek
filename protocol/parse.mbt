@@ -103,28 +103,9 @@ pub fn parse(line : Json) -> Event? {
       text(fields, "content").map(content => AssistantMessage(content~))
     "reasoning_message" =>
       text(fields, "content").map(content => ReasoningMessage(content~))
-    // Decoded field by field rather than through `Usage`'s derived `FromJson`,
-    // which reads a fractional number as an `Int` by truncating it: a counter
-    // of `1.5` is not a token count, and every other integer on the wire is
-    // rejected for exactly that. `int` is the same check used at the top level.
     "usage" => {
-      guard fields.get("usage") is Some(Object(usage)) &&
-        int(usage, "prompt_tokens") is Some(prompt_tokens) &&
-        int(usage, "completion_tokens") is Some(completion_tokens) &&
-        int(usage, "total_tokens") is Some(total_tokens) &&
-        int(usage, "prompt_cache_hit_tokens") is Some(prompt_cache_hit_tokens) &&
-        int(usage, "prompt_cache_miss_tokens") is Some(prompt_cache_miss_tokens) else {
-        return None
-      }
-      Some(
-        Usage(usage={
-          prompt_tokens,
-          completion_tokens,
-          total_tokens,
-          prompt_cache_hit_tokens,
-          prompt_cache_miss_tokens,
-        }),
-      )
+      guard fields.get("usage") is Some(Object(usage)) else { return None }
+      usage_of(usage).map(usage => Usage(usage~))
     }
     "tool_result" => {
       guard text(fields, "tool_call_id") is Some(tool_call_id) &&
@@ -370,6 +351,34 @@ pub fn parse(line : Json) -> Event? {
     "mcp_no_tools" => text(fields, "server").map(server => McpNoTools(server~))
     _ => None
   }
+}
+
+///|
+/// A `Usage` object's five counters, decoded field by field rather than
+/// through a derived `FromJson`, which reads a fractional number as an `Int` by
+/// truncating it: a counter of `1.5` is not a token count, and every other
+/// integer on the wire is rejected for exactly that. `int` is the same check
+/// used at the top level. Nor is a negative counter a token count.
+fn usage_of(usage : Map[String, Json]) -> Usage? {
+  guard int(usage, "prompt_tokens") is Some(prompt_tokens) &&
+    int(usage, "completion_tokens") is Some(completion_tokens) &&
+    int(usage, "total_tokens") is Some(total_tokens) &&
+    int(usage, "prompt_cache_hit_tokens") is Some(prompt_cache_hit_tokens) &&
+    int(usage, "prompt_cache_miss_tokens") is Some(prompt_cache_miss_tokens) &&
+    prompt_tokens >= 0 &&
+    completion_tokens >= 0 &&
+    total_tokens >= 0 &&
+    prompt_cache_hit_tokens >= 0 &&
+    prompt_cache_miss_tokens >= 0 else {
+    return None
+  }
+  Some({
+    prompt_tokens,
+    completion_tokens,
+    total_tokens,
+    prompt_cache_hit_tokens,
+    prompt_cache_miss_tokens,
+  })
 }
 
 ///|

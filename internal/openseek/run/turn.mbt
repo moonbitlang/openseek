@@ -2,7 +2,8 @@
 /// One headless turn with its own runtime, task group, and tool registry —
 /// including any configured MCP servers' tools, exactly as `serve` wires them.
 /// The MCP connections live on the turn's task group and are torn down when the
-/// turn's `with_task_group` ends. Returns how the turn ended.
+/// turn's `with_task_group` ends. How the turn ended is in what `append_item`
+/// recorded: a failed or cancelled turn seals its terminal and then raises.
 async fn run_task_turn(
   matches : @argparse.Matches,
   session : @agent_session.Session,
@@ -20,7 +21,7 @@ async fn run_task_turn(
   approval_policy~ : @execution.ApprovalPolicy,
   child_session? : @agent_subrun.ChildSession,
   job_log_dir? : String,
-) -> @agent_session.TurnTerminal? {
+) -> Unit {
   @async.with_task_group() <| group => {
     // `run` reads no commands, so there is nobody to ask: `--approval ask` is
     // refused where `run_task_command` reads it, and the surviving
@@ -99,6 +100,80 @@ async fn run_task_turn(
       retry_backoff_ms?,
       tools~,
       on_goal_met?,
-    ).last_terminal()
+    )
+    |> ignore
   }
+}
+
+///|
+/// A single run's turn as it is recorded, so that how the run ended can be
+/// read back even when the turn raised.
+priv struct TurnRecord {
+  /// The durable session the turn records to; `None` for `--no-session`.
+  mut session : String?
+  /// The session's last sequence before the turn: later events are the turn's.
+  mut started_after : Int
+  /// The session after the latest append; `None` until the turn has started.
+  mut latest : @agent_session.Session?
+}
+
+///|
+fn TurnRecord::record(
+  self : TurnRecord,
+  session : @agent_session.Session,
+) -> @agent_session.Session {
+  self.latest = Some(session)
+  session
+}
+
+///|
+/// How the run ended. A turn that ended short says why itself; otherwise a
+/// `failure` that escaped the run is the reason, even after a finished turn,
+/// so that the status never claims success for a run that exits nonzero.
+fn TurnRecord::status(
+  self : TurnRecord,
+  failure~ : Error?,
+) -> @openseek_protocol.RunStatus {
+  match (self.latest.bind(session => session.last_terminal()), failure) {
+    (Some(Finished(answer)), None) => Completed(output={ "answer": answer })
+    (Some(Finished(_)) | None, Some(error)) =>
+      Failed(reason=@cli.failure_message("\{error}").to_owned())
+    (Some(ContextYield(reason)), _) => ContextYield(reason~)
+    (Some(MaxStepsExhausted), _) => MaxStepsExhausted
+    (Some(Aborted(reason)), _) => Aborted(reason~)
+    (Some(Interrupted(reason)), _) => Interrupted(reason~)
+    (Some(Failed(reason)), _) => Failed(reason~)
+    (None, None) => Failed(reason="the turn recorded no terminal")
+  }
+}
+
+///|
+/// Token usage summed over the model responses the turn recorded, or `None`
+/// when the turn never started.
+fn TurnRecord::usage(self : TurnRecord) -> @openseek_protocol.Usage? {
+  guard self.latest is Some(session) else { return None }
+  let mut total : @openseek_protocol.Usage = {
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    total_tokens: 0,
+    prompt_cache_hit_tokens: 0,
+    prompt_cache_miss_tokens: 0,
+  }
+  for event in session.events() {
+    guard event.sequence() > self.started_after &&
+      event.item() is Assistant(message) &&
+      message.usage() is Some(usage) else {
+      continue
+    }
+    total = {
+      prompt_tokens: total.prompt_tokens + usage.prompt_tokens,
+      completion_tokens: total.completion_tokens + usage.completion_tokens,
+      total_tokens: total.total_tokens + usage.total_tokens,
+      prompt_cache_hit_tokens: total.prompt_cache_hit_tokens +
+      usage.prompt_cache_hit_tokens,
+      prompt_cache_miss_tokens: total.prompt_cache_miss_tokens +
+      usage.prompt_cache_miss_tokens,
+    }
+  }
+  Some(total)
 }

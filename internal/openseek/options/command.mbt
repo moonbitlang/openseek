@@ -77,6 +77,13 @@ pub fn root_command() -> @argparse.Command {
           // parses and then does nothing — and where an exported
           // OPENSEEK_APPROVAL would have bound commands that cannot honour it.
           approval_option(),
+          // No env binding: an exported path would be inherited by every
+          // child `run`, and siblings would overwrite each other's result.
+          OptionArg(
+            "result-file",
+            long="result-file",
+            about="Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.",
+          ),
         ],
         flags=[
           FlagArg(
