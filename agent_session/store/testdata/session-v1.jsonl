@@ -1,0 +1,19 @@
+{"version":1,"id":"legacy","system_prompt":"You are a test agent."}
+{"sequence":1,"ts":1758700001000,"item":{"kind":"user","payload":{"content":"read the readme","submission_id":"sub-1"}}}
+{"sequence":2,"ts":1758700002000,"item":{"kind":"runtime_notice","payload":{"content":"[plan reminder] keep going"}}}
+{"sequence":3,"ts":1758700003000,"item":{"kind":"assistant","payload":{"content":"","tool_calls":[{"id":"call_1","name":"read","arguments":"{\"path\":\"README.md\"}"}],"reasoning_content":"look first"}}}
+{"sequence":4,"ts":1758700004000,"item":{"kind":"tool_result","payload":{"tool_call_id":"call_1","tool_name":"read","content":"# Title","is_error":false,"brief":"1 line","data":{"lines":1}}}}
+{"sequence":5,"ts":1758700005000,"item":{"kind":"tool_result","payload":{"tool_call_id":"call_2","tool_name":"read","content":"no such file","is_error":true}}}
+{"sequence":6,"ts":1758700006000,"item":{"kind":"assistant","payload":{"content":"The readme has a title.","tool_calls":[]}}}
+{"sequence":7,"ts":1758700007000,"item":{"kind":"terminal","payload":{"kind":"finished","message":"The readme has a title."}}}
+{"sequence":8,"ts":1758700008000,"item":{"kind":"user","payload":{"content":"now do the big task"}}}
+{"sequence":9,"ts":1758700009000,"item":{"kind":"summary","payload":{"content":"read the readme; it has a title","from_sequence":1,"to_sequence":7}}}
+{"sequence":10,"ts":1758700010000,"item":{"kind":"terminal","payload":{"kind":"finished","message":"[context ceiling] This turn reached the model's context window and was checkpointed."}}}
+{"sequence":11,"ts":1758700011000,"item":{"kind":"user","payload":{"content":"continue"}}}
+{"sequence":12,"ts":1758700012000,"item":{"kind":"terminal","payload":{"kind":"failed","message":"max steps exhausted"}}}
+{"sequence":13,"ts":1758700013000,"item":{"kind":"user","payload":{"content":"again"}}}
+{"sequence":14,"ts":1758700014000,"item":{"kind":"terminal","payload":{"kind":"failed","message":"agent failed: boom"}}}
+{"sequence":15,"ts":1758700015000,"item":{"kind":"user","payload":{"content":"stop it"}}}
+{"sequence":16,"ts":1758700016000,"item":{"kind":"terminal","payload":{"kind":"aborted","message":"user asked to stop"}}}
+{"sequence":17,"ts":1758700017000,"item":{"kind":"user","payload":{"content":"one more"}}}
+{"sequence":18,"ts":1758700018000,"item":{"kind":"terminal","payload":{"kind":"interrupted","message":"cancelled"}}}
