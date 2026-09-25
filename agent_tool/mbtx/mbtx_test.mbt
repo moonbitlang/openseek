@@ -2138,3 +2138,30 @@ async test "CI monitor bundled entry forwards arguments before querying GitHub" 
     assert_true(out.content.contains("Expected seconds"), msg=out.content)
   })
 }
+
+///|
+async test "a described call is briefed with its description" {
+  @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+    // A successful run has no brief of its own; the description stands in,
+    // so a transcript line says what the call was for.
+    let ok = run_in(ws, {
+      "source": "fn main { println(1) }",
+      "description": "Print one",
+    })
+    assert_false(ok.is_error)
+    assert_true(ok.brief is Some("Print one"))
+    // A failure keeps its phase marker, which viewers classify by.
+    let failed = run_in(ws, {
+      "source": "fn main { let _x : Int = \"nope\" }",
+      "description": "Break the build",
+    })
+    assert_true(failed.is_error)
+    assert_true(failed.brief is Some("mbtx build"))
+    // A description that is not one short line is not a brief.
+    let long = run_in(ws, {
+      "source": "fn main { println(1) }",
+      "description": "Print one\nthen explain why",
+    })
+    assert_true(long.brief is None)
+  })
+}

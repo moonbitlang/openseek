@@ -1080,7 +1080,10 @@ fn tool_call_view(
     @html.strong(call.name),
     ..if call_brief_display(briefs.get(call.id), failed.contains(call.id))
       is Some(brief) &&
-      !brief.is_blank() {
+      !brief.is_blank() &&
+      // mbtx briefs a successful call with its description, shown next.
+      !(mbtx_description(call) is Some(description) &&
+      description.trim() == brief) {
       [@html.span(class="tool-call-brief") <| " · \{brief}"]
     },
     ..if mbtx_description(call) is Some(description) {

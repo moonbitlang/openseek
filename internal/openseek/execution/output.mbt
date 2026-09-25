@@ -108,15 +108,56 @@ fn TextRenderer::render(
         self.pending = Some(content)
       }
     }
-    // Waiting on a background job is coordination, not work of its own.
-    ToolResult(tool_name="job_wait", is_error=false, ..) => self.flush(progress)
-    ToolResult(tool_name~, is_error=true, content~, ..) => {
+    // Reading, awaiting or stopping a background job is coordination, not
+    // work of its own; the job's own lines below report it.
+    ToolResult(
+      tool_name="job_output"
+      | "job_wait"
+      | "job_stop",
+      is_error=false,
+      ..
+    ) => self.flush(progress)
+    ToolResult(tool_name~, is_error=true, content~, brief~, ..) => {
       self.flush(progress)
-      line(progress, "tool error: \{tool_name}: \{first_line(content)}")
+      let label = brief.unwrap_or(tool_name)
+      line(
+        progress,
+        "tool error: \{label}: \{error_headline(content, tool_name)}",
+      )
     }
     ToolResult(tool_name~, brief~, ..) => {
       self.flush(progress)
-      line(progress, "· \{brief.unwrap_or(tool_name)}")
+      match brief {
+        // The call moved to the background; its job's own line names it.
+        // (The desktop reads the job id from this same brief prefix.)
+        Some(text) if text.has_prefix("mbtx → bg ") => ()
+        // A brief that only repeats the tool name says nothing.
+        Some(text) if text != tool_name => line(progress, "· \{text}")
+        _ => ()
+      }
+    }
+    JobChanged(kind~, job~) => {
+      let label = job.description.unwrap_or(job.command)
+      match (kind, job.state) {
+        // A job starts while its step's tool calls run, so a held message is
+        // that step's commentary and comes first. Later events are not
+        // flushed: a job can end while the final answer is held.
+        (Started, _) => {
+          self.flush(progress)
+          line(progress, "· \{label} (in the background)")
+        }
+        // A job can exit 0 and still fail: its cleanup found unfinished
+        // calls, say. The runtime reports that as `Failed`.
+        (Failed, _) =>
+          line(progress, "tool error: \{label}: \{job_failure(job)}")
+        (Finished, Exited(0)) => line(progress, "· \{label} (finished)")
+        (Finished, Exited(code)) =>
+          line(progress, "tool error: \{label}: exited \{code}")
+        (Finished, Stopped(reason)) =>
+          line(progress, "· \{label} (stopped: \{reason})")
+        (Finished, Interrupted) => line(progress, "· \{label} (interrupted)")
+        _ => ()
+      }
     }
     ToolCallDecodeError(tool_name~, error~, ..) => {
       self.flush(progress)
@@ -203,6 +244,48 @@ fn TextRenderer::continue_hint(self : TextRenderer) -> String {
 fn line(out : StringBuilder, text : String) -> Unit {
   out.write_string(@cli.terminal_safe_line(text, limit=200))
   out.write_char('\n')
+}
+
+///|
+/// Why a background job failed: the first error its record carries, else
+/// how it ended.
+fn job_failure(job : @protocol.JobRecord) -> String {
+  match (job.cleanup_error, job.output_error, job.persistence_error) {
+    (Some(error), _, _) | (_, Some(error), _) | (_, _, Some(error)) =>
+      first_line(error)
+    _ =>
+      match job.state {
+        Exited(code) => "exited \{code}"
+        Stopped(reason) => "stopped: \{reason}"
+        Interrupted => "interrupted"
+        Running | Stopping => "failed"
+      }
+  }
+}
+
+///|
+/// A tool error's reason in a few words: the first line of its output,
+/// without the `[tool: … — explanation]` wrapper some tools put around it.
+/// `[mbtx: BUILD failed (exit 1) — the program never ran; …]` becomes
+/// `BUILD failed (exit 1)`.
+fn error_headline(content : String, tool_name : String) -> String {
+  let headline = first_line(content)
+  let headline = match headline.strip_prefix("[") {
+    Some(inner) =>
+      match inner.strip_suffix("]") {
+        Some(inner) => inner.to_owned()
+        None => headline
+      }
+    None => headline
+  }
+  let headline = match headline.strip_prefix("\{tool_name}: ") {
+    Some(rest) => rest.to_owned()
+    None => headline
+  }
+  match headline.split(" — ").next() {
+    Some(reason) if !reason.is_blank() => reason.to_owned()
+    _ => headline
+  }
 }
 
 ///|

@@ -165,6 +165,7 @@ async fn run_case(
                     // Exercise reading with the checked-in workflow directly.
                     "filename": root + "/share/workflow/read.mbtx",
                     "args": ["sample.mbt:2:3", "note.txt"],
+                    "description": "Read the sample files",
                   })
                 2 => {
                   let outputs = array_field(request, "messages").filter_map(message => {
@@ -481,7 +482,10 @@ async fn run_case(
     assert_eq(text_lines.filter(line => line.trim() != ""), [answer])
     assert_true(!progress_lines.any(line => line.has_prefix("tool error: ")))
     if read {
-      assert_eq(progress_lines.filter(line => line.has_prefix("· ")).length(), 1)
+      // The call's description is its progress line.
+      assert_eq(progress_lines.filter(line => line.has_prefix("· ")), [
+        "· Read the sample files",
+      ])
     }
   } else {
     let finishes = events.filter(e => has_event(e, "agent_finished"))

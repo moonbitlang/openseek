@@ -221,7 +221,7 @@ pub fn definition(
       } else {
         run(None)
       }
-      match (saved.val, action) {
+      let action = match (saved.val, action) {
         (Some(filename), Respond(output)) => {
           // The hint carries `ptc` whenever PTC ran or was explicitly declined,
           // so the re-run lands in the same mode; a defaulted-off run omits it.
@@ -238,9 +238,44 @@ pub fn definition(
         }
         _ => action
       }
+      described(action, input.description)
     }),
   )
 }
+
+///|
+/// Brief a successful call with its own `description`, the model's short
+/// account of what the call is for, when the result has no brief: a
+/// transcript line then says "Search the workspace for lib.mbt" instead of
+/// "mbtx". Only a single line of at most `DescriptionBriefLimit` characters is
+/// used, verbatim, so a viewer that also shows the description can recognize
+/// the brief as that same text and show it once. Failures keep their
+/// `mbtx build` / `mbtx run` phase markers, which viewers classify by.
+fn described(
+  action : @agent_tool.ToolAction,
+  description : String?,
+) -> @agent_tool.ToolAction {
+  guard action is Respond(output) &&
+    !output.is_error &&
+    output.brief is None &&
+    description is Some(description) else {
+    return action
+  }
+  let description = description.trim()
+  guard description != "" &&
+    !description.contains("\n") &&
+    description.char_length() <= DescriptionBriefLimit else {
+    return action
+  }
+  @agent_tool.respond(
+    output.content,
+    brief=description.to_owned(),
+    data?=output.data,
+  )
+}
+
+///|
+const DescriptionBriefLimit : Int = 72
 
 ///|
 /// What the model is told when an escalation did not become a run.

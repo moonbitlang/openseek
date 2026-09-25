@@ -312,6 +312,14 @@ fn tool_request_view(
     Pending(..) => (false, None)
     Snapshot(..) => (false, Some(ui(locale, SnapshotLabel)))
   }
+  // mbtx briefs a successful call with its description, which the label
+  // below appends anyway; such a brief counts as none, so it shows once.
+  let brief = match (brief, card_fields(arguments)) {
+    (Some(text), Some(fields)) if name == "mbtx" &&
+      fields.get("description") is Some(String(description)) &&
+      description.trim() == text => None
+    _ => brief
+  }
   let background_job_id = match (name, is_error, brief) {
     ("mbtx", false, Some(brief)) =>
       match brief.strip_prefix("mbtx → bg ") {

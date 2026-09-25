@@ -192,3 +192,164 @@ test "a blank answer prints nothing instead of borrowing a message" {
     ),
   )
 }
+
+///|
+test "tool lines name what the call did and background jobs read as work" {
+  fn job(
+    state : @protocol.JobState,
+    description : String?,
+  ) -> @protocol.JobRecord {
+    {
+      generation: "g",
+      id: "AaDYX7yddAWvcOUJBd6j4g",
+      revision: 1,
+      command: "mbtx: fn main { … }",
+      description,
+      cwd: None,
+      state,
+      started_at_ms: 0,
+      backgrounded_at_ms: 0,
+      finished_at_ms: None,
+      last_output_at_ms: None,
+      output_file: None,
+      output_persistent: false,
+      output_bytes: 0,
+      output_chars: 0,
+      output_truncated: false,
+      invalid_utf8: false,
+      output_error: None,
+      persistence_error: None,
+      cleanup_error: None,
+      data: None,
+    }
+  }
+
+  let walk = "Walk the tree for lib.mbt"
+  let (_, progress) = render_all([
+    // A brief that is only the tool name, or none at all, prints nothing.
+    ToolResult(
+      tool_call_id="c1",
+      tool_name="mbtx",
+      is_error=false,
+      content="ok",
+      brief=None,
+    ),
+    ToolResult(
+      tool_call_id="c2",
+      tool_name="mbtx",
+      is_error=false,
+      content="ok",
+      brief=Some("mbtx"),
+    ),
+    ToolResult(
+      tool_call_id="c3",
+      tool_name="mbtx",
+      is_error=false,
+      content="ok",
+      brief=Some("Check git status"),
+    ),
+    // A background handoff: the job's lines replace the handoff and polling.
+    JobChanged(kind=Started, job=job(Running, Some(walk))),
+    ToolResult(
+      tool_call_id="c4",
+      tool_name="mbtx",
+      is_error=false,
+      content="moved to the background",
+      brief=Some("mbtx → bg AaDYX7yddAWvcOUJBd6j4g"),
+    ),
+    JobChanged(kind=Updated, job=job(Running, Some(walk))),
+    ToolResult(
+      tool_call_id="c5",
+      tool_name="job_output",
+      is_error=false,
+      content="…",
+      brief=Some("job AaDYX7yddAWvcOUJBd6j4g (running): \{walk}"),
+    ),
+    JobChanged(kind=Finished, job=job(Exited(0), Some(walk))),
+    JobChanged(kind=Finished, job=job(Exited(2), None)),
+    // Exit 0 is not success when the runtime reports the job `Failed`.
+    JobChanged(kind=Failed, job={
+      ..job(Exited(0), Some(walk)),
+      cleanup_error: Some("script exited with unfinished tool calls\nmore"),
+    }),
+    // An error names the call and its reason, without the tool's wrapper.
+    ToolResult(
+      tool_call_id="c6",
+      tool_name="mbtx",
+      is_error=true,
+      content="[mbtx: BUILD failed (exit 1) — the program never ran; the output below is the build's]\nError: x is unbound",
+      brief=Some("mbtx build"),
+    ),
+  ])
+  inspect(
+    progress,
+    content=(
+      #|· Check git status
+      #|· Walk the tree for lib.mbt (in the background)
+      #|· Walk the tree for lib.mbt (finished)
+      #|tool error: mbtx: fn main { … }: exited 2
+      #|tool error: Walk the tree for lib.mbt: script exited with unfinished tool calls
+      #|tool error: mbtx build: BUILD failed (exit 1)
+      #|
+    ),
+  )
+}
+
+///|
+test "commentary before a backgrounded call comes first, the answer stays out" {
+  let job : @protocol.JobRecord = {
+    generation: "g",
+    id: "j1",
+    revision: 1,
+    command: "mbtx: fn main { … }",
+    description: Some("Run the tests"),
+    cwd: None,
+    state: Running,
+    started_at_ms: 0,
+    backgrounded_at_ms: 0,
+    finished_at_ms: None,
+    last_output_at_ms: None,
+    output_file: None,
+    output_persistent: false,
+    output_bytes: 0,
+    output_chars: 0,
+    output_truncated: false,
+    invalid_utf8: false,
+    output_error: None,
+    persistence_error: None,
+    cleanup_error: None,
+    data: None,
+  }
+  let (answer, progress) = render_all([
+    AssistantMessage(content="I will run the tests."),
+    // The runtime reports the job before the call's own result.
+    JobChanged(kind=Started, job~),
+    ToolResult(
+      tool_call_id="c1",
+      tool_name="mbtx",
+      is_error=false,
+      content="moved to the background",
+      brief=Some("mbtx → bg j1"),
+    ),
+    AssistantMessage(content="All tests pass."),
+    // The job ends while the final answer is held; the answer stays stdout's.
+    JobChanged(kind=Finished, job={ ..job, state: Exited(0), }),
+    AgentFinished(answer="All tests pass."),
+  ])
+  inspect(
+    progress,
+    content=(
+      #|I will run the tests.
+      #|· Run the tests (in the background)
+      #|· Run the tests (finished)
+      #|
+    ),
+  )
+  inspect(
+    answer,
+    content=(
+      #|All tests pass.
+      #|
+    ),
+  )
+}
