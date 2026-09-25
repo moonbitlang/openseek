@@ -122,8 +122,10 @@ async fn run_case(
   let snapshot_ready = @cond_var.Cond()
   let mut requests = 0
   let events : Array[Json] = []
-  // `run` prints text for a person, not the JSONL event stream `serve` writes.
+  // `run` prints text for a person, not the JSONL event stream `serve` writes:
+  // the answer on stdout, its progress on stderr.
   let text_lines : Array[String] = []
+  let progress_lines : Array[String] = []
   let environment = { "DEEPSEEK": "test", "OPENSEEK_RETRY_ATTEMPTS": "1" }
   @async.with_timeout(120000, () => {
     @async.with_task_group(group => {
@@ -408,6 +410,11 @@ async fn run_case(
       }
       let code = process.wait()
       let diagnostics = stderr.wait()
+      if !serve {
+        for line in diagnostics.split("\n") {
+          progress_lines.push(line.to_owned())
+        }
+      }
       guard code == 0 else {
         fail(
           "CLI exit \{code}: \{diagnostics}\n\{events.to_json().stringify()}",
@@ -470,12 +477,11 @@ async fn run_case(
     "checked the background result"
   }
   if !serve {
-    // One finished turn: its answer, then its closing summary line.
-    assert_eq(text_lines.filter(line => line.has_prefix("done · ")).length(), 1)
-    assert_true(text_lines.contains(answer))
-    assert_true(!text_lines.any(line => line.has_prefix("tool error: ")))
+    // One finished turn: stdout is its answer alone.
+    assert_eq(text_lines.filter(line => line.trim() != ""), [answer])
+    assert_true(!progress_lines.any(line => line.has_prefix("tool error: ")))
     if read {
-      assert_eq(text_lines.filter(line => line.has_prefix("  ↳ ")).length(), 1)
+      assert_eq(progress_lines.filter(line => line.has_prefix("· ")).length(), 1)
     }
   } else {
     let finishes = events.filter(e => has_event(e, "agent_finished"))

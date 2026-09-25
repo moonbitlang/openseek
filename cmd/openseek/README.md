@@ -17,7 +17,7 @@ process-level error handling. Command parsing, handlers, and shared setup live u
 [`internal/openseek`](../../internal/openseek/README.md).
 
 ```
-openseek run [options] TASK    run one task headlessly; readable progress on stdout
+openseek run [options] TASK    run one task headlessly; answer on stdout, progress on stderr
 openseek serve                 JSONL command server (stdin: prompt/steer/cancel/compact)
 openseek review [--base REF]   read-only code review of REF...HEAD → one JSON report
 openseek mcp                   list configured MCP servers and their tools
@@ -76,8 +76,8 @@ The standalone `openseek review --base REF` command still runs the review
 engine directly, without a workflow.
 
 Every run records a durable session: without `--session`, a generated
-`cli-YYYYMMDD-HHMMSS-mmm` id is used and announced by a `session_started` event
-on stdout, so the conversation is reviewable afterwards with `openseek sessions
+`cli-YYYYMMDD-HHMMSS-mmm` id is used and announced on a `session` line on
+stderr, so the conversation is reviewable afterwards with `openseek sessions
 list` / `openseek sessions show <id>` (or the viz server) and resumable with
 `--session <id>`. Pass `--no-session` to run ephemerally; combining it with
 `--session` is rejected.

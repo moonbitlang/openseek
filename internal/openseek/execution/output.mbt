@@ -13,17 +13,21 @@ pub async fn with_jsonl_stdout(body : async () -> Unit) -> Unit {
 }
 
 ///|
-/// Like `with_jsonl_stdout`, but stdout is text for a person: each event is
-/// rendered by one `TextRenderer` as it arrives, so the answer streams token by
-/// token instead of as one JSON object per token.
-pub async fn with_text_stdout(body : async () -> Unit) -> Unit {
+/// Like `with_jsonl_stdout`, but for a person: the answer goes to stdout and
+/// the run's progress to stderr, each event rendered by one `TextRenderer`.
+/// One drain task writes both streams, so on a terminal that shows both,
+/// their lines keep the events' order.
+pub async fn with_text_output(body : async () -> Unit) -> Unit {
   let renderer = TextRenderer()
   with_stdout_drain(
     () => {
       @emit.drain(event => {
         let text = renderer.render(event)
-        if text != "" {
-          @stdio.stdout.write(text)
+        if text.progress != "" {
+          @stdio.stderr.write(text.progress)
+        }
+        if text.answer != "" {
+          @stdio.stdout.write(text.answer)
         }
       })
     },
@@ -45,227 +49,160 @@ async fn with_stdout_drain(
 }
 
 ///|
-/// Which stream the cursor is in the middle of, so a switch between the
-/// model's reasoning and its answer starts on a fresh, labeled line.
-priv enum Stream {
-  Idle
-  Thinking
-  Answer
-} derive(Eq)
+/// What one event adds to each output stream.
+priv struct Rendered {
+  answer : String
+  progress : String
+}
 
 ///|
-/// Turns the event stream into terminal text. Stateful because the text is
-/// incremental: deltas continue the current line, and a status line has to
-/// first end whatever was streaming. Token counts are summed across steps and
-/// reported once, when the turn ends.
+/// Turns the event stream into minimal text, in the spirit of the desktop's
+/// minimal transcript: stdout gets only the answer, and stderr gets a quiet
+/// line per tool call, failures, and how the run ended. Reasoning, step
+/// numbers, token counts and bookkeeping events stay in the session log.
+///
+/// The answer is printed whole when the turn finishes, not streamed: until
+/// then a model message may still turn out to be intermediate, and stdout
+/// must hold only the answer so `run … > answer.md` captures just that.
 priv struct TextRenderer {
-  mut stream : Stream
-  /// The last write left the cursor mid-line.
-  mut mid_line : Bool
-  /// Answer deltas were printed since the last full message, so that message
-  /// is already on screen.
-  mut answer_streamed : Bool
-  mut last_message : String?
-  /// Fleet attempts share one stdout, so their deltas would interleave
-  /// character by character; a fleet prints whole messages instead.
+  /// The session this run records to, for the hint that names it.
+  mut session : String?
+  /// The latest model message, held back in case it is the answer. If the turn
+  /// goes on instead, it was intermediate and becomes a progress line.
+  mut pending : String?
+  /// Fleet attempts share both streams and their events interleave.
   mut fleet : Bool
-  mut steps : Int
-  mut prompt_tokens : Int
-  mut cached_tokens : Int
-  mut completion_tokens : Int
+  /// Answers printed so far, so a fleet's answers can be told apart.
+  mut answers : Int
 }
 
 ///|
 fn TextRenderer::TextRenderer() -> TextRenderer {
-  {
-    stream: Idle,
-    mid_line: false,
-    answer_streamed: false,
-    last_message: None,
-    fleet: false,
-    steps: 0,
-    prompt_tokens: 0,
-    cached_tokens: 0,
-    completion_tokens: 0,
-  }
+  { session: None, pending: None, fleet: false, answers: 0, }
 }
 
 ///|
-/// The text `event` adds to stdout; empty when it shows nothing.
-fn TextRenderer::render(self : TextRenderer, event : @protocol.Event) -> String {
-  let out = StringBuilder()
+/// The text `event` adds to stdout and stderr; empty when it shows nothing.
+fn TextRenderer::render(
+  self : TextRenderer,
+  event : @protocol.Event,
+) -> Rendered {
+  let answer = StringBuilder()
+  let progress = StringBuilder()
   match event {
-    SessionStarted(session~, session_root~, ..) =>
-      self.line(out, "session \{session} (\{session_root})")
+    SessionStarted(session~, session_root~, ..) => {
+      self.session = Some(session)
+      line(progress, "session \{session} (\{session_root})")
+    }
     FleetStarted(runs~, ..) => {
       self.fleet = true
-      self.line(out, "fleet: \{runs} runs")
+      line(progress, "fleet: \{runs} runs")
     }
-    AgentStep(step~) => {
-      self.steps = step
-      self.line(out, "--- step \{step}")
-    }
-    ReasoningDelta(content~) =>
-      if !self.fleet {
-        self.stream_text(out, Thinking, content)
-      }
-    AssistantDelta(content~) =>
-      if !self.fleet {
-        self.answer_streamed = true
-        self.stream_text(out, Answer, content)
-      }
-    // Reasoning is shown only live; its full-text repeat adds nothing.
-    ReasoningMessage(_) => ()
+    WorkspaceCreated(dir~) => line(progress, "created \{dir}")
+    // A message followed by another step was intermediate.
+    AgentStep(_) => self.flush(progress)
+    // A fleet's attempts interleave, so their messages are never held.
     AssistantMessage(content~) => {
-      self.last_message = Some(content)
-      if self.answer_streamed {
-        self.end_stream(out)
-      } else {
-        self.block(out, content)
+      self.flush(progress)
+      if !content.is_blank() && !self.fleet {
+        self.pending = Some(content)
       }
-      self.answer_streamed = false
     }
-    ToolResult(tool_name~, is_error=true, content~, ..) =>
-      self.line(out, "tool error: \{tool_name}: \{first_line(content)}")
-    ToolResult(tool_name~, brief~, ..) =>
-      self.line(out, "↳ \{brief.unwrap_or(tool_name)}", indent="  ")
-    ToolCallDecodeError(tool_name~, error~, ..) =>
-      self.line(out, "tool error: \{tool_name}: \{error}")
-    Usage(usage~) => {
-      self.prompt_tokens += usage.prompt_tokens
-      self.cached_tokens += usage.prompt_cache_hit_tokens
-      self.completion_tokens += usage.completion_tokens
+    // Waiting on a background job is coordination, not work of its own.
+    ToolResult(tool_name="job_wait", is_error=false, ..) => self.flush(progress)
+    ToolResult(tool_name~, is_error=true, content~, ..) => {
+      self.flush(progress)
+      line(progress, "tool error: \{tool_name}: \{first_line(content)}")
     }
-    StreamRetry(attempt~, max_attempts~, reason~) =>
-      self.line(out, "retrying (\{attempt}/\{max_attempts}): \{reason}")
-    AgentFinished(answer~) => {
-      // The answer is normally the last message, already printed; a `finish`
-      // tool answer has no message, so it is printed here. In a fleet the
-      // last message may be another attempt's, which at worst prints an
-      // answer twice rather than never.
-      if answer != "" && self.last_message != Some(answer) {
-        self.block(out, answer)
+    ToolResult(tool_name~, brief~, ..) => {
+      self.flush(progress)
+      line(progress, "· \{brief.unwrap_or(tool_name)}")
+    }
+    ToolCallDecodeError(tool_name~, error~, ..) => {
+      self.flush(progress)
+      line(progress, "tool error: \{tool_name}: \{error}")
+    }
+    StreamRetry(attempt~, max_attempts~, reason~) => {
+      self.flush(progress)
+      line(progress, "retrying (\{attempt}/\{max_attempts}): \{reason}")
+    }
+    AgentFinished(answer=result) => {
+      // The answer is `result` alone. A `finish`-tool answer arrives with no
+      // message of its own, so a different latest message was intermediate;
+      // a blank answer prints nothing rather than borrowing that message.
+      if self.pending is Some(message) && message != result {
+        self.flush(progress)
       }
-      self.line(out, self.summary("done"))
-    }
-    MaxStepsExhausted =>
-      self.line(out, self.summary("stopped: max steps exhausted"))
-    AgentAborted(reason~) => self.line(out, "aborted: \{reason}")
-    TurnFailed(error~) => self.line(out, "error: \{error}")
-    AgentSetupFailed(error~) => self.line(out, "setup failed: \{error}")
-    // Everything else is rare bookkeeping (goals, compaction, subruns, MCP):
-    // name it and show its fields rather than hand-format each variant.
-    _ =>
-      match event.to_json() {
-        Object(fields) => {
-          let name = match fields.get("event") {
-            Some(String(name)) => name
-            _ => "event"
-          }
-          let rest = Map::from_iter(
-            fields.iter().filter(field => field.0 != "event"),
-          )
-          let detail = if rest.is_empty() {
-            ""
-          } else {
-            " \{Json::object(rest).stringify()}"
-          }
-          self.line(out, "· \{name}\{detail}")
+      self.pending = None
+      let text = result
+      if !text.is_blank() {
+        // A fleet prints one answer per attempt; separate them.
+        if self.answers > 0 {
+          answer.write_string("---\n")
         }
-        _ => ()
+        answer.write_string(terminal_safe_text(text.trim_end()))
+        answer.write_char('\n')
+        self.answers += 1
       }
+    }
+    MaxStepsExhausted => {
+      self.flush(progress)
+      line(progress, "stopped: max steps exhausted\{self.continue_hint()}")
+    }
+    ContextYield(..) => {
+      self.flush(progress)
+      line(
+        progress,
+        "stopped at the model's context window\{self.continue_hint()}",
+      )
+    }
+    AgentAborted(reason~) => {
+      self.flush(progress)
+      line(progress, "aborted: \{reason}")
+    }
+    TurnFailed(error~) => {
+      self.flush(progress)
+      line(progress, "error: \{error}")
+    }
+    AgentSetupFailed(error~) => line(progress, "setup failed: \{error}")
+    McpConnectFailed(server~, ..) =>
+      line(progress, "MCP server `\{server}` failed to connect")
+    McpListToolsFailed(server~, ..) | McpListToolsTimeout(server~) =>
+      line(progress, "MCP server `\{server}` did not list its tools")
+    McpConfigUnreadable(path~, error~) | McpConfigInvalid(path~, error~) =>
+      line(progress, "MCP config error (\{path}): \{error}")
+    McpConfigIgnored(reason~) => line(progress, "MCP config ignored: \{reason}")
+    // Reasoning, deltas, usage, goals, compaction, subruns, jobs and the rest
+    // are in the session log.
+    _ => ()
   }
-  out.to_string()
+  { answer: answer.to_string(), progress: progress.to_string(), }
 }
 
 ///|
-/// Append streamed `text` to `stream`, first ending any other stream's line.
-fn TextRenderer::stream_text(
-  self : TextRenderer,
-  out : StringBuilder,
-  stream : Stream,
-  text : String,
-) -> Unit {
-  // Track the cursor from what is written: a dropped trailing control must
-  // not make a line that ended read as unfinished.
-  let safe = terminal_safe_text(text)
-  if safe == "" {
-    return
+/// Write the pending message as a progress line: the turn went on, so it was
+/// not the answer. A fleet drops it, since attempts' messages interleave.
+fn TextRenderer::flush(self : TextRenderer, progress : StringBuilder) -> Unit {
+  if self.pending is Some(message) && !self.fleet {
+    line(progress, message)
   }
-  if self.stream != stream {
-    let after_thinking = self.stream is Thinking
-    self.end_stream(out)
-    // A blank line between the reasoning and the answer it leads to.
-    if after_thinking && stream is Answer {
-      out.write_char('\n')
-    }
-    if stream is Thinking {
-      out.write_string("thinking: ")
-      self.mid_line = true
-    }
-    self.stream = stream
-  }
-  guard stream is Thinking else {
-    out.write_string(safe)
-    self.mid_line = !safe.has_suffix("\n")
-    return
-  }
-  // Indent every reasoning line after the labeled first one, so only the
-  // answer starts at column 0.
-  for ch in safe {
-    if !self.mid_line && ch != '\n' {
-      out.write_string("  ")
-    }
-    out.write_char(ch)
-    self.mid_line = ch != '\n'
+  self.pending = None
+}
+
+///|
+/// How to pick a stopped run back up, when it recorded a session.
+fn TextRenderer::continue_hint(self : TextRenderer) -> String {
+  match self.session {
+    Some(session) => " · continue with --session \{session}"
+    None => ""
   }
 }
 
 ///|
-/// End whatever is streaming, so the next write starts at column 0.
-fn TextRenderer::end_stream(self : TextRenderer, out : StringBuilder) -> Unit {
-  if self.mid_line {
-    out.write_char('\n')
-    self.mid_line = false
-  }
-  self.stream = Idle
-}
-
-///|
-/// A one-line status: untrusted text collapsed to a terminal-safe line, after a
-/// trusted `indent` (which the collapse would otherwise trim).
-fn TextRenderer::line(
-  self : TextRenderer,
-  out : StringBuilder,
-  text : String,
-  indent? : String = "",
-) -> Unit {
-  self.end_stream(out)
-  out.write_string(indent)
+/// A one-line status: untrusted text collapsed to a terminal-safe line.
+fn line(out : StringBuilder, text : String) -> Unit {
   out.write_string(@cli.terminal_safe_line(text, limit=200))
   out.write_char('\n')
-}
-
-///|
-/// A whole multi-line message, printed when it was not streamed.
-fn TextRenderer::block(
-  self : TextRenderer,
-  out : StringBuilder,
-  text : String,
-) -> Unit {
-  self.end_stream(out)
-  out.write_string(terminal_safe_text(text.trim_end()))
-  out.write_char('\n')
-}
-
-///|
-/// The closing line of a turn. A fleet's counters mix every attempt, so there
-/// it is the bare status; the fleet summary on stderr reports each attempt.
-fn TextRenderer::summary(self : TextRenderer, status : String) -> String {
-  if self.fleet {
-    return status
-  }
-  "\{status} · \{self.steps} step(s) · \{self.prompt_tokens} prompt tokens (\{self.cached_tokens} cached), \{self.completion_tokens} completion"
 }
 
 ///|
@@ -299,112 +236,4 @@ fn is_terminal_control(ch : Char) -> Bool {
   (code < 0x20 && ch != '\n' && ch != '\t') ||
   code == 0x7F ||
   (code >= 0x80 && code <= 0x9F)
-}
-
-///|
-test "text rendering streams the answer and summarizes the turn" {
-  let renderer = TextRenderer()
-  let events : Array[@protocol.Event] = [
-    SessionStarted(
-      session="s1",
-      session_root="/w/.openseek",
-      workspace_root=None,
-    ),
-    AgentStep(step=1),
-    ReasoningDelta(content="hmm\n"),
-    ReasoningDelta(content="let me\nthink"),
-    AssistantDelta(content="Hi"),
-    AssistantDelta(content=" there\u{1b}[31m"),
-    AssistantMessage(content="Hi there"),
-    ToolResult(
-      tool_call_id="c1",
-      tool_name="read",
-      is_error=false,
-      content="body",
-      brief=Some("read moon.mod"),
-    ),
-    ToolResult(
-      tool_call_id="c2",
-      tool_name="edit",
-      is_error=true,
-      content="no match\nfor old_string",
-      brief=None,
-    ),
-    Usage(usage={
-      prompt_tokens: 100,
-      completion_tokens: 7,
-      total_tokens: 107,
-      prompt_cache_hit_tokens: 60,
-      prompt_cache_miss_tokens: 40,
-    }),
-    GoalUpdated(goal=Some("ship")),
-    AgentFinished(answer="Hi there"),
-  ]
-  inspect(
-    events.map(event => renderer.render(event)).join(""),
-    content=(
-      #|session s1 (/w/.openseek)
-      #|--- step 1
-      #|thinking: hmm
-      #|  let me
-      #|  think
-      #|
-      #|Hi there[31m
-      #|  ↳ read moon.mod
-      #|tool error: edit: no match
-      #|· goal_updated {"goal":"ship"}
-      #|done · 1 step(s) · 100 prompt tokens (60 cached), 7 completion
-      #|
-    ),
-  )
-}
-
-///|
-test "fleet text prints whole messages and no mixed per-attempt counts" {
-  let renderer = TextRenderer()
-  let events : Array[@protocol.Event] = [
-    FleetStarted(runs=2, task="t"),
-    ReasoningDelta(content="thinking A"),
-    AssistantDelta(content="A"),
-    Usage(usage={
-      prompt_tokens: 5,
-      completion_tokens: 1,
-      total_tokens: 6,
-      prompt_cache_hit_tokens: 0,
-      prompt_cache_miss_tokens: 5,
-    }),
-    AssistantMessage(content="All of A"),
-    AgentFinished(answer="All of A"),
-    // A `finish`-tool answer arrives with no message of its own.
-    AgentFinished(answer="B via finish"),
-  ]
-  inspect(
-    events.map(event => renderer.render(event)).join(""),
-    content=(
-      #|fleet: 2 runs
-      #|All of A
-      #|done
-      #|B via finish
-      #|done
-      #|
-    ),
-  )
-}
-
-///|
-test "a dropped trailing control does not leave the line open" {
-  let renderer = TextRenderer()
-  let events : Array[@protocol.Event] = [
-    AssistantDelta(content="hello\n\u{1b}"),
-    AssistantDelta(content="\u{1b}"),
-    AgentStep(step=2),
-  ]
-  inspect(
-    events.map(event => renderer.render(event)).join(""),
-    content=(
-      #|hello
-      #|--- step 2
-      #|
-    ),
-  )
 }

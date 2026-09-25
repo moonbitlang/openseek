@@ -1,12 +1,14 @@
 ///|
 /// `openseek run [TASK…]` — a headless one-shot agent run (best-of-N under
-/// `--concurrency`), streaming human-readable progress on stdout.
+/// `--concurrency`): the answer on stdout, minimal progress on stderr.
 pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
   // Why a single run did not complete. Set inside the output scope and
   // raised only after it: raising in there would cancel the drain before
   // the turn's last events reached stdout.
   let mut incomplete : String? = None
-  @execution.with_text_stdout(() => {
+  // A finished fleet, reported after the output scope for the same reason.
+  let mut fleet : FleetResult? = None
+  @execution.with_text_output(() => {
     // --no-session contradicts an explicit --session; reject up front.
     @options.reject_session_contradiction(matches)
     // So is `--approval ask` on a command that reads no commands. Rejected
@@ -38,7 +40,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
           McpConfigIgnored(reason="fleet mode does not support MCP servers"),
         )
       }
-      run_fleet(matches, concurrency~, approval_policy~)
+      fleet = Some(run_fleet(matches, concurrency~, approval_policy~))
       return
     }
     let workspace_root = @setup.prepare_workspace_root(
@@ -129,6 +131,9 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
     }
     incomplete = incomplete_reason(terminal)
   })
+  if fleet is Some(result) {
+    report_fleet(result)
+  }
   // Like fleet mode, whose run fails unless some attempt completed.
   if incomplete is Some(reason) {
     fail("run did not complete: \{reason}")

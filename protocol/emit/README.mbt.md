@@ -93,7 +93,7 @@ Four properties are load-bearing:
   accumulate lines forever in a queue nobody reads. So there is no queue until
   `open` installs one, and `close` uninstalls it before closing it. The one
   place that opens is the one place that spawns the drain
-  (`with_jsonl_stdout` or `with_text_stdout` in the CLI); nothing else has to
+  (`with_jsonl_stdout` or `with_text_output` in the CLI); nothing else has to
   remember to close.
   `open` is synchronous and precedes the spawn, because `spawn_bg` does not
   promise the drain runs before the body's first `emit`.

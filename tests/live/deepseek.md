@@ -9,7 +9,7 @@ export DEEPSEEK=sk-...            # a real provider API key
 moon cram test tests/live
 ```
 
-`openseek run` prints its progress as text for a person. The machine-readable
+`openseek run` prints its answer for a person. The machine-readable
 stream is `openseek serve`: fed one `prompt` command on stdin, it runs that
 turn, exits at stdin EOF, and writes one JSON object per line (JSONL) to
 stdout. Instead of an
@@ -31,16 +31,14 @@ runs may also emit `reasoning_delta` progress before the completed
 may ignore it. Tool-only responses, such as the forced `finish` examples below,
 may skip content events and go straight to tool execution.
 
-## `openseek run` Streams Readable Text
+## `openseek run` Prints The Answer
 
-`run` renders the same events as text: a `session` line when it records, a
-`--- step N` line per model call, the answer as it streams, and a closing
-summary with the turn's token counts.
+`run` prints only the answer on stdout, once the turn finishes. Its progress
+(the session, one line per tool call, and how the run ended) goes to stderr.
 
 ```mooncram
-$ openseek.exe run --no-session --model deepseek-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null \
->   | grep -c '^done · '
-1
+$ openseek.exe run --no-session --model deepseek-flash --max-steps 3 "Call the finish tool immediately with the answer DONE. Use no other tool." 2>/dev/null
+DONE
 ```
 
 ## A Real Round Trip That Finishes

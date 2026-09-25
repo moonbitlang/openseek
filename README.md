@@ -101,7 +101,7 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `moonbitlang/openseek/jsonrpc` | Duplex JSON-RPC 2.0 client (concurrent requests, notifications, out-of-order replies). | — |
 | `moonbitlang/openseek/mcp` (+ `config`, `stdio`, `streamhttp`, `tools`) | MCP client: `mcp.json` decoding, stdio and Streamable HTTP transports, and the bridge that namespaces server tools into the registry. | — |
 | `moonbitlang/openseek/prompt` | Built-in system prompt text (generated from Markdown) and prompt-selection policy. | `prompt/README.mbt.md` |
-| `moonbitlang/openseek_protocol` | Typed engine event stream (own module): the `openseek serve` stdout wire contract (`openseek run` renders it as text), decodable on every backend. | `protocol/README.mbt.md` |
+| `moonbitlang/openseek_protocol` | Typed engine event stream (own module): the `openseek serve` stdout wire contract (`openseek run` renders it as minimal text), decodable on every backend. | `protocol/README.mbt.md` |
 | `moonbitlang/openseek_protocol/emit` | Writer for that stream (native or wasm): owns each event's log level. | `protocol/emit/README.mbt.md` |
 | `moonbitlang/openseek/agent` | OpenSeek agent loop (native or wasm) and local tool dispatch. | `agent/README.mbt.md` |
 | `moonbitlang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind `openseek review`. | `agent_review/README.mbt.md` |
@@ -172,6 +172,25 @@ command runner, spawning processes through the shell-free
 `job_output` and `job_stop` watching anything it detaches as a background job —
 plus `edit`, `multi_edit`, `write`, `remove`, `plan`, `goal`, and
 `finish`. There is no shell tool, so no command ever goes through a shell.
+
+To run it on your own project without installing anything, `moonx` fetches the
+published package and runs it in the current directory:
+
+```bash
+export DEEPSEEK=sk-...
+cd path/to/your/project
+moonx moonbitlang/openseek run "inspect this project and finish with a short summary"
+```
+
+`run` prints only the answer on stdout, so `… run "…" > answer.md` saves just
+the answer. Its progress goes to stderr: the session id, one line per tool
+call, and how the run ended. The full record (reasoning, every tool call and
+its output, token usage) is the session log. A run that stops early exits
+non-zero and names the session to continue with `--session <id>`.
+
+From a checkout of this repository, `moon run . --` runs the same CLI; pass
+`--dir` to point it at another project, since it works in the current
+directory:
 
 ```bash
 export DEEPSEEK=sk-...

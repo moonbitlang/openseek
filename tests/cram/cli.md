@@ -25,7 +25,7 @@ Usage: openseek [options] <command>
 DeepSeek-backed MoonBit coding agent (headless automation CLI).
 
 Commands:
-  run       Run one task headlessly; stream its progress as text on stdout.
+  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
   serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
   mcp       List configured MCP servers and the tools they expose.
   review    Read-only code review of base...HEAD; prints a JSON ReviewReport.
@@ -127,7 +127,7 @@ behind a headless run.
 $ openseek.exe run --help
 Usage: openseek run [options] [task...]
 
-Run one task headlessly; stream its progress as text on stdout.
+Run one task headlessly; print its answer on stdout and its progress on stderr.
 
 Arguments:
   task...  Task description.
@@ -289,19 +289,22 @@ budget, and the suite's runtime should not track its default.
 $ sh <<'EOF'
 > tmp=$(mktemp -d)
 > cd "$tmp"
-> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" "say hi" > out.txt 2>/dev/null; then echo exit-zero; else echo exit-non-zero; fi
-> grep -c '^session cli-' out.txt
+> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" "say hi" > out.txt 2> err.txt; then echo exit-zero; else echo exit-non-zero; fi
+> grep -c '^session cli-' err.txt
+> wc -c < out.txt | tr -d ' '
 > env -u DEEPSEEK openseek.exe sessions list | cut -f1 | sed -E 's/cli-[0-9]{8}-[0-9]{6}-[0-9]{3}(-[A-Za-z0-9]+)?/cli-<stamp>/'
 > rm -rf "$tmp"
 > EOF
 exit-non-zero
 1
+0
 cli-<stamp>
 ```
 
-The stdout stream is rendered from the event stream, not from a log: events
-reach stdout through their own writer, and the engine links no logger at all,
-so a logging environment variable cannot silence them. This case guards against the stream
+`run`'s output is rendered from the event stream, not from a log: events reach
+the terminal through their own writer, and the engine links no logger at all,
+so a logging environment variable cannot silence them. The session line on
+stderr is one such event. This case guards against the stream
 ever being routed back through one: once, events went through `@xlog`, and
 `MOON_XLOG=warn` dropped the whole stream — a TUI attached to that engine
 rendered nothing with no error to explain it.
@@ -311,8 +314,8 @@ $ sh <<'EOF'
 > tmp=$(mktemp -d)
 > cd "$tmp"
 > for level in warn error; do
->   env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 MOON_XLOG=$level openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" --dir "$tmp/$level" "say hi" > "out-$level.txt" 2>/dev/null
->   echo "$level: $(grep -c '^--- step ' "out-$level.txt")"
+>   env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 MOON_XLOG=$level openseek.exe run --api-url "http://127.0.0.1:9/chat/completions" --dir "$tmp/$level" "say hi" > /dev/null 2> "err-$level.txt"
+>   echo "$level: $(grep -c '^session cli-' "err-$level.txt")"
 > done
 > rm -rf "$tmp"
 > EOF
@@ -338,16 +341,16 @@ ephemeral
 
 `--dir` defaults to `.`, but it can point a run at another workspace. When the
 final path component is missing and the parent exists, OpenSeek creates that one
-directory, logs `workspace_created`, and resolves the default session root under
+directory, reports it on stderr, and resolves the default session root under
 it.
 
 ```mooncram
 $ sh <<'EOF'
 > tmp=$(mktemp -d)
 > mkdir -p "$tmp/parent"
-> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --dir "$tmp/parent/new" --api-url "http://127.0.0.1:9/chat/completions" "say hi" > "$tmp/out.txt" 2>/dev/null; then echo exit-zero; else echo exit-non-zero; fi
+> if env DEEPSEEK=test-key OPENSEEK_RETRY_ATTEMPTS=1 openseek.exe run --dir "$tmp/parent/new" --api-url "http://127.0.0.1:9/chat/completions" "say hi" > /dev/null 2> "$tmp/err.txt"; then echo exit-zero; else echo exit-non-zero; fi
 > if test -d "$tmp/parent/new"; then echo dir-created; else echo dir-missing; fi
-> grep -c '^· workspace_created ' "$tmp/out.txt"
+> grep -c '^created ' "$tmp/err.txt"
 > env -u DEEPSEEK openseek.exe sessions list --dir "$tmp/parent/new" | cut -f1 | sed -E 's/cli-[0-9]{8}-[0-9]{6}-[0-9]{3}(-[A-Za-z0-9]+)?/cli-<stamp>/'
 > env -u DEEPSEEK openseek.exe sessions list --dir "$tmp/parent/fresh" > "$tmp/session-list.out"
 > if test -d "$tmp/parent/fresh"; then echo session-dir-created; else echo session-dir-missing; fi

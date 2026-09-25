@@ -1,8 +1,9 @@
 ///|
 /// "Best-of-N" fleet mode (`--concurrency N`, any explicit N including 1): run
 /// the same task in N sibling copies of `--dir` concurrently, each recording
-/// its own durable session, then print a summary. The original `--dir` is
-/// never written to.
+/// its own durable session. The original `--dir` is never written to. Returns
+/// the attempts for `report_fleet`, which the caller runs once the event
+/// output has drained: the summary shares stderr with that drain.
 ///
 /// Naming uses `<base>_run_<i>` (underscores, not a dotted suffix that reads as a
 /// file extension) so the run directories are unambiguous and easy to recognize.
@@ -10,7 +11,7 @@ async fn run_fleet(
   matches : @argparse.Matches,
   concurrency~ : Int,
   approval_policy~ : @execution.ApprovalPolicy,
-) -> Unit {
+) -> FleetResult {
   // Fleet mode owns session creation and is a one-shot batch, so it conflicts
   // with the single-session and no-session modes of `openseek run`.
   guard !(matches is { flags: { "no-session": true, .. }, .. }) else {
@@ -95,9 +96,25 @@ async fn run_fleet(
       )
     }
   })
-  print_fleet_summary(task, outcomes, session_root_value)
-  guard outcomes.any(outcome => outcome is Some(result) && result.ok) else {
-    fail("all \{concurrency} run(s) failed")
+  { task, outcomes, session_root_value, }
+}
+
+///|
+/// A finished fleet, for its summary.
+priv struct FleetResult {
+  task : String
+  outcomes : Array[AttemptOutcome?]
+  session_root_value : String
+}
+
+///|
+/// Print the fleet summary, then fail unless some attempt finished. Run it
+/// only after the event output has drained: both write to stderr, and the
+/// failure would otherwise cancel the drain.
+async fn report_fleet(result : FleetResult) -> Unit {
+  print_fleet_summary(result.task, result.outcomes, result.session_root_value)
+  guard result.outcomes.any(outcome => outcome is Some(attempt) && attempt.ok) else {
+    fail("all \{result.outcomes.length()} run(s) failed")
   }
 }
 
@@ -363,8 +380,8 @@ fn inspect_hint(session_root_value : String) -> String {
 }
 
 ///|
-/// Print the fleet summary to stderr (stdout stays the JSONL event stream): a
-/// header line plus one row per attempt, and where to view the results.
+/// Print the fleet summary to stderr (stdout holds only the answers): a header
+/// line plus one row per attempt, and where to view the results.
 async fn print_fleet_summary(
   task : String,
   outcomes : Array[AttemptOutcome?],
