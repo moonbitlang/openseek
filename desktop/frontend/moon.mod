@@ -3,7 +3,7 @@ name = "openseek_desktop/frontend"
 version = "0.1.5"
 
 import {
-  "moonbitlang/openseek_protocol@0.1.2",
+  "moonbitlang/openseek_protocol@0.2.0",
   "moonbit-community/cmark@0.4.5",
   "moonbit-community/fuzzy_match@0.2.6",
   "moonbit-community/rabbita@0.16.3",

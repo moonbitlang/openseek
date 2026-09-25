@@ -4,7 +4,7 @@ version = "0.1.5"
 
 import {
   "moonbitlang/jsonl@0.2.0",
-  "moonbitlang/openseek_protocol@0.1.2",
+  "moonbitlang/openseek_protocol@0.2.0",
   "moonbit-community/pty@0.4.1",
   "moonbit-community/flate@0.7.1",
   "moonbitlang/x@0.4.50",
