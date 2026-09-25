@@ -200,6 +200,33 @@ error: an API key is required for deepseek-flash: pass --api-key
 stdout-empty
 ```
 
+## A Result File Says How the Run Ended
+
+`--result-file PATH` writes one JSON object when the run is over, whether it
+succeeded or not; `docs/run-result.md` is the full contract. A stale file at
+`PATH` is replaced. The result is written even when stderr cannot be written
+(the second run creates a new workspace and fails reporting it), since a
+parent reads the file, not the streams.
+
+```mooncram
+$ sh <<'EOF'
+> dir=$(mktemp -d)
+> echo stale > "$dir/result.json"
+> env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --no-session --dir "$dir/ws" --result-file "$dir/result.json" task > /dev/null 2>&1
+> echo "exit $?"
+> cat "$dir/result.json"
+> rm "$dir/result.json"
+> env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --no-session --dir "$dir/ws2" --result-file "$dir/result.json" task > /dev/null 2< /dev/null
+> echo "exit $?"
+> cat "$dir/result.json"
+> rm -rf "$dir"
+> EOF
+exit 1
+{"version":1,"status":"failed","reason":"an API key is required for deepseek-flash: pass --api-key"}
+exit 1
+{"version":1,"status":"failed","reason":"an API key is required for deepseek-flash: pass --api-key"}
+```
+
 ## Unknown Options Are Rejected Before Task Text
 
 The task is free-form after option parsing has stopped, but a leading

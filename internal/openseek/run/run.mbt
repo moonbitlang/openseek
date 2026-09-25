@@ -15,8 +15,8 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
   // (success or failure) to say how the run ended.
   let turn = TurnRecord::{ session: None, started_after: 0, latest: None, }
   // Why the run failed. It is set inside the output scope but acted on only
-  // after it: an error escaping the scope would
-  // cancel the drain before the run's last events reached stdout and stderr.
+  // after it: an error escaping the body would cancel the drain before the
+  // run's last events reached stdout and stderr.
   let mut failure : Error? = None
   @execution.with_text_output(() => {
     try {
@@ -128,7 +128,11 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
     } catch {
       error => failure = Some(error)
     }
-  })
+  }) catch {
+    // Writing stdout or stderr failed. The run cannot report through them,
+    // but it still owes its result file.
+    error => if failure is None { failure = Some(error) }
+  }
   let status = turn.status(failure~)
   if result_file is Some(path) {
     write_result_file(path, {
