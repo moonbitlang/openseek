@@ -318,70 +318,47 @@ fn Session::final_message(self : Session) -> Json {
 }
 
 ///|
-/// Provider usage summed over an engine log.
-async fn usage(log : String) -> Json {
-  usage_of(read_text(log))
+/// Provider usage summed over one trial. Engines since openseek#1773 save
+/// each response's usage on its `assistant` journal item, so the journal also
+/// counts a trial that was killed, aborted or yielded mid-run. Older engines
+/// under comparison saved none there but streamed JSONL `usage` events into
+/// `log`. `null` when neither reports any.
+async fn usage(workspace : String, name : String, log : String) -> Json {
+  // An unreadable journal already fails the trial's analysis; usage then
+  // falls back to the log.
+  let items = session_items(workspace, session_name=name) catch { _ => [] }
+  usage_of(items, read_text(log))
 }
 
 ///|
-/// Provider usage in engine log `text`: `openseek run` ends a turn with one
-/// text summary line (`done · 2 step(s) · 100 prompt tokens (60 cached), 7
-/// completion`); engines built before it streamed JSONL `usage` events, and
-/// the eval compares both. `null` when the log reports none.
-fn usage_of(text : String) -> Json {
+fn usage_of(items : Array[Json], log : String) -> Json {
   let mut totals : Map[String, Double]? = None
-  fn add(counts : Array[(String, Double)]) {
+  fn add(fields : Map[String, Json]) {
     let sums = totals.unwrap_or({})
     totals = Some(sums)
-    for count in counts {
-      sums[count.0] = sums.get(count.0).unwrap_or(0.0) + count.1
+    for key, value in fields {
+      if value is Number(count, ..) {
+        sums[key] = sums.get(key).unwrap_or(0.0) + count
+      }
     }
   }
-  for line in text.split("\n") {
-    if summary_usage(line) is Some((prompt, cached, completion)) {
-      add([
-        ("prompt_tokens", prompt),
-        ("completion_tokens", completion),
-        ("total_tokens", prompt + completion),
-        ("prompt_cache_hit_tokens", cached),
-        ("prompt_cache_miss_tokens", prompt - cached),
-      ])
-      continue
+  for item in items {
+    if item
+      is { "kind": "assistant", "payload": { "usage": Object(fields), .. }, .. } {
+      add(fields)
     }
-    let event = @json.parse(line.to_owned()) catch { _ => continue }
-    guard event is { "event": "usage", "usage": Object(fields), .. } else {
-      continue
+  }
+  if totals is None {
+    for line in log.split("\n") {
+      let event = @json.parse(line.to_owned()) catch { _ => continue }
+      if event is { "event": "usage", "usage": Object(fields), .. } {
+        add(fields)
+      }
     }
-    add(
-      fields
-      .iter()
-      .filter_map(field => {
-        guard field.1 is Number(value, ..) else { None }
-        Some((field.0, value))
-      })
-      .collect(),
-    )
   }
   match totals {
     Some(sums) => sums.to_json()
     None => Json::null()
-  }
-}
-
-///|
-/// `(prompt, cached, completion)` from a `run` summary line, which ends a
-/// turn as `done` or `stopped: …`.
-fn summary_usage(line : StringView) -> (Double, Double, Double)? {
-  guard line.split(" · ").collect() is [status, _, tokens] &&
-    (status == "done" || status.has_prefix("stopped: ")) &&
-    tokens.strip_suffix(" completion") is Some(tokens) &&
-    tokens.split(" prompt tokens (").collect() is [prompt, rest] &&
-    rest.split(" cached), ").collect() is [cached, completion] else {
-    return None
-  }
-  let parse = (text : StringView) => @string.parse_int(text).to_double()
-  Some((parse(prompt), parse(cached), parse(completion))) catch {
-    _ => None
   }
 }
 
@@ -764,7 +741,7 @@ async fn trial(
       result["failures"] = [error_message(error)].to_json()
     }
   }
-  result["usage"] = usage(log)
+  result["usage"] = usage(workspace, name, log)
   let result = result.to_json()
   write_json("\{out}/\{name}.json", result)
   println(result.stringify())
@@ -801,7 +778,7 @@ async fn reanalyze(out : String) -> Unit {
     for key, value in analysis {
       result[key] = value
     }
-    result["usage"] = usage("\{out}/\{name}.log")
+    result["usage"] = usage(workspace, name, "\{out}/\{name}.log")
     write_json("\{out}/\{file}", result.to_json())
     results.push(result.to_json())
   }
@@ -1580,7 +1557,7 @@ async fn yaml_analyze_trial(
   let session = Session::new(session_items(workspace, session_name=name))
   session.metrics(result)
   result["final"] = session.terminals.last().unwrap_or(Json::null())
-  result["usage"] = usage(log)
+  result["usage"] = usage(workspace, name, log)
   let children = []
   @fs.walk(workspace, (directory, entries) => {
     for entry in entries {
@@ -2282,29 +2259,36 @@ async test "deleted protected fixture is a failure not a crash" {
 }
 
 ///|
-test "usage reads the run summary line and older JSONL usage events" {
-  assert_eq(
-    usage_of(
-      "--- step 1\nDONE\ndone · 2 step(s) · 100 prompt tokens (60 cached), 7 completion\n",
-    ),
-    {
-      "prompt_tokens": 100.0,
-      "completion_tokens": 7.0,
-      "total_tokens": 107.0,
-      "prompt_cache_hit_tokens": 60.0,
-      "prompt_cache_miss_tokens": 40.0,
-    },
-  )
+test "usage sums the journal, else older JSONL usage events" {
+  let usage : Json = {
+    "prompt_tokens": 100,
+    "completion_tokens": 7,
+    "total_tokens": 107,
+    "prompt_cache_hit_tokens": 60,
+    "prompt_cache_miss_tokens": 40,
+  }
+  // A trial cut off before any terminal still counts the responses it paid
+  // for; replays and other items carry no usage.
+  let items : Array[Json] = [
+    { "kind": "user", "payload": { "content": "task" } },
+    { "kind": "assistant", "payload": { "content": "", "usage": usage } },
+    { "kind": "tool_result", "payload": { "content": "ok" } },
+    { "kind": "assistant", "payload": { "content": "more", "usage": usage } },
+    { "kind": "assistant", "payload": { "content": "replay", "is_replay": true } },
+  ]
   let event = "{\"event\":\"usage\",\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1}}"
-  assert_eq(usage_of("\{event}\n\{event}\n42\n"), {
+  // The journal wins over the log when it records usage.
+  assert_eq(usage_of(items, "\{event}\n"), {
+    "prompt_tokens": 200.0,
+    "completion_tokens": 14.0,
+    "total_tokens": 214.0,
+    "prompt_cache_hit_tokens": 120.0,
+    "prompt_cache_miss_tokens": 80.0,
+  })
+  // An older engine: no usage in the journal, JSONL events in the log.
+  assert_eq(usage_of([], "\{event}\n\{event}\n42\n"), {
     "prompt_tokens": 6.0,
     "completion_tokens": 2.0,
   })
-  assert_eq(usage_of("error: connection refused\n"), Json::null())
-  assert_eq(
-    summary_usage(
-      "done · 1 step(s) · x prompt tokens (1 cached), 1 completion",
-    ),
-    None,
-  )
+  assert_eq(usage_of([], "error: connection refused\n"), Json::null())
 }
