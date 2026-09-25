@@ -1798,9 +1798,11 @@ test('sidebar menu dismissal and pending selection follow the clicked row', asyn
   await expect(page.getByRole('menu', { name: 'Workspace actions' })).toBeVisible();
 
   const first = page.locator('.conversation-row[title="session-1"]');
-  // Click the title, not a fixed offset: the row's right end is the
-  // hover-revealed archive button, and the row's width is platform-dependent.
-  await first.locator('.sidebar-label').click();
+  // The menu opens at the pointer and can cover the rows below it, so click
+  // the row's leading padding, left of where the menu starts. Not its right
+  // end: that is the hover-revealed archive button, and the row's width is
+  // platform-dependent.
+  await first.click({ position: { x: 4, y: 10 } });
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(first).toHaveClass(/active/);
   await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
