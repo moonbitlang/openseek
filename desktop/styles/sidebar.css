@@ -70,7 +70,7 @@ html.is-resizing .sidebar-resize-handle {
 }
 .sidebar-section {
   display: grid;
-  gap: 4px;
+  gap: 1px;
   min-width: 0;
   /* The outer scroll lane owns the right inset — its gutter and padding add
      up to `--sidebar-inset` between them. Keep only the matching left inset
@@ -138,7 +138,7 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  min-height: 32px;
+  min-height: 28px;
   padding: 0 8px;
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
@@ -300,7 +300,7 @@ html.is-resizing .sidebar-resize-handle {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: 28px;
   margin-bottom: 2px;
   border-radius: var(--radius-sm);
   font-size: var(--font-size-md);
@@ -309,7 +309,7 @@ html.is-resizing .sidebar-resize-handle {
   text-transform: none;
 }
 .section-heading:not(:first-child) {
-  margin-top: 18px;
+  margin-top: 10px;
 }
 .section-disclosure {
   display: flex;
@@ -317,7 +317,7 @@ html.is-resizing .sidebar-resize-handle {
   gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 32px;
+  min-height: 28px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -371,7 +371,7 @@ html.is-resizing .sidebar-resize-handle {
    action menu or starting a chat cannot also toggle the project. */
 .conversation-row + .workspace-row,
 .project-show-more + .workspace-row {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .workspace-row {
@@ -379,7 +379,7 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  min-height: 32px;
+  min-height: 28px;
   padding: 0 8px;
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
@@ -460,15 +460,18 @@ html.is-resizing .sidebar-resize-handle {
   --icon-size: var(--icon-sm);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  box-sizing: border-box;
+  /* Same box as `.composer-model`, so the toolbar chips sit at one height. */
+  height: 30px;
   margin: 0;
-  padding: 1px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-text-muted);
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-control-surface);
+  color: var(--color-text-secondary);
   font: inherit;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
   white-space: nowrap;
 }
@@ -476,11 +479,10 @@ button.composer-worktree {
   cursor: pointer;
 }
 button.composer-worktree:hover {
-  border-color: var(--color-accent-border);
+  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
 .composer-worktree.on {
-  border-color: var(--color-accent-border);
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);
 }
@@ -494,7 +496,7 @@ button.composer-worktree:hover {
 .section-show-more,
 .project-show-more {
   width: 100%;
-  min-height: 28px;
+  min-height: 26px;
   padding: 0 8px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -1145,7 +1147,7 @@ button.row-twisty:hover {
 
 .sidebar-footer {
   display: grid;
-  gap: 8px;
+  gap: 1px;
   min-width: 0;
   padding: 0 var(--sidebar-inset);
 }
@@ -1157,7 +1159,7 @@ button.row-twisty:hover {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  min-height: 34px;
+  min-height: 28px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;

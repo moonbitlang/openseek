@@ -1,9 +1,8 @@
 
 /* ---------- composer ---------- */
 .composer {
-  border-top: 1px solid var(--color-separator);
   background: var(--color-bg-canvas);
-  padding: 16px 24px 18px;
+  padding: 6px 24px 14px;
 }
 
 /* Caller-owned notices and approval panels remain a stable DOM sibling above
@@ -137,10 +136,6 @@
   flex: 0 1 auto;
   /* 16px mobile text at 1.6 line-height plus the vertical padding is 33.6px. */
   min-height: 34px;
-}
-
-.content.terminal-open .composer-toolbar {
-  padding-top: 4px;
 }
 
 /* mention chips ($ skills, # symbols) above the textarea; the tray is
@@ -585,8 +580,6 @@
   align-items: center;
   /* Match the input's grid-item opt-out so the status row can shrink too. */
   min-width: 0;
-  padding-top: 8px;
-  border-top: 1px solid var(--color-border-subtle);
 }
 
 .composer-controls {
@@ -941,15 +934,22 @@
 }
 
 .composer-attach {
+  box-sizing: border-box;
+  height: 30px;
   border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0;
+  padding: 0 9px;
   position: relative;
   display: inline-flex;
   align-items: center;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   cursor: pointer;
+}
+.composer-attach:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
 }
 .composer-attach:focus-within {
   outline: 2px solid var(--color-text-primary);

@@ -47,7 +47,6 @@ pub(all) struct Input {
   can_start : Bool
   managed : Bool
   conversations : Array[@conversation.Input]
-  empty_label : String?
 } derive(Debug, Eq)
 
 ///|
@@ -300,18 +299,6 @@ pub fn component(
       ),
     ]
     if collapsed {
-      return rows
-    }
-    if conversation_rows.length() == 0 && input.empty_label is Some(label) {
-      rows.push(
-        (
-          "\{input.id.key()}:empty",
-          @html.div(class="conversation-row placeholder nested", [
-            @html.span(class="row-twisty spacer", ""),
-            @html.span(class="sidebar-label", label),
-          ]),
-        ),
-      )
       return rows
     }
     for index = 0; index < conversation_rows.length(); index = index + 1 {

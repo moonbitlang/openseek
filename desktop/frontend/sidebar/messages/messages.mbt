@@ -5,7 +5,6 @@
 pub(all) enum Message {
   Chats
   Projects
-  NoChats
   NewChat
   CreatingChat
   AddProject
@@ -45,11 +44,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, Projects) => "项目"
     (TraditionalChinese, Projects) => "專案"
     (Japanese, Projects) => "プロジェクト"
-    (English, NoChats) => "No chats yet"
-    (Spanish, NoChats) => "Aún no hay conversaciones"
-    (SimplifiedChinese, NoChats) => "暂无对话"
-    (TraditionalChinese, NoChats) => "暫無對話"
-    (Japanese, NoChats) => "チャットはありません"
     (English, NewChat) => "New chat"
     (Spanish, NewChat) => "Nueva conversación"
     (SimplifiedChinese, NewChat) => "新建对话"

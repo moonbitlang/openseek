@@ -48,7 +48,6 @@ pub(all) struct Input {
   can_start : Bool
   managed : Bool
   conversations : Array[@conversation.Input]
-  empty_label : String?
 } derive(Eq, @debug.Debug)
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::id(Self) -> Id

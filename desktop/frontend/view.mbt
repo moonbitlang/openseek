@@ -503,7 +503,6 @@ fn Model::sidebar_component_sections(
         can_start: true,
         managed: true,
         conversations,
-        empty_label: Some(@sidebar_messages.text(self.locale, NoChats)),
       }),
     )
   }

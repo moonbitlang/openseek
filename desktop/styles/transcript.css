@@ -892,7 +892,9 @@
   border-radius: var(--radius-xs);
   background: var(--color-bg-subtle);
   color: inherit;
-  border: 1px solid var(--color-border-subtle);
+  /* Tone alone marks code in prose; the transparent edge keeps the geometry
+     a file link's accent border recolors. */
+  border: 1px solid transparent;
   padding: 0.08em 0.34em;
   font-size: 0.92em;
   overflow-wrap: anywhere;
