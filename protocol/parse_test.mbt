@@ -216,6 +216,18 @@ test "a fractional usage counter is rejected, not truncated" {
 }
 
 ///|
+test "a negative usage counter is rejected" {
+  assert_eq(
+    decode(
+      (
+        #|{"event":"usage","usage":{"prompt_tokens":-1,"completion_tokens":2,"total_tokens":3,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":1}}
+      ),
+    ),
+    None,
+  )
+}
+
+///|
 /// Keys the decoder does not know are ignored. An engine older than this
 /// package wrote every event through `@xlog`, so its lines carry the logger's
 /// envelope (`timestamp`, `level`, `source`); a client built against the
