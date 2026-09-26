@@ -240,16 +240,7 @@ test "a context-yield turn chains: finished derivation and standing goal" {
     fail("the goal must survive the checkpoint")
   }
   assert_eq(goal.text(), "big objective")
-  assert_true(
-    should_auto_continue(
-      auto=true,
-      finished~,
-      idle=true,
-      shutting_down=false,
-      goal_standing=true,
-      turns_remaining=1,
-    ),
-  )
+  assert_true(auto_continues(finished~))
 }
 
 ///|
@@ -270,31 +261,13 @@ test "an unblocked goal resumes auto-continuation at the boundary" {
   }
   // While blocked, the boundary does NOT auto-continue.
   assert_false(goal_standing(base))
-  assert_false(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=goal_standing(base),
-      turns_remaining=1,
-    ),
-  )
+  assert_false(auto_continues(goal_standing=goal_standing(base)))
   // After the unblock marker lands, the same boundary resumes.
   let resumed = base.append(
     Runtime(RuntimeNotice(@agent_session.GoalUnblockedNotice)),
   )
   assert_true(goal_standing(resumed))
-  assert_true(
-    should_auto_continue(
-      auto=true,
-      finished=true,
-      idle=true,
-      shutting_down=false,
-      goal_standing=goal_standing(resumed),
-      turns_remaining=1,
-    ),
-  )
+  assert_true(auto_continues(goal_standing=goal_standing(resumed)))
 }
 
 ///|
