@@ -60,6 +60,16 @@ prompt:
 check-prompt:
     moon run scripts/md_to_mbt_string -- --check prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
 
+# Regenerate the session types from agent_session/session.schema.json.
+gen-session-types:
+    moonx bobzhang/typify/cmd/typify@0.2.0 agent_session/session.schema.json --lang moonbit --preserve-order --moonbit-config agent_session/session_types.moonbit.json -o agent_session/session_types.mbt
+    moonx bobzhang/typify/cmd/typify@0.2.0 agent_session/session.schema.json --lang moonbit --preserve-order --moonbit-config agent_session/log/header_record.moonbit.json -o agent_session/log/header_record.mbt
+
+# Fail if the generated session types are out of date with their schema.
+check-session-types:
+    moonx bobzhang/typify/cmd/typify@0.2.0 agent_session/session.schema.json --lang moonbit --preserve-order --moonbit-config agent_session/session_types.moonbit.json -o - | diff -q - agent_session/session_types.mbt
+    moonx bobzhang/typify/cmd/typify@0.2.0 agent_session/session.schema.json --lang moonbit --preserve-order --moonbit-config agent_session/log/header_record.moonbit.json -o - | diff -q - agent_session/log/header_record.mbt
+
 # Import the latest markdown build (or a specified commit) and regenerate the prompt.
 update-docs commit="latest":
     moon run scripts/update-moonbit-docs.mbtx {{quote(commit)}}

@@ -9,7 +9,7 @@
 /// default for pure in-memory `Session::append` and `append_event` calls. The
 /// filesystem store always passes a real wall-clock timestamp.
 pub fn SessionEvent::unix_ms(self : SessionEvent) -> Int64 {
-  self.ts.to_int64()
+  self.ts
 }
 
 ///|

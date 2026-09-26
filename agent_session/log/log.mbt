@@ -27,6 +27,20 @@ pub impl ToJson for SessionFileHeader with fn to_json(
 }
 
 ///|
+/// Encode a header record as a session file's first line (without the
+/// newline), as `agent_session/wire/session.schema.json` describes it.
+pub fn SessionFileHeader::to_json_line(self : SessionFileHeader) -> String {
+  let record : HeaderRecord = {
+    version: session_file_version,
+    id: self.id,
+    system_prompt: self.system_prompt,
+  }
+  record.to_json_string() catch {
+    error => abort("session header encoding failed: \{error}")
+  }
+}
+
+///|
 /// How a would-be header record classified. `UnsupportedVersion` is kept
 /// distinct from `NotHeader` so a reader confronted with a file written by a
 /// newer format can say so, instead of misreporting it as a file that has no

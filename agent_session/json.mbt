@@ -133,58 +133,6 @@ pub impl FromJson for TurnTerminal with fn from_json(
 }
 
 ///|
-/// Encode a `SessionItem` as a tagged payload object.
-///
-/// The JSON shape is `{ "kind": <tag>, "payload": <variant-json> }`. Tags are
-/// stable storage strings such as `user`, `assistant`, `tool_result`,
-/// `runtime_notice`, `summary`, and `terminal`.
-impl ToJson for SessionItem with fn to_json(item : SessionItem) -> Json {
-  let (kind, payload) = match item {
-    User(message) => ("user", ToJson::to_json(message))
-    Assistant(message) => ("assistant", ToJson::to_json(message))
-    Tool(result) => ("tool_result", ToJson::to_json(result))
-    Runtime(notice) => ("runtime_notice", ToJson::to_json(notice))
-    Summary(summary) => ("summary", ToJson::to_json(summary))
-    Terminal(terminal) => ("terminal", ToJson::to_json(terminal))
-  }
-  { "kind": kind, "payload": payload }
-}
-
-///|
-/// Decode a tagged `SessionItem`.
-///
-/// The decoder requires both `kind` and `payload`. Unknown tags raise
-/// `JsonDecodeError`; they are not ignored because the event log must replay to
-/// the exact durable event vocabulary understood by this package.
-pub impl FromJson for SessionItem with fn from_json(
-  json : Json,
-  path : @json.JsonPath,
-) -> SessionItem {
-  let fields = expect_object(json, path)
-  let payload = match fields {
-    { "payload": payload, .. } => payload
-    _ => json_decode_error(path.add_key("payload"), "expected payload")
-  }
-  match string_field(fields, path, "kind") {
-    "user" => User(@json.from_json(payload, path=path.add_key("payload")))
-    "assistant" =>
-      Assistant(@json.from_json(payload, path=path.add_key("payload")))
-    "tool_result" =>
-      Tool(@json.from_json(payload, path=path.add_key("payload")))
-    "runtime_notice" =>
-      Runtime(@json.from_json(payload, path=path.add_key("payload")))
-    "summary" => Summary(@json.from_json(payload, path=path.add_key("payload")))
-    "terminal" =>
-      Terminal(@json.from_json(payload, path=path.add_key("payload")))
-    other =>
-      json_decode_error(
-        path.add_key("kind"),
-        "unknown session item kind: \{other}",
-      )
-  }
-}
-
-///|
 /// Encode a complete `Session` snapshot.
 ///
 /// The JSON shape is versioned and contains `id`, `system_prompt`, and the
@@ -257,11 +205,6 @@ pub extend Session with ToJson::{to_json}
 #doc(hidden)
 #deprecated
 pub extend SessionId with FromJson::{from_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionItem with FromJson::{from_json}
 
 ///|
 #doc(hidden)

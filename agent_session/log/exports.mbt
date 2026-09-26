@@ -57,19 +57,21 @@ pub fn parse_events(text : String) -> ParsedLog {
     let may_be_header = first_content_line
     first_content_line = false
     let torn = index == lines.length() - 1 && !ends_with_newline
-    let json = @json.parse(line) catch {
-      error => {
-        note_bad_line(line_number, line, torn, "\{error}")
+    if may_be_header {
+      let json = @json.parse(line) catch {
+        error => {
+          note_bad_line(line_number, line, torn, "\{error}")
+          continue
+        }
+      }
+      if classify_header(json) is Header(parsed_header) {
+        header = Some(parsed_header)
         continue
       }
     }
-    if may_be_header && classify_header(json) is Header(parsed_header) {
-      header = Some(parsed_header)
-      continue
-    }
-    let event : @agent_session.SessionEvent = @json.from_json(json) catch {
-      error => {
-        note_bad_line(line_number, line, torn, "\{error}")
+    let event = @agent_session.SessionEvent::from_json_line(line) catch {
+      DeError(message) => {
+        note_bad_line(line_number, line, torn, message)
         continue
       }
     }

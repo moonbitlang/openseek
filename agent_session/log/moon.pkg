@@ -2,6 +2,10 @@ import {
   "moonbitlang/openseek/agent_session",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
+  "bobzhang/typify/runtime" @typify_rt,
 }
 
 warnings = "+unnecessary_annotation"
+
+// header_record.mbt is generated from ../session.schema.json; keep it as generated.
+formatter(ignore: [ "header_record.mbt" ])

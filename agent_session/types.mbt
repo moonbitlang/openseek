@@ -89,32 +89,6 @@ pub fn SessionId::generated(
 }
 
 ///|
-/// User-authored model input for one conversational event.
-///
-/// A `UserMessage` is durable data, not a UI transcript item. It records the
-/// ordered content that should be replayed as a user-role message in
-/// `Session::chat_messages`.
-///
-/// `submission_id` is the submitting controller's tag for this input,
-/// echoed from a serve `prompt` or `steer` command so a delivery can be
-/// reconciled by exact id rather than by matching text (two clients can submit
-/// identical text into one session). None for untagged input, including TUI
-/// and one-shot prompts, and older records without a tag. Encoding
-/// omits it when absent. Single text content is written as a string; mixed
-/// content is written as an ordered array. Both forms are accepted on read.
-struct UserMessage {
-  content : Content
-  submission_id : String?
-} derive(Eq, Debug, ToJson, FromJson)
-
-///|
-priv struct SessionToolCall {
-  id : String
-  name : String
-  arguments : String
-} derive(Eq, Debug, ToJson, FromJson)
-
-///|
 fn SessionToolCall::from_deepseek(call : @deepseek.ToolCall) -> SessionToolCall {
   { id: call.id, name: call.name, arguments: call.arguments, }
 }
@@ -148,37 +122,6 @@ pub fn UserMessage::content(self : UserMessage) -> Content {
 pub fn UserMessage::submission_id(self : UserMessage) -> String? {
   self.submission_id
 }
-
-///|
-/// Assistant output returned by the model for one event.
-///
-/// This stores visible assistant text, requested tool calls, and optional
-/// reasoning content. Tool calls are durable because later `ToolResult` events
-/// must match their call ids during `Session::chat_messages` projection.
-struct AssistantMessage {
-  content : String
-  tool_calls : Array[SessionToolCall]
-  reasoning_content : String?
-  // True only when a checkpoint re-appends an answer that an earlier durable
-  // provider step already owns. Absent on ordinary messages.
-  is_replay : Bool?
-  // The provider response's token usage, on the first durable record of that
-  // response only. Absent on replays and on logs written before it existed.
-  usage : TokenUsage?
-} derive(Eq, Debug, ToJson, FromJson)
-
-///|
-/// Token counts for one provider response, as its durable `AssistantMessage`
-/// records them. The fields and JSON match the `usage` event, so a reader of
-/// the session log can account for a run without its event stream: summed
-/// over a turn's messages, they equal the turn's `usage` events.
-pub(all) struct TokenUsage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  prompt_cache_hit_tokens : Int
-  prompt_cache_miss_tokens : Int
-} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 fn TokenUsage::from_deepseek(usage : @deepseek.Usage) -> TokenUsage {
@@ -278,22 +221,6 @@ pub fn AssistantMessage::is_replay(self : AssistantMessage) -> Bool {
 }
 
 ///|
-/// Result returned by a local tool for one assistant tool call.
-///
-/// During model projection, a `ToolResult` is emitted only when its
-/// `tool_call_id` matches a pending assistant tool call. Unmatched results are
-/// ignored to keep replay protocol-valid.
-struct ToolResult {
-  tool_call_id : String
-  tool_name : String
-  content : Content
-  is_error : Bool
-  brief : String?
-  /// Machine-readable output and nested PTC trace, excluded from model projection.
-  data : Json?
-} derive(Eq, Debug, ToJson, FromJson)
-
-///|
 /// Record the outcome of one tool execution.
 ///
 /// `tool_call_id` must be the id from the assistant tool call this result
@@ -342,16 +269,6 @@ pub fn ToolResult::is_error(self : ToolResult) -> Bool {
 }
 
 ///|
-/// Out-of-band runtime notice surfaced to the model.
-///
-/// Runtime notices are projected as user-role messages. They are intended for
-/// loop-injected context such as plan reminders or other text that did not
-/// originate from the user's prompt.
-struct RuntimeNotice {
-  content : String
-} derive(Eq, Debug, ToJson, FromJson)
-
-///|
 /// First line of the runtime notices the agent loop injects as plan-cadence
 /// reminders. The producer (`plan_reminder_text` in `agent`) stamps it and
 /// readers of the durable log (the viz card renderer, tests) key off it, so
@@ -369,18 +286,6 @@ pub fn RuntimeNotice::RuntimeNotice(content : String) -> RuntimeNotice {
 pub fn RuntimeNotice::content(self : RuntimeNotice) -> String {
   self.content
 }
-
-///|
-/// Durable compaction record for older session events.
-///
-/// A summary does not delete the covered raw events. It records that
-/// `from_sequence..to_sequence` can be replaced by `content` when projecting
-/// model context. The durable event log remains append-only.
-struct SessionSummary {
-  content : String
-  from_sequence : Int
-  to_sequence : Int
-} derive(Eq, Debug, ToJson, FromJson)
 
 ///|
 /// Return the summary text used in model-facing projection.
@@ -430,66 +335,12 @@ pub(all) enum TurnTerminal {
 } derive(Eq, Debug)
 
 ///|
-/// Payload vocabulary for one `SessionEvent`.
-///
-/// `User` and `Runtime` project as user-role model messages. `Assistant`
-/// projects as an assistant message and may open pending tool calls. `Tool`
-/// answers a pending assistant tool call. `Summary` is append-only compaction
-/// metadata that can replace older events during projection. `Terminal`
-/// records turn completion status and may project as a final assistant/status
-/// message.
-pub(all) enum SessionItem {
-  /// User-authored model input, including the initial task and any steering
-  /// text. JSON tag: `user`. Projection replays it as a user-role message.
-  User(UserMessage)
-  /// Model output for one response. JSON tag: `assistant`. Projection preserves
-  /// visible content, optional reasoning content, and native DeepSeek tool calls;
-  /// those tool calls open pending ids that later `Tool` events may answer.
-  Assistant(AssistantMessage)
-  /// Local result for one assistant tool call. JSON tag: `tool_result`.
-  /// Projection emits it only when `tool_call_id` matches a pending assistant
-  /// call; unmatched results are ignored to keep model replay protocol-valid.
-  Tool(ToolResult)
-  /// Runtime-injected context, such as a plan reminder. JSON tag:
-  /// `runtime_notice`. Projection sends it as a user-role message even though it
-  /// did not originate from the user's prompt.
-  Runtime(RuntimeNotice)
-  /// Append-only compaction metadata for an inclusive event sequence range.
-  /// JSON tag: `summary`. Projection skips covered earlier events when a later
-  /// summary covers their sequence and emits the summary text instead.
-  Summary(SessionSummary)
-  /// Completion status for an agent turn. JSON tag: `terminal`.
-  /// `Finished(text)` can project as a final assistant message; aborted,
-  /// interrupted, and failed terminals project assistant status messages.
-  Terminal(TurnTerminal)
-} derive(Eq, Debug)
-
-///|
-/// One append-only event in a session log.
-///
-/// Sequence numbers are one-based within a session and are assigned by
-/// `Session::append_event`. The durable store rejects non-contiguous sequences
-/// when loading from disk. The timestamp is unix milliseconds; in-memory
-/// appends default to `0`, while `SessionStore::append` stamps with the current
-/// wall clock.
-struct SessionEvent {
-  sequence : Int
-  // Wall-clock stamp (unix milliseconds) of when the event was appended; 0
-  // for purely in-memory sessions appended without a clock (the durable
-  // store always stamps). The field is named for its wire key, and typed
-  // Double so it serializes as a JSON number (core encodes Int64 as a
-  // string); milliseconds are exactly representable until year ~2255.
-  ts : Double
-  item : SessionItem
-} derive(Eq, Debug, ToJson, FromJson)
-
-///|
 fn SessionEvent::SessionEvent(
   sequence~ : Int,
   item~ : SessionItem,
   unix_ms? : Int64 = 0,
 ) -> SessionEvent {
-  { sequence, ts: unix_ms.to_double(), item, }
+  { sequence, ts: unix_ms, item, }
 }
 
 ///|
@@ -722,92 +573,12 @@ pub fn Session::compact(
 ///|
 #doc(hidden)
 #deprecated
-pub extend AssistantMessage with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend AssistantMessage with FromJson::{from_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend AssistantMessage with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend AssistantMessage with ToJson::{to_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend TokenUsage with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend TokenUsage with FromJson::{from_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend TokenUsage with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend TokenUsage with ToJson::{to_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend RuntimeNotice with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend RuntimeNotice with FromJson::{from_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend RuntimeNotice with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend RuntimeNotice with ToJson::{to_json}
-
-///|
-#doc(hidden)
-#deprecated
 pub extend Session with Debug::{to_repr}
 
 ///|
 #doc(hidden)
 #deprecated
 pub extend Session with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionEvent with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionEvent with FromJson::{from_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionEvent with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionEvent with ToJson::{to_json}
 
 ///|
 #doc(hidden)
@@ -822,82 +593,12 @@ pub extend SessionId with Eq::{equal, not_equal}
 ///|
 #doc(hidden)
 #deprecated
-pub extend SessionItem with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionItem with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionSummary with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionSummary with FromJson::{from_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionSummary with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend SessionSummary with ToJson::{to_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend ToolResult with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend ToolResult with FromJson::{from_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend ToolResult with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend ToolResult with ToJson::{to_json}
-
-///|
-#doc(hidden)
-#deprecated
 pub extend TurnTerminal with Debug::{to_repr}
 
 ///|
 #doc(hidden)
 #deprecated
 pub extend TurnTerminal with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend UserMessage with Debug::{to_repr}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend UserMessage with FromJson::{from_json}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend UserMessage with Eq::{equal, not_equal}
-
-///|
-#doc(hidden)
-#deprecated
-pub extend UserMessage with ToJson::{to_json}
 
 ///|
 /// Optional machine-readable metadata; never included in model messages.
