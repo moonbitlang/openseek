@@ -57,7 +57,7 @@ fn viz_config_from_matches(matches : @argparse.Matches) -> VizConfig raise {
       )
     _ => fail("missing parsed visualizer defaults")
   }
-  guard "\{export_session}".is_blank() || !"\{export_path}".is_blank() else {
+  guard export_session.is_blank() || !export_path.is_blank() else {
     fail("--export-session requires --export")
   }
   let host = host.trim()
@@ -83,7 +83,7 @@ fn viz_config_from_matches(matches : @argparse.Matches) -> VizConfig raise {
     web_dir,
     bundle,
     export_path,
-    export_session: "\{export_session}".trim().to_owned(),
+    export_session: export_session.trim().to_owned(),
   }
 }
 

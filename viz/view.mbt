@@ -2567,19 +2567,31 @@ pub fn rendered_error_count(
   session : @agent_session.Session,
   mode : ViewMode,
 ) -> Int {
+  rendered_result_count(session, mode, result => result.is_error())
+}
+
+///|
+/// How many tool results `render_session` draws for `mode` that satisfy
+/// `counts`: every durable `ToolResult` in `RawLog`, and in `ModelView` only
+/// those the projection shows (`model_shown_result`).
+fn rendered_result_count(
+  session : @agent_session.Session,
+  mode : ViewMode,
+  counts : (@agent_session.ToolResult) -> Bool,
+) -> Int {
   match mode {
     RawLog =>
       session
       .events()
       .iter()
-      .count_if(event => event.item() is Tool(result) && result.is_error())
+      .count_if(event => event.item() is Tool(result) && counts(result))
     ModelView => {
       let tool_results = tool_results_by_id(session)
       session
       .chat_messages()
       .count_if(message => {
         model_shown_result(message, tool_results) is Some(result) &&
-        result.is_error()
+        counts(result)
       })
     }
   }
@@ -2622,24 +2634,7 @@ pub fn rendered_build_error_count(
   session : @agent_session.Session,
   mode : ViewMode,
 ) -> Int {
-  match mode {
-    RawLog =>
-      session
-      .events()
-      .iter()
-      .count_if(event => {
-        event.item() is Tool(result) && result_is_build_failed(result)
-      })
-    ModelView => {
-      let tool_results = tool_results_by_id(session)
-      session
-      .chat_messages()
-      .count_if(message => {
-        model_shown_result(message, tool_results) is Some(result) &&
-        result_is_build_failed(result)
-      })
-    }
-  }
+  rendered_result_count(session, mode, result_is_build_failed)
 }
 
 ///|
