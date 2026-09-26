@@ -162,7 +162,7 @@ filesystem, and process APIs.
 ## Agent CLI
 
 The root package is the headless automation entry point — a subcommand
-tree (`run`/`serve`/`review`/`subrun`/`mcp`/`sessions`). The interactive terminal
+tree (`run`/`serve`/`review`/`mcp`/`sessions`). The interactive terminal
 UI is the separate `openseek_tui` binary, maintained in its own repository,
 [moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui). `openseek run` parses arguments and
 runs the agent package. The agent sends DeepSeek native function tools and
@@ -287,9 +287,11 @@ and exposes each on `PATH` as `<name>.exe` (e.g. `openseek.exe`).
 - [`tests/cram/cli.md`](tests/cram/cli.md) — offline `openseek` subcommand
   examples (top-level and `run` help, and the `run`/`serve`/`sessions` behaviors).
   They make no network calls and run in CI via `moon cram test tests/cram`.
-- [`tests/cram/subrun.md`](tests/cram/subrun.md) — the offline internal child-mode
-  wire contract: JSON input on stdin, JSONL events on stdout, typed reports, and
-  failure-event delivery. It uses the modelless `echo` kind and needs no API key.
+- [`tests/cram/run-requests.md`](tests/cram/run-requests.md) — `run` driven by a
+  parent: a JSON request on stdin, presets (`--kind`), the result file, refusals,
+  cancellation by closing stdin, and the one-general-child lease
+  ([`docs/run-result.md`](docs/run-result.md) is the contract). It uses the
+  modelless `echo` preset and a closed local port, and needs no API key.
 - [`tests/cram/read-workflow.md`](tests/cram/read-workflow.md) — a tested guide
   to `read.mbtx`: numbered files, ranges, errors, and output limits. See
   [Writing cram documentation](tests/cram/README.md) to add a guide for another script.

@@ -54,6 +54,7 @@ $ sh <<'EOF'
 > d=$(mktemp -d)
 > try() { openseek.exe run --no-session --dir "$d/ws" "$@" 2>&1 > /dev/null; echo "exit $?"; }
 > printf '{"version":1,"kind":"nope","input":{}}' | try --input-format json
+> printf '{"version":1,"kind":"worker","input":{"task":"fix things"}}' | try --input-format json
 > printf '{"version":2,"input":{}}' | try --input-format json
 > printf '{"version":1,"input":{"task":"t"},"schema":{"type":"object"}}' | try --input-format json
 > printf '{"version":1,"input":{"prompt":"t"}}' | try --input-format json
@@ -65,6 +66,8 @@ $ sh <<'EOF'
 > rm -rf "$d"
 > EOF
 error: unknown kind: nope
+exit 1
+error: worker input requires an absolute `worker_root`
 exit 1
 error: unsupported request version 2
 exit 1

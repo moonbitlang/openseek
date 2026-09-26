@@ -49,7 +49,7 @@ fn agent_options() -> Array[@argparse.OptionArg] {
 
 ///|
 /// The whole `openseek` command tree: the headless engine under
-/// `run`/`serve`/`review`/`subrun`/`mcp`/`sessions`. The shared agent options
+/// `run`/`serve`/`review`/`mcp`/`sessions`. The shared agent options
 /// (`--api-key`, `--model`, …) sit on the root as globals, so every engine
 /// subcommand inherits them in any position (`openseek --api-key k run`,
 /// `openseek run --api-key k`). `subcommand_required=true` makes a bare
@@ -73,7 +73,7 @@ pub fn root_command() -> @argparse.Command {
           ..agent_options(),
           review_deadline_option(),
           // Only `run` and `serve` build an approval channel. On the shared
-          // bundle this also reached `mcp`, `review` and `subrun`, where it
+          // bundle this also reached `mcp` and `review`, where it
           // parses and then does nothing — and where an exported
           // OPENSEEK_APPROVAL would have bound commands that cannot honour it.
           approval_option(),
@@ -145,18 +145,6 @@ pub fn root_command() -> @argparse.Command {
             long="base",
             default_values=["origin/main"],
             about="Base ref: review the diff base...HEAD.",
-          ),
-        ],
-      ),
-      Command(
-        "subrun",
-        about="INTERNAL: run one subagent kind as a child of this engine (input JSON on stdin; stdin EOF cancels).",
-        options=agent_options(),
-        positionals=[
-          PositionArg(
-            "kind",
-            num_args=ValueRange(lower=1),
-            about="Subagent kind: explore | review | worker | echo.",
           ),
         ],
       ),

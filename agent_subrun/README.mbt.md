@@ -22,11 +22,10 @@ Layers:
   cancellation re-raises — never folded into a terminal. Crash isolation is
   structural: a dead child is a `Failed` result, not a dead engine. A parent
   with no durable session launches its children with `--no-session`.
-- `report_line` (child side of the legacy `openseek subrun` mode): the
-  distinguished final stdout line that mode writes — `{"subrun_report": ...}`.
-  What a child RUNS to produce its report is not here: the bounded turn
-  itself (`execute_kind`, `capture_tool`) lives in `agent_kind`, which never
-  spawns and never knows it is in a child.
+- The child side is not here: `openseek run --kind` writes the result, and
+  the bounded turn that produces a report (`execute_kind`, `capture_tool`)
+  lives in `agent_kind`, which never spawns and never knows it is in a
+  child.
 
 Known limits: a hard-killed child can orphan its own tool subprocesses (the
 upstream group-kill gap) — the stdin-EOF grace path is the mitigation; a

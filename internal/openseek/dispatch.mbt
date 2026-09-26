@@ -18,14 +18,13 @@ pub async fn dispatch() -> Unit {
   // Only the agent-running commands spawn children, and only they read the
   // setting at all: a malformed value must not break `sessions list`, for the
   // same reason `--api-key` is not argparse-`required`.
-  if name is ("run" | "serve" | "review" | "subrun") {
+  if name is ("run" | "serve" | "review") {
     @options.export_retry_overrides(m)
   }
   match name {
     "run" => @run.run_task_command(m)
     "serve" => @serve.run_serve_command(m)
     "review" => @commands.run_review_command(m)
-    "subrun" => @run.run_subrun_command(m)
     "mcp" => @commands.run_mcp_command(m)
     "sessions" => @commands.run_sessions_command(m)
     name => fail("unhandled subcommand: \{name}")
