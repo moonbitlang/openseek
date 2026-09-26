@@ -25,7 +25,7 @@ pub async fn dispatch() -> Unit {
     "run" => @run.run_task_command(m)
     "serve" => @serve.run_serve_command(m)
     "review" => @commands.run_review_command(m)
-    "subrun" => @commands.run_subrun_command(m)
+    "subrun" => @run.run_subrun_command(m)
     "mcp" => @commands.run_mcp_command(m)
     "sessions" => @commands.run_sessions_command(m)
     name => fail("unhandled subcommand: \{name}")

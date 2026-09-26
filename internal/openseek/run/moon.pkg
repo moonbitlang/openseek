@@ -1,5 +1,9 @@
 import {
   "moonbitlang/openseek/agent",
+  "moonbitlang/openseek/agent_explore",
+  "moonbitlang/openseek/agent_pattern_repair",
+  "moonbitlang/openseek/agent_review",
+  "moonbitlang/openseek/agent_worker",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_subrun",
@@ -15,7 +19,9 @@ import {
   "moonbitlang/async/os_error",
   "moonbitlang/openseek/internal/openseek/options",
   "moonbitlang/openseek/internal/openseek/setup",
+  "moonbitlang/async/stdio",
   "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/core/json",
 }
 
 import {
@@ -27,7 +33,6 @@ import {
 } for "test"
 
 import {
-  "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/openseek/internal/openseek/testkit",
 } for "wbtest"
 
