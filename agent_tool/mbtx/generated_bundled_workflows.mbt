@@ -10,8 +10,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|///|
           #|import {
           #|  "moonbitlang/async@0.22.4",
-          #|  "moonbitlang/workflow@0.7.1",
-          #|  "moonbitlang/workflow@0.7.1/hosted",
+          #|  "moonbitlang/workflow@0.9.0",
+          #|  "moonbitlang/workflow@0.9.0/hosted",
           #|}
           #|
           #|///|
@@ -1104,8 +1104,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|import {
           #|  "moonbitlang/async@0.22.4",
           #|  "moonbitlang/async@0.22.4/fs",
-          #|  "moonbitlang/workflow@0.7.1",
-          #|  "moonbitlang/workflow@0.7.1/hosted",
+          #|  "moonbitlang/workflow@0.9.0",
+          #|  "moonbitlang/workflow@0.9.0/hosted",
           #|}
           #|
           #|///|
@@ -1389,8 +1389,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|import {
           #|  "moonbitlang/async@0.22.4",
           #|  "moonbitlang/core/env",
-          #|  "moonbitlang/workflow@0.7.1",
-          #|  "moonbitlang/workflow@0.7.1/hosted",
+          #|  "moonbitlang/workflow@0.9.0",
+          #|  "moonbitlang/workflow@0.9.0/hosted",
           #|}
           #|
           #|///|
@@ -1482,7 +1482,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    (None, Some((sha, dirty))) => (Some(sha), dirty)
           #|    (None, None) => (None, false)
           #|  }
-          #|  // The same input a `subrun review` child reads from the goal-met gate.
+          #|  // The same input the review child of the goal-met gate reads.
           #|  let input : Json = match sha {
           #|    Some(sha) => { "goal": goal, "sha": sha, "dirty": dirty }
           #|    None => { "goal": goal }

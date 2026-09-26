@@ -1,8 +1,8 @@
 ///|
 async fn main {
   match @env.args() {
-    [_, "hosted-child", name, mode, calls, child] =>
-      hosted_child(name, mode, calls, child)
+    [_, "hosted-child", name, mode, calls, child, result_file] =>
+      hosted_child(name, mode, calls, child, result_file)
     _ =>
       match @env.get_env_var("OPENSEEK_CI_FIXTURE") {
         Some(dir) => ci_child(dir)

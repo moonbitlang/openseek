@@ -78,7 +78,8 @@ test "a wasm engine's handoff names its runtime, module and fence" {
     }
   })
   assert_eq(args, [
-    "/build/wasm/openseek.wasm", "--", "subrun", "{kind}", "--session", "{child}",
+    "/build/wasm/openseek.wasm", "--", "run", "--input-format", "json", "--cancel-on-stdin-eof",
+    "--kind", "{kind}", "--result-file", "{result_file}", "--session", "{child}",
     "--session-root", "/store",
   ])
 }

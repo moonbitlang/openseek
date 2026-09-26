@@ -42,7 +42,7 @@ pub fn audit_criteria(session : @agent_session.Session) -> @host.AuditCriteria? 
 }
 
 ///|
-/// The input every `subrun review` child reads: the criteria to audit
+/// The input every review child reads: the criteria to audit
 /// against, plus the baseline commit when the goal captured one.
 fn review_subrun_input(
   goal : String,
@@ -57,7 +57,7 @@ fn review_subrun_input(
 
 ///|
 /// Build the advisory goal-met gate: on a durably recorded met, spawn the
-/// `subrun review` child against the goal's baseline and return the bounded
+/// `run --kind review` child against the goal's baseline and return the bounded
 /// digest notice. Advisory by contract — every failure shape (no report,
 /// timeout, spawn trouble) degrades to an `[review] unavailable` notice;
 /// only external cancellation re-raises (through run_subrun's own
@@ -76,14 +76,20 @@ pub fn build_goal_met_gate(
 ) -> async (String, @agent_session.GoalBaseline?) -> String? {
   let (self_exe, launch_prefix) = @setup.workflow_launch(self_exe)
   (goal, baseline) => {
-    // The `subrun review` child argv, shaped like every sub-run spawn: the
-    // command and its kind, the inherited model and step ceiling, plus
-    // `--api-url` only when one is configured (absent, the child falls back
-    // to its own default endpoint).
+    // The review child's argv, shaped like every sub-run spawn: a managed
+    // `run` of the `review` preset that writes its result to a file, the
+    // inherited model and step ceiling, plus `--api-url` only when one is
+    // configured (absent, the child falls back to its own default endpoint).
     let args = [
       ..launch_prefix,
-      "subrun",
+      "run",
+      "--input-format",
+      "json",
+      "--cancel-on-stdin-eof",
+      "--kind",
       "review",
+      "--result-file",
+      @spawn.ResultFilePlaceholder,
       "--model",
       "\{model}",
       "--max-steps",

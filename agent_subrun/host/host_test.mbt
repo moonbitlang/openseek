@@ -91,8 +91,9 @@ test "what this host writes is what the library reads" {
     }
   })
   assert_eq(args, [
-    "subrun", "{kind}", "--model", "deepseek-chat", "--session", "{child}", "--session-root",
-    "/store",
+    "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
+    "--result-file", "{result_file}", "--model", "deepseek-chat", "--session", "{child}",
+    "--session-root", "/store",
   ])
   // No `--max-steps`: per-call ceilings ride the request envelope.
   assert_false(args.contains("--max-steps"))
@@ -190,7 +191,10 @@ test "a runtime-launched engine still produces a handoff the library reads" {
       _ => "?"
     }
   })
-  assert_eq(args[:4], ["/build/wasm/openseek.wasm", "--", "subrun", "{kind}"])
+  assert_eq(args[:8], [
+    "/build/wasm/openseek.wasm", "--", "run", "--input-format", "json", "--cancel-on-stdin-eof",
+    "--kind", "{kind}",
+  ])
 }
 
 ///|
@@ -200,30 +204,37 @@ test "optional model and URL preserve the hosted argv layout" {
       (
         None,
         None,
-        ["subrun", "{kind}", "--session", "{child}", "--session-root", "/store"],
-      ),
-      (
-        Some("m"),
-        None,
         [
-          "subrun", "{kind}", "--model", "m", "--session", "{child}", "--session-root",
-          "/store",
-        ],
-      ),
-      (
-        None,
-        Some("u"),
-        [
-          "subrun", "{kind}", "--api-url", "u", "--session", "{child}", "--session-root",
+          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
+          "--result-file", "{result_file}", "--session", "{child}", "--session-root",
           "/store",
         ],
       ),
       (
         Some("m"),
-        Some("u"),
+        None,
         [
-          "subrun", "{kind}", "--model", "m", "--api-url", "u", "--session", "{child}",
+          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
+          "--result-file", "{result_file}", "--model", "m", "--session", "{child}",
           "--session-root", "/store",
+        ],
+      ),
+      (
+        None,
+        Some("u"),
+        [
+          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
+          "--result-file", "{result_file}", "--api-url", "u", "--session", "{child}",
+          "--session-root", "/store",
+        ],
+      ),
+      (
+        Some("m"),
+        Some("u"),
+        [
+          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
+          "--result-file", "{result_file}", "--model", "m", "--api-url", "u", "--session",
+          "{child}", "--session-root", "/store",
         ],
       ),
     ] {
