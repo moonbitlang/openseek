@@ -16,9 +16,14 @@ const PatternRepairTraceMaxItemUnits : Int = 240
 const PatternRepairTraceOmitted : String = "Earlier events omitted"
 
 ///|
+/// The child's session id inside its private session root.
+const PatternRepairSessionId : String = "pattern-repair"
+
+///|
 priv enum PatternRepairProcessOutcome {
-  Finished(Int, String, (String, String)?, String?, Array[String])
-  TimedOut(Array[String])
+  /// The child exited with this code and this stderr.
+  Finished(Int, String)
+  TimedOut
 }
 
 ///|
@@ -47,6 +52,9 @@ fn pattern_repair_trace_push(trace : Array[String], value : String) -> Unit {
 }
 
 ///|
+/// Run the child and wait for it, within the wall timeout. Its stdout is text
+/// for people and is drained unread; what it did is in its session, and how
+/// it ended is in its result file.
 async fn run_pattern_repair_process(
   command : String,
   args : Array[String],
@@ -54,9 +62,6 @@ async fn run_pattern_repair_process(
   cwd : String,
   env : Map[String, String],
 ) -> PatternRepairProcessOutcome {
-  // Retain a bounded trace incrementally so a wall timeout can still return
-  // the events observed before the child was cancelled.
-  let trace : Ref[Array[String]] = { val: [], }
   let result = @async.with_timeout_opt(PatternRepairWallTimeoutMs, () => {
     @async.with_task_group(group => {
       let (stdin_reader, stdin_writer) = @process.write_to_process()
@@ -80,43 +85,15 @@ async fn run_pattern_repair_process(
         stdin_writer.close()
         process.cancel()
       }
+      // One request line; stdin stays open until the child exits, because the
+      // child treats its closing as cancellation.
       stdin_writer.write(input)
       let stdout_task = group.spawn(() => {
         defer stdout_reader.close()
-        let mut candidate : (String, String)? = None
-        let mut agent_error : String? = None
-        for ;; {
-          let line = stdout_reader.read_until("\n") catch { _ => None }
-          guard line is Some(line) else { break }
-          let json = @json.parse(line.trim()) catch { _ => continue }
-          if json is { "subrun_report": report, .. } {
-            match report {
-              {
-                "candidate_pattern": String(pattern),
-                "message": String(message),
-                ..
-              } => {
-                candidate = Some((pattern, message))
-                pattern_repair_trace_push(trace.val, "Candidate submitted")
-              }
-              _ => {
-                agent_error = Some(
-                  pattern_repair_diagnostic(report.stringify()),
-                )
-                pattern_repair_trace_push(
-                  trace.val,
-                  "Agent returned a malformed submission report",
-                )
-              }
-            }
-            continue
-          }
-          let event_error = pattern_repair_record_event(json, trace.val)
-          if event_error is Some(error) {
-            agent_error = Some(pattern_repair_diagnostic(error))
-          }
+        while (stdout_reader.read_some(max_len=4096) catch { _ => None })
+              is Some(_) {
+
         }
-        (candidate, agent_error)
       })
       let stderr_task = group.spawn(() => {
         defer stderr_reader.close()
@@ -126,174 +103,121 @@ async fn run_pattern_repair_process(
       })
       let code = process.wait()
       stdin_writer.close()
-      let (candidate, agent_error) = stdout_task.wait()
-      let stderr = stderr_task.wait()
-      (code, stderr, candidate, agent_error)
+      stdout_task.wait()
+      (code, stderr_task.wait())
     })
   })
   match result {
-    Some((code, stderr, candidate, agent_error)) =>
-      Finished(code, stderr, candidate, agent_error, trace.val.copy())
-    None => {
-      pattern_repair_trace_push(
-        trace.val,
-        "Host Agent timed out after \{PatternRepairWallTimeoutSeconds} seconds",
-      )
-      TimedOut(trace.val.copy())
-    }
+    Some((code, stderr)) => Finished(code, stderr)
+    None => TimedOut
   }
 }
 
 ///|
-/// Keep the child's original terminal event available to the UI. Event names
-/// are only used to identify terminal events; the displayed value remains the
-/// raw agent diagnostic instead of a Host-side error classification.
-fn pattern_repair_agent_error(json : Json) -> String? {
-  guard json is { "event": String(event), .. } else { return None }
-  if event == "turn_failed" ||
-    event == "agent_setup_failed" ||
-    event == "command_error" {
-    match json {
-      { "error": String(error), .. } => Some(error)
-      _ => Some(json.stringify())
+/// The bounded trace of a repair, from the child's session: its steps,
+/// validation outcomes, submission, and how its turn ended. Assistant and
+/// reasoning content and tool arguments never reach the trace.
+fn pattern_repair_trace_of(session : @agent_session.Session) -> Array[String] {
+  let trace : Array[String] = []
+  let mut steps = 0
+  for event in session.events() {
+    if event.is_agent_step() {
+      steps += 1
+      pattern_repair_trace_push(trace, "Agent step \{steps}")
     }
-  } else if event == "max_steps_exhausted" ||
-    event == "context_yield" ||
-    event == "agent_finished" ||
-    event == "agent_aborted" {
-    Some(json.stringify())
-  } else {
-    None
-  }
-}
-
-///|
-/// Reduce the child JSONL stream to safe, bounded repair events. Assistant
-/// and reasoning content, tool arguments, and unrelated event payloads are
-/// never retained in the trace.
-fn pattern_repair_record_event(json : Json, trace : Array[String]) -> String? {
-  guard json is { "event": String(event), .. } else { return None }
-  if event == "agent_step" {
-    if json is { "step": Number(step, ..), .. } {
-      pattern_repair_trace_push(trace, "Agent step \{step.to_int()}")
-    }
-    return None
-  }
-  if event == "stream_retry" {
-    if json
-      is {
-        "attempt": Number(attempt, ..),
-        "max_attempts": Number(max_attempts, ..),
-        ..
-      } {
-      pattern_repair_trace_push(
-        trace,
-        "Provider retry \{attempt.to_int()}/\{max_attempts.to_int()}",
-      )
-    }
-    return None
-  }
-  if event == "tool_result" {
-    guard json
-      is {
-        "tool_name": String(tool_name),
-        "content": String(content),
-        "is_error": is_error,
-        ..
-      } else {
-      return None
-    }
-    if tool_name == "validate_pattern" {
-      let result = @json.parse(content) catch { _ => Json::null() }
-      if result is { "valid": True, .. } {
-        pattern_repair_trace_push(trace, "validate_pattern: passed")
-      } else if result
-        is { "valid": False, "diagnostic": String(diagnostic), .. } {
-        pattern_repair_trace_push(
-          trace,
-          "validate_pattern: failed — \{diagnostic}",
-        )
-      } else if is_error is True {
-        pattern_repair_trace_push(trace, "validate_pattern: \{content}")
-      } else {
-        pattern_repair_trace_push(trace, "validate_pattern: returned")
+    match event.item() {
+      Tool(result) if result.tool_name() == "validate_pattern" => {
+        let content = result.content().text()
+        let outcome = @json.parse(content) catch { _ => Json::null() }
+        if outcome is { "valid": True, .. } {
+          pattern_repair_trace_push(trace, "validate_pattern: passed")
+        } else if outcome
+          is { "valid": False, "diagnostic": String(diagnostic), .. } {
+          pattern_repair_trace_push(
+            trace,
+            "validate_pattern: failed — \{diagnostic}",
+          )
+        } else if result.is_error() {
+          pattern_repair_trace_push(trace, "validate_pattern: \{content}")
+        } else {
+          pattern_repair_trace_push(trace, "validate_pattern: returned")
+        }
       }
-    } else if tool_name == "submit_pattern_repair" {
-      pattern_repair_trace_push(trace, "submit_pattern_repair: returned")
+      Tool(result) if result.tool_name() == "submit_pattern_repair" =>
+        pattern_repair_trace_push(trace, "submit_pattern_repair: returned")
+      Terminal(MaxStepsExhausted) =>
+        pattern_repair_trace_push(trace, "Agent step limit exhausted")
+      Terminal(ContextYield(_)) =>
+        pattern_repair_trace_push(trace, "Agent yielded at its context limit")
+      Terminal(Aborted(reason)) =>
+        pattern_repair_trace_push(trace, "Agent aborted: \{reason}")
+      Terminal(Interrupted(reason)) =>
+        pattern_repair_trace_push(trace, "Agent interrupted: \{reason}")
+      Terminal(Failed(error)) => pattern_repair_trace_push(trace, error)
+      _ => ()
     }
-    return None
   }
-  if pattern_repair_agent_error(json) is Some(error) {
-    let summary = if event == "max_steps_exhausted" {
-      "Agent step limit exhausted"
-    } else if event == "agent_finished" {
-      "Agent turn finished without a submission"
-    } else if event == "context_yield" {
-      "Agent yielded at its context limit"
-    } else if event == "agent_aborted" {
-      match json {
-        { "reason": String(reason), .. } => "Agent aborted: \{reason}"
-        _ => "Agent aborted"
-      }
-    } else {
-      error
-    }
-    pattern_repair_trace_push(trace, summary)
-    return Some(error)
-  }
-  None
+  trace
 }
 
 ///|
-test "pattern repair preserves raw agent failure diagnostics" {
-  assert_eq(
-    pattern_repair_agent_error({
-      "event": "turn_failed",
-      "error": "provider returned an invalid tool call",
-    }),
-    Some("provider returned an invalid tool call"),
-  )
-  match pattern_repair_agent_error({ "event": "max_steps_exhausted" }) {
-    Some(diagnostic) => assert_true(diagnostic.contains("max_steps_exhausted"))
-    None => assert_true(false)
+/// The repair's trace, read from the child's session; empty when the child
+/// recorded nothing (it failed before its turn, or its record is unreadable).
+async fn pattern_repair_session_trace(session_root : String) -> Array[String] {
+  let session = @store.SessionStore(session_root).load(
+    SessionId(PatternRepairSessionId),
+  ) catch {
+    _ => return []
+  }
+  pattern_repair_trace_of(session)
+}
+
+///|
+/// How a finished child ended, from its result file: a candidate, or why
+/// there is none. `None` when there is no readable result, which leaves the
+/// exit status and stderr to explain.
+async fn pattern_repair_result(
+  path : String,
+) -> Result[(String, String), String]? {
+  let text = @fs.read_file(path).text() catch { _ => return None }
+  let json = @json.parse(text) catch { _ => return None }
+  let result = @openseek_protocol.parse_run_result(json) catch {
+    _ => return None
+  }
+  match result.status {
+    Completed(
+      output={
+        "candidate_pattern": String(pattern),
+        "message": String(message),
+        ..
+      }
+    ) => Some(Ok((pattern, message)))
+    Completed(output~) =>
+      Some(Err(pattern_repair_diagnostic(output.stringify())))
+    NoReport => Some(Err("Pattern Repair Agent finished without a submission."))
+    MaxStepsExhausted => Some(Err("Pattern Repair Agent exhausted its steps."))
+    ContextYield(reason~)
+    | Aborted(reason~)
+    | Interrupted(reason~)
+    | Failed(reason~) => Some(Err(pattern_repair_diagnostic(reason)))
   }
 }
 
 ///|
 test "pattern repair trace keeps validation outcomes and omits model content" {
-  let trace : Array[String] = []
-  let _ = pattern_repair_record_event(
-    {
-      "event": "tool_result",
-      "tool_name": "validate_pattern",
-      "is_error": false,
-      "content": "{\"valid\":false,\"diagnostic\":\"expected expression\"}",
-    },
-    trace,
-  )
-  let _ = pattern_repair_record_event(
-    { "event": "reasoning_delta", "content": "private reasoning" },
-    trace,
-  )
-  assert_eq(trace, ["validate_pattern: failed — expected expression"])
-}
-
-///|
-test "pattern repair trace records steps and raw terminal errors" {
-  let trace : Array[String] = []
-  let _ = pattern_repair_record_event(
-    { "event": "agent_step", "step": 3 },
-    trace,
-  )
-  let failure = pattern_repair_record_event(
-    {
-      "event": "turn_failed",
-      "error": "provider response could not be decoded",
-    },
-    trace,
-  )
-  assert_eq(failure, Some("provider response could not be decoded"))
-  assert_eq(trace, ["Agent step 3", "provider response could not be decoded"])
+  let session = @agent_session.Session(SessionId("t"), system_prompt="")
+    .append(Assistant(AssistantMessage("private reasoning about the pattern")))
+    .append(
+      Tool(
+        ToolResult(tool_call_id="c1", tool_name="validate_pattern", content=[
+          Text("{\"valid\":false,\"diagnostic\":\"expected expression\"}"),
+        ]),
+      ),
+    )
+    .append(Terminal(MaxStepsExhausted))
+  assert_eq(pattern_repair_trace_of(session), [
+    "Agent step 1", "validate_pattern: failed — expected expression", "Agent step limit exhausted",
+  ])
 }
 
 ///|
@@ -328,9 +252,36 @@ async fn request_pattern_repair_candidate(
       command,
     ).stringify()
   }
-  let input = ({ "pattern": pattern, "instruction": instruction } : Json).stringify() +
-    "\n"
-  let args = ["subrun", "pattern-repair", "--model", model]
+  // A private directory for the child's result and session, removed when
+  // the repair is done: nothing of a repair outlives it but its reply.
+  let dir = @fs.tmpdir(prefix="openseek-pattern-repair-") catch {
+    error => return Failed("\{error}", [])
+  }
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  let result_path = "\{dir}/result.json"
+  let session_root = "\{dir}/sessions"
+  let request : @openseek_protocol.RunRequest = {
+    request_id: None,
+    kind: Some("pattern-repair"),
+    input: { "pattern": pattern, "instruction": instruction },
+    max_steps: None,
+  }
+  let args = [
+    "run",
+    "--input-format",
+    "json",
+    "--cancel-on-stdin-eof",
+    "--kind",
+    "pattern-repair",
+    "--result-file",
+    result_path,
+    "--session",
+    PatternRepairSessionId,
+    "--session-root",
+    session_root,
+    "--model",
+    model,
+  ]
   if thinking is Some(thinking) {
     args.push("--thinking")
     args.push(thinking.wire())
@@ -338,26 +289,37 @@ async fn request_pattern_repair_candidate(
   let process = run_pattern_repair_process(
     state.engine,
     args,
-    input,
+    request.to_json().stringify() + "\n",
     root.0,
     agent_env,
   ) catch {
     error if @async.is_being_cancelled() => raise error
     error => return Failed("\{error}", [])
   }
+  let trace = pattern_repair_session_trace(session_root)
   match process {
-    TimedOut(trace) => TimedOut(trace)
-    Finished(code, stderr, candidate, agent_error, trace) =>
-      if candidate is Some((candidate, message)) {
-        Candidate(candidate, message, trace)
-      } else if agent_error is Some(error) {
-        Failed(error, trace)
-      } else if !stderr.trim().is_empty() {
-        Failed(pattern_repair_diagnostic(stderr), trace)
-      } else if code != 0 {
-        Failed("Pattern Repair Agent process exited with code \{code}.", trace)
-      } else {
-        Failed("Pattern Repair Agent did not produce a subrun report.", trace)
+    TimedOut => {
+      pattern_repair_trace_push(
+        trace,
+        "Host Agent timed out after \{PatternRepairWallTimeoutSeconds} seconds",
+      )
+      TimedOut(trace)
+    }
+    Finished(code, stderr) =>
+      match pattern_repair_result(result_path) {
+        Some(Ok((candidate, message))) => {
+          pattern_repair_trace_push(trace, "Candidate submitted")
+          Candidate(candidate, message, trace)
+        }
+        Some(Err(error)) => Failed(error, trace)
+        None if !stderr.trim().is_empty() =>
+          Failed(pattern_repair_diagnostic(stderr), trace)
+        None if code != 0 =>
+          Failed(
+            "Pattern Repair Agent process exited with code \{code}.",
+            trace,
+          )
+        None => Failed("Pattern Repair Agent did not produce a result.", trace)
       }
   }
 }
@@ -453,4 +415,43 @@ async fn pattern_repair_op(
       )
     }
   }
+}
+
+///|
+async test "pattern repair reads its candidate, or why there is none, from the result" {
+  let dir = @fs.tmpdir(prefix="openseek-pattern-repair-result-")
+  defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
+  let path = "\{dir}/result.json"
+  async fn read(result : String) -> Result[(String, String), String]? {
+    @fs.write_file(path, result, create_mode=CreateOrTruncate)
+    pattern_repair_result(path)
+  }
+  assert_eq(
+    read(
+      (
+        #|{"version":1,"status":"completed","output":{"candidate_pattern":"foo($x)","message":"closed the call"}}
+      ),
+    ),
+    Some(Ok(("foo($x)", "closed the call"))),
+  )
+  assert_eq(
+    read(
+      (
+        #|{"version":1,"status":"no_report"}
+      ),
+    ),
+    Some(Err("Pattern Repair Agent finished without a submission.")),
+  )
+  assert_eq(
+    read(
+      (
+        #|{"version":1,"status":"failed","reason":"an API key is required"}
+      ),
+    ),
+    Some(Err("an API key is required")),
+  )
+  // Not a result this build can read: the exit status explains instead.
+  assert_eq(read("not json"), None)
+  @fs.remove(path)
+  assert_eq(pattern_repair_result(path), None)
 }
