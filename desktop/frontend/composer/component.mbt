@@ -488,7 +488,11 @@ fn Entry::accept_completion(
     }
     Files =>
       item.path.map(path => Mention::{
-        ref_: @mention_context.File(path~),
+        ref_: if path.has_suffix("/") {
+          @mention_context.Directory(path=path.trim_end(chars="/").to_owned())
+        } else {
+          @mention_context.File(path~)
+        },
         range: None,
       })
   }
@@ -535,9 +539,15 @@ fn Entry::settled_file_completion(
     return None
   }
   let files = if remote_files is Some(remote_files) {
-    @files.Search(remote_files, input.open_files, input.active_file).rank(query)
+    @files.Search(remote_files, input.open_files, input.active_file).rank(
+      query,
+      include_directories=true,
+    )
   } else {
-    @files.Search(input.file_candidates, [], None).rank(query)
+    @files.Search(input.file_candidates, [], None).rank(
+      query,
+      include_directories=true,
+    )
   }
   let file_completion = RemoteSettled(owner~, root~, query~, files~, epoch~)
   Some({

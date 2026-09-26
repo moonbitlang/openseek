@@ -33,7 +33,7 @@ pub struct Search {
   candidates : Array[@pathx.Relative]
 }
 pub fn Search::Search(Array[@pathx.Relative], Array[@pathx.Relative], @pathx.Relative?) -> Self
-pub fn Search::rank(Self, String, limit? : Int) -> Array[Match]
+pub fn Search::rank(Self, String, limit? : Int, include_directories? : Bool) -> Array[Match]
 
 // Type aliases
 

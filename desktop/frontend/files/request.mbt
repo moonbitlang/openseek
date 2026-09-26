@@ -95,7 +95,14 @@ pub fn Request::run(
           return
         }
         let paths = [
-          for path in reply.files if !path.is_empty() => @pathx.Relative(path)
+          ..reply.files
+          .filter(path => !path.is_empty())
+          .map(path => @pathx.Relative(path)),
+          // A trailing separator preserves the directory kind in the shared
+          // relative-path index; file paths can never end with a separator.
+          ..reply.directories
+          .filter(path => !path.is_empty())
+          .map(path => @pathx.Relative("\{path}/")),
         ]
         scheduler.add(loaded(paths, reply.limit_hit))
       }) catch {
@@ -203,7 +210,14 @@ fn searching_loader(
             return
           }
           let paths = [
-            for path in reply.files if !path.is_empty() => @pathx.Relative(path)
+            ..reply.files
+            .filter(path => !path.is_empty())
+            .map(path => @pathx.Relative(path)),
+            // A trailing separator preserves the directory kind in the shared
+            // relative-path index; file paths can never end with a separator.
+            ..reply.directories
+            .filter(path => !path.is_empty())
+            .map(path => @pathx.Relative("\{path}/")),
           ]
           if active {
             scheduler.add(loaded(paths, reply.limit_hit))
