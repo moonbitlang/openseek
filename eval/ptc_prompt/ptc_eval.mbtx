@@ -287,10 +287,12 @@ fn Session::metrics(self : Session, into : Map[String, Json]) -> Unit {
     })
     .to_json()
   into["nested_calls"] = self.nested.length().to_json()
-  into["tool_errors"] = self.results.count_if(r => r is { "is_error": True, .. }).to_json()
-  into["nested_errors"] = self.nested.count_if(c => {
-    c is { "result": { "is_error": True, .. }, .. }
-  }).to_json()
+  into["tool_errors"] = self.results
+    .count_if(r => r is { "is_error": True, .. })
+    .to_json()
+  into["nested_errors"] = self.nested
+    .count_if(c => c is { "result": { "is_error": True, .. }, .. })
+    .to_json()
 }
 
 ///|
@@ -650,9 +652,9 @@ async fn analyze(
     "failures": failures.to_json(),
   }
   session.metrics(result)
-  result["interrupted_calls"] = session.nested.count_if(c => {
-    !(c is { "status": "done", .. })
-  }).to_json()
+  result["interrupted_calls"] = session.nested
+    .count_if(c => !(c is { "status": "done", .. }))
+    .to_json()
   result["model_tool_output_chars"] = session.results
     .fold(init=0, (total, r) => {
       match r {
