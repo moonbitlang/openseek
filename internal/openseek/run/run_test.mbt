@@ -99,6 +99,8 @@ async test "a single run exits successfully only when its turn completes" {
         ]),
       )
       assert_eq(read_result(result_file), {
+        request_id: None,
+        kind: None,
         status: Completed(output={ "answer": "done" }),
         session: None,
         usage: Some(usage),
@@ -129,6 +131,8 @@ async test "a single run exits successfully only when its turn completes" {
             "\{error}".contains("run did not complete: max steps exhausted"),
           )
           assert_eq(read_result(result_file), {
+            request_id: None,
+            kind: None,
             status: MaxStepsExhausted,
             session: None,
             usage: Some(usage),
@@ -165,6 +169,8 @@ async test "a single run exits successfully only when its turn completes" {
         )
       }
       assert_eq(read_result(result_file), {
+        request_id: None,
+        kind: None,
         status: Completed(output={ "answer": "done" }),
         session: Some("resumed"),
         usage: Some(usage),
@@ -187,6 +193,8 @@ async test "a single run exits successfully only when its turn completes" {
       error => {
         guard read_result(result_file)
           is {
+            request_id: None,
+            kind: None,
             status: Failed(reason~),
             session: None,
             usage: None,

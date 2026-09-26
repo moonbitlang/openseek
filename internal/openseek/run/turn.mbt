@@ -21,6 +21,7 @@ async fn run_task_turn(
   approval_policy~ : @execution.ApprovalPolicy,
   child_session? : @agent_subrun.ChildSession,
   job_log_dir? : String,
+  delegate~ : Bool,
 ) -> Unit {
   @async.with_task_group() <| group => {
     // `run` reads no commands, so there is nobody to ask: `--approval ask` is
@@ -49,17 +50,21 @@ async fn run_task_turn(
     // A snippet's workflow delegates to children named from the SAME ordinal
     // counter `run_subrun` uses, so a snippet's child and a `review` child
     // cannot collide on one transcript file.
-    let mbtx_subrun = child_session.map(spec => {
-      let (exe, launch_prefix) = @setup.workflow_launch(exe)
-      spec.injection(
-        exe~,
-        launch_prefix~,
-        workspace_root~,
-        model="\{model}",
-        api_url?,
-        criteria=() => @execution.audit_criteria(latest_session),
-      )
-    })
+    // A delegated run does not delegate further: no workflow handoff for its
+    // snippets (they see an empty `WORKFLOW_HOST`) and no review gate.
+    let mbtx_subrun = child_session
+      .filter(_ => delegate)
+      .map(spec => {
+        let (exe, launch_prefix) = @setup.workflow_launch(exe)
+        spec.injection(
+          exe~,
+          launch_prefix~,
+          workspace_root~,
+          model="\{model}",
+          api_url?,
+          criteria=() => @execution.audit_criteria(latest_session),
+        )
+      })
     let tools = @agent.build_tools(
       runtime,
       scope,
@@ -67,7 +72,7 @@ async fn run_task_turn(
       mbtx_subrun?,
       job_log_dir?,
     )
-    let on_goal_met = if @options.review_gate_enabled(matches) {
+    let on_goal_met = if delegate && @options.review_gate_enabled(matches) {
       Some(
         @execution.build_goal_met_gate(
           self_exe=exe,
@@ -130,12 +135,21 @@ fn TurnRecord::record(
 /// How the run ended. A turn that ended short says why itself; otherwise a
 /// `failure` that escaped the run is the reason, even after a finished turn,
 /// so that the status never claims success for a run that exits nonzero.
+/// `cancelled` says the parent closed stdin; `output` turns a finished turn's
+/// answer into what the run produced, or `None` when a preset submitted no
+/// report.
 fn TurnRecord::status(
   self : TurnRecord,
   failure~ : Error?,
+  cancelled~ : Bool,
+  output~ : (String) -> Json?,
 ) -> @openseek_protocol.RunStatus {
   match (self.latest.bind(session => session.last_terminal()), failure) {
-    (Some(Finished(answer)), None) => Completed(output={ "answer": answer })
+    (Some(Finished(answer)), None) =>
+      match output(answer) {
+        Some(output) => Completed(output~)
+        None => NoReport
+      }
     (Some(Finished(_)) | None, Some(error)) =>
       Failed(reason=@cli.failure_message("\{error}").to_owned())
     (Some(ContextYield(reason)), _) => ContextYield(reason~)
@@ -143,6 +157,8 @@ fn TurnRecord::status(
     (Some(Aborted(reason)), _) => Aborted(reason~)
     (Some(Interrupted(reason)), _) => Interrupted(reason~)
     (Some(Failed(reason)), _) => Failed(reason~)
+    (None, None) if cancelled =>
+      Interrupted(reason="stdin closed before the run finished")
     (None, None) => Failed(reason="the turn recorded no terminal")
   }
 }

@@ -145,6 +145,7 @@ Options:
   --session-root <session-root>                                Directory containing durable OpenSeek sessions. [default: .openseek]
   --no-session                                                 Run ephemerally: do not record this run to a durable session.
   --review-gate                                                On goal(met), audit the worktree against the goal with a review subagent and inject the findings as an advisory notice.
+  --cancel-on-stdin-eof                                        For a parent that launches this run: read the JSON request as one line, keep reading stdin, and cancel the run when it closes. Needs --input-format json. The run delegates no further work.
   --dir <dir>                                                  Workspace directory for relative paths; creates only the final path component if its parent exists. [default: .]
   --system-prompt-file <system-prompt-file>                    Read the complete system prompt from this file instead of the built-in prompt. [env: OPENSEEK_SYSTEM_PROMPT_FILE] [default: ]
   --system-prompt-addendum-file <system-prompt-addendum-file>  Append this file to the selected system prompt for prompt experiments. [env: OPENSEEK_SYSTEM_PROMPT_ADDENDUM_FILE] [default: ]
@@ -153,6 +154,8 @@ Options:
   --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
   --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking). [env: OPENSEEK_APPROVAL] [default: never]
   --result-file <result-file>                                  Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.
+  --kind <kind>                                                Run a preset instead of the general agent: explore, review, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.
+  --input-format <input-format>                                text: the task is the command-line words. json: read one JSON request from stdin instead (see docs/run-result.md). [default: text]
 ```
 
 `--approval ask` is refused here rather than accepted and then never honoured:

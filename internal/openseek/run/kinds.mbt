@@ -28,6 +28,45 @@ fn Kind::parse(name : StringView) -> Kind? {
 }
 
 ///|
+/// Why `input` is not this kind's input, or `None` when it is. Pure, so a
+/// request can be refused before anything is created for it.
+fn Kind::check_input(self : Kind, input : Json) -> String? {
+  match self {
+    Explore =>
+      if input is { "query": String(query), .. } && !query.is_blank() {
+        None
+      } else {
+        Some("explore requires a non-empty query")
+      }
+    Review =>
+      if input is { "goal": String(goal), .. } && !goal.is_blank() {
+        None
+      } else {
+        Some("review requires a non-empty goal")
+      }
+    Worker =>
+      match @agent_worker.WorkerInput::parse(input) {
+        Ok(_) => None
+        Err(reason) => Some(reason)
+      }
+    PatternRepair =>
+      if input
+        is {
+          "pattern": String(pattern),
+          "instruction": String(instruction),
+          ..
+        } &&
+        !pattern.is_blank() &&
+        !instruction.is_blank() {
+        None
+      } else {
+        Some("pattern-repair requires pattern and instruction")
+      }
+    Echo => None
+  }
+}
+
+///|
 /// How running a kind went, short of an error (errors raise).
 priv enum KindOutcome {
   /// The input was refused before any model was contacted; says why.
@@ -53,25 +92,14 @@ priv struct KindLaunch {
 }
 
 ///|
-/// The step ceiling for one kind run, by precedence: an explicit `--max-steps`
-/// on the command line (the operator's word), else the request's ceiling,
-/// else `OPENSEEK_MAX_STEPS`, else the kind's own default. The environment
-/// ranks below the request because it is a standing default, not a word about
-/// this call.
+/// The step ceiling for one kind run: `resolved_max_steps`, else the kind's
+/// own default.
 fn step_ceiling(
   matches : @argparse.Matches,
   requested : Int?,
   default : Int,
 ) -> Int raise {
-  let configured = @options.max_steps(matches)
-  match (@options.explicitly_provided(matches, "max-steps"), configured) {
-    (true, Some(steps)) => steps
-    _ =>
-      match requested {
-        Some(steps) => steps
-        None => configured.unwrap_or(default)
-      }
-  }
+  resolved_max_steps(matches, requested).unwrap_or(default)
 }
 
 ///|
@@ -85,6 +113,9 @@ async fn Kind::run(
   input : Json,
   launch : KindLaunch,
 ) -> KindOutcome {
+  if self.check_input(input) is Some(reason) {
+    return Rejected(reason)
+  }
   let { matches, model, thinking, api_url, workspace_root, .. } = launch
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
   fn api_key() raise {
@@ -95,9 +126,6 @@ async fn Kind::run(
   }
   match self {
     Explore => {
-      guard input is { "query": String(query), .. } && !query.is_blank() else {
-        return Rejected("explore requires a non-empty query")
-      }
       let api_key = api_key()
       let scratch_dir = @setup.new_scratch_lab("openseek-explore-lab-")
       defer @setup.remove_scratch_lab(scratch_dir)
@@ -122,7 +150,7 @@ async fn Kind::run(
       Ran(report=report.map(report => Json(report)))
     }
     Review => {
-      guard input is { "goal": String(goal), .. } && !goal.is_blank() else {
+      guard input is { "goal": String(goal), .. } else {
         return Rejected("review requires a non-empty goal")
       }
       let baseline : @agent_session.GoalBaseline? = match input {
@@ -155,9 +183,6 @@ async fn Kind::run(
       Ran(report=report.map(report => Json(report)))
     }
     Worker => {
-      if @agent_worker.WorkerInput::parse(input) is Err(reason) {
-        return Rejected(reason)
-      }
       let api_key = api_key()
       // No scratch lab: the worker's whole worktree is writable, and its
       // geometry (worktree, denied roots, allowed paths) arrives in the
@@ -190,9 +215,7 @@ async fn Kind::run(
           "pattern": String(pattern),
           "instruction": String(instruction),
           ..
-        } &&
-        !pattern.is_blank() &&
-        !instruction.is_blank() else {
+        } else {
         return Rejected("pattern-repair requires pattern and instruction")
       }
       let api_key = api_key()
