@@ -22,7 +22,7 @@ pub let default_worker_deadline_ms : Int = 2_700_000
 
 ///|
 /// The geometry and work order a worker child receives from the worker
-/// controller, decoded from the `subrun worker` input line. Every path is
+/// controller, decoded from the `run --kind worker` request's input. Every path is
 /// canonical (the controller realpaths at provision time) — the child does
 /// not re-derive geometry, it enforces with what it was handed.
 pub struct WorkerInput {
@@ -110,10 +110,10 @@ fn worker_task(input : WorkerInput) -> String {
 }
 
 ///|
-/// The CHILD-side entry for `openseek subrun worker`: decode the input
-/// line, assemble the confined toolset, run the worker's turn in this
-/// process, and return the report (the dispatch prints it as the final
-/// `subrun_report` line). `Err` for malformed input — the child must never
+/// The CHILD-side entry for `openseek run --kind worker`: decode the input,
+/// assemble the confined toolset, run the worker's turn in this process, and
+/// return the report (the run's result carries it as its output). `Err` for
+/// malformed input — the child must never
 /// run unconfined; `Ok(None)` when the child finished without a valid
 /// submission.
 pub async fn run_child(
