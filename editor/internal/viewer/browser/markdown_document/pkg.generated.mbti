@@ -44,11 +44,12 @@ pub fn MarkdownDocumentView::set_scroll_position(Self, scroll_top? : Double, scr
 pub fn MarkdownDocumentView::set_section_fold_toggle_handler(Self, (Int) -> Unit) -> Unit
 pub fn MarkdownDocumentView::set_toc_entries(Self, Array[MarkdownTocBarEntry], (Int) -> Unit) -> Unit
 pub fn MarkdownDocumentView::source_model_version(Self) -> Int
+pub fn MarkdownDocumentView::source_selection(Self) -> MarkdownSourceSelection?
 pub fn MarkdownDocumentView::viewport(Self) -> @dom.Element
 pub fn MarkdownDocumentView::visible_source_ranges(Self) -> Array[@common.OffsetRange]
 
 pub(all) struct MarkdownSectionFoldControl {
-  heading_element_index : Int
+  heading_node_id : Int
   section_index : Int
   collapsed : Bool
 } derive(Eq, @debug.Debug)
@@ -69,6 +70,17 @@ pub struct MarkdownSemanticPointerHit {
   source_offset : Int
   pointer_x : Double
 }
+
+pub struct MarkdownSourceSelection {
+  source_range : @common.OffsetRange
+  selected_text : String
+  source_model_version : Int
+  projection_generation : Int
+  prefer_below : Bool
+  // private fields
+}
+pub fn MarkdownSourceSelection::anchor_client_rect(Self) -> @dom.DOMRect
+pub fn MarkdownSourceSelection::same_dom_range(Self, Self) -> Bool
 
 pub(all) struct MarkdownTocBarEntry {
   depth : Int

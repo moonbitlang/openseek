@@ -21,7 +21,16 @@ fn feedback_at(
   replies? : Array[String] = [],
   state? : @agent_feedback_api.AgentFeedbackState = Accepted,
 ) -> @agent_feedback_api.AgentFeedback {
-  { id, text, resource, range: Range(line, 1, line, 1), kind, replies, state, }
+  {
+    id,
+    text,
+    resource,
+    range: Range(line, 1, line, 1),
+    selected_text: None,
+    kind,
+    replies,
+    state,
+  }
 }
 
 ///|
@@ -89,38 +98,60 @@ test "mark_feedback_submitted transitions accepted items and reports counts" {
 }
 
 ///|
-test "agent_feedback_handle adapts the concrete service and preserves defaults" {
+test "agent_feedback_handle preserves defaults and selected text through lifecycle" {
   let service = AgentFeedbackService()
   let resource = uri("memory://session/handle.mbt")
   let handle = service.agent_feedback_handle()
   let mut change_count = 0
   let subscription = handle.on_did_change_feedback(_ => change_count += 1)
+  let submitted_selections : Array[String?] = []
+  let submitted_subscription = service.on_did_submit_feedback(event => {
+    for item in event.items {
+      submitted_selections.push(item.selected_text)
+    }
+  })
   service.set_feedback_enabled(resource, true)
   assert_true(handle.is_feedback_enabled(resource))
   let defaulted = handle.add_feedback(resource, Range(1, 1, 1, 3), "defaulted")
   assert_eq(defaulted.kind, UserReview)
   assert_eq(defaulted.state, Accepted)
+  assert_eq(defaulted.selected_text, None)
   let explicit = handle.add_feedback(
     resource,
     Range(3, 1, 3, 3),
     "explicit",
     kind=AgentReview,
     state=Created,
+    selected_text="  selected words\nnext line  ",
   )
   assert_eq(explicit.kind, AgentReview)
   assert_eq(explicit.state, Created)
   assert_eq(handle.get_feedback(resource).length(), 2)
+  assert_eq(explicit.selected_text, Some("  selected words\nnext line  "))
+  let image = handle.add_feedback(
+    resource,
+    Range(5, 1, 5, 20),
+    "image",
+    selected_text="",
+  )
   handle.accept_feedback(resource, explicit.id)
   handle.update_feedback(resource, explicit.id, "updated")
   handle.add_reply(resource, explicit.id, "reply")
+  let updated = handle.get_feedback(resource)[1]
+  assert_eq(updated.text, "updated")
+  assert_eq(updated.replies, ["reply"])
+  assert_eq(updated.selected_text, explicit.selected_text)
   handle.set_navigation_anchor(resource, Some(explicit.id))
   assert_eq(
     handle.get_navigation_bearing(resource, [defaulted.id, explicit.id]),
     { active_idx: 1, total_count: 2, },
   )
   handle.mark_feedback_submitted(resource)
+  assert_eq(submitted_selections, [None, explicit.selected_text, Some("")])
+  assert_eq(handle.get_feedback(resource)[2].selected_text, image.selected_text)
   handle.remove_feedback(resource, defaulted.id)
   assert_true(change_count >= 7)
   subscription.dispose()
+  submitted_subscription.dispose()
   service.dispose()
 }

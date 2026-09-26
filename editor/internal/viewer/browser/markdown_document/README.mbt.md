@@ -22,6 +22,12 @@ flowchart TB
 The package owns no model, provider, marker store, or request policy. Root and
 the hover browser package own those higher-level contracts.
 
+Feedback selection captures two independent values: the enclosing source
+range resolved through node IDs, and the exact rendered text returned by the
+browser's native Selection. The text is captured before feedback input takes
+focus and remains attached to that selection; the source range is a location
+hint, not a request to expand the quote to a whole source block.
+
 ```mbt nocheck
 // MarkdownViewer installs this as its rich-document presentation.
 let document_view = MarkdownDocumentView::new(host, model_source)
@@ -73,7 +79,7 @@ moon test --target js internal/viewer/browser/markdown_document
 
 The view owns two fold mechanics and no fold policy:
 
-- `set_hidden_root_elements` marks a run of article root elements with
+- `set_hidden_root_elements` identifies article root elements by AST node ID and marks them with
   `data-markdown-section-hidden`, which the stylesheet maps to `display:none`.
   Pure visibility over retained nodes -- never a re-render, never a projection
   rebuild, never a `projection_generation` change -- so the `.mbt.md` semantic
@@ -87,9 +93,9 @@ The view owns two fold mechanics and no fold policy:
   `set_section_fold_toggle_handler`.
 - `set_toc_entries` exposes outlines of at least three sections through a
   compact, overlaid navigation panel. The collapsed summary stays outside
-  article flow and projection ordinals; activating a row collapses the panel,
+  article flow and source-bearing block roots; activating a row collapses the panel,
   restores focus to its toggle without scrolling, and hands the source offset
   to the root Viewer for expansion and reveal.
 
 Which sections exist, what starts collapsed, and how state survives a source or
-theme replacement belong to the root Viewer (`viewer/markdown_folding.mbt`).
+theme replacement belong to the root Viewer (`internal/viewer/markdown_viewer/markdown_viewer_folding.mbt`).

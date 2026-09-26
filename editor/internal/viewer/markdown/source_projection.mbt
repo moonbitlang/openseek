@@ -19,12 +19,14 @@ pub struct MarkdownProjectedCodeRange {
 ///|
 /// One source-bearing Markdown block in document order. Container and child
 /// anchors may overlap; the stable index distinguishes equal-looking blocks.
-/// A rendered ordinal assumes each code override follows the current
-/// package-owned contract of producing exactly one root element.
+/// Node IDs belong to this parse only; source-mapped HTML retains them.
+/// A container and its only child may share an ID and the same source range.
+/// Root elements are retained separately for section folding.
 pub struct MarkdownBlockAnchor {
   index : Int
   source_range : @common.OffsetRange
-  rendered_element_index : Int?
+  node_id : Int
+  is_root_element : Bool
   /// The ATX or setext heading level for a heading anchor, otherwise `None`.
   /// Retained during the one parse that produces the HTML and this projection,
   /// so section structure cannot describe a different parse than the document.
@@ -129,16 +131,18 @@ priv struct MarkdownProjectionBuilder {
 }
 
 ///|
-/// Retains cmark identities only until the same parsed document is rendered.
+/// Collects source facts and identities for the same parsed document that the
+/// renderer consumes.
 fn markdown_document_projection(
   doc : @cmark.Doc,
+  source_mapping~ : Bool,
 ) -> (MarkdownDocumentProjection, Map[Int, MarkdownCodeBlock]) {
   let builder : MarkdownProjectionBuilder = {
     block_anchors: [],
     code_blocks: [],
     code_blocks_by_id: Map([]),
   }
-  let rendered_element_indices = markdown_rendered_element_indices(doc)
+  let root_element_ids = markdown_root_element_ids(doc, source_mapping~)
   let folder = @cmark.Folder::new(block=fn(
     folder,
     builder : MarkdownProjectionBuilder,
@@ -146,13 +150,15 @@ fn markdown_document_projection(
   ) {
     if markdown_block_has_anchor(block) &&
       markdown_offset_range(block.meta().loc) is Some(source_range) {
+      // cmark may share one Meta between a container and its only child.
+      // Only the outer occurrence is a root element for section folding.
+      let is_root_element = root_element_ids.contains(block.meta().id)
+      root_element_ids.remove(block.meta().id)
       builder.block_anchors.push({
         index: builder.block_anchors.length(),
         source_range,
-        rendered_element_index: markdown_take_rendered_element_index(
-          rendered_element_indices,
-          block.meta().id,
-        ),
+        node_id: block.meta().id,
+        is_root_element,
         heading_level: markdown_block_heading_level(block),
         heading_text: markdown_block_heading_text(block),
       })
@@ -162,6 +168,7 @@ fn markdown_document_projection(
         node.v,
         node.meta.loc,
         builder.code_blocks.length(),
+        node_id=if source_mapping { Some(node.meta.id) } else { None },
       )
       is Some(code_block) {
       builder.code_blocks.push(code_block)
@@ -179,13 +186,14 @@ fn markdown_document_projection(
 }
 
 ///|
-fn markdown_rendered_element_indices(doc : @cmark.Doc) -> Array[(Int, Int)] {
-  let result : Array[(Int, Int)] = []
-  let mut rendered_element_index = 0
+fn markdown_root_element_ids(
+  doc : @cmark.Doc,
+  source_mapping~ : Bool,
+) -> Set[Int] {
+  let result : Set[Int] = Set([])
   let add = fn(block : @cmark.Block) {
-    if markdown_block_renders_one_root_element(block) {
-      result.push((block.meta().id, rendered_element_index))
-      rendered_element_index += 1
+    if markdown_block_renders_one_root_element(block, source_mapping~) {
+      result.add(block.meta().id)
     }
   }
   match doc.block {
@@ -196,6 +204,21 @@ fn markdown_rendered_element_indices(doc : @cmark.Doc) -> Array[(Int, Int)] {
     block => add(block)
   }
   result
+}
+
+///|
+/// Resolves an identity from this projection's rendered DOM. IDs must never be
+/// reused across parses or persisted as source locations.
+pub fn MarkdownDocumentProjection::source_range_for_node(
+  self : MarkdownDocumentProjection,
+  node_id : Int,
+) -> @common.OffsetRange? {
+  for anchor in self.block_anchors {
+    if anchor.node_id == node_id {
+      return Some(anchor.source_range)
+    }
+  }
+  None
 }
 
 ///|
@@ -239,7 +262,10 @@ fn markdown_block_heading_text(block : @cmark.Block) -> String? {
 }
 
 ///|
-fn markdown_block_renders_one_root_element(block : @cmark.Block) -> Bool {
+fn markdown_block_renders_one_root_element(
+  block : @cmark.Block,
+  source_mapping~ : Bool,
+) -> Bool {
   match block {
     BlockQuote(_)
     | CodeBlock(_)
@@ -248,30 +274,15 @@ fn markdown_block_renders_one_root_element(block : @cmark.Block) -> Bool {
     | Paragraph(_)
     | ThematicBreak(_)
     | ExtTable(_) => true
-    // The safe HTML renderer emits a comment for HtmlBlock, plain text for
-    // ExtMathBlock, and no in-place output for these remaining source nodes.
+    ExtMathBlock(_) => source_mapping
+    // The safe HTML renderer emits a comment for HtmlBlock and no in-place
+    // output for these remaining source nodes.
     Blocks(_)
     | BlankLine(_)
     | HtmlBlock(_)
     | LinkRefDefinition(_)
-    | ExtMathBlock(_)
     | ExtFootnoteDefinition(_) => false
   }
-}
-
-///|
-fn markdown_take_rendered_element_index(
-  indices : Array[(Int, Int)],
-  meta_id : Int,
-) -> Int? {
-  for index, pair in indices {
-    let (candidate_id, rendered_element_index) = pair
-    if candidate_id == meta_id {
-      indices.remove(index) |> ignore
-      return Some(rendered_element_index)
-    }
-  }
-  None
 }
 
 ///|
@@ -299,6 +310,7 @@ fn markdown_code_block_from_cmark(
   block : @cmark.CodeBlock,
   block_loc : @cmark_base.TextLoc,
   block_index : Int,
+  node_id~ : Int?,
 ) -> MarkdownCodeBlock? {
   guard markdown_offset_range(block_loc) is Some(block_source_range) else {
     return None
@@ -316,6 +328,7 @@ fn markdown_code_block_from_cmark(
   }
   Some({
     block_index,
+    node_id,
     code: markdown_code_block_text(block),
     language_id: language_and_remainder.map(pair => pair.0),
     full_info_string,

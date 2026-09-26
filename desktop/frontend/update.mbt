@@ -18088,12 +18088,12 @@ test "ApplyAllFeedback queues the attached annotation on a running task" {
     FileEditor(
       EditorCommentAdded(
         resource=@fileeditor.ModelUri::of(
-          @interop.ChannelId::Local.test_resource("/work/project/src/main.mbt"),
+          @interop.ChannelId::Local.test_resource("/work/project/README.md"),
         ),
-        file=Relative("src/main.mbt"),
-        range=@common.Range(5, 1, 6, 3),
-        quote="fn parse_hover() {",
-        comment="rename this",
+        file=Relative("README.md"),
+        range=@common.Range(3, 1, 6, 46),
+        quote="DeepSeek, Kimi, and Z.AI GLM models",
+        comment="make this clearer",
         feedback_id="viewer-feedback-immediate",
       ),
     ),
@@ -18109,8 +18109,23 @@ test "ApplyAllFeedback queues the attached annotation on a running task" {
   assert_eq(applied.active().pending_steers.length(), 1)
   let steer = applied.active().pending_steers[0]
   assert_eq(steer.mentions.length(), 1)
-  assert_true(steer.content.contains("<user_mentions>"))
-  assert_true(steer.content.contains("rename this"))
+  // Clearing the active composer preserves the selection in the queued draft.
+  assert_eq(batched.active().mentions, steer.mentions)
+  assert_eq(
+    steer.content,
+    (
+      #|<user_mentions>
+      #|<annotation file="README.md" lines="3-6">
+      #|<quote>
+      #|DeepSeek, Kimi, and Z.AI GLM models
+      #|</quote>
+      #|<user_comment>
+      #|make this clearer
+      #|</user_comment>
+      #|</annotation>
+      #|</user_mentions>
+    ),
+  )
 }
 
 ///|
@@ -18344,12 +18359,12 @@ test "Codex ApplyAllFeedback steers the running task through its composer" {
     FileEditor(
       EditorCommentAdded(
         resource=@fileeditor.ModelUri::of(
-          @interop.ChannelId::Local.test_resource("/work/project/src/main.mbt"),
+          @interop.ChannelId::Local.test_resource("/work/project/README.md"),
         ),
-        file=Relative("src/main.mbt"),
-        range=@common.Range(5, 1, 6, 3),
-        quote="fn parse_hover() {",
-        comment="rename this",
+        file=Relative("README.md"),
+        range=@common.Range(3, 1, 6, 46),
+        quote="DeepSeek, Kimi, and Z.AI GLM models",
+        comment="make this clearer",
         feedback_id="viewer-feedback-codex-immediate",
       ),
     ),
@@ -18362,13 +18377,30 @@ test "Codex ApplyAllFeedback steers the running task through its composer" {
     FileEditor(@fileeditor.ApplyAllFeedback),
     batched,
   )
+  assert_eq(
+    before.draft.mentions,
+    batched.codex_composer_input().draft.mentions,
+  )
   let queued = applied.codex.transcript_items()
   assert_eq(queued.length(), 1)
   guard queued[0].kind is @transcript.User(content=prompt) else {
     fail("expected the queued comment as a user prompt")
   }
-  assert_true(prompt.contains("<user_mentions>"))
-  assert_true(prompt.contains("rename this"))
+  assert_eq(
+    prompt.text(),
+    (
+      #|<user_mentions>
+      #|<annotation file="README.md" lines="3-6">
+      #|<quote>
+      #|DeepSeek, Kimi, and Z.AI GLM models
+      #|</quote>
+      #|<user_comment>
+      #|make this clearer
+      #|</user_comment>
+      #|</annotation>
+      #|</user_mentions>
+    ),
+  )
 }
 
 ///|

@@ -18,11 +18,12 @@ fn contract_feedback_handle() -> @agent_feedback_api.AgentFeedbackHandle {
       active_idx: -1,
       total_count: item_ids.length(),
     },
-    add_feedback=(resource, range, text, kind, state) => {
+    add_feedback=(resource, range, text, kind, state, selected_text) => {
       id: "external-contract-feedback",
       text,
       resource,
       range,
+      selected_text,
       kind: kind.unwrap_or(UserReview),
       replies: [],
       state: state.unwrap_or(Created),

@@ -18,7 +18,7 @@ pub(all) struct AgentFeedbackAddedEvent {
 
 type DesktopFeedbackService
 pub fn DesktopFeedbackService::DesktopFeedbackService() -> Self
-pub fn DesktopFeedbackService::add_feedback(Self, @common.Uri, @common.Range, String, kind? : @agent_feedback_api.AgentFeedbackKind, state? : @agent_feedback_api.AgentFeedbackState) -> @agent_feedback_api.AgentFeedback
+pub fn DesktopFeedbackService::add_feedback(Self, @common.Uri, @common.Range, String, kind? : @agent_feedback_api.AgentFeedbackKind, state? : @agent_feedback_api.AgentFeedbackState, selected_text? : String) -> @agent_feedback_api.AgentFeedback
 pub fn DesktopFeedbackService::agent_feedback_handle(Self) -> @agent_feedback_api.AgentFeedbackHandle
 pub fn DesktopFeedbackService::clear_feedback(Self, @common.Uri) -> Unit
 pub fn DesktopFeedbackService::on_did_add_feedback(Self, (AgentFeedbackAddedEvent) -> Unit) -> @common.Disposable

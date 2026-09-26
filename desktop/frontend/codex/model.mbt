@@ -1227,7 +1227,7 @@ pub fn State::draft_text(self : State) -> String {
 
 ///|
 /// Add an editor comment as the same annotation chip OpenSeek renders. The
-/// textarea remains the user's typed draft; selected source and comment travel
+/// textarea remains the user's typed draft; selected text and comment travel
 /// as structured context and are deduplicated like ordinary file mentions.
 /// Original-revision comments retain their source line but deliberately have no
 /// working-document navigation range.

@@ -112,15 +112,12 @@ fn MarkdownViewerWidgetAttachment::apply_folding(
       Some(record) => record.collapsed
       None => false
     }
-    match
-      projection.block_anchors[section.heading_anchor_index].rendered_element_index {
-      Some(heading_element_index) =>
-        controls.push({ heading_element_index, section_index, collapsed, })
-      None => continue
-    }
+    let anchor = projection.block_anchors[section.heading_anchor_index]
+    guard anchor.is_root_element else { continue }
+    controls.push({ heading_node_id: anchor.node_id, section_index, collapsed, })
     if collapsed {
-      for element_index in section.body_rendered_element_indexes(projection) {
-        hidden.add(element_index)
+      for node_id in section.body_node_ids(projection) {
+        hidden.add(node_id)
       }
     }
   }

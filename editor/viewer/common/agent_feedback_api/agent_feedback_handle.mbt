@@ -13,6 +13,7 @@ struct AgentFeedbackHandle {
     String,
     AgentFeedbackKind?,
     AgentFeedbackState?,
+    String?,
   ) -> AgentFeedback
   mark_feedback_submitted_callback : (@base_common.Uri) -> Unit
   remove_feedback_callback : (@base_common.Uri, String) -> Unit
@@ -37,6 +38,7 @@ pub fn AgentFeedbackHandle::AgentFeedbackHandle(
     String,
     AgentFeedbackKind?,
     AgentFeedbackState?,
+    String?,
   ) -> AgentFeedback,
   mark_feedback_submitted~ : (@base_common.Uri) -> Unit,
   remove_feedback~ : (@base_common.Uri, String) -> Unit,
@@ -105,6 +107,8 @@ pub fn AgentFeedbackHandle::get_navigation_bearing(
 ///|
 /// Omitted `kind` and `state` remain `None` at this boundary so the captured
 /// backing, rather than the handle, selects their defaults.
+/// `selected_text` is forwarded unchanged, including an explicitly empty
+/// snapshot, and remains independent of the source range.
 pub fn AgentFeedbackHandle::add_feedback(
   self : AgentFeedbackHandle,
   resource : @base_common.Uri,
@@ -112,8 +116,11 @@ pub fn AgentFeedbackHandle::add_feedback(
   text : String,
   kind? : AgentFeedbackKind,
   state? : AgentFeedbackState,
+  selected_text? : String,
 ) -> AgentFeedback {
-  (self.add_feedback_callback)(resource, range, text, kind, state)
+  (self.add_feedback_callback)(
+    resource, range, text, kind, state, selected_text,
+  )
 }
 
 ///|

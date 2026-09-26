@@ -280,22 +280,49 @@ fn layout_active_editor_surface() -> Unit {
 
 ///|
 /// Resolves feedback for the live working document. The code source Viewer is
-/// normally authoritative; when rich Markdown is selected it is detached, so
-/// the modified DiffEditor kernel becomes the working-document surface.
+/// authoritative for source presentation; rich Markdown owns its separate
+/// model. A detached source surface can still have a modified diff model.
 fn working_feedback_model(
   source_model : @model.TextModel?,
+  markdown_model : @viewer.MarkdownViewerModel?,
   diff_model : @viewer.DiffEditorModel?,
   resource : @common.Uri,
 ) -> @model.TextModel? {
   match source_model {
     Some(model) if model.uri.to_string() == resource.to_string() => Some(model)
     _ =>
-      match diff_model {
-        Some(model) if model.modified.uri.to_string() == resource.to_string() =>
-          Some(model.modified)
-        _ => None
+      match markdown_model {
+        Some(markdown) if markdown.model.uri.to_string() == resource.to_string() =>
+          Some(markdown.model)
+        _ =>
+          match diff_model {
+            Some(model) if model.modified.uri.to_string() ==
+              resource.to_string() => Some(model.modified)
+            _ => None
+          }
       }
   }
+}
+
+///|
+/// Rendered selections provide their visible text while the source range only
+/// locates the enclosing block. Source editors still quote their exact range.
+fn working_feedback_message(
+  file : @pathx.Relative,
+  model : @model.TextModel,
+  feedback : @agent_feedback_api.AgentFeedback,
+) -> Msg {
+  EditorCommentAdded(
+    resource=ModelUri(feedback.resource.to_string()),
+    file~,
+    range=feedback.range,
+    quote=match feedback.selected_text {
+      Some(selected) => selected
+      None => model.get_value_in_range(feedback.range)
+    },
+    comment=feedback.text,
+    feedback_id=feedback.id,
+  )
 }
 
 ///|
@@ -359,7 +386,7 @@ fn markdown_resource_kind(name : String) -> @viewer.MarkdownResourceKind {
 /// tokenizers and hover provider register with it). A no-op if already
 /// mounted or the host element is not in the DOM yet.
 ///
-/// Mounting also wires both code-pane comment flows into the update
+/// Mounting also wires code and rendered Markdown feedback into the update
 /// loop. Working-side feedback becomes `EditorCommentAdded`; feedback filed on
 /// the original pane becomes `DiffCommentAdded` with original-revision
 /// identity. The main package turns either event into a composer chip.
@@ -436,29 +463,23 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
             context.relative_path(document) is Some(file) else {
             return
           }
-          // The modified pane and code source use the same live URI. Rich
-          // Markdown detaches that source Viewer, so resolve the modified diff
-          // model as the fallback working-document owner.
+          // Each presentation owns its model; rich Markdown detaches the code
+          // source Viewer. Resolve its model for source-location ownership.
+          let markdown_model = viewer_state.markdown_viewer.bind(editor => {
+            editor.get_model()
+          })
           let diff_model = viewer_state.diff_editor.bind(editor => {
             editor.get_model()
           })
           if working_feedback_model(
               viewer.get_model(),
+              markdown_model,
               diff_model,
               event.feedback.resource,
             )
             is Some(model) {
             scheduler.add(
-              dispatch(
-                EditorCommentAdded(
-                  resource=ModelUri(event.feedback.resource.to_string()),
-                  file~,
-                  range=event.feedback.range,
-                  quote=model.get_value_in_range(event.feedback.range),
-                  comment=event.feedback.text,
-                  feedback_id=event.feedback.id,
-                ),
-              ),
+              dispatch(working_feedback_message(file, model, event.feedback)),
             )
             return
           }
@@ -1475,9 +1496,8 @@ fn show_file_in_viewer(
           review_original
         },
       )
-      // MarkdownViewer has no code-feedback contribution, but the same live
-      // resource may be mounted in DiffEditor's modified code kernel. Keep the
-      // resource enabled so review comments remain available there.
+      // Code, rendered Markdown, and modified diff panes share the live
+      // resource's feedback permission.
       services.feedback.set_feedback_enabled(uri, live)
       if live && !show_markdown {
         // A fresh document view starts with no bubbles (comments become
