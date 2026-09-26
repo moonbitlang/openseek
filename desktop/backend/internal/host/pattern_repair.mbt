@@ -174,15 +174,24 @@ async fn pattern_repair_session_trace(session_root : String) -> Array[String] {
 
 ///|
 /// How a finished child ended, from its result file: a candidate, or why
-/// there is none. `None` when there is no readable result, which leaves the
-/// exit status and stderr to explain.
+/// there is none. `None` only when the child wrote no result, which leaves the
+/// exit status and stderr to explain; a result that exists but cannot be read
+/// or decoded is an error of its own.
 async fn pattern_repair_result(
   path : String,
 ) -> Result[(String, String), String]? {
-  let text = @fs.read_file(path).text() catch { _ => return None }
-  let json = @json.parse(text) catch { _ => return None }
-  let result = @openseek_protocol.parse_run_result(json) catch {
-    _ => return None
+  let text = @fs.read_file(path).text() catch {
+    @os_error.OSError(_) as error if error.is_ENOENT() => return None
+    error =>
+      return Some(
+        Err("The Pattern Repair Agent's result is unreadable: \{error}"),
+      )
+  }
+  let result = @openseek_protocol.parse_run_result(@json.parse(text)) catch {
+    error =>
+      return Some(
+        Err("The Pattern Repair Agent's result is malformed: \{error}"),
+      )
   }
   match result.status {
     Completed(
@@ -450,8 +459,12 @@ async test "pattern repair reads its candidate, or why there is none, from the r
     ),
     Some(Err("an API key is required")),
   )
-  // Not a result this build can read: the exit status explains instead.
-  assert_eq(read("not json"), None)
+  // A result that exists but cannot be decoded says so; only a missing one
+  // leaves the exit status to explain.
+  guard read("not json") is Some(Err(error)) else {
+    fail("a malformed result must be reported")
+  }
+  assert_true(error.contains("malformed"))
   @fs.remove(path)
   assert_eq(pattern_repair_result(path), None)
 }
