@@ -308,7 +308,8 @@ test "decode maps subrun brackets onto the lane's open and close" {
         id="sr-1",
         status="captured",
         steps=12,
-        tokens=39600
+        tokens=39600,
+        unaccounted=None
       )
     ) else {
     fail("subrun_finished not decoded")

@@ -16,7 +16,7 @@ pub const McpClientVersion : String = "0.2.2"
 
 pub fn approval_channel(ApprovalPolicy, ApprovalDesk) -> @agent_runtime.ApprovalChannel?
 
-pub fn approval_policy(@argparse.Matches, interactive~ : Bool) -> ApprovalPolicy raise
+pub fn approval_policy(@argparse.Matches, interactive~ : Bool, delegated? : Bool) -> ApprovalPolicy raise
 
 pub fn audit_criteria(@agent_session.Session) -> @host.AuditCriteria?
 

@@ -19,6 +19,7 @@ import {
   "moonbitlang/openseek/mcp/tools" @mcptools,
   "moonbitlang/openseek/internal/openseek/setup",
   "moonbitlang/openseek/agent_tool/web_search",
+  "moonbitlang/workflow/spawn",
 }
 
 import {

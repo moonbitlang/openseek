@@ -33,6 +33,7 @@ struct SubrunResult[T] {
   prompt_tokens : Int
   completion_tokens : Int
   cost_usd : Double?
+  unaccounted : String?
   subrun_id : String
 } derive(Debug)
 
@@ -63,6 +64,14 @@ pub fn[T] SubrunResult::cost_usd(self : SubrunResult[T]) -> Double? {
 }
 
 ///|
+/// Why the counts may fall short of what the child spent: it left no usable
+/// result, so they are only what was observed. `None` when they are the
+/// child's own account.
+pub fn[T] SubrunResult::unaccounted(self : SubrunResult[T]) -> String? {
+  self.unaccounted
+}
+
+///|
 /// The runner-assigned sub-run id ("sr-N"): the same id the
 /// SubrunStarted/SubrunFinished brackets carried, and — when the child was
 /// launched with a `ChildSession` — the suffix of the child's durable
@@ -76,13 +85,17 @@ pub fn[T] SubrunResult::subrun_id(self : SubrunResult[T]) -> String {
 /// what it cost.
 ///
 /// `command`/`args` name the child — in production the parent's own
-/// executable with `["subrun", <kind>, ...]` (same binary, so the report's
-/// derived JSON codecs cannot drift), in tests any script that speaks the
-/// contract. The runner writes `input` as one JSON line on the child's
-/// stdin and HOLDS THE PIPE OPEN: closing it is the graceful-cancel signal.
-/// It drains the child's stdout, summing `usage` and `agent_step` events
-/// for cost and capturing the final `{"subrun_report": ...}` line, which
-/// `parse_report` turns into the typed value (rejects become `Failed`).
+/// executable running a preset in managed mode, `["run", "--input-format",
+/// "json", "--cancel-on-stdin-eof", "--kind", <kind>, "--result-file",
+/// "{result_file}", ...]` (same binary, so the report's derived JSON codecs
+/// cannot drift), in tests any script that speaks transport 2 of the
+/// workflow child contract. The runner writes the request as one JSON line on
+/// the child's stdin and HOLDS THE PIPE OPEN: closing it is the
+/// graceful-cancel signal. The child's result file decides the outcome and
+/// its cost; its stdout is for humans and is not read. `parse_report` turns
+/// the result's output into the typed value (rejects become `Failed`). A
+/// child with no `ChildSession` is launched with `--no-session`, so it keeps
+/// its transcript in memory rather than starting a session of its own.
 ///
 /// Deadline: after `wall_deadline_ms` the runner closes stdin and gives the
 /// child `cancel_grace_ms` to flush and exit — a report that lands during
@@ -125,29 +138,42 @@ pub async fn[T] run_subrun(
   let args = match child_session {
     Some(spec) =>
       [..args, "--session", "\{spec.parent}-\{id}", "--session-root", spec.root]
-    None => args
+    None => [..args, "--no-session"]
   }
   emit_event(
     SubrunStarted(id~, kind~, label=@agent_tool.brief_line(label, limit=72)),
   )
-  let progress = @spawn.ContractProgress()
-  fn finished(status : String) -> Unit {
+  fn finished(
+    status : String,
+    steps : Int,
+    prompt_tokens : Int,
+    completion_tokens : Int,
+    unaccounted : String?,
+  ) -> Unit {
     emit_event(
       SubrunFinished(
         id~,
         status~,
-        steps=progress.steps,
-        prompt_tokens=progress.prompt_tokens,
-        completion_tokens=progress.completion_tokens,
+        steps~,
+        prompt_tokens~,
+        completion_tokens~,
+        unaccounted~,
       ),
     )
   }
   // The spawn/drain/deadline machinery is the SHARED contract
   // implementation in `moonbitlang/workflow/spawn` — one definition for the
   // engine and for every foreign adapter. Cancellation re-raises out of
-  // it after teardown; the errdefer closes the finish bracket first,
-  // with whatever costs the live `progress` observed.
-  errdefer finished("cancelled")
+  // it after teardown; the errdefer closes the finish bracket first. A
+  // result-file child reports its costs only in its result, so a cancelled
+  // one's are unknown.
+  errdefer finished(
+    "cancelled",
+    0,
+    0,
+    0,
+    Some("the sub-run was cancelled before its result was read"),
+  )
   let contract = @spawn.contract_run(
     command~,
     args~,
@@ -157,7 +183,7 @@ pub async fn[T] run_subrun(
     wall_deadline_ms~,
     cwd?,
     extra_env?,
-    progress~,
+    transport=ResultFile,
   )
   // Re-typing the raw report happens HERE, at the layer that knows the
   // schema: a Captured contract terminal whose report the caller rejects
@@ -179,7 +205,13 @@ pub async fn[T] run_subrun(
     TimedOut => (None, TimedOut)
     Failed(reason) => (None, Failed(reason))
   }
-  finished(status_of(terminal))
+  finished(
+    status_of(terminal),
+    contract.steps_used,
+    contract.prompt_tokens,
+    contract.completion_tokens,
+    contract.unaccounted,
+  )
   {
     value,
     terminal,
@@ -187,6 +219,7 @@ pub async fn[T] run_subrun(
     prompt_tokens: contract.prompt_tokens,
     completion_tokens: contract.completion_tokens,
     cost_usd: contract.cost_usd,
+    unaccounted: contract.unaccounted,
     subrun_id: id,
   }
 }

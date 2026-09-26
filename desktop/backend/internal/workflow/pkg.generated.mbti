@@ -23,6 +23,7 @@ pub(all) struct ChildFinished {
   status : String
   steps : Int
   tokens : Int
+  unaccounted : String?
 } derive(Eq, @debug.Debug)
 pub fn ChildFinished::equal(Self, Self) -> Bool
 pub fn ChildFinished::not_equal(Self, Self) -> Bool

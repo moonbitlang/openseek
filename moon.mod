@@ -9,7 +9,7 @@ import {
   "moonbitlang/openseek_protocol@0.2.1",
   "moonbit-community/rabbita@0.16.3",
   "moonbitlang/editor@0.4.5",
-  "moonbitlang/workflow@0.7.1",
+  "moonbitlang/workflow@0.9.0",
 }
 
 readme = "README.md"

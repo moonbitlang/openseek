@@ -52,7 +52,7 @@ pub(all) struct AuditCriteria {
 /// reading a coordinate it did not choose.
 struct SubrunInjection {
   exe : String
-  /// argv tokens that come BEFORE `subrun` in every child launch. Empty for a
+  /// argv tokens that come BEFORE `run` in every child launch. Empty for a
   /// native engine, which is its own executable; on a wasm build they are the
   /// runtime and the module — `moonrun <module> --` — because the module is
   /// not a program any OS will exec.
@@ -209,14 +209,21 @@ pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
   let dir = "\{self.session_root}/\{self.parent}-wf-\{base}"
   let journal_path = "\{dir}/journal.jsonl"
   let events_path = "\{dir}/events.jsonl"
-  // The child argv, with the library's two placeholders. The API key NEVER
-  // rides argv — it reaches the child through the inherited environment.
-  // Per-call `max_steps` is not here either: it rides the request envelope,
-  // where the contract already carries it, and `subrun` reads it from there.
+  // The child argv, with the library's placeholders: a parent-managed `run` of
+  // the call's preset that writes its result to a file (transport 2 of the
+  // workflow child contract). The API key NEVER rides argv — it reaches the
+  // child through the inherited environment. Per-call `max_steps` is not here
+  // either: it rides the request, where the contract already carries it.
   let child_args = [
     ..self.launch_prefix,
-    "subrun",
+    "run",
+    "--input-format",
+    "json",
+    "--cancel-on-stdin-eof",
+    "--kind",
     "{kind}",
+    "--result-file",
+    "{result_file}",
     ..if self.model is Some(model) {
       ["--model", model]
     },
@@ -228,8 +235,11 @@ pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
     "--session-root",
     self.session_root,
   ]
+  // Version 2 of the handoff, which names the transport: a library too old to
+  // read result files refuses it instead of passing `{result_file}` along.
   let handoff : Json = {
-    "v": 1,
+    "v": 2,
+    "transport": "result_file",
     "exe": self.exe,
     "child_args": Json(child_args.map(Json::string)),
     "child_id": "\{self.parent}-sr-{n}",

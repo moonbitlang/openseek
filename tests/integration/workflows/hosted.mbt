@@ -4,18 +4,19 @@ async fn hosted_child(
   mode : String,
   calls : String,
   child : String,
+  result_file : String,
 ) -> Unit {
   guard @stdio.stdin.read_until("\n") is Some(line) else {
     fail("Missing child request")
   }
   let request = @json.parse(line)
   if name == "review" {
-    return review_child(request, mode, calls)
+    return review_child(request, mode, calls, result_file)
   }
   let steps = if name == "repo-map" { 12 } else { 16 }
   assert_true(request is { "kind": String("explore"), .. })
   assert_true(
-    request is { "max_steps": Number(value, ..), .. } &&
+    request is { "limits": { "max_steps": Number(value, ..), .. }, .. } &&
     value == steps.to_double(),
   )
   if name == "repo-map" {
@@ -54,17 +55,31 @@ async fn hosted_child(
     [{ "file": file, "line": line }]
   }
   let report : Json = {
-    "subrun_report": {
-      // Deliberately malformed empty answer tests the workflow's rejection.
-      "answer": if mode == "empty" && child == "test-2" {
-        ""
-      } else {
-        "offline evidence " + child
-      },
-      "citations": citations,
+    // Deliberately malformed empty answer tests the workflow's rejection.
+    "answer": if mode == "empty" && child == "test-2" {
+      ""
+    } else {
+      "offline evidence " + child
     },
+    "citations": citations,
   }
-  println(report.stringify())
+  write_result(result_file, request, report)
+}
+
+///|
+/// Answer `request` with a completed result carrying `report`, the way
+/// `openseek run --result-file` does (transport 2 of the child contract).
+async fn write_result(path : String, request : Json, report : Json) -> Unit {
+  guard request is { "request_id": String(id), .. } else {
+    fail("the request carries no request_id")
+  }
+  let result : Json = {
+    "version": 1,
+    "request_id": id,
+    "status": "completed",
+    "output": report,
+  }
+  @fs.write_file(path, result.stringify(), create_mode=CreateOrTruncate)
 }
 
 ///|
@@ -72,8 +87,19 @@ async fn hosted_child(
 /// resolved (its arguments, the engine's standing goal, or both) and a
 /// baseline only when one was given, answered with a report in the review
 /// contract's shape.
-async fn review_child(request : Json, mode : String, calls : String) -> Unit {
-  guard request is { "kind": "review", "max_steps": 100, "input": input, .. } else {
+async fn review_child(
+  request : Json,
+  mode : String,
+  calls : String,
+  result_file : String,
+) -> Unit {
+  guard request
+    is {
+      "kind": "review",
+      "limits": { "max_steps": 100, .. },
+      "input": input,
+      ..
+    } else {
     fail("unexpected review request: \{request.stringify()}")
   }
   let (goal, baseline) : (String, (String, Bool)?) = match mode {
@@ -112,20 +138,18 @@ async fn review_child(request : Json, mode : String, calls : String) -> Unit {
     []
   }
   let report : Json = {
-    "subrun_report": {
-      "schema_version": 1,
-      "scope": { "base": "abc", "head": "WORKTREE", "files": [] },
-      "findings": findings,
-      "summary": "offline fixture report",
-      "stats": {
-        "files_reviewed": 0,
-        "findings": findings.length(),
-        "build": "skipped",
-        "tests": "skipped",
-      },
+    "schema_version": 1,
+    "scope": { "base": "abc", "head": "WORKTREE", "files": [] },
+    "findings": findings,
+    "summary": "offline fixture report",
+    "stats": {
+      "files_reviewed": 0,
+      "findings": findings.length(),
+      "build": "skipped",
+      "tests": "skipped",
     },
   }
-  println(report.stringify())
+  write_result(result_file, request, report)
 }
 
 ///|
@@ -142,9 +166,12 @@ async fn verify_review(root : String, temp : String, exe : String) -> Unit {
     let env = clean_env()
     if mode != "missing" {
       let handoff : Json = {
-        "v": 1,
+        "v": 2,
+        "transport": "result_file",
         "exe": exe,
-        "child_args": ["hosted-child", "review", mode, calls, "{child}"],
+        "child_args": [
+          "hosted-child", "review", mode, calls, "{child}", "{result_file}",
+        ],
         "child_id": "test-{n}",
         "ids": [1, 1],
         "cwd": repo,
@@ -265,9 +292,12 @@ async fn verify_hosted(root : String, temp : String, exe : String) -> Unit {
       let env = clean_env()
       if mode != "missing" {
         let handoff : Json = {
-          "v": 1,
+          "v": 2,
+          "transport": "result_file",
           "exe": exe,
-          "child_args": ["hosted-child", name, mode, calls, "{child}"],
+          "child_args": [
+            "hosted-child", name, mode, calls, "{child}", "{result_file}",
+          ],
           "child_id": "test-{n}",
           "ids": [
             1,
@@ -308,7 +338,7 @@ async fn verify_hosted(root : String, temp : String, exe : String) -> Unit {
       if mode != "missing" && mode != "capacity" {
         let ids : Map[String, Unit] = Map([])
         for call in launched {
-          guard call is { "id": String(id), .. } else {
+          guard call is { "request_id": String(id), .. } else {
             fail("Missing child id")
           }
           ids[id] = ()
