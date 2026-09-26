@@ -4,6 +4,10 @@ import {
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
   "moonbitlang/x/time",
+  "bobzhang/typify/runtime" @typify_rt,
 }
 
 warnings = "+unnecessary_annotation"
+
+// session_types.mbt is generated from session.schema.json; keep it as generated.
+formatter(ignore: [ "session_types.mbt" ])

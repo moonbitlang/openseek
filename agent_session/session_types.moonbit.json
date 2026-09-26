@@ -1,0 +1,37 @@
+{
+  "$comment": "typify.mbt options for session_types.mbt (see `just gen-session-types`). The domain types keep their hand-written constructors and methods in types.mbt; TurnTerminal and Content are hand-written types with their own codecs.",
+  "roots": [
+    "SessionEvent"
+  ],
+  "from_json": true,
+  "codecs": "package",
+  "error_paths": true,
+  "strict_warnings": true,
+  "defaults": {
+    "visibility": "abstract",
+    "constructor": false
+  },
+  "types": {
+    "SessionItem": {
+      "visibility": "pub(all)",
+      "variants": {
+        "tool_result": "Tool",
+        "runtime_notice": "Runtime"
+      }
+    },
+    "TokenUsage": {
+      "visibility": "pub(all)"
+    },
+    "SessionToolCall": {
+      "visibility": "priv"
+    },
+    "Content": {
+      "replace": "Content",
+      "codec": "json"
+    },
+    "TurnTerminal": {
+      "replace": "TurnTerminal",
+      "codec": "json"
+    }
+  }
+}

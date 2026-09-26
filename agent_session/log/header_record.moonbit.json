@@ -1,0 +1,7 @@
+{
+  "$comment": "typify.mbt options for header_record.mbt: the session file header record, private to this package (see `just gen-session-types`).",
+  "roots": ["SessionFileHeader"],
+  "strict_warnings": true,
+  "defaults": { "visibility": "priv", "constructor": false },
+  "types": { "SessionFileHeader": { "name": "HeaderRecord" } }
+}

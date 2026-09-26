@@ -39,6 +39,7 @@ pub(all) struct SessionFileHeader {
   id : String
   system_prompt : String
 } derive(Eq, @debug.Debug)
+pub fn SessionFileHeader::to_json_line(Self) -> String
 pub impl ToJson for SessionFileHeader
 
 // Type aliases
