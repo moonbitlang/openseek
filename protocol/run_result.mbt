@@ -35,6 +35,10 @@ pub(all) enum RunStatus {
 /// authoritative account of how the run ended. See `docs/run-result.md` for
 /// the file's lifecycle and the exact JSON.
 pub(all) struct RunResult {
+  /// The request's `request_id`, echoed; `None` when it carried none.
+  request_id : String?
+  /// The preset that ran; `None` for a general run.
+  kind : String?
   status : RunStatus
   /// The durable session the run recorded to; `None` for `--no-session`.
   session : String?
@@ -58,6 +62,12 @@ pub(all) suberror RunResultError {
 ///|
 pub impl ToJson for RunResult with fn to_json(self) {
   let fields : Map[String, Json] = { "version": RunResultVersion.to_json() }
+  if self.request_id is Some(id) {
+    fields["request_id"] = id.to_json()
+  }
+  if self.kind is Some(kind) {
+    fields["kind"] = kind.to_json()
+  }
   match self.status {
     Completed(output~) => {
       fields["status"] = "completed"
@@ -123,6 +133,15 @@ pub fn parse_run_result(json : Json) -> RunResult raise RunResultError {
     Some("failed") => Failed(reason=required("reason"))
     _ => raise Malformed("status")
   }
+  fn optional_text(key) raise RunResultError {
+    match fields.get(key) {
+      None => None
+      Some(String(value)) => Some(value)
+      Some(_) => raise Malformed(key)
+    }
+  }
+  let request_id = optional_text("request_id")
+  let kind = optional_text("kind")
   let session = match fields.get("session") {
     None => None
     Some(String(session)) => Some(session)
@@ -145,7 +164,7 @@ pub fn parse_run_result(json : Json) -> RunResult raise RunResultError {
         _ => raise Malformed("steps")
       }
   }
-  { status, session, usage, steps, }
+  { request_id, kind, status, session, usage, steps, }
 }
 
 ///|

@@ -53,25 +53,14 @@ priv struct KindLaunch {
 }
 
 ///|
-/// The step ceiling for one kind run, by precedence: an explicit `--max-steps`
-/// on the command line (the operator's word), else the request's ceiling,
-/// else `OPENSEEK_MAX_STEPS`, else the kind's own default. The environment
-/// ranks below the request because it is a standing default, not a word about
-/// this call.
+/// The step ceiling for one kind run: `resolved_max_steps`, else the kind's
+/// own default.
 fn step_ceiling(
   matches : @argparse.Matches,
   requested : Int?,
   default : Int,
 ) -> Int raise {
-  let configured = @options.max_steps(matches)
-  match (@options.explicitly_provided(matches, "max-steps"), configured) {
-    (true, Some(steps)) => steps
-    _ =>
-      match requested {
-        Some(steps) => steps
-        None => configured.unwrap_or(default)
-      }
-  }
+  resolved_max_steps(matches, requested).unwrap_or(default)
 }
 
 ///|
