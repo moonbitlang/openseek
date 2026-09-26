@@ -261,12 +261,10 @@ fn normalize_allowed_paths(
     guard !cleaned.contains("\\") else {
       return Err("allowed_paths entries must use forward slashes: \{prefix}")
     }
-    for part in cleaned.split("/") {
-      guard !(part.to_owned() is ("" | "." | "..")) else {
-        return Err(
-          "allowed_paths entries must not contain empty, `.`, or `..` components: \{prefix}",
-        )
-      }
+    guard !cleaned.split("/").any(part => part is ("" | "." | "..")) else {
+      return Err(
+        "allowed_paths entries must not contain empty, `.`, or `..` components: \{prefix}",
+      )
     }
     if !normalized.contains(cleaned) {
       normalized.push(cleaned)

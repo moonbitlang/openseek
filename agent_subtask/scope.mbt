@@ -102,7 +102,6 @@ fn gitlink_introductions_in_raw_z(output : String) -> Array[String] {
       // :src_mode dst_mode src_oid dst_oid status
       let parts = meta
         .view(start_offset=1)
-        .to_owned()
         .split(" ")
         .map(p => p.to_owned())
         .collect()
