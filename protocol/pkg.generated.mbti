@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub const RunRequestVersion : Int = 1
+
 pub const RunResultVersion : Int = 1
 
 pub fn job_id_from_storage(String) -> String
@@ -14,6 +16,8 @@ pub fn job_id_from_storage(String) -> String
 pub fn job_storage_name(String) -> String
 
 pub fn parse(Json) -> Event?
+
+pub fn parse_run_request(Json) -> RunRequest raise RunRequestError
 
 pub fn parse_run_result(Json) -> RunResult raise RunResultError
 
@@ -31,6 +35,15 @@ pub(all) suberror ImageError {
 pub fn ImageError::equal(Self, Self) -> Bool
 pub fn ImageError::not_equal(Self, Self) -> Bool
 pub fn ImageError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror RunRequestError {
+  UnsupportedVersion(Int)
+  Malformed(String)
+  Unsupported(String)
+} derive(Eq, @debug.Debug)
+pub fn RunRequestError::equal(Self, Self) -> Bool
+pub fn RunRequestError::not_equal(Self, Self) -> Bool
+pub fn RunRequestError::to_repr(Self) -> @debug.Repr
 
 pub(all) suberror RunResultError {
   UnsupportedVersion(Int)
@@ -234,7 +247,21 @@ pub fn JobStopOutcome::to_repr(Self) -> @debug.Repr
 pub impl ToJson for JobStopOutcome
 pub impl @json.FromJson for JobStopOutcome
 
+pub(all) struct RunRequest {
+  request_id : String?
+  kind : String?
+  input : Json
+  max_steps : Int?
+} derive(Eq, @debug.Debug)
+pub fn RunRequest::equal(Self, Self) -> Bool
+pub fn RunRequest::not_equal(Self, Self) -> Bool
+pub fn RunRequest::to_json(Self) -> Json
+pub fn RunRequest::to_repr(Self) -> @debug.Repr
+pub impl ToJson for RunRequest
+
 pub(all) struct RunResult {
+  request_id : String?
+  kind : String?
   status : RunStatus
   session : String?
   usage : Usage?

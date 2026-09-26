@@ -84,6 +84,17 @@ pub fn root_command() -> @argparse.Command {
             long="result-file",
             about="Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.",
           ),
+          OptionArg(
+            "kind",
+            long="kind",
+            about="Run a preset instead of the general agent: explore, review, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.",
+          ),
+          OptionArg(
+            "input-format",
+            long="input-format",
+            default_values=["text"],
+            about="text: the task is the command-line words. json: read one JSON request from stdin instead (see docs/run-result.md).",
+          ),
         ],
         flags=[
           FlagArg(
@@ -92,6 +103,11 @@ pub fn root_command() -> @argparse.Command {
             about="Run ephemerally: do not record this run to a durable session.",
           ),
           review_gate_flag(),
+          FlagArg(
+            "cancel-on-stdin-eof",
+            long="cancel-on-stdin-eof",
+            about="For a parent that launches this run: read the JSON request as one line, keep reading stdin, and cancel the run when it closes. Needs --input-format json. The run delegates no further work.",
+          ),
         ],
         positionals=[
           PositionArg(
