@@ -2544,7 +2544,7 @@ fn message_card(
 /// dangling call with a synthetic message; in those cases the looked-up result
 /// is not what the model saw, so the content guard rejects it (returns `None`)
 /// rather than misrepresent the model view. Shared by `model_tool_card` and
-/// `rendered_error_count` so the on-screen flags and the error count never drift.
+/// `rendered_result_count` so the on-screen flags and the counts never drift.
 fn model_shown_result(
   message : @deepseek.ChatMessage,
   tool_results : Map[String, @agent_session.ToolResult],
