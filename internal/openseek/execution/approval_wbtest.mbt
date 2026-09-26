@@ -22,8 +22,12 @@ fn ApprovalDesk::standing(self : ApprovalDesk) -> String? {
 }
 
 ///|
-async test "an answered question resolves to the controller's decision" {
-  let desk = ApprovalDesk::ApprovalDesk(now_ms=0)
+/// Test helper: ask `desk` one question, answer it with `allow`, and return
+/// what the asker resolved to.
+async fn answered(
+  desk : ApprovalDesk,
+  allow : Bool,
+) -> @agent_runtime.ApprovalOutcome {
   @async.with_task_group(group => {
     let asked = group.spawn(() => {
       desk.ask({
@@ -34,28 +38,21 @@ async test "an answered question resolves to the controller's decision" {
     })
     await_standing(desk)
     guard desk.standing() is Some(id) else { fail("no question was announced") }
-    desk.settle(id, true)
-    assert_true(asked.wait() is AllowedOnce)
+    desk.settle(id, allow)
+    asked.wait()
   })
+}
+
+///|
+async test "an answered question resolves to the controller's decision" {
+  let desk = ApprovalDesk::ApprovalDesk(now_ms=0)
+  assert_true(answered(desk, true) is AllowedOnce)
   assert_eq(desk.pending.length(), 0)
 }
 
 ///|
 async test "a refused question resolves to rejected" {
-  let desk = ApprovalDesk::ApprovalDesk(now_ms=0)
-  @async.with_task_group(group => {
-    let asked = group.spawn(() => {
-      desk.ask({
-        tool_name: "mbtx",
-        detail: "run without the sandbox policy",
-        body: Some("fn main { println(1) }"),
-      })
-    })
-    await_standing(desk)
-    guard desk.standing() is Some(id) else { fail("no question was announced") }
-    desk.settle(id, false)
-    assert_true(asked.wait() is Rejected)
-  })
+  assert_true(answered(ApprovalDesk(now_ms=0), false) is Rejected)
 }
 
 ///|
