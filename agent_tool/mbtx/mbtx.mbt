@@ -1895,10 +1895,14 @@ fn description(
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` as an admitted child process.
-    #|- A snippet READS anywhere and WRITES only its own `@fs.tmpdir()`. Changing a
-    #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
-    #|  checkout` and friends are child processes and run normally. A write refusal
-    #|  is that rule firing, not a filesystem fault to debug or route around.
+    #|- A snippet READS anywhere and WRITES only its own `@fs.tmpdir()`. Use the
+    #|  file tools to change workspace files; commands such as `moon fmt` may also
+    #|  change files as part of their intended function.
+    #|- The wasm filesystem policy applies to the snippet, not to its allowed child
+    #|  processes. Never use a child process (including `moonx --target native`) to
+    #|  get around a write refusal. A refusal is the policy firing, not a filesystem
+    #|  fault to debug or route around. See the `moonx` entry above for its native
+    #|  execution boundary and file-tool provenance limitation.
     #|- DNS and outbound connections are allowed. A snippet may bind/listen only on
     #|  IPv4 or IPv6 localhost; wildcard and external-interface binds are refused.
     #|  These network rules do not constrain an allowed child process.

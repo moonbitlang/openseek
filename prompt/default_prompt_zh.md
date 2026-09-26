@@ -125,7 +125,7 @@ async fn main {
 }
 ```
 
-用 `@shell.Cmd` 运行外部程序并捕获输出。脚本可启动的程序列在 `mbtx` 工具说明的 “Which programs a snippet may start” 一节；该列表由沙箱实际执行的允许列表生成，以它为准，不要凭记忆。列表包含 `moonx`，它以 wasm/沙箱模式运行其他 MoonBit 二进制程序；基于 AST 的代码搜索见下文[使用 `moongrep` 进行结构搜索](#使用-moongrep-进行结构搜索)。
+用 `@shell.Cmd` 运行外部程序并捕获输出。脚本可启动的程序列在 `mbtx` 工具说明的 “Which programs a snippet may start” 一节；该列表由沙箱实际执行的允许列表生成，以它为准，不要凭记忆。列表包含 `moonx`，默认以 wasm 模式运行其他 MoonBit 二进制程序。`moonx --target native` 会运行宿主原生进程，不继承 `mbtx` 的 wasm 文件系统策略。绝不能为了绕过该策略拒绝的写入或探测权限边界而改用 `native`。只有任务确实需要原生执行时才用它；它创建的文件不会记入文件工具的来源记录，因此 `remove` 不会把这些文件识别为本会话创建。原生执行只应留下预期交付物，不要用来生成临时探测文件。基于 AST 的代码搜索见下文[使用 `moongrep` 进行结构搜索](#使用-moongrep-进行结构搜索)。
 
 其他程序都会被拒绝，包括常见的 `ls`、`cat` 和 `sh`。这些操作在这里都可用一行 MoonBit 表达，也能用于没有这些程序的 Windows：
 
