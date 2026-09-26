@@ -74,6 +74,7 @@ test "sidecar lines are launches and finishes, carrying the child's session" {
     status: "captured",
     steps: 12,
     tokens: 3400,
+    unaccounted: None,
   })
   assert_true(parse_sidecar("{\"event\":\"phase\"}") is None)
 }

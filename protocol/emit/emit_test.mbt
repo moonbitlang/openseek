@@ -147,6 +147,15 @@ fn all_events() -> Array[@protocol.Event] {
       steps=12,
       prompt_tokens=34_000,
       completion_tokens=5_600,
+      unaccounted=None,
+    ),
+    SubrunFinished(
+      id="sr-2",
+      status="cancelled",
+      steps=0,
+      prompt_tokens=0,
+      completion_tokens=0,
+      unaccounted=Some("the sub-run was cancelled before its result was read"),
     ),
     SessionStarted(
       session="cli-1",

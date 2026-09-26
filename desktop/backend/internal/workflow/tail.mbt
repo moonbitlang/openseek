@@ -141,6 +141,9 @@ pub(all) struct ChildFinished {
   steps : Int
   /// Prompt and completion tokens together; the sidecar does not split them.
   tokens : Int
+  /// Why `steps` and `tokens` may fall short of the child's spend (it left no
+  /// result, or its launch was cancelled); `None` when they are its account.
+  unaccounted : String?
 } derive(Eq, Debug)
 
 ///|
@@ -168,10 +171,21 @@ fn parse_sidecar(text : String) -> Result[ChildStarted, ChildFinished]? {
       "steps": Number(steps, ..),
       "tokens": Number(tokens, ..),
       ..
-    } =>
+    } => {
+      let unaccounted = match json {
+        { "unaccounted": String(reason), .. } => Some(reason)
+        _ => None
+      }
       Some(
-        Err({ child, status, steps: steps.to_int(), tokens: tokens.to_int(), }),
+        Err({
+          child,
+          status,
+          steps: steps.to_int(),
+          tokens: tokens.to_int(),
+          unaccounted,
+        }),
       )
+    }
     _ => None
   }
 }

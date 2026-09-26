@@ -112,7 +112,9 @@ error: a run launched from a hosted workflow needs its reserved --session; deleg
 ## A Parent-Managed Run: One Line In, stdin Held Open
 
 With `--cancel-on-stdin-eof` the request is one line and the parent keeps the
-pipe open (the `sleep` here). Closing stdin before a request arrives is a
+pipe open (the `sleep` here). A delegated run refuses every escalation: an
+inherited `OPENSEEK_APPROVAL` does not reach it, and an explicit
+`--approval always` is refused. Closing stdin before a request arrives is a
 failed run.
 
 ```mooncram
@@ -121,6 +123,9 @@ $ sh <<'EOF'
 > (printf '{"version":1,"kind":"echo","input":[1,2]}\n'; sleep 1) | openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" --result-file "$d/result.json" > /dev/null 2>&1
 > echo "exit $?"
 > cat "$d/result.json"
+> (printf '{"version":1,"kind":"echo","input":"inherited"}\n'; sleep 1) | env OPENSEEK_APPROVAL=ask openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" --result-file "$d/result.json" > /dev/null 2>&1
+> cat "$d/result.json"
+> printf '{"version":1,"kind":"echo","input":0}\n' | openseek.exe run --input-format json --cancel-on-stdin-eof --approval always --no-session --dir "$d/ws" 2>&1 > /dev/null
 > openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" --result-file "$d/result.json" < /dev/null 2>&1 > /dev/null
 > echo "exit $?"
 > cat "$d/result.json"
@@ -128,6 +133,8 @@ $ sh <<'EOF'
 > EOF
 exit 0
 {"version":1,"kind":"echo","status":"completed","output":[1,2]}
+{"version":1,"kind":"echo","status":"completed","output":"inherited"}
+error: a delegated run (--cancel-on-stdin-eof) refuses every escalation: --approval must be never
 error: stdin closed before a request arrived
 exit 1
 {"version":1,"status":"failed","reason":"stdin closed before a request arrived"}

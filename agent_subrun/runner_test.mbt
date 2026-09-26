@@ -195,6 +195,8 @@ async test "a nonzero exit without a result is Failed by exit status" {
   let result = run_script(script)
   guard result.terminal() is Failed(reason) else { fail("expected Failed") }
   assert_true(reason.contains("exited 3"))
+  // The child may have spent anything before it died.
+  assert_eq(result.unaccounted(), Some("the child left no result"))
 }
 
 ///|
@@ -229,7 +231,8 @@ async test "a run emits a matched started/finished bracket pair" {
         status="captured",
         steps=2,
         prompt_tokens=90,
-        completion_tokens=10
+        completion_tokens=10,
+        unaccounted=None
       ),
     ] else {
     fail("expected exactly one started/finished pair, got \{Repr(events)}")
@@ -295,7 +298,13 @@ async test "external cancellation closes the bracket before re-raising" {
     assert_true(reraised)
     assert_true(outcome is None)
   }
-  guard events is [SubrunStarted(..), SubrunFinished(status="cancelled", ..)] else {
+  // A result-file child's spend is known only from its result: a cancelled
+  // one's is unknown, never zero.
+  guard events
+    is [
+      SubrunStarted(..),
+      SubrunFinished(status="cancelled", unaccounted=Some(_), ..),
+    ] else {
     fail("expected a cancelled pair, got \{Repr(events)}")
   }
 }
