@@ -201,17 +201,6 @@ fn opt_int(value : Int?) -> Json {
 }
 
 ///|
-fn count(values : Array[Json], matches : (Json) -> Bool) -> Int {
-  values.fold(init=0, (total, value) => {
-    if matches(value) {
-      total + 1
-    } else {
-      total
-    }
-  })
-}
-
-///|
 fn error_message(error : Error) -> String {
   match error {
     Failure(message) => message
@@ -298,10 +287,12 @@ fn Session::metrics(self : Session, into : Map[String, Json]) -> Unit {
     })
     .to_json()
   into["nested_calls"] = self.nested.length().to_json()
-  into["tool_errors"] = count(self.results, r => r is { "is_error": True, .. }).to_json()
-  into["nested_errors"] = count(self.nested, c => {
-    c is { "result": { "is_error": True, .. }, .. }
-  }).to_json()
+  into["tool_errors"] = self.results
+    .count_if(r => r is { "is_error": True, .. })
+    .to_json()
+  into["nested_errors"] = self.nested
+    .count_if(c => c is { "result": { "is_error": True, .. }, .. })
+    .to_json()
 }
 
 ///|
@@ -609,10 +600,10 @@ fn search_oracle(session : Session, final_message : Json) -> Bool {
       }
     }
   }
-  let search_calls = count(session.results, r => {
+  let search_calls = session.results.count_if(r => {
       r is { "tool_name": "web_search", .. }
     }) +
-    count(session.nested, c => c is { "name": "web_search", .. })
+    session.nested.count_if(c => c is { "name": "web_search", .. })
   search_calls >= 2
 }
 
@@ -661,9 +652,9 @@ async fn analyze(
     "failures": failures.to_json(),
   }
   session.metrics(result)
-  result["interrupted_calls"] = count(session.nested, c => {
-    !(c is { "status": "done", .. })
-  }).to_json()
+  result["interrupted_calls"] = session.nested
+    .count_if(c => !(c is { "status": "done", .. }))
+    .to_json()
   result["model_tool_output_chars"] = session.results
     .fold(init=0, (total, r) => {
       match r {
