@@ -318,7 +318,6 @@ fn eval_session_with_context(
   if context.validation.ran && !context.validation.passed {
     reasons.push(context.validation.reason)
   }
-  let warnings = context.extra_warnings.copy()
   let success = reasons.length() == 0
   let text = @session_analyzer.transcript_text(session)
   {
@@ -374,7 +373,7 @@ fn eval_session_with_context(
     @metrics.count_occurrences(text, "Err("),
     try_mentions: @metrics.count_occurrences(text, "try?") +
     @metrics.count_occurrences(text, "try!"),
-    warnings: warnings.join("; "),
+    warnings: context.extra_warnings.join("; "),
   }
 }
 

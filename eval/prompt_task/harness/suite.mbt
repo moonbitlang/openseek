@@ -550,30 +550,18 @@ fn SuiteManifest::from_json(json : Json) -> SuiteManifest raise {
     min_successes=int_field(fields, "min_successes"),
     max_steps=int_field(fields, "max_steps"),
     models=string_array_field(fields, "models"),
-    problems=suite_manifest_problems(fields),
-    combos=suite_manifest_combos(fields),
-  )
-}
-
-///|
-fn suite_manifest_problems(
-  fields : Map[String, Json],
-) -> Array[ProblemSpec] raise {
-  array_field(
-    fields,
-    "problems",
-    label="suite manifest problems",
-    ProblemSpec::from_manifest_json,
-  )
-}
-
-///|
-fn suite_manifest_combos(fields : Map[String, Json]) -> Array[ComboRun] raise {
-  array_field(
-    fields,
-    "combos",
-    label="suite manifest combos",
-    ComboRun::from_json,
+    problems=array_field(
+      fields,
+      "problems",
+      label="suite manifest problems",
+      ProblemSpec::from_manifest_json,
+    ),
+    combos=array_field(
+      fields,
+      "combos",
+      label="suite manifest combos",
+      ComboRun::from_json,
+    ),
   )
 }
 
