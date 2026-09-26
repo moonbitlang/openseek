@@ -19,14 +19,29 @@ pub enum ApprovalPolicy {
 /// whether this subcommand has a controller that could answer — `serve` reads
 /// commands from stdin, `run` does not — so asking where nobody can answer is
 /// refused up front.
+///
+/// A `delegated` run (launched by a parent, `--cancel-on-stdin-eof`) has
+/// nobody to ask, and a parent's standing grant must not reach the children it
+/// delegates to: it is always `Never`, whatever `OPENSEEK_APPROVAL` it
+/// inherited, and an explicit `--approval` other than `never` is refused.
 pub fn approval_policy(
   matches : @argparse.Matches,
   interactive~ : Bool,
+  delegated? : Bool = false,
 ) -> ApprovalPolicy raise {
   // Every subcommand that reads this declares the option with a default, so
   // an absent value is a command tree that forgot one — not a state a user
   // can reach.
   guard matches is { values: { "approval"? : Some([value, ..]), .. }, .. } else {
+    return Never
+  }
+  if delegated {
+    guard !(matches.sources.get("approval") is Some(Argv)) ||
+      value.trim() == "never" else {
+      fail(
+        "a delegated run (--cancel-on-stdin-eof) refuses every escalation: --approval must be never",
+      )
+    }
     return Never
   }
   match value.trim() {

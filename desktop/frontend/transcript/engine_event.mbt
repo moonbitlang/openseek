@@ -30,7 +30,13 @@ pub(all) enum EngineEvent {
   // and a line that never changes is indistinguishable from a hang. The
   // finish reports what it cost — the only place those numbers appear.
   SubrunOpened(id~ : String, kind~ : String, label~ : String)
-  SubrunClosed(id~ : String, status~ : String, steps~ : Int, tokens~ : Int)
+  SubrunClosed(
+    id~ : String,
+    status~ : String,
+    steps~ : Int,
+    tokens~ : Int,
+    unaccounted~ : String?
+  )
   // A workflow's lifecycle brackets. A workflow is a run inside an `mbtx`
   // snippet that delegates to child agents of its own; the engine has to
   // announce it because the workflow library is generic and the parent sees
@@ -150,13 +156,21 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
     // with the host's `subrun.progress` pushes in between; the finish is
     // where its cost is reported, since nothing durable records it.
     SubrunStarted(id~, kind~, label~) => Some(SubrunOpened(id~, kind~, label~))
-    SubrunFinished(id~, status~, steps~, prompt_tokens~, completion_tokens~) =>
+    SubrunFinished(
+      id~,
+      status~,
+      steps~,
+      prompt_tokens~,
+      completion_tokens~,
+      unaccounted~
+    ) =>
       Some(
         SubrunClosed(
           id~,
           status~,
           steps~,
           tokens=prompt_tokens + completion_tokens,
+          unaccounted~,
         ),
       )
     // A workflow's brackets, carried through unchanged: the host needs the

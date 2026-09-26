@@ -1369,7 +1369,7 @@ fn apply_engine_event(
     // The error goes in the retained OVERLAY, not in `messages`: the finish of
     // the enclosing run starts a snapshot whose `adopt_snapshot` replaces
     // `messages` wholesale, which would erase a non-durable error bubble.
-    SubrunClosed(id~, status~, steps~, tokens~) => {
+    SubrunClosed(id~, status~, steps~, tokens~, unaccounted~) => {
       let closed = conv.turn.subruns.filter(lane => lane.id == id)
       let conv = {
         ..conv,
@@ -1392,12 +1392,13 @@ fn apply_engine_event(
           [lane, ..] => lane.kind
           [] => "subrun"
         }
-        (
-          Some(
-            "\{kind} \{id}: \{status} · \{steps} step(s) · \{@labels.compact_count(tokens)} tok",
-          ),
-          conv,
-        )
+        // Counts that are not the child's own account are not shown as if
+        // they were: unknown spend is not zero spend.
+        let cost = match unaccounted {
+          Some(_) => "usage unknown"
+          None => "\{steps} step(s) · \{@labels.compact_count(tokens)} tok"
+        }
+        (Some("\{kind} \{id}: \{status} · \{cost}"), conv)
       }
     }
     Usage(prompt_tokens~, completion_tokens~) =>
@@ -9247,7 +9248,13 @@ test "sub-run completion reports only abnormal terminal status" {
   )
   let (captured_report, closed) = apply_engine_event(
     opened,
-    SubrunClosed(id="sr-1", status="captured", steps=37, tokens=12_449),
+    SubrunClosed(
+      id="sr-1",
+      status="captured",
+      steps=37,
+      tokens=12_449,
+      unaccounted=None,
+    ),
     Some("r1"),
   )
   assert_true(captured_report is None)
@@ -9261,7 +9268,13 @@ test "sub-run completion reports only abnormal terminal status" {
   )
   let (failure_report, failed) = apply_engine_event(
     reopened,
-    SubrunClosed(id="sr-2", status="failed", steps=4, tokens=901),
+    SubrunClosed(
+      id="sr-2",
+      status="failed",
+      steps=4,
+      tokens=901,
+      unaccounted=None,
+    ),
     Some("r1"),
   )
   inspect(failed.visible_subruns().length(), content="0")
@@ -21232,7 +21245,13 @@ test "a sub-run's finish refreshes the child transcript one last time" {
     test_dispatch(),
     Engine(
       Some("r7"),
-      SubrunClosed(id="sr-1", status="captured", steps=7, tokens=30),
+      SubrunClosed(
+        id="sr-1",
+        status="captured",
+        steps=7,
+        tokens=30,
+        unaccounted=None,
+      ),
       session=None,
     ),
     page,
@@ -21282,7 +21301,13 @@ test "a workflow's brackets and its children's brackets build the run's rows" {
   inspect(other.workflows[0].rows.length(), content="1")
   let (_, closed) = apply_engine_event(
     other,
-    SubrunClosed(id="sr-5", status="captured", steps=12, tokens=3400),
+    SubrunClosed(
+      id="sr-5",
+      status="captured",
+      steps=12,
+      tokens=3400,
+      unaccounted=None,
+    ),
     Some("r1"),
   )
   inspect(closed.workflows[0].running(), content="0")

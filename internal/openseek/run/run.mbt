@@ -48,9 +48,11 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
       // announced `session_started` and only then refused, which is a failure
       // the caller pays for in artifacts on disk. Read once, and passed to the
       // turn rather than parsed again.
+      let mode = input_mode(matches)
       let approval_policy = @execution.approval_policy(
         matches,
         interactive=false,
+        delegated=mode == Managed,
       )
       // Validated before the workspace is created, like the options above.
       let review_deadline_ms = @options.review_deadline_ms(matches)

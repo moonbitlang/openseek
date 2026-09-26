@@ -140,7 +140,31 @@ pub fn Event::to_json(self : Event) -> Json {
     CompactionFailed(error~) => { "event": "compaction_failed", "error": error }
     SubrunStarted(id~, kind~, label~) =>
       { "event": "subrun_started", "id": id, "kind": kind, "label": label }
-    SubrunFinished(id~, status~, steps~, prompt_tokens~, completion_tokens~) =>
+    SubrunFinished(
+      id~,
+      status~,
+      steps~,
+      prompt_tokens~,
+      completion_tokens~,
+      unaccounted=Some(unaccounted)
+    ) =>
+      {
+        "event": "subrun_finished",
+        "id": id,
+        "status": status,
+        "steps": steps,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "unaccounted": unaccounted,
+      }
+    SubrunFinished(
+      id~,
+      status~,
+      steps~,
+      prompt_tokens~,
+      completion_tokens~,
+      unaccounted=None
+    ) =>
       {
         "event": "subrun_finished",
         "id": id,

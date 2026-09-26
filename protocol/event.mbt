@@ -141,12 +141,17 @@ pub(all) enum Event {
   /// sub-run terminal in snake_case ("captured", "no_report", "max_steps",
   /// "context_yield", "timed_out", "failed", "cancelled"); `steps` and the
   /// token counts are the child's actual spend, for cost attribution.
+  /// `unaccounted` says why they may fall short of it — the child left no
+  /// result, or the sub-run was cancelled before its result was read — so a
+  /// reader shows the spend as unknown rather than as the counts; `None` means
+  /// they are the child's own account.
   SubrunFinished(
     id~ : String,
     status~ : String,
     steps~ : Int,
     prompt_tokens~ : Int,
-    completion_tokens~ : Int
+    completion_tokens~ : Int,
+    unaccounted~ : String?
   )
 
   // ── workflow ───────────────────────────────────────────────────────────

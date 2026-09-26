@@ -33,6 +33,7 @@ struct SubrunResult[T] {
   prompt_tokens : Int
   completion_tokens : Int
   cost_usd : Double?
+  unaccounted : String?
   subrun_id : String
 } derive(Debug)
 
@@ -60,6 +61,14 @@ pub fn[T] SubrunResult::steps_used(self : SubrunResult[T]) -> Int {
 /// that prices nothing leaves it absent.
 pub fn[T] SubrunResult::cost_usd(self : SubrunResult[T]) -> Double? {
   self.cost_usd
+}
+
+///|
+/// Why the counts may fall short of what the child spent: it left no usable
+/// result, so they are only what was observed. `None` when they are the
+/// child's own account.
+pub fn[T] SubrunResult::unaccounted(self : SubrunResult[T]) -> String? {
+  self.unaccounted
 }
 
 ///|
@@ -139,9 +148,17 @@ pub async fn[T] run_subrun(
     steps : Int,
     prompt_tokens : Int,
     completion_tokens : Int,
+    unaccounted : String?,
   ) -> Unit {
     emit_event(
-      SubrunFinished(id~, status~, steps~, prompt_tokens~, completion_tokens~),
+      SubrunFinished(
+        id~,
+        status~,
+        steps~,
+        prompt_tokens~,
+        completion_tokens~,
+        unaccounted~,
+      ),
     )
   }
   // The spawn/drain/deadline machinery is the SHARED contract
@@ -149,8 +166,14 @@ pub async fn[T] run_subrun(
   // engine and for every foreign adapter. Cancellation re-raises out of
   // it after teardown; the errdefer closes the finish bracket first. A
   // result-file child reports its costs only in its result, so a cancelled
-  // one closes with none.
-  errdefer finished("cancelled", 0, 0, 0)
+  // one's are unknown.
+  errdefer finished(
+    "cancelled",
+    0,
+    0,
+    0,
+    Some("the sub-run was cancelled before its result was read"),
+  )
   let contract = @spawn.contract_run(
     command~,
     args~,
@@ -187,6 +210,7 @@ pub async fn[T] run_subrun(
     contract.steps_used,
     contract.prompt_tokens,
     contract.completion_tokens,
+    contract.unaccounted,
   )
   {
     value,
@@ -195,6 +219,7 @@ pub async fn[T] run_subrun(
     prompt_tokens: contract.prompt_tokens,
     completion_tokens: contract.completion_tokens,
     cost_usd: contract.cost_usd,
+    unaccounted: contract.unaccounted,
     subrun_id: id,
   }
 }

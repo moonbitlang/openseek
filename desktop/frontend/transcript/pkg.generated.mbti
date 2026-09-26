@@ -47,7 +47,7 @@ pub(all) enum EngineEvent {
   ToolResult(tool_name~ : String, is_error~ : Bool, content~ : String, brief~ : String?)
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   SubrunOpened(id~ : String, kind~ : String, label~ : String)
-  SubrunClosed(id~ : String, status~ : String, steps~ : Int, tokens~ : Int)
+  SubrunClosed(id~ : String, status~ : String, steps~ : Int, tokens~ : Int, unaccounted~ : String?)
   WorkflowOpened(id~ : String, journal~ : String, events~ : String, first_child~ : Int, child_count~ : Int)
   WorkflowClosed(id~ : String)
   AgentFinished(String)

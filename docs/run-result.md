@@ -91,7 +91,9 @@ one ends `no_report`.
 
 A managed run is a delegated run, and it delegates no further: its `mbtx`
 snippets get no workflow handoff (they see an empty `WORKFLOW_HOST`), and
-`--review-gate` is refused. One launched from a hosted workflow must carry
+`--review-gate` is refused. It also refuses every escalation: an inherited
+`OPENSEEK_APPROVAL` does not apply, and `--approval` other than `never` is
+refused. One launched from a hosted workflow must carry
 its reserved `--session`.
 
 A delegated run takes only what its launch grants. Its launcher may be a

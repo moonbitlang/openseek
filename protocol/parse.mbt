@@ -33,7 +33,7 @@
 /// absence means the line is not what it claims to be. Guessing there would
 /// hide a real wire break behind a fabricated value.
 ///
-/// Three fields qualify today, all under (1), each verified against `git log -S`
+/// Four fields qualify today, all under (1), each verified against `git log -S`
 /// for the field versus its event's introducing commit — the check to run
 /// before adding a fourth, and the one that catches a field wrongly made
 /// required, as `workspace_root` was:
@@ -43,6 +43,9 @@
 /// - `session_started`'s `workspace_root` — added d5d0b208 (2026-06-13, with
 ///   `--dir`) to an event from d11e04c2 (2026-06-12).
 /// - `tool_result`'s `brief` — added 4eacdc95 to an event from 1f761102.
+/// - `subrun_finished`'s `unaccounted` — added with the result-file transport
+///   (openseek#1767) to an event from the process-based sub-runs; absent
+///   means the counts are the child's own account.
 pub fn parse(line : Json) -> Event? {
   guard line is Object(fields) else { return None }
   guard text(fields, "event") is Some(name) else { return None }
@@ -222,7 +225,14 @@ pub fn parse(line : Json) -> Event? {
         return None
       }
       Some(
-        SubrunFinished(id~, status~, steps~, prompt_tokens~, completion_tokens~),
+        SubrunFinished(
+          id~,
+          status~,
+          steps~,
+          prompt_tokens~,
+          completion_tokens~,
+          unaccounted=text(fields, "unaccounted"),
+        ),
       )
     }
     "workflow_started" => {

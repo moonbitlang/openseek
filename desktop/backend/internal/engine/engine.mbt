@@ -1844,6 +1844,7 @@ async fn ServeEngine::consume(
                       steps=finished.steps,
                       prompt_tokens=finished.tokens,
                       completion_tokens=0,
+                      unaccounted=finished.unaccounted,
                     )
                     let run_id = engine.steer_runs.route_event(
                       event~,
