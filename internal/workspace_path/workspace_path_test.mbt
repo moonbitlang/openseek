@@ -55,3 +55,34 @@ test "lexical path helpers preserve roots and normalize separators" {
     @workspace_path.is_under_workspace_root("C:\\work", "C:\\work\\main.mbt"),
   )
 }
+
+///|
+test "filesystem path helpers preserve separator spelling" {
+  assert_true(
+    @workspace_path.parent_dir_preserving_separators("/work/lib")
+    is Some("/work"),
+  )
+  assert_true(
+    @workspace_path.parent_dir_preserving_separators("/work") is Some("/"),
+  )
+  assert_true(
+    @workspace_path.parent_dir_preserving_separators("bare") is Some("."),
+  )
+  assert_true(
+    @workspace_path.parent_dir_preserving_separators("C:\\work\\lib\\")
+    is Some("C:\\work"),
+  )
+  assert_true(
+    @workspace_path.parent_dir_preserving_separators("C:\\work\\main.mbt")
+    is Some("C:\\work"),
+  )
+  assert_true(@workspace_path.parent_dir_preserving_separators("C:\\") is None)
+  assert_eq(
+    @workspace_path.join_child_preserving_separator("/work/pkg", "main.mbt"),
+    "/work/pkg/main.mbt",
+  )
+  assert_eq(
+    @workspace_path.join_child_preserving_separator("C:\\work\\pkg", "main.mbt"),
+    "C:\\work\\pkg\\main.mbt",
+  )
+}

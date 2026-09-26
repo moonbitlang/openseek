@@ -2,8 +2,11 @@ import {
   "moonbitlang/openseek/agent_tool/bgjobs",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
+  "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/x/crypto",
 }
 

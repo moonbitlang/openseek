@@ -191,3 +191,39 @@ async test "empty directories are removed without asking even when a channel is 
     }
   })
 }
+
+///|
+async test "a complete agent-created directory tree is removed without approval" {
+  @vfs.with_tmpdir(prefix="openseek-remove-created-tree-", dir => {
+    let state = @agent_tool.FileStateMap()
+    let root = "\{dir}/generated"
+    let nested = "\{root}/nested"
+    let path = "\{nested}/report.txt"
+    state.create_parent_directories(path)
+    @fs.write_file(path, "temporary report", create_mode=CreateNew)
+    state.record_created(path, @agent_tool.content_digest("temporary report"))
+    let asked = Ref(false)
+    let definition = @remove.definition(
+      workspace_root=dir,
+      file_state=state,
+      approval=ApprovalChannel(_ => {
+        asked.val = true
+        AllowedOnce
+      }),
+    )
+    guard definition.execute is Async(run) else { fail("expected async") }
+    guard run({
+        "path": "generated",
+        "reason": "generated report is no longer needed",
+      })
+      is Respond(output) else {
+      fail("expected response")
+    }
+    assert_false(output.is_error, msg=output.content)
+    assert_false(asked.val)
+    assert_false(@fs.exists(root))
+    assert_true(state.get(path) is None)
+    assert_false(state.created_directory(root))
+    assert_false(state.created_directory(nested))
+  })
+}

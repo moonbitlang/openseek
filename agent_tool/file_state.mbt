@@ -58,13 +58,43 @@ priv struct Entry {
 /// never as "not created".
 struct FileStateMap {
   entries : Map[String, Entry]
+  created_directories : Set[String]
   lock : @async.Mutex
 }
 
 ///|
 /// A fresh, empty session file-state map.
 pub fn FileStateMap::FileStateMap() -> FileStateMap {
-  { entries: Map([]), lock: Mutex(), }
+  { entries: Map([]), created_directories: Set([]), lock: Mutex(), }
+}
+
+///|
+/// Create missing parent directories one at a time and record only the
+/// directories this call actually created. A concurrent creator wins the
+/// `mkdir` race without granting this session provenance for that directory.
+pub async fn FileStateMap::create_parent_directories(
+  self : FileStateMap,
+  path : String,
+) -> Unit {
+  let missing : Array[String] = []
+  let mut current = @workspace_path.parent_dir_preserving_separators(path)
+  while current is Some(directory) && !@fs.exists(directory) {
+    missing.push(directory)
+    current = @workspace_path.parent_dir_preserving_separators(directory)
+  }
+  for index = missing.length() - 1; index >= 0; index = index - 1 {
+    let directory = missing[index]
+    let created = try {
+      @fs.mkdir(directory)
+      true
+    } catch {
+      @os_error.OSError(_) as error if error.is_EEXIST() => false
+      error => raise error
+    }
+    if created {
+      self.record_created_directory(directory)
+    }
+  }
 }
 
 ///|
@@ -85,6 +115,33 @@ pub fn FileStateMap::record_created(
   digest : String,
 ) -> Unit {
   self.entries[path] = { provenance: Created, digest, }
+}
+
+///|
+/// Record a directory created by a file tool during this session.
+pub fn FileStateMap::record_created_directory(
+  self : FileStateMap,
+  path : String,
+) -> Unit {
+  self.created_directories.add(path)
+}
+
+///|
+/// Whether a file tool created `path` as a directory this session.
+pub fn FileStateMap::created_directory(
+  self : FileStateMap,
+  path : String,
+) -> Bool {
+  self.created_directories.contains(path)
+}
+
+///|
+/// Drop directory provenance after its directory has been removed.
+pub fn FileStateMap::forget_directory(
+  self : FileStateMap,
+  path : String,
+) -> Unit {
+  self.created_directories.remove(path)
 }
 
 ///|

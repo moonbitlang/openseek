@@ -180,7 +180,7 @@ async fn write_file(
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
     return err("write blocked: \{reason}")
   }
-  create_parent_dirs(path)
+  file_state.create_parent_directories(path)
   // Probe before writing so the result can tell the model whether it created a
   // new file or clobbered an existing one — a wholesale `write` over content it
   // never read is a common way to lose work. A non-ENOENT `exists` error (e.g.
@@ -295,18 +295,6 @@ fn write_reject_report(
 /// by the manifest guard, and hand-maintained ones are rare and editable.
 fn is_mbt_source(path : String) -> Bool {
   path.has_suffix(".mbt") || path.has_suffix(".mbt.md")
-}
-
-///|
-/// Create the parent directory of `path` (recursively) when it is missing, so a
-/// write to `dir/moon.pkg` works without a separate `mkdir`. The path is already
-/// resolved under the workspace root, so this stays inside the workspace. A
-/// mkdir failure propagates to the caller's `error writing` path rather than
-/// being swallowed — the write would fail anyway, so the real cause is useful.
-async fn create_parent_dirs(path : String) -> Unit {
-  if @workspace_path.parent_dir(path) is Some(parent) && !@fs.exists(parent) {
-    @fs.mkdir(parent, recursive=true)
-  }
 }
 
 ///|

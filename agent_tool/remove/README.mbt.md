@@ -5,13 +5,16 @@ the agent does not supply a hash or an approval flag.
 
 - Files recorded as created by this session whose contents still match the
   recorded digest are deleted automatically.
+- A nonempty directory tree is also deleted automatically when every directory
+  was created by this session and every contained file still matches its
+  recorded digest.
 - Existing files, files made by external commands, and files changed since the
   agent last wrote them require one-shot approval through `ApprovalChannel`.
   The question shows the path, the agent's reason, and why approval is needed.
 - Empty directories are deleted automatically using non-recursive `rmdir`;
   if an entry appears before removal, it fails without deleting that entry.
-- Nonempty directories require approval, showing the recursive file and subdirectory
-  counts. Hidden files and empty subdirectories are included.
+- Other nonempty directories require approval, showing the recursive file and
+  subdirectory counts. Hidden files and empty subdirectories are included.
 - Missing files, workspace roots and their ancestors, symlinks (including inside
   a directory), special files, and targets outside a worker's write scope are
   rejected without requesting approval.

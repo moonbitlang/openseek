@@ -37,9 +37,7 @@ async fn save_script(
     }
     return
   }
-  if @workspace_path.parent_dir(path) is Some(parent) && !@fs.exists(parent) {
-    @fs.mkdir(parent, recursive=true)
-  }
+  file_state.create_parent_directories(path)
   check_scope()
   @fs.write_file(path, source, create_mode=CreateNew)
   file_state.record_created(path, @agent_tool.content_digest(source))

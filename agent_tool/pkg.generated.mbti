@@ -55,10 +55,14 @@ pub enum FileState {
 
 type FileStateMap
 pub fn FileStateMap::FileStateMap() -> Self
+pub async fn FileStateMap::create_parent_directories(Self, String) -> Unit
 pub fn FileStateMap::created_and_unchanged(Self, String, String) -> Bool
+pub fn FileStateMap::created_directory(Self, String) -> Bool
 pub fn FileStateMap::forget(Self, String) -> Unit
+pub fn FileStateMap::forget_directory(Self, String) -> Unit
 pub fn FileStateMap::get(Self, String) -> FileState?
 pub fn FileStateMap::record_created(Self, String, String) -> Unit
+pub fn FileStateMap::record_created_directory(Self, String) -> Unit
 pub fn FileStateMap::record_edited(Self, String, String, String) -> Unit
 pub fn FileStateMap::record_modified(Self, String, String) -> Unit
 pub fn FileStateMap::serialize(Self, AgentToolDefinition) -> AgentToolDefinition

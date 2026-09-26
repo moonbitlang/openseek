@@ -116,6 +116,16 @@ async fn execute_with_workspace(
             write_scope?,
           ),
         )
+      } else if created_directory_tree(version, file_state) {
+        Finished(
+          delete_directory(
+            path,
+            input.reason,
+            version,
+            file_state,
+            write_scope?,
+          ),
+        )
       } else {
         let why = if version.entries.last() is Some((_, Directory(_))) {
           let files = version.entries
@@ -184,6 +194,27 @@ async fn execute_with_workspace(
 }
 
 ///|
+/// A non-empty tree can bypass approval only when every entry was created by
+/// this session and every regular file still has the content recorded for it.
+/// Directory provenance matters separately: a pre-existing empty directory
+/// that happens to contain only agent-created files is still user-owned.
+fn created_directory_tree(
+  version : RemovalVersion,
+  file_state : @agent_tool.FileStateMap,
+) -> Bool {
+  for (entry, node) in version.entries {
+    match node {
+      File(file) =>
+        if !file_state.created_and_unchanged(entry, file.digest) {
+          return false
+        }
+      Directory(_) => if !file_state.created_directory(entry) { return false }
+    }
+  }
+  true
+}
+
+///|
 /// Approval never overrides scope or kind restrictions. Hash complete raw bytes.
 async fn inspect_node(
   path : String,
@@ -226,7 +257,7 @@ async fn inspect_target(
         fail("cannot remove the workspace root or its ancestors")
       }
       for name in @fs.readdir(path, include_hidden=true, sort=true) {
-        visit(@workspace_path.join_child(path, name))
+        visit(@workspace_path.join_child_preserving_separator(path, name))
       }
     }
     entries.push((path, node))
@@ -250,10 +281,15 @@ async fn delete_directory(
       fail("directory changed during deletion; remaining entries were kept")
     }
     match expected {
-      File(_) => @fs.remove(entry)
-      Directory(_) => @fs.rmdir(entry)
+      File(_) => {
+        @fs.remove(entry)
+        file_state.forget(entry)
+      }
+      Directory(_) => {
+        @fs.rmdir(entry)
+        file_state.forget_directory(entry)
+      }
     }
-    file_state.forget(entry)
   }
   @agent_tool.respond(
     "ok: recursively removed \{path} (reason: \{reason})",

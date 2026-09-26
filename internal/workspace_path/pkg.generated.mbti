@@ -6,7 +6,11 @@ pub fn is_under_workspace_root(String, String) -> Bool
 
 pub fn join_child(String, String) -> String
 
+pub fn join_child_preserving_separator(String, String) -> String
+
 pub fn parent_dir(String) -> String?
+
+pub fn parent_dir_preserving_separators(String) -> String?
 
 pub fn path_basename(String) -> String
 

@@ -79,6 +79,46 @@ pub fn parent_dir(path : String) -> String? {
 }
 
 ///|
+/// Return the lexical parent without changing the path's separator spelling.
+/// This is for filesystem operations whose provenance keys must match the
+/// caller's original path string.
+pub fn parent_dir_preserving_separators(path : String) -> String? {
+  let mut end = path.length()
+  while end > 1 &&
+        is_separator(path[end - 1]) &&
+        !(end == 3 && path[1] == ':' && is_separator(path[2])) {
+    end -= 1
+  }
+  let path = path[:end].to_owned()
+  if path == "" ||
+    path == "." ||
+    path == "/" ||
+    path == "\\" ||
+    (path.length() == 2 && path[1] == ':') ||
+    (path.length() == 3 && path[1] == ':' && is_separator(path[2])) {
+    return None
+  }
+  let separator_index = match (path.rev_find("/"), path.rev_find("\\")) {
+    (Some(slash), Some(backslash)) =>
+      Some(if slash > backslash { slash } else { backslash })
+    (Some(slash), None) => Some(slash)
+    (None, Some(backslash)) => Some(backslash)
+    (None, None) => None
+  }
+  match separator_index {
+    None => Some(".")
+    Some(0) => Some(path[:1].to_owned())
+    Some(2) if path[1] == ':' => Some(path[:3].to_owned())
+    Some(index) => Some(path[:index].to_owned())
+  }
+}
+
+///|
+fn is_separator(unit : UInt16) -> Bool {
+  unit == '/'.to_int().to_uint16() || unit == '\\'.to_int().to_uint16()
+}
+
+///|
 /// Append one basename to a lexical directory path.
 pub fn join_child(dir : String, base : String) -> String {
   if dir == "" || dir == "." {
@@ -87,6 +127,25 @@ pub fn join_child(dir : String, base : String) -> String {
     "\{dir}\{base}"
   } else {
     "\{dir}/\{base}"
+  }
+}
+
+///|
+/// Append one basename while keeping the separator style already used by the
+/// directory path.
+pub fn join_child_preserving_separator(dir : String, base : String) -> String {
+  if dir == "" || dir == "." {
+    base
+  } else if dir.has_suffix("/") || dir.has_suffix("\\") {
+    "\{dir}\{base}"
+  } else {
+    let separator = match (dir.rev_find("/"), dir.rev_find("\\")) {
+      (Some(slash), Some(backslash)) if slash > backslash => "/"
+      (Some(_), None) => "/"
+      (None, Some(_)) => "\\"
+      _ => "/"
+    }
+    "\{dir}\{separator}\{base}"
   }
 }
 
