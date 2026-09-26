@@ -998,7 +998,7 @@ fn is_meaningful_dir(d : String) -> Bool {
 /// `is_marker` whether the last path segment is a discovered store marker (e.g.
 /// `.openseek`) — only then is it stripped. For a marker store: the container
 /// directory holding the workspace (grandparent of the store) so sibling run
-/// workspaces (best-of-N / fleet) cluster under one heading; a workspace directly
+/// workspaces (best-of-N copies) cluster under one heading; a workspace directly
 /// under the cwd groups by itself; a bare marker under the current directory
 /// (`""`). A direct (non-marker) store is its own group, keyed by its full path.
 fn session_group(root_label : String, is_marker : Bool) -> String {

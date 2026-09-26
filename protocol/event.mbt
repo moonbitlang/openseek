@@ -194,7 +194,6 @@ pub(all) enum Event {
   SessionError(error~ : String)
   WorkspaceCreated(dir~ : String)
   CommandError(error~ : String)
-  FleetStarted(runs~ : Int, task~ : String)
 
   // ── mcp ────────────────────────────────────────────────────────────────
   McpConfigIgnored(reason~ : String)

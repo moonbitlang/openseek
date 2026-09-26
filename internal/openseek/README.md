@@ -10,7 +10,7 @@ to stderr before invoking the shared runner.
 | `options` | The argparse command tree, option definitions, and value validation — except `--approval`'s value, which `execution` parses into its policy. |
 | `setup` | Workspace preparation, prompt assembly, session initialization, child IDs, launch paths and scratch labs, and goal baseline capture. |
 | `execution` | JSONL event draining, the approval policy and its requests, extra tools and MCP connections, and review gates. |
-| `run` | One-shot turns and fleet attempts in independent workspaces. |
+| `run` | One-shot runs. |
 | `serve` | The persistent command loop, scheduling state, cancellation, and goal continuation. |
 | `commands` | Session management, standalone review, child subruns, and MCP inspection. |
 | `testkit` | Test-only argv parsers (`run_matches`, `sessions_leaf_matches`), imported `for "wbtest"`. |

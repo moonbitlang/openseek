@@ -175,7 +175,7 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
     // `turn_failed` and `command_error` reach the view as the host's normalized
     // error, not as stream events; `auto_compaction_started/failed` are internal
     // to an open turn, unlike the finish this view previews;
-    // `session_started`/`workspace_created`/`fleet_started` describe a headless
+    // `session_started`/`workspace_created` describe a headless
     // run's setup; the MCP events are engine-side registry diagnostics.
     GoalUpdated(..)
     | GoalBlocked(..)
@@ -191,7 +191,6 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
     | AutoCompactionFailed(..)
     | SessionStarted(..)
     | WorkspaceCreated(..)
-    | FleetStarted(..)
     | McpConfigIgnored(..)
     | McpConfigUnreadable(..)
     | McpConfigInvalid(..)

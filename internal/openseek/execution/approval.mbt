@@ -33,8 +33,7 @@ struct ApprovalDesk {
   /// ids to new runs and cross-wire two conversations' event streams". The
   /// same applies here — every engine process starts its own desk, and their
   /// questions meet in places that are not per-process: the desktop host's
-  /// hub, one client's window, and the single stdout stream a best-of-N fleet
-  /// shares.
+  /// hub and one client's window.
   nonce : String
   /// Ordinal within this desk. Kept beside the nonce rather than replaced by
   /// it because it is what makes a log readable in ask order.

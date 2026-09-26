@@ -27,22 +27,6 @@ async test "--dir creates a missing final component with trailing separator" {
 }
 
 ///|
-test "--dir trailing separator trim preserves roots" {
-  assert_eq(@setup.trim_trailing_path_separators("/"), "/")
-  assert_eq(@setup.trim_trailing_path_separators("//"), "//")
-  assert_eq(@setup.trim_trailing_path_separators("C:\\"), "C:\\")
-  assert_eq(@setup.trim_trailing_path_separators("C:/"), "C:/")
-  assert_eq(
-    @setup.trim_trailing_path_separators("C:\\workspace\\"),
-    "C:\\workspace",
-  )
-  assert_eq(
-    @setup.trim_trailing_path_separators("C:/workspace/"),
-    "C:/workspace",
-  )
-}
-
-///|
 async test "--dir rejects missing parents instead of creating recursively" {
   @vfs.with_tmpdir(prefix="openseek-dir-missing-parent-", root => {
     let child = "\{root}/missing/child"

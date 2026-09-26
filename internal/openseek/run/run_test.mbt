@@ -1,13 +1,9 @@
 ///|
-async test "invalid review deadline is rejected before fleet workspaces are created" {
-  @vfs.with_tmpdir(prefix="openseek-review-deadline-fleet-", root => {
-    let source = "\{root}/project"
-    @fs.mkdir(source, recursive=true)
+async test "an invalid review deadline is rejected before the workspace is created" {
+  @vfs.with_tmpdir(prefix="openseek-review-deadline-", root => {
+    let workspace = "\{root}/project"
     let parsed = @testkit.run_matches(
-      argv=[
-        "--review-deadline", "0", "--concurrency", "1", "--dir", source, "write",
-        "MoonBit",
-      ],
+      argv=["--review-deadline", "0", "--dir", workspace, "write", "MoonBit"],
       env={ "DEEPSEEK": "test-key" },
     )
     let _ = @run.run_task_command(parsed) catch {
@@ -15,11 +11,11 @@ async test "invalid review deadline is rejected before fleet workspaces are crea
         assert_true(
           "\{error}".contains("--review-deadline must be a positive integer"),
         )
-        assert_false(@fs.exists("\{root}/project_run_1"))
+        assert_false(@fs.exists(workspace))
         return
       }
     }
-    fail("invalid review deadline started a fleet run")
+    fail("an invalid review deadline started a run")
   })
 }
 

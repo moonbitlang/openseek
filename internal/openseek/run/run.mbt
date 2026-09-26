@@ -1,13 +1,11 @@
 ///|
-/// `openseek run [TASK…]` — a headless one-shot agent run (best-of-N under
-/// `--concurrency`): the answer on stdout, minimal progress on stderr.
+/// `openseek run [TASK…]` — a headless one-shot agent run: the answer on
+/// stdout, minimal progress on stderr.
 pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
   // Why a single run did not complete. Set inside the output scope and
   // raised only after it: raising in there would cancel the drain before
   // the turn's last events reached stdout.
   let mut incomplete : String? = None
-  // A finished fleet, reported after the output scope for the same reason.
-  let mut fleet : FleetResult? = None
   @execution.with_text_output(() => {
     // --no-session contradicts an explicit --session; reject up front.
     @options.reject_session_contradiction(matches)
@@ -15,34 +13,11 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
     // HERE, before a session directory exists and before the model is
     // contacted: resolving it at the first turn instead left a run that
     // announced `session_started` and only then refused, which is a failure
-    // the caller pays for in artifacts on disk. Read once: the turn and the
-    // fleet below take the value rather than parsing it again.
+    // the caller pays for in artifacts on disk. Read once, and passed to the
+    // turn rather than parsed again.
     let approval_policy = @execution.approval_policy(matches, interactive=false)
-    // Validate this before fleet mode materializes sibling workspaces. The
-    // fleet path currently has no review subruns, but an invalid run option
-    // must still be rejected instead of being silently accepted there.
+    // Validated before the workspace is created, like the options above.
     let review_deadline_ms = @options.review_deadline_ms(matches)
-    // Best-of-N fleet mode owns its own workspace materialization and session
-    // creation, so it branches before prepare_workspace_root (which would
-    // create a single --dir).
-    let concurrency_input = match matches {
-      { values: { "concurrency": [input, ..], .. }, .. } => input
-      _ => fail("missing parsed argument: concurrency")
-    }
-    let concurrency = @cli.parse_positive_int(
-      concurrency_input, "--concurrency",
-    )
-    if fleet_mode(matches, concurrency) {
-      // Fleet members own separate materialized workspaces; per-member MCP
-      // connections are not wired, so say so instead of silently ignoring.
-      if @options.mcp_config_path(matches) is Some(_) {
-        @emit.emit(
-          McpConfigIgnored(reason="fleet mode does not support MCP servers"),
-        )
-      }
-      fleet = Some(run_fleet(matches, concurrency~, approval_policy~))
-      return
-    }
     let workspace_root = @setup.prepare_workspace_root(
       matches,
       log_created=true,
@@ -131,10 +106,6 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
     }
     incomplete = incomplete_reason(terminal)
   })
-  if fleet is Some(result) {
-    report_fleet(result)
-  }
-  // Like fleet mode, whose run fails unless some attempt completed.
   if incomplete is Some(reason) {
     fail("run did not complete: \{reason}")
   }
@@ -156,13 +127,4 @@ fn incomplete_reason(terminal : @agent_session.TurnTerminal?) -> String? {
     Some(Failed(message)) => Some(message)
     None => Some("the turn recorded no terminal")
   }
-}
-
-///|
-/// Whether `openseek run` should use fleet mode: any N >= 2, or an explicit
-/// `--concurrency` at any value. `--concurrency 1` still means "one run in a
-/// copied `<dir>_run_1` workspace" — the flag always protects `--dir` from
-/// writes, at every N. Only the flagless default runs in place.
-fn fleet_mode(matches : @argparse.Matches, concurrency : Int) -> Bool {
-  concurrency >= 2 || @options.explicitly_provided(matches, "concurrency")
 }

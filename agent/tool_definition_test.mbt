@@ -12,7 +12,7 @@ async test "agent registers the expected tool names" {
 ///|
 /// A turn built by `run_turn_with_append` offers `escalated` only when the
 /// caller hands it a channel — which is the plumbing best-of-N runs were
-/// missing. `openseek run --concurrency N --approval always` parsed the flag,
+/// missing. The since-removed `openseek run --concurrency N --approval always` parsed the flag,
 /// discarded it, and built every attempt's runtime without one, so the
 /// argument was never advertised and the option was silently inert.
 ///
