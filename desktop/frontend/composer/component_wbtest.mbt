@@ -384,6 +384,12 @@ test "the heartbeat reports only the detail it actually has" {
     tokens: 12_345,
   }
   assert_eq(full.label(clock_ms~), "Thinking… (2m 14s · 12.3k tokens)")
+  // The spent-tokens unit is localized, never a bare English word left in
+  // otherwise translated text.
+  assert_eq(
+    full.label(locale=@i18n.SimplifiedChinese, clock_ms~),
+    "正在思考… (2m 14s · 12.3k 个词元)",
+  )
   // A run adopted from a reconnect has no start this page witnessed. Its age
   // is omitted, never guessed from the moment we noticed it.
   assert_eq(
