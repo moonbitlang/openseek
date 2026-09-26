@@ -23,6 +23,8 @@ async test "manifest error rejects generated mbti files" {
   let message = "*.generated.mbti files are generated; run moon info instead of editing them"
   assert_write_error("lib/pkg.generated.mbti", "package x", message)
   assert_write_error("C:\\workspace\\pkg.generated.mbti", "", message)
+  assert_write_error("pkg.generated.mbti", "...", message)
+  assert_write_error("lib\\pkg.generated.mbti", "...", message)
 }
 
 ///|
@@ -81,11 +83,4 @@ async test "manifest error accepts Windows path separators" {
   assert_write_error(
     "C:\\workspace\\moon.mod.json", "{}", "moon.mod.json is legacy; create moon.mod for new MoonBit projects",
   )
-}
-
-///|
-async test "manifest error rejects generated interfaces" {
-  let message = "*.generated.mbti files are generated; run moon info instead of editing them"
-  assert_write_error("pkg.generated.mbti", "...", message)
-  assert_write_error("lib\\pkg.generated.mbti", "...", message)
 }
