@@ -297,13 +297,6 @@ pub fn parse(line : Json) -> Event? {
     "workspace_created" =>
       text(fields, "dir").map(dir => WorkspaceCreated(dir~))
     "command_error" => text(fields, "error").map(error => CommandError(error~))
-    "fleet_started" => {
-      guard int(fields, "runs") is Some(runs) &&
-        text(fields, "task") is Some(task) else {
-        return None
-      }
-      Some(FleetStarted(runs~, task~))
-    }
     "mcp_config_ignored" =>
       text(fields, "reason").map(reason => McpConfigIgnored(reason~))
     "mcp_config_unreadable" => {

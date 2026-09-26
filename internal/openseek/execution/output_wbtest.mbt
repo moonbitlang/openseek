@@ -135,65 +135,6 @@ test "a finish-tool answer, and runs that stop early" {
 }
 
 ///|
-test "a fleet separates its answers and drops interleaved messages" {
-  let (answer, progress) = render_all([
-    FleetStarted(runs=2, task="t"),
-    AssistantMessage(content="A is thinking aloud"),
-    AssistantMessage(content="All of A"),
-    AgentFinished(answer="All of A"),
-    AgentFinished(answer="B via finish"),
-  ])
-  inspect(
-    answer,
-    content=(
-      #|All of A
-      #|---
-      #|B via finish
-      #|
-    ),
-  )
-  inspect(
-    progress,
-    content=(
-      #|fleet: 2 runs
-      #|
-    ),
-  )
-}
-
-///|
-test "a blank answer prints nothing instead of borrowing a message" {
-  let (answer, progress) = render_all([
-    AssistantMessage(content="wrapping up"),
-    AgentFinished(answer=""),
-  ])
-  inspect(answer, content="")
-  inspect(
-    progress,
-    content=(
-      #|wrapping up
-      #|
-    ),
-  )
-  // In a fleet, attempt A's message must never become attempt B's answer.
-  let (answer, progress) = render_all([
-    FleetStarted(runs=2, task="t"),
-    McpConfigIgnored(reason="fleet mode does not support MCP servers"),
-    AssistantMessage(content="A, still working"),
-    AgentFinished(answer=""),
-  ])
-  inspect(answer, content="")
-  inspect(
-    progress,
-    content=(
-      #|fleet: 2 runs
-      #|MCP config ignored: fleet mode does not support MCP servers
-      #|
-    ),
-  )
-}
-
-///|
 test "tool lines name what the call did and background jobs read as work" {
   fn job(
     state : @protocol.JobState,

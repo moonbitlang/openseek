@@ -77,12 +77,6 @@ pub fn root_command() -> @argparse.Command {
           // parses and then does nothing — and where an exported
           // OPENSEEK_APPROVAL would have bound commands that cannot honour it.
           approval_option(),
-          OptionArg(
-            "concurrency",
-            long="concurrency",
-            default_values=["1"],
-            about="Run the task in N sibling copies of --dir concurrently (best-of-N). Any explicit value, including 1, copies --dir into <dir>_run_<i> and never writes to --dir itself; omit the flag for a single in-place run.",
-          ),
         ],
         flags=[
           FlagArg(

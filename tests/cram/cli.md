@@ -152,7 +152,6 @@ Options:
   --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are exposed to the agent, namespaced mcp__<server>__<tool>. Empty disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
   --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
   --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking). [env: OPENSEEK_APPROVAL] [default: never]
-  --concurrency <concurrency>                                  Run the task in N sibling copies of --dir concurrently (best-of-N). Any explicit value, including 1, copies --dir into <dir>_run_<i> and never writes to --dir itself; omit the flag for a single in-place run. [default: 1]
 ```
 
 `--approval ask` is refused here rather than accepted and then never honoured:

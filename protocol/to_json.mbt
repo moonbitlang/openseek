@@ -186,8 +186,6 @@ pub fn Event::to_json(self : Event) -> Json {
     SessionError(error~) => { "event": "session_error", "error": error }
     WorkspaceCreated(dir~) => { "event": "workspace_created", "dir": dir }
     CommandError(error~) => { "event": "command_error", "error": error }
-    FleetStarted(runs~, task~) =>
-      { "event": "fleet_started", "runs": runs, "task": task }
     McpConfigIgnored(reason~) =>
       { "event": "mcp_config_ignored", "reason": reason }
     McpConfigUnreadable(path~, error~) =>

@@ -9,8 +9,7 @@ interactive terminal UI is the separate `openseek_tui` binary, maintained in
 [moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui)). It parses arguments with
 `moonbitlang/core/argparse`, reads defaults from environment variables, and
 drives turns through `moonbitlang/openseek/agent.run_turn_in_scope` (both one-shot
-`run` and durable sessions; fleet mode's independent attempts use
-`agent.run_turn_with_append`).
+`run` and durable sessions).
 
 Both executable packages call the same application entry point and share
 process-level error handling. Command parsing, handlers, and shared setup live under
@@ -51,9 +50,7 @@ with `OPENSEEK_API_URL`; when omitted, OpenSeek uses the official endpoint for
 the model's provider.
 The run exits non-zero unless its turn completes: running out of steps,
 stopping at the model's context window, an agent abort, and a failure each end
-with `error: run did not complete: …` on stderr, after the last JSONL event. A
-fleet run (`--concurrency`) exits non-zero unless at least one attempt
-completes.
+with `error: run did not complete: …` on stderr, after the last JSONL event.
 `--dir` defaults to `.` and becomes the workspace root for relative prompt
 files, sessions, workspace skills, and agent tools. If the directory itself is
 missing but its parent exists, OpenSeek creates that final component and logs a
@@ -151,23 +148,26 @@ moon run . -- run --dir ../another-workspace "run moon test"
 moon run . -- run --session parser-fix "continue from the last run"
 ```
 
-Best-of-N: run the same task in N sibling copies of `--dir` concurrently, each
-recording its own session, then print a summary. The original `--dir` is never
-written to (a present `--dir` is copied — keeping `.git` and `.openseek/skills`,
-skipping `_build`/`node_modules` and the session store; an absent one yields
-empty workspaces to build from scratch).
-
-The copy is a plain filesystem copy: in-workspace file symlinks are dereferenced
-(content copied), and a **linked git worktree/submodule** copy is *not* itself a
-git checkout — its `.git` pointer is dropped so the copy can never write the
-original repo. Each run's session lives under its run directory.
+`run` performs one run. For best-of-N, run the same task in separate checkouts
+of the workspace from a script, then compare how each ended:
 
 ```bash
-# 3 attempts at the same fix in dir_run_1 / dir_run_2 / dir_run_3
-moon run . -- run --concurrency 3 --dir myproject "fix the failing test"
+for i in 1 2 3; do
+  git -C myproject worktree add --detach "$PWD/attempt_$i"
+  moon run . -- run --dir "attempt_$i" "fix the failing test" \
+    > "answer_$i.md" 2> "progress_$i.log" &
+done
+wait
 ```
 
-`run --concurrency` cannot be combined with `--session` or `--no-session`.
+Each attempt gets its own worktree, index and `HEAD`. A plain `cp -R` of a
+checkout that is itself a linked worktree keeps its `.git` pointer, so the
+copies would share the original's index and interfere with each other.
+
+[`share/examples/best-of-n.mbtx`](../../share/examples/best-of-n.mbtx) is the
+same as a MoonBit script (`moon run best-of-n.mbtx`): it creates the worktrees,
+runs the attempts concurrently, and reports which ones completed, from `run`'s
+exit status.
 
 ## Package Boundary
 

@@ -30,8 +30,9 @@ Part 1 of the prompt teaches the tooling:
 
 The reusable-script form is taught from `share/workflow/check.mbtx`, the
 bundled workflow itself, so the prompt shows the same file `@builtin/` runs.
-`paths_and_env.mbtx` and `cli_greet.mbtx` are verified here but not linked
-from the prompt; `cli_greet.mbtx` is the fixture
+`paths_and_env.mbtx`, `cli_greet.mbtx` and `best-of-n.mbtx` (best-of-N
+attempts of `openseek run` in separate worktrees, linked from
+`cmd/openseek/README.md`) are verified here but not linked from the prompt; `cli_greet.mbtx` is the fixture
 `agent_tool/mbtx/mbtx_test.mbt` drives through the real tool to pin the `args`
 contract.
 

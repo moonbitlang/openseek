@@ -70,15 +70,11 @@ priv struct TextRenderer {
   /// The latest model message, held back in case it is the answer. If the turn
   /// goes on instead, it was intermediate and becomes a progress line.
   mut pending : String?
-  /// Fleet attempts share both streams and their events interleave.
-  mut fleet : Bool
-  /// Answers printed so far, so a fleet's answers can be told apart.
-  mut answers : Int
 }
 
 ///|
 fn TextRenderer::TextRenderer() -> TextRenderer {
-  { session: None, pending: None, fleet: false, answers: 0, }
+  { session: None, pending: None, }
 }
 
 ///|
@@ -94,17 +90,12 @@ fn TextRenderer::render(
       self.session = Some(session)
       line(progress, "session \{session} (\{session_root})")
     }
-    FleetStarted(runs~, ..) => {
-      self.fleet = true
-      line(progress, "fleet: \{runs} runs")
-    }
     WorkspaceCreated(dir~) => line(progress, "created \{dir}")
     // A message followed by another step was intermediate.
     AgentStep(_) => self.flush(progress)
-    // A fleet's attempts interleave, so their messages are never held.
     AssistantMessage(content~) => {
       self.flush(progress)
-      if !content.is_blank() && !self.fleet {
+      if !content.is_blank() {
         self.pending = Some(content)
       }
     }
@@ -177,13 +168,8 @@ fn TextRenderer::render(
       self.pending = None
       let text = result
       if !text.is_blank() {
-        // A fleet prints one answer per attempt; separate them.
-        if self.answers > 0 {
-          answer.write_string("---\n")
-        }
         answer.write_string(terminal_safe_text(text.trim_end()))
         answer.write_char('\n')
-        self.answers += 1
       }
     }
     MaxStepsExhausted => {
@@ -222,9 +208,9 @@ fn TextRenderer::render(
 
 ///|
 /// Write the pending message as a progress line: the turn went on, so it was
-/// not the answer. A fleet drops it, since attempts' messages interleave.
+/// not the answer.
 fn TextRenderer::flush(self : TextRenderer, progress : StringBuilder) -> Unit {
-  if self.pending is Some(message) && !self.fleet {
+  if self.pending is Some(message) {
     line(progress, message)
   }
   self.pending = None

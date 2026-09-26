@@ -1,0 +1,54 @@
+///|
+// Best-of-N with `openseek run`: the same task in several separate checkouts,
+// run at once, then which attempts completed. `run` performs one run; fanning
+// out is the script's job.
+//
+// Run it next to the repository (`myproject` here) with `moon run
+// best-of-n.mbtx`. Each attempt gets its own `git worktree`, so attempts never
+// share an index or `HEAD`, and neither do they with `myproject`.
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+}
+
+///|
+async fn main {
+  let task = "fix the failing test"
+  let attempts = 3
+  // Worktrees one at a time: concurrent `git worktree add` on one repository
+  // contend for its lock.
+  for i in 1..<=attempts {
+    let code = @process.run("git", [
+      "-C",
+      "myproject",
+      "worktree",
+      "add",
+      "--detach",
+      "../attempt_\{i}",
+    ])
+    guard code == 0 else { fail("git worktree add failed for attempt \{i}") }
+  }
+  // The attempts run concurrently. Each writes its answer to stdout and its
+  // progress to stderr, and exits 0 only when its task completed.
+  let codes = Array::make(attempts, -1)
+  @async.with_task_group(group => {
+    for i in 1..<=attempts {
+      group.spawn_bg(() => {
+        codes[i - 1] = @process.run(
+          "openseek",
+          ["run", "--dir", "attempt_\{i}", task],
+          stdout=@process.redirect_to_file("answer_\{i}.md"),
+          stderr=@process.redirect_to_file("progress_\{i}.log"),
+        )
+      })
+    }
+  })
+  for i in 1..<=attempts {
+    let outcome = if codes[i - 1] == 0 {
+      "completed"
+    } else {
+      "did not complete"
+    }
+    println("attempt \{i}: \{outcome} (answer_\{i}.md, progress_\{i}.log)")
+  }
+}
