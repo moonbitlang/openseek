@@ -4,8 +4,9 @@
 /// `capture_tool` — `None` when the model finished without submitting. This
 /// is what a sub-run *kind* (review, explore, worker, ...) is made of;
 /// nothing here spawns, and nothing here knows whether it is running inside
-/// a child process at all. Three callers share it: the `openseek subrun
-/// <kind>` child mode (where the calling process IS the sub-run), the
+/// a child process at all. Three callers share it: `openseek run --kind
+/// <kind>` (where the calling process IS the sub-run, when a parent launched
+/// it), the
 /// standalone review CLI (its own process by construction), and
 /// kind-internals unit tests (which get the full lifecycle — capture,
 /// reject-retry, ceiling salvage — against a mock endpoint without spawning
@@ -13,9 +14,8 @@
 ///
 /// Process concerns deliberately absent: spawning, the wall deadline, cost
 /// accounting, and terminal classification live in `agent_subrun`
-/// (`run_subrun`), which observes a child from outside through its event
-/// stream and exit. Events go to the process log as always — in a child
-/// process, stdout IS the report channel the parent reads.
+/// (`run_subrun`), which observes a child from outside through its result
+/// file and exit. Events go to the process's event stream as always.
 pub async fn[T] execute_kind(
   session_id~ : String,
   system_prompt~ : String,
@@ -35,8 +35,8 @@ pub async fn[T] execute_kind(
   let tools = tools(captured)
   let session = @agent_session.Session(SessionId(session_id), system_prompt~)
   // Default: the transcript lives and dies with this process. A caller
-  // wires a store-backed append (the `subrun` child mode when the parent
-  // is durable) to make the child's transcript a first-class session.
+  // wires a store-backed append (a `run --kind` child with a session) to
+  // make the child's transcript a first-class session.
   let append = match append_item {
     Some(append) => append
     None => (session, item) => session.append(item)

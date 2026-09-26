@@ -5,7 +5,7 @@
 // conflict-resolution and continue halves of the slice lifecycle. Their
 // production caller, the `subtask` tool, was removed in #1320; the worker
 // controller that hosted workflows will reach (a self-provisioning
-// `subrun worker` plus an `integrate` child mode) needs exactly these, and
+// `run --kind worker` plus an `integrate` child mode) needs exactly these, and
 // `lifecycle_test.mbt` exercises them end to end.
 //
 // `git_require`: test seam — this package's lifecycle tests drive real git

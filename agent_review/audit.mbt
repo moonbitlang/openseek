@@ -64,8 +64,8 @@ fn audit_task(
 }
 
 ///|
-/// Run the goal audit IN THIS PROCESS (the `openseek subrun review` child
-/// mode calls this; the standalone shape mirrors `run_review`). `None`
+/// Run the goal audit IN THIS PROCESS (the `openseek run --kind review`
+/// child calls this; the standalone shape mirrors `run_review`). `None`
 /// when the auditor finished without a valid submission.
 pub async fn run_goal_audit(
   goal~ : String,

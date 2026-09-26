@@ -2,16 +2,17 @@
 
 The `explore` sub-run kind: a read-only scout that answers one self-contained
 question about the workspace or the MoonBit APIs it can use, and submits a
-bounded, cited answer. The scout runs as an `openseek subrun explore` child
-process; this package is the child half (`run_child` decodes the input line
-and runs the kind in-process on `@agent_kind.execute_kind`). Who launches it:
+bounded, cited answer. The scout runs as an `openseek run --kind explore`
+child process; this package is the child half (`run_child` decodes the
+request's input and runs the kind in-process on `@agent_kind.execute_kind`).
+Who launches it:
 
 - a parent agent's `mbtx` snippet running a `moonbitlang/workflow` workflow
   with `subrun: true` — `wf.agent(prompt=..., kind="explore")` is one scout,
   and the library sends the child `{"query": prompt, "hints"?: ...}` (the
   `moonbitlang/workflow/hosted` runner spawns and reaps it);
-- a standalone workflow script, or anything else that speaks the subrun
-  child contract with the same input line.
+- a standalone workflow script, or anything else that launches
+  `openseek run --kind explore` with the same input.
 
 Why it exists: long autonomous runs burn their context on fan-out reading,
 and MoonBit is young enough that model priors about its APIs are unreliable.

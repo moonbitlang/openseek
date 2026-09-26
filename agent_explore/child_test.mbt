@@ -1,7 +1,7 @@
 ///|
 /// Mock-endpoint harness for the CHILD-side kind execution (`run_child`
-/// runs the scout's turn in this process, exactly as `openseek subrun
-/// explore` will in a child process). The parent-side spawn/reap path is
+/// runs the scout's turn in this process, exactly as `openseek run --kind
+/// explore` does in a child process). The parent-side spawn/reap path is
 /// covered by the runner's own tests with scripted children.
 async fn bind_test_server(skip_message : String) -> @http.Server? {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {

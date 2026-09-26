@@ -6,10 +6,10 @@
 pub let default_explore_max_steps : Int = 100
 
 ///|
-/// The entry for `openseek subrun explore`: decode the input line
+/// The entry for `openseek run --kind explore`: decode the request's input
 /// (`{"query": ..., "hints"?: ...}` — what `wf.agent(prompt=, kind="explore")`
 /// sends), run the scout kind in this process, and return the report (the
-/// dispatch prints it as the final `subrun_report` line). `None` when the
+/// run's result carries it as its output). `None` when the
 /// child finished without a valid submission or the input is malformed.
 pub async fn run_child(
   input : Json,

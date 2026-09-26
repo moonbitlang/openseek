@@ -1,6 +1,6 @@
 ///|
 /// Mock-endpoint harness for `execute_kind`: the kind's turn runs in THIS
-/// process, exactly as the `openseek subrun` child mode does — so the full
+/// process, exactly as an `openseek run --kind` child does — so the full
 /// internal lifecycle (capture, reject-retry, ceiling salvage) is
 /// unit-testable without spawning anything.
 priv enum MockReply {

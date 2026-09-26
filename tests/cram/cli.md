@@ -5,7 +5,7 @@ builds the native executable packages first, then exposes their executables
 on `PATH` as `openseek.exe`.
 
 `openseek` is the headless automation CLI: a subcommand tree under `run`,
-`serve`, `review`, `subrun`, `mcp`, and `sessions` (the interactive terminal UI
+`serve`, `review`, `mcp`, and `sessions` (the interactive terminal UI
 is the separate `openseek_tui` binary, maintained in its own repository). Every
 command here is offline: it either prints help or fails argument validation
 before the agent contacts DeepSeek, so the suite needs no API key and makes no
@@ -29,7 +29,6 @@ Commands:
   serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
   mcp       List configured MCP servers and the tools they expose.
   review    Read-only code review of base...HEAD; prints a JSON ReviewReport.
-  subrun    INTERNAL: run one subagent kind as a child of this engine (input JSON on stdin; stdin EOF cancels).
   sessions  Manage durable sessions.
 
 Options:

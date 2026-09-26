@@ -24,9 +24,9 @@ let default_review_max_steps : Int = 120
 /// report.
 ///
 /// Runs the review kind IN THIS PROCESS via `@agent_kind.execute_kind`: the
-/// standalone CLI is already a dedicated process, and a future in-session
-/// gate spawns `openseek subrun review` — a child process whose dispatch
-/// calls this same code path.
+/// standalone CLI is already a dedicated process, and the goal-met gate
+/// spawns `openseek run --kind review` — a child process that calls this
+/// same code path.
 pub async fn run_review(
   api_key : String,
   model : @deepseek.Model,
