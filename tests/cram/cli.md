@@ -152,6 +152,7 @@ Options:
   --mcp-config <mcp-config>                                    Path to a JSON file of MCP servers ({"mcpServers": {"<name>": {"command", "args", "env"} | {"url", "headers"}}}); each server's tools (stdio subprocess or Streamable HTTP) are exposed to the agent, namespaced mcp__<server>__<tool>. Empty disables MCP. [env: OPENSEEK_MCP_CONFIG] [default: ]
   --review-deadline <review-deadline>                          Wall-clock deadline in milliseconds for one --review-gate audit; default 900000 (15 minutes).
   --approval <approval>                                        What happens when a tool needs permission (sandbox escalation or file deletion): never (default; refuse without asking), ask (prompt the controller over the command stream and wait), always (grant without asking). [env: OPENSEEK_APPROVAL] [default: never]
+  --result-file <result-file>                                  Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.
 ```
 
 `--approval ask` is refused here rather than accepted and then never honoured:
@@ -197,6 +198,33 @@ $ sh <<'EOF'
 exit-non-zero
 error: an API key is required for deepseek-flash: pass --api-key
 stdout-empty
+```
+
+## A Result File Says How the Run Ended
+
+`--result-file PATH` writes one JSON object when the run is over, whether it
+succeeded or not; `docs/run-result.md` is the full contract. A stale file at
+`PATH` is replaced. The result is written even when stderr cannot be written
+(the second run creates a new workspace and fails reporting it), since a
+parent reads the file, not the streams.
+
+```mooncram
+$ sh <<'EOF'
+> dir=$(mktemp -d)
+> echo stale > "$dir/result.json"
+> env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --no-session --dir "$dir/ws" --result-file "$dir/result.json" task > /dev/null 2>&1
+> echo "exit $?"
+> cat "$dir/result.json"
+> rm "$dir/result.json"
+> env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL openseek.exe run --no-session --dir "$dir/ws2" --result-file "$dir/result.json" task > /dev/null 2< /dev/null
+> echo "exit $?"
+> cat "$dir/result.json"
+> rm -rf "$dir"
+> EOF
+exit 1
+{"version":1,"status":"failed","reason":"an API key is required for deepseek-flash: pass --api-key"}
+exit 1
+{"version":1,"status":"failed","reason":"an API key is required for deepseek-flash: pass --api-key"}
 ```
 
 ## Unknown Options Are Rejected Before Task Text

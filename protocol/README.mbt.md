@@ -10,7 +10,7 @@ portable:
 
 | Package | Contents | Targets | Deps |
 | --- | --- | --- | --- |
-| `moonbitlang/openseek_protocol` | `Event`, `Usage`, `Command`, `SteerKind`, `Content`, `Image`, `to_json`, `parse` | js, wasm, wasm-gc, native | `core/json`, `core/encoding` |
+| `moonbitlang/openseek_protocol` | `Event`, `Usage`, `Command`, `SteerKind`, `Content`, `Image`, `to_json`, `parse`; `RunResult`, `parse_run_result` (the `run --result-file` format, see `docs/run-result.md`) | js, wasm, wasm-gc, native | `core/json`, `core/encoding` |
 | `moonbitlang/openseek_protocol/emit` | `emit` (`to_json` + stdout writer) | native | `async`, above |
 
 Only the *writer* does I/O, and only a native process can write fd 1

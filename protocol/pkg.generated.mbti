@@ -7,11 +7,15 @@ import {
 }
 
 // Values
+pub const RunResultVersion : Int = 1
+
 pub fn job_id_from_storage(String) -> String
 
 pub fn job_storage_name(String) -> String
 
 pub fn parse(Json) -> Event?
+
+pub fn parse_run_result(Json) -> RunResult raise RunResultError
 
 pub fn split_child_session_id(String) -> (String, Int)?
 
@@ -27,6 +31,14 @@ pub(all) suberror ImageError {
 pub fn ImageError::equal(Self, Self) -> Bool
 pub fn ImageError::not_equal(Self, Self) -> Bool
 pub fn ImageError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror RunResultError {
+  UnsupportedVersion(Int)
+  Malformed(String)
+} derive(Eq, @debug.Debug)
+pub fn RunResultError::equal(Self, Self) -> Bool
+pub fn RunResultError::not_equal(Self, Self) -> Bool
+pub fn RunResultError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 pub(all) enum Command {
@@ -221,6 +233,29 @@ pub fn JobStopOutcome::to_json(Self) -> Json
 pub fn JobStopOutcome::to_repr(Self) -> @debug.Repr
 pub impl ToJson for JobStopOutcome
 pub impl @json.FromJson for JobStopOutcome
+
+pub(all) struct RunResult {
+  status : RunStatus
+  session : String?
+  usage : Usage?
+} derive(Eq, @debug.Debug)
+pub fn RunResult::equal(Self, Self) -> Bool
+pub fn RunResult::not_equal(Self, Self) -> Bool
+pub fn RunResult::to_json(Self) -> Json
+pub fn RunResult::to_repr(Self) -> @debug.Repr
+pub impl ToJson for RunResult
+
+pub(all) enum RunStatus {
+  Completed(output~ : Json)
+  ContextYield(reason~ : String)
+  MaxStepsExhausted
+  Aborted(reason~ : String)
+  Interrupted(reason~ : String)
+  Failed(reason~ : String)
+} derive(Eq, @debug.Debug)
+pub fn RunStatus::equal(Self, Self) -> Bool
+pub fn RunStatus::not_equal(Self, Self) -> Bool
+pub fn RunStatus::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SteerKind {
   Prompt
