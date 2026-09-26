@@ -21,6 +21,9 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
   // last events reached stdout and stderr.
   let mut failure : Error? = None
   let mut invocation : Invocation? = None
+  // The request's id, known as soon as its JSON is read: a refused request is
+  // answered under its id too.
+  let mut request_id : String? = None
   // What a preset produced: its submitted report, or `echo`'s input.
   let mut report : Json? = None
   let mut echoed : Json? = None
@@ -45,7 +48,9 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
       let mode = input_mode(matches)
       // The request is read and checked before the workspace or a session
       // exists, so a bad one leaves nothing behind.
-      let request = read_invocation(matches, mode)
+      let request = read_invocation(matches, mode, on_request_id=id => {
+        request_id = Some(id)
+      })
       invocation = Some(request)
       // A run launched by a parent does not delegate further.
       let delegated = mode == Managed
@@ -67,7 +72,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
       if delegated &&
         @env.get_env_var("WORKFLOW_HOST") is Some(handoff) &&
         !handoff.is_empty() &&
-        !@options.explicitly_provided(matches, "session") {
+        reserved_session(matches) is None {
         fail(
           "a run launched from a hosted workflow needs its reserved --session; delegate through @hosted.run so the child gets a transcript",
         )
@@ -171,7 +176,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
   if result_file is Some(path) {
     let accounting = turn.accounting()
     write_result_file(path, {
-      request_id: invocation.bind(request => request.request_id),
+      request_id,
       kind: preset,
       status,
       session: turn.session,
@@ -314,15 +319,25 @@ async fn run_preset(
           "a --kind run starts a new session, and \{id.value()} already exists",
         )
       }
-      @emit.emit(
-        SessionStarted(
-          session=id.value(),
-          session_root~,
-          workspace_root=Some(workspace_root),
-        ),
+      // Named only once something is recorded: a preset refused for want of
+      // a key, or the modelless `echo`, leaves no transcript to point at.
+      (
+        id.value(),
+        (session, item) => {
+          let next = store.append(session, item)
+          if turn.session is None {
+            turn.session = Some(id.value())
+            @emit.emit(
+              SessionStarted(
+                session=id.value(),
+                session_root~,
+                workspace_root=Some(workspace_root),
+              ),
+            )
+          }
+          turn.record(next)
+        },
       )
-      turn.session = Some(id.value())
-      (id.value(), (session, item) => turn.record(store.append(session, item)))
     }
   }
   kind.run(input, {
@@ -381,5 +396,17 @@ fn incomplete_reason(status : @openseek_protocol.RunStatus) -> String? {
     Aborted(reason~) => Some("aborted: \{reason}")
     Interrupted(reason~) => Some("interrupted: \{reason}")
     Failed(reason~) => Some(reason)
+  }
+}
+
+///|
+/// The session a parent reserved for this run: a non-blank `--session`, not
+/// overridden by `--no-session`. `None` when there is none.
+fn reserved_session(matches : @argparse.Matches) -> String? {
+  match matches {
+    { flags: { "no-session": true, .. }, .. } => None
+    { values: { "session": [session, ..], .. }, .. } if !session.is_blank() =>
+      Some(session)
+    _ => None
   }
 }

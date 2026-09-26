@@ -39,7 +39,6 @@ priv enum Profile {
 /// A run's request, read and checked before anything is created: no workspace,
 /// session or model call exists yet when a bad request is refused.
 priv struct Invocation {
-  request_id : String?
   profile : Profile
   /// The request's step ceiling; see `resolved_max_steps`.
   requested_max_steps : Int?
@@ -56,10 +55,13 @@ fn Invocation::kind_name(self : Invocation) -> String? {
 
 ///|
 /// Read the run's request: the command-line task in text mode, else one JSON
-/// request from stdin.
+/// request from stdin. `on_request_id` hears the request's id as soon as the
+/// JSON is read, before any check that can refuse the request, so that even a
+/// refusal answers the request it refuses.
 async fn read_invocation(
   matches : @argparse.Matches,
   mode : InputMode,
+  on_request_id~ : (String) -> Unit,
 ) -> Invocation {
   let cli_kind = match matches.values.get("kind") {
     Some([kind, ..]) => Some(kind)
@@ -73,7 +75,6 @@ async fn read_invocation(
         fail("--kind needs --input-format json: a preset reads a JSON request")
       }
       return {
-        request_id: None,
         profile: General(task=@options.task_text(matches)),
         requested_max_steps: None,
       }
@@ -91,6 +92,9 @@ async fn read_invocation(
   }
   let json = @json.parse(text.trim()) catch {
     error => fail("the request on stdin is not JSON: \{error}")
+  }
+  if json is { "request_id": String(id), .. } && !id.is_blank() {
+    on_request_id(id)
   }
   let request = @openseek_protocol.parse_run_request(json) catch {
     UnsupportedVersion(version) =>
@@ -112,13 +116,12 @@ async fn read_invocation(
     General(task=task.trim().to_owned())
   } else {
     guard Kind::parse(name) is Some(kind) else { fail("unknown kind: \{name}") }
+    if kind.check_input(request.input) is Some(reason) {
+      fail(reason)
+    }
     Preset(kind~, name~, input=request.input)
   }
-  {
-    request_id: request.request_id,
-    profile,
-    requested_max_steps: request.max_steps,
-  }
+  { profile, requested_max_steps: request.max_steps, }
 }
 
 ///|

@@ -84,6 +84,31 @@ error: --review-gate is not available with --cancel-on-stdin-eof: a delegated ru
 exit 1
 ```
 
+## A Refused Request Still Answers Under Its Id, and Leaves Nothing Behind
+
+The request's `request_id` is echoed even when the request is refused, and a
+preset's input is checked before the workspace exists: `ws` is never created.
+A preset names its session only once it records something, so the modelless
+`echo` reports none.
+
+```mooncram
+$ sh <<'EOF'
+> d=$(mktemp -d)
+> printf '{"version":1,"request_id":"r-3","kind":"explore","input":{}}' | openseek.exe run --input-format json --no-session --dir "$d/ws" --result-file "$d/result.json" 2>&1 > /dev/null
+> cat "$d/result.json"
+> test -e "$d/ws" && echo "ws exists" || echo "no ws"
+> printf '{"version":1,"kind":"echo","input":0}' | openseek.exe run --input-format json --session s-echo --session-root "$d/sessions" --dir "$d/ws" --result-file "$d/result.json" > /dev/null 2>&1
+> cat "$d/result.json"
+> printf '{"version":1,"kind":"echo","input":0}\n' | env WORKFLOW_HOST='{"v":1}' openseek.exe run --input-format json --cancel-on-stdin-eof --session '' --dir "$d/ws" 2>&1 > /dev/null
+> rm -rf "$d"
+> EOF
+error: explore requires a non-empty query
+{"version":1,"request_id":"r-3","status":"failed","reason":"explore requires a non-empty query"}
+no ws
+{"version":1,"kind":"echo","status":"completed","output":0}
+error: a run launched from a hosted workflow needs its reserved --session; delegate through @hosted.run so the child gets a transcript
+```
+
 ## A Parent-Managed Run: One Line In, stdin Held Open
 
 With `--cancel-on-stdin-eof` the request is one line and the parent keeps the
