@@ -41,6 +41,12 @@ import {
   "moonbitlang/async/http",
   "moonbitlang/async/socket",
   "moonbitlang/core/json",
+  "moonbitlang/openseek/testkit/filesystem" @vfs,
+  "moonbitlang/openseek/agent_tool/write_scope",
+  "moonbitlang/openseek/agent_tool/write",
+  "moonbitlang/openseek/agent_tool/edit",
+  "moonbitlang/openseek/agent_tool/multi_edit",
+  "moonbitlang/openseek/agent_tool/remove",
 } for "test"
 
 warnings = "+unnecessary_annotation"

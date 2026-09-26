@@ -171,11 +171,23 @@ pub async fn[X] build_tools(
     })
   })
   let file_tools = [
-    @edit.definition(workspace_root~, file_state~),
-    @multi_edit.definition(workspace_root~, file_state~),
-    @write.definition(workspace_root~, file_state~),
+    @edit.definition(
+      workspace_root~,
+      file_state~,
+      approval?=runtime.approval_channel(),
+    ),
+    @multi_edit.definition(
+      workspace_root~,
+      file_state~,
+      approval?=runtime.approval_channel(),
+    ),
+    @write.definition(
+      workspace_root~,
+      file_state~,
+      approval?=runtime.approval_channel(),
+    ),
   ].map(tool => file_state.serialize(tool))
-  // Remove owns two short locked phases, with approval outside the gate.
+  // Remove owns its file gate, releasing it while awaiting approval.
   file_tools.push(
     @remove.definition(
       workspace_root~,

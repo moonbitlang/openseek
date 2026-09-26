@@ -179,3 +179,14 @@ async test "multi_edit applies fixes through the registry" {
   })
 }
 ```
+
+## Scoped operation approval
+
+Direct and PTC calls use the same executor and file-operation gate. A valid
+operation outside a configured write scope can request one-shot approval when
+a channel is present. Parameter, matching, manifest, and syntax failures do not
+request approval. The prompt shows the operation and proposed content; affected
+paths, canonical destinations, and file contents are rechecked after the wait.
+The wait releases the file gate. Approval grants only the exact targets for
+this call, including its guarded rollback, without changing future permissions.
+Without a channel, an out-of-scope operation remains blocked.

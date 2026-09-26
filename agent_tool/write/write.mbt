@@ -1,7 +1,7 @@
 ///|
 /// Tool definition for `write`: creates a new file at `arguments.path` with
 /// `arguments.content`, or overwrites an existing non-source file. Overwriting
-/// an existing `.mbt`/`.mbt.md` source file is rejected (use `edit`/`multi_edit`,
+/// an existing `.mbt`/`.mbt.md` source file requires one-shot approval (prefer `edit`/`multi_edit`,
 /// which also insert). Missing parent directories are created (so `dir/moon.pkg`
 /// works without a separate mkdir).
 ///
@@ -33,17 +33,20 @@ pub fn definition(
   workspace_root? : String = ".",
   file_state? : @agent_tool.FileStateMap = FileStateMap(),
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
+    owns_file_access=true,
+    can_request_approval=approval is Some(_),
     name="write",
+    program_callable=true,
     description=(
       #|Create a new file at arguments.path with arguments.content (missing parent
       #|directories are created), or overwrite an existing non-source file. Overwriting an
-      #|existing .mbt/.mbt.md source file is rejected: use edit or multi_edit to change
-      #|existing source (an empty old_string inserts new code). New syntax-checkable
+      #|existing .mbt/.mbt.md source file requires approval for the supplied full contents.
+      #|Use edit or multi_edit for partial changes (an empty old_string inserts new code). New syntax-checkable
       #|content (.mbt, .mbt.md, moon.mod, moon.pkg) that fails to lex/parse is rejected
-      #|BEFORE writing and the parse errors are returned — see revert_on_parse_errors. Do
-      #|not use write to copy a snippet-generated rewrite of a file back over source. Do not
+      #|BEFORE writing or approval — see revert_on_parse_errors. Do not
       #|create Markdown or README files unless the user explicitly asks for them.
     ),
     schema=JsonSchema({
@@ -59,7 +62,7 @@ pub fn definition(
             #|(moonc syncheck); content with lex/parse errors is REJECTED — nothing is
             #|written — and the call returns the errors with excerpts of the offending
             #|lines. A file that does not parse is never a valid intermediate state, and
-            #|write cannot overwrite existing source, so the retry is another write with
+            #|a syntax failure is not eligible for approval; retry another write with
             #|corrected content. Type errors never trigger the gate (they may be a
             #|legitimate transient state during multi-file work); in .mbt.md only the
             #|checked (`mbt check` / `moonbit check`) fenced blocks are parsed. Set false
@@ -72,12 +75,15 @@ pub fn definition(
       "required": ["path", "content"],
     }),
     execute=Async(arguments => {
-      execute_with_workspace(
-        workspace_root,
-        file_state,
-        arguments,
-        write_scope?,
-      )
+      file_state.with_access(() => {
+        execute_with_workspace(
+          workspace_root,
+          file_state,
+          arguments,
+          write_scope?,
+          approval?,
+        )
+      })
     }),
   )
 }
@@ -88,6 +94,7 @@ async fn execute_with_workspace(
   file_state : @agent_tool.FileStateMap,
   arguments : Json,
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
     error => {
@@ -99,16 +106,7 @@ async fn execute_with_workspace(
     }
   }
   let path = @workspace_path.resolve(workspace_root, input.path)
-  // Containment gate for confined (worker) registries; re-checked below
-  // immediately before the file is written.
-  if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
-    return @agent_tool.respond(
-      "error writing \{path}: write blocked: \{reason}",
-      is_error=true,
-      brief="write \{@agent_tool.brief_basename(path)}",
-    )
-  }
-  write_file(input, path~, file_state~, write_scope?)
+  write_file(input, path~, file_state~, write_scope?, approval?)
 }
 
 ///|
@@ -117,6 +115,7 @@ async fn write_file(
   path~ : String,
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
   fn err(message : String) -> @agent_tool.ToolAction {
     // Every failure names the file it tried to write, as `edit`/`remove` do.
@@ -132,23 +131,14 @@ async fn write_file(
     return err(message)
   }
   // Resolve symlinks once, up front: the realpath decides both whether this
-  // is an existing-source overwrite to reject and — for the syntax gate below
+  // is an existing-source overwrite requiring approval and — for the syntax gate below
   // — what KIND the written file really is. A brand-new path has no target, so
   // realpath fails and it falls back to its own name.
   let target = @fs.realpath(path) catch { _ => path }
-  // Guard the last unguarded source-write path: `write` is an in-process file
-  // write with no sandbox in front of it, so overwriting an existing
-  // `.mbt`/`.mbt.md` file here would bypass the line-anchored edit discipline
-  // and risk silently dropping content. Existing source must change through
-  // `edit`/`multi_edit` (which also insert). Creating a NEW source file, or
-  // writing non-source files, is still allowed. Resolving the symlink first
-  // stops a link named `x.txt` pointing at `lib.mbt` from slipping past the
-  // suffix check and truncating the source through CreateOrTruncate below.
-  if @fs.exists(path) && (is_mbt_source(path) || is_mbt_source(target)) {
-    return err(
-      "existing source file — use edit or multi_edit to change it (an empty old_string inserts new code); write is for creating new files",
-    )
-  }
+  // Replacing existing MoonBit source is an explicit operation-level grant,
+  // including aliases whose destination is source. New source remains ordinary.
+  let source_overwrite = @fs.exists(path) &&
+    (is_mbt_source(path) || is_mbt_source(target))
   // Pre-write syntax gate for syncheck inputs (`.mbt`, `.mbt.md`, `moon.mod`,
   // `moon.pkg`): parse the candidate content in a scratch file first (moonc
   // syncheck needs no project context), so malformed content is rejected
@@ -156,8 +146,7 @@ async fn write_file(
   // under every kind this file could be classified as (from both the path and
   // its symlink target), so malformed content written THROUGH a link (e.g.
   // `alias.txt -> moon.pkg`) is caught too. A non-parsing file is never a
-  // valid intermediate state, and since `write` refuses to overwrite existing
-  // source, the natural retry is another `write` with corrected content.
+  // valid intermediate state; syntax failures never become approval requests.
   // Fail-open: when the gate cannot run (moonc missing), write as usual.
   if input.revert_on_parse_errors {
     for gate_path in @auto_check.gate_paths(path, target) {
@@ -174,11 +163,29 @@ async fn write_file(
       }
     }
   }
+  let write_scope = @permission.authorize(
+    [path],
+    tool_name="write",
+    arguments={ "path": path, "content": input.content },
+    file_state~,
+    write_scope?,
+    approval?,
+    reason?=if source_overwrite {
+      Some("overwrite an existing source file with the supplied full contents")
+    } else {
+      None
+    },
+  ) catch {
+    error => return err(@tool_error.failure_message("\{error}"))
+  }
   // Containment re-check at the moment of writing (before parent directories
   // are created for the target): the early gate decided on filesystem state
   // that awaits ago may have changed underneath the tool.
   if write_scope is Some(scope) && scope.deny_reason(path) is Some(reason) {
     return err("write blocked: \{reason}")
+  }
+  if @fs.exists(path) && (@fs.realpath(path) catch { _ => path }) != target {
+    return err("file target changed before writing; re-read and retry")
   }
   create_parent_dirs(path)
   // Probe before writing so the result can tell the model whether it created a
@@ -187,7 +194,7 @@ async fn write_file(
   // ENOTDIR) falls through to the write below, and the dispatch boundary in
   // `@agent_tool.execute_tool_call` reports the fault.
   let existed = @fs.exists(path)
-  // Truncation is allowed ONLY for a genuine pre-existing non-source file;
+  // Truncation requires a pre-existing non-source file or an approved source replacement;
   // everything else commits to CreateNew, which fails instead of writing
   // through when (a) the "new" path gained a file since the probe — for a
   // source path that racer's file would otherwise be truncated despite the
@@ -197,7 +204,7 @@ async fn write_file(
   @fs.write_file(
     path,
     input.content,
-    create_mode=if existed && !is_mbt_source(path) {
+    create_mode=if existed && (!is_mbt_source(path) || source_overwrite) {
       CreateOrTruncate
     } else {
       CreateNew

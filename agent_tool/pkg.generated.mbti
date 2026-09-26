@@ -43,7 +43,8 @@ pub struct AgentToolDefinition {
   control : Bool
   // private fields
 } derive(@debug.Debug)
-pub fn AgentToolDefinition::AgentToolDefinition(name~ : String, description~ : String, schema~ : JsonSchema, execute~ : ToolExecutor, control? : Bool, concurrent_safe? : Bool, program_callable? : Bool) -> Self
+pub fn AgentToolDefinition::AgentToolDefinition(name~ : String, description~ : String, schema~ : JsonSchema, execute~ : ToolExecutor, control? : Bool, concurrent_safe? : Bool, program_callable? : Bool, owns_file_access? : Bool, can_request_approval? : Bool) -> Self
+pub fn AgentToolDefinition::can_request_approval(Self) -> Bool
 pub fn AgentToolDefinition::is_concurrent_safe(Self) -> Bool
 pub fn AgentToolDefinition::is_control(Self) -> Bool
 pub fn AgentToolDefinition::is_program_callable(Self) -> Bool
@@ -63,6 +64,7 @@ pub fn FileStateMap::record_edited(Self, String, String, String) -> Unit
 pub fn FileStateMap::record_modified(Self, String, String) -> Unit
 pub fn FileStateMap::serialize(Self, AgentToolDefinition) -> AgentToolDefinition
 pub async fn[T] FileStateMap::with_access(Self, async () -> T) -> T
+pub async fn[T] FileStateMap::without_access(Self, async () -> T) -> T
 
 pub(all) struct JsonSchema(Json) derive(@debug.Debug)
 

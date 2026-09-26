@@ -11,8 +11,8 @@ script-authoring packages are taught. A host that ships its own prompt owns
 that text too. This file covers hosting, lifetime, and wire bounds. Scripts
 call host tools through the published SDK, which invokes the same registered
 executors as direct tool calls, including edit validation, rollback checks,
-and the session's shared `FileStateMap`. Direct `edit` and `multi_edit`
-remain available.
+and the session's shared `FileStateMap`. Direct file-tool calls remain available. PTC also exposes `write` and `remove`,
+with the same operation-scoped approval and validation as direct calls.
 
 For example, pass this as `source` to mbtx:
 
@@ -44,6 +44,8 @@ PTC-enabled tools and their argument shapes:
 
 - `edit`
 - `multi_edit`, e.g. `{ "edits": edits }` or `{ "edits_file": "edits.json" }`
+- `write`, e.g. `{ "path": "note.txt", "content": "hello" }`
+- `remove`, e.g. `{ "path": "note.txt", "reason": "remove obsolete notes" }`
 - `web_search`, e.g. `{ "query": query }`, when registered
 
 SDK 0.1.0 also ships `@tools.edit` and friends as thin wrappers; 0.2.0 removes
@@ -74,7 +76,8 @@ The OpenSeek session owns one loopback HTTP server. Every script receives its
 own capability, active-call set, and trace. The listener calls existing leaf
 executors directly, independently of the agent loop's wait for mbtx. The outer
 mbtx wait never holds the file gate. Direct and RPC file operations share that
-gate across validation, writes, checks, and rollback.
+gate across validation, writes, checks, and rollback. Human approval releases
+the gate; the tool reacquires it and revalidates its targets before writing.
 
 Normal mbtx background handoff is preserved. After adoption, the job owns the
 script registration; the server stays in OpenSeek. Calls after handoff update
@@ -115,7 +118,13 @@ Version 1 accepts `{version: 1, name, arguments}` and returns
   Each connection carries one HTTP/1.1 POST, using Content-Length or plain
   chunked encoding; duplicate headers, ambiguous framing, chunk extensions,
   trailers, and connection reuse are unsupported.
-- 120 seconds per tool call, including initial trace publication and queueing; 125 seconds client timeout.
+- 120 seconds per ordinary tool call, including initial trace publication and
+  queueing. Approval-capable tools have no host execution deadline, matching
+  direct calls; program/session cancellation still cancels them.
+- SDK 0.1.0 retains a fixed 125-second client deadline even for approval calls.
+  The unreleased SDK 0.2.0 honors the host's `approval_tools` capability metadata
+  and waits without that deadline for those calls. Ordinary calls remain bounded.
+  Publishing the updated SDK is required to remove the old client's limit.
 - 64K characters per serialized result. Oversized output becomes an explicit
   error saying execution occurred; the host does not retry it.
 - 512 KiB retained trace plus JSON framing. Full results still reach the client;

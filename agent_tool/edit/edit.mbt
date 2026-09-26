@@ -55,8 +55,11 @@ pub fn definition(
   workspace_root? : String = ".",
   file_state? : @agent_tool.FileStateMap = FileStateMap(),
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
+    owns_file_access=true,
+    can_request_approval=approval is Some(_),
     program_callable=true,
     name="edit",
     description=(
@@ -171,12 +174,15 @@ pub fn definition(
       "required": ["path", "old_string", "new_string", "start_line"],
     }),
     execute=Async(arguments => {
-      execute_with_workspace(
-        workspace_root,
-        file_state,
-        arguments,
-        write_scope?,
-      )
+      file_state.with_access(() => {
+        execute_with_workspace(
+          workspace_root,
+          file_state,
+          arguments,
+          write_scope?,
+          approval?,
+        )
+      })
     }),
   )
 }
@@ -187,6 +193,7 @@ async fn execute_with_workspace(
   file_state : @agent_tool.FileStateMap,
   arguments : Json,
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
     error => {
@@ -199,22 +206,9 @@ async fn execute_with_workspace(
     }
   }
   let path = @workspace_path.resolve(workspace_root, input.path)
-  // Containment gate for confined (worker) registries. Previews write
-  // nothing, so they stay readable everywhere; the write itself is gated
-  // again in commit_edit, immediately before the file is touched.
-  if !input.replace_all_preview &&
-    write_scope is Some(scope) &&
-    scope.deny_reason(path) is Some(reason) {
-    return failure(
-      path,
-      "write blocked: \{reason}",
-      "edit \{@agent_tool.brief_basename(path)}",
-      outcome="error",
-    )
-  }
   // A filesystem failure (a missing or unreadable file) is an outcome of
   // this tool, with data, not a raise for the dispatcher to render without.
-  edit_file(input, path~, file_state~, write_scope?) catch {
+  edit_file(input, path~, file_state~, write_scope?, approval?) catch {
     error =>
       failure(
         path,
@@ -231,6 +225,7 @@ async fn edit_file(
   path~ : String,
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
   // Every failure names the file it tried to edit so the viz can show
   // `→ edit · edit <file> 🚩` on the folded call line.
@@ -303,6 +298,7 @@ async fn edit_file(
       ok_brief~,
       file_state~,
       write_scope?,
+      approval?,
     )
   }
   let (norm_content, offset_map) = @matching.normalize_content_for_matching(
@@ -356,6 +352,7 @@ async fn edit_file(
     ok_brief="edited \{@agent_tool.brief_basename(path)}:\{match_line} (1×)",
     file_state~,
     write_scope?,
+    approval?,
   )
 }
 
@@ -757,6 +754,7 @@ async fn commit_edit(
   ok_brief~ : String,
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
+  approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
   if @manifest_error.write_error(path, new_content) is Some(message) {
     return failure(path, message, fail_brief, outcome="error")
@@ -787,6 +785,26 @@ async fn commit_edit(
     )
   }
 
+  let write_scope = @permission.authorize(
+    [path, resolved_target(path)],
+    tool_name="edit",
+    arguments={
+      "path": path,
+      "old_content": original_content,
+      "new_content": new_content,
+    },
+    file_state~,
+    write_scope?,
+    approval?,
+  )
+  guard @fs.read_file(path).text() == original_content else {
+    return failure(
+      path,
+      "file changed before editing; re-read and retry",
+      fail_brief,
+      outcome="error",
+    )
+  }
   // A link is compiled twice over: moon reads its content as a member of the
   // package the link sits in, and again as the target's own package — which
   // may be another module (`a/lib/alias.mbt -> b/lib/lib.mbt`). The guard's

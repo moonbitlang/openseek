@@ -10,6 +10,9 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="remove",
+    program_callable=true,
+    owns_file_access=true,
+    can_request_approval=approval is Some(_),
     description=(
       #|Delete a file or recursively delete a directory, with a non-empty reason.
       #|Unchanged session-created files and empty directories are removed automatically.
@@ -18,7 +21,8 @@ pub fn definition(
       #|A file or tree changed while waiting must be reconsidered
       #|and approved again. Directory approval covers the whole captured tree.
       #|Workspace roots and their ancestors, symlinks (including inside a tree),
-      #|special files, and paths outside the worker's write scope are refused.
+      #|and special files are refused. Valid paths outside the write scope require
+      #|approval for this deletion only.
       #|Do not bypass a refusal with mbtx.
       #|Deleting .mbt/.mbt.md also runs moon check and reports its feedback.
     ),
@@ -67,12 +71,6 @@ priv struct RemovalVersion {
 } derive(Eq)
 
 ///|
-priv enum Removal {
-  Finished(@agent_tool.ToolAction)
-  NeedsApproval(RemovalVersion, String)
-}
-
-///|
 fn removal_error(path : String, message : String) -> @agent_tool.ToolAction {
   @agent_tool.respond(
     "error removing \{path}: \{message}",
@@ -99,86 +97,46 @@ async fn execute_with_workspace(
     }
   }
   let path = @workspace_path.resolve(workspace_root, input.path)
-  try {
-    let decision = file_state.with_access(() => {
-      let version = inspect_target(path, workspace_root, write_scope?)
-      if version.entries is [(_, File(file))] &&
-        file_state.created_and_unchanged(path, file.digest) {
-        Finished(delete_file(path, input.reason, file_state, write_scope?))
-      } else if version.entries is [(_, Directory(_))] {
-        // Non-recursive rmdir fails if a file appears after inspection.
-        Finished(
-          delete_directory(
-            path,
-            input.reason,
-            version,
-            file_state,
-            write_scope?,
-          ),
+  file_state.with_access(() => {
+    let version = inspect_target(path, workspace_root)
+    let reason = match version.entries {
+      [(_, File(file))] if file_state.created_and_unchanged(path, file.digest) =>
+        None
+      [(_, Directory(_))] => None
+      _ =>
+        Some(
+          if version.entries.last() is Some((_, Directory(_))) {
+            let files = version.entries
+              .filter(entry => entry.1 is File(_))
+              .length()
+            "recursive directory deletion: \{files} files and \{version.entries.length() - files - 1} subdirectories; all contents will be removed"
+          } else if file_state.get(path) is Some(Created) {
+            "the file's content has changed since the agent last wrote it"
+          } else {
+            "the file is not recorded as created by the agent this session"
+          },
         )
-      } else {
-        let why = if version.entries.last() is Some((_, Directory(_))) {
-          let files = version.entries
-            .filter(entry => entry.1 is File(_))
-            .length()
-          "recursive directory deletion: \{files} files and \{version.entries.length() - files - 1} subdirectories; all contents will be removed"
-        } else if file_state.get(path) is Some(Created) {
-          "the file's content has changed since the agent last wrote it"
-        } else {
-          "the file is not recorded as created by the agent this session"
-        }
-        NeedsApproval(version, why)
-      }
-    })
-    let (version, why) = match decision {
-      Finished(result) => return result
-      NeedsApproval(version, why) => (version, why)
     }
-    guard approval is Some(channel) else {
+    let write_scope = @permission.authorize(
+      version.entries.map(entry => entry.0),
+      tool_name="remove",
+      arguments={ "path": path, "reason": input.reason },
+      file_state~,
+      write_scope?,
+      approval?,
+      reason?,
+    )
+    guard inspect_target(path, workspace_root, write_scope?) == version else {
       return removal_error(
-        path,
-        "\{why}; deletion requires approval, but this session has no approval channel",
+        path, "file or directory changed while awaiting approval; deletion refused. Reconsider and request approval again",
       )
     }
-    // Human-paced IO must not occupy the shared file-operation gate. The
-    // original version, not a fresh approval for whatever is there, is retained.
-    let body : Json = { "path": path, "reason": input.reason }
-    let outcome = channel.ask({
-      tool_name: "remove",
-      detail: "delete this target: \{why}. This grants no other deletions or sandbox changes.",
-      body: Some(body.stringify()),
-    })
-    match outcome {
-      AllowedOnce =>
-        file_state.with_access(() => {
-          let current = inspect_target(path, workspace_root, write_scope?)
-          guard current == version else {
-            return removal_error(
-              path, "file or directory changed while awaiting approval; deletion refused. Reconsider and request approval again",
-            )
-          }
-          if version.entries.last() is Some((_, Directory(_))) {
-            delete_directory(
-              path,
-              input.reason,
-              version,
-              file_state,
-              write_scope?,
-            )
-          } else {
-            delete_file(path, input.reason, file_state, write_scope?)
-          }
-        })
-      Rejected =>
-        removal_error(
-          path, "deletion approval rejected; target kept. Do not retry without new user instructions",
-        )
-      Cancelled =>
-        removal_error(path, "deletion approval cancelled; target kept")
-      Unavailable =>
-        removal_error(path, "deletion approval unavailable; target kept")
+    if version.entries.last() is Some((_, Directory(_))) {
+      delete_directory(path, input.reason, version, file_state, write_scope?)
+    } else {
+      delete_file(path, input.reason, file_state, write_scope?)
     }
-  } catch {
+  }) catch {
     error => removal_error(path, @tool_error.failure_message("\{error}"))
   }
 }
