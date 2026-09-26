@@ -132,23 +132,9 @@ fn child_durable_session(
 }
 
 ///|
-/// The step ceiling for one child, by precedence: the explicit `--max-steps`
-/// flag (the operator's word), else the request envelope's `max_steps` (where
-/// the workflow contract carries a caller's per-call ceiling), else the
-/// kind's own default.
-fn step_ceiling(
-  matches : @argparse.Matches,
-  envelope : Int?,
-  default : Int,
-) -> Int raise {
-  match @options.max_steps(matches) {
-    Some(steps) => steps
-    None => envelope.unwrap_or(default)
-  }
-}
-
-///|
-/// Run one kind in this process and return its report, if any.
+/// Run one kind in this process for the legacy child contract and return its
+/// report, if any. A refusal becomes the `command_error` event the parent
+/// classifies on.
 async fn dispatch_kind(
   kind : String,
   input : Json,
@@ -159,17 +145,16 @@ async fn dispatch_kind(
   api_url : String?,
   workspace_root : String,
 ) -> Json? {
+  guard Kind::parse(kind) is Some(preset) else {
+    @emit.emit(CommandError(error="unknown subrun kind: \{kind}"))
+    return None
+  }
   // A durable parent passes `--session <parent>-<sr-id> --session-root`
   // (appended by the runner): this child then persists its own transcript
   // as a sibling session — inspectable, linkable, and crash-honest, since
   // items append as the turn runs. Without the flags the transcript stays
   // in-memory, exactly as before.
   let durable = child_durable_session(matches, workspace_root~)
-  // Read here rather than threaded in: like `step_ceiling` below, this is a
-  // pure read of the child's own already-parsed argv/env. The parent does not
-  // inject `--retry-attempts` on the child argv — the retry settings ride the
-  // inherited environment, exactly as the API key and `--thinking` do.
-  let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
   // A child spawned from a hosted snippet inherits that snippet's handoff
   // in its environment. One that arrives with the handoff but WITHOUT a
   // reserved session was launched around the library — a hand-rolled
@@ -186,167 +171,29 @@ async fn dispatch_kind(
     )
     return None
   }
-  let session_id = durable.map(pair => pair.0)
-  let append_item = durable.map(pair => {
-    let store = @store.SessionStore(pair.1)
-    (session, item) => store.append(session, item)
-  })
-  // Every model-driven kind gets its own scratch lab: a temp directory
-  // where the otherwise read-only child MAY scaffold projects and write
-  // source to verify claims empirically (the sr-2 lesson: denied the
-  // 3-step experiment, a scout greps compiler binaries for 60 steps).
-  match kind {
-    "explore" => {
-      guard model.api_key(matches.values) is Some(api_key) else {
-        fail("an API key is required for \{model}: pass --api-key")
-      }
-      let scratch_dir = @setup.new_scratch_lab("openseek-explore-lab-")
-      defer @setup.remove_scratch_lab(scratch_dir)
-      let report = @agent_explore.run_child(
-        input,
-        api_key~,
-        model~,
-        max_steps=step_ceiling(
-          matches, ceiling, @agent_explore.default_explore_max_steps,
-        ),
-        thinking~,
-        api_url?,
-        retry_attempts?,
-        retry_backoff_ms?,
-        workspace_root~,
-        session_id?,
-        append_item?,
-        scratch_dir~,
-      )
-      report.map(report => Json(report))
+  let (session_id, append_item) = match durable {
+    Some((id, root)) => {
+      let store = @store.SessionStore(root)
+      (id, (session, item) => store.append(session, item))
     }
-    "review" => {
-      guard input is { "goal": String(goal), .. } && !goal.is_blank() else {
-        @emit.emit(
-          CommandError(error="subrun review requires a non-empty goal"),
-        )
-        return None
-      }
-      let baseline : @agent_session.GoalBaseline? = match input {
-        { "sha": String(sha), "dirty": dirty, .. } =>
-          Some({ sha, dirty: dirty is True, })
-        _ => None
-      }
-      guard model.api_key(matches.values) is Some(api_key) else {
-        fail("an API key is required for \{model}: pass --api-key")
-      }
-      let scratch_dir = @setup.new_scratch_lab("openseek-review-lab-")
-      defer @setup.remove_scratch_lab(scratch_dir)
-      let report = @agent_review.run_goal_audit(
-        goal~,
-        baseline~,
-        api_key~,
-        model~,
-        max_steps=step_ceiling(
-          matches, ceiling, @agent_review.default_audit_max_steps,
-        ),
-        thinking~,
-        api_url?,
-        retry_attempts?,
-        retry_backoff_ms?,
-        workspace_root~,
-        session_id?,
-        append_item?,
-        scratch_dir~,
-      )
-      report.map(report => Json(report))
-    }
-    "worker" => {
-      // Input first, key second: a malformed input line reports its exact
-      // defect even in a keyless environment (and the cram can pin it).
-      if @agent_worker.WorkerInput::parse(input) is Err(reason) {
-        @emit.emit(CommandError(error="subrun worker: \{reason}"))
-        return None
-      }
-      guard model.api_key(matches.values) is Some(api_key) else {
-        fail("an API key is required for \{model}: pass --api-key")
-      }
-      // No scratch lab: the worker's whole worktree is writable, and its
-      // geometry (worktree, denied roots, allowed paths) arrives in the
-      // input line from the worker controller — the child enforces with
-      // what it was handed rather than deriving anything itself.
-      match
-        @agent_worker.run_child(
-          input,
-          api_key~,
-          model~,
-          max_steps=step_ceiling(
-            matches, ceiling, @agent_worker.default_worker_max_steps,
-          ),
-          thinking~,
-          api_url?,
-          retry_attempts?,
-          retry_backoff_ms?,
-          session_id?,
-          append_item?,
-        ) {
-        Ok(report) => report.map(report => Json(report))
-        Err(reason) => {
-          @emit.emit(CommandError(error="subrun worker: \{reason}"))
-          None
-        }
-      }
-    }
-    "pattern-repair" => {
-      guard input
-        is {
-          "pattern": String(pattern),
-          "instruction": String(instruction),
-          ..
-        } &&
-        !pattern.is_blank() &&
-        !instruction.is_blank() else {
-        @emit.emit(
-          CommandError(
-            error="subrun pattern-repair requires pattern and instruction",
-          ),
-        )
-        return None
-      }
-      guard model.api_key(matches.values) is Some(api_key) else {
-        fail("an API key is required for \{model}: pass --api-key")
-      }
-      let report = @agent_pattern_repair.run(
-        pattern,
-        instruction,
-        api_key~,
-        model~,
-        // Pattern repair is bounded by the Host's wall timeout. Keep the
-        // agent loop unbounded by default so a repair can validate, inspect
-        // the diagnostic, and retry as many times as needed.
-        max_steps=step_ceiling(matches, ceiling, @agent.unbounded_max_steps),
-        thinking~,
-        api_url?,
-        retry_attempts?,
-        retry_backoff_ms?,
-        workspace_root~,
-      )
-      report.map(report => Json(report))
-    }
-    "echo" => {
-      // Modelless probe: two canned events plus the input echoed back —
-      // enough to exercise spawn, drain, accounting, and the typed report
-      // channel end to end.
-      @emit.emit(AgentStep(step=1))
-      @emit.emit(
-        Usage(usage={
-          prompt_tokens: 7,
-          completion_tokens: 3,
-          total_tokens: 10,
-          prompt_cache_hit_tokens: 0,
-          prompt_cache_miss_tokens: 7,
-        }),
-      )
-      Some(input)
-    }
-    _ => {
-      @emit.emit(CommandError(error="unknown subrun kind: \{kind}"))
+    None => (kind, (session, item) => session.append(item))
+  }
+  let launch = KindLaunch::{
+    matches,
+    model,
+    thinking,
+    api_url,
+    workspace_root,
+    requested_max_steps: ceiling,
+    session_id,
+    append_item,
+  }
+  match preset.run(input, launch) {
+    Rejected(reason) => {
+      @emit.emit(CommandError(error="subrun \{kind}: \{reason}"))
       None
     }
+    Ran(report~) => report
+    Echoed(input) => Some(input)
   }
 }

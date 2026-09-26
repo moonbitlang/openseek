@@ -60,6 +60,7 @@ One JSON object on one line, UTF-8, ending in a newline:
 | `reason` | string | When `status` is `context_yield`, `aborted`, `interrupted` or `failed`: why. For humans; do not match on it. |
 | `session` | string, optional | The durable session the run recorded to. Absent with `--no-session`, and when the run failed before its session was opened. |
 | `usage` | object, optional | Token usage the run recorded; see below. Absent when the run never reached its turn. |
+| `steps` | integer, optional | How many model responses this run's turn recorded. Present exactly when `usage` is. |
 
 A writer includes `output` and `reason` only for the statuses listed; a reader
 ignores them elsewhere.
@@ -69,6 +70,7 @@ ignores them elsewhere.
 | `status` | Session terminal | Meaning |
 | --- | --- | --- |
 | `completed` | `finished` | The model finished. The only success. |
+| `no_report` | `finished` | A preset run (`--kind`, a later step) finished its turn without submitting the preset's report. Not a failure of the engine, but no result either. A general run never ends this way. |
 | `context_yield` | `context_yield` | The turn filled the model's context window and was checkpointed. The work is not necessarily done; continue it with `--session`. |
 | `max_steps_exhausted` | `max_steps_exhausted` | `--max-steps` ran out before the model finished. |
 | `aborted` | `aborted` | The agent stopped on purpose, e.g. a tool asked it to abort. |

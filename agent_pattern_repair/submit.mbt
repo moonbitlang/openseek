@@ -43,6 +43,8 @@ fn parse_pattern_repair_submission(
 /// Run one Pattern Repair Agent turn. It has no workspace tools: its only
 /// non-submit capability is the Host-owned syntax validator. The caller may
 /// impose a step ceiling; the normal Host path relies on its wall timeout.
+/// `append_item`, when given, records the transcript (a durable child session);
+/// without it the transcript lives and dies with this process.
 pub async fn run(
   pattern : String,
   instruction : String,
@@ -54,10 +56,13 @@ pub async fn run(
   retry_attempts? : Int,
   retry_backoff_ms? : Int,
   workspace_root? : String = ".",
+  session_id? : String = "pattern-repair",
+  append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
 ) -> PatternRepairReport? {
   let validated_pattern : Ref[String?] = { val: None, }
   @agent_kind.execute_kind(
-    session_id="pattern-repair",
+    session_id~,
+    append_item?,
     system_prompt=pattern_repair_system_prompt(),
     task=pattern_repair_task(pattern, instruction),
     tools=captured => {

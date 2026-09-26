@@ -102,6 +102,7 @@ async test "a single run exits successfully only when its turn completes" {
         status: Completed(output={ "answer": "done" }),
         session: None,
         usage: Some(usage),
+        steps: Some(1),
       })
     }
     @async.with_task_group() <| group => {
@@ -131,6 +132,7 @@ async test "a single run exits successfully only when its turn completes" {
             status: MaxStepsExhausted,
             session: None,
             usage: Some(usage),
+            steps: Some(1),
           })
           return
         }
@@ -166,6 +168,7 @@ async test "a single run exits successfully only when its turn completes" {
         status: Completed(output={ "answer": "done" }),
         session: Some("resumed"),
         usage: Some(usage),
+        steps: Some(1),
       })
     }
     // A run that fails before its turn still says so, with no usage.
@@ -183,7 +186,12 @@ async test "a single run exits successfully only when its turn completes" {
     let _ = @run.run_task_command(no_key) catch {
       error => {
         guard read_result(result_file)
-          is { status: Failed(reason~), session: None, usage: None, } else {
+          is {
+            status: Failed(reason~),
+            session: None,
+            usage: None,
+            steps: None,
+          } else {
           fail("unexpected result for a keyless run")
         }
         // The same text the CLI prints after `error: `.

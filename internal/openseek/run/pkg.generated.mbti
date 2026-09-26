@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub async fn run_subrun_command(@argparse.Matches) -> Unit
+
 pub async fn run_task_command(@argparse.Matches) -> Unit
 
 // Errors

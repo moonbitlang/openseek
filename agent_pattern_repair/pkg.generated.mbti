@@ -4,11 +4,12 @@ package "moonbitlang/openseek/agent_pattern_repair"
 import {
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
+  "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/deepseek",
 }
 
 // Values
-pub async fn run(String, String, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, retry_attempts? : Int, retry_backoff_ms? : Int, workspace_root? : String) -> PatternRepairReport?
+pub async fn run(String, String, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, retry_attempts? : Int, retry_backoff_ms? : Int, workspace_root? : String, session_id? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session) -> PatternRepairReport?
 
 // Errors
 
