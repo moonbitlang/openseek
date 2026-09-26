@@ -440,9 +440,12 @@ fn wasm_policy_document(
     }
     allow.push(rule)
   }
-  // The engine itself, one verb only: `subrun` reads a JSON line and reports
-  // a child agent's result. The other verbs stay out, since a bare `openseek`
-  // starts an interactive agent. A wasm engine's runtime appears with the
+  // The engine itself, in one form only: a parent-managed `run` of a preset
+  // (`--kind general` included), which reads a JSON request and writes its
+  // result. The managed flags sit in the prefix, so every child a snippet
+  // starts is a delegated run: it delegates no further, and a general one
+  // holds the workspace's lease. The other verbs stay out, since a bare
+  // `openseek` starts an interactive agent. A wasm engine's runtime appears with the
   // module this host chose in front of that verb, so `moonrun` here names
   // that one engine rather than a general licence to run modules — which is
   // why this entry is generated per reservation instead of living in
@@ -453,7 +456,7 @@ fn wasm_policy_document(
   if spawnable is Some((program, launch_prefix)) {
     allow.push({
       "program": program,
-      "args_prefix": json_strings([..launch_prefix, "subrun"]),
+      "args_prefix": json_strings([..launch_prefix, ..delegated_run_prefix]),
     })
   }
   {
@@ -576,12 +579,15 @@ test "the reservation reaches the guest, and only its own directory is writable"
   // snippet can append its own ledger and nothing else's transcript.
   assert_true(write.contains("/store/run7-wf-1"))
   assert_false(write.contains("/store"))
-  // The engine is admitted by ABSOLUTE path and for one verb. moonrun matches
+  // The engine is admitted by ABSOLUTE path and in one form. moonrun matches
   // the entry exactly, so this admits that binary and not a same-named one
   // earlier in PATH — the same guarantee `run_subrun` callers get from never
   // resolving the engine through PATH.
   assert_true(
-    allow.contains({ "program": "/opt/openseek", "args_prefix": ["subrun"] }),
+    allow.contains({
+      "program": "/opt/openseek",
+      "args_prefix": json_strings(delegated_run_prefix),
+    }),
   )
 }
 
@@ -612,13 +618,18 @@ test "a wasm engine is admitted as its runtime plus the chosen module" {
   assert_true(
     allow.contains({
       "program": "moonrun",
-      "args_prefix": ["/engine/openseek.wasm", "--", "subrun"],
+      "args_prefix": json_strings(
+        ["/engine/openseek.wasm", "--", ..delegated_run_prefix],
+      ),
     }),
   )
   // The module is part of the rule: a snippet cannot point the runtime at
   // another module, nor run one it wrote itself.
   assert_false(
-    allow.contains({ "program": "moonrun", "args_prefix": ["subrun"] }),
+    allow.contains({
+      "program": "moonrun",
+      "args_prefix": json_strings(delegated_run_prefix),
+    }),
   )
   assert_false(allow.contains({ "program": "moonrun" }))
 }
@@ -660,3 +671,10 @@ test "no injection clears any inherited handoff and admits no engine" {
     assert_false(program.contains("openseek"))
   }
 }
+
+///|
+/// The argv a snippet may start the engine with, after any runtime prefix:
+/// the managed form of `run` that `@host.SubrunInjection` templates.
+let delegated_run_prefix : Array[String] = [
+  "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind",
+]

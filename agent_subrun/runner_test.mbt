@@ -1,9 +1,21 @@
 ///|
 /// Parent-runner tests against SCRIPTED children: any process that speaks
-/// the contract (JSONL events on stdout, a final `subrun_report` line,
-/// stdin EOF as cancel) exercises spawn/drain/deadline/teardown without a
-/// model or a built binary — the same hermetic trick the MCP stdio tests
-/// use. Skips cleanly where the sandbox forbids spawning `sh`.
+/// transport 2 of the workflow child contract (one request line on stdin,
+/// stdin EOF as cancel, one result file) exercises spawn/deadline/teardown
+/// without a model or a built binary — the same hermetic trick the MCP
+/// stdio tests use. Skips cleanly where the sandbox forbids spawning `sh`.
+///
+/// Every scripted child starts with `child_preamble`: it reads the request,
+/// keeps the result path (`$1`, from `{result_file}`) as `$RESULT` and the
+/// request id as `$id`, and `result FIELDS` writes a result answering it.
+let child_preamble : String =
+  #|read line
+  #|RESULT=$1
+  #|id=$(printf '%s' "$line" | sed -e 's/.*"request_id":"\([^"]*\)".*/\1/')
+  #|result() { printf '{"version":1,"request_id":"%s",%s}' "$id" "$1" > "$RESULT"; }
+  #|
+
+///|
 fn parse_answer(json : Json) -> Result[String, String] {
   match json {
     { "answer": String(answer), .. } => Ok(answer)
@@ -19,7 +31,7 @@ async fn run_script(
 ) -> @agent_subrun.SubrunResult[String] {
   @agent_subrun.run_subrun(
     command="sh",
-    args=["-c", script],
+    args=["-c", child_preamble + script, "sh", @spawn.ResultFilePlaceholder],
     input={ "query": "q" },
     parse_report=parse_answer,
     wall_deadline_ms~,
@@ -36,8 +48,7 @@ async fn run_script(
 /// that wrongly folds stream errors into Failed (review finding).
 async fn can_spawn_sh() -> Bool {
   let script =
-    #|read line
-    #|printf '{"subrun_report": {"answer": "probe"}}\n'
+    #|result '"status":"completed","output":{"answer":"probe"}'
   // The probe must never throw: under fork pressure (EAGAIN) or a
   // spawn-hostile sandbox it reports false and the test skips.
   let result = run_script(script) catch { _ => return false }
@@ -50,7 +61,7 @@ async test "a spawn failure folds into Failed" {
   let events : Array[@protocol.Event] = []
   let result = @agent_subrun.run_subrun(
     command="/nonexistent/openseek-not-here",
-    args=[],
+    args=[@spawn.ResultFilePlaceholder],
     input={ "query": "q" },
     parse_report=parse_answer,
     wall_deadline_ms=2_000,
@@ -62,26 +73,20 @@ async test "a spawn failure folds into Failed" {
     fail("expected one bracket pair, got \{Repr(events)}")
   }
   guard result.terminal() is Failed(reason) else {
-    // Some sandboxes surface spawn refusal as an immediate empty exit:
-    // accept NoReport there but never a hang or crash.
-    assert_true(result.terminal() is NoReport)
-    assert_eq(bracket_status, "no_report")
-    return
+    fail("expected Failed, got \{Repr(result.terminal())}")
   }
-  assert_true(reason.contains("spawn") || reason.contains("subrun"))
+  // Some sandboxes surface spawn refusal as an immediate failed exit.
+  assert_true(reason.contains("spawn") || reason.contains("exited"))
   assert_eq(bracket_status, "failed")
 }
 
 ///|
-async test "events and the report line are drained and accounted" {
+async test "the result file is the report and the account; stdout is not read" {
+  // Under the old stdout contract the first two lines would have counted.
   let script =
-    #|read line
-    #|printf '{"event":"agent_step","step":1}\n'
-    #|printf 'not json at all\n'
-    #|printf '{"event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
-    #|printf '{"event":"agent_step","step":2}\n'
-    #|printf '{"event":"usage","usage":{"prompt_tokens":95,"completion_tokens":5,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":95}}\n'
-    #|printf '{"subrun_report": {"answer": "forty-two"}}\n'
+    #|printf '{"subrun_report": {"answer": "forged"}}\n'
+    #|printf '{"event":"usage","usage":{"prompt_tokens":999,"completion_tokens":1,"total_tokens":1000,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":999}}\n'
+    #|result '"status":"completed","output":{"answer":"forty-two"},"usage":{"prompt_tokens":185,"completion_tokens":15,"total_tokens":200,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":185},"steps":2'
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
@@ -95,10 +100,9 @@ async test "events and the report line are drained and accounted" {
 }
 
 ///|
-async test "a clean exit without a report is NoReport" {
+async test "a result without a report is NoReport" {
   let script =
-    #|read line
-    #|printf '{"event":"agent_step","step":1}\n'
+    #|result '"status":"no_report"'
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
@@ -113,10 +117,9 @@ async test "a clean exit without a report is NoReport" {
 }
 
 ///|
-async test "an observed step exhaustion without a report is MaxSteps" {
+async test "step exhaustion without a report is MaxSteps" {
   let script =
-    #|read line
-    #|printf '{"event":"max_steps_exhausted"}\n'
+    #|result '"status":"max_steps_exhausted"'
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
@@ -132,8 +135,7 @@ async test "an observed step exhaustion without a report is MaxSteps" {
 ///|
 async test "a garbled report is Failed, never rendered" {
   let script =
-    #|read line
-    #|printf '{"subrun_report": {"answer": 42}}\n'
+    #|result '"status":"completed","output":{"answer":42}'
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
@@ -149,9 +151,8 @@ async test "a garbled report is Failed, never rendered" {
 /// EOF with its report inside the grace window still counts as Captured.
 async test "a report arriving in the cancel grace window still captures" {
   let script =
-    #|read line
     #|read _ignored
-    #|printf '{"subrun_report": {"answer": "flushed on eof"}}\n'
+    #|result '"status":"completed","output":{"answer":"flushed on eof"}'
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
@@ -174,7 +175,6 @@ async test "the input pipe stays open until the deadline" {
     return
   }
   let script =
-    #|read line
     #|read second || exit 7
     #|exit 7
   let result = run_script(script, wall_deadline_ms=500)
@@ -183,11 +183,10 @@ async test "the input pipe stays open until the deadline" {
 }
 
 ///|
-/// A crash-class child — nonzero exit, no failure event, no report — is
-/// classified Failed via its exit status, never NoReport.
-async test "a nonzero exit without a report is Failed by exit status" {
+/// A crash-class child — nonzero exit, no result — is classified Failed via
+/// its exit status, never success.
+async test "a nonzero exit without a result is Failed by exit status" {
   let script =
-    #|read line
     #|exit 3
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
@@ -218,10 +217,7 @@ async test "a run emits a matched started/finished bracket pair" {
     return
   }
   let script =
-    #|read line
-    #|printf '{"event":"agent_step","step":2}\n'
-    #|printf '{"event":"usage","usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90}}\n'
-    #|printf '{"subrun_report": {"answer": "forty-two"}}\n'
+    #|result '"status":"completed","output":{"answer":"forty-two"},"usage":{"prompt_tokens":90,"completion_tokens":10,"total_tokens":100,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":90},"steps":2'
   let events : Array[@protocol.Event] = []
   let result = run_script(script, emit_event=bracket_collector(events))
   debug_inspect(result.terminal(), content="Captured")
@@ -248,7 +244,6 @@ async test "a timed-out run still closes its bracket" {
     return
   }
   let script =
-    #|read line
     #|sleep 60
   let events : Array[@protocol.Event] = []
   let result = run_script(
@@ -278,7 +273,6 @@ async test "external cancellation closes the bracket before re-raising" {
     return
   }
   let script =
-    #|read line
     #|sleep 60
   let events : Array[@protocol.Event] = []
   @async.with_task_group() <| group => {
@@ -313,8 +307,7 @@ async test "sub-run ids are unique across runs" {
     return
   }
   let script =
-    #|read line
-    #|printf '{"subrun_report": {"answer": "ok"}}\n'
+    #|result '"status":"completed","output":{"answer":"ok"}'
   let events : Array[@protocol.Event] = []
   let _ = run_script(script, emit_event=bracket_collector(events))
   let _ = run_script(script, emit_event=bracket_collector(events))
@@ -333,14 +326,13 @@ async test "sub-run ids are unique across runs" {
 }
 
 ///|
-async test "an observed context yield closes with its status" {
+async test "a context yield closes with its status" {
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
   }
   let script =
-    #|read line
-    #|printf '{"event":"context_yield","to_sequence":9,"answer":"partial"}\n'
+    #|result '"status":"context_yield","reason":"partial"'
   let events : Array[@protocol.Event] = []
   let result = run_script(script, emit_event=bracket_collector(events))
   debug_inspect(result.terminal(), content="ContextYield")
@@ -357,15 +349,14 @@ async test "an observed context yield closes with its status" {
 /// derivation, and the result carries the same id.
 async test "child_session appends session argv derived from the sub-run id" {
   let script =
-    #|read line
-    #|printf '{"subrun_report": {"answer": "%s %s %s %s"}}\n' "$0" "$1" "$2" "$3"
+    #|result "\"status\":\"completed\",\"output\":{\"answer\":\"$2 $3 $4 $5\"}"
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
   }
   let result = @agent_subrun.run_subrun(
     command="sh",
-    args=["-c", script],
+    args=["-c", child_preamble + script, "sh", @spawn.ResultFilePlaceholder],
     input={ "query": "q" },
     parse_report=parse_answer,
     wall_deadline_ms=10_000,
@@ -389,15 +380,14 @@ async test "child_session appends session argv derived from the sub-run id" {
 /// high so no other test's allocations can reach it first.)
 async test "child_session's ordinal floor skips persisted ids" {
   let script =
-    #|read line
-    #|printf '{"subrun_report": {"answer": "%s"}}\n' "$1"
+    #|result "\"status\":\"completed\",\"output\":{\"answer\":\"$3\"}"
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
   }
   let result = @agent_subrun.run_subrun(
     command="sh",
-    args=["-c", script],
+    args=["-c", child_preamble + script, "sh", @spawn.ResultFilePlaceholder],
     input={ "query": "q" },
     parse_report=parse_answer,
     wall_deadline_ms=10_000,
@@ -412,7 +402,7 @@ async test "child_session's ordinal floor skips persisted ids" {
   guard result.value() is Some(session_arg) else {
     fail("expected a captured report, got \{Repr(result.terminal())}")
   }
-  // $1 is the --session value: parent + the allocated id, at or past the floor.
+  // $3 is the --session value: parent + the allocated id, at or past the floor.
   assert_eq(session_arg, "resumed-\{result.subrun_id()}")
   guard result.subrun_id().strip_prefix("sr-") is Some(digits) else {
     fail("unexpected subrun id \{result.subrun_id()}")
@@ -422,4 +412,22 @@ async test "child_session's ordinal floor skips persisted ids" {
     ordinal = ordinal * 10 + (c.to_int() - '0'.to_int())
   }
   assert_true(ordinal >= 50_000)
+}
+
+///|
+/// Without a `ChildSession` the child is told to keep its transcript in
+/// memory, and the request it reads names the kind and the sub-run id.
+async test "a child without a session is launched with --no-session" {
+  guard can_spawn_sh() else {
+    println("skipped: cannot spawn sh")
+    return
+  }
+  let script =
+    #|kind=$(printf '%s' "$line" | sed -e 's/.*"kind":"\([^"]*\)".*/\1/')
+    #|result "\"status\":\"completed\",\"output\":{\"answer\":\"$2 $kind $id\"}"
+  let result = run_script(script)
+  guard result.value() is Some(answer) else {
+    fail("expected a captured report, got \{Repr(result.terminal())}")
+  }
+  assert_eq(answer, "--no-session test-kind \{result.subrun_id()}")
 }
