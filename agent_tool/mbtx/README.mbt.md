@@ -386,9 +386,16 @@ The model says whether this snippet WILL delegate: the `subrun: true` argument.
 Only then does the tool reserve a block of 32 child ordinals, create a run
 directory in the session store, write a `WORKFLOW_HOST` handoff into the guest
 environment for `moonbitlang/workflow/hosted` to read, admit that launch
-command to the spawn allowlist (`subrun` only, and on a wasm build pinned to
-the module this host chose), grant the run directory as the one writable store
-path, and announce the run with `workflow_started`.
+command to the spawn allowlist, grant the run directory as the one writable
+store path, and announce the run with `workflow_started`. The allowlist admits
+the engine only as a delegated `run` whose argv starts with the prefix this
+host wrote: the managed-mode flags, then the host's `--dir`, `--session-root`,
+`--result-root` (the snippet's temp directory), `--model` and `--api-url`, then
+`--kind` (on a wasm build, also pinned to the module this host chose). The
+snippet picks only what follows: the kind, the result file, the reserved
+session. A delegated run refuses any option given twice and any option outside
+its short list, so nothing appended after the prefix widens the grant (see
+[`docs/run-result.md`](../../docs/run-result.md)).
 Every other snippet gets none of that — reserving children a script never
 starts would waste ids and announce a workflow that does not exist.
 
@@ -398,6 +405,28 @@ and letting its subagents vanish. And whether or not the flag is set,
 `WORKFLOW_HOST` is always DECIDED by the policy — the handoff, or nothing — so
 a child engine's snippet can never inherit its grandparent's handoff and mint
 child ids from a block that is not its own.
+
+### Snippets written for an older `moonbitlang/workflow`
+
+The handoff is version 2, which names how a child reports (`transport`: a
+result file). `moonbitlang/workflow` 0.9.0 is the first release that reads it.
+An older release refuses a handoff version it does not know, so for a snippet
+whose imports pin one, `@hosted.context()` returns `None` exactly as it does
+on a session that cannot host: the snippet takes its own no-host branch (the
+bundled scripts fail with a message saying they need OpenSeek), and no child
+is launched or recorded. Update the imports:
+
+```text
+import {
+  "moonbitlang/workflow@0.9.0",
+  "moonbitlang/workflow@0.9.0/hosted",
+}
+```
+
+Nothing else changes for a snippet that uses the library. A snippet that
+launched `openseek subrun` itself must move to `openseek run --input-format
+json --cancel-on-stdin-eof --kind KIND --result-file PATH`, which is what the
+library does; `subrun` is gone.
 
 ### Independent review
 

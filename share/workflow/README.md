@@ -92,6 +92,12 @@ Run these with the hosted child-agent handoff:
 {"description":"Map repository architecture","filename":"@builtin/repo-map.mbtx","subrun":true,"cwd":"/path/to/repository"}
 ```
 
+These scripts import `moonbitlang/workflow@0.9.0`, the first release that
+reads the engine's version-2 handoff. A saved copy pinned to an older release
+sees no handoff at all (`@hosted.context()` is `None`) and stops with its
+"needs OpenSeek" message; update its imports to 0.9.0. See
+[snippets written for an older `moonbitlang/workflow`](../../agent_tool/mbtx/README.mbt.md#snippets-written-for-an-older-moonbitlangworkflow).
+
 `review.mbtx` launches one `review` child (100-step ceiling). With no
 arguments it audits the standing goal and the baseline it recorded, which the
 engine places in `WORKFLOW_HOST.openseek.audit` (`goal`, optional `sha` and
