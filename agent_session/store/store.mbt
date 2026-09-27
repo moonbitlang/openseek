@@ -132,14 +132,14 @@ fn header_line(session : @agent_session.Session) -> String {
     id: session.id().value(),
     system_prompt: session.system_prompt(),
   }
-  "\{Json(header).stringify()}\n"
+  "\{header.to_json_line()}\n"
 }
 
 ///|
 fn events_jsonl(events : @vector.Vector[@agent_session.SessionEvent]) -> String {
   let builder = StringBuilder()
   for event in events {
-    let line = ToJson::to_json(event).stringify()
+    let line = event.to_json_line()
     builder <+ "\{line}\n"
   }
   builder.to_string()
@@ -228,7 +228,7 @@ fn parse_session_file(
       continue
     }
     let unterminated_last = index == segments.length() - 1 && !ends_with_newline
-    let event : @agent_session.SessionEvent = @json.from_json(@json.parse(line)) catch {
+    let event = @agent_session.SessionEvent::from_json_line(line) catch {
       error => if unterminated_last { continue } else { raise error }
     }
     decoded.push(event)
@@ -365,7 +365,7 @@ async fn persist_event(
     // does not silently follow an upstream default change.
     @fs.write_file(
       path,
-      ToJson::to_json(event).stringify() + "\n",
+      event.to_json_line() + "\n",
       create_mode=OpenOrCreate,
       append=true,
       sync=Data,
@@ -625,7 +625,7 @@ async fn first_prompt_in_log(path : String) -> String {
     if line.is_blank() {
       continue
     }
-    let event : @agent_session.SessionEvent = @json.from_json(@json.parse(line)) catch {
+    let event = @agent_session.SessionEvent::from_json_line(line) catch {
       _ => return ""
     }
     if event.item() is User(message) {

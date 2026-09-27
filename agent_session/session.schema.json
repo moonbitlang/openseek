@@ -1,0 +1,421 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "The openseek session transcript (`openseek_session-<id>.jsonl`): the first line is a SessionFileHeader and every later line a SessionEvent. This schema is the source of truth for the on-disk format. The session types in agent_session (session_types.mbt) and the header record in agent_session/log (header_record.mbt) are generated from it; see `just gen-session-types`.",
+  "definitions": {
+    "SessionFileHeader": {
+      "description": "The header record on the first line of a session file: the session identity and system prompt for the event lines that follow.",
+      "type": "object",
+      "required": [
+        "version",
+        "id",
+        "system_prompt"
+      ],
+      "properties": {
+        "version": {
+          "description": "The session file format version; this build reads version 1.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "id": {
+          "type": "string"
+        },
+        "system_prompt": {
+          "type": "string"
+        }
+      }
+    },
+    "SessionEvent": {
+      "description": "One append-only event in a session log.\n\nSequence numbers are one-based within a session and are assigned by `Session::append_event`. The durable store rejects non-contiguous sequences when loading from disk.",
+      "type": "object",
+      "required": [
+        "sequence",
+        "ts",
+        "item"
+      ],
+      "properties": {
+        "sequence": {
+          "description": "One-based position in the session log.",
+          "type": "integer",
+          "format": "int32"
+        },
+        "ts": {
+          "description": "Wall-clock stamp (unix milliseconds) of when the event was appended; 0 for purely in-memory sessions appended without a clock (the durable store always stamps).",
+          "type": "integer",
+          "format": "int64"
+        },
+        "item": {
+          "$ref": "#/definitions/SessionItem"
+        }
+      }
+    },
+    "SessionItem": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "user"
+              ]
+            },
+            "payload": {
+              "$ref": "#/definitions/UserMessage"
+            }
+          },
+          "description": "User-authored model input, including the initial task and any steering text. JSON tag: `user`. Projection replays it as a user-role message."
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "assistant"
+              ]
+            },
+            "payload": {
+              "$ref": "#/definitions/AssistantMessage"
+            }
+          },
+          "description": "Model output for one response. JSON tag: `assistant`. Projection preserves visible content, optional reasoning content, and native DeepSeek tool calls; those tool calls open pending ids that later `Tool` events may answer."
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "tool_result"
+              ]
+            },
+            "payload": {
+              "$ref": "#/definitions/ToolResult"
+            }
+          },
+          "description": "Local result for one assistant tool call. JSON tag: `tool_result`. Projection emits it only when `tool_call_id` matches a pending assistant call; unmatched results are ignored to keep model replay protocol-valid."
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "runtime_notice"
+              ]
+            },
+            "payload": {
+              "$ref": "#/definitions/RuntimeNotice"
+            }
+          },
+          "description": "Runtime-injected context, such as a plan reminder. JSON tag: `runtime_notice`. Projection sends it as a user-role message even though it did not originate from the user's prompt."
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "summary"
+              ]
+            },
+            "payload": {
+              "$ref": "#/definitions/SessionSummary"
+            }
+          },
+          "description": "Append-only compaction metadata for an inclusive event sequence range. JSON tag: `summary`. Projection skips covered earlier events when a later summary covers their sequence and emits the summary text instead."
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "payload"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "terminal"
+              ]
+            },
+            "payload": {
+              "$ref": "#/definitions/TurnTerminal"
+            }
+          },
+          "description": "Completion status for an agent turn. JSON tag: `terminal`. `Finished(text)` can project as a final assistant message; aborted, interrupted, and failed terminals project assistant status messages."
+        }
+      ],
+      "description": "Payload vocabulary for one `SessionEvent`.\n\n`User` and `Runtime` project as user-role model messages. `Assistant` projects as an assistant message and may open pending tool calls. `Tool` answers a pending assistant tool call. `Summary` is append-only compaction metadata that can replace older events during projection. `Terminal` records turn completion status and may project as a final assistant/status message."
+    },
+    "UserMessage": {
+      "type": "object",
+      "required": [
+        "content"
+      ],
+      "properties": {
+        "content": {
+          "$ref": "#/definitions/Content"
+        },
+        "submission_id": {
+          "description": "The submitting controller's tag for this input, echoed from a serve `prompt` or `steer` command so a delivery can be reconciled by exact id rather than by matching text (two clients can submit identical text into one session). Absent for untagged input, including TUI and one-shot prompts, and older records without a tag.",
+          "type": "string"
+        }
+      },
+      "description": "User-authored model input for one conversational event.\n\nA `UserMessage` is durable data, not a UI transcript item. It records the ordered content that should be replayed as a user-role message in `Session::chat_messages`."
+    },
+    "SessionToolCall": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "arguments"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "arguments": {
+          "description": "The raw JSON argument string from the model.",
+          "type": "string"
+        }
+      },
+      "description": "One tool call requested by the model, kept durable so later `ToolResult` events can match its id."
+    },
+    "AssistantMessage": {
+      "type": "object",
+      "required": [
+        "content",
+        "tool_calls"
+      ],
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "tool_calls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SessionToolCall"
+          }
+        },
+        "reasoning_content": {
+          "type": "string"
+        },
+        "is_replay": {
+          "description": "True only when a checkpoint re-appends an answer that an earlier durable provider step already owns. Absent on ordinary messages.",
+          "type": "boolean"
+        },
+        "usage": {
+          "$ref": "#/definitions/TokenUsage",
+          "description": "The provider response's token usage, on the first durable record of that response only. Absent on replays and on logs written before it existed."
+        }
+      },
+      "description": "Assistant output returned by the model for one event.\n\nThis stores visible assistant text, requested tool calls, and optional reasoning content. Tool calls are durable because later `ToolResult` events must match their call ids during `Session::chat_messages` projection."
+    },
+    "ToolResult": {
+      "type": "object",
+      "required": [
+        "tool_call_id",
+        "tool_name",
+        "content",
+        "is_error"
+      ],
+      "properties": {
+        "tool_call_id": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "content": {
+          "$ref": "#/definitions/Content"
+        },
+        "is_error": {
+          "type": "boolean"
+        },
+        "brief": {
+          "type": "string",
+          "description": "An optional one-line, human-readable summary of what the call did (e.g. `ran ls → 12 files`), for display only; never replayed to the model."
+        },
+        "data": {
+          "description": "Machine-readable output and nested PTC trace, excluded from model projection."
+        }
+      },
+      "description": "Result returned by a local tool for one assistant tool call.\n\nDuring model projection, a `ToolResult` is emitted only when its `tool_call_id` matches a pending assistant tool call. Unmatched results are ignored to keep replay protocol-valid."
+    },
+    "RuntimeNotice": {
+      "type": "object",
+      "required": [
+        "content"
+      ],
+      "properties": {
+        "content": {
+          "type": "string"
+        }
+      },
+      "description": "Out-of-band runtime notice surfaced to the model.\n\nRuntime notices are projected as user-role messages. They are intended for loop-injected context such as plan reminders or other text that did not originate from the user's prompt."
+    },
+    "SessionSummary": {
+      "type": "object",
+      "required": [
+        "content",
+        "from_sequence",
+        "to_sequence"
+      ],
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "from_sequence": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "to_sequence": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "Durable compaction record for older session events.\n\nA summary does not delete the covered raw events. It records that `from_sequence..to_sequence` can be replaced by `content` when projecting model context. The durable event log remains append-only."
+    },
+    "TurnTerminal": {
+      "description": "How a turn ended. `message` is absent only for `max_steps_exhausted`; `verbatim` marks a message that must not be reinterpreted by the legacy rules (a `finished` message starting with the context-yield prefix, a `failed` message equal to the max-steps text).",
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "finished",
+            "context_yield",
+            "aborted",
+            "interrupted",
+            "max_steps_exhausted",
+            "failed"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "verbatim": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Content": {
+      "description": "Message content: a plain string for a single text part (the original format), otherwise an array of parts.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ContentPart"
+          }
+        }
+      ]
+    },
+    "ContentPart": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "text"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "text"
+              ]
+            },
+            "text": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "media_type",
+            "data"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "image"
+              ]
+            },
+            "media_type": {
+              "type": "string"
+            },
+            "data": {
+              "description": "Base64-encoded image bytes.",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "TokenUsage": {
+      "description": "Token counts for one provider response, as its durable `AssistantMessage` records them. The fields and JSON match the `usage` event, so a reader of the session log can account for a run without its event stream: summed over a turn's messages, they equal the turn's `usage` events.",
+      "type": "object",
+      "required": [
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens"
+      ],
+      "properties": {
+        "prompt_tokens": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "completion_tokens": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total_tokens": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "prompt_cache_hit_tokens": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "prompt_cache_miss_tokens": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    }
+  }
+}

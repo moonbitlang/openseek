@@ -10,6 +10,7 @@ import {
   "moonbit-community/rabbita@0.16.3",
   "moonbitlang/editor@0.4.5",
   "moonbitlang/workflow@0.7.1",
+  "bobzhang/typify@0.2.0",
 }
 
 readme = "README.md"

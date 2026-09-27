@@ -438,6 +438,17 @@ This package provides JSON round-tripping for `Session`, `SessionId`,
 `SessionEvent`, and all session item variants. The nested native package
 `moonbitlang/openseek/agent_session/store` owns filesystem persistence.
 
+The session log format is described by
+[`session.schema.json`](session.schema.json). The event types (`SessionEvent`,
+`SessionItem` and their payloads) are generated from it into `session_types.mbt` by
+[typify.mbt](https://github.com/bobzhang/typify.mbt). Their options live in
+`session_types.moonbit.json`: visibility, the `Tool`/`Runtime` variant names, and the
+hand-written `Content` and `TurnTerminal` types used as-is. Constructors and methods
+stay hand-written in `types.mbt`. After editing the schema, run
+`just gen-session-types`; `just check-session-types` fails when the generated files
+are out of date. Before changing the format, read typify.mbt's
+[schema evolution guide](https://github.com/bobzhang/typify.mbt/blob/main/docs/schema-evolution.md).
+
 The store layout is:
 
 ```text
