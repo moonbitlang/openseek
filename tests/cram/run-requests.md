@@ -80,7 +80,7 @@ error: --cancel-on-stdin-eof needs --input-format json
 exit 1
 error: the request on stdin is not JSON: Invalid character 'o' at line 1, column 1
 exit 1
-error: --review-gate is not available with --cancel-on-stdin-eof: a delegated run does not delegate further
+error: a delegated run (--cancel-on-stdin-eof) does not take --review-gate: it gets only what its parent's launch grants
 exit 1
 ```
 
@@ -131,6 +131,52 @@ exit 0
 error: stdin closed before a request arrived
 exit 1
 {"version":1,"status":"failed","reason":"stdin closed before a request arrived"}
+```
+
+## A Delegated Run Takes Only What Its Launch Grants
+
+A parent may be a sandboxed snippet whose sandbox admits the engine by an argv
+prefix, so whatever follows that prefix is the snippet's. A delegated run
+therefore accepts only options that grant nothing. The launcher pins `--dir`,
+`--session-root`, `--result-root`, `--model` and `--api-url` in the prefix,
+and a second copy cannot override it: any option given twice is refused. It starts
+no MCP servers, whatever its environment says, and its result must be a new
+file inside `--result-root`: a path outside it, or an existing file, is
+refused and left untouched.
+
+```mooncram
+$ sh <<'EOF'
+> d=$(mktemp -d)
+> mkdir "$d/out" "$d/ws"
+> echo keep > "$d/out/existing.json"
+> managed() { openseek.exe run --input-format json --cancel-on-stdin-eof --no-session "$@"; }
+> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --dir / 2>&1 > /dev/null | head -1
+> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --mcp-config "$d/mcp.json" 2>&1 > /dev/null
+> printf '{"version":1,"kind":"echo","input":0}\n' | env OPENSEEK_MCP_CONFIG="$d/mcp.json" openseek.exe run --input-format json --cancel-on-stdin-eof --no-session --dir "$d/ws" 2>&1 > /dev/null
+> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --result-root "$d/out" --result-file "$d/elsewhere.json" 2>&1 > /dev/null | sed "s#$d#DIR#g; s#/private##g"
+> test -e "$d/elsewhere.json" && echo "elsewhere written" || echo "nothing written elsewhere"
+> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --result-root "$d/out" --result-file "$d/out/existing.json" 2>&1 > /dev/null | sed "s#$d#DIR#g; s#/private##g"
+> cat "$d/out/existing.json"
+> printf '{"version":1,"kind":"echo","input":0}\n' | managed --dir "$d/ws" --result-root "$d/out" --result-file "$d/out/result.json" > /dev/null 2>&1
+> cat "$d/out/result.json"
+> rm -rf "$d"
+> EOF
+error: argument '--dir' cannot be used multiple times
+error: a delegated run (--cancel-on-stdin-eof) does not take --mcp-config: it gets only what its parent's launch grants
+MCP config ignored: a delegated run starts no MCP servers its parent did not grant
+error: --result-file must be inside --result-root DIR/out
+nothing written elsewhere
+error: --result-file must name a new file: DIR/out/existing.json already exists
+keep
+{"version":1,"kind":"echo","status":"completed","output":0}
+```
+
+A malformed `OPENSEEK_MAX_STEPS` does not refuse a request that carries its own
+step ceiling: the environment is parsed only when it would apply.
+
+```mooncram
+$ printf '{"version":1,"input":{"task":"t"},"limits":{"max_steps":2}}' | env -u DEEPSEEK -u KIMI -u OPENSEEK_MODEL OPENSEEK_MAX_STEPS=bad openseek.exe run --input-format json --no-session --dir "$(mktemp -d)" 2>&1 | tail -1
+error: an API key is required for deepseek-flash: pass --api-key
 ```
 
 ## Closing stdin Cancels a Managed Run, Which Still Reports

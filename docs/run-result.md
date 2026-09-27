@@ -94,6 +94,31 @@ snippets get no workflow handoff (they see an empty `WORKFLOW_HOST`), and
 `--review-gate` is refused. One launched from a hosted workflow must carry
 its reserved `--session`.
 
+A delegated run takes only what its launch grants. Its launcher may be a
+sandboxed snippet whose sandbox admits the engine by an argv *prefix*, so
+anything after that prefix is the snippet's, and the run cannot trust it:
+
+- **Allowed options:** only those that grant nothing are accepted on its
+  command line: `--input-format`, `--cancel-on-stdin-eof`, `--kind`,
+  `--result-file`, `--result-root`, `--dir`, `--session`, `--session-root`,
+  `--no-session`, `--model`, `--api-url`, `--api-key`, `--thinking`,
+  `--max-steps`, `--retry-attempts`, `--retry-backoff-ms` and `--approval`.
+  Anything else (`--mcp-config`, the prompt files, `--global-skills-dir`,
+  `--review-gate`, …) is refused.
+- **Pinned values:** a launcher pins its own values for `--dir`,
+  `--session-root`, `--result-root`, `--model` and `--api-url` in the
+  prefix. A second copy after it cannot override them, because any option
+  given twice is refused.
+- **No settings from the environment:** MCP servers, prompt files and the
+  skills directory, which would each run a command or read a file the parent
+  did not grant, are never taken from the environment. A configured MCP file
+  is reported as ignored.
+- **Result location:** with `--result-root`, `--result-file` must name a
+  *new* file inside that directory. A path outside it, or an existing file,
+  is refused before anything is written, and never removed or replaced.
+- **New sessions only:** a delegated general run, like a preset, starts a
+  new session; it never appends to an existing one.
+
 Only one managed general run may work in a workspace at a time. It holds a
 lock on `<workspace>/.openseek/general-child.lock` for as long as it runs; a
 second is refused with a `failed` result. The lock is released with its

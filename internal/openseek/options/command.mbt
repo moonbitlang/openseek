@@ -85,6 +85,11 @@ pub fn root_command() -> @argparse.Command {
             about="Write how the run ended (status, answer, session, token usage) to this file as JSON once it is over; see docs/run-result.md. A missing file means the run did not finish.",
           ),
           OptionArg(
+            "result-root",
+            long="result-root",
+            about="The directory --result-file must be written in: the result must be a new file inside it. A launcher pins it to decide where a run it starts may write.",
+          ),
+          OptionArg(
             "kind",
             long="kind",
             about="Run a preset instead of the general agent: explore, review, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.",

@@ -134,13 +134,11 @@ fn resolved_max_steps(
   matches : @argparse.Matches,
   requested : Int?,
 ) -> Int? raise {
-  let configured = @options.max_steps(matches)
-  if @options.explicitly_provided(matches, "max-steps") {
-    return configured
-  }
-  match requested {
-    Some(steps) => Some(steps)
-    None => configured
+  // Only the value that applies is parsed: a malformed environment default
+  // must not refuse a request that carries its own ceiling.
+  match (@options.explicitly_provided(matches, "max-steps"), requested) {
+    (false, Some(steps)) => Some(steps)
+    _ => @options.max_steps(matches)
   }
 }
 

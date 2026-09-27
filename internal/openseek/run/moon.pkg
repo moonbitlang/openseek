@@ -22,6 +22,7 @@ import {
   "moonbitlang/async/stdio",
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/core/json",
+  "moonbitlang/x/path",
 }
 
 import {

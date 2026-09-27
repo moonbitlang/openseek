@@ -5,9 +5,13 @@
 /// `--kind` it runs a preset; see docs/run-result.md.
 pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
   let result_file = result_file_path(matches)
-  // A result left by an earlier run must not pass for this one's: if this
-  // run dies before writing its own, the path is simply absent.
-  if result_file is Some(path) {
+  // A launch that pins `--result-root` decides where the result may go: the
+  // file must be new and inside it, and a path that is not is refused before
+  // anything is written — writing there is exactly what is refused.
+  let result_root = check_result_root(matches, result_file)
+  // Otherwise a result left by an earlier run must not pass for this one's:
+  // if this run dies before writing its own, the path is simply absent.
+  if result_file is Some(path) && result_root is None {
     @fs.remove(path) catch {
       @os_error.OSError(_) as error if error.is_ENOENT() => ()
       error => raise error
@@ -31,6 +35,11 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
   let mut cancelled = false
   @execution.with_text_output(() => {
     try {
+      let mode = input_mode(matches)
+      // A run launched by a parent takes only what the launch grants.
+      if mode == Managed {
+        restrict_delegated_run(matches)
+      }
       // --no-session contradicts an explicit --session; reject up front.
       @options.reject_session_contradiction(matches)
       // So is `--approval ask` on a command that reads no commands. Rejected
@@ -45,7 +54,6 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
       )
       // Validated before the workspace is created, like the options above.
       let review_deadline_ms = @options.review_deadline_ms(matches)
-      let mode = input_mode(matches)
       // The request is read and checked before the workspace or a session
       // exists, so a bad one leaves nothing behind.
       let request = read_invocation(matches, mode, on_request_id=id => {
@@ -243,6 +251,16 @@ async fn run_general(
       )
     }
     Some(id) => {
+      let store = @store.SessionStore(
+        @setup.session_root(matches, workspace_root~),
+      )
+      // A delegated run starts a session of its own: resuming one would let
+      // its launcher append to a conversation it does not own.
+      if !delegate && store.exists(id) {
+        fail(
+          "a delegated run starts a new session, and \{id.value()} already exists",
+        )
+      }
       // Name the recording up front so a user scanning the event stream knows
       // where to find this run later (`sessions show`, the viz server, or
       // resuming by id).
@@ -252,9 +270,6 @@ async fn run_general(
           session_root=@setup.session_root(matches, workspace_root~),
           workspace_root=Some(workspace_root),
         ),
-      )
-      let store = @store.SessionStore(
-        @setup.session_root(matches, workspace_root~),
       )
       let session = @setup.load_or_new_session(
         store,
