@@ -135,10 +135,12 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
   }
   let status = turn.status(failure~)
   if result_file is Some(path) {
+    let accounting = turn.accounting()
     write_result_file(path, {
       status,
       session: turn.session,
-      usage: turn.usage(),
+      usage: accounting.map(pair => pair.0),
+      steps: accounting.map(pair => pair.1),
     })
   }
   if failure is Some(error) {
@@ -184,6 +186,7 @@ async fn write_result_file(
 fn incomplete_reason(status : @openseek_protocol.RunStatus) -> String? {
   match status {
     Completed(_) => None
+    NoReport => Some("the run finished without submitting its report")
     ContextYield(_) =>
       Some(
         "the turn reached the model's context window and was checkpointed before the task was done",

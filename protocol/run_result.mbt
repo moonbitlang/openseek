@@ -11,8 +11,12 @@ pub const RunResultVersion : Int = 1
 /// workspace), which are `Failed` too.
 pub(all) enum RunStatus {
   /// The run finished. `output` is what it produced: `{"answer": String}`,
-  /// the model's final message, for a general run.
+  /// the model's final message, for a general run; the preset's typed report
+  /// for a `--kind` run.
   Completed(output~ : Json)
+  /// A `--kind` run's turn finished without submitting the preset's report.
+  /// The run did not fail, but it produced nothing the caller asked for.
+  NoReport
   /// The turn filled the model's context window and was checkpointed. The work
   /// is not necessarily done; a new turn on the same session continues it.
   ContextYield(reason~ : String)
@@ -37,6 +41,9 @@ pub(all) struct RunResult {
   /// Token usage summed over the model responses of this run's turn; `None`
   /// when the run never reached its turn.
   usage : Usage?
+  /// How many model responses this run's turn recorded; `None` when the run
+  /// never reached its turn.
+  steps : Int?
 } derive(Eq, Debug)
 
 ///|
@@ -60,6 +67,7 @@ pub impl ToJson for RunResult with fn to_json(self) {
       fields["status"] = "context_yield"
       fields["reason"] = reason.to_json()
     }
+    NoReport => fields["status"] = "no_report"
     MaxStepsExhausted => fields["status"] = "max_steps_exhausted"
     Aborted(reason~) => {
       fields["status"] = "aborted"
@@ -79,6 +87,9 @@ pub impl ToJson for RunResult with fn to_json(self) {
   }
   if self.usage is Some(usage) {
     fields["usage"] = usage.to_json()
+  }
+  if self.steps is Some(steps) {
+    fields["steps"] = steps.to_json()
   }
   Json::object(fields)
 }
@@ -105,6 +116,7 @@ pub fn parse_run_result(json : Json) -> RunResult raise RunResultError {
         None => raise Malformed("output")
       }
     Some("context_yield") => ContextYield(reason=required("reason"))
+    Some("no_report") => NoReport
     Some("max_steps_exhausted") => MaxStepsExhausted
     Some("aborted") => Aborted(reason=required("reason"))
     Some("interrupted") => Interrupted(reason=required("reason"))
@@ -125,7 +137,15 @@ pub fn parse_run_result(json : Json) -> RunResult raise RunResultError {
       }
     Some(_) => raise Malformed("usage")
   }
-  { status, session, usage, }
+  let steps = match fields.get("steps") {
+    None => None
+    Some(_) =>
+      match int(fields, "steps") {
+        Some(steps) if steps >= 0 => Some(steps)
+        _ => raise Malformed("steps")
+      }
+  }
+  { status, session, usage, steps, }
 }
 
 ///|

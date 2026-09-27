@@ -148,9 +148,11 @@ fn TurnRecord::status(
 }
 
 ///|
-/// Token usage summed over the model responses the turn recorded, or `None`
-/// when the turn never started.
-fn TurnRecord::usage(self : TurnRecord) -> @openseek_protocol.Usage? {
+/// Token usage summed over the model responses the turn recorded, and how many
+/// responses it recorded; `None` when the turn never started.
+fn TurnRecord::accounting(
+  self : TurnRecord,
+) -> (@openseek_protocol.Usage, Int)? {
   guard self.latest is Some(session) else { return None }
   let mut total : @openseek_protocol.Usage = {
     prompt_tokens: 0,
@@ -159,10 +161,13 @@ fn TurnRecord::usage(self : TurnRecord) -> @openseek_protocol.Usage? {
     prompt_cache_hit_tokens: 0,
     prompt_cache_miss_tokens: 0,
   }
+  let mut steps = 0
   for event in session.events() {
-    guard event.sequence() > self.started_after &&
-      event.item() is Assistant(message) &&
-      message.usage() is Some(usage) else {
+    guard event.sequence() > self.started_after && event.is_agent_step() else {
+      continue
+    }
+    steps += 1
+    guard event.item() is Assistant(message) && message.usage() is Some(usage) else {
       continue
     }
     total = {
@@ -175,5 +180,5 @@ fn TurnRecord::usage(self : TurnRecord) -> @openseek_protocol.Usage? {
       usage.prompt_cache_miss_tokens,
     }
   }
-  Some(total)
+  Some((total, steps))
 }
