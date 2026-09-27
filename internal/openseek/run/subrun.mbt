@@ -145,6 +145,10 @@ async fn dispatch_kind(
   api_url : String?,
   workspace_root : String,
 ) -> Json? {
+  guard Kind::parse(kind) is Some(preset) else {
+    @emit.emit(CommandError(error="unknown subrun kind: \{kind}"))
+    return None
+  }
   // A durable parent passes `--session <parent>-<sr-id> --session-root`
   // (appended by the runner): this child then persists its own transcript
   // as a sibling session — inspectable, linkable, and crash-honest, since
@@ -167,15 +171,13 @@ async fn dispatch_kind(
     )
     return None
   }
-  guard Kind::parse(kind) is Some(preset) else {
-    @emit.emit(CommandError(error="unknown subrun kind: \{kind}"))
-    return None
+  let (session_id, append_item) = match durable {
+    Some((id, root)) => {
+      let store = @store.SessionStore(root)
+      (id, (session, item) => store.append(session, item))
+    }
+    None => (kind, (session, item) => session.append(item))
   }
-  let session_id = durable.map(pair => pair.0)
-  let append_item = durable.map(pair => {
-    let store = @store.SessionStore(pair.1)
-    (session, item) => store.append(session, item)
-  })
   let launch = KindLaunch::{
     matches,
     model,
@@ -188,7 +190,7 @@ async fn dispatch_kind(
   }
   match preset.run(input, launch) {
     Rejected(reason) => {
-      @emit.emit(CommandError(error="subrun \{reason}"))
+      @emit.emit(CommandError(error="subrun \{kind}: \{reason}"))
       None
     }
     Ran(report~) => report

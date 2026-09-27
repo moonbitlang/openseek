@@ -41,8 +41,6 @@ priv enum KindOutcome {
 ///|
 /// What a kind's run needs from its launch. `requested_max_steps` is the
 /// caller's per-request step ceiling, when its request carried one.
-/// `session_id` and `append_item` name a durable session to record to; without
-/// them each kind keeps its transcript in memory under its own default id.
 priv struct KindLaunch {
   matches : @argparse.Matches
   model : @deepseek.Model
@@ -50,29 +48,38 @@ priv struct KindLaunch {
   api_url : String?
   workspace_root : String
   requested_max_steps : Int?
-  session_id : String?
-  append_item : (async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session)?
+  session_id : String
+  append_item : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
 }
 
 ///|
-/// The step ceiling for one kind run, by precedence: the configured
-/// `--max-steps` (flag or `OPENSEEK_MAX_STEPS`), else the request's ceiling,
-/// else the kind's own default.
+/// The step ceiling for one kind run, by precedence: an explicit `--max-steps`
+/// on the command line (the operator's word), else the request's ceiling,
+/// else `OPENSEEK_MAX_STEPS`, else the kind's own default. The environment
+/// ranks below the request because it is a standing default, not a word about
+/// this call.
 fn step_ceiling(
   matches : @argparse.Matches,
   requested : Int?,
   default : Int,
 ) -> Int raise {
-  match @options.max_steps(matches) {
-    Some(steps) => steps
-    None => requested.unwrap_or(default)
+  let configured = @options.max_steps(matches)
+  match (@options.explicitly_provided(matches, "max-steps"), configured) {
+    (true, Some(steps)) => steps
+    _ =>
+      match requested {
+        Some(steps) => steps
+        None => configured.unwrap_or(default)
+      }
   }
 }
 
 ///|
-/// Run `kind` on `input` in this process. Every model-driven kind but `worker`
-/// gets its own scratch lab: a temporary directory where the otherwise
-/// read-only child may scaffold projects and write source to check its claims.
+/// Run `kind` on `input` in this process. Input is validated before an API key
+/// is required, so a miswired caller learns the exact defect even keylessly.
+/// Every model-driven kind but `worker` gets its own scratch lab: a temporary
+/// directory where the otherwise read-only child may scaffold projects and
+/// write source to check its claims.
 async fn Kind::run(
   self : Kind,
   input : Json,
@@ -88,7 +95,9 @@ async fn Kind::run(
   }
   match self {
     Explore => {
-      // A blank query ends the run without a report: `run_child` refuses it.
+      guard input is { "query": String(query), .. } && !query.is_blank() else {
+        return Rejected("explore requires a non-empty query")
+      }
       let api_key = api_key()
       let scratch_dir = @setup.new_scratch_lab("openseek-explore-lab-")
       defer @setup.remove_scratch_lab(scratch_dir)
@@ -106,8 +115,8 @@ async fn Kind::run(
         retry_attempts?,
         retry_backoff_ms?,
         workspace_root~,
-        session_id?=launch.session_id,
-        append_item?=launch.append_item,
+        session_id=launch.session_id,
+        append_item=launch.append_item,
         scratch_dir~,
       )
       Ran(report=report.map(report => Json(report)))
@@ -139,15 +148,15 @@ async fn Kind::run(
         retry_attempts?,
         retry_backoff_ms?,
         workspace_root~,
-        session_id?=launch.session_id,
-        append_item?=launch.append_item,
+        session_id=launch.session_id,
+        append_item=launch.append_item,
         scratch_dir~,
       )
       Ran(report=report.map(report => Json(report)))
     }
     Worker => {
       if @agent_worker.WorkerInput::parse(input) is Err(reason) {
-        return Rejected("worker: \{reason}")
+        return Rejected(reason)
       }
       let api_key = api_key()
       // No scratch lab: the worker's whole worktree is writable, and its
@@ -168,11 +177,11 @@ async fn Kind::run(
           api_url?,
           retry_attempts?,
           retry_backoff_ms?,
-          session_id?=launch.session_id,
-          append_item?=launch.append_item,
+          session_id=launch.session_id,
+          append_item=launch.append_item,
         ) {
         Ok(report) => Ran(report=report.map(report => Json(report)))
-        Err(reason) => Rejected("worker: \{reason}")
+        Err(reason) => Rejected(reason)
       }
     }
     PatternRepair => {
@@ -205,6 +214,8 @@ async fn Kind::run(
         retry_attempts?,
         retry_backoff_ms?,
         workspace_root~,
+        session_id=launch.session_id,
+        append_item=launch.append_item,
       )
       Ran(report=report.map(report => Json(report)))
     }

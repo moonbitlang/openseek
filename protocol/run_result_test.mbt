@@ -5,7 +5,7 @@
 let run_result_fixtures : Array[(String, @openseek_protocol.RunResult)] = [
   (
     (
-      #|{"version":1,"status":"completed","output":{"answer":"Fixed the parser; tests pass."},"session":"s-1","usage":{"prompt_tokens":120,"completion_tokens":30,"total_tokens":150,"prompt_cache_hit_tokens":100,"prompt_cache_miss_tokens":20}}
+      #|{"version":1,"status":"completed","output":{"answer":"Fixed the parser; tests pass."},"session":"s-1","usage":{"prompt_tokens":120,"completion_tokens":30,"total_tokens":150,"prompt_cache_hit_tokens":100,"prompt_cache_miss_tokens":20},"steps":3}
     ),
     {
       status: Completed(output={ "answer": "Fixed the parser; tests pass." }),
@@ -17,6 +17,7 @@ let run_result_fixtures : Array[(String, @openseek_protocol.RunResult)] = [
         prompt_cache_hit_tokens: 100,
         prompt_cache_miss_tokens: 20,
       }),
+      steps: Some(3),
     },
   ),
   (
@@ -27,13 +28,31 @@ let run_result_fixtures : Array[(String, @openseek_protocol.RunResult)] = [
       status: ContextYield(reason="[context yield] checkpointed"),
       session: Some("s-1"),
       usage: None,
+      steps: None,
     },
   ),
   (
     (
       #|{"version":1,"status":"max_steps_exhausted"}
     ),
-    { status: MaxStepsExhausted, session: None, usage: None, },
+    { status: MaxStepsExhausted, session: None, usage: None, steps: None, },
+  ),
+  (
+    (
+      #|{"version":1,"status":"no_report","session":"s-2","usage":{"prompt_tokens":9,"completion_tokens":1,"total_tokens":10,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":9},"steps":1}
+    ),
+    {
+      status: NoReport,
+      session: Some("s-2"),
+      usage: Some({
+        prompt_tokens: 9,
+        completion_tokens: 1,
+        total_tokens: 10,
+        prompt_cache_hit_tokens: 0,
+        prompt_cache_miss_tokens: 9,
+      }),
+      steps: Some(1),
+    },
   ),
   (
     (
@@ -43,13 +62,19 @@ let run_result_fixtures : Array[(String, @openseek_protocol.RunResult)] = [
       status: Aborted(reason="the task is impossible"),
       session: None,
       usage: None,
+      steps: None,
     },
   ),
   (
     (
       #|{"version":1,"status":"interrupted","reason":"cancelled"}
     ),
-    { status: Interrupted(reason="cancelled"), session: None, usage: None, },
+    {
+      status: Interrupted(reason="cancelled"),
+      session: None,
+      usage: None,
+      steps: None,
+    },
   ),
   (
     (
@@ -59,6 +84,7 @@ let run_result_fixtures : Array[(String, @openseek_protocol.RunResult)] = [
       status: Failed(reason="an API key is required"),
       session: None,
       usage: None,
+      steps: None,
     },
   ),
 ]
@@ -91,7 +117,7 @@ test "unknown fields are ignored" {
         ),
       ),
     ),
-    { status: MaxStepsExhausted, session: None, usage: None, },
+    { status: MaxStepsExhausted, session: None, usage: None, steps: None, },
   )
 }
 
@@ -166,6 +192,22 @@ test "malformed results name the offending field" {
       "usage",
     ),
   ]
+  cases.push(
+    (
+      (
+        #|{"version":1,"status":"max_steps_exhausted","steps":-1}
+      ),
+      "steps",
+    ),
+  )
+  cases.push(
+    (
+      (
+        #|{"version":1,"status":"max_steps_exhausted","steps":"3"}
+      ),
+      "steps",
+    ),
+  )
   for case in cases {
     let (text, field) = case
     assert_eq(run_result_error(text), Some(Malformed(field)))

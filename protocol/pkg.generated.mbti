@@ -238,6 +238,7 @@ pub(all) struct RunResult {
   status : RunStatus
   session : String?
   usage : Usage?
+  steps : Int?
 } derive(Eq, @debug.Debug)
 pub fn RunResult::equal(Self, Self) -> Bool
 pub fn RunResult::not_equal(Self, Self) -> Bool
@@ -247,6 +248,7 @@ pub impl ToJson for RunResult
 
 pub(all) enum RunStatus {
   Completed(output~ : Json)
+  NoReport
   ContextYield(reason~ : String)
   MaxStepsExhausted
   Aborted(reason~ : String)
