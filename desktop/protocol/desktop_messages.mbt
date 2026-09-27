@@ -1197,6 +1197,10 @@ pub(all) struct WorkflowEntryPayload {
   prompt_tokens : Int
   completion_tokens : Int
   cost_usd : Double?
+  /// Why `steps` and the token counts may fall short of what the child spent
+  /// (it left no result, or its launch was cancelled); absent when they are
+  /// the engine's own account. Unknown spend is not zero spend.
+  unaccounted : String?
   /// Milliseconds since the epoch, as plain JSON numbers.
   started_at : Double?
   finished_at : Double?

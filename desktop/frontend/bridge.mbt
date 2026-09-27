@@ -206,6 +206,7 @@ fn device_msg(
           prompt_tokens: payload.prompt_tokens,
           completion_tokens: payload.completion_tokens,
           cost_usd: payload.cost_usd,
+          unaccounted: payload.unaccounted,
           started_at: payload.started_at,
           finished_at: payload.finished_at,
         }),

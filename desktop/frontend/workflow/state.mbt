@@ -32,6 +32,7 @@ pub(all) struct Entry {
   prompt_tokens : Int
   completion_tokens : Int
   cost_usd : Double?
+  unaccounted : String?
   /// Milliseconds since the epoch.
   started_at : Double?
   finished_at : Double?
@@ -57,6 +58,9 @@ pub(all) struct Row {
   steps : Int
   tokens : Int
   cost_usd : Double?
+  /// Why `steps` and `tokens` may fall short of what the child spent;
+  /// `None` when they are its own account. Unknown spend is not zero spend.
+  unaccounted : String?
   /// Milliseconds since the epoch.
   started_at : Double?
   finished_at : Double?
@@ -198,6 +202,7 @@ pub fn child_opened(
               steps: 0,
               tokens: 0,
               cost_usd: None,
+              unaccounted: None,
               started_at: None,
               finished_at: None,
             },
@@ -216,6 +221,7 @@ pub fn child_closed(
   status~ : String,
   steps~ : Int,
   tokens~ : Int,
+  unaccounted? : String,
 ) -> Array[Run] {
   guard ordinal_of(id) is Some(ordinal) else { return runs }
   runs.map(run => {
@@ -224,7 +230,13 @@ pub fn child_closed(
     match run.rows.search_by(row => row.child == child) {
       Some(index) => {
         let rows = run.rows.copy()
-        rows[index] = { ..rows[index], status: Some(status), steps, tokens, }
+        rows[index] = {
+          ..rows[index],
+          status: Some(status),
+          steps,
+          tokens,
+          unaccounted,
+        }
         { ..run, rows, }
       }
       // A finish for a child whose start this client never saw: still a
@@ -244,6 +256,7 @@ pub fn child_closed(
               steps,
               tokens,
               cost_usd: None,
+              unaccounted,
               started_at: None,
               finished_at: None,
             },
@@ -280,6 +293,7 @@ pub fn entry(runs : Array[Run], entry : Entry) -> Array[Run] {
       steps: entry.steps,
       tokens: entry.prompt_tokens + entry.completion_tokens,
       cost_usd: entry.cost_usd,
+      unaccounted: entry.unaccounted,
       started_at: entry.started_at,
       finished_at: entry.finished_at,
     }
@@ -311,6 +325,7 @@ pub fn entry(runs : Array[Run], entry : Entry) -> Array[Run] {
               steps: 0,
               tokens: 0,
               cost_usd: None,
+              unaccounted: None,
               started_at: None,
               finished_at: None,
             }),
@@ -337,9 +352,17 @@ pub fn Run::running(self : Run) -> Int {
 }
 
 ///|
-/// Total tokens across the run's resolved children.
+/// Total tokens across the run's resolved children. A floor, not the run's
+/// spend, when `unaccounted` counts any child.
 pub fn Run::tokens(self : Run) -> Int {
   self.rows.fold(init=0, (sum, row) => sum + row.tokens)
+}
+
+///|
+/// How many of the run's children spent an amount nobody could account for,
+/// so the totals leave them out.
+pub fn Run::unaccounted(self : Run) -> Int {
+  self.rows.filter(row => row.unaccounted is Some(_)).length()
 }
 
 ///|

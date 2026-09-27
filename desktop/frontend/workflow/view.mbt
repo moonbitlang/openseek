@@ -112,16 +112,35 @@ fn run_view(
       },
     ),
   ]
+  // With a child's spend unknown, the totals are a floor, and say so.
+  let unaccounted = run.unaccounted()
+  let floor = if unaccounted > 0 { "≥ " } else { "" }
   if run.tokens() > 0 {
     summary.push(
       @html.span(
         class="workflow-run-tokens",
-        "\{@labels.compact_count(run.tokens())} tok",
+        "\{floor}\{@labels.compact_count(run.tokens())} tok",
       ),
     )
   }
   if run.cost_usd() is Some(cost) {
-    summary.push(@html.span(class="workflow-run-cost", money(cost)))
+    summary.push(
+      @html.span(class="workflow-run-cost", "\{floor}\{money(cost)}"),
+    )
+  }
+  if unaccounted > 0 {
+    summary.push(
+      @html.span(
+        class="workflow-run-unaccounted",
+        match locale {
+          SimplifiedChinese => "\{unaccounted} 个用量未知"
+          TraditionalChinese => "\{unaccounted} 個用量未知"
+          Japanese => "使用量不明 \{unaccounted} 件"
+          English => "\{unaccounted} with usage unknown"
+          Spanish => "\{unaccounted} con uso desconocido"
+        },
+      ),
+    )
   }
   @html.section(class="workflow-run workflow-run-\{state}", [
     @html.header(class="workflow-run-head", summary),
@@ -144,7 +163,17 @@ fn row_view(
   if row.phase is Some(phase) {
     detail.push(@html.span(class="workflow-row-phase", phase))
   }
-  if row.steps > 0 {
+  // Counts that are not the child's own account are not shown as if they
+  // were: its row says the usage is unknown, and why on hover.
+  if row.unaccounted is Some(reason) {
+    detail.push(
+      @html.span(
+        class="workflow-row-unaccounted",
+        title=reason,
+        usage_unknown(locale~),
+      ),
+    )
+  } else if row.steps > 0 {
     detail.push(
       @html.span(
         class="workflow-row-steps",
@@ -163,7 +192,7 @@ fn row_view(
       ),
     )
   }
-  if row.tokens > 0 {
+  if row.unaccounted is None && row.tokens > 0 {
     detail.push(
       @html.span(
         class="workflow-row-tokens",
@@ -231,5 +260,17 @@ fn duration(ms : Double) -> String {
     "\{seconds / 60}m \{seconds % 60}s"
   } else {
     "\{seconds / 3600}h \{seconds % 3600 / 60}m"
+  }
+}
+
+///|
+/// The label for spend nobody could account for.
+fn usage_unknown(locale? : @i18n.Locale = English) -> String {
+  match locale {
+    SimplifiedChinese => "用量未知"
+    TraditionalChinese => "用量未知"
+    Japanese => "使用量不明"
+    English => "usage unknown"
+    Spanish => "uso desconocido"
   }
 }

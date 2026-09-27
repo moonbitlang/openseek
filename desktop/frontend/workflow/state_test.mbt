@@ -77,6 +77,7 @@ fn entry_for(child : String, phase : String?) -> @workflow.Entry {
     prompt_tokens: 3000,
     completion_tokens: 400,
     cost_usd: Some(0.01),
+    unaccounted: None,
     started_at: Some(1788535817640.0),
     finished_at: Some(1788535817648.0),
   }
@@ -179,5 +180,45 @@ test "a row still running after the run closed reads as unresolved" {
   debug_inspect(
     @workflow.row_status(timed[0].rows[0], closed=true),
     content="(\"timed out\", \"failed\")",
+  )
+}
+
+///|
+test "a child whose spend is unknown makes the run's totals a floor" {
+  let runs = @workflow.child_closed(
+    announced(),
+    id="sr-5",
+    status="captured",
+    steps=12,
+    tokens=3400,
+  )
+  inspect(runs[0].unaccounted(), content="0")
+  // The launch was cancelled before its result was read: the counters are
+  // only what was observed, and the run says it cannot total them.
+  let runs = @workflow.child_closed(
+    runs,
+    id="sr-6",
+    status="failed",
+    steps=0,
+    tokens=0,
+    unaccounted="the launch was cancelled before its result was read",
+  )
+  inspect(runs[0].unaccounted(), content="1")
+  inspect(runs[0].tokens(), content="3400")
+  // The journal's entry carries the same fact and refines the row with it.
+  let runs = @workflow.entry(runs, {
+    ..entry_for("run7-sr-5", None),
+    status: "failed",
+    unaccounted: Some("the child left no result"),
+  })
+  inspect(runs[0].unaccounted(), content="2")
+  debug_inspect(
+    runs[0].rows.map(row => row.unaccounted),
+    content=(
+      #|[
+      #|  Some("the child left no result"),
+      #|  Some("the launch was cancelled before its result was read"),
+      #|]
+    ),
   )
 }

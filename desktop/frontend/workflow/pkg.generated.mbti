@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub fn child_closed(Array[Run], id~ : String, status~ : String, steps~ : Int, tokens~ : Int) -> Array[Run]
+pub fn child_closed(Array[Run], id~ : String, status~ : String, steps~ : Int, tokens~ : Int, unaccounted? : String) -> Array[Run]
 
 pub fn child_opened(Array[Run], id~ : String, kind~ : String, label~ : String) -> Array[Run]
 
@@ -42,6 +42,7 @@ pub(all) struct Entry {
   prompt_tokens : Int
   completion_tokens : Int
   cost_usd : Double?
+  unaccounted : String?
   started_at : Double?
   finished_at : Double?
 } derive(Eq, @debug.Debug)
@@ -59,6 +60,7 @@ pub(all) struct Row {
   steps : Int
   tokens : Int
   cost_usd : Double?
+  unaccounted : String?
   started_at : Double?
   finished_at : Double?
 } derive(Eq, @debug.Debug)
@@ -81,6 +83,7 @@ pub fn Run::ordered_rows(Self) -> Array[Row]
 pub fn Run::running(Self) -> Int
 pub fn Run::to_repr(Self) -> @debug.Repr
 pub fn Run::tokens(Self) -> Int
+pub fn Run::unaccounted(Self) -> Int
 
 // Type aliases
 

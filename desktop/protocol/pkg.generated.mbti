@@ -3327,6 +3327,7 @@ pub(all) struct WorkflowEntryPayload {
   prompt_tokens : Int
   completion_tokens : Int
   cost_usd : Double?
+  unaccounted : String?
   started_at : Double?
   finished_at : Double?
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)

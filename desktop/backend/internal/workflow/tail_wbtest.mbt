@@ -12,6 +12,12 @@ let timed_out_line : String =
   #|{"v":1,"e":{"call":{"kind":"worker","input":{},"label":"edit:a","scope":""},"outcome":["DidNotFinish",{"failure":["TimedOut"],"attempt":{"attempt_id":"run7-sr-7","steps_used":40,"prompt_tokens":900,"completion_tokens":100,"cost_usd":0.02}}],"phase":"apply"}}
 
 ///|
+/// A child that left no result: its counters are only what was observed, and
+/// the attempt says why (`moonbitlang/workflow` 0.9.0).
+let unaccounted_line : String =
+  #|{"v":1,"e":{"call":{"kind":"explore","input":{},"label":"scout:w","scope":""},"outcome":["DidNotFinish",{"failure":["Failed","no result file"],"attempt":{"attempt_id":"run7-sr-8","steps_used":0,"prompt_tokens":0,"completion_tokens":0,"unaccounted":"the child left no result"}}],"phase":"survey"}}
+
+///|
 /// A call refused before launch: no attempt, no child, nothing to point at.
 let skipped_line : String =
   #|{"v":1,"e":{"call":{"kind":"explore","input":{},"label":"scout:z","scope":""},"outcome":["DidNotFinish",{"failure":["Skipped"],"attempt":null}],"phase":"survey"}}
@@ -42,6 +48,14 @@ test "journal lines become ledger rows keyed by the child's session" {
   assert_eq(row.steps, 40)
   assert_eq(row.cost_usd, Some(0.02))
   assert_eq(row.started_at, None)
+  assert_eq(row.unaccounted, None)
+  // Unknown spend stays unknown rather than reading as zero.
+  guard parse_journal(unaccounted_line, workflow="wf-5", session="run7")
+    is Some(row) else {
+    fail("an unaccounted entry must parse")
+  }
+  assert_eq(row.status, "failed")
+  assert_eq(row.unaccounted, Some("the child left no result"))
   // A refused call launched nothing: there is no child for a per-subagent
   // view to point at, and the sidecar never reported one.
   assert_true(

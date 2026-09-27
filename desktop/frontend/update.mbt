@@ -1383,6 +1383,7 @@ fn apply_engine_event(
           status~,
           steps~,
           tokens~,
+          unaccounted?,
         ),
       }
       if status == "captured" {
@@ -21352,6 +21353,7 @@ test "a workflow entry refines the parent conversation's run" {
     prompt_tokens: 3000,
     completion_tokens: 400,
     cost_usd: Some(0.01),
+    unaccounted: None,
     started_at: Some(1788535817640.0),
     finished_at: Some(1788535817648.0),
   }

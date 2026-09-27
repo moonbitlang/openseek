@@ -2864,6 +2864,11 @@ button.git-history-file.selected {
 .workflow-run-count {
   color: var(--color-text-muted);
 }
+/* Spend nobody could account for: not a failure, but not a zero either. */
+.workflow-run-unaccounted,
+.workflow-row-unaccounted {
+  color: var(--color-warning, var(--color-text-secondary));
+}
 .workflow-rows {
   display: flex;
   flex-direction: column;

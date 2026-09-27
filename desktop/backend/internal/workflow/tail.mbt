@@ -266,6 +266,10 @@ fn parse_journal(
       Some(Number(cost, ..)) => Some(cost)
       _ => None
     },
+    unaccounted: match attempt.get("unaccounted") {
+      Some(String(reason)) => Some(reason)
+      _ => None
+    },
     started_at: time_at(entry, "started_at"),
     finished_at: time_at(entry, "finished_at"),
   })
