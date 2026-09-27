@@ -441,10 +441,11 @@ fn wasm_policy_document(
     allow.push(rule)
   }
   // The engine itself, in one form only: a parent-managed `run` of a preset
-  // (`--kind general` included), which reads a JSON request and writes its
-  // result. The managed flags sit in the prefix, so every child a snippet
-  // starts is a delegated run: it delegates no further, and a general one
-  // holds the workspace's lease. The other verbs stay out, since a bare
+  // (`--kind general` included) with the host's values pinned ahead of
+  // `--kind` (`@host.SubrunReservation::spawn_prefix`). Every child a snippet
+  // starts is therefore a delegated run: it delegates no further, takes only
+  // what the launch grants, a general one holds the workspace's lease, and an
+  // appended copy of a pinned option is refused rather than winning. The other verbs stay out, since a bare
   // `openseek` starts an interactive agent. A wasm engine's runtime appears with the
   // module this host chose in front of that verb, so `moonrun` here names
   // that one engine rather than a general licence to run modules — which is
@@ -453,11 +454,8 @@ fn wasm_policy_document(
   // sub-run IS an agent — which is the already-accepted `moon run` shape;
   // what the prefix buys is that only the delegating FORM of this program
   // exists in a snippet's vocabulary.
-  if spawnable is Some((program, launch_prefix)) {
-    allow.push({
-      "program": program,
-      "args_prefix": json_strings([..launch_prefix, ..delegated_run_prefix]),
-    })
+  if spawnable is Some((program, spawn_prefix)) {
+    allow.push({ "program": program, "args_prefix": json_strings(spawn_prefix) })
   }
   {
     // A policy run BUILDS the guest environment rather than inheriting one, so
@@ -552,7 +550,7 @@ test "the reservation reaches the guest, and only its own directory is writable"
     )
   }
   let injection = test_injection(Ref(0))
-  let reservation = injection.reserve()
+  let reservation = injection.reserve(result_root="/run/tmp")
   // A snippet that tried to redirect its own scratch space cannot: the policy
   // writes TMPDIR last, so the one name here whose value is a policy decision
   // rather than a message always wins.
@@ -562,7 +560,7 @@ test "the reservation reaches the guest, and only its own directory is writable"
     tmp_dir="/run/tmp",
     extra_roots=[reservation.dir()],
     inject~,
-    spawnable=Some((injection.exe(), injection.launch_prefix())),
+    spawnable=Some((injection.exe(), reservation.spawn_prefix())),
   )
   guard policy
     is {
@@ -579,14 +577,18 @@ test "the reservation reaches the guest, and only its own directory is writable"
   // snippet can append its own ledger and nothing else's transcript.
   assert_true(write.contains("/store/run7-wf-1"))
   assert_false(write.contains("/store"))
-  // The engine is admitted by ABSOLUTE path and in one form. moonrun matches
-  // the entry exactly, so this admits that binary and not a same-named one
-  // earlier in PATH — the same guarantee `run_subrun` callers get from never
-  // resolving the engine through PATH.
+  // The engine is admitted by ABSOLUTE path and in one form, with the host's
+  // values pinned: moonrun matches the program exactly and the argv by
+  // prefix, so a snippet may only append to this, and `run` refuses a second
+  // copy of any option pinned here.
   assert_true(
     allow.contains({
       "program": "/opt/openseek",
-      "args_prefix": json_strings(delegated_run_prefix),
+      "args_prefix": json_strings([
+        "run", "--input-format", "json", "--cancel-on-stdin-eof", "--dir", "/ws",
+        "--session-root", "/store", "--result-root", "/run/tmp", "--api-url", "",
+        "--kind",
+      ]),
     }),
   )
 }
@@ -606,29 +608,26 @@ test "a wasm engine is admitted as its runtime plus the chosen module" {
     workspace_root="/ws",
     reserve_ordinals=_ => 1,
   )
+  let prefix = injection.reserve(result_root="/run/tmp").spawn_prefix()
   let policy = wasm_policy_document(
     tmp_dir="/run/tmp",
     extra_roots=[],
     inject=Map([]),
-    spawnable=Some((injection.exe(), injection.launch_prefix())),
+    spawnable=Some((injection.exe(), prefix)),
   )
   guard policy is { "process": { "allow": Array(allow), .. }, .. } else {
     fail("policy lost its process section")
   }
+  assert_eq(prefix[:3], ["/engine/openseek.wasm", "--", "run"])
   assert_true(
-    allow.contains({
-      "program": "moonrun",
-      "args_prefix": json_strings(
-        ["/engine/openseek.wasm", "--", ..delegated_run_prefix],
-      ),
-    }),
+    allow.contains({ "program": "moonrun", "args_prefix": json_strings(prefix) }),
   )
   // The module is part of the rule: a snippet cannot point the runtime at
   // another module, nor run one it wrote itself.
   assert_false(
     allow.contains({
       "program": "moonrun",
-      "args_prefix": json_strings(delegated_run_prefix),
+      "args_prefix": json_strings(prefix[2:].to_owned()),
     }),
   )
   assert_false(allow.contains({ "program": "moonrun" }))
@@ -671,10 +670,3 @@ test "no injection clears any inherited handoff and admits no engine" {
     assert_false(program.contains("openseek"))
   }
 }
-
-///|
-/// The argv a snippet may start the engine with, after any runtime prefix:
-/// the managed form of `run` that `@host.SubrunInjection` templates.
-let delegated_run_prefix : Array[String] = [
-  "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind",
-]

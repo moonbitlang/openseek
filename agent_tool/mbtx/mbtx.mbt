@@ -654,7 +654,7 @@ async fn execute(
   // snippet cannot name a session that was not reserved for it.
   let reservation = if input.subrun {
     match subrun {
-      Some(injection) => Some(injection.reserve())
+      Some(injection) => Some(injection.reserve(result_root=snippet_tmp))
       // Asked, and cannot be served: say so. A snippet that believed it had a
       // handoff would spawn children with no transcript, and the model would
       // learn nothing until its subagents failed to appear anywhere.
@@ -720,8 +720,7 @@ async fn execute(
     ],
     inject=injected,
     spawnable=match (reservation, subrun) {
-      (Some(_), Some(injection)) =>
-        Some((injection.exe(), injection.launch_prefix()))
+      (Some(r), Some(injection)) => Some((injection.exe(), r.spawn_prefix()))
       _ => None
     },
   )

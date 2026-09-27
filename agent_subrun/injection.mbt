@@ -45,8 +45,8 @@ test "a session's injection draws from the shared counter" {
   // never below the session's floor.
   let session = ChildSession(root="/store", parent="run7", first_free=1)
   let injection = session.injection(exe="/opt/openseek", workspace_root="/ws")
-  let first = injection.reserve()
-  let second = injection.reserve()
+  let first = injection.reserve(result_root="/run/tmp")
+  let second = injection.reserve(result_root="/run/tmp")
   assert_true(first.base() >= 1)
   assert_eq(second.base(), first.base() + @host.block_size)
   assert_true(first.dir().has_prefix("/store/run7-wf-"))
@@ -63,7 +63,8 @@ test "a wasm engine's handoff names its runtime, module and fence" {
   )
   assert_eq(injection.exe(), "moonrun")
   assert_eq(injection.launch_prefix(), ["/build/wasm/openseek.wasm", "--"])
-  guard injection.reserve().env().get("WORKFLOW_HOST") is Some(raw) else {
+  guard injection.reserve(result_root="/run/tmp").env().get("WORKFLOW_HOST")
+    is Some(raw) else {
     fail("the handoff variable must be set")
   }
   let document = @json.parse(raw)
@@ -79,7 +80,7 @@ test "a wasm engine's handoff names its runtime, module and fence" {
   })
   assert_eq(args, [
     "/build/wasm/openseek.wasm", "--", "run", "--input-format", "json", "--cancel-on-stdin-eof",
-    "--kind", "{kind}", "--result-file", "{result_file}", "--session", "{child}",
-    "--session-root", "/store",
+    "--dir", "/ws", "--session-root", "/store", "--result-root", "/run/tmp", "--api-url",
+    "", "--kind", "{kind}", "--result-file", "{result_file}", "--session", "{child}",
   ])
 }

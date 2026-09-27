@@ -34,8 +34,8 @@ fn hosted_context(raw : String) -> @hosted.Context? {
 ///|
 test "blocks are disjoint and come from the allocator" {
   let injection = injection(Ref(8))
-  let first = injection.reserve()
-  let second = injection.reserve()
+  let first = injection.reserve(result_root="/run/tmp")
+  let second = injection.reserve(result_root="/run/tmp")
   // The floor is honoured: a resumed session never reissues an ordinal an
   // earlier process already persisted.
   assert_eq(first.base(), 9)
@@ -58,7 +58,9 @@ test "what this host writes is what the library reads" {
   // must be one `moonbitlang/workflow/hosted` accepts, with the engine's own
   // argv shape intact. A drift here would be silent — the snippet would see
   // no handoff and quietly delegate to nothing.
-  let reservation = injection(Ref(0), model="deepseek-chat").reserve()
+  let reservation = injection(Ref(0), model="deepseek-chat").reserve(
+    result_root="/run/tmp",
+  )
   guard reservation.env().get("WORKFLOW_HOST") is Some(raw) else {
     fail("the handoff variable must be set")
   }
@@ -90,10 +92,11 @@ test "what this host writes is what the library reads" {
       _ => "?"
     }
   })
+  // The host's values are pinned ahead of `--kind`, the per-call ones after.
   assert_eq(args, [
-    "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
-    "--result-file", "{result_file}", "--model", "deepseek-chat", "--session", "{child}",
-    "--session-root", "/store",
+    "run", "--input-format", "json", "--cancel-on-stdin-eof", "--dir", "/ws", "--session-root",
+    "/store", "--result-root", "/run/tmp", "--model", "deepseek-chat", "--api-url",
+    "", "--kind", "{kind}", "--result-file", "{result_file}", "--session", "{child}",
   ])
   // No `--max-steps`: per-call ceilings ride the request envelope.
   assert_false(args.contains("--max-steps"))
@@ -112,12 +115,12 @@ test "the standing goal rides the hosted extension" {
     reserve_ordinals=_ => 1,
     criteria=() => goal.val,
   )
-  let env = injection.reserve().env()
+  let env = injection.reserve(result_root="/run/tmp").env()
   assert_eq(env.length(), 1)
   guard env.get("WORKFLOW_HOST") is Some(raw) else { fail("missing handoff") }
   assert_true(@json.parse(raw) is { "openseek"? : None, .. })
   goal.val = Some({ goal: "ship the parser", sha: None, dirty: true, })
-  let env = injection.reserve().env()
+  let env = injection.reserve(result_root="/run/tmp").env()
   assert_eq(env.length(), 1)
   guard env.get("WORKFLOW_HOST") is Some(raw) else { fail("missing handoff") }
   assert_true(
@@ -140,7 +143,7 @@ test "the standing goal rides the hosted extension" {
     sha: Some("abc123"),
     dirty: false,
   })
-  let env = injection.reserve().env()
+  let env = injection.reserve(result_root="/run/tmp").env()
   assert_eq(env.length(), 1)
   guard env.get("WORKFLOW_HOST") is Some(raw) else { fail("missing handoff") }
   assert_true(
@@ -174,7 +177,8 @@ test "a runtime-launched engine still produces a handoff the library reads" {
     workspace_root="/ws",
     reserve_ordinals=_ => 1,
   )
-  guard injection.reserve().env().get("WORKFLOW_HOST") is Some(raw) else {
+  guard injection.reserve(result_root="/run/tmp").env().get("WORKFLOW_HOST")
+    is Some(raw) else {
     fail("the handoff variable must be set")
   }
   guard hosted_context(raw) is Some(_) else {
@@ -191,9 +195,8 @@ test "a runtime-launched engine still produces a handoff the library reads" {
       _ => "?"
     }
   })
-  assert_eq(args[:8], [
+  assert_eq(args[:6], [
     "/build/wasm/openseek.wasm", "--", "run", "--input-format", "json", "--cancel-on-stdin-eof",
-    "--kind", "{kind}",
   ])
 }
 
@@ -205,36 +208,38 @@ test "optional model and URL preserve the hosted argv layout" {
         None,
         None,
         [
-          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
-          "--result-file", "{result_file}", "--session", "{child}", "--session-root",
-          "/store",
+          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--dir", "/ws",
+          "--session-root", "/store", "--result-root", "/run/tmp", "--api-url", "",
+          "--kind", "{kind}", "--result-file", "{result_file}", "--session", "{child}",
         ],
       ),
       (
         Some("m"),
         None,
         [
-          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
-          "--result-file", "{result_file}", "--model", "m", "--session", "{child}",
-          "--session-root", "/store",
+          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--dir", "/ws",
+          "--session-root", "/store", "--result-root", "/run/tmp", "--model", "m",
+          "--api-url", "", "--kind", "{kind}", "--result-file", "{result_file}",
+          "--session", "{child}",
         ],
       ),
       (
         None,
         Some("u"),
         [
-          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
-          "--result-file", "{result_file}", "--api-url", "u", "--session", "{child}",
-          "--session-root", "/store",
+          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--dir", "/ws",
+          "--session-root", "/store", "--result-root", "/run/tmp", "--api-url", "u",
+          "--kind", "{kind}", "--result-file", "{result_file}", "--session", "{child}",
         ],
       ),
       (
         Some("m"),
         Some("u"),
         [
-          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--kind", "{kind}",
-          "--result-file", "{result_file}", "--model", "m", "--api-url", "u", "--session",
-          "{child}", "--session-root", "/store",
+          "run", "--input-format", "json", "--cancel-on-stdin-eof", "--dir", "/ws",
+          "--session-root", "/store", "--result-root", "/run/tmp", "--model", "m",
+          "--api-url", "u", "--kind", "{kind}", "--result-file", "{result_file}",
+          "--session", "{child}",
         ],
       ),
     ] {
@@ -246,7 +251,7 @@ test "optional model and URL preserve the hosted argv layout" {
       model?,
       api_url?,
       reserve_ordinals=_ => 1,
-    ).reserve()
+    ).reserve(result_root="/run/tmp")
     guard reservation.env().get("WORKFLOW_HOST") is Some(raw) else {
       fail("missing handoff")
     }

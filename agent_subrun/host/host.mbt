@@ -139,6 +139,7 @@ struct SubrunReservation {
   journal_path : String
   events_path : String
   env : Map[String, String]
+  spawn_prefix : Array[String]
 }
 
 ///|
@@ -184,7 +185,21 @@ pub fn SubrunReservation::env(self : SubrunReservation) -> Map[String, String] {
 }
 
 ///|
-/// Reserve a block for one snippet invocation.
+/// The argv a snippet may start the engine with, after the program: a
+/// parent-managed `run` with this host's values pinned ahead of `--kind`.
+/// The snippet's sandbox admits the engine by this PREFIX, so anything the
+/// snippet appends comes after it — and `run` refuses an option given twice,
+/// so an appended `--dir` or `--result-root` cannot override the pinned one.
+pub fn SubrunReservation::spawn_prefix(
+  self : SubrunReservation,
+) -> Array[String] {
+  self.spawn_prefix
+}
+
+///|
+/// Reserve a block for one snippet invocation. `result_root` is where the
+/// snippet's children may write their result files: the snippet's own temp
+/// directory, where the workflow library allocates them.
 ///
 /// Blocks never overlap, so the child session ids two snippets mint cannot
 /// collide — including a background snippet still running from an earlier
@@ -198,7 +213,10 @@ pub fn SubrunReservation::env(self : SubrunReservation) -> Map[String, String] {
 /// write the same document. `attempt_id` in the resulting ledger is the
 /// rendered `child_id` — `<parent>-sr-N` — which is exactly the session id the
 /// transcript viewer links to and the desktop's progress probe tails.
-pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
+pub fn SubrunInjection::reserve(
+  self : SubrunInjection,
+  result_root~ : String,
+) -> SubrunReservation {
   let base = (self.reserve_ordinals)(block_size)
   // The run's directory lives in the session store's root, beside the store's
   // own `sessions/` tree that holds the transcripts it accounts for — with the
@@ -209,31 +227,36 @@ pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
   let dir = "\{self.session_root}/\{self.parent}-wf-\{base}"
   let journal_path = "\{dir}/journal.jsonl"
   let events_path = "\{dir}/events.jsonl"
+  // Everything the host decides is pinned ahead of `--kind`: the workspace,
+  // the session store, where results may go, the model and the endpoint (an
+  // empty `--api-url` is the provider's default, pinned so that a snippet
+  // cannot name its own).
+  let spawn_prefix = [
+    ..self.launch_prefix,
+    "run",
+    "--input-format",
+    "json",
+    "--cancel-on-stdin-eof",
+    "--dir",
+    self.workspace_root,
+    "--session-root",
+    self.session_root,
+    "--result-root",
+    result_root,
+    ..if self.model is Some(model) {
+      ["--model", model]
+    },
+    "--api-url",
+    self.api_url.unwrap_or(""),
+    "--kind",
+  ]
   // The child argv, with the library's placeholders: a parent-managed `run` of
   // the call's preset that writes its result to a file (transport 2 of the
   // workflow child contract). The API key NEVER rides argv — it reaches the
   // child through the inherited environment. Per-call `max_steps` is not here
   // either: it rides the request, where the contract already carries it.
   let child_args = [
-    ..self.launch_prefix,
-    "run",
-    "--input-format",
-    "json",
-    "--cancel-on-stdin-eof",
-    "--kind",
-    "{kind}",
-    "--result-file",
-    "{result_file}",
-    ..if self.model is Some(model) {
-      ["--model", model]
-    },
-    ..if self.api_url is Some(url) {
-      ["--api-url", url]
-    },
-    "--session",
-    "{child}",
-    "--session-root",
-    self.session_root,
+    ..spawn_prefix, "{kind}", "--result-file", "{result_file}", "--session", "{child}",
   ]
   // Version 2 of the handoff, which names the transport: a library too old to
   // read result files refuses it instead of passing `{result_file}` along.
@@ -262,5 +285,13 @@ pub fn SubrunInjection::reserve(self : SubrunInjection) -> SubrunReservation {
     }
   }
   let env = { "WORKFLOW_HOST": handoff.stringify() }
-  { base, limit: block_size, dir, journal_path, events_path, env, }
+  {
+    base,
+    limit: block_size,
+    dir,
+    journal_path,
+    events_path,
+    env,
+    spawn_prefix,
+  }
 }
