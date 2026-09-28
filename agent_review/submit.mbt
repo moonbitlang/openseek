@@ -9,7 +9,7 @@
 /// result, so the loop's ceiling salvage honors a pending `submit_review`
 /// instead of skip-closing it — without this, a review that hits the
 /// context ceiling on its submitting step would lose its finished report
-/// and fail with `ReviewError`.
+/// and finish with none.
 fn submit_review_tool(
   captured : Ref[ReviewReport?],
 ) -> @agent_tool.AgentToolDefinition {
@@ -89,7 +89,7 @@ fn report_schema() -> Json {
 test "submit_review declares itself a control tool" {
   // The ceiling salvage honors control-declared completions; without this
   // a review hitting the context ceiling on its submitting step would
-  // skip-close submit_review and fail with ReviewError.
+  // skip-close submit_review and finish with no report.
   let captured : Ref[ReviewReport?] = { val: None, }
   assert_true(submit_review_tool(captured).is_control())
 }

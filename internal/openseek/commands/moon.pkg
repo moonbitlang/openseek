@@ -1,12 +1,9 @@
 import {
-  "moonbitlang/openseek/agent",
-  "moonbitlang/openseek/agent_review",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/core/argparse",
   "moonbitlang/async",
   "moonbitlang/openseek/cli",
-  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/internal/openseek/execution",
   "moonbitlang/async/fs",
   "moonbitlang/core/json",
@@ -14,9 +11,7 @@ import {
   "moonbitlang/openseek/mcp/tools" @mcptools,
   "moonbitlang/openseek/internal/openseek/options",
   "moonbitlang/openseek/internal/openseek/setup",
-  "moonbitlang/async/stdio",
   "moonbitlang/openseek/agent_session/store",
-  "moonbitlang/x/sys",
   "moonbitlang/x/time",
   "moonbitlang/openseek/internal/workspace_path",
 }

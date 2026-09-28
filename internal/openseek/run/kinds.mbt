@@ -5,7 +5,8 @@
 priv enum Kind {
   /// The read-only scout: answers a question about the workspace.
   Explore
-  /// The goal audit behind the review gate.
+  /// A review: the goal audit behind the review gate (`goal`), or a code
+  /// review of `base...HEAD` (`base`).
   Review
   /// A write-capable child confined to a provisioned git worktree.
   Worker
@@ -39,10 +40,9 @@ fn Kind::check_input(self : Kind, input : Json) -> String? {
         Some("explore requires a non-empty query")
       }
     Review =>
-      if input is { "goal": String(goal), .. } && !goal.is_blank() {
-        None
-      } else {
-        Some("review requires a non-empty goal")
+      match ReviewTarget::parse(input) {
+        Ok(_) => None
+        Err(reason) => Some(reason)
       }
     Worker =>
       match @agent_worker.WorkerInput::parse(input) {
@@ -63,6 +63,32 @@ fn Kind::check_input(self : Kind, input : Json) -> String? {
         Some("pattern-repair requires pattern and instruction")
       }
     Echo => None
+  }
+}
+
+///|
+/// What a `review` request asks for: exactly one of a goal to audit the
+/// worktree against, or a base ref whose `base...HEAD` diff to review.
+priv enum ReviewTarget {
+  Goal(goal~ : String, baseline~ : @agent_session.GoalBaseline?)
+  Base(String)
+}
+
+///|
+fn ReviewTarget::parse(input : Json) -> Result[ReviewTarget, String] {
+  match input {
+    { "goal": _, "base": _, .. } =>
+      Err("review takes a goal or a base, not both")
+    { "goal": String(goal), .. } if !goal.is_blank() => {
+      let baseline : @agent_session.GoalBaseline? = match input {
+        { "sha": String(sha), "dirty": dirty, .. } =>
+          Some({ sha, dirty: dirty is True, })
+        _ => None
+      }
+      Ok(Goal(goal~, baseline~))
+    }
+    { "base": String(base), .. } if !base.is_blank() => Ok(Base(base))
+    _ => Err("review requires a non-empty goal or base")
   }
 }
 
@@ -150,36 +176,54 @@ async fn Kind::run(
       Ran(report=report.map(report => Json(report)))
     }
     Review => {
-      guard input is { "goal": String(goal), .. } else {
-        return Rejected("review requires a non-empty goal")
-      }
-      let baseline : @agent_session.GoalBaseline? = match input {
-        { "sha": String(sha), "dirty": dirty, .. } =>
-          Some({ sha, dirty: dirty is True, })
-        _ => None
+      let target = match ReviewTarget::parse(input) {
+        Ok(target) => target
+        Err(reason) => return Rejected(reason)
       }
       let api_key = api_key()
       let scratch_dir = @setup.new_scratch_lab("openseek-review-lab-")
       defer @setup.remove_scratch_lab(scratch_dir)
-      let report = @agent_review.run_goal_audit(
-        goal~,
-        baseline~,
-        api_key~,
-        model~,
-        max_steps=step_ceiling(
-          matches,
-          launch.requested_max_steps,
-          @agent_review.default_audit_max_steps,
-        ),
-        thinking~,
-        api_url?,
-        retry_attempts?,
-        retry_backoff_ms?,
-        workspace_root~,
-        session_id=launch.session_id,
-        append_item=launch.append_item,
-        scratch_dir~,
-      )
+      let report = match target {
+        Goal(goal~, baseline~) =>
+          @agent_review.run_goal_audit(
+            goal~,
+            baseline~,
+            api_key~,
+            model~,
+            max_steps=step_ceiling(
+              matches,
+              launch.requested_max_steps,
+              @agent_review.default_audit_max_steps,
+            ),
+            thinking~,
+            api_url?,
+            retry_attempts?,
+            retry_backoff_ms?,
+            workspace_root~,
+            session_id=launch.session_id,
+            append_item=launch.append_item,
+            scratch_dir~,
+          )
+        Base(base) =>
+          @agent_review.run_review(
+            base~,
+            api_key~,
+            model~,
+            max_steps=step_ceiling(
+              matches,
+              launch.requested_max_steps,
+              @agent_review.default_review_max_steps,
+            ),
+            thinking~,
+            api_url?,
+            retry_attempts?,
+            retry_backoff_ms?,
+            workspace_root~,
+            session_id=launch.session_id,
+            append_item=launch.append_item,
+            scratch_dir~,
+          )
+      }
       Ran(report=report.map(report => Json(report)))
     }
     Worker => {

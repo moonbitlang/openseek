@@ -18,13 +18,12 @@ process-level error handling. Command parsing, handlers, and shared setup live u
 ```
 openseek run [options] TASK    run one task headlessly; answer on stdout, progress on stderr
 openseek serve                 JSONL command server (stdin: prompt/steer/cancel/compact)
-openseek review [--base REF]   read-only code review of REF...HEAD → one JSON report
 openseek mcp                   list configured MCP servers and their tools
 openseek sessions list|show <id>|compact <id> …   manage durable sessions
 ```
 
 The whole CLI is **one `moonbitlang/core/argparse` command tree**:
-`run`/`serve`/`review`/`subrun`/`mcp`/`sessions` are subcommands (argparse owns
+`run`/`serve`/`mcp`/`sessions` are subcommands (argparse owns
 parsing, `--help`, and rejecting unknown or missing subcommands). There is **no
 free-form top-level prompt** and **no default action** — a bare `openseek` is
 rejected; launch the UI with `openseek_tui`. The options shared with the engine
@@ -69,8 +68,12 @@ child has the hosted default deadline of 600000 (10 minutes), independent of
 this flag. See the
 [hosted review notes](../../agent_tool/mbtx/README.mbt.md#independent-review).
 Hosted delegation requires a durable session; `--no-session` cannot delegate.
-The standalone `openseek review --base REF` command still runs the review
-engine directly, without a workflow.
+A read-only code review of `REF...HEAD` runs as the `review` preset, with
+the report as the result file's `output`:
+
+```bash
+printf '{"version":1,"input":{"base":"origin/main"}}' | openseek run --kind review --input-format json --result-file review.json
+```
 
 Every run records a durable session: without `--session`, a generated
 `cli-YYYYMMDD-HHMMSS-mmm` id is used and announced on a `session` line on

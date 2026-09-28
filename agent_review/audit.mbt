@@ -64,9 +64,10 @@ fn audit_task(
 }
 
 ///|
-/// Run the goal audit IN THIS PROCESS (the `openseek run --kind review`
-/// child calls this; the standalone shape mirrors `run_review`). `None`
-/// when the auditor finished without a valid submission.
+/// Run the goal audit IN THIS PROCESS (`openseek run --kind review` with a
+/// `goal` input calls this, as does the goal-met gate's child; the shape
+/// mirrors `run_review`). `None` when the auditor finished without a valid
+/// submission.
 pub async fn run_goal_audit(
   goal~ : String,
   baseline~ : @agent_session.GoalBaseline?,

@@ -8,8 +8,6 @@ import {
 // Values
 pub async fn run_mcp_command(@argparse.Matches) -> Unit
 
-pub async fn run_review_command(@argparse.Matches) -> Unit
-
 pub async fn run_sessions_command(@argparse.Matches) -> Unit
 
 // Errors

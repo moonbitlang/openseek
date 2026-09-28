@@ -10,7 +10,7 @@ fn dir_option() -> @argparse.OptionArg {
 
 ///|
 /// Engine-only options for the agent-running subcommands (`run`, `serve`,
-/// `review`). The agent-shared options (`--api-key`, `--model`, `--api-url`,
+/// `mcp`). The agent-shared options (`--api-key`, `--model`, `--api-url`,
 /// `--max-steps`, `--thinking`, `--session`, `--session-root`) are root globals
 /// (see `root_command`) inherited here — redeclaring a global is a build error.
 fn agent_options() -> Array[@argparse.OptionArg] {
@@ -49,7 +49,7 @@ fn agent_options() -> Array[@argparse.OptionArg] {
 
 ///|
 /// The whole `openseek` command tree: the headless engine under
-/// `run`/`serve`/`review`/`mcp`/`sessions`. The shared agent options
+/// `run`/`serve`/`mcp`/`sessions`. The shared agent options
 /// (`--api-key`, `--model`, …) sit on the root as globals, so every engine
 /// subcommand inherits them in any position (`openseek --api-key k run`,
 /// `openseek run --api-key k`). `subcommand_required=true` makes a bare
@@ -61,7 +61,7 @@ pub fn root_command() -> @argparse.Command {
     "openseek",
     about="DeepSeek-backed MoonBit coding agent (headless automation CLI).",
     // The shared agent options (--api-key, --model, …) live on the root as
-    // globals, so every engine subcommand either uses them (run/serve/review) or
+    // globals, so every engine subcommand either uses them (run/serve) or
     // harmlessly inherits them, and they resolve in any position
     // (`openseek --api-key k run`, `openseek run --api-key k`).
     options=@cli.agent_shared_options(global=true),
@@ -73,7 +73,7 @@ pub fn root_command() -> @argparse.Command {
           ..agent_options(),
           review_deadline_option(),
           // Only `run` and `serve` build an approval channel. On the shared
-          // bundle this also reached `mcp` and `review`, where it
+          // bundle this also reached `mcp`, where it
           // parses and then does nothing — and where an exported
           // OPENSEEK_APPROVAL would have bound commands that cannot honour it.
           approval_option(),
@@ -139,19 +139,6 @@ pub fn root_command() -> @argparse.Command {
         "mcp",
         about="List configured MCP servers and the tools they expose.",
         options=agent_options(),
-      ),
-      Command(
-        "review",
-        about="Read-only code review of base...HEAD; prints a JSON ReviewReport.",
-        options=[
-          ..agent_options(),
-          OptionArg(
-            "base",
-            long="base",
-            default_values=["origin/main"],
-            about="Base ref: review the diff base...HEAD.",
-          ),
-        ],
       ),
       Command(
         "sessions",
