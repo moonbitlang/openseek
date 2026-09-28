@@ -142,11 +142,7 @@ pub fn parse_run_result(json : Json) -> RunResult raise RunResultError {
   }
   let request_id = optional_text("request_id")
   let kind = optional_text("kind")
-  let session = match fields.get("session") {
-    None => None
-    Some(String(session)) => Some(session)
-    Some(_) => raise Malformed("session")
-  }
+  let session = optional_text("session")
   let usage = match fields.get("usage") {
     None => None
     Some(Object(usage)) =>

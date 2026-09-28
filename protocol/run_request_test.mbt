@@ -24,8 +24,7 @@ test "a request is exactly what to_json writes, and reads back" {
       },
     ),
   ]
-  for fixture in fixtures {
-    let (text, request) = fixture
+  for (text, request) in fixtures {
     assert_eq(request.to_json().stringify(), text)
     assert_eq(@openseek_protocol.parse_run_request(@json.parse(text)), request)
   }
@@ -101,8 +100,7 @@ test "requests that cannot be run are refused, naming why" {
       Unsupported("schema"),
     ),
   ]
-  for case in cases {
-    let (text, error) = case
+  for (text, error) in cases {
     assert_eq(run_request_error(text), Some(error))
   }
 }

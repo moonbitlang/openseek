@@ -110,8 +110,7 @@ let run_result_fixtures : Array[(String, @openseek_protocol.RunResult)] = [
 
 ///|
 test "every result fixture is exactly what to_json writes, and reads back" {
-  for fixture in run_result_fixtures {
-    let (text, result) = fixture
+  for (text, result) in run_result_fixtures {
     assert_eq(result.to_json().stringify(), text)
     assert_eq(@openseek_protocol.parse_run_result(@json.parse(text)), result)
   }
@@ -217,33 +216,26 @@ test "malformed results name the offending field" {
       ),
       "usage",
     ),
-  ]
-  cases.push(
     (
       (
         #|{"version":1,"status":"max_steps_exhausted","steps":-1}
       ),
       "steps",
     ),
-  )
-  cases.push(
     (
       (
         #|{"version":1,"status":"max_steps_exhausted","steps":"3"}
       ),
       "steps",
     ),
-  )
-  cases.push(
     (
       (
         #|{"version":1,"status":"max_steps_exhausted","request_id":3}
       ),
       "request_id",
     ),
-  )
-  for case in cases {
-    let (text, field) = case
+  ]
+  for (text, field) in cases {
     assert_eq(run_result_error(text), Some(Malformed(field)))
   }
 }
