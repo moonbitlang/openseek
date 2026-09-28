@@ -1417,7 +1417,7 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           @html.datalist(
             id="font-size-ticks",
             [
-              for size in AppFontSizeMinPixels..<(AppFontSizeMaxPixels + 1) => {
+              for size in AppFontSizeMinPixels..<=AppFontSizeMaxPixels => {
                 @html.option(value=size.to_string(), "")
               }
             ],

@@ -5157,9 +5157,10 @@ fn update_msg(
       }
     }
     FontSizeAdjusted(delta) => {
-      let size = (model.app_font_size.base_pixels() + delta)
-        .max(AppFontSizeMinPixels)
-        .min(AppFontSizeMaxPixels)
+      let size = (model.app_font_size.base_pixels() + delta).clamp(
+        min=AppFontSizeMinPixels,
+        max=AppFontSizeMaxPixels,
+      )
       update(dispatch, FontSizeChanged(size.to_string()), model)
     }
     FontSizeChanged(value) => {

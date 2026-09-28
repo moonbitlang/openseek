@@ -161,18 +161,6 @@ fn pattern_repair_trace_of(session : @agent_session.Session) -> Array[String] {
 }
 
 ///|
-/// The repair's trace, read from the child's session; empty when the child
-/// recorded nothing (it failed before its turn, or its record is unreadable).
-async fn pattern_repair_session_trace(session_root : String) -> Array[String] {
-  let session = @store.SessionStore(session_root).load(
-    SessionId(PatternRepairSessionId),
-  ) catch {
-    _ => return []
-  }
-  pattern_repair_trace_of(session)
-}
-
-///|
 /// How a finished child ended, from its result file: a candidate, or why
 /// there is none. `None` only when the child wrote no result, which leaves the
 /// exit status and stderr to explain; a result that exists but cannot be read
@@ -305,7 +293,13 @@ async fn request_pattern_repair_candidate(
     error if @async.is_being_cancelled() => raise error
     error => return Failed("\{error}", [])
   }
-  let trace = pattern_repair_session_trace(session_root)
+  // The repair's trace, read from the child's session; empty when the child
+  // recorded nothing (it failed before its turn, or its record is unreadable).
+  let trace = pattern_repair_trace_of(
+    @store.SessionStore(session_root).load(SessionId(PatternRepairSessionId)),
+  ) catch {
+    _ => []
+  }
   match process {
     TimedOut => {
       pattern_repair_trace_push(
