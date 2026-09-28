@@ -55,7 +55,6 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
       // announced `session_started` and only then refused, which is a failure
       // the caller pays for in artifacts on disk. Read once, and passed to the
       // turn rather than parsed again.
-      let mode = input_mode(matches)
       let approval_policy = @execution.approval_policy(
         matches,
         interactive=false,
@@ -260,9 +259,8 @@ async fn run_general(
       )
     }
     Some(id) => {
-      let store = @store.SessionStore(
-        @setup.session_root(matches, workspace_root~),
-      )
+      let session_root = @setup.session_root(matches, workspace_root~)
+      let store = @store.SessionStore(session_root)
       // A delegated run starts a session of its own: resuming one would let
       // its launcher append to a conversation it does not own.
       if !delegate && store.exists(id) {
@@ -276,7 +274,7 @@ async fn run_general(
       @emit.emit(
         SessionStarted(
           session=id.value(),
-          session_root=@setup.session_root(matches, workspace_root~),
+          session_root~,
           workspace_root=Some(workspace_root),
         ),
       )

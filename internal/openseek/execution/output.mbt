@@ -166,9 +166,8 @@ fn TextRenderer::render(
         self.flush(progress)
       }
       self.pending = None
-      let text = result
-      if !text.is_blank() {
-        answer.write_string(terminal_safe_text(text.trim_end()))
+      if !result.is_blank() {
+        answer.write_string(terminal_safe_text(result.trim_end()))
         answer.write_char('\n')
       }
     }
