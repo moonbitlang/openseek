@@ -7,6 +7,13 @@ import {
   "moonbitlang/core/json",
 }
 
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/json",
+} for "test"
+
 dev_build(
   rule: "md_to_mbt_string",
   input: "review_system_prompt.mbt.md",

@@ -5,8 +5,8 @@ explore, worker, pattern repair, ...) is one bounded agent turn over a
 restricted toolset that ends by submitting a typed value through a
 `capture_tool`. `execute_kind` runs that turn in the calling process and
 returns the captured value; it never spawns and never learns whether it is
-inside an `openseek run --kind <kind>` child, the standalone review CLI, or a
-unit test against a mock endpoint — those are its three callers. The process
+inside an `openseek run --kind <kind>` child or a unit test against a mock
+endpoint — those are its two callers. The process
 boundary (spawn, wall deadline, the result file, cost accounting, terminal
 classification) is `agent_subrun`'s job, and that package never imports this
 one.

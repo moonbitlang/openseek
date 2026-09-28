@@ -2,10 +2,14 @@
 
 `agent_review` is OpenSeek's **code-review engine**. It runs a read-only,
 compiler-grounded review of a change set and returns a single structured
-`ReviewReport`. The engine is deliberately front-end-agnostic: the headless
-`openseek review` CLI is one caller today, and the same `ReviewReport` JSON is
-the boundary other coding agents (e.g. Codex, Claude) spawn and consume when they
-dispatch a review to OpenSeek.
+`ReviewReport`. The engine is deliberately front-end-agnostic: its one
+front end is the `review` kind (`openseek run --kind review`), and the same
+`ReviewReport` JSON is the boundary other coding agents (e.g. Codex, Claude)
+spawn and consume when they dispatch a review to OpenSeek. The kind takes
+exactly one of two inputs: `{"base": REF}` runs `run_review` (below);
+`{"goal": …, "sha"?, "dirty"?}` runs `run_goal_audit`, which audits the
+current worktree against a goal — the goal-met gate's child and the hosted
+`@builtin/review.mbtx` workflow.
 
 ## What it does
 
@@ -17,7 +21,7 @@ dispatch a review to OpenSeek.
 2. instructs the model to ground every finding in the compiler — run
    `moon check`/`moon test` and cite real diagnostics, not opinion;
 3. captures the model's `submit_review` call into a validated `ReviewReport` and
-   returns it. If the model finishes without submitting, it raises `ReviewError`.
+   returns it, or `None` if the model finishes without submitting.
 
 ## The contract: `ReviewReport`
 
@@ -63,8 +67,6 @@ instead of finishing.
 - **Compiler-grounded.** The prompt makes the reviewer execute the build/tests
   and report what they actually said — `stats.build` / `stats.tests` are observed
   facts. The MoonBit compiler is reliable; the model's intuition is not.
-- **Strongest model.** Review is judgement-heavy, so it pins the Pro model;
-  flash is too shallow for the call.
 
 ## Read-only stance (best-effort, not airtight)
 
@@ -78,20 +80,22 @@ design, a review *reports* rather than *edits*.
 
 ## Using it
 
-Headless, one JSON report on stdout (progress is suppressed so stdout stays
-clean), exit code by severity:
+Headless, through `run`'s JSON request and result file (see
+[docs/run-result.md](../docs/run-result.md)). The model is `--model`; the step
+ceiling is `--max-steps`, else the request's `limits.max_steps`, else
+`default_review_max_steps` (120):
 
 ```bash
-# 0 = clean or non-blocking findings, 1 = the review produced no report,
-# 2 = blocker findings present
-openseek review --base origin/main
+printf '{"version":1,"input":{"base":"origin/main"}}' | openseek run --kind review --input-format json --no-session --result-file review.json
 ```
 
-Because the report is a stable JSON document on stdout, any orchestrator that can
-run a subprocess can use it:
+The run exits 0 whenever the review completed, blockers or not; the report is
+the result's `output`. Check `status` before reading it — any other status
+means there is no report — and give each run a fresh path: a run refused while
+its arguments are parsed never touches the file, so an old one would stand:
 
 ```bash
-openseek review --base origin/main | jq '.findings[] | select(.severity=="blocker")'
+jq -e '.status == "completed"' review.json && jq '.output.findings[] | select(.severity=="blocker")' review.json
 ```
 
 ## Ensembling for confidence
@@ -109,4 +113,5 @@ report a calibrated confidence signal that one pass cannot.
 | `types.mbt` | `ReviewReport` / `Finding` / `ReviewScope` / `ReviewStats`, JSON derive, `to_json_string`, `parse`, `validate` |
 | `submit.mbt` | the `submit_review` structured-output tool |
 | `prompt.mbt` | the review system prompt and task |
-| `engine.mbt` | `run_review` — the engine, and `ReviewError` |
+| `engine.mbt` | `run_review` — the code review of `base...HEAD` |
+| `audit.mbt` | `run_goal_audit` — the worktree audit against a goal, and the gate's `digest` |

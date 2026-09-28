@@ -12,7 +12,7 @@ to stderr before invoking the shared runner.
 | `execution` | JSONL event draining, the approval policy and its requests, extra tools and MCP connections, and review gates. |
 | `run` | One-shot runs: the general agent or a preset (`--kind`), from the command line or a JSON request, with its result file. |
 | `serve` | The persistent command loop, scheduling state, cancellation, and goal continuation. |
-| `commands` | Session management, standalone review, and MCP inspection. |
+| `commands` | Session management and MCP inspection. |
 | `testkit` | Test-only argv parsers (`run_matches`, `sessions_leaf_matches`), imported `for "wbtest"`. |
 
 Production dependencies flow from the dispatcher to the command handlers, then
