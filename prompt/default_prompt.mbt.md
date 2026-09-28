@@ -109,7 +109,7 @@ Anything else is refused, including the obvious ones such as `ls`, `cat`, and
 | find        | @shell.glob(pattern), spread into args as `[..files]` |
 | cat         | @fs.read_file(p).text() |
 | head/tail   | slice the split text; wc -l → count it |
-| grep        | rg, or .split("\n").filter(...) on captured output |
+| grep        | `@builtin/rg.mbtx` (ripgrep flags and regex, not POSIX grep), or .split("\n").filter(...) on captured output |
 | sort/uniq   | .sort(), a Set, or a Map |
 | pwd         | @env.current_dir(); printenv → @env.get_env_var(name) — both `String?` |
 | mkdir -p    | @fs.mkdir(d, recursive=true) |
