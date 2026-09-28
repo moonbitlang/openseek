@@ -26,7 +26,7 @@ fn app_shortcut_sub_loader(
           return
         }
         // In a real browser these chords overlap print/new-tab, new-window,
-        // and bookmark commands. The app deliberately replaces them in both
+        // bookmark, and page zoom commands. The app deliberately replaces them in both
         // shells; capture also reaches past Monaco/xterm before either can
         // consume the event.
         event.prevent_default()
@@ -64,6 +64,7 @@ fn app_shortcut_sub_loader(
 /// browser console. Apple platforms use Cmd; other platforms use Ctrl. P/T
 /// open Quick Open, N starts a chat, O adds a project, B toggles the left
 /// sidebar, Shift+B toggles the right panel, and Shift+F opens Search.
+/// Plus/equal and minus adjust the app font size, including held-key repeats.
 fn app_shortcut_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
   @sub.custom_sub(
     "app-shortcut-capture",
@@ -131,7 +132,7 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
 }
 
 ///|
-/// Map only the platform's exact, non-repeating command chords to the same
+/// Map the platform's command chords to the same
 /// messages used by their corresponding UI buttons.
 fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? {
   if keyboard.code() == "Backquote" &&
@@ -148,12 +149,15 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
   } else {
     keyboard.ctrl_key() && !keyboard.meta_key()
   }
-  guard command &&
-    !keyboard.alt_key() &&
-    !keyboard.is_composing() &&
-    !keyboard.repeat() else {
+  guard command && !keyboard.alt_key() && !keyboard.is_composing() else {
     return None
   }
+  match keyboard.key() {
+    "+" | "=" => return Some(FontSizeAdjusted(1))
+    "-" if !keyboard.shift_key() => return Some(FontSizeAdjusted(-1))
+    _ => ()
+  }
+  guard !keyboard.repeat() else { return None }
   match (keyboard.code(), keyboard.shift_key()) {
     ("KeyP", false) => Some(QuickOpenOpen(@quick_open.Files))
     ("KeyT", false) => Some(QuickOpenOpen(@quick_open.Symbols))

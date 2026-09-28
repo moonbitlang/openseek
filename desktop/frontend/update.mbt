@@ -5156,6 +5156,12 @@ fn update_msg(
         )
       }
     }
+    FontSizeAdjusted(delta) => {
+      let size = (model.app_font_size.base_pixels() + delta)
+        .max(AppFontSizeMinPixels)
+        .min(AppFontSizeMaxPixels)
+      update(dispatch, FontSizeChanged(size.to_string()), model)
+    }
     FontSizeChanged(value) => {
       let app_font_size = AppFontSize::parse(value, model.app_font_size)
       let model = { ..model, select_menu: None, }

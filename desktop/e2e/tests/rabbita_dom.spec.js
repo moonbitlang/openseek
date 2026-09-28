@@ -2571,3 +2571,46 @@ test('project picker capture preserves focused controls and is removed on close'
   expect(handled).toEqual([false, false]);
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const [platform, modifier] of [['MacIntel', 'Meta'], ['Win32', 'Control']]) {
+  test(`font size shortcuts clamp and persist on ${platform}`, async ({ page }) => {
+    await page.addInitScript(platform => {
+      Object.defineProperty(navigator, 'platform', { get: () => platform });
+      Object.defineProperty(navigator, 'userAgentData', { get: () => undefined });
+    }, platform);
+    const app = new DesktopBrowserHarness(page);
+    await app.install();
+    await app.goto();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const slider = page.getByRole('slider', { name: 'Font size' });
+    await slider.focus();
+    await page.keyboard.press(`${modifier}+Equal`);
+    await expect(slider).toHaveValue('15');
+    await page.keyboard.press(`${modifier}+Shift+Equal`);
+    await expect(slider).toHaveValue('16');
+    await page.keyboard.press(`${modifier}+Minus`);
+    await expect(slider).toHaveValue('15');
+    await page.keyboard.press(`${modifier}+Alt+Equal`);
+    await expect(slider).toHaveValue('15');
+    // Capture must prevent the browser's zoom even for held-key repeats.
+    const prevented = await slider.evaluate((element, modifier) => {
+      const event = new KeyboardEvent('keydown', {
+        key: '+', code: 'Equal', shiftKey: true,
+        metaKey: modifier === 'Meta', ctrlKey: modifier === 'Control',
+        repeat: true, bubbles: true, cancelable: true,
+      });
+      element.dispatchEvent(event);
+      return event.defaultPrevented;
+    }, modifier);
+    expect(prevented).toBe(true);
+    await expect(slider).toHaveValue('16');
+    for (let i = 0; i < 5; i++) await page.keyboard.press(`${modifier}+Equal`);
+    await expect(slider).toHaveValue('18');
+    for (let i = 0; i < 9; i++) await page.keyboard.press(`${modifier}+Minus`);
+    await expect(slider).toHaveValue('12');
+    await expect(page.locator('body')).toHaveCSS('font-size', '12px');
+    await page.reload();
+    await expect(page.locator('body')).toHaveCSS('font-size', '12px');
+    expect(app.pageErrors).toEqual([]);
+  });
+}

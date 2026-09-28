@@ -1892,6 +1892,7 @@ priv enum Msg {
   MinimalTranscriptChanged(Bool)
   // A Settings selection changes the shared app/editor/terminal type scale.
   FontSizeChanged(String)
+  FontSizeAdjusted(Int)
   // The window was resized; `width` decides the narrow (phone) layout.
   ViewportResized(width~ : Int)
   // The native window gained or lost OS focus. This is deliberately distinct
