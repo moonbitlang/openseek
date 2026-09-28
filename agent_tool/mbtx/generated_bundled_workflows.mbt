@@ -10,8 +10,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|///|
           #|import {
           #|  "moonbitlang/async@0.22.4",
-          #|  "moonbitlang/workflow@0.9.0",
-          #|  "moonbitlang/workflow@0.9.0/hosted",
+          #|  "moonbitlang/workflow@0.10.0",
+          #|  "moonbitlang/workflow@0.10.0/hosted",
           #|}
           #|
           #|///|
@@ -1104,8 +1104,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|import {
           #|  "moonbitlang/async@0.22.4",
           #|  "moonbitlang/async@0.22.4/fs",
-          #|  "moonbitlang/workflow@0.9.0",
-          #|  "moonbitlang/workflow@0.9.0/hosted",
+          #|  "moonbitlang/workflow@0.10.0",
+          #|  "moonbitlang/workflow@0.10.0/hosted",
           #|}
           #|
           #|///|
@@ -1389,8 +1389,8 @@ fn bundled_workflow(name : StringView) -> String? {
           #|import {
           #|  "moonbitlang/async@0.22.4",
           #|  "moonbitlang/core/env",
-          #|  "moonbitlang/workflow@0.9.0",
-          #|  "moonbitlang/workflow@0.9.0/hosted",
+          #|  "moonbitlang/workflow@0.10.0",
+          #|  "moonbitlang/workflow@0.10.0/hosted",
           #|}
           #|
           #|///|

@@ -410,16 +410,18 @@ child ids from a block that is not its own.
 
 The handoff is version 2, which names how a child reports (`transport`: a
 result file). `moonbitlang/workflow` 0.9.0 is the first release that reads it.
-An older release refuses a handoff version it does not know, so for a snippet
-whose imports pin one, `@hosted.context()` returns `None` exactly as it does
-on a session that cannot host: the snippet takes its own no-host branch (the
-bundled scripts fail with a message saying they need OpenSeek), and no child
-is launched or recorded. Update the imports:
+A release older than that refuses a handoff version it does not know, so for a
+snippet whose imports pin one, `@hosted.context()` returns `None` exactly as it
+does on a session that cannot host: the snippet takes its own no-host branch
+(the bundled scripts fail with a message saying they need OpenSeek), and no
+child is launched or recorded. From 0.10.0 on, a handoff that is present but
+unusable raises `@hosted.HandoffError` with the reason instead of reading as
+no host. Update the imports:
 
 ```text
 import {
-  "moonbitlang/workflow@0.9.0",
-  "moonbitlang/workflow@0.9.0/hosted",
+  "moonbitlang/workflow@0.10.0",
+  "moonbitlang/workflow@0.10.0/hosted",
 }
 ```
 

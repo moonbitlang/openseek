@@ -183,43 +183,52 @@ pub async fn[T] run_subrun(
     wall_deadline_ms~,
     cwd?,
     extra_env?,
-    transport=ResultFile,
   )
   // Re-typing the raw report happens HERE, at the layer that knows the
-  // schema: a Captured contract terminal whose report the caller rejects
-  // is a Failed sub-run, never rendered.
-  let (value, terminal) = match contract.terminal {
-    Captured =>
-      match contract.report {
-        Some(report) =>
-          match parse_report(report) {
-            Ok(value) => (Some(value), Captured)
-            Err(problem) =>
-              ((None : T?), Failed("subrun report rejected: \{problem}"))
-          }
-        None => (None, Failed("captured terminal without a report"))
+  // schema: a finished run whose report the caller rejects is a Failed
+  // sub-run, never rendered.
+  let (value, terminal) = match contract.outcome {
+    Finished(value~, ..) =>
+      match parse_report(value) {
+        Ok(value) => (Some(value), Captured)
+        Err(problem) =>
+          ((None : T?), Failed("subrun report rejected: \{problem}"))
       }
-    NoReport => (None, NoReport)
-    MaxSteps => (None, MaxSteps)
-    ContextYield => (None, ContextYield)
-    TimedOut => (None, TimedOut)
-    Failed(reason) => (None, Failed(reason))
+    DidNotFinish(failure~, ..) =>
+      (
+        None,
+        match failure {
+          NoReport => NoReport
+          MaxSteps => MaxSteps
+          ContextYield => ContextYield
+          TimedOut => TimedOut
+          // A contract run never skips: skipping is a replay decision.
+          Skipped => Failed("skipped")
+          Failed(reason) => Failed(reason)
+        },
+      )
   }
+  // Every contract run accounts for its attempt, launched or not.
+  let attempt = contract.outcome.attempt()
+  let steps_used = attempt.map(a => a.steps_used).unwrap_or(0)
+  let prompt_tokens = attempt.map(a => a.prompt_tokens).unwrap_or(0)
+  let completion_tokens = attempt.map(a => a.completion_tokens).unwrap_or(0)
+  let unaccounted = attempt.bind(a => a.unaccounted)
   finished(
     status_of(terminal),
-    contract.steps_used,
-    contract.prompt_tokens,
-    contract.completion_tokens,
-    contract.unaccounted,
+    steps_used,
+    prompt_tokens,
+    completion_tokens,
+    unaccounted,
   )
   {
     value,
     terminal,
-    steps_used: contract.steps_used,
-    prompt_tokens: contract.prompt_tokens,
-    completion_tokens: contract.completion_tokens,
-    cost_usd: contract.cost_usd,
-    unaccounted: contract.unaccounted,
+    steps_used,
+    prompt_tokens,
+    completion_tokens,
+    cost_usd: attempt.bind(a => a.cost_usd),
+    unaccounted,
     subrun_id: id,
   }
 }

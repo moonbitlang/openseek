@@ -21,7 +21,7 @@ fn injection(issued : Ref[Int], model? : String) -> @host.SubrunInjection {
 ///|
 /// What `moonbitlang/workflow/hosted` reads when the guest environment carries
 /// `raw` as its handoff; the process environment is restored afterwards.
-fn hosted_context(raw : String) -> @hosted.Context? {
+fn hosted_context(raw : String) -> @hosted.Context? raise {
   let previous = @env.get_env_var("WORKFLOW_HOST")
   @env.set_env_var("WORKFLOW_HOST", raw)
   defer (match previous {
@@ -71,7 +71,6 @@ test "what this host writes is what the library reads" {
   }
   assert_eq(ctx.child_capacity(), @host.block_size)
   assert_eq(ctx.journal_path(), Some("/store/run7-wf-1/journal.jsonl"))
-  assert_eq(ctx.events_path(), Some("/store/run7-wf-1/events.jsonl"))
   // The engine's own CLI shape, as data the library substitutes per call: the
   // session flags are what make a child durable, and they name the library's
   // placeholder rather than an ordinal this host would have had to guess. A
