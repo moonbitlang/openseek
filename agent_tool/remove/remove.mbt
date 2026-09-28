@@ -151,16 +151,12 @@ fn created_directory_tree(
   version : RemovalVersion,
   file_state : @agent_tool.FileStateMap,
 ) -> Bool {
-  for (entry, node) in version.entries {
-    match node {
-      File(file) =>
-        if !file_state.created_and_unchanged(entry, file.digest) {
-          return false
-        }
-      Directory(_) => if !file_state.created_directory(entry) { return false }
+  version.entries.all(entry => {
+    match entry {
+      (path, File(file)) => file_state.created_and_unchanged(path, file.digest)
+      (path, Directory(_)) => file_state.created_directory(path)
     }
-  }
-  true
+  })
 }
 
 ///|
