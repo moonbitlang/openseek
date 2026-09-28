@@ -395,7 +395,7 @@ fn wrap_bullet(bullet : String) -> String {
 /// subcommand.
 /// `inject` names variables written into the GUEST environment on top of the
 /// host's, and `spawnable` the program a snippet may start for its delegated
-/// children, with the argv tokens that must precede `subrun` in the launch.
+/// children, with the pinned argv prefix every such launch must begin with.
 /// Both exist for one caller: a snippet that runs a workflow needs the
 /// engine's own launch command plus the coordinates mbtx reserved for it, and
 /// neither can come from the snippet — the whole point is that only values

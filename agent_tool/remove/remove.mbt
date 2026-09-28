@@ -105,18 +105,10 @@ async fn execute_with_workspace(
       if version.entries is [(_, File(file))] &&
         file_state.created_and_unchanged(path, file.digest) {
         Finished(delete_file(path, input.reason, file_state, write_scope?))
-      } else if version.entries is [(_, Directory(_))] {
-        // Non-recursive rmdir fails if a file appears after inspection.
-        Finished(
-          delete_directory(
-            path,
-            input.reason,
-            version,
-            file_state,
-            write_scope?,
-          ),
-        )
-      } else if created_directory_tree(version, file_state) {
+      } else if version.entries is [(_, Directory(_))] ||
+        created_directory_tree(version, file_state) {
+        // For an empty directory, non-recursive rmdir fails if a file
+        // appears after inspection.
         Finished(
           delete_directory(
             path,
@@ -202,16 +194,12 @@ fn created_directory_tree(
   version : RemovalVersion,
   file_state : @agent_tool.FileStateMap,
 ) -> Bool {
-  for (entry, node) in version.entries {
-    match node {
-      File(file) =>
-        if !file_state.created_and_unchanged(entry, file.digest) {
-          return false
-        }
-      Directory(_) => if !file_state.created_directory(entry) { return false }
+  version.entries.all(entry => {
+    match entry {
+      (path, File(file)) => file_state.created_and_unchanged(path, file.digest)
+      (path, Directory(_)) => file_state.created_directory(path)
     }
-  }
-  true
+  })
 }
 
 ///|
