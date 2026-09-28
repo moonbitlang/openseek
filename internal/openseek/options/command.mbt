@@ -60,10 +60,6 @@ pub fn root_command() -> @argparse.Command {
   Command(
     "openseek",
     about="DeepSeek-backed MoonBit coding agent (headless automation CLI).",
-    // The shared agent options (--api-key, --model, …) live on the root as
-    // globals, so every engine subcommand either uses them (run/serve) or
-    // harmlessly inherits them, and they resolve in any position
-    // (`openseek --api-key k run`, `openseek run --api-key k`).
     options=@cli.agent_shared_options(global=true),
     subcommands=[
       Command(
@@ -73,9 +69,9 @@ pub fn root_command() -> @argparse.Command {
           ..agent_options(),
           review_deadline_option(),
           // Only `run` and `serve` build an approval channel. On the shared
-          // bundle this also reached `mcp`, where it
-          // parses and then does nothing — and where an exported
-          // OPENSEEK_APPROVAL would have bound commands that cannot honour it.
+          // bundle this also reached `mcp`, where it parses and then does
+          // nothing — and where an exported OPENSEEK_APPROVAL would have bound
+          // commands that cannot honour it.
           approval_option(),
           // No env binding: an exported path would be inherited by every
           // child `run`, and siblings would overwrite each other's result.
