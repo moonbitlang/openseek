@@ -170,7 +170,13 @@ fn row_view(
       @html.span(
         class="workflow-row-unaccounted",
         title=reason,
-        usage_unknown(locale~),
+        match locale {
+          SimplifiedChinese => "用量未知"
+          TraditionalChinese => "用量未知"
+          Japanese => "使用量不明"
+          English => "usage unknown"
+          Spanish => "uso desconocido"
+        },
       ),
     )
   } else if row.steps > 0 {
@@ -260,17 +266,5 @@ fn duration(ms : Double) -> String {
     "\{seconds / 60}m \{seconds % 60}s"
   } else {
     "\{seconds / 3600}h \{seconds % 3600 / 60}m"
-  }
-}
-
-///|
-/// The label for spend nobody could account for.
-fn usage_unknown(locale? : @i18n.Locale = English) -> String {
-  match locale {
-    SimplifiedChinese => "用量未知"
-    TraditionalChinese => "用量未知"
-    Japanese => "使用量不明"
-    English => "usage unknown"
-    Spanish => "uso desconocido"
   }
 }
