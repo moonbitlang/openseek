@@ -125,7 +125,7 @@ MoonBit here, which also works on Windows, where the binaries do not exist:
 | find        | @shell.glob(pattern), spread into args as `[..files]` |
 | cat         | @fs.read_file(p).text() |
 | head/tail   | slice the split text; wc -l → count it |
-| grep        | rg, or .split("\n").filter(...) on captured output |
+| grep        | `@builtin/rg.mbtx` (ripgrep flags and regex, not POSIX grep), or .split("\n").filter(...) on captured output |
 | sort/uniq   | .sort(), a Set, or a Map |
 | pwd         | @env.current_dir(); printenv → @env.get_env_var(name) |
 | mkdir -p    | @fs.mkdir(d, recursive=true) |

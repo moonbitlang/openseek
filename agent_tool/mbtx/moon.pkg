@@ -34,6 +34,7 @@ dev_build(
     "../../share/workflow/read.mbtx",
     "../../share/workflow/repo-map.mbtx",
     "../../share/workflow/review.mbtx",
+    "../../share/workflow/rg.mbtx",
     "../../share/workflow/test.mbtx",
   ],
   output: "generated_bundled_workflows.mbt",
