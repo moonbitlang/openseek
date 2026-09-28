@@ -59,9 +59,9 @@ struct SubrunInjection {
   launch_prefix : Array[String]
   session_root : String
   parent : String
-  /// Where a child RUNS. Not the session store: an `explore` child reads the
-  /// workspace by paths relative to its cwd, exactly as `run_subrun` launches
-  /// it, and a store-rooted child would find nothing to read.
+  /// Where a child RUNS. Not the session store: a child reads the workspace
+  /// by paths relative to its cwd, exactly as `run_subrun` launches it, and a
+  /// store-rooted child would find nothing to read.
   workspace_root : String
   model : String?
   api_url : String?
@@ -75,8 +75,8 @@ struct SubrunInjection {
 /// An injection over an explicit allocator.
 ///
 /// `reserve_ordinals` must be the session's ONE child-ordinal allocator — the
-/// counter `run_subrun` mints `explore` children from — or a snippet's child
-/// and an `explore` child will be named alike and the second to append will
+/// counter `run_subrun` mints its children from — or a snippet's child and a
+/// direct sub-run will be named alike and the second to append will
 /// die against the first's stale snapshot. `ChildSession::injection` in
 /// `agent_subrun` wires that counter; this package is a leaf and cannot name
 /// it. Tests pass a local counter so ordinals do not depend on what earlier
@@ -87,8 +87,8 @@ struct SubrunInjection {
 /// executable; a wasm build — whose argv[0] is a module no OS will exec —
 /// names its runtime and pins the module in the prefix, so the command is one
 /// the kernel can run and a policy can admit. Either way parent and child are
-/// the same binary, which is the guarantee `explore` gets by never resolving
-/// the engine through `PATH`: the report's derived JSON codecs cannot drift.
+/// the same binary, which is the guarantee a direct sub-run gets by never
+/// resolving the engine through `PATH`: the report's derived JSON codecs cannot drift.
 pub fn SubrunInjection::SubrunInjection(
   exe~ : String,
   launch_prefix? : Array[String] = [],

@@ -23,9 +23,8 @@ pub enum SubrunTerminal {
 
 ///|
 /// The outcome of one sub-run: the parsed report when there is one, plus the
-/// cost the child actually spent — observed from the child's own event
-/// stream (`usage` summed, `agent_step` maxed), so it is exact for the
-/// requests the child made.
+/// cost the child actually spent — read from the child's own result file
+/// (`usage`, `steps`), so it is exact for the requests the child made.
 struct SubrunResult[T] {
   value : T?
   terminal : SubrunTerminal
@@ -56,8 +55,8 @@ pub fn[T] SubrunResult::steps_used(self : SubrunResult[T]) -> Int {
 }
 
 ///|
-/// The child's own money figure for the run, summed from the `usage.cost_usd`
-/// its event stream reported. `None` means unknown, never free: an engine
+/// The child's own money figure for the run: the `usage.cost_usd` its result
+/// file reported. `None` means unknown, never free: an engine
 /// that prices nothing leaves it absent.
 pub fn[T] SubrunResult::cost_usd(self : SubrunResult[T]) -> Double? {
   self.cost_usd

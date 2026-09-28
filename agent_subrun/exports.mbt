@@ -12,7 +12,7 @@ pub fn[T] SubrunResult::prompt_tokens(self : SubrunResult[T]) -> Int {
 }
 
 ///|
-/// Completion tokens summed from the child's observed usage events.
+/// Completion tokens the child consumed, from its result file's `usage`.
 pub fn[T] SubrunResult::completion_tokens(self : SubrunResult[T]) -> Int {
   self.completion_tokens
 }

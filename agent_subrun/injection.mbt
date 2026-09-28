@@ -4,9 +4,9 @@
 ///
 /// Built HERE, beside `reserve_subrun_ordinals`, because the injection must
 /// draw from the session's one child-ordinal allocator — the same counter
-/// `run_subrun` mints `explore` children from, with this session's resumed
+/// `run_subrun` mints its children from, with this session's resumed
 /// floor. Two independent counters would hand `<parent>-sr-1` to both a
-/// snippet's child and an `explore` child, and the second to append would
+/// snippet's child and a direct sub-run, and the second to append would
 /// die against the first's stale snapshot. `agent_subrun/host` owns the
 /// document; it is a leaf and cannot name the allocator, so the wiring is
 /// this function's whole job.
