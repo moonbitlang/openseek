@@ -304,7 +304,7 @@ fn BrowserViews::set_app_titlebar_theme(
   payload : @protocol.AppTitlebarThemePayload,
 ) -> @protocol.EmptyReply raise {
   let window = self.attached_window()
-  if @sys.win32 || @sys.win64 || @sys.apple_os_mac {
+  if @async.platform is (Windows | MacOS) {
     window.set_theme(if payload.dark { Dark } else { Light })
   }
   Acknowledged
@@ -389,7 +389,7 @@ fn BrowserViews::focused_browser(
 fn window_endpoints(views : BrowserViews) -> Array[@endpoint.WindowEndpoint] {
   [
     WindowEndpoint(@commands.app_language_apply, (_, payload) => {
-      if !(@sys.win32 || @sys.win64) {
+      if !(@async.platform is Windows) {
         views
         .attached_window()
         .set_menu(Some(localized_menu(payload.language.unwrap_or("en"))))

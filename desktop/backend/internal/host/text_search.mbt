@@ -675,7 +675,7 @@ fn text_search_args(payload : SearchTextPayload) -> Array[String] {
   )
   // VS Code treats globs and ignore-file entries case-insensitively on macOS
   // and Windows, while Linux retains filesystem case.
-  if !@sysplatform.linux {
+  if !(@async.platform is Linux) {
     args.append(["--glob-case-insensitive", "--ignore-file-case-insensitive"])
   }
   args.append(
@@ -737,7 +737,7 @@ fn nested_json_text(fields : Map[String, Json], key : String) -> String? {
 
 ///|
 fn normalize_text_search_path(path : String) -> String {
-  let path = if @sysplatform.win32 || @sysplatform.win64 {
+  let path = if @async.platform is Windows {
     path.replace_all(old="\\", new="/")
   } else {
     path
@@ -1160,7 +1160,7 @@ test "text search arguments mirror VS Code regex, ignore, and glob defaults" {
   let expected : Array[String] = [
     "--hidden", "--no-require-git", "--ignore-case",
   ]
-  if !@sysplatform.linux {
+  if !(@async.platform is Linux) {
     expected.append([
       "--glob-case-insensitive", "--ignore-file-case-insensitive",
     ])
@@ -1311,10 +1311,13 @@ test "literal case-sensitive arguments are deterministic and follow symlinks" {
   assert_true(args.contains("--no-ignore-parent"))
   assert_true(args.contains("--no-ignore-global"))
   assert_true(args.contains("--crlf"))
-  assert_eq(args.contains("--glob-case-insensitive"), !@sysplatform.linux)
+  assert_eq(
+    args.contains("--glob-case-insensitive"),
+    !(@async.platform is Linux),
+  )
   assert_eq(
     args.contains("--ignore-file-case-insensitive"),
-    !@sysplatform.linux,
+    !(@async.platform is Linux),
   )
   assert_false(args.contains("--no-ignore"))
   assert_false(args.contains("--no-ignore-vcs"))
@@ -1396,7 +1399,7 @@ test "one CRLF ripgrep line preserves multiple occurrence ranges" {
   }
   assert_eq(
     parsed.path,
-    if @sysplatform.win32 || @sysplatform.win64 {
+    if @async.platform is Windows {
       "src/main.mbt"
     } else {
       "src\\main.mbt"

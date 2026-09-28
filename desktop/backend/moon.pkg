@@ -20,7 +20,6 @@ import {
   "moonbitlang/core/argparse",
   "moonbitlang/core/debug",
   "moonbitlang/core/env",
-  "tonyfettes/platform",
   "tonyfettes/xlog",
 }
 

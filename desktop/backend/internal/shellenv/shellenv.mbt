@@ -37,7 +37,7 @@ pub fn print_env_json(mark : String) -> Unit {
 /// already inherit the user's registry environment, so they return before
 /// starting a probe.
 pub async fn apply_login_shell_env(executable : String) -> Unit {
-  if @platform.win32 || @platform.win64 {
+  if @async.platform is Windows {
     return
   }
   guard @sys.get_env_var(ResolvingGuardVar) is None else { return }

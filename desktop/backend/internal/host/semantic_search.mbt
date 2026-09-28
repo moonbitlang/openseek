@@ -276,7 +276,7 @@ async fn SemanticSearchService::run(
 /// `scan .` emits `./relative/path.mbt` rows that this function rebases into
 /// slash-separated workspace-relative paths, matching text-search results.
 fn normalize_semantic_path(path : String) -> String {
-  let path = if @sysplatform.win32 || @sysplatform.win64 {
+  let path = if @async.platform is Windows {
     path.replace_all(old="\\", new="/")
   } else {
     path

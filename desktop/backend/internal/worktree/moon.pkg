@@ -15,7 +15,6 @@ import {
 
 import {
   "openseek_desktop/backend/internal/processx",
-  "tonyfettes/platform",
 } for "wbtest"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

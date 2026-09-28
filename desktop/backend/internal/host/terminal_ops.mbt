@@ -76,7 +76,7 @@ async fn terminal_open_op(
       raise HostError("\{unavailable}")
     error => raise HostError("could not resolve a MoonBit toolchain: \{error}")
   }
-  let windows = @sysplatform.win32 || @sysplatform.win64
+  let windows = @async.platform is Windows
   let shell_command = if windows {
     @sys.get_env_var("COMSPEC").unwrap_or("cmd.exe")
   } else {

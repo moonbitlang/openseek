@@ -25,11 +25,11 @@ fn app_runtime_dir(executable : String) -> @pathx.Path? {
 /// The current platform's per-user application-data directory, the parent
 /// this app's own `SeekMoon` state directory lives under.
 fn platform_app_data_dir() -> @pathx.Path? {
-  if @platform.is_darwin() {
+  if @async.platform is MacOS {
     guard @home.dir() is Some(home) else { return None }
     return Some(home.join("Library").join("Application Support"))
   }
-  if @sysplatform.win32 || @sysplatform.win64 {
+  if @async.platform is Windows {
     if @env.get("LOCALAPPDATA") is Some(local_app_data) {
       return Some(local_app_data)
     }

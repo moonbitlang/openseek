@@ -173,12 +173,12 @@ async test "Codex project catalog rechecks a missing cwd on later refreshes" {
 ///|
 async test "Codex draft projects accept only the main checkout" {
   let catalog = ProjectCatalog()
-  let project = if @platform.win32 || @platform.win64 {
+  let project = if @async.platform is Windows {
     "C:\\workspace\\project"
   } else {
     "/workspace/project"
   }
-  let resource = if @platform.win32 || @platform.win64 {
+  let resource = if @async.platform is Windows {
     "/c:/workspace/project"
   } else {
     "/workspace/project"

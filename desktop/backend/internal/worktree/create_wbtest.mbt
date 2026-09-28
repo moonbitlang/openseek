@@ -4,7 +4,7 @@ async test "worktree creation reads settings using a resource path" {
   // Release only after the home variable has been restored by the defer below.
   defer worktree_env_test_lock.release()
   let root = worktree_test_root("openseek-worktree-windows-")
-  let windows = @platform.win32 || @platform.win64
+  let windows = @async.platform is Windows
   defer (if windows {
     // Git objects are read-only on Windows; fs.rmdir cannot remove them.
     let (code, _, stderr) = @processx.collect_output_no_stdin(

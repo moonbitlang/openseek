@@ -126,29 +126,11 @@ fn global_skills_dir_for_home(value : String?) -> String? {
 ///|
 /// The user-level skills default: `USERPROFILE` on Windows, `HOME` everywhere
 /// else — a Windows `HOME` may be a Git Bash/MSYS translation of it.
-///
-/// The platform is picked by `#cfg`, not by a runtime check: this package is
-/// `+wasm+native`, and the one native platform probe available
-/// (`tonyfettes/platform`) is built on the `extern "c"` FFI the wasm backend
-/// refuses; the js-only sniff in `moonbitlang/editor/base/common` reports an
-/// unknown platform natively, and `moonbitlang/async/internal/env_util` is
-/// internal. Both arms are private, so no `#cfg` value reaches
-/// `pkg.generated.mbti`.
-#cfg(platform="windows")
 fn default_global_skills_dir() -> String? {
-  if global_skills_dir_for_home(@env.get_env_var("USERPROFILE")) is Some(dir) {
+  if @async.platform is Windows &&
+    global_skills_dir_for_home(@env.get_env_var("USERPROFILE")) is Some(dir) {
     return Some(dir)
   }
-  if global_skills_dir_for_home(@env.get_env_var("HOME")) is Some(dir) {
-    return Some(dir)
-  }
-  None
-}
-
-///|
-/// `HOME` alone on every other target — see the note above.
-#cfg(not(platform="windows"))
-fn default_global_skills_dir() -> String? {
   global_skills_dir_for_home(@env.get_env_var("HOME"))
 }
 

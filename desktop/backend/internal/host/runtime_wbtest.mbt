@@ -14,7 +14,7 @@ let runtime_env_test_lock : @async.Mutex = Mutex()
 
 ///|
 async test "platform_app_data_dir uses %LOCALAPPDATA% on Windows, falls back to USERPROFILE" {
-  if !(@sysplatform.win32 || @sysplatform.win64) {
+  if !(@async.platform is Windows) {
     return
   }
   runtime_env_test_lock.acquire()
@@ -40,10 +40,10 @@ async test "platform_app_data_dir uses %LOCALAPPDATA% on Windows, falls back to 
 
 ///|
 async test "platform_app_data_dir uses XDG_DATA_HOME on Linux, falls back to ~/.local/share" {
-  if @sysplatform.win32 || @sysplatform.win64 {
+  if @async.platform is Windows {
     return
   }
-  if @platform.is_darwin() {
+  if @async.platform is MacOS {
     return
   }
   runtime_env_test_lock.acquire()
