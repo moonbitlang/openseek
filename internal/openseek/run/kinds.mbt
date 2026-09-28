@@ -131,9 +131,9 @@ fn step_ceiling(
 ///|
 /// Run `kind` on `input` in this process. Input is validated before an API key
 /// is required, so a miswired caller learns the exact defect even keylessly.
-/// Every model-driven kind but `worker` gets its own scratch lab: a temporary
-/// directory where the otherwise read-only child may scaffold projects and
-/// write source to check its claims.
+/// Every model-driven kind but `worker` and `pattern-repair` gets its own
+/// scratch lab: a temporary directory where the otherwise read-only child may
+/// scaffold projects and write source to check its claims.
 async fn Kind::run(
   self : Kind,
   input : Json,
