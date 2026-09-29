@@ -1177,7 +1177,7 @@ fn transcript_view(
   input : Input,
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
-  page? : Int,
+  page~ : @transcript_overview.Page,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   stream~ : Map[String, @html.Html],
   on_jump_latest~ : @cmd.Cmd,
@@ -1188,7 +1188,7 @@ fn transcript_view(
     stream~,
     pinned~,
     overview~,
-    page?,
+    page~,
     overview_emit~,
     on_jump_latest~,
   )

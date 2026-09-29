@@ -83,6 +83,17 @@ test('sending re-pins a transcript the reader had scrolled up', async ({ page })
   await expect.poll(() => transcript.evaluate(node => node.scrollHeight))
     .toBeGreaterThan(heightBeforeStream);
   await expect.poll(() => distanceFromBottom(transcript)).toBeLessThanOrEqual(4);
+  // A consumed local-send request must not re-pin on later input updates.
+  await page.getByRole('button', { name: 'Previous history page' }).click();
+  await expect(page.locator('#transcript .msg.user').first()).toContainText('question 21');
+  app.notify('agent.event', {
+    run_id: 'run-e2e', session: 'session-1',
+    event: { event: 'assistant_delta', content: '\nLater streamed output' },
+  });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(transcript).toHaveAttribute('data-transcript-theme', 'dark');
+  await expect(page.getByTitle('Jump to latest', { exact: true })).toBeVisible();
+  await expect(page.locator('#transcript .msg.user').first()).toContainText('question 21');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -113,6 +124,9 @@ test('returning to a conversation restores where the reader left it', async ({ p
 
   const transcript = page.locator('#transcript');
   await waitUntilScrollable(transcript);
+  await page.locator('#task').fill('Start a turn before reading history');
+  await page.getByTitle('Send', { exact: true }).click();
+  await expect.poll(() => app.requests.some(request => request.method === 'agent.start')).toBe(true);
   await page.getByRole('button', { name: 'Previous history page' }).click();
   await expect(page.locator('#transcript .msg.user').first()).toContainText('question 21');
   await transcript.evaluate(node => { node.scrollTop = 600; });

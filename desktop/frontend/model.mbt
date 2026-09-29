@@ -1537,6 +1537,8 @@ priv struct Model {
   // the same model remains deterministic.
   page_namespace : String
   submission_sequence : Int
+  // The latest local send request, scoped to its transcript component.
+  transcript_follow_request : (String, String)?
   // Where the reader left each transcript that has been on screen, keyed by
   // its `TranscriptSlot` key. The transcript component reports it when its
   // conversation leaves the screen and reads it back on return.
@@ -2711,6 +2713,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     page_namespace: generated_session_id(),
     submission_sequence: 0,
     transcript_scroll: @sorted_map.new(),
+    transcript_follow_request: None,
     conversations: [],
     project_picker: None,
     pending_project_adoption: None,

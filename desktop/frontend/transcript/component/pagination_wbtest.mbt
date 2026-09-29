@@ -33,31 +33,40 @@ fn paged_input(turns : Int, without_sequence? : Bool = false) -> Input {
 ///|
 test "pages cover whole turns, including answers, with stable local anchors" {
   let input = paged_input(53, without_sequence=true)
-  let bounds = input.page_rows(Some(1))
+  let bounds = TurnIndex::new(input.items).page_rows(Some(1))
   assert_eq((bounds.start, bounds.end), (40, 80))
-  assert_eq(stream_blocks(input, page=1).length(), 40)
+  assert_eq(
+    stream_blocks(input, bounds=TurnIndex::new(input.items).page_rows(Some(1))).length(),
+    40,
+  )
   assert_true(
-    stream_blocks(input, page=1).to_array()[0].content
+    stream_blocks(input, bounds=TurnIndex::new(input.items).page_rows(Some(1))).to_array()[0].content
     is Item(anchor=Some("turn-i40"), ..),
   )
   assert_true(
-    stream_blocks(input, page=1).to_array()[1].content
+    stream_blocks(input, bounds=TurnIndex::new(input.items).page_rows(Some(1))).to_array()[1].content
     is Item(step_label=Some("#21"), ..),
   )
-  assert_eq(input.page_for_turn(@transcript_overview.Local(80)), Some(2))
-  assert_eq(input.page_for_turn(@transcript_overview.Local(1)), None)
-  let latest = input.page_rows(None)
+  assert_eq(
+    TurnIndex::new(input.items).page_for_turn(@transcript_overview.Local(80)),
+    Some(2),
+  )
+  assert_eq(
+    TurnIndex::new(input.items).page_for_turn(@transcript_overview.Local(1)),
+    None,
+  )
+  let latest = TurnIndex::new(input.items).page_rows(None)
   assert_eq((latest.start, latest.end), (80, 106))
 }
 
 ///|
 test "empty and exact-boundary histories have no extra page" {
-  assert_eq(base_input().page_rows(None).page.count, 1)
+  assert_eq(TurnIndex::new(base_input().items).page_rows(None).page.count, 1)
   let input = paged_input(40)
-  assert_eq(input.page_rows(None).page.index, 1)
-  assert_eq(input.page_rows(Some(99)).page.index, 1)
-  assert_eq(input.page_rows(Some(-1)).page.index, 0)
-  assert_eq(paged_input(41).page_rows(None).page.index, 2)
+  assert_eq(TurnIndex::new(input.items).page_rows(None).page.index, 1)
+  assert_eq(TurnIndex::new(input.items).page_rows(Some(99)).page.index, 1)
+  assert_eq(TurnIndex::new(input.items).page_rows(Some(-1)).page.index, 0)
+  assert_eq(TurnIndex::new(paged_input(41).items).page_rows(None).page.index, 2)
 }
 
 ///|
@@ -74,7 +83,7 @@ test "old-page bottom cannot pin or show the live response" {
   assert_false(bottom.pinned)
   assert_eq(bottom.page, Some(1))
   assert_false(
-    stream_blocks(input, page=1)
+    stream_blocks(input, bounds=TurnIndex::new(input.items).page_rows(Some(1)))
     .to_array()
     .any(block => block.content is Live(..)),
   )
@@ -110,12 +119,12 @@ test "preamble belongs to the first page and a turn is never split" {
     identity: "summary",
   }
   let input = { ..input, items: [preamble, ..input.items], }
-  let first = input.page_rows(Some(0))
-  let second = input.page_rows(Some(1))
+  let first = TurnIndex::new(input.items).page_rows(Some(0))
+  let second = TurnIndex::new(input.items).page_rows(Some(1))
   assert_eq((first.start, first.end), (0, 41))
   assert_eq((second.start, second.end), (41, 43))
   assert_true(
-    stream_blocks(input, page=0).to_array()[0].content
+    stream_blocks(input, bounds=TurnIndex::new(input.items).page_rows(Some(0))).to_array()[0].content
     is Item(item={ kind: Summary(_), .. }, ..),
   )
   // Background output without any user turns remains visible on its only page.

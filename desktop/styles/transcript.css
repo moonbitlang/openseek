@@ -35,8 +35,8 @@
    otherwise re-lays out every row whenever the column width changes (the
    editor panel animating open, a window resize), and every render walks
    them for style. A skipped row keeps the height it had when last rendered
-   (`auto`); the component renders every row once when the transcript
-   mounts (see render_rows_once_after_mount), so the 120px guess never
+   (`auto`); the component measures the mounted page before positioning
+   its scroll (see measure_page_after_render), so the 120px guess never
    stands in and scroll offsets stay exact. The empty state is always
    on screen and does not need containment. */
 .stream > :not(.empty) {

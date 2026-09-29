@@ -75,6 +75,8 @@ struct Input {
   active_session : String
   // Where the reader left this conversation last time, read once by `init`.
   scroll : ScrollPosition
+  // Unique local send identity, observed once by the mounted component.
+  follow_request : String?
   // The registered project that owns this conversation, kept separate from
   // `root`: a managed worktree resolves files from its checkout while the
   // empty-state question should still name the project the user selected.
@@ -113,6 +115,7 @@ pub fn Input::Input(
   focused~ : @interop.ChannelId,
   active_session~ : String,
   scroll? : ScrollPosition = Pinned,
+  follow_request? : String,
   project_label? : String,
   current_project~ : @common.Uri?,
   projects~ : Array[ProjectChoice],
@@ -134,6 +137,7 @@ pub fn Input::Input(
     focused,
     active_session,
     scroll,
+    follow_request,
     project_label,
     current_project,
     projects,
@@ -201,6 +205,7 @@ fn Model::update(
   input : Input,
   msg : Msg,
   emit : @cmd.Emit[Msg],
+  turns? : TurnIndex = TurnIndex::new(input.items),
 ) -> (Model, @cmd.Cmd) {
   // The conversation is fixed for this component's lifetime, but its image
   // root can move (a worktree gets bound after the first send). Never project
@@ -213,7 +218,7 @@ fn Model::update(
   }
   match msg {
     Pinned(pinned) => {
-      let page = input.page_rows(self.page).page
+      let page = turns.page_rows(self.page).page
       let pinned = pinned && page.is_latest()
       (
         { ..self, pinned, page: if pinned { None } else { Some(page.index) }, },
@@ -224,7 +229,7 @@ fn Model::update(
       (
         { ..self, pinned: true, page: None, },
         @cmd.batch([
-          render_rows_once_after_mount(),
+          measure_page_after_render(),
           scroll_after_render(),
           report_visible_turn_after_render(emit, current=self.overview.active),
         ]),
@@ -265,27 +270,27 @@ fn Model::update(
         // The clicked tick is already under the pointer. Revealing it could
         // move the rail beneath the pointer and transfer hover to a neighbor.
         Clicked(key) => {
-          guard input.page_for_turn(key) is Some(page) else {
+          guard turns.page_for_turn(key) is Some(page) else {
             return (self, @cmd.none)
           }
           (
             { ..next, pinned: false, page: Some(page), },
             @cmd.batch([
-              render_rows_once_after_mount(),
+              measure_page_after_render(),
               scroll_turn_into_view(emit, key),
             ]),
           )
         }
         PreviousPage =>
           self.select_page(
-            input,
-            input.page_rows(self.page).page.index - 1,
+            turns,
+            turns.page_rows(self.page).page.index - 1,
             emit,
           )
         NextPage =>
           self.select_page(
-            input,
-            input.page_rows(self.page).page.index + 1,
+            turns,
+            turns.page_rows(self.page).page.index + 1,
             emit,
           )
         // A transcript scroll may activate a tick outside the rail's visible
@@ -316,9 +321,12 @@ pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
+  let turns = input.map(input => input.items).map(TurnIndex::new)
+  let indexed_input = input.map2(turns, (input, turns) => (input, turns))
   let (state, emit) = @rabbita.create_state_with_input(
-    input~,
-    init=(emit, input) => {
+    input=indexed_input,
+    init=(emit, indexed) => {
+      let (input, _) = indexed
       (
         {
           pinned: input.scroll is Pinned,
@@ -331,7 +339,7 @@ pub fn component(
           images: ImageCache::empty(),
         },
         @cmd.batch([
-          render_rows_once_after_mount(),
+          measure_page_after_render(),
           match input.scroll {
             Pinned => scroll_after_render()
             Unpinned(top~, ..) => restore_scroll_after_render(top)
@@ -340,11 +348,15 @@ pub fn component(
         ]),
       )
     },
-    update=(state, input, msg, emit) => state.update(input, msg, emit),
-    subscriptions=(model, input, emit) => {
+    update=(state, indexed, msg, emit) => {
+      state.update(indexed.0, msg, emit, turns=indexed.1)
+    },
+    subscriptions=(model, indexed, emit) => {
+      let (input, turns) = indexed
       transcript_subscription(
         model,
-        input.page_rows(model.page).page,
+        turns.page_rows(model.page).page,
+        input.follow_request,
         emit,
         actions.departed,
       )
@@ -362,8 +374,11 @@ pub fn component(
   // an unchanged key means an unchanged subtree, and the diff skips it. Stream
   // children are keyed, so a counter never meets another branch's counter.
   let selected_page = state.map(state => state.page)
-  let blocks = input.map2(selected_page, (input, page) => {
-    stream_blocks(input, page?).map(block => (input.locale, block))
+  let page_rows = turns.map2(selected_page, (turns, page) => {
+    turns.page_rows(page)
+  })
+  let blocks = input.map2(page_rows, (input, bounds) => {
+    stream_blocks(input, bounds~).map(block => (input.locale, block))
   })
   let rendered = blocks.assoc_by(
     (_, block) => {
@@ -391,13 +406,13 @@ pub fn component(
     },
     by=pair => pair.1.branch_key(),
   )
-  state.view3(input, rendered, (state, input, rendered) => {
+  state.view4(input, rendered, page_rows, (state, input, rendered, bounds) => {
     transcript_view(
       locale=input.locale,
       input,
       pinned=state.pinned,
       overview=state.overview,
-      page?=state.page,
+      page=bounds.page,
       overview_emit=emit.map(msg => Overview(msg)),
       stream=keyed_stream(rendered),
       on_jump_latest=emit(JumpToLatest),
@@ -446,25 +461,6 @@ fn focus_empty_project_trigger_after_render() -> @cmd.Cmd {
 }
 
 ///|
-/// Scroll the transcript to its tail after the next render. The root issues
-/// this when Send accepts a prompt or a steer, before the durable User item
-/// arrives, so early streamed work is immediately visible. Notify the mounted
-/// component so it selects the latest page before scrolling its new DOM.
-pub fn scroll_to_latest() -> @cmd.Cmd {
-  @cmd.custom_cmd(
-    _ => {
-      @dom.document()
-      .as_event_target()
-      .dispatch_event(@dom.Event::new(JUMP_LATEST_EVENT))
-    },
-    kind=@cmd.after_render,
-  )
-}
-
-///|
-const JUMP_LATEST_EVENT = "openseek-transcript-jump-latest"
-
-///|
 fn scroll_after_render() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
@@ -478,13 +474,10 @@ fn scroll_after_render() -> @cmd.Cmd {
 }
 
 ///|
-/// Render every row in the transcript's first frame, then let rows outside
-/// the viewport be skipped again (`content-visibility: auto`, see
-/// `transcript.css`). A skipped row keeps the height it was last rendered
-/// at, so after this frame no row stands in at a guessed height: scroll
-/// offsets saved earlier map to the same content, and scrolling through
-/// history never shifts as rows first render.
-fn render_rows_once_after_mount() -> @cmd.Cmd {
+/// Lay out the mounted page before restoring an offset or locating a turn.
+/// Afterwards, content-visibility may skip offscreen rows using their measured
+/// heights. Run on initial mount and page/turn navigation, not on each delta.
+fn measure_page_after_render() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       guard @dom.document().get_element_by_id("stream").to_option()
@@ -664,7 +657,8 @@ priv suberror TranscriptSubscription {
     // single source of truth and no cache can drift from it.
     pinned~ : Bool,
     active~ : @transcript_overview.TurnKey?,
-    page~ : @transcript_overview.Page
+    page~ : @transcript_overview.Page,
+    follow_request~ : String?
   )
 }
 
@@ -675,6 +669,7 @@ priv suberror TranscriptSubscription {
 fn transcript_subscription(
   model : Model,
   page : @transcript_overview.Page,
+  follow_request : String?,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
 ) -> @sub.Sub {
@@ -687,6 +682,7 @@ fn transcript_subscription(
       pinned=model.pinned,
       active=model.overview.active,
       page~,
+      follow_request~,
     ),
     transcript_sub_loader,
   )
@@ -698,12 +694,20 @@ fn transcript_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    TranscriptSubscription(emit~, departed~, pinned~, active~, page~) => {
+    TranscriptSubscription(
+      emit~,
+      departed~,
+      pinned~,
+      active~,
+      page~,
+      follow_request~
+    ) => {
       let mut emit = emit
       let mut departed = departed
       let mut pinned = pinned
       let mut active = active
       let mut page = page
+      let mut follow_request = follow_request
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.target().to_element() is Some(element) &&
@@ -725,8 +729,6 @@ fn transcript_sub_loader(
         }
       }
       target.add_event_listener_with_options("scroll", listener, capture=true)
-      let jump_listener : @dom.Listener = _ => scheduler.add(emit(JumpToLatest))
-      target.add_event_listener(JUMP_LATEST_EVENT, jump_listener)
       let observers = TranscriptObservers::install(
         () => scheduler.add(emit(ContentRendered)),
         path => scheduler.add(emit(ImageRequested(path))),
@@ -738,7 +740,6 @@ fn transcript_sub_loader(
             listener,
             capture=true,
           )
-          target.remove_event_listener(JUMP_LATEST_EVENT, jump_listener)
           observers.disconnect()
           // The branch is disposed while the incremental graph is read, one
           // step before Rabbita replaces the DOM, so the scroller still shows
@@ -764,7 +765,8 @@ fn transcript_sub_loader(
               departed=left,
               pinned=next_pinned,
               active=next_active,
-              page=next_page
+              page=next_page,
+              follow_request=next_request
             ) else {
             return
           }
@@ -773,6 +775,12 @@ fn transcript_sub_loader(
           pinned = next_pinned
           active = next_active
           page = next_page
+          if next_request != follow_request {
+            follow_request = next_request
+            if next_request is Some(_) {
+              scheduler.add(emit(JumpToLatest))
+            }
+          }
         },
       })
     }

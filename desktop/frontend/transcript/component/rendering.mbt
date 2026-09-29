@@ -454,12 +454,14 @@ priv enum BlockContent {
 } derive(Eq)
 
 ///|
-/// The direct children of `#stream` in display order: one block per
-/// transcript item, then the
-/// response still streaming; or the empty state alone. Vector order determines
+/// The mounted page's direct children of `#stream` in display order: one
+/// block per item, plus the live response on the latest page; or the empty
+/// state alone. Vector order determines
 /// visual order; the keys only determine node identity.
-fn stream_blocks(input : Input, page? : Int) -> @vector.Vector[Block] {
-  let bounds = input.page_rows(page)
+fn stream_blocks(
+  input : Input,
+  bounds? : PageRows = TurnIndex::new(input.items).page_rows(None),
+) -> @vector.Vector[Block] {
   let input = if bounds.page.is_latest() {
     input
   } else {
@@ -626,7 +628,7 @@ fn section_children(
   stream~ : Map[String, @html.Html],
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
-  page? : Int,
+  page~ : @transcript_overview.Page,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   on_jump_latest~ : @cmd.Cmd,
 ) -> Map[String, @html.Html] {
@@ -648,14 +650,14 @@ fn section_children(
       overview,
       overview_emit,
       clock=ms => clock_label(locale~, ms),
-      page=input.page_rows(page).page,
+      page~,
     ),
   )
   children.set(
     TranscriptSectionKey::stream(input).wire(),
     @html.div(id="stream", class="stream", stream),
   )
-  // Reading history unpins auto-follow (see `watch_transcript_scroll`); the
+  // Reading history unpins auto-follow (see the transcript DOM subscription); the
   // floating button is the way back to the live tail. Sticky inside the
   // scroller with zero height, so it never adds scroll length.
   if !pinned {
