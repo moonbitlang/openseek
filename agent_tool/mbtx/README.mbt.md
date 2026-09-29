@@ -458,8 +458,8 @@ budget, and `--review-deadline` applies only to the automatic goal-met gate. A
 hand-written workflow reaches the same child with
 `wf.agent_call(kind="review", input={"goal": ...})` — `agent_call`, not the
 scout-shaped `agent`. Without a durable session, hosted delegation is
-unavailable; the standalone `openseek review --base REF` still calls the review
-engine directly, without a workflow.
+unavailable; `openseek run --kind review` still runs the same child
+directly, without a workflow.
 
 ## Programmatic tool calls
 

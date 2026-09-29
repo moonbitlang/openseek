@@ -2,11 +2,7 @@ import {
   "moonbitlang/async/os_error",
   "moonbitlang/async/fs",
   "openseek_desktop/backend/internal/pathx",
-  "tonyfettes/platform",
-}
-
-import {
   "moonbitlang/async",
-} for "test"
+}
 
 supported_targets = "+native"

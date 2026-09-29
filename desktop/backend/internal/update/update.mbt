@@ -60,7 +60,7 @@ pub struct PackageInfo {
 /// arm64 bundle self-updates today; elsewhere the manifest's page URL is
 /// the whole story.
 fn manifest_platform_key() -> String? {
-  if @platform.is_darwin() {
+  if @async.platform is MacOS {
     Some("macos-arm64")
   } else {
     None

@@ -150,7 +150,7 @@ async fn main {
   // which is what dispatches editing shortcuts to every text field. The
   // Windows engine has no native app menus and fails the run on any menu
   // bar, so the menu bar stays macOS/Linux-only.
-  let app = if @platform.win32 || @platform.win64 {
+  let app = if @async.platform is Windows {
     app
   } else {
     app.menu(
@@ -162,7 +162,7 @@ async fn main {
             "Open Developer Tools",
           ),
         ]),
-        if @platform.apple_os_mac {
+        if @async.platform is MacOS {
           @proton.Menu::role(Window, items=[
             @proton.MenuItem::role(Minimize),
             @proton.MenuItem::role(Zoom),

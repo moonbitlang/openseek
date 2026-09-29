@@ -106,7 +106,7 @@ async fn chmod(path : StringView, permission : Int) -> Unit {
   // as unsupported there. Keep the operation in this shared implementation so
   // every platform type-checks the real copy path without issuing an async
   // warning for a platform-only no-op.
-  if !(@platform.win32 || @platform.win64) {
+  if !(@async.platform is Windows) {
     @fs.chmod(path, permission)
   }
 }

@@ -161,7 +161,7 @@ fn default_prompt_zh() -> String {
     #|| find | @shell.glob(pattern)，用 `[..files]` 展开到参数中 |
     #|| cat | @fs.read_file(p).text() |
     #|| head/tail | 将文本拆分后切片；wc -l → 计数 |
-    #|| grep | rg，或对捕获的输出调用 .split("\n").filter(...) |
+    #|| grep | `@builtin/rg.mbtx`（ripgrep 的参数与正则，不是 POSIX grep），或对捕获的输出调用 .split("\n").filter(...) |
     #|| sort/uniq | .sort()、Set 或 Map |
     #|| pwd | @env.current_dir()；printenv → @env.get_env_var(name)，两者都返回 `String?` |
     #|| mkdir -p | @fs.mkdir(d, recursive=true) |

@@ -104,7 +104,7 @@ git submodule update --init editor/vscode     # opt-in performance suite
 | `moonbitlang/openseek_protocol` | Typed engine event stream (own module): the `openseek serve` stdout wire contract (`openseek run` renders it as minimal text), decodable on every backend. | `protocol/README.mbt.md` |
 | `moonbitlang/openseek_protocol/emit` | Writer for that stream (native or wasm): owns each event's log level. | `protocol/emit/README.mbt.md` |
 | `moonbitlang/openseek/agent` | OpenSeek agent loop (native or wasm) and local tool dispatch. | `agent/README.mbt.md` |
-| `moonbitlang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind `openseek review`. | `agent_review/README.mbt.md` |
+| `moonbitlang/openseek/agent_review` | Read-only, compiler-grounded code-review engine behind the `review` kind (`openseek run --kind review`). | `agent_review/README.mbt.md` |
 | `moonbitlang/openseek/cmd/openseek` | Deprecated CLI compatibility entry point; use the root package. | `cmd/openseek/README.md` |
 | `moonbitlang/openseek/internal/openseek` | The CLI's dispatcher and implementation: `options` (argparse tree), `setup` (workspace, prompt, session), `execution` (event sink, approvals, tools, review gate), `run`, `serve`, and `commands`. | `internal/openseek/README.md` |
 | `moonbitlang/openseek/cli` | Shared command-main helpers: the agent options (`--api-key`, `--model`, …) and failure-text sanitizer used by `openseek` and the out-of-tree `openseek_tui`. | — |
@@ -162,7 +162,7 @@ filesystem, and process APIs.
 ## Agent CLI
 
 The root package is the headless automation entry point — a subcommand
-tree (`run`/`serve`/`review`/`mcp`/`sessions`). The interactive terminal
+tree (`run`/`serve`/`mcp`/`sessions`). The interactive terminal
 UI is the separate `openseek_tui` binary, maintained in its own repository,
 [moonbitlang/openseek_tui](https://github.com/moonbitlang/openseek_tui). `openseek run` parses arguments and
 runs the agent package. The agent sends DeepSeek native function tools and

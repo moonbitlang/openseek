@@ -15,7 +15,6 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/string",
-  "tonyfettes/platform" @sys,
   "tonyfettes/xlog",
 }
 

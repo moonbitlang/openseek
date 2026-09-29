@@ -20,3 +20,34 @@ test "kind names are the registered presets and nothing else" {
   assert_true(Kind::parse("general") is None)
   assert_true(Kind::parse("Explore") is None)
 }
+
+///|
+test "a review takes exactly one of a goal or a base" {
+  assert_true(
+    ReviewTarget::parse({ "goal": "tests pass" })
+    is Ok(Goal(goal="tests pass", baseline=None)),
+  )
+  assert_true(
+    ReviewTarget::parse({ "goal": "tests pass", "sha": "abc", "dirty": true })
+    is Ok(Goal(baseline=Some({ sha: "abc", dirty: true, }), ..)),
+  )
+  assert_true(
+    ReviewTarget::parse({ "base": "origin/main" }) is Ok(Base("origin/main")),
+  )
+  assert_eq(
+    Kind::Review.check_input({ "goal": "tests pass", "base": "origin/main" }),
+    Some("review takes a goal or a base, not both"),
+  )
+  let refused : Array[Json] = [
+    {},
+    { "goal": " " },
+    { "base": "" },
+    { "base": 1 },
+  ]
+  for input in refused {
+    assert_eq(
+      Kind::Review.check_input(input),
+      Some("review requires a non-empty goal or base"),
+    )
+  }
+}

@@ -3,7 +3,6 @@ import {
   "moonbitlang/async",
   "moonbitlang/core/env" @sys,
   "moonbitlang/core/json",
-  "tonyfettes/platform",
   "tonyfettes/xlog",
 }
 

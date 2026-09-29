@@ -1853,6 +1853,10 @@ fn description(
     #|option-like filenames. Headings, numbered lines and footers report each file,
     #|including empty files; errors fail the call but remaining files still return.
     #|Follow truncated/skipped_files with focused reads. args=["--help"] gives budgets.
+    #|@builtin/rg.mbtx searches text: args go to ripgrep unchanged (rg flags and
+    #|regex, not POSIX grep: -E is --encoding, alternation is a|b), e.g.
+    #|args=["fn parse", "-g", "*.mbt"]; output is path:line:text, bounded
+    #|like read, and no match exits 0 with a note.
     #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
     #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
     #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).

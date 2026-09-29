@@ -3,7 +3,7 @@ test "codex home is a codex subdirectory of the runtime dir" {
   let home = @codex.home_dir(Path("/tmp/openseek-state"))
   assert_eq(
     home.to_string(),
-    if @platform.win32 || @platform.win64 {
+    if @async.platform is Windows {
       "\\tmp\\openseek-state\\codex"
     } else {
       "/tmp/openseek-state/codex"

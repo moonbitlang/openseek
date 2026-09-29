@@ -1,0 +1,84 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/shell",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/sys",
+}
+
+///|
+/// Leave room below mbtx's 48,000-byte transport limit, as read.mbtx does.
+const OutputBytes : Int = 40_000
+
+///|
+/// Placed before the caller's arguments. rg lets a later flag override an
+/// earlier one, so a caller can still ask for `--heading`, `--color`, or a
+/// wider `--max-columns`; by default every match is `path:line:text`, the
+/// shape `@builtin/read.mbtx path:start:end` follows up on.
+let defaults : Array[String] = [
+  "--no-config", "--color=never", "--line-number", "--with-filename", "--no-heading",
+  "--max-columns=500", "--max-columns-preview",
+]
+
+///|
+let usage : String =
+  #|Usage: mbtx(filename="@builtin/rg.mbtx", args=["PATTERN", "PATH", ...])
+  #|Runs ripgrep with these arguments, unchanged: rg flags and Rust regex syntax,
+  #|not POSIX grep (`-E` is --encoding, `-h` is help; alternation is `a|b`).
+  #|Output is `path:line:text`; lines past 500 columns are previewed. Common
+  #|flags: -i (ignore case), -F (literal), -w (word), -g GLOB (filter paths),
+  #|-t TYPE, -C N (context), -l (paths only), -c (counts), -m N (per file).
+  #|Output is bounded to 40000 UTF-8 bytes; narrow the search when truncated.
+  #|No match exits 0 with a note. Relative paths use cwd (default workspace).
+  #|args=["-h"] prints ripgrep's own flag summary.
+
+///|
+async fn main {
+  let args = @env.args()[1:]
+  if args is ([] | ["--help"]) {
+    println(usage)
+    return
+  }
+  let mut remaining = OutputBytes - 256
+  let mut shown = 0
+  let mut total = 0
+  // With no path, rg searches stdin whenever stdin is a pipe or a file, and a
+  // child's default stdin is an empty pipe: every search would then report no
+  // matches. The null device is neither, so rg searches the working directory.
+  let null_device = if @async.platform is Windows { "NUL" } else { "/dev/null" }
+  let rg = @shell.Cmd(
+    "rg",
+    [..defaults, ..args],
+    stdin=FromFile(null_device),
+    stderr=Inherit,
+  )
+  let exit_code = rg.each_line(line => {
+    total += 1
+    let bytes = @utf8.encode(line).length() + 1
+    if shown == total - 1 && bytes <= remaining {
+      println(line)
+      shown += 1
+      remaining -= bytes
+    }
+  }) catch {
+    error => {
+      println(
+        "error: could not run rg (\{error}); install ripgrep and put `rg` on PATH",
+      )
+      @sys.exit(2)
+      return
+    }
+  }
+  if shown < total {
+    println(
+      "<system>truncated=true shown_lines=\{shown} total_lines=\{total} note=narrow the pattern or paths (-g GLOB, -t TYPE, -m N) to see the rest</system>",
+    )
+  }
+  match exit_code {
+    0 => ()
+    // rg's "nothing matched" is an answer, not a failure.
+    1 if total == 0 => println("<system>no matches</system>")
+    code => @sys.exit(code)
+  }
+}

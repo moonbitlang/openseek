@@ -19,17 +19,17 @@ fn codex_same_workspace(left : String, right : String) -> Bool {
 
 ///|
 async test "Codex thread resources roundtrip through host workspace grants" {
-  let native = if @platform.win32 || @platform.win64 {
+  let native = if @async.platform is Windows {
     "C:\\work\\project"
   } else {
     "/work/project"
   }
-  let resource = if @platform.win32 || @platform.win64 {
+  let resource = if @async.platform is Windows {
     "/c:/work/project"
   } else {
     "/work/project"
   }
-  let frontend = if @platform.win32 || @platform.win64 {
+  let frontend = if @async.platform is Windows {
     "/C:/work/project"
   } else {
     resource

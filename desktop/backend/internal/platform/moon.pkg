@@ -2,7 +2,7 @@ import {
   "openseek_desktop/backend/internal/processx",
   "moonbitlang/async/process",
   "moonbitlang/x/path",
-  "tonyfettes/platform" @sys,
+  "moonbitlang/async",
 }
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

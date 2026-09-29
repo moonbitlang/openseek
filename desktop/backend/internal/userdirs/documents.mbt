@@ -15,7 +15,7 @@ extern "C" fn known_folder_documents() -> Bytes = "openseek_desktop_documents_di
 /// authority on Windows. `None` when the lookup fails — and always off
 /// Windows, where the native stub returns empty bytes.
 pub async fn documents_dir() -> @pathx.Path? {
-  if @platform.win32 || @platform.win64 {
+  if @async.platform is Windows {
     let path = known_folder_documents()
     guard path.length() > 0 else { return None }
     Some(@utf8.decode_lossy(path))

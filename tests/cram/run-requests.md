@@ -55,6 +55,8 @@ $ sh <<'EOF'
 > try() { openseek.exe run --no-session --dir "$d/ws" "$@" 2>&1 > /dev/null; echo "exit $?"; }
 > printf '{"version":1,"kind":"nope","input":{}}' | try --input-format json
 > printf '{"version":1,"kind":"worker","input":{"task":"fix things"}}' | try --input-format json
+> printf '{"version":1,"kind":"review","input":{"goal":"g","base":"origin/main"}}' | try --input-format json
+> printf '{"version":1,"kind":"review","input":{"base":" "}}' | try --input-format json
 > printf '{"version":2,"input":{}}' | try --input-format json
 > printf '{"version":1,"input":{"task":"t"},"schema":{"type":"object"}}' | try --input-format json
 > printf '{"version":1,"input":{"prompt":"t"}}' | try --input-format json
@@ -68,6 +70,10 @@ $ sh <<'EOF'
 error: unknown kind: nope
 exit 1
 error: worker input requires an absolute `worker_root`
+exit 1
+error: review takes a goal or a base, not both
+exit 1
+error: review requires a non-empty goal or base
 exit 1
 error: unsupported request version 2
 exit 1

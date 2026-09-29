@@ -50,7 +50,7 @@ pub async fn prepared_home(runtime_dir : @pathx.Path) -> @pathx.Path? {
   // MCP server config and private tool state; keep it owner-only on POSIX.
   // Windows has no chmod, so the ACLs of the per-user runtime directory
   // are the protection boundary there.
-  if !(@platform.win32 || @platform.win64) {
+  if !(@async.platform is Windows) {
     @fs.chmod(home.to_string(), 0o700) catch {
       error =>
         @xlog.warn(category="codex") <?

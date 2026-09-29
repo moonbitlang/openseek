@@ -78,7 +78,7 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
     if kind is Some(Directory) &&
       should_reveal_checkout_directory(
         system_path,
-        is_darwin=@platform.is_darwin(),
+        is_darwin=@async.platform is MacOS,
       ) {
       let real_root_text = Some(@fs.realpath(root.to_string())) catch {
         _ => None

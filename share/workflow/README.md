@@ -6,6 +6,9 @@ alongside the official documentation in `share/doc/moonbit/`.
 this resource root's absolute path.
 
 - `read.mbtx` reads text files with numbered lines and per-file ranges (see below).
+- `rg.mbtx` searches text with ripgrep: its arguments go to `rg` unchanged
+  (ripgrep flags and Rust regex, not POSIX grep), output is `path:line:text`
+  bounded to 40000 bytes, and no match exits zero with a note.
 - `check.mbtx` runs `moon check`.
 - `test.mbtx` runs `moon test` without updating snapshots.
 - `check-test.mbtx` runs check then test, stopping on the first failure.

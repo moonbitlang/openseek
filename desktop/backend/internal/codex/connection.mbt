@@ -74,7 +74,7 @@ pub async fn[X] connect(
   }
   let (executable, args) = app_server_launch(
     command,
-    windows=@platform.win32 || @platform.win64,
+    windows=@async.platform is Windows,
   )
   let (stdin_writer, stdout_reader, stderr_reader, process) = try {
     let (child_stdin, stdin_writer) = @process.write_to_process()

@@ -4,11 +4,9 @@
 /// `capture_tool` — `None` when the model finished without submitting. This
 /// is what a sub-run *kind* (review, explore, worker, ...) is made of;
 /// nothing here spawns, and nothing here knows whether it is running inside
-/// a child process at all. Three callers share it: `openseek run --kind
+/// a child process at all. Two callers share it: `openseek run --kind
 /// <kind>` (where the calling process IS the sub-run, when a parent launched
-/// it), the
-/// standalone review CLI (its own process by construction), and
-/// kind-internals unit tests (which get the full lifecycle — capture,
+/// it), and kind-internals unit tests (which get the full lifecycle — capture,
 /// reject-retry, ceiling salvage — against a mock endpoint without spawning
 /// anything).
 ///
