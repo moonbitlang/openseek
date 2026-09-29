@@ -109,3 +109,125 @@ test('a pinned reader follows the first turn of a new page', async ({ page }) =>
   await expect(page.getByRole('button', { name: 'Next history page' })).toBeDisabled();
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const minimal of [false, true]) {
+  test(`wheel crosses page boundaries with a stable overlapping turn (${minimal ? 'minimal' : 'detailed'})`, async ({ page }) => {
+    const app = await mount(page, 53, minimal);
+    const transcript = page.locator('#transcript');
+    const users = transcript.locator('.msg.user .msg-content');
+    await page.locator('.overview-tick-button').first().click();
+    await expect(users.first()).toHaveText('Question 1');
+    await transcript.evaluate(node => { node.scrollTop = node.scrollHeight; });
+    const rect = await transcript.boundingBox();
+    await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height - 30);
+    await page.mouse.wheel(0, 100);
+    await page.waitForTimeout(80);
+    await expect(users.first()).toHaveText('Question 1');
+    await page.waitForTimeout(300);
+    await page.mouse.wheel(0, 100);
+    await expect(users.first()).toHaveText('Question 20');
+    await expect(users.last()).toHaveText('Question 40');
+    await expect(users).toHaveCount(21);
+    await expect(page.locator('.overview-tick.in-page')).toHaveCount(20);
+    // A short overlapping turn cannot retain a lower screen position without
+    // inserting blank padding. Clamp naturally at the new page's top.
+    await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(0);
+    await expect(page.locator('#turn-s39')).toBeInViewport();
+    // Continuing the same gesture cannot skip another page.
+    for (let i = 0; i < 5; i += 1) await page.mouse.wheel(0, 20);
+    await expect(users.last()).toHaveText('Question 40');
+    await transcript.evaluate(node => { node.scrollTop = 0; });
+    await page.mouse.move(rect.x + rect.width / 2, rect.y + 30);
+    await page.mouse.wheel(0, -100);
+    await page.waitForTimeout(80);
+    await expect(users.last()).toHaveText('Question 40');
+    const upper = await page.locator('#turn-s41').evaluate(node => node.getBoundingClientRect().top);
+    await page.waitForTimeout(300);
+    await page.mouse.wheel(0, -100);
+    await expect(users.first()).toHaveText('Question 1');
+    await expect(users.last()).toHaveText('Question 21');
+    await expect.poll(() => page.locator('#turn-s41').evaluate(node => node.getBoundingClientRect().top).then(top => Math.abs(top - upper))).toBeLessThan(3);
+    await expect(page.locator('#turn-s41')).toBeInViewport();
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+test('long overlapping turns retain their screen position across a wheel page change', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = events(40);
+  app.sessionEvents[39].item.payload.content += '\n\nLong boundary paragraph.\n\n'.repeat(70);
+  await app.install();
+  await app.goto();
+  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+  await page.locator('.overview-tick-button').first().click();
+  const transcript = page.locator('#transcript');
+  await expect(transcript.locator('.msg.user .msg-content').first()).toHaveText('Question 1');
+  await transcript.evaluate(node => { node.scrollTop = node.scrollHeight; });
+  const rect = await transcript.boundingBox();
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height - 80);
+  await page.mouse.wheel(0, 100);
+  await page.waitForTimeout(300);
+  const before = await page.locator('#turn-s39').evaluate(node => node.getBoundingClientRect().top);
+  await page.mouse.wheel(0, 100);
+  await expect(transcript.locator('.msg.user .msg-content').first()).toHaveText('Question 20');
+  await expect.poll(() => page.locator('#turn-s39').evaluate(node => node.getBoundingClientRect().top).then(top => Math.abs(top - before))).toBeLessThan(3);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('nested scrolling and zoom gestures do not navigate history pages', async ({ page }) => {
+  const app = await mount(page, 40);
+  await page.locator('.overview-tick-button').first().click();
+  const transcript = page.locator('#transcript');
+  await expect(transcript.locator('.msg.user .msg-content').first()).toHaveText('Question 1');
+  await transcript.evaluate(node => { node.scrollTop = node.scrollHeight; });
+  await page.locator('#stream').evaluate(node => {
+    const nested = document.createElement('div');
+    nested.id = 'nested-scroll-fixture';
+    nested.style.cssText = 'height:100px;overflow:auto';
+    nested.innerHTML = '<div style="height:1000px">Nested content</div>';
+    node.append(nested);
+  });
+  await transcript.evaluate(node => { node.scrollTop = node.scrollHeight; });
+  const nested = page.locator('#nested-scroll-fixture');
+  await nested.hover();
+  await page.mouse.wheel(0, 30);
+  await page.waitForTimeout(300);
+  await page.mouse.wheel(0, 30);
+  await expect.poll(() => nested.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+  await nested.evaluate(node => node.remove());
+  for (let i = 0; i < 2; i += 1) {
+    await transcript.dispatchEvent('wheel', { deltaY: 100, ctrlKey: true });
+    await page.waitForTimeout(300);
+  }
+  await expect(transcript.locator('.msg.user .msg-content').first()).toHaveText('Question 1');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('returning to a wheel-paged conversation restores its overlap and offset', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = events(53);
+  app.liveSessions.push({ id: 'session-2', title: 'Other history', updated_at_ms: 2 });
+  await app.install();
+  await app.goto();
+  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+  await page.locator('.overview-tick-button').first().click();
+  const transcript = page.locator('#transcript');
+  const users = transcript.locator('.msg.user .msg-content');
+  await expect(users.first()).toHaveText('Question 1');
+  await transcript.evaluate(node => { node.scrollTop = node.scrollHeight; });
+  const rect = await transcript.boundingBox();
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height - 80);
+  await page.mouse.wheel(0, 100);
+  await page.waitForTimeout(300);
+  await page.mouse.wheel(0, 100);
+  await expect(users.first()).toHaveText('Question 20');
+  await transcript.evaluate(node => { node.scrollTop = 500; });
+  await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(500);
+  await page.locator('.conversation-row[title="session-2"]').click();
+  await expect(users.first()).toHaveText('Question 41');
+  await page.locator('.conversation-row[title="session-1"]').click();
+  await expect(users.first()).toHaveText('Question 20');
+  await expect(users).toHaveCount(21);
+  await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(500);
+  expect(app.pageErrors).toEqual([]);
+});

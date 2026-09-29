@@ -30,17 +30,34 @@ fn TurnIndex::new(rows : Array[VisibleRow]) -> TurnIndex {
 }
 
 ///|
-fn TurnIndex::page_rows(self : TurnIndex, index : Int?) -> PageRows {
+fn TurnIndex::page_rows(
+  self : TurnIndex,
+  index : Int?,
+  overlap? : Int? = None,
+) -> PageRows {
   let page = @transcript_overview.Page::of(self.starts.length(), index?)
+  // A tail-following page can advance after new turns arrive. Never carry an
+  // old overlap across intervening pages and accidentally mount the history.
+  let overlap = overlap.filter(value => {
+    value >= 0 &&
+    value < self.starts.length() &&
+    (value == page.start - 1 || value == page.end)
+  })
+  let start = overlap
+    .map(value => Int::min(value, page.start))
+    .unwrap_or(page.start)
+  let end = overlap
+    .map(value => Int::max(value + 1, page.end))
+    .unwrap_or(page.end)
   {
     page,
     // Notices before the first prompt belong to the first page.
-    start: if page.start == 0 {
+    start: if start == 0 {
       0
     } else {
-      self.starts[page.start]
+      self.starts[start]
     },
-    end: self.starts.get(page.end).unwrap_or(self.row_count),
+    end: self.starts.get(end).unwrap_or(self.row_count),
   }
 }
 
@@ -69,6 +86,7 @@ fn Model::select_page(
     {
       ..self,
       page: Some(rows.page.index),
+      overlap: None,
       pinned: false,
       overview: { hover: None, active, },
     },

@@ -24,6 +24,7 @@ fn pinned_model(input : Input) -> Model {
   {
     pinned: true,
     page: None,
+    overlap: None,
     overview: @transcript_overview.State::empty(),
     image_owner: input.image_owner(),
     images: ImageCache::empty(),

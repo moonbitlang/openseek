@@ -653,9 +653,19 @@ fn section_children(
       page~,
     ),
   )
+  let page_content : Map[String, @html.Html] = Map([])
+  if page.index > 0 {
+    page_content.set("page-start-hint", page_scroll_hint(locale, forward=false))
+  }
+  for key, html in stream {
+    page_content.set(key, html)
+  }
+  if !page.is_latest() {
+    page_content.set("page-end-hint", page_scroll_hint(locale, forward=true))
+  }
   children.set(
     TranscriptSectionKey::stream(input).wire(),
-    @html.div(id="stream", class="stream", stream),
+    @html.div(id="stream", class="stream", page_content),
   )
   // Reading history unpins auto-follow (see the transcript DOM subscription); the
   // floating button is the way back to the live tail. Sticky inside the

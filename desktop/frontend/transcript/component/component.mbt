@@ -59,7 +59,7 @@ pub extend ProjectChoice with Eq::{equal, not_equal}
 /// through `Input::scroll` when the conversation returns.
 pub(all) enum ScrollPosition {
   Pinned
-  Unpinned(top~ : Double, page~ : Int)
+  Unpinned(top~ : Double, page~ : Int, overlap~ : Int?)
 } derive(Eq)
 
 ///|
@@ -183,6 +183,7 @@ pub(all) struct Actions {
 priv struct Model {
   // None follows the latest page; an explicit index stays on that history page.
   page : Int?
+  overlap : Int?
   pinned : Bool
   overview : @transcript_overview.State
   image_owner : ImageOwner
@@ -193,6 +194,7 @@ priv struct Model {
 priv enum Msg {
   Pinned(Bool)
   JumpToLatest
+  CrossPage(Bool)
   ContentRendered
   ImageRequested(String)
   ImageResolved(ImageOwner, String, ImageReadResult)
@@ -225,9 +227,10 @@ fn Model::update(
         @cmd.none,
       )
     }
+    CrossPage(forward) => self.cross_page(turns, forward, emit)
     JumpToLatest =>
       (
-        { ..self, pinned: true, page: None, },
+        { ..self, pinned: true, page: None, overlap: None, },
         @cmd.batch([
           measure_page_after_render(),
           scroll_after_render(),
@@ -274,7 +277,7 @@ fn Model::update(
             return (self, @cmd.none)
           }
           (
-            { ..next, pinned: false, page: Some(page), },
+            { ..next, pinned: false, page: Some(page), overlap: None, },
             @cmd.batch([
               measure_page_after_render(),
               scroll_turn_into_view(emit, key),
@@ -334,6 +337,10 @@ pub fn component(
             Pinned => None
             Unpinned(page~, ..) => Some(page)
           },
+          overlap: match input.scroll {
+            Pinned => None
+            Unpinned(overlap~, ..) => overlap
+          },
           overview: @transcript_overview.State::empty(),
           image_owner: input.image_owner(),
           images: ImageCache::empty(),
@@ -373,9 +380,9 @@ pub fn component(
   // branch renders only when its block changes (blocks compare by value), so
   // an unchanged key means an unchanged subtree, and the diff skips it. Stream
   // children are keyed, so a counter never meets another branch's counter.
-  let selected_page = state.map(state => state.page)
+  let selected_page = state.map(state => (state.page, state.overlap))
   let page_rows = turns.map2(selected_page, (turns, page) => {
-    turns.page_rows(page)
+    turns.page_rows(page.0, overlap=page.1)
   })
   let blocks = input.map2(page_rows, (input, bounds) => {
     stream_blocks(input, bounds~).map(block => (input.locale, block))
@@ -658,7 +665,8 @@ priv suberror TranscriptSubscription {
     pinned~ : Bool,
     active~ : @transcript_overview.TurnKey?,
     page~ : @transcript_overview.Page,
-    follow_request~ : String?
+    follow_request~ : String?,
+    overlap~ : Int?
   )
 }
 
@@ -683,6 +691,7 @@ fn transcript_subscription(
       active=model.overview.active,
       page~,
       follow_request~,
+      overlap=model.overlap,
     ),
     transcript_sub_loader,
   )
@@ -700,13 +709,16 @@ fn transcript_sub_loader(
       pinned~,
       active~,
       page~,
-      follow_request~
+      follow_request~,
+      overlap~
     ) => {
       let mut emit = emit
       let mut departed = departed
       let mut pinned = pinned
       let mut active = active
       let mut page = page
+      let mut overlap = overlap
+      let gesture = PageGesture::new()
       let mut follow_request = follow_request
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
@@ -729,6 +741,38 @@ fn transcript_sub_loader(
         }
       }
       target.add_event_listener_with_options("scroll", listener, capture=true)
+      let wheel_listener : @dom.Listener = event => {
+        guard event.to_wheel_event() is Some(wheel) &&
+          !wheel.get_ctrl_key() &&
+          !wheel.get_shift_key() &&
+          wheel.get_delta_y().abs() > wheel.get_delta_x().abs() &&
+          event.target().to_element() is Some(element) &&
+          element.closest("#transcript") is Some(_) &&
+          element.closest(".transcript-overview") is None &&
+          @dom.document().get_element_by_id("transcript").to_option()
+          is Some(transcript) else {
+          return
+        }
+        let forward = wheel.get_delta_y() > 0
+        // A nested editor/code scroller owns its wheel input.
+        if nested_scrollable(element, transcript, forward) {
+          return
+        }
+        let boundary = if forward {
+          !page.is_latest() && at_page_bottom(transcript)
+        } else {
+          page.index > 0 && transcript.get_scroll_top() <= 1
+        }
+        if gesture.wheel(wheel.get_time_stamp(), boundary, forward) {
+          event.prevent_default()
+          scheduler.add(emit(CrossPage(forward)))
+        }
+      }
+      target.add_event_listener_with_options(
+        "wheel",
+        wheel_listener,
+        passive=false,
+      )
       let observers = TranscriptObservers::install(
         () => scheduler.add(emit(ContentRendered)),
         path => scheduler.add(emit(ImageRequested(path))),
@@ -740,6 +784,7 @@ fn transcript_sub_loader(
             listener,
             capture=true,
           )
+          target.remove_event_listener("wheel", wheel_listener)
           observers.disconnect()
           // The branch is disposed while the incremental graph is read, one
           // step before Rabbita replaces the DOM, so the scroller still shows
@@ -752,7 +797,11 @@ fn transcript_sub_loader(
                 if pinned && page.is_latest() {
                   Pinned
                 } else {
-                  Unpinned(top=transcript.get_scroll_top(), page=page.index)
+                  Unpinned(
+                    top=transcript.get_scroll_top(),
+                    page=page.index,
+                    overlap~,
+                  )
                 },
               ),
             )
@@ -766,7 +815,8 @@ fn transcript_sub_loader(
               pinned=next_pinned,
               active=next_active,
               page=next_page,
-              follow_request=next_request
+              follow_request=next_request,
+              overlap=next_overlap
             ) else {
             return
           }
@@ -774,6 +824,7 @@ fn transcript_sub_loader(
           departed = left
           pinned = next_pinned
           active = next_active
+          overlap = next_overlap
           page = next_page
           if next_request != follow_request {
             follow_request = next_request
