@@ -5,7 +5,6 @@ priv struct PageNavigation {
   page : Int
   anchor : @transcript_overview.TurnKey?
   generation : Int
-  rendering : Bool
 } derive(Eq)
 
 ///|
@@ -29,27 +28,16 @@ fn Model::mount_page(
   emit : @cmd.Emit[Msg],
 ) -> (Model, @cmd.Cmd) {
   guard self.navigation is Some(navigation) &&
-    navigation.generation == generation &&
-    !navigation.rendering else {
+    navigation.generation == generation else {
     return (self, @cmd.none)
   }
   let page = turns.page_rows(Some(navigation.page)).page
-  (
-    {
-      ..self,
-      page: Some(page.index),
-      overlap: None,
-      navigation: Some({ ..navigation, rendering: true, }),
-    },
-    @cmd.batch([
-      measure_page_after_render(),
-      match navigation.anchor {
-        Some(key) => scroll_turn_into_view(emit, key)
-        None => restore_scroll_after_render(0)
-      },
-      after_page_paint(emit(PageReady(generation))),
-    ]),
+  let (next, position) = self.show_page(
+    page.index,
+    emit,
+    anchor?=navigation.anchor,
   )
+  (next, @cmd.batch([position, after_page_paint(emit(PageReady(generation)))]))
 }
 
 ///|
@@ -113,4 +101,74 @@ fn turn_layout_top(bubble : @dom.Element, transcript : @dom.Element) -> Double? 
     current = element.get_offset_parent()
   }
   None
+}
+
+///|
+/// Explicit navigation unpins even at an old page's bottom. The overview
+/// stays complete; only the selected page's message branches are mounted.
+fn Model::select_page(
+  self : Model,
+  turns : TurnIndex,
+  index : Int,
+  emit : @cmd.Emit[Msg],
+  anchor? : @transcript_overview.TurnKey,
+) -> (Model, @cmd.Cmd) {
+  let rows = turns.page_rows(Some(index))
+  guard anchor is Some(_) ||
+    rows.page.index != self.navigation_page(turns).index else {
+    return (self, @cmd.none)
+  }
+  let overview : @transcript_overview.State = {
+    hover: None,
+    active: match anchor {
+      Some(key) => Some(key)
+      None => turns.keys.get(rows.page.start)
+    },
+  }
+  if self.navigation is None &&
+    rows.page.index == turns.page_rows(self.page).page.index {
+    return { ..self, overview, }.show_page(rows.page.index, emit, anchor?)
+  }
+  let generation = self.navigation_generation + 1
+  (
+    {
+      ..self,
+      navigation: Some({ page: rows.page.index, anchor, generation, }),
+      navigation_generation: generation,
+      pinned: false,
+      overview,
+    },
+    @cmd.batch([
+      // A clicked tick is already visible; keep it under the pointer.
+      if anchor is None {
+        reveal_active_overview_tick()
+      } else {
+        @cmd.none
+      },
+      after_page_paint(emit(MountPage(generation)), animate=true),
+    ]),
+  )
+}
+
+///|
+/// All navigation paths commit page bounds and restore position here. A
+/// wheel crossing supplies the retained turn's offset; clicks align at 10px.
+fn Model::show_page(
+  self : Model,
+  page : Int,
+  emit : @cmd.Emit[Msg],
+  anchor? : @transcript_overview.TurnKey,
+  offset? : Double = 10,
+  overlap? : Int,
+) -> (Model, @cmd.Cmd) {
+  (
+    { ..self, page: Some(page), overlap, pinned: false, },
+    @cmd.batch([
+      measure_page_after_render(),
+      match anchor {
+        Some(key) => scroll_turn_into_view(emit, key, offset~)
+        None => restore_scroll_after_render(0)
+      },
+    ]),
+  )
 }

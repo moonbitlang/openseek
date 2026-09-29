@@ -38,17 +38,16 @@ fn TurnIndex::page_rows(
   let page = @transcript_overview.Page::of(self.starts.length(), index?)
   // A tail-following page can advance after new turns arrive. Never carry an
   // old overlap across intervening pages and accidentally mount the history.
-  let overlap = overlap.filter(value => {
-    value >= 0 &&
-    value < self.starts.length() &&
-    (value == page.start - 1 || value == page.end)
-  })
-  let start = overlap
-    .map(value => Int::min(value, page.start))
-    .unwrap_or(page.start)
-  let end = overlap
-    .map(value => Int::max(value + 1, page.end))
-    .unwrap_or(page.end)
+  let start = if page.start > 0 && overlap == Some(page.start - 1) {
+    page.start - 1
+  } else {
+    page.start
+  }
+  let end = if page.end < self.starts.length() && overlap == Some(page.end) {
+    page.end + 1
+  } else {
+    page.end
+  }
   {
     page,
     // Notices before the first prompt belong to the first page.
@@ -69,51 +68,4 @@ fn TurnIndex::page_for_turn(
   self.keys
   .search(key)
   .map(index => index / @transcript_overview.TURNS_PER_PAGE)
-}
-
-///|
-/// Explicit navigation unpins even at an old page's bottom. The overview
-/// stays complete; only the selected page's message branches are mounted.
-fn Model::select_page(
-  self : Model,
-  turns : TurnIndex,
-  index : Int,
-  emit : @cmd.Emit[Msg],
-  anchor? : @transcript_overview.TurnKey,
-) -> (Model, @cmd.Cmd) {
-  let rows = turns.page_rows(Some(index))
-  guard anchor is Some(_) ||
-    rows.page.index != self.navigation_page(turns).index else {
-    return (self, @cmd.none)
-  }
-  let generation = self.navigation_generation + 1
-  (
-    {
-      ..self,
-      navigation: Some({
-        page: rows.page.index,
-        anchor,
-        generation,
-        rendering: false,
-      }),
-      navigation_generation: generation,
-      pinned: false,
-      overview: {
-        hover: None,
-        active: match anchor {
-          Some(key) => Some(key)
-          None => turns.keys.get(rows.page.start)
-        },
-      },
-    },
-    @cmd.batch([
-      // A clicked tick is already visible; keep it under the pointer.
-      if anchor is None {
-        reveal_active_overview_tick()
-      } else {
-        @cmd.none
-      },
-      after_page_paint(emit(MountPage(generation)), animate=true),
-    ]),
-  )
 }

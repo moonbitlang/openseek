@@ -12,15 +12,73 @@ function events(turns) {
   return result;
 }
 
-async function mount(page, turns, minimal = false) {
+async function mount(page, turns, minimal = false, configure = () => {}) {
   await page.addInitScript(minimal => localStorage.setItem('openseek.minimal_transcript', String(minimal)), minimal);
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = events(turns);
+  configure(app);
   await app.install();
   await app.goto();
   await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
   await expect(page.locator('#transcript .msg.user .msg-content').last()).toHaveText(`Question ${turns}`);
   return app;
+}
+
+async function navigationFrames(page, selector, first, shortRail = false) {
+  return page.evaluate(async ({ selector, first, shortRail }) => {
+    const transcript = document.querySelector('#transcript');
+    const rail = document.querySelector('.overview-rail');
+    // A short rail forces this adjacent page out of its visible window.
+    if (shortRail) {
+      rail.style.maxHeight = '60px';
+      rail.scrollTop = rail.scrollHeight;
+    }
+    const marker = document.querySelector('.overview-rail-content');
+    const samples = [];
+    const sample = () => {
+      const loader = document.querySelector('.transcript-page-loading .conversation-load-state');
+      return {
+        busy: transcript.getAttribute('aria-busy') === 'true',
+        first: transcript.querySelector('.msg.user .msg-content')?.textContent,
+        hidden: getComputedStyle(document.querySelector('#stream')).visibility === 'hidden',
+        loading: Boolean(loader && loader.getBoundingClientRect().height > 0),
+        y: new DOMMatrixReadOnly(getComputedStyle(marker, '::before').transform).m42,
+        railTop: rail.scrollTop,
+      };
+    };
+    samples.push(sample());
+    document.querySelector(selector).click();
+    await new Promise(resolve => {
+      const deadline = performance.now() + 3000;
+      function frame() {
+        const current = sample(); samples.push(current);
+        if ((!current.busy && current.first === first) || performance.now() > deadline) resolve();
+        else requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    });
+    return samples;
+  }, { selector, first, shortRail });
+}
+
+async function firstPage(page) {
+  await page.locator('.overview-tick-button').first().click();
+  await expect(page.locator('#transcript .msg.user .msg-content').first()).toHaveText('Question 1');
+  await expect(page.locator('#transcript')).toHaveAttribute('aria-busy', 'false');
+}
+
+async function wheelAtEdge(page, forward = true) {
+  const transcript = page.locator('#transcript');
+  await transcript.evaluate((node, forward) => { node.scrollTop = forward ? node.scrollHeight : 0; }, forward);
+  const rect = await transcript.boundingBox();
+  await page.mouse.move(rect.x + rect.width / 2, forward ? rect.y + rect.height - 30 : rect.y + 30);
+  await page.mouse.wheel(0, forward ? 100 : -100);
+}
+
+async function expectTurnAligned(page, sequence) {
+  await expect.poll(() => page.locator(`#turn-s${sequence}`).evaluate(node => {
+    return Math.abs(node.getBoundingClientRect().top - document.querySelector('#transcript').getBoundingClientRect().top - 10);
+  })).toBeLessThan(3);
 }
 
 for (const minimal of [false, true]) {
@@ -48,10 +106,7 @@ for (const minimal of [false, true]) {
     await rail.getByRole('button', { name: 'Question 3', exact: true }).click();
     await expect(users.first()).toHaveText('Question 1');
     await expect(previous).toBeDisabled();
-    await expect.poll(() => page.locator('#turn-s5').evaluate(node => {
-      const scroller = document.querySelector('#transcript');
-      return Math.abs(node.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 10);
-    })).toBeLessThan(3);
+    await expectTurnAligned(page, 5);
     await expect(rail.locator('.overview-tick')).toHaveCount(53);
     await page.setViewportSize({ width: 900, height: 800 });
     await expect(next).toBeVisible();
@@ -89,7 +144,7 @@ test('three thousand turns mount one page while keeping all history ticks', asyn
   await expect(page.locator('#transcript .msg.user .msg-content')).toHaveCount(20);
   await expect(page.locator('#transcript .msg.user .msg-content').first()).toHaveText('Question 2981');
   expect(await page.locator('#stream *').count()).toBeLessThan(5000);
-  await page.locator('.overview-tick-button').first().click();
+  await firstPage(page);
   await expect(page.locator('#transcript .msg.user .msg-content').first()).toHaveText('Question 1');
   await expect(page.locator('#transcript .msg.user .msg-content')).toHaveCount(20);
   expect(await page.locator('#stream *').count()).toBeLessThan(5000);
@@ -115,12 +170,8 @@ for (const minimal of [false, true]) {
     const app = await mount(page, 53, minimal);
     const transcript = page.locator('#transcript');
     const users = transcript.locator('.msg.user .msg-content');
-    await page.locator('.overview-tick-button').first().click();
-    await expect(users.first()).toHaveText('Question 1');
-    await transcript.evaluate(node => { node.scrollTop = node.scrollHeight; });
-    const rect = await transcript.boundingBox();
-    await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height - 30);
-    await page.mouse.wheel(0, 100);
+    await firstPage(page);
+    await wheelAtEdge(page);
     await page.waitForTimeout(80);
     await expect(users.first()).toHaveText('Question 1');
     await page.waitForTimeout(300);
@@ -136,9 +187,7 @@ for (const minimal of [false, true]) {
     // Continuing the same gesture cannot skip another page.
     for (let i = 0; i < 5; i += 1) await page.mouse.wheel(0, 20);
     await expect(users.last()).toHaveText('Question 40');
-    await transcript.evaluate(node => { node.scrollTop = 0; });
-    await page.mouse.move(rect.x + rect.width / 2, rect.y + 30);
-    await page.mouse.wheel(0, -100);
+    await wheelAtEdge(page, false);
     await page.waitForTimeout(80);
     await expect(users.last()).toHaveText('Question 40');
     const upper = await page.locator('#turn-s41').evaluate(node => node.getBoundingClientRect().top);
@@ -153,19 +202,13 @@ for (const minimal of [false, true]) {
 }
 
 test('long overlapping turns retain their screen position across a wheel page change', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.sessionEvents = events(40);
-  app.sessionEvents[39].item.payload.content += '\n\nLong boundary paragraph.\n\n'.repeat(70);
-  await app.install();
-  await app.goto();
-  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
-  await page.locator('.overview-tick-button').first().click();
+  const app = await mount(page, 40, false, app => {
+    app.sessionEvents[39].item.payload.content += '\n\nLong boundary paragraph.\n\n'.repeat(70);
+  });
+  await firstPage(page);
   const transcript = page.locator('#transcript');
   await expect(transcript.locator('.msg.user .msg-content').first()).toHaveText('Question 1');
-  await transcript.evaluate(node => { node.scrollTop = node.scrollHeight; });
-  const rect = await transcript.boundingBox();
-  await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height - 80);
-  await page.mouse.wheel(0, 100);
+  await wheelAtEdge(page);
   await page.waitForTimeout(300);
   const before = await page.locator('#turn-s39').evaluate(node => node.getBoundingClientRect().top);
   await page.mouse.wheel(0, 100);
@@ -176,7 +219,7 @@ test('long overlapping turns retain their screen position across a wheel page ch
 
 test('nested scrolling and zoom gestures do not navigate history pages', async ({ page }) => {
   const app = await mount(page, 40);
-  await page.locator('.overview-tick-button').first().click();
+  await firstPage(page);
   const transcript = page.locator('#transcript');
   await expect(transcript.locator('.msg.user .msg-content').first()).toHaveText('Question 1');
   await transcript.evaluate(node => { node.scrollTop = node.scrollHeight; });
@@ -204,20 +247,14 @@ test('nested scrolling and zoom gestures do not navigate history pages', async (
 });
 
 test('returning to a wheel-paged conversation restores its overlap and offset', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.sessionEvents = events(53);
-  app.liveSessions.push({ id: 'session-2', title: 'Other history', updated_at_ms: 2 });
-  await app.install();
-  await app.goto();
-  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
-  await page.locator('.overview-tick-button').first().click();
+  const app = await mount(page, 53, false, app => {
+    app.liveSessions.push({ id: 'session-2', title: 'Other history', updated_at_ms: 2 });
+  });
+  await firstPage(page);
   const transcript = page.locator('#transcript');
   const users = transcript.locator('.msg.user .msg-content');
   await expect(users.first()).toHaveText('Question 1');
-  await transcript.evaluate(node => { node.scrollTop = node.scrollHeight; });
-  const rect = await transcript.boundingBox();
-  await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height - 80);
-  await page.mouse.wheel(0, 100);
+  await wheelAtEdge(page);
   await page.waitForTimeout(300);
   await page.mouse.wheel(0, 100);
   await expect(users.first()).toHaveText('Question 20');
@@ -234,38 +271,7 @@ test('returning to a wheel-paged conversation restores its overlap and offset', 
 
 test('page buttons paint loading and animate the rail before replacing the transcript', async ({ page }) => {
   const app = await mount(page, 200);
-  const frames = await page.evaluate(async () => {
-    const transcript = document.querySelector('#transcript');
-    const rail = document.querySelector('.overview-rail');
-    // A short rail forces this adjacent page out of its visible window.
-    rail.style.maxHeight = '60px';
-    rail.scrollTop = rail.scrollHeight;
-    const marker = document.querySelector('.overview-rail-content');
-    const samples = [];
-    const sample = () => {
-      const loader = document.querySelector('.transcript-page-loading .conversation-load-state');
-      return {
-        busy: transcript.getAttribute('aria-busy') === 'true',
-        first: transcript.querySelector('.msg.user .msg-content')?.textContent,
-        hidden: getComputedStyle(document.querySelector('#stream')).visibility === 'hidden',
-        loading: Boolean(loader && loader.getBoundingClientRect().height > 0),
-        y: new DOMMatrixReadOnly(getComputedStyle(marker, '::before').transform).m42,
-        railTop: rail.scrollTop,
-      };
-    };
-    samples.push(sample());
-    document.querySelector('.overview-page-button.previous').click();
-    await new Promise(resolve => {
-      const deadline = performance.now() + 3000;
-      function frame() {
-        const current = sample(); samples.push(current);
-        if ((!current.busy && current.first === 'Question 161') || performance.now() > deadline) resolve();
-        else requestAnimationFrame(frame);
-      }
-      requestAnimationFrame(frame);
-    });
-    return samples;
-  });
+  const frames = await navigationFrames(page, '.overview-page-button.previous', 'Question 161', true);
   expect(frames.some(frame => frame.busy && frame.loading && frame.hidden && frame.first === 'Question 181')).toBe(true);
   expect(frames.some(frame => frame.y < 1080 && frame.y > 960)).toBe(true);
   expect(frames.some(frame => frame.railTop < frames[0].railTop)).toBe(true);
@@ -298,26 +304,10 @@ test('page navigation respects reduced motion', async ({ page }) => {
 
 test('cross-page tick clicks paint loading before rendering and land on the selected conversation', async ({ page }) => {
   const app = await mount(page, 60);
-  const samples = await page.evaluate(async () => {
-    const transcript = document.querySelector('#transcript');
-    const frames = [];
-    document.querySelector('.overview-tick-button[aria-label="Question 7"]').click();
-    await new Promise(resolve => {
-      const deadline = performance.now() + 3000;
-      const frame = () => {
-        const busy = transcript.getAttribute('aria-busy') === 'true';
-        const first = transcript.querySelector('.msg.user .msg-content')?.textContent;
-        frames.push({ busy, first, loading: Boolean(transcript.querySelector('.conversation-load-state')) });
-        if ((!busy && first === 'Question 1') || performance.now() > deadline) resolve();
-        else requestAnimationFrame(frame);
-      };
-      requestAnimationFrame(frame);
-    });
-    return frames;
-  });
+  const samples = await navigationFrames(page, '.overview-tick-button[aria-label="Question 7"]', 'Question 1');
   expect(samples.some(frame => frame.busy && frame.loading && frame.first === 'Question 41')).toBe(true);
   expect(samples.at(-1)).toMatchObject({ busy: false, loading: false, first: 'Question 1' });
-  await expect.poll(() => page.locator('#turn-s13').evaluate(node => Math.abs(node.getBoundingClientRect().top - document.querySelector('#transcript').getBoundingClientRect().top - 10))).toBeLessThan(3);
+  await expectTurnAligned(page, 13);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -327,6 +317,6 @@ test('a second tick in a pending page replaces the first destination', async ({ 
   await expect(page.locator('#transcript')).toHaveAttribute('aria-busy', 'true');
   await page.evaluate(() => document.querySelector('.overview-tick-button[aria-label="Question 9"]').click());
   await expect(page.locator('#transcript')).toHaveAttribute('aria-busy', 'false');
-  await expect.poll(() => page.locator('#turn-s17').evaluate(node => Math.abs(node.getBoundingClientRect().top - document.querySelector('#transcript').getBoundingClientRect().top - 10))).toBeLessThan(3);
+  await expectTurnAligned(page, 17);
   expect(app.pageErrors).toEqual([]);
 });

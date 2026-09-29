@@ -64,42 +64,19 @@ fn Model::cross_page(
   guard index >= 0 && index < page.count else { return (self, @cmd.none) }
   let boundary = if forward { page.end - 1 } else { page.start }
   guard turns.keys.get(boundary) is Some(key) else { return (self, @cmd.none) }
-  let offset = @dom.document()
-    .get_element_by_id(key.anchor())
-    .to_option()
-    .bind(bubble => {
-      @dom.document()
-      .get_element_by_id("transcript")
-      .to_option()
-      .map(transcript => {
-        bubble.get_bounding_client_rect().get_top() -
-        transcript.get_bounding_client_rect().get_top()
-      })
-    })
-  (
-    { ..self, page: Some(index), overlap: Some(boundary), pinned: false, },
-    @cmd.batch([
-      measure_page_after_render(),
-      @cmd.custom_cmd(
-        scheduler => {
-          if offset is Some(offset) &&
-            @dom.document().get_element_by_id(key.anchor()).to_option()
-            is Some(bubble) &&
-            @dom.document().get_element_by_id("transcript").to_option()
-            is Some(transcript) {
-            let next = bubble.get_bounding_client_rect().get_top() -
-              transcript.get_bounding_client_rect().get_top()
-            transcript.set_scroll_top(
-              transcript.get_scroll_top() + next - offset,
-            )
-            scheduler.add(
-              emit(Overview(ActiveChanged(visible_turn(transcript)))),
-            )
-          }
-        },
-        kind=@cmd.after_render,
-      ),
-    ]),
+  guard @dom.document().get_element_by_id(key.anchor()).to_option()
+    is Some(bubble) &&
+    @dom.document().get_element_by_id("transcript").to_option()
+    is Some(transcript) &&
+    turn_layout_top(bubble, transcript) is Some(top) else {
+    return (self, @cmd.none)
+  }
+  self.show_page(
+    index,
+    emit,
+    anchor=key,
+    overlap=boundary,
+    offset=top - transcript.get_scroll_top(),
   )
 }
 

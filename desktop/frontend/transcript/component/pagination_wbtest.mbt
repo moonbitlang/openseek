@@ -33,29 +33,16 @@ fn paged_input(turns : Int, without_sequence? : Bool = false) -> Input {
 ///|
 test "pages cover whole turns, including answers, with stable local anchors" {
   let input = paged_input(53, without_sequence=true)
-  let bounds = TurnIndex::new(input.items).page_rows(Some(1))
+  let turns = TurnIndex::new(input.items)
+  let bounds = turns.page_rows(Some(1))
+  let blocks = stream_blocks(input, bounds~).to_array()
   assert_eq((bounds.start, bounds.end), (40, 80))
-  assert_eq(
-    stream_blocks(input, bounds=TurnIndex::new(input.items).page_rows(Some(1))).length(),
-    40,
-  )
-  assert_true(
-    stream_blocks(input, bounds=TurnIndex::new(input.items).page_rows(Some(1))).to_array()[0].content
-    is Item(anchor=Some("turn-i40"), ..),
-  )
-  assert_true(
-    stream_blocks(input, bounds=TurnIndex::new(input.items).page_rows(Some(1))).to_array()[1].content
-    is Item(step_label=Some("#21"), ..),
-  )
-  assert_eq(
-    TurnIndex::new(input.items).page_for_turn(@transcript_overview.Local(80)),
-    Some(2),
-  )
-  assert_eq(
-    TurnIndex::new(input.items).page_for_turn(@transcript_overview.Local(1)),
-    None,
-  )
-  let latest = TurnIndex::new(input.items).page_rows(None)
+  assert_eq(blocks.length(), 40)
+  assert_true(blocks[0].content is Item(anchor=Some("turn-i40"), ..))
+  assert_true(blocks[1].content is Item(step_label=Some("#21"), ..))
+  assert_eq(turns.page_for_turn(@transcript_overview.Local(80)), Some(2))
+  assert_eq(turns.page_for_turn(@transcript_overview.Local(1)), None)
+  let latest = turns.page_rows(None)
   assert_eq((latest.start, latest.end), (80, 106))
 }
 
@@ -72,24 +59,11 @@ test "empty and exact-boundary histories have no extra page" {
 ///|
 test "old-page bottom cannot pin or show the live response" {
   let input = { ..paged_input(41), streaming_response: Some("live"), }
-  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let (older, _) = pinned_model(input).update(
-    input,
-    Overview(PreviousPage),
-    emit,
-  )
-  let (older, _) = older.update(
-    input,
-    MountPage(older.navigation_generation),
-    emit,
-  )
-  let (older, _) = older.update(
-    input,
-    PageReady(older.navigation_generation),
-    emit,
-  )
+  let older = pinned_model(input).step(input, Overview(PreviousPage))
+  let older = older.step(input, MountPage(older.navigation_generation))
+  let older = older.step(input, PageReady(older.navigation_generation))
   assert_eq(older.page, Some(1))
-  let (bottom, _) = older.update(input, Pinned(true), emit)
+  let bottom = older.step(input, Pinned(true))
   assert_false(bottom.pinned)
   assert_eq(bottom.page, Some(1))
   assert_false(
@@ -100,7 +74,7 @@ test "old-page bottom cannot pin or show the live response" {
   assert_true(
     stream_blocks(input).to_array().any(block => block.content is Live(..)),
   )
-  let (latest, _) = bottom.update(input, JumpToLatest, emit)
+  let latest = bottom.step(input, JumpToLatest)
   assert_true(latest.pinned)
   assert_eq(latest.page, None)
 }
@@ -109,18 +83,12 @@ test "old-page bottom cannot pin or show the live response" {
 test "cross-page navigation uses global turn keys in both sources" {
   for source in [OpenSeek, Codex] {
     let input = { ..paged_input(53), source, }
-    let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-    let (next, _) = pinned_model(input).update(
+    let next = pinned_model(input).step(
       input,
       Overview(Clicked(@transcript_overview.Durable(47))),
-      emit,
     )
     assert_eq(next.page, None)
-    let (next, _) = next.update(
-      input,
-      MountPage(next.navigation_generation),
-      emit,
-    )
+    let next = next.step(input, MountPage(next.navigation_generation))
     assert_eq(next.page, Some(1))
     assert_false(next.pinned)
     assert_eq(next.overview.active, Some(@transcript_overview.Durable(47)))

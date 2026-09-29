@@ -222,11 +222,15 @@ fn Model::update(
   } else {
     { ..self, image_owner, images: ImageCache::empty(), }
   }
+  if self.navigation is Some(_) &&
+    msg
+    is (Pinned(_) | ContentRendered | CrossPage(_) | Overview(ActiveChanged(_))) {
+    return (self, @cmd.none)
+  }
   match msg {
     MountPage(generation) => self.mount_page(turns, generation, emit)
     PageReady(generation) => {
-      guard self.navigation
-        is Some({ generation: current, rendering: true, .. }) &&
+      guard self.navigation is Some({ generation: current, .. }) &&
         current == generation else {
         return (self, @cmd.none)
       }
@@ -239,7 +243,6 @@ fn Model::update(
       )
     }
     Pinned(pinned) => {
-      guard self.navigation is None else { return (self, @cmd.none) }
       let page = turns.page_rows(self.page).page
       let pinned = pinned && page.is_latest()
       (
@@ -247,12 +250,7 @@ fn Model::update(
         @cmd.none,
       )
     }
-    CrossPage(forward) =>
-      if self.navigation is None {
-        self.cross_page(turns, forward, emit)
-      } else {
-        (self, @cmd.none)
-      }
+    CrossPage(forward) => self.cross_page(turns, forward, emit)
     JumpToLatest =>
       (
         { ..self, pinned: true, page: None, overlap: None, navigation: None, },
@@ -263,7 +261,6 @@ fn Model::update(
         ]),
       )
     ContentRendered => {
-      guard self.navigation is None else { return (self, @cmd.none) }
       // Rendered content grew or changed size. A pinned reader follows the
       // tail; the overview re-reads which turn sits under the reading line.
       let commands : Array[@cmd.Cmd] = []
@@ -290,9 +287,6 @@ fn Model::update(
       ({ ..self, images, }, images.apply_after_render())
     }
     Overview(msg) => {
-      if self.navigation is Some(_) && msg is ActiveChanged(_) {
-        return (self, @cmd.none)
-      }
       let previous_active = self.overview.active
       let next = {
         ..self,
@@ -305,23 +299,7 @@ fn Model::update(
           guard turns.page_for_turn(key) is Some(page) else {
             return (self, @cmd.none)
           }
-          if page != turns.page_rows(self.page).page.index ||
-            self.navigation is Some(_) {
-            return self.select_page(turns, page, emit, anchor=key)
-          }
-          (
-            {
-              ..next,
-              pinned: false,
-              page: Some(page),
-              overlap: None,
-              navigation: None,
-            },
-            @cmd.batch([
-              measure_page_after_render(),
-              scroll_turn_into_view(emit, key),
-            ]),
-          )
+          self.select_page(turns, page, emit, anchor=key)
         }
         PreviousPage =>
           self.select_page(turns, self.navigation_page(turns).index - 1, emit)
@@ -413,10 +391,22 @@ pub fn component(
   // branch renders only when its block changes (blocks compare by value), so
   // an unchanged key means an unchanged subtree, and the diff skips it. Stream
   // children are keyed, so a counter never meets another branch's counter.
-  let selected_page = state.map(state => (state.page, state.overlap))
-  let page_rows = turns.map2(selected_page, (turns, page) => {
-    turns.page_rows(page.0, overlap=page.1)
-  })
+  let pages = turns.map2(
+    state.map(state => {
+      (state.page, state.overlap, state.navigation.map(n => n.page))
+    }),
+    (turns, selection) => {
+      let (page, overlap, pending) = selection
+      let rows = turns.page_rows(page, overlap~)
+      (
+        rows,
+        pending
+        .map(page => turns.page_rows(Some(page)).page)
+        .unwrap_or(rows.page),
+      )
+    },
+  )
+  let page_rows = pages.map(pages => pages.0)
   let blocks = input.map2(page_rows, (input, bounds) => {
     stream_blocks(input, bounds~).map(block => (input.locale, block))
   })
@@ -446,21 +436,14 @@ pub fn component(
     },
     by=pair => pair.1.branch_key(),
   )
-  let navigation_page = turns.map2(
-    state.map(state => state.navigation.map(n => n.page)),
-    (turns, pending) => pending.map(page => turns.page_rows(Some(page)).page),
-  )
-  let pages = page_rows.map2(navigation_page, (bounds, pending) => {
-    (bounds, pending)
-  })
   state.view4(input, rendered, pages, (state, input, rendered, pages) => {
-    let (bounds, pending) = pages
+    let (_, page) = pages
     transcript_view(
       locale=input.locale,
       input,
       pinned=state.pinned,
       overview=state.overview,
-      page=pending.unwrap_or(bounds.page),
+      page~,
       loading=state.navigation is Some(_),
       overview_emit=emit.map(msg => Overview(msg)),
       stream=keyed_stream(rendered),
@@ -647,6 +630,7 @@ fn visible_turn_anchor(transcript : @dom.Element) -> String? {
 fn scroll_turn_into_view(
   emit : @cmd.Emit[Msg],
   key : @transcript_overview.TurnKey,
+  offset? : Double = 10,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
@@ -659,7 +643,7 @@ fn scroll_turn_into_view(
         return
       }
       guard turn_layout_top(bubble, transcript) is Some(top) else { return }
-      transcript.set_scroll_top(top - 10.0)
+      transcript.set_scroll_top(top - offset)
       scheduler.add(emit(Pinned(at_bottom(transcript))))
       scheduler.add(emit(Overview(ActiveChanged(visible_turn(transcript)))))
     },
