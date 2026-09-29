@@ -3,18 +3,18 @@ name = "openseek_desktop/backend"
 version = "0.1.5"
 
 import {
-  "moonbitlang/jsonl@0.2.0",
+  "moonbitlang/jsonl@0.2.1",
   "moonbitlang/openseek_protocol@0.3.0",
-  "moonbit-community/pty@0.4.1",
-  "moonbit-community/flate@0.7.1",
-  "moonbitlang/x@0.4.50",
+  "moonbit-community/pty@0.4.3",
+  "moonbit-community/flate@0.8.4",
+  "moonbitlang/x@0.5.5",
   "moonbitlang/async@0.22.4",
-  "moonbit-community/proton@0.3.3",
-  "moonbit-community/proton_ext@0.3.3",
+  "moonbit-community/proton@0.3.4",
+  "moonbit-community/proton_ext@0.3.4",
   "tonyfettes/platform@0.1.1",
-  "tonyfettes/xlog@0.4.0",
-  "moonbit-community/proton_contract@0.3.3",
-  "moonbitlang/openseek@0.3.2",
+  "tonyfettes/xlog@0.4.2",
+  "moonbit-community/proton_contract@0.3.4",
+  "moonbitlang/openseek@0.5.0",
   "openseek_desktop@0.1.5",
 }
 

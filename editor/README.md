@@ -80,7 +80,7 @@ Whole-line Markdown comments render exact lowercase `d2`/`diago` and
 `uml`/`plantuml` fences synchronously with the bundled Diago and
 `kokic/uml` compilers. Exact lowercase `mermaid` fences use Mermaid's official
 browser implementation. The web build downloads
-the pinned `mermaid@11.16.0` npm archive, verifies its SHA-256 digest, and
+the pinned `mermaid@12.0.0` npm archive, verifies its SHA-256 digest, and
 stages the minified ESM entry, relative chunks, and license under
 `web/dist/mermaid/`. Mermaid remains a lazy runtime import, but it is loaded
 from that same-origin directory rather than a public CDN.

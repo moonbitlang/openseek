@@ -2,16 +2,12 @@
 
 An ordinary MoonBit package for calling tools exposed by the current OpenSeek
 `mbtx` invocation. This module has no dependency on the agent, editor, or host
-implementation. SDK 0.2.0 (unreleased, `moonbitlang/openseek_tools`) speaks PTC
-protocol version 1.
-
-The dynamic API also works with the published 0.1.0, which still lives under the
-old owner, so the runnable examples pin `bobzhang/openseek_tools@0.1.0` until
-0.2.0 is published under `moonbitlang`:
+implementation. The published SDK `moonbitlang/openseek_tools@0.2.0` speaks
+PTC protocol version 1. Runnable examples use this version explicitly.
 
 ```mbtx
 import {
-  "bobzhang/openseek_tools@0.1.0" @tools,
+  "moonbitlang/openseek_tools@0.2.0" @tools,
   "moonbitlang/async",
 }
 

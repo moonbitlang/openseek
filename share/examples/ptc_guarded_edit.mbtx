@@ -6,7 +6,7 @@
 /// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
 /// a host-backed test that runs it through the real sandbox and host.
 import {
-  "bobzhang/openseek_tools@0.1.0",
+  "moonbitlang/openseek_tools@0.2.0",
   "moonbitlang/async",
   "moonbitlang/core/env",
   "moonbitlang/core/string",

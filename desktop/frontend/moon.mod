@@ -4,12 +4,12 @@ version = "0.1.5"
 
 import {
   "moonbitlang/openseek_protocol@0.3.0",
-  "moonbit-community/cmark@0.4.5",
+  "moonbit-community/cmark@0.4.9",
   "moonbit-community/fuzzy_match@0.2.6",
   "moonbit-community/rabbita@0.16.3",
   "moonbitlang/editor@0.4.5",
-  "moonbitlang/x@0.4.50",
-  "moonbitlang/openseek@0.3.2",
+  "moonbitlang/x@0.5.5",
+  "moonbitlang/openseek@0.5.0",
   "openseek_desktop@0.1.5",
   "moonbitlang/async@0.22.4",
 }

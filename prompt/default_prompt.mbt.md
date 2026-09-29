@@ -150,7 +150,7 @@ line-anchored and reviewable — not by having a snippet rewrite files. The
 tools that rewrite source as their job (`moon fmt`, `moon info`,
 `moon test --update`, `git checkout`) do run normally.
 
-### Host tool calls with bobzhang/openseek_tools
+### Host tool calls with moonbitlang/openseek_tools
 
 A mbtx script can call the host's own tools.
 `@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same

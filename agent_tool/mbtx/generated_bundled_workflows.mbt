@@ -445,7 +445,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|/// Arguments: --dry-run   plan only, write nothing
           #|///            --limit N   stop after N fixes (default 500)
           #|import {
-          #|  "bobzhang/openseek_tools@0.1.0" @tools,
+          #|  "moonbitlang/openseek_tools@0.2.0" @tools,
           #|  "moonbitlang/async",
           #|  "moonbitlang/async/fs",
           #|  "moonbitlang/async/shell",

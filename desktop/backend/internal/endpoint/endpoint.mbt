@@ -8,7 +8,7 @@
 ///|
 /// A native command after its payload and reply types have been safely
 /// paired. The generic types remain captured inside `bind` and `invoke`;
-/// users of the registry only need the stable name and route.
+/// users of the registry only need the stable name.
 priv enum Invoker {
   Async(async (Json) -> Json)
   Sync((Json) -> Json raise)
@@ -19,7 +19,6 @@ priv enum Invoker {
 /// invoked by name over remote JSON-RPC.
 struct Endpoint {
   name : String
-  route : @proton_contract.ContractRoute
   bind : (@proton.CommandRegistrar) -> Unit raise
   invoke : Invoker
 }
@@ -32,7 +31,6 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::Endpoint(
 ) -> Endpoint {
   {
     name: command.name(),
-    route: command.descriptor().contract_route(),
     bind: registrar => {
       registrar.bind(command.descriptor(), (_, payload) => handler(payload))
     },
@@ -51,7 +49,6 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::sync(
 ) -> Endpoint {
   {
     name: command.name(),
-    route: command.descriptor().contract_route(),
     bind: registrar => {
       registrar.bind(command.descriptor(), (_, payload) => handler(payload))
     },
@@ -100,11 +97,6 @@ pub fn Endpoint::name(self : Endpoint) -> String {
 }
 
 ///|
-pub fn Endpoint::route(self : Endpoint) -> @proton_contract.ContractRoute {
-  self.route
-}
-
-///|
 pub fn Endpoint::bind(
   self : Endpoint,
   registrar : @proton.CommandRegistrar,
@@ -127,7 +119,6 @@ pub async fn Endpoint::invoke(self : Endpoint, params : Json) -> Json {
 /// `Endpoint` alone.
 struct WindowEndpoint {
   name : String
-  route : @proton_contract.ContractRoute
   bind : (@proton.CommandRegistrar) -> Unit raise
 }
 
@@ -138,7 +129,6 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] WindowEndpoint::WindowEndpoint(
 ) -> WindowEndpoint {
   {
     name: command.name(),
-    route: command.descriptor().contract_route(),
     bind: registrar => registrar.bind(command.descriptor(), handler),
   }
 }
@@ -146,13 +136,6 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] WindowEndpoint::WindowEndpoint(
 ///|
 pub fn WindowEndpoint::name(self : WindowEndpoint) -> String {
   self.name
-}
-
-///|
-pub fn WindowEndpoint::route(
-  self : WindowEndpoint,
-) -> @proton_contract.ContractRoute {
-  self.route
 }
 
 ///|

@@ -6,7 +6,7 @@
 /// when its URL contains <domain>. Verified by a host-backed test with a
 /// stub search tool.
 import {
-  "bobzhang/openseek_tools@0.1.0" @tools,
+  "moonbitlang/openseek_tools@0.2.0" @tools,
   "moonbitlang/async",
   "moonbitlang/core/env",
 }

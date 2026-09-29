@@ -387,12 +387,8 @@ pub fn openseek_capability(
   for endpoint in window_endpoints(views) {
     window_only.push(endpoint)
   }
-  let routes = endpoints.map(endpoint => endpoint.route())
-  for endpoint in window_only {
-    routes.push(endpoint.route())
-  }
   @proton_extension.capability(
-    @proton_extension.typed(@commands.extension_contract, routes, registrar => {
+    @proton_extension.typed(@commands.extension_contract, registrar => {
       for endpoint in endpoints {
         endpoint.bind(registrar)
       }

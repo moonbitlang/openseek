@@ -19,11 +19,11 @@ preferred_target = "js"
 warnings = "+prefer_readonly_array+implicit_impl_as_method+test_unqualified_package"
 
 import {
-  "moonbit-community/cmark@0.4.5",
-  "moonbit-community/moondiff@0.0.7",
+  "moonbit-community/cmark@0.4.9",
+  "moonbit-community/moondiff@0.0.9",
   "moonbitlang/async@0.22.4",
   "moonbit-community/rabbita@0.16.3",
-  "Milky2018/diago@0.3.0",
-  "moonbitlang/x@0.4.50",
+  "Milky2018/diago@0.3.5",
+  "moonbitlang/x@0.5.5",
   "kokic/uml@0.4.0",
 }
