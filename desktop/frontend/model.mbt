@@ -1105,20 +1105,17 @@ priv struct BufferedCommit {
 } derive(Eq)
 
 ///|
-/// What the main area shows: the active conversation, the Skills page, the
-/// Settings page, or one workspace's settings page. Selecting a conversation
-/// (or rotating to a new one) always returns to the chat. While the
+/// What the main area shows: a conversation, Skills, Scheduled tasks, or
+/// Settings. Selecting a conversation (or rotating to a new one) always
+/// returns to the chat. While the
 /// configured endpoint is unusable the chat stays reachable, the API-setup
 /// modal takes over until dismissed, and the composer keeps Send disabled.
-/// `WorkspaceSettings` carries the project it is about; detaching that
-/// project falls back to the chat.
 priv enum Screen {
   Chat
   Codex
   Skills
   Schedules
   Settings
-  WorkspaceSettings(channel~ : @interop.ChannelId, workspace~ : @common.Uri)
 } derive(Eq)
 
 ///|
@@ -1441,6 +1438,7 @@ priv struct Model {
   // and it closes the moment a usable endpoint arrives.
   api_setup_open : Bool
   export_dialog : @export_dialog.Model
+  workspace_settings_dialog : WorkspaceSettingsDialog?
   // The user answered "Not now" to the setup modal. Held until a usable
   // endpoint re-arms the announcement, and deliberately not part of the
   // host-settings mirror: a reconnect or focus switch clears the mirror but
@@ -1985,9 +1983,10 @@ priv enum Msg {
   // away — the directory and the sessions inside it stay, so re-adding
   // restores them.
   RemoveProject(@interop.ChannelId, @common.Uri)
-  // Show the per-workspace settings page for one device's project.
+  // Open settings without replacing the current conversation or page.
   OpenWorkspaceSettings(@interop.ChannelId, @common.Uri)
-  // The workspace settings page's launch-mode select. Carries the raw
+  CloseWorkspaceSettings
+  // The workspace settings dialog's launch-mode select. Carries the raw
   // select value ("local" | "worktree"); update decides what it means.
   WorkspaceDefaultModeChosen(@interop.ChannelId, @common.Uri, String)
   // Whether new or repaired worktrees for this workspace populate the
@@ -2745,6 +2744,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     update_ux: UpdateUnknown,
     api_setup_open: false,
     export_dialog: @export_dialog.Model(),
+    workspace_settings_dialog: None,
     api_setup_dismissed: false,
     remote_access: None,
     remote_connecting: false,
