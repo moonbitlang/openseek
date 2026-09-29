@@ -70,7 +70,8 @@ html.is-resizing .sidebar-resize-handle {
 }
 .sidebar-section {
   display: grid;
-  gap: 1px;
+  /* Preserve the 1px gap at the default 14px type size, scaling with it. */
+  gap: calc(1em / 14);
   min-width: 0;
   /* The outer scroll lane owns the right inset — its gutter and padding add
      up to `--sidebar-inset` between them. Keep only the matching left inset
@@ -138,7 +139,8 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  min-height: 28px;
+  /* Keep breathing room around the 1.6em line box as the font grows. */
+  min-height: 2em;
   padding: 0 8px;
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
@@ -300,7 +302,7 @@ html.is-resizing .sidebar-resize-handle {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 28px;
+  min-height: 2em;
   margin-bottom: 2px;
   border-radius: var(--radius-sm);
   font-size: var(--font-size-md);
@@ -317,7 +319,7 @@ html.is-resizing .sidebar-resize-handle {
   gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 28px;
+  min-height: 2em;
   padding: 0;
   border: 0;
   background: transparent;
@@ -379,7 +381,7 @@ html.is-resizing .sidebar-resize-handle {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  min-height: 28px;
+  min-height: 2em;
   padding: 0 8px;
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
@@ -496,7 +498,7 @@ button.composer-worktree:hover {
 .section-show-more,
 .project-show-more {
   width: 100%;
-  min-height: 26px;
+  min-height: calc(26em / 14);
   padding: 0 8px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -1147,7 +1149,7 @@ button.row-twisty:hover {
 
 .sidebar-footer {
   display: grid;
-  gap: 1px;
+  gap: calc(1em / 14);
   min-width: 0;
   padding: 0 var(--sidebar-inset);
 }
@@ -1159,7 +1161,7 @@ button.row-twisty:hover {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  min-height: 28px;
+  min-height: 2em;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
