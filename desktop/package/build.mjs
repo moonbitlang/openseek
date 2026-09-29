@@ -11,27 +11,27 @@ const Hosts = {
   darwin: {
     command: "macos", platform: "macos-arm64", moonbit: "darwin-aarch64",
     ripgrep: "aarch64-apple-darwin",
-    sha: "3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4",
+    sha: "378e973289176ca0c6054054ee7f631a065874a352bf43f0fa60ef079b6ba715",
     esbuild: { package: "darwin-arm64", binary: "bin/esbuild",
-      sha: "1980cde09749094452b20d36ff267585ccb3f72749c7bc97291cd9996ccf5a2a" },
+      sha: "5d64cc9bc527d598450b5f8d47ff293eb9f3aea38dd9eff67fd55d228c5ccb43" },
   },
   linux: {
     command: "linux", platform: "linux-x64", moonbit: "linux-x86_64",
     ripgrep: "x86_64-unknown-linux-musl",
-    sha: "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c",
+    sha: "1c9297be4a084eea7ecaedf93eb03d058d6faae29bbc57ecdaf5063921491599",
     esbuild: { package: "linux-x64", binary: "bin/esbuild",
-      sha: "9573bb2233aab0f9ea7647d5cca9726113cc1768de61d66b17267f4db84488f6" },
+      sha: "9ed00ab5330c94386f3273eda99a1fb0e8f37cfd6cb5270e4ad2fe3527da3546" },
   },
   win32: {
     command: "windows", platform: "windows-x64", moonbit: "windows-x86_64",
     ripgrep: "x86_64-pc-windows-msvc",
-    sha: "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5",
+    sha: "124510b94b6baa3380d051fdf4650eaa80a302c876d611e9dba0b2e18d87493a",
     esbuild: { package: "win32-x64", binary: "esbuild.exe",
-      sha: "7286c3611b6f1f4c4d9ec90adcbc478407ff0d28ead96567f361d53e67613e19" },
+      sha: "5c5d62da7572b57ddc1fa3caedc36c1218b5d8d02ce9c7ee70e3339fce4453c4" },
   },
 };
 
-const EsbuildVersion = "0.28.2";
+const EsbuildVersion = "0.28.1";
 
 // A development build must not answer to the shipped application's identity.
 // Proton derives the macOS permission grants and the application data
@@ -72,9 +72,9 @@ const WebArchives = {
     path: "node_modules/@xterm/addon-web-links",
   },
   mermaid: {
-    filename: "mermaid-12.0.0.tgz",
-    url: "https://registry.npmjs.org/mermaid/-/mermaid-12.0.0.tgz",
-    sha: "7df1e7de572d26ea7aca5eaa7b0e77f5caacb63567006f4077c2753d730ffd9d",
+    filename: "mermaid-11.16.0.tgz",
+    url: "https://registry.npmjs.org/mermaid/-/mermaid-11.16.0.tgz",
+    sha: "ff48c94a0a0458b377a5187ad01407184d2a182e6476c2015b7068ff58355fae",
     path: "mermaid",
   },
   relativeTime: {
@@ -307,10 +307,10 @@ class Build {
   }
 
   async vendors() {
-    const rgName = `ripgrep-15.2.0-${this.host.ripgrep}`;
+    const rgName = `ripgrep-15.1.0-${this.host.ripgrep}`;
     const extension = this.command === "windows" ? "zip" : "tar.gz";
     const rgArchive = join(this.desktop, `target/vendor-ripgrep/cache/${rgName}.${extension}`);
-    await this.download(`https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/${rgName}.${extension}`, rgArchive, this.host.sha);
+    await this.download(`https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/${rgName}.${extension}`, rgArchive, this.host.sha);
     const rg = join(this.desktop, `target/vendor-ripgrep/work/${this.host.ripgrep}`);
     await rm(rg, { recursive: true, force: true });
     await mkdir(rg, { recursive: true });

@@ -66,7 +66,7 @@ Mermaid rendering is an explicit browser-only opt-in. Pass
 text content is the safe source fallback. The adapter lazily imports Mermaid's
 official ESM build from `mermaid/mermaid.esm.min.mjs`, resolved against the
 document resource base; no marked wrapper means no import. The editor web build
-downloads the pinned `mermaid@12.0.0` npm archive, verifies SHA-256, and
+downloads the pinned `mermaid@11.16.0` npm archive, verifies SHA-256, and
 stages that entry with all of its relative ESM chunks. `Light` selects
 Mermaid's `default` theme and
 `Dark` selects `dark`. Call `RenderedMarkdown::rerender_mermaid` when the

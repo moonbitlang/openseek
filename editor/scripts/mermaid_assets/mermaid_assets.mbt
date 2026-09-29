@@ -1,8 +1,8 @@
 ///|
-const MermaidVersion : String = "12.0.0"
+const MermaidVersion : String = "11.16.0"
 
 ///|
-const MermaidArchiveSha256 : String = "7df1e7de572d26ea7aca5eaa7b0e77f5caacb63567006f4077c2753d730ffd9d"
+const MermaidArchiveSha256 : String = "ff48c94a0a0458b377a5187ad01407184d2a182e6476c2015b7068ff58355fae"
 
 ///|
 const MermaidArchiveName : String = "mermaid-\{MermaidVersion}.tgz"
