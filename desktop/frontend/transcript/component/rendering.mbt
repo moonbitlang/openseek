@@ -629,6 +629,7 @@ fn section_children(
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
   page~ : @transcript_overview.Page,
+  loading? : Bool = false,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   on_jump_latest~ : @cmd.Cmd,
 ) -> Map[String, @html.Html] {
@@ -653,6 +654,14 @@ fn section_children(
       page~,
     ),
   )
+  if loading {
+    children.set(
+      "page-loading",
+      @html.div(class="transcript-page-loading", [
+        conversation_loading_view(locale~),
+      ]),
+    )
+  }
   let page_content : Map[String, @html.Html] = Map([])
   if page.index > 0 {
     page_content.set("page-start-hint", page_scroll_hint(locale, forward=false))
@@ -670,7 +679,7 @@ fn section_children(
   // Reading history unpins auto-follow (see the transcript DOM subscription); the
   // floating button is the way back to the live tail. Sticky inside the
   // scroller with zero height, so it never adds scroll length.
-  if !pinned {
+  if !pinned && !loading {
     children.set(
       TranscriptSectionKey::jump_latest().wire(),
       @html.div(class="jump-latest-wrap", [

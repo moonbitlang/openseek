@@ -1178,6 +1178,7 @@ fn transcript_view(
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
   page~ : @transcript_overview.Page,
+  loading? : Bool = false,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   stream~ : Map[String, @html.Html],
   on_jump_latest~ : @cmd.Cmd,
@@ -1189,6 +1190,7 @@ fn transcript_view(
     pinned~,
     overview~,
     page~,
+    loading~,
     overview_emit~,
     on_jump_latest~,
   )
@@ -1199,7 +1201,8 @@ fn transcript_view(
   @html.section(
     attrs=@html.Attrs::build()
       .id("transcript")
-      .class("transcript")
+      .class(if loading { "transcript is-paging" } else { "transcript" })
+      .aria_busy(if loading { "true" } else { "false" })
       .data_set("transcript-session", input.active_session)
       .data_set(
         "transcript-theme",

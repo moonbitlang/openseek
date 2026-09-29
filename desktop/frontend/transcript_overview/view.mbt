@@ -86,7 +86,17 @@ pub fn rail(
       page_button(locale, previous=true, disabled=page.index == 0, emit),
     )
   }
-  controls.push(@html.div(class="overview-rail", ticks))
+  controls.push(
+    @html.div(class="overview-rail", [
+      @html.div(
+        class="overview-rail-content",
+        attrs=@html.Attrs::build()
+          .style("--overview-page-start", "\{page.start}")
+          .style("--overview-page-size", "\{page.end - page.start}"),
+        ticks,
+      ),
+    ]),
+  )
   if page.count > 1 {
     controls.push(
       page_button(locale, previous=false, disabled=page.is_latest(), emit),

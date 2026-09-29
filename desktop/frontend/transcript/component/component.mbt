@@ -183,6 +183,8 @@ pub(all) struct Actions {
 priv struct Model {
   // None follows the latest page; an explicit index stays on that history page.
   page : Int?
+  navigation : PageNavigation?
+  navigation_generation : Int
   overlap : Int?
   pinned : Bool
   overview : @transcript_overview.State
@@ -195,6 +197,8 @@ priv enum Msg {
   Pinned(Bool)
   JumpToLatest
   CrossPage(Bool)
+  MountPage(Int)
+  PageReady(Int)
   ContentRendered
   ImageRequested(String)
   ImageResolved(ImageOwner, String, ImageReadResult)
@@ -219,7 +223,23 @@ fn Model::update(
     { ..self, image_owner, images: ImageCache::empty(), }
   }
   match msg {
+    MountPage(generation) => self.mount_page(turns, generation, emit)
+    PageReady(generation) => {
+      guard self.navigation
+        is Some({ generation: current, rendering: true, .. }) &&
+        current == generation else {
+        return (self, @cmd.none)
+      }
+      (
+        { ..self, navigation: None, },
+        @cmd.batch([
+          report_visible_turn_after_render(emit, current=self.overview.active),
+          self.images.apply_after_render(),
+        ]),
+      )
+    }
     Pinned(pinned) => {
+      guard self.navigation is None else { return (self, @cmd.none) }
       let page = turns.page_rows(self.page).page
       let pinned = pinned && page.is_latest()
       (
@@ -227,10 +247,15 @@ fn Model::update(
         @cmd.none,
       )
     }
-    CrossPage(forward) => self.cross_page(turns, forward, emit)
+    CrossPage(forward) =>
+      if self.navigation is None {
+        self.cross_page(turns, forward, emit)
+      } else {
+        (self, @cmd.none)
+      }
     JumpToLatest =>
       (
-        { ..self, pinned: true, page: None, overlap: None, },
+        { ..self, pinned: true, page: None, overlap: None, navigation: None, },
         @cmd.batch([
           measure_page_after_render(),
           scroll_after_render(),
@@ -238,6 +263,7 @@ fn Model::update(
         ]),
       )
     ContentRendered => {
+      guard self.navigation is None else { return (self, @cmd.none) }
       // Rendered content grew or changed size. A pinned reader follows the
       // tail; the overview re-reads which turn sits under the reading line.
       let commands : Array[@cmd.Cmd] = []
@@ -264,6 +290,9 @@ fn Model::update(
       ({ ..self, images, }, images.apply_after_render())
     }
     Overview(msg) => {
+      if self.navigation is Some(_) && msg is ActiveChanged(_) {
+        return (self, @cmd.none)
+      }
       let previous_active = self.overview.active
       let next = {
         ..self,
@@ -277,7 +306,13 @@ fn Model::update(
             return (self, @cmd.none)
           }
           (
-            { ..next, pinned: false, page: Some(page), overlap: None, },
+            {
+              ..next,
+              pinned: false,
+              page: Some(page),
+              overlap: None,
+              navigation: None,
+            },
             @cmd.batch([
               measure_page_after_render(),
               scroll_turn_into_view(emit, key),
@@ -285,17 +320,9 @@ fn Model::update(
           )
         }
         PreviousPage =>
-          self.select_page(
-            turns,
-            turns.page_rows(self.page).page.index - 1,
-            emit,
-          )
+          self.select_page(turns, self.navigation_page(turns).index - 1, emit)
         NextPage =>
-          self.select_page(
-            turns,
-            turns.page_rows(self.page).page.index + 1,
-            emit,
-          )
+          self.select_page(turns, self.navigation_page(turns).index + 1, emit)
         // A transcript scroll may activate a tick outside the rail's visible
         // window. Reveal only an actual active-turn change so rail scrolling
         // itself cannot feed back into another write.
@@ -332,6 +359,8 @@ pub fn component(
       let (input, _) = indexed
       (
         {
+          navigation: None,
+          navigation_generation: 0,
           pinned: input.scroll is Pinned,
           page: match input.scroll {
             Pinned => None
@@ -413,13 +442,22 @@ pub fn component(
     },
     by=pair => pair.1.branch_key(),
   )
-  state.view4(input, rendered, page_rows, (state, input, rendered, bounds) => {
+  let navigation_page = turns.map2(
+    state.map(state => state.navigation.map(n => n.page)),
+    (turns, pending) => pending.map(page => turns.page_rows(Some(page)).page),
+  )
+  let pages = page_rows.map2(navigation_page, (bounds, pending) => {
+    (bounds, pending)
+  })
+  state.view4(input, rendered, pages, (state, input, rendered, pages) => {
+    let (bounds, pending) = pages
     transcript_view(
       locale=input.locale,
       input,
       pinned=state.pinned,
       overview=state.overview,
-      page=bounds.page,
+      page=pending.unwrap_or(bounds.page),
+      loading=state.navigation is Some(_),
       overview_emit=emit.map(msg => Overview(msg)),
       stream=keyed_stream(rendered),
       on_jump_latest=emit(JumpToLatest),

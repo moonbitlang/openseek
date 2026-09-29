@@ -78,6 +78,16 @@ test "old-page bottom cannot pin or show the live response" {
     Overview(PreviousPage),
     emit,
   )
+  let (older, _) = older.update(
+    input,
+    MountPage(older.navigation_generation),
+    emit,
+  )
+  let (older, _) = older.update(
+    input,
+    PageReady(older.navigation_generation),
+    emit,
+  )
   assert_eq(older.page, Some(1))
   let (bottom, _) = older.update(input, Pinned(true), emit)
   assert_false(bottom.pinned)

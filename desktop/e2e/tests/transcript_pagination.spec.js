@@ -231,3 +231,67 @@ test('returning to a wheel-paged conversation restores its overlap and offset', 
   await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(500);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('page buttons paint loading and animate the rail before replacing the transcript', async ({ page }) => {
+  const app = await mount(page, 200);
+  const frames = await page.evaluate(async () => {
+    const transcript = document.querySelector('#transcript');
+    const rail = document.querySelector('.overview-rail');
+    // A short rail forces this adjacent page out of its visible window.
+    rail.style.maxHeight = '60px';
+    rail.scrollTop = rail.scrollHeight;
+    const marker = document.querySelector('.overview-rail-content');
+    const samples = [];
+    const sample = () => {
+      const loader = document.querySelector('.transcript-page-loading .conversation-load-state');
+      return {
+        busy: transcript.getAttribute('aria-busy') === 'true',
+        first: transcript.querySelector('.msg.user .msg-content')?.textContent,
+        hidden: getComputedStyle(document.querySelector('#stream')).visibility === 'hidden',
+        loading: Boolean(loader && loader.getBoundingClientRect().height > 0),
+        y: new DOMMatrixReadOnly(getComputedStyle(marker, '::before').transform).m42,
+        railTop: rail.scrollTop,
+      };
+    };
+    samples.push(sample());
+    document.querySelector('.overview-page-button.previous').click();
+    await new Promise(resolve => {
+      const deadline = performance.now() + 3000;
+      function frame() {
+        const current = sample(); samples.push(current);
+        if ((!current.busy && current.first === 'Question 161') || performance.now() > deadline) resolve();
+        else requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    });
+    return samples;
+  });
+  expect(frames.some(frame => frame.busy && frame.loading && frame.hidden && frame.first === 'Question 181')).toBe(true);
+  expect(frames.some(frame => frame.y < 1080 && frame.y > 960)).toBe(true);
+  expect(frames.some(frame => frame.railTop < frames[0].railTop)).toBe(true);
+  expect(frames.at(-1)).toMatchObject({ busy: false, hidden: false, loading: false, first: 'Question 161' });
+  await expect(page.locator('.overview-tick')).toHaveCount(200);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('rapid page buttons finish at the latest requested page', async ({ page }) => {
+  const app = await mount(page, 100);
+  await page.evaluate(() => document.querySelector('.overview-page-button.previous').click());
+  await expect(page.locator('#transcript')).toHaveAttribute('aria-busy', 'true');
+  await page.evaluate(() => document.querySelector('.overview-page-button.previous').click());
+  await expect(page.locator('#transcript')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('#transcript .msg.user .msg-content').first()).toHaveText('Question 41');
+  await page.waitForTimeout(250);
+  await expect(page.locator('#transcript .msg.user .msg-content').first()).toHaveText('Question 41');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('page navigation respects reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const app = await mount(page, 60);
+  await page.getByRole('button', { name: 'Previous history page' }).click();
+  await expect(page.locator('#transcript')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('#transcript .msg.user .msg-content').first()).toHaveText('Question 21');
+  expect(await page.locator('.overview-rail-content').evaluate(node => getComputedStyle(node, '::before').transitionDuration)).toBe('0s');
+  expect(app.pageErrors).toEqual([]);
+});

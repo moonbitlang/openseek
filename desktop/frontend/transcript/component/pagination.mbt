@@ -81,20 +81,21 @@ fn Model::select_page(
   emit : @cmd.Emit[Msg],
 ) -> (Model, @cmd.Cmd) {
   let rows = turns.page_rows(Some(index))
-  let active = turns.keys.get(rows.page.start)
+  guard rows.page.index != self.navigation_page(turns).index else {
+    return (self, @cmd.none)
+  }
+  let generation = self.navigation_generation + 1
   (
     {
       ..self,
-      page: Some(rows.page.index),
-      overlap: None,
+      navigation: Some({ page: rows.page.index, generation, rendering: false, }),
+      navigation_generation: generation,
       pinned: false,
-      overview: { hover: None, active, },
+      overview: { hover: None, active: turns.keys.get(rows.page.start), },
     },
     @cmd.batch([
-      measure_page_after_render(),
-      restore_scroll_after_render(0),
-      report_visible_turn_after_render(emit, current=active),
       reveal_active_overview_tick(),
+      after_page_paint(emit(MountPage(generation)), animate=true),
     ]),
   )
 }
