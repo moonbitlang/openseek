@@ -576,21 +576,31 @@ pub fn State::page(
     actions.transcript,
     actions.composer,
   ]
-  if self.archive_confirm is Some(confirm) {
-    page.push(
-      @composer.WorktreeArchiveDialog::{
-        refusal: confirm.refusal,
-        conversation_noun: "task",
-        cancel: dispatch(CancelArchiveDiscard),
-        confirm: dispatch(ConfirmArchiveDiscard),
-      }.render(),
-    )
-  }
   if self.permission_picker.confirmation_dialog(locale~, dispatch)
     is Some(dialog) {
     page.push(dialog)
   }
   page
+}
+
+///|
+/// The shell owns this overlay so archiving a sidebar row can request
+/// confirmation while any page is selected. Commands retain the staged target.
+pub fn State::archive_confirmation(
+  self : State,
+  dispatch : @cmd.Emit[Msg],
+) -> @composer.WorktreeArchiveDialog? {
+  self.archive_confirm.map(confirm => {
+    refusal: confirm.refusal,
+    conversation_noun: "task",
+    cancel: dispatch(CancelArchiveDiscard),
+    confirm: dispatch(ConfirmArchiveDiscard),
+  })
+}
+
+///|
+pub fn State::archive_confirmation_open(self : State) -> Bool {
+  self.archive_confirm is Some(_)
 }
 
 ///|
