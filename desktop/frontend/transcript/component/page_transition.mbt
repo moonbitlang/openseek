@@ -3,6 +3,7 @@
 /// A generation prevents an earlier click from finishing a newer request.
 priv struct PageNavigation {
   page : Int
+  anchor : @transcript_overview.TurnKey?
   generation : Int
   rendering : Bool
 } derive(Eq)
@@ -42,7 +43,10 @@ fn Model::mount_page(
     },
     @cmd.batch([
       measure_page_after_render(),
-      restore_scroll_after_render(0),
+      match navigation.anchor {
+        Some(key) => scroll_turn_into_view(emit, key)
+        None => restore_scroll_after_render(0)
+      },
       after_page_paint(emit(PageReady(generation))),
     ]),
   )
@@ -92,4 +96,21 @@ pub fn conversation_loading_view(
     attrs=@html.Attrs::build().role("status").aria_live("polite"),
     label,
   )
+}
+
+///|
+/// Use layout coordinates: getBoundingClientRect includes the message's
+/// entrance transform, which is still animating while a page is prepared.
+fn turn_layout_top(bubble : @dom.Element, transcript : @dom.Element) -> Double? {
+  let mut current = Some(bubble)
+  let mut top = 0.0
+  while current is Some(node) {
+    if node.is_same_node(transcript.as_node()) {
+      return Some(top)
+    }
+    guard node.to_html_element() is Some(element) else { return None }
+    top += element.get_offset_top()
+    current = element.get_offset_parent()
+  }
+  None
 }

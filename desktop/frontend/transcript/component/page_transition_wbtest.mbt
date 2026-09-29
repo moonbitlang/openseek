@@ -77,3 +77,54 @@ test "layout and scroll reports cannot overwrite a pending navigation target" {
     assert_true(next == moving)
   }
 }
+
+///|
+test "cross-page tick clicks share the loading path and retain the exact requested turn" {
+  let input = paged_input(60)
+  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let (first, _) = pinned_model(input).update(
+    input,
+    Overview(Clicked(@transcript_overview.Durable(7))),
+    emit,
+  )
+  assert_eq(first.page, None)
+  assert_true(
+    first.navigation
+    is Some({ page: 0, anchor: Some(Durable(7)), rendering: false, .. }),
+  )
+  // A second tick in the same pending page must supersede the first anchor.
+  let (last, _) = first.update(
+    input,
+    Overview(Clicked(@transcript_overview.Durable(17))),
+    emit,
+  )
+  assert_true(
+    last.navigation is Some({ page: 0, anchor: Some(Durable(17)), .. }),
+  )
+  let (stale, _) = last.update(
+    input,
+    MountPage(first.navigation_generation),
+    emit,
+  )
+  assert_true(stale == last)
+  let (mounted, _) = last.update(
+    input,
+    MountPage(last.navigation_generation),
+    emit,
+  )
+  assert_eq(mounted.page, Some(0))
+  assert_eq(mounted.overview.active, Some(@transcript_overview.Durable(17)))
+}
+
+///|
+test "ticks in the mounted page do not show a loading screen" {
+  let input = paged_input(60)
+  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let (next, _) = pinned_model(input).update(
+    input,
+    Overview(Clicked(@transcript_overview.Durable(87))),
+    emit,
+  )
+  assert_true(next.navigation is None)
+  assert_eq(next.overview.active, Some(@transcript_overview.Durable(87)))
+}

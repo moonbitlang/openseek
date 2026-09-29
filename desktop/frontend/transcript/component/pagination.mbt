@@ -79,22 +79,40 @@ fn Model::select_page(
   turns : TurnIndex,
   index : Int,
   emit : @cmd.Emit[Msg],
+  anchor? : @transcript_overview.TurnKey,
 ) -> (Model, @cmd.Cmd) {
   let rows = turns.page_rows(Some(index))
-  guard rows.page.index != self.navigation_page(turns).index else {
+  guard anchor is Some(_) ||
+    rows.page.index != self.navigation_page(turns).index else {
     return (self, @cmd.none)
   }
   let generation = self.navigation_generation + 1
   (
     {
       ..self,
-      navigation: Some({ page: rows.page.index, generation, rendering: false, }),
+      navigation: Some({
+        page: rows.page.index,
+        anchor,
+        generation,
+        rendering: false,
+      }),
       navigation_generation: generation,
       pinned: false,
-      overview: { hover: None, active: turns.keys.get(rows.page.start), },
+      overview: {
+        hover: None,
+        active: match anchor {
+          Some(key) => Some(key)
+          None => turns.keys.get(rows.page.start)
+        },
+      },
     },
     @cmd.batch([
-      reveal_active_overview_tick(),
+      // A clicked tick is already visible; keep it under the pointer.
+      if anchor is None {
+        reveal_active_overview_tick()
+      } else {
+        @cmd.none
+      },
       after_page_paint(emit(MountPage(generation)), animate=true),
     ]),
   )

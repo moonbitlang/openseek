@@ -295,3 +295,38 @@ test('page navigation respects reduced motion', async ({ page }) => {
   expect(await page.locator('.overview-rail-content').evaluate(node => getComputedStyle(node, '::before').transitionDuration)).toBe('0s');
   expect(app.pageErrors).toEqual([]);
 });
+
+test('cross-page tick clicks paint loading before rendering and land on the selected conversation', async ({ page }) => {
+  const app = await mount(page, 60);
+  const samples = await page.evaluate(async () => {
+    const transcript = document.querySelector('#transcript');
+    const frames = [];
+    document.querySelector('.overview-tick-button[aria-label="Question 7"]').click();
+    await new Promise(resolve => {
+      const deadline = performance.now() + 3000;
+      const frame = () => {
+        const busy = transcript.getAttribute('aria-busy') === 'true';
+        const first = transcript.querySelector('.msg.user .msg-content')?.textContent;
+        frames.push({ busy, first, loading: Boolean(transcript.querySelector('.conversation-load-state')) });
+        if ((!busy && first === 'Question 1') || performance.now() > deadline) resolve();
+        else requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    });
+    return frames;
+  });
+  expect(samples.some(frame => frame.busy && frame.loading && frame.first === 'Question 41')).toBe(true);
+  expect(samples.at(-1)).toMatchObject({ busy: false, loading: false, first: 'Question 1' });
+  await expect.poll(() => page.locator('#turn-s13').evaluate(node => Math.abs(node.getBoundingClientRect().top - document.querySelector('#transcript').getBoundingClientRect().top - 10))).toBeLessThan(3);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a second tick in a pending page replaces the first destination', async ({ page }) => {
+  const app = await mount(page, 60);
+  await page.evaluate(() => document.querySelector('.overview-tick-button[aria-label="Question 3"]').click());
+  await expect(page.locator('#transcript')).toHaveAttribute('aria-busy', 'true');
+  await page.evaluate(() => document.querySelector('.overview-tick-button[aria-label="Question 9"]').click());
+  await expect(page.locator('#transcript')).toHaveAttribute('aria-busy', 'false');
+  await expect.poll(() => page.locator('#turn-s17').evaluate(node => Math.abs(node.getBoundingClientRect().top - document.querySelector('#transcript').getBoundingClientRect().top - 10))).toBeLessThan(3);
+  expect(app.pageErrors).toEqual([]);
+});

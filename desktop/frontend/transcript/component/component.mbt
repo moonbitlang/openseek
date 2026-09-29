@@ -305,6 +305,10 @@ fn Model::update(
           guard turns.page_for_turn(key) is Some(page) else {
             return (self, @cmd.none)
           }
+          if page != turns.page_rows(self.page).page.index ||
+            self.navigation is Some(_) {
+            return self.select_page(turns, page, emit, anchor=key)
+          }
           (
             {
               ..next,
@@ -654,9 +658,8 @@ fn scroll_turn_into_view(
         is Some(bubble) else {
         return
       }
-      let offset = bubble.get_bounding_client_rect().get_top() -
-        transcript.get_bounding_client_rect().get_top()
-      transcript.set_scroll_top(transcript.get_scroll_top() + offset - 10.0)
+      guard turn_layout_top(bubble, transcript) is Some(top) else { return }
+      transcript.set_scroll_top(top - 10.0)
       scheduler.add(emit(Pinned(at_bottom(transcript))))
       scheduler.add(emit(Overview(ActiveChanged(visible_turn(transcript)))))
     },

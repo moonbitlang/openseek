@@ -115,6 +115,12 @@ test "cross-page navigation uses global turn keys in both sources" {
       Overview(Clicked(@transcript_overview.Durable(47))),
       emit,
     )
+    assert_eq(next.page, None)
+    let (next, _) = next.update(
+      input,
+      MountPage(next.navigation_generation),
+      emit,
+    )
     assert_eq(next.page, Some(1))
     assert_false(next.pinned)
     assert_eq(next.overview.active, Some(@transcript_overview.Durable(47)))
