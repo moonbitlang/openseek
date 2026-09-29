@@ -1177,7 +1177,7 @@ fn transcript_view(
   input : Input,
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
-  page~ : @transcript_overview.Page,
+  page~ : @transcript_overview.TranscriptPage,
   loading? : Bool = false,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   stream~ : Map[String, @html.Html],

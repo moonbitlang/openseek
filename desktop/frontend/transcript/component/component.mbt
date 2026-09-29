@@ -689,7 +689,7 @@ priv suberror TranscriptSubscription {
     // single source of truth and no cache can drift from it.
     pinned~ : Bool,
     active~ : @transcript_overview.TurnKey?,
-    page~ : @transcript_overview.Page,
+    page~ : @transcript_overview.TranscriptPage,
     follow_request~ : String?,
     overlap~ : Int?
   )
@@ -701,7 +701,7 @@ priv suberror TranscriptSubscription {
 /// forwards a synthetic "content changed" message into child state.
 fn transcript_subscription(
   model : Model,
-  page : @transcript_overview.Page,
+  page : @transcript_overview.TranscriptPage,
   follow_request : String?,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],

@@ -14,7 +14,7 @@ pub const TURNS_PER_PAGE : Int = 20
 
 pub fn entries(Array[@transcript.TranscriptItem], display~ : (String) -> String) -> Array[Entry]
 
-pub fn rail(locale? : @i18n.Locale, Array[Entry], State, @cmd.Emit[Msg], clock~ : (Double) -> String, page? : Page) -> @html.Html
+pub fn rail(locale? : @i18n.Locale, Array[Entry], State, @cmd.Emit[Msg], clock~ : (Double) -> String, page? : TranscriptPage) -> @html.Html
 
 pub fn update(Msg, State) -> State
 
@@ -50,18 +50,6 @@ pub(all) enum Msg {
   NextPage
 }
 
-pub(all) struct Page {
-  index : Int
-  count : Int
-  start : Int
-  end : Int
-} derive(Eq, @debug.Debug)
-pub fn Page::equal(Self, Self) -> Bool
-pub fn Page::is_latest(Self) -> Bool
-pub fn Page::not_equal(Self, Self) -> Bool
-pub fn Page::of(Int, index? : Int) -> Self
-pub fn Page::to_repr(Self) -> @debug.Repr
-
 pub(all) struct State {
   hover : Hover?
   active : TurnKey?
@@ -70,6 +58,18 @@ pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::to_repr(Self) -> @debug.Repr
+
+pub(all) struct TranscriptPage {
+  index : Int
+  count : Int
+  start : Int
+  end : Int
+} derive(Eq, @debug.Debug)
+pub fn TranscriptPage::equal(Self, Self) -> Bool
+pub fn TranscriptPage::is_latest(Self) -> Bool
+pub fn TranscriptPage::not_equal(Self, Self) -> Bool
+pub fn TranscriptPage::of(Int, index? : Int) -> Self
+pub fn TranscriptPage::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TurnKey {
   Durable(Int)

@@ -15,7 +15,7 @@ pub fn rail(
   state : State,
   emit : @cmd.Emit[Msg],
   clock~ : (Double) -> String,
-  page? : Page = Page::of(entries.length()),
+  page? : TranscriptPage = TranscriptPage::of(entries.length()),
 ) -> @html.Html {
   let ticks : Array[@html.Html] = []
   for index, entry in entries {

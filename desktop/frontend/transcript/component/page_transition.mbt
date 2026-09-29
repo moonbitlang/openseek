@@ -11,7 +11,7 @@ priv struct PageNavigation {
 fn Model::navigation_page(
   self : Model,
   turns : TurnIndex,
-) -> @transcript_overview.Page {
+) -> @transcript_overview.TranscriptPage {
   turns.page_rows(
     match self.navigation {
       Some(navigation) => Some(navigation.page)

@@ -628,7 +628,7 @@ fn section_children(
   stream~ : Map[String, @html.Html],
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
-  page~ : @transcript_overview.Page,
+  page~ : @transcript_overview.TranscriptPage,
   loading? : Bool = false,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   on_jump_latest~ : @cmd.Cmd,

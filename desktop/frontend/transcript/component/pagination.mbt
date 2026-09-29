@@ -2,7 +2,7 @@
 /// Row bounds retain global indices so local turn anchors and assistant step
 /// numbers do not change when a different page is mounted.
 priv struct PageRows {
-  page : @transcript_overview.Page
+  page : @transcript_overview.TranscriptPage
   start : Int
   end : Int
 } derive(Eq)
@@ -35,7 +35,10 @@ fn TurnIndex::page_rows(
   index : Int?,
   overlap? : Int? = None,
 ) -> PageRows {
-  let page = @transcript_overview.Page::of(self.starts.length(), index?)
+  let page = @transcript_overview.TranscriptPage::of(
+    self.starts.length(),
+    index?,
+  )
   // A tail-following page can advance after new turns arrive. Never carry an
   // old overlap across intervening pages and accidentally mount the history.
   let start = if page.start > 0 && overlap == Some(page.start - 1) {
