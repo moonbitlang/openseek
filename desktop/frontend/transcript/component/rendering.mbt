@@ -458,9 +458,15 @@ priv enum BlockContent {
 /// transcript item, then the
 /// response still streaming; or the empty state alone. Vector order determines
 /// visual order; the keys only determine node identity.
-fn stream_blocks(input : Input) -> @vector.Vector[Block] {
+fn stream_blocks(input : Input, page? : Int) -> @vector.Vector[Block] {
+  let bounds = input.page_rows(page)
+  let input = if bounds.page.is_latest() {
+    input
+  } else {
+    { ..input, streaming_response: None, streaming_reasoning: None, }
+  }
   if input.minimal {
-    return input.minimal_blocks()
+    return input.minimal_blocks(bounds~)
   }
   let stream = TranscriptSectionKey::stream(input)
   // The durable transcript plus client-local notices. Live semantic events
@@ -483,6 +489,9 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
   let descriptions : Map[String, String] = Map([])
   let mut steps = 0
   for index, row in input.items {
+    if index >= bounds.end {
+      break
+    }
     let item = row.item
     let step_label = if input.source is OpenSeek &&
       item.kind is Assistant(replay=false, ..) {
@@ -490,6 +499,14 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
       Some("#\{steps}")
     } else {
       None
+    }
+    if index < bounds.start {
+      if item.kind is Assistant(calls~, ..) {
+        for call in calls {
+          collect_job_description(call, descriptions)
+        }
+      }
+      continue
     }
     let anchor = if item.kind is User(..) {
       Some(@transcript_overview.TurnKey::of(item, index~).anchor())
@@ -609,6 +626,7 @@ fn section_children(
   stream~ : Map[String, @html.Html],
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
+  page? : Int,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   on_jump_latest~ : @cmd.Cmd,
 ) -> Map[String, @html.Html] {
@@ -630,6 +648,7 @@ fn section_children(
       overview,
       overview_emit,
       clock=ms => clock_label(locale~, ms),
+      page=input.page_rows(page).page,
     ),
   )
   children.set(

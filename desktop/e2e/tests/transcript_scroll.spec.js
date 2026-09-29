@@ -48,10 +48,12 @@ test('sending re-pins a transcript the reader had scrolled up', async ({ page })
   app.sessionEvents = longSessionEvents('First fixture:');
   await app.install();
   await app.goto();
-  await openConversation(page, 'Rabbita browser fixture', /^First fixture: question 1$/);
+  await openConversation(page, 'Rabbita browser fixture', /^First fixture: question 41$/);
 
   const transcript = page.locator('#transcript');
   await waitUntilScrollable(transcript);
+  await page.getByRole('button', { name: 'Previous history page' }).click();
+  await expect(page.locator('#transcript .msg.user').first()).toContainText('question 21');
   await transcript.evaluate(node => { node.scrollTop = 0; });
   await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(0);
 
@@ -107,20 +109,22 @@ test('returning to a conversation restores where the reader left it', async ({ p
   };
   await app.install();
   await app.goto();
-  await openConversation(page, 'Rabbita browser fixture', /^First fixture: question 1$/);
+  await openConversation(page, 'Rabbita browser fixture', /^First fixture: question 41$/);
 
   const transcript = page.locator('#transcript');
   await waitUntilScrollable(transcript);
+  await page.getByRole('button', { name: 'Previous history page' }).click();
+  await expect(page.locator('#transcript .msg.user').first()).toContainText('question 21');
   await transcript.evaluate(node => { node.scrollTop = 600; });
   await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(600);
 
   await page.locator('.conversation-row[title="session-2"]').click();
-  await page.locator('.transcript .msg-content', { hasText: /^Second fixture: question 1$/ }).waitFor();
+  await page.locator('.transcript .msg-content', { hasText: /^Second fixture: question 41$/ }).waitFor();
   // A conversation opened for the first time starts at its tail.
   await expect.poll(() => distanceFromBottom(transcript)).toBeLessThanOrEqual(4);
 
   await page.locator('.conversation-row[title="session-1"]').click();
-  await page.locator('.transcript .msg-content', { hasText: /^First fixture: question 1$/ }).waitFor();
+  await page.locator('.transcript .msg-content', { hasText: /^First fixture: question 21$/ }).waitFor();
   await expect.poll(() => transcript.evaluate(node => node.scrollTop)).toBe(600);
   expect(app.pageErrors).toEqual([]);
 });

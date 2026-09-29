@@ -49,7 +49,7 @@ pub fn ProjectChoice::not_equal(Self, Self) -> Bool
 
 pub(all) enum ScrollPosition {
   Pinned
-  Unpinned(top~ : Double)
+  Unpinned(top~ : Double, page~ : Int)
 } derive(Eq)
 pub fn ScrollPosition::equal(Self, Self) -> Bool
 pub fn ScrollPosition::not_equal(Self, Self) -> Bool

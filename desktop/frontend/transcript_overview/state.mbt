@@ -44,6 +44,8 @@ pub(all) enum Msg {
   Clicked(TurnKey)
   // Which turn the transcript viewport sits in, `None` above the first one.
   ActiveChanged(TurnKey?)
+  PreviousPage
+  NextPage
 }
 
 ///|
@@ -54,6 +56,7 @@ pub fn update(msg : Msg, state : State) -> State {
     Left => { ..state, hover: None, }
     Clicked(key) => { ..state, active: Some(key), }
     ActiveChanged(key) => { ..state, active: key, }
+    PreviousPage | NextPage => { ..state, hover: None, }
   }
 }
 

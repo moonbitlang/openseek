@@ -23,6 +23,7 @@ fn base_input() -> Input {
 fn pinned_model(input : Input) -> Model {
   {
     pinned: true,
+    page: None,
     overview: @transcript_overview.State::empty(),
     image_owner: input.image_owner(),
     images: ImageCache::empty(),
@@ -32,7 +33,16 @@ fn pinned_model(input : Input) -> Model {
 ///|
 test "an overview click unpins and highlights inside the component" {
   let key = @transcript_overview.Durable(3)
-  let input = base_input()
+  let input = {
+    ..base_input(),
+    items: VisibleRow::history([
+      {
+        kind: User(content=Content([Text("question")])),
+        ts: None,
+        sequence: Some(3),
+      },
+    ]),
+  }
   let state = pinned_model(input)
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (next, _) = state.update(input, Overview(Clicked(key)), emit)

@@ -953,7 +953,8 @@ test('transcript overview previews failed turns and jumps among mounted messages
   app.sessionEvents = events;
   await app.install();
   await app.goto();
-  await app.openSession();
+  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+  await page.locator('.msg.user', { hasText: 'Question 81 ' }).waitFor();
 
   const overview = page.getByRole('navigation', { name: 'Conversation overview' });
   const ticks = overview.locator('.overview-tick-button');

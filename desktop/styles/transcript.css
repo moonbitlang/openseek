@@ -89,7 +89,7 @@
   overflow: visible;
   z-index: 6;
 }
-.overview-rail {
+.overview-navigation {
   position: absolute;
   /* Centered on the transcript's own viewport — `.transcript` is the size
      container, so no chrome arithmetic. The sticky wrapper pins this to
@@ -103,19 +103,60 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  /* Bounded by the real transcript height; past the cap the rail scrolls
-     (the wheel, or the active-tick reveal) instead of compressing its
-     ticks into an unreadable bar. The scrollbar stays hidden — this is
-     18px of gutter. Scrolling means clipping, which is why the preview
-     popover renders as the nav's child, never inside this box. */
   max-height: calc(100cqh - 32px);
+  gap: 4px;
+}
+.overview-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-width: none;
+}
+.overview-page-button {
+  --icon-size: 14px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.overview-page-button.previous .icon {
+  transform: rotate(180deg);
+}
+.overview-page-button:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-hover-subtle);
+}
+.overview-page-button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+/* Adjacent selected ticks form one continuous page-range rectangle. No
+   grouping wrappers: every tick keeps its global position and identity. */
+.overview-tick.in-page {
+  background: var(--color-hover-subtle);
+  box-shadow: inset 1px 0 var(--color-border), inset -1px 0 var(--color-border);
+}
+.overview-tick.page-start {
+  border-radius: 3px 3px 0 0;
+  border-top: 1px solid var(--color-border);
+}
+.overview-tick.page-end {
+  border-radius: 0 0 3px 3px;
+  border-bottom: 1px solid var(--color-border);
 }
 .overview-rail::-webkit-scrollbar {
   display: none;
 }
 .overview-tick {
+  box-sizing: border-box;
   display: flex;
   /* Fixed-height rows: a conversation past the rail's cap scrolls (see the
      rail) rather than compressing, so every tick keeps a hittable size at
@@ -239,7 +280,7 @@
 /* The rail lives in the scroller's padding, so it survives any width the
    desktop layout produces; only a phone-narrow column drops it. */
 @container (max-width: 700px) {
-  .transcript-overview {
+  .transcript-overview:not(.paginated) {
     display: none;
   }
 }
