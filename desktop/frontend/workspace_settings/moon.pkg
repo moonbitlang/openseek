@@ -2,6 +2,7 @@ import {
   "openseek_desktop/frontend/i18n",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dialog",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/sub",
   "moonbitlang/editor/base/common",

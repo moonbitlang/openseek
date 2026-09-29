@@ -31,9 +31,13 @@ fn app_shortcut_sub_loader(
         // consume the event.
         event.prevent_default()
         event.stop_propagation()
-        // The rename dialog owns interaction until it is saved or cancelled.
+        // These dialogs own interaction while open.
         guard @dom.document()
           .get_element_by_id("conversation-rename-dialog")
+          .to_option()
+          is None &&
+          @dom.document()
+          .query_selector("#workspace-settings-dialog[open]")
           .to_option()
           is None else {
           return
@@ -307,7 +311,12 @@ fn SidebarDispatcher::project_settings(
   guard @resource.of_path(channel, id.root()) is Some(project) else {
     return @cmd.none
   }
-  self.emit(OpenWorkspaceSettings(channel, project))
+  @cmd.batch([
+    // The action menu has already closed. Give showModal a stable element
+    // to restore focus to when the workspace dialog is dismissed.
+    @project.focus(id),
+    self.emit(OpenWorkspaceSettings(channel, project)),
+  ])
 }
 
 ///|
@@ -671,6 +680,7 @@ fn main {
       state.map(model => model.locale),
       workspace_settings_input,
       {
+        dismiss: emit(CloseWorkspaceSettings),
         choose_default_mode: (channel, workspace, value) => {
           emit(WorkspaceDefaultModeChosen(channel, workspace, value))
         },

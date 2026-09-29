@@ -2201,19 +2201,19 @@ test('desktop shell and modal stay inside a narrow browser viewport', async ({ p
   expect(app.pageErrors).toEqual([]);
 });
 
-test('workspace settings open and persist per-workspace choices', async ({ page }) => {
+test('workspace settings dialog opens and persists per-workspace choices', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
 
-  // The project row's "…" menu is the way into a workspace's settings page.
+  // The project row's "…" menu opens its workspace settings dialog.
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByTitle('More actions').click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  await expect(page.getByRole('heading', { name: 'Workspace settings', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Workspace settings' })).toBeVisible();
   await expect(page.locator('.settings-subtitle')).toHaveText('/workspace');
 
-  // The page reads the host's authoritative snapshot before enabling the
+  // The dialog reads the host's authoritative snapshot before enabling the
   // selects.
   await expect.poll(() => app.requests.find(request =>
     request.method === 'workspace.settings_get')).toMatchObject({
@@ -2263,9 +2263,8 @@ test('workspace settings open and persist per-workspace choices', async ({ page 
     { ...app.workspaceSettingsFor('/workspace') },
   );
 
-  // Leave and re-enter: the page keeps the committed values.
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  // Close and re-enter: the dialog keeps the committed values.
+  await page.getByRole('button', { name: 'Close workspace settings' }).click();
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByTitle('More actions').click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
@@ -2281,11 +2280,8 @@ test('workspace settings open and persist per-workspace choices', async ({ page 
     submodule_checkout_timeout_seconds: 30,
   });
 
-  // A detach takes the page away with no click anywhere, so nothing
-  // click-away dismisses the open menu. Removing its trigger blurs it
-  // instead, and the shared select dismisses on blur, so the round trip
-  // leaves nothing open: re-entering renders closed, and the first click on
-  // the trigger opens the menu rather than closing one nobody can see.
+  // Detaching the workspace closes the dialog and its select menu. Reopening
+  // starts with closed selects, so the first trigger click opens the menu.
   const reentered = page.getByRole('button', { name: 'New chats' });
   await reentered.click();
   await expect(reentered).toHaveAttribute('aria-expanded', 'true');

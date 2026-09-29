@@ -14,6 +14,8 @@ import {
 // Values
 pub fn component(@rabbita.Val[Input], Actions, @rabbita.Val[@i18n.Locale]) -> @rabbita.Val[Array[(String, @html.Html)]]
 
+pub fn focus(Id) -> @cmd.Cmd
+
 // Errors
 
 // Types and methods

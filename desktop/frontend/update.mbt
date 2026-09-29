@@ -526,13 +526,6 @@ fn adopt_projects(
     }),
     conversations,
     loading_conversation,
-    // A detached workspace takes its settings page with it; the page
-    // addresses a row that no longer exists.
-    screen: match model.screen {
-      WorkspaceSettings(channel=owner, workspace~) if owner == channel &&
-        !paths.contains(workspace) => Chat
-      screen => screen
-    },
   })
   commands.push(refresh_cmd)
   if selected_detached {
@@ -1663,6 +1656,7 @@ fn covering_overlay(model : Model) -> Bool {
   (model.narrow && model.sidebar_open) ||
   model.project_picker is Some(_) ||
   model.export_dialog.is_open() ||
+  model.workspace_settings_dialog is Some(_) ||
   model.archive_confirm is Some(_) ||
   model.archived_delete_confirm is Some(_) ||
   model.quick_open.is_open() ||
@@ -1685,7 +1679,7 @@ fn desired_browser_view(model : Model) -> Int? {
   let git_details_open = match model.screen {
     Chat => model.git_details_open
     Codex => model.codex.git_details_open()
-    Skills | Schedules | Settings | WorkspaceSettings(..) => false
+    Skills | Schedules | Settings => false
   }
   guard model.is_desktop &&
     conversation_screen &&
@@ -1846,6 +1840,24 @@ fn update(
 ) -> (@cmd.Cmd, Model) {
   let previous = model
   let (cmd, model) = update_msg(dispatch, msg, model)
+  // Detaching a workspace or losing its device also dismisses its dialog.
+  let model = {
+    ..model,
+    workspace_settings_dialog: model.workspace_settings_dialog.filter(dialog => {
+      model
+      .device_state(dialog.target.channel)
+      .map_or(false, dev => dev.projects.contains(dialog.target.workspace))
+    }),
+  }
+  let workspace_settings_cmd = if previous.workspace_settings_dialog is None &&
+    model.workspace_settings_dialog is Some(_) {
+    @workspace_settings.show()
+  } else if previous.workspace_settings_dialog is Some(_) &&
+    model.workspace_settings_dialog is None {
+    @workspace_settings.close()
+  } else {
+    @cmd.none
+  }
   // A retained selection is not a read receipt when a panel covers it.
   // Reconcile after every transition, including panel restore and resize.
   let model = model.mark_visible_conversation_read()
@@ -2070,6 +2082,7 @@ fn update(
     @cmd.batch([
       cmd,
       notification_badge_cmd,
+      workspace_settings_cmd,
       quick_open_cmd,
       panel_visibility_cmd,
       panel_cmd,
@@ -3000,8 +3013,7 @@ fn update_msg(
             model,
           )
         }
-        Skills | Schedules | Settings | WorkspaceSettings(..) =>
-          (@cmd.none, model)
+        Skills | Schedules | Settings => (@cmd.none, model)
       }
     // Full-diff comments carry both line domains because a deletion has no
     // working-document position. Prefer the modified line for additions and
@@ -4778,19 +4790,32 @@ fn update_msg(
         (@cmd.none, model)
       }
     OpenWorkspaceSettings(channel, workspace) =>
-      (@cmd.none, { ..model, screen: WorkspaceSettings(channel~, workspace~), })
+      (
+        @cmd.none,
+        {
+          ..model,
+          workspace_settings_dialog: Some({
+            target: { channel, workspace, },
+            error: None,
+          }),
+        },
+      )
+    CloseWorkspaceSettings =>
+      (@cmd.none, { ..model, workspace_settings_dialog: None, })
     WorkspaceDefaultModeChosen(channel, workspace, value) => {
       guard model.device_state(channel) is Some(dev) else {
         return (@cmd.none, model)
       }
       let worktree_mode = value == "worktree"
       // Apply optimistically under a fresh token, so a slower list reply
-      // cannot roll the page's select back; the commit broadcast lands on a
+      // cannot roll the dialog's select back; the commit broadcast lands on a
       // newer token still. The failure path re-reads the disk state.
       let request_generation = dev.workspace_settings_request_generation + 1
       (
         save_workspace_settings(dispatch, channel, workspace, worktree_mode~),
-        model.replace_device({
+        model
+        .with_workspace_settings_error(channel, workspace, None)
+        .replace_device({
           ..dev.with_workspace_settings(
             workspace,
             worktree_mode,
@@ -4821,7 +4846,9 @@ fn update_msg(
           workspace,
           checkout_submodules~,
         ),
-        model.replace_device({
+        model
+        .with_workspace_settings_error(channel, workspace, None)
+        .replace_device({
           ..dev.with_workspace_settings(
             workspace,
             row.worktree_mode,
@@ -4854,7 +4881,9 @@ fn update_msg(
           workspace,
           submodule_checkout_timeout_seconds~,
         ),
-        model.replace_device({
+        model
+        .with_workspace_settings_error(channel, workspace, None)
+        .replace_device({
           ..dev.with_workspace_settings(
             workspace,
             row.worktree_mode,
@@ -7149,16 +7178,19 @@ fn update_device_msg(
       )
     }
     WorkspaceSettingsSaveFailed(workspace~, message~) => {
-      // The page's optimistic value may be wrong now: alongside the toast,
-      // re-read the disk state under a fresh token.
+      // A native dialog sits above the toast stack, so show the error inside
+      // the matching dialog too, then re-read the authoritative disk state.
       let request_generation = dev.workspace_settings_request_generation + 1
-      let (toast, next) = model.notify_error(
-        dispatch,
-        notice_text(
-          model.locale,
-          SaveWorkspace(workspace.path.to_string(), message.to_string()),
-        ),
+      let message = notice_text(
+        model.locale,
+        SaveWorkspace(workspace.path.to_string(), message.to_string()),
       )
+      let model = model.with_workspace_settings_error(
+        channel,
+        workspace,
+        Some(message),
+      )
+      let (toast, next) = model.notify_error(dispatch, message)
       (
         @cmd.batch([
           toast,

@@ -1984,18 +1984,6 @@ fn view(
       ]
     Schedules =>
       [@html.h1(class="topbar-title", ui(model.locale, ScheduledTasks))]
-    WorkspaceSettings(workspace~, ..) =>
-      [
-        @html.h1(
-          class="topbar-title",
-          @sidebar_messages.text(model.locale, WorkspaceSettings),
-        ),
-        @html.span(
-          class="topbar-workspace",
-          title=workspace.path,
-          @resource.label(workspace),
-        ),
-      ]
   }
   let content = match model.screen {
     // `Model::chat_column` is the one fork that decides what the conversation
@@ -2045,7 +2033,6 @@ fn view(
     Schedules => [schedules_page(dispatch, model)]
     Skills => [skills_html]
     Settings => [settings_page(dispatch, model)]
-    WorkspaceSettings(..) => [workspace_settings_html]
   }
   // The app is `sidebar | content`; `content` itself splits into the
   // conversation (left) and the editor (right) as two independent parts, so
@@ -2127,6 +2114,7 @@ fn view(
       right_panel_html,
       terminal_html,
     ]),
+    workspace_settings_html,
     // Keep the dialog before conditional overlays: replacing its DOM node
     // would lose showModal state during resize or a notification.
     model.export_dialog.view(

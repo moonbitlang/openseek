@@ -18,7 +18,8 @@ priv enum UiMessage {
   SixtySeconds
   SubmoduleTimeout
   TimeoutDescription
-  WorkspaceLabel
+  WorkspaceSettingsLabel
+  CloseLabel
   ConversationsLabel
   WorktreesLabel
 }
@@ -123,11 +124,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "如果 Git 未在此時間內完成，則停止初始化子模組。"
     (Japanese, TimeoutDescription) =>
       "この時間内に Git が完了しない場合、サブモジュールの初期化を停止します。"
-    (English, WorkspaceLabel) => "Workspace"
-    (Spanish, WorkspaceLabel) => "Espacio de trabajo"
-    (SimplifiedChinese, WorkspaceLabel) => "工作区"
-    (TraditionalChinese, WorkspaceLabel) => "工作區"
-    (Japanese, WorkspaceLabel) => "ワークスペース"
+    (English, WorkspaceSettingsLabel) => "Workspace settings"
+    (Spanish, WorkspaceSettingsLabel) => "Configuración del espacio de trabajo"
+    (SimplifiedChinese, WorkspaceSettingsLabel) => "工作区设置"
+    (TraditionalChinese, WorkspaceSettingsLabel) => "工作區設定"
+    (Japanese, WorkspaceSettingsLabel) => "ワークスペースの設定"
+    (English, CloseLabel) => "Close workspace settings"
+    (Spanish, CloseLabel) => "Cerrar configuración del espacio de trabajo"
+    (SimplifiedChinese, CloseLabel) => "关闭工作区设置"
+    (TraditionalChinese, CloseLabel) => "關閉工作區設定"
+    (Japanese, CloseLabel) => "ワークスペースの設定を閉じる"
     (English, ConversationsLabel) => "Conversations"
     (Spanish, ConversationsLabel) => "Conversaciones"
     (SimplifiedChinese, ConversationsLabel) => "对话"
