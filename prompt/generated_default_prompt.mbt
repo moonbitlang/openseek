@@ -274,7 +274,7 @@ fn default_prompt() -> String {
     #|tools that rewrite source as their job (`moon fmt`, `moon info`,
     #|`moon test --update`, `git checkout`) do run normally.
     #|
-    #|### Host tool calls with bobzhang/openseek_tools
+    #|### Host tool calls with moonbitlang/openseek_tools
     #|
     #|A mbtx script can call the host's own tools.
     #|`@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
@@ -321,7 +321,7 @@ fn default_prompt() -> String {
     #|/// <path> <old_string> <new_string> [<start_line>]. Verified end to end by
     #|/// a host-backed test that runs it through the real sandbox and host.
     #|import {
-    #|  "bobzhang/openseek_tools@0.1.0",
+    #|  "moonbitlang/openseek_tools@0.2.0",
     #|  "moonbitlang/async",
     #|  "moonbitlang/core/env",
     #|  "moonbitlang/core/string",
