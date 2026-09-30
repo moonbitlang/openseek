@@ -6,6 +6,20 @@ JavaScript bundle, and read-only session JSONL APIs. It builds for the wasm
 backend (the default — it compiles noticeably faster, since native also pays
 C-stub compilation and linking) and for native.
 
+## Run without a checkout
+
+The published package carries the viewer shell and a release frontend bundle
+inside the binary, so it runs anywhere through `moonx`, from the directory
+whose sessions you want to browse:
+
+```sh
+moonx moonbitlang/inspect --watch --host 127.0.0.1
+```
+
+Outside a checkout the server serves its built-in copies and ignores any
+`web/` or `_build/` in the current directory; `--web-dir` and `--bundle` still
+override them explicitly.
+
 ## Build
 
 From the repository root, build before starting the server:
@@ -118,3 +132,23 @@ If the server cannot find the generated JavaScript bundle, pass it explicitly:
 ```sh
 moon run inspect -- --bundle _build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js
 ```
+
+## Publishing
+
+Bump `version` in `moon.mod`, then dispatch the `publish-inspect` workflow. It
+runs `node scripts/publish.mjs inspect`, which builds the release frontend
+(`moon build --target js --release cmd/viz_app`), stages this package, and
+overwrites the staged `generated_assets.mbt` with `web/index.html` and that
+bundle (`scripts/embed_inspect_assets.mjs`) before `moon publish`. The copy of
+`generated_assets.mbt` in git stays empty, so the 2 MB bundle never enters the
+history, and a checkout build keeps serving the files from disk. To build
+exactly what would be published without publishing it:
+
+```sh
+node scripts/publish.mjs inspect --stage-only /tmp/inspect
+cd /tmp/inspect && MOON_WORK=off moon build --target wasm --release
+```
+
+The staged package compiles against the `moonbitlang/openseek` release named in
+this module's `moon.mod`, so publish the root module first when `inspect`
+needs its newer APIs.

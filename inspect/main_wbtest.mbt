@@ -67,19 +67,19 @@ test "module_root_from_exe recovers the checkout from a moon build path" {
 ///|
 test "asset candidates search cwd first, then the derived checkout" {
   @debug.debug_inspect(
-    shell_candidates("web", Some("/repo")),
+    shell_candidates("web", Some("/repo"), web_dir_explicit=false),
     content=(
       #|["web/index.html", "/repo/web/index.html"]
     ),
   )
   @debug.debug_inspect(
-    shell_candidates("custom", None),
+    shell_candidates("custom", None, web_dir_explicit=true),
     content=(
       #|["custom/index.html"]
     ),
   )
   @debug.debug_inspect(
-    bundle_candidates("", "web", Some("/repo")),
+    bundle_candidates("", "web", Some("/repo"), web_dir_explicit=false),
     content=(
       #|[
       #|  "",
@@ -94,14 +94,28 @@ test "asset candidates search cwd first, then the derived checkout" {
   )
   // An explicit --bundle stays the highest-priority candidate.
   @debug.debug_inspect(
-    bundle_candidates("/x/app.js", "web", None),
+    bundle_candidates("/x/app.js", "web", None, web_dir_explicit=true),
     content=(
-      #|[
-      #|  "/x/app.js",
-      #|  "web/viz_app.js",
-      #|  "_build/js/release/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
-      #|  "_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
-      #|]
+      #|["/x/app.js", "web/viz_app.js"]
+    ),
+  )
+}
+
+///|
+test "outside a checkout, only explicit asset paths are searched" {
+  // Under moonx there is no checkout: the default `web/` and the CWD build
+  // outputs belong to whatever project the user is in, so the binary's own
+  // embedded copies must win over them.
+  @debug.debug_inspect(
+    shell_candidates("web", None, web_dir_explicit=false),
+    content=(
+      #|[]
+    ),
+  )
+  @debug.debug_inspect(
+    bundle_candidates("", "web", None, web_dir_explicit=false),
+    content=(
+      #|[""]
     ),
   )
 }

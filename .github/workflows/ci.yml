@@ -340,6 +340,33 @@ jobs:
         working-directory: cmd/viz_app/e2e
         run: npm test
 
+      # A published moonbitlang/inspect embeds the viewer (scripts/publish.mjs
+      # inspect) so `moonx` can run it with no files beside the wasm. Build that
+      # shape from this checkout and serve it from a directory outside it: the
+      # shell and bundle must come from the binary, byte for byte, with the
+      # --watch setting injected.
+      - name: Serve inspect with the embedded viewer
+        run: |
+          bundle=_build/js/release/build/moonbitlang/openseek-viz-app/openseek-viz-app.js
+          moon build --target js --release cmd/viz_app
+          node scripts/embed_inspect_assets.mjs web/index.html "$bundle" inspect/generated_assets.mbt
+          moon check --target wasm --deny-warn inspect
+          moon build --target wasm --release inspect
+          dir="$RUNNER_TEMP/inspect-smoke"
+          mkdir -p "$dir"
+          cp _build/wasm/release/build/moonbitlang/inspect/inspect.wasm "$dir/"
+          (cd "$dir" && moonrun inspect.wasm -- --watch --host 127.0.0.1 --port 18731 > server.log 2>&1 &)
+          for _ in $(seq 1 50); do
+            curl -fsS -o /dev/null http://127.0.0.1:18731/ && break
+            sleep 0.2
+          done
+          cat "$dir/server.log"
+          grep -q 'shell from the copy built into this binary' "$dir/server.log"
+          grep -q 'bundle from the copy built into this binary' "$dir/server.log"
+          curl -fsS http://127.0.0.1:18731/ | grep -q 'window.__OPENSEEK_WATCH_MS__ = 1000;'
+          curl -fsS http://127.0.0.1:18731/viz_app.js | cmp - "$bundle"
+          pkill -f 'moonrun inspect.wasm' || true
+
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4

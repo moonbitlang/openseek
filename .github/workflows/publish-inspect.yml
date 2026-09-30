@@ -1,0 +1,90 @@
+name: publish-inspect
+
+# Bump `version` in inspect/moon.mod, then dispatch this workflow. The staged
+# package compiles against the moonbitlang/openseek release inspect/moon.mod
+# names, so publish the root module first when inspect needs its newer APIs.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: publish-inspect
+  cancel-in-progress: false
+
+jobs:
+  publish-inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: install moon
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: update MoonBit dependencies
+        run: moon update
+
+      # Publishing embeds a release build of cmd/viz_app, and building any JS
+      # target in this workspace runs Desktop's Proton prebuild. Mirror the
+      # viz-e2e job in ci.yml: pinned Proton, its pkg-config metadata, and the
+      # CEF runtime.
+      - name: resolve pinned Proton version
+        id: proton
+        run: |
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/backend/moon.mod)"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: restore Proton runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.proton/store
+            ~/.proton/helpers
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
+
+      - name: install Proton Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libgtk-3-dev libx11-dev
+
+      - name: assemble Proton CEF runtime
+        run: >-
+          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
+          cef setup
+
+      # Build exactly what would be published, on its own against the registry,
+      # before anything is uploaded.
+      - name: prepublish check
+        run: |
+          staged="$RUNNER_TEMP/inspect"
+          node scripts/publish.mjs inspect --stage-only "$staged"
+          cd "$staged"
+          export MOON_WORK=off
+          moon update
+          moon check --target wasm --deny-warn
+          moon test --target wasm
+          moon build --target wasm --release
+
+      - name: publish
+        env:
+          SECRET: ${{ secrets.MOONCAKES_MOONBITLANG_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "Error: MOONCAKES_MOONBITLANG_TOKEN secret is not set."
+            exit 1
+          fi
+          trap 'rm -f ~/.moon/credentials.json' EXIT
+          umask 077
+          printf '%s\n' "$SECRET" > ~/.moon/credentials.json
+          moon version --all
+          node scripts/publish.mjs inspect
