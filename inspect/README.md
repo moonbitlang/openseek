@@ -121,6 +121,8 @@ moonx moonbitlang/inspect --ensure --watch --session-root .openseek
   only by you, for the next caller to find.
 - It exits after 60 minutes without a request (`--idle-exit <minutes>`, 0 to
   never exit); a watching browser tab keeps it alive.
+- It also exits once its session root is deleted, so a server started for a
+  temporary directory (a test, a scratch run) does not outlive it.
 
 Either way the last line it prints is `openseek viz: open <url>`, with
 ` (already running)` appended when it reused a server. Add `#s=<session id>`

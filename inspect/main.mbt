@@ -266,6 +266,7 @@ async fn ensure_main(
         assets,
         access={ token, port, },
         idle_ms=idle_ms(config.idle_minutes),
+        watch_root=config.session_root,
         on_exit=() => remove_own_record(config.session_root, port, token),
       )
     }
@@ -296,32 +297,46 @@ fn idle_ms(minutes : Int) -> Int64 {
 }
 
 ///|
-/// Serve until stopped or, with a positive `idle_ms`, until that long passes
+/// Serve until stopped; or, with a positive `idle_ms`, until that long passes
 /// with no request (a watching browser tab counts, since it asks every
-/// second). Then `on_exit` runs and the server shuts down.
+/// second); or, with `watch_root`, until that directory is deleted, so a
+/// server started for a temporary session root does not outlive it. Then
+/// `on_exit` runs and the server shuts down.
 async fn serve(
   server : @http.Server,
   catalog : SessionCatalog,
   assets : ViewerAssets,
   access? : Guard,
   idle_ms~ : Int64,
+  watch_root? : String,
+  root_check_ms? : Int = 10_000,
   on_exit? : async () -> Unit = () => (),
 ) -> Unit {
   let last_request = Ref(@async.now())
   @async.with_task_group(group => {
-    if idle_ms > 0L {
+    if idle_ms > 0L || watch_root is Some(_) {
       group.spawn_bg(no_wait=true) <| () => {
-        let check_every = if idle_ms < 30_000L {
-          idle_ms.to_int()
-        } else {
-          30_000
+        let mut check_every = 30_000
+        if idle_ms > 0L && idle_ms < check_every.to_int64() {
+          check_every = idle_ms.to_int()
+        }
+        if watch_root is Some(_) && root_check_ms < check_every {
+          check_every = root_check_ms
         }
         while true {
           @async.sleep(check_every)
-          if @async.now() - last_request.val >= idle_ms {
-            println(
-              "openseek viz: idle for \{idle_ms / 60_000L} minute(s); exiting",
-            )
+          let reason = match watch_root {
+            Some(root) if !(@fs.exists(root) catch { _ => true }) =>
+              Some("session root '\{root}' is gone")
+            _ =>
+              if idle_ms > 0L && @async.now() - last_request.val >= idle_ms {
+                Some("idle for \{idle_ms / 60_000L} minute(s)")
+              } else {
+                None
+              }
+          }
+          if reason is Some(why) {
+            println("openseek viz: \{why}; exiting")
             on_exit()
             group.return_immediately(())
           }

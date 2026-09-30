@@ -635,3 +635,40 @@ async test "inspect_version matches moon.mod" {
   }
   assert_true(manifest.contains("version = \"\{inspect_version}\""))
 }
+
+///|
+async test "a server exits once its session root is deleted" {
+  @vfs.with_tmpdir(prefix="openseek-viz-root-", root => {
+    let session_root = "\{root}/.openseek"
+    @fs.mkdir(session_root, recursive=true, allow_exist=true)
+    let identity = server_identity(session_root, [])
+    guard ensure_server(session_root, identity, ensure_ports(identity))
+      is Started(server, port, token) else {
+      fail("expected a server")
+    }
+    let assets : ViewerAssets = {
+      shell: [],
+      bundle: [],
+      watch: false,
+      identity,
+    }
+    let finished = @async.with_timeout_opt(5000, () => {
+      @async.with_task_group(group => {
+        group.spawn_bg(no_wait=true) <| () => {
+          @async.sleep(200)
+          @fs.rmdir(session_root, recursive=true)
+        }
+        serve(
+          server,
+          { roots: [], },
+          assets,
+          access={ token, port, },
+          idle_ms=0L,
+          watch_root=session_root,
+          root_check_ms=50,
+        )
+      })
+    })
+    assert_true(finished is Some(_))
+  })
+}
