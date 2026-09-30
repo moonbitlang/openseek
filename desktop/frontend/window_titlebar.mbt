@@ -2,18 +2,10 @@
 // its available titlebar area into CSS. CSS declares the page's drag regions.
 
 ///|
-const WindowTitlebarSelector = ".sidebar-header, .topbar, .editor-tabsbar, .window-titlebar-drag-strip"
+const WindowTitlebarSelector = ".sidebar-header, .topbar, .editor-tabsbar"
 
 ///|
 const WindowTitlebarExcludedSelector = "button, a, input, textarea, select, [role=button], [contenteditable=true], .editor-tab, .dock-menu"
-
-///|
-fn window_titlebar_drag_strip_visible(
-  page_without_topbar : Bool,
-  is_desktop : Bool,
-) -> Bool {
-  page_without_topbar && is_desktop
-}
 
 ///|
 fn is_window_titlebar_double_click_target(element : @dom.Element) -> Bool {

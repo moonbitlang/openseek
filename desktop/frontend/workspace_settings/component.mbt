@@ -254,7 +254,6 @@ fn page_view(
         @html.div(class="settings-page-inner", [
           @html.div(class="settings-header", [
             @html.div(class="page-eyebrow", ui(locale, WorkspaceLabel)),
-            @html.h1(@resource.label(workspace)),
             @html.div(class="settings-subtitle", workspace.path),
           ]),
           @html.div(class="settings", [

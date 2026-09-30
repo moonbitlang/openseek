@@ -1532,7 +1532,6 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     @html.div(class="settings-page-inner", [
       @html.div(class="settings-header", [
         @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
-        @html.h1(@settings.text(locale, Settings)),
         @html.div(
           class="settings-subtitle",
           if !settings_loaded {
@@ -1622,15 +1621,15 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
 ///|
 /// Top bar: conversation identity on the left (session id and workspace in
 /// the tooltip), live run state and conversation controls on the right.
-fn topbar_view(
+fn conversation_header(
   dispatch : @cmd.Emit[Msg],
   toggle_terminal : @cmd.Cmd,
   model : Model,
   conv : Conversation,
-) -> @html.Html {
+) -> Array[@html.Html] {
   let items : Array[@html.Html] = []
   items.push(
-    @html.span(
+    @html.h1(
       class="topbar-title",
       title=session_tooltip(model, conv),
       conversation_title(locale=model.locale, conv),
@@ -1702,7 +1701,7 @@ fn topbar_view(
       ),
     )
   }
-  @html.div(class="topbar", items)
+  items
 }
 
 ///|
@@ -1951,18 +1950,53 @@ fn view(
   }
   let file_panel_visible = model.file_panel_visible()
   let terminal_panel_visible = model.terminal_panel_visible()
-  // Pages without their own topbar still paint beneath the native overlay.
-  // Mark their main element so the document-level double-click gesture can
-  // treat only its otherwise-empty top edge as window chrome.
-  let window_titlebar_page = match model.screen {
-    Chat => model.active_conversation() is None
-    Skills | Schedules | Settings | WorkspaceSettings(..) => true
-    Codex => false
+  let codex_actions : @codex.PageActions = {
+    toggle_terminal,
+    workspace_label: workspace => @resource.label(workspace),
+    transcript: transcript_html,
+    composer: codex_composer_html,
+    detail_toggle: model.detail_toggle(dispatch),
   }
-  let window_titlebar_drag_strip = window_titlebar_drag_strip_visible(
-    window_titlebar_page,
-    model.is_desktop,
-  )
+  let header = match model.screen {
+    Chat =>
+      match model.chat_column() {
+        Transcript(conversation=conv, ..) =>
+          conversation_header(dispatch, toggle_terminal, model, conv)
+        _ =>
+          [@html.h1(class="topbar-title", model.pending_conversation_title())]
+      }
+    Codex =>
+      model.codex.header(
+        locale=model.locale,
+        model.focused,
+        terminal_open=terminal_panel_visible,
+        narrow=model.narrow,
+        codex_actions,
+      )
+    Settings =>
+      [@html.h1(class="topbar-title", @settings.text(model.locale, Settings))]
+    Skills =>
+      [
+        @html.h1(
+          class="topbar-title",
+          @sidebar_messages.text(model.locale, Skills),
+        ),
+      ]
+    Schedules =>
+      [@html.h1(class="topbar-title", ui(model.locale, ScheduledTasks))]
+    WorkspaceSettings(workspace~, ..) =>
+      [
+        @html.h1(
+          class="topbar-title",
+          @sidebar_messages.text(model.locale, WorkspaceSettings),
+        ),
+        @html.span(
+          class="topbar-workspace",
+          title=workspace.path,
+          @resource.label(workspace),
+        ),
+      ]
+  }
   let content = match model.screen {
     // `Model::chat_column` is the one fork that decides what the conversation
     // column is; the transcript component's lifetime follows the same value.
@@ -1980,7 +2014,6 @@ fn view(
         Onboarding => [onboarding_view(dispatch, model)]
         Transcript(conversation=conv, ..) =>
           [
-            topbar_view(dispatch, toggle_terminal, model, conv),
             transcript_html,
             if conv.is_archived_read_only() {
               conv.archived_read_only_view(locale=model.locale, dispatch)
@@ -2007,16 +2040,7 @@ fn view(
       model.codex.page(
         locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
-        model.focused,
-        terminal_open=terminal_panel_visible,
-        narrow=model.narrow,
-        @codex.PageActions::{
-          toggle_terminal,
-          workspace_label: workspace => @resource.label(workspace),
-          transcript: transcript_html,
-          composer: codex_composer_html,
-          detail_toggle: model.detail_toggle(dispatch),
-        },
+        codex_actions,
       )
     Schedules => [schedules_page(dispatch, model)]
     Skills => [skills_html]
@@ -2040,11 +2064,13 @@ fn view(
   if terminal_panel_visible {
     content_class += " terminal-open"
   }
-  let page_content = if window_titlebar_drag_strip {
-    [@html.div(class="window-titlebar-drag-strip", @html.nothing), ..content]
-  } else {
-    content
-  }
+  let page_content = [
+    @html.div(
+      class=if model.screen is Codex { "topbar codex-topbar" } else { "topbar" },
+      header,
+    ),
+    ..content,
+  ]
   let panel_available = model.screen is Chat ||
     (
       file_ctx(model).placement is Some(placement) &&
@@ -2097,14 +2123,7 @@ fn view(
         on_click=toggle_right_panel,
         icon(icon_layout_sidebar_right),
       ),
-      @html.main_(
-        class=if window_titlebar_drag_strip {
-          "window-titlebar-page"
-        } else {
-          ""
-        },
-        page_content,
-      ),
+      @html.main_(page_content),
       right_panel_html,
       terminal_html,
     ]),

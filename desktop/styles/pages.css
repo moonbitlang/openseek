@@ -77,12 +77,9 @@ a:where(.setting-link) {
 }
 
 /* ---------- onboarding (no conversation on screen) ---------- */
-/* The conversation column with no conversation in it: the registry is still
-   in flight, or no project is attached to open a chat in. Like the Skills and
-   Settings pages it replaces all three of `main`'s rows, so it claims the
-   whole column rather than sitting in the topbar's. */
+/* Empty states occupy the body beneath the shared header. */
 .onboarding {
-  grid-row: 1 / -1;
+  grid-row: 2 / -1;
   display: grid;
   place-items: center;
   min-height: 0;
@@ -115,10 +112,10 @@ a:where(.setting-link) {
 /* Shares the Skills page's shell — same column width, header type, and
    section headings — so the two pages read as siblings. */
 .settings-page {
-  grid-row: 1 / -1;
+  grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
-  padding: calc(var(--topbar-height) + 24px) 28px 28px;
+  padding: 24px 28px 28px;
 }
 
 .settings-page-inner {
@@ -381,10 +378,10 @@ h2 {
 
 /* ---------- skills page ---------- */
 .skills-page {
-  grid-row: 1 / -1;
+  grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
-  padding: calc(var(--topbar-height) + 24px) 28px 28px;
+  padding: 24px 28px 28px;
 }
 
 .skills-page-inner {
