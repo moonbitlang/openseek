@@ -24,6 +24,9 @@ pub fn FileStateMap::serialize(
   self : FileStateMap,
   definition : AgentToolDefinition,
 ) -> AgentToolDefinition {
+  if definition.owns_file_access {
+    return definition
+  }
   {
     ..definition,
     execute: Async(arguments => {
@@ -41,4 +44,18 @@ pub fn Tools::program_tools(self : Tools) -> Tools raise {
       for tool in self.by_name.values() if tool.is_program_callable() => tool
     ],
   )
+}
+
+///|
+/// Run human-paced IO outside the file gate, then reacquire it even on
+/// cancellation so the enclosing with_access always releases its own lease.
+/// Only call from an executor currently inside this map's with_access.
+/// The caller must revalidate filesystem state after this returns.
+pub async fn[T] FileStateMap::without_access(
+  self : FileStateMap,
+  operation : async () -> T,
+) -> T {
+  self.lock.release()
+  defer @async.protect_from_cancel(() => self.lock.acquire())
+  operation()
 }

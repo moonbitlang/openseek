@@ -81,6 +81,8 @@ pub struct AgentToolDefinition {
   /// Host-owned opt-in for leaf executors; never infer from dynamic listings.
   /// Callable executors must not wait on agent-loop work. Loop control stays out.
   priv program_callable : Bool
+  /// The executor already owns the shared file-operation gate.
+  priv owns_file_access : Bool
   /// Human approval must not inherit a program's ordinary execution deadline.
   priv can_request_approval : Bool
 } derive(Debug(ignore=ToolExecutor))
@@ -96,6 +98,7 @@ pub fn AgentToolDefinition::AgentToolDefinition(
   control? : Bool = false,
   concurrent_safe? : Bool = false,
   program_callable? : Bool = false,
+  owns_file_access? : Bool = false,
   can_request_approval? : Bool = false,
 ) -> AgentToolDefinition {
   {
@@ -106,6 +109,7 @@ pub fn AgentToolDefinition::AgentToolDefinition(
     control,
     concurrent_safe,
     program_callable,
+    owns_file_access,
     can_request_approval,
   }
 }

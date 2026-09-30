@@ -287,6 +287,18 @@ fn default_prompt() -> String {
     #|the data, compute the replacements, call the tool, verify, print a summary —
     #|and return to the model when the next decision needs judgment.
     #|
+    #|`edit` and `multi_edit` reject writes outside their configured scope. Report
+    #|scope blockers to the coordinating agent; it can revise the assignment or
+    #|perform the edit itself. `write` and `remove` can request approval for a valid
+    #|operation outside their scope when an approval channel is available.
+    #|`write` also requests approval to replace an existing MoonBit source file with
+    #|the supplied full contents; prefer `edit`/`multi_edit` for partial changes.
+    #|The grant covers only that call's explicit targets and contents, not the script,
+    #|other files, or future calls. Changed targets invalidate pending approval.
+    #|Invalid arguments, missing edit matches, parse failures, and unsupported targets
+    #|are errors to fix, not reasons to request more permission. Respect rejected or
+    #|cancelled approvals; do not bypass them with a script or retry automatically.
+    #|
     #|The SDK exposes this interface:
     #|
     #|```
@@ -526,8 +538,9 @@ fn default_prompt() -> String {
     #|  while waiting, reconsider before requesting approval again. Respect rejection
     #|  or cancellation; do not retry a rejected deletion without new user instructions
     #|  or bypass it with a command. If approval is unavailable, report the limitation.
-    #|  Worker scope, workspace-root protection, and symlink restrictions (including
-    #|  symlinks inside a directory) cannot be overridden by approval. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
+    #|  Valid paths outside a tool's write scope require approval for the specific
+    #|  operation. Workspace-root protection and symlink restrictions (including
+    #|  symlinks inside a directory) remain enforced. `.mbt`/`.mbt.md` deletion also reports `moon check` feedback.
     #|  Change existing source with `edit`, not by removing and rewriting.
     #|
     #|- If a run reports that source file writes are blocked, retry compiler feedback fixes

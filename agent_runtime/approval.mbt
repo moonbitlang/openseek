@@ -28,10 +28,9 @@ pub(all) enum ApprovalOutcome {
 /// what they would do with it. A prompt missing any of the three cannot be
 /// decided on.
 ///
-/// No field names the tool CALL. Only one asking call can be in flight at a
-/// time — `mbtx` and `remove` are not `concurrent_safe`
-/// — so nothing needs pairing. A tool family that asks and admits adjacent
-/// concurrency would need the call id here.
+/// The transport assigns each question its own approval id. Direct tools and
+/// programmatic file operations use the same channel; grants are consumed only
+/// by the operation that asked, never by another call.
 pub(all) struct ApprovalAsk {
   /// The tool asking, for the prompt's title.
   tool_name : String
