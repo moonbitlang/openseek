@@ -119,7 +119,7 @@ moonx moonbitlang/inspect --ensure --watch --session-root .openseek
   which stops DNS-rebinding pages.
 - It keeps `{port, token, version}` in `<session-root>/inspect.json`, readable
   only by you, for the next caller to find.
-- It exits after 30 minutes without a request (`--idle-exit <minutes>`, 0 to
+- It exits after 60 minutes without a request (`--idle-exit <minutes>`, 0 to
   never exit); a watching browser tab keeps it alive.
 
 Either way the last line it prints is `openseek viz: open <url>`, with
