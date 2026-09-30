@@ -1,5 +1,5 @@
 // Workspace settings is a stable native dialog. The root owns its target
-// and persistence; this component owns the three select menus.
+// and persistence; this component owns visibility and the three select menus.
 
 ///|
 /// The workspace settings values the dialog renders. `Unloaded` means the
@@ -36,16 +36,6 @@ pub fn Input::inactive() -> Input {
 
 ///|
 const DialogId = "workspace-settings-dialog"
-
-///|
-pub fn show() -> @cmd.Cmd {
-  @dialog.show(DialogId)
-}
-
-///|
-pub fn close() -> @cmd.Cmd {
-  @dialog.close(DialogId)
-}
 
 ///|
 /// Parent-owned persistence messages this component re-emits. Captured at
@@ -287,21 +277,28 @@ fn dialog_contents(
 }
 
 ///|
-/// Keep the dialog mounted so incremental renders preserve showModal state.
-/// The native modal contains keyboard focus and restores it when closed.
-pub fn component(
+/// Each visibility transition creates fresh local state and schedules the
+/// native operation after layout. The dialog element itself stays mounted.
+fn dialog_component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   actions : Actions,
+  opening : Bool,
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
-    init=(_, input) => ({ key: input.target, menu: None, }, @cmd.none),
+    init=(_, input) => {
+      (
+        { key: input.target, menu: None, },
+        if opening {
+          @dialog.show(DialogId)
+        } else {
+          @dialog.close(DialogId)
+        },
+      )
+    },
     update=(state, input, msg, emit) => state.update(input, msg, emit),
     subscriptions=(state, input, emit) => {
-      // Gated on the dialog identity too: an input change without a message
-      // (workspace detach or device removal) unloads the click-away listener.
-      // The dialog's close event clears any remaining local menu state.
       if state.menu is Some(_) && state.key == input.target {
         @dismiss.on_outside_click(
           "workspace-settings-select-dismiss",
@@ -326,6 +323,25 @@ pub fn component(
         .aria_describedby("workspace-settings-description"),
       dialog_contents(locale~, input, state, emit, actions),
     )
+  })
+}
+
+///|
+/// Visibility changes dispose the previous local state and subscriptions.
+/// Ordinary setting or locale updates keep the same dialog and select state.
+pub fn component(
+  locale : @rabbita.Val[@i18n.Locale],
+  input : @rabbita.Val[Input],
+  actions : Actions,
+) -> @rabbita.Val[@html.Html] {
+  input
+  .map(input => input.target is Some(_))
+  .switch_by(opening => dialog_component(locale, input, actions, opening), by=opening => {
+    if opening {
+      "open"
+    } else {
+      "closed"
+    }
   })
 }
 
