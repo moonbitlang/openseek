@@ -1849,15 +1849,6 @@ fn update(
       .map_or(false, dev => dev.projects.contains(dialog.target.workspace))
     }),
   }
-  let workspace_settings_cmd = if previous.workspace_settings_dialog is None &&
-    model.workspace_settings_dialog is Some(_) {
-    @workspace_settings.show()
-  } else if previous.workspace_settings_dialog is Some(_) &&
-    model.workspace_settings_dialog is None {
-    @workspace_settings.close()
-  } else {
-    @cmd.none
-  }
   // A retained selection is not a read receipt when a panel covers it.
   // Reconcile after every transition, including panel restore and resize.
   let model = model.mark_visible_conversation_read()
@@ -2082,7 +2073,6 @@ fn update(
     @cmd.batch([
       cmd,
       notification_badge_cmd,
-      workspace_settings_cmd,
       quick_open_cmd,
       panel_visibility_cmd,
       panel_cmd,

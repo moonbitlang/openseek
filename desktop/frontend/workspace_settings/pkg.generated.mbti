@@ -11,11 +11,7 @@ import {
 }
 
 // Values
-pub fn close() -> @cmd.Cmd
-
 pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
-
-pub fn show() -> @cmd.Cmd
 
 // Errors
 
