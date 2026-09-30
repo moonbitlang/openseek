@@ -188,6 +188,22 @@ call, and how the run ended. The full record (reasoning, every tool call and
 its output, token usage) is the session log. A run that stops early exits
 non-zero and names the session to continue with `--session <id>`.
 
+To watch a run live in the browser, add `--inspect`. Before the agent starts,
+the run starts (or reuses) the session viewer for its session root
+(`moonx moonbitlang/inspect --ensure --watch`, see `inspect/README.md`) and
+prints a link on stderr:
+
+```text
+session cli-20260930-065544-387-647458c4 (.openseek)
+watch live: http://127.0.0.1:41474/?t=…#s=cli-20260930-065544-387-647458c4
+```
+
+The page opens on that run and follows it as it records. The viewer is shared
+by every run and TUI in the project, outlives the run, and exits after an hour
+without a request. If it cannot start, the run says so once and carries on.
+`--inspect` needs a recorded session, so it cannot be combined with
+`--no-session`.
+
 From a checkout of this repository, `moon run . --` runs the same CLI; pass
 `--dir` to point it at another project, since it works in the current
 directory:

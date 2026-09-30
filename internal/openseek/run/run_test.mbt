@@ -211,3 +211,22 @@ async test "a single run exits successfully only when its turn completes" {
     fail("a run without an API key exited successfully")
   })
 }
+
+///|
+async test "--inspect is refused with --no-session, before a workspace exists" {
+  @vfs.with_tmpdir(prefix="openseek-run-inspect-", root => {
+    let workspace = "\{root}/workspace"
+    let parsed = @testkit.run_matches(
+      argv=["--inspect", "--no-session", "--dir", workspace, "say", "hi"],
+      env={ "DEEPSEEK": "test-key" },
+    )
+    let _ = @run.run_task_command(parsed) catch {
+      error => {
+        assert_true("\{error}".contains("cannot be combined with --no-session"))
+        assert_false(@fs.exists(workspace))
+        return
+      }
+    }
+    fail("--inspect with --no-session started a run")
+  })
+}

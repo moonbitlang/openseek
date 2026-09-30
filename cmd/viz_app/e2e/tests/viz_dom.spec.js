@@ -552,3 +552,36 @@ test('a served viewer without --watch never polls', async ({ page }) => {
   await expect(page.locator('.header-meta')).not.toContainText('live');
   expect(viewer.apiRequests.filter(url => url.includes('known_bytes='))).toEqual([]);
 });
+
+test('--watch opens a linked session once it starts', async ({ page }) => {
+  // `openseek run --inspect` prints its link before the run records anything,
+  // so the page can load before the session is listed.
+  const viewer = new VizBrowserHarness(page);
+  await viewer.install({ watchMs: 200 });
+  await viewer.goto('#s=run-late');
+  await expect(page.getByText('waiting for run-late to start…')).toBeVisible();
+
+  viewer.extraSessionRows.push({
+    key: 'run-late',
+    id: 'run-late',
+    root_label: '/workspace/.openseek',
+    is_marker: true,
+    last_active: 2,
+    first_prompt: 'A run that started after its link',
+  });
+  viewer.childEvents.set('run-late', viewer.eventLog([
+    { sequence: 1, item: { kind: 'user', payload: { content: 'A run that started after its link' } } },
+  ], { id: 'run-late' }));
+
+  await expect(page.locator('.header-id', { hasText: 'run-late' })).toBeVisible();
+  await expect(page.locator('.header-meta')).toContainText('live');
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test('without --watch a link to an unknown session does not wait', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  await viewer.install();
+  await viewer.goto('#s=run-late');
+  await expect(page.getByText('1 session(s)')).toBeVisible();
+  await expect(page.getByText('waiting for run-late to start…')).toHaveCount(0);
+});

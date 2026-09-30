@@ -238,22 +238,34 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
     SessionsFetched(Ok(text)) =>
       match parse_session_rows(text) {
         Some(sessions) => {
+          let untouched = model.selected is None && model.dropped is None
+          // A watching viewer opened on a session that has not written its
+          // first event yet (a run's own link, printed as it starts) keeps
+          // the key and opens it once a list refresh shows it.
+          let waiting_for = match model.pending_restore_key {
+            Some(key) if model.watch_ms > 0 &&
+              untouched &&
+              resolve_session_key(sessions, key) is None => Some(key)
+            _ => None
+          }
           let listed = {
             ..model,
             sessions,
-            pending_restore_key: None,
+            pending_restore_key: waiting_for,
             collapsed_roots: prune_collapsed_roots(
               model.collapsed_roots,
               sessions,
             ),
-            status: list_status(model, "\{sessions.length()} session(s)"),
+            status: match waiting_for {
+              Some(key) => "waiting for \{key} to start…"
+              None => list_status(model, "\{sessions.length()} session(s)")
+            },
           }
           // A refresh restores the session named in the URL hash — in the
           // live viewer and in exports alike. Otherwise a standalone export
           // opens the first row immediately. Desktop session-family exports
           // put the parent first; live servers keep the explicit click, since
           // their list refreshes must never yank the user off a session.
-          let untouched = model.selected is None && model.dropped is None
           match model.pending_restore_key {
             Some(key) if untouched &&
               resolve_session_key(sessions, key) is Some(resolved) =>
@@ -455,7 +467,9 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
       }
     WatchTick => {
       let ticks = model.watch_ticks + 1
-      let list_refresh = if ticks % watch_list_every == 0 {
+      // While a linked session has yet to appear, look for it every tick.
+      let list_refresh = if ticks % watch_list_every == 0 ||
+        model.pending_restore_key is Some(_) {
         [
           fetch_text(emit, "/api/sessions", result => {
             WatchSessionsFetched(result)
@@ -540,18 +554,28 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
       match result {
         Ok(text) =>
           match parse_session_rows(text) {
-            Some(sessions) if sessions != model.sessions =>
-              (
-                @cmd.none,
-                {
-                  ..model,
+            Some(sessions) if sessions != model.sessions => {
+              let listed = {
+                ..model,
+                sessions,
+                collapsed_roots: prune_collapsed_roots(
+                  model.collapsed_roots,
                   sessions,
-                  collapsed_roots: prune_collapsed_roots(
-                    model.collapsed_roots,
-                    sessions,
-                  ),
-                },
-              )
+                ),
+              }
+              // The session a link named has started: open it, unless the
+              // reader picked something else meanwhile.
+              match model.pending_restore_key {
+                Some(key) if model.selected is None &&
+                  model.dropped is None &&
+                  resolve_session_key(sessions, key) is Some(resolved) =>
+                  update(emit, Select(resolved), {
+                    ..listed,
+                    pending_restore_key: None,
+                  })
+                _ => (@cmd.none, listed)
+              }
+            }
             _ => (@cmd.none, model)
           }
         Err(_) => (@cmd.none, model)

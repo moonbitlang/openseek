@@ -107,6 +107,11 @@ pub fn root_command() -> @argparse.Command {
             long="no-session",
             about="Run ephemerally: do not record this run to a durable session.",
           ),
+          FlagArg(
+            "inspect",
+            long="inspect",
+            about="Watch this run live in the browser: start (or reuse) the session viewer, `moonx moonbitlang/inspect --ensure --watch`, and print its link before the agent starts. Needs a recorded session.",
+          ),
           review_gate_flag(),
           FlagArg(
             "cancel-on-stdin-eof",

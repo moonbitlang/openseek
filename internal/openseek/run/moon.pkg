@@ -23,6 +23,9 @@ import {
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/core/json",
   "moonbitlang/x/path",
+  "moonbitlang/async/process",
+  "moonbitlang/core/encoding/percent",
+  "moonbitlang/core/debug",
 }
 
 import {
