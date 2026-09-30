@@ -76,6 +76,24 @@ ignores `.DS_Store`, lock files, and malformed/husk directories, and it can
 serve a normal `.openseek` store, a directory of copied JSONL files, or a single
 matching JSONL file.
 
+## Watch
+
+`--watch` (or `OPENSEEK_VIZ_WATCH=1`) keeps the browser live while sessions are
+being written, for example by the TUI or `openseek serve`:
+
+```sh
+moon run inspect -- --watch --host 127.0.0.1
+```
+
+The served page re-checks the open session every second, sending the log size
+it already has (`GET /api/sessions/<key>?known_bytes=N`). While the size is
+unchanged the server answers `{"found": true, "unchanged": true, ...}` without
+the log; once the log grows the page re-renders with the new events. A reader
+at the bottom of the log follows it; one scrolled up stays put. The session
+list refreshes every few seconds so new sessions appear. The setting is handed
+to the page as `window.__OPENSEEK_WATCH_MS__` in the served shell, so a
+standalone export never polls.
+
 ## Standalone export
 
 `--export <path>` writes a single self-contained HTML file with every discovered

@@ -156,8 +156,14 @@ export class VizBrowserHarness {
     };
   }
 
-  async install({ standalone = false } = {}) {
+  async install({ standalone = false, watchMs = 0 } = {}) {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
+    if (watchMs > 0) {
+      // What `inspect --watch` injects into the shell it serves.
+      await this.page.addInitScript(ms => {
+        window.__OPENSEEK_WATCH_MS__ = ms;
+      }, watchMs);
+    }
     this.page.on('request', request => {
       if (new URL(request.url()).pathname.startsWith('/api/sessions')) {
         this.apiRequests.push(request.url());
@@ -190,9 +196,16 @@ export class VizBrowserHarness {
         });
       }
       const id = decodeURIComponent(url.pathname.slice('/api/sessions/'.length));
+      const envelope = this.sessionEnvelope(id);
+      // Like the server: a watch poll for a log that has not grown gets the
+      // cheap `unchanged` reply instead of the whole log.
+      const known = url.searchParams.get('known_bytes');
+      const body = envelope.found && known === String(envelope.events_bytes)
+        ? { found: true, unchanged: true, events_bytes: envelope.events_bytes }
+        : envelope;
       return route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify(this.sessionEnvelope(id)),
+        body: JSON.stringify(body),
       });
     });
   }
