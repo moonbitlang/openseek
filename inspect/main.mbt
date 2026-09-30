@@ -10,6 +10,8 @@
 ///   (`?known_bytes=N` answers `{found, unchanged, events_bytes}` while the log
 ///   is still N bytes, so a `--watch` viewer can poll cheaply)
 /// - `GET /api/sessions/<key>/openseek_session-<id>.jsonl` → raw session file (header line + events)
+/// - `GET /api/info`                          → `{server, version, identity}`, so a
+///   second `inspect` can tell whether a busy port already serves its sessions
 ///
 /// The shell and bundle come from disk when running from a checkout (or when
 /// `--web-dir`/`--bundle` name them), and otherwise from the copies built into a
@@ -35,6 +37,13 @@ priv struct VizConfig {
   export_session : String
   // `--watch`: the served viewer re-checks the open session and the list.
   watch : Bool
+  // `--ensure`: find or start the one loopback, token-protected server for
+  // these sessions (see ensure.mbt).
+  ensure : Bool
+  // Whether `--port` (or its env) was given; `--ensure` otherwise derives one.
+  port_explicit : Bool
+  // Exit after this many minutes without a request; 0 never exits.
+  idle_minutes : Int
 }
 
 ///|
@@ -48,6 +57,7 @@ fn viz_config_from_matches(matches : @argparse.Matches) -> VizConfig raise {
     bundle,
     export_path,
     export_session,
+    idle_exit,
   ) = match matches {
     {
       values: {
@@ -59,19 +69,21 @@ fn viz_config_from_matches(matches : @argparse.Matches) -> VizConfig raise {
         "bundle": [bundle, ..],
         "export": [export_path, ..],
         "export-session": [export_session, ..],
+        "idle-exit": [idle_exit, ..],
         ..
       },
       ..
     } =>
       (
         port, host, session_root, session_root_name, web_dir, bundle, export_path,
-        export_session,
+        export_session, idle_exit,
       )
     _ => fail("missing parsed visualizer defaults")
   }
   guard export_session.is_blank() || !export_path.is_blank() else {
     fail("--export-session requires --export")
   }
+  let ensure = matches.flags.get("ensure") is Some(true)
   let host = host.trim()
   guard !host.is_empty() else {
     fail("--host or OPENSEEK_VIZ_HOST must not be empty")
@@ -98,6 +110,18 @@ fn viz_config_from_matches(matches : @argparse.Matches) -> VizConfig raise {
     export_path,
     export_session: export_session.trim().to_owned(),
     watch: matches.flags.get("watch") is Some(true),
+    ensure,
+    port_explicit: !(matches.sources.get("port") is (Some(Default) | None)),
+    idle_minutes: match idle_exit.trim() {
+      // Unset: an `--ensure` server is a shared background helper, so it goes
+      // away on its own; a server someone started by hand runs until stopped.
+      "" => if ensure { 30 } else { 0 }
+      text =>
+        @string.parse_int(text) catch {
+          _ =>
+            fail("--idle-exit must be a whole number of minutes, got: \{text}")
+        }
+    },
   }
 }
 
@@ -123,6 +147,12 @@ async fn main {
     module_root,
     web_dir_explicit=config.web_dir_explicit,
   )
+  // `--ensure` keys everything on the session root's real path and keeps its
+  // record there, so the root must exist before either is computed; a missing
+  // relative `.openseek` would otherwise hash the same in every project.
+  if config.ensure {
+    @fs.mkdir(config.session_root, recursive=true, allow_exist=true)
+  }
   let catalog = session_catalog(
     config.session_root,
     config.search_dirs,
@@ -167,31 +197,141 @@ async fn main {
     )
     return
   }
-  let addr = @socket.Addr::parse("\{config.host}:\{config.port}") catch {
-    _ => fail("invalid --host/--port: \{config.host}:\{config.port}")
-  }
-  println("openseek viz: serving \{catalog.roots.length()} session root(s)")
-  for root in catalog.roots {
-    println("openseek viz: sessions under '\{root.path}'")
-  }
-  println("openseek viz: shell from \{resolve_shell(shell).describe()}")
-  println(
-    "openseek viz: bundle from \{resolve_bundle(bundle_paths).describe()}",
-  )
-  if config.watch {
-    println(
-      "openseek viz: --watch: open sessions refresh every \{watch_interval_ms}ms",
-    )
-  }
-  print_open_urls(config.host, config.port)
+  let identity = server_identity(config.session_root, config.search_dirs)
   let assets : ViewerAssets = {
     shell,
     bundle: bundle_paths,
     watch: config.watch,
+    identity,
   }
-  let server = @http.Server(addr, reuse_addr=true)
-  server.run_forever((request, _body, conn) => {
-    handle(request, conn, catalog, assets)
+  if config.ensure {
+    ensure_main(config, catalog, assets)
+    return
+  }
+  let addr = @socket.Addr::parse("\{config.host}:\{config.port}") catch {
+    _ => fail("invalid --host/--port: \{config.host}:\{config.port}")
+  }
+  let server = @http.Server(addr, reuse_addr=true) catch {
+    @os_error.OSError(_) as error => {
+      // The port is taken. If an `inspect` for these same sessions holds it,
+      // point at that one rather than fail: starting a second is never wanted.
+      let probe_host = if config.host == "0.0.0.0" {
+        "127.0.0.1"
+      } else {
+        config.host
+      }
+      if probe_inspect(probe_host, config.port, identity) {
+        println(
+          "openseek viz: already serving these sessions at http://\{probe_host}:\{config.port}",
+        )
+        return
+      }
+      raise error
+    }
+    error => raise error
+  }
+  print_serving(catalog, assets)
+  print_open_urls(config.host, config.port)
+  serve(server, catalog, assets, idle_ms=idle_ms(config.idle_minutes))
+}
+
+///|
+/// `--ensure`: reuse the server already serving these sessions, or become it.
+/// Either way the last startup line is `openseek viz: open <url>`, which is
+/// what a caller such as the TUI reads.
+async fn ensure_main(
+  config : VizConfig,
+  catalog : SessionCatalog,
+  assets : ViewerAssets,
+) -> Unit {
+  let ports = if config.port_explicit {
+    [config.port]
+  } else {
+    ensure_ports(assets.identity)
+  }
+  match ensure_server(config.session_root, assets.identity, ports) {
+    Reused(port, token) =>
+      println("openseek viz: open \{ensure_url(port, token)} (already running)")
+    Started(server, port, token) => {
+      print_serving(catalog, assets)
+      if config.idle_minutes > 0 {
+        println(
+          "openseek viz: exits after \{config.idle_minutes} idle minute(s)",
+        )
+      }
+      println("openseek viz: open \{ensure_url(port, token)}")
+      serve(
+        server,
+        catalog,
+        assets,
+        access={ token, port, },
+        idle_ms=idle_ms(config.idle_minutes),
+        on_exit=() => remove_own_record(config.session_root, port, token),
+      )
+    }
+  }
+}
+
+///|
+async fn print_serving(catalog : SessionCatalog, assets : ViewerAssets) -> Unit {
+  println("openseek viz: serving \{catalog.roots.length()} session root(s)")
+  for root in catalog.roots {
+    println("openseek viz: sessions under '\{root.path}'")
+  }
+  println("openseek viz: shell from \{resolve_shell(assets.shell).describe()}")
+  println(
+    "openseek viz: bundle from \{resolve_bundle(assets.bundle).describe()}",
+  )
+  if assets.watch {
+    println(
+      "openseek viz: --watch: open sessions refresh every \{watch_interval_ms}ms",
+    )
+  }
+}
+
+///|
+/// `--idle-exit` minutes in milliseconds; 0 stays 0 ("never").
+fn idle_ms(minutes : Int) -> Int64 {
+  minutes.to_int64() * 60_000L
+}
+
+///|
+/// Serve until stopped or, with a positive `idle_ms`, until that long passes
+/// with no request (a watching browser tab counts, since it asks every
+/// second). Then `on_exit` runs and the server shuts down.
+async fn serve(
+  server : @http.Server,
+  catalog : SessionCatalog,
+  assets : ViewerAssets,
+  access? : Guard,
+  idle_ms~ : Int64,
+  on_exit? : async () -> Unit = () => (),
+) -> Unit {
+  let last_request = Ref(@async.now())
+  @async.with_task_group(group => {
+    if idle_ms > 0L {
+      group.spawn_bg(no_wait=true) <| () => {
+        let check_every = if idle_ms < 30_000L {
+          idle_ms.to_int()
+        } else {
+          30_000
+        }
+        while true {
+          @async.sleep(check_every)
+          if @async.now() - last_request.val >= idle_ms {
+            println(
+              "openseek viz: idle for \{idle_ms / 60_000L} minute(s); exiting",
+            )
+            on_exit()
+            group.return_immediately(())
+          }
+        }
+      }
+    }
+    server.run_forever((request, _body, conn) => {
+      last_request.val = @async.now()
+      handle(request, conn, catalog, assets, access?)
+    })
   })
 }
 
@@ -258,6 +398,8 @@ priv struct ViewerAssets {
   shell : Array[String]
   bundle : Array[String]
   watch : Bool
+  // What this server serves (`server_identity`), for `/api/info`.
+  identity : String
 }
 
 ///|
@@ -295,11 +437,35 @@ async fn handle(
   conn : @http.ServerConnection,
   catalog : SessionCatalog,
   assets : ViewerAssets,
+  access? : Guard,
 ) -> Unit {
-  let reply = build_reply(request, catalog, assets) catch {
-    error => text_reply(500, "Internal Server Error", "error: \{error}")
+  // An `--ensure` server answers only its own loopback name and its token;
+  // `/api/info` stays open so another `inspect` can recognise it.
+  let path = strip_query(request.path)
+  let (reply, set_cookie) = match access {
+    Some(access) if path != "/api/info" =>
+      if !access.host_allowed(request.headers) {
+        (text_reply(403, "Forbidden", "unexpected Host header"), None)
+      } else if !access.authorized(request.path, request.headers) {
+        (
+          text_reply(
+            403, "Forbidden", "missing or wrong token: open the URL `inspect --ensure` printed",
+          ),
+          None,
+        )
+      } else {
+        // Opening the printed `?t=` URL leaves the token in a cookie, so the
+        // page's own requests for the bundle and the session API get through.
+        let cookie = if query_param(request.path, "t") is Some(_) {
+          Some(access.cookie())
+        } else {
+          None
+        }
+        (build_reply_or_500(request, catalog, assets), cookie)
+      }
+    _ => (build_reply_or_500(request, catalog, assets), None)
   }
-  send_reply(conn, reply) catch {
+  send_reply(conn, reply, set_cookie?) catch {
     // The send already started, so a mid-body failure (client hung up) must not
     // trigger a second send_response. Swallow it; run_forever keeps serving.
     _ => ()
@@ -307,10 +473,29 @@ async fn handle(
 }
 
 ///|
-async fn send_reply(conn : @http.ServerConnection, reply : Reply) -> Unit {
-  conn.send_response(reply.code, reply.reason, extra_headers={
+async fn build_reply_or_500(
+  request : @http.Request,
+  catalog : SessionCatalog,
+  assets : ViewerAssets,
+) -> Reply {
+  build_reply(request, catalog, assets) catch {
+    error => text_reply(500, "Internal Server Error", "error: \{error}")
+  }
+}
+
+///|
+async fn send_reply(
+  conn : @http.ServerConnection,
+  reply : Reply,
+  set_cookie? : String,
+) -> Unit {
+  let headers : Map[@http.CaseInsensitiveString, String] = {
     "Content-Type": reply.content_type,
-  })
+  }
+  if set_cookie is Some(cookie) {
+    headers.set(@http.CaseInsensitiveString("Set-Cookie"), cookie)
+  }
+  conn.send_response(reply.code, reply.reason, extra_headers=headers)
   conn.write_string(reply.body)
   conn.end_response()
 }
@@ -359,6 +544,7 @@ async fn build_reply(
           )
       }
     "/api/sessions" => session_list_reply(catalog)
+    "/api/info" => info_reply(assets.identity)
     _ =>
       match path.strip_prefix("/api/sessions/") {
         Some(rest) =>
@@ -1160,6 +1346,12 @@ fn cli_command() -> @argparse.Command {
         env="OPENSEEK_VIZ_WATCH",
         about="Keep the browser live: the open session and the session list refresh as their logs grow.",
       ),
+      FlagArg(
+        "ensure",
+        long="ensure",
+        env="OPENSEEK_VIZ_ENSURE",
+        about="Find or start the one server for these sessions: reuse a running one, otherwise serve on loopback at a port derived from --session-root, behind a token, exiting after --idle-exit minutes. Prints `openseek viz: open <url>` either way.",
+      ),
     ],
     options=[
       OptionArg(
@@ -1210,6 +1402,13 @@ fn cli_command() -> @argparse.Command {
         env="OPENSEEK_VIZ_BUNDLE",
         default_values=[""],
         about="Path to the compiled viz_app.js; defaults to auto-locating the moon build output.",
+      ),
+      OptionArg(
+        "idle-exit",
+        long="idle-exit",
+        env="OPENSEEK_VIZ_IDLE_EXIT",
+        default_values=[""],
+        about="Exit after this many minutes without a request; 0 never exits. Defaults to 30 with --ensure, otherwise never.",
       ),
       OptionArg(
         "export",

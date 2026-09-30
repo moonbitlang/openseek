@@ -11,11 +11,13 @@ import {
   "moonbitlang/async/http",
   "moonbitlang/async/socket",
   "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
   "moonbitlang/core/argparse",
   "moonbitlang/core/encoding/percent",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
+  "moonbitlang/core/random",
   "moonbitlang/core/string",
 }
 

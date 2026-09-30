@@ -501,3 +501,137 @@ async test "session_envelope_reply answers unchanged while the size matches" {
     inspect(events.length(), content="\{size.to_int()}")
   })
 }
+
+///|
+async test "a second --ensure reuses the first; the token and Host gate the rest" {
+  @vfs.with_tmpdir(prefix="openseek-viz-ensure-", root => {
+    let session_root = "\{root}/.openseek"
+    @fs.mkdir(session_root, recursive=true, allow_exist=true)
+    let identity = server_identity(session_root, [])
+    let ports = ensure_ports(identity)
+    guard ensure_server(session_root, identity, ports)
+      is Started(server, port, token) else {
+      fail("expected the first --ensure to start a server")
+    }
+    // The record names this server and is only readable by its owner.
+    assert_true(
+      read_record(record_path(session_root)) is Some({ port: p, token: t, .. }) &&
+      p == port &&
+      t == token,
+    )
+    let assets : ViewerAssets = {
+      shell: [],
+      bundle: [],
+      watch: false,
+      identity,
+    }
+    let catalog : SessionCatalog = { roots: [], }
+    @async.with_task_group(group => {
+      group.spawn_bg(no_wait=true) <| () => {
+        serve(server, catalog, assets, access={ token, port, }, idle_ms=0L)
+      }
+      guard ensure_server(session_root, identity, ports) is Reused(p2, t2) else {
+        fail("expected the second --ensure to reuse the first")
+      }
+      assert_eq(p2, port)
+      assert_eq(t2, token)
+      let base = "http://127.0.0.1:\{port}"
+      // /api/info is open, and names the sessions served.
+      let (info, body) = @http.get("\{base}/api/info")
+      assert_eq(info.code, 200)
+      assert_true(
+        @json.parse(body.text()) is { "identity": String(served), .. } &&
+        served == identity,
+      )
+      // Everything else needs the token, as ?t= or the cookie it sets.
+      let (denied, _) = @http.get("\{base}/api/sessions")
+      assert_eq(denied.code, 403)
+      let (allowed, _) = @http.get("\{base}/api/sessions?t=\{token}")
+      assert_eq(allowed.code, 200)
+      // Opening with ?t= leaves the token in an HttpOnly cookie for the page.
+      assert_true(
+        allowed.cookies
+        .iter()
+        .any(cookie => {
+          cookie.name == "openseek_inspect_\{port}" &&
+          cookie.value == token &&
+          cookie.http_only &&
+          cookie.path == Some("/")
+        }),
+      )
+      let (by_cookie, _) = @http.get("\{base}/api/sessions", headers={
+        "Cookie": "openseek_inspect_\{port}=\{token}",
+      })
+      assert_eq(by_cookie.code, 200)
+      // A page on another site that rebinds its name to 127.0.0.1 is refused,
+      // even with the token. The HTTP client always sends the URL's own Host,
+      // so this request is written by hand.
+      let tcp = @socket.Tcp::connect(@socket.Addr::parse("127.0.0.1:\{port}"))
+      defer tcp.close()
+      tcp.write(
+        "GET /api/sessions?t=\{token} HTTP/1.1\r\nHost: evil.example:\{port}\r\nConnection: close\r\n\r\n",
+      )
+      assert_eq(tcp.read_until("\r\n"), Some("HTTP/1.1 403 Forbidden"))
+      // Other sessions never take over a busy port.
+      let other = "\{root}/other/.openseek"
+      @fs.mkdir(other, recursive=true, allow_exist=true)
+      let other_identity = server_identity(other, [])
+      assert_true(other_identity != identity)
+      let taken = try ensure_server(other, other_identity, [port]) catch {
+        error => {
+          assert_true("\{error}".contains("no free port"))
+          None
+        }
+      } noraise {
+        _ => Some(())
+      }
+      assert_true(taken is None)
+      group.return_immediately(())
+    })
+  })
+}
+
+///|
+async test "an idle server exits and clears its own record" {
+  @vfs.with_tmpdir(prefix="openseek-viz-idle-", root => {
+    let session_root = "\{root}/.openseek"
+    @fs.mkdir(session_root, recursive=true, allow_exist=true)
+    let identity = server_identity(session_root, [])
+    guard ensure_server(session_root, identity, ensure_ports(identity))
+      is Started(server, port, token) else {
+      fail("expected a server")
+    }
+    let assets : ViewerAssets = {
+      shell: [],
+      bundle: [],
+      watch: false,
+      identity,
+    }
+    let finished = @async.with_timeout_opt(5000, () => {
+      serve(
+        server,
+        { roots: [], },
+        assets,
+        access={ token, port, },
+        idle_ms=200L,
+        on_exit=() => remove_own_record(session_root, port, token),
+      )
+    })
+    assert_true(finished is Some(_))
+    assert_true(read_record(record_path(session_root)) is None)
+  })
+}
+
+///|
+async test "inspect_version matches moon.mod" {
+  // Tests run from the module or the workspace root, depending on the build.
+  let mut manifest = ""
+  for path in ["moon.mod", "inspect/moon.mod"] {
+    let text = @fs.read_file(path).text() catch { _ => continue }
+    if text.contains("name = \"moonbitlang/inspect\"") {
+      manifest = text
+      break
+    }
+  }
+  assert_true(manifest.contains("version = \"\{inspect_version}\""))
+}

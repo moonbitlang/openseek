@@ -90,6 +90,42 @@ ignores `.DS_Store`, lock files, and malformed/husk directories, and it can
 serve a normal `.openseek` store, a directory of copied JSONL files, or a single
 matching JSONL file.
 
+## One server per set of sessions
+
+Starting `inspect` on a port that is already taken does not fail when the
+server holding it is an `inspect` for the same sessions (same `--session-root`
+and search directories, compared by real path): it prints
+`openseek viz: already serving these sessions at <url>` and exits 0. Any other
+program on the port, or an `inspect` for other sessions, is still an error.
+`GET /api/info` answers `{"server", "version", "identity"}` for exactly this
+check.
+
+`--ensure` is for tools that start `inspect` in the background, such as the
+TUI:
+
+```sh
+moonx moonbitlang/inspect --ensure --watch --session-root .openseek
+```
+
+- It creates the session root if needed and derives a port from its real path
+  (a window of 16 ports inside 41000–41899), so each project has a stable home.
+  An explicit `--port` pins it instead.
+- If an `inspect` for the same sessions already listens there, it prints that
+  server's URL and exits 0. Otherwise it binds the port (only one process can,
+  so two callers starting at once cannot both win) and serves.
+- It listens on `127.0.0.1` only, and every route but `/api/info` needs the
+  token from the printed URL (`?t=<token>`; opening that URL stores it in an
+  HttpOnly cookie for the page's own requests) and a loopback `Host` header,
+  which stops DNS-rebinding pages.
+- It keeps `{port, token, version}` in `<session-root>/inspect.json`, readable
+  only by you, for the next caller to find.
+- It exits after 30 minutes without a request (`--idle-exit <minutes>`, 0 to
+  never exit); a watching browser tab keeps it alive.
+
+Either way the last line it prints is `openseek viz: open <url>`, with
+` (already running)` appended when it reused a server. Add `#s=<session id>`
+to open a session directly.
+
 ## Watch
 
 `--watch` (or `OPENSEEK_VIZ_WATCH=1`) keeps the browser live while sessions are
