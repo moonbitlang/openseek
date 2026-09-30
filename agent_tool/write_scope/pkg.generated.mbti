@@ -7,9 +7,12 @@ package "moonbitlang/openseek/agent_tool/write_scope"
 
 // Types and methods
 type WriteScope
+pub async fn WriteScope::check(Self, String) -> Result[String?, String]
 pub async fn WriteScope::create(root~ : String, allowed_paths? : Array[String]) -> Result[Self, String]
 pub async fn WriteScope::deny_reason(Self, String) -> String?
+pub async fn WriteScope::destination(Self, String) -> String
 pub fn WriteScope::root(Self) -> String
+pub fn WriteScope::with_grants(Self, Array[(String, String)]) -> Self
 
 // Type aliases
 

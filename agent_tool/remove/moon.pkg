@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/agent_tool/internal/permission",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/x/crypto",
   "moonbitlang/openseek/agent_tool",
