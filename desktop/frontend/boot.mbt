@@ -311,12 +311,7 @@ fn SidebarDispatcher::project_settings(
   guard @resource.of_path(channel, id.root()) is Some(project) else {
     return @cmd.none
   }
-  @cmd.batch([
-    // The action menu has already closed. Give showModal a stable element
-    // to restore focus to when the workspace dialog is dismissed.
-    @project.focus(id),
-    self.emit(OpenWorkspaceSettings(channel, project)),
-  ])
+  self.emit(OpenWorkspaceSettings(channel, project))
 }
 
 ///|
