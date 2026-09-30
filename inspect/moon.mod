@@ -3,7 +3,7 @@ name = "moonbitlang/inspect"
 version = "0.1.0"
 
 import {
-  "moonbitlang/openseek@0.5.0",
+  "moonbitlang/openseek@0.6.0",
   "moonbitlang/async@0.22.4",
 }
 
