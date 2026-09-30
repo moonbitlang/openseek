@@ -42,6 +42,13 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
       }
       // --no-session contradicts an explicit --session; reject up front.
       @options.reject_session_contradiction(matches)
+      // So does --inspect: there is no session to show.
+      if inspect_requested(matches) &&
+        matches.flags.get("no-session") is Some(true) {
+        fail(
+          "--inspect shows the run's session; it cannot be combined with --no-session",
+        )
+      }
       // So is `--approval ask` on a command that reads no commands. Rejected
       // HERE, before a session directory exists and before the model is
       // contacted: resolving it at the first turn instead left a run that
@@ -273,6 +280,14 @@ async fn run_general(
           workspace_root=Some(workspace_root),
         ),
       )
+      // --inspect: the link comes before the agent starts, so the page can be
+      // open for the first step.
+      if inspect_requested(matches) {
+        show_in_viewer(
+          @setup.session_root(matches, workspace_root~),
+          id.value(),
+        )
+      }
       let session = @setup.load_or_new_session(
         store,
         id,
@@ -351,6 +366,9 @@ async fn run_preset(
                 workspace_root=Some(workspace_root),
               ),
             )
+            if inspect_requested(matches) {
+              show_in_viewer(session_root, id.value())
+            }
           }
           turn.record(next)
         },
@@ -426,4 +444,10 @@ fn reserved_session(matches : @argparse.Matches) -> String? {
       Some(session)
     _ => None
   }
+}
+
+///|
+/// Whether `--inspect` asked to watch this run in the session viewer.
+fn inspect_requested(matches : @argparse.Matches) -> Bool {
+  matches.flags.get("inspect") is Some(true)
 }
