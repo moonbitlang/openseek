@@ -143,9 +143,10 @@ async fn write_record(path : String, record : ServerRecord) -> Unit {
 
 ///|
 /// A fresh 128-bit token, hex. Seeded from `/dev/urandom` where there is one;
-/// elsewhere (native Windows) from the clock and the session root, which is
-/// weaker, but the server only listens on loopback and checks `Host`, so the
-/// token guards against other local users rather than the network.
+/// elsewhere (native Windows) from the random name the OS gives a temporary
+/// directory, mixed with the clock and the session root. That is weaker, but
+/// the server only listens on loopback and checks `Host`, so the token guards
+/// against other local users rather than the network.
 async fn new_token(salt : String) -> String {
   let rand = @random.Rand::chacha8(seed=token_seed(salt))
   let builder = StringBuilder()
@@ -172,6 +173,7 @@ async fn token_seed(salt : String) -> Bytes {
     Some(bytes) if bytes.length() == 32 => bytes
     _ => {
       let now = @async.now()
+      let salt = "\{salt}\n\{tmpdir_entropy()}"
       let parts = [
         fnv1a64("\{now}\n\{salt}"),
         fnv1a64("\{salt}\n\{now}"),
@@ -187,6 +189,18 @@ async fn token_seed(salt : String) -> Bytes {
       Bytes::from_array(bytes)
     }
   }
+}
+
+///|
+/// The randomised name `mkdtemp` picks for a probe directory (removed at
+/// once), or "" when none can be made: the fallback entropy where there is no
+/// `/dev/urandom`. The same source `openseek run` salts its session ids with.
+async fn tmpdir_entropy() -> String {
+  let dir = @fs.tmpdir(prefix="openseek-inspect-") catch { _ => return "" }
+  @fs.rmdir(dir) catch {
+    _ => ()
+  }
+  dir
 }
 
 ///|
