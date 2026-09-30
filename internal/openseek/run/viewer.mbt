@@ -16,11 +16,22 @@ let inspect_wait_ms : Int = 60_000
 /// said once and the run goes on.
 async fn show_in_viewer(session_root : String, session : String) -> Unit {
   let line = try {
+    // `spawn_orphan` leaves the viewer in this terminal's session, so closing
+    // the terminal would hang it up; `nohup` makes it ignore that. Where there
+    // is no `nohup` (Windows, which has no hangup signal), start it directly.
     let url = start_viewer(
-      ["moonx", inspect_package],
+      ["nohup", "moonx", inspect_package],
       session_root,
       wait_ms=inspect_wait_ms,
-    )
+    ) catch {
+      @os_error.OSError(_) as error if error.is_ENOENT() =>
+        start_viewer(
+          ["moonx", inspect_package],
+          session_root,
+          wait_ms=inspect_wait_ms,
+        )
+      error => raise error
+    }
     "watch live: \{url}#s=\{@percent.encode(session)}"
   } catch {
     error => "could not start the session viewer (\{error}); the run goes on"
@@ -89,7 +100,10 @@ fn viewer_output(text : String) -> ViewerOutput {
         },
       )
     }
-    if line.has_prefix("Error") || line.has_prefix("error:") {
+    // `nohup:` is how a missing `moonx` shows up behind `nohup`.
+    if line.has_prefix("Error") ||
+      line.has_prefix("error:") ||
+      line.has_prefix("nohup:") {
       return Failed(line.to_owned())
     }
   }
@@ -113,6 +127,10 @@ test "viewer_output finds the URL, an error, or nothing yet" {
   @debug.assert_eq(
     viewer_output("Error: Prebuilt wasm asset does not exist\n"),
     Failed("Error: Prebuilt wasm asset does not exist"),
+  )
+  @debug.assert_eq(
+    viewer_output("nohup: moonx: No such file or directory\n"),
+    Failed("nohup: moonx: No such file or directory"),
   )
   @debug.assert_eq(viewer_output("openseek viz: serving 1"), Pending)
   @debug.assert_eq(viewer_output(""), Pending)
