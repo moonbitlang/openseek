@@ -58,6 +58,14 @@ struct Model {
   // keyed by child session id — rendered inline inside the parent's subrun
   // tool cards. Cleared on every selection change.
   subrun_children : Map[String, @agent_session.Session]
+  // `inspect --watch` polling interval in milliseconds; 0 when not watching
+  // (no `--watch`, or a standalone export).
+  watch_ms : Int
+  // A watch refresh of the open session is in flight; the next tick waits.
+  watch_pending : Bool
+  // Ticks since startup, to refresh the session list less often than the
+  // open session.
+  watch_ticks : Int
 } derive(Eq)
 
 ///|
@@ -110,6 +118,13 @@ enum Msg {
   ToggleBuildErrorsOnly
   JumpToBuildError(Int)
   UnfoldCurrent
+  // `--watch`: time to re-check the open session (and now and then the list).
+  WatchTick
+  // A watch re-check of the open session: (session key, response).
+  WatchFetched(String, Result[String, Error])
+  // A watch refresh of the session list. Unlike `SessionsFetched` it leaves
+  // the status line and the selection alone.
+  WatchSessionsFetched(Result[String, Error])
 }
 
 ///|
@@ -118,6 +133,8 @@ enum Msg {
 /// distinguished here from the body, not the HTTP status.
 enum LoadOutcome {
   Loaded(@session_log.ParsedLog, String, Bool, Int64)
+  // A watch re-check found the log still at the size the viewer already has.
+  Unchanged
   NotFound
   Malformed
 }
@@ -196,8 +213,22 @@ fn init_model() -> Model {
     escalated_only: false,
     show_original_args: false,
     subrun_children: Map([]),
+    // An export is a frozen archive; only a served viewer can watch.
+    watch_ms: if embedded_has("/api/sessions") {
+      0
+    } else {
+      watch_interval_ms()
+    },
+    watch_pending: false,
+    watch_ticks: 0,
   }
 }
+
+///|
+/// How many watch ticks pass between session-list refreshes. The list scan
+/// reads every log's first prompt, so it runs less often than the open
+/// session's cheap size check.
+let watch_list_every : Int = 5
 
 // ---- update ----------------------------------------------------------------
 
@@ -349,7 +380,7 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
                 )
                 (@cmd.none, { ..model, subrun_children: children, })
               }
-              NotFound | Malformed => (@cmd.none, model)
+              Unchanged | NotFound | Malformed => (@cmd.none, model)
             }
         }
       }
@@ -407,7 +438,9 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
                     status: "session not found: \{label}",
                   },
                 )
-              Malformed =>
+              // Only a watch request sends `known_bytes`, so a plain load
+              // never sees this; treat it like any other unusable reply.
+              Unchanged | Malformed =>
                 (
                   @cmd.none,
                   {
@@ -419,6 +452,109 @@ fn update(emit : @cmd.Emit[Msg], msg : Msg, model : Model) -> (@cmd.Cmd, Model) 
                 )
             }
         }
+      }
+    WatchTick => {
+      let ticks = model.watch_ticks + 1
+      let list_refresh = if ticks % watch_list_every == 0 {
+        [
+          fetch_text(emit, "/api/sessions", result => {
+            WatchSessionsFetched(result)
+          }),
+        ]
+      } else {
+        []
+      }
+      match model.selected {
+        // Re-check only a settled server session: not while its first load
+        // or a previous re-check is still in flight.
+        Some(key) if !model.loading && !model.watch_pending =>
+          (
+            @cmd.batch(
+              [
+                fetch_text(
+                  emit,
+                  "\{session_url(key)}?known_bytes=\{model.log_bytes}",
+                  result => WatchFetched(key, result),
+                ),
+                ..list_refresh,
+              ],
+            ),
+            { ..model, watch_ticks: ticks, watch_pending: true, },
+          )
+        _ => (@cmd.batch(list_refresh), { ..model, watch_ticks: ticks, })
+      }
+    }
+    WatchFetched(key, result) => {
+      let model = { ..model, watch_pending: false, }
+      // The user moved on while this was in flight; the new selection loads
+      // itself.
+      guard model.selected == Some(key) && !model.loading else {
+        return (@cmd.none, model)
+      }
+      match result {
+        // A transient failure (the server restarting, say) must not blank a
+        // session that is still on screen; the next tick tries again.
+        Err(_) => (@cmd.none, model)
+        Ok(text) =>
+          match parse_load(text) {
+            Unchanged | Malformed => (@cmd.none, model)
+            NotFound =>
+              (
+                @cmd.none,
+                {
+                  ..model,
+                  status: "session no longer on disk: \{session_label(model, key)}",
+                },
+              )
+            Loaded(parsed, system_prompt, header_present, log_bytes) => {
+              // Decide before the new events render: a reader parked at the
+              // bottom follows the log, anyone scrolled up stays put.
+              let follow = main_scrolled_to_bottom()
+              let child_fetches = subrun_child_refs(model, key, parsed).map(child => {
+                let (child_id, child_key) = child
+                fetch_text(emit, session_url(child_key), result => {
+                  SubrunFetched(key, child_id, result)
+                })
+              })
+              let scroll = if follow {
+                [@cmd.effect(() => scroll_main_to_bottom())]
+              } else {
+                []
+              }
+              (
+                @cmd.batch([..scroll, ..child_fetches]),
+                {
+                  ..model,
+                  parsed: Some(parsed),
+                  system_prompt,
+                  header_present,
+                  log_bytes,
+                  status: events_status(parsed),
+                },
+              )
+            }
+          }
+      }
+    }
+    WatchSessionsFetched(result) =>
+      match result {
+        Ok(text) =>
+          match parse_session_rows(text) {
+            Some(sessions) if sessions != model.sessions =>
+              (
+                @cmd.none,
+                {
+                  ..model,
+                  sessions,
+                  collapsed_roots: prune_collapsed_roots(
+                    model.collapsed_roots,
+                    sessions,
+                  ),
+                },
+              )
+            _ => (@cmd.none, model)
+          }
+        Err(_) => (@cmd.none, model)
       }
     FileDropped(name, bytes, file) => {
       let ticket = model.drop_ticket + 1
@@ -1204,9 +1340,15 @@ fn header_strip(model : Model, id : String, root_label : String?) -> @html.Html 
     Some(root) => " · \{root}"
     None => ""
   }
+  // Only a served session is re-checked; a dropped file is a snapshot.
+  let live_note = if model.watch_ms > 0 && model.selected is Some(_) {
+    " · live"
+  } else {
+    ""
+  }
   @html.header(class="header-strip") <| [
     @html.div(class="header-id") <| id,
-    @html.div(class="header-meta") <| "\{model.status} · \{prompt_note}\{root_note}",
+    @html.div(class="header-meta") <| "\{model.status}\{live_note} · \{prompt_note}\{root_note}",
   ]
 }
 
@@ -1658,6 +1800,7 @@ fn parse_load(text : String) -> LoadOutcome {
   let json = @json.parse(text) catch { _ => return Malformed }
   match json {
     { "found": false, .. } => NotFound
+    { "found": true, "unchanged": True, .. } => Unchanged
     { "found": true, "events": String(events_text), .. } => {
       let parsed = @viz.parse_events(events_text)
       let (system_prompt, header_present) = header_info(parsed)
@@ -1669,6 +1812,16 @@ fn parse_load(text : String) -> LoadOutcome {
     }
     _ => Malformed
   }
+}
+
+///|
+test "parse_load reads a watch reply for an unchanged log" {
+  assert_true(
+    parse_load("{\"found\":true,\"unchanged\":true,\"events_bytes\":77}")
+    is Unchanged,
+  )
+  // Without the marker, a reply lacking `events` is still malformed.
+  assert_true(parse_load("{\"found\":true,\"events_bytes\":77}") is Malformed)
 }
 
 ///|

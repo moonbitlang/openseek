@@ -520,3 +520,35 @@ test('scrubber navigation preserves hash state and clamps its transient tooltip'
   await expect(page.locator('.step-seg.current')).toHaveCount(1);
   expect(viewer.pageErrors).toEqual([]);
 });
+
+test('--watch refreshes the open session as its log grows', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  await viewer.install({ watchMs: 200 });
+  await viewer.goto();
+  await viewer.openSession();
+  await expect(page.locator('.header-meta')).toContainText('live');
+
+  // Polls while nothing changed ask with the size the viewer already has.
+  await expect.poll(() => viewer.apiRequests.filter(url => url.includes('known_bytes=')).length)
+    .toBeGreaterThan(1);
+
+  viewer.events += JSON.stringify({
+    sequence: 8,
+    ts: 8_000,
+    item: { kind: 'user', payload: { content: 'A prompt that arrived later' } },
+  }) + '\n';
+  await expect(page.locator('.card').getByText('A prompt that arrived later', { exact: true }))
+    .toBeVisible();
+  await expect(page.locator('.header-meta')).toContainText('8 event(s)');
+  expect(viewer.pageErrors).toEqual([]);
+});
+
+test('a served viewer without --watch never polls', async ({ page }) => {
+  const viewer = new VizBrowserHarness(page);
+  await viewer.install();
+  await viewer.goto();
+  await viewer.openSession();
+  await page.waitForTimeout(600);
+  await expect(page.locator('.header-meta')).not.toContainText('live');
+  expect(viewer.apiRequests.filter(url => url.includes('known_bytes='))).toEqual([]);
+});

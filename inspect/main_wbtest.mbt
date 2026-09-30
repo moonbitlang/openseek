@@ -458,3 +458,32 @@ async test "session_envelope_reply includes event log byte size" {
     assert_true(size.to_int() > 0)
   })
 }
+
+///|
+async test "session_envelope_reply answers unchanged while the size matches" {
+  @vfs.with_tmpdir(prefix="openseek-viz-watch-", root => {
+    let store = @store.SessionStore("\{root}/.openseek")
+    let session = @agent_session.Session(SessionId("demo"), system_prompt="").append(
+      User(UserMessage(Content([Text("hi")]))),
+    )
+    store.create(session)
+    let path = store.session_file(SessionId("demo"))
+    let full = session_envelope_reply(path)
+    guard @json.parse(full.body) is { "events_bytes": Number(size, ..), .. } else {
+      fail("expected events_bytes")
+    }
+    // The viewer already has every byte: no log in the reply.
+    let same = session_envelope_reply(path, known_bytes=size.to_int64())
+    guard @json.parse(same.body) is Object(fields) else {
+      fail("expected JSON")
+    }
+    assert_true(fields.get("unchanged") is Some(True))
+    assert_true(fields.get("events") is None)
+    // A stale size gets the full log again.
+    let stale = session_envelope_reply(path, known_bytes=1L)
+    guard @json.parse(stale.body) is { "events": String(events), .. } else {
+      fail("expected the full log")
+    }
+    inspect(events.length(), content="\{size.to_int()}")
+  })
+}

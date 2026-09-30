@@ -7,6 +7,8 @@
 /// - `GET /viz_app.js`                        → the compiled frontend bundle
 /// - `GET /api/sessions`                      → JSON listing across known roots
 /// - `GET /api/sessions/<key>`                → `{found, events, events_bytes}` envelope
+///   (`?known_bytes=N` answers `{found, unchanged, events_bytes}` while the log
+///   is still N bytes, so a `--watch` viewer can poll cheaply)
 /// - `GET /api/sessions/<key>/openseek_session-<id>.jsonl` → raw session file (header line + events)
 ///
 /// It never writes to the stores, so pointing it at live session roots is safe.
@@ -23,6 +25,8 @@ priv struct VizConfig {
   bundle : String
   export_path : String
   export_session : String
+  // `--watch`: the served viewer re-checks the open session and the list.
+  watch : Bool
 }
 
 ///|
@@ -84,6 +88,7 @@ fn viz_config_from_matches(matches : @argparse.Matches) -> VizConfig raise {
     bundle,
     export_path,
     export_session: export_session.trim().to_owned(),
+    watch: matches.flags.get("watch") is Some(true),
   }
 }
 
@@ -152,10 +157,20 @@ async fn main {
     println("openseek viz: sessions under '\{root.path}'")
   }
   println("openseek viz: shell from '\{shell[0]}'")
+  if config.watch {
+    println(
+      "openseek viz: --watch: open sessions refresh every \{watch_interval_ms}ms",
+    )
+  }
   print_open_urls(config.host, config.port)
+  let assets : ViewerAssets = {
+    shell,
+    bundle: bundle_paths,
+    watch: config.watch,
+  }
   let server = @http.Server(addr, reuse_addr=true)
   server.run_forever((request, _body, conn) => {
-    handle(request, conn, catalog, shell, bundle_paths)
+    handle(request, conn, catalog, assets)
   })
 }
 
@@ -215,6 +230,16 @@ async fn local_lan_ip() -> String? {
 }
 
 ///|
+/// Where the viewer's own files come from, plus whether to serve it in watch
+/// mode. Candidates are resolved per request, so a frontend rebuilt while the
+/// server runs is picked up on reload.
+priv struct ViewerAssets {
+  shell : Array[String]
+  bundle : Array[String]
+  watch : Bool
+}
+
+///|
 /// A fully-computed HTTP reply. Building it does no socket I/O, so the single
 /// send in `handle` is the only place a response is written — there is no way to
 /// start a second response (which would panic `send_response`).
@@ -248,10 +273,9 @@ async fn handle(
   request : @http.Request,
   conn : @http.ServerConnection,
   catalog : SessionCatalog,
-  shell : Array[String],
-  bundle : Array[String],
+  assets : ViewerAssets,
 ) -> Unit {
-  let reply = build_reply(request, catalog, shell, bundle) catch {
+  let reply = build_reply(request, catalog, assets) catch {
     error => text_reply(500, "Internal Server Error", "error: \{error}")
   }
   send_reply(conn, reply) catch {
@@ -274,8 +298,7 @@ async fn send_reply(conn : @http.ServerConnection, reply : Reply) -> Unit {
 async fn build_reply(
   request : @http.Request,
   catalog : SessionCatalog,
-  shell : Array[String],
-  bundle : Array[String],
+  assets : ViewerAssets,
 ) -> Reply {
   guard request.meth is Get else {
     return text_reply(405, "Method Not Allowed", "only GET is supported")
@@ -283,11 +306,27 @@ async fn build_reply(
   let path = strip_query(request.path)
   match path {
     "/" | "/index.html" =>
-      search_reply(
-        shell, "text/html; charset=utf-8", "index.html not found; pass --web-dir or run from the openseek checkout",
-      )
+      match first_existing(assets.shell) {
+        Some(path) => {
+          let html = read_text_lossy(path)
+          {
+            code: 200,
+            reason: "OK",
+            content_type: "text/html; charset=utf-8",
+            body: if assets.watch {
+              shell_with_watch(html, watch_interval_ms)
+            } else {
+              html
+            },
+          }
+        }
+        None =>
+          text_reply(
+            404, "Not Found", "index.html not found; pass --web-dir or run from the openseek checkout",
+          )
+      }
     "/viz_app.js" =>
-      match locate_bundle(bundle) {
+      match locate_bundle(assets.bundle) {
         Some(path) => asset_reply(path, "text/javascript; charset=utf-8")
         None =>
           text_reply(
@@ -297,7 +336,12 @@ async fn build_reply(
     "/api/sessions" => session_list_reply(catalog)
     _ =>
       match path.strip_prefix("/api/sessions/") {
-        Some(rest) => session_path_reply(catalog, "\{rest}")
+        Some(rest) =>
+          session_path_reply(
+            catalog,
+            "\{rest}",
+            known_bytes?=known_bytes_param(request.path),
+          )
         None => text_reply(404, "Not Found", "no route for \{path}")
       }
   }
@@ -312,7 +356,11 @@ async fn build_reply(
 /// literal, as it is in a path segment, and malformed escapes stay verbatim. The
 /// resolved path always comes from the catalog scan, never from the URL file
 /// segment.
-async fn session_path_reply(catalog : SessionCatalog, rest : String) -> Reply {
+async fn session_path_reply(
+  catalog : SessionCatalog,
+  rest : String,
+  known_bytes? : Int64,
+) -> Reply {
   let (key, file) = match rest.split_once("/") {
     None => (@percent.decode_lossy(rest), None)
     Some((key, file)) =>
@@ -326,7 +374,7 @@ async fn session_path_reply(catalog : SessionCatalog, rest : String) -> Reply {
     return text_reply(400, "Bad Request", "invalid session id")
   }
   match file {
-    None => session_envelope_reply(row.path)
+    None => session_envelope_reply(row.path, known_bytes?)
     Some(name) if name == session_file_name(row.id) =>
       asset_reply(row.path, "application/x-ndjson; charset=utf-8")
     Some(other) =>
@@ -354,15 +402,29 @@ fn valid_session_id(value : String) -> Bool {
 /// as success regardless of status code, so absence and content must be encoded
 /// in the body rather than signalled by 404. `events` is the raw session-file
 /// text — the header line followed by event lines — which the frontend parser
-/// splits apart itself.
-async fn session_envelope_reply(path : String) -> Reply {
+/// splits apart itself. `events_bytes` is the byte length of exactly that text,
+/// read once, so it can never claim bytes the reply does not carry.
+///
+/// With `known_bytes` (a watching viewer's current size), a log that has not
+/// changed size answers `{ "found": true, "unchanged": true, "events_bytes" }`
+/// instead of resending the whole file. Session logs are append-only between
+/// compactions, and a compaction rewrites the file to a different size.
+async fn session_envelope_reply(path : String, known_bytes? : Int64) -> Reply {
   if !@fs.exists(path) {
     return json_reply({ "found": false })
   }
+  if known_bytes is Some(known) && file_size(path) == known {
+    return json_reply({
+      "found": true,
+      "unchanged": true,
+      "events_bytes": Json(known.to_double()),
+    })
+  }
+  let bytes = @fs.read_file(path).binary()
   json_reply({
     "found": true,
-    "events": read_text_lossy(path),
-    "events_bytes": Json(file_size(path).to_double()),
+    "events": @utf8.decode_lossy(bytes),
+    "events_bytes": Json(bytes.length().to_double()),
   })
 }
 
@@ -1003,20 +1065,6 @@ fn bundle_candidates(
 }
 
 ///|
-/// Serve the first existing candidate file, or a 404 carrying `missing` so
-/// the error names the fix rather than just the failure.
-async fn search_reply(
-  candidates : Array[String],
-  content_type : String,
-  missing : String,
-) -> Reply {
-  match first_existing(candidates) {
-    Some(path) => asset_reply(path, content_type)
-    None => text_reply(404, "Not Found", missing)
-  }
-}
-
-///|
 /// Read a file into a reply, or a 404 reply when it does not exist.
 async fn asset_reply(path : String, content_type : String) -> Reply {
   if !@fs.exists(path) {
@@ -1073,6 +1121,14 @@ fn cli_command() -> @argparse.Command {
   Command(
     "openseek-viz",
     about="Read-only web server for the OpenSeek session visualizer.",
+    flags=[
+      FlagArg(
+        "watch",
+        long="watch",
+        env="OPENSEEK_VIZ_WATCH",
+        about="Keep the browser live: the open session and the session list refresh as their logs grow.",
+      ),
+    ],
     options=[
       OptionArg(
         "port",

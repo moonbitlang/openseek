@@ -26,11 +26,16 @@ fn main {
       // Rabbita owns clicks on its `<a>` nodes. Accept subrun URL requests,
       // push them into browser history, then resolve the resulting URL change
       // through the same selection path used by startup restoration.
-      subscriptions=(_, emit) => {
-        @sub.batch([
+      subscriptions=(model, emit) => {
+        let subs = [
           @sub.on_url_request(emit.map(request => UrlRequested(request))),
           @sub.on_url_changed(emit.map(url => UrlChanged(url))),
-        ])
+        ]
+        // `inspect --watch`: poll the open session while the page is open.
+        if model.watch_ms > 0 {
+          subs.push(@sub.every(model.watch_ms, emit(WatchTick)))
+        }
+        @sub.batch(subs)
       },
     )
     state.view(state => view(emit, state))

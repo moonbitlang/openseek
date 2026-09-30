@@ -124,3 +124,17 @@ extern "js" fn format_unix_ms_utc(milliseconds : Double) -> String =
   #|  if (!Number.isFinite(date.getTime())) return "";
   #|  return date.toISOString().slice(0, 16).replace("T", " ") + " UTC";
   #|}
+
+///|
+/// The `inspect --watch` polling interval the server injected into the shell as
+/// `window.__OPENSEEK_WATCH_MS__`, or 0 when absent (no `--watch`).
+extern "js" fn watch_interval_ms() -> Int = "() => { const ms = (typeof window !== 'undefined') ? window.__OPENSEEK_WATCH_MS__ : undefined; return (Number.isInteger(ms) && ms > 0) ? ms : 0; }"
+
+///|
+/// Whether the scrolling `.main` pane is at (or within a few lines of) its
+/// bottom, so a watch refresh knows the reader is following the log.
+extern "js" fn main_scrolled_to_bottom() -> Bool = "() => { const main = document.querySelector('.main'); return !main || main.scrollHeight - main.scrollTop - main.clientHeight < 80; }"
+
+///|
+/// Scroll `.main` to its bottom once the freshly rendered events are laid out.
+extern "js" fn scroll_main_to_bottom() -> Unit = "() => { requestAnimationFrame(() => requestAnimationFrame(() => { const main = document.querySelector('.main'); if (main) main.scrollTop = main.scrollHeight; })); }"
