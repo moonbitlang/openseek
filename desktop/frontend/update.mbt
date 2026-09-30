@@ -1840,10 +1840,12 @@ fn update(
 ) -> (@cmd.Cmd, Model) {
   let previous = model
   let (cmd, model) = update_msg(dispatch, msg, model)
-  // Detaching a workspace or losing its device also dismisses its dialog.
+  // The native dialog must not cover the desktop's connection-lost screen.
+  // Detaching a workspace or losing its device also dismisses it.
   let model = {
     ..model,
     workspace_settings_dialog: model.workspace_settings_dialog.filter(dialog => {
+      !(model.is_desktop && model.bridge_state() is BridgeLost(_)) &&
       model
       .device_state(dialog.target.channel)
       .map_or(false, dev => dev.projects.contains(dialog.target.workspace))
@@ -4786,6 +4788,7 @@ fn update_msg(
           ..model,
           workspace_settings_dialog: Some({
             target: { channel, workspace, },
+            pending_save: None,
             error: None,
           }),
         },
@@ -4802,9 +4805,16 @@ fn update_msg(
       // newer token still. The failure path re-reads the disk state.
       let request_generation = dev.workspace_settings_request_generation + 1
       (
-        save_workspace_settings(dispatch, channel, workspace, worktree_mode~),
+        save_workspace_settings(
+          dispatch,
+          channel,
+          workspace,
+          connection_generation=dev.connection_generation,
+          request_generation~,
+          worktree_mode~,
+        ),
         model
-        .with_workspace_settings_error(channel, workspace, None)
+        .begin_workspace_settings_save(channel, workspace, request_generation)
         .replace_device({
           ..dev.with_workspace_settings(
             workspace,
@@ -4834,10 +4844,12 @@ fn update_msg(
           dispatch,
           channel,
           workspace,
+          connection_generation=dev.connection_generation,
+          request_generation~,
           checkout_submodules~,
         ),
         model
-        .with_workspace_settings_error(channel, workspace, None)
+        .begin_workspace_settings_save(channel, workspace, request_generation)
         .replace_device({
           ..dev.with_workspace_settings(
             workspace,
@@ -4869,10 +4881,12 @@ fn update_msg(
           dispatch,
           channel,
           workspace,
+          connection_generation=dev.connection_generation,
+          request_generation~,
           submodule_checkout_timeout_seconds~,
         ),
         model
-        .with_workspace_settings_error(channel, workspace, None)
+        .begin_workspace_settings_save(channel, workspace, request_generation)
         .replace_device({
           ..dev.with_workspace_settings(
             workspace,
@@ -7167,36 +7181,60 @@ fn update_device_msg(
         }),
       )
     }
-    WorkspaceSettingsSaveFailed(workspace~, message~) => {
-      // A native dialog sits above the toast stack, so show the error inside
-      // the matching dialog too, then re-read the authoritative disk state.
-      let request_generation = dev.workspace_settings_request_generation + 1
-      let message = notice_text(
-        model.locale,
-        SaveWorkspace(workspace.path.to_string(), message.to_string()),
-      )
-      let model = model.with_workspace_settings_error(
-        channel,
-        workspace,
-        Some(message),
-      )
-      let (toast, next) = model.notify_error(dispatch, message)
-      (
-        @cmd.batch([
-          toast,
-          fetch_workspace_settings(
-            dispatch,
+    WorkspaceSettingsSaveFinished(
+      workspace~,
+      connection_generation~,
+      request_generation~,
+      result~
+    ) => {
+      guard dev.projects.contains(workspace) &&
+        connection_generation == dev.connection_generation else {
+        return (@cmd.none, model)
+      }
+      match result {
+        Ok(_) =>
+          (
+            @cmd.none,
+            model.finish_workspace_settings_save(
+              channel,
+              workspace,
+              request_generation,
+              None,
+            ),
+          )
+        Err(message) => {
+          // Preserve the failure notification and authoritative re-read;
+          // only the matching pending write may change dialog feedback.
+          let reread_generation = dev.workspace_settings_request_generation + 1
+          let message = notice_text(
+            model.locale,
+            SaveWorkspace(workspace.path.to_string(), message.to_string()),
+          )
+          let model = model.finish_workspace_settings_save(
             channel,
             workspace,
-            dev.connection_generation,
             request_generation,
-          ),
-        ]),
-        next.replace_device({
-          ..dev,
-          workspace_settings_request_generation: request_generation,
-        }),
-      )
+            Some(message),
+          )
+          let (toast, next) = model.notify_error(dispatch, message)
+          (
+            @cmd.batch([
+              toast,
+              fetch_workspace_settings(
+                dispatch,
+                channel,
+                workspace,
+                dev.connection_generation,
+                reread_generation,
+              ),
+            ]),
+            next.replace_device({
+              ..dev,
+              workspace_settings_request_generation: reread_generation,
+            }),
+          )
+        }
+      }
     }
     WorktreesLoaded(
       rows,

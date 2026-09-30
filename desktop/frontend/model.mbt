@@ -2337,9 +2337,14 @@ priv enum DeviceMsg {
     checkout_submodules~ : Bool,
     submodule_checkout_timeout_seconds~ : Int
   )
-  // A `workspace.settings_set` this client sent failed; the message pops as
-  // a toast and the workspace's settings are re-read.
-  WorkspaceSettingsSaveFailed(workspace~ : @common.Uri, message~ : String)
+  // The result of this client's write, paired with the connection and request
+  // that issued it. Settings data still arrives through the commit broadcast.
+  WorkspaceSettingsSaveFinished(
+    workspace~ : @common.Uri,
+    connection_generation~ : Int,
+    request_generation~ : Int,
+    result~ : Result[Unit, String]
+  )
   // One workspace's worktree registry — the reply to `worktree.list`, with
   // the same two-generation staleness fence as `ProjectsLoaded`.
   WorktreesLoaded(
