@@ -36,18 +36,6 @@ pub fn Id::key(self : Id) -> String {
 }
 
 ///|
-/// Give a modal a visible workspace control to restore focus to on dismissal.
-pub fn focus(id : Id) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => {
-    if @dom.document().get_element_by_id(id.key() + ":disclosure").to_option()
-      is Some(element) &&
-      element.to_html_element() is Some(button) {
-      button.focus()
-    }
-  })
-}
-
-///|
 pub(all) struct Input {
   id : Id
   title : String
@@ -250,7 +238,6 @@ pub fn component(
     let row_children : Array[@html.Html] = [
       @html.button(
         class="workspace-disclosure",
-        id=input.id.key() + ":disclosure",
         type_="button",
         title=input.title,
         on_click=emit(ToggleDisclosure),
