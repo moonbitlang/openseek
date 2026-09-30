@@ -114,7 +114,14 @@ Version 1 accepts `{version: 1, name, arguments}` and returns
   Each connection carries one HTTP/1.1 POST, using Content-Length or plain
   chunked encoding; duplicate headers, ambiguous framing, chunk extensions,
   trailers, and connection reuse are unsupported.
-- 120 seconds per tool call, including initial trace publication and queueing; 125 seconds client timeout.
+- 120 seconds per ordinary tool call, including initial trace publication and
+  queueing. Approval-capable tools have no host execution deadline, matching
+  direct calls; program/session cancellation still cancels them.
+- SDK clients without `approval_tools` support retain a fixed 125-second
+  deadline even for approval calls. The repository SDK honors this capability
+  metadata and waits without that deadline for those calls. Ordinary calls
+  remain bounded. The updated SDK must be published and adopted for long
+  approval waits to work end to end.
 - 64K characters per serialized result. Oversized output becomes an explicit
   error saying execution occurred; the host does not retry it.
 - 512 KiB retained trace plus JSON framing. Full results still reach the client;

@@ -24,6 +24,7 @@ fn leaf(
   name~ : String,
   execute~ : @agent_tool.ToolExecutor,
   concurrent_safe? : Bool = false,
+  can_request_approval? : Bool = false,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name~,
@@ -31,6 +32,7 @@ fn leaf(
     schema=JsonSchema({}),
     program_callable=true,
     concurrent_safe~,
+    can_request_approval~,
     execute~,
   )
 }
@@ -162,6 +164,7 @@ async test "PTC cancellation joins handlers releases shared state and retains in
   let trace : Ref[Json?] = Ref(None)
   let tool = state.serialize(
     leaf(
+      can_request_approval=true,
       name="block",
       execute=Async(_ => {
         defer {
@@ -412,6 +415,32 @@ async test "PTC program exit joins an unawaited request and revokes its endpoint
         _ => true
       }
       assert_true(closed)
+    })
+  })
+}
+
+///|
+async test "approval-capable calls outlive the ordinary deadline and advertise their wait policy" {
+  @async.with_timeout(3000, () => {
+    @async.with_task_group(group => {
+      let tool = leaf(
+        name="approval",
+        can_request_approval=true,
+        execute=Async(_ => {
+          @async.sleep(100)
+          @agent_tool.respond("approved")
+        }),
+      )
+      let service = Service::start(group, Tools([tool]), call_timeout_ms=10)
+      let program = service.register()
+      defer program.close()
+      let env = program.env()
+      assert_true(
+        @json.parse(env["OPENSEEK_PTC"])
+        is { "approval_tools": ["approval"], .. },
+      )
+      let result = request(env, "approval", {})
+      assert_true(result is { "is_error": false, "content": "approved", .. })
     })
   })
 }

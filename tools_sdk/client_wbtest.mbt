@@ -132,3 +132,51 @@ async test "caller cancellation is not converted to a transport failure" {
     assert_true(timed_out)
   })
 }
+
+///|
+async test "approval calls wait beyond the ordinary client deadline" {
+  @async.with_timeout(2000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      defer server.close()
+      let worker = group.spawn(no_wait=true, () => {
+        server.run_forever((_, _, conn) => {
+          defer conn.close()
+          @async.sleep(50)
+          conn.send_response(200, "OK")
+          conn.write(
+            ({ "version": 1, "content": "approved", "is_error": false } : Json),
+          )
+          conn.end_response()
+        })
+      })
+      defer {
+        worker.cancel()
+        @async.protect_from_cancel(() => worker.wait() catch { _ => () })
+      }
+      let result = request(
+        "http://127.0.0.1:\{server.addr.port()}/call",
+        "token",
+        "remove",
+        {},
+        wait_for_approval=true,
+        timeout_ms=1,
+      )
+      assert_eq(result.content, "approved")
+    })
+  })
+}
+
+///|
+test "old capabilities remain bounded and approval metadata names exact tools" {
+  let (_, _, old) = decode_handoff(
+    Some("{\"version\":1,\"url\":\"http://localhost/call\",\"token\":\"t\"}"),
+  )
+  assert_true(old.is_empty())
+  let (_, _, names) = decode_handoff(
+    Some(
+      "{\"version\":1,\"url\":\"http://localhost/call\",\"token\":\"t\",\"approval_tools\":[\"write\",\"remove\"]}",
+    ),
+  )
+  assert_eq(names, ["write", "remove"])
+}

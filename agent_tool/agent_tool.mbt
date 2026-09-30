@@ -81,6 +81,8 @@ pub struct AgentToolDefinition {
   /// Host-owned opt-in for leaf executors; never infer from dynamic listings.
   /// Callable executors must not wait on agent-loop work. Loop control stays out.
   priv program_callable : Bool
+  /// Human approval must not inherit a program's ordinary execution deadline.
+  priv can_request_approval : Bool
 } derive(Debug(ignore=ToolExecutor))
 
 ///|
@@ -94,6 +96,7 @@ pub fn AgentToolDefinition::AgentToolDefinition(
   control? : Bool = false,
   concurrent_safe? : Bool = false,
   program_callable? : Bool = false,
+  can_request_approval? : Bool = false,
 ) -> AgentToolDefinition {
   {
     name,
@@ -103,6 +106,7 @@ pub fn AgentToolDefinition::AgentToolDefinition(
     control,
     concurrent_safe,
     program_callable,
+    can_request_approval,
   }
 }
 
@@ -429,4 +433,12 @@ pub fn Tools::take_program_trace(self : Tools) -> Json? {
   let trace = self.program_trace.val
   self.program_trace.val = None
   trace
+}
+
+///|
+/// Whether the executor can wait for a human permission decision.
+pub fn AgentToolDefinition::can_request_approval(
+  self : AgentToolDefinition,
+) -> Bool {
+  self.can_request_approval
 }

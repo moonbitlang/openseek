@@ -51,7 +51,8 @@ and `web_search`). The wire protocol and JSON arguments are unchanged.
 A host tool error is a result. Connection/protocol failures raise
 `TransportError`; a mutation may already have executed, so the SDK never retries.
 Caller cancellation propagates. The complete request and response body have a
-125-second deadline, covering the host's 120-second tool deadline.
+125-second deadline for ordinary calls, covering the host's 120-second tool
+deadline. Approval-capable calls use the wait behavior described below.
 
 MoonBit async calls suspend directly; no `await` keyword is needed. Complete
 all calls and join spawned tasks before exiting. Only printed output enters
@@ -141,3 +142,12 @@ makes the first match at `start_line` exactly that occurrence, and working
 bottom-up per file and right to left per line keeps every remaining span
 valid without a second check. `share/workflow/fix-deprecations.mbtx` is this
 loop for deprecation warnings that name a bare replacement.
+
+## Approval waits
+
+The host may list `approval_tools` in the capability. This SDK implementation
+waits for these calls without its ordinary 125-second deadline; caller
+cancellation still propagates. Other calls, and calls to hosts without that
+metadata, retain the deadline. Clients without this support still time out
+after 125 seconds, so long approval waits require publication and adoption of
+the updated SDK.
