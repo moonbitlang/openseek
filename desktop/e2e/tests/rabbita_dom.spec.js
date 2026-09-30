@@ -2210,7 +2210,7 @@ test('workspace settings open and persist per-workspace choices', async ({ page 
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByTitle('More actions').click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  await expect(page.getByRole('heading', { name: 'workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workspace settings', exact: true })).toBeVisible();
   await expect(page.locator('.settings-subtitle')).toHaveText('/workspace');
 
   // The page reads the host's authoritative snapshot before enabling the

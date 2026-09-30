@@ -21,7 +21,6 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
   let content : Array[@html.Html] = [
     @html.div(class="settings-header", [
       @html.div(class="page-eyebrow", model.focused_device_name()),
-      @html.h1(ui(locale, ScheduledTasks)),
       @html.p(class="settings-subtitle", ui(locale, ScheduleDescription)),
     ]),
     @html.div(class="schedule-toolbar", [

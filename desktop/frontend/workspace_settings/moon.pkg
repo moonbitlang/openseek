@@ -8,7 +8,6 @@ import {
   "openseek_desktop/frontend/dismiss",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/interop",
-  "openseek_desktop/frontend/resource",
   "openseek_desktop/frontend/select_control",
   "openseek_desktop/frontend/settings",
 }

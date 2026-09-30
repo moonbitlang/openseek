@@ -394,8 +394,7 @@ html {
    controls receive them without a JavaScript scan. */
 html.native-titlebar-overlay .app .sidebar-header,
 html.native-titlebar-overlay .app .topbar,
-html.native-titlebar-overlay .app .editor-tabsbar,
-html.native-titlebar-overlay .app .window-titlebar-drag-strip {
+html.native-titlebar-overlay .app .editor-tabsbar {
   -webkit-app-region: drag;
   user-select: none;
 }
@@ -415,24 +414,6 @@ html.native-titlebar-overlay .app
   -webkit-app-region: no-drag;
 }
 
-/* Pages without a visible topbar still need one real DOM drag target. It
-   occupies only the otherwise-empty native chrome band; the fixed sidebar
-   toggle has the higher stacking level and remains interactive. */
-.window-titlebar-page {
-  position: relative;
-}
-.window-titlebar-drag-strip {
-  display: none;
-  position: absolute;
-  inset: 0 0 auto 0;
-  z-index: 2;
-  height: var(--topbar-height);
-}
-
-html.native-titlebar-overlay .app .window-titlebar-drag-strip {
-  display: block;
-  right: var(--native-titlebar-right, 0px);
-}
 /* The conversation (left) and the editor (right) live side by side as two
    independent parts. The editor track is zero-width until the panel
    opens, so the viewer host element stays in the DOM but takes no

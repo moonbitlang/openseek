@@ -22,6 +22,7 @@ main {
 
 /* ---------- top bar ---------- */
 .topbar {
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -62,6 +63,8 @@ main {
 }
 
 .topbar-title {
+  margin: 0;
+  font-weight: inherit;
   min-width: 0;
   max-width: 52%;
   overflow: hidden;
@@ -170,4 +173,9 @@ main {
 
 .right-panel-toggle.hidden {
   display: none;
+}
+
+/* Loading and failed conversations keep the shared header visible. */
+main > .conversation-load-state {
+  grid-row: 2 / -1;
 }

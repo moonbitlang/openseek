@@ -387,7 +387,6 @@ fn list_page(
   let sections : Array[@html.Html] = [
     @html.div(class="skills-header", [
       @html.div(class="page-eyebrow", ui(locale, Library)),
-      @html.h1(ui(locale, Skills)),
       @html.div(class="skills-subtitle", ui(locale, Description)),
     ]),
     @html.div(

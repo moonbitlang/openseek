@@ -19,7 +19,6 @@ priv enum UiMessage {
   InstallSkill
   HandWrittenSkill
   Library
-  Skills
   Description
   Search
   EmptyInstalled
@@ -121,11 +120,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Library) => "技能库"
     (TraditionalChinese, Library) => "技能庫"
     (Japanese, Library) => "スキルライブラリ"
-    (English, Skills) => "Skills"
-    (Spanish, Skills) => "Habilidades"
-    (SimplifiedChinese, Skills) => "技能"
-    (TraditionalChinese, Skills) => "技能"
-    (Japanese, Skills) => "スキル"
     (English, Description) =>
       "Playbooks the agent reads when a task matches. Skills apply to new chats."
     (Spanish, Description) =>

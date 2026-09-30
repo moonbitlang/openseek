@@ -485,13 +485,10 @@ pub(all) struct PageActions {
 }
 
 ///|
-/// The Codex conversation uses the same three-row main-column shape as an
-/// OpenSeek conversation: one compact topbar, one transcript, one composer.
-/// Conversation switching belongs to the global sidebar, not inside here.
-pub fn State::page(
+/// Contents for the shell-owned header; the shell owns its DOM and geometry.
+pub fn State::header(
   locale? : @i18n.Locale = English,
   self : State,
-  dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   terminal_open~ : Bool,
   narrow~ : Bool,
@@ -517,7 +514,7 @@ pub fn State::page(
     // Source selection already lives in the global sidebar. The conversation
     // title occupies the same topbar slot as an OpenSeek title instead of
     // growing a second product header inside the shared shell.
-    @html.span(class="topbar-title", title=tooltip, title),
+    @html.h1(class="topbar-title", title=tooltip, title),
   )
   if workspace is Some(workspace) {
     topbar.push(
@@ -571,11 +568,18 @@ pub fn State::page(
       ),
     )
   }
-  let page : Array[@html.Html] = [
-    @html.div(class="topbar codex-topbar", topbar),
-    actions.transcript,
-    actions.composer,
-  ]
+  topbar
+}
+
+///|
+/// Conversation content and dialogs beneath the shell-owned header.
+pub fn State::page(
+  locale? : @i18n.Locale = English,
+  self : State,
+  dispatch : @cmd.Emit[Msg],
+  actions : PageActions,
+) -> Array[@html.Html] {
+  let page : Array[@html.Html] = [actions.transcript, actions.composer]
   if self.archive_confirm is Some(confirm) {
     page.push(
       @composer.WorktreeArchiveDialog::{
