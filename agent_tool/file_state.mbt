@@ -82,18 +82,12 @@ pub async fn FileStateMap::create_parent_directories(
     missing.push(directory)
     current = @workspace_path.parent_dir_preserving_separators(directory)
   }
-  for index = missing.length() - 1; index >= 0; index = index - 1 {
-    let directory = missing[index]
-    let created = try {
-      @fs.mkdir(directory)
-      true
-    } catch {
-      @os_error.OSError(_) as error if error.is_EEXIST() => false
+  for directory in missing.rev_iter() {
+    @fs.mkdir(directory) catch {
+      @os_error.OSError(_) as error if error.is_EEXIST() => continue
       error => raise error
     }
-    if created {
-      self.record_created_directory(directory)
-    }
+    self.record_created_directory(directory)
   }
 }
 
