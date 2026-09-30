@@ -11,8 +11,10 @@ script-authoring packages are taught. A host that ships its own prompt owns
 that text too. This file covers hosting, lifetime, and wire bounds. Scripts
 call host tools through the published SDK, which invokes the same registered
 executors as direct tool calls, including edit validation, rollback checks,
-and the session's shared `FileStateMap`. Direct `edit` and `multi_edit`
-remain available.
+and the session's shared `FileStateMap`. Direct file-tool calls remain available.
+PTC also exposes `write` and `remove` with their existing permission rules: scope
+violations and full replacement of existing MoonBit source remain errors;
+`remove` retains its existing deletion approval.
 
 For example, pass this as `source` to mbtx:
 

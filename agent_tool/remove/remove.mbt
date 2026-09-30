@@ -10,6 +10,7 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="remove",
+    program_callable=true,
     can_request_approval=approval is Some(_),
     description=(
       #|Delete a file or recursively delete a directory, with a non-empty reason.

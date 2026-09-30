@@ -245,3 +245,83 @@ async test "explicit PTC without a session service is an error" {
     }
   })
 }
+
+///|
+async test "PTC write and remove preserve existing permissions and deletion approval" {
+  @vfs.with_tmpdir(ws => {
+    @vfs.FileSystem({
+      "allowed/existing.txt": "old",
+      "allowed/source.mbt": "fn f() -> Int { 1 }",
+    }).write_to(ws)
+    @async.with_task_group(group => {
+      guard @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"])
+        is Ok(scope) else {
+        fail("scope")
+      }
+      let state = @agent_tool.FileStateMap()
+      let asked : Array[String] = []
+      let tools = @agent_tool.Tools([
+        state.serialize(
+          @write.definition(
+            workspace_root=ws,
+            file_state=state,
+            write_scope=scope,
+          ),
+        ),
+        @remove.definition(
+          workspace_root=ws,
+          file_state=state,
+          write_scope=scope,
+          approval=ApprovalChannel(ask => {
+            asked.push(ask.tool_name)
+            @async.sleep(1100)
+            state.with_access(() => ())
+            AllowedOnce
+          }),
+        ),
+      ])
+      let service = @ptc.Service::start(group, tools, call_timeout_ms=1000)
+      let tool = @mbtx.definition(
+        workspace_root=ws,
+        file_state=state,
+        program_service=service,
+      )
+      let out = @async.with_timeout(30000, () => {
+        dispatch(tool, {
+          "source": (
+            #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async", "moonbitlang/async/fs" }
+            #|async fn main {
+            #|  let made = @tools.call("write", { "path": "allowed/new.txt", "content": "created" })
+            #|  if made.is_error { fail(made.content) }
+            #|  for path in ["allowed/new.txt", "allowed/existing.txt"] {
+            #|    let removed = @tools.call("remove", { "path": path, "reason": "cleanup" })
+            #|    if removed.is_error { fail(removed.content) }
+            #|  }
+            #|  let outside = @tools.call("write", { "path": "outside.txt", "content": "blocked" })
+            #|  if !outside.is_error { fail("scope restriction lifted") }
+            #|  let source = @tools.call("write", { "path": "allowed/source.mbt", "content": "fn f() -> Int { 2 }" })
+            #|  if !source.is_error { fail("source replacement permitted") }
+            #|  let denied = try {
+            #|    @fs.write_file("forbidden.txt", "no", create_mode=CreateNew)
+            #|    false
+            #|  } catch { _ => true }
+            #|  if !denied { fail("script policy lifted") }
+            #|  println("PTC permissions preserved")
+            #|}
+          ),
+        })
+      })
+      assert_false(out.is_error, msg=out.content)
+      assert_true(out.content.contains("PTC permissions preserved"))
+      assert_eq(asked, ["remove"])
+      assert_false(@fs.exists("\{ws}/allowed/new.txt"))
+      assert_false(@fs.exists("\{ws}/allowed/existing.txt"))
+      assert_false(@fs.exists("\{ws}/outside.txt"))
+      assert_false(@fs.exists("\{ws}/forbidden.txt"))
+      assert_eq(
+        @fs.read_file("\{ws}/allowed/source.mbt").text(),
+        "fn f() -> Int { 1 }",
+      )
+    })
+  })
+}

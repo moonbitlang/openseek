@@ -36,6 +36,7 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="write",
+    program_callable=true,
     description=(
       #|Create a new file at arguments.path with arguments.content (missing parent
       #|directories are created), or overwrite an existing non-source file. Overwriting an
