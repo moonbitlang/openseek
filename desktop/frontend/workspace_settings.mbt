@@ -81,6 +81,8 @@ fn save_workspace_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   workspace : @common.Uri,
+  connection_generation~ : Int,
+  request_generation~ : Int,
   worktree_mode? : Bool,
   checkout_submodules? : Bool,
   submodule_checkout_timeout_seconds? : Int,
@@ -89,32 +91,34 @@ fn save_workspace_settings(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      // Success needs no dispatch: the committed state reaches every client
-      // (this one included) as the canonical `workspace.settings_changed`
-      // broadcast from the store's commit seam.
-      let _ : @protocol.WorkspaceSettingsPayload = @interop.bridge_request_in_order(
-        channel,
-        @commands.workspace_settings_set,
-        {
-          workspace: workspace.path,
-          worktree_mode,
-          checkout_submodules,
-          submodule_checkout_timeout_seconds,
-        },
-        lane=workspace_settings_lane(channel, workspace),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              WorkspaceSettingsSaveFailed(
-                workspace~,
-                message=@interop.bridge_error_text(error),
-              ),
-            ),
-          )
-          return
-        }
+      // The commit broadcast owns settings data; this result only settles
+      // feedback for the exact local write that completed.
+      let result : Result[Unit, String] = try {
+        let _ : @protocol.WorkspaceSettingsPayload = @interop.bridge_request_in_order(
+          channel,
+          @commands.workspace_settings_set,
+          {
+            workspace: workspace.path,
+            worktree_mode,
+            checkout_submodules,
+            submodule_checkout_timeout_seconds,
+          },
+          lane=workspace_settings_lane(channel, workspace),
+        )
+        Ok(())
+      } catch {
+        error => Err(@interop.bridge_error_text(error))
       }
+      scheduler.add(
+        dispatch(
+          WorkspaceSettingsSaveFinished(
+            workspace~,
+            connection_generation~,
+            request_generation~,
+            result~,
+          ),
+        ),
+      )
     })
     |> ignore
   })
@@ -226,22 +230,45 @@ fn Model::default_worktree_mode(
 ///|
 priv struct WorkspaceSettingsDialog {
   target : @workspace_settings.Target
+  pending_save : Int?
   error : String?
 } derive(Eq)
 
 ///|
-fn Model::with_workspace_settings_error(
+fn Model::begin_workspace_settings_save(
   self : Model,
   channel : @interop.ChannelId,
   workspace : @common.Uri,
-  error : String?,
+  request_generation : Int,
 ) -> Model {
   {
     ..self,
     workspace_settings_dialog: self.workspace_settings_dialog.map(dialog => {
       if dialog.target.channel == channel &&
         dialog.target.workspace == workspace {
-        { ..dialog, error, }
+        { ..dialog, pending_save: Some(request_generation), error: None, }
+      } else {
+        dialog
+      }
+    }),
+  }
+}
+
+///|
+fn Model::finish_workspace_settings_save(
+  self : Model,
+  channel : @interop.ChannelId,
+  workspace : @common.Uri,
+  request_generation : Int,
+  error : String?,
+) -> Model {
+  {
+    ..self,
+    workspace_settings_dialog: self.workspace_settings_dialog.map(dialog => {
+      if dialog.target.channel == channel &&
+        dialog.target.workspace == workspace &&
+        dialog.pending_save == Some(request_generation) {
+        { ..dialog, pending_save: None, error, }
       } else {
         dialog
       }
@@ -294,6 +321,7 @@ test "workspace settings input projects the mirror row and falls back inert" {
     ..loaded,
     workspace_settings_dialog: Some({
       target: { channel: Local, workspace, },
+      pending_save: None,
       error: None,
     }),
   }
@@ -316,6 +344,7 @@ test "workspace settings input projects the mirror row and falls back inert" {
     ..model,
     workspace_settings_dialog: Some({
       target: { channel: Local, workspace, },
+      pending_save: None,
       error: None,
     }),
   }
@@ -329,6 +358,7 @@ test "workspace settings input projects the mirror row and falls back inert" {
     ..model,
     workspace_settings_dialog: Some({
       target: { channel: Remote("roster-ghost"), workspace, },
+      pending_save: None,
       error: None,
     }),
   }
@@ -590,7 +620,12 @@ test "a failed save pops a toast and re-reads under a fresh token" {
   let minted = chosen.dev().workspace_settings_request_generation
   let (_, failed) = update_dev(
     dispatch,
-    WorkspaceSettingsSaveFailed(workspace~, message="disk full"),
+    WorkspaceSettingsSaveFinished(
+      workspace~,
+      connection_generation=chosen.dev().connection_generation,
+      request_generation=minted,
+      result=Err("disk full"),
+    ),
     chosen,
   )
   inspect(failed.notifications.length(), content="1")
@@ -761,6 +796,7 @@ test "detaching a workspace closes its settings dialog" {
     }),
     workspace_settings_dialog: Some({
       target: { channel: Local, workspace: gone, },
+      pending_save: None,
       error: None,
     }),
   }
@@ -778,6 +814,7 @@ test "detaching a workspace closes its settings dialog" {
     }),
     workspace_settings_dialog: Some({
       target: { channel: Local, workspace: kept, },
+      pending_save: None,
       error: None,
     }),
   }
