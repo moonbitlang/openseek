@@ -317,6 +317,7 @@ pub fn component(
     @html.dialog(
       id=DialogId,
       class="modal workspace-settings-dialog",
+      closedby="any",
       on_cancel=@cmd.batch([emit(CloseMenu), actions.dismiss]),
       on_close=_ => emit(CloseMenu),
       attrs=@html.Attrs::build()
