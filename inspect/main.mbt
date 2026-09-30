@@ -115,7 +115,7 @@ fn viz_config_from_matches(matches : @argparse.Matches) -> VizConfig raise {
     idle_minutes: match idle_exit.trim() {
       // Unset: an `--ensure` server is a shared background helper, so it goes
       // away on its own; a server someone started by hand runs until stopped.
-      "" => if ensure { 30 } else { 0 }
+      "" => if ensure { 60 } else { 0 }
       text =>
         @string.parse_int(text) catch {
           _ =>
@@ -1408,7 +1408,7 @@ fn cli_command() -> @argparse.Command {
         long="idle-exit",
         env="OPENSEEK_VIZ_IDLE_EXIT",
         default_values=[""],
-        about="Exit after this many minutes without a request; 0 never exits. Defaults to 30 with --ensure, otherwise never.",
+        about="Exit after this many minutes without a request; 0 never exits. Defaults to 60 with --ensure, otherwise never.",
       ),
       OptionArg(
         "export",
