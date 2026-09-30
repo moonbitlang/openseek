@@ -11,6 +11,11 @@
 ///   is still N bytes, so a `--watch` viewer can poll cheaply)
 /// - `GET /api/sessions/<key>/openseek_session-<id>.jsonl` → raw session file (header line + events)
 ///
+/// The shell and bundle come from disk when running from a checkout (or when
+/// `--web-dir`/`--bundle` name them), and otherwise from the copies built into a
+/// published binary (`generated_assets.mbt`), so `moonx moonbitlang/inspect`
+/// needs no files beside it.
+///
 /// It never writes to the stores, so pointing it at live session roots is safe.
 /// Session discovery is intentionally file-oriented: only
 /// `openseek_session-*.jsonl` files are listed, so `.DS_Store`, lock files, and
@@ -22,6 +27,9 @@ priv struct VizConfig {
   session_root_name : String
   search_dirs : Array[String]
   web_dir : String
+  // Whether `--web-dir` (or its env) was given, rather than the `web` default.
+  // Only an explicit directory is searched when running outside a checkout.
+  web_dir_explicit : Bool
   bundle : String
   export_path : String
   export_session : String
@@ -85,6 +93,7 @@ fn viz_config_from_matches(matches : @argparse.Matches) -> VizConfig raise {
     session_root_name: "\{session_root_name}",
     search_dirs: effective_search_dirs(matches),
     web_dir,
+    web_dir_explicit: !(matches.sources.get("web-dir") is (Some(Default) | None)),
     bundle,
     export_path,
     export_session: export_session.trim().to_owned(),
@@ -103,11 +112,16 @@ async fn main {
     [exe, ..] => module_root_from_exe(exe)
     [] => None
   }
-  let shell = shell_candidates(config.web_dir, module_root)
+  let shell = shell_candidates(
+    config.web_dir,
+    module_root,
+    web_dir_explicit=config.web_dir_explicit,
+  )
   let bundle_paths = bundle_candidates(
     config.bundle,
     config.web_dir,
     module_root,
+    web_dir_explicit=config.web_dir_explicit,
   )
   let catalog = session_catalog(
     config.session_root,
@@ -135,17 +149,21 @@ async fn main {
       }
       scoped
     }
-    guard locate_bundle(bundle_paths) is Some(bundle_path) else {
+    let bundle = resolve_bundle(bundle_paths)
+    guard bundle.text() is Some(bundle_js) else {
       fail(
         "could not locate the viz_app.js bundle (build with `moon build cmd/viz_app --target js` or pass --bundle)",
       )
     }
-    let html = build_export_html(rows, shell, bundle_path)
+    guard resolve_shell(shell).text() is Some(shell_html) else {
+      fail("could not locate index.html shell (pass --web-dir)")
+    }
+    let html = build_export_html(rows, shell_html, bundle_js)
     @fs.write_file(config.export_path, html, create_mode=CreateOrTruncate)
     // Name the embedded bundle: a stale artifact silently shadowing a
     // fresh build is invisible in the output file, but not in this line.
     println(
-      "openseek viz: wrote standalone export '\{config.export_path}' (\{rows.length()} session(s), \{html.length()} chars; bundle: \{bundle_path})",
+      "openseek viz: wrote standalone export '\{config.export_path}' (\{rows.length()} session(s), \{html.length()} chars; bundle: \{bundle.describe()})",
     )
     return
   }
@@ -156,7 +174,10 @@ async fn main {
   for root in catalog.roots {
     println("openseek viz: sessions under '\{root.path}'")
   }
-  println("openseek viz: shell from '\{shell[0]}'")
+  println("openseek viz: shell from \{resolve_shell(shell).describe()}")
+  println(
+    "openseek viz: bundle from \{resolve_bundle(bundle_paths).describe()}",
+  )
   if config.watch {
     println(
       "openseek viz: --watch: open sessions refresh every \{watch_interval_ms}ms",
@@ -306,9 +327,8 @@ async fn build_reply(
   let path = strip_query(request.path)
   match path {
     "/" | "/index.html" =>
-      match first_existing(assets.shell) {
-        Some(path) => {
-          let html = read_text_lossy(path)
+      match resolve_shell(assets.shell).text() {
+        Some(html) =>
           {
             code: 200,
             reason: "OK",
@@ -319,15 +339,20 @@ async fn build_reply(
               html
             },
           }
-        }
         None =>
           text_reply(
             404, "Not Found", "index.html not found; pass --web-dir or run from the openseek checkout",
           )
       }
     "/viz_app.js" =>
-      match locate_bundle(assets.bundle) {
-        Some(path) => asset_reply(path, "text/javascript; charset=utf-8")
+      match resolve_bundle(assets.bundle).text() {
+        Some(js) =>
+          {
+            code: 200,
+            reason: "OK",
+            content_type: "text/javascript; charset=utf-8",
+            body: js,
+          }
         None =>
           text_reply(
             404, "Not Found", "viz_app.js not found; build it with: moon build",
@@ -443,13 +468,9 @@ async fn session_list_reply(catalog : SessionCatalog) -> Reply {
 /// current parser: the bundle that understands these logs ships alongside them.
 async fn build_export_html(
   rows : Array[SessionListRow],
-  shell : Array[String],
-  bundle_path : String,
+  shell_html : String,
+  bundle_js : String,
 ) -> String {
-  let shell_html = read_first_existing(
-    shell, "index.html shell (build with `moon build` or pass --web-dir)",
-  )
-  let bundle_js = read_text_lossy(bundle_path)
   let sessions : Array[@viz_export.Session] = []
   for row in rows {
     sessions.push(
@@ -466,18 +487,6 @@ async fn build_export_html(
     )
   }
   @viz_export.StandaloneExport(shell_html, bundle_js).render(sessions)
-}
-
-///|
-/// Read the first existing candidate as text, or fail naming what was missing.
-async fn read_first_existing(
-  candidates : Array[String],
-  what : String,
-) -> String {
-  match first_existing(candidates) {
-    Some(path) => read_text_lossy(path)
-    None => fail("could not locate \{what}")
-  }
 }
 
 ///|
@@ -1029,8 +1038,20 @@ fn module_root_from_exe(exe : String) -> String? {
 /// (CWD-relative by default, preserving in-checkout behavior), then the
 /// checkout's own `web/` derived from the executable path, so running from
 /// another project's directory needs no flags.
-fn shell_candidates(web_dir : String, module_root : String?) -> Array[String] {
-  let candidates = ["\{web_dir}/index.html"]
+///
+/// Outside a checkout (`module_root` is `None`, e.g. under `moonx`) only an
+/// explicit `--web-dir` is searched: the default `web/` would otherwise pick up
+/// whatever unrelated `web/index.html` the current project has, instead of the
+/// shell built into the binary.
+fn shell_candidates(
+  web_dir : String,
+  module_root : String?,
+  web_dir_explicit~ : Bool,
+) -> Array[String] {
+  let candidates = []
+  if web_dir_explicit || module_root is Some(_) {
+    candidates.push("\{web_dir}/index.html")
+  }
   if module_root is Some(root) {
     candidates.push("\{root}/web/index.html")
   }
@@ -1046,15 +1067,26 @@ fn shell_candidates(web_dir : String, module_root : String?) -> Array[String] {
 /// executable-derived checkout root. This lets `moon build cmd/viz_app
 /// --target js` followed by `moon run inspect` work with no copy step —
 /// from any directory.
+///
+/// Outside a checkout only an explicit `--bundle` or `--web-dir` is searched,
+/// as for the shell: the CWD-relative build outputs belong to a checkout, and
+/// the binary carries its own bundle.
 fn bundle_candidates(
   bundle : String,
   web_dir : String,
   module_root : String?,
+  web_dir_explicit~ : Bool,
 ) -> Array[String] {
   let build_outputs = [
     "_build/js/release/build/moonbitlang/openseek-viz-app/openseek-viz-app.js", "_build/js/debug/build/moonbitlang/openseek-viz-app/openseek-viz-app.js",
   ]
-  let candidates = [bundle, "\{web_dir}/viz_app.js", ..build_outputs]
+  let candidates = [bundle]
+  if web_dir_explicit || module_root is Some(_) {
+    candidates.push("\{web_dir}/viz_app.js")
+  }
+  if module_root is Some(_) {
+    candidates.append(build_outputs)
+  }
   if module_root is Some(root) {
     candidates.push("\{root}/web/viz_app.js")
     for path in build_outputs {
