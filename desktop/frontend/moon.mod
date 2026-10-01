@@ -9,7 +9,7 @@ import {
   "moonbit-community/rabbita@0.16.3",
   "moonbitlang/editor@0.4.5",
   "moonbitlang/x@0.5.5",
-  "moonbitlang/openseek@0.6.0",
+  "moonbitlang/openseek@0.6.1",
   "openseek_desktop@0.1.5",
   "moonbitlang/async@0.22.4",
 }
