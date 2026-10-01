@@ -13,7 +13,7 @@ import {
   "moonbit-community/proton_ext@0.3.4",
   "tonyfettes/xlog@0.4.2",
   "moonbit-community/proton_contract@0.3.4",
-  "moonbitlang/openseek@0.6.0",
+  "moonbitlang/openseek@0.6.1",
   "openseek_desktop@0.1.5",
 }
 
