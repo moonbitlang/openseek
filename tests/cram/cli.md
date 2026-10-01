@@ -142,7 +142,7 @@ Options:
   --session <session>                                          Create or resume this durable session id.
   --session-root <session-root>                                Directory containing durable OpenSeek sessions. [default: .openseek]
   --no-session                                                 Run ephemerally: do not record this run to a durable session.
-  --inspect                                                    Watch this run live in the browser: start (or reuse) the session viewer, `moonx moonbitlang/inspect --ensure --watch`, and print its link before the agent starts. Needs a recorded session.
+  --inspect                                                    Watch this run live in the browser: start (or reuse) the session viewer, `moonx moonbitlang/inspect --ensure --watch`, print its link and open it in your default browser before the agent starts. Needs a recorded session.
   --review-gate                                                On goal(met), audit the worktree against the goal with a review subagent and inject the findings as an advisory notice.
   --cancel-on-stdin-eof                                        For a parent that launches this run: read the JSON request as one line, keep reading stdin, and cancel the run when it closes. Needs --input-format json. The run delegates no further work.
   --dir <dir>                                                  Workspace directory for relative paths; creates only the final path component if its parent exists. [default: .]

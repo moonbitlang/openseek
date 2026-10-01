@@ -110,7 +110,7 @@ pub fn root_command() -> @argparse.Command {
           FlagArg(
             "inspect",
             long="inspect",
-            about="Watch this run live in the browser: start (or reuse) the session viewer, `moonx moonbitlang/inspect --ensure --watch`, and print its link before the agent starts. Needs a recorded session.",
+            about="Watch this run live in the browser: start (or reuse) the session viewer, `moonx moonbitlang/inspect --ensure --watch`, print its link and open it in your default browser before the agent starts. Needs a recorded session.",
           ),
           review_gate_flag(),
           FlagArg(

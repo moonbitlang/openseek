@@ -198,7 +198,10 @@ session cli-20260930-065544-387-647458c4 (.openseek)
 watch live: http://127.0.0.1:41474/?t=…#s=cli-20260930-065544-387-647458c4
 ```
 
-The page opens on that run and follows it as it records. The viewer is shared
+It also opens the link in your default browser (`open` on macOS, `xdg-open` on
+Linux, `rundll32` on Windows), except over SSH or on a Linux session without a
+display, and says on the next line what it did. The page opens on that run and
+follows it as it records. The viewer is shared
 by every run and TUI in the project, outlives the run, and exits after an hour
 without a request. If it cannot start, the run says so once and carries on.
 `--inspect` needs a recorded session, so it cannot be combined with

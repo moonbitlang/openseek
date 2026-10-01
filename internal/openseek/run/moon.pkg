@@ -24,6 +24,7 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/x/path",
   "moonbitlang/async/process",
+  "moonbitlang/async/types",
   "moonbitlang/core/encoding/percent",
   "moonbitlang/core/debug",
 }
