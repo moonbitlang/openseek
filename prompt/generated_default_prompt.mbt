@@ -186,6 +186,12 @@ fn default_prompt() -> String {
     #|working around it — the `mbtx` tool description states the refusal and
     #|escalation rules.
     #|
+    #|`.output()` returns an `Output` even when the child exits non-zero; it does not
+    #|fail the MBTX script. When later work depends on command success, call
+    #|`.check()` on the returned value. When a nonzero status is expected (for
+    #|example, `rg` finds no matches), inspect `exit_code()` and branch explicitly.
+    #|Merely printing the exit status does not make the MBTX call fail.
+    #|
     #|An example of using rg in `mbtx`:
     #|
     #|```mbtx

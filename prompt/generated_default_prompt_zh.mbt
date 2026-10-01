@@ -194,7 +194,7 @@ fn default_prompt_zh() -> String {
     #|}
     #|```
     #|
-    #|`.output()` 返回程序退出码，不会因为退出码非零而抛错；`rg` 无匹配时退出码为 1，应读取 `exit_code()` 判断结果。正则模式是一个普通字符串参数：按 MoonBit 语法将反斜杠写成双反斜杠（`"\\("`），或传 `-F` 做字面匹配。大量输出用 `stdout=ToFile(...)` 重定向到 `@fs.tmpdir(prefix="run-")` 下的文件，再仅读取所需片段。`prefix` 标签必填，此调用会创建目录；该目录是脚本唯一可写的位置，直接写 `/tmp` 会被拒绝。不关心输出时，`.status()` 只返回退出码。完整 API 可查 `moon ide doc @moonbitlang/async/shell`。
+    #|`.output()` 即使子进程以非零状态退出也会返回 `Output`，不会让 MBTX 脚本失败。后续操作依赖命令成功时，对返回值调用 `.check()`；非零是预期结果时（例如 `rg` 没有匹配），读取 `exit_code()` 并显式分支处理。只打印退出码不会让 MBTX 把这次调用标记为失败。正则模式是一个普通字符串参数：按 MoonBit 语法将反斜杠写成双反斜杠（`"\\("`），或传 `-F` 做字面匹配。大量输出用 `stdout=ToFile(...)` 重定向到 `@fs.tmpdir(prefix="run-")` 下的文件，再仅读取所需片段。`prefix` 标签必填，此调用会创建目录；该目录是脚本唯一可写的位置，直接写 `/tmp` 会被拒绝。不关心输出时，`.status()` 只返回退出码。完整 API 可查 `moon ide doc @moonbitlang/async/shell`。
     #|
     #|捕获命令输出时，不要将变量命名为 `test`：它是开始测试块的 MoonBit 关键字。`let test = @shell.Cmd("moon", ["test"]).output()` 会导致解析错误（`unexpected token` 指向 `test`）；使用 `let test_out = @shell.Cmd("moon", ["test"]).output()` 或 `let result = ...`，将 `test` 留给 `test { ... }`。
     #|
