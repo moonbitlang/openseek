@@ -32,11 +32,22 @@ async fn show_in_viewer(session_root : String, session : String) -> Unit {
         )
       error => raise error
     }
-    "watch live: \{url}#s=\{@percent.encode(session)}"
+    Ok("\{url}#s=\{@percent.encode(session)}")
   } catch {
-    error => "could not start the session viewer (\{error}); the run goes on"
+    error => Err("\{error}")
   }
-  @stdio.stderr.write("\{line}\n")
+  match line {
+    Ok(link) => {
+      // The link is printed first, so it is there to use whatever happens
+      // to the browser.
+      @stdio.stderr.write("watch live: \{link}\n")
+      @stdio.stderr.write("\{browser_notice(@open_in_browser.open(link))}\n")
+    }
+    Err(error) =>
+      @stdio.stderr.write(
+        "could not start the session viewer (\{error}); the run goes on\n",
+      )
+  }
 }
 
 ///|
@@ -52,11 +63,14 @@ async fn start_viewer(
   let dir = @fs.tmpdir(prefix="openseek-inspect-")
   defer (@fs.rmdir(dir, recursive=true) catch { _ => () })
   let out = "\{dir}/inspect.out"
+  // One handle for both streams, as `redirect_to_file` intends; opening the
+  // file twice kept the viewer's output from showing up on Windows.
+  let output = @process.redirect_to_file(out)
   let _ = @process.spawn_orphan(
     command[0],
     [..command[1:], "--ensure", "--watch", "--session-root", session_root],
-    stdout=@process.redirect_to_file(out, append=true),
-    stderr=@process.redirect_to_file(out, append=true),
+    stdout=output,
+    stderr=output,
   )
   let result = @async.with_timeout_opt(wait_ms, () => {
     while true {
@@ -134,4 +148,27 @@ test "viewer_output finds the URL, an error, or nothing yet" {
   )
   @debug.assert_eq(viewer_output("openseek viz: serving 1"), Pending)
   @debug.assert_eq(viewer_output(""), Pending)
+}
+
+///|
+/// The stderr line saying what opening the link did, under the link.
+fn browser_notice(outcome : @open_in_browser.Outcome) -> String {
+  match outcome {
+    Launched => "opened it in your default browser"
+    Skipped(reason) => "not opening a browser \{reason}; use the link above"
+    Failed(error) => "could not open a browser (\{error}); use the link above"
+  }
+}
+
+///|
+test "browser_notice says what happened under the link" {
+  inspect(browser_notice(Launched), content="opened it in your default browser")
+  inspect(
+    browser_notice(Skipped("over SSH")),
+    content="not opening a browser over SSH; use the link above",
+  )
+  inspect(
+    browser_notice(Failed("`xdg-open` not found")),
+    content="could not open a browser (`xdg-open` not found); use the link above",
+  )
 }

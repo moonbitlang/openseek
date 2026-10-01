@@ -24,6 +24,7 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/x/path",
   "moonbitlang/async/process",
+  "bobzhang/open_in_browser",
   "moonbitlang/core/encoding/percent",
   "moonbitlang/core/debug",
 }

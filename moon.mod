@@ -4,6 +4,7 @@ version = "0.6.0"
 
 import {
   "moonbitlang/async@0.22.4",
+  "bobzhang/open_in_browser@0.1.0",
   "moonbitlang/x@0.5.5",
   "moonbitlang/jsonl@0.2.1",
   "moonbitlang/openseek_protocol@0.3.0",
