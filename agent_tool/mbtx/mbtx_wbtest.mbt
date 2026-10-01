@@ -171,6 +171,15 @@ test "the rendered spawn list covers every admitted command" {
 }
 
 ///|
+test "the moonx spawn note distinguishes native children from the wasm policy" {
+  let bullet = spawn_bullet("moonx")
+  assert_true(bullet.contains("--target native"))
+  assert_true(bullet.contains("does NOT inherit mbtx's wasm filesystem policy"))
+  assert_true(bullet.contains("Never use native to get around a denied write"))
+  assert_true(bullet.contains("`remove` will not recognize them"))
+}
+
+///|
 /// The rendered bullet for `program`, whitespace flattened so a wrap cannot
 /// split a verb list, and with the following bullets cut off so a check reads
 /// only this program's grant. Fails the test when the program has no bullet
@@ -261,6 +270,15 @@ test "the mbtx description carries the rendered spawn list" {
   )
   assert_true(text.contains("## Which programs a snippet may start"))
   assert_true(text.contains(spawn_list_markdown()))
+  assert_true(
+    text.contains("The wasm filesystem policy applies to the snippet"),
+  )
+  assert_true(
+    text.contains(
+      "Never use a child process (including `moonx --target native`)",
+    ),
+  )
+  assert_true(text.contains("See the `moonx` entry above"))
 }
 
 ///|

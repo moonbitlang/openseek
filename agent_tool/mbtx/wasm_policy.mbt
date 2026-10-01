@@ -239,7 +239,7 @@ let spawn_notes : Map[String, String] = {
   "codex": "(A read-only review of the current branch/diff; not `exec`, `install`, or a bare `codex`.)",
   "diff": "Structured comparison of two files.",
   "rg": "Searches a whole tree faster than a snippet can walk it.",
-  "moonx": "Runs other MoonBit binaries in wasm/sandbox mode.",
+  "moonx": "Runs MoonBit binaries; wasm is the default. `--target native` runs as a host process and does NOT inherit mbtx's wasm filesystem policy. Never use native to get around a denied write or probe the boundary. Files created this way are not recorded by the file tools, so `remove` will not recognize them as created this session.",
 }
 
 ///|
