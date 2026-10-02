@@ -205,7 +205,13 @@ fn Entry::action_buttons(
           id: "send",
           class_name: "icon-button send-button",
           title: ui(locale, SendLabel),
-          disabled: !available || self.image_reads > 0 || self.draft.is_empty(),
+          disabled: !available ||
+          self.image_reads > 0 ||
+          self.draft.is_empty() ||
+          (
+            input.shell_command(self.draft) is Some(command) &&
+            command.is_blank()
+          ),
           command: emit(SubmitRequested),
           content: @icons.icon(@icons.icon_arrow_up),
         },
@@ -252,6 +258,7 @@ fn Entry::view(
 ) -> @html.Html {
   ignore(locale)
   let goal_mode = input.goal.draft is Some(_)
+  let shell_command = input.shell_command(self.draft)
   let actions = self.action_buttons(locale~, emit, action_emit, input)
   let context : Array[@html.Html] = []
   for component in input.presentation.context {
@@ -266,7 +273,8 @@ fn Entry::view(
   let image_emit = emit.map(event => ImageRead(self.identity(), event))
   let can_attach = input.presentation.images_enabled &&
     !input.presentation.disabled &&
-    !goal_mode
+    !goal_mode &&
+    shell_command is None
   let status = input.presentation.status.map(component => {
     component.render(locale~, self.identity(), action_emit)
   })
@@ -309,10 +317,15 @@ fn Entry::view(
     ],
     value: if goal_mode {
       self.goal_draft.unwrap_or("")
+    } else if shell_command is Some(command) {
+      command
     } else {
       self.draft.task
     },
-    placeholder: if !goal_mode && self.submission_choice(input) is Some(choice) {
+    shell: shell_command is Some(_),
+    placeholder: if shell_command is Some(_) {
+      ui(locale, ShellPlaceholder)
+    } else if !goal_mode && self.submission_choice(input) is Some(choice) {
       match choice {
         SteerNow => ui(locale, SteerPlaceholder)
         QueueNext => ui(locale, QueuePlaceholder)
@@ -333,10 +346,20 @@ fn Entry::view(
       } else {
         None
       },
+      exit_mode: if shell_command is Some("") {
+        Some(emit(ShellModeExited))
+      } else {
+        None
+      },
     },
     status,
     actions,
-    followup_menu: self.followup_menu(locale~, input, emit),
+    // A command is not a follow-up: it never steers or queues behind the turn.
+    followup_menu: if shell_command is Some(_) {
+      None
+    } else {
+      self.followup_menu(locale~, input, emit)
+    },
     overlay: if goal_mode {
       None
     } else {

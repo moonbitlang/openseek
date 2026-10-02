@@ -180,8 +180,14 @@ fn mtime_to_unix_millis(seconds : Int64, nanoseconds : Int) -> Int64 {
 
 ///|
 /// A machine-facing title for a session: the first line of its first user
-/// prompt, untruncated. Empty when the session has no user prompt.
+/// prompt, untruncated. Empty when the session has no user prompt. A session
+/// opened by a `!` command is titled by its `$ command` line rather than the
+/// `<user_shell_command>` tag its stored envelope begins with.
 fn session_title(first_prompt : String) -> String {
+  let first_prompt = match @command_context.parse(first_prompt) {
+    Some(shell) => "$ \{shell.command}"
+    None => first_prompt
+  }
   let content = first_prompt.trim()
   let title = match content.split_once("\n") {
     Some((line, _)) => line.trim()

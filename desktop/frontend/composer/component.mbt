@@ -234,7 +234,9 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
   let visible_files_changed = file_completion != self.file_completion &&
     self.completion is Some(current) &&
     current.kind is Files
-  let completion = if incoming_goal is Some(_) || context_changed {
+  let completion = if incoming_goal is Some(_) ||
+    context_changed ||
+    input.shell_command(draft) is Some(_) {
     None
   } else if draft != self.draft ||
     root_changed ||
@@ -365,6 +367,8 @@ priv enum Msg {
   ImageRead(Identity, @image_input.Event)
   MentionJumped(Int)
   GoalCancelled
+  // Backspace in an empty shell command: back to an ordinary empty prompt.
+  ShellModeExited
   SubmitRequested
   FollowupMenuToggled
   FollowupMenuDismissed
@@ -420,7 +424,31 @@ fn Entry::edited(
       @cmd.none,
     )
   }
+  // In shell mode the textarea shows only the command; the `!` it hides stays
+  // in the draft. A draft that is (or just became) a command opens no
+  // completion menu: `@`, `#`, and `$` are shell text there, not mentions.
+  let value = if input.shell_command(self.draft) is Some(_) {
+    "!" + value
+  } else {
+    value
+  }
   let draft = { ..self.draft, task: value, }
+  if input.shell_command(draft) is Some(command) {
+    return (
+      { ..self, draft, completion: None, pending_submission: None, },
+      // Entering shell mode drops the typed `!` from what the textarea shows.
+      // The live field is corrected now, while this input event is still
+      // being handled: the render may patch nothing (an empty draft, or `!`
+      // typed before existing text renders the same value as before), and a
+      // keystroke landing before the next frame must already read the field
+      // as the command, which is how shell-mode input is interpreted.
+      if input.shell_command(self.draft) is None {
+        @cmd.custom_cmd(_ => drop_shell_marker("#task", command))
+      } else {
+        @cmd.none
+      },
+    )
+  }
   let (files, files_loading) = input.completion_files(value)
   let file_completion = Local(
     files~,
@@ -448,6 +476,20 @@ fn Entry::edited(
     command,
   )
 }
+
+///|
+/// Show `command` in the textarea matched by `selector` while it still holds
+/// exactly the typed `!` marker before it, keeping the caret where it was
+/// relative to the text. Anything else means the render already patched the
+/// field or the user typed on, and both are left alone.
+extern "js" fn drop_shell_marker(selector : String, command : String) -> Unit =
+  #|(selector, command) => {
+  #|  const area = document.querySelector(selector);
+  #|  if (!area || area.value !== "!" + command) return;
+  #|  const caret = Math.max(0, (area.selectionStart ?? 1) - 1);
+  #|  area.value = command;
+  #|  area.setSelectionRange(caret, caret);
+  #|}
 
 ///|
 fn Entry::accept_completion(
@@ -809,6 +851,47 @@ fn Model::update(
         action_emit(GoalCancelled(identity=entry.identity())),
         action_emit,
       )
+    ShellModeExited =>
+      if input.shell_command(entry.draft) is Some("") {
+        self.commit_entry_change(
+          entry,
+          {
+            ..entry,
+            draft: { ..entry.draft, task: "", },
+            pending_submission: None,
+          },
+          @cmd.none,
+          action_emit,
+        )
+      } else {
+        (self.with_entry(entry), @cmd.none)
+      }
+    // A shell command is acknowledged like a prompt: the root clears the
+    // draft and advances the submission sequence once it accepts the command.
+    SubmitRequested if input.shell_command(entry.draft) is Some(command) => {
+      let command = command.trim()
+      guard !command.is_empty() else {
+        return (self.with_entry(entry), @cmd.none)
+      }
+      (
+        self.with_entry({
+          ..entry,
+          completion: None,
+          pending_submission: Some(
+            PromptSubmission(
+              sequence_before=input.submission_sequence,
+              entry.draft,
+            ),
+          ),
+        }),
+        action_emit(
+          ShellCommandSubmitted(
+            identity=entry.identity(),
+            command=command.to_owned(),
+          ),
+        ),
+      )
+    }
     SubmitRequested =>
       if input.goal.draft is Some(_) {
         let text = entry.goal_draft.unwrap_or("").trim().to_owned()

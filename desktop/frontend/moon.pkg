@@ -5,6 +5,7 @@ import {
   "openseek_desktop/frontend/sidebar/messages" @sidebar_messages,
   "openseek_desktop/frontend/i18n",
   "moonbitlang/openseek_protocol" @wire,
+  "moonbitlang/openseek_protocol/command_context",
   "openseek_desktop/frontend/jobs",
   "openseek_desktop/frontend/export_dialog",
   "openseek_desktop/frontend/github",

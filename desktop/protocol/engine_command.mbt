@@ -28,6 +28,15 @@ pub fn steer(content : @wire.Content, submission_id? : String) -> @wire.Command 
 }
 
 ///|
+/// Hand the engine a `!` command's result (the `<user_shell_command>`
+/// envelope) as command context: appended as a durable user message while
+/// idle, folded into an open turn at its next step boundary. It never starts a
+/// turn of its own.
+pub fn command_context(text : String) -> @wire.Command {
+  Steer(kind=Command, content=Content([Text(text)]), submission_id=None)
+}
+
+///|
 /// Ask the idle engine to compact the durable record.
 pub fn compact() -> @wire.Command {
   Compact
@@ -87,6 +96,10 @@ test "the host's commands are the protocol's" {
   assert_true(
     steer(Content([Text("go left")])).to_json()
     is { "command": "steer", "kind": "prompt", "content": "go left", .. },
+  )
+  assert_true(
+    command_context("<user_shell_command>").to_json()
+    is { "command": "steer", "kind": "command", .. },
   )
   assert_true(compact().to_json() is { "command": "compact", .. })
   assert_true(cancel().to_json() is { "command": "cancel", .. })

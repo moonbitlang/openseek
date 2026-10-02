@@ -625,6 +625,8 @@ export class DesktopBrowserHarness {
         return { accepted: true };
       case 'agent.steer':
         return { steered: true, run_id: request.params?.run_id };
+      case 'agent.shell':
+        return { delivered: true };
       case 'agent.cancel':
         return { run_id: request.params?.run_id || 'run-e2e' };
       case 'session.archive': {

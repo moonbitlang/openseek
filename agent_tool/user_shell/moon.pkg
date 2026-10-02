@@ -1,0 +1,16 @@
+import {
+  "moonbitlang/openseek_protocol/command_context",
+  "moonbitlang/openseek/agent_tool/internal/platform_shell",
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/openseek_protocol/command_context",
+} for "test"
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "native"

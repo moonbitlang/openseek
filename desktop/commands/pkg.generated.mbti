@@ -23,6 +23,8 @@ pub let agent_queue : Command[@protocol.QueuePayload, @protocol.QueueReply]
 
 pub let agent_runs : Command[@protocol.RunsPayload, @protocol.RunsReply]
 
+pub let agent_shell : Command[@protocol.ShellPayload, @protocol.ShellReply]
+
 pub let agent_start : Command[@protocol.StartPayload, @protocol.StartReply]
 
 pub let agent_steer : Command[@protocol.SteerPayload, @protocol.SteerReply]

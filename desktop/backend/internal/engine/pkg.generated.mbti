@@ -57,6 +57,8 @@ pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Un
 
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
+pub async fn shell_run(EngineManager, @protocol.ShellPayload) -> @protocol.ShellReply
+
 pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @protocol.StartReply
 
 pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply

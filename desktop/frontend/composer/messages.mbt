@@ -108,6 +108,10 @@ priv enum UiMessage {
   NotCounted
   NoChanges
   ChangesLabel
+  ShellModeLabel
+  ShellModeHint
+  ShellPlaceholder
+  ShellRunning
 }
 
 ///|
@@ -728,5 +732,31 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ChangesLabel) => "更改"
     (TraditionalChinese, ChangesLabel) => "更改"
     (Japanese, ChangesLabel) => "変更"
+    (_, ShellModeLabel) => "shell"
+    (English, ShellModeHint) =>
+      "Shell mode: Backspace on an empty command returns to chat"
+    (Spanish, ShellModeHint) =>
+      "Modo shell: Retroceso con el comando vacío vuelve al chat"
+    (SimplifiedChinese, ShellModeHint) =>
+      "Shell 模式：命令为空时按退格键返回对话"
+    (TraditionalChinese, ShellModeHint) =>
+      "Shell 模式：命令為空時按退格鍵返回對話"
+    (Japanese, ShellModeHint) =>
+      "シェルモード：コマンドが空のとき Backspace でチャットに戻ります"
+    (English, ShellPlaceholder) =>
+      "Run a shell command; its output is added to the conversation."
+    (Spanish, ShellPlaceholder) =>
+      "Ejecuta un comando de shell; su salida se añade a la conversación."
+    (SimplifiedChinese, ShellPlaceholder) =>
+      "运行 shell 命令，输出会加入对话。"
+    (TraditionalChinese, ShellPlaceholder) =>
+      "執行 shell 命令，輸出會加入對話。"
+    (Japanese, ShellPlaceholder) =>
+      "シェルコマンドを実行し、出力を会話に追加します。"
+    (English, ShellRunning) => "Running…"
+    (Spanish, ShellRunning) => "Ejecutando…"
+    (SimplifiedChinese, ShellRunning) => "运行中…"
+    (TraditionalChinese, ShellRunning) => "執行中…"
+    (Japanese, ShellRunning) => "実行中…"
   }
 }

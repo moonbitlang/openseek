@@ -148,6 +148,24 @@ pub(all) struct GoalPayload {
 } derive(Debug, Eq)
 
 ///|
+/// A `!` shell command typed in the composer. The host runs it in the
+/// conversation's working directory and hands the captured result to the
+/// engine as command context — a durable user message in the
+/// `<user_shell_command>` envelope. Like a goal it addresses a durable
+/// conversation rather than a live run: the engine appends it while idle and
+/// folds it into an open turn at the next step boundary.
+pub(all) struct ShellPayload {
+  session : String
+  // The command line exactly as typed after `!`.
+  command : String
+  // A resumed conversation may need a new engine process with these settings.
+  model : String?
+  thinking : OpenSeekThinking?
+  max_steps : Int?
+  workspace : String?
+} derive(Debug, Eq)
+
+///|
 pub(all) struct LoadSessionPayload {
   session : String
   // The workspace holding the session, when the client already knows it.
@@ -1862,6 +1880,18 @@ pub extend GitPullRequestPayload with ToJson::{to_json}
 
 ///|
 pub extend GoalPayload with Debug::{to_repr}
+
+///|
+pub extend ShellPayload with Debug::{to_repr}
+
+///|
+pub extend ShellPayload with FromJson::{from_json}
+
+///|
+pub extend ShellPayload with Eq::{equal, not_equal}
+
+///|
+pub extend ShellPayload with ToJson::{to_json}
 
 ///|
 pub extend GoalPayload with FromJson::{from_json}

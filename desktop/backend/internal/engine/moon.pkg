@@ -7,6 +7,8 @@ import {
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek/viz_export",
   "moonbitlang/openseek_protocol" @wire,
+  "moonbitlang/openseek_protocol/command_context",
+  "moonbitlang/openseek/agent_tool/user_shell",
   "moonbitlang/jsonl",
   "openseek_desktop/backend/internal/env",
   "openseek_desktop/backend/internal/fsx",

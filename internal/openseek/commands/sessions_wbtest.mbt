@@ -132,6 +132,11 @@ async test "session list json reports titles newest first with husks last" {
 ///|
 test "session title keeps the untruncated first line" {
   assert_eq(session_title("  first line\nsecond line  "), "first line")
+  let shell = @command_context.encode(
+    "git status\ngit log",
+    Ok({ exit_code: Some(0), text: "clean", output_limit_reached: false, }),
+  )
+  assert_eq(session_title(shell), "$ git status")
   let long_line = "x".repeat(256)
   let title = session_title(long_line)
   assert_eq(title.char_length(), 256)

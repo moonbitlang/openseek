@@ -457,6 +457,23 @@ pub fn ContextComponent::render(
       }
       @html.div(class="queued-inputs", rows)
     }
+    ShellCommandsRunning(commands~) =>
+      @html.div(
+        class="shell-commands-running",
+        commands.map(command => {
+          @html.div(class="composer-notice", title=command, [
+            @html.span(
+              class="composer-notice-icon",
+              @icons.icon(@icons.icon_terminal),
+            ),
+            @html.span(class="composer-notice-text", [
+              @html.code(class="shell-command-text", "$ \{command}"),
+              @html.text(" "),
+              @html.span(class="shell-command-state", ui(locale, ShellRunning)),
+            ]),
+          ])
+        }),
+      )
     CompactionNotice(queued~) =>
       @html.div(class="composer-notice", [
         @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_fold)),
@@ -781,6 +798,9 @@ priv struct View {
   before_inner : Array[@html.Html]
   mentions : Array[@html.Html]
   value : String
+  // The draft is a `!` shell command: `value` is the command, and the input
+  // wears the shell-mode chip and monospace text.
+  shell : Bool
   placeholder : String
   disabled : Bool
   input : @cmd.Emit[String]
@@ -820,21 +840,41 @@ fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
     // Keep the input wrapper and its two children permanently mounted. Rabbita
     // diffs array children by position, so chips appearing must not replace
     // the focus-holding textarea subtree.
-    @html.div(class="composer-input", [
-      @html.div(class="mention-tray", self.mentions),
-      @html.textarea(
-        id="task",
-        value=self.value,
-        placeholder=self.placeholder,
-        disabled=self.disabled,
-        on_input=self.input,
-        // The surrounding card owns the visible focus frame; this marker lets
-        // the global focus styling find the textarea without drawing a second
-        // border around the control itself.
-        attrs=self.keyboard.attrs().data_set("focus-target", ""),
-        "",
-      ),
-    ]),
+    @html.div(
+      class=if self.shell {
+        "composer-input shell-mode"
+      } else {
+        "composer-input"
+      },
+      [
+        @html.div(class="mention-tray", self.mentions),
+        @html.textarea(
+          id="task",
+          value=self.value,
+          placeholder=self.placeholder,
+          disabled=self.disabled,
+          on_input=self.input,
+          // The surrounding card owns the visible focus frame; this marker lets
+          // the global focus styling find the textarea without drawing a second
+          // border around the control itself.
+          attrs=self.keyboard.attrs(self.value).data_set("focus-target", ""),
+          "",
+        ),
+        // Appended after the textarea, so the chip coming and going never
+        // shifts the focus-holding textarea's position.
+        ..if self.shell {
+          [
+            @html.span(
+              class="composer-mode-chip",
+              title=ui(locale, ShellModeHint),
+              ui(locale, ShellModeLabel),
+            ),
+          ]
+        } else {
+          []
+        },
+      ],
+    ),
     @html.div(class="composer-toolbar", [
       @html.div(class="composer-controls", [
         @html.div(class="composer-status", self.status),
@@ -1048,10 +1088,15 @@ priv struct KeyboardActions {
   dismiss : @cmd.Cmd
   submit : @cmd.Cmd
   cancel : @cmd.Cmd?
+  // Backspace in an empty textarea leaves an input mode (shell mode).
+  exit_mode : @cmd.Cmd?
 }
 
 ///|
-fn KeyboardActions::attrs(self : KeyboardActions) -> @html.Attrs {
+fn KeyboardActions::attrs(
+  self : KeyboardActions,
+  value : String,
+) -> @html.Attrs {
   @html.Attrs::build().on_keydown(event => {
     if self.menu_open {
       match event.key() {
@@ -1083,6 +1128,11 @@ fn KeyboardActions::attrs(self : KeyboardActions) -> @html.Attrs {
     } else if event.key() == "Escape" && self.cancel is Some(cancel) {
       event.prevent_default()
       cancel
+    } else if event.key() == "Backspace" &&
+      value.is_empty() &&
+      self.exit_mode is Some(exit_mode) {
+      event.prevent_default()
+      exit_mode
     } else if is_submit_shortcut(event) {
       event.prevent_default()
       self.submit

@@ -458,6 +458,9 @@ pub fn endpoints(
     Endpoint(@commands.agent_goal, payload => {
       @engine.goal_run(state.manager, payload)
     }),
+    Endpoint(@commands.agent_shell, payload => {
+      @engine.shell_run(state.manager, payload)
+    }),
     // Synchronous like cancel: it hands one line to the engine's writer and
     // reports whether there was still a question to answer. Nothing here waits
     // on the engine — what the decision releases is reported by the run's own
@@ -724,6 +727,7 @@ test "remote endpoint catalog has one entry per command name" {
   assert_true(names.contains("codex.thread.list"))
   assert_true(names.contains("agent.start"))
   assert_true(names.contains("agent.goal"))
+  assert_true(names.contains("agent.shell"))
   assert_true(names.contains("session.load_archived"))
   assert_true(names.contains("session.delete_archived"))
   assert_true(names.contains("workspace.settings_get"))

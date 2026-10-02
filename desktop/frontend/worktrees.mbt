@@ -414,6 +414,84 @@ fn set_goal_in_new_worktree(
 }
 
 ///|
+/// Create and bind the worktree a fresh worktree-mode conversation runs its
+/// first `!` command in — the step `start_in_new_worktree` and
+/// `set_goal_in_new_worktree` take before their first command. Returns why
+/// setup failed, in which case the command must not run; `None` once the
+/// session is bound. The caller holds the session's command lane.
+async fn create_shell_worktree(
+  locale~ : @i18n.Locale,
+  scheduler : &@cmd.Scheduler,
+  device_dispatch : @cmd.Emit[DeviceMsg],
+  channel : @interop.ChannelId,
+  workspace : @common.Uri,
+  session : String,
+) -> String? noraise {
+  // The session is the create's idempotency key, exactly as on the start
+  // path: a retry after a lost reply gets the same worktree back.
+  let result : @protocol.WorktreeCreateResult = @interop.bridge_request(
+    channel,
+    @commands.worktree_create,
+    { workspace: workspace.path, session: Some(session), codex_thread: None, },
+  ) catch {
+    // A create whose reply was lost may have bound the session host-side;
+    // the registry settles the placement (see `Model::checkout_placement`).
+    _ =>
+      return Some(
+        match locale {
+          SimplifiedChinese =>
+            "桌面主机未响应，无法确认工作树是否已创建。此对话可能已绑定到新工作树；命令尚未运行。"
+          TraditionalChinese =>
+            "桌面主機未響應，無法確認工作樹是否已建立。此對話可能已繫結到新工作樹；命令尚未執行。"
+          Japanese =>
+            "デスクトップホストが応答しないため、ワークツリーの作成を確認できません。このチャットはすでに新しいワークツリーに関連付けられている可能性があります。コマンドは実行されていません。"
+          English =>
+            "Couldn’t confirm worktree creation because the desktop host did not respond. This chat may already be bound to the new worktree; the command did not run."
+          Spanish =>
+            "No se pudo confirmar la creación del worktree porque el host de escritorio no respondió. Es posible que esta conversación ya esté asociada al nuevo worktree; el comando no se ejecutó."
+        },
+      )
+  }
+  let reply = match result {
+    @protocol.WorktreeCreatedReply(reply) => reply
+    @protocol.WorktreeCreateError(message) =>
+      return Some(
+        (match locale {
+          SimplifiedChinese => "无法创建工作树。"
+          TraditionalChinese => "無法建立工作樹。"
+          Japanese => "ワークツリーを作成できません。"
+          English => "Couldn’t create the worktree. "
+          Spanish => "No se pudo crear el worktree. "
+        }) +
+        message,
+      )
+  }
+  guard !reply.name.is_empty() else {
+    return Some(
+      match locale {
+        SimplifiedChinese =>
+          "主机返回了不完整的响应，无法创建工作树。命令尚未运行。"
+        TraditionalChinese =>
+          "主機返回了不完整的響應，無法建立工作樹。命令尚未執行。"
+        Japanese =>
+          "ホストからの応答が不完全なため、ワークツリーを作成できません。コマンドは実行されていません。"
+        English =>
+          "Couldn’t create the worktree because the host returned an incomplete reply. The command did not run."
+        Spanish =>
+          "No se pudo crear el worktree porque el host devolvió una respuesta incompleta. El comando no se ejecutó."
+      },
+    )
+  }
+  // Bind before the command runs, so the chip and the next submit both know
+  // the environment; the host routes the bound session's cwd through its
+  // registry, which is where the command then runs.
+  scheduler.add(
+    device_dispatch(WorktreeCreated(workspace~, name=reply.name, session~)),
+  )
+  None
+}
+
+///|
 /// Rebuild a checkout that was deleted outside the app. The host repairs the
 /// existing registry entry on its surviving branch, so this restores the
 /// conversation's real environment; the canonical rows arrive as
@@ -659,7 +737,7 @@ fn Conversation::wants_fresh_worktree(self : Conversation) -> Bool {
 /// retrying the failing create with no way back to Local.
 ///
 /// A command already sent settles it, though — that command *is* the choice
-/// being exercised. Both the start and the goal chains create the worktree
+/// being exercised. The start, goal, and `!` chains create the worktree
 /// and bind it asynchronously, and neither re-reads the mode when the reply
 /// lands, so flipping the chip during that window would not move what is in
 /// flight. It would only leave the chip disagreeing with where the
@@ -672,7 +750,8 @@ fn Model::can_choose_launch_mode(self : Model, conv : Conversation) -> Bool {
   guard conv.workspace is Project(root~) &&
     conv.messages.length() == 0 &&
     conv.run is NoRun(..) &&
-    conv.goal_pending is None else {
+    conv.goal_pending is None &&
+    conv.shell_commands.is_empty() else {
     return false
   }
   // The registry, not the provisional Project variant, decides whether this
