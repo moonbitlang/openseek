@@ -1029,6 +1029,11 @@ priv struct PendingSteer {
   // it is in flight, so presentation cannot be derived from the current
   // global default.
   behavior : FollowupBehavior
+  // Not yet sent: it waits on the session lane behind a `!` command whose
+  // output it must not overtake. A run that ends meanwhile never received it,
+  // so that run's end does not settle it — its own reply does, once it goes
+  // out (`SteerReleased`).
+  deferred : Bool
 } derive(Eq)
 
 ///|
@@ -2524,6 +2529,9 @@ priv enum DeviceMsg {
   // output arrives through the durable record instead. `draft` is a command
   // that never ran (its worktree could not be set up), handed back to the
   // composer the way a rejected prompt restores its draft.
+  // A steer deferred behind a `!` command is now being sent: from here its
+  // run's end settles it like any other steer.
+  SteerReleased(session~ : String, submission_id~ : String)
   ShellSettled(
     session~ : String,
     id~ : String,
@@ -3923,6 +3931,7 @@ fn Conversation::enqueue_steer(
   mentions : Array[Mention],
   behavior : FollowupBehavior,
   images? : Array[@composer.Image] = [],
+  deferred? : Bool = false,
 ) -> Conversation {
   let pending_steers = self.pending_steers.copy()
   pending_steers.push({
@@ -3933,6 +3942,7 @@ fn Conversation::enqueue_steer(
     mentions: mentions.copy(),
     images,
     behavior,
+    deferred,
   })
   let queued_inputs = if behavior is FollowupQueue {
     let queued_inputs = self.queued_inputs.copy()
@@ -4138,13 +4148,16 @@ fn Conversation::forget_awaiting_inputs(self : Conversation) -> Conversation {
 ///|
 /// Forget receipt-driven steers owned by this exact run. Queue-add requests
 /// keep waiting for their direct host reply: unlike a steer receipt, that
-/// reply can still arrive after the run's terminal event.
+/// reply can still arrive after the run's terminal event. So does a steer
+/// still deferred behind a `!` command: it has not been sent, and its refusal
+/// is what hands its draft back.
 fn Conversation::forget_steers_for_run(
   self : Conversation,
   run_id : String,
 ) -> Conversation {
   let pending_steers = self.pending_steers.filter(input => {
     !(input.behavior is FollowupSteer &&
+    !input.deferred &&
     input.run_id is Some(owner) &&
     owner == run_id)
   })

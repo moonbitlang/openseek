@@ -2509,6 +2509,7 @@ fn update_msg(
                 [],
                 FollowupSteer,
                 images=item.images,
+                deferred=!conv.shell_commands.is_empty(),
               )
               (
                 queue_openseek(
@@ -4300,6 +4301,7 @@ fn update_msg(
             conv.mentions,
             followup_behavior,
             images=conv.images,
+            deferred=!conv.shell_commands.is_empty(),
           )
           let command = if followup_behavior is FollowupQueue {
             queue_openseek(
@@ -8813,6 +8815,24 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     }
+    SteerReleased(session~, submission_id~) =>
+      if model.find_conversation(channel, session) is Some(conv) {
+        (
+          @cmd.none,
+          model.replace_conversation({
+            ..conv,
+            pending_steers: conv.pending_steers.map(input => {
+              if input.submission_id == submission_id {
+                { ..input, deferred: false, }
+              } else {
+                input
+              }
+            }),
+          }),
+        )
+      } else {
+        (@cmd.none, model)
+      }
     ShellSettled(session~, id~, error~, draft~) =>
       if model.find_conversation(channel, session) is Some(conv) {
         // A command that never ran comes back to an empty composer; newer

@@ -1185,6 +1185,9 @@ fn steer_openseek(
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let delivered = behind_pending_shell(channel, session, after_shell, () => {
+        if after_shell {
+          scheduler.add(dispatch(SteerReleased(session~, submission_id~)))
+        }
         steer_delivered(channel, text, submission_id, run_id, images~)
       }) catch {
         error => {
@@ -1264,6 +1267,9 @@ fn queue_openseek(
     @js.Promise::from_async(() => {
       let accepted = try {
         let reply = behind_pending_shell(channel, session, after_shell, () => {
+          if after_shell && action is QueueSteer(id~) {
+            scheduler.add(dispatch(SteerReleased(session~, submission_id=id)))
+          }
           @interop.bridge_request(channel, @commands.agent_queue, {
             action,
             run_id,

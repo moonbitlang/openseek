@@ -148,3 +148,34 @@ test('a steer sent while a ! command runs waits for its output', async ({ page }
   await expect.poll(() => app.requests.find(r => r.method === 'agent.steer')?.params.text).toBe('fix the failures');
   expect(app.pageErrors).toEqual([]);
 });
+
+test('a steer deferred behind a ! command comes back if its turn ends first', async ({ page }) => {
+  const app = await open(page);
+  const replyFor = app.replyFor.bind(app);
+  // The turn is over by the time the deferred steer goes out, so the host
+  // refuses it, as a real host does for a finished run.
+  app.replyFor = request => request.method === 'agent.steer'
+    ? { steered: false }
+    : replyFor(request);
+  const task = page.locator('#task');
+  await task.fill('Begin');
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.some(r => r.method === 'agent.start')).toBe(true);
+  const start = app.requests.find(r => r.method === 'agent.start');
+  app.notify('agent.started', {
+    run_id: 'run-e2e', session: 'session-1', session_root: '/workspace/.openseek',
+    submission_id: start.params.submission_id, model: 'deepseek-v4-pro', max_steps: 1000,
+  });
+  app.rpcDelays.set('agent.shell', 1500);
+  await typeCommand(page, '!moon test');
+  await expect(page.locator('.shell-commands-running')).toContainText('$ moon test');
+  await task.pressSequentially('fix the failures');
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await task.press('Enter');
+  await expect(task).toHaveValue('');
+  app.notify('agent.finished', { run_id: 'run-e2e', status: 'success', answer: 'done' });
+  await expect.poll(() => app.requests.some(r => r.method === 'agent.steer')).toBe(true);
+  await expect(task).toHaveValue('fix the failures');
+  await expect(page.getByText('it is back in the composer', { exact: false }).first()).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});
