@@ -139,7 +139,18 @@ pub(all) struct ShellReply {
   // Whether the command's result reached a live engine for this
   // conversation; the durable user message is the real confirmation.
   delivered : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for ShellReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "shell reply")
+  { delivered: object.required_bool("delivered"), }
+}
+
+///|
+pub impl ToJson for ShellReply with fn to_json(self) {
+  { "delivered": self.delivered }
+}
 
 ///|
 pub(all) struct GoalReply {

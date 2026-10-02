@@ -2518,6 +2518,7 @@ fn update_msg(
                   conv.session_id,
                   @protocol.QueueSteer(id~),
                   run_id,
+                  after_shell=!conv.shell_commands.is_empty(),
                 ),
                 model.replace_conversation(conv),
               )
@@ -2693,15 +2694,21 @@ fn update_msg(
           // Advancing the submission sequence is the composer's acceptance
           // signal: it clears the `!` draft the way it clears a sent prompt.
           let (model, id) = model.allocate_submission_id()
+          // A fresh worktree-mode conversation creates its worktree first, as
+          // its first prompt or goal would: the command's durable output pins
+          // the session's placement just as they do.
+          let new_worktree = conv.goal_creates_worktree()
           (
             shell_openseek(
+              locale=model.locale,
               dispatch,
               conv.device,
               session=conv.session_id,
               model=conv.engine_model,
               reasoning=model.reasoning_for(conv.engine_model),
               max_steps=model.max_steps,
-              workspace=conv.project(),
+              workspace=new_worktree.unwrap_or(conv.project()),
+              new_worktree=new_worktree is Some(_),
               id~,
               command,
             ),
@@ -4306,6 +4313,7 @@ fn update_msg(
                 images=conv.images.map(image => image.url),
               ),
               run_id,
+              after_shell=!conv.shell_commands.is_empty(),
             )
           } else {
             steer_openseek(
@@ -4316,6 +4324,7 @@ fn update_msg(
               task,
               run_id,
               images=conv.images.map(image => image.url),
+              after_shell=!conv.shell_commands.is_empty(),
             )
           }
           (
@@ -8804,11 +8813,21 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     }
-    ShellSettled(session~, id~, error~) =>
+    ShellSettled(session~, id~, error~, draft~) =>
       if model.find_conversation(channel, session) is Some(conv) {
+        // A command that never ran comes back to an empty composer; newer
+        // writing there is never overwritten.
+        let restore = draft is Some(_) &&
+          conv.task.is_blank() &&
+          !conv.composer_draft_present
         let model = model.replace_conversation({
           ..conv,
           shell_commands: conv.shell_commands.filter(pending => pending.id != id),
+          task: match draft {
+            Some(command) if restore => "!" + command
+            _ => conv.task
+          },
+          composer_draft_present: conv.composer_draft_present || restore,
         })
         match error {
           Some(message) => model.notify_error(dispatch, message)

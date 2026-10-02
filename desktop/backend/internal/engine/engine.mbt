@@ -625,8 +625,7 @@ fn SessionSlot::claim(
           "a compaction is already being requested for this conversation"
         GoalPending =>
           "a goal update is already being sent for this conversation"
-        ShellPending =>
-          "a shell command result is already being sent for this conversation"
+        ShellPending => "a shell command is still running in this conversation"
         ArchivePending =>
           "this conversation is moving between live and archived stores"
       },

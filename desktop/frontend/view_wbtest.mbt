@@ -131,3 +131,16 @@ test "a `!` command displays as its command line, not its envelope" {
   assert_eq(user_display_text(envelope), "$ ls -la")
   assert_eq(user_display_text("plain prompt"), "plain prompt")
 }
+
+///|
+test "a conversation with a ! command in flight has begun and is kept" {
+  let fresh = test_conversation()
+  assert_false(fresh.has_begun())
+  assert_true(fresh.draft_empty())
+  let running = {
+    ..fresh,
+    shell_commands: [{ id: "page-submission-1", command: "moon test", }],
+  }
+  assert_true(running.has_begun())
+  assert_false(running.draft_empty())
+}

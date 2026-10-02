@@ -2521,8 +2521,15 @@ priv enum DeviceMsg {
   CompactRejected(session~ : String, message~ : String)
   // The `agent.shell` request for the `!` command `id` settled. `error` is
   // the host's refusal or the transport failure; on success the command's
-  // output arrives through the durable record instead.
-  ShellSettled(session~ : String, id~ : String, error~ : String?)
+  // output arrives through the durable record instead. `draft` is a command
+  // that never ran (its worktree could not be set up), handed back to the
+  // composer the way a rejected prompt restores its draft.
+  ShellSettled(
+    session~ : String,
+    id~ : String,
+    error~ : String?,
+    draft~ : String?
+  )
   // The `agent.goal` bridge request was rejected (no engine, host error):
   // no `[goal]` marker will commit, so the failure is reported here. `draft`
   // is the text that never landed — carried back so the composer can return
@@ -3758,7 +3765,8 @@ fn Conversation::draft_empty(self : Conversation) -> Bool {
   !self.composer_draft_present &&
   self.pending_semantic_submission is None &&
   !(self.goal_edit is Some(edit) && !edit.draft.is_blank()) &&
-  self.goal_pending is None
+  self.goal_pending is None &&
+  self.shell_commands.is_empty()
 }
 
 ///|
@@ -3801,7 +3809,9 @@ fn Conversation::durable_frontier(self : Conversation) -> Int {
 fn Conversation::has_begun(self : Conversation) -> Bool {
   self.is_running() ||
   self.messages.length() > 0 ||
-  !self.pending_steers.is_empty()
+  !self.pending_steers.is_empty() ||
+  // A `!` command in flight is about to become durable transcript.
+  !self.shell_commands.is_empty()
 }
 
 ///|

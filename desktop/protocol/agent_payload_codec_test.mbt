@@ -359,3 +359,32 @@ test "start and steer require a typed image array" {
   let decoded : @protocol.SteerPayload = @json.from_json(input.to_json())
   assert_eq(decoded, input)
 }
+
+///|
+test "agent.shell payload and reply codecs are explicit" {
+  let shell : @protocol.ShellPayload = @json.from_json({
+    "session": "session-1",
+    "command": "ls -la",
+    "model": null,
+    "workspace": "/workspace",
+  })
+  @debug.assert_eq(shell.to_json(), {
+    "session": "session-1",
+    "command": "ls -la",
+    "workspace": "/workspace",
+  })
+  let missing_command : @protocol.ShellPayload? = Some(
+    @json.from_json({ "session": "session-1" }),
+  ) catch {
+    _ => None
+  }
+  assert_true(missing_command is None)
+  let reply : @protocol.ShellReply = @json.from_json({ "delivered": true })
+  @debug.assert_eq(reply.to_json(), { "delivered": true })
+  let malformed_reply : @protocol.ShellReply? = Some(
+    @json.from_json({ "delivered": "yes" }),
+  ) catch {
+    _ => None
+  }
+  assert_true(malformed_reply is None)
+}

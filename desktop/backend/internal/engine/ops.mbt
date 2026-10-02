@@ -343,7 +343,7 @@ pub async fn goal_run(
     payload.session,
     GoalPending,
     () => goal_config(manager, payload),
-    command,
+    () => command,
     subject="the goal",
     failure_reason="failed to write the goal command",
   )
@@ -358,12 +358,18 @@ pub async fn goal_run(
 /// phase. A conversation with no live engine (resumed after a restart, or
 /// whose process died between turns) gets one spawned on the durable session
 /// first, from `config`. Returns once the engine's writer took the line.
+///
+/// `prepare` produces the command once the conversation is reserved: its slot
+/// claimed as `op` and its record leased, so archiving, detaching its
+/// workspace, or removing its worktree is refused until delivery settles. It
+/// runs outside the global placement lock, so a slow one (a `!` command)
+/// holds only this conversation.
 async fn deliver_session_command(
   manager : EngineManager,
   session : String,
   op : PendingOp,
   config : async () -> RunConfig,
-  command : @wire.Command,
+  prepare : async () -> @wire.Command,
   subject~ : String,
   failure_reason~ : String,
 ) -> Unit {
@@ -389,6 +395,8 @@ async fn deliver_session_command(
   defer claim.release(manager)
   placement_locked = false
   manager.workspace_lifecycle_lock.release()
+  let command = prepare()
+  claim.require_current(manager)
   // A command sent while idle observes the selected engine settings
   // immediately. Mid-turn and queued-compaction commands stay on the current
   // process because replacing it would destroy the operation they are ordered
@@ -457,38 +465,40 @@ pub async fn shell_run(
   guard !command.is_empty() else {
     raise EngineError("shell command must not be empty")
   }
-  // Refuse before running anything: the result could never be delivered.
-  @session_store.ensure_not_archived(payload.session.trim().to_owned())
-  let config = shell_config(manager, payload)
-  ensure_run_cwd(config)
-  let env = user_shell_env(config, manager.runtime_dir)
-  let result : Result[@command_context.ShellOutput, Error] = try
-    @async.with_timeout_opt(ShellCommandTimeoutMs, () => {
-      @user_shell.collect_shell_output(
-        command.to_owned(),
-        cwd?=config.cwd.map(cwd => cwd.to_string()),
-        env~,
-      )
-    })
-  catch {
-    error => Err(error)
-  } noraise {
-    Some(output) => Ok(output)
-    None =>
-      Err(
-        Failure(
-          "stopped after \{ShellCommandTimeoutMs / 1000}s without exiting",
-        ),
-      )
-  }
+  // The command runs inside the reservation, so the conversation cannot be
+  // archived, nor its workspace detached or worktree removed, under it.
   deliver_session_command(
     manager,
     payload.session,
     ShellPending,
     () => shell_config(manager, payload),
-    @protocol.command_context(
-      @command_context.encode(command.to_owned(), result),
-    ),
+    () => {
+      let config = shell_config(manager, payload)
+      ensure_run_cwd(config)
+      let env = user_shell_env(config, manager.runtime_dir)
+      let result : Result[@command_context.ShellOutput, Error] = try
+        @async.with_timeout_opt(ShellCommandTimeoutMs, () => {
+          @user_shell.collect_shell_output(
+            command.to_owned(),
+            cwd?=config.cwd.map(cwd => cwd.to_string()),
+            env~,
+          )
+        })
+      catch {
+        error => Err(error)
+      } noraise {
+        Some(output) => Ok(output)
+        None =>
+          Err(
+            Failure(
+              "stopped after \{ShellCommandTimeoutMs / 1000}s without exiting",
+            ),
+          )
+      }
+      @protocol.command_context(
+        @command_context.encode(command.to_owned(), result),
+      )
+    },
     subject="the shell command result",
     failure_reason="failed to write the shell command result",
   )
@@ -1294,6 +1304,62 @@ async test "a shell command reaches the engine as command context" {
     assert_eq(parsed.command, "cat workspace-marker.txt; exit 4")
     assert_eq(parsed.exit, "4")
     assert_eq(parsed.output, ["in the workspace"])
+    group.return_immediately(())
+  })
+}
+
+///|
+/// The command runs inside the conversation's reservation: a workspace detach
+/// (like an archive or a worktree removal) cannot pull its directory or its
+/// record out from under it.
+#cfg(not(platform="windows"))
+async test "a running shell command holds its conversation" {
+  let dir = @fs.tmpdir(prefix="openseek-shell-hold-")
+  defer @fs.rmdir(dir, recursive=true)
+  let root : @pathx.Path = Path(dir)
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous_home = @sys.get_env_var("HOME")
+  @sys.set_env_var("HOME", root.join("home").to_string())
+  defer restore_home_env(previous_home)
+  let workspace = attach_run_workspace(root)
+  let runtime = root.join("runtime")
+  @fsx.ensure_dir(runtime)
+  let actor = new_engine_actor("/nonexistent/engine", runtime_dir=runtime)
+  let manager = actor.manager()
+  configure_custom_provider(manager)
+  let started = root.join("started")
+  @async.with_task_group(group => {
+    serve_until_pumping(actor, manager, EventSink(_ => ()), group~)
+    group.spawn_bg(no_wait=true, () => {
+      ignore(
+        shell_run(manager, {
+          session: "s-" + mint_run_id(),
+          command: "touch '\{started}'; sleep 2",
+          model: None,
+          thinking: None,
+          max_steps: None,
+          workspace: Some(workspace),
+        }) catch {
+          _ => { delivered: false, }
+        },
+      )
+    })
+    assert_true(
+      @async.with_timeout_opt(3000, () => {
+        while !@fsx.exists(started) {
+          @async.sleep(1)
+        }
+      })
+      is Some(_),
+    )
+    let detached = try {
+      ignore(detach_workspace(manager, workspace, _ => ()))
+      true
+    } catch {
+      _ => false
+    }
+    assert_false(detached)
     group.return_immediately(())
   })
 }

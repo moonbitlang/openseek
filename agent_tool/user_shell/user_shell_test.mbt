@@ -92,3 +92,17 @@ async test "encode follows shell output fields on Windows" {
     expected,
   )
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "a descendant left running does not hold the result" {
+  // The background `sleep` inherits the output pipe; the shell exits at once.
+  let output = @async.with_timeout_opt(5000, () => {
+    @user_shell.collect_shell_output("sleep 30 & echo started")
+  })
+  guard output is Some(output) else {
+    fail("the collector waited for the backgrounded descendant")
+  }
+  assert_eq(output.exit_code, Some(0))
+  assert_eq(output.text, "started\n")
+}

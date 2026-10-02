@@ -7,6 +7,7 @@ import {
 }
 
 import {
+  "moonbitlang/async",
   "moonbitlang/openseek_protocol/command_context",
 } for "test"
 

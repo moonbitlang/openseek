@@ -42,48 +42,93 @@ pub async fn collect_shell_output(
       no_wait=true,
       no_console_window=true,
     )
-    let prefix = read_output_prefix(reader, max_output_chars)
-    let exit_code = if prefix.output_limit_reached {
-      None
-    } else {
-      Some(process.wait())
-    }
+    // Output is drained beside the exit wait rather than before it: a
+    // descendant the command left running (`server &`) inherits the pipe and
+    // can hold it open long after the shell itself has exited.
+    let output = OutputPrefix::new(max_output_chars)
+    let draining = group.spawn(() => {
+      // A read failure ends the drain with what was read so far.
+      output.drain(reader) catch {
+        _ => ()
+      }
+      output.drained = true
+      if output.output_limit_reached {
+        process.cancel()
+      }
+    })
+    let exit_code = process.wait() catch { _ => -1 }
+    // The shell is gone, but the pipe may still hold what it wrote just before
+    // exiting. Let the reader reach EOF; if it is still blocked after a short
+    // grace, a descendant is holding the pipe open, and what was read is the
+    // result.
+    ignore(
+      @async.with_timeout_opt(drain_grace_ms, () => {
+        while !output.drained {
+          @async.sleep(5)
+        }
+      }),
+    )
+    draining.cancel()
     {
-      exit_code,
-      text: prefix.text,
-      output_limit_reached: prefix.output_limit_reached,
+      exit_code: if output.output_limit_reached {
+        None
+      } else {
+        Some(exit_code)
+      },
+      text: output.text,
+      output_limit_reached: output.output_limit_reached,
     }
   }
 }
 
 ///|
+/// How long the reader may keep draining after the shell exits before a pipe
+/// still held open by a descendant is closed.
+let drain_grace_ms : Int = 200
+
+///|
+/// The captured prefix of a command's merged output, filled by `drain`.
 priv struct OutputPrefix {
-  text : String
-  output_limit_reached : Bool
+  max_output_chars : Int
+  buffer : Buffer
+  mut text : String
+  mut output_limit_reached : Bool
+  mut drained : Bool
+}
+
+///|
+fn OutputPrefix::new(max_output_chars : Int) -> OutputPrefix {
+  {
+    max_output_chars,
+    buffer: Buffer(),
+    text: "",
+    output_limit_reached: false,
+    drained: false,
+  }
 }
 
 ///|
 /// Read merged output until EOF or until it exceeds `max_output_chars`,
-/// returning at most that many characters.
-async fn read_output_prefix(
+/// keeping at most that many characters in `text`.
+async fn OutputPrefix::drain(
+  self : OutputPrefix,
   reader : @process.ReadFromProcess,
-  max_output_chars : Int,
-) -> OutputPrefix {
-  let buffer = Buffer()
-  let byte_budget = max_output_chars * 4 + 4
+) -> Unit {
+  let byte_budget = self.max_output_chars * 4 + 4
   for ;; {
-    let chunk_limit = (byte_budget - buffer.length()).clamp(min=1, max=1024)
-    guard reader.read_some(max_len=chunk_limit) is Some(chunk) else {
-      return {
-        text: decode_valid_utf8_prefix(buffer.to_bytes()),
-        output_limit_reached: false,
-      }
+    let chunk_limit = (byte_budget - self.buffer.length()).clamp(
+      min=1,
+      max=1024,
+    )
+    guard reader.read_some(max_len=chunk_limit) is Some(chunk) else { return }
+    self.buffer.write_bytes(chunk)
+    let text = decode_valid_utf8_prefix(self.buffer.to_bytes())
+    if text.offset_of_nth_char(self.max_output_chars) is Some(end) {
+      self.text = text[:end].to_owned()
+      self.output_limit_reached = true
+      return
     }
-    buffer.write_bytes(chunk)
-    let text = decode_valid_utf8_prefix(buffer.to_bytes())
-    if text.offset_of_nth_char(max_output_chars) is Some(end) {
-      return { text: text[:end].to_owned(), output_limit_reached: true, }
-    }
+    self.text = text
   }
 }
 

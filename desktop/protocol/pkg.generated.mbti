@@ -2973,12 +2973,14 @@ pub impl @json.FromJson for ShellPayload
 
 pub(all) struct ShellReply {
   delivered : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn ShellReply::equal(Self, Self) -> Bool
 pub fn ShellReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ShellReply::not_equal(Self, Self) -> Bool
 pub fn ShellReply::to_json(Self) -> Json
 pub fn ShellReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ShellReply
+pub impl @json.FromJson for ShellReply
 
 pub(all) enum SkillContentReply {
   SkillContent(String)

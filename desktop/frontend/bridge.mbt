@@ -1179,17 +1179,14 @@ fn steer_openseek(
   text : String,
   run_id : String,
   images? : Array[String] = [],
+  after_shell? : Bool = false,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let delivered = steer_delivered(
-        channel,
-        text,
-        submission_id,
-        run_id,
-        images~,
-      ) catch {
+      let delivered = behind_pending_shell(channel, session, after_shell, () => {
+        steer_delivered(channel, text, submission_id, run_id, images~)
+      }) catch {
         error => {
           scheduler.add(
             dispatch(
@@ -1211,6 +1208,27 @@ fn steer_openseek(
     })
     |> ignore
   })
+}
+
+///|
+/// Run `work` behind this session's command lane when `after_shell`: the
+/// conversation has a `!` command still running, and a follow-up written
+/// against its output must not reach the engine before that output does.
+/// Otherwise `work` runs at once, as follow-ups always have.
+async fn[T] behind_pending_shell(
+  channel : @interop.ChannelId,
+  session : String,
+  after_shell : Bool,
+  work : async () -> T,
+) -> T {
+  if after_shell {
+    @interop.in_ordered_lane(
+      @interop.session_command_lane(channel, session),
+      work,
+    )
+  } else {
+    work()
+  }
 }
 
 ///|
@@ -1238,15 +1256,18 @@ fn queue_openseek(
   session : String,
   action : @protocol.QueueAction,
   run_id : String,
+  after_shell? : Bool = false,
 ) -> @cmd.Cmd {
   let root_dispatch = dispatch
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let accepted = try {
-        let reply = @interop.bridge_request(channel, @commands.agent_queue, {
-          action,
-          run_id,
+        let reply = behind_pending_shell(channel, session, after_shell, () => {
+          @interop.bridge_request(channel, @commands.agent_queue, {
+            action,
+            run_id,
+          })
         })
         reply.accepted
       } catch {
@@ -1384,10 +1405,14 @@ fn compact_openseek(
 /// message the engine appends; the reply only retires the running row (`id`)
 /// and surfaces a refusal.
 ///
-/// The request rides the session's command lane for the whole run, so a
-/// prompt sent while the command is still running reaches the engine after
-/// its output — the model reads the result the prompt was written against.
+/// The whole chain rides the session's command lane, so a new turn started
+/// while the command is still running reaches the engine after its output —
+/// the model reads the result the prompt was written against. `new_worktree`
+/// is a fresh conversation in worktree launch mode: like its first prompt or
+/// goal, the command first creates and binds that worktree and then runs in
+/// it, and a failed setup runs nothing and hands the command back.
 fn shell_openseek(
+  locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session~ : String,
@@ -1395,35 +1420,65 @@ fn shell_openseek(
   reasoning~ : OpenSeekReasoning,
   max_steps~ : String,
   workspace~ : @common.Uri,
+  new_worktree~ : Bool,
   id~ : String,
   command : String,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   guard @resource.belongs_to(workspace, channel) else {
-    return dispatch(ShellSettled(session~, id~, error=None))
+    return dispatch(ShellSettled(session~, id~, error=None, draft=None))
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let error = try
-        @interop.bridge_request_in_order(
-          channel,
-          @commands.agent_shell,
-          {
-            session,
-            command,
-            model: Some(model.wire()),
-            thinking: model.thinking(reasoning),
-            max_steps: parsed_max_steps(max_steps),
-            workspace: Some(workspace.path),
-          },
-          lane=@interop.session_command_lane(channel, session),
-        )
-      catch {
-        error => Some(@interop.bridge_error_text(error))
-      } noraise {
-        _ => None
+      @interop.in_ordered_lane(
+        @interop.session_command_lane(channel, session),
+        () => {
+          if new_worktree {
+            if create_shell_worktree(
+                locale~,
+                scheduler,
+                dispatch,
+                channel,
+                workspace,
+                session,
+              )
+              is Some(message) {
+              scheduler.add(
+                dispatch(
+                  ShellSettled(
+                    session~,
+                    id~,
+                    error=Some(message),
+                    draft=Some(command),
+                  ),
+                ),
+              )
+              return
+            }
+          }
+          let error = try
+            @interop.bridge_request(channel, @commands.agent_shell, {
+              session,
+              command,
+              model: Some(model.wire()),
+              thinking: model.thinking(reasoning),
+              max_steps: parsed_max_steps(max_steps),
+              workspace: Some(workspace.path),
+            })
+          catch {
+            error => Some(@interop.bridge_error_text(error))
+          } noraise {
+            _ => None
+          }
+          scheduler.add(
+            dispatch(ShellSettled(session~, id~, error~, draft=None)),
+          )
+        },
+      ) catch {
+        // Unreachable: the lane only ever wakes its waiters, never fails
+        // them, and the work it runs is `noraise`. The type cannot say so.
+        _ => ()
       }
-      scheduler.add(dispatch(ShellSettled(session~, id~, error~)))
     })
     |> ignore
   })
