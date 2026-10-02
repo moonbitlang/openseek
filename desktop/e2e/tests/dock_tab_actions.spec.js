@@ -25,6 +25,8 @@ test('new-tab menu stays anchored to plus in split, expanded and narrow panels',
       await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
     } else if (layout === 'narrow') {
       await page.setViewportSize({ width: 390, height: 844 });
+      // Narrow navigation covers the retained resource; dismiss it to use the tab bar.
+      await page.getByRole('button', { name: 'Hide workspace navigator', exact: true }).click();
     }
     await add.click();
     await expect(menu).toBeVisible();
@@ -48,22 +50,26 @@ test('new-tab menu stays anchored to plus in split, expanded and narrow panels',
   await add.click();
   await menu.getByRole('menuitem', { name: 'Search', exact: true }).click();
   await expect(menu).toBeHidden();
-  await expect(page.locator('.editor-tab.active')).toContainText('Search');
+  await expect(page.locator('.editor-tab.active')).toContainText('alpha.mbt');
+  await expect(page.locator('.editor-tab')).toHaveCount(1);
+  await expect(page.getByRole('textbox', { name: 'Search', exact: true })).toBeFocused();
   expect(app.pageErrors).toEqual([]);
 });
 
 for (const [action, remaining, active] of [
   ['Close Others', ['bravo.mbt'], 'bravo.mbt'],
-  ['Close to the Left', ['bravo.mbt', 'charlie.mbt', 'Review Changes'], 'Review Changes'],
+  ['Close to the Left', ['bravo.mbt', 'charlie.mbt', 'Workflows'], 'Workflows'],
   ['Close to the Right', ['alpha.mbt', 'bravo.mbt'], 'bravo.mbt'],
 ]) {
-  test(`${action} is relative to the context tab, across file and picker tabs`, async ({ page }) => {
+  test(`${action} is relative to the context tab, across file and workflow tabs`, async ({ page }) => {
     const app = await openTabs(page, ['alpha', 'bravo', 'charlie']);
     await app.openReview();
+    await page.locator('.tab-add').click();
+    await page.getByRole('menuitem', { name: 'Workflows', exact: true }).click();
     await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
     const tabs = page.locator('.editor-tab');
     await tabs.filter({ hasText: 'bravo.mbt' }).click({ button: 'right' });
-    await expect(page.locator('.editor-tab.active')).toContainText('Review Changes');
+    await expect(page.locator('.editor-tab.active')).toContainText('Workflows');
     const menu = page.getByRole('menu', { name: 'Tab actions' });
     await expect(menu).toBeVisible();
     await menu.getByRole('menuitem', { name: action, exact: true }).click();
@@ -236,6 +242,7 @@ test('tab menu hides and restores the native browser view through the host bridg
   await page.goto('/dist/browser/index.html');
   await app.openSession();
   await app.openReview();
+  await page.locator('.dock-launcher').getByRole('button', { name: /^Workflows / }).click();
   await page.locator('.tab-add').click();
   await page.locator('.dock-menu').getByRole('menuitem', { name: 'Browse', exact: true }).click();
   await page.locator('#browser-address-input').fill('https://example.com');

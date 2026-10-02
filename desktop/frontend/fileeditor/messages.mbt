@@ -60,21 +60,15 @@ priv enum UiMessage {
   TreeLabel
   ShowFile
   FileView
-  FileLabel
-  ReviewMode
   ComparisonAlgorithm
   AvailableDiff
   AvailableTokenTree
   IncludeComments
   IgnoreCommentChanges
   IgnoreComments
-  CommentsIgnored
-  CommentsIncluded
   IncludeTests
   IgnoreTestBlocks
   IgnoreTests
-  TestsIgnored
-  TestsIncluded
   PreviousChangeShortcut
   PreviousChange
   NextChangeShortcut
@@ -431,12 +425,12 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ReviewedPrefix) => "已审阅："
     (TraditionalChinese, ReviewedPrefix) => "已審閱："
     (Japanese, ReviewedPrefix) => "レビュー済み："
-    (English, HideFileTree) => "Hide file tree"
+    (English, HideFileTree) => "Hide workspace navigator"
     (Spanish, HideFileTree) => "Ocultar árbol de archivos"
     (SimplifiedChinese, HideFileTree) => "隐藏文件树"
     (TraditionalChinese, HideFileTree) => "隱藏檔案樹"
     (Japanese, HideFileTree) => "ファイルツリーを非表示"
-    (English, ShowFileTree) => "Show file tree"
+    (English, ShowFileTree) => "Show workspace navigator"
     (Spanish, ShowFileTree) => "Mostrar árbol de archivos"
     (SimplifiedChinese, ShowFileTree) => "显示文件树"
     (TraditionalChinese, ShowFileTree) => "顯示檔案樹"
@@ -491,16 +485,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, FileView) => "文件视图"
     (TraditionalChinese, FileView) => "檔案檢視"
     (Japanese, FileView) => "ファイルビュー"
-    (English, FileLabel) => "File"
-    (Spanish, FileLabel) => "Archivo"
-    (SimplifiedChinese, FileLabel) => "文件"
-    (TraditionalChinese, FileLabel) => "檔案"
-    (Japanese, FileLabel) => "ファイル"
-    (English, ReviewMode) => "Review mode"
-    (Spanish, ReviewMode) => "Modo de revisión"
-    (SimplifiedChinese, ReviewMode) => "审阅模式"
-    (TraditionalChinese, ReviewMode) => "審閱模式"
-    (Japanese, ReviewMode) => "レビューモード"
     (English, ComparisonAlgorithm) => "Comparison algorithm"
     (Spanish, ComparisonAlgorithm) => "Algoritmo de comparación"
     (SimplifiedChinese, ComparisonAlgorithm) => "比较算法"
@@ -537,16 +521,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, IgnoreComments) => "忽略注释"
     (TraditionalChinese, IgnoreComments) => "忽略註釋"
     (Japanese, IgnoreComments) => "コメントを無視"
-    (English, CommentsIgnored) => "Comments: ignored"
-    (Spanish, CommentsIgnored) => "Comentarios: ignorados"
-    (SimplifiedChinese, CommentsIgnored) => "注释：已忽略"
-    (TraditionalChinese, CommentsIgnored) => "註釋：已忽略"
-    (Japanese, CommentsIgnored) => "コメント：無視"
-    (English, CommentsIncluded) => "Comments: included"
-    (Spanish, CommentsIncluded) => "Comentarios: incluidos"
-    (SimplifiedChinese, CommentsIncluded) => "注释：已包含"
-    (TraditionalChinese, CommentsIncluded) => "註釋：已包含"
-    (Japanese, CommentsIncluded) => "コメント：含む"
     (English, IncludeTests) => "Include tests in the comparison"
     (Spanish, IncludeTests) => "Incluir pruebas en la comparación"
     (SimplifiedChinese, IncludeTests) => "比较时包含测试"
@@ -562,16 +536,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, IgnoreTests) => "忽略测试"
     (TraditionalChinese, IgnoreTests) => "忽略測試"
     (Japanese, IgnoreTests) => "テストを無視"
-    (English, TestsIgnored) => "Tests: ignored"
-    (Spanish, TestsIgnored) => "Pruebas: ignoradas"
-    (SimplifiedChinese, TestsIgnored) => "测试：已忽略"
-    (TraditionalChinese, TestsIgnored) => "測試：已忽略"
-    (Japanese, TestsIgnored) => "テスト：無視"
-    (English, TestsIncluded) => "Tests: included"
-    (Spanish, TestsIncluded) => "Pruebas: incluidas"
-    (SimplifiedChinese, TestsIncluded) => "测试：已包含"
-    (TraditionalChinese, TestsIncluded) => "測試：已包含"
-    (Japanese, TestsIncluded) => "テスト：含む"
     (English, PreviousChangeShortcut) => "Previous change (Shift+F7)"
     (Spanish, PreviousChangeShortcut) => "Cambio anterior (Shift+F7)"
     (SimplifiedChinese, PreviousChangeShortcut) =>
