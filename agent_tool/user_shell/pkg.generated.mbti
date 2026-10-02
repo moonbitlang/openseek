@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_tool/user_shell"
+
+import {
+  "moonbitlang/openseek_protocol/command_context",
+}
+
+// Values
+pub async fn collect_shell_output(String, cwd? : String, env? : Map[String, String], max_output_chars? : Int) -> @command_context.ShellOutput
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

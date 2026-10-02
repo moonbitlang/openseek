@@ -1,5 +1,6 @@
 import {
   "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol/command_context",
   "openseek_desktop/frontend/i18n",
   "moonbitlang/openseek/agent_tool/edit_diff",
   "moonbitlang/openseek/agent_tool/mbtx/html" @read_html,

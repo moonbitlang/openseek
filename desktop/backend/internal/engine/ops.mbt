@@ -333,12 +333,46 @@ pub async fn goal_run(
   guard !(payload.auto is Some(true)) else {
     raise EngineError("autonomous goal continuation is not supported yet")
   }
+  let command = if goal is Some(text) {
+    @protocol.goal_set(text, auto=payload.auto is Some(true))
+  } else {
+    @protocol.goal_clear()
+  }
+  deliver_session_command(
+    manager,
+    payload.session,
+    GoalPending,
+    () => goal_config(manager, payload),
+    command,
+    subject="the goal",
+    failure_reason="failed to write the goal command",
+  )
+  { delivered: true, }
+}
+
+///|
+/// Deliver one conversation-addressed command that is welcome in every phase
+/// — a goal, or a `!` command's context. The serve engine appends it while
+/// idle, steers it into an open turn at a batch-safe boundary, and holds its
+/// wire-order position behind a queued compaction, so this never gates on
+/// phase. A conversation with no live engine (resumed after a restart, or
+/// whose process died between turns) gets one spawned on the durable session
+/// first, from `config`. Returns once the engine's writer took the line.
+async fn deliver_session_command(
+  manager : EngineManager,
+  session : String,
+  op : PendingOp,
+  config : async () -> RunConfig,
+  command : @wire.Command,
+  subject~ : String,
+  failure_reason~ : String,
+) -> Unit {
   manager.workspace_lifecycle_lock.acquire()
   let mut placement_locked = true
   defer (if placement_locked { manager.workspace_lifecycle_lock.release() })
-  let session = payload.session.trim().to_owned()
+  let session = session.trim().to_owned()
   // Checked before the slot lookup, not inside the spawn path: an engine
-  // already accepting on this key skips `goal_config` and its guard. Reject
+  // already accepting on this key skips `config` and its guard. Reject
   // malformed requests at the public operation boundary as well.
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
@@ -351,21 +385,21 @@ pub async fn goal_run(
   // Claim before looking at the engine, exactly as compact_run does: this op
   // may have to spawn one, and a start accepted during that wait could replace
   // the live process and lose the command in the dying engine's stdin.
-  let claim = slot.claim(sessions, session, GoalPending)
+  let claim = slot.claim(sessions, session, op)
   defer claim.release(manager)
   placement_locked = false
   manager.workspace_lifecycle_lock.release()
-  // A goal sent while idle observes the selected engine settings immediately.
-  // Mid-turn and queued-compaction goals stay on the current process because
-  // replacing it would destroy the operation they are ordered behind. New
-  // endpoint settings are therefore not resolved in that active path; the
-  // next idle start applies their fingerprint.
+  // A command sent while idle observes the selected engine settings
+  // immediately. Mid-turn and queued-compaction commands stay on the current
+  // process because replacing it would destroy the operation they are ordered
+  // behind. New endpoint settings are therefore not resolved in that active
+  // path; the next idle start applies their fingerprint.
   let replacement = match slot.live() {
-    None => Some(goal_config(manager, payload))
+    None => Some(config())
     Some(live) =>
       match live.phase {
         Idle(..) => {
-          let config = goal_config(manager, payload)
+          let config = config()
           if live.spec_key != engine_fingerprint(config) {
             Some(config)
           } else {
@@ -383,23 +417,14 @@ pub async fn goal_run(
   guard slot.live() is Some(live) else {
     raise EngineError("engine failed to start")
   }
-  let command = if goal is Some(text) {
-    @protocol.goal_set(text, auto=payload.auto is Some(true))
-  } else {
-    @protocol.goal_clear()
-  }
-  // The one command that must be acknowledged. A prompt or a compaction that
-  // never reaches stdin is reported by its run's lifecycle events, and a steer
-  // by its receipt or the run's durable recovery; a goal has neither. Its only
-  // other confirmation is the durable `[goal]` marker, so a dropped goal would
-  // leave the client believing a set or clear succeeded that never happened.
+  // These commands must be acknowledged. A prompt or a compaction that never
+  // reaches stdin is reported by its run's lifecycle events, and a steer by
+  // its receipt or the run's durable recovery; these have neither. Their only
+  // other confirmation is the durable record, so a dropped one would leave the
+  // client believing a goal or a `!` command landed that never did.
   let ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
-  guard live.submit(
-    command,
-    failure_reason="failed to write the goal command",
-    ack~,
-  ) else {
-    raise EngineError("engine changed before the goal was submitted")
+  guard live.submit(command, failure_reason~, ack~) else {
+    raise EngineError("engine changed before \{subject} was submitted")
   }
   // Affordable precisely because nothing above went public: no phase
   // transition, no event. A cancellation landing on this wait leaves nothing
@@ -407,6 +432,66 @@ pub async fn goal_run(
   if ack.get() is Some(error) {
     raise error
   }
+}
+
+///|
+/// How long a `!` command may run before the host stops it. The composer has
+/// no way to interrupt one, so this is what keeps a command that never exits
+/// (a dev server, a watcher) from holding its result forever.
+const ShellCommandTimeoutMs = 120_000
+
+///|
+/// Run a `!` shell command typed in the composer and hand its result to the
+/// conversation's serve engine as command context: the `<user_shell_command>`
+/// envelope, appended as a durable user message while idle and folded into an
+/// open turn at its next step boundary, exactly as the terminal UI's `!` mode
+/// does. The command runs in the conversation's working directory (its bound
+/// worktree, else the workspace) with no command policy — the user typed it.
+/// Its output reaches the transcript only through that durable message, so a
+/// live page and a reloaded one render the same card.
+pub async fn shell_run(
+  manager : EngineManager,
+  payload : @protocol.ShellPayload,
+) -> ShellReply {
+  let command = payload.command.trim()
+  guard !command.is_empty() else {
+    raise EngineError("shell command must not be empty")
+  }
+  // Refuse before running anything: the result could never be delivered.
+  @session_store.ensure_not_archived(payload.session.trim().to_owned())
+  let config = shell_config(manager, payload)
+  ensure_run_cwd(config)
+  let env = user_shell_env(config, manager.runtime_dir)
+  let result : Result[@command_context.ShellOutput, Error] = try
+    @async.with_timeout_opt(ShellCommandTimeoutMs, () => {
+      @user_shell.collect_shell_output(
+        command.to_owned(),
+        cwd?=config.cwd.map(cwd => cwd.to_string()),
+        env~,
+      )
+    })
+  catch {
+    error => Err(error)
+  } noraise {
+    Some(output) => Ok(output)
+    None =>
+      Err(
+        Failure(
+          "stopped after \{ShellCommandTimeoutMs / 1000}s without exiting",
+        ),
+      )
+  }
+  deliver_session_command(
+    manager,
+    payload.session,
+    ShellPending,
+    () => shell_config(manager, payload),
+    @protocol.command_context(
+      @command_context.encode(command.to_owned(), result),
+    ),
+    subject="the shell command result",
+    failure_reason="failed to write the shell command result",
+  )
   { delivered: true, }
 }
 
@@ -1132,6 +1217,106 @@ async test "a goal is delivered only once its command is on the wire" {
     )
     group.return_immediately(())
   })
+}
+
+///|
+/// A `!` command runs on the host and only its result travels: the engine
+/// receives one `kind=command` steer carrying the `<user_shell_command>`
+/// envelope, which it appends as durable context without opening a turn.
+#cfg(not(platform="windows"))
+async test "a shell command reaches the engine as command context" {
+  let dir = @fs.tmpdir(prefix="openseek-shell-ctx-")
+  defer @fs.rmdir(dir, recursive=true)
+  let root : @pathx.Path = Path(dir)
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous_home = @sys.get_env_var("HOME")
+  @sys.set_env_var("HOME", root.join("home").to_string())
+  defer restore_home_env(previous_home)
+  let workspace = attach_run_workspace(root)
+  @fs.write_file(
+    root.join("ws/workspace-marker.txt").to_string(),
+    "in the workspace",
+    create_mode=CreateOrTruncate,
+  )
+  let engine = root.join("bin/engine.sh")
+  let seed = root.join("bin/toolchains/moonbit/macos-arm64")
+  let runtime = root.join("runtime")
+  let received = root.join("received")
+  prepare_fake_moonbit_seed(seed, version="0.10.0-test")
+  prepare_fake_bundled_moonbit_home(
+    runtime.join("toolchains/moonbit/macos-arm64"),
+    version="0.10.0-test",
+  )
+  @fs.write_file(
+    engine.to_string(),
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nwhile IFS= read -r line; do printf '%s\\n' \"$line\" >> '\{received}'; done\n",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
+  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let manager = actor.manager()
+  configure_custom_provider(manager)
+  let session = "s-" + mint_run_id()
+  let sink = EventSink(_ => ())
+  @async.with_task_group(group => {
+    serve_until_pumping(actor, manager, sink, group~)
+    let reply = shell_run(manager, {
+      session,
+      command: "  cat workspace-marker.txt; exit 4  ",
+      model: None,
+      thinking: None,
+      max_steps: None,
+      workspace: Some(workspace),
+    })
+    assert_true(reply.delivered)
+    assert_true(
+      @async.with_timeout_opt(3000, () => {
+        while !@fsx.exists(received) {
+          @async.sleep(1)
+        }
+      })
+      is Some(_),
+    )
+    let line = @fs.read_file(received.to_string()).text()
+    guard @json.parse(line.trim())
+      is {
+        "command": "steer",
+        "kind": "command",
+        "content": String(content),
+        ..
+      } else {
+      fail("expected one command steer, got \{line}")
+    }
+    guard @command_context.parse(content) is Some(parsed) else {
+      fail("expected a <user_shell_command> envelope, got \{content}")
+    }
+    assert_eq(parsed.command, "cat workspace-marker.txt; exit 4")
+    assert_eq(parsed.exit, "4")
+    assert_eq(parsed.output, ["in the workspace"])
+    group.return_immediately(())
+  })
+}
+
+///|
+async test "a blank shell command is refused before anything runs" {
+  let actor = new_engine_actor("/nonexistent/engine")
+  try
+    shell_run(actor.manager(), {
+      session: "s-blank",
+      command: "   ",
+      model: None,
+      thinking: None,
+      max_steps: None,
+      workspace: None,
+    })
+  catch {
+    EngineError(message) =>
+      assert_eq(message, "shell command must not be empty")
+    error => fail("unexpected error: \{error}")
+  } noraise {
+    _ => fail("expected a refusal")
+  }
 }
 
 ///|

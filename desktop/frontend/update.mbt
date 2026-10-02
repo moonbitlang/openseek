@@ -2686,6 +2686,35 @@ fn update_msg(
             }),
           )
         }
+        @composer.ShellCommandSubmitted(identity~, command~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          // Advancing the submission sequence is the composer's acceptance
+          // signal: it clears the `!` draft the way it clears a sent prompt.
+          let (model, id) = model.allocate_submission_id()
+          (
+            shell_openseek(
+              dispatch,
+              conv.device,
+              session=conv.session_id,
+              model=conv.engine_model,
+              reasoning=model.reasoning_for(conv.engine_model),
+              max_steps=model.max_steps,
+              workspace=conv.project(),
+              id~,
+              command,
+            ),
+            model.replace_conversation({
+              ..conv,
+              task: "",
+              images: [],
+              mentions: [],
+              composer_draft_present: false,
+              shell_commands: [..conv.shell_commands, { id, command, }],
+            }),
+          )
+        }
         @composer.SlashCommand(identity~, command~) => {
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
@@ -8775,6 +8804,19 @@ fn update_device_msg(
         (@cmd.none, model)
       }
     }
+    ShellSettled(session~, id~, error~) =>
+      if model.find_conversation(channel, session) is Some(conv) {
+        let model = model.replace_conversation({
+          ..conv,
+          shell_commands: conv.shell_commands.filter(pending => pending.id != id),
+        })
+        match error {
+          Some(message) => model.notify_error(dispatch, message)
+          None => (@cmd.none, model)
+        }
+      } else {
+        (@cmd.none, model)
+      }
     CompactRejected(session~, message~) =>
       if model.find_conversation(channel, session) is Some(conv) {
         model

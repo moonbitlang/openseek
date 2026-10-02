@@ -1194,3 +1194,55 @@
 .changes-chip .mention-jump {
   text-decoration: none;
 }
+
+/* Shell mode: a draft that begins with `!` is a shell command. The card
+   takes the accent border, the command reads as monospace, and the mode chip
+   sits beside the textarea (Backspace in an empty command leaves the mode). */
+.composer-inner:has(> .composer-input.shell-mode) {
+  border-color: var(--color-accent-border);
+}
+
+.composer-input.shell-mode {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 8px;
+}
+
+.composer-input.shell-mode > .mention-tray {
+  grid-column: 1 / -1;
+}
+
+.composer-input.shell-mode > .mention-tray:empty {
+  display: none;
+}
+
+.composer-input.shell-mode > textarea {
+  font-family: var(--font-family-mono);
+}
+
+.composer-mode-chip {
+  margin-top: 5px;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1.6;
+  user-select: none;
+}
+
+.shell-commands-running {
+  display: grid;
+  gap: 4px;
+}
+
+.shell-command-text {
+  font-family: var(--font-family-mono);
+  overflow-wrap: anywhere;
+}
+
+.shell-command-state {
+  color: var(--color-text-muted);
+}

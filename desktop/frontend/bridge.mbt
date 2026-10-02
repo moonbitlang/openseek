@@ -1377,6 +1377,59 @@ fn compact_openseek(
 }
 
 ///|
+/// Run a `!` shell command on the conversation's host and hand its output to
+/// the conversation, carrying the same engine settings as a start: a
+/// conversation with no live serve process gets one spawned on the durable
+/// session first. The output reaches the transcript as the durable user
+/// message the engine appends; the reply only retires the running row (`id`)
+/// and surfaces a refusal.
+///
+/// The request rides the session's command lane for the whole run, so a
+/// prompt sent while the command is still running reaches the engine after
+/// its output — the model reads the result the prompt was written against.
+fn shell_openseek(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  session~ : String,
+  model~ : EngineModel,
+  reasoning~ : OpenSeekReasoning,
+  max_steps~ : String,
+  workspace~ : @common.Uri,
+  id~ : String,
+  command : String,
+) -> @cmd.Cmd {
+  let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
+  guard @resource.belongs_to(workspace, channel) else {
+    return dispatch(ShellSettled(session~, id~, error=None))
+  }
+  @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let error = try
+        @interop.bridge_request_in_order(
+          channel,
+          @commands.agent_shell,
+          {
+            session,
+            command,
+            model: Some(model.wire()),
+            thinking: model.thinking(reasoning),
+            max_steps: parsed_max_steps(max_steps),
+            workspace: Some(workspace.path),
+          },
+          lane=@interop.session_command_lane(channel, session),
+        )
+      catch {
+        error => Some(@interop.bridge_error_text(error))
+      } noraise {
+        _ => None
+      }
+      scheduler.add(dispatch(ShellSettled(session~, id~, error~)))
+    })
+    |> ignore
+  })
+}
+
+///|
 /// Set or clear a conversation's standing goal, carrying the same engine
 /// settings as a start: a conversation with no live serve process (resumed
 /// after a restart) gets one spawned on the durable session first. The

@@ -140,6 +140,40 @@ pub impl ToJson for CompactPayload with fn to_json(self) {
 }
 
 ///|
+pub impl FromJson for ShellPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "agent.shell payload")
+  {
+    session: object.required_string("session"),
+    command: object.required_string("command"),
+    model: object.optional_string("model"),
+    thinking: object.optional_thinking("thinking"),
+    max_steps: object.optional_int("max_steps"),
+    workspace: object.optional_string("workspace"),
+  }
+}
+
+///|
+pub impl ToJson for ShellPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "session": self.session.to_json(),
+    "command": self.command.to_json(),
+  }
+  if self.model is Some(model) {
+    fields["model"] = model.to_json()
+  }
+  if self.thinking is Some(thinking) {
+    fields["thinking"] = thinking.to_json()
+  }
+  if self.max_steps is Some(max_steps) {
+    fields["max_steps"] = max_steps.to_json()
+  }
+  if self.workspace is Some(workspace) {
+    fields["workspace"] = workspace.to_json()
+  }
+  Json(fields)
+}
+
+///|
 pub impl FromJson for GoalPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.goal payload")
   {

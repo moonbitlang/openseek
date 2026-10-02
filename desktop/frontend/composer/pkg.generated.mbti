@@ -31,6 +31,7 @@ pub(all) enum Action {
   ReviewChangesOpened(identity~ : Identity, selection~ : @mention_context.ReviewChanges)
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
   SlashCommand(identity~ : Identity, command~ : String)
+  ShellCommandSubmitted(identity~ : Identity, command~ : String)
   MentionOpened(identity~ : Identity, mention~ : Mention)
   GoalEditStarted(identity~ : Identity)
   GoalCancelled(identity~ : Identity)
@@ -82,6 +83,7 @@ pub(all) enum ContextComponent {
   ApprovalRequest(ApprovalNotice)
   CodexRequests(requests~ : Array[CodexRequestInput])
   PendingSteerPanel(items~ : Array[String])
+  ShellCommandsRunning(commands~ : Array[String])
   QueuedInputPanel(items~ : Array[QueuedInput])
   CompactionNotice(queued~ : Bool)
   WorktreePlacementNotice
@@ -192,6 +194,7 @@ pub(all) struct Input {
   run : RunHeartbeat?
   turn_id : String?
   slash_commands : Array[SlashCommand]
+  shell_available : Bool
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int

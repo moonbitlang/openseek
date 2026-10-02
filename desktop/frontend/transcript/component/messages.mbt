@@ -71,6 +71,9 @@ priv enum UiMessage {
   RequestedChanges
   CopyDiff
   OpenDiffFile
+  ShellFailed
+  ShellStopped
+  ShellTruncated
 }
 
 ///|
@@ -432,5 +435,20 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, RequestedChanges) => "请求的更改"
     (TraditionalChinese, RequestedChanges) => "請求的更改"
     (Japanese, RequestedChanges) => "要求された変更"
+    (English, ShellFailed) => "could not run"
+    (Spanish, ShellFailed) => "no se pudo ejecutar"
+    (SimplifiedChinese, ShellFailed) => "无法运行"
+    (TraditionalChinese, ShellFailed) => "無法執行"
+    (Japanese, ShellFailed) => "実行できませんでした"
+    (English, ShellStopped) => "stopped"
+    (Spanish, ShellStopped) => "detenido"
+    (SimplifiedChinese, ShellStopped) => "已停止"
+    (TraditionalChinese, ShellStopped) => "已停止"
+    (Japanese, ShellStopped) => "停止しました"
+    (English, ShellTruncated) => "Output truncated"
+    (Spanish, ShellTruncated) => "Salida truncada"
+    (SimplifiedChinese, ShellTruncated) => "输出已截断"
+    (TraditionalChinese, ShellTruncated) => "輸出已截斷"
+    (Japanese, ShellTruncated) => "出力は切り詰められました"
   }
 }

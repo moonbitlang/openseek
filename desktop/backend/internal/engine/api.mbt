@@ -63,6 +63,9 @@ type CompactReply = @protocol.CompactReply
 type GoalReply = @protocol.GoalReply
 
 ///|
+type ShellReply = @protocol.ShellReply
+
+///|
 /// One sidebar group of `list_sessions`: the conversations stored under one
 /// session root. `workspace` is the project directory and `name` its display
 /// label (the folder's basename). A group whose listing failed carries the

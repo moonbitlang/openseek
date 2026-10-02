@@ -222,8 +222,9 @@ fn ServeEngine::submit(
 /// steer addresses the turn in progress and means something else entirely to
 /// the next one — the engine reads an idle `cancel` as "withdraw the next
 /// prompt" and silently does so. Everything else was queued to run AFTER the
-/// turn on purpose (a `/compact` accepted mid-turn, a goal), and dropping it
-/// is what would strand the conversation.
+/// turn on purpose (a `/compact` accepted mid-turn, a goal, a `!` command's
+/// context, which the engine appends durably once idle), and dropping it is
+/// what would strand the conversation.
 ///
 /// Exhaustive on purpose: a new command kind must decide this at compile time.
 fn ends_with_turn(command : @wire.Command) -> Bool {
@@ -232,8 +233,9 @@ fn ends_with_turn(command : @wire.Command) -> Bool {
   // decision nobody is waiting for — so this dies with the turn like a steer,
   // rather than being delivered into a turn that never asked.
   match command {
-    Cancel | Steer(..) | ApprovalDecision(..) => true
-    Prompt(..)
+    Cancel | Steer(kind=Prompt, ..) | ApprovalDecision(..) => true
+    Steer(kind=Command, ..)
+    | Prompt(..)
     | Compact
     | GoalSet(..)
     | GoalClear
@@ -561,6 +563,7 @@ priv enum PendingOp {
   StartPending
   CompactPending
   GoalPending
+  ShellPending
   ArchivePending
 }
 
@@ -622,6 +625,8 @@ fn SessionSlot::claim(
           "a compaction is already being requested for this conversation"
         GoalPending =>
           "a goal update is already being sent for this conversation"
+        ShellPending =>
+          "a shell command result is already being sent for this conversation"
         ArchivePending =>
           "this conversation is moving between live and archived stores"
       },
@@ -1387,6 +1392,24 @@ async fn add_moonbit_path_for_native_engine(
       "bin_dir": toolchain.bin_dir.to_string(),
       "path_prefix": first_path_entry(path_env_value(env)),
     }
+}
+
+///|
+/// The environment a `!` command runs in: the host's own (login-shell
+/// derived) environment with the same MoonBit toolchain first on the path
+/// that the agent's engine and the integrated terminal see, so `!moon test`
+/// runs the `moon` the agent would. Unlike the engine's, it carries no
+/// provider key. A toolchain that cannot be resolved leaves the path as it
+/// is: the user's command may not need `moon` at all.
+async fn user_shell_env(
+  config : RunConfig,
+  runtime_dir : @pathx.Path?,
+) -> Map[String, String] {
+  let env = @sys.get_env_vars()
+  add_moonbit_path_for_native_engine(env, config, runtime_dir) catch {
+    _ => ()
+  }
+  env
 }
 
 ///|

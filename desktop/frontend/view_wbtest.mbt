@@ -121,3 +121,13 @@ test "workflow children fold under live or listed parents before inventory refre
     assert_eq(project.conversations[0].children.length(), 1)
   }
 }
+
+///|
+test "a `!` command displays as its command line, not its envelope" {
+  let envelope = @command_context.encode(
+    "ls -la",
+    Ok({ exit_code: Some(0), text: "total 0\n", output_limit_reached: false, }),
+  )
+  assert_eq(user_display_text(envelope), "$ ls -la")
+  assert_eq(user_display_text("plain prompt"), "plain prompt")
+}

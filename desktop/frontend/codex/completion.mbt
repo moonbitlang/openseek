@@ -365,6 +365,8 @@ pub fn State::composer_input(
         command: "review",
       },
     ],
+    // Codex runs its own shell tools; `!` mode is OpenSeek's.
+    shell_available: false,
     root: self
     .active_placement(context.channel)
     .bind(placement => placement.checkout_root()),
@@ -535,6 +537,7 @@ fn State::apply_composer_action(
     | @composer.GoalCancelled(..)
     | @composer.GoalCleared(..)
     | @composer.GoalSubmitted(..)
+    | @composer.ShellCommandSubmitted(..)
     | @composer.FileIndexEnsured(..)
     | @composer.ModelMenuToggled(..)
     | @composer.ReasoningMenuToggled(..)
@@ -545,6 +548,7 @@ fn State::apply_composer_action(
     | @composer.QueuedInputEditRequested(..)
     | @composer.QueuedInputSteerRequested(..)
     | @composer.QueuedInputDeleteRequested(..)
+    // Never emitted here: this composer reports `shell_available: false`.
     | @composer.WorktreePlacementRetried(..) => (@cmd.none, self)
   }
 }

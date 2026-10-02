@@ -214,6 +214,21 @@ async fn goal_config(
 }
 
 ///|
+async fn shell_config(
+  manager : EngineManager,
+  payload : @protocol.ShellPayload,
+) -> RunConfig {
+  session_command_config(
+    manager,
+    payload.session,
+    model?=payload.model,
+    thinking?=payload.thinking,
+    max_steps?=payload.max_steps,
+    workspace?=payload.workspace,
+  )
+}
+
+///|
 async fn session_command_config(
   manager : EngineManager,
   session : String,

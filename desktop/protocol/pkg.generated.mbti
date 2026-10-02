@@ -12,6 +12,8 @@ pub fn approval(String, allow~ : Bool) -> @openseek_protocol.Command
 
 pub fn cancel() -> @openseek_protocol.Command
 
+pub fn command_context(String) -> @openseek_protocol.Command
+
 pub fn compact() -> @openseek_protocol.Command
 
 pub fn goal_clear() -> @openseek_protocol.Command
@@ -2952,6 +2954,31 @@ pub fn SettingsStatusPayload::to_json(Self) -> Json
 pub fn SettingsStatusPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SettingsStatusPayload
 pub impl @json.FromJson for SettingsStatusPayload
+
+pub(all) struct ShellPayload {
+  session : String
+  command : String
+  model : String?
+  thinking : OpenSeekThinking?
+  max_steps : Int?
+  workspace : String?
+} derive(Eq, @debug.Debug)
+pub fn ShellPayload::equal(Self, Self) -> Bool
+pub fn ShellPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ShellPayload::not_equal(Self, Self) -> Bool
+pub fn ShellPayload::to_json(Self) -> Json
+pub fn ShellPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ShellPayload
+pub impl @json.FromJson for ShellPayload
+
+pub(all) struct ShellReply {
+  delivered : Bool
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn ShellReply::equal(Self, Self) -> Bool
+pub fn ShellReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ShellReply::not_equal(Self, Self) -> Bool
+pub fn ShellReply::to_json(Self) -> Json
+pub fn ShellReply::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SkillContentReply {
   SkillContent(String)

@@ -918,6 +918,18 @@ priv struct Conversation {
   // refusal retires it unsatisfied, handing a set's text back; a transport
   // failure leaves it standing, because the command may have landed anyway.
   goal_pending : GoalCommand?
+  // `!` commands submitted from this conversation's composer that are still
+  // running on the host, oldest first. Each is retired by its `agent.shell`
+  // reply; the output itself arrives as a durable user message.
+  shell_commands : Array[ShellCommand]
+} derive(Eq)
+
+///|
+/// One `!` command in flight. `id` names the send, so a reply retires exactly
+/// the command it answers even when the same text runs twice.
+priv struct ShellCommand {
+  id : String
+  command : String
 } derive(Eq)
 
 ///|
@@ -2507,6 +2519,10 @@ priv enum DeviceMsg {
   // nothing will report compaction events, so the conversation's queued /
   // in-flight compaction notice must be cleared here, not by the stream.
   CompactRejected(session~ : String, message~ : String)
+  // The `agent.shell` request for the `!` command `id` settled. `error` is
+  // the host's refusal or the transport failure; on success the command's
+  // output arrives through the durable record instead.
+  ShellSettled(session~ : String, id~ : String, error~ : String?)
   // The `agent.goal` bridge request was rejected (no engine, host error):
   // no `[goal]` marker will commit, so the failure is reported here. `draft`
   // is the text that never landed — carried back so the composer can return
@@ -2593,6 +2609,7 @@ fn empty_conversation(
     goal: None,
     goal_edit: None,
     goal_pending: None,
+    shell_commands: [],
   }
 }
 

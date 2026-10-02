@@ -622,6 +622,9 @@ fn section_children(
     @transcript_overview.rail(
       locale~,
       @transcript_overview.entries(visible_items, display=text => {
+        if @command_context.parse(text) is Some(shell) {
+          return "$ \{shell.command}"
+        }
         match @mention_context.parse(text) {
           Some(message) => message.display_text()
           None => text

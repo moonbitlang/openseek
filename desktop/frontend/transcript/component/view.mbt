@@ -743,13 +743,17 @@ fn speaker_label(name : String) -> @html.Html {
 /// it was composed with — the same tray the composer showed, minus the remove
 /// buttons — above the typed text; anything else is plain text. A chip with a
 /// resolved location jumps the editor panel there via `on_jump`, when the
-/// caller wires one.
+/// caller wires one. A `<user_shell_command>` envelope (a `!` command run from
+/// the composer) renders as that command's card instead.
 fn user_text_nodes(
   locale~ : @i18n.Locale,
   content : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
   changes? : @review_changes.Control,
 ) -> Array[@html.Html] {
+  if @command_context.parse(content) is Some(shell) {
+    return [shell_command_view(locale~, shell)]
+  }
   let body : Array[@html.Html] = []
   match @mention_context.parse(content) {
     Some(parsed) => {
@@ -814,6 +818,50 @@ fn user_text_nodes(
       body.push(@html.div(class="msg-content", inline_code_nodes(content)))
   }
   body
+}
+
+///|
+/// A `!` command the user ran from the composer: the `<user_shell_command>`
+/// envelope the engine stored, rendered as the command line, how it ended
+/// when that was not a clean exit, and its captured output.
+fn shell_command_view(
+  locale~ : @i18n.Locale,
+  shell : @command_context.ShellCommand,
+) -> @html.Html {
+  let status = match shell.exit {
+    "0" => None
+    "failed" => Some(ui(locale, ShellFailed))
+    "cancelled" => Some(ui(locale, ShellStopped))
+    code => Some("exit \{code}")
+  }
+  let header : Array[@html.Html] = [
+    @html.code(class="user-shell-line", "$ \{shell.command}"),
+  ]
+  if status is Some(label) {
+    header.push(@html.span(class="user-shell-status", label))
+  }
+  // Captured output usually ends in a newline, which splits off as one empty
+  // last line; it is not output anyone wants to see.
+  let mut end = shell.output.length()
+  while end > 0 && shell.output[end - 1].is_blank() {
+    end -= 1
+  }
+  let lines = shell.output[:end]
+  let body : Array[@html.Html] = [@html.div(class="user-shell-header", header)]
+  if !lines.is_empty() {
+    body.push(@html.pre(class="user-shell-output", lines.join("\n")))
+  }
+  if shell.output_limit_reached {
+    body.push(@html.div(class="user-shell-note", ui(locale, ShellTruncated)))
+  }
+  @html.div(
+    class=if status is Some(_) {
+      "user-shell-command failed"
+    } else {
+      "user-shell-command"
+    },
+    body,
+  )
 }
 
 ///|
