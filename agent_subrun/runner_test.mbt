@@ -27,6 +27,7 @@ fn parse_answer(json : Json) -> Result[String, String] {
 async fn run_script(
   script : String,
   wall_deadline_ms? : Int = 10_000,
+  child_session? : @agent_subrun.ChildSession,
   emit_event? : (@protocol.Event) -> Unit,
 ) -> @agent_subrun.SubrunResult[String] {
   @agent_subrun.run_subrun(
@@ -37,6 +38,7 @@ async fn run_script(
     wall_deadline_ms~,
     kind="test-kind",
     label="scripted child",
+    child_session?,
     emit_event?,
   )
 }
@@ -363,14 +365,8 @@ async test "child_session appends session argv derived from the sub-run id" {
     println("skipped: cannot spawn sh")
     return
   }
-  let result = @agent_subrun.run_subrun(
-    command="sh",
-    args=["-c", child_preamble + script, "sh", @spawn.ResultFilePlaceholder],
-    input={ "query": "q" },
-    parse_report=parse_answer,
-    wall_deadline_ms=10_000,
-    kind="test-kind",
-    label="argv probe",
+  let result = run_script(
+    script,
     child_session=ChildSession(root="/tmp/subrun-root", parent="parent-id"),
   )
   guard result.value() is Some(argv) else {
@@ -394,14 +390,8 @@ async test "child_session's ordinal floor skips persisted ids" {
     println("skipped: cannot spawn sh")
     return
   }
-  let result = @agent_subrun.run_subrun(
-    command="sh",
-    args=["-c", child_preamble + script, "sh", @spawn.ResultFilePlaceholder],
-    input={ "query": "q" },
-    parse_report=parse_answer,
-    wall_deadline_ms=10_000,
-    kind="test-kind",
-    label="ordinal floor",
+  let result = run_script(
+    script,
     child_session=ChildSession(
       root="/tmp/subrun-root",
       parent="resumed",
