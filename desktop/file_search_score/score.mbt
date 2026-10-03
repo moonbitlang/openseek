@@ -66,6 +66,7 @@ pub fn PathQuery::key(self : PathQuery) -> String {
 
 ///|
 fn path_label(path : String) -> String {
+  let path = path.trim_end(chars="/").to_owned()
   path.rev_after("/").map_or(path, label => label.to_owned())
 }
 

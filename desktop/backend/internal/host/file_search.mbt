@@ -17,6 +17,7 @@ const FileScanCancellationChunkSize : Int = 512
 ///|
 priv struct FileIndexSnapshot {
   files : Array[String]
+  directories : Array[String]
 }
 
 ///|
@@ -56,6 +57,7 @@ async fn collect_directory_listing(
   prefix : String,
   entries : Array[FileScanEntry],
   into : Array[String],
+  directories : Array[String],
   read : async (@pathx.Absolute) -> Array[FileScanEntry],
 ) -> Unit {
   let mut processed = 0
@@ -69,8 +71,16 @@ async fn collect_directory_listing(
       if @file_search_policy.excludes_directory(relative) {
         continue
       }
+      directories.push(relative)
       let child = dir.join(Relative(entry.name))
-      collect_directory_listing(child, relative, read(child), into, read)
+      collect_directory_listing(
+        child,
+        relative,
+        read(child),
+        into,
+        directories,
+        read,
+      )
     } else {
       into.push(relative)
     }
@@ -83,14 +93,15 @@ async fn scan_directory_tree(
   read : async (@pathx.Absolute) -> Array[FileScanEntry],
 ) -> FileIndexSnapshot {
   let files : Array[String] = []
-  collect_directory_listing(root, "", read(root), files, read)
-  { files, }
+  let directories : Array[String] = []
+  collect_directory_listing(root, "", read(root), files, directories, read)
+  { files, directories, }
 }
 
 ///|
 async fn scan_workspace_files(root : @pathx.Absolute) -> FileIndexSnapshot {
   if !@fs.exists(root.to_string()) {
-    return { files: [], }
+    return { files: [], directories: [], }
   }
   scan_directory_tree(root, read_sorted_directory)
 }
@@ -120,6 +131,7 @@ priv struct PendingFileSearch {
 ///|
 priv struct FileSearchComputation {
   files : Array[String]
+  directories : Array[String]
   limit_hit : Bool
   inspected : Int
 }
@@ -228,7 +240,13 @@ async fn FileSearchService::search(
   match reply.get() {
     SearchSucceeded(result) => result
     SearchCancelled =>
-      { files: [], from_cache: true, limit_hit: false, cancelled: true, }
+      {
+        files: [],
+        directories: [],
+        from_cache: true,
+        limit_hit: false,
+        cancelled: true,
+      }
     SearchFailed(message) => raise HostError(message)
   }
 }
@@ -261,6 +279,7 @@ fn file_search_reply(
 ) -> SearchFilesReply {
   {
     files: computed.files,
+    directories: computed.directories,
     from_cache,
     limit_hit: computed.limit_hit,
     cancelled: false,
@@ -287,13 +306,37 @@ async fn compute_file_search(
   query_text : String,
   max_results : Int,
 ) -> FileSearchComputation {
+  let (files, files_limit_hit, inspected) = rank_search_paths(
+    snapshot.files,
+    query_text,
+    max_results,
+  )
+  let (directories, directories_limit_hit, directories_inspected) = rank_search_paths(
+    snapshot.directories,
+    query_text.trim_end(chars="/\\").to_owned(),
+    max_results,
+  )
+  {
+    files,
+    directories,
+    limit_hit: files_limit_hit || directories_limit_hit,
+    inspected: inspected + directories_inspected,
+  }
+}
+
+///|
+async fn rank_search_paths(
+  paths : Array[String],
+  query_text : String,
+  max_results : Int,
+) -> (Array[String], Bool, Int) {
   let query = @file_search_score.PathQuery(query_text)
   if query.is_empty() {
-    return {
-      files: snapshot.files[:snapshot.files.length().min(max_results)].to_owned(),
-      limit_hit: snapshot.files.length() > max_results,
-      inspected: 0,
-    }
+    return (
+      paths[:paths.length().min(max_results)].to_owned(),
+      paths.length() > max_results,
+      0,
+    )
   }
   let mut chunk : Array[String] = []
   let mut best : Array[String] = []
@@ -302,7 +345,7 @@ async fn compute_file_search(
   // VS Code's Quick Open preloads the empty-pattern cache row and filters that
   // complete row for every query. Do the same here: retaining candidate arrays
   // for every keystroke multiplies memory by the number of typed prefixes.
-  for path in snapshot.files {
+  for path in paths {
     inspected += 1
     if query.matches(path) {
       matched += 1
@@ -317,7 +360,7 @@ async fn compute_file_search(
     }
   }
   best = merge_ranked_chunk(query, best, chunk, max_results)
-  { files: best, limit_hit: matched > max_results, inspected, }
+  (best, matched > max_results, inspected)
 }
 
 ///|
@@ -348,11 +391,11 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
       }
       let prepared = @file_search_score.PathQuery(waiter.query)
       if prepared.is_empty() {
-        let computed : FileSearchComputation = {
-          files: snapshot.files[:snapshot.files.length().min(waiter.max_results)].to_owned(),
-          limit_hit: snapshot.files.length() > waiter.max_results,
-          inspected: 0,
-        }
+        let computed = compute_file_search(
+          snapshot,
+          waiter.query,
+          waiter.max_results,
+        )
         waiter.reply.put(
           SearchSucceeded(file_search_reply(computed, waiter.from_cache)),
         )
@@ -648,6 +691,7 @@ async test "native file scan uses the same ignore and DFS semantics" {
       @async.protect_from_cancel(() => @fs.rmdir(root, recursive=true))
     })
     @fs.mkdir("\{root}/a", recursive=true)
+    @fs.mkdir("\{root}/empty")
     @fs.mkdir("\{root}/.claude/session", recursive=true)
     @fs.mkdir("\{root}/node_modules/pkg", recursive=true)
     @fs.write_file("\{root}/a/2.mbt", "", create_mode=CreateOrTruncate)
@@ -665,6 +709,7 @@ async test "native file scan uses the same ignore and DFS semantics" {
     )
     let snapshot = scan_workspace_files(@pathx.Path(root).resolve())
     assert_eq(snapshot.files, ["a/1.mbt", "a/2.mbt", "a.txt"])
+    assert_eq(snapshot.directories, ["a", "empty"])
   }
 }
 
@@ -672,7 +717,7 @@ async test "native file scan uses the same ignore and DFS semantics" {
 async test "Host ranking searches the complete snapshot" {
   let files = Array::makei(20000, index => "noise/file-\{index}.txt")
   files.push("late/needle.mbt")
-  let computed = compute_file_search({ files, }, "needle", 200)
+  let computed = compute_file_search({ files, directories: [], }, "needle", 200)
   assert_eq(computed.inspected, 20001)
   assert_eq(computed.files, ["late/needle.mbt"])
 }
@@ -682,7 +727,7 @@ async test "successive queries retain complete-snapshot recall" {
   let files = Array::makei(2000, index => "noise/file-\{index}.txt")
   files.push("src/app.mbt")
   files.push("src/application.mbt")
-  let snapshot : FileIndexSnapshot = { files, }
+  let snapshot : FileIndexSnapshot = { files, directories: [], }
   let first = compute_file_search(snapshot, "app", 200)
   assert_eq(first.inspected, 2002)
   assert_eq(first.files, ["src/app.mbt", "src/application.mbt"])
@@ -703,7 +748,7 @@ async test "query cancellation keeps the cache-populating scan alive" {
     let service = FileSearchService::new_with_scan(_ => {
       starts.put(())
       release.get()
-      { files: ["target.mbt"], }
+      { files: ["target.mbt"], directories: [], }
     })
     group.spawn_bg(() => service.run())
     let root = @pathx.Path("/workspace-cancel").resolve()
@@ -739,7 +784,7 @@ async test "cache keys coalesce scans and clearCache retires one session" {
     })
     @async.pause()
     assert_true(starts.try_get() is None)
-    outcomes.put({ files: ["old.mbt", "other.mbt"], })
+    outcomes.put({ files: ["old.mbt", "other.mbt"], directories: [], })
     ignore(@async.with_timeout(1000, () => warm.wait()))
     let joined_reply = @async.with_timeout(1000, () => joined.wait())
     assert_true(joined_reply.from_cache)
@@ -750,7 +795,7 @@ async test "cache keys coalesce scans and clearCache retires one session" {
     service.clear_cache("cache-a")
     let fresh = group.spawn(() => service.search(root, "cache-a", "new", 200, 4))
     @async.with_timeout(1000, () => starts.get())
-    outcomes.put({ files: ["new.mbt"], })
+    outcomes.put({ files: ["new.mbt"], directories: [], })
     let fresh_reply = @async.with_timeout(1000, () => fresh.wait())
     assert_false(fresh_reply.from_cache)
     assert_eq(fresh_reply.files, ["new.mbt"])
@@ -766,7 +811,7 @@ async test "one connection serializes discovery across cache sessions" {
     let service = FileSearchService::new_with_scan(root => {
       starts.put(root.to_string())
       releases.get()
-      { files: ["file.mbt"], }
+      { files: ["file.mbt"], directories: [], }
     })
     group.spawn_bg(() => service.run())
     let first_root = @pathx.Path("/workspace-one").resolve()
@@ -804,7 +849,7 @@ async test "a failed cache population is not installed and can retry" {
       if attempts == 1 {
         raise HostError("injected discovery failure")
       }
-      { files: ["recovered.mbt"], }
+      { files: ["recovered.mbt"], directories: [], }
     })
     group.spawn_bg(() => service.run())
     let root = @pathx.Path("/workspace-retry").resolve()
@@ -825,7 +870,10 @@ async test "a failed cache population is not installed and can retry" {
 ///|
 async test "a cache key cannot cross workspace roots" {
   @async.with_task_group(group => {
-    let service = FileSearchService::new_with_scan(_ => { files: ["one.mbt"], })
+    let service = FileSearchService::new_with_scan(_ => {
+      files: ["one.mbt"],
+      directories: [],
+    })
     group.spawn_bg(() => service.run())
     let first = @pathx.Path("/workspace-one").resolve()
     let second = @pathx.Path("/workspace-two").resolve()

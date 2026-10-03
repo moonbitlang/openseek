@@ -575,6 +575,7 @@ test "file search payload and reply round-trip at the JSON boundary" {
   @debug.assert_eq(payload.to_json(), raw_payload)
   let raw_reply : Json = {
     "files": ["src/main.mbt", "src/main_test.mbt"],
+    "directories": ["src", "empty"],
     "from_cache": true,
     "limit_hit": false,
     "cancelled": false,
@@ -1871,4 +1872,41 @@ test "detached worktree replies omit branch and reject malformed branch values" 
       }),
     )
   }
+}
+
+///|
+test "file search directory field is required and strictly typed" {
+  let invalid : Array[Json] = [null, "src", [1]]
+  for directories in invalid {
+    assert_true(
+      refused(() => {
+        let _reply : @protocol.SearchFilesReply = @json.from_json({
+          "files": [],
+          "directories": directories,
+          "from_cache": false,
+          "limit_hit": false,
+          "cancelled": false,
+        })
+      }),
+    )
+  }
+  assert_true(
+    refused(() => {
+      let _reply : @protocol.SearchFilesReply = @json.from_json({
+        "files": [],
+        "from_cache": false,
+        "limit_hit": false,
+        "cancelled": false,
+      })
+    }),
+  )
+  let reply : @protocol.SearchFilesReply = @json.from_json({
+    "files": [],
+    "directories": [],
+    "from_cache": false,
+    "limit_hit": false,
+    "cancelled": false,
+    "unknown": true,
+  })
+  assert_eq(reply.directories, [])
 }

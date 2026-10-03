@@ -221,7 +221,10 @@ fn Input::completion_files(
     return ([], false)
   }
   (
-    @files.Search(self.file_candidates, [], None).rank(trigger.query()),
+    @files.Search(self.file_candidates, [], None).rank(
+      trigger.query(),
+      include_directories=true,
+    ),
     self.file_index.loading(self.root is Some(_)),
   )
 }
