@@ -2017,6 +2017,11 @@ pub fn breadcrumb_view(
   }
   let review = review_toolbar_visible(state, ctx)
   let path_row : Array[@html.Html] = [@html.div(class="crumb-path", crumbs)]
+  if review ||
+    mbti_view_available(state, ctx) ||
+    moon_mod_view_available(state, ctx) {
+    path_row.push(file_view_toolbar(locale~, dispatch, state, ctx))
+  }
   if !review {
     path_row.push(review_diff_navigation(locale~, dispatch, state, ctx))
   }
@@ -2024,12 +2029,6 @@ pub fn breadcrumb_view(
     path_row.push(review_badge(locale~, dispatch, state, ctx))
   }
   path_row.push(review_progress(locale~, dispatch, state, ctx))
-  if mbti_view_available(state, ctx) {
-    path_row.push(mbti_view_toolbar(locale~, dispatch, state, ctx))
-  }
-  if moon_mod_view_available(state, ctx) {
-    path_row.push(moon_mod_view_toolbar(locale~, dispatch, state, ctx))
-  }
   if reveal is Some((label, command)) {
     path_row.push(
       @html.button(
@@ -2058,7 +2057,7 @@ pub fn breadcrumb_view(
     let children : Array[@html.Html] = [
       @html.div(class="viewer-breadcrumb-row", path_row),
       @html.div(class="review-command-row", [
-        review_mode_toolbar(locale~, dispatch, state, ctx),
+        review_diff_mode_toolbar(locale~, dispatch, state, ctx),
         @html.span(
           class="review-control-divider",
           attrs=@html.Attrs::build().aria_hidden("true"),
@@ -2097,113 +2096,68 @@ pub fn breadcrumb_view(
 }
 
 ///|
-/// Only an ordinary, loaded generated interface owns the diagram/source
-/// presentation. Review and historical paths retain their code surfaces.
-fn mbti_view_available(state : State, ctx : Ctx) -> Bool {
-  guard ctx.active_history_diff is None && ctx.active_file is Some(path) else {
+/// Working-file presentations remain available alongside an attached comparison.
+/// Historical and deleted resources never expose a live graph/source surface.
+fn working_presentation_available(state : State, ctx : Ctx) -> Bool {
+  guard ctx.active_history_diff is None &&
+    ctx.active_file is Some(path) &&
+    state.docs.get(path) is Some(doc) &&
+    doc.state is TabLoaded(..) else {
     return false
   }
-  state.docs.get(path) is Some({ name, state: TabLoaded(..), review: None, .. }) &&
+  match doc.review {
+    Some(review) => review.selected.has_working_tree_file()
+    None => true
+  }
+}
+
+///|
+fn mbti_view_available(state : State, ctx : Ctx) -> Bool {
+  working_presentation_available(state, ctx) &&
+  ctx.active_file is Some(path) &&
+  state.docs.get(path) is Some({ name, .. }) &&
   uses_mbti_presentation(name)
 }
 
 ///|
-fn uses_mbti_diagram_surface(state : State, ctx : Ctx) -> Bool {
-  guard mbti_view_available(state, ctx) && ctx.active_file is Some(path) else {
-    return false
-  }
-  state.mbti_view_mode(path) == MbtiDiagram
-}
-
-///|
-fn mbti_view_button(
-  dispatch : @cmd.Emit[Msg],
-  selected : MbtiViewMode,
-  mode : MbtiViewMode,
-  label : String,
-) -> @html.Html {
-  let active = selected == mode
-  @html.button(
-    type_="button",
-    class=if active {
-      "review-mode-button active"
-    } else {
-      "review-mode-button"
-    },
-    on_click=if active {
-      @cmd.none
-    } else {
-      dispatch(MbtiViewModeSelected(mode))
-    },
-    attrs=@html.Attrs::build().aria_pressed(active.to_string()),
-    label,
-  )
-}
-
-///|
-fn mbti_view_toolbar(
-  locale? : @i18n.Locale = English,
-  dispatch : @cmd.Emit[Msg],
-  state : State,
-  ctx : Ctx,
-) -> @html.Html {
-  guard ctx.active_file is Some(path) else { return @html.nothing }
-  let selected = state.mbti_view_mode(path)
-  @html.div(
-    class="review-mode-toolbar mbti-view-toolbar",
-    attrs=@html.Attrs::build()
-      .role("group")
-      .aria_label(
-        match locale {
-          SimplifiedChinese => "MBTI 视图"
-          TraditionalChinese => "MBTI 檢視"
-          Japanese => "MBTI ビュー"
-          English => "MBTI view"
-          Spanish => "Vista MBTI"
-        },
-      ),
-    [
-      mbti_view_button(
-        dispatch,
-        selected,
-        MbtiDiagram,
-        ui(locale, DiagramLabel),
-      ),
-      mbti_view_button(dispatch, selected, MbtiSource, ui(locale, SourceLabel)),
-    ],
-  )
-}
-
-///|
-/// A package dependency graph belongs only to an ordinary, loaded file whose
-/// exact basename is `moon.mod`. Reviews and historical comparisons retain
-/// their source/diff surfaces even if their path names a module manifest.
 fn moon_mod_view_available(state : State, ctx : Ctx) -> Bool {
-  guard ctx.active_history_diff is None &&
-    ctx.active_file is Some(path) &&
-    ctx.relative(path) is Some(_) else {
-    return false
-  }
-  state.docs.get(path) is Some({ name, state: TabLoaded(..), review: None, .. }) &&
+  working_presentation_available(state, ctx) &&
+  ctx.active_file is Some(path) &&
+  ctx.relative(path) is Some(_) &&
+  state.docs.get(path) is Some({ name, .. }) &&
   uses_moon_mod_presentation(name)
 }
 
 ///|
+fn file_diff_selected(state : State, ctx : Ctx) -> Bool {
+  ctx.active_file is Some(path) &&
+  state.docs.get(path)
+  is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. })
+}
+
+///|
+fn uses_mbti_diagram_surface(state : State, ctx : Ctx) -> Bool {
+  mbti_view_available(state, ctx) &&
+  !file_diff_selected(state, ctx) &&
+  ctx.active_file is Some(path) &&
+  state.mbti_view_mode(path) == MbtiDiagram
+}
+
+///|
 fn uses_package_diagram_surface(state : State, ctx : Ctx) -> Bool {
-  guard moon_mod_view_available(state, ctx) && ctx.active_file is Some(path) else {
-    return false
-  }
+  moon_mod_view_available(state, ctx) &&
+  !file_diff_selected(state, ctx) &&
+  ctx.active_file is Some(path) &&
   state.moon_mod_view_mode(path) == MoonModDependencies
 }
 
 ///|
-fn moon_mod_view_button(
-  dispatch : @cmd.Emit[Msg],
-  selected : MoonModViewMode,
-  mode : MoonModViewMode,
+fn file_view_button(
   label : String,
+  active : Bool,
+  command : @cmd.Cmd,
+  enabled? : Bool = true,
 ) -> @html.Html {
-  let active = selected == mode
   @html.button(
     type_="button",
     class=if active {
@@ -2211,42 +2165,91 @@ fn moon_mod_view_button(
     } else {
       "review-mode-button"
     },
-    // An already-selected failed dependency view treats another click as an
-    // explicit retry; the update loop leaves every other same-mode click inert.
-    on_click=dispatch(MoonModViewModeSelected(mode)),
+    disabled=!enabled,
+    on_click=command,
     attrs=@html.Attrs::build().aria_pressed(active.to_string()),
     label,
   )
 }
 
 ///|
-fn moon_mod_view_toolbar(
+/// One chip describes the file's presentation. Comparison algorithms belong
+/// to their own toolbar; attaching a review adds Diff to the existing variants.
+fn file_view_toolbar(
   locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
-  guard ctx.active_file is Some(path) else { return @html.nothing }
-  let selected = state.moon_mod_view_mode(path)
-  @html.div(
-    class="review-mode-toolbar moon-mod-view-toolbar",
-    attrs=@html.Attrs::build()
-      .role("group")
-      .aria_label(ui(locale, MoonModuleView)),
-    [
-      moon_mod_view_button(
-        dispatch,
-        selected,
-        MoonModDependencies,
+  guard ctx.active_file is Some(path) && state.docs.get(path) is Some(doc) else {
+    return @html.nothing
+  }
+  let diff = file_diff_selected(state, ctx)
+  let mbti = mbti_view_available(state, ctx)
+  let moon_module = moon_mod_view_available(state, ctx)
+  let diagram = uses_mbti_diagram_surface(state, ctx)
+  let dependencies = uses_package_diagram_surface(state, ctx)
+  let children : Array[@html.Html] = []
+  if mbti {
+    children.push(
+      file_view_button(
+        ui(locale, DiagramLabel),
+        diagram,
+        dispatch(MbtiViewModeSelected(MbtiDiagram)),
+      ),
+    )
+  }
+  if moon_module {
+    children.push(
+      file_view_button(
         ui(locale, DependencyGraph),
+        dependencies,
+        dispatch(MoonModViewModeSelected(MoonModDependencies)),
       ),
-      moon_mod_view_button(
-        dispatch,
-        selected,
-        MoonModSource,
-        ui(locale, SourceLabel),
+    )
+  }
+  let working_file = match doc.review {
+    Some(review) => review.selected.has_working_tree_file()
+    None => true
+  }
+  children.push(
+    file_view_button(
+      if uses_mbti_presentation(doc.name) ||
+        uses_moon_mod_presentation(doc.name) {
+        ui(locale, SourceLabel)
+      } else {
+        ui(locale, ContentLabel)
+      },
+      !diff && !diagram && !dependencies,
+      if mbti {
+        dispatch(MbtiViewModeSelected(MbtiSource))
+      } else if moon_module {
+        dispatch(MoonModViewModeSelected(MoonModSource))
+      } else if diff {
+        dispatch(ToggleReviewDiff)
+      } else {
+        @cmd.none
+      },
+      enabled=working_file,
+    ),
+  )
+  if doc.review is Some(_) {
+    children.push(
+      file_view_button(
+        ui(locale, DiffLabel),
+        diff,
+        if diff {
+          @cmd.none
+        } else {
+          dispatch(ToggleReviewDiff)
+        },
       ),
-    ],
+    )
+  }
+  @html.div(
+    class="review-mode-toolbar file-view-toggle",
+    attrs=@html.Attrs::build().role("group").aria_label(ui(locale, FileView)),
+    children,
   )
 }
 
@@ -2415,92 +2418,8 @@ fn review_diff_mode_button(
 }
 
 ///|
-fn review_mode_toolbar(
-  locale? : @i18n.Locale = English,
-  dispatch : @cmd.Emit[Msg],
-  state : State,
-  ctx : Ctx,
-) -> @html.Html {
-  guard ctx.active_file is Some(path) &&
-    state.docs.get(path) is Some(doc) &&
-    doc.review is Some(review) else {
-    return @html.span(class="review-mode-toolbar hidden", "")
-  }
-  let diff = review.view_mode == ReviewDiff
-  let enabled = doc.diff_content() is Some(_)
-  let moon = supports_moon_diff(path.path)
-  let children : Array[@html.Html] = [
-    @html.button(
-      type_="button",
-      class=if diff {
-        "review-mode-button"
-      } else {
-        "review-mode-button active"
-      },
-      title=ui(locale, ShowFile),
-      disabled=!enabled,
-      on_click=if diff { dispatch(ToggleReviewDiff) } else { @cmd.none },
-      attrs=@html.Attrs::build()
-        .data_set("review-mode", "file")
-        .aria_label(ui(locale, FileView))
-        .aria_pressed((!diff).to_string()),
-      ui(locale, FileLabel),
-    ),
-    @html.span(
-      class="review-mode-divider",
-      attrs=@html.Attrs::build().aria_hidden("true"),
-      "",
-    ),
-    review_diff_mode_button(
-      locale~,
-      enabled~,
-      ReviewDiffLine,
-      diff && (!moon || state.review_diff_mode == ReviewDiffLine),
-      if moon {
-        dispatch(ReviewDiffModeSelected(ReviewDiffLine))
-      } else if diff {
-        @cmd.none
-      } else {
-        dispatch(ToggleReviewDiff)
-      },
-    ),
-  ]
-  if moon {
-    children.push(
-      review_diff_mode_button(
-        locale~,
-        enabled~,
-        ReviewDiffToken,
-        diff && state.review_diff_mode == ReviewDiffToken,
-        dispatch(ReviewDiffModeSelected(ReviewDiffToken)),
-      ),
-    )
-    children.push(
-      review_diff_mode_button(
-        locale~,
-        enabled~,
-        ReviewDiffTree,
-        diff && state.review_diff_mode == ReviewDiffTree,
-        dispatch(ReviewDiffModeSelected(ReviewDiffTree)),
-      ),
-    )
-  }
-  @html.div(
-    class=if review_controls_pending(state, ctx) {
-      "review-mode-toolbar pending"
-    } else {
-      "review-mode-toolbar"
-    },
-    attrs=@html.Attrs::build()
-      .role("toolbar")
-      .aria_label(ui(locale, ReviewMode)),
-    children,
-  )
-}
-
-///|
-/// Historical comparisons have no File surface, but retain the same explicit
-/// MoonBit comparison algorithms as changed-file reviews.
+/// Comparison algorithms are independent of the selected file presentation.
+/// Historical comparisons reuse this toolbar without a working-file chip.
 fn review_diff_mode_toolbar(
   locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
@@ -2511,7 +2430,8 @@ fn review_diff_mode_toolbar(
     return @html.span(class="review-mode-toolbar hidden", "")
   }
   @html.div(
-    class="review-mode-toolbar review-history-mode-toolbar",
+    class="review-mode-toolbar comparison-algorithm" +
+      (if review_controls_pending(state, ctx) { " pending" } else { "" }),
     attrs=@html.Attrs::build()
       .role("toolbar")
       .aria_label(ui(locale, ComparisonAlgorithm)),

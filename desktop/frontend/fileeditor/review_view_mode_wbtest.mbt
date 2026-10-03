@@ -292,3 +292,24 @@ test "Content and Diff selections belong to their own file tabs" {
     is Some({ review: Some({ view_mode: ReviewSource, .. }), .. }),
   )
 }
+
+///|
+test "file view selection remains usable while the baseline is pending" {
+  let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
+  let doc = reviewed_doc(path, test_modified_change(path))
+  guard doc.review is Some(review) else { fail("missing review fixture") }
+  let docs = owned_state().docs.copy()
+  docs[file] = { ..doc, review: Some({ ..review, baseline: ReviewLoading, }), }
+  let state = { ..owned_state(), docs, }
+  let (_, content) = update(test_emit(), ToggleReviewDiff, state, ctx)
+  let (_, repeated) = update(test_emit(), ToggleReviewDiff, state, ctx)
+  assert_true(content == repeated)
+  assert_false(file_diff_selected(content, ctx))
+  assert_true(content.docs[file].state == doc.state)
+  let (_, diff) = update(test_emit(), ToggleReviewDiff, content, ctx)
+  assert_true(file_diff_selected(diff, ctx))
+  assert_true(diff.docs[file].diff_is_pending())
+  assert_true(diff.docs[file].review is Some({ baseline: ReviewLoading, .. }))
+}

@@ -32,29 +32,47 @@ test "ordinary MBTI tabs default to diagram and toggle without replacing the doc
 }
 
 ///|
-test "reviewed MBTI files keep source and reject the diagram toggle" {
+test "reviewed MBTI switches among diagram source and diff without losing its baseline" {
   let path = @pathx.Relative("api/pkg.generated.mbti")
   let file = test_file(path.0)
-  let selected = test_modified_change(path)
   let docs = owned_state().docs.copy()
-  docs[file] = reviewed_doc(
-    path,
-    selected,
-    baseline="package \"old\"",
-    view_mode=ReviewSource,
-  )
+  docs[file] = reviewed_doc(path, test_modified_change(path))
   let state = { ..owned_state(), docs, }
   let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
-
-  assert_false(mbti_view_available(state, ctx))
+  assert_true(mbti_view_available(state, ctx))
   assert_false(uses_mbti_diagram_surface(state, ctx))
-  let (_, after) = update(
-    test_emit(),
-    MbtiViewModeSelected(MbtiSource),
-    state,
-    ctx,
-  )
-  assert_true(after == state)
+  for mode in [MbtiDiagram, MbtiSource] {
+    let (_, selected) = update(
+      test_emit(),
+      MbtiViewModeSelected(mode),
+      state,
+      ctx,
+    )
+    let (_, repeated) = update(
+      test_emit(),
+      MbtiViewModeSelected(mode),
+      state,
+      ctx,
+    )
+    assert_true(selected == repeated)
+    assert_true(selected.mbti_view_mode(file) == mode)
+    assert_true(
+      uses_mbti_diagram_surface(selected, ctx) == (mode == MbtiDiagram),
+    )
+    assert_true(
+      selected.docs[file].review
+      is Some(
+        { baseline: ReviewContent("old source"), view_mode: ReviewSource, .. }
+      ),
+    )
+    assert_true(state.docs[file].review is Some({ view_mode: ReviewDiff, .. }))
+    let (_, diff) = update(test_emit(), ToggleReviewDiff, selected, ctx)
+    assert_true(file_diff_selected(diff, ctx))
+    assert_false(uses_mbti_diagram_surface(diff, ctx))
+    let (_, source) = update(test_emit(), ToggleReviewDiff, diff, ctx)
+    assert_true(source.mbti_view_mode(file) == MbtiSource)
+    assert_false(uses_mbti_diagram_surface(source, ctx))
+  }
 }
 
 ///|
