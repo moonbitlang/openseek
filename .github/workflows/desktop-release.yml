@@ -402,7 +402,7 @@ jobs:
     needs: [release-needed, release-windows, release-macos]
     if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     env:
       OPENSEEK_API_ORIGIN: ${{ (github.event_name != 'schedule' && inputs.channel == 'staging') && 'https://openseek-api-staging.moonbitlang.cn' || 'https://openseek-api.moonbitlang.cn' }}
       RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
