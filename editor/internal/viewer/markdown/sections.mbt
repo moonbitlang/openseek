@@ -33,27 +33,27 @@ pub fn MarkdownSection::is_foldable(
   self : MarkdownSection,
   projection : MarkdownDocumentProjection,
 ) -> Bool {
-  self.body_rendered_element_indexes(projection).length() > 0
+  self.body_node_ids(projection).length() > 0
 }
 
 ///|
-/// The root-element ordinals this section's body occupies, in document order.
+/// The rendered root node identities in this section's body, in source order.
 ///
 /// Anchors that produced no in-place root element (blank lines, link reference
 /// definitions, omitted raw HTML, and nested anchors) contribute nothing, so
-/// hiding this run never shifts an unrelated element's ordinal. The heading's
+/// hiding this run never depends on the order of DOM children. The heading's
 /// own element is deliberately excluded: collapsing hides the body and leaves
 /// the heading as the affordance.
-pub fn MarkdownSection::body_rendered_element_indexes(
+pub fn MarkdownSection::body_node_ids(
   self : MarkdownSection,
   projection : MarkdownDocumentProjection,
 ) -> Array[Int] {
   let result = []
   for anchor_index in self.body_anchor_indexes {
     if anchor_index >= 0 && anchor_index < projection.block_anchors.length() {
-      match projection.block_anchors[anchor_index].rendered_element_index {
-        Some(rendered) => result.push(rendered)
-        None => ()
+      let anchor = projection.block_anchors[anchor_index]
+      if anchor.is_root_element {
+        result.push(anchor.node_id)
       }
     }
   }
@@ -65,13 +65,13 @@ pub fn MarkdownSection::body_rendered_element_indexes(
 ///
 /// A heading only bounds a section when it is a *top-level* block, which is
 /// exactly when it produced a root element. A heading nested in a blockquote or
-/// a list item renders inside its container and has no root ordinal of its own,
+/// a list item renders inside its container and has no root element of its own,
 /// so it can neither be hidden independently nor end the enclosing section --
 /// treating it as a boundary would leave the container's following siblings
 /// stranded outside every section.
 fn markdown_anchor_section_level(anchor : MarkdownBlockAnchor) -> Int? {
-  match (anchor.heading_level, anchor.rendered_element_index) {
-    (Some(level), Some(_)) => Some(level)
+  match (anchor.heading_level, anchor.is_root_element) {
+    (Some(level), true) => Some(level)
     _ => None
   }
 }
@@ -357,7 +357,7 @@ pub fn markdown_default_collapsed_sections(
     guard section_index < entries.length() else { continue }
     let entry = entries[section_index]
     guard entry.is_foldable && entry.depth >= min_depth else { continue }
-    let rendered = section.body_rendered_element_indexes(projection).length()
+    let rendered = section.body_node_ids(projection).length()
     let body_lines = match section.body_source_range {
       Some(body) => markdown_count_source_lines(source, body)
       None => 0

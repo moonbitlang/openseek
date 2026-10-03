@@ -4,6 +4,8 @@ package "moonbitlang/editor/tests/browser/moonbit/agent_feedback"
 // Values
 pub fn run_agent_feedback_test() -> Unit
 
+pub fn run_markdown_feedback_test() -> Unit
+
 // Errors
 
 // Types and methods

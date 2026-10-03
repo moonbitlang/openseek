@@ -19,10 +19,12 @@ pub(all) struct MarkdownRenderOptions {
   action_handler : ((String) -> Unit)?
   code_block_renderer : ((@moonbitlang/editor/internal/viewer/markdown.MarkdownCodeBlock, String?) -> String)?
   on_size_changed : (() -> Unit)?
+  code_block_renderer_owns_source_root : Bool
+  source_mapping : Bool
   allow_remote_images : Bool
   mermaid_theme : MermaidTheme?
 }
-pub fn MarkdownRenderOptions::MarkdownRenderOptions(language_id? : String, base_uri? : @common.Uri, action_handler? : (String) -> Unit, code_block_renderer? : (@moonbitlang/editor/internal/viewer/markdown.MarkdownCodeBlock, String?) -> String, on_size_changed? : () -> Unit, allow_remote_images? : Bool, mermaid_theme? : MermaidTheme) -> Self
+pub fn MarkdownRenderOptions::MarkdownRenderOptions(language_id? : String, base_uri? : @common.Uri, action_handler? : (String) -> Unit, code_block_renderer? : (@moonbitlang/editor/internal/viewer/markdown.MarkdownCodeBlock, String?) -> String, on_size_changed? : () -> Unit, code_block_renderer_owns_source_root? : Bool, source_mapping? : Bool, allow_remote_images? : Bool, mermaid_theme? : MermaidTheme) -> Self
 
 pub(all) enum MermaidTheme {
   Light

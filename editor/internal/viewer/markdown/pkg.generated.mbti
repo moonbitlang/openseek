@@ -19,7 +19,7 @@ pub fn markdown_table_of_contents(MarkdownDocumentProjection) -> Array[MarkdownT
 
 pub fn render_diago_svg(String) -> String?
 
-pub fn render_markdown(String, language_id? : String, code_block_renderer? : (MarkdownCodeBlock, String?) -> String) -> MarkdownRenderFact
+pub fn render_markdown(String, language_id? : String, source_mapping? : Bool, code_block_renderer_owns_source_root? : Bool, code_block_renderer? : (MarkdownCodeBlock, String?) -> String) -> MarkdownRenderFact
 
 pub fn render_mbti_diagram_svg(String) -> String?
 
@@ -37,7 +37,8 @@ pub fn render_uml_diagram_svg(String) -> String?
 pub struct MarkdownBlockAnchor {
   index : Int
   source_range : @common.OffsetRange
-  rendered_element_index : Int?
+  node_id : Int
+  is_root_element : Bool
   // private fields
 } derive(Eq, @debug.Debug)
 pub fn MarkdownBlockAnchor::equal(Self, Self) -> Bool
@@ -46,12 +47,13 @@ pub fn MarkdownBlockAnchor::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownCodeBlock {
   block_index : Int
+  node_id : Int?
   language_id : String?
   block_source_range : @common.OffsetRange
   code_lines : Array[MarkdownCodeLine]
   // private fields
 } derive(Eq, @debug.Debug)
-pub fn MarkdownCodeBlock::MarkdownCodeBlock(Int, String, String?, String?, String?, @common.OffsetRange, Array[MarkdownCodeLine]) -> Self
+pub fn MarkdownCodeBlock::MarkdownCodeBlock(Int, String, String?, String?, String?, @common.OffsetRange, Array[MarkdownCodeLine], node_id? : Int) -> Self
 pub fn MarkdownCodeBlock::equal(Self, Self) -> Bool
 pub fn MarkdownCodeBlock::is_moonbit_check_fence(Self, MarkdownResourceKind) -> Bool
 pub fn MarkdownCodeBlock::not_equal(Self, Self) -> Bool
@@ -75,6 +77,7 @@ pub struct MarkdownDocumentProjection {
 } derive(Eq, @debug.Debug)
 pub fn MarkdownDocumentProjection::equal(Self, Self) -> Bool
 pub fn MarkdownDocumentProjection::not_equal(Self, Self) -> Bool
+pub fn MarkdownDocumentProjection::source_range_for_node(Self, Int) -> @common.OffsetRange?
 pub fn MarkdownDocumentProjection::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownProjectedCodeRange {
@@ -108,7 +111,7 @@ pub struct MarkdownSection {
   body_source_range : @common.OffsetRange?
   // private fields
 } derive(Eq, @debug.Debug)
-pub fn MarkdownSection::body_rendered_element_indexes(Self, MarkdownDocumentProjection) -> Array[Int]
+pub fn MarkdownSection::body_node_ids(Self, MarkdownDocumentProjection) -> Array[Int]
 pub fn MarkdownSection::equal(Self, Self) -> Bool
 pub fn MarkdownSection::is_foldable(Self, MarkdownDocumentProjection) -> Bool
 pub fn MarkdownSection::not_equal(Self, Self) -> Bool

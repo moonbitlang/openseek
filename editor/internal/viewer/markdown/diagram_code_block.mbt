@@ -23,11 +23,11 @@ fn render_diagram_code_block(code_block : MarkdownCodeBlock) -> String? {
   match code_block.language_id {
     Some("diago") | Some("d2") =>
       render_diago_svg(code_block.code).map(svg => {
-        wrap_diagram_svg("diago", svg)
+        wrap_diagram_svg("diago", svg, code_block.node_id)
       })
     Some("uml") | Some("plantuml") =>
       render_uml_diagram_svg(code_block.code).map(svg => {
-        wrap_diagram_svg("uml", svg)
+        wrap_diagram_svg("uml", svg, code_block.node_id)
       })
     _ => None
   }
@@ -108,9 +108,14 @@ fn viewer_uml_color_scheme() -> @uml_style.ColorScheme {
 }
 
 ///|
-fn wrap_diagram_svg(language_id : String, svg : String) -> String {
+fn wrap_diagram_svg(
+  language_id : String,
+  svg : String,
+  node_id : Int?,
+) -> String {
+  let source_attribute = node_id.map(markdown_node_attribute).unwrap_or("")
   (
-    $|<div class="moonbit-viewer-markdown-diagram" data-diagram-language="\{language_id}">
+    $|<div class="moonbit-viewer-markdown-diagram" data-diagram-language="\{language_id}"\{source_attribute}>
     $|\{svg}
     $|</div>
     $|

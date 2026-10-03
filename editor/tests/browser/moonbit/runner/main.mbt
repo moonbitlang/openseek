@@ -23,6 +23,7 @@ fn run_scenario(scenario : String) -> Unit {
     "initial-size" => @component.run_initial_size_test()
     "markdown-comments" => @component.run_markdown_comments_test()
     "markdown-document" => @component.run_markdown_document_test()
+    "markdown-feedback" => @agent_feedback.run_markdown_feedback_test()
     "markdown-folding" => @component.run_markdown_folding_test()
     "model-swap" => @model_swap.run_model_swap_test()
     "peek-references" => @peek_references.run_peek_references_browser_test()

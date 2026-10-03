@@ -8,6 +8,7 @@ fn feedback_fixture(
     text: "note",
     resource,
     range: Range(2, 1, 2, 5),
+    selected_text: None,
     kind: UserReview,
     replies: [],
     state: Accepted,
@@ -21,6 +22,7 @@ test "AgentFeedbackHandle forwards its exact callback floor" {
   let calls : Array[String] = []
   let changed_ids : Array[String] = []
   let navigated : Array[String] = []
+  let selections : Array[String?] = []
   let handle = @agent_feedback_api.AgentFeedbackHandle(
     on_did_change_feedback=listener => {
       calls.push("subscribe-feedback")
@@ -44,7 +46,8 @@ test "AgentFeedbackHandle forwards its exact callback floor" {
       calls.push("bearing:\{item_ids.join(",")}")
       { active_idx: 1, total_count: item_ids.length(), }
     },
-    add_feedback=(_, _, _, kind, state) => {
+    add_feedback=(_, _, _, kind, state, selected_text) => {
+      selections.push(selected_text)
       let kind_label = match kind {
         None => "none"
         Some(UserReview) => "user"
@@ -94,8 +97,12 @@ test "AgentFeedbackHandle forwards its exact callback floor" {
     "explicit",
     kind=AgentReview,
     state=Created,
+    selected_text="selected words",
   )
   |> ignore
+  handle.add_feedback(resource, Range(2, 1, 2, 20), "image", selected_text="")
+  |> ignore
+  assert_eq(selections, [None, Some("selected words"), Some("")])
   handle.mark_feedback_submitted(resource)
   handle.remove_feedback(resource, "feedback-1")
   handle.accept_feedback(resource, "feedback-2")
@@ -106,7 +113,7 @@ test "AgentFeedbackHandle forwards its exact callback floor" {
   navigation_subscription.dispose()
   assert_eq(
     calls.join("|"),
-    "subscribe-feedback|subscribe-navigation|enabled|get|bearing:a,b|add:none:none|add:agent:created|submit|remove:feedback-1|accept:feedback-2|anchor:feedback-2|update:feedback-2:updated|reply:feedback-2:reply|dispose-feedback|dispose-navigation",
+    "subscribe-feedback|subscribe-navigation|enabled|get|bearing:a,b|add:none:none|add:agent:created|add:none:none|submit|remove:feedback-1|accept:feedback-2|anchor:feedback-2|update:feedback-2:updated|reply:feedback-2:reply|dispose-feedback|dispose-navigation",
   )
 }
 

@@ -170,6 +170,7 @@ priv struct MarkdownViewerWidgetAttachment {
   view : @markdown_document.MarkdownDocumentView?
   hover_bridge : @hover_browser.MarkdownDocumentHoverBridge?
   definition_bridge : MarkdownViewerWidgetDefinitionBridge?
+  feedback_bridge : MarkdownViewerWidgetFeedbackBridge?
   fold : MarkdownViewerWidgetFoldState
   listeners : Array[@base_common.Disposable]
   mut disposed : Bool
@@ -357,18 +358,35 @@ fn MarkdownViewerWidget::attach_model(
       (Some(view), Some(hover_bridge), Some(definition_bridge))
     }
   }
+  let feedback_bridge = match (view, self.services.agent_feedback) {
+    (Some(view), Some(service)) =>
+      Some(
+        MarkdownViewerWidgetFeedbackBridge(
+          self,
+          view,
+          model.model,
+          generation,
+          service,
+        ),
+      )
+    _ => None
+  }
   let attachment : MarkdownViewerWidgetAttachment = {
     model,
     generation,
     view,
     hover_bridge,
     definition_bridge,
+    feedback_bridge,
     fold,
     listeners,
     disposed: false,
   }
   self.current = Some(attachment)
   attachment.initialize_folding()
+  if feedback_bridge is Some(bridge) {
+    bridge.activate()
+  }
   match hover_bridge {
     Some(bridge) => bridge.activate()
     None => ()
@@ -387,6 +405,9 @@ fn MarkdownViewerWidgetAttachment::replace_source(
   source_model_version : Int,
 ) -> Unit {
   guard !self.disposed && self.view is Some(view) else { return }
+  if self.feedback_bridge is Some(bridge) {
+    bridge.hide()
+  }
   match self.definition_bridge {
     Some(bridge) => bridge.before_projection_replaced()
     None => ()
@@ -413,6 +434,9 @@ fn MarkdownViewerWidgetAttachment::apply_theme(
   theme : String,
 ) -> Unit {
   guard !self.disposed && self.view is Some(view) else { return }
+  if self.feedback_bridge is Some(bridge) {
+    bridge.hide()
+  }
   match self.definition_bridge {
     Some(bridge) => bridge.before_projection_replaced()
     None => ()
@@ -437,6 +461,9 @@ fn MarkdownViewerWidgetAttachment::apply_theme(
 fn MarkdownViewerWidgetAttachment::layout_changed(
   self : MarkdownViewerWidgetAttachment,
 ) -> Unit {
+  if self.feedback_bridge is Some(bridge) {
+    bridge.layout()
+  }
   match self.hover_bridge {
     Some(bridge) => bridge.layout_changed()
     None => ()
@@ -455,6 +482,9 @@ fn MarkdownViewerWidgetAttachment::dispose(
     return
   }
   self.disposed = true
+  if self.feedback_bridge is Some(bridge) {
+    bridge.dispose()
+  }
   match self.definition_bridge {
     Some(bridge) => bridge.dispose()
     None => ()

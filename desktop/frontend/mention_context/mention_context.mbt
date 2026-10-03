@@ -23,7 +23,7 @@
 //   <symbol name="parse_hover" file="a.mbt" line="5"/>
 //   <annotation file="a.mbt" lines="12-20">
 //   <quote>
-//   ...the selected source, verbatim...
+//   ...the selected text, verbatim...
 //   </quote>
 //   <user_comment>
 //   ...what the user said about it...
@@ -44,7 +44,7 @@
 ///|
 /// One mention chip in envelope form. `Symbol`'s `file` is `""` (and `line`
 /// 0) when the language server could not place it; `Annotation` is an editor
-/// comment — the selected source, its revision side, and what the user said.
+/// comment — selected text, source location, revision side, and user feedback.
 pub(all) enum AnnotationSide {
   WorkingRevision
   OriginalRevision

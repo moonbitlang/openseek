@@ -210,6 +210,7 @@ fn agent_feedback_test_comment(
     kind: AgentReview,
     resource: @base_common.Uri::file("/feedback/\{id}.mbt"),
     range: Range(line, 1, line, 2),
+    selected_text: None,
     text,
     replies,
     state: Accepted,

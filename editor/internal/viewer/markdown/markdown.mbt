@@ -4,6 +4,8 @@
 /// parsed by cmark; an unlabelled or indented block has no language id.
 pub struct MarkdownCodeBlock {
   block_index : Int
+  /// Present only for a parse rendered with source mapping enabled.
+  node_id : Int?
   priv code : String
   language_id : String?
   priv full_info_string : String?
@@ -23,9 +25,11 @@ pub fn MarkdownCodeBlock::MarkdownCodeBlock(
   info_remainder : String?,
   block_source_range : @common.OffsetRange,
   code_lines : Array[MarkdownCodeLine],
+  node_id? : Int,
 ) -> MarkdownCodeBlock {
   {
     block_index,
+    node_id,
     code,
     language_id,
     full_info_string,
@@ -49,9 +53,15 @@ pub struct MarkdownRenderFact {
 /// synchronous and receives both the MoonBit-owned block value and the active
 /// language id supplied by the caller. Conversion failures never expose raw
 /// input as HTML: they produce one escaped plaintext paragraph.
+/// `source_mapping` adds parse-local node IDs to block elements for document
+/// consumers that retain the matching projection. A custom renderer may set
+/// `code_block_renderer_owns_source_root=true` only when it writes `node_id`
+/// onto its own root element; other custom HTML receives an owned wrapper.
 pub fn render_markdown(
   markdown : String,
   language_id? : String,
+  source_mapping? : Bool = false,
+  code_block_renderer_owns_source_root? : Bool = false,
   code_block_renderer? : (MarkdownCodeBlock, String?) -> String,
 ) -> MarkdownRenderFact {
   let saw_code_block = Ref(false)
@@ -62,7 +72,10 @@ pub fn render_markdown(
     layout=true,
     locs=true,
   )
-  let (projection, code_blocks_by_id) = markdown_document_projection(doc)
+  let (projection, code_blocks_by_id) = markdown_document_projection(
+    doc,
+    source_mapping~,
+  )
   let code_override = @cmark_renderer.Renderer::new(block=fn(ctx, block) {
     match block {
       CodeBlock(node) => {
@@ -74,7 +87,13 @@ pub fn render_markdown(
           ctx.string(html)
           true
         } else if code_block_renderer is Some(render) {
-          ctx.string(render(code_block, language_id))
+          markdown_write_code_override(
+            ctx,
+            node.meta.id,
+            render(code_block, language_id),
+            source_mapping=source_mapping &&
+              !code_block_renderer_owns_source_root,
+          )
           true
         } else {
           false
@@ -84,7 +103,13 @@ pub fn render_markdown(
     }
   })
   markdown_conversion_result(markdown, saw_code_block, projection, () => {
-    @cmark_html.renderer(safe=true).compose(code_override).doc_to_string(doc)
+    let renderer = @cmark_html.renderer(safe=true)
+    let renderer = if source_mapping {
+      renderer.compose(markdown_source_renderer())
+    } else {
+      renderer
+    }
+    renderer.compose(code_override).doc_to_string(doc)
   })
 }
 
