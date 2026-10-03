@@ -21,11 +21,11 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { appendFile, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// Everything one release ships. `file` is both the name in
+// Everything one release ships, in upload order. `file` is both the name in
 // dist/ and the immutable download name under the version directory; `label`
 // names the download in the release summary.
 const Artifacts = [
@@ -91,18 +91,13 @@ export class Release {
     return version;
   }
 
-  async commandRun(program, args, env = {}) {
+  commandRun(program, args, env = {}) {
     console.log(`$ ${program} ${args.join(" ")}`);
-    await new Promise((resolve, reject) => {
-      const child = spawn(program, args, {
-        cwd: this.desktop, env: { ...process.env, ...env }, stdio: "inherit", shell: false,
-      });
-      child.once("error", reject);
-      child.once("close", (code, signal) => {
-        if (code === 0) resolve();
-        else reject(new Error(`${program} exited with ${code ?? signal}`));
-      });
+    const result = spawnSync(program, args, {
+      cwd: this.desktop, env: { ...process.env, ...env }, stdio: "inherit", shell: false,
     });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`${program} exited with ${result.status ?? result.signal}`);
   }
 
   async digest(path) {
@@ -226,7 +221,7 @@ export class Release {
     if (sealed.status === 200) {
       console.log(`${version} is already published by the API; reusing its OSS artifacts`);
       for (const artifact of Artifacts) {
-        await this.commandRun("ossutil", ["cp", "--force", "--region", oss.region,
+        this.commandRun("ossutil", ["cp", "--force", "--region", oss.region,
           this.ossUrl(version, artifact), join(this.dist, artifact.file)]);
         await this.verifyServed(version, artifact, await this.localArtifact(artifact));
         console.log(`${artifact.platform} restored: ${this.ossUrl(version, artifact)}`);
@@ -241,13 +236,11 @@ export class Release {
 
     console.log(`${version} is unpublished; uploading replaceable OSS artifacts`);
     const digests = {};
-    // Independent object keys can upload concurrently; stage the Browser only
-    // after every upload and its OSS verification have succeeded.
-    await Promise.all(Artifacts.map(async artifact => {
+    for (const artifact of Artifacts) {
       const local = await this.localArtifact(artifact);
       // Rebuilds are not byte-identical. Until the API publishes this version,
       // a retry must replace provisional bytes instead of keeping an older run.
-      await this.commandRun("ossutil", ["cp", "--force", "--region", oss.region,
+      this.commandRun("ossutil", ["cp", "--force", "--region", oss.region,
         "--content-type", artifact.contentType,
         "--cache-control", "public, max-age=31536000, immutable",
         "--metadata", `sha256=${local.sha256}`,
@@ -257,7 +250,7 @@ export class Release {
       await this.verifyServed(version, artifact, local);
       digests[artifact.platform] = local.sha256;
       console.log(`${artifact.platform} verified in OSS`);
-    }));
+    }
 
     // `/console/` remains on the API origin, so only the much smaller Browser
     // archive is uploaded twice. Desktop packages exist only in OSS.
@@ -276,7 +269,7 @@ export class Release {
   // dist/: the bytes OSS holds and the API received.
   async unpackBrowser() {
     await rm(join(this.dist, "browser"), { recursive: true, force: true });
-    await this.commandRun("tar", ["-xzf", join(this.dist, Browser.file), "-C", this.dist]);
+    this.commandRun("tar", ["-xzf", join(this.dist, Browser.file), "-C", this.dist]);
   }
 
   // Publish and rollback share the same API contract. The runner knows OSS and
