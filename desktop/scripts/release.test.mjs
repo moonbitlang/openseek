@@ -256,9 +256,75 @@ test("upload sends the Windows installer to OSS as an executable download", asyn
   const commands = t.mock.method(release, "commandRun", () => {});
   await release.upload("v0.1.9");
   assert.equal(commands.mock.callCount(), 4);
-  const [program, args] = commands.mock.calls.at(-1).arguments;
+  const [program, args] = commands.mock.calls.find(call =>
+    call.arguments[1].at(-1).endsWith("/SeekMoon-windows-x64-setup.exe")).arguments;
   assert.equal(program, "ossutil");
   assert.equal(args[args.indexOf("--content-type") + 1], "application/octet-stream");
   assert.equal(args.at(-2), join(release.dist, "SeekMoon-windows-x64-setup.exe"));
   assert.equal(args.at(-1), "oss://test/releases/v0.1.9/SeekMoon-windows-x64-setup.exe");
+});
+
+for (const failure of [null, "upload", "verification"]) {
+  test(`concurrent uploads gate Browser staging: ${failure ?? "success"}`, { timeout: 5000 }, async t => {
+    const release = new Release();
+    release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-release-concurrent-"));
+    t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
+    await fs.writeFile(join(release.dist, "SeekMoon.browser.tar.gz"), "browser");
+    const sha256 = "a".repeat(64);
+    const error = new Error(`${failure} failed`);
+    const started = Promise.withResolvers();
+    const uploaded = Promise.withResolvers();
+    const verified = Promise.withResolvers();
+    let active = 0;
+    let checks = 0;
+    t.mock.method(release, "moduleVersion", async () => "0.1.9");
+    t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
+    t.mock.method(release, "fetch", async () => new Response(null, { status: 404 }));
+    t.mock.method(release, "localArtifact", async artifact => ({ path: artifact.file, size: 7, sha256 }));
+    const uploads = [];
+    t.mock.method(release, "commandRun", (_program, args) => {
+      const pending = Promise.withResolvers();
+      uploads.push({ ...pending, file: args.at(-2) });
+      if (++active === 4) started.resolve();
+      return pending.promise;
+    });
+    t.mock.method(release, "verifyServed", async () => {
+      if (++checks === 4) uploaded.resolve();
+      await verified.promise;
+      return { sha256 };
+    });
+    const stage = t.mock.method(release, "fetchJson", async () => ({ sha256 }));
+    const unpack = t.mock.method(release, "unpackBrowser", async () => {});
+    const result = release.upload("v0.1.9");
+    const completion = failure ? assert.rejects(result, actual => actual === error) : result;
+    await started.promise;
+    assert.equal(checks, 0);
+    assert.equal(stage.mock.callCount(), 0);
+    for (const upload of uploads) {
+      if (failure === "upload" && upload.file.endsWith(".exe")) upload.reject(error);
+      else upload.resolve();
+    }
+    if (failure !== "upload") {
+      await uploaded.promise;
+      assert.equal(stage.mock.callCount(), 0);
+    }
+    if (failure === "verification") verified.reject(error);
+    else verified.resolve();
+    await completion;
+    assert.equal(stage.mock.callCount(), failure ? 0 : 1);
+    assert.equal(unpack.mock.callCount(), failure ? 0 : 1);
+  });
+}
+
+test("async commands await completion and propagate process failures", async t => {
+  const release = new Release();
+  let yielded = false;
+  const command = release.commandRun(process.execPath, ["-e", "setTimeout(() => process.exit(0), 10)"]);
+  setImmediate(() => { yielded = true; });
+  await command;
+  assert.equal(yielded, true, "the child process must not block the event loop");
+  await assert.rejects(release.commandRun(process.execPath, ["-e", "process.exit(7)"]), /exited with 7/);
+  release.desktop = await fs.mkdtemp(join(tmpdir(), "openseek-release-spawn-"));
+  t.after(() => fs.rm(release.desktop, { recursive: true, force: true }));
+  await assert.rejects(release.commandRun(join(release.desktop, "missing-command"), []), { code: "ENOENT" });
 });
