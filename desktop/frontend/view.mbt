@@ -1900,14 +1900,6 @@ fn Model::selected_conversation_loaded(self : Model) -> Bool {
 }
 
 ///|
-fn conversation_loading_view(locale? : @i18n.Locale = English) -> @html.Html {
-  @html.div(
-    class="conversation-load-state",
-    shell_text(locale, LoadingConversation),
-  )
-}
-
-///|
 fn conversation_load_failed_view(
   locale? : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
@@ -2010,7 +2002,8 @@ fn view(
               message,
             ),
           ]
-        Loading => [conversation_loading_view(locale=model.locale)]
+        Loading =>
+          [@transcript_component.conversation_loading_view(locale=model.locale)]
         Onboarding => [onboarding_view(dispatch, model)]
         Transcript(conversation=conv, ..) =>
           [

@@ -4290,9 +4290,11 @@ fn update_msg(
             )
           }
           (
-            @cmd.batch([command, @transcript_component.scroll_to_latest()]),
+            command,
             {
-              ..model.replace_conversation({
+              ..model
+              .follow_transcript_latest(submission_id)
+              .replace_conversation({
                 ..conv,
                 task: "",
                 images: [],
@@ -4382,8 +4384,10 @@ fn update_msg(
         // Re-pin now, before the durable User item arrives, so the early
         // streamed work is visible even if the reader had scrolled up.
         (
-          @cmd.batch([start_cmd, @transcript_component.scroll_to_latest()]),
-          model.replace_conversation(next),
+          start_cmd,
+          model
+          .follow_transcript_latest(submission_id)
+          .replace_conversation(next),
         )
       }
     }

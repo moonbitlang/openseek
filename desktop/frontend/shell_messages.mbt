@@ -44,7 +44,6 @@ priv enum ShellMessage {
   DeviceLinkDescription
   SigningOut
   SignOutLabel
-  LoadingConversation
   CannotLoadConversation
   RetryLabel
   ScheduleReadOnly
@@ -338,11 +337,6 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, SignOutLabel) => "退出登录"
     (TraditionalChinese, SignOutLabel) => "退出登入"
     (Japanese, SignOutLabel) => "ログアウト"
-    (English, LoadingConversation) => "Loading conversation…"
-    (Spanish, LoadingConversation) => "Cargando conversación…"
-    (SimplifiedChinese, LoadingConversation) => "正在加载对话…"
-    (TraditionalChinese, LoadingConversation) => "正在載入對話…"
-    (Japanese, LoadingConversation) => "チャットを読み込み中…"
     (English, CannotLoadConversation) => "Could not load conversation"
     (Spanish, CannotLoadConversation) => "No se pudo cargar la conversación"
     (SimplifiedChinese, CannotLoadConversation) => "无法加载对话"

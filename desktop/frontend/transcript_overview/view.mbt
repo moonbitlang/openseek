@@ -15,10 +15,20 @@ pub fn rail(
   state : State,
   emit : @cmd.Emit[Msg],
   clock~ : (Double) -> String,
+  page? : TranscriptPage = TranscriptPage::of(entries.length()),
 ) -> @html.Html {
   let ticks : Array[@html.Html] = []
-  for entry in entries {
+  for index, entry in entries {
     let mut tick_class = "overview-tick"
+    if page.count > 1 && index >= page.start && index < page.end {
+      tick_class += " in-page"
+      if index == page.start {
+        tick_class += " page-start"
+      }
+      if index == page.end - 1 {
+        tick_class += " page-end"
+      }
+    }
     if state.active is Some(key) && key == entry.key {
       tick_class += " active"
     }
@@ -50,6 +60,13 @@ pub fn rail(
           on_click=emit(Clicked(entry.key)),
           attrs=@html.Attrs::build()
             .aria_label(label)
+            .aria_current(
+              if state.active is Some(key) && key == entry.key {
+                "location"
+              } else {
+                "false"
+              },
+            )
             .on_mouseenter(event => {
               let (flip, anchor) = preview_measure(event)
               emit(Entered(entry.key, flip~, anchor~))
@@ -63,7 +80,31 @@ pub fn rail(
   // scroll container, and a scroll container clips everything inside it.
   // The hover's enter-time anchor replaces the tick position it can no
   // longer inherit.
-  let children : Array[@html.Html] = [@html.div(class="overview-rail", ticks)]
+  let controls : Array[@html.Html] = []
+  if page.count > 1 {
+    controls.push(
+      page_button(locale, previous=true, disabled=page.index == 0, emit),
+    )
+  }
+  controls.push(
+    @html.div(class="overview-rail", [
+      @html.div(
+        class="overview-rail-content",
+        attrs=@html.Attrs::build()
+          .style("--overview-page-start", "\{page.start}")
+          .style("--overview-page-size", "\{page.end - page.start}"),
+        ticks,
+      ),
+    ]),
+  )
+  if page.count > 1 {
+    controls.push(
+      page_button(locale, previous=false, disabled=page.is_latest(), emit),
+    )
+  }
+  let children : Array[@html.Html] = [
+    @html.div(class="overview-navigation", controls),
+  ]
   if state.hover is Some(hover) &&
     entries.iter().find_first(entry => entry.key == hover.key) is Some(entry) {
     children.push(
@@ -71,7 +112,11 @@ pub fn rail(
     )
   }
   @html.nav(
-    class="transcript-overview",
+    class=if page.count > 1 {
+      "transcript-overview paginated"
+    } else {
+      "transcript-overview"
+    },
     hidden=entries.length() < 2,
     attrs=@html.Attrs::build()
       .aria_label(
@@ -191,4 +236,38 @@ fn clamp_preview(text : String) -> String {
   } else {
     cut + "…"
   }
+}
+
+///|
+fn page_button(
+  locale : @i18n.Locale,
+  previous~ : Bool,
+  disabled~ : Bool,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
+  let label = match (locale, previous) {
+    (English, true) => "Previous history page"
+    (English, false) => "Next history page"
+    (SimplifiedChinese, true) => "上一页历史"
+    (SimplifiedChinese, false) => "下一页历史"
+    (TraditionalChinese, true) => "上一頁歷史"
+    (TraditionalChinese, false) => "下一頁歷史"
+    (Japanese, true) => "前の履歴ページ"
+    (Japanese, false) => "次の履歴ページ"
+    (Spanish, true) => "Página anterior del historial"
+    (Spanish, false) => "Página siguiente del historial"
+  }
+  @html.button(
+    type_="button",
+    class=if previous {
+      "overview-page-button previous"
+    } else {
+      "overview-page-button"
+    },
+    disabled~,
+    title=label,
+    attrs=@html.Attrs::build().aria_label(label),
+    on_click=emit(if previous { PreviousPage } else { NextPage }),
+    @icons.icon(@icons.icon_chevron_down),
+  )
 }
