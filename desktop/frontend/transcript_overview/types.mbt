@@ -7,8 +7,8 @@
 /// Identity of one user turn: the durable event sequence when the row has
 /// one, else its position in the visible transcript (a client-local row, or
 /// a fixture written without sequences). Sequences are per-session, so a key
-/// must never outlive a conversation switch — the root resets the overview
-/// state when the active conversation changes.
+/// must never outlive a conversation switch — each conversation mounts its
+/// own transcript component with fresh overview state.
 pub(all) enum TurnKey {
   Durable(Int)
   Local(Int)

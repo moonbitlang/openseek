@@ -454,13 +454,21 @@ priv enum BlockContent {
 } derive(Eq)
 
 ///|
-/// The direct children of `#stream` in display order: one block per
-/// transcript item, then the
-/// response still streaming; or the empty state alone. Vector order determines
+/// The mounted page's direct children of `#stream` in display order: one
+/// block per item, plus the live response on the latest page; or the empty
+/// state alone. Vector order determines
 /// visual order; the keys only determine node identity.
-fn stream_blocks(input : Input) -> @vector.Vector[Block] {
+fn stream_blocks(
+  input : Input,
+  bounds? : PageRows = TurnIndex::new(input.items).page_rows(None),
+) -> @vector.Vector[Block] {
+  let input = if bounds.page.is_latest() {
+    input
+  } else {
+    { ..input, streaming_response: None, streaming_reasoning: None, }
+  }
   if input.minimal {
-    return input.minimal_blocks()
+    return input.minimal_blocks(bounds~)
   }
   let stream = TranscriptSectionKey::stream(input)
   // The durable transcript plus client-local notices. Live semantic events
@@ -483,6 +491,9 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
   let descriptions : Map[String, String] = Map([])
   let mut steps = 0
   for index, row in input.items {
+    if index >= bounds.end {
+      break
+    }
     let item = row.item
     let step_label = if input.source is OpenSeek &&
       item.kind is Assistant(replay=false, ..) {
@@ -490,6 +501,14 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
       Some("#\{steps}")
     } else {
       None
+    }
+    if index < bounds.start {
+      if item.kind is Assistant(calls~, ..) {
+        for call in calls {
+          collect_job_description(call, descriptions)
+        }
+      }
+      continue
     }
     let anchor = if item.kind is User(..) {
       Some(@transcript_overview.TurnKey::of(item, index~).anchor())
@@ -609,6 +628,8 @@ fn section_children(
   stream~ : Map[String, @html.Html],
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
+  page~ : @transcript_overview.TranscriptPage,
+  loading? : Bool = false,
   overview_emit~ : @cmd.Emit[@transcript_overview.Msg],
   on_jump_latest~ : @cmd.Cmd,
 ) -> Map[String, @html.Html] {
@@ -630,16 +651,35 @@ fn section_children(
       overview,
       overview_emit,
       clock=ms => clock_label(locale~, ms),
+      page~,
     ),
   )
+  if loading {
+    children.set(
+      "page-loading",
+      @html.div(class="transcript-page-loading", [
+        conversation_loading_view(locale~),
+      ]),
+    )
+  }
+  let page_content : Map[String, @html.Html] = Map([])
+  if page.index > 0 {
+    page_content.set("page-start-hint", page_scroll_hint(locale, forward=false))
+  }
+  for key, html in stream {
+    page_content.set(key, html)
+  }
+  if !page.is_latest() {
+    page_content.set("page-end-hint", page_scroll_hint(locale, forward=true))
+  }
   children.set(
     TranscriptSectionKey::stream(input).wire(),
-    @html.div(id="stream", class="stream", stream),
+    @html.div(id="stream", class="stream", page_content),
   )
-  // Reading history unpins auto-follow (see `watch_transcript_scroll`); the
+  // Reading history unpins auto-follow (see the transcript DOM subscription); the
   // floating button is the way back to the live tail. Sticky inside the
   // scroller with zero height, so it never adds scroll length.
-  if !pinned {
+  if !pinned && !loading {
     children.set(
       TranscriptSectionKey::jump_latest().wire(),
       @html.div(class="jump-latest-wrap", [

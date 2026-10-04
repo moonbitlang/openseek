@@ -54,12 +54,12 @@ pub extend ProjectChoice with Eq::{equal, not_equal}
 
 ///|
 /// Where the reader is in a transcript. `Pinned` follows the tail as content
-/// grows; `Unpinned` is a fixed offset the reader scrolled to. The component
+/// grows; `Unpinned` records the history page and its scroll offset. The component
 /// reports it when its conversation leaves the screen and receives it back
 /// through `Input::scroll` when the conversation returns.
 pub(all) enum ScrollPosition {
   Pinned
-  Unpinned(top~ : Double)
+  Unpinned(top~ : Double, page~ : Int, overlap~ : Int?)
 } derive(Eq)
 
 ///|
@@ -75,6 +75,8 @@ struct Input {
   active_session : String
   // Where the reader left this conversation last time, read once by `init`.
   scroll : ScrollPosition
+  // Unique local send identity, observed once by the mounted component.
+  follow_request : String?
   // The registered project that owns this conversation, kept separate from
   // `root`: a managed worktree resolves files from its checkout while the
   // empty-state question should still name the project the user selected.
@@ -113,6 +115,7 @@ pub fn Input::Input(
   focused~ : @interop.ChannelId,
   active_session~ : String,
   scroll? : ScrollPosition = Pinned,
+  follow_request? : String,
   project_label? : String,
   current_project~ : @common.Uri?,
   projects~ : Array[ProjectChoice],
@@ -134,6 +137,7 @@ pub fn Input::Input(
     focused,
     active_session,
     scroll,
+    follow_request,
     project_label,
     current_project,
     projects,
@@ -177,6 +181,11 @@ pub(all) struct Actions {
 /// root keys it by conversation), so `init` alone decides where a fresh
 /// component starts: at the tail, or where the reader left this conversation.
 priv struct Model {
+  // None follows the latest page; an explicit index stays on that history page.
+  page : Int?
+  navigation : PageNavigation?
+  navigation_generation : Int
+  overlap : Int?
   pinned : Bool
   overview : @transcript_overview.State
   image_owner : ImageOwner
@@ -187,6 +196,9 @@ priv struct Model {
 priv enum Msg {
   Pinned(Bool)
   JumpToLatest
+  CrossPage(Bool)
+  MountPage(Int)
+  PageReady(Int)
   ContentRendered
   ImageRequested(String)
   ImageResolved(ImageOwner, String, ImageReadResult)
@@ -199,6 +211,7 @@ fn Model::update(
   input : Input,
   msg : Msg,
   emit : @cmd.Emit[Msg],
+  turns? : TurnIndex = TurnIndex::new(input.items),
 ) -> (Model, @cmd.Cmd) {
   // The conversation is fixed for this component's lifetime, but its image
   // root can move (a worktree gets bound after the first send). Never project
@@ -209,12 +222,40 @@ fn Model::update(
   } else {
     { ..self, image_owner, images: ImageCache::empty(), }
   }
+  if self.navigation is Some(_) &&
+    msg
+    is (Pinned(_) | ContentRendered | CrossPage(_) | Overview(ActiveChanged(_))) {
+    return (self, @cmd.none)
+  }
   match msg {
-    Pinned(pinned) => ({ ..self, pinned, }, @cmd.none)
+    MountPage(generation) => self.mount_page(turns, generation, emit)
+    PageReady(generation) => {
+      guard self.navigation is Some({ generation: current, .. }) &&
+        current == generation else {
+        return (self, @cmd.none)
+      }
+      (
+        { ..self, navigation: None, },
+        @cmd.batch([
+          report_visible_turn_after_render(emit, current=self.overview.active),
+          self.images.apply_after_render(),
+        ]),
+      )
+    }
+    Pinned(pinned) => {
+      let page = turns.page_rows(self.page).page
+      let pinned = pinned && page.is_latest()
+      (
+        { ..self, pinned, page: if pinned { None } else { Some(page.index) }, },
+        @cmd.none,
+      )
+    }
+    CrossPage(forward) => self.cross_page(turns, forward, emit)
     JumpToLatest =>
       (
-        { ..self, pinned: true, },
+        { ..self, pinned: true, page: None, overlap: None, navigation: None, },
         @cmd.batch([
+          measure_page_after_render(),
           scroll_after_render(),
           report_visible_turn_after_render(emit, current=self.overview.active),
         ]),
@@ -254,8 +295,16 @@ fn Model::update(
       match msg {
         // The clicked tick is already under the pointer. Revealing it could
         // move the rail beneath the pointer and transfer hover to a neighbor.
-        Clicked(key) =>
-          ({ ..next, pinned: false, }, scroll_turn_into_view(emit, key))
+        Clicked(key) => {
+          guard turns.page_for_turn(key) is Some(page) else {
+            return (self, @cmd.none)
+          }
+          self.select_page(turns, page, emit, anchor=key)
+        }
+        PreviousPage =>
+          self.select_page(turns, self.navigation_page(turns).index - 1, emit)
+        NextPage =>
+          self.select_page(turns, self.navigation_page(turns).index + 1, emit)
         // A transcript scroll may activate a tick outside the rail's visible
         // window. Reveal only an actual active-turn change so rail scrolling
         // itself cannot feed back into another write.
@@ -284,29 +333,51 @@ pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
+  let turns = input.map(input => input.items).map(TurnIndex::new)
+  let indexed_input = input.map2(turns, (input, turns) => (input, turns))
   let (state, emit) = @rabbita.create_state_with_input(
-    input~,
-    init=(emit, input) => {
+    input=indexed_input,
+    init=(emit, indexed) => {
+      let (input, _) = indexed
       (
         {
+          navigation: None,
+          navigation_generation: 0,
           pinned: input.scroll is Pinned,
+          page: match input.scroll {
+            Pinned => None
+            Unpinned(page~, ..) => Some(page)
+          },
+          overlap: match input.scroll {
+            Pinned => None
+            Unpinned(overlap~, ..) => overlap
+          },
           overview: @transcript_overview.State::empty(),
           image_owner: input.image_owner(),
           images: ImageCache::empty(),
         },
         @cmd.batch([
-          render_rows_once_after_mount(),
+          measure_page_after_render(),
           match input.scroll {
             Pinned => scroll_after_render()
-            Unpinned(top~) => restore_scroll_after_render(top)
+            Unpinned(top~, ..) => restore_scroll_after_render(top)
           },
           report_visible_turn_after_render(emit, current=None),
         ]),
       )
     },
-    update=(state, input, msg, emit) => state.update(input, msg, emit),
-    subscriptions=(model, _, emit) => {
-      transcript_subscription(model, emit, actions.departed)
+    update=(state, indexed, msg, emit) => {
+      state.update(indexed.0, msg, emit, turns=indexed.1)
+    },
+    subscriptions=(model, indexed, emit) => {
+      let (input, turns) = indexed
+      transcript_subscription(
+        model,
+        turns.page_rows(model.page).page,
+        input.follow_request,
+        emit,
+        actions.departed,
+      )
     },
   )
   // Every stream child renders in its own branch, keyed by the block within
@@ -320,8 +391,24 @@ pub fn component(
   // branch renders only when its block changes (blocks compare by value), so
   // an unchanged key means an unchanged subtree, and the diff skips it. Stream
   // children are keyed, so a counter never meets another branch's counter.
-  let blocks = input.map(input => {
-    stream_blocks(input).map(block => (input.locale, block))
+  let pages = turns.map2(
+    state.map(state => {
+      (state.page, state.overlap, state.navigation.map(n => n.page))
+    }),
+    (turns, selection) => {
+      let (page, overlap, pending) = selection
+      let rows = turns.page_rows(page, overlap~)
+      (
+        rows,
+        pending
+        .map(page => turns.page_rows(Some(page)).page)
+        .unwrap_or(rows.page),
+      )
+    },
+  )
+  let page_rows = pages.map(pages => pages.0)
+  let blocks = input.map2(page_rows, (input, bounds) => {
+    stream_blocks(input, bounds~).map(block => (input.locale, block))
   })
   let rendered = blocks.assoc_by(
     (_, block) => {
@@ -349,12 +436,15 @@ pub fn component(
     },
     by=pair => pair.1.branch_key(),
   )
-  state.view3(input, rendered, (state, input, rendered) => {
+  state.view4(input, rendered, pages, (state, input, rendered, pages) => {
+    let (_, page) = pages
     transcript_view(
       locale=input.locale,
       input,
       pinned=state.pinned,
       overview=state.overview,
+      page~,
+      loading=state.navigation is Some(_),
       overview_emit=emit.map(msg => Overview(msg)),
       stream=keyed_stream(rendered),
       on_jump_latest=emit(JumpToLatest),
@@ -403,15 +493,6 @@ fn focus_empty_project_trigger_after_render() -> @cmd.Cmd {
 }
 
 ///|
-/// Scroll the transcript to its tail after the next render. The root issues
-/// this when Send accepts a prompt or a steer, before the durable User item
-/// arrives, so early streamed work is immediately visible. The scroll it
-/// causes reaches the component's own listener, which records the pin.
-pub fn scroll_to_latest() -> @cmd.Cmd {
-  scroll_after_render()
-}
-
-///|
 fn scroll_after_render() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
@@ -425,13 +506,10 @@ fn scroll_after_render() -> @cmd.Cmd {
 }
 
 ///|
-/// Render every row in the transcript's first frame, then let rows outside
-/// the viewport be skipped again (`content-visibility: auto`, see
-/// `transcript.css`). A skipped row keeps the height it was last rendered
-/// at, so after this frame no row stands in at a guessed height: scroll
-/// offsets saved earlier map to the same content, and scrolling through
-/// history never shifts as rows first render.
-fn render_rows_once_after_mount() -> @cmd.Cmd {
+/// Lay out the mounted page before restoring an offset or locating a turn.
+/// Afterwards, content-visibility may skip offscreen rows using their measured
+/// heights. Run on initial mount and page/turn navigation, not on each delta.
+fn measure_page_after_render() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       guard @dom.document().get_element_by_id("stream").to_option()
@@ -472,16 +550,13 @@ fn restore_scroll_after_render(top : Double) -> @cmd.Cmd {
 }
 
 ///|
-/// The reader is pinned while the scroller sits within a few pixels of its
-/// bottom edge; anything else is a fixed offset worth restoring later.
-fn scroll_position(transcript : @dom.Element) -> ScrollPosition {
-  let top = transcript.get_scroll_top()
-  if transcript.get_scroll_height() - top - transcript.get_client_height() <=
-    4.0 {
-    Pinned
-  } else {
-    Unpinned(top~)
-  }
+/// The viewport has reached this page's bottom. Only the latest page's
+/// bottom may pin the conversation; reaching an older page's end must not.
+fn at_bottom(transcript : @dom.Element) -> Bool {
+  transcript.get_scroll_height() -
+  transcript.get_scroll_top() -
+  transcript.get_client_height() <=
+  4.0
 }
 
 ///|
@@ -555,6 +630,7 @@ fn visible_turn_anchor(transcript : @dom.Element) -> String? {
 fn scroll_turn_into_view(
   emit : @cmd.Emit[Msg],
   key : @transcript_overview.TurnKey,
+  offset? : Double = 10,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
@@ -566,10 +642,9 @@ fn scroll_turn_into_view(
         is Some(bubble) else {
         return
       }
-      let offset = bubble.get_bounding_client_rect().get_top() -
-        transcript.get_bounding_client_rect().get_top()
-      transcript.set_scroll_top(transcript.get_scroll_top() + offset - 10.0)
-      scheduler.add(emit(Pinned(scroll_position(transcript) is Pinned)))
+      guard turn_layout_top(bubble, transcript) is Some(top) else { return }
+      transcript.set_scroll_top(top - offset)
+      scheduler.add(emit(Pinned(at_bottom(transcript))))
       scheduler.add(emit(Overview(ActiveChanged(visible_turn(transcript)))))
     },
     kind=@cmd.after_render,
@@ -593,7 +668,7 @@ fn report_visible_turn_after_render(
         return
       }
       let active = visible_turn(transcript)
-      if unpinned && scroll_position(transcript) is Pinned {
+      if unpinned && at_bottom(transcript) {
         scheduler.add(emit(Pinned(true)))
       }
       if active != current {
@@ -613,7 +688,10 @@ priv suberror TranscriptSubscription {
     // listener reports only readings that differ from it, so the Model is the
     // single source of truth and no cache can drift from it.
     pinned~ : Bool,
-    active~ : @transcript_overview.TurnKey?
+    active~ : @transcript_overview.TurnKey?,
+    page~ : @transcript_overview.TranscriptPage,
+    follow_request~ : String?,
+    overlap~ : Int?
   )
 }
 
@@ -623,6 +701,8 @@ priv suberror TranscriptSubscription {
 /// forwards a synthetic "content changed" message into child state.
 fn transcript_subscription(
   model : Model,
+  page : @transcript_overview.TranscriptPage,
+  follow_request : String?,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
 ) -> @sub.Sub {
@@ -634,6 +714,9 @@ fn transcript_subscription(
       departed~,
       pinned=model.pinned,
       active=model.overview.active,
+      page~,
+      follow_request~,
+      overlap=model.overlap,
     ),
     transcript_sub_loader,
   )
@@ -645,11 +728,23 @@ fn transcript_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    TranscriptSubscription(emit~, departed~, pinned~, active~) => {
+    TranscriptSubscription(
+      emit~,
+      departed~,
+      pinned~,
+      active~,
+      page~,
+      follow_request~,
+      overlap~
+    ) => {
       let mut emit = emit
       let mut departed = departed
       let mut pinned = pinned
       let mut active = active
+      let mut page = page
+      let mut overlap = overlap
+      let gesture = PageGesture::new()
+      let mut follow_request = follow_request
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.target().to_element() is Some(element) &&
@@ -659,7 +754,7 @@ fn transcript_sub_loader(
         // Report only what differs from the Model. Its next message brings
         // the same value back through `update_tagger`; assigning here just
         // keeps a burst of scroll events from repeating the report meanwhile.
-        let position_pinned = scroll_position(element) is Pinned
+        let position_pinned = page.is_latest() && at_bottom(element)
         if position_pinned != pinned {
           pinned = position_pinned
           scheduler.add(emit(Pinned(position_pinned)))
@@ -671,6 +766,38 @@ fn transcript_sub_loader(
         }
       }
       target.add_event_listener_with_options("scroll", listener, capture=true)
+      let wheel_listener : @dom.Listener = event => {
+        guard event.to_wheel_event() is Some(wheel) &&
+          !wheel.get_ctrl_key() &&
+          !wheel.get_shift_key() &&
+          wheel.get_delta_y().abs() > wheel.get_delta_x().abs() &&
+          event.target().to_element() is Some(element) &&
+          element.closest("#transcript") is Some(_) &&
+          element.closest(".transcript-overview") is None &&
+          @dom.document().get_element_by_id("transcript").to_option()
+          is Some(transcript) else {
+          return
+        }
+        let forward = wheel.get_delta_y() > 0
+        // A nested editor/code scroller owns its wheel input.
+        if nested_scrollable(element, transcript, forward) {
+          return
+        }
+        let boundary = if forward {
+          !page.is_latest() && at_page_bottom(transcript)
+        } else {
+          page.index > 0 && transcript.get_scroll_top() <= 1
+        }
+        if gesture.wheel(wheel.get_time_stamp(), boundary, forward) {
+          event.prevent_default()
+          scheduler.add(emit(CrossPage(forward)))
+        }
+      }
+      target.add_event_listener_with_options(
+        "wheel",
+        wheel_listener,
+        passive=false,
+      )
       let observers = TranscriptObservers::install(
         () => scheduler.add(emit(ContentRendered)),
         path => scheduler.add(emit(ImageRequested(path))),
@@ -682,6 +809,7 @@ fn transcript_sub_loader(
             listener,
             capture=true,
           )
+          target.remove_event_listener("wheel", wheel_listener)
           observers.disconnect()
           // The branch is disposed while the incremental graph is read, one
           // step before Rabbita replaces the DOM, so the scroller still shows
@@ -689,7 +817,19 @@ fn transcript_sub_loader(
           // put them back there.
           if @dom.document().get_element_by_id("transcript").to_option()
             is Some(transcript) {
-            scheduler.add(departed(scroll_position(transcript)))
+            scheduler.add(
+              departed(
+                if pinned && page.is_latest() {
+                  Pinned
+                } else {
+                  Unpinned(
+                    top=transcript.get_scroll_top(),
+                    page=page.index,
+                    overlap~,
+                  )
+                },
+              ),
+            )
           }
         },
         update_tagger: payload => {
@@ -698,7 +838,10 @@ fn transcript_sub_loader(
               emit=next,
               departed=left,
               pinned=next_pinned,
-              active=next_active
+              active=next_active,
+              page=next_page,
+              follow_request=next_request,
+              overlap=next_overlap
             ) else {
             return
           }
@@ -706,6 +849,14 @@ fn transcript_sub_loader(
           departed = left
           pinned = next_pinned
           active = next_active
+          overlap = next_overlap
+          page = next_page
+          if next_request != follow_request {
+            follow_request = next_request
+            if next_request is Some(_) {
+              scheduler.add(emit(JumpToLatest))
+            }
+          }
         },
       })
     }

@@ -353,7 +353,10 @@ fn MinimalStream::finish(
 }
 
 ///|
-fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
+fn Input::minimal_blocks(
+  self : Input,
+  bounds? : PageRows = TurnIndex::new(self.items).page_rows(None),
+) -> @vector.Vector[Block] {
   let locale = self.locale
   let builder : MinimalStream = {
     stream: TranscriptSectionKey::stream(self),
@@ -364,6 +367,17 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
   let assistant = self.source.assistant_name()
   let descriptions : Map[String, String] = Map([])
   for index, row in self.items {
+    if index >= bounds.end {
+      break
+    }
+    if index < bounds.start {
+      if row.item.kind is Assistant(calls~, ..) {
+        for call in calls {
+          collect_job_description(call, descriptions)
+        }
+      }
+      continue
+    }
     let identity = row.identity
     match row.item.kind {
       User(..) => {
