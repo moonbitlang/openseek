@@ -625,6 +625,10 @@ export class DesktopBrowserHarness {
         return { accepted: true };
       case 'agent.steer':
         return { steered: true, run_id: request.params?.run_id };
+      case 'terminal.open':
+        // One id per session, in open order, so a spec can address the PTY
+        // it expects (`terminal-1` is the first one this page opened).
+        return { id: `terminal-${this.requests.filter(r => r.method === 'terminal.open').length}` };
       case 'agent.cancel':
         return { run_id: request.params?.run_id || 'run-e2e' };
       case 'session.archive': {

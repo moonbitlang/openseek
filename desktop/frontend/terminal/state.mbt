@@ -34,6 +34,18 @@ priv enum TabStatus {
   TabRunning
   /// Opening or driving the session failed.
   TabFailed(message~ : String)
+  /// A command tab whose command ended and whose result is being read from
+  /// its screen; the tab retires when that report lands.
+  TabExited(code~ : Int)
+} derive(Eq)
+
+///|
+/// What a command tab runs: one `!` command from the composer, in place of
+/// the interactive shell. `shell` is the root's id for that submission, which
+/// names it again when the tab reports the command's result.
+priv struct TabCommand {
+  shell : String
+  text : String
 } derive(Eq)
 
 ///|
@@ -50,6 +62,8 @@ priv struct Tab {
   session : String
   workspace_path : @common.Uri?
   status : TabStatus
+  /// `None` for an ordinary shell tab.
+  command : TabCommand?
 } derive(Eq)
 
 ///|
@@ -65,11 +79,11 @@ struct State {
   /// produces no terminal message.
   shown : String?
   /// Session UUIDs whose exit event beat their `terminal_open` reply, paired
-  /// with the channel used to discard that channel's pending output on loss.
-  /// The reply is the first event that identifies the opening tab, so it
-  /// consumes the pair and retires that tab instead of reviving an
-  /// already-dead session.
-  exited_before_open : Array[(@interop.ChannelId, String)]
+  /// with the channel used to discard that channel's pending output on loss
+  /// and the exit code that event carried. The reply is the first event that
+  /// identifies the opening tab, so it consumes the entry and retires that
+  /// tab instead of reviving an already-dead session.
+  exited_before_open : Array[(@interop.ChannelId, String, Int)]
   /// The color scheme last applied to every mounted emulator. Keeping this in
   /// model state lets `sync` refresh existing xterm instances exactly once
   /// when the application switches between light and dark mode.
@@ -208,6 +222,17 @@ fn State::remember_active(
 }
 
 ///|
+/// Whether a `!` command's tab could be opened (`State::run_command`).
+pub(all) enum CommandStart {
+  CommandStarted(@cmd.Cmd, State)
+  /// The conversation's checkout is not known yet — its placement is still
+  /// loading, as right after its worktree was created. Worth asking again.
+  CommandUnresolved
+  /// No terminal can open here: the device is away or the checkout is gone.
+  CommandUnavailable
+}
+
+///|
 pub(all) enum Msg {
   /// Show/hide the panel (every shell keeps running while hidden).
   ToggleTerminal
@@ -241,6 +266,22 @@ pub(all) enum Msg {
   InputFailed(message~ : String)
   /// One tab's emulator re-fit to a new grid size.
   ViewportResized(key~ : String, cols~ : Int, rows~ : Int)
+  /// A command tab's `!` command ended. `exit_code` is `None` when it did not
+  /// exit on its own account — the user closed its tab, its connection
+  /// dropped, or a signal killed it — and `output` is the plain text the
+  /// emulator showed, capped to its tail (`truncated`). The main frontend
+  /// takes the result; the panel then retires the tab.
+  CommandFinished(
+    shell~ : String,
+    exit_code~ : Int?,
+    output~ : String,
+    truncated~ : Bool
+  )
+  /// A command tab's session could not be opened, so its command never ran.
+  /// Consumed by the main frontend like `CommandFinished`.
+  CommandNotStarted(shell~ : String, message~ : String)
+  /// Open the panel on the tab running `!` command `shell`.
+  RevealCommand(shell~ : String)
 }
 
 ///|

@@ -1194,3 +1194,75 @@
 .changes-chip .mention-jump {
   text-decoration: none;
 }
+
+/* Shell mode: a draft that begins with `!` is a shell command. The card
+   takes the accent border, the command reads as monospace, and the mode chip
+   sits beside the textarea (Backspace in an empty command leaves the mode). */
+.composer-inner:has(> .composer-input.shell-mode) {
+  border-color: var(--color-accent-border);
+}
+
+.composer-input.shell-mode {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 8px;
+}
+
+.composer-input.shell-mode > .mention-tray {
+  grid-column: 1 / -1;
+}
+
+.composer-input.shell-mode > .mention-tray:empty {
+  display: none;
+}
+
+/* The `!` that makes the draft a command is drawn in red. A textarea cannot
+   color one character, so in shell mode its text is painted through its
+   background: a red patch exactly one character wide and one line tall sits
+   over the first cell, above a layer in the ordinary text color, and both are
+   clipped to the glyphs. `local` keeps the patch on the first line when a
+   long command scrolls. The 6px are the textarea's own left and top padding. */
+.composer-input.shell-mode > textarea {
+  font-family: var(--font-family-mono);
+  color: transparent;
+  caret-color: var(--color-text-primary);
+  background-image:
+    linear-gradient(var(--color-danger), var(--color-danger)),
+    linear-gradient(var(--color-text-primary), var(--color-text-primary));
+  background-size: calc(6px + 1ch) calc(6px + 1lh), auto;
+  background-repeat: no-repeat;
+  background-attachment: local;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.composer-input.shell-mode > textarea::selection {
+  color: var(--color-text-primary);
+}
+
+.composer-mode-chip {
+  margin-top: 5px;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1.6;
+  user-select: none;
+}
+
+.shell-commands-running {
+  display: grid;
+  gap: 4px;
+}
+
+.shell-command-text {
+  font-family: var(--font-family-mono);
+  overflow-wrap: anywhere;
+}
+
+.shell-command-state {
+  color: var(--color-text-muted);
+}

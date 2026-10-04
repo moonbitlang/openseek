@@ -108,6 +108,11 @@ priv enum UiMessage {
   NotCounted
   NoChanges
   ChangesLabel
+  ShellModeLabel
+  ShellModeHint
+  ShellRunning
+  ShellShowTerminal
+  ShellShowTerminalHint
 }
 
 ///|
@@ -728,5 +733,36 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ChangesLabel) => "更改"
     (TraditionalChinese, ChangesLabel) => "更改"
     (Japanese, ChangesLabel) => "変更"
+    (_, ShellModeLabel) => "shell"
+    (English, ShellModeHint) =>
+      "Shell mode: Enter runs this command in the terminal and sends its output. Delete the ! to leave."
+    (Spanish, ShellModeHint) =>
+      "Modo shell: Intro ejecuta este comando en el terminal y envía su salida. Borra el ! para salir."
+    (SimplifiedChinese, ShellModeHint) =>
+      "Shell 模式：按 Enter 在终端中运行此命令并发送输出。删除 ! 即可退出。"
+    (TraditionalChinese, ShellModeHint) =>
+      "Shell 模式：按 Enter 在終端機中執行此命令並傳送輸出。刪除 ! 即可離開。"
+    (Japanese, ShellModeHint) =>
+      "シェルモード：Enter でこのコマンドをターミナルで実行し、出力を送信します。! を消すと終了します。"
+    (English, ShellRunning) => "Running…"
+    (Spanish, ShellRunning) => "Ejecutando…"
+    (SimplifiedChinese, ShellRunning) => "运行中…"
+    (TraditionalChinese, ShellRunning) => "執行中…"
+    (Japanese, ShellRunning) => "実行中…"
+    (English, ShellShowTerminal) => "Terminal"
+    (Spanish, ShellShowTerminal) => "Terminal"
+    (SimplifiedChinese, ShellShowTerminal) => "终端"
+    (TraditionalChinese, ShellShowTerminal) => "終端機"
+    (Japanese, ShellShowTerminal) => "ターミナル"
+    (English, ShellShowTerminalHint) =>
+      "Show this command in the terminal (Ctrl+C there stops it)"
+    (Spanish, ShellShowTerminalHint) =>
+      "Mostrar este comando en el terminal (Ctrl+C allí lo detiene)"
+    (SimplifiedChinese, ShellShowTerminalHint) =>
+      "在终端中显示此命令（在终端按 Ctrl+C 可停止）"
+    (TraditionalChinese, ShellShowTerminalHint) =>
+      "在終端機中顯示此命令（在終端機按 Ctrl+C 可停止）"
+    (Japanese, ShellShowTerminalHint) =>
+      "このコマンドをターミナルに表示（そこで Ctrl+C を押すと停止）"
   }
 }

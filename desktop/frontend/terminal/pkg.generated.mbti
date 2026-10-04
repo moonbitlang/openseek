@@ -21,6 +21,12 @@ pub fn output(@interop.ChannelId, String, Int, String) -> @cmd.Cmd
 // Errors
 
 // Types and methods
+pub(all) enum CommandStart {
+  CommandStarted(@cmd.Cmd, State)
+  CommandUnresolved
+  CommandUnavailable
+}
+
 pub struct Ctx {
   channel : @interop.ChannelId
   session : String
@@ -52,6 +58,9 @@ pub(all) enum Msg {
   BinaryInput(key~ : String, data~ : String)
   InputFailed(message~ : String)
   ViewportResized(key~ : String, cols~ : Int, rows~ : Int)
+  CommandFinished(shell~ : String, exit_code~ : Int?, output~ : String, truncated~ : Bool)
+  CommandNotStarted(shell~ : String, message~ : String)
+  RevealCommand(shell~ : String)
 }
 
 type State derive(Eq)
@@ -61,6 +70,7 @@ pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self)
 pub fn State::is_open(Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::reconcile(Self, @cmd.Emit[Msg], Input) -> (Self, @cmd.Cmd)
+pub fn State::run_command(Self, @cmd.Emit[Msg], Input, shell~ : String, command~ : String, on_screen~ : Bool) -> CommandStart
 
 // Type aliases
 

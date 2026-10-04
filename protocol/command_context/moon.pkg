@@ -1,0 +1,1 @@
+warnings = "+missing_doc+unnecessary_annotation+unnecessary_view_op"

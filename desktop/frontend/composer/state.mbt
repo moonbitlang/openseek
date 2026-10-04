@@ -118,6 +118,25 @@ pub fn Draft::with_mention(self : Draft, mention : Mention) -> Draft {
 }
 
 ///|
+/// The shell command a draft holds, or `None` when it is an ordinary prompt.
+///
+/// Shell mode is a property of the draft itself rather than separate composer
+/// state: in a conversation that offers it, a draft whose text begins with `!`
+/// and carries no chips or images is a command — the TUI's `!` mode. The mode
+/// therefore survives navigation and draft recovery with the text, and
+/// deleting the `!` leaves it. Goal editing never is.
+fn Input::shell_command(self : Input, draft : Draft) -> String? {
+  guard self.shell_available &&
+    self.goal.draft is None &&
+    draft.mentions.is_empty() &&
+    draft.images.is_empty() &&
+    draft.task is [.. "!", .. command] else {
+    return None
+  }
+  Some(command.to_owned())
+}
+
+///|
 /// Encode the typed text and chips into the durable prompt sent to the engine.
 pub fn Draft::prompt(self : Draft) -> String {
   @mention_context.encode(self.mentions.map(mention => mention.ref_), self.task)

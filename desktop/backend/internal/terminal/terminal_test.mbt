@@ -291,3 +291,58 @@ test "ops on unknown terminal ids degrade cleanly" {
   }
   assert_true(failed)
 }
+
+///|
+#cfg(not(platform="windows"))
+async fn exit_code(pushes : @async.Queue[@terminal.TerminalPush]) -> Int {
+  for ;; {
+    if pushes.get() is Exited(code~, ..) {
+      return code
+    }
+  }
+}
+
+///|
+/// A `!` command runs as a session's only process: when it ends, the session
+/// ends with the command's own exit status.
+#cfg(not(platform="windows"))
+async test "a command session reports the command's exit code" {
+  @async.with_task_group(group => {
+    let state = @terminal.new_terminal_state()
+    defer state.shutdown()
+    let pushes = new_push_queue()
+    group.spawn_bg(allow_failure=true, () => {
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
+    })
+    ignore(
+      @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
+        "/bin/sh", "-c", "echo out; exit 3",
+      ]),
+    )
+    @async.with_timeout(5000, () => wait_for_output(pushes, "out"))
+    assert_eq(@async.with_timeout(5000, () => exit_code(pushes)), 3)
+  })
+}
+
+///|
+/// Ctrl+C typed into the tab is the terminal's own interrupt: the PTY turns
+/// the byte into SIGINT for the command, which ends the session.
+#cfg(not(platform="windows"))
+async test "Ctrl+C typed into a command session interrupts the command" {
+  @async.with_task_group(group => {
+    let state = @terminal.new_terminal_state()
+    defer state.shutdown()
+    let pushes = new_push_queue()
+    group.spawn_bg(allow_failure=true, () => {
+      @terminal.run_terminal_pump(state, push => pushes.put(push))
+    })
+    let id = @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
+      "/bin/sh", "-c", "echo ready; sleep 30",
+    ])
+    @async.with_timeout(5000, () => wait_for_output(pushes, "ready"))
+    @terminal.write_terminal(state, id~, b"\x03")
+    // A signal death is reported as a negative status, never as a code the
+    // command chose.
+    assert_true(@async.with_timeout(5000, () => exit_code(pushes)) < 0)
+  })
+}

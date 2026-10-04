@@ -655,7 +655,39 @@ pub(all) struct TerminalOpenPayload {
   workspace : String?
   cols : Int
   rows : Int
-} derive(Debug, Eq, FromJson, ToJson)
+  // One shell command line to run as the session's only process, in place of
+  // the interactive login shell: a `!` command from the composer. The session
+  // ends when the command does, and `terminal.exit` carries its exit code.
+  command : String?
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for TerminalOpenPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "terminal.open payload")
+  {
+    session: object.required_string("session"),
+    workspace: object.optional_string("workspace"),
+    cols: object.required_int("cols"),
+    rows: object.required_int("rows"),
+    command: object.optional_string("command"),
+  }
+}
+
+///|
+pub impl ToJson for TerminalOpenPayload with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "session": self.session.to_json(),
+    "cols": self.cols.to_json(),
+    "rows": self.rows.to_json(),
+  }
+  if self.workspace is Some(workspace) {
+    fields["workspace"] = workspace.to_json()
+  }
+  if self.command is Some(command) {
+    fields["command"] = command.to_json()
+  }
+  Json(fields)
+}
 
 ///|
 /// Terminal input is a wire union: text carries `data`, byte-oriented input

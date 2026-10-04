@@ -10,10 +10,16 @@ fn tab_view(
   tab : Tab,
   active : Bool,
 ) -> @html.Html {
+  // A command tab is named by what it runs.
+  let label = match tab.command {
+    Some(command) => "$ \{command.text}"
+    None => tab.workspace_label
+  }
   let title = match tab.status {
     TabOpening => "starting…"
-    TabRunning => tab.workspace_label
+    TabRunning => label
     TabFailed(message~) => message
+    TabExited(code~) => "\{label} (exit \{code})"
   }
   let status : Array[@html.Html] = if tab.status is TabFailed(..) {
     [@html.span(class="terminal-tab-failed", "!")]
@@ -25,7 +31,7 @@ fn tab_view(
       class="terminal-tab-select",
       title~,
       on_click=dispatch(TabSelected(key=tab.key)),
-      [@html.span(class="terminal-tab-label", tab.workspace_label), ..status],
+      [@html.span(class="terminal-tab-label", label), ..status],
     ),
     @html.button(
       class="terminal-tab-close",
@@ -85,6 +91,8 @@ fn panel_view(
         items.push(@html.span(class="terminal-status", "starting…"))
       TabFailed(message~) =>
         items.push(@html.span(class="terminal-status terminal-error", message))
+      TabExited(code~) =>
+        items.push(@html.span(class="terminal-status", "exit \{code}"))
       TabRunning => ()
     }
   } else if ctx.placement is None {

@@ -918,6 +918,18 @@ priv struct Conversation {
   // refusal retires it unsatisfied, handing a set's text back; a transport
   // failure leaves it standing, because the command may have landed anyway.
   goal_pending : GoalCommand?
+  // `!` commands submitted from this conversation's composer that are still
+  // running in a terminal tab, oldest first. A command leaves the list when
+  // its tab reports; its output is then sent as a message.
+  shell_commands : Array[ShellCommand]
+} derive(Eq)
+
+///|
+/// One `!` command in flight. `id` names its terminal tab, so the tab's
+/// report retires exactly this command even when the same text runs twice.
+priv struct ShellCommand {
+  id : String
+  command : String
 } derive(Eq)
 
 ///|
@@ -1906,6 +1918,10 @@ priv enum Msg {
   Skills(@skills.Msg)
   Send
   SendFollowup(@composer.FollowupChoice)
+  // `Send` for a conversation that is not the one on screen (a `!` command
+  // finishing in the background): the same submission, without scrolling the
+  // transcript the user is reading.
+  SendInBackground
   Stop
   // The user answered the active conversation's permission question. `allow`
   // grants the one action it asked about; the card stays until the engine's
@@ -2154,6 +2170,23 @@ priv enum Msg {
   // Terminal UI, host notifications, and xterm callbacks share one root-owned
   // state machine.
   Terminal(@terminal.Msg)
+  /// Run `!` command `id` in a terminal tab of its conversation's workspace.
+  /// `attempt` counts the retries while that checkout is still loading.
+  RunShellCommand(
+    channel~ : @interop.ChannelId,
+    session~ : String,
+    id~ : String,
+    command~ : String,
+    attempt~ : Int
+  )
+  /// `!` command `id` never ran — its worktree or its terminal could not be
+  /// set up — so it goes back to the composer with `message`.
+  ShellNotStarted(
+    channel~ : @interop.ChannelId,
+    session~ : String,
+    id~ : String,
+    message~ : String
+  )
   // A message produced by one device channel's connection — its lifecycle,
   // its notification stream, and every reply fenced by its connection
   // generation — tagged with the channel it came from.
@@ -2593,6 +2626,7 @@ fn empty_conversation(
     goal: None,
     goal_edit: None,
     goal_pending: None,
+    shell_commands: [],
   }
 }
 
@@ -3741,7 +3775,8 @@ fn Conversation::draft_empty(self : Conversation) -> Bool {
   !self.composer_draft_present &&
   self.pending_semantic_submission is None &&
   !(self.goal_edit is Some(edit) && !edit.draft.is_blank()) &&
-  self.goal_pending is None
+  self.goal_pending is None &&
+  self.shell_commands.is_empty()
 }
 
 ///|
@@ -3784,7 +3819,9 @@ fn Conversation::durable_frontier(self : Conversation) -> Int {
 fn Conversation::has_begun(self : Conversation) -> Bool {
   self.is_running() ||
   self.messages.length() > 0 ||
-  !self.pending_steers.is_empty()
+  !self.pending_steers.is_empty() ||
+  // A `!` command in flight is about to become transcript.
+  !self.shell_commands.is_empty()
 }
 
 ///|

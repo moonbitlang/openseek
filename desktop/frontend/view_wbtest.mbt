@@ -121,3 +121,29 @@ test "workflow children fold under live or listed parents before inventory refre
     assert_eq(project.conversations[0].children.length(), 1)
   }
 }
+
+///|
+test "a `!` command displays as its command line, not its envelope" {
+  let envelope = @command_context.encode(
+    "ls -la",
+    Ok({ exit_code: Some(0), text: "total 0\n", output_limit_reached: false, }),
+  )
+  assert_eq(user_display_text(envelope), "$ ls -la")
+  assert_eq(user_display_text("plain prompt"), "plain prompt")
+  // As an editable draft it keeps its output.
+  assert_eq(editable_text(envelope), envelope)
+  assert_eq(editable_text("plain prompt"), "plain prompt")
+}
+
+///|
+test "a conversation with a ! command in flight has begun and is kept" {
+  let fresh = test_conversation()
+  assert_false(fresh.has_begun())
+  assert_true(fresh.draft_empty())
+  let running = {
+    ..fresh,
+    shell_commands: [{ id: "page-submission-1", command: "moon test", }],
+  }
+  assert_true(running.has_begun())
+  assert_false(running.draft_empty())
+}

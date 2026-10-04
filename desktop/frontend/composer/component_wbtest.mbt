@@ -11,6 +11,7 @@ fn Input::fixture(task : String) -> Input {
     turn_id: None,
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [],
+    shell_available: false,
     root: Some(@common.Uri::file("/workspace")),
     installed_skills: [],
     context_generation: 0,
@@ -869,4 +870,149 @@ test "review context root removals reconcile beside local typing and file chips"
   assert_eq(restored.task, "typed locally")
   assert_eq(restored.mentions.length(), 2)
   assert_true(restored.prompt().contains("chosen"))
+}
+
+///|
+fn Input::shell_fixture(task : String) -> Input {
+  { ..Input::fixture(task), shell_available: true, }
+}
+
+///|
+test "a leading ! makes the draft a shell command, and deleting it undoes that" {
+  let input = Input::shell_fixture("")
+  let (entered, _) = Model(input).update(
+    input,
+    TextChanged("!"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let entry = entered.active(input)
+  inspect(entry.draft.task, content="!")
+  assert_true(input.shell_command(entry.draft) is Some(""))
+  // `@` is shell text here, not a file mention.
+  let (typed, _) = entered.update(
+    input,
+    TextChanged("!ls @src"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let entry = typed.active(input)
+  inspect(entry.draft.task, content="!ls @src")
+  assert_true(input.shell_command(entry.draft) is Some("ls @src"))
+  assert_true(entry.completion is None)
+  // The mode is the `!`: without it the text is an ordinary prompt again.
+  let (left, _) = typed.update(
+    input,
+    TextChanged("ls @src"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(input.shell_command(left.active(input).draft) is None)
+}
+
+///|
+test "a ! draft stays a prompt where shell commands are unavailable" {
+  let input = Input::fixture("")
+  let (typed, _) = Model(input).update(
+    input,
+    TextChanged("!ls"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let entry = typed.active(input)
+  inspect(entry.draft.task, content="!ls")
+  assert_true(input.shell_command(entry.draft) is None)
+}
+
+///|
+test "a shell command submits trimmed and is acknowledged like a prompt" {
+  let input = Input::shell_fixture("!  echo hi  ")
+  let actions : Array[Action] = []
+  let (submitted, _) = Model(input).update(
+    input,
+    SubmitRequested,
+    Msg::test_emit(),
+    @cmd.Emit(action => {
+      actions.push(action)
+      @cmd.none
+    }),
+  )
+  assert_true(actions is [ShellCommandSubmitted(command="echo hi", ..)])
+  let accepted = {
+    ..input,
+    draft: { ..input.draft, task: "", },
+    submission_sequence: 1,
+  }
+  let entry = submitted.active(accepted)
+  inspect(entry.draft.task, content="")
+  assert_true(entry.pending_submission is None)
+}
+
+///|
+test "a blank shell command does not submit" {
+  let input = Input::shell_fixture("!   ")
+  let actions : Array[Action] = []
+  ignore(
+    Model(input).update(
+      input,
+      SubmitRequested,
+      Msg::test_emit(),
+      @cmd.Emit(action => {
+        actions.push(action)
+        @cmd.none
+      }),
+    ),
+  )
+  assert_true(actions is [])
+}
+
+///|
+test "a shell command is accepted only where sending is" {
+  let ready = Input::shell_fixture("!ls")
+  let submitted = (input : Input) => {
+    let actions : Array[Action] = []
+    ignore(
+      Model(input).update(
+        input,
+        SubmitRequested,
+        Msg::test_emit(),
+        @cmd.Emit(action => {
+          actions.push(action)
+          @cmd.none
+        }),
+      ),
+    )
+    actions is [ShellCommandSubmitted(..)]
+  }
+  let with_action = (action : PrimaryAction) => {
+    ..ready,
+    presentation: { ..ready.presentation, primary_action: action, },
+  }
+  assert_true(submitted(ready))
+  assert_false(submitted(with_action(Send(available=false))))
+  // A turn that is starting or being cancelled offers no send action.
+  assert_false(
+    submitted(
+      with_action(
+        Running(
+          steer_available=false,
+          can_stop=true,
+          submit=Steer,
+          queue_available=false,
+        ),
+      ),
+    ),
+  )
+  assert_true(
+    submitted(
+      with_action(
+        Running(
+          steer_available=true,
+          can_stop=true,
+          submit=Steer,
+          queue_available=false,
+        ),
+      ),
+    ),
+  )
 }

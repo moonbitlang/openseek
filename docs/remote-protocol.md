@@ -587,7 +587,7 @@ has an independent terminal-id namespace.
 
 | method | params | result |
 |---|---|---|
-| `terminal.open` | `{session, workspace?, cols, rows}` — resolves the conversation's workspace on the host — a session no attached workspace owns is refused rather than given a directory | `{id}` |
+| `terminal.open` | `{session, workspace?, cols, rows, command?}` — resolves the conversation's workspace on the host — a session no attached workspace owns is refused rather than given a directory. With `command` (one shell command line: a composer `!` command) the session runs that instead of the interactive login shell — `$SHELL -c` on POSIX, PowerShell on Windows, with the packaged tools first on the path — and ends when it does; `terminal.exit` then carries the command's exit code, negative when a signal ended it | `{id}` |
 | `terminal.input` | `{id, data}` \| `{id, data_base64}` | `{}` |
 | `terminal.resize` | `{id, cols, rows}` | `{}` |
 | `terminal.ack` | `{id, sequence}` | `{}` |
