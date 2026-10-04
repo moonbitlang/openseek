@@ -111,3 +111,50 @@ test('saved reasoning and answers default unlabelled code to MoonBit', async ({ 
   }
   expect(app.pageErrors).toEqual([]);
 });
+
+test('write calls show numbered content highlighted by the path language', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  // Each write's first token, or null when the path has no tokenizer.
+  const writes = [
+    { path: 'src/lib.mbt', content: 'pub fn answer() -> Int {\n  42\n}', first: 'pub' },
+    { path: 'src/pkg.generated.mbti', content: 'package "demo/src"\n\npub fn answer() -> Int', first: 'package' },
+    { path: 'scripts/fix.mbtx', content: 'fn main {\n  println("<b>hi</b>")\n}', first: 'fn' },
+    { path: 'src/moon.pkg', content: 'import {\n  "moonbitlang/core/json",\n}', first: 'import' },
+    { path: 'notes.txt', content: 'plain <notes>\nsecond line', first: null },
+  ];
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture writes' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: {
+      content: '', tool_calls: writes.map(({ path, content }, index) => ({
+        id: `write-${index}`, name: 'write', arguments: JSON.stringify({ path, content }),
+      })),
+    } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const calls = page.locator('#transcript details.tool-call');
+  await expect(calls).toHaveCount(writes.length);
+  for (const [index, { path, content, first }] of writes.entries()) {
+    const call = calls.nth(index);
+    await call.locator('.tool-call-summary').click();
+    const card = call.locator('.write-args');
+    await expect(card.locator('.tool-card-chip')).toHaveText([`path: ${path}`]);
+    const lines = content.split('\n');
+    await expect(card.locator('.moonbit-gutter')).toHaveText(lines.map((_, line) => String(line + 1)));
+    await expect(card.locator('.moonbit-code')).toHaveText(lines);
+    const tokens = card.locator('span[class^="mtk"]');
+    if (first === null) {
+      await expect(tokens).toHaveCount(0);
+    } else {
+      await expect(tokens.first()).toHaveText(first);
+      // Keywords take a theme color distinct from plain source text.
+      const colors = await tokens.evaluateAll(spans => new Set(spans.map(span => getComputedStyle(span).color)).size);
+      expect(colors).toBeGreaterThan(1);
+    }
+  }
+  const plain = calls.nth(writes.length - 1);
+  await plain.getByText('Original JSON', { exact: true }).click();
+  await expect(plain.locator('pre.tool-card-original-json:visible')).toContainText('"notes.txt"');
+  expect(app.pageErrors).toEqual([]);
+});

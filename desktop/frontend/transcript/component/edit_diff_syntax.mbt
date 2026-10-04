@@ -1,7 +1,7 @@
 ///|
-/// The transcript owns extension policy; the shared editor renderer owns
-/// tokenization, independent old/new states, and syntax spans.
-fn edit_tokenizer(path : String?) -> &@syntax.LineTokenizer? {
+/// The transcript owns extension policy for `edit` diffs and `write` bodies;
+/// the shared editor renderer owns tokenization, lexer state, and syntax spans.
+fn path_tokenizer(path : String?) -> &@syntax.LineTokenizer? {
   guard path is Some(path) else { return None }
   guard path.replace(old="\\", new="/").split("/").last() is Some(basename) else {
     return None

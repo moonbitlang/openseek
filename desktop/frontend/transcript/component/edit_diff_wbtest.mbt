@@ -129,10 +129,10 @@ test "recognized patch languages share the editor token palette" {
       "src/main.mjs", "src/main.cjs", "data.json", "events.jsonl", "lib/moon.pkg",
       "moon.mod",
     ] {
-    assert_true(edit_tokenizer(Some(path)) is Some(_))
+    assert_true(path_tokenizer(Some(path)) is Some(_))
   }
-  assert_true(edit_tokenizer(Some("unknown.txt")) is None)
-  assert_true(edit_tokenizer(None) is None)
+  assert_true(path_tokenizer(Some("unknown.txt")) is None)
+  assert_true(path_tokenizer(None) is None)
 }
 
 ///|

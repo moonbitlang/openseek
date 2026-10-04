@@ -460,7 +460,7 @@ fn EditChanges::render_minimal(
     let preview = @syntax_html.diff_preview(
       edit.preview_lines(),
       label~,
-      tokenizer?=edit_tokenizer(edit.path),
+      tokenizer?=path_tokenizer(edit.path),
     )
     entries.push(
       @html.div(class="edit-entry minimal-edit-block", [

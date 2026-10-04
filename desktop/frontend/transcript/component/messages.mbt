@@ -39,6 +39,7 @@ priv enum UiMessage {
   SaveRun
   SourceLabel
   FilenameLabel
+  ContentLabel
   ChangeLabel
   ChangesLabel
   ReadFiles
@@ -280,6 +281,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, FilenameLabel) => "文件名"
     (TraditionalChinese, FilenameLabel) => "檔名"
     (Japanese, FilenameLabel) => "ファイル名"
+    (English, ContentLabel) => "Content"
+    (Spanish, ContentLabel) => "Contenido"
+    (SimplifiedChinese, ContentLabel) => "内容"
+    (TraditionalChinese, ContentLabel) => "內容"
+    (Japanese, ContentLabel) => "内容"
     (English, ChangeLabel) => "Change"
     (Spanish, ChangeLabel) => "Cambio"
     (SimplifiedChinese, ChangeLabel) => "更改"
