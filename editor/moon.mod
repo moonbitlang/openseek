@@ -20,10 +20,10 @@ warnings = "+prefer_readonly_array+implicit_impl_as_method+test_unqualified_pack
 
 import {
   "moonbit-community/cmark@0.4.9",
-  "moonbit-community/moondiff@0.0.9",
+  "moonbit-community/moondiff@0.0.10",
   "moonbitlang/async@0.22.4",
   "moonbit-community/rabbita@0.16.3",
   "Milky2018/diago@0.3.5",
   "moonbitlang/x@0.5.5",
-  "kokic/uml@0.4.0",
+  "kokic/uml@0.4.2",
 }
