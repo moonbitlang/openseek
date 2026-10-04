@@ -60,7 +60,7 @@ test('loading and failure retain the selected conversation title', async ({ page
   expect(app.pageErrors).toEqual([]);
 });
 
-test('workspace settings and Codex use the shell header', async ({ page }) => {
+test('workspace settings dialog preserves the Codex shell header', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
     defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }] }];
@@ -75,8 +75,18 @@ test('workspace settings and Codex use the shell header', async ({ page }) => {
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByTitle('More actions').click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  await expectHeader(page, 'Workspace settings');
-  await expect(page.locator('main > .topbar .topbar-workspace')).toHaveText('workspace');
+  const dialog = page.getByRole('dialog', { name: 'Workspace settings' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveJSProperty('open', true);
+  await expect(dialog.getByRole('heading', { name: 'Workspace settings', level: 2 })).toBeVisible();
+  await expect(dialog.locator('.workspace-settings-name')).toHaveText('workspace');
+  await expect(dialog.locator('.settings-subtitle')).toHaveText('/workspace');
+  await expect(page.locator('main > .codex-topbar h1')).toHaveText('New chat');
+  expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
+  await dialog.getByRole('button', { name: 'Close workspace settings', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expectHeader(page, 'New chat');
+  await expect(page.locator('main > .codex-topbar')).toBeVisible();
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });

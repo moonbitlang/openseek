@@ -2,7 +2,7 @@
 // `.openseek/settings.json` on its host. It controls where a NEW conversation
 // starts and how worktree creation populates submodules. The mirror
 // refreshes with the project list and is replaced wholesale by the
-// `workspace.settings_changed` broadcast; the settings page edits it through
+// `workspace.settings_changed` broadcast; the settings dialog edits it through
 // `workspace.settings_set`, and the composer chip stays a per-conversation
 // override that never writes here.
 
@@ -81,6 +81,8 @@ fn save_workspace_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   workspace : @common.Uri,
+  connection_generation~ : Int,
+  request_generation~ : Int,
   worktree_mode? : Bool,
   checkout_submodules? : Bool,
   submodule_checkout_timeout_seconds? : Int,
@@ -89,32 +91,34 @@ fn save_workspace_settings(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      // Success needs no dispatch: the committed state reaches every client
-      // (this one included) as the canonical `workspace.settings_changed`
-      // broadcast from the store's commit seam.
-      let _ : @protocol.WorkspaceSettingsPayload = @interop.bridge_request_in_order(
-        channel,
-        @commands.workspace_settings_set,
-        {
-          workspace: workspace.path,
-          worktree_mode,
-          checkout_submodules,
-          submodule_checkout_timeout_seconds,
-        },
-        lane=workspace_settings_lane(channel, workspace),
-      ) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              WorkspaceSettingsSaveFailed(
-                workspace~,
-                message=@interop.bridge_error_text(error),
-              ),
-            ),
-          )
-          return
-        }
+      // The commit broadcast owns settings data; this result only settles
+      // feedback for the exact local write that completed.
+      let result : Result[Unit, String] = try {
+        let _ : @protocol.WorkspaceSettingsPayload = @interop.bridge_request_in_order(
+          channel,
+          @commands.workspace_settings_set,
+          {
+            workspace: workspace.path,
+            worktree_mode,
+            checkout_submodules,
+            submodule_checkout_timeout_seconds,
+          },
+          lane=workspace_settings_lane(channel, workspace),
+        )
+        Ok(())
+      } catch {
+        error => Err(@interop.bridge_error_text(error))
       }
+      scheduler.add(
+        dispatch(
+          WorkspaceSettingsSaveFinished(
+            workspace~,
+            connection_generation~,
+            request_generation~,
+            result~,
+          ),
+        ),
+      )
     })
     |> ignore
   })
@@ -224,34 +228,74 @@ fn Model::default_worktree_mode(
 }
 
 ///|
-/// The component input projected from the root model. While the Workspace
-/// Settings screen is active it carries the workspace identity and its
-/// settings mirror row; otherwise it is inactive and the component renders
-/// nothing.
+priv struct WorkspaceSettingsDialog {
+  target : @workspace_settings.Target
+  pending_save : Int?
+  error : String?
+} derive(Eq)
+
+///|
+fn Model::begin_workspace_settings_save(
+  self : Model,
+  channel : @interop.ChannelId,
+  workspace : @common.Uri,
+  request_generation : Int,
+) -> Model {
+  {
+    ..self,
+    workspace_settings_dialog: self.workspace_settings_dialog.map(dialog => {
+      if dialog.target.channel == channel &&
+        dialog.target.workspace == workspace {
+        { ..dialog, pending_save: Some(request_generation), error: None, }
+      } else {
+        dialog
+      }
+    }),
+  }
+}
+
+///|
+fn Model::finish_workspace_settings_save(
+  self : Model,
+  channel : @interop.ChannelId,
+  workspace : @common.Uri,
+  request_generation : Int,
+  error : String?,
+) -> Model {
+  {
+    ..self,
+    workspace_settings_dialog: self.workspace_settings_dialog.map(dialog => {
+      if dialog.target.channel == channel &&
+        dialog.target.workspace == workspace &&
+        dialog.pending_save == Some(request_generation) {
+        { ..dialog, pending_save: None, error, }
+      } else {
+        dialog
+      }
+    }),
+  }
+}
+
+///|
+/// Project the dialog's own workspace, which may differ from the conversation.
 fn Model::workspace_settings_input(self : Model) -> @workspace_settings.Input {
-  match self.screen {
-    WorkspaceSettings(channel~, workspace~) => {
-      // While the page's device is absent from the roster there is nothing
-      // authoritative to show, so the input is inactive and the page
-      // renders nothing until the device is back.
-      guard self.device_state(channel) is Some(dev) else {
-        return @workspace_settings.Input::inactive()
-      }
-      let row = dev.workspace_settings_row(workspace)
-      {
-        page: Active(channel~, workspace~),
-        settings: match row {
-          Some(row) =>
-            Loaded(
-              worktree_mode=row.worktree_mode,
-              checkout_submodules=row.checkout_submodules,
-              submodule_checkout_timeout_seconds=row.submodule_checkout_timeout_seconds,
-            )
-          None => Unloaded
-        },
-      }
-    }
-    _ => @workspace_settings.Input::inactive()
+  guard self.workspace_settings_dialog is Some(dialog) &&
+    self.device_state(dialog.target.channel) is Some(dev) else {
+    return @workspace_settings.Input::inactive()
+  }
+  let row = dev.workspace_settings_row(dialog.target.workspace)
+  {
+    target: Some(dialog.target),
+    settings: row
+    .map(row => {
+      @workspace_settings.SettingsSnapshot::Loaded(
+        worktree_mode=row.worktree_mode,
+        checkout_submodules=row.checkout_submodules,
+        submodule_checkout_timeout_seconds=row.submodule_checkout_timeout_seconds,
+      )
+    })
+    .unwrap_or(Unloaded),
+    error: dialog.error,
   }
 }
 
@@ -259,9 +303,8 @@ fn Model::workspace_settings_input(self : Model) -> @workspace_settings.Input {
 test "workspace settings input projects the mirror row and falls back inert" {
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let model = test_model().with_dev(dev => { ..dev, projects: [workspace], })
-  // Off the Workspace Settings screen the projected input is inactive and
-  // the component renders nothing.
-  assert_true(model.workspace_settings_input().page is Inactive)
+  // Without an open dialog the component has no workspace target.
+  assert_true(model.workspace_settings_input().target is None)
   let (_, loaded) = update_dev(
     test_dispatch(),
     WorkspaceSettingsLoaded(
@@ -274,9 +317,16 @@ test "workspace settings input projects the mirror row and falls back inert" {
     ),
     model,
   )
-  let page = { ..loaded, screen: WorkspaceSettings(channel=Local, workspace~), }
-  let input = page.workspace_settings_input()
-  assert_true(input.page is Active(..))
+  let dialog = {
+    ..loaded,
+    workspace_settings_dialog: Some({
+      target: { channel: Local, workspace, },
+      pending_save: None,
+      error: None,
+    }),
+  }
+  let input = dialog.workspace_settings_input()
+  assert_true(input.target is Some(_))
   guard input.settings
     is Loaded(
       worktree_mode~,
@@ -288,24 +338,35 @@ test "workspace settings input projects the mirror row and falls back inert" {
   assert_true(worktree_mode)
   assert_false(checkout_submodules)
   assert_eq(submodule_checkout_timeout_seconds, 30)
-  // A workspace whose mirror has not landed still projects an active page,
+  // A workspace whose mirror has not landed still projects an active dialog,
   // with an unloaded snapshot the component renders disabled.
-  let empty = { ..model, screen: WorkspaceSettings(channel=Local, workspace~), }
+  let empty = {
+    ..model,
+    workspace_settings_dialog: Some({
+      target: { channel: Local, workspace, },
+      pending_save: None,
+      error: None,
+    }),
+  }
   let unloaded = empty.workspace_settings_input()
-  assert_true(unloaded.page is Active(..))
+  assert_true(unloaded.target is Some(_))
   assert_true(unloaded.settings is Unloaded)
-  // A screen whose device is absent from the roster projects nothing: the
-  // device identity cannot anchor the page, and a later re-add must mint a
+  // A dialog whose device is absent from the roster projects nothing: the
+  // device identity cannot anchor the dialog, and a later re-add must mint a
   // fresh key instead of matching component state from before the drop.
   let gone = {
     ..model,
-    screen: WorkspaceSettings(channel=Remote("roster-ghost"), workspace~),
+    workspace_settings_dialog: Some({
+      target: { channel: Remote("roster-ghost"), workspace, },
+      pending_save: None,
+      error: None,
+    }),
   }
-  assert_true(gone.workspace_settings_input().page is Inactive)
+  assert_true(gone.workspace_settings_input().target is None)
 }
 
-// Tests below cover the settings mirror's staleness fences, the page's
-// optimistic write, and the "…" menu and settings-page navigation that
+// Tests below cover the settings mirror's staleness fences, the dialog's
+// optimistic write, and the "…" menu and settings-dialog opening that
 // ride on the mirror.
 
 ///|
@@ -416,7 +477,7 @@ test "a settings commit broadcast supersedes list replies" {
 }
 
 ///|
-test "the settings page select applies optimistically" {
+test "the settings dialog select applies optimistically" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   // The state the adopt fan-out leaves behind: the mint spent one token on
@@ -559,7 +620,12 @@ test "a failed save pops a toast and re-reads under a fresh token" {
   let minted = chosen.dev().workspace_settings_request_generation
   let (_, failed) = update_dev(
     dispatch,
-    WorkspaceSettingsSaveFailed(workspace~, message="disk full"),
+    WorkspaceSettingsSaveFinished(
+      workspace~,
+      connection_generation=chosen.dev().connection_generation,
+      request_generation=minted,
+      result=Err("disk full"),
+    ),
     chosen,
   )
   inspect(failed.notifications.length(), content="1")
@@ -697,15 +763,19 @@ test "settings commit decoder carries the workspace identity" {
 }
 
 ///|
-test "project actions navigate to settings and detach" {
+test "project actions open settings without navigating and detach" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/proj")
   let (_, page) = update(
     dispatch,
     OpenWorkspaceSettings(Local, workspace),
-    test_model(),
+    test_model().with_dev(dev => { ..dev, projects: [workspace], }),
   )
-  assert_true(page.screen == WorkspaceSettings(channel=Local, workspace~))
+  assert_true(page.screen is Chat)
+  assert_true(
+    page.workspace_settings_dialog is Some(dialog) &&
+    dialog.target.workspace == workspace,
+  )
   let (_, detached) = update(
     dispatch,
     RemoveProject(Local, workspace),
@@ -715,7 +785,7 @@ test "project actions navigate to settings and detach" {
 }
 
 ///|
-test "detaching a workspace closes its settings page" {
+test "detaching a workspace closes its settings dialog" {
   let dispatch = test_dispatch()
   let gone = @interop.ChannelId::Local.test_resource("/gone")
   let kept = @interop.ChannelId::Local.test_resource("/kept")
@@ -724,21 +794,29 @@ test "detaching a workspace closes its settings page" {
       ..dev,
       projects: [@interop.ChannelId::Local.test_project(), gone, kept],
     }),
-    screen: WorkspaceSettings(channel=Local, workspace=gone),
+    workspace_settings_dialog: Some({
+      target: { channel: Local, workspace: gone, },
+      pending_save: None,
+      error: None,
+    }),
   }
   let (_, adopted) = update_dev(
     dispatch,
     ProjectsChanged([kept], chat_root=None),
     model,
   )
-  assert_true(adopted.screen is Chat)
-  // A snapshot that retains the workspace leaves the settings page alone.
+  assert_true(adopted.workspace_settings_dialog is None)
+  // A snapshot that retains the workspace leaves the settings dialog alone.
   let staying = {
     ..test_model().with_dev(dev => {
       ..dev,
       projects: [@interop.ChannelId::Local.test_project(), kept],
     }),
-    screen: WorkspaceSettings(channel=Local, workspace=kept),
+    workspace_settings_dialog: Some({
+      target: { channel: Local, workspace: kept, },
+      pending_save: None,
+      error: None,
+    }),
   }
   let (_, retained) = update_dev(
     dispatch,
@@ -749,6 +827,7 @@ test "detaching a workspace closes its settings page" {
     staying,
   )
   assert_true(
-    retained.screen == WorkspaceSettings(channel=Local, workspace=kept),
+    retained.workspace_settings_dialog is Some(dialog) &&
+    dialog.target.workspace == kept,
   )
 }

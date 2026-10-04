@@ -31,9 +31,13 @@ fn app_shortcut_sub_loader(
         // consume the event.
         event.prevent_default()
         event.stop_propagation()
-        // The rename dialog owns interaction until it is saved or cancelled.
+        // These dialogs own interaction while open.
         guard @dom.document()
           .get_element_by_id("conversation-rename-dialog")
+          .to_option()
+          is None &&
+          @dom.document()
+          .query_selector("#workspace-settings-dialog[open]")
           .to_option()
           is None else {
           return
@@ -671,6 +675,7 @@ fn main {
       state.map(model => model.locale),
       workspace_settings_input,
       {
+        dismiss: emit(CloseWorkspaceSettings),
         choose_default_mode: (channel, workspace, value) => {
           emit(WorkspaceDefaultModeChosen(channel, workspace, value))
         },
