@@ -716,10 +716,27 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
 /// The one-line display form of a submitted prompt (steer bubbles, sidebar
 /// titles): a submission that carried chips is shown as its typed text plus
 /// `$name`/`#name` markers rather than the raw `<user_mentions>` envelope the
-/// engine receives.
+/// engine receives. A `!` command's `<user_shell_command>` envelope shows as
+/// its `$ command` line.
 fn user_display_text(text : String) -> String {
+  if @command_context.parse(text) is Some(shell) {
+    return "$ \{shell.command}"
+  }
   guard @mention_context.parse(text) is Some(parsed) else { return text }
   parsed.display_text()
+}
+
+///|
+/// A submitted message as a draft the composer can hold again (editing a
+/// queued message, restoring a refused one). A `!` command's result has no
+/// shorter editable form: its one-line label would drop the output, so it
+/// stays the whole envelope.
+fn editable_text(text : String) -> String {
+  if @command_context.parse(text) is Some(_) {
+    text
+  } else {
+    user_display_text(text)
+  }
 }
 
 ///|

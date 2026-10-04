@@ -15,6 +15,7 @@ fn open_session(
   workspace : @common.Uri?,
   cols : Int,
   rows : Int,
+  command? : String,
 ) -> @cmd.Cmd {
   match workspace {
     Some(resource) if !@resource.belongs_to(resource, channel) =>
@@ -28,6 +29,7 @@ fn open_session(
         workspace: workspace.map(value => value.path),
         cols,
         rows,
+        command,
       }) catch {
         error => {
           scheduler.add(

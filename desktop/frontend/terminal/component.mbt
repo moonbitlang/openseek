@@ -45,7 +45,7 @@ pub fn State::reconcile(
   let mut state = self
   for channel in self.live_channels {
     if !input.live_channels.contains(channel) {
-      let (command, next) = disconnect(state, channel)
+      let (command, next) = disconnect(dispatch, state, channel)
       commands.push(command)
       state = next
     }

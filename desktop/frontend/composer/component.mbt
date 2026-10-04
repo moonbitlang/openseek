@@ -234,7 +234,9 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
   let visible_files_changed = file_completion != self.file_completion &&
     self.completion is Some(current) &&
     current.kind is Files
-  let completion = if incoming_goal is Some(_) || context_changed {
+  let completion = if incoming_goal is Some(_) ||
+    context_changed ||
+    input.shell_command(draft) is Some(_) {
     None
   } else if draft != self.draft ||
     root_changed ||
@@ -396,6 +398,20 @@ priv enum Msg {
 }
 
 ///|
+/// Whether the composer offers a send action right now, by the rule its
+/// button follows: nothing is being read in, and the conversation accepts a
+/// message (idle and ready, or an open turn that can be steered). A `!`
+/// command's output is sent as a message, so Enter in shell mode must not get
+/// past a gate the button respects.
+fn Entry::can_send(self : Entry, input : Input) -> Bool {
+  self.image_reads == 0 &&
+  (match input.presentation.primary_action {
+    Send(available~) => available
+    Running(steer_available~, ..) => steer_available
+  })
+}
+
+///|
 fn Entry::holds_draft(self : Entry) -> Bool {
   self.image_reads > 0 ||
   !self.draft.is_empty() ||
@@ -421,6 +437,14 @@ fn Entry::edited(
     )
   }
   let draft = { ..self.draft, task: value, }
+  // A draft that is a shell command opens no completion menu: `@`, `#`, and
+  // `$` are shell text there, not mentions.
+  if input.shell_command(draft) is Some(_) {
+    return (
+      { ..self, draft, completion: None, pending_submission: None, },
+      @cmd.none,
+    )
+  }
   let (files, files_loading) = input.completion_files(value)
   let file_completion = Local(
     files~,
@@ -809,6 +833,32 @@ fn Model::update(
         action_emit(GoalCancelled(identity=entry.identity())),
         action_emit,
       )
+    // A shell command is acknowledged like a prompt: the root clears the
+    // draft and advances the submission sequence once it accepts the command.
+    SubmitRequested if input.shell_command(entry.draft) is Some(command) => {
+      let command = command.trim()
+      guard !command.is_empty() && entry.can_send(input) else {
+        return (self.with_entry(entry), @cmd.none)
+      }
+      (
+        self.with_entry({
+          ..entry,
+          completion: None,
+          pending_submission: Some(
+            PromptSubmission(
+              sequence_before=input.submission_sequence,
+              entry.draft,
+            ),
+          ),
+        }),
+        action_emit(
+          ShellCommandSubmitted(
+            identity=entry.identity(),
+            command=command.to_owned(),
+          ),
+        ),
+      )
+    }
     SubmitRequested =>
       if input.goal.draft is Some(_) {
         let text = entry.goal_draft.unwrap_or("").trim().to_owned()

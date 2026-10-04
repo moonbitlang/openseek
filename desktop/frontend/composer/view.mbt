@@ -457,6 +457,32 @@ pub fn ContextComponent::render(
       }
       @html.div(class="queued-inputs", rows)
     }
+    ShellCommandsRunning(commands~) =>
+      @html.div(
+        class="shell-commands-running",
+        commands.mapi((index, command) => {
+          @html.div(class="composer-notice", title=command, [
+            @html.span(
+              class="composer-notice-icon",
+              @icons.icon(@icons.icon_terminal),
+            ),
+            @html.span(class="composer-notice-text", [
+              @html.code(class="shell-command-text", "$ \{command}"),
+              @html.text(" "),
+              @html.span(class="shell-command-state", ui(locale, ShellRunning)),
+            ]),
+            // The command runs in a terminal tab that stays out of the way
+            // until asked for: this is where it is watched and interrupted.
+            @html.button(
+              class="composer-notice-btn",
+              type_="button",
+              title=ui(locale, ShellShowTerminalHint),
+              on_click=action_emit(ShellTerminalRequested(identity~, index~)),
+              ui(locale, ShellShowTerminal),
+            ),
+          ])
+        }),
+      )
     CompactionNotice(queued~) =>
       @html.div(class="composer-notice", [
         @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_fold)),
@@ -781,6 +807,9 @@ priv struct View {
   before_inner : Array[@html.Html]
   mentions : Array[@html.Html]
   value : String
+  // The draft is a `!` shell command: the input wears the shell-mode chip
+  // and monospace text.
+  shell : Bool
   placeholder : String
   disabled : Bool
   input : @cmd.Emit[String]
@@ -820,21 +849,41 @@ fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
     // Keep the input wrapper and its two children permanently mounted. Rabbita
     // diffs array children by position, so chips appearing must not replace
     // the focus-holding textarea subtree.
-    @html.div(class="composer-input", [
-      @html.div(class="mention-tray", self.mentions),
-      @html.textarea(
-        id="task",
-        value=self.value,
-        placeholder=self.placeholder,
-        disabled=self.disabled,
-        on_input=self.input,
-        // The surrounding card owns the visible focus frame; this marker lets
-        // the global focus styling find the textarea without drawing a second
-        // border around the control itself.
-        attrs=self.keyboard.attrs().data_set("focus-target", ""),
-        "",
-      ),
-    ]),
+    @html.div(
+      class=if self.shell {
+        "composer-input shell-mode"
+      } else {
+        "composer-input"
+      },
+      [
+        @html.div(class="mention-tray", self.mentions),
+        @html.textarea(
+          id="task",
+          value=self.value,
+          placeholder=self.placeholder,
+          disabled=self.disabled,
+          on_input=self.input,
+          // The surrounding card owns the visible focus frame; this marker lets
+          // the global focus styling find the textarea without drawing a second
+          // border around the control itself.
+          attrs=self.keyboard.attrs().data_set("focus-target", ""),
+          "",
+        ),
+        // Appended after the textarea, so the chip coming and going never
+        // shifts the focus-holding textarea's position.
+        ..if self.shell {
+          [
+            @html.span(
+              class="composer-mode-chip",
+              title=ui(locale, ShellModeHint),
+              ui(locale, ShellModeLabel),
+            ),
+          ]
+        } else {
+          []
+        },
+      ],
+    ),
     @html.div(class="composer-toolbar", [
       @html.div(class="composer-controls", [
         @html.div(class="composer-status", self.status),

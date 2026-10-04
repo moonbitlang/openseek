@@ -359,3 +359,32 @@ test "start and steer require a typed image array" {
   let decoded : @protocol.SteerPayload = @json.from_json(input.to_json())
   assert_eq(decoded, input)
 }
+
+///|
+test "terminal.open carries an optional command and omits absent fields" {
+  let plain : @protocol.TerminalOpenPayload = @json.from_json({
+    "session": "session-1",
+    "workspace": null,
+    "cols": 80,
+    "rows": 24,
+  })
+  @debug.assert_eq(plain.to_json(), {
+    "session": "session-1",
+    "cols": 80,
+    "rows": 24,
+  })
+  let command : @protocol.TerminalOpenPayload = @json.from_json({
+    "session": "session-1",
+    "workspace": "/workspace",
+    "cols": 80,
+    "rows": 24,
+    "command": "moon test",
+  })
+  assert_eq(command.command, Some("moon test"))
+  let missing_rows : @protocol.TerminalOpenPayload? = Some(
+    @json.from_json({ "session": "session-1", "cols": 80 }),
+  ) catch {
+    _ => None
+  }
+  assert_true(missing_rows is None)
+}

@@ -414,6 +414,79 @@ fn set_goal_in_new_worktree(
 }
 
 ///|
+/// Run the first `!` command of a conversation whose worktree launch mode has
+/// not bound an environment yet: create and bind it first, exactly as the
+/// first prompt or goal would, then run the command in it. Running it in the
+/// workspace root instead would leave output in the conversation that makes
+/// `wants_fresh_worktree` false, quietly discarding the launch mode the user
+/// chose. A failed setup runs nothing and hands the command back.
+fn run_shell_in_new_worktree(
+  locale? : @i18n.Locale = English,
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  session : String,
+  workspace : @common.Uri,
+  id~ : String,
+  command~ : String,
+) -> @cmd.Cmd {
+  guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
+  @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      // The create holds this session's command lane, like the start and goal
+      // chains: two of them started together must not run independent creates.
+      // The session is its idempotency key, so a retry after a lost reply gets
+      // the same worktree back.
+      let created : Result[String, String] = @interop.in_ordered_lane(
+        @interop.session_command_lane(channel, session),
+        () => {
+          match
+            @interop.bridge_request(channel, @commands.worktree_create, {
+              workspace: workspace.path,
+              session: Some(session),
+              codex_thread: None,
+            }) {
+            @protocol.WorktreeCreatedReply(reply) if !reply.name.is_empty() =>
+              Ok(reply.name)
+            @protocol.WorktreeCreatedReply(_) => Err("incomplete reply")
+            @protocol.WorktreeCreateError(message) => Err(message)
+          }
+        },
+      ) catch {
+        error => Err(@interop.bridge_error_text(error))
+      }
+      match created {
+        Ok(name) => {
+          // Bind before the command runs, so the chip and the next submit
+          // both know the environment; the terminal then opens in it.
+          scheduler.add(
+            dispatch(
+              FromDevice(channel, WorktreeCreated(workspace~, name~, session~)),
+            ),
+          )
+          scheduler.add(
+            dispatch(
+              RunShellCommand(channel~, session~, id~, command~, attempt=0),
+            ),
+          )
+        }
+        Err(detail) =>
+          scheduler.add(
+            dispatch(
+              ShellNotStarted(
+                channel~,
+                session~,
+                id~,
+                message=shell_text(locale, ShellWorktreeFailed) + detail,
+              ),
+            ),
+          )
+      }
+    })
+    |> ignore
+  })
+}
+
+///|
 /// Rebuild a checkout that was deleted outside the app. The host repairs the
 /// existing registry entry on its surviving branch, so this restores the
 /// conversation's real environment; the canonical rows arrive as
@@ -659,7 +732,7 @@ fn Conversation::wants_fresh_worktree(self : Conversation) -> Bool {
 /// retrying the failing create with no way back to Local.
 ///
 /// A command already sent settles it, though — that command *is* the choice
-/// being exercised. Both the start and the goal chains create the worktree
+/// being exercised. The start, goal, and `!` chains create the worktree
 /// and bind it asynchronously, and neither re-reads the mode when the reply
 /// lands, so flipping the chip during that window would not move what is in
 /// flight. It would only leave the chip disagreeing with where the
@@ -672,7 +745,8 @@ fn Model::can_choose_launch_mode(self : Model, conv : Conversation) -> Bool {
   guard conv.workspace is Project(root~) &&
     conv.messages.length() == 0 &&
     conv.run is NoRun(..) &&
-    conv.goal_pending is None else {
+    conv.goal_pending is None &&
+    conv.shell_commands.is_empty() else {
     return false
   }
   // The registry, not the provisional Project variant, decides whether this

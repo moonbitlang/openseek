@@ -151,6 +151,13 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   if !queued_items.is_empty() {
     context.push(@composer.QueuedInputPanel(items=queued_items))
   }
+  if !conv.shell_commands.is_empty() {
+    context.push(
+      @composer.ShellCommandsRunning(
+        commands=conv.shell_commands.map(pending => pending.command),
+      ),
+    )
+  }
   match conv.compaction {
     Requested | Compacting =>
       context.push(@composer.CompactionNotice(queued=false))
@@ -199,6 +206,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         command: "goal",
       },
     ],
+    // Editing a queued message rewrites that message; it never runs one.
+    shell_available: conv.queue_edit_id is None,
     root: self.conversation_root(conv),
     installed_skills: self.installed_skills,
     context_generation: self.composer_context_generation,
@@ -315,6 +324,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
     run: None,
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [],
+    shell_available: false,
     root: None,
     installed_skills: self.installed_skills,
     context_generation: self.composer_context_generation,

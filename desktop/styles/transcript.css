@@ -1922,3 +1922,48 @@
     pointer-events: auto;
   }
 }
+
+/* A `!` command the user ran from the composer: its command line, how it
+   ended when that was not a clean exit, and its captured output. */
+.user-shell-command {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.user-shell-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.user-shell-line {
+  font-family: var(--font-family-mono);
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.user-shell-status {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+.user-shell-output {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-bg-canvas) 70%, transparent);
+  font: var(--font-size-sm) / 1.5 var(--font-family-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.user-shell-note {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}

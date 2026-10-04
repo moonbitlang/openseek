@@ -12,6 +12,7 @@ import {
   "moonbitlang/openseek/internal/openseek/options",
   "moonbitlang/openseek/internal/openseek/setup",
   "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek_protocol/command_context",
   "moonbitlang/x/time",
   "moonbitlang/openseek/internal/workspace_path",
 }

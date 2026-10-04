@@ -133,6 +133,9 @@ pub(all) enum ContextComponent {
   ApprovalRequest(ApprovalNotice)
   CodexRequests(requests~ : Array[CodexRequestInput])
   PendingSteerPanel(items~ : Array[String])
+  // `!` commands submitted from this composer that are still running on the
+  // host, oldest first. Each settles when its result reaches the engine.
+  ShellCommandsRunning(commands~ : Array[String])
   QueuedInputPanel(items~ : Array[QueuedInput])
   CompactionNotice(queued~ : Bool)
   WorktreePlacementNotice
@@ -227,6 +230,9 @@ pub(all) struct Input {
   // Canonical turn identity, including transitions while this entry is hidden.
   turn_id : String?
   slash_commands : Array[SlashCommand]
+  // Whether a draft beginning with `!` is a shell command (see
+  // `Input::shell_command`). Only an OpenSeek conversation runs one.
+  shell_available : Bool
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int
@@ -264,6 +270,12 @@ pub(all) enum Action {
   )
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
   SlashCommand(identity~ : Identity, command~ : String)
+  // A `!` draft was submitted: run `command` (the text after `!`, trimmed and
+  // non-empty) and hand its output to the conversation.
+  ShellCommandSubmitted(identity~ : Identity, command~ : String)
+  // Show the terminal tab of the running `!` command at `index` in
+  // `ShellCommandsRunning`.
+  ShellTerminalRequested(identity~ : Identity, index~ : Int)
   MentionOpened(identity~ : Identity, mention~ : Mention)
   GoalEditStarted(identity~ : Identity)
   GoalCancelled(identity~ : Identity)
@@ -317,6 +329,8 @@ pub fn Action::identity(self : Action) -> Identity {
     | ReviewChangesOpened(identity~, ..)
     | RootMentionRemoved(identity~, ..)
     | SlashCommand(identity~, ..)
+    | ShellCommandSubmitted(identity~, ..)
+    | ShellTerminalRequested(identity~, ..)
     | MentionOpened(identity~, ..)
     | GoalEditStarted(identity~)
     | GoalCancelled(identity~)

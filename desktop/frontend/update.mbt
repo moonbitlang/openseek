@@ -2488,7 +2488,7 @@ fn update_msg(
                 @cmd.none,
                 model.replace_conversation({
                   ..conv,
-                  task: user_display_text(item.content),
+                  task: editable_text(item.content),
                   images: item.images,
                   mentions: [],
                   composer_draft_present: true,
@@ -2510,7 +2510,7 @@ fn update_msg(
                 id,
                 Some(run_id),
                 item.content,
-                user_display_text(item.content),
+                editable_text(item.content),
                 [],
                 FollowupSteer,
                 images=item.images,
@@ -2689,6 +2689,23 @@ fn update_msg(
                 existing.ref_ != mention.ref_
               }),
             }),
+          )
+        }
+        @composer.ShellCommandSubmitted(identity~, command~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) else {
+            return (@cmd.none, model)
+          }
+          submit_shell_command(dispatch, model, conv, command)
+        }
+        @composer.ShellTerminalRequested(identity~, index~) => {
+          guard model.conversation_for_composer_action(identity) is Some(conv) &&
+            conv.shell_commands.get(index) is Some(pending) else {
+            return (@cmd.none, model)
+          }
+          update_msg(
+            dispatch,
+            Terminal(@terminal.RevealCommand(shell=pending.id)),
+            model,
           )
         }
         @composer.SlashCommand(identity~, command~) => {
@@ -4159,7 +4176,13 @@ fn update_msg(
       }
       (@cmd.batch([page_cmd, fetch_installed_skills(dispatch, channel)]), model)
     }
-    Send | SendFollowup(_) => {
+    Send | SendFollowup(_) | SendInBackground => {
+      // Re-pinning is for the reader of this conversation's transcript.
+      let scroll = if msg is SendInBackground {
+        @cmd.none
+      } else {
+        @transcript_component.scroll_to_latest()
+      }
       let followup = match msg {
         SendFollowup(choice) => Some(choice)
         _ => None
@@ -4294,7 +4317,7 @@ fn update_msg(
             )
           }
           (
-            @cmd.batch([command, @transcript_component.scroll_to_latest()]),
+            @cmd.batch([command, scroll]),
             {
               ..model.replace_conversation({
                 ..conv,
@@ -4385,10 +4408,7 @@ fn update_msg(
         }
         // Re-pin now, before the durable User item arrives, so the early
         // streamed work is visible even if the reader had scrolled up.
-        (
-          @cmd.batch([start_cmd, @transcript_component.scroll_to_latest()]),
-          model.replace_conversation(next),
-        )
+        (@cmd.batch([start_cmd, scroll]), model.replace_conversation(next))
       }
     }
     Stop => {
@@ -6065,6 +6085,42 @@ fn update_msg(
     }
     Terminal(@terminal.LinkActivated(url~)) =>
       update_msg(dispatch, ExternalLinkClicked(url), model)
+    Terminal(
+      @terminal.CommandFinished(shell~, exit_code~, output~, truncated~) as msg
+    ) => {
+      // The panel sees it too: the result is read, so the tab can retire.
+      let (retire, terminal) = model.terminal.handle(
+        dispatch.map(next => Terminal(next)),
+        msg,
+        model.terminal_input(),
+      )
+      let (send, model) = shell_command_finished(
+        dispatch,
+        { ..model, terminal, },
+        shell,
+        exit_code,
+        output,
+        truncated,
+      )
+      (@cmd.batch([retire, send]), model)
+    }
+    Terminal(@terminal.CommandNotStarted(shell~, message~)) =>
+      match model.conversation_by_shell(shell) {
+        Some(conv) =>
+          shell_not_started(
+            dispatch,
+            model,
+            conv.device,
+            conv.session_id,
+            shell,
+            message,
+          )
+        None => (@cmd.none, model)
+      }
+    RunShellCommand(channel~, session~, id~, command~, attempt~) =>
+      run_shell_command(dispatch, model, channel, session, id, command, attempt)
+    ShellNotStarted(channel~, session~, id~, message~) =>
+      shell_not_started(dispatch, model, channel, session, id, message)
     Terminal(@terminal.InputFailed(message~)) =>
       model.notify_error(dispatch, message)
     Terminal(msg) => {

@@ -70,6 +70,8 @@ priv enum ShellMessage {
   NoOpenRouterKey
   NoDeepSeekKey
   CompactContext
+  ShellTerminalUnavailable
+  ShellWorktreeFailed
   SetGoal
   GoalPlaceholder
   EditQueuePlaceholder
@@ -502,6 +504,26 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "總結並壓縮此對話的上下文"
     (Japanese, CompactContext) =>
       "このチャットのコンテキストを要約・圧縮"
+    (English, ShellTerminalUnavailable) =>
+      "Couldn’t open a terminal for this command: the workspace isn’t ready yet. The command did not run."
+    (Spanish, ShellTerminalUnavailable) =>
+      "No se pudo abrir un terminal para este comando: el espacio de trabajo aún no está listo. El comando no se ejecutó."
+    (SimplifiedChinese, ShellTerminalUnavailable) =>
+      "无法为此命令打开终端：工作区尚未就绪。命令尚未运行。"
+    (TraditionalChinese, ShellTerminalUnavailable) =>
+      "無法為此命令開啟終端機：工作區尚未就緒。命令尚未執行。"
+    (Japanese, ShellTerminalUnavailable) =>
+      "このコマンド用のターミナルを開けません：ワークスペースの準備ができていません。コマンドは実行されていません。"
+    (English, ShellWorktreeFailed) =>
+      "Couldn’t create the worktree, so the command did not run: "
+    (Spanish, ShellWorktreeFailed) =>
+      "No se pudo crear el worktree, así que el comando no se ejecutó: "
+    (SimplifiedChinese, ShellWorktreeFailed) =>
+      "无法创建工作树，命令尚未运行："
+    (TraditionalChinese, ShellWorktreeFailed) =>
+      "無法建立工作樹，命令尚未執行："
+    (Japanese, ShellWorktreeFailed) =>
+      "ワークツリーを作成できないため、コマンドは実行されていません："
     (English, SetGoal) => "Set or clear this conversation's standing goal"
     (Spanish, SetGoal) =>
       "Establecer o borrar el objetivo permanente de esta conversación"

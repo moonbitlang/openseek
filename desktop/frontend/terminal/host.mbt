@@ -44,6 +44,11 @@ priv struct TermHost {
   /// Output that arrived before `terminal_open` identified its tab:
   /// `(sequence, base64_data)`.
   pending : Map[String, (@interop.ChannelId, Array[(Int, String)])]
+  /// Command-tab reports issued but not yet delivered, by tab key: each is
+  /// waiting for its emulator to finish rendering what the PTY sent. A tab
+  /// disposed meanwhile keeps its emulator until the report has read it, so
+  /// a command's result is reported exactly once however its tab goes away.
+  owed : Map[String, () -> Unit]
   mut resize_wired : Bool
 }
 
@@ -53,6 +58,7 @@ let term_host : TermHost = {
   owners: Map([]),
   opening_channels: [],
   pending: Map([]),
+  owed: Map([]),
   resize_wired: false,
 }
 
@@ -131,7 +137,7 @@ fn no_args() -> FixedArray[@js.Value] {
 /// Show `key`'s element, hide the rest, then re-fit and focus the shown one
 /// (its `onResize` keeps the PTY's grid in sync). Imperative display state:
 /// the elements are outside the virtual DOM.
-fn show_only(key : String) -> Unit {
+fn show_only(key : String, focus? : Bool = true) -> Unit {
   for entry_key, entry in term_host.entries {
     let style : @js.Value = entry.element.get_with_string("style")
     style.set_with_string(
@@ -144,11 +150,12 @@ fn show_only(key : String) -> Unit {
     )
   }
   guard term_host.entries.get(key) is Some(entry) else { return }
-  let width : Int = entry.element.get_with_string("clientWidth")
-  if width > 0 {
+  if has_area(entry.element) {
     let _ : @js.Value = entry.fit.apply_with_string("fit", no_args())
   }
-  let _ : @js.Value = entry.term.apply_with_string("focus", no_args())
+  if focus {
+    let _ : @js.Value = entry.term.apply_with_string("focus", no_args())
+  }
 }
 
 ///|
@@ -157,19 +164,38 @@ fn show_only(key : String) -> Unit {
 /// tab switch).
 fn refit_visible() -> Unit {
   for _, entry in term_host.entries {
-    let width : Int = entry.element.get_with_string("clientWidth")
-    if width > 0 {
+    if has_area(entry.element) {
       let _ : @js.Value = entry.fit.apply_with_string("fit", no_args())
     }
   }
 }
 
 ///|
+/// Whether an emulator's element is laid out with room to draw. A hidden tab
+/// has no width; a closed panel keeps its width but collapses to no height,
+/// and fitting to that would shrink the emulator — and the PTY behind it —
+/// to a single row. An emulator that is not fitted keeps the size it has.
+fn has_area(element : @js.Value) -> Bool {
+  let width : Int = element.get_with_string("clientWidth")
+  let height : Int = element.get_with_string("clientHeight")
+  width > 0 && height > 0
+}
+
+///|
 /// Mount the tab's emulator into the container (a no-op if it already
 /// exists), make it the visible one, and report its grid size through
 /// `EmulatorReady`. Idempotent: the update loop decides whether a ready
-/// report should spawn a session, so re-reports are harmless.
-fn mount_tab(dispatch : @cmd.Emit[Msg], key : String) -> @cmd.Cmd {
+/// report should spawn a session, so re-reports are harmless. A command tab
+/// mounts without taking focus: its command was just submitted from the
+/// composer, and the next keystrokes belong there, not in its PTY. With
+/// `show=false` the emulator is mounted hidden and the display is left alone:
+/// the tab belongs to a workspace that is not the one on screen.
+fn mount_tab(
+  dispatch : @cmd.Emit[Msg],
+  key : String,
+  focus? : Bool = true,
+  show? : Bool = true,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
       guard xterm_module() is Some(module_) else { return }
@@ -265,8 +291,13 @@ fn mount_tab(dispatch : @cmd.Emit[Msg], key : String) -> @cmd.Cmd {
           }
         }
       }
-      show_only(key)
       guard term_host.entries.get(key) is Some(entry) else { return }
+      if show {
+        show_only(key, focus~)
+      } else {
+        let style : @js.Value = entry.element.get_with_string("style")
+        style.set_with_string("display", "none")
+      }
       let cols : Int = entry.term.get_with_string("cols")
       let rows : Int = entry.term.get_with_string("rows")
       scheduler.add(dispatch(EmulatorReady(key~, cols~, rows~)))
@@ -288,11 +319,11 @@ fn hide_all() -> Unit {
 /// closed): show it, hide the rest, re-fit and focus. `sync` dispatches
 /// this whenever the tab that should be on screen changes — including
 /// conversation switches, which produce no terminal message of their own.
-fn apply_shown(key : String?) -> @cmd.Cmd {
+fn apply_shown(key : String?, focus? : Bool = true) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       match key {
-        Some(key) => show_only(key)
+        Some(key) => show_only(key, focus~)
         None => hide_all()
       }
     },
@@ -378,6 +409,30 @@ fn State::sync_host_routes(self : State) -> @cmd.Cmd {
 /// Write one accepted chunk to a specific emulator and acknowledge it after
 /// xterm renders it. A missing emulator still consumes the chunk: retaining
 /// its acknowledgement would stall every later chunk in the host window.
+fn TermHost::write_now(
+  self : TermHost,
+  scheduler : &@cmd.Scheduler,
+  channel : @interop.ChannelId,
+  key : String,
+  id : String,
+  sequence : Int,
+  data : String,
+) -> Unit {
+  guard self.entries.get(key) is Some(entry) && xterm_module() is Some(module_) else {
+    scheduler.add(TerminalAck::{ channel, id, sequence, }.send())
+    return
+  }
+  let done = (_ : @js.Value) => {
+    scheduler.add(TerminalAck::{ channel, id, sequence, }.send())
+  }
+  let _ : @js.Value = module_.apply_with_string("writeBase64", [
+    entry.term,
+    @js.Value::cast_from(data),
+    @js.Value::cast_from(done),
+  ])
+}
+
+///|
 fn TermHost::write_to_tab(
   self : TermHost,
   channel : @interop.ChannelId,
@@ -387,19 +442,7 @@ fn TermHost::write_to_tab(
   data : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard self.entries.get(key) is Some(entry) &&
-      xterm_module() is Some(module_) else {
-      scheduler.add(TerminalAck::{ channel, id, sequence, }.send())
-      return
-    }
-    let done = (_ : @js.Value) => {
-      scheduler.add(TerminalAck::{ channel, id, sequence, }.send())
-    }
-    let _ : @js.Value = module_.apply_with_string("writeBase64", [
-      entry.term,
-      @js.Value::cast_from(data),
-      @js.Value::cast_from(done),
-    ])
+    self.write_now(scheduler, channel, key, id, sequence, data)
   })
 }
 
@@ -438,7 +481,9 @@ pub fn output(
 ///|
 /// Flush chunks buffered for `id` into the tab that just claimed it. Every
 /// flushed chunk goes through the normal write path, so each one is
-/// acknowledged as it renders.
+/// acknowledged as it renders. The writes are queued in the emulator by the
+/// time this command returns, so a command tab's report issued right behind
+/// it reads a screen that includes them.
 fn flush_pending(key : String, id : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard term_host.pending.get(id) is Some((channel, chunks)) else { return }
@@ -446,7 +491,7 @@ fn flush_pending(key : String, id : String) -> @cmd.Cmd {
     for chunk in chunks {
       // The accepted Opened transition supplies the key directly; its route
       // projection is scheduled by reconciliation immediately afterward.
-      scheduler.add(term_host.write_to_tab(channel, key, id, chunk.0, chunk.1))
+      term_host.write_now(scheduler, channel, key, id, chunk.0, chunk.1)
     }
   })
 }
@@ -482,13 +527,122 @@ fn TermHost::clear_pending(
 }
 
 ///|
-/// Dispose a closed tab's emulator and remove its element.
+/// The most output a `!` command hands the conversation, in characters. The
+/// tail is kept: a long build's verdict is at its end.
+const CommandOutputMaxChars = 12000
+
+///|
+/// The plain text an emulator shows, scrollback included: what the user saw,
+/// with colors, cursor movement, and redrawn progress lines already resolved
+/// by the terminal rather than stripped from the byte stream. Soft-wrapped
+/// rows are joined back into their lines and trailing blank lines dropped.
+/// Returns `{ text, truncated }`, keeping the last `max_chars` characters;
+/// `truncated` also covers output that outran the emulator's scrollback.
+extern "js" fn emulator_text(term : @js.Value, max_chars : Int) -> @js.Value =
+  #|(term, maxChars) => {
+  #|  const buffer = term.buffer.normal;
+  #|  const lines = [];
+  #|  let current = "";
+  #|  for (let row = 0; row < buffer.length; row++) {
+  #|    const line = buffer.getLine(row);
+  #|    if (!line) continue;
+  #|    const next = buffer.getLine(row + 1);
+  #|    const wraps = Boolean(next && next.isWrapped);
+  #|    let text = line.translateToString(!wraps);
+  #|    // A double-width character that does not fit in the last column wraps
+  #|    // whole, leaving that cell empty. It reads back as a space the command
+  #|    // never printed; a printed space has a character in its cell.
+  #|    if (wraps && line.getCell(line.length - 1)?.getChars() === "") {
+  #|      text = text.slice(0, -1);
+  #|    }
+  #|    current += text;
+  #|    if (!wraps) {
+  #|      lines.push(current);
+  #|      current = "";
+  #|    }
+  #|  }
+  #|  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  #|  const chars = Array.from(lines.join("\n"));
+  #|  const long = chars.length > maxChars;
+  #|  // A buffer filled to its scrollback limit has been dropping its oldest
+  #|  // rows: what is left is a tail even when it is short.
+  #|  const evicted = buffer.length >= (term.options.scrollback ?? 0) + term.rows;
+  #|  return {
+  #|    text: (long ? chars.slice(chars.length - maxChars) : chars).join(""),
+  #|    truncated: long || evicted,
+  #|  };
+  #|}
+
+///|
+/// Report a command tab's result to the main frontend: `CommandFinished` with
+/// the text its emulator shows, once the emulator has rendered everything the
+/// PTY sent (an exit follows the last output chunk closely, and xterm parses
+/// writes asynchronously). The report is owed from here until that moment;
+/// `dispose_tab` keeps the emulator alive for it.
+fn report_command(
+  dispatch : @cmd.Emit[Msg],
+  key : String,
+  shell : String,
+  exit_code : Int?,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    guard term_host.entries.get(key) is Some(entry) else {
+      scheduler.add(
+        dispatch(
+          CommandFinished(shell~, exit_code~, output="", truncated=false),
+        ),
+      )
+      return
+    }
+    term_host.owed[key] = () => {
+      let shown = emulator_text(entry.term, CommandOutputMaxChars)
+      let output : String = shown.get_with_string("text")
+      let truncated : Bool = shown.get_with_string("truncated")
+      scheduler.add(
+        dispatch(CommandFinished(shell~, exit_code~, output~, truncated~)),
+      )
+    }
+    let rendered = () => {
+      guard term_host.owed.get(key) is Some(owed) else { return }
+      term_host.owed.remove(key)
+      owed()
+    }
+    // xterm parses writes in order: this write's callback runs once
+    // everything queued before it is on screen. It must not be empty —
+    // xterm's synchronous flush (a resize takes that path) stops at the first
+    // falsy chunk and discards the callbacks behind it — so it is an SGR
+    // reset, which shows nothing and ends a finished command's colors.
+    let _ : @js.Value = entry.term.apply_with_string("write", [
+      @js.Value::cast_from("\u{1b}[0m"),
+      @js.Value::cast_from(rendered),
+    ])
+  })
+}
+
+///|
+/// Dispose a closed tab's emulator and remove its element. An emulator whose
+/// command report is still owed leaves the screen now but is destroyed only
+/// once that report has read it: destroying it sooner would discard the
+/// output xterm has not parsed yet.
 fn dispose_tab(key : String) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     term_host.owners.retain((_, owner) => owner.1 != key)
     guard term_host.entries.get(key) is Some(entry) else { return }
     term_host.entries.remove(key)
-    let _ : @js.Value = entry.term.apply_with_string("dispose", no_args())
-    let _ : @js.Value = entry.element.apply_with_string("remove", no_args())
+    let destroy = () => {
+      let _ : @js.Value = entry.term.apply_with_string("dispose", no_args())
+      let _ : @js.Value = entry.element.apply_with_string("remove", no_args())
+    }
+    match term_host.owed.get(key) {
+      Some(report) => {
+        let style : @js.Value = entry.element.get_with_string("style")
+        style.set_with_string("display", "none")
+        term_host.owed[key] = () => {
+          report()
+          destroy()
+        }
+      }
+      None => destroy()
+    }
   })
 }
