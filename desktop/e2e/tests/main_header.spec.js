@@ -28,11 +28,17 @@ test('empty projects and settings pages share one persistent header', async ({ p
     await expectHeader(page, title);
     expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
     await expect(page.locator('main h1')).toHaveCount(1);
+    await expect(page.locator('.management-page-content')).toBeVisible();
+    await page.getByRole('button', { name: 'Return to work', exact: true }).click();
+    await expectHeader(page, 'SeekMoon');
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('settings-header.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await expectHeader(page, 'Settings');
+  await expect(page.getByRole('button', { name: 'Return to work', exact: true })).toBeInViewport();
+  await page.getByRole('button', { name: 'Return to work', exact: true }).click();
+  await expectHeader(page, 'SeekMoon');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -56,6 +62,16 @@ test('loading and failure retain the selected conversation title', async ({ page
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
   await expect(page.locator('main > .topbar h1')).not.toHaveText('SeekMoon');
+  expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
+  const title = await page.locator('main > .topbar h1').textContent();
+  const composer = page.getByRole('textbox', { name: 'Ask SeekMoon to inspect, edit, or explain this workspace.' });
+  await composer.fill('Keep my unfinished draft');
+  for (const name of ['Settings', 'Skills', 'Scheduled']) {
+    await page.getByRole('button', { name, exact: true }).click();
+  }
+  await page.getByRole('button', { name: 'Return to work', exact: true }).click();
+  await expectHeader(page, title);
+  await expect(composer).toHaveValue('Keep my unfinished draft');
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
@@ -88,5 +104,14 @@ test('workspace settings dialog preserves the Codex shell header', async ({ page
   await expectHeader(page, 'New chat');
   await expect(page.locator('main > .codex-topbar')).toBeVisible();
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
+  const composer = page.getByRole('textbox', { name: 'Ask Codex to inspect, edit, or explain this workspace.' });
+  await composer.fill('Keep my Codex draft');
+  for (const name of ['Settings', 'Skills', 'Scheduled']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await page.getByRole('button', { name: 'Return to work', exact: true }).click();
+    await expect(page.locator('main > .codex-topbar')).toBeVisible();
+    await expectHeader(page, 'New chat');
+    await expect(composer).toHaveValue('Keep my Codex draft');
+  }
   expect(app.pageErrors).toEqual([]);
 });

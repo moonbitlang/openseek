@@ -229,36 +229,34 @@ fn detail_shell(
   state : State,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  @html.section(class="skills-page", [
-    @html.div(class="skills-page-inner skill-detail-page", [
-      @html.button(
-        class="button secondary skill-back",
-        on_click=emit(BackToList),
-        ui(locale, Back),
-      ),
-      @html.div(class="skill-detail-header", [
-        @html.div(class="page-eyebrow", ui(locale, Details)),
-        @html.h1(preview_name(target)),
-        @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
-        detail_action(locale~, target, state, input, emit),
-        @html.div(notice_views(state, Some(target))),
+  @page_shell.body(class="skills-page skill-detail-page", [
+    @html.button(
+      class="button secondary skill-back",
+      on_click=emit(BackToList),
+      ui(locale, Back),
+    ),
+    @html.div(class="skill-detail-header", [
+      @html.div(class="page-eyebrow", ui(locale, Details)),
+      @html.h2(preview_name(target)),
+      @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
+      detail_action(locale~, target, state, input, emit),
+      @html.div(notice_views(state, Some(target))),
+    ]),
+    @html.div(class="skill-detail-card", [
+      @html.div(class="skill-file-bar", [
+        @html.span(class="skill-file-name", "SKILL.md"),
+        match state.preview {
+          Ready(content~, ..) =>
+            @html.button(
+              class="button secondary skill-copy-button",
+              attrs=@html.Attrs::build().aria_label(ui(locale, CopyDocument)),
+              on_click=copy_content(content),
+              ui(locale, Copy),
+            )
+          _ => @html.span(class="skill-file-status", ui(locale, Loading))
+        },
       ]),
-      @html.div(class="skill-detail-card", [
-        @html.div(class="skill-file-bar", [
-          @html.span(class="skill-file-name", "SKILL.md"),
-          match state.preview {
-            Ready(content~, ..) =>
-              @html.button(
-                class="button secondary skill-copy-button",
-                attrs=@html.Attrs::build().aria_label(ui(locale, CopyDocument)),
-                on_click=copy_content(content),
-                ui(locale, Copy),
-              )
-            _ => @html.span(class="skill-file-status", ui(locale, Loading))
-          },
-        ]),
-        content,
-      ]),
+      content,
     ]),
   ])
 }
@@ -479,7 +477,7 @@ fn list_page(
       @html.div(class="settings-group-card", market_rows),
     ]),
   )
-  @html.section(
+  @page_shell.body(
     class="skills-page",
     attrs=@html.Attrs::build().on_scroll(event => {
       guard event.target().to_element() is Some(element) else {
@@ -487,7 +485,7 @@ fn list_page(
       }
       emit(SkillsScrolled(element.get_scroll_top()))
     }),
-    [@html.div(class="skills-page-inner", sections)],
+    sections,
   )
 }
 

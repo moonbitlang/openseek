@@ -108,22 +108,29 @@ a:where(.setting-link) {
   font-size: var(--font-size-md);
 }
 
-/* ---------- settings page ---------- */
-/* Shares the Skills page's shell — same column width, header type, and
-   section headings — so the two pages read as siblings. */
-.settings-page {
+/* ---------- shared management-page shell ---------- */
+.management-page {
   grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
-  padding: 24px 28px 28px;
+  padding: 24px clamp(16px, 4vw, 28px) 28px;
 }
 
-.settings-page-inner {
+.management-page-content {
   display: grid;
   align-content: start;
   gap: 24px;
   max-width: 720px;
   margin: 0 auto;
+}
+
+.management-page-actions {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+}
+
+.management-page-return {
+  white-space: nowrap;
 }
 
 .page-eyebrow {
@@ -377,21 +384,6 @@ h2 {
 }
 
 /* ---------- skills page ---------- */
-.skills-page {
-  grid-row: 2 / -1;
-  min-height: 0;
-  overflow: auto;
-  padding: 24px 28px 28px;
-}
-
-.skills-page-inner {
-  display: grid;
-  align-content: start;
-  gap: 20px;
-  max-width: 720px;
-  margin: 0 auto;
-}
-
 .skills-header {
   display: grid;
   gap: 7px;
@@ -590,10 +582,6 @@ h2 {
   white-space: pre-wrap;
 }
 
-.skill-detail-page {
-  max-width: 840px;
-}
-
 .skill-back {
   justify-self: start;
 }
@@ -603,7 +591,7 @@ h2 {
   gap: 8px;
 }
 
-.skill-detail-header h1 {
+.skill-detail-header h2 {
   overflow-wrap: anywhere;
 }
 
@@ -767,7 +755,6 @@ h2 {
 }
 
 /* Scheduled tasks share the Settings page's type scale and theme. */
-.schedules-page { max-width: 900px; }
 .schedule-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .schedule-card, .schedule-form { border: 1px solid var(--color-border); border-radius: 10px; padding: 18px; margin: 16px 0; }
 .schedule-card h2, .schedule-card h3 { margin: 0 0 8px; font-size: 16px; }

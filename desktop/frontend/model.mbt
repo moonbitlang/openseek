@@ -1575,6 +1575,8 @@ priv struct Model {
   chat_creation : (@interop.ChannelId, Int, Int)?
   chat_creation_sequence : Int
   screen : Screen
+  // The work surface retained while visiting management pages.
+  management_return : WorkScreen?
   // Codex app-server has an independent durable thread/turn/item model. Keep
   // its page state beside the screen selector instead of folding it into an
   // OpenSeek Conversation, whose persistence and event protocol are different.
@@ -1878,6 +1880,7 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
+  ReturnToWork
   // The API-setup modal's "Not now" button and its backdrop click.
   DismissApiSetup
   // The composer's BYOK notice reopens the modal a dismissal closed.
@@ -2777,6 +2780,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     selected_conversation: None,
     conversation_load_failure: None,
     screen: Chat,
+    management_return: None,
     codex: @codex.State(),
     schedules: SchedulePage::empty(),
     skills: @skills.State::empty(),

@@ -170,7 +170,7 @@ for (const targetInstalled of [false, true]) {
       await expect(page.locator('.skill-detail-page')).toContainText('Cannot remove wayfinder: permission denied');
       await page.getByRole('button', { name: '← Back to skills', exact: true }).click();
       await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
-      await expect(page.locator('.skill-detail-header h1')).toHaveText('widget');
+      await expect(page.locator('.skill-detail-header h2')).toHaveText('widget');
       await expect(page.locator('.skill-preview-markdown')).toBeVisible();
       await expect(page.locator('.skill-detail-page .skills-notice')).toHaveCount(0);
       // The second navigation exercises the cached branch without another read.
@@ -208,7 +208,7 @@ for (const removing of [false, true]) {
     await expect(detail.locator('.skill-detail-action')).toBeDisabled();
     await back.click();
     await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
-    await expect(page.locator('.skill-detail-header h1')).toHaveText('widget');
+    await expect(page.locator('.skill-detail-header h2')).toHaveText('widget');
     await detail.getByRole('button', { name: 'Install skill', exact: true }).click();
     await expect(detail.locator('.skills-notice')).toHaveText('Widget install failed');
     release({ error: 'Wayfinder operation failed after navigation' });

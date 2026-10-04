@@ -1840,6 +1840,17 @@ fn update(
 ) -> (@cmd.Cmd, Model) {
   let previous = model
   let (cmd, model) = update_msg(dispatch, msg, model)
+  let model = {
+    ..model,
+    management_return: if model.screen.work_screen() is Some(_) {
+      None
+    } else {
+      match previous.screen.work_screen() {
+        Some(origin) => Some(origin)
+        None => previous.management_return
+      }
+    },
+  }
   // The native dialog must not cover the desktop's connection-lost screen.
   // Detaching a workspace or losing its device also dismisses it.
   let model = {
@@ -3976,6 +3987,21 @@ fn update_msg(
         @cmd.none,
         { ..model, screen: Settings, setup_api_key: "", api_setup_open: false, },
       )
+    ReturnToWork =>
+      if model.screen.work_screen() is None {
+        (
+          @cmd.none,
+          {
+            ..model,
+            screen: match model.management_return {
+              Some(CodexWork) => Codex
+              Some(OpenSeekWork) | None => Chat
+            },
+          },
+        )
+      } else {
+        (@cmd.none, model)
+      }
     DismissApiSetup =>
       (
         @cmd.none,

@@ -148,6 +148,37 @@ controls. It must not conceal what will change, what did change, whether the
 result is trustworthy, what failed, or how the user can recover. Simplicity is
 the removal of unnecessary decisions, not the removal of necessary truth.
 
+## Independent management pages
+
+Settings, Skills, and Scheduled tasks share a persistent shell header, one
+scrolling content column, and a labeled **Return to work** action in the
+header's trailing action slot. Keep the return action visible while the page
+scrolls and in narrow layouts. Page-specific actions live with their content;
+they do not displace the shared return action.
+
+Entering a management page retains the current OpenSeek Chat or Codex work
+surface. Switching between management pages keeps that origin. Returning
+reveals the retained conversation or draft, including unfinished input and
+loading/error state; it does not reload a transcript or start a new chat.
+Selecting another conversation explicitly establishes a new work context.
+
+With no prior conversation, return reveals the originating work surface's
+start view (project onboarding when no project is attached). If the original
+conversation or workspace becomes unavailable, normal conversation lifecycle
+handling chooses the remaining conversation or start view. Return must use
+that current state, never resurrect a removed conversation from a saved copy.
+
+Local navigation remains distinct: **Back to skills** returns from a skill's
+details to its list; **Close log** and **Cancel editing** affect only the
+Scheduled tasks page. **Return to work** leaves the management page and keeps
+its local state available on a later visit.
+
+Future independent management pages must use the shared `page_shell` header
+and body, participate in root return navigation, and define their no-origin
+and unavailable-origin destination. Keep the page title as the shell's single
+`h1`; use lower-level headings for local details. Small contextual operations
+such as Workspace settings use a dismissible dialog instead.
+
 ## Operational companion
 
 Concrete defaults for feedback, wait thresholds, motion, reduced motion,

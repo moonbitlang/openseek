@@ -1361,7 +1361,7 @@ fn api_settings_rows(
 
 ///|
 /// The Settings page, shown in the main area in place of the conversation
-/// (mirroring the Skills page — the sidebar is the way out, no Done button).
+/// inside the shared management shell with explicit return navigation.
 /// While the configured endpoint is unusable the BYOK guide leads the API
 /// group, and the composer keeps Send disabled until a usable endpoint is
 /// saved.
@@ -1591,28 +1591,26 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ]),
     )
   }
-  @html.section(class="settings-page", [
-    @html.div(class="settings-page-inner", [
-      @html.div(class="settings-header", [
-        @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
-        @html.div(
-          class="settings-subtitle",
-          if !settings_loaded {
-            @settings.text(locale, LoadingSettings)
-          } else if ready {
-            @settings.text(locale, RuntimeSettings)
-          } else {
-            match model.api_provider {
-              Deepseek => @settings.text(locale, DeepseekKey)
-              Glm => @settings.text(locale, GlmKey)
-              OpenRouter => @settings.text(locale, OpenRouterKey)
-              Custom => @settings.text(locale, CustomEndpoint)
-            }
-          },
-        ),
-      ]),
-      @html.div(class="settings", groups),
+  @page_shell.body(class="settings-page", [
+    @html.div(class="settings-header", [
+      @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
+      @html.div(
+        class="settings-subtitle",
+        if !settings_loaded {
+          @settings.text(locale, LoadingSettings)
+        } else if ready {
+          @settings.text(locale, RuntimeSettings)
+        } else {
+          match model.api_provider {
+            Deepseek => @settings.text(locale, DeepseekKey)
+            Glm => @settings.text(locale, GlmKey)
+            OpenRouter => @settings.text(locale, OpenRouterKey)
+            Custom => @settings.text(locale, CustomEndpoint)
+          }
+        },
+      ),
     ]),
+    @html.div(class="settings", groups),
   ])
 }
 
@@ -2037,16 +2035,15 @@ fn view(
         codex_actions,
       )
     Settings =>
-      [@html.h1(class="topbar-title", @settings.text(model.locale, Settings))]
+      management_header(dispatch, model, @settings.text(model.locale, Settings))
     Skills =>
-      [
-        @html.h1(
-          class="topbar-title",
-          @sidebar_messages.text(model.locale, Skills),
-        ),
-      ]
+      management_header(
+        dispatch,
+        model,
+        @sidebar_messages.text(model.locale, Skills),
+      )
     Schedules =>
-      [@html.h1(class="topbar-title", ui(model.locale, ScheduledTasks))]
+      management_header(dispatch, model, ui(model.locale, ScheduledTasks))
   }
   let content = match model.screen {
     // `Model::chat_column` is the one fork that decides what the conversation
