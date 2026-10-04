@@ -5,8 +5,10 @@ line tokenizers and token colors. It does not mount `Viewer` or `DiffEditor`,
 create text models, register providers, or own DOM lifetimes.
 
 `moonbit_source_lines`, `moonbit_source_code`, and `moonbit_numbered_source`
-render ordinary MoonBit source. `diff_preview` renders an already recorded
-patch; it does not compute a diff or read current files.
+render ordinary MoonBit source. `numbered_source` renders the same numbered
+rows for any caller-chosen `syntax.LineTokenizer`, or plain escaped text
+without one. `diff_preview` renders an already recorded patch; it does not
+compute a diff or read current files.
 
 ## Diff preview
 

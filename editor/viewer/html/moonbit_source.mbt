@@ -6,7 +6,7 @@
 /// is returned, so callers that add gutters or other line chrome do not lose
 /// multiline comments and strings by tokenizing each line independently.
 pub fn moonbit_source_lines(source : String) -> Array[@rhtml.Html] {
-  tokenized_lines(source, _ => true)
+  tokenized_lines(source, Some(@lang_moonbit.MoonBitTokenizer()), _ => true)
 }
 
 ///|
@@ -15,10 +15,22 @@ pub fn moonbit_source_lines(source : String) -> Array[@rhtml.Html] {
 /// rest. Every line is still lexed so state keeps flowing across a skipped
 /// region; what a dropped line saves is its token inflation and span nodes,
 /// which is what lets the numbered clamp decide before building instead of
-/// building tens of thousands of rows to discard.
-fn tokenized_lines(source : String, keep : (Int) -> Bool) -> Array[@rhtml.Html] {
-  let tokenizer : &@syntax.LineTokenizer = @lang_moonbit.MoonBitTokenizer()
+/// building tens of thousands of rows to discard. Without a tokenizer every
+/// kept line is one plain escaped text node.
+fn tokenized_lines(
+  source : String,
+  tokenizer : &@syntax.LineTokenizer?,
+  keep : (Int) -> Bool,
+) -> Array[@rhtml.Html] {
   let lines : Array[@rhtml.Html] = []
+  guard tokenizer is Some(tokenizer) else {
+    for index, line in source.split("\n") {
+      if keep(index) {
+        lines.push(@rhtml.text(line.to_owned()))
+      }
+    }
+    return lines
+  }
   let mut state = tokenizer.initial_state()
   let mut index = -1
   for line_view in source.split("\n") {
@@ -95,6 +107,33 @@ pub fn moonbit_source_code(source : String) -> @rhtml.Html {
 /// with an unnumbered `moonbit-skip` row stating what was elided, rather than
 /// renumbering or growing the DOM without bound.
 pub fn moonbit_numbered_source(source : String) -> @rhtml.Html {
+  numbered_rows(
+    source,
+    Some(@lang_moonbit.MoonBitTokenizer()),
+    "language-moonbit moonbit-code",
+  )
+}
+
+///|
+/// Renders any source as the same numbered rows as `moonbit_numbered_source`,
+/// highlighted by the caller's editor tokenizer. File-extension policy belongs
+/// to the caller; without a tokenizer each line is plain escaped text, still
+/// numbered and clamped the same way. Rows share the `moonbit-line`,
+/// `moonbit-gutter` and `moonbit-code` classes so hosts style every numbered
+/// listing with one rule set.
+pub fn numbered_source(
+  source : String,
+  tokenizer? : &@syntax.LineTokenizer,
+) -> @rhtml.Html {
+  numbered_rows(source, tokenizer, "moonbit-code")
+}
+
+///|
+fn numbered_rows(
+  source : String,
+  tokenizer : &@syntax.LineTokenizer?,
+  code_class : String,
+) -> @rhtml.Html {
   // Decide what to keep before anything is built: past the bound, only the
   // head and tail lines ever materialize spans — a degenerate line count must
   // not construct tens of thousands of rows just to discard the middle.
@@ -105,7 +144,7 @@ pub fn moonbit_numbered_source(source : String) -> @rhtml.Html {
     index < NUMBERED_HEAD_LINES ||
     index >= total - NUMBERED_TAIL_LINES
   }
-  let lines = tokenized_lines(source, keep)
+  let lines = tokenized_lines(source, tokenizer, keep)
   let width = total.to_string().length()
   let rows : Array[@rhtml.Html] = []
   for position, line in lines {
@@ -138,7 +177,7 @@ pub fn moonbit_numbered_source(source : String) -> @rhtml.Html {
           class="moonbit-gutter",
           " ".repeat(width - text.length()) + text,
         ),
-        @rhtml.code(class="language-moonbit moonbit-code", [line]),
+        @rhtml.code(class=code_class, [line]),
       ]),
     )
   }

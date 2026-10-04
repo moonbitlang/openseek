@@ -5,7 +5,8 @@
 // Every card needs the same two things around that shape: a row of chips for
 // the arguments it did not dramatize, and the recorded payload itself, so the
 // card is a reading of the call and never the only account of it.
-// `mbtx` uses the same pieces for its Source and Filename views.
+// `mbtx` uses the same pieces for its Source and Filename views, and `write`
+// for its Content view.
 
 ///|
 /// The custom card for a tool whose arguments have a shape the recorded JSON
@@ -19,6 +20,7 @@ fn custom_card(
 ) -> (String, @html.Html)? {
   match name {
     "mbtx" => mbtx_card(locale~, arguments)
+    "write" => write_card(locale~, arguments)
     "edit" | "multi_edit" =>
       EditChanges::from_arguments(name, arguments).map(changes => {
         (
