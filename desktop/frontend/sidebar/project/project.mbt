@@ -118,23 +118,31 @@ fn State::folded(self : State, input : Input) -> Bool {
 }
 
 ///|
-fn State::conversation_visible(
-  self : State,
-  index : Int,
-  active : Bool,
-) -> Bool {
-  index < self.preview_limit || active
+/// A row the compact preview must not hide: the conversation on screen, and
+/// one whose title is being edited — a refresh can reorder the list under
+/// the field.
+fn stays_visible(row : @conversation.Input) -> Bool {
+  row.active || row.rename is Some(_)
 }
 
 ///|
-/// Advance past seven conversations that are actually hidden. The active
-/// chat may already be visible beyond the compact prefix; skipping it here
-/// means one click still reveals seven new rows rather than six.
+fn State::conversation_visible(
+  self : State,
+  index : Int,
+  stays_visible : Bool,
+) -> Bool {
+  index < self.preview_limit || stays_visible
+}
+
+///|
+/// Advance past seven conversations that are actually hidden. A row may
+/// already be visible beyond the compact prefix (`stays_visible`); skipping
+/// it here means one click still reveals seven new rows rather than six.
 fn State::next_preview_limit(self : State, input : Input) -> Int {
   let mut limit = self.preview_limit
   let mut revealed = 0
   while limit < input.conversations.length() && revealed < PreviewStep {
-    if !input.conversations[limit].active {
+    if !stays_visible(input.conversations[limit]) {
       revealed += 1
     }
     limit += 1
@@ -147,7 +155,7 @@ fn State::has_hidden_conversation(self : State, input : Input) -> Bool {
   for index = self.preview_limit
       index < input.conversations.length()
       index = index + 1 {
-    if !input.conversations[index].active {
+    if !stays_visible(input.conversations[index]) {
       return true
     }
   }
@@ -303,7 +311,10 @@ pub fn component(
     }
     for index = 0; index < conversation_rows.length(); index = index + 1 {
       let group = conversation_rows[index]
-      if state.conversation_visible(index, input.conversations[index].active) {
+      if state.conversation_visible(
+          index,
+          stays_visible(input.conversations[index]),
+        ) {
         for row in group {
           rows.push(row)
         }
