@@ -1,49 +1,45 @@
-// Quoting text selected elsewhere on screen into the message input. The reply
-// is written into the textarea and, when it is to be sent, submitted with the
-// textarea's own Enter, so the component stays the single writer and sender
-// of whichever draft the textarea is editing.
+// Replies that quote text selected elsewhere on screen. A reply is a message:
+// the component adds it to the prompt draft itself and, when asked, submits
+// that draft through its ordinary submit, so a draft keeps one writer and one
+// sender.
 
 ///|
 const MessageInputId : String = "task"
 
 ///|
-#external
-priv type MessageInput
+/// A reply quoting on-screen text, addressed to one conversation's composer.
+pub(all) struct QuoteReply {
+  identity : Identity
+  quote : String
+  comment : String
+  // Submit the message once the reply is in it; otherwise it waits there.
+  send : Bool
+  // Run when the composer takes the reply. A composer that declines it — it
+  // now serves another conversation, or is not editing a message — runs
+  // nothing, so the caller still holds what was typed.
+  accepted : @cmd.Cmd
+}
 
 ///|
-/// The message input, when the screen has one that accepts text.
-extern "js" fn message_input(id : String) -> @js.Nullable[MessageInput] =
+/// The identity a quoted reply to this composer must carry, when the composer
+/// is editing a message at all: a goal being edited is not one.
+pub fn Input::quote_target(self : Input) -> Identity? {
+  guard !self.presentation.disabled && self.goal.draft is None else {
+    return None
+  }
+  Some(self.identity)
+}
+
+///|
+/// Move to the message input and show the end of its text.
+extern "js" fn reveal_message_end(id : String) -> Unit =
   #| id => {
   #|   const input = document.getElementById(id)
-  #|   return input instanceof HTMLTextAreaElement && !input.disabled
-  #|     ? input
-  #|     : null
-  #| }
-
-///|
-extern "js" fn MessageInput::value(self : MessageInput) -> String =
-  #| input => input.value
-
-///|
-/// Write `text` after the input's current content and tell the component, as
-/// typing would. The page's focus and selection are left alone.
-extern "js" fn MessageInput::append(self : MessageInput, text : String) -> Unit =
-  #| (input, text) => {
-  #|   const end = input.value.length
-  #|   input.setRangeText(text, end, end, "end")
-  #|   input.dispatchEvent(new InputEvent("input", { bubbles: true }))
+  #|   if (!(input instanceof HTMLTextAreaElement)) return
+  #|   input.focus({ preventScroll: true })
+  #|   input.setSelectionRange(input.value.length, input.value.length)
   #|   input.scrollTop = input.scrollHeight
   #| }
-
-///|
-/// Press Enter in the input: the component's own submit, with every rule it
-/// applies to one.
-extern "js" fn MessageInput::press_enter(self : MessageInput) -> Unit =
-  #| input => input.dispatchEvent(new KeyboardEvent("keydown", {
-  #|   key: "Enter",
-  #|   bubbles: true,
-  #|   cancelable: true,
-  #| }))
 
 ///|
 /// What replying to `text` with `comment` writes after a draft holding
@@ -82,23 +78,50 @@ fn quote_insertion(
 }
 
 ///|
-/// Whether `quote_reply` has a message input to write into right now.
-pub fn quote_available() -> Bool {
-  message_input(MessageInputId).to_option() is Some(_)
-}
-
-///|
-/// Add a reply quoting `text` to the message input. With `send`, the message
-/// is then submitted as Enter would submit it, together with anything already
-/// written there; otherwise it waits for the reader to send it.
-pub fn quote_reply(text : String, comment : String, send~ : Bool) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => {
-    guard message_input(MessageInputId).to_option() is Some(input) else {
-      return
-    }
-    input.append(quote_insertion(input.value(), text, comment))
-    if send {
-      input.press_enter()
-    }
-  })
+/// Take a quoted reply into the active prompt draft and, when it asks, submit
+/// that draft as Enter would. A reply this composer is not the addressee of is
+/// declined untouched.
+fn Model::quote_replied(
+  self : Model,
+  entry : Entry,
+  input : Input,
+  reply : QuoteReply,
+  emit : @cmd.Emit[Msg],
+  action_emit : @cmd.Emit[Action],
+) -> (Model, @cmd.Cmd) {
+  // A `!` draft is a shell command; a reply appended to it would run as one.
+  guard input.quote_target() == Some(reply.identity) &&
+    input.shell_command(entry.draft) is None else {
+    return (self, @cmd.none)
+  }
+  let task = entry.draft.task +
+    quote_insertion(entry.draft.task, reply.quote, reply.comment)
+  let (model, changed) = self.commit_entry_change(
+    entry,
+    {
+      ..entry,
+      draft: { ..entry.draft, task, },
+      completion: None,
+      pending_submission: None,
+    },
+    @cmd.none,
+    action_emit,
+  )
+  let (model, submitted) = if reply.send {
+    model.update(input, SubmitRequested, emit, action_emit)
+  } else {
+    (model, @cmd.none)
+  }
+  (
+    model,
+    @cmd.batch([
+      changed,
+      submitted,
+      reply.accepted,
+      @cmd.custom_cmd(
+        _ => reveal_message_end(MessageInputId),
+        kind=@cmd.after_render,
+      ),
+    ]),
+  )
 }

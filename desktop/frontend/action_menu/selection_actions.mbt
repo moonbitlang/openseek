@@ -1,19 +1,32 @@
 // The floating reply beside a fresh text selection. "Reply" turns the bar into
 // a small composer that keeps the quote in view while a comment is typed; the
-// result goes to the screen's reply input, either sent at once or batched
-// into the message being written there. Pointer-only by design.
+// result is handed to the composer the selection's screen named, either to be
+// sent at once or batched into the message being written there. The reply
+// stays open until that composer takes it. Pointer-only by design.
 
 ///|
-/// Quoting selected text, with a comment, into the screen's reply input.
-pub(all) struct QuoteActions {
-  // Whether the screen has a reply input right now. Asked each time a
-  // selection is offered, never while rendering.
-  available : () -> Bool
-  // Quote and comment, sent as a message now.
-  send : (String, String) -> @cmd.Cmd
-  // Quote and comment, added to the message being written.
-  batch : (String, String) -> @cmd.Cmd
+/// A reply quoting the selected text, for the composer `target` names.
+pub(all) struct QuoteReply[T] {
+  target : T
+  quote : String
+  comment : String
+  // Send the message now, rather than leave it to go out with the next one.
+  send : Bool
+  // To run once the reply has been taken. Until then it stays open here, so a
+  // composer that declines it loses nothing the reader typed.
+  accepted : @cmd.Cmd
 }
+
+///|
+/// A quotable selection and where its surface sits.
+priv struct SelectionAnchor {
+  text : String
+  // Viewport position of the surface's anchor edge: its bottom centre, or its
+  // top centre when `below`.
+  x : Int
+  y : Int
+  below : Bool
+} derive(Eq)
 
 ///|
 priv enum SelectionStage {
@@ -22,34 +35,52 @@ priv enum SelectionStage {
 } derive(Eq)
 
 ///|
-priv struct SelectionOpen {
-  text : String
-  // Viewport position of the surface's anchor edge: its bottom centre, or its
-  // top centre when `below`.
-  x : Int
-  y : Int
-  below : Bool
+priv struct SelectionOpen[T] {
+  anchor : SelectionAnchor
+  // The composer on screen when the text was selected. The surface shows, and
+  // delivers, only while that is still the composer on screen.
+  target : T
   stage : SelectionStage
 } derive(Eq)
 
 ///|
-priv struct SelectionState {
-  open : SelectionOpen?
+priv struct SelectionState[T] {
+  open : SelectionOpen[T]?
   // Sticky for the page: a reader collecting quotes keeps collecting.
   batched : Bool
 } derive(Eq)
 
 ///|
 priv enum SelectionMsg {
-  Settled(SelectionOpen)
-  // The selection moved or went away. That ends an offer, but not a reply
-  // already being typed: focusing its input is itself a selection change.
-  Abandoned
+  Settled(SelectionAnchor)
   Closed
   ReplyStarted
   CommentChanged(String)
   BatchToggled
   Submitted
+  Delivered
+}
+
+///|
+/// What the document listeners have to watch for, derived from the state
+/// after every message so the two cannot drift apart.
+priv enum SelectionWatch {
+  Idle
+  // An offer follows its selection: it goes when the selection changes or
+  // moves.
+  Offer(SelectionAnchor)
+  // A reply being typed stays put: focusing its input is itself a selection
+  // change, and a scroll must not cost the reader their text.
+  Reply
+}
+
+///|
+fn[T] SelectionState::watch(self : SelectionState[T]) -> SelectionWatch {
+  match self.open {
+    None => Idle
+    Some({ stage: Offered, anchor, .. }) => Offer(anchor)
+    Some({ stage: Replying(..), .. }) => Reply
+  }
 }
 
 ///|
@@ -79,12 +110,11 @@ const SelectionSurfaceHalfWidth : Double = 190
 const SelectionSurfaceGap : Double = 6
 
 ///|
-/// Where the surface sits for the current selection, when that selection is
-/// quotable text.
-fn settled_selection() -> SelectionOpen? {
+/// The current selection, when it is one range of quotable text.
+fn settled_anchor() -> SelectionAnchor? {
   guard browser_selection().to_option() is Some(selection) &&
     !selection.collapsed() &&
-    selection.count() > 0 else {
+    selection.count() == 1 else {
     return None
   }
   let text = selection.text()
@@ -110,35 +140,40 @@ fn settled_selection() -> SelectionOpen? {
   } else {
     bounds.get_top() - SelectionSurfaceGap
   }
-  Some({
-    text,
-    x: @math.round(x).to_int(),
-    y: @math.round(y).to_int(),
-    below,
-    stage: Offered,
-  })
+  Some({ text, x: @math.round(x).to_int(), y: @math.round(y).to_int(), below, })
+}
+
+///|
+priv struct SelectionListener {
+  sync : (SelectionWatch) -> Unit
+  unload : () -> Unit
 }
 
 ///|
 fn install_selection_listener(
-  available : () -> Bool,
   emit : (SelectionMsg) -> Unit,
-) -> () -> Unit {
+) -> SelectionListener {
   let document = @dom.document()
   let window = @dom.window().as_event_target()
-  // Only a shown surface needs telling; this keeps ordinary typing and
-  // scrolling from sending a message per event.
-  let mut shown = false
-  let close = () => {
-    if shown {
-      shown = false
-      emit(Closed)
-    }
-  }
-  let abandon = () => if shown { emit(Abandoned) }
+  // Set here the moment a message is sent, then overwritten by `sync` with
+  // what the state made of it.
+  let mut watch = Idle
+  let mut unloaded = false
   let on_surface = (event : @dom.Event) => {
     event_element(event) is Some(element) &&
     element.closest(SelectionSurface) is Some(_)
+  }
+  let close = () => {
+    if !(watch is Idle) {
+      watch = Idle
+      emit(Closed)
+    }
+  }
+  let follow = () => {
+    if watch is Offer(anchor) && settled_anchor() != Some(anchor) {
+      watch = Idle
+      emit(Closed)
+    }
   }
   let on_mouse_down : @dom.Listener = event => if !on_surface(event) { close() }
   let on_mouse_up : @dom.Listener = event => {
@@ -150,91 +185,102 @@ fn install_selection_listener(
     // A click inside an existing selection collapses it only after `mouseup`.
     let _ = @dom.window().set_timeout(
       () => {
-        match settled_selection() {
-          Some(open) if available() => {
-            shown = true
-            emit(Settled(open))
+        guard !unloaded && !(watch is Reply) else { return }
+        match settled_anchor() {
+          Some(anchor) => {
+            watch = Offer(anchor)
+            emit(Settled(anchor))
           }
-          _ => abandon()
+          None => follow()
         }
       },
       0,
     )
   }
-  let on_selection_change : @dom.Listener = _ => {
-    if browser_selection().to_option() is Some(selection) &&
-      !selection.collapsed() {
+  let on_change : @dom.Listener = _ => follow()
+  let on_key_down : @dom.Listener = event => {
+    // Escape during composition belongs to the input method.
+    guard !(watch is Idle) &&
+      event.to_keyboard_event() is Some(key) &&
+      key.key() == "Escape" &&
+      !key.is_composing() else {
       return
     }
-    abandon()
-  }
-  let on_key_down : @dom.Listener = event => {
-    if event.to_keyboard_event() is Some(key) && key.key() == "Escape" {
-      close()
+    // Typed into the reply, Escape closes the reply and nothing else.
+    if on_surface(event) {
+      event.prevent_default()
+      event.stop_propagation()
     }
+    watch = Idle
+    emit(Closed)
   }
-  let on_leave : @dom.Listener = _ => abandon()
   document.add_event_listener_with_options(
     "mousedown",
     on_mouse_down,
     capture=true,
   )
-  document.add_event_listener("mouseup", on_mouse_up)
-  document.add_event_listener("selectionchange", on_selection_change)
+  document.add_event_listener_with_options("mouseup", on_mouse_up, capture=true)
+  document.add_event_listener("selectionchange", on_change)
   document.add_event_listener_with_options("keydown", on_key_down, capture=true)
-  // The surface is placed in viewport coordinates, so a scroll strands an
-  // offer. A reply being typed stays put instead of losing its text.
-  document.add_event_listener_with_options("scroll", on_leave, capture=true)
-  window.add_event_listener("resize", on_leave)
-  window.add_event_listener("blur", on_leave)
-  () => {
-    document.remove_event_listener_with_options(
-      "mousedown",
-      on_mouse_down,
-      capture=true,
-    )
-    document.remove_event_listener("mouseup", on_mouse_up)
-    document.remove_event_listener("selectionchange", on_selection_change)
-    document.remove_event_listener_with_options(
-      "keydown",
-      on_key_down,
-      capture=true,
-    )
-    document.remove_event_listener_with_options(
-      "scroll",
-      on_leave,
-      capture=true,
-    )
-    window.remove_event_listener("resize", on_leave)
-    window.remove_event_listener("blur", on_leave)
+  // The surface is placed in viewport coordinates, so a scroll or resize that
+  // moves the selection strands an offer.
+  document.add_event_listener_with_options("scroll", on_change, capture=true)
+  window.add_event_listener("resize", on_change)
+  {
+    sync: next => watch = next,
+    unload: () => {
+      unloaded = true
+      document.remove_event_listener_with_options(
+        "mousedown",
+        on_mouse_down,
+        capture=true,
+      )
+      document.remove_event_listener_with_options(
+        "mouseup",
+        on_mouse_up,
+        capture=true,
+      )
+      document.remove_event_listener("selectionchange", on_change)
+      document.remove_event_listener_with_options(
+        "keydown",
+        on_key_down,
+        capture=true,
+      )
+      document.remove_event_listener_with_options(
+        "scroll",
+        on_change,
+        capture=true,
+      )
+      window.remove_event_listener("resize", on_change)
+    },
   }
 }
 
 ///|
 priv suberror SelectionSubscription {
-  SelectionSubscription(@cmd.Emit[SelectionMsg])
+  SelectionSubscription(@cmd.Emit[SelectionMsg], SelectionWatch)
 }
 
 ///|
 fn selection_subscription(
   emit : @cmd.Emit[SelectionMsg],
-  available : () -> Bool,
+  watch : SelectionWatch,
 ) -> @sub.Sub {
   @sub.custom_sub(
     "app-selection-actions",
     Global,
-    SelectionSubscription(emit),
+    SelectionSubscription(emit, watch),
     (payload, scheduler) => {
-      guard payload is SelectionSubscription(emit) else { return None }
+      guard payload is SelectionSubscription(emit, watch) else { return None }
       let mut emit = emit
-      let unload = install_selection_listener(available, msg => {
-        scheduler.add(emit(msg))
-      })
+      let listener = install_selection_listener(msg => scheduler.add(emit(msg)))
+      (listener.sync)(watch)
       Some({
-        unload: _ => unload(),
+        unload: _ => (listener.unload)(),
         update_tagger: payload => {
-          guard payload is SelectionSubscription(next) else { return }
+          guard payload is SelectionSubscription(next, watch) else { return }
           emit = next
+          (listener.sync)(watch)
         },
       })
     },
@@ -242,15 +288,24 @@ fn selection_subscription(
 }
 
 ///|
-fn SelectionState::update(
-  self : SelectionState,
+fn[T : Eq] SelectionState::update(
+  self : SelectionState[T],
+  target : T?,
   msg : SelectionMsg,
-  actions : QuoteActions,
-) -> (SelectionState, @cmd.Cmd) {
+  emit : @cmd.Emit[SelectionMsg],
+  deliver : (QuoteReply[T]) -> @cmd.Cmd,
+) -> (SelectionState[T], @cmd.Cmd) {
   let unpin = @cmd.custom_cmd(_ => clear_selection_highlight(QuoteHighlight))
   match (msg, self.open) {
-    (Settled(open), _) => ({ ..self, open: Some(open), }, unpin)
-    (Abandoned, Some({ stage: Offered, .. })) | (Closed, Some(_)) =>
+    (Settled(anchor), _) =>
+      (
+        {
+          ..self,
+          open: target.map(target => { anchor, target, stage: Offered, }),
+        },
+        unpin,
+      )
+    (Closed, Some(_)) | (Delivered, Some({ stage: Replying(..), .. })) =>
       ({ ..self, open: None, }, unpin)
     (ReplyStarted, Some({ stage: Offered, .. } as open)) =>
       (
@@ -273,25 +328,36 @@ fn SelectionState::update(
         // The checkbox took the focus; Enter belongs to the comment.
         focus_element(SelectionReplyInput, true),
       )
-    (Submitted, Some({ stage: Replying(comment~), text, .. })) => {
+    (Submitted, Some({ stage: Replying(comment~), anchor, target: addressed, })) => {
       // A batched quote may wait for its comment; a message sent now is the
       // comment.
-      guard self.batched || !comment.is_blank() else {
+      guard target == Some(addressed) && (self.batched || !comment.is_blank()) else {
         return (self, @cmd.none)
       }
-      let deliver = if self.batched { actions.batch } else { actions.send }
-      ({ ..self, open: None, }, @cmd.batch([unpin, deliver(text, comment)]))
+      (
+        self,
+        deliver({
+          target: addressed,
+          quote: anchor.text,
+          comment,
+          send: !self.batched,
+          accepted: emit(Delivered),
+        }),
+      )
     }
     _ => (self, @cmd.none)
   }
 }
 
 ///|
-fn selection_surface_attrs(open : SelectionOpen, label : String) -> @html.Attrs {
+fn selection_surface_attrs(
+  stage : SelectionStage,
+  label : String,
+) -> @html.Attrs {
   let attrs = @html.Attrs::build()
     .aria_label(label)
     .data_set("selection-actions", "")
-  match open.stage {
+  match stage {
     // Keep the selection and the focus where they are while the button is
     // pressed; `ReplyStarted` decides what moves.
     Offered =>
@@ -301,31 +367,45 @@ fn selection_surface_attrs(open : SelectionOpen, label : String) -> @html.Attrs 
         event.prevent_default()
         @cmd.none
       })
-    Replying(_) => attrs.role("dialog")
+    Replying(..) => attrs.role("dialog")
   }
 }
 
 ///|
-/// Own the floating reply for text selected inside a quote source.
-pub fn selection_component(
+/// Own the floating reply for text selected inside a quote source. `target`
+/// names the composer a reply from the screen would go to, when there is one;
+/// `deliver` hands a finished reply to it.
+pub fn[T : Eq] selection_component(
   locale : @rabbita.Val[@i18n.Locale],
-  actions : QuoteActions,
+  target : @rabbita.Val[T?],
+  deliver : (QuoteReply[T]) -> @cmd.Cmd,
 ) -> @rabbita.Val[@html.Html] {
-  let (state, emit) = @rabbita.create_state(
-    SelectionState::{ open: None, batched: false, },
-    update=(state, msg, _) => state.update(msg, actions),
-    subscriptions=(_, emit) => selection_subscription(emit, actions.available),
+  let (state, emit) = @rabbita.create_state_with_input(
+    input=target,
+    init=(_, _) => (SelectionState::{ open: None, batched: false, }, @cmd.none),
+    update=(state, target, msg, emit) => {
+      state.update(target, msg, emit, deliver)
+    },
+    subscriptions=(state, _, emit) => {
+      selection_subscription(emit, state.watch())
+    },
   )
-  state.map2(locale, (state, locale) => {
-    guard state.open is Some(open) else { return @html.nothing }
-    let placement = if open.below { " below" } else { "" }
-    let style = ["left: \{open.x}px", "top: \{open.y}px"]
+  state.map3(target, locale, (state, target, locale) => {
+    // A surface opened over another conversation is not this one's to show.
+    guard state.open is Some(open) && target == Some(open.target) else {
+      return @html.nothing
+    }
+    let placement = if open.anchor.below { " below" } else { "" }
+    let style = ["left: \{open.anchor.x}px", "top: \{open.anchor.y}px"]
     match open.stage {
       Offered =>
         @html.div(
           class="selection-actions\{placement}",
           style~,
-          attrs=selection_surface_attrs(open, ui(locale, SelectionActions)),
+          attrs=selection_surface_attrs(
+            open.stage,
+            ui(locale, SelectionActions),
+          ),
           [
             @html.button(
               class="action-menu-item",
@@ -346,9 +426,9 @@ pub fn selection_component(
         @html.div(
           class="selection-actions replying\{placement}",
           style~,
-          attrs=selection_surface_attrs(open, ui(locale, ReplyDialog)),
+          attrs=selection_surface_attrs(open.stage, ui(locale, ReplyDialog)),
           [
-            @html.blockquote(class="selection-reply-quote", open.text),
+            @html.blockquote(class="selection-reply-quote", open.anchor.text),
             @html.div(class="selection-reply-row", [
               @html.input(
                 input_type=@html.InputType::Text,
