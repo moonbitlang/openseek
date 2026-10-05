@@ -9,9 +9,10 @@ fn submit_answer_tool(
   @agent_kind.capture_tool(
     name="submit_answer",
     description=(
-      #|Submit the final explore report and end the run. Call this exactly once, when the
-      #|question is answered. Every workspace claim needs a file (and line when known)
-      #|citation; put what you could not determine in `unresolved`.
+      #|Submit the final explore report and end the run. Call this when the question is
+      #|answered. Every workspace claim needs a file (and line when known) citation; put
+      #|what you could not determine in `unresolved`. If a new instruction reaches you
+      #|after you submitted, that report no longer counts: submit again.
     ),
     schema=JsonSchema(report_schema()),
     parse=parse_submission,

@@ -11,6 +11,8 @@ pub let default_explore_max_steps : Int = 100
 /// sends), run the scout kind in this process, and return the report (the
 /// run's result carries it as its output). `None` when the
 /// child finished without a valid submission or the input is malformed.
+/// `instructions` hands over what the launcher posted since the last call
+/// (see `@agent_kind.execute_kind`): a scout can be redirected mid-search.
 pub async fn run_child(
   input : Json,
   api_key~ : String,
@@ -24,6 +26,7 @@ pub async fn run_child(
   session_id? : String = "explore",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   scratch_dir? : String,
+  instructions? : async () -> Array[@agent_runtime.SteerInput],
 ) -> ExploreReport? {
   guard input is { "query": String(query), .. } && !query.is_blank() else {
     return None
@@ -35,6 +38,7 @@ pub async fn run_child(
   @agent_kind.execute_kind(
     session_id~,
     append_item?,
+    instructions?,
     system_prompt=explore_system_prompt(),
     task=explore_task(query, hints, scratch_dir),
     tools=captured => {

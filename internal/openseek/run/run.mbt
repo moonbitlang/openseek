@@ -336,11 +336,12 @@ async fn run_preset(
   workspace_root~ : String,
 ) -> KindOutcome {
   let (model, thinking, api_url) = @options.agent_settings(matches)
-  let (session_id, append_item) : (
+  let (session_id, append_item, instructions) : (
     String,
     async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+    (async () -> Array[@agent_runtime.SteerInput])?,
   ) = match @setup.resolved_session_id(matches) {
-    None => (name, (session, item) => turn.record(session.append(item)))
+    None => (name, (session, item) => turn.record(session.append(item)), None)
     Some(id) => {
       let session_root = @setup.session_root(matches, workspace_root~)
       let store = @store.SessionStore(session_root)
@@ -349,11 +350,22 @@ async fn run_preset(
           "a --kind run starts a new session, and \{id.value()} already exists",
         )
       }
+      // The inbox sits beside the transcript and is opened just BEFORE the
+      // first record: a session with a transcript and no inbox is then one
+      // that takes no instructions, never one that has not got to it yet.
+      let inbox = if kind.takes_instructions() {
+        Some(store.inbox_path(id))
+      } else {
+        None
+      }
       // Named only once something is recorded: a preset refused for want of
       // a key, or the modelless `echo`, leaves no transcript to point at.
       (
         id.value(),
         (session, item) => {
+          if turn.session is None && inbox is Some(path) {
+            @inbox.open(path)
+          }
           let next = store.append(session, item)
           if turn.session is None {
             turn.session = Some(id.value())
@@ -370,6 +382,11 @@ async fn run_preset(
           }
           turn.record(next)
         },
+        inbox.map(path => {
+          let reader = @inbox.Reader(path)
+          let launcher = launcher_of(id.value())
+          () => launcher_instructions(reader.take(), launcher)
+        }),
       )
     }
   }
@@ -382,6 +399,7 @@ async fn run_preset(
     requested_max_steps,
     session_id,
     append_item,
+    instructions,
   })
 }
 
@@ -448,4 +466,43 @@ fn reserved_session(matches : @argparse.Matches) -> String? {
 /// Whether `--inspect` asked to watch this run in the session viewer.
 fn inspect_requested(matches : @argparse.Matches) -> Bool {
   matches.flags.get("inspect") is Some(true)
+}
+
+///|
+/// The session that launched the sub-run recorded as `id`: the parent its
+/// child id names. `None` for a run that is nobody's child.
+fn launcher_of(id : String) -> String? {
+  @openseek_protocol.split_child_session_id(id).map(pair => pair.0)
+}
+
+///|
+/// The steering input `messages` amount to for a run launched by `launcher`.
+///
+/// Only the launcher's messages are presented. One from any other sender is
+/// neither presented nor acknowledged: this build has no honest way to frame
+/// it. Neither is one with a blank body — the framing has content of its own,
+/// so it would supersede a report the run already submitted with an
+/// instruction that says nothing.
+fn launcher_instructions(
+  messages : Array[@inbox.Message],
+  launcher : String?,
+) -> Array[@agent_runtime.SteerInput] {
+  [
+    for message in messages if Some(message.from) == launcher &&
+    !message.text.is_blank() => launcher_instruction(message)
+  ]
+}
+
+///|
+/// One instruction from the launcher as the turn takes it in: a user message
+/// tagged with the message's receipt, so the transcript records exactly which
+/// message — whose, and which of theirs — was delivered. The framing says
+/// who is speaking: a kind's system prompt describes a single task, and a
+/// bare second user message would read as a contradiction of it rather than
+/// as its author changing their mind.
+fn launcher_instruction(message : @inbox.Message) -> @agent_runtime.SteerInput {
+  let text =
+    $|[New instruction from the agent that gave you this task, sent while you work. Follow it: it refines or redirects the task. Your report is still due through the same submit tool.]
+    $|\{message.text}
+  Prompt(Content([Text(text)]), submission_id=Some(message.receipt()))
 }

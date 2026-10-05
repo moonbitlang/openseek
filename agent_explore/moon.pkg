@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_kind",
   "moonbitlang/openseek/agent_tool",

@@ -859,3 +859,15 @@ pub fn SessionStore::job_logs_dir(
 ) -> String raise {
   "\{self.session_dir(id)}/jobs"
 }
+
+///|
+/// Return the prospective path of a session's instruction inbox without
+/// creating anything: the file a running child reads the instructions its
+/// launcher posts (see `agent_subrun/inbox`). It lives in the session's own
+/// directory, so it moves with archives and is removed with the session.
+pub fn SessionStore::inbox_path(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  "\{self.session_dir(id)}/inbox.jsonl"
+}

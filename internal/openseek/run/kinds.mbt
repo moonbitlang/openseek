@@ -29,6 +29,16 @@ fn Kind::parse(name : StringView) -> Kind? {
 }
 
 ///|
+/// Whether a run of this kind reads instructions its launcher posts while it
+/// works. A scout does: its question can be sharpened or redirected. A review
+/// does not, on purpose — the party under audit is the one that would be
+/// posting, and a reviewer it can talk out of a finding is not independent.
+/// The rest have no launcher that watches them.
+fn Kind::takes_instructions(self : Kind) -> Bool {
+  self is Explore
+}
+
+///|
 /// Why `input` is not this kind's input, or `None` when it is. Pure, so a
 /// request can be refused before anything is created for it.
 fn Kind::check_input(self : Kind, input : Json) -> String? {
@@ -115,6 +125,10 @@ priv struct KindLaunch {
   requested_max_steps : Int?
   session_id : String
   append_item : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
+  /// What arrived in this run's inbox since the last call, as steering
+  /// input, when the kind takes instructions and the run has a session to
+  /// keep an inbox in.
+  instructions : (async () -> Array[@agent_runtime.SteerInput])?
 }
 
 ///|
@@ -172,6 +186,7 @@ async fn Kind::run(
         session_id=launch.session_id,
         append_item=launch.append_item,
         scratch_dir~,
+        instructions?=launch.instructions,
       )
       Ran(report=report.map(report => Json(report)))
     }

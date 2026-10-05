@@ -4,6 +4,7 @@ package "moonbitlang/openseek/agent_explore"
 import {
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
+  "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/deepseek",
 }
@@ -11,7 +12,7 @@ import {
 // Values
 pub let default_explore_max_steps : Int
 
-pub async fn run_child(Json, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, retry_attempts? : Int, retry_backoff_ms? : Int, workspace_root? : String, session_id? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, scratch_dir? : String) -> ExploreReport?
+pub async fn run_child(Json, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, retry_attempts? : Int, retry_backoff_ms? : Int, workspace_root? : String, session_id? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, scratch_dir? : String, instructions? : async () -> Array[@agent_runtime.SteerInput]) -> ExploreReport?
 
 // Errors
 

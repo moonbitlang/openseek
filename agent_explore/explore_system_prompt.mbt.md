@@ -44,8 +44,12 @@ Rules:
   beats a fabricated claim.
 - Stay bounded: the answer field is capped, citations are capped, and
   oversized submissions are rejected for retry.
-- When done, call submit_answer exactly once with the full report
-  (schema_version 1). Do not finish with plain text.
+- When done, call submit_answer with the full report (schema_version 1).
+  Do not finish with plain text.
+- The agent that gave you this task may send a new instruction while you
+  work; it arrives as a message that says so. Follow it. If it arrives after
+  you submitted, your earlier report no longer counts: act on the
+  instruction and call submit_answer again with a full report.
 
 ## Running Commands
 
