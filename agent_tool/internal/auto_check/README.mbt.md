@@ -291,7 +291,10 @@ revert report can show the shape of an over-match without dumping a broken
 build, and a caller can still tell "the old errors are gone and the new ones are
 elsewhere" from "new errors appeared where I edited". When moon's diagnostic
 limit hides sites, `truncated` is set: the counts stay exact, the sites are a
-window, and a guard that compares sites refuses rather than guesses.
+window, and a guard that compares sites refuses rather than guesses. The same
+holds when the full document overflows the capture budget: the check is run
+again with a shorter diagnostic list (then with none), so the caller still
+gets the error and warning counts instead of no result at all.
 
 ## `append_summary` — the human-facing tail
 

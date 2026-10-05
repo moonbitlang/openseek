@@ -35,3 +35,47 @@ async test "restore refuses a target replaced by a link to a look-alike" {
   assert_eq(@fs.read_file(target).text(), "someone else's save\n")
   @fs.rmdir(dir, recursive=true)
 }
+
+///|
+/// A tally whose site lists are a window (moon's diagnostic limit, or a
+/// document too large to capture whole) still carries moon's complete
+/// counts, and the check line states them as they are.
+test "check_report states the counts of a truncated tally" {
+  let site : @auto_check.ErrorSite = {
+    path: Some("lib/a.mbt"),
+    loc: "3:3-3:9",
+    code: Some(4014),
+    message: "Type mismatch",
+  }
+  assert_eq(
+    check_report({
+      error_count: 12,
+      warning_count: 3400,
+      errors: [site],
+      warnings: [],
+      truncated: true,
+    }),
+    "moon check: 12 error(s), 3400 warning(s)\nlib/a.mbt:3:3-3:9: Type mismatch",
+  )
+  // No site captured at all: the counts alone.
+  assert_eq(
+    check_report({
+      error_count: 12,
+      warning_count: 3400,
+      errors: [],
+      warnings: [],
+      truncated: true,
+    }),
+    "moon check: 12 error(s), 3400 warning(s)",
+  )
+  assert_eq(
+    check_report({
+      error_count: 0,
+      warning_count: 3400,
+      errors: [],
+      warnings: [],
+      truncated: true,
+    }),
+    "moon check: ok — 0 errors, 3400 warning(s)",
+  )
+}

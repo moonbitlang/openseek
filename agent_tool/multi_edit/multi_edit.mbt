@@ -864,7 +864,8 @@ async fn measure_baseline(paths : Array[String]) -> BaselineOutcome {
   let mut plan_failure : String? = None
   for path in paths {
     let tally = match @auto_check.check(path) {
-      Checked(tally) if tally.truncated => return Refused(TruncatedCapture)
+      Checked(tally) if tally.truncated =>
+        return Refused(truncated_capture(tally))
       Checked(tally) => tally
       Failed(code, tally, detail) => {
         plan_failure = Some(
@@ -889,9 +890,12 @@ async fn measure_baseline(paths : Array[String]) -> BaselineOutcome {
 }
 
 ///|
-/// Why a guard cannot compare an overflowed capture: the lists are then
-/// windows onto moon's output, and a site can enter one without being new.
-const TruncatedCapture : String = "moon check hid some diagnostic sites behind its diagnostic limit, so the guard cannot compare the two runs"
+/// Why a guard cannot compare a tally whose lists are a window onto moon's
+/// output: a site can enter one without being new. The counts are complete,
+/// so the reason states them.
+fn truncated_capture(tally : @auto_check.CheckErrors) -> String {
+  "moon check reported \{tally.error_count} error(s) and \{tally.warning_count} warning(s) but listed only some of them, so the guard cannot compare the two runs"
+}
 
 ///|
 /// How many introduced sites a warning revert lists, in text and data.

@@ -194,3 +194,61 @@ test "to_json carries both severities, caps each list, and marks the cut" {
   assert_eq(count.to_int(), JsonSiteLimit + 1)
   assert_eq(shown.length(), JsonSiteLimit)
 }
+
+///|
+/// A capture that overflows holds no document, so the check is run again with
+/// a shorter diagnostic list: the counts are moon's complete ones either way,
+/// and the tally says its lists are a window.
+async test "an overflowed capture still reports moon's counts" {
+  @vfs.with_tmpdir(prefix="openseek-auto-check-overflow-", dir => {
+    let source = StringBuilder()
+    for index in 0..<30 {
+      source.write_string("///|\nfn unused_\{index}() -> Int {\n  1\n}\n\n")
+    }
+    source.write_string("///|\npub fn bad() -> Int {\n  \"text\"\n}\n")
+    @vfs.FileSystem({
+      "moon.mod": "name = \"tmp/auto_check_overflow\"\n",
+      "moon.pkg": "",
+      "main.mbt": source.to_string(),
+    }).write_to(dir)
+    // The whole document fits: every site is listed.
+    guard check_project(dir, max_output_chars=MoonCheckJsonMaxOutputChars)
+      is Checked(full) else {
+      fail("expected a complete tally")
+    }
+    assert_eq((full.error_count, full.warning_count), (1, 30))
+    assert_eq(full.warnings.length(), 30)
+    assert_false(full.truncated)
+    // Too small for all 31 sites, large enough for the short list: the error
+    // comes first, and the counts are unchanged.
+    let whole = full_document_chars(dir)
+    guard check_project(dir, max_output_chars=whole - 1) is Checked(listed) else {
+      fail("expected a tally from the shorter list")
+    }
+    assert_eq((listed.error_count, listed.warning_count), (1, 30))
+    assert_eq(listed.errors.length(), 1)
+    assert_eq(listed.warnings.length(), RevertErrorDisplayLimit - 1)
+    assert_true(listed.truncated)
+    // Too small for any site: the counts alone.
+    guard check_project(dir, max_output_chars=1000) is Checked(counted) else {
+      fail("expected a tally from the summary alone")
+    }
+    assert_eq((counted.error_count, counted.warning_count), (1, 30))
+    assert_eq((counted.errors, counted.warnings), ([], []))
+    assert_true(counted.truncated)
+    // Too small even for the summary: no verdict.
+    assert_true(check_project(dir, max_output_chars=10) is Unavailable(_))
+  })
+}
+
+///|
+/// How many characters `moon check --json` prints for the project at `dir`
+/// with every diagnostic listed.
+async fn full_document_chars(dir : String) -> Int {
+  collect_process_output(
+    "moon",
+    ["check", "--json", "--diagnostic-limit", "\{MoonCheckDiagnosticLimit}"],
+    cwd=dir,
+    max_output_chars=MoonCheckJsonMaxOutputChars,
+  ).text.char_length()
+}

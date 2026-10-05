@@ -51,9 +51,18 @@ const MoonCheckDiagnosticLimit : Int = 1000
 /// nothing. The budget is sized for `MoonCheckDiagnosticLimit` diagnostics
 /// whose source excerpts are very long lines (an average of 20,000
 /// characters each): the document is parsed and dropped, never shown, so
-/// the only cost of a large one is the time to read it. An overflow is no
-/// verdict, not a lower bound.
+/// the only cost of a large one is the time to read it. An overflowed capture
+/// holds no document at all, so the check is run again under
+/// `overflow_diagnostic_limits`.
 const MoonCheckJsonMaxOutputChars : Int = 20000000
+
+///|
+/// The diagnostic limits tried, in order, once a full capture overflowed. The
+/// summary counts do not depend on the limit, so a shorter list still says how
+/// many errors and warnings the tree has: first with enough sites for a
+/// report to show (moon lists errors before warnings), then with none, which
+/// no diagnostic can overflow.
+let overflow_diagnostic_limits : Array[Int] = [RevertErrorDisplayLimit, 0]
 
 ///|
 /// How many individual error diagnostics a revert report surfaces; enough to
@@ -310,18 +319,36 @@ pub(all) enum CheckOutcome {
 /// diagnostics, or say why that was not possible.
 pub async fn check(path : String) -> CheckOutcome {
   guard moon_check_cwd(path) is Some(cwd) else { return NotApplicable }
-  let result = @async.with_timeout_opt(@moon_check.TimeoutMs, () => {
-    collect_process_output(
-      "moon",
-      ["check", "--json", "--diagnostic-limit", "\{MoonCheckDiagnosticLimit}"],
-      cwd~,
-      max_output_chars=MoonCheckJsonMaxOutputChars,
-    )
-  }) catch {
-    _ => return Unavailable("failed to run")
+  check_project(cwd, max_output_chars=MoonCheckJsonMaxOutputChars)
+}
+
+///|
+/// `check` for the project at `cwd`, with the capture budget a parameter so a
+/// test can overflow it without a thousand diagnostics.
+async fn check_project(cwd : String, max_output_chars~ : Int) -> CheckOutcome {
+  // The document is all or nothing, so an overflowed capture is run again
+  // with a shorter diagnostic list: the tally then carries moon's complete
+  // counts and is `truncated`, which is what a caller reports and a guard
+  // refuses on. The build is already done, so the reruns only reprint.
+  let mut captured : ProcessOutput? = None
+  for limit in [MoonCheckDiagnosticLimit, ..overflow_diagnostic_limits] {
+    let result = @async.with_timeout_opt(@moon_check.TimeoutMs, () => {
+      collect_process_output(
+        "moon",
+        ["check", "--json", "--diagnostic-limit", "\{limit}"],
+        cwd~,
+        max_output_chars~,
+      )
+    }) catch {
+      _ => return Unavailable("failed to run")
+    }
+    guard result is Some(output) else { return Unavailable("timed out") }
+    if !output.output_limit_reached {
+      captured = Some(output)
+      break
+    }
   }
-  guard result is Some(output) else { return Unavailable("timed out") }
-  if output.output_limit_reached {
+  guard captured is Some(output) else {
     return Unavailable("moon check output exceeded the capture budget")
   }
   guard parse_check_document(output.text) is Some(document) else {

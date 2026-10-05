@@ -826,7 +826,8 @@ async fn commit_edit(
     None
   } else {
     let measured = match check_tree() {
-      Checked(tally) if tally.truncated => return not_verified(TruncatedCapture)
+      Checked(tally) if tally.truncated =>
+        return not_verified(truncated_capture(tally))
       Checked(tally) => Some(tally)
       // Guards are moot only when the file belongs to no project at all; a
       // listed project that could not be checked is a lost verdict.
@@ -1021,7 +1022,7 @@ async fn commit_edit(
     (Checked(tally), None) =>
       keep(Some(check_report(tally)), { "check": tally.summary_json() })
     (Checked(tally), Some(_)) if tally.truncated =>
-      unverified_after(TruncatedCapture)
+      unverified_after(truncated_capture(tally))
     (Checked(tally), Some(before)) =>
       guarded_outcome(
         path,
@@ -1040,9 +1041,12 @@ async fn commit_edit(
 }
 
 ///|
-/// Why a guard cannot compare an overflowed capture: the lists are then
-/// windows onto moon's output, and a site can enter one without being new.
-const TruncatedCapture : String = "moon check hid some diagnostic sites behind its diagnostic limit, so the guard cannot compare the two runs"
+/// Why a guard cannot compare a tally whose lists are a window onto moon's
+/// output: a site can enter one without being new. The counts are complete,
+/// so the reason states them.
+fn truncated_capture(tally : @auto_check.CheckErrors) -> String {
+  "moon check reported \{tally.error_count} error(s) and \{tally.warning_count} warning(s) but listed only some of them, so the guard cannot compare the two runs"
+}
 
 ///|
 /// The spellings of `path` whose projects a check must cover: the written one
@@ -1346,21 +1350,20 @@ fn edit_data(
 /// or — on a clean tree — the first warning, so the model still sees one
 /// concrete diagnostic without a second check.
 fn check_report(tally : @auto_check.CheckErrors) -> String {
-  let bound = if tally.truncated { "≥" } else { "" }
-  if tally.truncated && tally.error_count == 0 {
-    // The collector stops moon at the capture budget, so no error captured
-    // does not mean no error exists.
-    return "moon check: incomplete — output truncated after ≥\{tally.warning_count} warning(s) with no error captured; the result is unknown"
-  }
+  // The counts are moon's own and complete even when it listed only some of
+  // the sites, so they are stated as they are.
   if tally.error_count == 0 {
-    let head = "moon check: ok — 0 errors, \{bound}\{tally.warning_count} warning(s)"
+    let head = "moon check: ok — 0 errors, \{tally.warning_count} warning(s)"
     match tally.warnings {
       [first, ..] => "\{head}\nfirst warning: \{first.line()}"
       [] => head
     }
   } else {
-    let head = "moon check: \{bound}\{tally.error_count} error(s), \{bound}\{tally.warning_count} warning(s)"
-    "\{head}\n\{tally.first_errors().join("\n")}"
+    let head = "moon check: \{tally.error_count} error(s), \{tally.warning_count} warning(s)"
+    match tally.first_errors() {
+      [] => head
+      lines => "\{head}\n\{lines.join("\n")}"
+    }
   }
 }
 
