@@ -331,21 +331,25 @@ html.is-resizing .sidebar-resize-handle {
 }
 /* Both groups stay in layout (visibility, not display) so the cell keeps
    one width across the swap. */
-.conversation-row:hover .row-trailing:has(.row-actions) .row-status,
-.conversation-row:focus-within .row-trailing:has(.row-actions) .row-status {
+.conversation-row:hover .row-trailing:not(.persistent):has(.row-actions) .row-status,
+.conversation-row:focus-within .row-trailing:not(.persistent):has(.row-actions) .row-status {
   visibility: hidden;
 }
-/* An open conversation menu keeps its hover-revealed trigger in place of the
-   status glyphs while the pointer moves into the floating surface. */
-.row-menu-button[aria-expanded="true"] {
+/* A live row's overflow trigger is always shown, so its status glyphs sit
+   beside the trigger instead of swapping with it. */
+.row-trailing.persistent {
+  display: flex;
+  gap: 6px;
+}
+.row-trailing.persistent .row-status:empty {
+  display: none;
+}
+.row-trailing.persistent .row-menu-button {
   visibility: visible;
+}
+.row-menu-button[aria-expanded="true"] {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
-}
-.conversation-row:not(.loading)
-  .row-trailing:has(.row-menu-button[aria-expanded="true"])
-  .row-status {
-  visibility: hidden;
 }
 .conversation-row.loading .row-trailing {
   display: flex;

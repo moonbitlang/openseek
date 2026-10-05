@@ -583,7 +583,18 @@ pub fn component(
         // children occupy the same CSS grid area and overlap each other.
         trailing.push(@html.span(class="row-actions", buttons))
       }
-      children.push(@html.span(class="row-trailing", trailing))
+      children.push(
+        @html.span(
+          // The overflow trigger is always shown; hover-revealed direct
+          // actions swap with the status glyphs instead.
+          class=if menu_kind is Some(LiveMenu) {
+            "row-trailing persistent"
+          } else {
+            "row-trailing"
+          },
+          trailing,
+        ),
+      )
     }
     let row_attrs = match menu_kind {
       Some(_) => @action_menu.context_attrs(input.id.key())
