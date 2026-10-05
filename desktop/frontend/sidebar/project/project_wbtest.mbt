@@ -61,6 +61,21 @@ test "the project component state owns its compact preview" {
 }
 
 ///|
+test "a conversation being renamed stays in the compact preview" {
+  let state : State = { fold: Open, preview_limit: PreviewLimit, }
+  let conversations = test_conversations(6)
+  conversations[5] = {
+    ..conversations[5],
+    rename: Some({ draft: "Renamed", saving: false, error: None, }),
+  }
+  assert_true(state.conversation_visible(5, stays_visible(conversations[5])))
+  assert_false(state.conversation_visible(5, stays_visible(conversations[4])))
+  // It is on screen already, so nothing is left behind "Show more".
+  let input = { ..test_input(), conversations, }
+  assert_false(state.has_hidden_conversation(input))
+}
+
+///|
 test "show more skips an active chat that was already visible" {
   let state : State = { fold: Open, preview_limit: PreviewLimit, }
   let input = {
