@@ -1,7 +1,7 @@
 # Plan: subagents the engine owns
 
-Date: 2026-10-05. Status: proposal; the first step (the allocator) is being
-implemented, nothing else is. It supersedes a first attempt (pull requests
+Date: 2026-10-05. Status: proposal; the first step (the allocator) is
+implemented in #1874, nothing else is. It supersedes a first attempt (pull requests
 #1868–#1871, closed) that added messaging on top of children the `mbtx`
 snippet spawns; the parts of that work which still apply are carried into
 this plan and named where they appear. Three rounds of external design
@@ -334,17 +334,25 @@ One append-only file per parent session, written by the engine only:
 child ordinals and the record of each child's lifecycle; it is not a second
 copy of anything.
 
-- **One engine process owns a session's subagents at a time.** The owner
-  holds an exclusive lock for its lifetime on a dedicated file,
-  `subagents.lock`, taken without blocking. It is not `session.lock`, which
-  ordinary persistence must keep being able to take. A second engine
-  process on the same session cannot take it: its `subagent_start` is
-  refused `unavailable`, and its `mbtx(subrun=true)` is refused the same
-  way. Liveness is the kernel lock, never a guess from a process id — and
+- **One allocator owns a session's subagents at a time.** The owner holds
+  an exclusive lock on a dedicated file, `subagents.lock`, taken without
+  blocking. It is not `session.lock`, which ordinary persistence must keep
+  being able to take. Ownership is taken at the FIRST allocation, not at
+  engine start: a session that never delegates gets no ledger, no lock
+  file, and no session directory ahead of its own first record. So several
+  engine processes may run turns of one session; whichever allocates first
+  holds the ledger until it closes, and another's `subagent_start` is
+  refused `unavailable` and its `mbtx(subrun=true)` the same way, with the
+  reason. Liveness is the kernel lock, never a guess from a process id — and
   never the file's existence, which outlives a crash. The desktop already
   closes an engine before starting its successor; a `run --session` beside
   a live `serve` is the case this refuses. A `--kind` child is a different
   session and does not contend.
+- **Closing is ordered.** Opening, allocating and closing are serialized, so
+  ownership is never released under an allocation that has chosen its
+  ordinal and not yet written it; a closed owner refuses later allocations
+  and does not quietly reopen. An engine closes after every task that could
+  allocate has unwound.
 - **Without a durable session there is no ledger and no launcher.** The
   tools are not registered, and `mbtx(subrun=true)` is refused as today.
   The gate's reviewer keeps its existing ephemeral path, with in-memory
@@ -353,9 +361,11 @@ copy of anything.
   record (`first`, `count`, `owner`) is appended and synced first: `count`
   1 for a start, 32 for a hosted workflow's block, 1 for the gate's
   reviewer. The next ordinal is one past the highest recorded allocation or
-  existing child session, whichever is greater. Today the counter lives in
-  memory and a restart recovers only from child sessions that exist, so a
-  surviving script holding an unused block can collide with a new child.
+  existing child session, whichever is greater — the latter read from the
+  store when the ledger is opened, since a child that predates the ledger
+  can appear until then. Before this, the counter lived in memory and a
+  restart recovered only from child sessions that existed, so a surviving
+  script holding an unused block could collide with a new child.
   The hosted reservation is synchronous today; it becomes awaited and
   fallible at its one call site, before the handoff is published.
 - **Lifecycle.** `started` when the process is spawned; `ended` with the
@@ -364,10 +374,14 @@ copy of anything.
   no id. A failed `started` or `ended` write does not undo the fact; the
   envelope carries `recorded: false` and history will later read
   `owner_lost` for that child.
-- **Torn tails.** Appends take the file's lock and close off an
-  unterminated tail before writing, so damage stays in one record; a reader
-  splits lines as bytes, decodes each on its own, and counts what it cannot
-  read. Allocation takes the maximum over every readable record.
+- **Torn tails.** An append closes off an unterminated tail before writing,
+  so damage stays in one record; a reader splits lines as bytes, decodes
+  each on its own, and passes over what it cannot read. Allocation takes
+  the maximum over every readable record.
+- **The file itself is durable, not only its bytes.** The directories the
+  ledger depends on are synced with the first record a process writes,
+  whoever created the file — one left by an attempt that died before that
+  point was made durable by nobody.
 
 After a restart, a child with no `ended` record is `owner_lost`: the engine
 that owned it is gone (the lock is free). It was sent end-of-input and
