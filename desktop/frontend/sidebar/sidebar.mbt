@@ -13,11 +13,20 @@ pub(all) struct Account {
 pub const ResizeHandleId : String = "sidebar-resize-handle"
 
 ///|
+/// Which conversations the list shows. Chats live in host-managed scratch
+/// workspaces; Work conversations belong to a project the user registered.
+pub(all) enum Mode {
+  ChatMode
+  WorkMode
+} derive(Debug, Eq)
+
+///|
 /// The complete plain input of the left sidebar component. Commands are kept
 /// in `Actions`, so this value remains comparable and can drive incremental
 /// Rabbita branches without embedding emitters in application data.
 pub(all) struct Input {
   locale : @i18n.Locale
+  mode : Mode
   notices : Array[String]
   sections : Array[@section.Input]
   update_label : String?
@@ -36,6 +45,7 @@ pub(all) struct Actions {
   open_settings : @cmd.Cmd
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
+  select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
 }
 
@@ -115,6 +125,34 @@ fn Actions::section_component(
   locale : @rabbita.Val[@i18n.Locale],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   @section.component(input, self.section, locale)
+}
+
+///|
+/// One segment of the header's Chat/Work switch. The glyph carries no text,
+/// so the mode name is both the tooltip and the accessible name.
+fn Actions::mode_option(
+  self : Actions,
+  input : Input,
+  mode : Mode,
+  label : @messages.Message,
+  image : () -> @html.Html,
+) -> @html.Html {
+  let title = @messages.text(input.locale, label)
+  let selected = input.mode == mode
+  @html.button(
+    class=if selected {
+      "sidebar-mode-option active"
+    } else {
+      "sidebar-mode-option"
+    },
+    type_="button",
+    title~,
+    attrs=@html.Attrs::build()
+      .aria_label(title)
+      .aria_pressed(selected.to_string()),
+    on_click=(self.select_mode)(mode),
+    @icons.icon(image),
+  )
 }
 
 ///|
@@ -267,8 +305,25 @@ pub fn component(
       }
     }
     @html.aside([
-      // Reserve chrome for the shell-owned fixed toggle and native controls.
-      @html.div(class="sidebar-header", @html.nothing),
+      // The leading edge stays clear for the shell-owned fixed toggle and
+      // native controls; the mode switch sits at the trailing edge.
+      @html.div(class="sidebar-header", [
+        @html.div(
+          class="sidebar-mode",
+          attrs=@html.Attrs::build()
+            .role("group")
+            .aria_label(@messages.text(input.locale, ModeGroup)),
+          [
+            actions.mode_option(
+              input,
+              ChatMode,
+              ModeChat,
+              @icons.icon_comment_discussion,
+            ),
+            actions.mode_option(input, WorkMode, ModeWork, @icons.icon_code),
+          ],
+        ),
+      ]),
       @html.div(class="sidebar-main", [
         @html.div(class="sidebar-section sessions", rows),
       ]),
@@ -297,6 +352,12 @@ pub extend Account with Eq::{equal, not_equal}
 
 ///|
 pub extend Input with Debug::{to_repr}
+
+///|
+pub extend Mode with Debug::{to_repr}
+
+///|
+pub extend Mode with Eq::{equal, not_equal}
 
 ///|
 pub extend Input with Eq::{equal, not_equal}

@@ -379,6 +379,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
     open_settings: self.emit(OpenSetup),
     refresh_account: self.emit(Console(RefreshClicked)),
     sign_out: self.emit(Console(SignOutClicked)),
+    select_mode: mode => self.emit(SidebarModeSelected(mode)),
     section,
   }
 }

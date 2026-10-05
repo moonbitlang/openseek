@@ -418,14 +418,7 @@ fn Model::sidebar_component_sections(
   // root. Codex state mirrors the focused device only, so other devices'
   // rows are OpenSeek's alone.
   let codex_context : @codex.SidebarContext? = if dev.channel == self.focused {
-    let registered_projects = dev.projects.filter_map(project => {
-      @resource.path_for(project, dev.channel)
-    })
-    Some({
-      channel: dev.channel,
-      selected: self.screen is Codex,
-      registered_projects,
-    })
+    Some(self.codex_sidebar_context(dev))
   } else {
     None
   }
@@ -522,11 +515,12 @@ fn Model::sidebar_component_sections(
   let openseek_section_activation = activation(
     dev.active_project is Some(project) && !dev.is_chat_workspace(project),
   )
-  sections.push({
+  // Chats and Projects are the two lists the header switch chooses between;
+  // only the selected one is projected. Archived holds both kinds and stays.
+  let chats : @section.Input = {
     id: @section.Id(source="openseek.chats", channel~),
     label: @sidebar_messages.text(self.locale, Chats),
     initially_collapsed: false,
-    preview_limit: Some(3),
     activation: chats_activation,
     action: Some({
       title: if self.chat_creation_pending() {
@@ -539,12 +533,11 @@ fn Model::sidebar_component_sections(
       dev.bridge != Connected,
     }),
     entries: ordered_by_recency(chat_rows).map(row => @section.Conversation(row)),
-  })
-  sections.push({
+  }
+  let work : @section.Input = {
     id: @section.Id(source="openseek.projects", channel~),
     label: @sidebar_messages.text(self.locale, Projects),
     initially_collapsed: false,
-    preview_limit: None,
     activation: if openseek_section_activation is Some(_) {
       openseek_section_activation
     } else if codex_context is Some(context) &&
@@ -559,7 +552,13 @@ fn Model::sidebar_component_sections(
       disabled: false,
     }),
     entries: projects,
-  })
+  }
+  sections.push(
+    match self.sidebar_mode {
+      ChatMode => chats
+      WorkMode => work
+    },
+  )
   // Archived conversations fold behind a collapsed section at the end of the
   // list. Their records live in the store's `archived` twin, so they come
   // from the host's archived reply, not the live list; each row carries a
@@ -627,7 +626,6 @@ fn Model::sidebar_component_sections(
       ArchivedChats(archived_entries.length()),
     ),
     initially_collapsed: true,
-    preview_limit: None,
     // Opening an archived transcript never force-reveals the section; its
     // fold stays purely user-controlled, as before.
     activation: None,
@@ -635,6 +633,53 @@ fn Model::sidebar_component_sections(
     entries: archived_entries,
   })
   sections
+}
+
+///|
+/// Codex's view of the focused device's sidebar: which roots are registered
+/// projects, and whether a Codex conversation is the one on screen.
+fn Model::codex_sidebar_context(
+  self : Model,
+  dev : DeviceState,
+) -> @codex.SidebarContext {
+  {
+    channel: dev.channel,
+    selected: self.screen is Codex,
+    registered_projects: dev.projects.filter_map(project => {
+      @resource.path_for(project, dev.channel)
+    }),
+  }
+}
+
+///|
+/// The list holding the conversation on screen, with that conversation's
+/// identity; `None` on a page that shows no conversation. It classifies the
+/// same way `sidebar_component_sections` files rows: a conversation is a chat
+/// exactly when its workspace is under the host's managed chat root.
+fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
+  guard self.focused_device() is Some(dev) else { return None }
+  match self.screen {
+    Chat => {
+      guard dev.active_project is Some(project) else { return None }
+      let mode : @sidebar.Mode = if dev.is_chat_workspace(project) {
+        ChatMode
+      } else {
+        WorkMode
+      }
+      Some((mode, self.active_session))
+    }
+    Codex => {
+      guard self.codex.active_id() is Some(id) else { return None }
+      let context = self.codex_sidebar_context(dev)
+      let chat = dev.projects.any(path => {
+        dev.is_chat_workspace(path) &&
+        @resource.path_for(path, dev.channel) is Some(root) &&
+        self.codex.project_activation(context, root) is Some(_)
+      })
+      Some((if chat { ChatMode } else { WorkMode }, id))
+    }
+    Skills | Schedules | Settings => None
+  }
 }
 
 ///|
@@ -702,6 +747,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   {
     notices,
     locale: self.locale,
+    mode: self.sidebar_mode,
     sections,
     update_label,
     update_enabled: self.update_ux is (UpdateAvailable(..) | UpdateReady(..)),

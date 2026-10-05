@@ -301,6 +301,10 @@ const OpenSeekReasoningStorageKey : String = "openseek.reasoning_effort"
 const GlmReasoningStorageKey : String = "openseek.glm_reasoning_effort"
 
 ///|
+/// The sidebar list (Chat or Work) this page last showed.
+const SidebarModeStorageKey : String = "openseek.sidebar_mode"
+
+///|
 /// Every conversation whose tier the user has chosen, so reopening one
 /// recovers its own tier instead of inheriting whatever was picked last in
 /// some unrelated chat. Page-local like the rest of this file: the desktop
@@ -1503,6 +1507,12 @@ priv struct Model {
   // On the narrow layout the sidebar is a full-screen drawer instead of a
   // column, and starts closed.
   sidebar_open : Bool
+  // Which list the sidebar shows. The switch in its header sets this, and it
+  // follows the conversation on screen: `sidebar_revealed` is the activation
+  // the mode last followed, so only a different one moves it again and a
+  // manual pick holds while the same conversation stays up.
+  sidebar_mode : @sidebar.Mode
+  sidebar_revealed : (@sidebar.Mode, String)?
   // Right-panel visibility is shared by the shell grid, file-editor lifecycle,
   // and native Browser geometry, so the application root is its single owner.
   // The right-panel component receives these values as read-only input.
@@ -1892,6 +1902,10 @@ priv enum Msg {
   // root rejects it after focus moves instead of applying it to another host.
   Codex(channel~ : @interop.ChannelId, @codex.Msg)
   ToggleSidebar
+  // The sidebar header's Chat/Work switch, and the stored pick read back at
+  // startup.
+  SidebarModeSelected(@sidebar.Mode)
+  SidebarModeLoaded(@sidebar.Mode)
   // A Settings selection fixes the page to Light or Dark and persists it.
   ThemeChanged(String)
   LanguageLoaded(@i18n.Preference?, Array[String])
@@ -2736,6 +2750,8 @@ fn initial_model(desktop~ : Bool) -> Model {
     minimal_transcript: false,
     narrow,
     sidebar_open: !narrow,
+    sidebar_mode: WorkMode,
+    sidebar_revealed: None,
     right_panel_open: false,
     right_panel_menu_open: false,
     dock_tab_menu_open: false,
