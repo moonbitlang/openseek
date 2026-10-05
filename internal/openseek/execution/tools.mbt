@@ -2,7 +2,10 @@
 /// The extra tools a turn's registry carries on top of the built-ins: the
 /// configured MCP servers' tools and `web_search` when a key the official
 /// DeepSeek endpoint accepts is in hand.
-/// Model-initiated scouts and reviews run through hosted `mbtx` workflows.
+/// Model-initiated scouts and reviews run through hosted `mbtx` workflows;
+/// `subagents`, the session those children are recorded under, adds the two
+/// tools that watch them and post them instructions (`subagent_status`,
+/// `subagent_send`). Absent where the turn cannot delegate.
 ///
 /// `run`'s one-shot turn and `serve`'s long-lived loop wire the identical
 /// set. They used to build it from two copies of the same expression, which is
@@ -16,8 +19,17 @@ pub async fn[X] build_extra_tools(
   mcp_config_path? : String,
   deepseek_api_key? : String,
   api_url? : String,
+  subagents? : @agent_subrun.ChildSession,
 ) -> Array[@agent_tool.AgentToolDefinition] {
   let extra_tools = resolve_mcp_tools(mcp_config_path, scope, workspace_root~)
+  if subagents is Some(children) {
+    extra_tools.append(
+      @subagent.definitions(
+        session_root=children.root(),
+        parent=children.parent(),
+      ),
+    )
+  }
   if web_search_api_key(model, api_key, api_url, deepseek_api_key)
     is Some(web_search_key) {
     extra_tools.push(@web_search.definition(api_key=web_search_key))

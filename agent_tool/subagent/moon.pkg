@@ -1,0 +1,21 @@
+import {
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/log" @session_log,
+  "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/agent_subrun/inbox",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek_protocol",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+import {
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/agent_subrun/inbox",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+} for "test"
+
+supported_targets = "+wasm+native"

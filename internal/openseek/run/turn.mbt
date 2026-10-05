@@ -46,6 +46,7 @@ async fn run_task_turn(
       mcp_config_path?=@options.mcp_config_path(matches),
       deepseek_api_key?=@options.deepseek_api_key(matches),
       api_url?,
+      subagents?=child_session.filter(_ => delegate),
     )
     // A snippet's workflow delegates to children named from the SAME ordinal
     // counter `run_subrun` uses, so a snippet's child and a `review` child

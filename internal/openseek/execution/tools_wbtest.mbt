@@ -27,3 +27,34 @@ test "web_search_api_key reuses the DeepSeek key only for official-endpoint runs
     web_search_api_key(Kimi(K27Code), "kimi-key", official, None) is None,
   )
 }
+
+///|
+/// The tools that watch and message subagents exist exactly where a turn has
+/// a durable session to record children under.
+async test "the subagent tools are registered only for a session that can delegate" {
+  @async.with_task_group() <| group => {
+    fn names(tools : Array[@agent_tool.AgentToolDefinition]) -> Array[String] {
+      tools.map(tool => tool.name)
+    }
+    let scope = @agent_runtime.AgentTaskScope(group)
+    // A custom endpoint keeps web_search out, so the subagent tools are the
+    // whole difference between the two registries.
+    let without = build_extra_tools(
+      scope,
+      model=Deepseek(V4Pro),
+      api_key="k",
+      workspace_root=".",
+      api_url="https://gateway.example/v1",
+    )
+    assert_eq(names(without), [])
+    let with_children = build_extra_tools(
+      scope,
+      model=Deepseek(V4Pro),
+      api_key="k",
+      workspace_root=".",
+      api_url="https://gateway.example/v1",
+      subagents=ChildSession(root="/store", parent="p"),
+    )
+    assert_eq(names(with_children), ["subagent_status", "subagent_send"])
+  }
+}

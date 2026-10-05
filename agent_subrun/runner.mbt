@@ -261,6 +261,18 @@ pub fn ChildSession::ChildSession(
 }
 
 ///|
+/// The session root the children's transcripts are stored under.
+pub fn ChildSession::root(self : ChildSession) -> String {
+  self.root
+}
+
+///|
+/// The parent session's id: its children are the sessions `<parent>-sr-N`.
+pub fn ChildSession::parent(self : ChildSession) -> String {
+  self.parent
+}
+
+///|
 /// Per-process monotonic sub-run ids: unique within one engine's stream,
 /// which is all the pairing contract needs.
 let subrun_ids : Ref[Int] = { val: 0, }

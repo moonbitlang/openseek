@@ -163,6 +163,7 @@ async fn run_serve(
       mcp_config_path?=@options.mcp_config_path(matches),
       deepseek_api_key?=@options.deepseek_api_key(matches),
       api_url?,
+      subagents?=child_session,
     )
     // The advisory goal-met gate (--review-gate): built once, shared by
     // every turn; engine-initiated, so it runs on its own allowance.

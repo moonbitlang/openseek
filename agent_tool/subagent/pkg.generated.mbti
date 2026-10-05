@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_tool/subagent"
+
+import {
+  "moonbitlang/openseek/agent_tool",
+}
+
+// Values
+pub fn definitions(session_root~ : String, parent~ : String) -> Array[@agent_tool.AgentToolDefinition]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
