@@ -26,6 +26,7 @@ priv enum UiMessage {
   BatchHint
   SendReply
   AddReply
+  ReplyDeclined
   SelectionActions
   ContextMenu
 }
@@ -162,6 +163,14 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, AddReply) => "加入消息"
     (TraditionalChinese, AddReply) => "加入訊息"
     (Japanese, AddReply) => "メッセージに追加"
+    (English, ReplyDeclined) => "The message box can't take a reply right now."
+    (Spanish, ReplyDeclined) =>
+      "El cuadro de mensaje no puede aceptar una respuesta ahora."
+    (SimplifiedChinese, ReplyDeclined) => "输入框当前无法接收回复。"
+    (TraditionalChinese, ReplyDeclined) =>
+      "輸入框目前無法接收回覆。"
+    (Japanese, ReplyDeclined) =>
+      "メッセージ欄は現在返信を受け取れません。"
     (English, SelectionActions) => "Selection actions"
     (Spanish, SelectionActions) => "Acciones de selección"
     (SimplifiedChinese, SelectionActions) => "选区操作"

@@ -41,6 +41,7 @@ fn Model::quoted(
       comment: "why?",
       send,
       accepted: @cmd.none,
+      declined: @cmd.none,
     }),
     Msg::test_emit(),
     Action::test_emit(),
