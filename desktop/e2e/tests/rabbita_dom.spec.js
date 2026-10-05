@@ -1598,7 +1598,8 @@ test('new chat materializes on send, and archive and restore update the sidebar'
   await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
   const liveRow = page.locator('.conversation-row[title="session-1"]');
   await liveRow.hover();
-  await liveRow.getByTitle(/Archive —/).click();
+  await liveRow.getByRole('button', { name: 'Conversation actions' }).click();
+  await page.getByRole('menuitem', { name: 'Archive' }).click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'session.archive' &&
     request.params?.session === 'session-1')).toBe(true);
@@ -1898,9 +1899,9 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await expect(secondWorkspaceMenu).toBeFocused();
 
   const liveRow = page.locator('.conversation-row[title="session-1"]');
-  const archiveButton = liveRow.getByTitle(/Archive —/);
+  const actionsButton = liveRow.getByRole('button', { name: 'Conversation actions' });
   await liveRow.hover();
-  await archiveButton.focus();
+  await actionsButton.focus();
   await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
   menu = page.getByRole('menu', { name: 'Conversation actions' });
   await expect(menu).toBeVisible();
@@ -1927,8 +1928,16 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await expect(rename).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
-  await expect(archiveButton).toBeFocused();
-  await expect(liveRow.getByRole('button', { name: 'Conversation actions' })).toHaveCount(0);
+  await expect(actionsButton).toBeFocused();
+
+  // The row's overflow trigger opens the same menu and toggles it closed.
+  await actionsButton.click();
+  await expect(actionsButton).toHaveAttribute('aria-expanded', 'true');
+  await expect(menu).toBeFocused();
+  await expect(menu.getByRole('menuitem')).toHaveText(['Rename…', 'Archive']);
+  await expect(archive).toHaveAttribute('title', /Archive —/);
+  await actionsButton.click();
+  await expect(menu).toHaveCount(0);
 
   await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
   await page.getByRole('menuitem', { name: 'Rename…' }).click({ button: 'right' });
@@ -1976,7 +1985,8 @@ test('shared WebView action menu supports context position, keyboard, and rename
 
   app.rpcDelays.delete('session.rename');
   app.rpcErrors.set('session.rename', 'fixture rename unavailable');
-  await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
+  await liveRow.hover();
+  await actionsButton.click();
   await page.getByRole('menuitem', { name: 'Rename…' }).click();
   await input.fill('Rename that will fail');
   await page.getByRole('button', { name: 'Save' }).click();
@@ -2007,7 +2017,7 @@ test('sidebar menu dismissal and pending selection follow the clicked row', asyn
   const first = page.locator('.conversation-row[title="session-1"]');
   // The menu opens at the pointer and can cover the rows below it, so click
   // the row's leading padding, left of where the menu starts. Not its right
-  // end: that is the hover-revealed archive button, and the row's width is
+  // end: that is the hover-revealed actions trigger, and the row's width is
   // platform-dependent.
   await first.click({ position: { x: 4, y: 10 } });
   await expect(page.getByRole('menu')).toHaveCount(0);
