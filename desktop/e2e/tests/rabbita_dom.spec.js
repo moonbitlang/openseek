@@ -18,6 +18,16 @@ async function diagramViewportFillsHost(host) {
   });
 }
 
+// `goto()` returns once the shell is mounted, which can be before the host's
+// project list arrives. Until then the main pane shows an onboarding card with
+// its own "Add a project" button, so wait for the fixture project and address
+// the sidebar's button through its landmark.
+async function sidebarAddProject(page) {
+  const sidebar = page.getByRole('complementary');
+  await expect(sidebar.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
+  return sidebar.getByRole('button', { name: 'Add a project', exact: true });
+}
+
 test('workspace search supports toggles and keyboard navigation', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -783,7 +793,7 @@ test('project picker adds the browsed folder with Enter', async ({ page }) => {
   await app.install();
   await app.goto();
 
-  await page.getByRole('button', { name: 'Add a project' }).click();
+  await (await sidebarAddProject(page)).click();
   const picker = page.getByRole('dialog', { name: 'Add a project' });
   await expect(picker).toBeVisible();
   await expect(
@@ -1369,12 +1379,17 @@ test('new chat materializes on send, and archive and restore update the sidebar'
   const project = page.locator('.workspace-row', { hasText: 'workspace' });
   await project.hover();
   const newConversation = project.getByTitle('New conversation in this project');
-  const addProject = page.locator('.sidebar-header')
-    .getByRole('button', { name: 'Add a project' });
+  const addProject = await sidebarAddProject(page);
   const iconPaths = button => button.locator('svg path').evaluateAll(paths =>
     paths.map(path => path.getAttribute('d')),
   );
-  expect(await iconPaths(newConversation)).not.toEqual(await iconPaths(addProject));
+  // `evaluateAll` does not wait and returns [] for a locator that matches
+  // nothing, so require both icons before comparing them.
+  const newConversationIcon = await iconPaths(newConversation);
+  const addProjectIcon = await iconPaths(addProject);
+  expect(newConversationIcon).not.toEqual([]);
+  expect(addProjectIcon).not.toEqual([]);
+  expect(newConversationIcon).not.toEqual(addProjectIcon);
 
   await newConversation.click();
   await expect(project).toHaveClass(/\bactive\b/);
@@ -2151,7 +2166,13 @@ test('Codex creates a thread, sends its first turn, and stops it', async ({ page
     request.method === 'codex.draft.open'))
     .toMatchObject({ params: { cwd: '/workspace' } });
 
-  await page.locator('#task').fill('Run the Codex browser E2E turn');
+  // The request leaves in the same update that selects the Codex draft, a
+  // frame before the Codex composer replaces SeekMoon's in the shared #task.
+  // Wait for the destination textbox rather than filling the old one.
+  await page.getByRole('textbox', {
+    name: 'Ask Codex to inspect, edit, or explain this workspace.',
+    exact: true,
+  }).fill('Run the Codex browser E2E turn');
   await page.getByTitle('Send', { exact: true }).click();
   await expect.poll(() => app.requests.find(request =>
     request.method === 'codex.thread.start'))
@@ -2189,7 +2210,7 @@ test('desktop shell and modal stay inside a narrow browser viewport', async ({ p
   await app.goto();
 
   await page.getByRole('button', { name: 'Show sidebar' }).click();
-  await page.getByRole('button', { name: 'Add a project' }).click();
+  await (await sidebarAddProject(page)).click();
   const bounds = await page.locator('.picker-modal').boundingBox();
   expect(bounds).not.toBeNull();
   expect(bounds.x).toBeGreaterThanOrEqual(0);
@@ -2537,7 +2558,7 @@ test('project picker capture preserves focused controls and is removed on close'
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
-  const open = page.getByRole('button', { name: 'Add a project', exact: true });
+  const open = await sidebarAddProject(page);
   const picker = page.getByRole('dialog', { name: 'Add a project', exact: true });
   for (let i = 0; i < 2; i++) {
     await open.click();
