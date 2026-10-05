@@ -14,6 +14,15 @@
 /// accounting, and terminal classification live in `agent_subrun`
 /// (`run_subrun`), which observes a child from outside through its result
 /// file and exit. Events go to the process's event stream as always.
+///
+/// `instructions` is how whoever started the turn talks to it while it runs:
+/// each call returns what arrived since the last one, already shaped as
+/// steering input. The loop asks wherever it looks for steers, so an
+/// instruction is folded in before the next model request and wins over a
+/// completion decided meanwhile. That includes a submission: a report
+/// captured before an instruction arrived answers a task that has since
+/// changed, so it is dropped and the turn must submit again. Where the
+/// instructions come from (a child's inbox file) is the caller's business.
 pub async fn[T] execute_kind(
   session_id~ : String,
   system_prompt~ : String,
@@ -28,6 +37,7 @@ pub async fn[T] execute_kind(
   retry_backoff_ms? : Int,
   workspace_root? : String = ".",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+  instructions? : async () -> Array[@agent_runtime.SteerInput],
 ) -> T? {
   let captured : Ref[T?] = { val: None, }
   let tools = tools(captured)
@@ -39,9 +49,21 @@ pub async fn[T] execute_kind(
     Some(append) => append
     None => (session, item) => session.append(item)
   }
+  let external_input = instructions.map(arrived => {
+    async fn() -> Array[@agent_runtime.SteerInput] {
+      let inputs = arrived()
+      // Only input the loop will act on supersedes a report: a blank one is
+      // dropped there, and must not cost the turn its result here.
+      if inputs.any(input => input.has_content()) {
+        captured.val = None
+      }
+      inputs
+    }
+  })
+  let runtime = @agent_runtime.AgentRuntime(workspace_root~, external_input?)
   let _ : @agent_session.Session = @async.with_task_group() <| group => {
     @agent.run_turn_in_scope(
-      runtime=AgentRuntime(workspace_root~),
+      runtime~,
       scope=AgentTaskScope(group),
       api_key~,
       model~,

@@ -59,6 +59,12 @@ struct AgentRuntime {
   /// approval does not acquire a dependency on the protocol, the engine, or
   /// whichever controller happens to be attached.
   approval : ApprovalChannel?
+  /// Where input from OUTSIDE this process arrives, when anything sends
+  /// some (see `pull_external_input`). `None` once the source has failed.
+  mut external_input : (async () -> Array[SteerInput])?
+  /// Why the source failed, until the loop has told the turn
+  /// (see `take_external_input_failure`).
+  mut external_input_failure : String?
 }
 
 ///|
@@ -77,9 +83,13 @@ struct AgentRuntime {
 /// nothing, the tools that would ask do not offer the argument that asks, and
 /// a call that asks anyway is answered `Unavailable` — which is what every
 /// caller with no human attached, and every test that does not care, wants.
+///
+/// `external_input` returns what arrived from outside the process since its
+/// last call — a child's inbox, for instance. See `pull_external_input`.
 pub fn AgentRuntime::AgentRuntime(
   workspace_root? : String = ".",
   approval? : ApprovalChannel,
+  external_input? : async () -> Array[SteerInput],
 ) -> AgentRuntime {
   {
     workspace_root,
@@ -88,6 +98,8 @@ pub fn AgentRuntime::AgentRuntime(
     user_input_changed: Cond(),
     user_input_pending: false,
     approval,
+    external_input,
+    external_input_failure: None,
   }
 }
 
@@ -157,6 +169,48 @@ pub fn AgentRuntime::queue_steer(
     self.user_input_pending = true
     self.user_input_changed.broadcast()
   }
+}
+
+///|
+/// Move whatever the external source holds into the steering queue.
+///
+/// The agent loop calls this wherever it is about to drain steers, so input
+/// from another process obeys exactly the rules a user's mid-turn input
+/// does: folded in before the next model request, and winning over a
+/// completion the model decided on meanwhile. It is an await at a point where
+/// the loop's session is current, which is why the source is asked here and
+/// not from inside a persistence callback.
+///
+/// A source that fails is dropped, not retried on every step. The failure is
+/// NOT queued as steering input: steering wins over a completion, and a turn
+/// that just finished its work must not be kept running — and so perhaps lose
+/// its result to the step budget — because a side channel broke. It is held
+/// for `take_external_input_failure` instead.
+pub async fn AgentRuntime::pull_external_input(self : AgentRuntime) -> Unit {
+  guard self.external_input is Some(source) else { return }
+  let inputs = source() catch {
+    error => {
+      self.external_input = None
+      self.external_input_failure = Some("\{error}")
+      return
+    }
+  }
+  for input in inputs {
+    self.queue_steer(input)
+  }
+}
+
+///|
+/// Why the external source failed, once: the loop collects it when it is
+/// about to make another model request anyway, and tells the turn then. A
+/// turn that ends first never hears of it, which costs nothing — it has no
+/// further use for the source.
+pub fn AgentRuntime::take_external_input_failure(
+  self : AgentRuntime,
+) -> String? {
+  let failure = self.external_input_failure
+  self.external_input_failure = None
+  failure
 }
 
 ///|

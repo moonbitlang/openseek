@@ -17,12 +17,14 @@ pub extenum AgentEvent {
 }
 
 type AgentRuntime
-pub fn AgentRuntime::AgentRuntime(workspace_root? : String, approval? : ApprovalChannel) -> Self
+pub fn AgentRuntime::AgentRuntime(workspace_root? : String, approval? : ApprovalChannel, external_input? : async () -> Array[SteerInput]) -> Self
 pub fn AgentRuntime::approval_channel(Self) -> ApprovalChannel?
 pub fn AgentRuntime::drain_events(Self) -> Array[AgentEvent]
 pub fn AgentRuntime::drain_steers(Self) -> Array[SteerInput]
 pub fn AgentRuntime::emit_event(Self, AgentEvent) -> Unit
+pub async fn AgentRuntime::pull_external_input(Self) -> Unit
 pub fn AgentRuntime::queue_steer(Self, SteerInput, wake? : Bool) -> Unit
+pub fn AgentRuntime::take_external_input_failure(Self) -> String?
 pub async fn AgentRuntime::wait_for_user_input(Self) -> Unit
 pub fn AgentRuntime::workspace_root(Self) -> String
 

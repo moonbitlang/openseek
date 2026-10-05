@@ -305,9 +305,12 @@ pub async fn[X] run_turn_in_scope(
 
 ///|
 /// Queued steering input worth applying: drained losslessly, blanks dropped.
-fn @agent_runtime.AgentRuntime::pending_steers(
+/// Input waiting outside the process is pulled in first, so it is seen at
+/// every point the loop looks for steers and nowhere else.
+async fn @agent_runtime.AgentRuntime::pending_steers(
   runtime : Self,
 ) -> Array[@agent_runtime.SteerInput] {
+  runtime.pull_external_input()
   [
     for input in runtime.drain_steers() if input.has_content() => input
   ]

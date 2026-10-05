@@ -471,6 +471,16 @@ async fn AgentLoop::prepare_step(
   // Steering first: user-visible mid-turn input should be applied before plan
   // reminders or the next model request.
   let session = self.apply_steer_inputs(session, self.runtime.pending_steers())
+  // A broken outside source is reported here and only here: this turn is
+  // making another request regardless, so the notice cannot keep it running.
+  let session = match self.runtime.take_external_input_failure() {
+    Some(reason) =>
+      self.append_runtime_notice(
+        session,
+        "Messages from other agents can no longer be read (\{reason}). Carry on with the task as it stands.",
+      )
+    None => session
+  }
   // A goal met without a finish attempt still gets its owed review before
   // the next model request (the finish seams handle the met-then-finish
   // shapes; this covers met-then-keep-working). AFTER the steers: a queued

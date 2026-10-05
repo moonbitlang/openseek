@@ -115,6 +115,7 @@ async fn run_answer_kind(
   session_id : String,
   max_steps? : Int = 8,
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+  instructions? : async () -> Array[@agent_runtime.SteerInput],
 ) -> String? {
   @agent_kind.execute_kind(
     session_id~,
@@ -147,6 +148,7 @@ async fn run_answer_kind(
     model=Deepseek(V4Flash),
     api_url=url,
     append_item?,
+    instructions?,
   )
 }
 
@@ -270,5 +272,240 @@ async test "a store-backed append_item persists the child transcript" {
     assert_eq(loaded.system_prompt(), "You are a test subagent.")
     // The durable transcript holds the whole turn, not just a header.
     assert_true(loaded.events().length() >= 3)
+  }
+}
+
+///|
+/// One instruction, handed over the first time the source is asked after
+/// `ready` turns true.
+fn one_instruction(
+  text : String,
+  ready : () -> Bool,
+) -> async () -> Array[@agent_runtime.SteerInput] {
+  let mut given = false
+  () => {
+    if given || !ready() {
+      []
+    } else {
+      given = true
+      [Prompt(Content([Text(text)]), submission_id=Some("m1"))]
+    }
+  }
+}
+
+///|
+/// How many of a request's messages carry `needle`.
+fn copies(request : Json, needle : String) -> Int {
+  guard request is { "messages": Array(messages), .. } else { return 0 }
+  messages.iter().filter(m => m.stringify().contains(needle)).count()
+}
+
+///|
+/// The launcher's side channel: an instruction that arrives while the kind
+/// works is in the next model request, once.
+async test "an instruction reaches the model at its next request" {
+  @async.with_task_group() <| group => {
+    let requests : Array[Json] = []
+    let handle : (Json) -> MockReply raise = request => {
+      requests.push(request)
+      match requests.length() {
+        1 | 2 =>
+          Sse(
+            sse_tool_calls(
+              [("call_\{requests.length()}", "probe", "{}")],
+              100_000,
+            ),
+          )
+        _ =>
+          Sse(
+            sse_tool_calls(
+              [("call_3", "submit", "{\"answer\": \"redirected\"}")],
+              110_000,
+            ),
+          )
+      }
+    }
+    guard child_test_server(group, handle) is Some(url) else { return }
+    let answer = run_answer_kind(
+      url,
+      "instructed",
+      instructions=one_instruction("look at the tests instead", () => {
+        requests.length() == 1
+      }),
+    )
+    assert_true(answer is Some("redirected"))
+    assert_eq(copies(requests[0], "look at the tests instead"), 0)
+    assert_eq(copies(requests[1], "look at the tests instead"), 1)
+    assert_eq(copies(requests[2], "look at the tests instead"), 1)
+  }
+}
+
+///|
+/// An instruction that lands while the kind is submitting overrides the
+/// finish, and the report it had captured — an answer to the task as it was —
+/// is not what the run returns.
+async test "a report captured before an instruction is not returned" {
+  @async.with_task_group() <| group => {
+    let requests : Array[Json] = []
+    let handle : (Json) -> MockReply raise = request => {
+      requests.push(request)
+      if requests.length() == 1 {
+        Sse(
+          sse_tool_calls(
+            [("call_1", "submit", "{\"answer\": \"before\"}")],
+            100_000,
+          ),
+        )
+      } else {
+        // The turn continued with the instruction in view, and this time the
+        // model stops without submitting.
+        Sse(sse_final("nothing more to add", 110_000))
+      }
+    }
+    guard child_test_server(group, handle) is Some(url) else { return }
+    let answer = run_answer_kind(
+      url,
+      "superseded",
+      instructions=one_instruction("only production callers", () => {
+        requests.length() == 1
+      }),
+    )
+    assert_eq(requests.length(), 2)
+    assert_eq(copies(requests[1], "only production callers"), 1)
+    assert_true(answer is None)
+  }
+}
+
+///|
+async test "a fresh submission after an instruction is the report" {
+  @async.with_task_group() <| group => {
+    let requests : Array[Json] = []
+    let handle : (Json) -> MockReply raise = request => {
+      requests.push(request)
+      let answer = if requests.length() == 1 { "before" } else { "after" }
+      Sse(
+        sse_tool_calls(
+          [
+            (
+              "call_\{requests.length()}",
+              "submit",
+              "{\"answer\": \"\{answer}\"}",
+            ),
+          ],
+          100_000,
+        ),
+      )
+    }
+    guard child_test_server(group, handle) is Some(url) else { return }
+    let answer = run_answer_kind(
+      url,
+      "resubmitted",
+      instructions=one_instruction("only production callers", () => {
+        requests.length() == 1
+      }),
+    )
+    assert_true(answer is Some("after"))
+  }
+}
+
+///|
+/// A source that fails stops being asked, and the turn is told once.
+async test "a failing instruction source does not end the turn" {
+  @async.with_task_group() <| group => {
+    let requests : Array[Json] = []
+    let handle : (Json) -> MockReply raise = request => {
+      requests.push(request)
+      if requests.length() == 1 {
+        Sse(sse_tool_calls([("call_1", "probe", "{}")], 100_000))
+      } else {
+        Sse(
+          sse_tool_calls(
+            [("call_2", "submit", "{\"answer\": \"done\"}")],
+            110_000,
+          ),
+        )
+      }
+    }
+    guard child_test_server(group, handle) is Some(url) else { return }
+    let mut asked = 0
+    let answer = run_answer_kind(url, "broken-source", instructions=() => {
+      asked += 1
+      fail("inbox unreadable")
+    })
+    assert_true(answer is Some("done"))
+    assert_eq(asked, 1)
+    assert_eq(copies(requests[0], "can no longer be read"), 1)
+    assert_eq(copies(requests[1], "can no longer be read"), 1)
+  }
+}
+
+///|
+/// The source breaking while the kind is submitting on its LAST step must
+/// not cost it the report: a notice there would override the finish and the
+/// step budget would end the run with nothing.
+async test "a source failing at the finish does not lose the report" {
+  @async.with_task_group() <| group => {
+    let requests : Array[Json] = []
+    let handle : (Json) -> MockReply raise = request => {
+      requests.push(request)
+      Sse(
+        sse_tool_calls(
+          [("call_1", "submit", "{\"answer\": \"just in time\"}")],
+          100_000,
+        ),
+      )
+    }
+    guard child_test_server(group, handle) is Some(url) else { return }
+    let mut terminal : @agent_session.TurnTerminal? = None
+    let answer = run_answer_kind(
+      url,
+      "broken-at-finish",
+      max_steps=1,
+      append_item=(session, item) => {
+        if item is Terminal(ended) {
+          terminal = Some(ended)
+        }
+        session.append(item)
+      },
+      instructions=() => {
+        if requests.is_empty() {
+          []
+        } else {
+          fail("inbox unreadable")
+        }
+      },
+    )
+    assert_eq(requests.length(), 1)
+    assert_true(answer is Some("just in time"))
+    // The turn FINISHED: the run reports its result from the terminal, so a
+    // capture that survived an exhausted turn would still reach nobody.
+    assert_true(terminal is Some(Finished(_)))
+  }
+}
+
+///|
+/// Blank input is dropped by the loop, so it supersedes nothing.
+async test "blank input does not discard a captured report" {
+  @async.with_task_group() <| group => {
+    let requests : Array[Json] = []
+    let handle : (Json) -> MockReply raise = request => {
+      requests.push(request)
+      Sse(
+        sse_tool_calls(
+          [("call_1", "submit", "{\"answer\": \"kept\"}")],
+          100_000,
+        ),
+      )
+    }
+    guard child_test_server(group, handle) is Some(url) else { return }
+    let answer = run_answer_kind(url, "blank-input", instructions=() => {
+      if requests.is_empty() {
+        []
+      } else {
+        [Prompt(Content([Text("  ")]), submission_id=None)]
+      }
+    })
+    assert_eq(requests.length(), 1)
+    assert_true(answer is Some("kept"))
   }
 }
