@@ -116,3 +116,61 @@ test('opening another conversation saves a title being edited', async ({ page })
   await expect(first.locator('.row-menu-button')).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
+
+test('a background reorder does not end or save a title being edited', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.liveSessions[0].updated_at_ms = 5;
+  app.liveSessions.push({ id: 'session-2', title: 'Second conversation', updated_at_ms: 6 });
+  app.liveSessions.push({ id: 'session-3', title: 'Third conversation', updated_at_ms: 7 });
+  await app.install();
+  await app.goto();
+  const order = () => page.locator('.conversation-row').evaluateAll(
+    rows => rows.map(row => row.getAttribute('title')));
+  await expect.poll(order).toEqual(['session-3', 'session-2', 'session-1']);
+  const row = page.locator('.conversation-row[title="session-3"]');
+  await row.hover();
+  await row.locator('.row-menu-button').click();
+  await page.getByRole('menuitem', { name: 'Rename…' }).click();
+  const input = row.getByRole('textbox', { name: 'Rename conversation' });
+  await expect(input).toBeFocused();
+  await input.pressSequentially('Half');
+  // The edited row drops to the end: the list re-inserts its node, which
+  // blurs the field without the user leaving it.
+  app.liveSessions.find(session => session.id === 'session-3').updated_at_ms = 1;
+  app.notify('session.changed', { change: 'created', session: 'session-3', workspace: '/workspace' });
+  await expect.poll(order).toEqual(['session-2', 'session-1', 'session-3']);
+  await expect(input).toBeFocused();
+  await input.pressSequentially(' typed');
+  await expect(input).toHaveValue('Half typed');
+  expect(app.requests.filter(r => r.method === 'session.rename')).toEqual([]);
+  await input.press('Enter');
+  await expect.poll(() => app.requests.filter(r => r.method === 'session.rename')
+    .map(r => r.params.title)).toEqual(['Half typed']);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a project stays open to show a failed rename', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  const row = page.locator('.conversation-row[title="session-1"]');
+  await row.hover();
+  await row.locator('.row-menu-button').click();
+  await page.getByRole('menuitem', { name: 'Rename…' }).click();
+  const input = row.getByRole('textbox', { name: 'Rename conversation' });
+  await expect(input).toBeFocused();
+  await input.fill('Will not save');
+  app.rpcErrors.set('session.rename', 'fixture rename unavailable');
+  app.rpcDelays.set('session.rename', 400);
+  // Collapsing the project moves focus away, which starts the save.
+  const disclosure = page.locator('.workspace-row[title="/workspace"] .workspace-disclosure');
+  await disclosure.click();
+  await expect(page.getByRole('alert')).toContainText('fixture rename unavailable');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('Will not save');
+  // Giving up lets the pending collapse take effect.
+  await input.press('Escape');
+  await expect(row).toHaveCount(0);
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  expect(app.pageErrors).toEqual([]);
+});

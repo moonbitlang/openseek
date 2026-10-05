@@ -332,6 +332,35 @@ pub fn open_id(id : Id) -> String {
 }
 
 ///|
+/// Whether the field lost focus because the list re-inserted its row, not
+/// because the user left it. A reorder moves the row's node, and the browser
+/// blurs a focused element that is moved. Every way of leaving looks
+/// different: Tab and a click on a control name where focus goes, another
+/// window takes the document's focus, and a press on plain content holds an
+/// `:active` element.
+fn blurred_by_relocation(event : @dom.FocusEvent) -> Bool {
+  let related : @js.Value = @js.Value::cast_from(event).get_with_string(
+    "relatedTarget",
+  )
+  let document = @dom.document()
+  let has_focus : Bool = @js.Value::cast_from(document).apply_with_string(
+    "hasFocus",
+    ([] : FixedArray[@js.Value]),
+  )
+  related.is_null() &&
+  has_focus &&
+  document.query_selector(":active").to_option() is None
+}
+
+///|
+fn focus_rename_field() -> Unit {
+  if @dom.document().get_element_by_id(RenameFieldId).to_option() is Some(field) &&
+    field.to_html_element() is Some(field) {
+    field.focus()
+  }
+}
+
+///|
 fn rename_field(
   locale : @i18n.Locale,
   id : Id,
@@ -347,7 +376,14 @@ fn rename_field(
     attrs=@html.Attrs::build()
       .aria_label(ui(locale, RenameConversation))
       .aria_invalid((rename.error is Some(_)).to_string())
-      .on_blur(_ => (actions.rename_edit)(id, Left))
+      .on_blur(event => {
+        if blurred_by_relocation(event) {
+          // The user is still editing: take focus back in the row's new place.
+          @cmd.custom_cmd(_ => focus_rename_field(), kind=@cmd.after_render)
+        } else {
+          (actions.rename_edit)(id, Left)
+        }
+      })
       .on_keydown(event => {
         // Keys typed into the title never reach the app's shortcuts.
         event.stop_propagation()
