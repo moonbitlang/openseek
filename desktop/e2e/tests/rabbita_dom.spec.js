@@ -2429,7 +2429,7 @@ test('workspace settings dialog opens and persists per-workspace choices', async
   await app.install();
   await app.goto();
 
-  // The project row's "…" menu opens its workspace settings dialog.
+  // The project row's "⋮" menu opens its workspace settings dialog.
   await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
   await page.getByTitle('More actions').click();
   await page.getByRole('menuitem', { name: 'Workspace settings' }).click();

@@ -179,8 +179,8 @@ pub fn icon_reply() -> @html.Html {
 }
 
 ///|
-/// Hand-drawn (not a codicon): a horizontal ellipsis — three filled dots —
-/// for a row's overflow menu.
+/// Hand-drawn (not a codicon): a vertical ellipsis — three filled dots — for
+/// a row's overflow menu.
 pub fn icon_more() -> @html.Html {
   @svg.svg(
     width=16,
@@ -188,9 +188,9 @@ pub fn icon_more() -> @html.Html {
     view_box="0 0 16 16",
     attrs=@svg.Attrs::build().fill("currentColor"),
     [
-      svg_circle("3.5", "8", "1.25"),
+      svg_circle("8", "3.5", "1.25"),
       svg_circle("8", "8", "1.25"),
-      svg_circle("12.5", "8", "1.25"),
+      svg_circle("8", "12.5", "1.25"),
     ],
   )
 }
