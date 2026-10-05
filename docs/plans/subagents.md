@@ -1,10 +1,11 @@
 # Plan: subagents the engine owns
 
-Date: 2026-10-05. Status: proposal, not implemented. It supersedes a first
-attempt (pull requests #1868–#1871, closed) that added messaging on top of
-children the `mbtx` snippet spawns; the parts of that work which still apply
-are carried into this plan and named where they appear. Two rounds of
-external design review shaped it; their findings are at the end.
+Date: 2026-10-05. Status: proposal; the first step (the allocator) is being
+implemented, nothing else is. It supersedes a first attempt (pull requests
+#1868–#1871, closed) that added messaging on top of children the `mbtx`
+snippet spawns; the parts of that work which still apply are carried into
+this plan and named where they appear. Three rounds of external design
+review shaped it; their findings are at the end.
 
 ## Where this is going
 
@@ -139,7 +140,9 @@ Every answer about a child is the same small object:
 ```
 
 - `state`: `starting`, `running`, `ended`. There is no other state; a
-  stopped child is `ended` with outcome `stopped`.
+  stopped child is `ended` with outcome `stopped`. These are facts about a
+  child THIS engine process is running or has reaped. A child it only knows
+  from disk is not given a state it cannot vouch for (see Seeing a child).
 - `outcome`, present only when ended: `captured`, `no_report`, `max_steps`,
   `context_yield`, `timed_out`, `failed`, `stopped`, `owner_lost`.
 - `owner`: `"model"`, or the job id of the script that started it once that
@@ -154,10 +157,21 @@ file that holds it. The engine writes every captured report to
 the session is, so the reference is always valid and identity, outcome and
 usage can never be lost to an oversized report.
 
-Every result's `content` is one line; the data rides once, in `data`. A
-caller should collect each result once: a script's retained call trace is
-512 KiB, and when it is exhausted the service refuses further calls. The
-children are unaffected and are stopped when the script closes.
+One launcher, two ways of answering, because the two callers read
+different halves of a tool result:
+
+- **A script** reads `data`. Its `content` is one line. The data rides
+  once, so thirty-two envelopes are a few kilobytes of the script's 512 KiB
+  retained trace; a script should still collect each result once, because a
+  trace that is exhausted makes the service refuse further calls (the
+  children are unaffected and are stopped when the script closes).
+- **The model** reads `content`; `data` never enters its context. So the
+  model's tools render the same envelope as bounded text, and
+  `subagent_result` renders the report itself, or names `report_file` when
+  it is too large.
+
+Tool results in general are NOT changed to project `data` to the model; the
+retained traces of scripts are excluded from context on purpose.
 
 Refusals from `subagent_start` are results a caller can branch on, with
 `refused`: `"busy"` (four children already running; retry after one ends;
@@ -196,7 +210,12 @@ Nothing about the caller rides in script-controlled arguments.
 
 Quota is per owner: 32 starts for a program, counted when a start is
 admitted, never refunded. The model's direct calls are not subject to it;
-they are bounded by the in-flight cap and by being one call each.
+they are bounded by the in-flight cap and by being one call each. That is a
+choice about spend, not an oversight: a session spend limit is later work.
+
+Ownership is authorization. It is not who a child's messages come from: for
+both entrances the sender of an instruction is the parent SESSION (see
+Talking to a child).
 
 ### Admission and close
 
@@ -222,9 +241,26 @@ A dropped connection is not a close: an admitted call keeps running. A
 caller that loses the reply to a start must look with `subagent_status`
 before starting again, and the taught example does.
 
-Cancelling the model's TURN does not stop a background script or its
-children — background jobs outlive a turn today — and does not stop the
-model's own children either. `job_stop` and `subagent_stop` do.
+"Join" covers every child of the owner, including a start still
+allocating its id; a test cancels during that write.
+
+**When a turn ends or is cancelled.** A model-owned child belongs to the
+session and survives context yields and later turns. Three rules keep that
+from going wrong:
+
+- *Finishing.* A turn that would end in plain text while model-owned
+  children it started are still running is asked to choose — keep working,
+  wait, stop them, or finish and leave them running — exactly as it is for
+  background jobs today. An explicit `finish` is the model's decision and
+  passes.
+- *Ending while idle.* A child that ends between turns is recorded and
+  shown through the existing idle notice path. It does not start a model
+  turn by itself.
+- *The user's Cancel.* Cancelling the turn STOPS the model's own running
+  children. A user who presses Cancel means "stop spending", and today
+  there is no way to stop a child without another model turn. A background
+  script and its children are not stopped by Cancel, as background jobs are
+  not; the job controls stop them.
 
 ### In flight
 
@@ -252,15 +288,26 @@ loop that does not would spin through its call budget.
 
 From a script the wait is bounded at 60 s, after which it returns the
 children's actual states. Sixty seconds leaves room for admission delay
-inside the SDK's 125 s. To keep the channel usable while waits are pending,
-a program may have ONE wait in flight (a second is refused `busy`), and at
-most eight waits are held across the session; a ninth returns the current
-states at once. One wait can cover all of a program's children, so nothing
-is lost by the limit.
+inside the SDK's 125 s. To keep the channel usable while waits are pending:
 
-From the model the wait pauses the turn the way `job_wait` does: until a
-listed child ends or user input arrives, with no timeout. A child's end also
-queues a notice for the model, so it need not wait at all.
+- every one of these tools is `concurrent_safe`, so a held wait holds
+  neither the service's execution mutex nor the file gate — without that,
+  one wait would queue every `stop`, `send` and edit behind it;
+- a program may have ONE wait in flight (a second is refused `busy`), and
+  at most eight are held across the session; a ninth returns the current
+  states at once. A wait takes its slot on suspending and gives it back on
+  waking. One wait can cover all of a program's children.
+
+The acceptance test holds waits and proves `stop` and `send` still get
+through the real service.
+
+From the model the wait is a different registration of the same launcher,
+because a script's tool must answer with a result and the model's must ask
+the loop to pause. It behaves as `job_wait` does: alone in its tool batch,
+needs budget for another model step, pauses until a listed child ends or
+user input arrives, and reports which. A model-owned child's end is
+published as a notice BEFORE waiters see it as settled, so the model need
+not wait at all.
 
 Cancelling a wait removes the waiter. It never touches the children.
 
@@ -275,9 +322,10 @@ Stopping a child that has just ended returns its real outcome. To ask a
 child for what it has before stopping it, send it an instruction and wait.
 
 The launcher is the single publisher of a child's terminal outcome.
-`run_subrun` today allocates its own id and reports `cancelled` when it
-unwinds; it gains a way to run with an id allocated earlier and to leave the
-terminal to its caller.
+`run_subrun` today allocates its own id, emits a `SubrunStarted` /
+`SubrunFinished` pair, and reports `cancelled` when it unwinds. It gains a
+way to run with an id allocated earlier, to emit neither bracket, and to
+leave the terminal to its caller. The gate keeps its brackets.
 
 ### The ledger
 
@@ -287,10 +335,20 @@ child ordinals and the record of each child's lifecycle; it is not a second
 copy of anything.
 
 - **One engine process owns a session's subagents at a time.** The owner
-  holds an exclusive lock for its lifetime. A second engine process on the
-  same session cannot take it: its `subagent_start` is refused
-  `unavailable`, and its `mbtx(subrun=true)` is refused the same way.
-  Liveness is the lock, never a guess from a process id or a generation.
+  holds an exclusive lock for its lifetime on a dedicated file,
+  `subagents.lock`, taken without blocking. It is not `session.lock`, which
+  ordinary persistence must keep being able to take. A second engine
+  process on the same session cannot take it: its `subagent_start` is
+  refused `unavailable`, and its `mbtx(subrun=true)` is refused the same
+  way. Liveness is the kernel lock, never a guess from a process id — and
+  never the file's existence, which outlives a crash. The desktop already
+  closes an engine before starting its successor; a `run --session` beside
+  a live `serve` is the case this refuses. A `--kind` child is a different
+  session and does not contend.
+- **Without a durable session there is no ledger and no launcher.** The
+  tools are not registered, and `mbtx(subrun=true)` is refused as today.
+  The gate's reviewer keeps its existing ephemeral path, with in-memory
+  ids and no transcript.
 - **Allocation is durable before an id leaves the engine.** An `allocated`
   record (`first`, `count`, `owner`) is appended and synced first: `count`
   1 for a start, 32 for a hosted workflow's block, 1 for the gate's
@@ -298,6 +356,8 @@ copy of anything.
   existing child session, whichever is greater. Today the counter lives in
   memory and a restart recovers only from child sessions that exist, so a
   surviving script holding an unused block can collide with a new child.
+  The hosted reservation is synchronous today; it becomes awaited and
+  fallible at its one call site, before the handoff is published.
 - **Lifecycle.** `started` when the process is spawned; `ended` with the
   outcome and usage when the launcher reaps it.
 - **Writes fail loudly.** A failed or unconfirmed allocation write returns
@@ -337,24 +397,43 @@ usage.
 
 ### Seeing a child
 
-`subagent_status` reads the registry: an engine-launched child is
-`starting`, `running` or `ended` as a fact. With an id it adds the child's
-last few transcript events and where each instruction sent to it stands.
-Children from earlier engine processes come from the ledger. Children a
-hosted workflow spawned are shown from their transcripts alone, as "no end
-recorded, last activity N s ago" when they have no terminal; the first
-attempt's reader of the workflow's `events.jsonl` is not carried over.
+`subagent_status` answers with two different kinds of entry, and says which
+each is:
 
-When a script-owned child starts, the model gets one bounded notice naming
-its id, label and job. A model-owned child's end queues a notice; a
-script-owned child's end does not, beyond its job's own completion notice.
+- **Managed** — a child this engine process started. Its envelope's state is
+  a fact: `starting`, `running`, or `ended` with an outcome.
+- **Observed** — a child known only from disk. One from the ledger with no
+  `ended` record is `owner_lost`. One a hosted workflow spawned has a
+  transcript and nothing else: it is reported as "ended" only if its
+  transcript has a terminal, and otherwise as "no end recorded, last
+  activity N s ago". It is never given `running`, and never `owner_lost`
+  while the engine that might still be running it is alive. The first
+  attempt's reader of the workflow's `events.jsonl` is not carried over.
 
-The desktop already lists a child's session under its parent in the
-sidebar, and shows a script's host calls and their results under its job.
-Live per-child lanes for children that outlive a turn are deferred: lanes
-are turn-scoped today, and promising visibility from transient events alone
-would be wrong. The engine therefore emits no new subrun brackets for
-launcher children in the first stack.
+With an id it adds the child's last few transcript events and where each
+instruction sent to it stands.
+
+A long session accumulates children without limit, so a listing is bounded:
+every child that has not ended, then the most recently ended, at most 32
+entries, with a count of the older ones left out. Any one of them is still
+reachable by id.
+
+What a user sees for a launcher child in the first stack, stated plainly:
+
+- the start call in the transcript, like any tool call, and the notice when
+  it ends;
+- the child's session nested under its parent in the sidebar once the
+  session list refreshes, openable as a transcript;
+- NOT a live lane, a workflow row, or the probe-driven refresh that
+  `SubrunStarted`/`SubrunFinished` drive for the gate's reviewer today. The
+  TUI likewise shows no start or finish line.
+
+Lanes are turn-scoped, and a child here can outlive its turn; a bracket
+delivered after the turn's terminal would be dropped or attached to the
+wrong run. So the launcher emits neither bracket in the first stack, and
+live lanes are later work. When a script-owned child starts, the model gets
+one bounded notice naming its id, label and job; that, not the sidebar, is
+how a child is discovered promptly.
 
 ### Talking to a child
 
@@ -379,7 +458,16 @@ Carried over from the first attempt, where it was reviewed and tested.
   response followed). None claims the child obeyed.
 - `subagent_send` refuses a child that has ended, one the caller may not
   address, a blank or over-long message, and a child with eight
-  instructions still waiting.
+  instructions still waiting. The check and the post for one child are
+  serialized, so two senders cannot both pass the limit.
+- **The sender is always the parent session.** A child accepts instructions
+  only from the session its id names as parent, so `from` is that session's
+  id whether the model or a script sent it. Who may send is the ownership
+  rule above; it is not written into the message.
+- **Sending right after starting.** A child opens its inbox when it writes
+  its first record, a moment after it is started. A send before that is
+  refused `not_ready`, which a caller retries; it is not held by the
+  engine.
 
 The inbox stays even though the engine now holds the child's stdin: it
 survives a sender's restart, and the child's stdin treats everything after
@@ -396,8 +484,9 @@ The bundled one-liner is
 per question, wait, print each report or the outcome that replaced it.
 
 **The model.** The same six tools are in the model's tool list, as the last
-step of the stack. They are non-blocking for the model exactly as they are
-for a script, so the turn is never held for a child's lifetime.
+step of the stack: the same launcher behind registrations that answer in
+text and wait through the loop. The turn is never held for a child's
+lifetime.
 
 The acceptance check for the teaching is a compiled script run through the
 real host-call service against contract-speaking fake children, covering a
@@ -408,39 +497,68 @@ recommended before wider use.
 
 ### Workers (the next stack)
 
-A child that can edit. Most of it exists and has been dormant since the
-`subtask` tool was removed: `agent_worker` (the kind), `agent_subtask`
-(provision, capture, integrate), the write scope and the worker sandbox
-profile.
+A child that can edit. Two modes, both allowed:
 
-- `subagent_start(kind="worker", input={"task", "allowed_paths", "name"})`.
-  The engine provisions a git worktree on a new branch; the worker may
-  write only under its allowed paths (file tools everywhere, plus a kernel
-  sandbox on macOS) and cannot commit.
-- When it ends, the engine validates that every change is in scope and
-  commits it. The envelope gains `changes`: branch, commit, diff summary.
-- `subagent_integrate(id)` merges that exact commit into the main checkout;
-  a conflict stops and hands the files to the caller, with continue and
-  abort. `subagent_discard(id)` drops it.
-- Overlapping `allowed_paths` between live workers are refused at start.
+- **In a worktree** — the default, and the only mode for workers running in
+  parallel. The engine provisions a git worktree on a new branch; the
+  worker may write only under its allowed paths and cannot commit. When it
+  ends, the engine validates that every change is in scope and commits it.
+- **In place** — the worker edits the checkout its launcher is working in,
+  one at a time, while the launcher waits. No merge and a warm build; no
+  clean discard.
 
-Worktrees are built in, not something the caller manages: the engine
-creates a worker's worktree, records it, and removes it after the work is
-integrated or discarded. The caller never runs `git worktree` for a worker.
-Two things follow from that and are part of the same stack:
+Most of the worktree mode exists and has been dormant since the `subtask`
+tool was removed: `agent_worker` (the kind), `agent_subtask` (provision,
+capture, integrate, discard, a registry under the common git directory),
+the write scope and the worker sandbox profile.
 
-- **Looking inside a worker's worktree.** A scout can be started IN a
-  worker's worktree — `subagent_start(kind="explore", input, in="sr-5")` —
-  to check that worker's result before it is integrated. `in` accepts only
-  the id of a worker the caller may address; it is not a path.
-- **Cleanup is the engine's.** A worker's worktree and branch are removed on
-  integrate and on discard, and `subagent_status` lists any that are left,
-  so none is orphaned silently. (In a repository with submodules, plain
-  `git worktree remove` refuses; the existing controller already removes the
-  directory and prunes instead.)
+Contracts fixed NOW, so the first stack's shapes do not have to change:
 
-The tools and envelope above are shaped so that this adds a kind, one
-optional argument, one envelope field and two tools, and changes none.
+- **A child's process outcome and the state of its changes are separate
+  things.** A worker can report successfully and fail scope validation; a
+  stopped worker can leave valid changes. The envelope's `outcome` stays
+  about the process. A worker's envelope adds a tagged `changes` object:
+  `state` (`none`, `defective`, `committed`, `conflicted`, `integrated`,
+  `discarded`, and `in_place` for the other mode), with `commit`, `branch`,
+  a diff summary, the validation defects and the cleanup status present
+  only where they exist.
+- **The child-to-workspace association is recorded in the ledger**, so a
+  restart still knows which worktree belongs to which child.
+- **Integration targets the checkout that launched the worker**, which may
+  itself be a linked worktree — not "the main checkout".
+- `subagent_integrate(id, action?)` merges that exact commit; `action` is
+  `continue` or `abort` for a merge left in conflict.
+  `subagent_discard(id)` drops the changes and the worktree.
+- **`in` is a lease.** `subagent_start(kind="explore", ..., in="sr-5")`
+  starts a scout inside worker sr-5's worktree to check its result. `in`
+  takes only the id of a worker the caller may address, never a path, and
+  holds a lease on that worktree: integrate, discard and cleanup refuse
+  while a lease is out, so a worktree is never removed under a scout.
+- **Overlap is a repository-wide question.** Two sessions in one repository
+  can start workers on overlapping paths; today's reservation mutex is
+  process-local although its registry is shared. Worker admission needs a
+  lock under the common git directory.
+- **Worktrees are the engine's.** It creates, records and removes them; the
+  caller never runs `git worktree` for a worker, and `subagent_status`
+  lists any that are left.
+
+The in-place mode gets its safety from permissions instead of isolation,
+and needs more of them:
+
+- a sandbox profile that allows writes in the launcher's checkout only
+  under the allowed paths and still denies `.git`;
+- exclusion: one in-place worker at a time, and the launcher's own edit
+  tools refuse while it runs;
+- the files the worker created are handed to the launcher when it ends,
+  because an agent may only delete files it knows it created;
+- a snapshot before it starts, so its changes can be shown and, in a git
+  repository, reverted; outside git there is no undo, and the tool says so;
+- the launcher's baseline of existing diagnostics is refreshed afterwards.
+
+A delegated child's approval policy is always "never", so a worker in
+either mode refuses anything that needs the user's permission and reports
+that it could not. Passing such a request up to the user needs the
+child-to-parent channel and is not part of the worker stack.
 
 ### Reviews
 
@@ -474,26 +592,28 @@ stays, sharing the ledger's allocator so ids cannot collide.
 ## Stack
 
 1. **The allocator.** Durable, locked allocation of child ordinals in the
-   ledger; one engine process per session; used by `run_subrun` (the gate),
-   hosted reservations and, later, the launcher. Tests: restart with an
-   unused block, two engine processes, a torn tail.
-2. **Owner-bound host tools.** The service builds a program's owner-aware
-   tools over a host-created owner; program close closes the owner;
-   per-owner quota; typed refusals. Tests against the real service: close
-   during admission, a dropped connection.
-3. **The launcher for `explore`.** Registry, start / wait / result / stop,
-   the in-flight cap, lifecycle and accounting records, `report.json`,
-   session shutdown, the `run_subrun` seam. Tests with a fake child.
-4. **Scripts.** Program registration, `subagent_status` from the registry
-   and ledger, the taught contract, the acceptance script, the verified
-   example, `@builtin/scout.mbtx`.
-5. **Messaging.** The loop's input source, the inbox, the scout reading its
+   ledger; one engine process per session; awaited by `run_subrun` (the
+   gate) and by hosted reservations; the ephemeral path kept. Tests: restart
+   with an unused block, two engine processes, a torn tail, no store.
+2. **The launcher, for scripts.** Owner-bound host tools in the service;
+   the `explore` launcher with its registry, in-flight cap, lifecycle and
+   accounting records and `report.json`; start / wait / result / stop /
+   status as script tools; the `run_subrun` seam; session shutdown. One
+   slice, because the launcher has no usable or recoverable entrance
+   without the tools. Acceptance: a compiled script through the real
+   service against fake children, including close during admission, a
+   dropped connection, and `stop` getting through while waits are held.
+3. **Messaging.** The loop's input source, the inbox, the scout reading its
    launcher's instructions, `subagent_send` and delivery states.
-6. **The model.** The six tools in the model's list, the turn-level wait,
-   end notices, the prompt.
+4. **Teaching.** The contract for scripts in the prompt and the `mbtx`
+   description, the verified example, `@builtin/scout.mbtx`.
+5. **The model.** The six tools in the model's list with text results, the
+   loop-level wait, the finish guard, Cancel stopping the model's children,
+   end notices, the prompt. Tests at the turn level, not only against fake
+   children.
 
-Then: workers. Later: the workflow adapter, reviews, a per-child model
-choice, a spend limit, live lanes, a start queue.
+Then: workers, in both modes. Later: the workflow adapter, reviews, a
+per-child model choice, a spend limit, live lanes, a start queue.
 
 ## Review rounds
 
@@ -518,3 +638,20 @@ queue, gate integration with the registry, and live lanes. It asked that
 owner close, session cleanup, durable allocation, explicit persistence
 errors, bounded control availability, report validation and engine-owned
 accounting NOT be cut; none is.
+
+**Round 3** (this document): start the allocator now; revise these before
+the launcher is exposed. Each is addressed above:
+
+| Required | Where |
+| --- | --- |
+| The model never reads `data`; direct calls would start children and see nothing | The envelope (two ways of answering) |
+| A turn can end with children running; idle ends start no turn; Cancel would leave children spending | Admission and close (when a turn ends or is cancelled) |
+| A held wait holds the service's execution mutex unless the tool is concurrency-safe | Waiting |
+| Three states cannot describe a child known only from disk; a listing is unbounded | The envelope; Seeing a child |
+| The hosted reservation is synchronous; the gate has an ephemeral path that must survive | The ledger |
+| Suppressing brackets removes more than lanes | Stopping; Seeing a child |
+| `from` must stay the parent session; a send can beat the child's inbox | Talking to a child |
+| Workers: process outcome and change state are separate; `in` needs a lease; overlap is repository-wide | Workers |
+
+It also advised merging the service, launcher and script-tool steps into one
+slice, and moving the teaching after messaging; the stack above does both.
