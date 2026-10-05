@@ -631,6 +631,21 @@ export class DesktopBrowserHarness {
         return { id: `terminal-${this.requests.filter(r => r.method === 'terminal.open').length}` };
       case 'agent.cancel':
         return { run_id: request.params?.run_id || 'run-e2e' };
+      case 'session.rename': {
+        // Like the host: store the title, then announce the change.
+        const renamed = this.liveSessions.find(
+          session => session.id === request.params?.session,
+        );
+        if (renamed) {
+          renamed.title = request.params.title;
+        }
+        this.notify('session.changed', {
+          change: 'renamed',
+          session: request.params?.session,
+          workspace: request.params?.workspace,
+        });
+        return {};
+      }
       case 'session.archive': {
         const index = this.liveSessions.findIndex(
           session => session.id === request.params?.session,

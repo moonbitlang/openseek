@@ -216,6 +216,34 @@ html.is-resizing .sidebar-resize-handle {
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
+/* The title edited in place: the field takes the title's own box and type,
+   so the text does not move when editing starts. */
+.conversation-row.renaming {
+  cursor: text;
+}
+.conversation-rename-input {
+  align-self: stretch;
+  margin: 2px 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font: inherit;
+  outline: 1px solid var(--color-accent-border);
+  outline-offset: 2px;
+}
+.conversation-rename-input[aria-invalid="true"] {
+  outline-color: var(--color-danger);
+}
+/* The failure sits under the title it belongs to: the row's padding, twisty
+   cell, and gap make up the indent. */
+.conversation-rename-error {
+  padding: 0 8px 4px 28px;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
 .conversation-row:hover {
   background: var(--color-bg-subtle);
 }
@@ -331,25 +359,21 @@ html.is-resizing .sidebar-resize-handle {
 }
 /* Both groups stay in layout (visibility, not display) so the cell keeps
    one width across the swap. */
-.conversation-row:hover .row-trailing:not(.persistent):has(.row-actions) .row-status,
-.conversation-row:focus-within .row-trailing:not(.persistent):has(.row-actions) .row-status {
+.conversation-row:hover .row-trailing:has(.row-actions) .row-status,
+.conversation-row:focus-within .row-trailing:has(.row-actions) .row-status {
   visibility: hidden;
 }
-/* A live row's overflow trigger is always shown, so its status glyphs sit
-   beside the trigger instead of swapping with it. */
-.row-trailing.persistent {
-  display: flex;
-  gap: 6px;
-}
-.row-trailing.persistent .row-status:empty {
-  display: none;
-}
-.row-trailing.persistent .row-menu-button {
-  visibility: visible;
-}
+/* An open conversation menu keeps its hover-revealed trigger in place of the
+   status glyphs while the pointer moves into the floating surface. */
 .row-menu-button[aria-expanded="true"] {
+  visibility: visible;
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
+}
+.conversation-row:not(.loading)
+  .row-trailing:has(.row-menu-button[aria-expanded="true"])
+  .row-status {
+  visibility: hidden;
 }
 .conversation-row.loading .row-trailing {
   display: flex;
@@ -543,6 +567,9 @@ button.composer-worktree:hover {
    workspace's. */
 .conversation-row.nested {
   padding-left: 16px;
+}
+.conversation-rename-error.nested {
+  padding-left: 36px;
 }
 .project-show-more {
   width: 100%;

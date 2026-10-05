@@ -5026,8 +5026,10 @@ fn update_msg(
             ..model,
             conversation_rename: Some({
               id,
+              original: label,
               draft: label,
               saving: false,
+              focus_left: false,
               error: None,
             }),
           },
@@ -5035,53 +5037,38 @@ fn update_msg(
       } else {
         (@cmd.none, model)
       }
-    ConversationRenameChanged(id~, value~) =>
+    ConversationRenameEdited(id~, edit~) =>
       match model.conversation_rename {
-        Some(rename) if rename.id == id && !rename.saving =>
-          (
-            @cmd.none,
-            {
-              ..model,
-              conversation_rename: Some({ ..rename, draft: value, error: None, }),
-            },
-          )
-        _ => (@cmd.none, model)
-      }
-    ConversationRenameSubmitted(id) =>
-      match model.conversation_rename {
-        Some(rename) if rename.id == id &&
-          !rename.saving &&
-          !rename.draft.trim().is_empty() => {
-          let saving = { ..rename, saving: true, error: None, }
-          (
-            rename_conversation(locale=model.locale, dispatch, saving),
-            { ..model, conversation_rename: Some(saving), },
-          )
-        }
-        _ => (@cmd.none, model)
-      }
-    ConversationRenameCancelled(id) =>
-      match model.conversation_rename {
-        Some(rename) if rename.id == id && !rename.saving =>
-          (close_conversation_rename(), { ..model, conversation_rename: None, })
+        Some(rename) if rename.id == id =>
+          model.edit_conversation_rename(dispatch, rename, edit)
         _ => (@cmd.none, model)
       }
     ConversationRenameSucceeded(id) =>
       match model.conversation_rename {
         Some(rename) if rename.id == id =>
-          (close_conversation_rename(), { ..model, conversation_rename: None, })
+          (
+            if rename.focus_left {
+              @cmd.none
+            } else {
+              focus_conversation_title(id)
+            },
+            { ..model, conversation_rename: None, },
+          )
         _ => (@cmd.none, model)
       }
     ConversationRenameFailed(id~, message~) =>
       match model.conversation_rename {
         Some(rename) if rename.id == id =>
           (
-            @cmd.none,
+            // The save may have started as focus left the field; the error
+            // needs the user back in it.
+            focus_conversation_rename(),
             {
               ..model,
               conversation_rename: Some({
                 ..rename,
                 saving: false,
+                focus_left: false,
                 error: Some(
                   (match model.locale {
                     SimplifiedChinese => "重命名失败："
@@ -5134,14 +5121,15 @@ fn update_msg(
         guard model.live_selection(channel, session_id) is Some(target) else {
           return (@cmd.none, model)
         }
+        let (rename_cmd, model) = model.leave_conversation_rename(dispatch)
         let model = {
-          ..model.cancel_unsubmitted_conversation_rename(),
+          ..model,
           selected_conversation: Some(target),
           conversation_load_failure: None,
           screen: Chat,
         }
         let (cmd, model) = open_session_on(dispatch, channel, model, session_id)
-        (@cmd.batch([focus_cmd, cmd]), model)
+        (@cmd.batch([focus_cmd, rename_cmd, cmd]), model)
       }
     RetrySelectedConversation =>
       match model.selected_conversation {
@@ -5176,8 +5164,9 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
+      let (rename_cmd, model) = model.leave_conversation_rename(dispatch)
       let model = {
-        ..model.cancel_unsubmitted_conversation_rename(),
+        ..model,
         selected_conversation: Some({
           channel,
           session,
@@ -5190,7 +5179,7 @@ fn update_msg(
       let (cmd, model) = model.open_archived_session_on(
         dispatch, channel, session, workspace,
       )
-      (@cmd.batch([focus_cmd, cmd]), model)
+      (@cmd.batch([focus_cmd, rename_cmd, cmd]), model)
     }
     ColorSchemeChanged(dark) => {
       let model = { ..model, system_dark: dark, }

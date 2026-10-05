@@ -122,6 +122,24 @@ pub(all) enum TrailingAction {
 } derive(Debug, Eq)
 
 ///|
+/// A row's title while it is edited in place. The root owns the draft and
+/// the save; the row only renders the field and the last save's failure.
+pub(all) struct Rename {
+  draft : String
+  error : String?
+} derive(Debug, Eq)
+
+///|
+/// What the user did in the in-place title field. `Left` is focus moving
+/// away, which commits like the Finder's name field.
+pub(all) enum RenameEdit {
+  Typed(String)
+  Submitted
+  Cancelled
+  Left
+}
+
+///|
 /// Plain, comparable input to one conversation component. Child runs are
 /// nested data so their lifetime follows the parent branch rather than array
 /// position in the global sidebar.
@@ -136,6 +154,7 @@ pub(all) struct Input {
   load_failed : Bool
   running : Bool
   openable : Bool
+  rename : Rename?
   run_mark : RunMark
   trailing : Array[TrailingAction]
   children : Array[Input]
@@ -156,6 +175,7 @@ pub(all) struct Actions {
   restore : (Id) -> @cmd.Cmd
   delete : (Id) -> @cmd.Cmd
   rename : (Id, String) -> @cmd.Cmd
+  rename_edit : (Id, RenameEdit) -> @cmd.Cmd
 }
 
 ///|
@@ -207,18 +227,6 @@ fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
     self.trailing.any(action => action is Archive(..)) && !self.running,
     self.trailing.any(action => action is Delete(..)),
   )
-}
-
-///|
-/// A live row folds its actions behind one overflow trigger, so Rename sits
-/// beside Archive in the menu the row's context click also opens. Archived
-/// rows keep their direct Restore and Delete buttons.
-fn Input::direct_actions(self : Input) -> Array[TrailingAction] {
-  if self.menu_kind() is Some(LiveMenu) {
-    []
-  } else {
-    self.trailing
-  }
 }
 
 ///|
@@ -312,6 +320,51 @@ pub fn Input::menu_entries(
 }
 
 ///|
+/// The one in-place title field; the root focuses it when a rename starts.
+pub const RenameFieldId : String = "conversation-rename-input"
+
+///|
+/// The id of a row's title button, where focus returns after a rename.
+pub fn open_id(id : Id) -> String {
+  id.key() + ":open"
+}
+
+///|
+fn rename_field(
+  locale : @i18n.Locale,
+  id : Id,
+  rename : Rename,
+  actions : Actions,
+) -> @html.Html {
+  @html.input(
+    id=RenameFieldId,
+    class="sidebar-label conversation-rename-input",
+    value=rename.draft,
+    on_input=value => (actions.rename_edit)(id, Typed(value)),
+    attrs=@html.Attrs::build()
+      .aria_label(ui(locale, RenameConversation))
+      .aria_invalid((rename.error is Some(_)).to_string())
+      .on_blur(_ => (actions.rename_edit)(id, Left))
+      .on_keydown(event => {
+        // Keys typed into the title never reach the app's shortcuts.
+        event.stop_propagation()
+        guard !event.is_composing() else { return @cmd.none }
+        match event.key() {
+          "Enter" => {
+            event.prevent_default()
+            (actions.rename_edit)(id, Submitted)
+          }
+          "Escape" => {
+            event.prevent_default()
+            (actions.rename_edit)(id, Cancelled)
+          }
+          _ => @cmd.none
+        }
+      }),
+  )
+}
+
+///|
 fn Actions::child_component(
   self : Actions,
   locale : @rabbita.Val[@i18n.Locale],
@@ -376,6 +429,10 @@ pub fn component(
     if input.running {
       class += " running"
     }
+    let renaming = input.rename is Some(_)
+    if renaming {
+      class += " renaming"
+    }
     let children : Array[@html.Html] = []
     if input.children.is_empty() {
       children.push(@html.span(class="row-twisty spacer", ""))
@@ -394,10 +451,13 @@ pub fn component(
       )
     }
     children.push(
-      if input.openable {
+      if input.rename is Some(rename) {
+        rename_field(locale, input.id, rename, actions)
+      } else if input.openable {
         // Native keyboard activation bubbles to the row's existing open
         // handler, just like a pointer click on the title.
         @html.button(
+          id=open_id(input.id),
           type_="button",
           class="sidebar-label conversation-open",
           attrs=@html.Attrs::build()
@@ -501,6 +561,9 @@ pub fn component(
       }
     }
     let menu_kind = input.menu_kind()
+    // A live row folds its actions behind one overflow trigger, so Rename
+    // sits beside Archive in the menu the row's context click also opens.
+    // Archived rows keep their direct Restore and Delete buttons.
     let buttons : Array[@html.Html] = []
     if menu_kind is Some(LiveMenu) {
       buttons.push(
@@ -517,8 +580,18 @@ pub fn component(
         ),
       )
     }
-    let trailing_actions = input.direct_actions()
-    if !status.is_empty() || !buttons.is_empty() || !trailing_actions.is_empty() {
+    let trailing_actions = if menu_kind is Some(LiveMenu) {
+      []
+    } else {
+      input.trailing
+    }
+    // The title field takes the whole row while it is edited.
+    if !renaming &&
+      (
+        !status.is_empty() ||
+        !buttons.is_empty() ||
+        !trailing_actions.is_empty()
+      ) {
       // The status group stays in the slot even when empty: a glyph coming or
       // going (the load spinner, a run mark) must not shift the action group
       // to another child position, which would re-create a focused button.
@@ -565,31 +638,42 @@ pub fn component(
         // children occupy the same CSS grid area and overlap each other.
         trailing.push(@html.span(class="row-actions", buttons))
       }
-      children.push(
-        @html.span(
-          // The overflow trigger is always shown; hover-revealed direct
-          // actions swap with the status glyphs instead.
-          class=if menu_kind is Some(LiveMenu) {
-            "row-trailing persistent"
-          } else {
-            "row-trailing"
-          },
-          trailing,
-        ),
-      )
+      children.push(@html.span(class="row-trailing", trailing))
     }
+    // A row being renamed is a text field: no row menu over the field's own
+    // context menu, and a click places the caret instead of opening the row.
     let row_attrs = match menu_kind {
-      Some(_) => @action_menu.context_attrs(input.id.key())
-      None => @html.Attrs::build()
+      Some(_) if !renaming => @action_menu.context_attrs(input.id.key())
+      _ => @html.Attrs::build()
     }
     let row = @html.div(
       class~,
       title=input.title,
-      on_click=if input.openable { (actions.open)(input.id) } else { @cmd.none },
+      on_click=if input.openable && !renaming {
+        (actions.open)(input.id)
+      } else {
+        @cmd.none
+      },
       attrs=row_attrs,
       children,
     )
     let rows : Array[(String, @html.Html)] = [(input.id.key(), row)]
+    if input.rename is Some({ error: Some(error), .. }) {
+      rows.push(
+        (
+          input.id.key() + ":rename-error",
+          @html.div(
+            class=if input.nested {
+              "conversation-rename-error nested"
+            } else {
+              "conversation-rename-error"
+            },
+            attrs=@html.Attrs::build().role("alert"),
+            error,
+          ),
+        ),
+      )
+    }
     if children_open {
       for group in child_rows {
         for child in group {
@@ -618,6 +702,12 @@ pub extend Id with Eq::{equal, not_equal}
 
 ///|
 pub extend Id with Hash::{hash, hash_combine}
+
+///|
+pub extend Rename with Debug::{to_repr}
+
+///|
+pub extend Rename with Eq::{equal, not_equal}
 
 ///|
 pub extend Input with Debug::{to_repr}

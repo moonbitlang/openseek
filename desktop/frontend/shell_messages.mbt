@@ -59,10 +59,7 @@ priv enum ShellMessage {
   SetupEndpoint
   NotNow
   DismissLabel
-  RenameConversation
   CancelLabel
-  SavingLabel
-  SaveLabel
   DeleteChatQuestion
   DeletePermanently
   NoEndpoint
@@ -424,26 +421,11 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, DismissLabel) => "关闭"
     (TraditionalChinese, DismissLabel) => "關閉"
     (Japanese, DismissLabel) => "閉じる"
-    (English, RenameConversation) => "Rename conversation"
-    (Spanish, RenameConversation) => "Cambiar nombre de la conversación"
-    (SimplifiedChinese, RenameConversation) => "重命名对话"
-    (TraditionalChinese, RenameConversation) => "重新命名對話"
-    (Japanese, RenameConversation) => "チャット名を変更"
     (English, CancelLabel) => "Cancel"
     (Spanish, CancelLabel) => "Cancelar"
     (SimplifiedChinese, CancelLabel) => "取消"
     (TraditionalChinese, CancelLabel) => "取消"
     (Japanese, CancelLabel) => "キャンセル"
-    (English, SavingLabel) => "Saving…"
-    (Spanish, SavingLabel) => "Guardando…"
-    (SimplifiedChinese, SavingLabel) => "正在保存…"
-    (TraditionalChinese, SavingLabel) => "正在儲存…"
-    (Japanese, SavingLabel) => "保存中…"
-    (English, SaveLabel) => "Save"
-    (Spanish, SaveLabel) => "Guardar"
-    (SimplifiedChinese, SaveLabel) => "保存"
-    (TraditionalChinese, SaveLabel) => "儲存"
-    (Japanese, SaveLabel) => "保存"
     (English, DeleteChatQuestion) => "Permanently delete this chat?"
     (Spanish, DeleteChatQuestion) =>
       "¿Eliminar esta conversación de forma permanente?"

@@ -55,36 +55,64 @@ test('conversation titles support keyboard activation and independent row action
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a live row always shows its actions trigger; archived actions stay hover-revealed', async ({ page }) => {
+test('pointer selection keeps the status slot instead of revealing row actions', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  app.archivedSessions.push({ id: 'session-9', title: 'Archived conversation', updated_at_ms: 1 });
+  app.liveSessions.push({ id: 'session-2', title: 'Second conversation', updated_at_ms: 2 });
   await app.install();
   await app.goto();
   const first = page.locator('.conversation-row[title="session-1"]');
-  const actions = first.getByRole('button', { name: 'Conversation actions' });
-  // No hover needed: the trigger is part of the row at rest.
-  await page.mouse.move(1439, 899);
-  await expect(actions).toBeVisible();
-  await actions.click();
-  await expect(actions).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('menu')).toHaveCount(0);
-
-  await page.locator('.section-heading', { hasText: 'Archived chats (1)' }).click();
-  const archived = page.locator('.conversation-row[title="session-9"]');
-  const openArchived = archived.getByRole('button', { name: 'Archived conversation', exact: true });
-  // By class: a hidden button is outside the accessibility tree.
-  const restore = archived.locator('.row-archive').first();
+  const openFirst = first.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
+  // By class: the hidden trigger is outside the accessibility tree.
+  const actions = first.locator('.row-menu-button');
+  await expect(actions).toHaveCount(1);
   // A pointer press must not leave focus on the title: once the pointer
   // leaves the row, the row shows its status slot again rather than the
   // actions a lingering focus would pin open.
-  await openArchived.click();
-  await expect(archived).toHaveClass(/active/);
+  await openFirst.click();
+  await expect(first).toHaveClass(/active/);
+  await expect.poll(() => app.requests.filter(r => r.method === 'session.load' && r.params?.session === 'session-1').length).toBe(1);
   await page.mouse.move(1439, 899);
-  await expect(restore).toBeHidden();
-  // Hover is still the pointer affordance for the direct actions.
-  await archived.hover();
-  await expect(restore).toBeVisible();
+  await expect(actions).toBeHidden();
+  // Hover is still the pointer affordance for the actions.
+  await first.hover();
+  await expect(actions).toBeVisible();
+  // An open menu keeps its trigger in place after the pointer leaves the row.
+  await actions.click();
+  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
+  await page.mouse.move(1439, 899);
+  await expect(actions).toBeVisible();
+  await expect(actions).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('opening another conversation saves a title being edited', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.liveSessions.push({ id: 'session-2', title: 'Second conversation', updated_at_ms: 2 });
+  await app.install();
+  await app.goto();
+  const first = page.locator('.conversation-row[title="session-1"]');
+  const second = page.locator('.conversation-row[title="session-2"]');
+  await first.hover();
+  await first.locator('.row-menu-button').click();
+  await page.getByRole('menuitem', { name: 'Rename…' }).click();
+  const input = first.getByRole('textbox', { name: 'Rename conversation' });
+  await expect(input).toBeFocused();
+  await input.fill('Saved by opening another');
+  // A title's pointer press keeps focus where it was, so the field never sees
+  // focus leave; opening the other conversation still commits the edit.
+  await second.getByRole('button', { name: 'Second conversation', exact: true }).click();
+  await expect(second).toHaveClass(/active/);
+  await expect(input).toHaveCount(0);
+  await expect(
+    first.getByRole('button', { name: 'Saved by opening another', exact: true }),
+  ).toBeVisible();
+  expect(app.requests.filter(r => r.method === 'session.rename').map(r => r.params.title))
+    .toEqual(['Saved by opening another']);
+  // The renamed row is left at rest: focus was not handed back to it, so its
+  // actions are not pinned open.
+  await page.mouse.move(1439, 899);
+  await expect(first.locator('.row-menu-button')).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });

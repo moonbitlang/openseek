@@ -11,7 +11,11 @@ import {
 }
 
 // Values
+pub const RenameFieldId : String = "conversation-rename-input"
+
 pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], Actions) -> @rabbita.Val[Array[(String, @html.Html)]]
+
+pub fn open_id(Id) -> String
 
 // Errors
 
@@ -22,6 +26,7 @@ pub(all) struct Actions {
   restore : (Id) -> @cmd.Cmd
   delete : (Id) -> @cmd.Cmd
   rename : (Id, String) -> @cmd.Cmd
+  rename_edit : (Id, RenameEdit) -> @cmd.Cmd
 }
 
 pub(all) enum ConversationSource {
@@ -66,6 +71,7 @@ pub(all) struct Input {
   load_failed : Bool
   running : Bool
   openable : Bool
+  rename : Rename?
   run_mark : RunMark
   trailing : Array[TrailingAction]
   children : Array[Input]
@@ -75,6 +81,21 @@ pub fn Input::id(Self) -> Id
 pub fn Input::menu_entries(locale? : @i18n.Locale, Self, Actions) -> Array[@action_menu.Entry]?
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Rename {
+  draft : String
+  error : String?
+} derive(Eq, @debug.Debug)
+pub fn Rename::equal(Self, Self) -> Bool
+pub fn Rename::not_equal(Self, Self) -> Bool
+pub fn Rename::to_repr(Self) -> @debug.Repr
+
+pub(all) enum RenameEdit {
+  Typed(String)
+  Submitted
+  Cancelled
+  Left
+}
 
 pub(all) enum RunMark {
   NoRunMark

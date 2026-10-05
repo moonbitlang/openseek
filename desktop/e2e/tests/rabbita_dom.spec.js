@@ -1943,64 +1943,95 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await actionsButton.click();
   await expect(menu).toHaveCount(0);
 
+  // Rename edits the title in the row itself, like the Finder: no dialog.
+  const renameRequests = () => app.requests.filter(request =>
+    request.method === 'session.rename');
+  const input = liveRow.getByRole('textbox', { name: 'Rename conversation' });
+  const startRename = async () => {
+    await liveRow.hover();
+    await actionsButton.click();
+    await page.getByRole('menuitem', { name: 'Rename…' }).click();
+    await expect(input).toBeFocused();
+  };
   await liveRow.click({ button: 'right', position: { x: 18, y: 18 } });
   await page.getByRole('menuitem', { name: 'Rename…' }).click({ button: 'right' });
-  const input = page.getByRole('textbox', { name: 'Rename conversation' });
-  const dialog = page.getByRole('dialog', { name: 'Rename conversation' });
-  await expect(dialog).toBeVisible();
-  await expect(liveRow.getByRole('textbox')).toHaveCount(0);
-  expect(await dialog.evaluate(element => element.matches(':modal'))).toBe(true);
   await expect(input).toBeFocused();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect.poll(() => input.evaluate(element => ({
     start: element.selectionStart,
     end: element.selectionEnd,
     length: element.value.length,
   }))).toEqual({ start: 0, end: 23, length: 23 });
+
+  // Escape discards the draft and hands focus back to the title.
+  await input.fill('Discarded');
+  await input.press('Escape');
+  await expect(input).toHaveCount(0);
+  const title = liveRow.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
+  await expect(title).toBeFocused();
+
+  // A blank title keeps the current one.
+  await startRename();
   await input.fill('   ');
-  await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
   await input.press('Enter');
-  await expect(dialog).toBeVisible();
-  await input.fill('Renamed in WebView');
-  await input.press('Shift+Tab');
-  await expect(dialog.getByRole('button', { name: 'Save', exact: true })).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(input).toBeFocused();
-  await page.mouse.click(5, 5);
-  await expect(input).toHaveValue('Renamed in WebView');
-  await expect(dialog).toBeVisible();
+  await expect(input).toHaveCount(0);
+  await expect(title).toBeVisible();
+  expect(renameRequests()).toEqual([]);
+
+  // Clicks inside the field belong to the field, not to the row or its menu.
+  await startRename();
+  await input.click();
   await input.click({ button: 'right' });
   await expect(menu).toHaveCount(0);
+  await expect(input).toBeFocused();
+
+  // Enter saves; only the host's answer ends the edit.
   app.rpcDelays.set('session.rename', 1200);
+  await input.fill('Renamed in WebView');
   await input.press('Enter');
-  await expect(dialog.getByRole('button', { name: 'Saving…' })).toBeDisabled();
-  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  await expect.poll(() => renameRequests()).toHaveLength(1);
   await input.press('Escape');
-  await expect(dialog).toBeVisible();
-  await expect.poll(() => app.requests.find(request =>
-    request.method === 'session.rename')).toMatchObject({
-      params: {
-        session: 'session-1',
-        workspace: '/workspace',
-        title: 'Renamed in WebView',
-      },
-    });
-
-  await expect(dialog).toHaveCount(0);
-
+  await input.press('Enter');
+  await expect(input).toBeVisible();
+  expect(renameRequests()).toHaveLength(1);
+  await expect.poll(() => renameRequests()[0]).toMatchObject({
+    params: {
+      session: 'session-1',
+      workspace: '/workspace',
+      title: 'Renamed in WebView',
+    },
+  });
+  await expect(input).toHaveCount(0);
+  await expect(
+    liveRow.getByRole('button', { name: 'Renamed in WebView', exact: true }),
+  ).toBeFocused();
   app.rpcDelays.delete('session.rename');
+
+  // Moving focus away saves too, and focus stays where the user put it.
+  await startRename();
+  await input.fill('Renamed by leaving');
+  await page.locator('#task').click();
+  await expect(input).toHaveCount(0);
+  await expect(
+    liveRow.getByRole('button', { name: 'Renamed by leaving', exact: true }),
+  ).toBeVisible();
+  expect(renameRequests()).toHaveLength(2);
+  await expect(page.locator('#task')).toBeFocused();
+
+  // A failed save keeps the draft in the field with the reason under the row.
   app.rpcErrors.set('session.rename', 'fixture rename unavailable');
-  await liveRow.hover();
-  await actionsButton.click();
-  await page.getByRole('menuitem', { name: 'Rename…' }).click();
+  await startRename();
   await input.fill('Rename that will fail');
-  await page.getByRole('button', { name: 'Save' }).click();
+  await input.press('Enter');
   await expect(page.getByRole('alert')).toContainText(
     'Rename failed: fixture rename unavailable',
   );
   await expect(input).toHaveValue('Rename that will fail');
-  await expect(input).toBeEnabled();
+  await expect(input).toHaveAttribute('aria-invalid', 'true');
+  await expect(input).toBeFocused();
   await input.press('Escape');
-  await expect(dialog).toHaveCount(0);
+  await expect(input).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
