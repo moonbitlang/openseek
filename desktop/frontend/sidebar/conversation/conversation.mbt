@@ -211,10 +211,15 @@ fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
 }
 
 ///|
-/// Direct row actions remain available alongside the WebView menu. Running
-/// conversations keep the menu for discovery but cannot be archived directly.
+/// A live row folds its actions behind one overflow trigger, so Rename sits
+/// beside Archive in the menu the row's context click also opens. Archived
+/// rows keep their direct Restore and Delete buttons.
 fn Input::direct_actions(self : Input) -> Array[TrailingAction] {
-  self.trailing
+  if self.menu_kind() is Some(LiveMenu) {
+    []
+  } else {
+    self.trailing
+  }
 }
 
 ///|
@@ -239,10 +244,14 @@ fn Input::menu_entries_for_kind(
         Separator,
         Action({
           label: ui(locale, ArchiveLabel),
-          title: if archive_enabled {
-            ui(locale, ArchiveConversation)
-          } else {
+          // The menu is the row's only Archive control, so it carries the
+          // source's own hint about what archiving keeps.
+          title: if !archive_enabled {
             ui(locale, StopBeforeArchive)
+          } else if self.trailing is [Archive(title~), ..] {
+            title
+          } else {
+            ui(locale, ArchiveConversation)
           },
           icon: Some(@icons.icon(@icons.icon_archive)),
           enabled: archive_enabled,
@@ -510,15 +519,30 @@ pub fn component(
       }
     }
     let menu_kind = input.menu_kind()
-    // Direct durable-action shortcuts stay alongside the shared WebView
-    // context menu; they remain the one-click path for frequent actions.
+    let buttons : Array[@html.Html] = []
+    if menu_kind is Some(LiveMenu) {
+      buttons.push(
+        @html.button(
+          class="row-archive row-menu-button",
+          type_="button",
+          // Named for its row kind: a project row's trigger sits right above
+          // and opens a different menu.
+          title=@messages.text(locale, ConversationActions),
+          attrs=@action_menu.button_attrs(input.id.key()).aria_label(
+            @messages.text(locale, ConversationActions),
+          ),
+          @icons.icon(@icons.icon_more),
+        ),
+      )
+    }
     let trailing_actions = input.direct_actions()
-    if !status.is_empty() || !trailing_actions.is_empty() {
-      let trailing : Array[@html.Html] = []
-      if !status.is_empty() {
-        trailing.push(@html.span(class="row-status", status))
-      }
-      let buttons : Array[@html.Html] = []
+    if !status.is_empty() || !buttons.is_empty() || !trailing_actions.is_empty() {
+      // The status group stays in the slot even when empty: a glyph coming or
+      // going (the load spinner, a run mark) must not shift the action group
+      // to another child position, which would re-create a focused button.
+      let trailing : Array[@html.Html] = [
+        @html.span(class="row-status", status),
+      ]
       for action in trailing_actions {
         let enabled = !(action is Archive(..) && input.running)
         let (title, button_class, image, id_suffix) = match action {

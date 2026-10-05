@@ -330,10 +330,21 @@ html.is-resizing .sidebar-resize-handle {
   gap: 6px;
 }
 /* Both groups stay in layout (visibility, not display) so the cell keeps
-   one width across the swap. An open menu keeps its trigger visible while
-   the pointer moves into the floating surface. */
+   one width across the swap. */
 .conversation-row:hover .row-trailing:has(.row-actions) .row-status,
 .conversation-row:focus-within .row-trailing:has(.row-actions) .row-status {
+  visibility: hidden;
+}
+/* An open conversation menu keeps its hover-revealed trigger in place of the
+   status glyphs while the pointer moves into the floating surface. */
+.row-menu-button[aria-expanded="true"] {
+  visibility: visible;
+  background: var(--color-hover-subtle);
+  color: var(--color-text-primary);
+}
+.conversation-row:not(.loading)
+  .row-trailing:has(.row-menu-button[aria-expanded="true"])
+  .row-status {
   visibility: hidden;
 }
 .conversation-row.loading .row-trailing {
