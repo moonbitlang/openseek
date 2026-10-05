@@ -164,6 +164,7 @@ fn session_component_input(
     load_failed: false,
     running,
     openable: true,
+    rename: None,
     // Keep the capability in the row input while a run is active: Proton
     // presents Archive disabled, while the browser fallback hides it.
     run_mark,
@@ -590,6 +591,7 @@ fn Model::sidebar_component_sections(
           load_failed: false,
           running: false,
           openable: true,
+          rename: None,
           run_mark: @conversation.NoRunMark,
           trailing: [
             @conversation.Restore(title=shell_text(self.locale, RestoreHint)),
@@ -2243,11 +2245,6 @@ fn view(
   }
   if model.archived_delete_confirm is Some(confirm) {
     children.push(archived_delete_modal(locale=model.locale, dispatch, confirm))
-  }
-  if model.conversation_rename is Some(rename) {
-    children.push(
-      conversation_rename_dialog(locale=model.locale, dispatch, rename),
-    )
   }
   // Rendered whether or not the palette is open — closed it is an empty
   // placeholder — so opening it never shifts the overlay children around it.

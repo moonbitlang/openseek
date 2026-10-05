@@ -29,8 +29,7 @@ fn open_quick_open(
   model : Model,
   provider : @quick_open.Provider,
 ) -> (@cmd.Cmd, Model) {
-  guard model.conversation_rename is None &&
-    model.project_picker is None &&
+  guard model.project_picker is None &&
     model.archive_confirm is None &&
     model.archived_delete_confirm is None &&
     !(model.update_ux is ConfirmingRestart(..)) &&

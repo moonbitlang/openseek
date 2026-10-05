@@ -31,12 +31,8 @@ fn app_shortcut_sub_loader(
         // consume the event.
         event.prevent_default()
         event.stop_propagation()
-        // These dialogs own interaction while open.
+        // This dialog owns interaction while open.
         guard @dom.document()
-          .get_element_by_id("conversation-rename-dialog")
-          .to_option()
-          is None &&
-          @dom.document()
           .query_selector("#workspace-settings-dialog[open]")
           .to_option()
           is None else {
@@ -390,6 +386,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
     restore: id => self.conversation_restore(id),
     delete: id => self.conversation_delete(id),
     rename: (id, label) => self.emit(ConversationRenameRequested(id~, label~)),
+    rename_edit: (id, edit) => self.emit(ConversationRenameEdited(id~, edit~)),
   }
   let project : @project.Actions = {
     new_conversation: id => self.project_new(id),

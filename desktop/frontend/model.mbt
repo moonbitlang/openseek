@@ -2056,9 +2056,10 @@ priv enum Msg {
   ConfirmDeleteArchivedSession
   CancelDeleteArchivedSession
   ConversationRenameRequested(id~ : @conversation.Id, label~ : String)
-  ConversationRenameChanged(id~ : @conversation.Id, value~ : String)
-  ConversationRenameSubmitted(@conversation.Id)
-  ConversationRenameCancelled(@conversation.Id)
+  ConversationRenameEdited(
+    id~ : @conversation.Id,
+    edit~ : @conversation.RenameEdit
+  )
   ConversationRenameSucceeded(@conversation.Id)
   ConversationRenameFailed(id~ : @conversation.Id, message~ : String)
   // The host's dark-mode preference changed. It updates the palette only while

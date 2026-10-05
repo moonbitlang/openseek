@@ -1,12 +1,17 @@
-// Root-owned coordination for the title dialog. The shared action-menu
-// component owns transient WebView menu state; only the asynchronous rename
-// operation crosses into the application model.
+// Root-owned coordination for renaming a conversation in place. The sidebar
+// row renders the title field; the draft and the asynchronous rename live in
+// the application model.
 
 ///|
 priv struct ConversationRename {
   id : @conversation.Id
+  // The title when editing began: a draft that still matches it saves nothing.
+  original : String
   draft : String
   saving : Bool
+  // The pending save began as focus left the field, so its answer must not
+  // pull focus back to the row.
+  focus_left : Bool
   error : String?
 } derive(Eq)
 
@@ -36,30 +41,34 @@ fn Model::decorate_conversation_input(
     selected &&
     !self.selected_conversation_loaded() &&
     !load_failed
-  { ..input, active: selected, loading, load_failed, }
+  let rename = match self.conversation_rename {
+    Some(rename) if rename.id == input.id =>
+      Some(@conversation.Rename::{ draft: rename.draft, error: rename.error, })
+    _ => None
+  }
+  { ..input, active: selected, loading, load_failed, rename, }
 }
 
 ///|
-fn Model::cancel_unsubmitted_conversation_rename(self : Model) -> Model {
+/// Something else took the user's attention (another conversation opened)
+/// without the field seeing focus leave: end the edit as if it had.
+fn Model::leave_conversation_rename(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+) -> (@cmd.Cmd, Model) {
   match self.conversation_rename {
-    Some(rename) if !rename.saving => { ..self, conversation_rename: None, }
-    _ => self
+    Some(rename) => self.edit_conversation_rename(dispatch, rename, Left)
+    None => (@cmd.none, self)
   }
 }
 
 ///|
+/// Put the caret in the row's title field with the whole title selected.
 fn focus_conversation_rename() -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       if @dom.document()
-        .get_element_by_id("conversation-rename-dialog")
-        .to_option()
-        is Some(element) &&
-        element.to_html_dialog_element() is Some(dialog) {
-        dialog.show_modal()
-      }
-      if @dom.document()
-        .get_element_by_id("conversation-rename-input")
+        .get_element_by_id(@conversation.RenameFieldId)
         .to_option()
         is Some(input) {
         let _ : @js.Value = @js.Value::cast_from(input).apply_with_string(
@@ -74,6 +83,77 @@ fn focus_conversation_rename() -> @cmd.Cmd {
     },
     kind=@cmd.after_render,
   )
+}
+
+///|
+/// Hand focus from the closing title field back to the row's title, for an
+/// edit that ended from the keyboard.
+fn focus_conversation_title(id : @conversation.Id) -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => {
+      if @dom.document()
+        .get_element_by_id(@conversation.open_id(id))
+        .to_option()
+        is Some(title) &&
+        title.to_html_element() is Some(title) {
+        title.focus()
+      }
+    },
+    kind=@cmd.after_render,
+  )
+}
+
+///|
+/// Apply one edit from the row's title field. Like the Finder's name field,
+/// Enter and moving focus away both commit, and a blank or unchanged name
+/// keeps the current title without a save. While a save is in flight the
+/// draft still follows the field, but only the host's answer ends the edit.
+fn Model::edit_conversation_rename(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  rename : ConversationRename,
+  edit : @conversation.RenameEdit,
+) -> (@cmd.Cmd, Model) {
+  fn close(refocus : Bool) -> (@cmd.Cmd, Model) {
+    (
+      if refocus {
+        focus_conversation_title(rename.id)
+      } else {
+        @cmd.none
+      },
+      { ..self, conversation_rename: None, },
+    )
+  }
+
+  let title = rename.draft.trim()
+  match edit {
+    Typed(draft) =>
+      (
+        @cmd.none,
+        {
+          ..self,
+          conversation_rename: Some({ ..rename, draft, error: None, }),
+        },
+      )
+    _ if rename.saving => (@cmd.none, self)
+    Cancelled => close(true)
+    // A failed save stays open for a retry; walking away from it gives up.
+    Left if rename.error is Some(_) => close(false)
+    Submitted | Left if title.is_empty() || title == rename.original.trim() =>
+      close(edit is Submitted)
+    Submitted | Left => {
+      let saving = {
+        ..rename,
+        saving: true,
+        focus_left: edit is Left,
+        error: None,
+      }
+      (
+        rename_conversation(locale=self.locale, dispatch, saving),
+        { ..self, conversation_rename: Some(saving), },
+      )
+    }
+  }
 }
 
 ///|
@@ -185,152 +265,4 @@ fn rename_conversation(
     })
     |> ignore
   })
-}
-
-///|
-/// The dialog's controls in tab order. Disabled buttons drop out while a save
-/// is pending, so Tab never lands on an inert control.
-fn conversation_rename_focus_slots(
-  dialog : @dom.Element,
-) -> Array[@dom.Element] {
-  let slots : Array[@dom.Element] = []
-  for
-    slot in dialog.query_selector_all(
-      "button:not([disabled]), input:not([disabled])",
-    ) {
-    slots.push(slot)
-  }
-  slots
-}
-
-///|
-/// Move focus by `delta` controls inside the rename dialog, wrapping at either
-/// end. Native `dialog` navigation parks on the document between the first and
-/// last control, so the dialog wraps Tab itself to keep focus on a control.
-fn move_conversation_rename_focus(delta : Int) -> @cmd.Cmd {
-  // Run after the pending draft render so the Save button's enabled state is
-  // current: typing can enable it in the same flush as this keydown.
-  @cmd.custom_cmd(
-    _ => {
-      guard @dom.document()
-        .get_element_by_id("conversation-rename-dialog")
-        .to_option()
-        is Some(dialog) else {
-        return
-      }
-      let slots = conversation_rename_focus_slots(dialog)
-      let count = slots.length()
-      guard count > 0 else { return }
-      let active = @dom.document().get_active_element()
-      // Without a known control, `Tab` starts at the first and `Shift+Tab` at the
-      // last, so the wrapped destination still lands on a control.
-      let mut index = if delta > 0 { count - 1 } else { 0 }
-      if active is Some(active_element) {
-        let mut position = 0
-        for slot in slots {
-          if slot.is_same_node(active_element.as_node()) {
-            index = position
-          }
-          position += 1
-        }
-      }
-      let next = (index + delta + count) % count
-      if slots[next].to_html_element() is Some(element) {
-        element.focus()
-      }
-    },
-    kind=@cmd.after_render,
-  )
-}
-
-///|
-fn close_conversation_rename() -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => {
-    if @dom.document()
-      .get_element_by_id("conversation-rename-dialog")
-      .to_option()
-      is Some(element) &&
-      element.to_html_dialog_element() is Some(dialog) {
-      dialog.close()
-    }
-  })
-}
-
-///|
-fn conversation_rename_dialog(
-  locale? : @i18n.Locale = English,
-  dispatch : @cmd.Emit[Msg],
-  rename : ConversationRename,
-) -> @html.Html {
-  let valid = !rename.draft.trim().is_empty() && !rename.saving
-  @html.dialog(
-    id="conversation-rename-dialog",
-    class="modal conversation-rename-dialog",
-    on_cancel=dispatch(ConversationRenameCancelled(rename.id)),
-    attrs=@html.Attrs::build()
-      .aria_label(shell_text(locale, RenameConversation))
-      .on_keydown(event => {
-        event.stop_propagation()
-        if event.is_composing() || event.key() != "Tab" {
-          return @cmd.none
-        }
-        event.prevent_default()
-        move_conversation_rename_focus(if event.shift_key() { -1 } else { 1 })
-      }),
-    [
-      @html.div(class="modal-title", shell_text(locale, RenameConversation)),
-      @html.input(
-        id="conversation-rename-input",
-        input_type=@html.InputType::Text,
-        class="conversation-rename-input",
-        value=rename.draft,
-        on_input=value => {
-          dispatch(ConversationRenameChanged(id=rename.id, value~))
-        },
-        attrs=@html.Attrs::build()
-          .aria_label(shell_text(locale, RenameConversation))
-          .readonly_(rename.saving)
-          .on_keydown(event => {
-            guard !event.is_composing() && event.key() == "Enter" else {
-              return @cmd.none
-            }
-            event.prevent_default()
-            if valid {
-              dispatch(ConversationRenameSubmitted(rename.id))
-            } else {
-              @cmd.none
-            }
-          }),
-      ),
-      ..rename.error.map_or([], error => {
-        [
-          @html.div(
-            class="conversation-rename-error",
-            attrs=@html.Attrs::build().role("alert"),
-            error,
-          ),
-        ]
-      }),
-      @html.div(class="modal-actions", [
-        @html.button(
-          class="button secondary",
-          type_="button",
-          disabled=rename.saving,
-          on_click=dispatch(ConversationRenameCancelled(rename.id)),
-          shell_text(locale, CancelLabel),
-        ),
-        @html.button(
-          class="button primary",
-          type_="button",
-          disabled=!valid,
-          on_click=dispatch(ConversationRenameSubmitted(rename.id)),
-          if rename.saving {
-            shell_text(locale, SavingLabel)
-          } else {
-            shell_text(locale, SaveLabel)
-          },
-        ),
-      ]),
-    ],
-  )
 }
