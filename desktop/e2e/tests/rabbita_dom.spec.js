@@ -1683,13 +1683,17 @@ test('new-chat project title filters and switches registered projects', async ({
 
   const workspace = page.locator('.workspace-row[title="/workspace"]');
   const other = page.locator('.workspace-row[title="/other"]');
+  const transcript = page.locator('#transcript');
+  const bootSession = await transcript.getAttribute('data-transcript-session');
   await workspace.hover();
   await workspace.getByTitle('New conversation in this project').click();
 
   const title = page.locator('.empty-title');
-  const transcript = page.locator('#transcript');
   await expect(title).toHaveText('What should we build in workspace?');
   await expect(page.getByText(/SeekMoon plans the work/)).toHaveCount(0);
+  // The click starts a fresh draft a beat after it returns, and the title
+  // already matched the boot draft: wait for the rotation before recording.
+  await expect(transcript).not.toHaveAttribute('data-transcript-session', bootSession);
   const originalSession = await transcript.getAttribute('data-transcript-session');
 
   // The picker borrows the app's select popup frame. Capture that frame from

@@ -55,34 +55,36 @@ test('conversation titles support keyboard activation and independent row action
   expect(app.pageErrors).toEqual([]);
 });
 
-test('pointer selection keeps the status slot instead of revealing row actions', async ({ page }) => {
+test('a live row always shows its actions trigger; archived actions stay hover-revealed', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  app.liveSessions.push({ id: 'session-2', title: 'Second conversation', updated_at_ms: 2 });
+  app.archivedSessions.push({ id: 'session-9', title: 'Archived conversation', updated_at_ms: 1 });
   await app.install();
   await app.goto();
   const first = page.locator('.conversation-row[title="session-1"]');
-  const openFirst = first.getByRole('button', { name: 'Rabbita browser fixture', exact: true });
-  // By class: the hidden trigger is outside the accessibility tree.
-  const actions = first.locator('.row-menu-button');
-  await expect(actions).toHaveCount(1);
+  const actions = first.getByRole('button', { name: 'Conversation actions' });
+  // No hover needed: the trigger is part of the row at rest.
+  await page.mouse.move(1439, 899);
+  await expect(actions).toBeVisible();
+  await actions.click();
+  await expect(actions).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+
+  await page.locator('.section-heading', { hasText: 'Archived chats (1)' }).click();
+  const archived = page.locator('.conversation-row[title="session-9"]');
+  const openArchived = archived.getByRole('button', { name: 'Archived conversation', exact: true });
+  // By class: a hidden button is outside the accessibility tree.
+  const restore = archived.locator('.row-archive').first();
   // A pointer press must not leave focus on the title: once the pointer
   // leaves the row, the row shows its status slot again rather than the
   // actions a lingering focus would pin open.
-  await openFirst.click();
-  await expect(first).toHaveClass(/active/);
-  await expect.poll(() => app.requests.filter(r => r.method === 'session.load' && r.params?.session === 'session-1').length).toBe(1);
+  await openArchived.click();
+  await expect(archived).toHaveClass(/active/);
   await page.mouse.move(1439, 899);
-  await expect(actions).toBeHidden();
-  // Hover is still the pointer affordance for the actions.
-  await first.hover();
-  await expect(actions).toBeVisible();
-  // An open menu keeps its trigger in place after the pointer leaves the row.
-  await actions.click();
-  await expect(page.getByRole('menu', { name: 'Conversation actions' })).toBeVisible();
-  await page.mouse.move(1439, 899);
-  await expect(actions).toBeVisible();
-  await expect(actions).toHaveAttribute('aria-expanded', 'true');
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(restore).toBeHidden();
+  // Hover is still the pointer affordance for the direct actions.
+  await archived.hover();
+  await expect(restore).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
