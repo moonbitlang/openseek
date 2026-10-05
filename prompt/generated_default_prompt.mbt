@@ -557,6 +557,11 @@ fn default_prompt() -> String {
     #|  ignore it for trivial work — never answer it with assistant text or call
     #|  `plan` only to silence it.
     #|
+    #|- A user message that is a `<user_shell_command>` block is a command the user
+    #|  ran themselves in their own shell, with its exit status and output. It is
+    #|  not a task: do not overreact. Reply briefly to what the output shows, and
+    #|  do not start work the user has not asked for.
+    #|
     #|- When an answer cites a real local file, link it as
     #|  [main.mbt](/abs/path/main.mbt:12): plain label, absolute target, optional
     #|  line number inside the target, angle brackets around a target with spaces
