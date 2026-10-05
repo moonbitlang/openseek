@@ -4,7 +4,7 @@ fn user_item(text : String) -> @transcript.TranscriptItem {
 }
 
 ///|
-test "sent prompts are the user's own, in order, without shell results or repeats" {
+test "sent prompts are the user's own, in order, with shell commands as ! drafts, without repeats" {
   let conv = {
     ..running_conversation(),
     messages: [
@@ -21,5 +21,6 @@ test "sent prompts are the user's own, in order, without shell results or repeat
       user_item("two"),
     ],
   }
-  assert_eq(conv.sent_prompts(), ["one", "two"])
+  assert_eq(conv.sent_prompts(shell=true), ["one", "!ls", "two"])
+  assert_eq(conv.sent_prompts(shell=false), ["one", "two"])
 }

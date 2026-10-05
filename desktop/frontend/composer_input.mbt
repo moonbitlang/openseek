@@ -208,7 +208,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     ],
     // Editing a queued message rewrites that message; it never runs one.
     shell_available: conv.queue_edit_id is None,
-    history: conv.sent_prompts(),
+    history: conv.sent_prompts(shell=conv.queue_edit_id is None),
     root: self.conversation_root(conv),
     installed_skills: self.installed_skills,
     context_generation: self.composer_context_generation,
@@ -351,22 +351,32 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
 ///|
 /// The prompts the user sent in this conversation, oldest first, in the form
 /// the composer shows them again: typed text with chip markers, no envelopes.
-/// A `!` command is left out — its record is the command's output, not
-/// something to send again — and so is a prompt repeating the one before it.
-/// A prompt starting with `!` is left out too: recalled without the chips or
-/// images it may have carried, it would read as a shell command.
-fn Conversation::sent_prompts(self : Conversation) -> Array[String] {
+/// A `!` command comes back as the `!command` draft that ran it, but only where
+/// the composer runs those (`shell`), and a prompt that itself starts with `!`
+/// is left out: recalled without the chips or images it may have carried, it
+/// would read as a shell command. A prompt repeating the one before it is left
+/// out too.
+fn Conversation::sent_prompts(
+  self : Conversation,
+  shell~ : Bool,
+) -> Array[String] {
   let prompts : Array[String] = []
   for item in self.messages {
     guard item.kind is User(content~) else { continue }
     let text = content.text()
-    if @command_context.parse(text) is Some(_) {
-      continue
+    let shown = if @command_context.parse(text) is Some(result) {
+      if !shell {
+        continue
+      }
+      "!\{result.command}"
+    } else {
+      let shown = user_display_text(text)
+      if shown.has_prefix("!") {
+        continue
+      }
+      shown
     }
-    let shown = user_display_text(text)
-    if !shown.is_blank() &&
-      !shown.has_prefix("!") &&
-      prompts.last() != Some(shown) {
+    if !shown.is_blank() && prompts.last() != Some(shown) {
       prompts.push(shown)
     }
   }
