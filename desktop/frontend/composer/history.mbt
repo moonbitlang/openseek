@@ -78,35 +78,41 @@ fn Entry::history_label(
 /// Whether the caret sits where the arrow key has no text left to move over:
 /// on the first visual row for Up, the last for Down, counting soft-wrapped
 /// rows. A selection is never an edge, so extending or collapsing one keeps its
-/// ordinary meaning. Rows are measured on a hidden copy of the textarea holding
-/// the text before the caret, so wrapping follows the real width and font.
+/// ordinary meaning. Rows are read from a hidden mirror of the whole text, with
+/// a marker at the caret, so wrapping matches the real width and font.
 extern "js" fn caret_at_edge(id : String, up~ : Bool) -> Bool =
   #| (id, up) => {
   #|   const input = document.getElementById(id)
   #|   if (!(input instanceof HTMLTextAreaElement)) return false
   #|   if (input.selectionStart !== input.selectionEnd) return false
-  #|   const probe = input.cloneNode(false)
-  #|   probe.removeAttribute("id")
+  #|   const mirror = document.createElement("div")
   #|   const computed = getComputedStyle(input)
   #|   for (const name of computed) {
-  #|     probe.style.setProperty(name, computed.getPropertyValue(name))
+  #|     mirror.style.setProperty(name, computed.getPropertyValue(name))
   #|   }
-  #|   probe.style.position = "absolute"
-  #|   probe.style.visibility = "hidden"
-  #|   probe.style.pointerEvents = "none"
-  #|   probe.style.height = "1px"
-  #|   probe.style.minHeight = "0"
-  #|   probe.style.maxHeight = "none"
-  #|   probe.style.overflow = "hidden"
-  #|   input.parentNode.appendChild(probe)
-  #|   const height = text => {
-  #|     probe.value = text
-  #|     return probe.scrollHeight
+  #|   mirror.style.position = "absolute"
+  #|   mirror.style.visibility = "hidden"
+  #|   mirror.style.pointerEvents = "none"
+  #|   mirror.style.height = "auto"
+  #|   mirror.style.minHeight = "0"
+  #|   mirror.style.maxHeight = "none"
+  #|   mirror.style.whiteSpace = "pre-wrap"
+  #|   mirror.style.overflowY = input.scrollHeight > input.clientHeight ? "scroll" : "hidden"
+  #|   input.parentNode.appendChild(mirror)
+  #|   const rowTop = at => {
+  #|     const marker = document.createElement("span")
+  #|     marker.textContent = "\u200b"
+  #|     mirror.replaceChildren(
+  #|       document.createTextNode(input.value.slice(0, at)),
+  #|       marker,
+  #|       document.createTextNode(input.value.slice(at)),
+  #|     )
+  #|     return marker.offsetTop
   #|   }
   #|   try {
-  #|     const before = height(input.value.slice(0, input.selectionStart))
-  #|     return up ? before <= height("x") : before >= height(input.value)
+  #|     const caret = rowTop(input.selectionStart)
+  #|     return up ? caret <= rowTop(0) : caret >= rowTop(input.value.length)
   #|   } finally {
-  #|     probe.remove()
+  #|     mirror.remove()
   #|   }
   #| }
