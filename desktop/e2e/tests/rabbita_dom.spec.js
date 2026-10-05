@@ -1308,6 +1308,123 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
   expect(app.pageErrors).toEqual([]);
 });
 
+test('selected transcript text can be quoted in a floating reply', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [
+    {
+      sequence: 1,
+      item: { kind: 'user', payload: { content: 'Show the browser fixture quote reply' } },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: { content: 'First answer paragraph.\n\nSecond answer paragraph.' },
+      },
+    },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const markdown = page.locator('.transcript .msg-content.markdown');
+  const first = markdown.getByText('First answer paragraph.');
+  const second = markdown.getByText('Second answer paragraph.');
+  const bar = page.getByRole('toolbar', { name: 'Selection actions' });
+  const reply = page.getByRole('dialog', { name: 'Reply to selection' });
+  const comment = reply.getByRole('textbox', { name: 'Reply' });
+  const batch = reply.getByRole('checkbox', { name: 'Batch' });
+  const task = page.locator('#task');
+  const pinned = () => page.evaluate(() => CSS.highlights.has('quote-reply'));
+  const selectWord = paragraph => paragraph.dblclick({ position: { x: 8, y: 8 } });
+
+  // Selecting text offers Reply just above it; Reply opens a composer that
+  // keeps the quote in view and painted while the comment is typed.
+  await selectWord(first);
+  await expect(bar.getByRole('button')).toHaveText(['Reply']);
+  const barBox = await bar.boundingBox();
+  const firstBox = await first.boundingBox();
+  expect(barBox.y + barBox.height).toBeLessThanOrEqual(firstBox.y);
+  await bar.getByRole('button', { name: 'Reply' }).click();
+  await expect(reply.locator('blockquote')).toHaveText('First');
+  await expect(comment).toBeFocused();
+  expect(await pinned()).toBe(true);
+  await expect(reply.getByRole('button', { name: 'Send reply' })).toBeDisabled();
+
+  // Batched, the reply joins the message being written and nothing is sent.
+  await batch.check();
+  await expect(comment).toBeFocused();
+  await expect(reply.getByRole('button', { name: 'Add to message' })).toBeEnabled();
+  await page.keyboard.type('Why first?');
+  await page.keyboard.press('Enter');
+  await expect(reply).toHaveCount(0);
+  await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
+  expect(await pinned()).toBe(false);
+  expect(app.requests.some(request => request.method === 'agent.start')).toBe(false);
+
+  // An offer goes away with its selection; a reply being typed survives a
+  // scroll and closes on Escape or a press elsewhere.
+  await selectWord(first);
+  await expect(bar).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(bar).toHaveCount(0);
+  await selectWord(first);
+  await expect(bar).toBeVisible();
+  await page.evaluate(() => document.getSelection().removeAllRanges());
+  await expect(bar).toHaveCount(0);
+  await selectWord(first);
+  await expect(bar).toBeVisible();
+  await page.locator('#transcript').dispatchEvent('scroll');
+  await expect(bar).toHaveCount(0);
+  await selectWord(first);
+  await bar.getByRole('button', { name: 'Reply' }).click();
+  await expect(comment).toBeFocused();
+  await page.keyboard.type('Keep me');
+  await page.locator('#transcript').dispatchEvent('scroll');
+  await expect(comment).toHaveValue('Keep me');
+  await page.keyboard.press('Escape');
+  await expect(reply).toHaveCount(0);
+  await selectWord(first);
+  await bar.getByRole('button', { name: 'Reply' }).click();
+  await expect(reply).toBeVisible();
+  await page.locator('.topbar-title').click();
+  await expect(reply).toHaveCount(0);
+  await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
+
+  // Text selected outside the transcript gets no offer.
+  const selectAll = locator => locator.evaluate(element => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = document.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+  });
+  await selectAll(page.locator('.topbar-title'));
+  await page.evaluate(() => new Promise(resolve => {
+    setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 0);
+  }));
+  await expect(bar).toHaveCount(0);
+  await selectAll(first);
+  await expect(bar).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Unbatched, the reply is sent at once with what was already batched.
+  await selectWord(second);
+  await bar.getByRole('button', { name: 'Reply' }).click();
+  await expect(batch).toBeChecked();
+  await batch.uncheck();
+  await expect(comment).toBeFocused();
+  await page.keyboard.type('And this?');
+  await page.keyboard.press('Enter');
+  await expect(reply).toHaveCount(0);
+  await expect.poll(() => app.requests.find(request =>
+    request.method === 'agent.start')?.params.task)
+    .toBe('> First\n\nWhy first?\n\n> Second\n\nAnd this?');
+  await expect(task).toHaveValue('');
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('approval card sends its decision through the browser transport', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

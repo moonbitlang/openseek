@@ -17,6 +17,8 @@ pub fn context_attrs(String) -> @html.Attrs
 
 pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput], ContextActions) -> @rabbita.Val[@html.Html]
 
+pub fn selection_component(@rabbita.Val[@i18n.Locale], QuoteActions) -> @rabbita.Val[@html.Html]
+
 // Errors
 
 // Types and methods
@@ -61,6 +63,12 @@ pub(all) struct Item {
   enabled : Bool
   destructive : Bool
   command : @cmd.Cmd
+}
+
+pub(all) struct QuoteActions {
+  available : () -> Bool
+  send : (String, String) -> @cmd.Cmd
+  batch : (String, String) -> @cmd.Cmd
 }
 
 // Type aliases

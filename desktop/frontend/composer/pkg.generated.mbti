@@ -20,6 +20,10 @@ import {
 // Values
 pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Action]) -> @rabbita.Val[@html.Html]
 
+pub fn quote_available() -> Bool
+
+pub fn quote_reply(String, String, send~ : Bool) -> @cmd.Cmd
+
 // Errors
 
 // Types and methods

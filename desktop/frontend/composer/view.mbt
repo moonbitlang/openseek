@@ -858,7 +858,7 @@ fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
       [
         @html.div(class="mention-tray", self.mentions),
         @html.textarea(
-          id="task",
+          id=MessageInputId,
           value=self.value,
           placeholder=self.placeholder,
           disabled=self.disabled,

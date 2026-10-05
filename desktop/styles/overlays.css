@@ -66,6 +66,80 @@
   background: var(--color-border);
 }
 
+/* Floating reply beside a fresh text selection. The action-menu module
+   anchors the surface's bottom centre above the selection, or its top centre
+   below when the selection is too close to the top of the viewport. */
+.selection-actions {
+  --icon-size: var(--icon-md);
+  position: fixed;
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+  z-index: var(--z-menu);
+}
+.selection-actions.below {
+  transform: translate(-50%, 0);
+}
+.selection-actions > .action-menu-item {
+  width: auto;
+}
+.selection-actions.replying {
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 20px));
+  padding: 10px;
+  white-space: normal;
+}
+.selection-reply-quote {
+  display: -webkit-box;
+  margin: 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--color-border);
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.selection-reply-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.selection-reply-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+}
+.selection-reply-batch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.selection-reply-submit {
+  flex: none;
+}
+/* The quoted range, kept painted once focus is in the reply input. */
+::highlight(quote-reply) {
+  background-color: var(--color-text-selection);
+}
+
 /* ---------- notifications ---------- */
 /* The export dialog uses the browser's modal top layer for keyboard focus. */
 dialog.export-dialog {
