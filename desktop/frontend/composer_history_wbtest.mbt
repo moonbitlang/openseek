@@ -17,6 +17,7 @@ test "sent prompts are the user's own, in order, without shell results or repeat
         ),
       ),
       user_item("   "),
+      user_item("!looks like a command"),
       user_item("two"),
     ],
   }

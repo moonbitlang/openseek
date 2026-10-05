@@ -21,6 +21,22 @@ test('Up and Down recall the conversation\'s sent prompts', async ({ page }) => 
   await expect(task).toHaveValue('');
   await expect(caption).toHaveCount(0);
 
+  // In a prompt that wraps, Up on a lower row moves the caret instead.
+  await task.press('ArrowUp');
+  const rows = await task.evaluate(el => {
+    el.style.cssText += ';width:120px;max-width:120px;flex:none';
+    return el.scrollHeight / parseFloat(getComputedStyle(el).lineHeight);
+  });
+  expect(rows).toBeGreaterThan(2);
+  await task.press('ArrowUp');
+  await expect(task).toHaveValue(prompt);
+  await expect(caption).toHaveText('History 1/1');
+  expect(await task.evaluate(el => el.selectionStart)).toBeLessThan(prompt.length);
+  await task.evaluate(el => { el.style.width = ''; el.style.maxWidth = ''; el.style.flex = ''; });
+  await task.press('ControlOrMeta+End');
+  await task.press('ArrowDown');
+  await expect(task).toHaveValue('');
+
   // A draft the user typed is never replaced.
   await task.fill('typed');
   await task.press('Home');

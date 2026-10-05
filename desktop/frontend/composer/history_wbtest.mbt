@@ -94,3 +94,27 @@ test "submitting a recalled prompt starts the next recall from the latest" {
   assert_true(entry.history_back is None)
   assert_eq(submitted.moved(accepted, -1).active(accepted).draft.task, "second")
 }
+
+///|
+test "a recalled draft that changed underneath is no longer a recall" {
+  let input = Input::history_fixture("")
+  let entry = Model(input).moved(input, -1).active(input)
+  // The root recovered a different draft over the recalled one.
+  let recovered = {
+    ..input,
+    draft: { task: "other", mentions: [], images: [], },
+  }
+  let entry = { ..entry, draft: recovered.draft, }
+  assert_true(entry.recalled_back(recovered) is None)
+  assert_true(entry.history_label(English, recovered) is None)
+  assert_true(!entry.can_recall_history(recovered))
+}
+
+///|
+test "a goal being edited has no prompt history" {
+  let input = {
+    ..Input::history_fixture(""),
+    goal: { draft: Some("goal"), standing: None, pending: None, },
+  }
+  assert_true(!Model(input).active(input).can_recall_history(input))
+}
