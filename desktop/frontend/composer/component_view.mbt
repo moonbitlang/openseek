@@ -331,8 +331,18 @@ fn Entry::view(
     },
     disabled: input.presentation.disabled,
     input: emit.map(value => TextChanged(value)),
+    history: if goal_mode {
+      None
+    } else {
+      self.history_label(locale, input)
+    },
     keyboard: {
       menu_open: !goal_mode && self.completion is Some(_),
+      history: if !goal_mode && self.can_recall_history(input) {
+        Some(delta => emit(HistoryMoved(delta)))
+      } else {
+        None
+      },
       navigate: delta => emit(CompletionMove(delta)),
       accept: emit(CompletionAccept),
       dismiss: emit(CompletionDismiss),

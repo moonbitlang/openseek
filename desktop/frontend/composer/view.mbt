@@ -814,6 +814,8 @@ priv struct View {
   disabled : Bool
   input : @cmd.Emit[String]
   keyboard : KeyboardActions
+  // The position caption shown while a recalled prompt is in the draft.
+  history : String?
   status : Array[@html.Html]
   actions : Array[ActionButton]
   followup_menu : @html.Html?
@@ -879,6 +881,11 @@ fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
               ui(locale, ShellModeLabel),
             ),
           ]
+        } else {
+          []
+        },
+        ..if self.history is Some(position) {
+          [@html.span(class="composer-mode-chip", position)]
         } else {
           []
         },
@@ -1093,6 +1100,8 @@ fn CompletionView::render(
 priv struct KeyboardActions {
   menu_open : Bool
   navigate : (Int) -> @cmd.Cmd
+  // Present while the arrow keys may recall an earlier prompt.
+  history : ((Int) -> @cmd.Cmd)?
   accept : @cmd.Cmd
   dismiss : @cmd.Cmd
   submit : @cmd.Cmd
@@ -1132,6 +1141,16 @@ fn KeyboardActions::attrs(self : KeyboardActions) -> @html.Attrs {
     } else if event.key() == "Escape" && self.cancel is Some(cancel) {
       event.prevent_default()
       cancel
+    } else if self.history is Some(recall) &&
+      (event.key() == "ArrowUp" || event.key() == "ArrowDown") &&
+      !(event.shift_key() ||
+      event.alt_key() ||
+      event.ctrl_key() ||
+      event.meta_key() ||
+      event.is_composing()) &&
+      caret_at_edge(MessageInputId, up=event.key() == "ArrowUp") {
+      event.prevent_default()
+      recall(if event.key() == "ArrowUp" { -1 } else { 1 })
     } else if is_submit_shortcut(event) {
       event.prevent_default()
       self.submit

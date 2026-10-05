@@ -196,6 +196,7 @@ pub(all) struct Input {
   turn_id : String?
   slash_commands : Array[SlashCommand]
   shell_available : Bool
+  history : Array[String]
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int

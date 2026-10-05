@@ -12,6 +12,7 @@ fn Input::fixture(task : String) -> Input {
     goal: { draft: None, standing: None, pending: None, },
     slash_commands: [],
     shell_available: false,
+    history: [],
     root: Some(@common.Uri::file("/workspace")),
     installed_skills: [],
     context_generation: 0,

@@ -109,6 +109,7 @@ priv enum UiMessage {
   NoChanges
   ChangesLabel
   ShellModeLabel
+  HistoryLabel
   ShellModeHint
   ShellRunning
   ShellShowTerminal
@@ -734,6 +735,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, ChangesLabel) => "更改"
     (Japanese, ChangesLabel) => "変更"
     (_, ShellModeLabel) => "shell"
+    (English, HistoryLabel) => "History"
+    (Spanish, HistoryLabel) => "Historial"
+    (SimplifiedChinese, HistoryLabel) => "历史"
+    (TraditionalChinese, HistoryLabel) => "歷史"
+    (Japanese, HistoryLabel) => "履歴"
     (English, ShellModeHint) =>
       "Shell mode: Enter runs this command in the terminal and sends its output. Delete the ! to leave."
     (Spanish, ShellModeHint) =>
