@@ -164,7 +164,6 @@ fn session_component_input(
     load_failed: false,
     running,
     openable: true,
-    worktree,
     // Keep the capability in the row input while a run is active: Proton
     // presents Archive disabled, while the browser fallback hides it.
     run_mark,
@@ -591,7 +590,6 @@ fn Model::sidebar_component_sections(
           load_failed: false,
           running: false,
           openable: true,
-          worktree: None,
           run_mark: @conversation.NoRunMark,
           trailing: [
             @conversation.Restore(title=shell_text(self.locale, RestoreHint)),

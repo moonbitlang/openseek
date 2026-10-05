@@ -502,23 +502,9 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
-/* Worktree affordances: the sidebar row's worktree glyph and the composer's
-   launch-mode chip. The archive-discard confirmation reuses the shared
-   modal styles. */
-/* The row's worktree glyph, shown when the registry mapping (or the local
-   binding) names one; the name it stands for is in the row's own tooltip,
-   which stays reachable when hover swaps this glyph out. Display only — the
-   environment lives and dies with its conversation. A fixed slot, so the
-   title keeps the rest of the row no matter how long the name is. */
-.worktree-mark {
-  --icon-size: var(--icon-sm);
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  color: var(--color-text-muted);
-}
+/* Worktree affordances: the composer's launch-mode chip. A sidebar row names
+   its worktree in the row's own tooltip. The archive-discard confirmation
+   reuses the shared modal styles. */
 /* The composer's launch-mode chip: Local ⇄ Worktree while the conversation
    can still choose; fixed to the worktree's name once bound. */
 .composer-worktree {
