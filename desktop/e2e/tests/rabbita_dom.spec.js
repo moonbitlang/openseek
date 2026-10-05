@@ -1985,11 +1985,12 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await expect(menu).toHaveCount(0);
   await expect(input).toBeFocused();
 
-  // Enter saves; only the host's answer ends the edit.
+  // Enter saves; the field is locked and only the host's answer ends the edit.
   app.rpcDelays.set('session.rename', 1200);
   await input.fill('Renamed in WebView');
   await input.press('Enter');
   await expect.poll(() => renameRequests()).toHaveLength(1);
+  await expect(input).toHaveJSProperty('readOnly', true);
   await input.press('Escape');
   await input.press('Enter');
   await expect(input).toBeVisible();
@@ -2005,6 +2006,14 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await expect(
     liveRow.getByRole('button', { name: 'Renamed in WebView', exact: true }),
   ).toBeFocused();
+
+  // Moving on while the save is pending keeps focus where the user went.
+  await startRename();
+  await input.fill('Renamed while typing elsewhere');
+  await input.press('Enter');
+  await page.locator('#task').click();
+  await expect(input).toHaveCount(0);
+  await expect(page.locator('#task')).toBeFocused();
   app.rpcDelays.delete('session.rename');
 
   // Moving focus away saves too, and focus stays where the user put it.
@@ -2015,7 +2024,7 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await expect(
     liveRow.getByRole('button', { name: 'Renamed by leaving', exact: true }),
   ).toBeVisible();
-  expect(renameRequests()).toHaveLength(2);
+  expect(renameRequests()).toHaveLength(3);
   await expect(page.locator('#task')).toBeFocused();
 
   // A failed save keeps the draft in the field with the reason under the row.

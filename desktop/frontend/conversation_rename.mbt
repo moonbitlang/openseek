@@ -43,23 +43,14 @@ fn Model::decorate_conversation_input(
     !load_failed
   let rename = match self.conversation_rename {
     Some(rename) if rename.id == input.id =>
-      Some(@conversation.Rename::{ draft: rename.draft, error: rename.error, })
+      Some(@conversation.Rename::{
+        draft: rename.draft,
+        saving: rename.saving,
+        error: rename.error,
+      })
     _ => None
   }
   { ..input, active: selected, loading, load_failed, rename, }
-}
-
-///|
-/// Something else took the user's attention (another conversation opened)
-/// without the field seeing focus leave: end the edit as if it had.
-fn Model::leave_conversation_rename(
-  self : Model,
-  dispatch : @cmd.Emit[Msg],
-) -> (@cmd.Cmd, Model) {
-  match self.conversation_rename {
-    Some(rename) => self.edit_conversation_rename(dispatch, rename, Left)
-    None => (@cmd.none, self)
-  }
 }
 
 ///|
@@ -107,7 +98,7 @@ fn focus_conversation_title(id : @conversation.Id) -> @cmd.Cmd {
 /// Apply one edit from the row's title field. Like the Finder's name field,
 /// Enter and moving focus away both commit, and a blank or unchanged name
 /// keeps the current title without a save. While a save is in flight the
-/// draft still follows the field, but only the host's answer ends the edit.
+/// field is locked and only the host's answer ends the edit.
 fn Model::edit_conversation_rename(
   self : Model,
   dispatch : @cmd.Emit[Msg],
@@ -127,6 +118,13 @@ fn Model::edit_conversation_rename(
 
   let title = rename.draft.trim()
   match edit {
+    // The host's answer must not pull focus back once the user has moved on.
+    Left if rename.saving =>
+      (
+        @cmd.none,
+        { ..self, conversation_rename: Some({ ..rename, focus_left: true, }), },
+      )
+    _ if rename.saving => (@cmd.none, self)
     Typed(draft) =>
       (
         @cmd.none,
@@ -135,7 +133,6 @@ fn Model::edit_conversation_rename(
           conversation_rename: Some({ ..rename, draft, error: None, }),
         },
       )
-    _ if rename.saving => (@cmd.none, self)
     Cancelled => close(true)
     // A failed save stays open for a retry; walking away from it gives up.
     Left if rename.error is Some(_) => close(false)

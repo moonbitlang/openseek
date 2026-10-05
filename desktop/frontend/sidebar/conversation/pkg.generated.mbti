@@ -84,6 +84,7 @@ pub fn Input::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Rename {
   draft : String
+  saving : Bool
   error : String?
 } derive(Eq, @debug.Debug)
 pub fn Rename::equal(Self, Self) -> Bool

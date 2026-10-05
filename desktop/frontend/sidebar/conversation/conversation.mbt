@@ -123,9 +123,11 @@ pub(all) enum TrailingAction {
 
 ///|
 /// A row's title while it is edited in place. The root owns the draft and
-/// the save; the row only renders the field and the last save's failure.
+/// the save; the row only renders the field, locked while a save is pending,
+/// and the last save's failure.
 pub(all) struct Rename {
   draft : String
+  saving : Bool
   error : String?
 } derive(Debug, Eq)
 
@@ -340,6 +342,7 @@ fn rename_field(
     id=RenameFieldId,
     class="sidebar-label conversation-rename-input",
     value=rename.draft,
+    read_only=rename.saving,
     on_input=value => (actions.rename_edit)(id, Typed(value)),
     attrs=@html.Attrs::build()
       .aria_label(ui(locale, RenameConversation))
@@ -470,6 +473,13 @@ pub fn component(
             .on_mousedown(event => {
               if event.get_button() == 0 {
                 event.prevent_default()
+                // That also keeps focus in another row's title field. Let it
+                // go, so this click commits that edit like any click away.
+                if @dom.document().get_element_by_id(RenameFieldId).to_option()
+                  is Some(field) &&
+                  field.to_html_element() is Some(field) {
+                  field.blur()
+                }
               }
               @cmd.none
             }),
