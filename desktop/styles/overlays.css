@@ -97,6 +97,7 @@
 }
 .selection-reply-quote {
   display: -webkit-box;
+  flex: none;
   margin: 0;
   padding-left: 8px;
   border-left: 2px solid var(--color-border);
@@ -108,26 +109,39 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
 }
+/* The row holds a comment that grows with its lines. It is the one part of
+   the surface that gives way when the surface reaches its `max-height` (the
+   room between the selection and the viewport edge, set inline): the input
+   stretches to the row and scrolls, and the controls stay on the last line. */
 .selection-reply-row {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
+  /* A floor in place of the content-sized default, which would not shrink. */
+  min-height: 30px;
 }
 .selection-reply-input {
+  field-sizing: content;
   flex: 1;
+  align-self: stretch;
   min-width: 0;
+  max-height: 140px;
   padding: 4px 0;
   border: 0;
   outline: none;
+  overflow-y: auto;
   background: transparent;
   color: var(--color-text-primary);
   font: inherit;
+  resize: none;
 }
 .selection-reply-batch {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 4px;
+  /* As tall as the send button beside it, so the two share a centre line. */
+  min-height: 30px;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   cursor: pointer;
@@ -136,6 +150,7 @@
   flex: none;
 }
 .selection-reply-note {
+  flex: none;
   color: var(--color-danger);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-tight);

@@ -1500,6 +1500,95 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   expect(app.pageErrors).toEqual([]);
 });
 
+test('a floating reply takes a comment of several lines', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const filler = Array.from({ length: 40 }, (_, index) => `Filler paragraph ${index + 1}.`);
+  app.sessionEvents = [
+    {
+      sequence: 1,
+      item: { kind: 'user', payload: { content: 'Show the browser fixture quote reply' } },
+    },
+    {
+      sequence: 2,
+      item: {
+        kind: 'assistant',
+        payload: { content: [...filler, 'First answer paragraph.'].join('\n\n') },
+      },
+    },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+
+  const markdown = page.locator('.transcript .msg-content.markdown');
+  const reply = page.getByRole('dialog', { name: 'Reply to selection' });
+  const comment = reply.getByRole('textbox', { name: 'Reply' });
+  const task = page.locator('#task');
+  const height = async locator => (await locator.boundingBox()).height;
+  const openReply = async paragraph => {
+    await paragraph.dblclick({ position: { x: 8, y: 8 } });
+    await page.getByRole('toolbar', { name: 'Selection actions' })
+      .getByRole('button', { name: 'Reply' }).click();
+    await expect(comment).toBeFocused();
+  };
+  const scrolls = () => comment.evaluate(input => input.scrollHeight > input.clientHeight);
+  const bottom = async () => {
+    const box = await reply.boundingBox();
+    return box.y + box.height;
+  };
+  const lines = 'Line one\nLine two\nLine three\nLine four';
+  const long = Array.from({ length: 40 }, (_, index) => `Row ${index + 1}`).join('\n');
+
+  await openReply(markdown.getByText('First answer paragraph.'));
+  await reply.getByRole('checkbox', { name: 'Batch' }).check();
+  await expect(comment).toBeFocused();
+
+  // Shift+Enter starts a new line and the input grows to show it, upwards:
+  // the row being typed in stays where it is.
+  await page.keyboard.type('Line one');
+  const oneLine = await height(comment);
+  const anchored = await bottom();
+  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.type('Line two');
+  await expect(comment).toHaveValue('Line one\nLine two');
+  await expect.poll(() => height(comment)).toBeGreaterThan(oneLine * 1.5);
+  expect(await bottom()).toBeCloseTo(anchored, 0);
+
+  // Text put in whole, as a paste is, keeps its line breaks.
+  await page.keyboard.insertText('\nLine three\nLine four');
+  await expect(comment).toHaveValue(lines);
+
+  // The input stops growing at a few lines and scrolls from there.
+  await comment.fill(long);
+  await expect.poll(scrolls).toBe(true);
+  expect(await bottom()).toBeCloseTo(anchored, 0);
+  await comment.fill(lines);
+  await expect.poll(scrolls).toBe(false);
+
+  // Enter still delivers, with the lines intact.
+  await page.keyboard.press('Enter');
+  await expect(reply).toHaveCount(0);
+  await expect(task).toHaveValue(`> First\n\n${lines}\n\n`);
+
+  // Near the top of the viewport there is less room to grow into: the input
+  // gives way sooner rather than push the reply off screen.
+  const near = markdown.getByText('Filler paragraph 20.', { exact: true });
+  await near.evaluate(element => {
+    document.querySelector('#transcript').scrollTop +=
+      element.getBoundingClientRect().top - 170;
+  });
+  await page.evaluate(() => new Promise(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+  await openReply(near);
+  const anchoredNear = await bottom();
+  await comment.fill(long);
+  await expect.poll(scrolls).toBe(true);
+  expect((await reply.boundingBox()).y).toBeGreaterThanOrEqual(0);
+  expect(await bottom()).toBeCloseTo(anchoredNear, 0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('approval card sends its decision through the browser transport', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
