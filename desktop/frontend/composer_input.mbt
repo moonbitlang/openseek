@@ -353,6 +353,8 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
 /// the composer shows them again: typed text with chip markers, no envelopes.
 /// A `!` command is left out — its record is the command's output, not
 /// something to send again — and so is a prompt repeating the one before it.
+/// A prompt starting with `!` is left out too: recalled without the chips or
+/// images it may have carried, it would read as a shell command.
 fn Conversation::sent_prompts(self : Conversation) -> Array[String] {
   let prompts : Array[String] = []
   for item in self.messages {
@@ -362,7 +364,9 @@ fn Conversation::sent_prompts(self : Conversation) -> Array[String] {
       continue
     }
     let shown = user_display_text(text)
-    if !shown.is_blank() && prompts.last() != Some(shown) {
+    if !shown.is_blank() &&
+      !shown.has_prefix("!") &&
+      prompts.last() != Some(shown) {
       prompts.push(shown)
     }
   }
