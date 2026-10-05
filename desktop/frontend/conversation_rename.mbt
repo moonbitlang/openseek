@@ -12,7 +12,6 @@ priv struct ConversationRename {
   // The pending save began as focus left the field, so its answer must not
   // pull focus back to the row.
   focus_left : Bool
-  error : String?
 } derive(Eq)
 
 ///|
@@ -43,11 +42,7 @@ fn Model::decorate_conversation_input(
     !load_failed
   let rename = match self.conversation_rename {
     Some(rename) if rename.id == input.id =>
-      Some(@conversation.Rename::{
-        draft: rename.draft,
-        saving: rename.saving,
-        error: rename.error,
-      })
+      Some(@conversation.Rename::{ draft: rename.draft, saving: rename.saving, })
     _ => None
   }
   { ..input, active: selected, loading, load_failed, rename, }
@@ -78,7 +73,7 @@ fn focus_conversation_rename() -> @cmd.Cmd {
 
 ///|
 /// Hand focus from the closing title field back to the row's title, for an
-/// edit that ended from the keyboard.
+/// edit that ended with focus still in the field.
 fn focus_conversation_title(id : @conversation.Id) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
@@ -126,31 +121,35 @@ fn Model::edit_conversation_rename(
       )
     _ if rename.saving => (@cmd.none, self)
     Typed(draft) =>
-      (
-        @cmd.none,
-        {
-          ..self,
-          conversation_rename: Some({ ..rename, draft, error: None, }),
-        },
-      )
+      (@cmd.none, { ..self, conversation_rename: Some({ ..rename, draft, }), })
     Cancelled => close(true)
-    // A failed save stays open for a retry; walking away from it gives up.
-    Left if rename.error is Some(_) => close(false)
     Submitted | Left if title.is_empty() || title == rename.original.trim() =>
       close(edit is Submitted)
     Submitted | Left => {
-      let saving = {
-        ..rename,
-        saving: true,
-        focus_left: edit is Left,
-        error: None,
-      }
+      let saving = { ..rename, saving: true, focus_left: edit is Left, }
       (
         rename_conversation(locale=self.locale, dispatch, saving),
         { ..self, conversation_rename: Some(saving), },
       )
     }
   }
+}
+
+///|
+/// The host answered a pending save: close the field. Focus goes back to the
+/// row's title unless the user has already moved on.
+fn Model::finish_conversation_rename(
+  self : Model,
+  rename : ConversationRename,
+) -> (@cmd.Cmd, Model) {
+  (
+    if rename.focus_left {
+      @cmd.none
+    } else {
+      focus_conversation_title(rename.id)
+    },
+    { ..self, conversation_rename: None, },
+  )
 }
 
 ///|

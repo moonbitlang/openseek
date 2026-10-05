@@ -2034,20 +2034,18 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await expect(input).toHaveCount(0);
   expect(renameRequests()).toHaveLength(4);
 
-  // A failed save keeps the draft in the field with the reason under the row.
+  // A failed save leaves the title as it was and says why in a toast.
   app.rpcErrors.set('session.rename', 'fixture rename unavailable');
   await startRename();
   await input.fill('Rename that will fail');
   await input.press('Enter');
-  await expect(page.getByRole('alert')).toContainText(
+  await expect(page.locator('.notification')).toContainText(
     'Rename failed: fixture rename unavailable',
   );
-  await expect(input).toHaveValue('Rename that will fail');
-  await expect(input).toHaveAttribute('aria-invalid', 'true');
-  await expect(input).toBeFocused();
-  await input.press('Escape');
   await expect(input).toHaveCount(0);
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(
+    liveRow.getByRole('button', { name: 'Renamed by pressing elsewhere', exact: true }),
+  ).toBeFocused();
   expect(app.pageErrors).toEqual([]);
 });
 

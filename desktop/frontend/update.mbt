@@ -5033,7 +5033,6 @@ fn update_msg(
               draft: label,
               saving: false,
               focus_left: false,
-              error: None,
             }),
           },
         )
@@ -5049,42 +5048,28 @@ fn update_msg(
     ConversationRenameSucceeded(id) =>
       match model.conversation_rename {
         Some(rename) if rename.id == id =>
-          (
-            if rename.focus_left {
-              @cmd.none
-            } else {
-              focus_conversation_title(id)
-            },
-            { ..model, conversation_rename: None, },
-          )
+          model.finish_conversation_rename(rename)
         _ => (@cmd.none, model)
       }
     ConversationRenameFailed(id~, message~) =>
       match model.conversation_rename {
-        Some(rename) if rename.id == id =>
-          (
-            // The save may have started as focus left the field; the error
-            // needs the user back in it.
-            focus_conversation_rename(),
-            {
-              ..model,
-              conversation_rename: Some({
-                ..rename,
-                saving: false,
-                focus_left: false,
-                error: Some(
-                  (match model.locale {
-                    SimplifiedChinese => "重命名失败："
-                    TraditionalChinese => "重新命名失敗："
-                    Japanese => "名前を変更できませんでした："
-                    English => "Rename failed: "
-                    Spanish => "No se pudo cambiar el nombre: "
-                  }) +
-                  message,
-                ),
-              }),
-            },
+        Some(rename) if rename.id == id => {
+          // The title is unchanged, and the row may be folded away by now:
+          // the reason goes to the toast rail, which is always on screen.
+          let (focus, model) = model.finish_conversation_rename(rename)
+          let (toast, model) = model.notify_error(
+            dispatch,
+            (match model.locale {
+              SimplifiedChinese => "重命名失败："
+              TraditionalChinese => "重新命名失敗："
+              Japanese => "名前を変更できませんでした："
+              English => "Rename failed: "
+              Spanish => "No se pudo cambiar el nombre: "
+            }) +
+            message,
           )
+          (@cmd.batch([focus, toast]), model)
+        }
         _ => (@cmd.none, model)
       }
     NotificationClicked(run_id~) => {

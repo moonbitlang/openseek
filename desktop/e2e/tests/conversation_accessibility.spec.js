@@ -149,7 +149,7 @@ test('a background reorder does not end or save a title being edited', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a project stays open to show a failed rename', async ({ page }) => {
+test('a failed rename is reported even after its project is folded', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -162,15 +162,16 @@ test('a project stays open to show a failed rename', async ({ page }) => {
   await input.fill('Will not save');
   app.rpcErrors.set('session.rename', 'fixture rename unavailable');
   app.rpcDelays.set('session.rename', 400);
-  // Collapsing the project moves focus away, which starts the save.
+  // Folding the project moves focus away, which starts the save; the row is
+  // gone by the time the host refuses it.
   const disclosure = page.locator('.workspace-row[title="/workspace"] .workspace-disclosure');
   await disclosure.click();
-  await expect(page.getByRole('alert')).toContainText('fixture rename unavailable');
-  await expect(input).toBeFocused();
-  await expect(input).toHaveValue('Will not save');
-  // Giving up lets the pending collapse take effect.
-  await input.press('Escape');
-  await expect(row).toHaveCount(0);
   await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.notification')).toContainText(
+    'Rename failed: fixture rename unavailable',
+  );
+  await disclosure.click();
+  await expect(row.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toBeVisible();
+  await expect(input).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

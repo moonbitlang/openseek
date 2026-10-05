@@ -234,10 +234,7 @@ pub fn component(
     conversation_rows,
     locale,
   ) => {
-    // A title being edited keeps its project open: a failed save has to
-    // stay where the user can see it.
-    let collapsed = state.folded(input) &&
-      !input.conversations.any(row => row.rename is Some(_))
+    let collapsed = state.folded(input)
     let mut class = if collapsed {
       "workspace-row collapsible collapsed"
     } else {

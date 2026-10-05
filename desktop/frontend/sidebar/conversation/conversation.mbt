@@ -123,12 +123,10 @@ pub(all) enum TrailingAction {
 
 ///|
 /// A row's title while it is edited in place. The root owns the draft and
-/// the save; the row only renders the field, locked while a save is pending,
-/// and the last save's failure.
+/// the save; the row only renders the field, locked while a save is pending.
 pub(all) struct Rename {
   draft : String
   saving : Bool
-  error : String?
 } derive(Debug, Eq)
 
 ///|
@@ -375,7 +373,6 @@ fn rename_field(
     on_input=value => (actions.rename_edit)(id, Typed(value)),
     attrs=@html.Attrs::build()
       .aria_label(ui(locale, RenameConversation))
-      .aria_invalid((rename.error is Some(_)).to_string())
       .on_blur(event => {
         if blurred_by_relocation(event) {
           // The user is still editing: take focus back in the row's new place.
@@ -704,22 +701,6 @@ pub fn component(
       children,
     )
     let rows : Array[(String, @html.Html)] = [(input.id.key(), row)]
-    if input.rename is Some({ error: Some(error), .. }) {
-      rows.push(
-        (
-          input.id.key() + ":rename-error",
-          @html.div(
-            class=if input.nested {
-              "conversation-rename-error nested"
-            } else {
-              "conversation-rename-error"
-            },
-            attrs=@html.Attrs::build().role("alert"),
-            error,
-          ),
-        ),
-      )
-    }
     if children_open {
       for group in child_rows {
         for child in group {
