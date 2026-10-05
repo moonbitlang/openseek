@@ -32,6 +32,11 @@ test('Up and Down recall the conversation\'s sent prompts', async ({ page }) => 
   await expect(task).toHaveValue(prompt);
   await expect(caption).toHaveText('History 1/1');
   expect(await task.evaluate(el => el.selectionStart)).toBeLessThan(prompt.length);
+  // From mid-text on a lower row, Up still moves the caret rather than recalling.
+  await task.evaluate(el => el.setSelectionRange(60, 60));
+  await task.press('ArrowUp');
+  await expect(task).toHaveValue(prompt);
+  expect(await task.evaluate(el => el.selectionStart)).toBeLessThan(60);
   await task.evaluate(el => { el.style.width = ''; el.style.maxWidth = ''; el.style.flex = ''; });
   await task.press('ControlOrMeta+End');
   await task.press('ArrowDown');
