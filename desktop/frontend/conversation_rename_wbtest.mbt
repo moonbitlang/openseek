@@ -84,3 +84,35 @@ test "a failed save retries on Enter and gives up when focus leaves" {
   assert_true(retry.saving)
   assert_true(rename_edit(failed, Left).conversation_rename is None)
 }
+
+///|
+test "a pending save keeps its draft and notes that focus moved on" {
+  let model = rename_edit(renaming_model(), Typed("Renamed"))
+  let saving = rename_edit(model, Submitted)
+  let typed = rename_edit(saving, Typed("Too late"))
+  assert_true(typed.conversation_rename == saving.conversation_rename)
+  guard rename_edit(saving, Left).conversation_rename is Some(rename) else {
+    fail("leaving the field ended a pending save")
+  }
+  assert_true(rename.saving)
+  assert_true(rename.focus_left)
+  assert_eq(rename.draft, "Renamed")
+}
+
+///|
+test "another rename cannot replace one whose save is pending" {
+  let model = rename_edit(renaming_model(), Typed("Renamed"))
+  let saving = rename_edit(model, Submitted)
+  let other = @conversation.Id(
+    source=@conversation.OpenSeekLive,
+    channel=@interop.ChannelId::Local.uri_authority(),
+    conversation="chat-2",
+    root="/work/project",
+  )
+  let (_, requested) = update_msg(
+    test_dispatch(),
+    ConversationRenameRequested(id=other, label="Other"),
+    saving,
+  )
+  assert_true(requested.conversation_rename == saving.conversation_rename)
+}

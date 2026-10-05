@@ -5019,7 +5019,10 @@ fn update_msg(
       )
     }
     ConversationRenameRequested(id~, label~) =>
-      if id.source() is (@conversation.OpenSeekLive | @conversation.CodexLive) {
+      // One edit at a time: a save still in flight keeps its field, so its
+      // failure has somewhere to be shown.
+      if id.source() is (@conversation.OpenSeekLive | @conversation.CodexLive) &&
+        !(model.conversation_rename is Some({ saving: true, .. })) {
         (
           focus_conversation_rename(),
           {
@@ -5121,7 +5124,6 @@ fn update_msg(
         guard model.live_selection(channel, session_id) is Some(target) else {
           return (@cmd.none, model)
         }
-        let (rename_cmd, model) = model.leave_conversation_rename(dispatch)
         let model = {
           ..model,
           selected_conversation: Some(target),
@@ -5129,7 +5131,7 @@ fn update_msg(
           screen: Chat,
         }
         let (cmd, model) = open_session_on(dispatch, channel, model, session_id)
-        (@cmd.batch([focus_cmd, rename_cmd, cmd]), model)
+        (@cmd.batch([focus_cmd, cmd]), model)
       }
     RetrySelectedConversation =>
       match model.selected_conversation {
@@ -5164,7 +5166,6 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
-      let (rename_cmd, model) = model.leave_conversation_rename(dispatch)
       let model = {
         ..model,
         selected_conversation: Some({
@@ -5179,7 +5180,7 @@ fn update_msg(
       let (cmd, model) = model.open_archived_session_on(
         dispatch, channel, session, workspace,
       )
-      (@cmd.batch([focus_cmd, rename_cmd, cmd]), model)
+      (@cmd.batch([focus_cmd, cmd]), model)
     }
     ColorSchemeChanged(dark) => {
       let model = { ..model, system_dark: dark, }
