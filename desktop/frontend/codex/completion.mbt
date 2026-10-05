@@ -367,6 +367,7 @@ pub fn State::composer_input(
     ],
     // Codex runs its own shell tools; `!` mode is OpenSeek's.
     shell_available: false,
+    history: [],
     root: self
     .active_placement(context.channel)
     .bind(placement => placement.checkout_root()),

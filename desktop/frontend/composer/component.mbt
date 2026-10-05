@@ -89,6 +89,9 @@ priv struct Entry {
   image_reads : Int
   image_error : String?
   pending_submission : PendingSubmission?
+  // How far back in `Input::history` the draft was recalled from (1 is the
+  // latest prompt), or `None` while the draft is the user's own.
+  history_back : Int?
 } derive(Eq)
 
 ///|
@@ -115,6 +118,7 @@ fn Entry::Entry(input : Input) -> Entry {
     image_reads: 0,
     image_error: None,
     pending_submission: None,
+    history_back: None,
   }
 }
 
@@ -203,6 +207,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
       },
       followup_menu_open: false,
       pending_submission: None,
+      history_back: None,
     }
   }
   let draft = self.draft.reconciled(source=self.source, incoming~)
@@ -357,6 +362,8 @@ priv enum Msg {
   // A second passed while a turn was open. Carries nothing: the handler reads
   // the clock, and the message exists only to advance the span on screen.
   ClockTicked
+  // Up (-1) or Down (+1) through the conversation's earlier prompts.
+  HistoryMoved(Int)
   ChangesToggled
   ChangesDismissed(restore_focus~ : Bool)
   ChangesFileToggled(String)
@@ -438,6 +445,7 @@ fn Entry::edited(
     )
   }
   let draft = { ..self.draft, task: value, }
+  let self = { ..self, history_back: None, }
   // A draft that is a shell command opens no completion menu: `@`, `#`, and
   // `$` are shell text there, not mentions.
   if input.shell_command(draft) is Some(_) {
@@ -711,6 +719,12 @@ fn Model::update(
       let (next, command) = entry.edited(input, value, action_emit)
       self.commit_entry_change(entry, next, command, action_emit)
     }
+    HistoryMoved(delta) =>
+      match entry.history_moved(input, delta) {
+        Some(next) =>
+          self.commit_entry_change(entry, next, @cmd.none, action_emit)
+        None => (self, @cmd.none)
+      }
     QuoteReplied(reply) =>
       self.quote_replied(entry, input, reply, emit, action_emit)
     CompletionMove(delta) => {

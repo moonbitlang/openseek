@@ -233,6 +233,9 @@ pub(all) struct Input {
   // Whether a draft beginning with `!` is a shell command (see
   // `Input::shell_command`). Only an OpenSeek conversation runs one.
   shell_available : Bool
+  // The prompts this conversation has already sent, oldest first, as the
+  // composer recalls them with the arrow keys.
+  history : Array[String]
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int
