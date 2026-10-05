@@ -64,25 +64,18 @@ test "Escape discards the draft" {
 }
 
 ///|
-test "a failed save retries on Enter and gives up when focus leaves" {
+test "a failed save closes the field and reports through a toast" {
   let id = test_conversation_id()
   let model = rename_edit(renaming_model(), Typed("Renamed"))
-  let model = rename_edit(model, Submitted)
   let (_, failed) = update_msg(
     test_dispatch(),
     ConversationRenameFailed(id~, message="offline"),
-    model,
+    rename_edit(model, Submitted),
   )
-  guard failed.conversation_rename is Some(rename) else {
-    fail("the failed rename closed")
-  }
-  assert_false(rename.saving)
-  assert_eq(rename.error, Some("Rename failed: offline"))
-  guard rename_edit(failed, Submitted).conversation_rename is Some(retry) else {
-    fail("Enter did not retry")
-  }
-  assert_true(retry.saving)
-  assert_true(rename_edit(failed, Left).conversation_rename is None)
+  assert_true(failed.conversation_rename is None)
+  assert_true(
+    failed.notifications is [{ message: "Rename failed: offline", .. }],
+  )
 }
 
 ///|

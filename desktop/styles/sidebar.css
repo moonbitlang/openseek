@@ -233,17 +233,6 @@ html.is-resizing .sidebar-resize-handle {
   outline: 1px solid var(--color-accent-border);
   outline-offset: 2px;
 }
-.conversation-rename-input[aria-invalid="true"] {
-  outline-color: var(--color-danger);
-}
-/* The failure sits under the title it belongs to: the row's padding, twisty
-   cell, and gap make up the indent. */
-.conversation-rename-error {
-  padding: 0 8px 4px 28px;
-  color: var(--color-danger);
-  font-size: var(--font-size-sm);
-  overflow-wrap: anywhere;
-}
 .conversation-row:hover {
   background: var(--color-bg-subtle);
 }
@@ -567,9 +556,6 @@ button.composer-worktree:hover {
    workspace's. */
 .conversation-row.nested {
   padding-left: 16px;
-}
-.conversation-rename-error.nested {
-  padding-left: 36px;
 }
 .project-show-more {
   width: 100%;

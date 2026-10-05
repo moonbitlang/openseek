@@ -66,7 +66,7 @@ test "a conversation being renamed stays in the compact preview" {
   let conversations = test_conversations(6)
   conversations[5] = {
     ..conversations[5],
-    rename: Some({ draft: "Renamed", saving: false, error: None, }),
+    rename: Some({ draft: "Renamed", saving: false, }),
   }
   assert_true(state.conversation_visible(5, stays_visible(conversations[5])))
   assert_false(state.conversation_visible(5, stays_visible(conversations[4])))
