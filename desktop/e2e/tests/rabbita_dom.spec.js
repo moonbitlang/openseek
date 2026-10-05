@@ -2027,6 +2027,13 @@ test('shared WebView action menu supports context position, keyboard, and rename
   expect(renameRequests()).toHaveLength(3);
   await expect(page.locator('#task')).toBeFocused();
 
+  // So does a press on plain, unfocusable content.
+  await startRename();
+  await input.fill('Renamed by pressing elsewhere');
+  await page.locator('.topbar').click({ position: { x: 300, y: 6 } });
+  await expect(input).toHaveCount(0);
+  expect(renameRequests()).toHaveLength(4);
+
   // A failed save keeps the draft in the field with the reason under the row.
   app.rpcErrors.set('session.rename', 'fixture rename unavailable');
   await startRename();
