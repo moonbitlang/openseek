@@ -1246,6 +1246,8 @@ fn transcript_view(
     attrs=@html.Attrs::build()
       .id("transcript")
       .class("transcript")
+      // Text selected here gets the shell's floating reply.
+      .data_set("context-quote", "")
       .data_set("transcript-session", input.active_session)
       .data_set(
         "transcript-theme",

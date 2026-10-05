@@ -144,6 +144,27 @@ pub fn icon_new_chat() -> @html.Html {
 }
 
 ///|
+/// Hand-drawn (not a codicon): a reply arrow in the same quiet outline style
+/// as `icon_new_chat`.
+pub fn icon_reply() -> @html.Html {
+  @svg.svg(
+    width=16,
+    height=16,
+    view_box="0 0 16 16",
+    attrs=@svg.Attrs::build()
+      .fill("none")
+      .stroke("currentColor")
+      .stroke_width("1.25")
+      .stroke_linecap("round")
+      .stroke_linejoin("round"),
+    [
+      @svg.path(d="M6.25 3.75 2.5 7.25 6.25 10.75"),
+      @svg.path(d="M2.75 7.25H9.5a4 4 0 0 1 4 4v1.25"),
+    ],
+  )
+}
+
+///|
 /// Hand-drawn (not a codicon): a horizontal ellipsis — three filled dots —
 /// for a row's overflow menu.
 pub fn icon_more() -> @html.Html {

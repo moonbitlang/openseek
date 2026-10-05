@@ -19,6 +19,14 @@ priv enum UiMessage {
   CopyFilePath
   CopyLabel
   CopySelected
+  ReplyLabel
+  ReplyHint
+  ReplyDialog
+  BatchLabel
+  BatchHint
+  SendReply
+  AddReply
+  SelectionActions
   ContextMenu
 }
 
@@ -114,6 +122,51 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, CopySelected) => "复制选中文本"
     (TraditionalChinese, CopySelected) => "複製選中文字"
     (Japanese, CopySelected) => "選択したテキストをコピー"
+    (English, ReplyLabel) => "Reply"
+    (Spanish, ReplyLabel) => "Responder"
+    (SimplifiedChinese, ReplyLabel) => "回复"
+    (TraditionalChinese, ReplyLabel) => "回覆"
+    (Japanese, ReplyLabel) => "返信"
+    (English, ReplyHint) => "Quote the selected text and reply to it"
+    (Spanish, ReplyHint) => "Citar el texto seleccionado y responder"
+    (SimplifiedChinese, ReplyHint) => "引用选中文本并回复"
+    (TraditionalChinese, ReplyHint) => "引用選中文字並回覆"
+    (Japanese, ReplyHint) => "選択したテキストを引用して返信"
+    (English, ReplyDialog) => "Reply to selection"
+    (Spanish, ReplyDialog) => "Responder a la selección"
+    (SimplifiedChinese, ReplyDialog) => "回复选中内容"
+    (TraditionalChinese, ReplyDialog) => "回覆選取內容"
+    (Japanese, ReplyDialog) => "選択範囲に返信"
+    (English, BatchLabel) => "Batch"
+    (Spanish, BatchLabel) => "Agrupar"
+    (SimplifiedChinese, BatchLabel) => "批量"
+    (TraditionalChinese, BatchLabel) => "批次"
+    (Japanese, BatchLabel) => "まとめる"
+    (English, BatchHint) =>
+      "Add replies to the message being written instead of sending each one"
+    (Spanish, BatchHint) =>
+      "Añadir las respuestas al mensaje en curso en vez de enviar cada una"
+    (SimplifiedChinese, BatchHint) =>
+      "将回复加入正在撰写的消息，而不是逐条发送"
+    (TraditionalChinese, BatchHint) =>
+      "將回覆加入正在撰寫的訊息，而不是逐則傳送"
+    (Japanese, BatchHint) =>
+      "返信を1件ずつ送らず、作成中のメッセージに追加"
+    (English, SendReply) => "Send reply"
+    (Spanish, SendReply) => "Enviar respuesta"
+    (SimplifiedChinese, SendReply) => "发送回复"
+    (TraditionalChinese, SendReply) => "傳送回覆"
+    (Japanese, SendReply) => "返信を送信"
+    (English, AddReply) => "Add to message"
+    (Spanish, AddReply) => "Añadir al mensaje"
+    (SimplifiedChinese, AddReply) => "加入消息"
+    (TraditionalChinese, AddReply) => "加入訊息"
+    (Japanese, AddReply) => "メッセージに追加"
+    (English, SelectionActions) => "Selection actions"
+    (Spanish, SelectionActions) => "Acciones de selección"
+    (SimplifiedChinese, SelectionActions) => "选区操作"
+    (TraditionalChinese, SelectionActions) => "選取範圍操作"
+    (Japanese, SelectionActions) => "選択範囲の操作"
     (English, ContextMenu) => "Context menu"
     (Spanish, ContextMenu) => "Menú contextual"
     (SimplifiedChinese, ContextMenu) => "上下文菜单"

@@ -662,6 +662,21 @@ fn main {
         reveal_file: path => emit(RevealFile(path)),
       },
     )
+    // The floating reply for selected text is a shell overlay like the
+    // context menu; they share one slot.
+    let context_menu_html = @rabbita.Val::map2(
+      context_menu_html,
+      @action_menu.selection_component(state.map(model => model.locale), {
+        available: @composer.quote_available,
+        send: (text, comment) => @composer.quote_reply(text, comment, send=true),
+        batch: (text, comment) => {
+          @composer.quote_reply(text, comment, send=false)
+        },
+      }),
+      (context_menu, selection_actions) => {
+        @html.fragment([context_menu, selection_actions])
+      },
+    )
     let skills_html = @skills.component(
       state.map(model => model.skills_input()),
       state.map(model => model.skills),
