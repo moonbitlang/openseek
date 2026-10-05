@@ -102,8 +102,9 @@ const SelectionReplyInput : String = "selection-reply-input"
 const QuoteHighlight : String = "quote-reply"
 
 ///|
-/// Room reserved for the surface, sized for the reply composer so the bar
-/// does not jump when it opens.
+/// Room reserved for the surface, sized for the reply composer holding a short
+/// comment so the bar does not jump when it opens. A longer comment grows into
+/// whatever room the viewport has past that.
 const SelectionSurfaceHeight : Double = 140
 
 ///|
@@ -429,7 +430,19 @@ pub fn[T : Eq] selection_component(
       return @html.nothing
     }
     let placement = if open.anchor.below { " below" } else { "" }
-    let style = ["left: \{open.anchor.x}px", "top: \{open.anchor.y}px"]
+    // The surface grows away from the selection as a comment gains lines;
+    // `room` is how far it can go before it would leave the viewport.
+    let gap = SelectionSurfaceGap.to_int()
+    let room = if open.anchor.below {
+      "calc(100vh - \{open.anchor.y + gap}px)"
+    } else {
+      "\{open.anchor.y - gap}px"
+    }
+    let style = [
+      "left: \{open.anchor.x}px",
+      "top: \{open.anchor.y}px",
+      "max-height: \{room}",
+    ]
     match open.stage {
       Offered =>
         @html.div(
@@ -463,11 +476,13 @@ pub fn[T : Eq] selection_component(
           [
             @html.blockquote(class="selection-reply-quote", open.anchor.text),
             @html.div(class="selection-reply-row", [
-              @html.input(
-                input_type=@html.InputType::Text,
+              // Enter sends; Shift+Enter starts a new line, and the input
+              // grows to show it.
+              @html.textarea(
                 id=SelectionReplyInput,
                 class="selection-reply-input",
                 value=comment,
+                rows=1,
                 placeholder=ui(locale, ReplyLabel),
                 on_input=emit.map(value => CommentChanged(value)),
                 attrs=@html.Attrs::build()
@@ -482,6 +497,7 @@ pub fn[T : Eq] selection_component(
                       @cmd.none
                     }
                   }),
+                "",
               ),
               @html.label(
                 class="selection-reply-batch",
