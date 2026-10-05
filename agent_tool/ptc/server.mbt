@@ -39,6 +39,14 @@ const TraceEntryReserveBytes : Int = 1024
 struct Service {
   server : @socket.TcpServer
   tools : @agent_tool.Tools
+  /// Builds the tools that must know which program is calling, once per
+  /// program, over that program's `Owner`. See owner.mbt.
+  owner_tools : ((Owner) -> Array[@agent_tool.AgentToolDefinition])?
+  mut owners : Int
+  /// Cleanup still running for owners whose registration failed after their
+  /// tools were built, by owner number. An entry leaves when its cleanup
+  /// finishes; what is left is joined when the service closes.
+  abandoned : Map[Int, @async.Task[Json]]
   programs : Map[String, Program]
   serial : @async.Mutex
   spawn : (async () -> Json) -> @async.Task[Json]
@@ -55,6 +63,10 @@ struct Program {
   // and the registry this program's token lives in.
   service : Service
   token : String
+  /// This program as its own tools see it, and those tools: instances built
+  /// for it alone. Looked up before the service's shared registry.
+  owner : Owner
+  tools : @agent_tool.Tools
   calls : Array[Json]
   reservations : Array[Int]
   mut trace_bytes : Int
@@ -91,9 +103,15 @@ fn call_entry(
 ///|
 /// Start a listener on the existing session task group. No agent-loop dispatch
 /// or file lock is held while the listener waits for requests.
+///
+/// `tools` are shared by every program. `owner_tools` builds, for each
+/// program as it registers, the tools that need to know which program is
+/// calling; only the program-callable ones among them are reachable, as for
+/// `tools`. A name may be in one set or the other, not both.
 pub async fn[X] Service::start(
   group : @async.TaskGroup[X],
   tools : @agent_tool.Tools,
+  owner_tools? : (Owner) -> Array[@agent_tool.AgentToolDefinition],
   call_timeout_ms? : Int = 120000,
   trace_timeout_ms? : Int = 5000,
 ) -> Service {
@@ -101,6 +119,9 @@ pub async fn[X] Service::start(
   let service : Service = {
     server,
     tools: tools.program_tools(),
+    owner_tools,
+    owners: 0,
+    abandoned: Map([]),
     programs: Map([]),
     serial: Mutex(),
     spawn: operation => group.spawn(operation, no_wait=true, allow_failure=true),
@@ -201,7 +222,7 @@ pub async fn[X] Service::start(
           // Approval-capable tools use the same human-paced lifetime as
           // direct calls. Session/program cancellation still revokes and joins
           // them; their own validation/check deadlines remain in force.
-          if service.tools.find(name) is Some(tool) &&
+          if program.find_tool(name) is Some(tool) &&
             tool.can_request_approval() {
             return
           }
@@ -259,9 +280,65 @@ pub fn Service::register(
     fail("PTC: secure random capability unavailable")
   }
   let token = @crypto.bytes_to_hex_string(entropy)
+  // The owner exists before its tools do: they are closed over it, and may
+  // register their stop and close hooks as they are built.
+  // This owner's number is taken once, here. A stop hook may itself
+  // register a program — and fail — before this registration is done with
+  // the number, so it is never read back from the counter.
+  self.owners += 1
+  let number = self.owners
+  let owner : Owner = {
+    id: "program-\{number}",
+    closed: false,
+    job: None,
+    stops: [],
+    closes: [],
+  }
+  // Once the factory has run, it may hold state for this owner and have
+  // registered hooks on it. If registration fails from here on, no program
+  // will ever stop or close that owner, so it is stopped now and its close
+  // hooks are run on the session group. Its id is not reused.
+  //
+  // The cleanup is protected from cancellation: the session group cancels
+  // its tasks when it ends, and a hook interrupted at a suspension would
+  // leave what it was releasing held. It retires its own handle when it
+  // finishes, so a long session with many failed registrations keeps only
+  // the cleanups still running; `Service::close` joins those.
+  errdefer {
+    owner.stop()
+    let mut finished = false
+    let cleanup = (self.spawn)(() => {
+      @async.protect_from_cancel(() => owner.close())
+      finished = true
+      self.abandoned.remove(number)
+      Json::null()
+    })
+    // A cleanup with nothing to wait for may already be over.
+    if !finished {
+      self.abandoned[number] = cleanup
+    }
+  }
+  let own = match self.owner_tools {
+    Some(build) => @agent_tool.Tools(build(owner)).program_tools()
+    None => Tools([])
+  }
+  for tool in own.function_tools() {
+    guard self.tools.find(tool.name) is None else {
+      fail("PTC: `\{tool.name}` is both a shared tool and an owner-bound one")
+    }
+  }
+  // The factory ran in between, and may have registered a program of its
+  // own or closed the service: what was true before it is checked again
+  // before this program is admitted.
+  guard !self.closed else { fail("PTC service is closed") }
+  guard self.programs.length() < MaxPrograms else {
+    fail("PTC session has \{MaxPrograms} active programs")
+  }
   let program : Program = {
     service: self,
     token,
+    owner,
+    tools: own,
     calls: [],
     reservations: [],
     trace_bytes: 0,
@@ -289,6 +366,12 @@ pub async fn Service::close(self : Service) -> Unit {
     for program in programs {
       program.close()
     }
+    for task in self.abandoned.values().to_array() {
+      ignore(task.wait()) catch {
+        _ => ()
+      }
+    }
+    self.abandoned.clear()
     if self.stop is Some(stop) {
       self.stop = None
       stop()
@@ -308,10 +391,11 @@ pub fn Program::env(self : Program) -> Map[String, String] {
         "token": self.token,
         "approval_tools": Json(
           [
-            for tool in self.service.tools.function_tools() if self.service.tools.find(
-              tool.name,
-            )
-            is Some(definition) &&
+            for
+              tool in [
+                ..self.service.tools.function_tools(),
+                ..self.tools.function_tools(),
+              ] if self.find_tool(tool.name) is Some(definition) &&
             definition.can_request_approval() => tool.name.to_json()
           ],
         ),
@@ -343,6 +427,9 @@ pub fn Program::handoff(
   observer : async (Json) -> Unit,
 ) -> Unit {
   self.job_id = Some(job_id)
+  // The same owner, now with a job: what the program started before it was
+  // adopted is still its own.
+  self.owner.job = Some(job_id)
   self.on_trace = if self.closed { _ => () } else { observer }
 }
 
@@ -382,6 +469,10 @@ pub async fn Program::close(self : Program) -> Unit {
       }
     }
     self.active.clear()
+    // Joining the calls is not enough for a tool that returned at once and
+    // left something running for this program: its owner's close hooks stop
+    // and join that too, before the trace is called final.
+    self.owner.close()
     // Wait for any in-flight publication (a timed-out handler's, say) so the
     // final snapshot is delivered last, then release the job observer, which
     // captures the runtime. A publisher still queued behind this sees the
@@ -400,6 +491,7 @@ pub async fn Program::close(self : Program) -> Unit {
 /// process exit or stop initiation; close later joins and persists final data.
 pub fn Program::stop(self : Program) -> Unit {
   self.closed = true
+  self.owner.stop()
   self.service.programs.remove(self.token)
   for index in 0..<self.calls.length() {
     self.cancel_call(index)
@@ -481,7 +573,7 @@ async fn Program::execute(
   name : String,
   arguments : Json,
 ) -> Json {
-  let tools = self.service.tools
+  let tools = self.registry_of(name)
   errdefer (if @async.is_being_cancelled() {
     self.calls[index] = call_entry(name, arguments, "interrupted")
   })
@@ -608,4 +700,24 @@ async fn Program::deliver_trace(self : Program) -> Unit {
     error =>
       self.trace_error = Some(@agent_tool.brief_line("\{error}", limit=512))
   }
+}
+
+///|
+/// The registry that holds `name` for this program: its own tools first,
+/// then the service's shared ones. A name is never in both.
+fn Program::registry_of(self : Program, name : String) -> @agent_tool.Tools {
+  if self.tools.find(name) is Some(_) {
+    self.tools
+  } else {
+    self.service.tools
+  }
+}
+
+///|
+/// The tool this program reaches by `name`, if any.
+fn Program::find_tool(
+  self : Program,
+  name : String,
+) -> @agent_tool.AgentToolDefinition? {
+  self.registry_of(name).find(name)
 }

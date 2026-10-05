@@ -11,6 +11,13 @@ import {
 // Errors
 
 // Types and methods
+type Owner
+pub fn Owner::id(Self) -> String
+pub fn Owner::is_closed(Self) -> Bool
+pub fn Owner::job(Self) -> String?
+pub fn Owner::on_close(Self, async () -> Unit noraise) -> Unit
+pub fn Owner::on_stop(Self, () -> Unit) -> Unit
+
 type Program
 pub fn Program::adopted(Self) -> Bool
 pub async fn Program::close(Self) -> Unit
@@ -26,7 +33,7 @@ pub fn Program::trace_error(Self) -> String?
 type Service
 pub async fn Service::close(Self) -> Unit
 pub fn Service::register(Self, on_trace? : (Json) -> Unit) -> Program raise
-pub async fn[X] Service::start(@async.TaskGroup[X], @agent_tool.Tools, call_timeout_ms? : Int, trace_timeout_ms? : Int) -> Self
+pub async fn[X] Service::start(@async.TaskGroup[X], @agent_tool.Tools, owner_tools? : (Owner) -> Array[@agent_tool.AgentToolDefinition], call_timeout_ms? : Int, trace_timeout_ms? : Int) -> Self
 
 // Type aliases
 
