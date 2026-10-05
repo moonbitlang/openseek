@@ -7,7 +7,6 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
-  "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
   "openseek_desktop/frontend/select_control",
   "openseek_desktop/frontend/symbols",

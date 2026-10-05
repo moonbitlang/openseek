@@ -136,6 +136,37 @@ fn Model::context_menu_input(self : Model) -> @action_menu.ContextInput {
 }
 
 ///|
+/// The composer sitting under the transcript on screen.
+priv enum QuoteScreen {
+  ChatQuote
+  CodexQuote
+} derive(Eq)
+
+///|
+/// The composer a reply quoting the transcript on screen is addressed to.
+priv enum QuoteTarget {
+  ChatComposer(@composer.Identity)
+  CodexComposer(@composer.Identity)
+} derive(Eq)
+
+///|
+/// Which composer, if any, is shown with a transcript right now. A read-only
+/// conversation shows its transcript without one.
+fn Model::quote_screen(self : Model) -> QuoteScreen? {
+  guard !self.is_console_gated() else { return None }
+  match self.screen {
+    Codex => Some(CodexQuote)
+    Chat =>
+      match self.chat_column() {
+        Transcript(conversation=conv, ..) if !conv.is_archived_read_only() &&
+          !self.scheduled_session_read_only(conv) => Some(ChatQuote)
+        _ => None
+      }
+    Skills | Schedules | Settings => None
+  }
+}
+
+///|
 /// Map the platform's command chords to the same
 /// messages used by their corresponding UI buttons.
 fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? {
@@ -632,13 +663,13 @@ fn main {
         },
       )
     let composer_input = state.map(model => model.composer_input())
-    let composer_html = @composer.component(
+    let (composer_html, composer_quote) = @composer.component(
       state.map(model => model.locale),
       composer_input,
       emit.map(action => ComposerAction(action)),
     )
     let codex_composer_input = state.map(model => model.codex_composer_input())
-    let codex_composer_html = @composer.component(
+    let (codex_composer_html, codex_composer_quote) = @composer.component(
       state.map(model => model.locale),
       codex_composer_input,
       emit.map(action => CodexComposerAction(action)),
@@ -664,16 +695,39 @@ fn main {
       },
     )
     // The floating reply for selected text is a shell overlay like the
-    // context menu; they share one slot.
+    // context menu; they share one slot. It is bound to the composer under
+    // the transcript on screen, so a reply opened over one conversation can
+    // never be delivered to another.
+    let quote_target = state
+      .map(model => model.quote_screen())
+      .map3(composer_input, codex_composer_input, (screen, chat, codex) => {
+        match screen {
+          Some(ChatQuote) =>
+            chat.quote_target().map(identity => ChatComposer(identity))
+          Some(CodexQuote) =>
+            codex.quote_target().map(identity => CodexComposer(identity))
+          None => None
+        }
+      })
     let context_menu_html = @rabbita.Val::map2(
       context_menu_html,
-      @action_menu.selection_component(state.map(model => model.locale), {
-        available: @composer.quote_available,
-        send: (text, comment) => @composer.quote_reply(text, comment, send=true),
-        batch: (text, comment) => {
-          @composer.quote_reply(text, comment, send=false)
+      @action_menu.selection_component(
+        state.map(model => model.locale),
+        quote_target,
+        reply => {
+          let (quote, identity) = match reply.target {
+            ChatComposer(identity) => (composer_quote, identity)
+            CodexComposer(identity) => (codex_composer_quote, identity)
+          }
+          quote({
+            identity,
+            quote: reply.quote,
+            comment: reply.comment,
+            send: reply.send,
+            accepted: reply.accepted,
+          })
         },
-      }),
+      ),
       (context_menu, selection_actions) => {
         @html.fragment([context_menu, selection_actions])
       },

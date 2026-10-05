@@ -1310,6 +1310,7 @@ test('transcript Markdown keeps links safe and loads local raster bytes through 
 
 test('selected transcript text can be quoted in a floating reply', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
+  const filler = Array.from({ length: 40 }, (_, index) => `Filler paragraph ${index + 1}.`);
   app.sessionEvents = [
     {
       sequence: 1,
@@ -1319,7 +1320,10 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
       sequence: 2,
       item: {
         kind: 'assistant',
-        payload: { content: 'First answer paragraph.\n\nSecond answer paragraph.' },
+        payload: {
+          content: [...filler, 'First answer paragraph.', 'Second answer paragraph.']
+            .join('\n\n'),
+        },
       },
     },
   ];
@@ -1327,6 +1331,7 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await app.goto();
   await app.openSession();
 
+  const transcript = page.locator('#transcript');
   const markdown = page.locator('.transcript .msg-content.markdown');
   const first = markdown.getByText('First answer paragraph.');
   const second = markdown.getByText('Second answer paragraph.');
@@ -1337,6 +1342,16 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   const task = page.locator('#task');
   const pinned = () => page.evaluate(() => CSS.highlights.has('quote-reply'));
   const selectWord = paragraph => paragraph.dblclick({ position: { x: 8, y: 8 } });
+  const openReply = async paragraph => {
+    await selectWord(paragraph);
+    await bar.getByRole('button', { name: 'Reply' }).click();
+    await expect(comment).toBeFocused();
+  };
+  const scrollTranscript = async delta => {
+    const box = await transcript.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + 40);
+    await page.mouse.wheel(0, delta);
+  };
 
   // Selecting text offers Reply just above it; Reply opens a composer that
   // keeps the quote in view and painted while the comment is typed.
@@ -1351,7 +1366,8 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   expect(await pinned()).toBe(true);
   await expect(reply.getByRole('button', { name: 'Send reply' })).toBeDisabled();
 
-  // Batched, the reply joins the message being written and nothing is sent.
+  // Batched, the reply joins the message being written, which is where the
+  // reader lands; nothing is sent.
   await batch.check();
   await expect(comment).toBeFocused();
   await expect(reply.getByRole('button', { name: 'Add to message' })).toBeEnabled();
@@ -1359,11 +1375,12 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await page.keyboard.press('Enter');
   await expect(reply).toHaveCount(0);
   await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
+  await expect(task).toBeFocused();
   expect(await pinned()).toBe(false);
   expect(app.requests.some(request => request.method === 'agent.start')).toBe(false);
 
-  // An offer goes away with its selection; a reply being typed survives a
-  // scroll and closes on Escape or a press elsewhere.
+  // An offer follows its selection: it goes on Escape, when the selection
+  // goes, and when a scroll moves the text from under it.
   await selectWord(first);
   await expect(bar).toBeVisible();
   await page.keyboard.press('Escape');
@@ -1374,19 +1391,20 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await expect(bar).toHaveCount(0);
   await selectWord(first);
   await expect(bar).toBeVisible();
-  await page.locator('#transcript').dispatchEvent('scroll');
+  await scrollTranscript(-60);
   await expect(bar).toHaveCount(0);
-  await selectWord(first);
-  await bar.getByRole('button', { name: 'Reply' }).click();
-  await expect(comment).toBeFocused();
+  await scrollTranscript(60);
+
+  // A reply being typed survives a scroll, and closes on Escape or a press
+  // elsewhere.
+  await openReply(first);
   await page.keyboard.type('Keep me');
-  await page.locator('#transcript').dispatchEvent('scroll');
+  await scrollTranscript(-60);
   await expect(comment).toHaveValue('Keep me');
+  await scrollTranscript(60);
   await page.keyboard.press('Escape');
   await expect(reply).toHaveCount(0);
-  await selectWord(first);
-  await bar.getByRole('button', { name: 'Reply' }).click();
-  await expect(reply).toBeVisible();
+  await openReply(first);
   await page.locator('.topbar-title').click();
   await expect(reply).toHaveCount(0);
   await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
@@ -1409,9 +1427,22 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await expect(bar).toBeVisible();
   await page.keyboard.press('Escape');
 
+  // A reply belongs to the conversation it quotes: leaving that conversation
+  // from the keyboard takes the reply off screen instead of retargeting it.
+  await openReply(second);
+  await page.keyboard.type('Wrong place');
+  await page.keyboard.press(await page.evaluate(() =>
+    navigator.platform.includes('Mac') ? 'Meta+KeyN' : 'Control+KeyN'));
+  await expect(page.locator('.empty-title')).toBeVisible();
+  await expect(reply).toHaveCount(0);
+  await expect(task).toHaveValue('');
+  await page.getByText('Rabbita browser fixture', { exact: true }).first().click();
+  await expect(second).toBeVisible();
+  await expect(reply).toHaveCount(0);
+  await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
+
   // Unbatched, the reply is sent at once with what was already batched.
-  await selectWord(second);
-  await bar.getByRole('button', { name: 'Reply' }).click();
+  await openReply(second);
   await expect(batch).toBeChecked();
   await batch.uncheck();
   await expect(comment).toBeFocused();

@@ -17,7 +17,7 @@ pub fn context_attrs(String) -> @html.Attrs
 
 pub fn context_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[ContextInput], ContextActions) -> @rabbita.Val[@html.Html]
 
-pub fn selection_component(@rabbita.Val[@i18n.Locale], QuoteActions) -> @rabbita.Val[@html.Html]
+pub fn[T : Eq] selection_component(@rabbita.Val[@i18n.Locale], @rabbita.Val[T?], (QuoteReply[T]) -> @cmd.Cmd) -> @rabbita.Val[@html.Html]
 
 // Errors
 
@@ -65,10 +65,12 @@ pub(all) struct Item {
   command : @cmd.Cmd
 }
 
-pub(all) struct QuoteActions {
-  available : () -> Bool
-  send : (String, String) -> @cmd.Cmd
-  batch : (String, String) -> @cmd.Cmd
+pub(all) struct QuoteReply[T] {
+  target : T
+  quote : String
+  comment : String
+  send : Bool
+  accepted : @cmd.Cmd
 }
 
 // Type aliases

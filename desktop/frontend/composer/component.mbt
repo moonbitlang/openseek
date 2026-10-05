@@ -368,6 +368,7 @@ priv enum Msg {
   MentionJumped(Int)
   GoalCancelled
   SubmitRequested
+  QuoteReplied(QuoteReply)
   FollowupMenuToggled
   FollowupMenuDismissed
   FollowupSelected(String)
@@ -710,6 +711,8 @@ fn Model::update(
       let (next, command) = entry.edited(input, value, action_emit)
       self.commit_entry_change(entry, next, command, action_emit)
     }
+    QuoteReplied(reply) =>
+      self.quote_replied(entry, input, reply, emit, action_emit)
     CompletionMove(delta) => {
       let next = if entry.completion is Some(completion) {
         {
@@ -1099,7 +1102,7 @@ pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   action_emit : @cmd.Emit[Action],
-) -> @rabbita.Val[@html.Html] {
+) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply]) {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, input) => (Model(input), @cmd.none),
@@ -1108,9 +1111,10 @@ pub fn component(
     },
     subscriptions=(state, input, emit) => state.subscriptions(input, emit),
   )
-  state.view3(input, locale, (state, input, locale) => {
+  let html = state.view3(input, locale, (state, input, locale) => {
     state
     .active(input)
     .view(locale~, emit, action_emit, input, clock_ms=state.clock_ms)
   })
+  (html, emit.map(reply => QuoteReplied(reply)))
 }
