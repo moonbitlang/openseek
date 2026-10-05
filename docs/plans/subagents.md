@@ -4,7 +4,7 @@ Date: 2026-10-05. Status: proposal; the first step (the allocator) is
 implemented in #1874, nothing else is. It supersedes a first attempt (pull requests
 #1868–#1871, closed) that added messaging on top of children the `mbtx`
 snippet spawns; the parts of that work which still apply are carried into
-this plan and named where they appear. Three rounds of external design
+this plan and named where they appear. Four rounds of external design
 review shaped it; their findings are at the end.
 
 ## Where this is going
@@ -143,6 +143,11 @@ Every answer about a child is the same small object:
   stopped child is `ended` with outcome `stopped`. These are facts about a
   child THIS engine process is running or has reaped. A child it only knows
   from disk is not given a state it cannot vouch for (see Seeing a child).
+  `starting` means admitted and handed to the runner; `running` means the
+  child has written the first record of its own transcript, which the
+  engine can see. The engine is not told when the process is spawned — that
+  happens inside the shared spawn code, which returns only when the child
+  ends — so it does not claim `running` on a guess.
 - `outcome`, present only when ended: `captured`, `no_report`, `max_steps`,
   `context_yield`, `timed_out`, `failed`, `stopped`, `owner_lost`.
 - `owner`: `"model"`, or the job id of the script that started it once that
@@ -152,10 +157,21 @@ Every answer about a child is the same small object:
 
 `subagent_result` adds `report` for a `captured` child when the whole reply,
 serialized, is at most 48,000 characters; otherwise `report_file` names the
-file that holds it. The engine writes every captured report to
-`sessions/<child>/report.json`, beside the transcript and kept as long as
-the session is, so the reference is always valid and identity, outcome and
-usage can never be lost to an oversized report.
+file that holds it.
+
+The engine stores every captured report at `sessions/<child>/report.json`,
+beside the transcript and kept as long as the session is. It does so AFTER
+the child is reaped: the child must be the one to create its own session
+directory (a `--kind` run refuses a directory that already exists), and the
+transport's result file is in a temporary directory that is deleted when
+the run returns. The report is written to a sibling and renamed into place,
+and only then is `report_file` given out. Storing it can fail — a full disk
+— and that must not cost the child its outcome or its usage: the envelope
+then carries `report_stored: false` with the reason and no `report_file`,
+and the report is still returned inline while this engine process holds it.
+A child that died before writing anything has no session directory; the
+engine creates it then, since nothing else ever will. The engine never
+writes or rewrites the child's transcript.
 
 One launcher, two ways of answering, because the two callers read
 different halves of a tool result:
@@ -268,10 +284,21 @@ A child runs in the session's own workspace — the checkout, or the git
 worktree, the launching agent is working in — so a scout reads what its
 launcher sees.
 
-Four children run at once per session, counting the model's and every
-script's together; the gate's reviewer is outside that count. A fifth start
-is refused `busy`. There is no queue in the first stack. Each child has a
-wall deadline of 600 s, the hosted default today, enforced by the runner.
+Four launcher slots per session. A slot is taken at admission — step 1
+above, while the child is still `starting` — and given back when admission
+fails or the child's teardown completes, so five simultaneous starts cannot
+all pass a check that only counted running processes. The model's children
+and every script's count together: every program's tool instances close
+over the one launcher. A fifth start is refused `busy`, takes no id and
+costs no quota. There is no queue in the first stack.
+
+Outside the count: the gate's reviewer, and children a hosted workflow
+spawns itself, which the launcher does not see. The bound is on the
+launcher, not on everything a session can have running, until the hosted
+path is retired.
+
+Each child has a wall deadline of 600 s, the hosted default today, enforced
+by the runner.
 
 ### Waiting
 
@@ -324,8 +351,14 @@ child for what it has before stopping it, send it an instruction and wait.
 The launcher is the single publisher of a child's terminal outcome.
 `run_subrun` today allocates its own id, emits a `SubrunStarted` /
 `SubrunFinished` pair, and reports `cancelled` when it unwinds. It gains a
-way to run with an id allocated earlier, to emit neither bracket, and to
-leave the terminal to its caller. The gate keeps its brackets.
+way to run with an id allocated earlier — used for both the request and the
+child's session — to emit neither bracket, and to let cancellation unwind
+into the launcher's own settlement. The gate keeps its wrapper and its
+brackets.
+
+The runner reports missing usage as zeros. The launcher keeps whether usage
+was available apart from the counters, and falls back to the transcript
+when it was not (see Accounting).
 
 ### The ledger
 
@@ -366,14 +399,27 @@ copy of anything.
   can appear until then. Before this, the counter lived in memory and a
   restart recovered only from child sessions that existed, so a surviving
   script holding an unused block could collide with a new child.
-  The hosted reservation is synchronous today; it becomes awaited and
-  fallible at its one call site, before the handoff is published.
-- **Lifecycle.** `started` when the process is spawned; `ended` with the
-  outcome and usage when the launcher reaps it.
-- **Writes fail loudly.** A failed or unconfirmed allocation write returns
-  no id. A failed `started` or `ended` write does not undo the fact; the
-  envelope carries `recorded: false` and history will later read
-  `owner_lost` for that child.
+  The hosted reservation is awaited and fallible at its one call site,
+  before the handoff is published.
+- **Provenance.** An allocation says what it is for. The gate's reviewer is
+  `owner: "engine"`, a hosted workflow's block is `owner: "workflow"`, and a
+  launcher child is `owner: "launcher"` with its kind, label and owner. A
+  block of 32 a script never used is 32 reserved numbers, not 32 lost
+  children: only launcher allocations are attempts.
+- **Lifecycle.** One more record per launcher child: `ended`, with the
+  outcome and usage, when the launcher reaps it. There is no `started`
+  record; the engine cannot observe the spawn, and nothing in recovery
+  would use one.
+- **One writer.** `ended` goes through the same path as allocations — the
+  same mutex, the same closed check, the same durable append and tail
+  handling. A second writer on the file could append after ownership was
+  released.
+- **Writes fail loudly, and recovery reads what is there.** A failed or
+  unconfirmed allocation write returns no id. A failed `ended` write does
+  not undo the fact: the live envelope carries `recorded: false`. Recovery
+  does not reason about which writes failed; it uses what it can read. A
+  readable `ended` is authoritative. A launcher allocation with no readable
+  `ended`, once its owner is gone, is `owner_lost`.
 - **Torn tails.** An append closes off an unterminated tail before writing,
   so damage stays in one record; a reader splits lines as bytes, decodes
   each on its own, and passes over what it cannot read. Allocation takes
@@ -383,8 +429,8 @@ copy of anything.
   whoever created the file — one left by an attempt that died before that
   point was made durable by nobody.
 
-After a restart, a child with no `ended` record is `owner_lost`: the engine
-that owned it is gone (the lock is free). It was sent end-of-input and
+After a restart, a launcher child with no readable `ended` record is
+`owner_lost`: the engine that owned it is gone (the lock is free). It was sent end-of-input and
 should have stopped; nothing confirms that. Its transcript says how far it
 got. It cannot be waited on, stopped or collected, and it is not relaunched.
 This is fail-on-owner-loss on purpose: a ledger makes history truthful; it
@@ -427,10 +473,13 @@ each is:
 With an id it adds the child's last few transcript events and where each
 instruction sent to it stands.
 
-A long session accumulates children without limit, so a listing is bounded:
-every child that has not ended, then the most recently ended, at most 32
-entries, with a count of the older ones left out. Any one of them is still
-reachable by id.
+A long session accumulates children without limit, so a listing is bounded
+at 32 entries. The managed children that have not ended come first — there
+are never more than four — and the rest of the entries are the most recent
+of everything else, managed or observed. Everything left out is counted,
+including observed children whose end is unknown; a session can have more
+than 32 of those, so "every child that has not ended" cannot be promised.
+Any one of them is still reachable by id.
 
 What a user sees for a launcher child in the first stack, stated plainly:
 
@@ -605,29 +654,36 @@ stays, sharing the ledger's allocator so ids cannot collide.
 
 ## Stack
 
-1. **The allocator.** Durable, locked allocation of child ordinals in the
-   ledger; one engine process per session; awaited by `run_subrun` (the
-   gate) and by hosted reservations; the ephemeral path kept. Tests: restart
-   with an unused block, two engine processes, a torn tail, no store.
-2. **The launcher, for scripts.** Owner-bound host tools in the service;
-   the `explore` launcher with its registry, in-flight cap, lifecycle and
-   accounting records and `report.json`; start / wait / result / stop /
-   status as script tools; the `run_subrun` seam; session shutdown. One
-   slice, because the launcher has no usable or recoverable entrance
-   without the tools. Acceptance: a compiled script through the real
-   service against fake children, including close during admission, a
-   dropped connection, and `stop` getting through while waits are held.
-3. **Messaging.** The loop's input source, the inbox, the scout reading its
-   launcher's instructions, `subagent_send` and delivery states.
-4. **Teaching.** The contract for scripts in the prompt and the `mbtx`
+1. **The allocator** (#1874). Durable, locked allocation of child ordinals
+   in the ledger; one allocator per session; awaited by `run_subrun` (the
+   gate) and by hosted reservations; the ephemeral path kept.
+2. **Owner-bound host tools.** The host-call service builds each program its
+   own instances of owner-aware tools over a host-created owner, and uses
+   that registry for dispatch and for its approval lookups; adoption keeps
+   the owner and fills in the job; stop and close close the owner. Tested
+   with fake tools: isolation between programs, adoption, revocation,
+   joining. Nothing uses it yet.
+3. **The launcher, for scripts.** The `explore` launcher with its registry,
+   slots, lifecycle and accounting records and `report.json`; start / wait /
+   result / stop / status as script tools; the `run_subrun` seam; session
+   shutdown, with the allocator closed last. Acceptance: a compiled script
+   through the real service against fake children, including close during
+   admission, a dropped connection, a report that cannot be stored, a child
+   that never creates its session directory, and `stop` getting through
+   while waits are held.
+4. **Messaging.** The loop's input source, the inbox, the scout reading its
+   launcher's instructions, `subagent_send` and delivery states, with `send`
+   added to the acceptance script.
+5. **Teaching.** The contract for scripts in the prompt and the `mbtx`
    description, the verified example, `@builtin/scout.mbtx`.
-5. **The model.** The six tools in the model's list with text results, the
+6. **The model.** The six tools in the model's list with text results, the
    loop-level wait, the finish guard, Cancel stopping the model's children,
    end notices, the prompt. Tests at the turn level, not only against fake
    children.
 
 Then: workers, in both modes. Later: the workflow adapter, reviews, a
-per-child model choice, a spend limit, live lanes, a start queue.
+per-child model choice, a spend limit, live lanes, a start queue, a
+spawn-success signal from the shared spawn code.
 
 ## Review rounds
 
@@ -669,3 +725,17 @@ the launcher is exposed. Each is addressed above:
 
 It also advised merging the service, launcher and script-tool steps into one
 slice, and moving the teaching after messaging; the stack above does both.
+
+**Round 4** (before the launcher): seven of the eight round-3 requirements
+are resolved; proceed once five corrections are recorded. Each is above:
+
+| Required | Where |
+| --- | --- |
+| Lifecycle records need one writer, and recovery must read evidence, not reason about failed writes; an unused block is not 32 lost children | The ledger (provenance, lifecycle, one writer) |
+| The engine cannot observe the spawn; do not record or claim it | The envelope (`starting` / `running`); The ledger (no `started`) |
+| `report.json`: who creates the directory, and what a failed write costs | The envelope (storing the report) |
+| The cap must count admissions, and say what it does not cover | In flight |
+| A listing cannot both include every non-ended child and be bounded | Seeing a child |
+
+It advised that the host-call service change may be extracted as its own
+pull request; the stack does so.
