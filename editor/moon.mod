@@ -22,7 +22,7 @@ import {
   "moonbit-community/cmark@0.4.9",
   "moonbit-community/moondiff@0.0.10",
   "moonbitlang/async@0.22.4",
-  "moonbit-community/rabbita@0.16.3",
+  "moonbit-community/rabbita@0.16.4",
   "Milky2018/diago@0.3.5",
   "moonbitlang/x@0.5.5",
   "kokic/uml@0.4.2",

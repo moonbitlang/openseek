@@ -8,7 +8,7 @@ import {
   "moonbitlang/x@0.5.5",
   "moonbitlang/jsonl@0.2.1",
   "moonbitlang/openseek_protocol@0.3.0",
-  "moonbit-community/rabbita@0.16.3",
+  "moonbit-community/rabbita@0.16.4",
   "moonbitlang/editor@0.4.5",
   "moonbitlang/workflow@0.10.0",
 }
