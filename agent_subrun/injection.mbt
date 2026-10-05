@@ -2,12 +2,13 @@
 /// The host handoff for a snippet run under this durable session: what an
 /// `mbtx` snippet is given so the children it delegates to are visible.
 ///
-/// Built HERE, beside `reserve_subrun_ordinals`, because the injection must
-/// draw from the session's one child-ordinal allocator — the same counter
-/// `run_subrun` mints its children from, with this session's resumed
-/// floor. Two independent counters would hand `<parent>-sr-1` to both a
+/// Built HERE because the injection must draw from the session's one
+/// child-ordinal allocator — the ledger `run_subrun` mints its children
+/// from. Two independent counters would hand `<parent>-sr-1` to both a
 /// snippet's child and a direct sub-run, and the second to append would
-/// die against the first's stale snapshot. `agent_subrun/host` owns the
+/// die against the first's stale snapshot. A block is recorded in the ledger
+/// before the snippet is given it, so it stays taken even if this engine
+/// dies while the snippet lives on. `agent_subrun/host` owns the
 /// document; it is a leaf and cannot name the allocator, so the wiring is
 /// this function's whole job.
 ///
@@ -24,7 +25,6 @@ pub fn ChildSession::injection(
   api_url? : String,
   criteria? : () -> @host.AuditCriteria?,
 ) -> @host.SubrunInjection {
-  let first_free = self.first_free
   SubrunInjection(
     exe~,
     launch_prefix~,
@@ -34,53 +34,6 @@ pub fn ChildSession::injection(
     model?,
     api_url?,
     criteria?,
-    reserve_ordinals=count => reserve_subrun_ordinals(count, first_free~),
+    reserve_ordinals=count => self.allocate(count~, owner="workflow"),
   )
-}
-
-///|
-test "a session's injection draws from the shared counter" {
-  // Ordinals depend on what this process has already reserved, so the test
-  // pins the invariants rather than the numbers: consecutive blocks, disjoint,
-  // never below the session's floor.
-  let session = ChildSession(root="/store", parent="run7", first_free=1)
-  let injection = session.injection(exe="/opt/openseek", workspace_root="/ws")
-  let first = injection.reserve(result_root="/run/tmp")
-  let second = injection.reserve(result_root="/run/tmp")
-  assert_true(first.base() >= 1)
-  assert_eq(second.base(), first.base() + @host.block_size)
-  assert_true(first.dir().has_prefix("/store/run7-wf-"))
-}
-
-///|
-/// The session forwards the host's launch prefix unchanged into the handoff.
-test "a wasm engine's handoff names its runtime, module and fence" {
-  let session = ChildSession(root="/store", parent="run7", first_free=1)
-  let injection = session.injection(
-    exe="moonrun",
-    launch_prefix=["/build/wasm/openseek.wasm", "--"],
-    workspace_root="/ws",
-  )
-  assert_eq(injection.exe(), "moonrun")
-  assert_eq(injection.launch_prefix(), ["/build/wasm/openseek.wasm", "--"])
-  guard injection.reserve(result_root="/run/tmp").env().get("WORKFLOW_HOST")
-    is Some(raw) else {
-    fail("the handoff variable must be set")
-  }
-  let document = @json.parse(raw)
-  guard document is { "exe": String(exe), "child_args": Array(args), .. } else {
-    fail("handoff shape drifted: \{document.stringify()}")
-  }
-  assert_eq(exe, "moonrun")
-  let args = args.map(item => {
-    match item {
-      String(value) => value
-      _ => "?"
-    }
-  })
-  assert_eq(args, [
-    "/build/wasm/openseek.wasm", "--", "run", "--input-format", "json", "--cancel-on-stdin-eof",
-    "--dir", "/ws", "--session-root", "/store", "--result-root", "/run/tmp", "--api-url",
-    "", "--kind", "{kind}", "--result-file", "{result_file}", "--session", "{child}",
-  ])
 }

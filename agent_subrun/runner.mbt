@@ -101,6 +101,10 @@ pub fn[T] SubrunResult::subrun_id(self : SubrunResult[T]) -> String {
 /// the grace still counts — then terminates it. External cancellation of
 /// the caller re-raises after teardown; it is never folded into a terminal.
 ///
+/// With a `ChildSession` this RAISES, before anything is spawned or
+/// announced, when the child's ordinal cannot be recorded: a durable child
+/// is never launched on an id the ledger does not hold.
+///
 /// Lifecycle brackets: the runner emits `SubrunStarted{id, kind, label}`
 /// before anything else and a PAIRED `SubrunFinished{id, status, costs}` on
 /// every exit — success, failure, and cancellation (emitted before the
@@ -122,15 +126,17 @@ pub async fn[T] run_subrun(
   extra_env? : Map[String, String],
   emit_event? : (@protocol.Event) -> Unit = event => @emit.emit(event),
 ) -> SubrunResult[T] {
-  // Bump the process counter past any child ordinal an earlier engine
-  // process already persisted for this parent — monotonic, so it can only
-  // skip ids, never reuse one. Without a child session, a floor of 1 is a
-  // no-op.
-  let first_free = match child_session {
-    Some(spec) => spec.first_free
-    None => 1
+  // A durable child's ordinal comes from the session's ledger, recorded
+  // before the child exists. A child with no session of its own leaves
+  // nothing an ordinal could collide on, and counts in memory.
+  let ordinal = match child_session {
+    Some(spec) => spec.allocate(count=1, owner="engine")
+    None => {
+      ephemeral_ids.val += 1
+      ephemeral_ids.val
+    }
   }
-  let id = "sr-\{reserve_subrun_ordinals(1, first_free~)}"
+  let id = "sr-\{ordinal}"
   // The child persists its own transcript under `<parent>-<id>` when the
   // parent is durable: the id exists only after allocation, so the session
   // argv is the runner's to append, not the caller's.
@@ -239,54 +245,126 @@ pub async fn[T] run_subrun(
 /// same root, so session tooling (the viewer, `openseek sessions`)
 /// discovers child transcripts with no extra plumbing.
 ///
-/// `first_free` is the lowest child ordinal no earlier engine process has
-/// persisted for this parent (the CLI scans the store at startup). The
-/// sub-run counter is per-process, so without this floor a RESUMED durable
-/// session would reuse `sr-1` — and the fresh child session would die on
-/// its first append against the old child's file (stale-snapshot check).
+/// It also names the session's ledger: the one allocator of child ordinals
+/// for this parent, shared by `run_subrun` and by every workflow snippet's
+/// reserved block. An ordinal is recorded durably before it is handed out,
+/// so a restarted engine cannot reuse one an earlier process gave away —
+/// including a block a snippet was given and has not used yet.
+///
+/// The ledger is opened, and this process becomes the session's one owner
+/// of it, at the FIRST allocation — not when this value is built. A session
+/// that never delegates gets no ledger and no lock file, and a session
+/// directory is not created ahead of the session's own first record. So the
+/// rule is one ALLOCATOR per session, not one engine: several engines may
+/// run turns of a session, and whichever allocates first holds the ledger
+/// until it closes.
 struct ChildSession {
   root : String
   parent : String
-  first_free : Int
+  ledger_path : String
+  ledger_dirs : Array[String]?
+  first_free : async () -> Int
+  /// Serializes opening, every allocation, and closing: ownership is never
+  /// released under an allocation that has not finished.
+  gate : @async.Mutex
+  mut ledger : @ledger.Ledger?
+  mut closed : Bool
 }
 
 ///|
-/// See `ChildSession`.
+/// The children of session `parent` under `root`, numbered from the ledger
+/// at `ledger`.
+///
+/// `first_free` answers, when asked, the lowest child ordinal the session
+/// store shows to be unused: one past the highest child session that
+/// exists. It is asked each time the ledger is opened, not once up front —
+/// a child that is not in the ledger (one from before the ledger existed)
+/// may appear between building this value and the first allocation. The
+/// ledger starts from whichever of that and its own records is further on.
+///
+/// `ledger_dirs` is the chain of directories the ledger's existence depends
+/// on, innermost first, made durable with its first record; left out, only
+/// the ledger's own directory is.
 pub fn ChildSession::ChildSession(
   root~ : String,
   parent~ : String,
-  first_free? : Int = 1,
+  ledger~ : String,
+  ledger_dirs? : Array[String],
+  first_free? : async () -> Int = () => 1,
 ) -> ChildSession {
-  { root, parent, first_free, }
-}
-
-///|
-/// Per-process monotonic sub-run ids: unique within one engine's stream,
-/// which is all the pairing contract needs.
-let subrun_ids : Ref[Int] = { val: 0, }
-
-///|
-/// Reserve `count` consecutive child ordinals from THIS process's counter and
-/// return the first.
-///
-/// Child sessions are named `<parent>-sr-N`, and `run_subrun` is no longer the
-/// only thing that mints one: an mbtx snippet running a workflow allocates its
-/// own children. Both must draw from the same counter, or a snippet's `sr-1`
-/// and a `review` call's `sr-1` name the same file and the second child dies
-/// on its first append against the first's snapshot.
-///
-/// `first_free` is the same floor `ChildSession` carries — the lowest ordinal
-/// no earlier engine process persisted for this parent — applied here so a
-/// block reserved right after a resume cannot reuse a persisted id either.
-/// Monotonic: this can skip ordinals, never reuse one.
-fn reserve_subrun_ordinals(count : Int, first_free~ : Int) -> Int {
-  if subrun_ids.val < first_free - 1 {
-    subrun_ids.val = first_free - 1
+  {
+    root,
+    parent,
+    ledger_path: ledger,
+    ledger_dirs,
+    first_free,
+    gate: Mutex(),
+    ledger: None,
+    closed: false,
   }
-  let base = subrun_ids.val + 1
-  subrun_ids.val += if count > 0 { count } else { 1 }
-  base
 }
+
+///|
+/// Allocate `count` consecutive child ordinals and return the first, taking
+/// ownership of the session's ledger if this is the first allocation.
+///
+/// Raises, returning no allocation, when another process already holds this
+/// session's ledger — one allocator at a time, so that two cannot hand out
+/// the same ordinal — when the record cannot be written, or once this value
+/// has been closed. An opening that fails is tried afresh by the next
+/// allocation.
+async fn ChildSession::allocate(
+  self : ChildSession,
+  count~ : Int,
+  owner~ : String,
+) -> Int {
+  self.gate.acquire()
+  defer self.gate.release()
+  guard !self.closed else {
+    fail("this session's subagents are closed: its engine is stopping")
+  }
+  let ledger = match self.ledger {
+    Some(ledger) => ledger
+    None => {
+      let floor = (self.first_free)()
+      guard @ledger.Ledger::open(
+          self.ledger_path,
+          floor~,
+          dirs?=self.ledger_dirs,
+        )
+        is Some(ledger) else {
+        fail(
+          "another openseek process is already running this session's subagents",
+        )
+      }
+      self.ledger = Some(ledger)
+      ledger
+    }
+  }
+  ledger.allocate(count~, owner~)
+}
+
+///|
+/// Stop allocating for this session and give up its ledger, once any
+/// allocation in flight has finished. An allocation that arrives later is
+/// refused — it does not quietly take the ledger back. Exiting releases the
+/// ledger too; this is for an engine that stops serving a session and keeps
+/// living, and it belongs AFTER the tasks that may allocate have ended.
+pub async fn ChildSession::close(self : ChildSession) -> Unit {
+  self.gate.acquire()
+  defer self.gate.release()
+  self.closed = true
+  if self.ledger is Some(ledger) {
+    ledger.close()
+    self.ledger = None
+  }
+}
+
+///|
+/// Ordinals for children that have no session of their own (`--no-session`):
+/// unique within this engine's event stream, which is all the pairing of a
+/// started bracket with its finished one needs.
+let ephemeral_ids : Ref[Int] = { val: 0, }
 
 ///|
 /// The wire status vocabulary for a terminal (the "cancelled" status has no

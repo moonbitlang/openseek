@@ -22,6 +22,7 @@ pub fn SessionStore::SessionStore(String) -> Self
 pub async fn SessionStore::append(Self, @agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
 pub async fn SessionStore::compact(Self, @agent_session.Session, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> @agent_session.Session
 pub async fn SessionStore::create(Self, @agent_session.Session) -> Unit
+pub fn SessionStore::durable_dirs(Self, @agent_session.SessionId) -> Array[String] raise
 pub async fn SessionStore::exists(Self, @agent_session.SessionId) -> Bool
 pub fn SessionStore::job_logs_dir(Self, @agent_session.SessionId) -> String raise
 pub async fn SessionStore::latest(Self) -> @agent_session.SessionId?
@@ -31,6 +32,7 @@ pub async fn SessionStore::load(Self, @agent_session.SessionId) -> @agent_sessio
 pub fn SessionStore::root(Self) -> String
 pub fn SessionStore::session_file(Self, @agent_session.SessionId) -> String raise
 pub async fn SessionStore::set_title(Self, @agent_session.SessionId, String) -> Unit
+pub fn SessionStore::subagents_path(Self, @agent_session.SessionId) -> String raise
 pub async fn SessionStore::title(Self, @agent_session.SessionId) -> String?
 
 // Type aliases

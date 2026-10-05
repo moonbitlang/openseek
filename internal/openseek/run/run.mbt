@@ -295,6 +295,11 @@ async fn run_general(
       )
       turn.session = Some(id.value())
       turn.started_after = session.last_sequence()
+      // This run's children get their ids from the session's ledger, which
+      // it takes at its first allocation and gives back once the turn — and
+      // every task of it that could allocate — has ended.
+      let child_session = @setup.child_session(store, id)
+      defer @async.protect_from_cancel(() => child_session.close())
       run_task_turn(
         matches,
         session,
@@ -311,11 +316,7 @@ async fn run_general(
         workspace_root~,
         review_deadline_ms~,
         approval_policy~,
-        child_session=ChildSession(
-          root=store.root(),
-          parent=id.value(),
-          first_free=@setup.first_free_child_ordinal(store, id.value()),
-        ),
+        child_session~,
         delegate~,
       )
     }

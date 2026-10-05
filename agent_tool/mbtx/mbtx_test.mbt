@@ -1979,6 +1979,48 @@ async test "delegation is refused off the wasm target, before anything is reserv
 }
 
 ///|
+/// A block is recorded before it is handed out, so reserving can fail — the
+/// record could not be written, or another engine process runs this
+/// session's subagents. The snippet then must not run as a workflow at all:
+/// the model is told why, and no run directory or announcement is left
+/// behind for a workflow that never was.
+async test "a reservation that fails stops the workflow before it starts" {
+  @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
+    @vfs.with_tmpdir(prefix="mbtx-store-", store => {
+      let subrun = @host.SubrunInjection(
+        exe="/unused/openseek",
+        session_root=store,
+        parent="run7",
+        workspace_root=ws,
+        reserve_ordinals=_ => {
+          fail(
+            "another openseek process is already running this session's subagents",
+          )
+        },
+      )
+      let out = dispatch(@mbtx.definition(workspace_root=ws, subrun~), {
+        "source": "fn main { println(\"ran anyway\") }",
+        "subrun": true,
+      })
+      assert_true(out.is_error)
+      assert_true(
+        out.content.contains(
+          "`subrun` is unavailable: another openseek process is already running this session's subagents",
+        ),
+      )
+      assert_false(out.content.contains("ran anyway"))
+      assert_true(@fs.readdir(store).is_empty())
+      // Without the flag the same snippet is an ordinary run.
+      let plain = dispatch(@mbtx.definition(workspace_root=ws, subrun~), {
+        "source": "fn main { println(\"ran anyway\") }",
+      })
+      assert_false(plain.is_error, msg=plain.content)
+      assert_true(plain.content.contains("ran anyway"))
+    })
+  })
+}
+
+///|
 async test "the run directory is created even when the store root is not there yet" {
   @vfs.with_tmpdir(prefix="mbtx-ws-", ws => {
     @vfs.with_tmpdir(prefix="mbtx-store-", store => {
