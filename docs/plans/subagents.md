@@ -228,6 +228,10 @@ model's own children either. `job_stop` and `subagent_stop` do.
 
 ### In flight
 
+A child runs in the session's own workspace — the checkout, or the git
+worktree, the launching agent is working in — so a scout reads what its
+launcher sees.
+
 Four children run at once per session, counting the model's and every
 script's together; the gate's reviewer is outside that count. A fifth start
 is refused `busy`. There is no queue in the first stack. Each child has a
@@ -420,8 +424,23 @@ profile.
   abort. `subagent_discard(id)` drops it.
 - Overlapping `allowed_paths` between live workers are refused at start.
 
+Worktrees are built in, not something the caller manages: the engine
+creates a worker's worktree, records it, and removes it after the work is
+integrated or discarded. The caller never runs `git worktree` for a worker.
+Two things follow from that and are part of the same stack:
+
+- **Looking inside a worker's worktree.** A scout can be started IN a
+  worker's worktree — `subagent_start(kind="explore", input, in="sr-5")` —
+  to check that worker's result before it is integrated. `in` accepts only
+  the id of a worker the caller may address; it is not a path.
+- **Cleanup is the engine's.** A worker's worktree and branch are removed on
+  integrate and on discard, and `subagent_status` lists any that are left,
+  so none is orphaned silently. (In a repository with submodules, plain
+  `git worktree remove` refuses; the existing controller already removes the
+  directory and prunes instead.)
+
 The tools and envelope above are shaped so that this adds a kind, one
-envelope field and two tools, and changes none.
+optional argument, one envelope field and two tools, and changes none.
 
 ### Reviews
 
