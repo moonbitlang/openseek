@@ -12,9 +12,10 @@ pub(all) struct QuoteReply[T] {
   comment : String
   // Send the message now, rather than leave it to go out with the next one.
   send : Bool
-  // To run once the reply has been taken. Until then it stays open here, so a
-  // composer that declines it loses nothing the reader typed.
+  // The composer answers with one of these. Until it accepts, the reply stays
+  // open here, so a declined reply loses nothing the reader typed.
   accepted : @cmd.Cmd
+  declined : @cmd.Cmd
 }
 
 ///|
@@ -31,7 +32,8 @@ priv struct SelectionAnchor {
 ///|
 priv enum SelectionStage {
   Offered
-  Replying(comment~ : String)
+  // `declined` shows that the composer would not take the last attempt.
+  Replying(comment~ : String, declined~ : Bool)
 } derive(Eq)
 
 ///|
@@ -59,6 +61,7 @@ priv enum SelectionMsg {
   BatchToggled
   Submitted
   Delivered
+  Declined
 }
 
 ///|
@@ -101,7 +104,7 @@ const QuoteHighlight : String = "quote-reply"
 ///|
 /// Room reserved for the surface, sized for the reply composer so the bar
 /// does not jump when it opens.
-const SelectionSurfaceHeight : Double = 116
+const SelectionSurfaceHeight : Double = 140
 
 ///|
 const SelectionSurfaceHalfWidth : Double = 190
@@ -175,13 +178,20 @@ fn install_selection_listener(
       emit(Closed)
     }
   }
-  let on_mouse_down : @dom.Listener = event => if !on_surface(event) { close() }
-  let on_mouse_up : @dom.Listener = event => {
-    guard event.to_mouse_event() is Some(mouse) &&
+  // Whether the press now held began in a quote source. A release anywhere
+  // else — over a menu, say — must not offer a selection left from earlier.
+  let mut selecting = false
+  let on_mouse_down : @dom.Listener = event => {
+    guard !on_surface(event) else { return }
+    selecting = event.to_mouse_event() is Some(mouse) &&
       mouse.get_button() == 0 &&
-      !on_surface(event) else {
-      return
-    }
+      event_element(event) is Some(element) &&
+      element.closest(QuoteSource) is Some(_)
+    close()
+  }
+  let on_mouse_up : @dom.Listener = _ => {
+    guard selecting else { return }
+    selecting = false
     // A click inside an existing selection collapses it only after `mouseup`.
     let _ = @dom.window().set_timeout(
       () => {
@@ -200,19 +210,24 @@ fn install_selection_listener(
   let on_change : @dom.Listener = _ => follow()
   let on_key_down : @dom.Listener = event => {
     // Escape during composition belongs to the input method.
-    guard !(watch is Idle) &&
-      event.to_keyboard_event() is Some(key) &&
+    guard event.to_keyboard_event() is Some(key) &&
       key.key() == "Escape" &&
       !key.is_composing() else {
       return
     }
-    // Typed into the reply, Escape closes the reply and nothing else.
-    if on_surface(event) {
-      event.prevent_default()
-      event.stop_propagation()
+    match watch {
+      Idle => ()
+      Offer(_) => close()
+      // A reply holds typed text: only Escape typed into it closes it, and
+      // then it closes nothing else. Escape meant for another overlay opened
+      // over the reply is that overlay's.
+      Reply =>
+        if on_surface(event) {
+          event.prevent_default()
+          event.stop_propagation()
+          close()
+        }
     }
-    watch = Idle
-    emit(Closed)
   }
   document.add_event_listener_with_options(
     "mousedown",
@@ -309,7 +324,10 @@ fn[T : Eq] SelectionState::update(
       ({ ..self, open: None, }, unpin)
     (ReplyStarted, Some({ stage: Offered, .. } as open)) =>
       (
-        { ..self, open: Some({ ..open, stage: Replying(comment=""), }), },
+        {
+          ..self,
+          open: Some({ ..open, stage: Replying(comment="", declined=false), }),
+        },
         @cmd.batch([
           // Pinned while the range is still selected; focusing the input
           // takes the native selection with it.
@@ -317,9 +335,20 @@ fn[T : Eq] SelectionState::update(
           focus_element(SelectionReplyInput, true),
         ]),
       )
-    (CommentChanged(comment), Some({ stage: Replying(_), .. } as open)) =>
+    (CommentChanged(comment), Some({ stage: Replying(..), .. } as open)) =>
       (
-        { ..self, open: Some({ ..open, stage: Replying(comment~), }), },
+        {
+          ..self,
+          open: Some({ ..open, stage: Replying(comment~, declined=false), }),
+        },
+        @cmd.none,
+      )
+    (Declined, Some({ stage: Replying(comment~, ..), .. } as open)) =>
+      (
+        {
+          ..self,
+          open: Some({ ..open, stage: Replying(comment~, declined=true), }),
+        },
         @cmd.none,
       )
     (BatchToggled, _) =>
@@ -328,7 +357,10 @@ fn[T : Eq] SelectionState::update(
         // The checkbox took the focus; Enter belongs to the comment.
         focus_element(SelectionReplyInput, true),
       )
-    (Submitted, Some({ stage: Replying(comment~), anchor, target: addressed, })) => {
+    (
+      Submitted,
+      Some({ stage: Replying(comment~, ..), anchor, target: addressed, }),
+    ) => {
       // A batched quote may wait for its comment; a message sent now is the
       // comment.
       guard target == Some(addressed) && (self.batched || !comment.is_blank()) else {
@@ -342,6 +374,7 @@ fn[T : Eq] SelectionState::update(
           comment,
           send: !self.batched,
           accepted: emit(Delivered),
+          declined: emit(Declined),
         }),
       )
     }
@@ -416,7 +449,7 @@ pub fn[T : Eq] selection_component(
             ),
           ],
         )
-      Replying(comment~) => {
+      Replying(comment~, declined~) => {
         let sendable = state.batched || !comment.is_blank()
         let submit_title = if state.batched {
           ui(locale, AddReply)
@@ -479,6 +512,17 @@ pub fn[T : Eq] selection_component(
                 ],
               ),
             ]),
+            // Last, so its coming and going moves nothing the reader is
+            // typing in.
+            if declined {
+              @html.div(
+                class="selection-reply-note",
+                attrs=@html.Attrs::build().role("status"),
+                ui(locale, ReplyDeclined),
+              )
+            } else {
+              @html.nothing
+            },
           ],
         )
       }

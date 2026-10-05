@@ -71,6 +71,7 @@ pub(all) struct QuoteReply[T] {
   comment : String
   send : Bool
   accepted : @cmd.Cmd
+  declined : @cmd.Cmd
 }
 
 // Type aliases

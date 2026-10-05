@@ -14,10 +14,11 @@ pub(all) struct QuoteReply {
   comment : String
   // Submit the message once the reply is in it; otherwise it waits there.
   send : Bool
-  // Run when the composer takes the reply. A composer that declines it — it
-  // now serves another conversation, or is not editing a message — runs
-  // nothing, so the caller still holds what was typed.
+  // The composer runs one of these. It declines a reply it is not the
+  // addressee of, and one that arrives while it is not editing a message; the
+  // caller then still holds what was typed.
   accepted : @cmd.Cmd
+  declined : @cmd.Cmd
 }
 
 ///|
@@ -92,7 +93,7 @@ fn Model::quote_replied(
   // A `!` draft is a shell command; a reply appended to it would run as one.
   guard input.quote_target() == Some(reply.identity) &&
     input.shell_command(entry.draft) is None else {
-    return (self, @cmd.none)
+    return (self, reply.declined)
   }
   let task = entry.draft.task +
     quote_insertion(entry.draft.task, reply.quote, reply.comment)

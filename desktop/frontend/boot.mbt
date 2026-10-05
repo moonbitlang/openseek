@@ -725,6 +725,7 @@ fn main {
             comment: reply.comment,
             send: reply.send,
             accepted: reply.accepted,
+            declined: reply.declined,
           })
         },
       ),

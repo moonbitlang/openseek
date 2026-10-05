@@ -1409,23 +1409,67 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await expect(reply).toHaveCount(0);
   await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
 
-  // Text selected outside the transcript gets no offer.
-  const selectAll = locator => locator.evaluate(element => {
+  // Text selected outside the transcript gets no offer, and neither does a
+  // transcript selection left from earlier when the mouse is pressed and
+  // released somewhere else.
+  const press = (locator, selected) => locator.evaluate((element, selected) => {
+    const event = type => new MouseEvent(type, { bubbles: true, button: 0 });
+    element.dispatchEvent(event('mousedown'));
     const range = document.createRange();
-    range.selectNodeContents(element);
+    range.selectNodeContents(selected ?? element);
     const selection = document.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
-    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
-  });
-  await selectAll(page.locator('.topbar-title'));
-  await page.evaluate(() => new Promise(resolve => {
+    element.dispatchEvent(event('mouseup'));
+  }, selected);
+  const settled = () => page.evaluate(() => new Promise(resolve => {
     setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(resolve)), 0);
   }));
+  const title = page.locator('.topbar-title');
+  await press(title);
+  await settled();
   await expect(bar).toHaveCount(0);
-  await selectAll(first);
+  await press(title, await first.elementHandle());
+  await settled();
+  await expect(bar).toHaveCount(0);
+  await press(first);
   await expect(bar).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(bar).toHaveCount(0);
+
+  // Escape meant for another overlay leaves the reply and its text alone.
+  await openReply(first);
+  await page.keyboard.type('Still here');
+  await page.keyboard.press(await page.evaluate(() =>
+    navigator.platform.includes('Mac') ? 'Meta+KeyP' : 'Control+KeyP'));
+  const quickOpen = page.getByRole('dialog', { name: 'Search workspace files' });
+  await expect(quickOpen).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(quickOpen).toHaveCount(0);
+  await expect(comment).toHaveValue('Still here');
+  await comment.focus();
+  await page.keyboard.press('Escape');
+  await expect(reply).toHaveCount(0);
+
+  // A composer holding a shell command is not editing a message: it declines
+  // the reply, which says so and keeps what was typed until it is taken.
+  const batched = '> First\n\nWhy first?\n\n';
+  await task.fill('!echo hello');
+  await expect(page.locator('.composer-mode-chip')).toBeVisible();
+  await openReply(first);
+  await page.keyboard.type('Not a command');
+  await page.keyboard.press('Enter');
+  await expect(reply.getByRole('status')).toHaveText(
+    "The message box can't take a reply right now.");
+  await expect(comment).toHaveValue('Not a command');
+  await expect(task).toHaveValue('!echo hello');
+  expect(app.requests.some(request => request.method === 'terminal.open')).toBe(false);
+  await task.fill(batched);
+  await comment.focus();
+  await page.keyboard.press('Enter');
+  await expect(reply).toHaveCount(0);
+  await expect(task).toHaveValue(`${batched}> First\n\nNot a command\n\n`);
+  await task.fill(batched);
 
   // A reply belongs to the conversation it quotes: leaving that conversation
   // from the keyboard takes the reply off screen instead of retargeting it.

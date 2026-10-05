@@ -135,6 +135,11 @@
 .selection-reply-submit {
   flex: none;
 }
+.selection-reply-note {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
+}
 /* The quoted range, kept painted once focus is in the reply input. */
 ::highlight(quote-reply) {
   background-color: var(--color-text-selection);
