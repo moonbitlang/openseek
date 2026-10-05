@@ -2087,6 +2087,12 @@ async test "a hosted run is announced before it runs and closed on every exit" {
         let output = dispatch(definition, { "source": source, "subrun": true })
         assert_false(output.is_error, msg=output.content)
         assert_true(output.content.contains("moved to the background"))
+        // The launcher is told which subagent ids this run may use: the
+        // block reserved for it, before any of them exists.
+        assert_true(
+          output.content.contains("numbered from sr-900 in launch order"),
+        )
+        assert_true(output.content.contains("up to sr-931"))
         guard workflow_lines("wf-900")
           is [{ "event": String("workflow_started"), .. }] else {
           fail("at adoption the run is announced and still open")

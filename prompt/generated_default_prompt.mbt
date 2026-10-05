@@ -279,8 +279,9 @@ fn default_prompt() -> String {
     #|A mbtx script can call the host's own tools.
     #|`@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
     #|JSON object the direct tool takes, forwarded unchanged: validation and
-    #|defaults stay in the host. `edit`, `multi_edit`, `write`, `remove`, and
-    #|`web_search` (when registered) are the tools a script may call; `finish`,
+    #|defaults stay in the host. `edit`, `multi_edit`, `write`, `remove`,
+    #|`web_search` (when registered), and `subagent_status` and `subagent_send`
+    #|(in a session that can delegate) are the tools a script may call; `finish`,
     #|`goal`, `plan`, the job controls, and a recursive `mbtx` are not.
     #|
     #|Reach for them when computation or filtering saves model round trips — read
@@ -433,6 +434,14 @@ fn default_prompt() -> String {
     #|  })
     #|}
     #|```
+    #|
+    #|A workflow moves to the background after a few seconds, and that result names
+    #|the subagent ids reserved for it. While it runs, `subagent_status` shows what
+    #|each subagent is doing and `subagent_send` posts one a new instruction: narrow
+    #|its question, hand it a fact it is missing, or tell it to stop searching and
+    #|report what it has. Look in on a scout before waiting out a long job — one
+    #|that is off track costs its whole run, and stopping the job loses every
+    #|unfinished report. A reviewer takes no instructions.
     #|
     #|Before declaring substantial work or a standing goal complete, ask for an
     #|independent audit:

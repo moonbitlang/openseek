@@ -275,3 +275,11 @@ test "the spawn policy admits only the codex review verb" {
   assert_false(codex_prefixes.contains(["exec"]))
   assert_false(codex_prefixes.contains(["install"]))
 }
+
+///|
+test "a backgrounded workflow names the subagent ids reserved for it" {
+  let note = subagents_note(33, 32)
+  assert_true(note.contains("numbered from sr-33 in launch order"))
+  assert_true(note.contains("at most 32, up to sr-64"))
+  assert_true(note.contains("subagent_status"))
+}

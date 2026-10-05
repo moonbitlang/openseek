@@ -256,17 +256,33 @@ run against a mock model server.
 
 **Stage 1 — make it usable.**
 
-1. Ids. Put the reserved child range in the `mbtx(subrun=true)` launch
-   result. Have `subagent_status` read the run's `events.jsonl` for label,
-   job, launched-but-not-yet-recorded children, and the library's end status.
-   The sidecar is best-effort and script-writable, so it refines the display
-   and never decides who is a child; where it and the transcript disagree or
-   it is missing, the state is "unknown", not "working".
-2. Bounded, deduplicated lifecycle notices to the parent (child started,
+Done:
+
+1. Ids. A backgrounded `mbtx(subrun=true)` result names the subagent ids
+   reserved for the run (`sr-<base>` onward, in launch order).
+   `subagent_status` reads each run's `events.jsonl` for the script's label,
+   which run launched the child, children launched but not yet recorded, and
+   the library's end status. That file is best-effort and script-writable,
+   so it refines the display and never decides who is a child: a child with
+   no terminal is "running per the workflow's record" only when the workflow
+   says so, "no end in its transcript; the workflow recorded it as
+   `timed_out`" when the library closed it, and otherwise just "no end
+   recorded, last activity Ns ago". `subagent_send` refuses a child the
+   workflow recorded as over, and still requires a transcript. The start
+   and finish records are written independently, so a finish with no start
+   still closes the child. Reading the records never fails the tools: each
+   line is decoded on its own, and a run whose file cannot be read, or a
+   whole line that is damaged, is counted and said — a child shown as
+   running may then already be over.
+2. Both tools are `program_callable`, so a snippet can
+   `@tools.call("subagent_send", ...)` — the mediated way for a script to
+   post, since its own policy does not let it write the inbox.
+3. Prompt: a paragraph in the Orchestration section.
+
+Remaining:
+
+4. Bounded, deduplicated lifecycle notices to the parent (child started,
    child ended), in the manner of the background-job completion notice.
-3. Mark both tools `program_callable` so a snippet can
-   `@tools.call("subagent_send", ...)`.
-4. Prompt: a short paragraph in the Orchestration section.
 5. A live run with a real model.
 
 **Stage 2 — child → parent.**
@@ -294,8 +310,9 @@ for write-capable workers, which have no product entry point today.
   intervention that cannot wait needs cancellation, not a message.
 - A child that ran out of steps, or was killed, never takes what is waiting.
   The sender learns this from `subagent_status`; nothing retries.
-- A child killed without a terminal looks "working" until stage 1 reads the
-  sidecar, and even then only best-effort.
+- A child killed without a terminal is reported as over only when the
+  workflow library recorded its end, which is best-effort; the engine's own
+  sub-runs have no such record at all.
 - `subagent_status` parses each child's whole transcript on every call
   (200–380 KB observed per child).
 - Posting is not idempotent by id. No sender retries today.
@@ -359,3 +376,13 @@ Two changes were required in the child wiring, both made:
 | --- | --- |
 | The scout's prompts still said to submit exactly once, so a redirected scout could not comply | System prompt, task text and tool description now allow a replacement submission after a new instruction. |
 | A blank message body was framed into a non-blank instruction, which could discard a report on the final step | Blank bodies are dropped before framing; test added, and checked against the real binary. |
+
+## Round 4 review (the stage 1 commit)
+
+The child wiring was approved after the round 3 changes. Two changes were
+required in the stage 1 commit, both made:
+
+| Finding | Resolution |
+| --- | --- |
+| One damaged workflow record (cut inside a character, or unreadable) made every status and send call fail, including for unrelated healthy children | Records are read without raising: lines are split as bytes and decoded one by one, and transcripts and inboxes keep working. An unreadable run and a damaged line — not JSON, missing a field, carrying a child id that is not one, or cut off at the end of the file — are counted and said, because a lost finish would otherwise leave a child reading as running with no warning. An event this build does not know, and a well-formed id under another parent, are not damage. |
+| A finish record was dropped when its start record was missing, leaving a cut-off child sendable | Start and finish are kept independently. |

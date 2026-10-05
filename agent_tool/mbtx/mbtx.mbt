@@ -1013,6 +1013,14 @@ async fn execute(
       } else {
         handoff
       }
+      // A workflow's children are otherwise invisible from here: the parent
+      // sees one opaque job however many subagents it starts. Their ids come
+      // from the block reserved for this run, so they can be named before
+      // any of them exists.
+      let handoff = match reservation {
+        Some(r) => "\{handoff}\n\{subagents_note(r.base(), r.limit())}"
+        None => handoff
+      }
       // Explicitly requested compiler warnings must not vanish because the
       // program outlived the grace: they exist only in the build phase's
       // capture, so this response is their one ride to the model.
@@ -1682,7 +1690,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
                 "ptc",
                 Json({
                   "type": "boolean",
-                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.2.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for supported wasm runs; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with other targets, escalated, or subrun.",
+                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, web_search, and (where offered) subagent_status and subagent_send through an explicit \"moonbitlang/openseek_tools@0.2.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for supported wasm runs; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with other targets, escalated, or subrun.",
                 }),
               ),
             ]
@@ -2026,4 +2034,13 @@ async fn read_script_snapshot(
   path : String,
 ) -> String {
   state.with_access(() => @fs.read_file(path).text())
+}
+
+///|
+/// What a backgrounded workflow tells its launcher about the subagents it
+/// may start: the ids reserved for it, `sr-<base>` onward, `limit` of them.
+/// The block is a ceiling, not a count — a run starts as many as its script
+/// calls for — and ids are handed out in launch order.
+fn subagents_note(base : Int, limit : Int) -> String {
+  "Subagents this workflow starts are numbered from sr-\{base} in launch order (at most \{limit}, up to sr-\{base + limit - 1}). Watch them with subagent_status and redirect one with subagent_send."
 }

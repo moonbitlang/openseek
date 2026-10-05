@@ -33,7 +33,8 @@ pub fn definitions(
         #|Look at the subagents this conversation started (the children of a
         #|`subrun` workflow): what each was asked, whether it is still working, how
         #|many steps it has taken, and its most recent actions. Without `id` it
-        #|lists every subagent in one line each; with `id` (for example "sr-2") it
+        #|lists every subagent in one line each, with the label and workflow the
+        #|launching script gave it when that is on record; with `id` (for example "sr-2") it
         #|shows that one's recent transcript and where each instruction you sent
         #|stands: waiting (not taken yet), delivered (in its transcript, no model
         #|response recorded after it yet), or seen (a model response followed it —
@@ -53,6 +54,9 @@ pub fn definitions(
       }),
       execute=Async(arguments => status(store, parent, arguments)),
       concurrent_safe=true,
+      // Reads the store and returns: safe for a snippet to call, so a
+      // script can check on several subagents and act on what it finds.
+      program_callable=true,
     ),
     AgentToolDefinition(
       name="subagent_send",
@@ -82,6 +86,9 @@ pub fn definitions(
         "required": ["id", "message"],
       }),
       execute=Async(arguments => send(store, parent, arguments)),
+      // One append to a file the engine owns, which a snippet's own policy
+      // does not let it write: this is how a script posts.
+      program_callable=true,
     ),
   ]
 }
@@ -108,6 +115,165 @@ async fn children(store : @store.SessionStore, parent : String) -> Array[Int] {
   }
   found.sort()
   found
+}
+
+///|
+/// What a workflow run recorded about one child it launched, from the run's
+/// `events.jsonl`. The workflow library writes that file best-effort, and a
+/// script can write it too, so it only ever REFINES what is shown — a label,
+/// which run, how the library says the child ended. It never decides who is
+/// a child or whether one may be posted to on its own: a transcript does.
+///
+/// The start and finish records are written independently and either can be
+/// missing, so neither depends on the other here: a finish with no start
+/// still says the child is over.
+priv struct Launch {
+  /// The N of the run `wf-N` that recorded it.
+  workflow : Int
+  /// The kind and label the script gave it, when the start was recorded.
+  named : (String, String)?
+  /// The library's own word for how the child ended (`captured`,
+  /// `timed_out`, `cancelled`, ...), when the finish was recorded.
+  ended : String?
+}
+
+///|
+/// What the workflow runs of one conversation recorded.
+priv struct Launches {
+  by_child : Map[Int, Launch]
+  /// Runs whose record could not be read at all. Their children are then
+  /// shown from their transcripts alone, and the listing says so.
+  unreadable : Int
+  /// Whole lines, in records that could be read, that are not a record:
+  /// damaged in the writing. Which child one was about is unknowable, so any
+  /// child may be missing a start or — what matters — a finish.
+  damaged : Int
+}
+
+///|
+/// Every launch the workflow runs of `parent` recorded, by child ordinal.
+/// The runs' directories are the siblings `<parent>-wf-<N>` of `sessions/` in
+/// the store's root.
+///
+/// This never raises: the records are a view, and a damaged one must not
+/// take the transcripts and inboxes down with it. A run whose file cannot be
+/// read is counted. Within a readable file each whole line is decoded on its
+/// own, so a damaged one costs only itself — and is counted too, because a
+/// lost finish would otherwise leave a child reading as running with nothing
+/// to say the record is incomplete. That includes a final line with no
+/// newline, and a record whose child id is not one. An event this build does
+/// not know is not damage, and neither is a well-formed id under another
+/// parent; both are passed over.
+async fn launches(
+  store : @store.SessionStore,
+  parent : String,
+) -> Launches noraise {
+  let by_child : Map[Int, Launch] = Map([])
+  let mut unreadable = 0
+  let mut damaged = 0
+  let root = store.root()
+  let names = try {
+    if @fs.exists(root) {
+      @fs.readdir(root, sort=true)
+    } else {
+      []
+    }
+  } catch {
+    _ => {
+      unreadable += 1
+      []
+    }
+  }
+  let prefix = "\{parent}-wf-"
+  for name in names {
+    // A run's number has the same shape as a child's: reuse the one parser.
+    guard name.strip_prefix(prefix) is Some(digits) &&
+      ordinal("sr-\{digits}") is Some(workflow) else {
+      continue
+    }
+    let events = "\{root}/\{name}/events.jsonl"
+    let bytes = try {
+      guard @fs.exists(events) else { continue }
+      @fs.read_file(events).binary()
+    } catch {
+      _ => {
+        unreadable += 1
+        continue
+      }
+    }
+    let mut start = 0
+    for index in 0..<bytes.length() {
+      guard bytes[index] == b'\n' else { continue }
+      let line = bytes[start:index]
+      start = index + 1
+      guard line.length() > 0 else { continue }
+      let json = @json.parse(@utf8.decode(line)) catch {
+        _ => {
+          damaged += 1
+          continue
+        }
+      }
+      guard json is { "event": String(event), .. } else {
+        damaged += 1
+        continue
+      }
+      guard event is ("agent_started" | "agent_finished") else { continue }
+      guard json is { "child": String(child), .. } else {
+        damaged += 1
+        continue
+      }
+      // An id that is not a child id at all is damage: the record was
+      // about SOME child, and cannot say which. A well-formed id under
+      // another parent is simply not ours.
+      guard @openseek_protocol.split_child_session_id(child) is Some((owner, n)) else {
+        damaged += 1
+        continue
+      }
+      guard owner == parent else { continue }
+      let known = by_child
+        .get(n)
+        .unwrap_or({ workflow, named: None, ended: None, })
+      match (event, json) {
+        ("agent_started", { "kind": String(kind), "label": String(label), .. }) =>
+          by_child[n] = { ..known, workflow, named: Some((kind, label)), }
+        ("agent_finished", { "status": String(status), .. }) =>
+          by_child[n] = { ..known, workflow, ended: Some(status), }
+        _ => damaged += 1
+      }
+    }
+    // What follows the last newline was cut off: the library writes a whole
+    // line at once, so a tail is a write that died, not one in progress.
+    if start < bytes.length() {
+      damaged += 1
+    }
+  }
+  { by_child, unreadable, damaged, }
+}
+
+///|
+/// The bracketed tag that names a recorded child in a listing.
+fn Launch::tag(self : Launch) -> String {
+  match self.named {
+    Some((kind, label)) =>
+      " [\{clip(label, 60)} · \{kind} · wf-\{self.workflow}]"
+    None => " [wf-\{self.workflow}]"
+  }
+}
+
+///|
+/// What to say when the workflows' records are incomplete, or nothing.
+fn Launches::caveat(self : Launches) -> String? {
+  let problems = []
+  if self.unreadable > 0 {
+    problems.push("\{self.unreadable} workflow record(s) could not be read")
+  }
+  if self.damaged > 0 {
+    problems.push("\{self.damaged} line(s) in a workflow record are damaged")
+  }
+  guard !problems.is_empty() else { return None }
+  Some(
+    "(\{problems.join(" and ")}: a label or an end may be missing above, so a subagent shown as running may already be over)",
+  )
 }
 
 ///|
@@ -214,16 +380,26 @@ fn Delivery::describe(self : Delivery, ended~ : Bool) -> String {
 ///|
 /// One line: state, steps, how its instructions stand, and anything about
 /// its record that makes the rest uncertain.
-fn Child::summary(self : Child, now_ms~ : Int64) -> String {
+fn Child::summary(self : Child, now_ms~ : Int64, launch~ : Launch?) -> String {
   let steps = self.log.events.iter().filter(e => e.is_agent_step()).count()
   let ended = self.ended()
-  let state = match (ended, self.log.events.last()) {
-    (Some(ended), _) => ended
-    (None, Some(event)) => {
+  // The transcript's own terminal is the only thing called an end outright.
+  // Without one, "running" is said only on the workflow's word, and a child
+  // nothing vouches for is described by what is known: no end, and how long
+  // since it last wrote.
+  let state = match (ended, self.log.events.last(), launch) {
+    (Some(ended), _, _) => ended
+    (None, _, Some({ ended: Some(status), .. })) =>
+      "no end in its transcript; the workflow recorded it as \{status}"
+    (None, Some(event), launch) => {
       let idle = (now_ms - event.unix_ms()) / 1000L
-      "working, last activity \{idle}s ago"
+      if launch is Some(_) {
+        "running per the workflow's record, last activity \{idle}s ago"
+      } else {
+        "no end recorded, last activity \{idle}s ago"
+      }
     }
-    (None, None) => "starting"
+    (None, None, _) => "starting"
   }
   let line = StringBuilder()
   line.write_string("\{state} · \{steps} step(s)")
@@ -368,18 +544,42 @@ async fn status(
   let report = try {
     match wanted {
       None => {
+        let recorded = launches(store, parent)
+        let launched = recorded.by_child
+        let ordinals = [..children(store, parent), ..launched.keys()]
+        ordinals.sort()
+        ordinals.dedup()
         let lines = []
-        for n in children(store, parent) {
-          guard Child::read(store, parent, n) is Some(child) else { continue }
-          lines.push(
-            "sr-\{n} — \{child.summary(now_ms~)} — \{clip(child.task(), 100)}",
-          )
+        for n in ordinals {
+          let launch = launched.get(n)
+          let tag = launch.map_or("", launch => launch.tag())
+          match (Child::read(store, parent, n), launch) {
+            (Some(child), _) =>
+              lines.push(
+                "sr-\{n}\{tag} — \{child.summary(now_ms~, launch~)} — \{clip(child.task(), 100)}",
+              )
+            // Launched, by the workflow's account, and nothing of its own
+            // on record yet — or ever, if it ended first.
+            (None, Some({ ended: Some(status), .. })) =>
+              lines.push(
+                "sr-\{n}\{tag} — the workflow recorded it as \{status}; it recorded nothing itself",
+              )
+            (None, Some(_)) =>
+              lines.push(
+                "sr-\{n}\{tag} — launched per the workflow's record; nothing recorded yet",
+              )
+            (None, None) => ()
+          }
         }
         if lines.is_empty() {
-          "no subagents yet: none has recorded a step in this conversation"
-        } else {
-          lines.join("\n")
+          lines.push(
+            "no subagents yet: none has recorded a step in this conversation",
+          )
         }
+        if recorded.caveat() is Some(caveat) {
+          lines.push(caveat)
+        }
+        lines.join("\n")
       }
       Some(n) => {
         guard Child::read(store, parent, n) is Some(child) else {
@@ -389,8 +589,11 @@ async fn status(
           )
         }
         let ended = child.ended() is Some(_)
+        let recorded = launches(store, parent)
+        let launch = recorded.by_child.get(n)
+        let tag = launch.map_or("", launch => launch.tag())
         let lines = [
-          "sr-\{n} — \{child.summary(now_ms~)}",
+          "sr-\{n}\{tag} — \{child.summary(now_ms~, launch~)}",
           "task: \{clip(child.task(), 600)}",
           "recent:",
           ..child.recent(),
@@ -399,6 +602,7 @@ async fn status(
               "  [\{pair.1.describe(ended~)}] \{clip(pair.0.text, 300)}"
             }
           ],
+          ..recorded.caveat().map_or([], caveat => [caveat]),
         ]
         lines.join("\n")
       }
@@ -454,6 +658,15 @@ async fn send(
           (Some(ended), _) =>
             Err(
               "sr-\{n} already ended (\{ended}) and takes no more instructions",
+            )
+          // No terminal of its own, but the workflow that launched it says
+          // it is over: cut off. Refusing costs nothing if that record is
+          // wrong — nothing would have been lost — and saves an instruction
+          // posted to a process that is gone.
+          (None, _) if launches(store, parent).by_child.get(n)
+            is Some({ ended: Some(status), .. }) =>
+            Err(
+              "sr-\{n} has no end in its transcript, but the workflow recorded it as \{status}: it is no longer running. Nothing was sent",
             )
           // Its inbox is opened before its first record, so a subagent with
           // a transcript and no inbox is one that takes none.

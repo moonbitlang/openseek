@@ -360,6 +360,8 @@ async test "binary output does not escape the deadline" {
     let action = run_async_tool(mbtx, { "source": source })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(output.content.contains("moved to the background as job"))
+    // An ordinary background job reserved no subagents and names none.
+    assert_false(output.content.contains("Subagents this workflow starts"))
     guard bg_runtime.list() is [job, ..] else { fail("no job was registered") }
     let _ = bg_runtime.stop(job.id)
   })
