@@ -10,7 +10,6 @@ pub(all) enum Message {
   AddProject
   ArchivedChats(Int)
   ShowMore
-  ShowMoreIn(String)
   ShowMoreChats
   MoreActions
   NewProjectConversation
@@ -20,6 +19,9 @@ pub(all) enum Message {
   DetachDescription
   HideSidebar
   ShowSidebar
+  ModeGroup
+  ModeChat
+  ModeWork
   WorkspaceActions
   ConversationActions
   Skills
@@ -94,13 +96,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, ShowMore) => "显示更多"
     (TraditionalChinese, ShowMore) => "顯示更多"
     (Japanese, ShowMore) => "さらに表示"
-    (English, ShowMoreIn(label)) => "Show more in \{label}"
-    (Spanish, ShowMoreIn(label)) => "Mostrar más en \{label}"
-    (SimplifiedChinese, ShowMoreIn(label)) =>
-      "显示“\{label}”中的更多内容"
-    (TraditionalChinese, ShowMoreIn(label)) =>
-      "顯示“\{label}”中的更多內容"
-    (Japanese, ShowMoreIn(label)) => "「\{label}」の項目をさらに表示"
     (English, ShowMoreChats) => "Show more chats in this project"
     (Spanish, ShowMoreChats) => "Mostrar más conversaciones de este proyecto"
     (SimplifiedChinese, ShowMoreChats) => "显示此项目中的更多对话"
@@ -158,6 +153,21 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, ShowSidebar) => "显示侧边栏"
     (TraditionalChinese, ShowSidebar) => "顯示側邊欄"
     (Japanese, ShowSidebar) => "サイドバーを表示"
+    (English, ModeGroup) => "Sidebar list"
+    (Spanish, ModeGroup) => "Lista de la barra lateral"
+    (SimplifiedChinese, ModeGroup) => "侧边栏列表"
+    (TraditionalChinese, ModeGroup) => "側邊欄列表"
+    (Japanese, ModeGroup) => "サイドバーの一覧"
+    (English, ModeChat) => "Chat"
+    (Spanish, ModeChat) => "Chat"
+    (SimplifiedChinese, ModeChat) => "对话"
+    (TraditionalChinese, ModeChat) => "對話"
+    (Japanese, ModeChat) => "チャット"
+    (English, ModeWork) => "Work"
+    (Spanish, ModeWork) => "Trabajo"
+    (SimplifiedChinese, ModeWork) => "工作"
+    (TraditionalChinese, ModeWork) => "工作"
+    (Japanese, ModeWork) => "作業"
     (English, WorkspaceActions) => "Workspace actions"
     (Spanish, WorkspaceActions) => "Acciones del espacio de trabajo"
     (SimplifiedChinese, WorkspaceActions) => "工作区操作"

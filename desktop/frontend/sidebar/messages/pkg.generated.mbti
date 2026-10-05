@@ -19,7 +19,6 @@ pub(all) enum Message {
   AddProject
   ArchivedChats(Int)
   ShowMore
-  ShowMoreIn(String)
   ShowMoreChats
   MoreActions
   NewProjectConversation
@@ -29,6 +28,9 @@ pub(all) enum Message {
   DetachDescription
   HideSidebar
   ShowSidebar
+  ModeGroup
+  ModeChat
+  ModeWork
   WorkspaceActions
   ConversationActions
   Skills

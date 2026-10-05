@@ -1911,6 +1911,20 @@ fn update(
   } else {
     model
   }
+  // The sidebar lists one kind of conversation at a time, so a conversation
+  // arriving on screen by any route — a click, Cmd+N, a toast, a restored
+  // session — brings its own list with it. The stamp makes this an edge: the
+  // header switch can browse the other list while the conversation stays up.
+  let model = match model.sidebar_activation() {
+    Some((sidebar_mode, _)) as revealed if revealed != model.sidebar_revealed =>
+      { ..model, sidebar_mode, sidebar_revealed: revealed, }
+    _ => model
+  }
+  let sidebar_mode_cmd = if model.sidebar_mode != previous.sidebar_mode {
+    save_sidebar_mode(model.sidebar_mode)
+  } else {
+    @cmd.none
+  }
   // The quick pick belongs to the focused conversation captured when it
   // opened, and to that conversation's concrete root. Both can change through
   // many messages — device/session switches, background pushes, connection
@@ -2075,6 +2089,7 @@ fn update(
     @cmd.batch([
       cmd,
       notification_badge_cmd,
+      sidebar_mode_cmd,
       quick_open_cmd,
       panel_visibility_cmd,
       panel_cmd,
@@ -4073,6 +4088,15 @@ fn update_msg(
     }
     ToggleSidebar =>
       (@cmd.none, { ..model, sidebar_open: !model.sidebar_open, })
+    SidebarModeSelected(sidebar_mode) => (@cmd.none, { ..model, sidebar_mode, })
+    // A conversation already on screen has claimed the list; the stored pick
+    // only decides what an empty page shows.
+    SidebarModeLoaded(sidebar_mode) =>
+      if model.sidebar_revealed is None {
+        (@cmd.none, { ..model, sidebar_mode, })
+      } else {
+        (@cmd.none, model)
+      }
     WindowFocusChanged(focused) => {
       // Returning to a visible transcript marks its completed turn read.
       // Permission questions remain actionable until answered and therefore
@@ -14577,13 +14601,11 @@ test "Codex threads share the Projects section's project rows" {
     ],
   })
   let sections = model.sidebar_component_sections(model.dev())
-  // Projects, Chats, and Archived share the sidebar across both agents.
-  assert_eq(sections.length(), 3)
-  assert_eq(sections[0].label, "Chats")
+  // Work shows Projects, shared across both agents, above Archived.
+  assert_eq(sections.length(), 2)
+  inspect(sections[0].label, content="Projects")
   assert_true(!sections[0].initially_collapsed)
-  assert_eq(sections[0].preview_limit, Some(3))
-  inspect(sections[1].label, content="Projects")
-  guard sections[1].entries[0] is @section.Project(project) else {
+  guard sections[0].entries[0] is @section.Project(project) else {
     fail("expected the fixture project's row")
   }
   // The fixture's unsent OpenSeek chat is represented by its project rather
@@ -14594,7 +14616,8 @@ test "Codex threads share the Projects section's project rows" {
   assert_true(project.conversations[1].id.source() is @conversation.CodexLive)
   assert_true(project.conversations[1].nested)
   // With the Codex page on screen, its active task claims the activation.
-  assert_eq(sections[1].activation, Some("codex-thread-1"))
+  assert_eq(sections[0].activation, Some("codex-thread-1"))
+  assert_eq(model.sidebar_activation(), Some((WorkMode, "codex-thread-1")))
 }
 
 ///|

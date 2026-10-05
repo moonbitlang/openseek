@@ -59,7 +59,6 @@ pub(all) struct Input {
   id : Id
   label : String
   initially_collapsed : Bool
-  preview_limit : Int?
   activation : String?
   action : Action?
   entries : Array[Entry]

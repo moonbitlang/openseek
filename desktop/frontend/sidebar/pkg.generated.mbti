@@ -35,11 +35,13 @@ pub(all) struct Actions {
   open_settings : @cmd.Cmd
   refresh_account : @cmd.Cmd
   sign_out : @cmd.Cmd
+  select_mode : (Mode) -> @cmd.Cmd
   section : @section.Actions
 }
 
 pub(all) struct Input {
   locale : @i18n.Locale
+  mode : Mode
   notices : Array[String]
   sections : Array[@section.Input]
   update_label : String?
@@ -52,6 +54,14 @@ pub(all) struct Input {
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 pub fn Input::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Mode {
+  ChatMode
+  WorkMode
+} derive(Eq, @debug.Debug)
+pub fn Mode::equal(Self, Self) -> Bool
+pub fn Mode::not_equal(Self, Self) -> Bool
+pub fn Mode::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

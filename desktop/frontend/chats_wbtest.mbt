@@ -80,18 +80,76 @@ test "managed chats are flat and user named workspaces remain projects" {
   assert_true(!model.dev().is_chat_workspace(prefix_sibling))
   assert_true(!model.can_choose_new_chat_project())
   assert_eq(model.transcript_projects().length(), 2)
-  let sections = model.sidebar_component_sections(model.dev())
-  let projects = sections.filter(section => section.label == "Projects")
-  assert_eq(projects[0].entries.length(), 2)
-  let chats = sections.filter(section => section.label == "Chats")
-  assert_eq(chats.length(), 1)
-  assert_eq(chats[0].activation, Some(model.active_session))
+  // Each list is its own sidebar mode; Archived follows either.
+  let labels = (model : Model) => {
+    model.sidebar_component_sections(model.dev()).map(section => section.label)
+  }
+  let work = { ..model, sidebar_mode: WorkMode, }
+  assert_eq(labels(work), ["Projects", "Archived chats"])
+  assert_eq(work.sidebar_component_sections(work.dev())[0].entries.length(), 2)
+  let chat = { ..model, sidebar_mode: ChatMode, }
+  assert_eq(labels(chat), ["Chats", "Archived chats"])
+  let chats = chat.sidebar_component_sections(chat.dev())[0]
+  assert_eq(chats.activation, Some(model.active_session))
   assert_true(
-    chats[0].entries is [@section.Conversation(row)] &&
+    chats.entries is [@section.Conversation(row)] &&
     row.label == "New chat" &&
     !row.nested &&
     row.active,
   )
+}
+
+///|
+test "the sidebar mode follows the conversation on screen and keeps a manual pick" {
+  let dispatch = test_dispatch()
+  let channel = @interop.ChannelId::Local
+  let root = channel.test_resource("/app-data/workspaces")
+  let managed = channel.test_resource("/app-data/workspaces/Unnamed workspace")
+  let named = channel.test_resource("/user/project")
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    projects: [named, managed],
+    chat_root: Some(Ok(root)),
+    active_project: Some(named),
+  })
+  assert_eq(model.sidebar_activation(), Some((WorkMode, model.active_session)))
+  // The first transition stamps the conversation already on screen.
+  let (_, model) = update(dispatch, ToggleSidebar, model)
+  assert_true(model.sidebar_mode is WorkMode)
+  // Browsing the other list does not move the conversation, and the pick
+  // survives unrelated messages while that conversation stays on screen.
+  let (_, browsing) = update(dispatch, SidebarModeSelected(ChatMode), model)
+  assert_true(browsing.sidebar_mode is ChatMode)
+  assert_eq(browsing.active_session, model.active_session)
+  let (_, settled) = update(dispatch, ToggleSidebar, browsing)
+  assert_true(settled.sidebar_mode is ChatMode)
+  // A page without a conversation claims no list.
+  let (_, settings) = update(dispatch, OpenSetup, settled)
+  assert_true(settings.sidebar_activation() is None)
+  assert_true(settings.sidebar_mode is ChatMode)
+  // A chat coming on screen by any route brings the Chats list with it.
+  let in_work = { ..model, sidebar_mode: WorkMode, }
+  let (_, revealed) = update(
+    dispatch,
+    ToggleSidebar,
+    in_work.with_active_project(Some(managed)),
+  )
+  assert_true(revealed.sidebar_mode is ChatMode)
+  // The stored pick only decides a page with no conversation yet.
+  let (_, ignored) = update(dispatch, SidebarModeLoaded(WorkMode), revealed)
+  assert_true(ignored.sidebar_mode is ChatMode)
+  let empty = test_model().with_dev(dev => { ..dev, active_project: None, })
+  let (_, restored) = update(dispatch, SidebarModeLoaded(ChatMode), empty)
+  assert_true(restored.sidebar_mode is ChatMode)
+}
+
+///|
+test "the stored sidebar mode round-trips and rejects unknown text" {
+  for mode in ([ChatMode, WorkMode] : Array[@sidebar.Mode]) {
+    assert_eq(parse_sidebar_mode(sidebar_mode_wire(mode)), Some(mode))
+  }
+  assert_true(parse_sidebar_mode("") is None)
+  assert_true(parse_sidebar_mode("code") is None)
 }
 
 ///|

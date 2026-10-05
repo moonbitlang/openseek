@@ -37,6 +37,34 @@ fn load_saved_settings(
         ),
       ),
     )
+    if load_setting(SidebarModeStorageKey).bind(parse_sidebar_mode)
+      is Some(mode) {
+      scheduler.add(dispatch(SidebarModeLoaded(mode)))
+    }
+  })
+}
+
+///|
+fn sidebar_mode_wire(mode : @sidebar.Mode) -> String {
+  match mode {
+    ChatMode => "chat"
+    WorkMode => "work"
+  }
+}
+
+///|
+fn parse_sidebar_mode(text : String) -> @sidebar.Mode? {
+  match text {
+    "chat" => Some(ChatMode)
+    "work" => Some(WorkMode)
+    _ => None
+  }
+}
+
+///|
+fn save_sidebar_mode(mode : @sidebar.Mode) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => {
+    save_setting(SidebarModeStorageKey, sidebar_mode_wire(mode))
   })
 }
 

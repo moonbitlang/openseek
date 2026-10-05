@@ -32,7 +32,11 @@ pub fn icon_close() -> @html.Html
 
 pub fn icon_close_all() -> @html.Html
 
+pub fn icon_code() -> @html.Html
+
 pub fn icon_comment() -> @html.Html
+
+pub fn icon_comment_discussion() -> @html.Html
 
 pub fn icon_copy() -> @html.Html
 

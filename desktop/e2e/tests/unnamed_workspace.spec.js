@@ -4,6 +4,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 const root = '/Users/test/Library/Application Support/SeekMoon/workspaces';
 const workspace = `${root}/Unnamed workspace`;
 const chatsHeader = page => page.locator('.section-heading').filter({ has: page.getByRole('button', { name: 'Chats', exact: true }) });
+const sidebarMode = (page, name) => page.getByRole('group', { name: 'Sidebar list' }).getByRole('button', { name, exact: true });
 
 async function expectInChats(row) {
   await expect(row).toBeVisible();
@@ -22,6 +23,7 @@ test('Chats creates directly without a picker and restores titled chats outside 
   await page.emulateMedia({ colorScheme: 'dark' });
   await app.install();
   await app.goto();
+  await sidebarMode(page, 'Chat').click();
   const create = chatsHeader(page).getByRole('button', { name: 'New chat', exact: true });
   await expect(create).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Chats', exact: true })).toHaveAttribute('aria-expanded', 'true');
@@ -51,6 +53,7 @@ test('Chats creates directly without a picker and restores titled chats outside 
   app.liveSessions = [{ id: start.params.session, title, updated_at_ms: 1 }];
   app.sessionGroups = sessions => ({ groups: [{ workspace, name: 'Unnamed workspace', session_root: `${workspace}/.openseek`, sessions, error: '' }] });
   await page.reload();
+  await expect(sidebarMode(page, 'Chat')).toHaveAttribute('aria-pressed', 'true');
   const chats = page.getByRole('button', { name: 'Chats', exact: true });
   if (await chats.getAttribute('aria-expanded') === 'false') await chats.click();
   await expectInChats(page.locator('.conversation-row').filter({ hasText: title }));
@@ -64,6 +67,12 @@ test('Chats creation errors allow retry without changing the selected project', 
   app.rpcErrors.set('fs.create_unnamed_workspace', 'disk full');
   await app.install();
   await app.goto();
+  // The project on screen brings the Work list; browsing Chats leaves it up.
+  await expect(sidebarMode(page, 'Work')).toHaveAttribute('aria-pressed', 'true');
+  await expect(chatsHeader(page)).toHaveCount(0);
+  await sidebarMode(page, 'Chat').click();
+  await expect(sidebarMode(page, 'Chat')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.workspace-row')).toHaveCount(0);
   const create = chatsHeader(page).getByRole('button', { name: 'New chat', exact: true });
   await create.click();
   await expect(page.getByText(/Cannot create chat:.*disk full/)).toBeVisible();
@@ -83,7 +92,7 @@ test('a user project named Unnamed workspace remains in Projects', async ({ page
   await app.install();
   await app.goto();
   await expect(page.getByRole('button', { name: 'Unnamed workspace', exact: true })).toBeVisible();
-  await expect(chatsHeader(page)).toBeVisible();
+  await expect(chatsHeader(page)).toHaveCount(0);
   const launchMode = page.locator('button.composer-worktree');
   await expect(launchMode).toHaveText('Local');
   await launchMode.click();
@@ -93,7 +102,7 @@ test('a user project named Unnamed workspace remains in Projects', async ({ page
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Chats shows the latest three conversations and reveals older chats with Show more', async ({ page }) => {
+test('the sidebar switch lists every chat, and opening one keeps the Chats list', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.workspaces = ['/workspace', `${root}/history`];
   app.liveSessions = Array.from({ length: 5 }, (_, index) => ({ id: `chat-${index}`, title: `Chat number ${index}`, updated_at_ms: 100 - index }));
@@ -103,15 +112,25 @@ test('Chats shows the latest three conversations and reveals older chats with Sh
   }] });
   await app.install();
   await app.goto();
+  const rows = page.locator('.conversation-row').filter({ hasText: /Chat number/ });
+  await expect(sidebarMode(page, 'Work')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.section-disclosure').first()).toHaveText('Projects');
+  await expect(page.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
+  await expect(rows).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('sidebar-work.png') });
+  await sidebarMode(page, 'Chat').click();
   await expect(page.locator('.section-disclosure').first()).toHaveText('Chats');
   await expect(page.getByRole('button', { name: 'Chats', exact: true })).toHaveAttribute('aria-expanded', 'true');
-  const rows = page.locator('.conversation-row').filter({ hasText: /Chat number/ });
-  await expect(rows).toHaveCount(3);
-  await expect(rows).toHaveText(['Chat number 0', 'Chat number 1', 'Chat number 2']);
-  await page.screenshot({ path: test.info().outputPath('chats-three-preview.png') });
-  await page.getByTitle('Show more in Chats', { exact: true }).click();
-  await expect(rows).toHaveCount(5);
-  await expect(page.getByTitle('Show more in Chats', { exact: true })).toHaveCount(0);
+  await expect(rows).toHaveText(Array.from({ length: 5 }, (_, index) => `Chat number ${index}`));
+  await expect(page.locator('.workspace-row')).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath('sidebar-chat.png') });
+  // Opening a chat keeps its list; going back to Work is the user's call.
+  await rows.first().click();
+  await expect(rows.first()).toHaveClass(/\bactive\b/);
+  await expect(sidebarMode(page, 'Chat')).toHaveAttribute('aria-pressed', 'true');
+  await sidebarMode(page, 'Work').click();
+  await expect(page.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
+  await expect(rows).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

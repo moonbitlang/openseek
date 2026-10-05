@@ -43,10 +43,59 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-accent-soft);
 }
 
-/* The fixed shell toggle needs a header even without native titlebar controls. */
+/* The fixed shell toggle needs a header even without native titlebar controls.
+   Its leading edge stays clear for that toggle and the native controls; the
+   Chat/Work switch takes the trailing edge. */
 .sidebar-header {
+  --sidebar-mode-size: 28px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
   height: var(--topbar-height);
+  padding-inline: var(--sidebar-toggle-reserved-width) var(--sidebar-inset);
   border-bottom: 1px solid var(--color-separator);
+}
+
+/* A two-segment switch between the Chats list and the Projects list. It
+   shares the shell toggle's row: centered on the native titlebar when that is
+   shorter than the app header. */
+.sidebar-mode {
+  display: flex;
+  gap: 2px;
+  box-sizing: border-box;
+  height: var(--sidebar-mode-size);
+  margin-top: max(
+    0px,
+    calc((var(--native-titlebar-height, var(--topbar-height)) - var(--sidebar-mode-size)) / 2)
+  );
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
+}
+.sidebar-mode-option {
+  --icon-size: var(--icon-md);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.sidebar-mode-option:hover {
+  color: var(--color-text-primary);
+}
+.sidebar-mode-option.active {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: 0 0 0 1px var(--color-separator);
+}
+.sidebar-mode-option:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .sidebar-main {
@@ -412,7 +461,6 @@ html.is-resizing .sidebar-resize-handle {
   color: var(--color-text-secondary);
 }
 .workspace-disclosure:focus-visible,
-.section-show-more:focus-visible,
 .project-show-more:focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
@@ -495,7 +543,6 @@ button.composer-worktree:hover {
 .conversation-row.nested {
   padding-left: 16px;
 }
-.section-show-more,
 .project-show-more {
   width: 100%;
   min-height: calc(26em / 14);
@@ -509,16 +556,12 @@ button.composer-worktree:hover {
   text-align: left;
   cursor: pointer;
 }
-/* Each instance sits under the titles of the rows it reveals. A section's
-   top-level conversation rows indent their label 8 + 14 + 6 = 28px; a
-   project's nested rows add their own 16px pad on top, landing at 36px. */
-.section-show-more {
-  padding-left: 28px;
-}
+/* It sits under the titles of the rows it reveals. A top-level conversation
+   row indents its label 8 + 14 + 6 = 28px; a project's nested rows add their
+   own 16px pad on top, landing at 36px. */
 .project-show-more {
   padding-left: 36px;
 }
-.section-show-more:hover,
 .project-show-more:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-secondary);

@@ -2,13 +2,13 @@
 test "the sidebar input keeps peer sections in one component value" {
   let input : @sidebar.Input = {
     locale: English,
+    mode: WorkMode,
     notices: [],
     sections: [
       {
         id: @section.Id(source="openseek.projects", channel="local"),
         label: "Projects",
         initially_collapsed: false,
-        preview_limit: None,
         activation: None,
         action: None,
         entries: [],
@@ -17,7 +17,6 @@ test "the sidebar input keeps peer sections in one component value" {
         id: @section.Id(source="archived", channel="local"),
         label: "Archived chats",
         initially_collapsed: true,
-        preview_limit: None,
         activation: Some("desktop-test"),
         action: None,
         entries: [],
