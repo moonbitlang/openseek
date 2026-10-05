@@ -137,9 +137,8 @@ main {
 
 /* Outcomes and requests stay distinguishable without color or animation.
    The glyph occupies the conversation row's 20px slot, the same one the
-   worktree mark and the archive buttons beside it use, so every glyph in
-   the row shares one grid and the hover swap to row actions cannot nudge
-   it. Without the slot the box hugs the glyph and the 14px icon lands off
+   row's action buttons beside it use, so every glyph in the row shares one
+   grid. Without the slot the box hugs the glyph and the 14px icon lands off
    that grid. */
 .sidebar-run-status {
   --icon-size: var(--icon-md);

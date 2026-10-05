@@ -136,7 +136,6 @@ pub(all) struct Input {
   load_failed : Bool
   running : Bool
   openable : Bool
-  worktree : String?
   run_mark : RunMark
   trailing : Array[TrailingAction]
   children : Array[Input]
@@ -439,23 +438,6 @@ pub fn component(
             ui(locale, ConversationLoadFailed),
           ),
           "!",
-        ),
-      )
-    }
-    if input.worktree is Some(name) {
-      status.push(
-        @html.span(
-          class="worktree-mark",
-          attrs=@html.Attrs::build().aria_label(
-            match locale {
-              SimplifiedChinese => "在工作树 \{name} 中运行"
-              TraditionalChinese => "在工作樹 \{name} 中執行"
-              Japanese => "ワークツリー \{name} で実行"
-              English => "Runs in worktree \{name}"
-              Spanish => "Se ejecuta en el worktree \{name}"
-            },
-          ),
-          @icons.icon(@icons.icon_worktree),
         ),
       )
     }

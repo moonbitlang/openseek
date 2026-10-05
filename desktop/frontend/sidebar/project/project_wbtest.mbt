@@ -34,7 +34,6 @@ fn test_conversations(
       load_failed: false,
       running: false,
       openable: true,
-      worktree: None,
       run_mark: @conversation.NoRunMark,
       trailing: [],
       children: [],

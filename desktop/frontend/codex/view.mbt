@@ -183,7 +183,6 @@ fn SidebarContext::draft_input(
     load_failed: false,
     running: false,
     openable: true,
-    worktree: None,
     run_mark: @conversation.NoRunMark,
     trailing: [],
     children: [],
@@ -357,7 +356,6 @@ fn CodexThreadRow::archived_sidebar_input(
     load_failed: false,
     running: false,
     openable: false,
-    worktree: None,
     run_mark: @conversation.NoRunMark,
     trailing: [@conversation.Restore(title=ui(locale, RestoreCodex))],
     children: [],
@@ -414,9 +412,6 @@ fn CodexThreadRow::sidebar_input(
     load_failed: false,
     running,
     openable: true,
-    worktree: self.worktree
-    .filter(worktree => worktree.present)
-    .map(worktree => worktree.name),
     run_mark,
     trailing: [@conversation.Archive(title=ui(locale, ArchiveCodex))],
     children: [],

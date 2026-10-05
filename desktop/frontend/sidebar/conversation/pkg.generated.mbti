@@ -66,7 +66,6 @@ pub(all) struct Input {
   load_failed : Bool
   running : Bool
   openable : Bool
-  worktree : String?
   run_mark : RunMark
   trailing : Array[TrailingAction]
   children : Array[Input]
