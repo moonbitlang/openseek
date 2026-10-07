@@ -101,3 +101,58 @@ async test "compiler capture preserves literal arguments and the working directo
   assert_eq(output.text, literal + "cwd-ok")
   assert_false(output.output_limit_reached)
 }
+
+///|
+/// Reads cut the stream wherever they fall, so a character's bytes arrive in
+/// two pieces: the capture must reassemble them, and count characters the
+/// same whichever way the stream was cut.
+async test "compiler capture reassembles characters split across reads" {
+  let (program, args) = output_fixture(
+    "yes '中😀' | head -n 2000 | tr -d '\\n'", "[Console]::Out.Write('中😀' * 2000)",
+  )
+  let whole = collect_process_output(
+    program,
+    args,
+    cwd=".",
+    max_output_chars=4000,
+  )
+  assert_false(whole.output_limit_reached)
+  assert_true(whole.text == "中😀".repeat(2000))
+  let cut = collect_process_output(
+    program,
+    args,
+    cwd=".",
+    max_output_chars=3001,
+  )
+  assert_true(cut.output_limit_reached)
+  assert_true(cut.text == "中😀".repeat(1500) + "中")
+}
+
+///|
+test "decoding holds back the bytes of an incomplete character" {
+  let bytes = @utf8.encode("a中😀")
+  assert_eq(decode_complete_chars(bytes), ("a中😀", b""))
+  // One byte short of the emoji: its first three bytes wait for the rest.
+  let (text, rest) = decode_complete_chars(
+    bytes[:bytes.length() - 1].to_owned(),
+  )
+  assert_eq(text, "a中")
+  assert_eq(rest.length(), 3)
+  assert_eq(
+    decode_complete_chars(rest + bytes[bytes.length() - 1:].to_owned()),
+    ("😀", b""),
+  )
+  // Malformed bytes are decoded lossily, with nothing held back.
+  assert_eq(
+    decode_complete_chars(b"a\xffb\xffcd"),
+    ("a\u{fffd}b\u{fffd}cd", b""),
+  )
+  // A character split after malformed bytes is still held back and
+  // completed by the next read, not replaced.
+  let (text, rest) = decode_complete_chars(b"\xffabcd\xe4\xb8")
+  assert_eq(text, "\u{fffd}abcd")
+  assert_eq(decode_complete_chars(rest + b"\xadzab"), ("中zab", b""))
+  // Three continuation bytes end a four-byte character: nothing to wait for.
+  assert_eq(incomplete_tail_length(@utf8.encode("😀")), 0)
+  assert_eq(incomplete_tail_length(b""), 0)
+}

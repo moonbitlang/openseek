@@ -48,9 +48,12 @@ const MoonCheckDiagnosticLimit : Int = 1000
 
 ///|
 /// The document is printed once, at the end, so the capture is all or
-/// nothing: room for `MoonCheckDiagnosticLimit` diagnostics with their
-/// source excerpts. An overflow is no verdict, not a lower bound.
-const MoonCheckJsonMaxOutputChars : Int = 2000000
+/// nothing. The budget is sized for `MoonCheckDiagnosticLimit` diagnostics
+/// whose source excerpts are very long lines (an average of 20,000
+/// characters each): the document is parsed and dropped, never shown, so
+/// the only cost of a large one is the time to read it. An overflow is no
+/// verdict, not a lower bound.
+const MoonCheckJsonMaxOutputChars : Int = 20000000
 
 ///|
 /// How many individual error diagnostics a revert report surfaces; enough to
