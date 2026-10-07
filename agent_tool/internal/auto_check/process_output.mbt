@@ -55,30 +55,33 @@ priv struct OutputPrefix {
 }
 
 ///|
+/// Read the child's output until it ends or exceeds `max_output_chars`. The
+/// bytes are decoded as they arrive, so a capture costs time linear in its
+/// size; the bytes of a character split across two reads wait in `pending`.
 async fn read_output_prefix(
   reader : @process.ReadFromProcess,
   max_output_chars : Int,
 ) -> OutputPrefix {
-  let buffer = Buffer()
+  let text = StringBuilder()
+  let mut chars = 0
+  let mut bytes_read = 0
+  let mut pending : Bytes = b""
   let byte_budget = max_output_chars * 4 + 4
   for ;; {
-    let remaining_budget = byte_budget - buffer.length()
-    let chunk_limit = remaining_budget.clamp(min=1, max=1024)
-    match reader.read_some(max_len=chunk_limit) {
-      None =>
-        return {
-          text: decode_valid_utf8_prefix(buffer.to_bytes()),
-          output_limit_reached: false,
-        }
-      Some(chunk) => {
-        buffer.write_bytes(chunk)
-        let text = decode_valid_utf8_prefix(buffer.to_bytes())
-        if text.char_length() > max_output_chars {
-          return {
-            text: text_prefix_by_chars(text, max_output_chars),
-            output_limit_reached: true,
-          }
-        }
+    let chunk_limit = (byte_budget - bytes_read).clamp(min=1, max=1024)
+    // A character left incomplete when the stream ends is dropped.
+    guard reader.read_some(max_len=chunk_limit) is Some(chunk) else {
+      return { text: text.to_string(), output_limit_reached: false, }
+    }
+    bytes_read += chunk.length()
+    let (decoded, rest) = decode_complete_chars(pending + chunk)
+    pending = rest
+    text.write_string(decoded)
+    chars += decoded.char_length()
+    if chars > max_output_chars {
+      return {
+        text: text_prefix_by_chars(text.to_string(), max_output_chars),
+        output_limit_reached: true,
       }
     }
   }
@@ -90,16 +93,39 @@ fn text_prefix_by_chars(text : String, max_chars : Int) -> String {
 }
 
 ///|
-fn decode_valid_utf8_prefix(bytes : Bytes) -> String {
-  for dropped in 0..<=3 {
-    let end = bytes.length() - dropped
-    if end >= 0 {
-      try {
-        return @utf8.decode(bytes[:end])
-      } catch {
-        _ => ()
-      }
+/// Decode `bytes` up to its last complete character, returning the at most
+/// three trailing bytes that begin a character and wait for its rest. Where
+/// to cut is read off the bytes themselves, so malformed bytes earlier in the
+/// input (decoded lossily) do not cost the split character after them.
+fn decode_complete_chars(bytes : Bytes) -> (String, Bytes) {
+  let end = bytes.length() - incomplete_tail_length(bytes)
+  let complete = bytes[:end]
+  let text = @utf8.decode(complete) catch { _ => @utf8.decode_lossy(complete) }
+  (text, bytes[end:].to_owned())
+}
+
+///|
+/// How many bytes at the end of `bytes` are a lead byte and continuation
+/// bytes short of the length that lead announces; 0 when the input ends on a
+/// character boundary, or on bytes no later byte could complete.
+fn incomplete_tail_length(bytes : Bytes) -> Int {
+  let length = bytes.length()
+  for back in 1..<=3 {
+    if back > length {
+      break
     }
+    let byte = bytes[length - back].to_int()
+    // A continuation byte: the lead is further back.
+    if byte is (0x80..=0xBF) {
+      continue
+    }
+    let announced = match byte {
+      0xC0..=0xDF => 2
+      0xE0..=0xEF => 3
+      0xF0..=0xF7 => 4
+      _ => 1
+    }
+    return if announced > back { back } else { 0 }
   }
-  @utf8.decode_lossy(bytes)
+  0
 }
