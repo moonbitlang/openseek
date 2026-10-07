@@ -1,5 +1,5 @@
 ///|
-test "ordinary MBTI tabs default to diagram and toggle without replacing the document" {
+test "ordinary MBTI tabs default to source and toggle without replacing the document" {
   let path = @pathx.Relative("api/pkg.generated.mbti")
   let file = test_file(path.0)
   let docs = owned_state().docs.copy()
@@ -8,27 +8,27 @@ test "ordinary MBTI tabs default to diagram and toggle without replacing the doc
   let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
 
   assert_true(mbti_view_available(state, ctx))
-  assert_true(uses_mbti_diagram_surface(state, ctx))
-  assert_true(state.mbti_view_mode(file) is MbtiDiagram)
-
-  let (_, source) = update(
-    test_emit(),
-    MbtiViewModeSelected(MbtiSource),
-    state,
-    ctx,
-  )
-  assert_true(source.mbti_view_mode(file) is MbtiSource)
-  assert_false(uses_mbti_diagram_surface(source, ctx))
-  assert_true(source.docs.get(file) == state.docs.get(file))
+  assert_false(uses_mbti_diagram_surface(state, ctx))
+  assert_true(state.mbti_view_mode(file) is MbtiSource)
 
   let (_, diagram) = update(
     test_emit(),
     MbtiViewModeSelected(MbtiDiagram),
-    source,
+    state,
     ctx,
   )
   assert_true(diagram.mbti_view_mode(file) is MbtiDiagram)
   assert_true(uses_mbti_diagram_surface(diagram, ctx))
+  assert_true(diagram.docs.get(file) == state.docs.get(file))
+
+  let (_, source) = update(
+    test_emit(),
+    MbtiViewModeSelected(MbtiSource),
+    diagram,
+    ctx,
+  )
+  assert_true(source.mbti_view_mode(file) is MbtiSource)
+  assert_false(uses_mbti_diagram_surface(source, ctx))
 }
 
 ///|
@@ -50,7 +50,7 @@ test "reviewed MBTI files keep source and reject the diagram toggle" {
   assert_false(uses_mbti_diagram_surface(state, ctx))
   let (_, after) = update(
     test_emit(),
-    MbtiViewModeSelected(MbtiSource),
+    MbtiViewModeSelected(MbtiDiagram),
     state,
     ctx,
   )
@@ -66,9 +66,17 @@ test "positioned MBTI opens use source and closing forgets the tab preference" {
   let state = { ..owned_state(), docs, }
   let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
 
+  let (_, diagram) = update(
+    test_emit(),
+    MbtiViewModeSelected(MbtiDiagram),
+    state,
+    ctx,
+  )
+  assert_true(uses_mbti_diagram_surface(diagram, ctx))
+
   let (_, positioned) = open_document(
     test_emit(),
-    state,
+    diagram,
     ctx,
     file,
     name="pkg.generated.mbti",
@@ -77,16 +85,22 @@ test "positioned MBTI opens use source and closing forgets the tab preference" {
   )
   assert_true(positioned.mbti_view_mode(file) is MbtiSource)
 
+  let (_, reselected) = update(
+    test_emit(),
+    MbtiViewModeSelected(MbtiDiagram),
+    positioned,
+    ctx,
+  )
   let (_, closed) = close_document(
     test_emit(),
-    positioned,
+    reselected,
     { ..ctx, open_files: [], active_file: None, },
     file,
     next=None,
     was_active=true,
   )
   assert_true(closed.mbti_view_modes.get(file) is None)
-  assert_true(closed.mbti_view_mode(file) is MbtiDiagram)
+  assert_true(closed.mbti_view_mode(file) is MbtiSource)
 }
 
 ///|
@@ -100,7 +114,7 @@ test "non-MBTI documents do not expose or accept MBTI presentation" {
   assert_false(mbti_view_available(state, ctx))
   let (_, after) = update(
     test_emit(),
-    MbtiViewModeSelected(MbtiSource),
+    MbtiViewModeSelected(MbtiDiagram),
     state,
     ctx,
   )

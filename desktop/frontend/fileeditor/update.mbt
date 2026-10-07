@@ -432,7 +432,7 @@ pub fn open_document(
   }
   // A position-bearing open (Search, go-to-definition, or an annotation
   // jump) needs a visible text model so its range can be revealed. Plain file
-  // and tab opens retain this tab's explicit selection, with Diagram as the
+  // and tab opens retain this tab's explicit selection, with Source as the
   // default for a newly opened `.mbti`.
   let state = if uses_mbti_presentation(name) &&
     (range is Some(_) || annotation is Some(_)) {

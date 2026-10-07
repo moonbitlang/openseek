@@ -84,8 +84,9 @@ pub(all) enum ReviewViewMode {
 
 ///|
 /// The presentation selected for an ordinary generated MoonBit interface.
-/// Diff/review and positioned navigation ignore this preference and keep the
-/// source surface, but a normal `.mbti` tab starts in diagram mode.
+/// Source is the default and the UML diagram is shown on request. Diff/review
+/// and positioned navigation ignore this preference and keep the source
+/// surface.
 pub(all) enum MbtiViewMode {
   MbtiDiagram
   MbtiSource
@@ -563,9 +564,9 @@ pub(all) struct State {
   // mirrors the dock strip's file tabs (`Ctx.open_files`): the root update
   // adds an entry when it opens a tab and drops it when the tab closes.
   docs : Map[@common.Uri, Doc]
-  // Per-tab MBTI presentation. Absence is the normal default (`MbtiDiagram`),
-  // so a closed and later reopened interface starts rendered again. Special
-  // source-bearing opens record `MbtiSource` while that tab remains open.
+  // Per-tab MBTI presentation. Absence is the normal default (`MbtiSource`),
+  // so a closed and later reopened interface starts as source again. A
+  // positioned open records `MbtiSource` over an explicit diagram selection.
   mbti_view_modes : Map[@common.Uri, MbtiViewMode]
   // Per-tab moon.mod presentation and the Host-produced package graph JSON.
   // Absence from `moon_mod_view_modes` defaults to source;
@@ -658,11 +659,10 @@ pub fn State::empty() -> State {
 }
 
 ///|
-/// An open MBTI tab defaults to its rendered diagram without storing a map
-/// entry. Explicit source/diagram selections then live only for that tab's
-/// lifetime.
+/// An open MBTI tab defaults to source without storing a map entry. Explicit
+/// source/diagram selections then live only for that tab's lifetime.
 fn State::mbti_view_mode(self : State, path : @common.Uri) -> MbtiViewMode {
-  self.mbti_view_modes.get(path).unwrap_or(MbtiDiagram)
+  self.mbti_view_modes.get(path).unwrap_or(MbtiSource)
 }
 
 ///|
