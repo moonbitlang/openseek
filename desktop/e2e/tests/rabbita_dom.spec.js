@@ -534,7 +534,7 @@ test('Review routes Markdown source and keeps non-MoonBit comparisons on Line di
   expect(app.pageErrors).toEqual([]);
 });
 
-test('ordinary MBTI files render as UML and reviews keep source surfaces', async ({ page }) => {
+test('ordinary MBTI files default to source, render UML on demand, and reviews keep source surfaces', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const path = 'api/pkg.generated.mbti';
   const working = [
@@ -569,7 +569,18 @@ test('ordinary MBTI files render as UML and reviews keep source surfaces', async
   await page.getByRole('option', { name: /pkg\.generated\.mbti/ }).click();
 
   const diagram = page.locator('#mbti-diagram-host');
+  const view = page.getByRole('group', { name: 'MBTI view' });
+  await expect(page.locator('#viewer-host')).toBeVisible();
+  await expect(page.locator('#viewer-host')).toContainText('Point');
+  await expect(view.getByRole('button', { name: 'Source' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(diagram).toBeHidden();
+  await view.getByRole('button', { name: 'Diagram' }).click();
+
   await expect(diagram).toBeVisible();
+  await expect(page.locator('#viewer-host')).toBeHidden();
   await expect(diagram.locator('svg')).toBeVisible();
   await expect(diagram.locator('svg')).toContainText('Point');
   await expect(
@@ -582,7 +593,6 @@ test('ordinary MBTI files render as UML and reviews keep source surfaces', async
   await expect(
     diagram.getByRole('separator', { name: 'Resize diagram' }),
   ).toHaveCount(0);
-  const view = page.getByRole('group', { name: 'MBTI view' });
   await expect(view.getByRole('button')).toHaveText(['Diagram', 'Source']);
   await expect(view.getByRole('button', { name: 'Diagram' })).toHaveAttribute(
     'aria-pressed',
