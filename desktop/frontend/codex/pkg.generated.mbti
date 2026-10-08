@@ -62,7 +62,7 @@ pub fn Msg::worktree_changed(String, String, String, String, Bool) -> Self
 
 pub(all) struct PageActions {
   toggle_terminal : @cmd.Cmd
-  workspace_label : (@common.Uri) -> String
+  conversation_heading : (String, String, @common.Uri?) -> Array[@html.Html]
   transcript : @html.Html
   composer : @html.Html
   detail_toggle : @html.Html

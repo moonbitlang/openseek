@@ -305,7 +305,5 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       @html.section(attrs=@html.Attrs::build().aria_label(title), section),
     )
   }
-  @html.section(class="settings-page", [
-    @html.div(class="settings-page-inner schedules-page", content),
-  ])
+  @page_shell.body(class="settings-page schedules-page", content)
 }

@@ -3,6 +3,7 @@
 ///|
 priv enum ShellMessage {
   NewChatLabel
+  ReturnToWorkLabel
   ArchiveHint
   RestoreHint
   DeleteArchivedHint
@@ -80,6 +81,11 @@ priv enum ShellMessage {
 ///|
 fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
   match (locale, message) {
+    (English, ReturnToWorkLabel) => "Back to conversation"
+    (Spanish, ReturnToWorkLabel) => "Volver a la conversación"
+    (SimplifiedChinese, ReturnToWorkLabel) => "返回对话"
+    (TraditionalChinese, ReturnToWorkLabel) => "返回對話"
+    (Japanese, ReturnToWorkLabel) => "会話に戻る"
     (English, NewChatLabel) => "New chat"
     (Spanish, NewChatLabel) => "Nueva conversación"
     (SimplifiedChinese, NewChatLabel) => "新建对话"

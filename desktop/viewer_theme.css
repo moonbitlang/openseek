@@ -13,9 +13,8 @@
  * titleBar, tree, list focus) are deliberately omitted.
  *
  * Syntax highlighting is the exception: the app palette has no token colors,
- * so the `--vscode-token-*` block (and the shadow/opacity leftovers beside
- * it) keeps values transcribed from VS Code's Dark Modern / Light Modern
- * themes (MIT licensed):
+ * so the `--vscode-token-*` block starts from VS Code's Dark Modern / Light
+ * Modern themes (MIT licensed), with contrast adjustments for app surfaces:
  *   - extensions/theme-defaults/themes/dark_modern.json, light_modern.json
  *   - src/vs/platform/theme/common/colors/*.ts
  * Those are the only values that still need the [data-theme="light"] block;
@@ -224,7 +223,7 @@
   --vscode-widget-shadow: rgb(0 0 0 / 36%);
   --vscode-shadow-hover: rgb(0 0 0 / 36%);
   --vscode-shadow-lg: var(--shadow-overlay);
-  --vscode-editorUnnecessaryCode-opacity: 0.67;
+  --vscode-editorUnnecessaryCode-opacity: 1;
 
   --vscode-token-keyword: #569cd6;
   --vscode-token-variable: #9cdcfe;
@@ -235,8 +234,8 @@
   --vscode-token-function: #dcdcaa;
   --vscode-token-type: #4ec9b0;
   --vscode-token-string-escape: #d7ba7d;
-  --vscode-token-regexp: #d16969;
-  --vscode-token-invalid: #f44747;
+  --vscode-token-regexp: #df8585;
+  --vscode-token-invalid: #ff7272;
 
   /* VS Code editor defaults on macOS: 12px Menlo, 1.5x line height. The app
      stylesheet loads after this one and rebinds the fonts to the app tokens
@@ -250,6 +249,13 @@
   --ui-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Ubuntu",
     "Droid Sans", sans-serif;
   --ui-font-size: 13px;
+}
+
+/* Unused code remains distinct through a neutral color instead of fading
+   every syntax token, which can make an entire expression unreadable. */
+:where(.editor-shell, .moonbit-source, .composer-approval-body, .changes-preview)
+  .moonbit-viewer.showUnused .squiggly-inline-unnecessary {
+  color: var(--color-text-muted);
 }
 
 .editor-shell[data-theme="light"],
@@ -268,17 +274,16 @@
   --vscode-peekViewEditor-matchHighlightBackground: #f5d802de;
   --vscode-widget-shadow: rgb(0 0 0 / 16%);
   --vscode-shadow-hover: rgb(0 0 0 / 16%);
-  --vscode-editorUnnecessaryCode-opacity: 0.47;
 
   --vscode-token-keyword: #0000ff;
   --vscode-token-variable: #001080;
   --vscode-token-string: #a31515;
-  --vscode-token-number: #098658;
+  --vscode-token-number: #086b45;
   --vscode-token-comment: #008000;
   --vscode-token-punctuation: #3b3b3b;
   --vscode-token-function: #795e26;
-  --vscode-token-type: #267f99;
-  --vscode-token-string-escape: #ee0000;
+  --vscode-token-type: #1c647c;
+  --vscode-token-string-escape: #c00000;
   --vscode-token-regexp: #811f3f;
   --vscode-token-invalid: #cd3131;
 }

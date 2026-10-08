@@ -136,9 +136,7 @@
   align-items: center;
   justify-items: start;
 }
-/* Text-gray tones, not border tones: the border palette is intentionally too
-   quiet for a navigation mark against the dark canvas. The muted resting
-   state comes from opacity so one semantic text family carries both themes. */
+/* Navigation marks use opaque text tones to stay visible in both themes. */
 .overview-tick-button::before {
   content: "";
   width: 7px;
@@ -146,7 +144,7 @@
   max-height: 100%;
   border-radius: 1px;
   background: var(--color-text-muted);
-  opacity: 0.5;
+  opacity: 1;
   transition:
     width 0.12s ease,
     background 0.12s ease,

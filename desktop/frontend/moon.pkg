@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/frontend/page_shell",
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/async/http",
   "moonbitlang/core/encoding/utf8",

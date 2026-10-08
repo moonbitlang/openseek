@@ -23,6 +23,20 @@
   or fix issues that only reproduce under it; code that exists only to serve
   it may be removed.
 
+## UI Pull Requests
+
+- For PRs with visible Desktop UI changes, include screenshots in the PR
+  description showing the affected UI from the changed build. Include
+  before-and-after comparisons when useful, and a short recording when the
+  change is best demonstrated through interaction.
+- Prefer demo data when capturing screenshots or recordings. Before uploading,
+  remove or redact personal information, real conversations, private project
+  names and paths, credentials, and other sensitive content, including content
+  in sidebars, terminals, and notifications.
+- Inspect the final images or recording before uploading to confirm that
+  sensitive content is removed and the UI change remains clear. If visual
+  evidence cannot be captured, explain the limitation in the PR description.
+
 ## Child Processes
 
 - For a one-shot command that collects stdout and stderr but must not read

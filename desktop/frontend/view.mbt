@@ -39,7 +39,9 @@ fn SelectMenu::setting_control(
 }
 
 ///|
-fn conversation_title(
+/// Temporary label shared by the sidebar and header before the host lists
+/// this conversation. Listed records always use the host's resolved title.
+fn unlisted_conversation_label(
   locale? : @i18n.Locale = English,
   conv : Conversation,
 ) -> String {
@@ -248,7 +250,7 @@ fn Model::push_group_component_inputs(
           conv.pending_prompt is None {
           shell_text(self.locale, NewChatLabel)
         } else {
-          conversation_title(locale=self.locale, conv)
+          unlisted_conversation_label(locale=self.locale, conv)
         },
       ),
       workspace,
@@ -267,19 +269,10 @@ fn Model::push_group_component_inputs(
   // Sub-run transcripts fold under the conversation that launched them: they
   // are that turn's evidence, not conversations of their own. They ride the
   // parent's component input, so their disclosure state lives in the
-  // conversation component. A label follows the live conversation while it
-  // is the one on screen (its title settles at the first send), and
-  // otherwise comes from the host's listing.
+  // conversation component. Listed records keep the host's resolved label;
+  // the unlisted records above already carry their temporary local label.
   for tree in @transcript.session_tree(items) {
-    let parent_label = if tree.item.title is Some(title) && !title.is_blank() {
-      title
-    } else if self.find_conversation(dev.channel, tree.item.id) is Some(conv) &&
-      dev.channel == self.focused &&
-      tree.item.id == self.active_session {
-      conversation_title(locale=self.locale, conv)
-    } else {
-      session_item_label(tree.item)
-    }
+    let parent_label = session_item_label(tree.item)
     let children : Array[@conversation.Input] = []
     for child in tree.children {
       // The ordinal leads the row: it is what the transcript's sub-run
@@ -1361,7 +1354,7 @@ fn api_settings_rows(
 
 ///|
 /// The Settings page, shown in the main area in place of the conversation
-/// (mirroring the Skills page — the sidebar is the way out, no Done button).
+/// inside the shared management shell with explicit return navigation.
 /// While the configured endpoint is unusable the BYOK guide leads the API
 /// group, and the composer keeps Send disabled until a usable endpoint is
 /// saved.
@@ -1591,28 +1584,26 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ]),
     )
   }
-  @html.section(class="settings-page", [
-    @html.div(class="settings-page-inner", [
-      @html.div(class="settings-header", [
-        @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
-        @html.div(
-          class="settings-subtitle",
-          if !settings_loaded {
-            @settings.text(locale, LoadingSettings)
-          } else if ready {
-            @settings.text(locale, RuntimeSettings)
-          } else {
-            match model.api_provider {
-              Deepseek => @settings.text(locale, DeepseekKey)
-              Glm => @settings.text(locale, GlmKey)
-              OpenRouter => @settings.text(locale, OpenRouterKey)
-              Custom => @settings.text(locale, CustomEndpoint)
-            }
-          },
-        ),
-      ]),
-      @html.div(class="settings", groups),
+  @page_shell.body(class="settings-page", [
+    @html.div(class="settings-header", [
+      @html.div(class="page-eyebrow", @settings.text(locale, Preferences)),
+      @html.div(
+        class="settings-subtitle",
+        if !settings_loaded {
+          @settings.text(locale, LoadingSettings)
+        } else if ready {
+          @settings.text(locale, RuntimeSettings)
+        } else {
+          match model.api_provider {
+            Deepseek => @settings.text(locale, DeepseekKey)
+            Glm => @settings.text(locale, GlmKey)
+            OpenRouter => @settings.text(locale, OpenRouterKey)
+            Custom => @settings.text(locale, CustomEndpoint)
+          }
+        },
+      ),
     ]),
+    @html.div(class="settings", groups),
   ])
 }
 
@@ -1690,22 +1681,12 @@ fn conversation_header(
   model : Model,
   conv : Conversation,
 ) -> Array[@html.Html] {
-  let items : Array[@html.Html] = []
-  items.push(
-    @html.h1(
-      class="topbar-title",
-      title=session_tooltip(model, conv),
-      conversation_title(locale=model.locale, conv),
-    ),
-  )
-  // The project this conversation works in. The git branch is not shown here
-  // — it lives in the composer's status row.
   let workspace = conv.project()
-  items.push(
-    @html.span(class="topbar-workspace", title=workspace.path, [
-      icon(icon_folder),
-      @html.text(@resource.label(workspace)),
-    ]),
+  let items = model.conversation_heading(
+    conv.device,
+    model.selected_conversation_title(),
+    session_tooltip(model, conv),
+    Some(workspace),
   )
   items.push(run_indicator(model, conv))
   if conv.turn.usage_tokens > 0 {
@@ -1736,7 +1717,7 @@ fn conversation_header(
           OpenExport({
             session: conv.session_id,
             workspace: workspace.path,
-            title: conversation_title(locale=model.locale, conv),
+            title: model.selected_conversation_title(),
             archived: conv.is_archived_read_only(),
           }),
         ),
@@ -2015,7 +1996,9 @@ fn view(
   let terminal_panel_visible = model.terminal_panel_visible()
   let codex_actions : @codex.PageActions = {
     toggle_terminal,
-    workspace_label: workspace => @resource.label(workspace),
+    conversation_heading: (title, tooltip, workspace) => {
+      model.conversation_heading(model.focused, title, tooltip, workspace)
+    },
     transcript: transcript_html,
     composer: codex_composer_html,
     detail_toggle: model.detail_toggle(dispatch),
@@ -2025,8 +2008,16 @@ fn view(
       match model.chat_column() {
         Transcript(conversation=conv, ..) =>
           conversation_header(dispatch, toggle_terminal, model, conv)
-        _ =>
-          [@html.h1(class="topbar-title", model.pending_conversation_title())]
+        _ => {
+          let title = model.selected_conversation_title()
+          let selected = model.conversation_selection()
+          model.conversation_heading(
+            selected.map_or(model.focused, selected => selected.channel),
+            title,
+            title,
+            selected.map(selected => selected.workspace),
+          )
+        }
       }
     Codex =>
       model.codex.header(
@@ -2037,16 +2028,15 @@ fn view(
         codex_actions,
       )
     Settings =>
-      [@html.h1(class="topbar-title", @settings.text(model.locale, Settings))]
+      management_header(dispatch, model, @settings.text(model.locale, Settings))
     Skills =>
-      [
-        @html.h1(
-          class="topbar-title",
-          @sidebar_messages.text(model.locale, Skills),
-        ),
-      ]
+      management_header(
+        dispatch,
+        model,
+        @sidebar_messages.text(model.locale, Skills),
+      )
     Schedules =>
-      [@html.h1(class="topbar-title", ui(model.locale, ScheduledTasks))]
+      management_header(dispatch, model, ui(model.locale, ScheduledTasks))
   }
   let content = match model.screen {
     // `Model::chat_column` is the one fork that decides what the conversation

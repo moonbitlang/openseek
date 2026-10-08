@@ -47,7 +47,7 @@
     --button-color: var(--color-on-accent);
     --button-border-color: var(--color-accent);
     --button-background: var(--color-accent);
-    --button-hover-color: var(--color-on-accent);
+    --button-hover-color: var(--color-on-accent-strong);
     --button-hover-border-color: var(--color-accent-strong);
     --button-hover-background: var(--color-accent-strong);
     --button-disabled-opacity: 0.7;
@@ -60,7 +60,7 @@
     --button-hover-background: color-mix(
       in srgb,
       var(--color-danger-soft) 75%,
-      var(--color-danger)
+      var(--color-bg-surface)
     );
   }
 }
@@ -108,22 +108,30 @@ a:where(.setting-link) {
   font-size: var(--font-size-md);
 }
 
-/* ---------- settings page ---------- */
-/* Shares the Skills page's shell — same column width, header type, and
-   section headings — so the two pages read as siblings. */
-.settings-page {
+/* ---------- shared management-page shell ---------- */
+.management-page {
   grid-row: 2 / -1;
   min-height: 0;
   overflow: auto;
   padding: 24px 28px 28px;
 }
 
-.settings-page-inner {
+.management-page-content {
   display: grid;
   align-content: start;
   gap: 24px;
   max-width: 720px;
   margin: 0 auto;
+}
+
+.management-page-return {
+  flex: none;
+  border: 0;
+}
+
+.management-page-return:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .page-eyebrow {
@@ -377,19 +385,8 @@ h2 {
 }
 
 /* ---------- skills page ---------- */
-.skills-page {
-  grid-row: 2 / -1;
-  min-height: 0;
-  overflow: auto;
-  padding: 24px 28px 28px;
-}
-
-.skills-page-inner {
-  display: grid;
-  align-content: start;
+.skills-page > .management-page-content {
   gap: 20px;
-  max-width: 720px;
-  margin: 0 auto;
 }
 
 .skills-header {
@@ -471,7 +468,7 @@ h2 {
 }
 
 .skill-desc {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
 }
@@ -590,7 +587,7 @@ h2 {
   white-space: pre-wrap;
 }
 
-.skill-detail-page {
+.skill-detail-page > .management-page-content {
   max-width: 840px;
 }
 
@@ -603,7 +600,7 @@ h2 {
   gap: 8px;
 }
 
-.skill-detail-header h1 {
+.skill-detail-header h2 {
   overflow-wrap: anywhere;
 }
 
@@ -767,7 +764,7 @@ h2 {
 }
 
 /* Scheduled tasks share the Settings page's type scale and theme. */
-.schedules-page { max-width: 900px; }
+.schedules-page > .management-page-content { max-width: 900px; }
 .schedule-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .schedule-card, .schedule-form { border: 1px solid var(--color-border); border-radius: 10px; padding: 18px; margin: 16px 0; }
 .schedule-card h2, .schedule-card h3 { margin: 0 0 8px; font-size: 16px; }
