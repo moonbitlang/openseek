@@ -77,7 +77,7 @@ fn encode_chat_request_for_endpoint(
 
 ///|
 fn supports_image_route(model : @deepseek.Model, api_url : String) -> Bool {
-  model is Deepseek(_) && api_url != OpenRouterChatCompletionsUrl
+  model is Deepseek(V4Flash) && api_url != OpenRouterChatCompletionsUrl
 }
 
 ///|

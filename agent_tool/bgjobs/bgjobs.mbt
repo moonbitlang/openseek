@@ -165,7 +165,7 @@ priv struct BgJob {
 /// (the first inline-budget characters); the *full* output — when `over_inline_cap`
 /// — is read with `BgJobRuntime::read_output`.
 pub struct BgJobSnapshot {
-  image_output : ImageOutput
+  image_output : ImageOutput?
   data : Json?
   cleanup_error : String?
   id : String
@@ -468,7 +468,7 @@ fn BgJob::to_snapshot(self : BgJob, persistent_logs : Bool) -> BgJobSnapshot {
       bg_status(self.exec.status())
     },
     data: self.data.map(get => get()),
-    image_output: self.image_output.map_or({ content: "", images: [], }, get => {
+    image_output: self.image_output.map(get => {
       let output = get()
       { content: output.content, images: output.images.copy(), }
     }),

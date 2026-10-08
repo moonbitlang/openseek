@@ -35,7 +35,7 @@ pub async fn BgJobRuntime::terminal_denial_feedback(Self, String) -> String?
 pub async fn BgJobRuntime::wait_any(Self, Array[String]) -> Unit
 
 pub struct BgJobSnapshot {
-  image_output : ImageOutput
+  image_output : ImageOutput?
   data : Json?
   cleanup_error : String?
   id : String

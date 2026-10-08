@@ -12,7 +12,7 @@ pub fn definition(workspace_root~ : String) -> @agent_tool.AgentToolDefinition {
     }),
     program_callable=true,
     requires_image_input=true,
-    concurrent_safe=true,
+    concurrent_safe=false,
     execute=Async(arguments => {
       guard arguments is { "path": String(path), .. } && !path.is_blank() else {
         return @agent_tool.respond(

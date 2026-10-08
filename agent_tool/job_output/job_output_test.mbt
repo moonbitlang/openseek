@@ -85,9 +85,37 @@ async test "job_output reports a finished job's exit code" {
       command="job",
     )
     poll_bg_terminal(bg, id)
+    assert_true(bg.snapshot(id) is Some({ image_output: None, .. }))
     let output = run_job_output(bg, { "job_id": id })
     assert_true(output.is_error)
     assert_true(output.content.contains("exit=2"))
+  })
+}
+
+///|
+async test "job_output preserves a present but empty image result after completion" {
+  @async.with_task_group(group => {
+    let bg = @bgjobs.BgJobRuntime(AgentTaskScope(group))
+    let exec = bg.spawn_foreground_retained(
+      "moonx",
+      [CLI_PRINTF, "hello"],
+      None,
+      12000,
+    )
+    let id = bg.adopt(exec, command="job", image_output=() => {
+      content: "",
+      images: [],
+    })
+    bg.wait_any([id])
+    assert_true(
+      bg.snapshot(id)
+      is Some({ image_output: Some({ content: "", images: [], }), .. }),
+    )
+    let output = run_job_output(bg, { "job_id": id })
+    assert_false(output.is_error, msg=output.content)
+    assert_true(output.content.has_prefix("hello\n<system>"))
+    assert_true(output.content.has_suffix("</system>"))
+    assert_true(output.images.is_empty())
   })
 }
 

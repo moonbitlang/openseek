@@ -178,22 +178,21 @@ async fn execute(
   if snapshot.cleanup_error is Some(error) {
     content.write_string("Job cleanup failed: \{error}\n")
   }
-  if snapshot.image_output.content != "" {
-    content.write_string(snapshot.image_output.content)
-    content.write_string("\n")
+  let images = if snapshot.image_output is Some(image_output) {
+    if image_output.content != "" {
+      content.write_string(image_output.content)
+      content.write_string("\n")
+    }
+    image_output.images
+  } else {
+    []
   }
   content.write_string(footer)
   let content = content.to_string()
   let brief = snapshot.description.map(description => {
     "job \{job_id} (\{status_label}): \{description}"
   })
-  @agent_tool.respond(
-    content,
-    images=snapshot.image_output.images,
-    is_error~,
-    brief?,
-    data?=snapshot.data,
-  )
+  @agent_tool.respond(content, images~, is_error~, brief?, data?=snapshot.data)
 }
 
 ///|
