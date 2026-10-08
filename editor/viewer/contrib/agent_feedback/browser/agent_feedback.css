@@ -1,12 +1,5 @@
-/* Agent-feedback contrib styling: a transcription of vscode
-   sessions/contrib/agentFeedback/browser/media/agentFeedbackEditorInput.css.
-   The upstream file leans on the new design-token vars
-   (--vscode-spacing-*, --vscode-cornerRadius-*, --vscode-shadow-lg,
-   --vscode-icon-plus-content/-font-family); the viewer's theme.css carries
-   none of those, so they are inlined to their default values (spacing-size60
-   = 6px, size120 = 12px, size200 = 20px, cornerRadius-small/large = 2px/6px)
-   and the icons are the vendored codicon font (plus \ea60, send \ec0f —
-   codiconsLibrary.ts codepoints), following the comments.css precedent. */
+/* Agent-feedback surfaces use the viewer's host-neutral theme variables.
+   Icon glyphs use the vendored codicon font, like the comment widgets. */
 
 /* --- hover "+" gutter glyph -------------------------------------------- */
 
@@ -42,20 +35,24 @@
 
 /* --- inline input widget ------------------------------------------------ */
 
+/* A compact composer: UI typography, one border around the surface, and
+   neutral icon actions aligned with the last line of the growing input. */
 .agent-feedback-input-widget {
   position: absolute;
   z-index: 10000;
   pointer-events: auto;
-  background-color: var(--vscode-panel-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-foreground);
+  background: var(--vscode-panel-background, var(--vscode-editorWidget-background));
   border: 1px solid var(--vscode-editorWidget-border, var(--vscode-contrastBorder, #454545));
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  border-radius: 6px;
+  box-shadow: 0 8px 30px -8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.25));
+  border-radius: 9px;
   box-sizing: border-box;
-  padding: 8px;
+  padding: 10px;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  align-items: flex-end;
   gap: 8px;
+  font: var(--ui-font-size, 13px) / 1.5 var(--ui-font-family, system-ui, sans-serif);
+  white-space: normal;
   animation: agentFeedbackInputAppear 0.15s ease-out;
 }
 
@@ -79,18 +76,15 @@
 
 .agent-feedback-input-widget textarea {
   box-sizing: border-box;
-  width: 100%;
+  flex: 1;
   min-width: 0;
-  min-height: 64px;
-  max-height: 180px;
-  padding: 6px 8px;
-  border: 1px solid var(--vscode-input-border, transparent);
-  background-color: var(--vscode-input-background);
-  color: var(--vscode-input-foreground);
+  min-height: 30px;
+  max-height: 140px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font: inherit;
-  font-size: 13px;
-  line-height: 18px;
-  border-radius: 3px;
   outline: none;
   resize: none;
   overflow-y: auto;
@@ -100,7 +94,6 @@
 }
 
 .agent-feedback-input-widget textarea:focus {
-  border-color: var(--vscode-focusBorder);
   outline: none !important;
 }
 
@@ -110,49 +103,56 @@
 
 .agent-feedback-input-widget .agent-feedback-input-actions {
   display: flex;
+  flex: none;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  gap: 2px;
 }
 
 .agent-feedback-input-widget .agent-feedback-input-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
   box-sizing: border-box;
-  min-height: 28px;
-  padding: 4px 10px;
-  border: 1px solid var(--vscode-button-border, transparent);
-  border-radius: 3px;
-  font: inherit;
-  font-size: 12px;
-  line-height: 18px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+  background: transparent;
   cursor: pointer;
 }
 
-.agent-feedback-input-widget .agent-feedback-input-action-cancel,
-.agent-feedback-input-widget .agent-feedback-input-action-secondary {
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
+.agent-feedback-input-widget .agent-feedback-input-action:hover:not([disabled]) {
+  color: var(--vscode-foreground);
+  background: var(--vscode-toolbar-hoverBackground);
 }
 
-.agent-feedback-input-widget .agent-feedback-input-action-primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-
-.agent-feedback-input-widget
-  .agent-feedback-input-action-cancel:hover:not([disabled]),
-.agent-feedback-input-widget
-  .agent-feedback-input-action-secondary:hover:not([disabled]) {
-  background: var(--vscode-button-secondaryHoverBackground);
-}
-
-.agent-feedback-input-widget
-  .agent-feedback-input-action-primary:hover:not([disabled]) {
-  background: var(--vscode-button-hoverBackground);
+.agent-feedback-input-widget .agent-feedback-input-action:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
 }
 
 .agent-feedback-input-widget .agent-feedback-input-action[disabled] {
   opacity: 0.4;
   cursor: default;
+}
+
+.agent-feedback-input-icon::before {
+  font: normal normal normal 16px/1 codicon;
+}
+
+.agent-feedback-input-action-cancel .agent-feedback-input-icon::before {
+  content: "\ea76";
+}
+
+.agent-feedback-input-action-add .agent-feedback-input-icon::before {
+  content: "\ea60";
+}
+
+.agent-feedback-input-action-apply .agent-feedback-input-icon::before {
+  content: "\ec0f";
 }
 
 /* --- feedback speech-bubble widget --------------------------------------

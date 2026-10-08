@@ -175,9 +175,9 @@ test('agent feedback: bubbles, glyph add flow, reply, remove, scroll', async ({ 
   const applyAllFeedback = page.locator(
     '.agent-feedback-input-action-apply',
   );
-  await expect(cancelFeedback).toHaveText('Cancel');
-  await expect(addFeedback).toHaveText('Add feedback');
-  await expect(applyAllFeedback).toHaveText('Apply all feedback');
+  await expect(cancelFeedback).toHaveAccessibleName('Cancel');
+  await expect(addFeedback).toHaveAccessibleName('Add feedback');
+  await expect(applyAllFeedback).toHaveAccessibleName('Apply all feedback');
   await expect(addFeedback).toBeDisabled();
   await expect(applyAllFeedback).toBeDisabled();
   await input.fill('Needs a guard clause');

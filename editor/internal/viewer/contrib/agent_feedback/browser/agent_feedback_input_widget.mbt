@@ -1,7 +1,7 @@
 // The inline "Add Feedback" input, porting `AgentFeedbackInputWidget`
 // (`vscode/src/vs/sessions/contrib/agentFeedback/browser/
 // agentFeedbackEditorInputContribution.ts:44-242`): a floating overlay node
-// with an auto-growing textarea and explicit Cancel/Add/Apply actions. Add
+// with a compact auto-growing textarea and Cancel/Add/Apply icon actions. Add
 // keeps the feedback in the host's main-window batch; Apply submits that
 // batch through the host's ordinary message queue. The widget is a
 // null-position overlay widget: the glue positions it by writing
@@ -26,10 +26,10 @@ let input_max_width_px : Double = 400.0
 let input_max_width_editor_fraction : Double = 0.9
 
 ///|
-let input_min_height_px : Double = 64.0
+let input_min_height_px : Double = 30.0
 
 ///|
-let input_max_height_px : Double = 180.0
+let input_max_height_px : Double = 140.0
 
 ///|
 /// The glue-facing seam: submit/cancel routing plus the geometry reads the
@@ -71,8 +71,10 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   let root = document.create_element("div")
   root.set_attribute("class", "agent-feedback-input-widget")
   root.set_attribute("style", "display:none")
+  root.set_attribute("role", "dialog")
+  root.set_attribute("aria-label", localization.text(AddFeedback))
   let textarea = document.create_element("textarea")
-  textarea.set_attribute("rows", "3")
+  textarea.set_attribute("rows", "1")
   textarea.set_attribute("placeholder", localization.text(AddFeedback))
   textarea.set_attribute("aria-label", localization.text(FeedbackLabel))
   textarea.set_attribute("data-agent-feedback-input", "true")
@@ -85,25 +87,32 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
     "class", "agent-feedback-input-action agent-feedback-input-action-cancel",
   )
   cancel.set_attribute("title", localization.text(CancelFeedback))
-  cancel.set_inner_html(localization.text(CancelLabel))
+  cancel.set_attribute("aria-label", localization.text(CancelLabel))
+  cancel.set_inner_html(
+    "<span class=\"agent-feedback-input-icon\" aria-hidden=\"true\"></span>",
+  )
   let add = document.create_element("button")
   add.set_attribute("type", "button")
   add.set_attribute(
-    "class", "agent-feedback-input-action agent-feedback-input-action-secondary agent-feedback-input-action-add",
+    "class", "agent-feedback-input-action agent-feedback-input-action-add",
   )
   add.set_attribute("data-agent-feedback-action", "add")
   add.set_attribute("title", localization.text(AddFeedbackBatch))
   add.set_attribute("aria-label", localization.text(AddFeedback))
-  add.set_inner_html(localization.text(AddFeedback))
+  add.set_inner_html(
+    "<span class=\"agent-feedback-input-icon\" aria-hidden=\"true\"></span>",
+  )
   let apply = document.create_element("button")
   apply.set_attribute("type", "button")
   apply.set_attribute(
-    "class", "agent-feedback-input-action agent-feedback-input-action-primary agent-feedback-input-action-apply",
+    "class", "agent-feedback-input-action agent-feedback-input-action-apply",
   )
   apply.set_attribute("data-agent-feedback-action", "apply")
   apply.set_attribute("title", localization.text(ApplyFeedbackShortcut))
   apply.set_attribute("aria-label", localization.text(ApplyFeedback))
-  apply.set_inner_html(localization.text(ApplyFeedback))
+  apply.set_inner_html(
+    "<span class=\"agent-feedback-input-icon\" aria-hidden=\"true\"></span>",
+  )
   actions.append_child(cancel.as_node())
   actions.append_child(add.as_node())
   actions.append_child(apply.as_node())
@@ -238,16 +247,15 @@ pub fn AgentFeedbackInputWidget::refresh_labels(
     self.localization.text(FeedbackLabel),
   )
   self.cancel.set_attribute("title", self.localization.text(CancelFeedback))
-  self.cancel.set_inner_html(self.localization.text(CancelLabel))
+  self.root.set_attribute("aria-label", self.localization.text(AddFeedback))
+  self.cancel.set_attribute("aria-label", self.localization.text(CancelLabel))
   self.add.set_attribute("title", self.localization.text(AddFeedbackBatch))
   self.add.set_attribute("aria-label", self.localization.text(AddFeedback))
-  self.add.set_inner_html(self.localization.text(AddFeedback))
   self.apply.set_attribute(
     "title",
     self.localization.text(ApplyFeedbackShortcut),
   )
   self.apply.set_attribute("aria-label", self.localization.text(ApplyFeedback))
-  self.apply.set_inner_html(self.localization.text(ApplyFeedback))
 }
 
 ///|
@@ -318,7 +326,7 @@ pub fn AgentFeedbackInputWidget::measured_height(
   if height > 0.0 {
     height
   } else {
-    112.0
+    52.0
   }
 }
 
