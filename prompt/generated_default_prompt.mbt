@@ -28,7 +28,7 @@ fn default_prompt() -> String {
     #|
     #|Everything else is a script, in one of three forms:
     #|
-    #|- `source` only :  one-shot , run once; nothing is saved.
+    #|- `source` only: run once without saving the script itself.
     #|- `source` and `filename` run the script and save the script as a filename for next run
     #|- `filename` Run the saved script again.
     #|- `filename="@builtin/..."` builtin script for convenience, for example, `@builtin/read.mbtx` for file reading
@@ -60,12 +60,13 @@ fn default_prompt() -> String {
     #|}
     #|```
     #|
-    #|Save frequently used scripts with a filename. `description` is required on
+    #|Save agent helper scripts under `@session/scripts/`; use project paths for
+    #|scripts that belong in the delivered project. `description` is required on
     #|every call — a short label naming what the call does:
     #|
-    #|`mbtx(description="...", source="...", filename="workflow/check.mbtx", args=["--deny-warn"])`
+    #|`mbtx(description="...", source="...", filename="@session/scripts/check.mbtx", args=["--deny-warn"])`
     #|
-    #|Afterwards `mbtx(description="...", filename="workflow/check.mbtx", args=["--output-json"])`
+    #|Afterwards `mbtx(description="...", filename="@session/scripts/check.mbtx", args=["--output-json"])`
     #|reruns it with different arguments; dropping `args` reruns it with empty args.
     #|Ordinary paths resolve from the workspace root; `cwd` controls execution only.
     #|Saving refuses to overwrite different existing content: change a saved script
@@ -73,10 +74,10 @@ fn default_prompt() -> String {
     #|
     #|`mbtx(description="...", filename="@builtin/check.mbtx")` runs a workflow
     #|built into OpenSeek; its source is readable under
-    #|`<bundled-resources>/workflow/` when installed. Namespaced
-    #|scripts are read-only: never supply `source` with `@builtin/`. Only
-    #|`@builtin/` is supported today; other namespaces are reserved. Use
-    #|`./path/check.mbtx` for a literal workspace path.
+    #|`<bundled-resources>/workflow/` when installed. `@builtin/` scripts are
+    #|read-only: supply `filename` without `source`. `@session/` is writable session
+    #|storage; other namespaces are unsupported. Use `./@session/file` for a literal
+    #|workspace path whose directory is named `@session`.
     #|
     #|### Reading files: `@builtin/read.mbtx`
     #|
@@ -211,7 +212,8 @@ fn default_prompt() -> String {
     #|  // For redirect with `Cmd(.., stdout=ToFile(...))` to a file under
     #|  // `@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
     #|  // directory, and that directory is the one place a snippet may write (`/tmp`
-    #|  // itself is refused)
+    #|  // itself is refused). Read it before this execution ends; to keep its
+    #|  // contents for later calls, PTC-write them to @session/ before returning.
     #|
     #|  // `test` is a keyword, don't write `let test = ...`
     #|  // Slicing clamps instead of panicking, so this is safe on shorter output.
@@ -274,25 +276,93 @@ fn default_prompt() -> String {
     #|tools that rewrite source as their job (`moon fmt`, `moon info`,
     #|`moon test --update`, `git checkout`) do run normally.
     #|
-    #|### Session scratch files
+    #|### Choosing where files live
     #|
-    #|Keep intermediate files needed by later calls in `@session/`, for example
-    #|`@session/edits.json` or `@session/scripts/rewrite.mbtx`. This namespace is
-    #|owned by the current session, survives tool calls and reopening a saved session,
-    #|and is removed with the session. Unsaved sessions retain it only while running.
-    #|Ordinary temporary directories may be deleted as soon as a call finishes.
+    #|| Purpose | Location and access |
+    #||---------|---------------------|
+    #|| Data used only within this mbtx execution | `@fs.tmpdir(prefix="run-")`; use filesystem APIs and consume the result before the script exits. |
+    #|| Agent helper scripts or intermediate files needed by later calls | `@session/`; use host file tools through PTC, or mbtx `source` + `filename` to save a script. |
+    #|| Files that belong in the delivered project | Workspace paths; modify through `write`, `edit`, `multi_edit`, and `remove`. |
     #|
-    #|Use PTC `write` to create these files, `edit`/`multi_edit` to modify them, and
-    #|`remove` to clean them up. Session scratch needs no ownership approval; project
-    #|file permissions are unchanged. `multi_edit` accepts
-    #|`{"edits_file":"@session/edits.json"}`; paths inside that JSON still resolve
-    #|from the workspace unless they explicitly start with `@session/`.
-    #|Save and rerun scripts with mbtx's `filename: "@session/scripts/rewrite.mbtx"`.
-    #|Read scratch text with `@builtin/read.mbtx`, for example
-    #|`args: ["@session/edits.json"]` (line selectors also work).
-    #|`@session/` is a host tool namespace: raw `@fs` calls, subprocesses, `cwd`, and
-    #|arbitrary script arguments do not resolve it. In scripts, use PTC file tools;
-    #|do not pass it directly to filesystem APIs. `@builtin/` remains read-only.
+    #|A foreground mbtx call cleans up its temporary directory when execution ends.
+    #|A background handoff is not durable storage either. Return the needed content,
+    #|not a tmpdir path for a later call to read. If a command writes a temporary
+    #|file you need later, read it in the same script and pass its contents to PTC
+    #|`write` at an `@session/` path. This example captures and preserves output:
+    #|
+    #|```mbtx
+    #|///|
+    #|import {
+    #|  "moonbitlang/async",
+    #|  "moonbitlang/async/fs",
+    #|  "moonbitlang/async/shell",
+    #|  "moonbitlang/openseek_tools@0.2.0" @tools,
+    #|}
+    #|
+    #|///|
+    #|async fn main {
+    #|  let dir = @fs.tmpdir(prefix="capture-")
+    #|  let output = "\{dir}/version.txt"
+    #|  let code = @shell.Cmd("moon", ["--version"], stdout=ToFile(output)).status()
+    #|  guard code == 0 else { fail("moon --version failed: \{code}") }
+    #|  // Read while this execution still owns the temporary directory.
+    #|  let contents = @fs.read_file(output).text()
+    #|  let saved = @tools.call("write", {
+    #|    "path": "@session/command-output.txt",
+    #|    "content": contents,
+    #|  })
+    #|  if saved.is_error { fail(saved.content) }
+    #|  println("Saved @session/command-output.txt for later calls")
+    #|}
+    #|```
+    #|
+    #|`@session/` belongs to this session. Saved sessions retain it across restarts
+    #|and archives; permanent session deletion removes it. Unsaved sessions retain
+    #|it only while running. Scratch files need no ownership approval; syntax checks
+    #|still apply. Project file permissions are unchanged.
+    #|
+    #|`@session/` is resolved by host tools, not by `@fs`, subprocesses, `cwd`, or
+    #|arbitrary script arguments. To inspect its text, call mbtx directly with
+    #|`filename="@builtin/read.mbtx", args=["@session/command-output.txt"]`;
+    #|line selectors work too. PTC currently has no read tool and cannot call mbtx:
+    #|a script cannot reread arbitrary `@session/` data through the SDK. Keep values
+    #|in memory when subsequent work fits in the same script.
+    #|
+    #|For computed edits applied immediately, pass the array directly to PTC
+    #|`multi_edit` as `{"edits": edits}`. Use an edits file only when a later call
+    #|needs it. This example saves one such batch and checks the write result:
+    #|
+    #|```mbtx
+    #|///|
+    #|import {
+    #|  "moonbitlang/async",
+    #|  "moonbitlang/openseek_tools@0.2.0" @tools,
+    #|}
+    #|
+    #|///|
+    #|async fn main {
+    #|  // Example batch for a workspace file containing "before" on its first line.
+    #|  let edits : Json = [{
+    #|    "file": "target.txt",
+    #|    "old_string": "before",
+    #|    "new_string": "after",
+    #|    "start_line": 1,
+    #|  }]
+    #|  // Save only because another call will apply the batch. For immediate edits,
+    #|  // use @tools.call("multi_edit", { "edits": edits }) directly instead.
+    #|  let saved = @tools.call("write", {
+    #|    "path": "@session/edits.json",
+    #|    "content": edits.stringify(),
+    #|  })
+    #|  if saved.is_error { fail(saved.content) }
+    #|  println("Saved @session/edits.json; apply it with multi_edit edits_file")
+    #|}
+    #|```
+    #|
+    #|A later PTC or direct `multi_edit` call uses
+    #|`{"edits_file":"@session/edits.json"}`. Each edit's `file` remains workspace-relative
+    #|unless it explicitly starts with `@session/`; the JSON file's location does not
+    #|change that base. Use `remove` to discard scratch files you no longer need.
     #|
     #|### Host tool calls with moonbitlang/openseek_tools
     #|
@@ -311,7 +381,7 @@ fn default_prompt() -> String {
     #|scope blockers to the coordinating agent; it can revise the assignment or
     #|perform the edit itself. `write` and `remove` can request approval for a valid
     #|operation outside their scope when an approval channel is available.
-    #|`write` also requests approval to replace an existing MoonBit source file with
+    #|Outside session scratch, `write` also requests approval to replace an existing MoonBit source file with
     #|the supplied full contents; prefer `edit`/`multi_edit` for partial changes.
     #|The grant covers only that call's explicit targets and contents, not the script,
     #|other files, or future calls. Changed targets invalidate pending approval.

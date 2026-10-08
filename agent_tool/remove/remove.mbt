@@ -17,6 +17,7 @@ pub fn definition(
     description=(
       #|Delete a file or recursively delete a directory, with a non-empty reason.
       #|Unchanged session-created files and empty directories are removed automatically.
+      #|Session scratch files and subdirectories (@session/...) also need no ownership approval.
       #|Other files and nonempty directories require approval through the permission channel.
       #|If approval is unavailable, rejected, or cancelled, the target is kept.
       #|A file or tree changed while waiting must be reconsidered

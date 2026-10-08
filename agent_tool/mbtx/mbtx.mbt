@@ -1851,17 +1851,18 @@ fn description(
     #|Omit unused fields entirely; do not send null.
     #|
     #|For example, create and run a reusable script with
-    #|`{"description":"Save and run a greeting","source":"fn main { println(42) }","filename":"scripts/greet.mbtx"}`.
-    #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
+    #|`{"description":"Save and run a greeting","source":"fn main { println(42) }","filename":"@session/scripts/greet.mbtx"}`.
+    #|Run it again with `{"description":"Run the saved greeting","filename":"@session/scripts/greet.mbtx"}`.
     #|A filename-only call cannot create a script. Missing parent directories are
     #|created. Identical existing content is reused; different content is never
     #|overwritten. Use the edit tool to change a saved script. Saving is limited
-    #|to the writable workspace and is unavailable in read-only mode.
+    #|to the writable workspace or session scratch and is unavailable in read-only mode.
     #|Pass `args` (an array of strings, default `[]`) to parameterize any script:
-    #|`{"description":"Run saved checks","filename":"scripts/check.mbtx","args":["--deny-warn"]}`.
+    #|`{"description":"Run saved checks","filename":"@session/scripts/check.mbtx","args":["--deny-warn"]}`.
     #|The script runs on wasm. Import "moonbitlang/core/env" and read
     #|`@env.args()[1:]` to skip the executable name.
     #|Arguments are passed verbatim, without shell expansion or splitting.
+    #|Only @builtin/read.mbtx resolves @session/ file selectors in its args.
     #|When bundled resources are available, these scripts are already bundled:
     #|Read text files with {"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}.
     #|Selectors: path, path:start, path:start:end (inclusive, 1-based); batch in args.
@@ -1914,7 +1915,12 @@ fn description(
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` as an admitted child process.
-    #|- A snippet READS anywhere and WRITES only its own `@fs.tmpdir()`. Changing a
+    #|- Direct filesystem IO READS anywhere and WRITES only its own `@fs.tmpdir()`.
+    #|  Consume temporary files before execution ends; foreground cleanup removes them.
+    #|  To retain command output, read it in that script and PTC-write its contents to
+    #|  @session/. Raw filesystem APIs and subprocesses do not resolve this namespace.
+    #|  Pass computed edits directly to PTC multi_edit unless a later call needs a file.
+    #|  Changing a
     #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
     #|  checkout` and friends are child processes and run normally. A write refusal
     #|  is that rule firing, not a filesystem fault to debug or route around.

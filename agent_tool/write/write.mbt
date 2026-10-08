@@ -45,7 +45,7 @@ pub fn definition(
     description=(
       #|Create a new file at arguments.path with arguments.content (missing parent
       #|directories are created), or overwrite an existing non-source file. Overwriting an
-      #|existing .mbt/.mbt.md source file requires approval for the supplied full contents.
+      #|existing .mbt/.mbt.md source file outside @session/ requires approval for the supplied full contents.
       #|Use edit or multi_edit for partial changes (an empty old_string inserts new code). New syntax-checkable
       #|content (.mbt, .mbt.md, moon.mod, moon.pkg) that fails to lex/parse is rejected
       #|BEFORE writing or approval — see revert_on_parse_errors. Do not

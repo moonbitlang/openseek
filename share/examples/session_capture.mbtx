@@ -1,0 +1,23 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/shell",
+  "moonbitlang/openseek_tools@0.2.0" @tools,
+}
+
+///|
+async fn main {
+  let dir = @fs.tmpdir(prefix="capture-")
+  let output = "\{dir}/version.txt"
+  let code = @shell.Cmd("moon", ["--version"], stdout=ToFile(output)).status()
+  guard code == 0 else { fail("moon --version failed: \{code}") }
+  // Read while this execution still owns the temporary directory.
+  let contents = @fs.read_file(output).text()
+  let saved = @tools.call("write", {
+    "path": "@session/command-output.txt",
+    "content": contents,
+  })
+  if saved.is_error { fail(saved.content) }
+  println("Saved @session/command-output.txt for later calls")
+}

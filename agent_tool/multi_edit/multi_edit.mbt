@@ -77,9 +77,11 @@ pub fn definition(
           "description": (
             #|Path to a JSON file holding an array of the same edit objects — a response
             #|file for large, script-generated batches. Concatenated with inline edits
-            #|when both are given.
+            #|when both are given. For reuse across calls, PTC-write the JSON string to
+            #|@session/edits.json before the producing script exits. For immediate
+            #|application, pass edits inline instead. Targets stay workspace-relative.
           ),
-          "examples": ["fixes.json"],
+          "examples": ["@session/edits.json"],
         },
         "revert_if_error_delta_greater_or_equal": {
           "type": "integer",
