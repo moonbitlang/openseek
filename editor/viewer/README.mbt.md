@@ -227,6 +227,21 @@ other pane, which clamps at its own limit without feeding that clamp back.
 Repeating the host offset, including during vertical host scrolling, leaves
 both horizontal positions unchanged.
 
+In Inline layout the visible modified pane owns the shared horizontal range.
+Its clamp resets the hidden original pane too. A real wheel, scrollbar, touch
+or navigation gesture invalidates a pending layout anchor before child event
+handling, so a completed render cannot restore an older viewport over new input.
+
+While a same-version provider/options recomputation is Pending, navigation
+and actions are invalidated but the last committed alignment geometry stays
+visible until the replacement result is ready. Changed model identities or
+content versions discard that geometry immediately. The hidden-layout
+one-shot reveal and both-axis browser cases cover these transitions.
+
+Geometry-only reconciliation repositions existing hunk action DOM. A new diff
+generation or explicit host renderer update rebuilds it; ordinary layout does
+not close an open action menu or replace its focused button.
+
 This is a behavior port of VS Code
 [`DiffEditorItemTemplate.setScrollLeft` at `07c20d96`](https://github.com/microsoft/vscode/blob/07c20d96cf3f2cbc8142ac7079ba9048cf7f6134/src/vs/editor/browser/widget/multiDiffEditor/diffEditorItemTemplate.ts#L234-L240).
 The concrete `DiffEditor` API owns pane selection so hosts do not need child

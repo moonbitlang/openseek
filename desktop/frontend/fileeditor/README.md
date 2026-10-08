@@ -36,3 +36,10 @@ The model/version/rules-specific structural folding cache never shares mutable
 collapse flags; stored view states remain the authority for user fold choices.
 A late or failed preparation cannot publish the previous file under a new tab.
 The package ships the matching `editor-code-worker.js` beside `frontend.js`.
+
+Semantic review sections may become ready before the whole-file Line worker.
+Viewed hunk coverage remains partial while that complete universe is unknown.
+When fresh file coverage arrives, the exact row/review/surface generation gates
+run before merging it: a file becomes complete only if its stored viewed ranges
+contain every changed range. Late coverage never marks an untouched file or
+restores a hunk the user explicitly unviewed.

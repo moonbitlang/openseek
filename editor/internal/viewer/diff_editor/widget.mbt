@@ -53,6 +53,8 @@ pub struct DiffEditorWidget {
   mut original_alignment_geometry : PaneGeometrySnapshot?
   mut modified_alignment_geometry : PaneGeometrySnapshot?
   mut diff_state : DiffState?
+  priv mut rendered_model_versions : (Int, Int, Int, Int)?
+  priv mut hunk_actions_generation : Int?
   priv line_widgets : Array[MountedDiffLineWidget]
   priv mut line_action : ((Bool, Int) -> Unit)?
   priv mut line_action_allowed : ((Bool, Int) -> Bool)?
@@ -246,6 +248,8 @@ pub fn DiffEditorWidget::create(
     original_alignment_geometry: None,
     modified_alignment_geometry: None,
     diff_state: None,
+    rendered_model_versions: None,
+    hunk_actions_generation: None,
     line_widgets: [],
     line_action: None,
     line_action_allowed: None,
@@ -391,6 +395,14 @@ fn DiffEditorWidget::layout_editors_after_render(
 
 ///|
 fn DiffEditorWidget::install_event_bridges(self : DiffEditorWidget) -> Unit {
+  self.lifetime.push(
+    @base_common.Disposable::from(
+      listen_scroll_intent(self.root.as_event_target(), () => {
+        self.pending_layout_modified_viewport = None
+        self.clear_pending_scroll_echoes()
+      }),
+    ),
+  )
   // Explicit cursor movement restores cursor-relative navigation after a
   // viewport selection; hunk reveals retain their own selected group.
   self.lifetime.push(
@@ -738,6 +750,9 @@ fn DiffEditorWidget::restore_modified_viewport_and_sync_original(
     self.pending_modified_scroll_left_echo = Some(after_left)
   }
   self.sync_scroll_top_to(OriginalScrollPane, after_top)
+  if self.layout_state.actual_layout == Inline {
+    self.shared_scroll_left = after_left
+  }
   self.sync_scroll_left_to(ModifiedScrollPane, self.shared_scroll_left)
   self.sync_scroll_left_to(OriginalScrollPane, self.shared_scroll_left)
 }
@@ -1142,10 +1157,10 @@ fn DiffEditorWidget::sync_overview_ruler_option(
 fn DiffEditorWidget::sync_failure_diagnostic(self : DiffEditorWidget) -> Unit {
   match self.view_model.get_failure_diagnostic() {
     Some(diagnostic) => {
-      let message = if diagnostic == "provider error" {
-        self.localization.text(CannotComputeDiff)
-      } else {
+      let message = if diagnostic == "validator rejection" {
         self.localization.text(InvalidDiff)
+      } else {
+        self.localization.text(CannotComputeDiff)
       }
       self.root.set_attribute("data-diff-failure", diagnostic)
       self.status.remove_attribute("hidden")
@@ -1166,6 +1181,7 @@ fn DiffEditorWidget::commit_empty_diff_features(
   self : DiffEditorWidget,
   generation : Int,
 ) -> Unit {
+  self.rendered_model_versions = None
   let modified_viewport = self.modified_viewport_for_geometry_transaction()
   self.clear_decorations()
   self.original_alignment_zone_ids = replace_alignment_zones(
@@ -1260,6 +1276,7 @@ fn DiffEditorWidget::commit_diff_state(
   }
   self.apply_overview_diff_state(diff_state, generation)
   self.diff_state = Some(diff_state)
+  self.rendered_model_versions = Some(diff_model_versions(model))
   self.sync_failure_diagnostic()
   self.refresh_overview_viewport()
 }
@@ -1349,14 +1366,28 @@ fn DiffEditorWidget::reconcile_view_model(self : DiffEditorWidget) -> Unit {
   }
   self.reconciling_generation += 1
   let generation = self.reconciling_generation
-  guard self.view_model.get_diff() is Some(document_diff) &&
-    self.view_model.get_model() is Some(model) else {
+  guard self.view_model.get_model() is Some(model) else {
     self.commit_empty_diff_features(generation)
-    self.try_reveal_first_diff()
-    self.try_reveal_last_diff()
     return
   }
-  let diff_state = DiffState::from_diff_result(document_diff)
+  let diff_state = match self.view_model.get_diff() {
+    Some(document_diff) => DiffState::from_diff_result(document_diff)
+    None => {
+      // A same-version provider/options recomputation keeps valid geometry
+      // until its worker returns. Content/model changes never reuse old ranges.
+      // The update bridge has already invalidated logical navigation/actions;
+      // do not clear or rebuild the previously committed alignment zones here.
+      if self.view_model.get_state() == Pending &&
+        self.rendered_model_versions == Some(diff_model_versions(model)) {
+        self.sync_failure_diagnostic()
+        return
+      }
+      self.commit_empty_diff_features(generation)
+      self.try_reveal_first_diff()
+      self.try_reveal_last_diff()
+      return
+    }
+  }
   self.commit_diff_state(diff_state, model, generation)
   self.try_reveal_first_diff()
   self.try_reveal_last_diff()
@@ -1556,7 +1587,11 @@ pub fn DiffEditorWidget::get_max_scroll_left(self : DiffEditorWidget) -> Double 
   self.editors.original.get_layout_info().content_width).max(0.0)
   let modified = (self.editors.modified.get_scroll_width() -
   self.editors.modified.get_layout_info().content_width).max(0.0)
-  original.max(modified)
+  if self.layout_state.actual_layout == Inline {
+    modified
+  } else {
+    original.max(modified)
+  }
 }
 
 ///|
@@ -1567,16 +1602,19 @@ pub fn DiffEditorWidget::set_scroll_left(
   self : DiffEditorWidget,
   scroll_left : Double,
 ) -> Unit {
+  self.pending_layout_modified_viewport = None
   let original = self.editors.original.get_scroll_width() -
     self.editors.original.get_layout_info().content_width
   let modified = self.editors.modified.get_scroll_width() -
     self.editors.modified.get_layout_info().content_width
-  if modified > original {
+  if self.layout_state.actual_layout == Inline || modified > original {
     self.editors.modified.set_scroll_left(scroll_left)
     self.shared_scroll_left = self.editors.modified.get_scroll_left()
+    self.sync_scroll_left_to(OriginalScrollPane, self.shared_scroll_left)
   } else {
     self.editors.original.set_scroll_left(scroll_left)
     self.shared_scroll_left = self.editors.original.get_scroll_left()
+    self.sync_scroll_left_to(ModifiedScrollPane, self.shared_scroll_left)
   }
 }
 
@@ -2190,3 +2228,32 @@ pub fn DiffEditorWidget::dispose(self : DiffEditorWidget) -> Unit {
   self.did_reveal_change.dispose()
   self.host.remove_child(self.root.as_node())
 }
+
+///|
+fn diff_model_versions(model : DiffEditorModelData) -> (Int, Int, Int, Int) {
+  (
+    model.original.identity(),
+    model.original.get_version_id(),
+    model.modified.identity(),
+    model.modified.get_version_id(),
+  )
+}
+
+///|
+/// Capture input intent before a child can stop propagation. A layout barrier
+/// may suppress geometry echoes, but must not suppress a new wheel/scrollbar
+/// gesture or keyboard navigation and restore an older anchor over it.
+extern "js" fn listen_scroll_intent(
+  target : @rdom.EventTarget,
+  callback : () -> Unit,
+) -> () -> Unit =
+  #| (target, callback) => {
+  #|   const input = () => callback();
+  #|   const key = event => { if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) callback(); };
+  #|   for (const type of ['wheel', 'pointerdown', 'touchstart']) target.addEventListener(type, input, {capture:true, passive:true});
+  #|   target.addEventListener('keydown', key, true);
+  #|   return () => {
+  #|     for (const type of ['wheel', 'pointerdown', 'touchstart']) target.removeEventListener(type, input, true);
+  #|     target.removeEventListener('keydown', key, true);
+  #|   };
+  #| }

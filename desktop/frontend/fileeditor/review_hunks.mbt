@@ -361,6 +361,17 @@ fn State::accept_active_review_hunk(
     self.review_hunk_surface_generation == surface_generation else {
     return self
   }
+  // Semantic sections can be viewed before the asynchronous whole-file Line
+  // diff settles. Promote their recorded coverage when the verified universe
+  // arrives, rather than requiring the user to toggle the final hunk again.
+  let self = if ready &&
+    file_changes is Some(file_changes) &&
+    self.review_file_progress(change) is Some(ReviewFileInProgress(coverage)) &&
+    coverage.contains(file_changes) {
+    self.set_review_file_progress(change, Some(ReviewFileComplete))
+  } else {
+    self
+  }
   {
     ..self,
     review_hunk_ready: if ready {
