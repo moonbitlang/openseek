@@ -1,6 +1,7 @@
 ///|
 /// Every load state uses the same catalog label as the sidebar. Only an
-/// unlisted conversation needs a temporary label from its local state.
+/// unlisted conversation needs a temporary label from its local state. Fresh
+/// chats keep the same default title before typing and until the first send.
 fn Model::selected_conversation_title(self : Model) -> String {
   guard self.conversation_selection() is Some(selected) else {
     return "SeekMoon"
@@ -19,7 +20,11 @@ fn Model::selected_conversation_title(self : Model) -> String {
   if self.find_conversation(selected.channel, selected.session) is Some(conv) &&
     conv.project() == selected.workspace &&
     conv.record == selected.record {
-    return unlisted_conversation_label(locale=self.locale, conv)
+    return if self.conversation_is_new_chat(conv) {
+      shell_text(self.locale, NewChatLabel)
+    } else {
+      unlisted_conversation_label(locale=self.locale, conv)
+    }
   }
   selected.session
 }
