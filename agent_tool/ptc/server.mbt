@@ -50,6 +50,22 @@ struct Service {
 }
 
 ///|
+/// Metadata persisted in the trace for one image snapshot file.
+priv struct ImageSnapshot {
+  path : String
+  call_index : Int
+  media_type : String
+  bytes : Int
+} derive(ToJson)
+
+///|
+/// Images from one tool call and the metadata for their retained snapshot files.
+priv struct ImageResult {
+  output : @bgjobs.ImageOutput
+  snapshots : Array[ImageSnapshot]
+}
+
+///|
 /// A script's capability and trace, retained by its job after background handoff.
 struct Program {
   // The owning listener: its tools, its stateful-call mutex, its deadlines,
@@ -57,8 +73,7 @@ struct Program {
   service : Service
   token : String
   calls : Array[Json]
-  image_results : Map[Int, @bgjobs.ImageOutput]
-  image_paths : Map[Int, Array[Json]]
+  image_results : Map[Int, ImageResult]
   mut reserved_images : Int
   reservations : Array[Int]
   mut trace_bytes : Int
@@ -272,7 +287,6 @@ pub fn Service::register(
     token,
     calls: [],
     image_results: Map([]),
-    image_paths: Map([]),
     reserved_images: 0,
     reservations: [],
     trace_bytes: 0,
@@ -335,10 +349,10 @@ pub fn Program::env(self : Program) -> Map[String, String] {
 /// Immutable bounded trace, without credentials or transport details.
 pub fn Program::trace(self : Program) -> Json {
   let fields : Map[String, Json] = { "ptc_calls": self.calls.to_json() }
-  let images : Array[Json] = []
+  let images : Array[ImageSnapshot] = []
   for index in 0..<self.calls.length() {
-    if self.image_paths.get(index) is Some(paths) {
-      images.append(paths)
+    if self.image_results.get(index) is Some(result) {
+      images.append(result.snapshots)
     }
   }
   if !images.is_empty() {
@@ -495,19 +509,16 @@ pub fn Program::result(
 /// their metadata together. Retain entries that could not be removed so the
 /// final trace reports only paths still needing cleanup, and retries are safe.
 async fn Program::discard_image_files(self : Program) -> Unit {
-  for paths in self.image_paths.values() {
-    while paths.last() is Some(entry) {
-      guard entry is { "path": String(path), .. } else {
-        fail("invalid PTC image snapshot metadata")
-      }
-      @fs.remove(path) catch {
+  for result in self.image_results.values() {
+    let snapshots = result.snapshots
+    while snapshots.last() is Some(snapshot) {
+      @fs.remove(snapshot.path) catch {
         @os_error.OSError(_) as error if error.is_ENOENT() => ()
         error => raise error
       }
-      ignore(paths.pop())
+      ignore(snapshots.pop())
     }
   }
-  self.image_paths.clear()
 }
 
 ///|
@@ -689,9 +700,9 @@ pub fn Program::image_output(self : Program) -> @bgjobs.ImageOutput {
   let text = StringBuilder()
   let images : Array[@protocol.Image] = []
   for index in 0..<self.calls.length() {
-    if self.image_results.get(index) is Some(output) {
-      text.write_string("\n\{output.content}")
-      images.append(output.images)
+    if self.image_results.get(index) is Some(result) {
+      text.write_string("\n\{result.output.content}")
+      images.append(result.output.images)
     }
   }
   { content: text.to_string(), images, }
@@ -721,7 +732,7 @@ async fn Program::capture_images(
       self.reserved_images -= images.length()
     })
   })
-  let paths : Array[Json] = []
+  let snapshots : Array[ImageSnapshot] = []
   if (self.service.image_directory)() is Some(directory) {
     for image in images {
       let path = "\{directory}/ptc-image-\{@uuid.v7()}"
@@ -735,18 +746,20 @@ async fn Program::capture_images(
       created.push(path)
       defer file.close()
       file.write(image.bytes)
-      paths.push({
-        "path": path,
-        "call_index": index,
-        "media_type": image.media_type,
-        "bytes": image.bytes.length(),
+      snapshots.push({
+        path,
+        call_index: index,
+        media_type: image.media_type,
+        bytes: image.bytes.length(),
       })
     }
   }
   guard !self.closed && !(self.calls[index] is { "status": "interrupted", .. }) else {
     fail("PTC program ended before the image result was retained")
   }
-  self.image_results[index] = { content: text, images: images.copy(), }
-  self.image_paths[index] = paths
+  self.image_results[index] = {
+    output: { content: text, images: images.copy(), },
+    snapshots,
+  }
   (self.on_image_output)(self.image_output())
 }
