@@ -80,12 +80,23 @@ main {
   align-items: center;
   gap: 5px;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 28%;
   white-space: nowrap;
   font-size: var(--font-size-sm);
   color: var(--color-text-faint);
 }
+
+.topbar-workspace-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-workspace > .icon,
+.topbar-workspace-separator {
+  flex-shrink: 0;
+}
+
 .run-status {
   display: inline-flex;
   align-items: center;

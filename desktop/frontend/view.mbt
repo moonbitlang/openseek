@@ -1681,22 +1681,12 @@ fn conversation_header(
   model : Model,
   conv : Conversation,
 ) -> Array[@html.Html] {
-  let items : Array[@html.Html] = []
-  items.push(
-    @html.h1(
-      class="topbar-title",
-      title=session_tooltip(model, conv),
-      model.selected_conversation_title(),
-    ),
-  )
-  // The project this conversation works in. The git branch is not shown here
-  // — it lives in the composer's status row.
   let workspace = conv.project()
-  items.push(
-    @html.span(class="topbar-workspace", title=workspace.path, [
-      icon(icon_folder),
-      @html.text(@resource.label(workspace)),
-    ]),
+  let items = model.conversation_heading(
+    conv.device,
+    model.selected_conversation_title(),
+    session_tooltip(model, conv),
+    Some(workspace),
   )
   items.push(run_indicator(model, conv))
   if conv.turn.usage_tokens > 0 {
@@ -2006,7 +1996,9 @@ fn view(
   let terminal_panel_visible = model.terminal_panel_visible()
   let codex_actions : @codex.PageActions = {
     toggle_terminal,
-    workspace_label: workspace => @resource.label(workspace),
+    conversation_heading: (title, tooltip, workspace) => {
+      model.conversation_heading(model.focused, title, tooltip, workspace)
+    },
     transcript: transcript_html,
     composer: codex_composer_html,
     detail_toggle: model.detail_toggle(dispatch),
@@ -2016,8 +2008,16 @@ fn view(
       match model.chat_column() {
         Transcript(conversation=conv, ..) =>
           conversation_header(dispatch, toggle_terminal, model, conv)
-        _ =>
-          [@html.h1(class="topbar-title", model.selected_conversation_title())]
+        _ => {
+          let title = model.selected_conversation_title()
+          let selected = model.conversation_selection()
+          model.conversation_heading(
+            selected.map_or(model.focused, selected => selected.channel),
+            title,
+            title,
+            selected.map(selected => selected.workspace),
+          )
+        }
       }
     Codex =>
       model.codex.header(

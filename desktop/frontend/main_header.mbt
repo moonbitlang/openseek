@@ -28,3 +28,35 @@ fn Model::selected_conversation_title(self : Model) -> String {
   }
   selected.session
 }
+
+///|
+/// Work conversations show their project before the title. Managed Chats
+/// omit the storage workspace; classification follows the conversation,
+/// independent of which sidebar list the user is browsing.
+fn Model::conversation_heading(
+  self : Model,
+  channel : @interop.ChannelId,
+  title : String,
+  tooltip : String,
+  workspace : @common.Uri?,
+) -> Array[@html.Html] {
+  let items : Array[@html.Html] = []
+  if workspace is Some(workspace) &&
+    !self
+    .device_state(channel)
+    .map_or(false, dev => dev.is_chat_workspace(workspace)) {
+    items.push(
+      @html.span(class="topbar-workspace", title=workspace.path, [
+        icon(icon_folder),
+        @html.span(class="topbar-workspace-label", @resource.label(workspace)),
+        @html.span(
+          class="topbar-workspace-separator",
+          attrs=@html.Attrs::build().aria_hidden("true"),
+          "/",
+        ),
+      ]),
+    )
+  }
+  items.push(@html.h1(class="topbar-title", title=tooltip, title))
+  items
+}

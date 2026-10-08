@@ -471,7 +471,7 @@ fn CodexGitStatus::presentation(
 /// terminal, file-editor, and external-link policy in the root shell.
 pub(all) struct PageActions {
   toggle_terminal : @cmd.Cmd
-  workspace_label : (@common.Uri) -> String
+  conversation_heading : (String, String, @common.Uri?) -> Array[@html.Html]
   // The root shell supplies the one transcript view shared with OpenSeek.
   // Codex owns the normalized items, but no parallel message/activity DOM.
   transcript : @html.Html
@@ -494,7 +494,6 @@ pub fn State::header(
 ) -> Array[@html.Html] {
   // Account actions (sign in/out, the pending sign-in page) live in the
   // Settings page's Codex group; the topbar keeps only the status label.
-  let topbar : Array[@html.Html] = []
   let title = match self.selection {
     CodexDraftTask(_) => ui(locale, NewChat)
     CodexStoredTask(thread) => thread.title.unwrap_or(ui(locale, NewChat))
@@ -508,20 +507,7 @@ pub fn State::header(
     CodexStoredTask(thread) => thread.cwd.unwrap_or(thread.id)
     CodexNoTask => "Codex app-server"
   }
-  topbar.push(
-    // Source selection already lives in the global sidebar. The conversation
-    // title occupies the same topbar slot as an OpenSeek title instead of
-    // growing a second product header inside the shared shell.
-    @html.h1(class="topbar-title", title=tooltip, title),
-  )
-  if workspace is Some(workspace) {
-    topbar.push(
-      @html.span(class="topbar-workspace", title=workspace.path, [
-        icon(icon_folder),
-        @html.text((actions.workspace_label)(workspace)),
-      ]),
-    )
-  }
+  let topbar = (actions.conversation_heading)(title, tooltip, workspace)
   topbar.push(
     @html.div(
       class=if self.is_running() { "run-status accent" } else { "run-status" },
