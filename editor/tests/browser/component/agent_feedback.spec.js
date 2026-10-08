@@ -272,6 +272,14 @@ test('agent feedback: default send, sticky Batch, keyboard focus and IME', async
 
   // Keyboard focus can move into Batch without dismissing an empty input.
   await open(16);
+  // Label text has different native focus ordering from the checkbox itself.
+  const batchLabel = page.locator('.agent-feedback-input-batch span');
+  await batchLabel.click();
+  await expect(batch).toBeChecked();
+  await expect(input).toBeFocused();
+  await batchLabel.click();
+  await expect(batch).not.toBeChecked();
+  await expect(input).toBeFocused();
   await input.press('Tab');
   await expect(batch).toBeFocused();
   await batch.press('Space');

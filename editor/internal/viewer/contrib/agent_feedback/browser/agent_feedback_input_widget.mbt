@@ -122,12 +122,13 @@ fn AgentFeedbackInputWidget::hook_events(
   self.root.add_event_listener("mouseup", event => event.stop_propagation())
   self.root.add_event_listener("click", event => event.stop_propagation())
   self.root.add_event_listener("contextmenu", event => event.stop_propagation())
-  // Mousedown anywhere on the widget that isn't the textarea itself focuses
-  // the textarea (upstream's padding-click handler).
+  // Preserve textarea focus on padding and the non-focusable Batch label.
+  // Otherwise label mousedown blurs an empty draft before its native click
+  // can toggle the checkbox. The checkbox and submit retain native focus.
   self.root.add_event_listener("mousedown", event => {
     event.stop_propagation()
     if !input_event_targets(event, self.textarea) &&
-      !input_event_targets(event, self.batch_label) &&
+      !input_event_targets(event, self.batch) &&
       !input_event_targets(event, self.submit) {
       event.prevent_default()
       @base_browser.focus_prevent_scroll(self.textarea)
