@@ -78,3 +78,36 @@ test "decode rejects malformed arguments and names the offending field" {
   assert_decode_error({ "content": "hello" }, "arguments.path")
   assert_decode_error(Json::null(), "object arguments")
 }
+
+///|
+test "decode accepts filename as an alias and requires agreement" {
+  let inputs : Array[Json] = [
+    { "filename": "note.txt", "content": "hello" },
+    { "path": "note.txt", "filename": "note.txt", "content": "hello" },
+  ]
+  for arguments in inputs {
+    let input = @decode.decode(arguments)
+    assert_eq(input.path, "note.txt")
+    assert_eq(input.content, "hello")
+    assert_true(input.revert_on_parse_errors)
+  }
+  assert_decode_error(
+    { "path": "a.txt", "filename": "b.txt", "content": "hello" },
+    "arguments.path and arguments.filename to match",
+  )
+  for value in [Json::null(), Json(42)] {
+    assert_decode_error(
+      { "filename": value, "content": "hello" },
+      "arguments.filename",
+    )
+    assert_decode_error(
+      { "path": "a.txt", "filename": value, "content": "hello" },
+      "arguments.filename",
+    )
+    assert_decode_error(
+      { "path": value, "filename": "a.txt", "content": "hello" },
+      "arguments.path",
+    )
+  }
+  assert_decode_error({ "filename": "note.txt" }, "arguments.content")
+}

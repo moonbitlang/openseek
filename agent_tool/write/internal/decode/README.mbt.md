@@ -9,11 +9,13 @@ post-write syntax gate stay in the parent package.
 
 | Name | Type | Required | Decoder behavior |
 | --- | --- | --- | --- |
-| `path` | string | yes | Missing or non-string raises `arguments.path`. |
+| `path` | string | unless `filename` is provided | Canonical destination field. Non-string raises `arguments.path`. |
+| `filename` | string | no | Alias for `path`. If both are present, both must be strings with identical values. |
 | `content` | string | yes | Missing or non-string raises `arguments.content`. Empty is valid. |
 | `revert_on_parse_errors` | boolean | no | Defaults to `true`. `null` also means `true`. A non-boolean raises. |
 
-Extra fields are ignored. Non-object JSON raises `object arguments`.
+At least one of `path` or `filename` is required. Conflicting values are rejected
+before any file access. Extra fields are ignored. Non-object JSON raises `object arguments`.
 
 ```mbt check
 ///|
