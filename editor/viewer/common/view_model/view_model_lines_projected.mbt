@@ -2,8 +2,8 @@
 /// The line collection for every view model — Monaco's
 /// `ViewModelLinesFromProjectedModel` (`viewModelLines.ts:60`), which Monaco
 /// uses for all normal editors, wrapping on or off (its
-/// `ViewModelLinesFromModelAsIs` is only the too-large-for-tokenization
-/// escape hatch, which a readonly viewer never needs). Lines that need no
+/// `ViewModelLinesFromModelAsIs` is the too-large-for-tokenization
+/// escape hatch, represented here by implicit identity queries). Lines that need no
 /// mapping project as `Identity` and stay allocation-free; wrapping and
 /// injected text produce per-line `Projected` data.
 pub struct ViewModelLinesFromProjectedModel {
@@ -112,7 +112,17 @@ pub fn ViewModelLinesFromProjectedModel::create_coordinates_converter(
 fn ViewModelLinesFromProjectedModel::construct_lines(
   self : ViewModelLinesFromProjectedModel,
   reset_hidden_areas~ : Bool,
+  reuse_previous? : Bool = false,
 ) -> Unit {
+  if self.model.is_too_large_for_tokenization() {
+    self.hidden_areas_decoration_ids = self.model.delta_decorations(
+      self.hidden_areas_decoration_ids,
+      [],
+    )
+    self.model_line_projections = []
+    self.projected_model_line_line_counts = [0]
+    return
+  }
   let model_line_projections : Array[ModelLineProjection] = []
   let prefix_sums : Array[Int] = [0]
   if reset_hidden_areas {
@@ -129,11 +139,20 @@ fn ViewModelLinesFromProjectedModel::construct_lines(
     wrapping_indent=self.wrapping_indent,
   )
   let line_count = self.model.snapshot.line_count()
+  let no_injections : Array[InjectedText] = []
   for model_line_number in 1..<=line_count {
     computer.add_request(
       model_line_number,
       self.model.snapshot.line_text(model_line_number - 1),
-      injected_text_buckets[model_line_number - 1],
+      injected_text_buckets.get(model_line_number - 1).unwrap_or(no_injections),
+      previous?=if reuse_previous {
+        match self.model_line_projections[model_line_number - 1] {
+          Projected(data, ..) => Some(data)
+          Identity | Hidden => None
+        }
+      } else {
+        None
+      },
     )
   }
   let line_break_data = computer.finalize()
@@ -185,7 +204,7 @@ fn ViewModelLinesFromProjectedModel::construct_lines(
 fn ViewModelLinesFromProjectedModel::ensure_at_least_one_visible_line(
   self : ViewModelLinesFromProjectedModel,
 ) -> Unit {
-  if self.get_view_line_count() == 0 && self.model_line_projections.length() > 0 {
+  if self.get_view_line_count() == 0 && self.projection_count() > 0 {
     self.model_line_projections[0] = self.model_line_projections[0].set_visible(
       true,
     )
@@ -228,6 +247,9 @@ pub fn ViewModelLinesFromProjectedModel::set_hidden_areas(
   self : ViewModelLinesFromProjectedModel,
   ranges : Array[@base_common.Range],
 ) -> Bool {
+  if self.model.is_too_large_for_tokenization() {
+    return false
+  }
   let validated_ranges = ranges.map(r => self.model.validate_range(r))
   let new_ranges = normalize_line_ranges(validated_ranges[:])
 
@@ -255,7 +277,7 @@ pub fn ViewModelLinesFromProjectedModel::set_hidden_areas(
     hidden_areas.length() {
     hidden_area_end + 1
   } else {
-    self.model_line_projections.length() + 2
+    self.projection_count() + 2
   }
   let mut has_visible_line = false
   for i, projection in self.model_line_projections {
@@ -268,7 +290,7 @@ pub fn ViewModelLinesFromProjectedModel::set_hidden_areas(
         hidden_areas.length() {
         hidden_area_end + 1
       } else {
-        self.model_line_projections.length() + 2
+        self.projection_count() + 2
       }
     }
     if line_number >= hidden_area_start && line_number <= hidden_area_end {
@@ -299,12 +321,11 @@ pub fn ViewModelLinesFromProjectedModel::model_position_is_visible(
   self : ViewModelLinesFromProjectedModel,
   model_line_number : Int,
 ) -> Bool {
-  if model_line_number < 1 ||
-    model_line_number > self.model_line_projections.length() {
+  if model_line_number < 1 || model_line_number > self.projection_count() {
     // invalid arguments
     return false
   }
-  self.model_line_projections[model_line_number - 1].is_visible()
+  self.projection_at(model_line_number - 1).is_visible()
 }
 
 ///|
@@ -354,11 +375,13 @@ pub fn ViewModelLinesFromProjectedModel::set_wrapping_settings(
     self.wrapping_indent == wrapping_indent {
     return false
   }
+  let reuse_previous = self.font_info == font_info &&
+    self.wrapping_indent == wrapping_indent
   self.font_info = font_info
   self.wrapping_column = wrapping_column
   self.wrapping_indent = wrapping_indent
-  self.construct_lines(reset_hidden_areas=false)
-  true
+  self.construct_lines(reset_hidden_areas=false, reuse_previous~)
+  !self.model.is_too_large_for_tokenization()
 }
 
 ///|
@@ -407,8 +430,12 @@ pub fn ViewModelLinesFromProjectedModel::on_injected_text_changed(
 pub fn ViewModelLinesFromProjectedModel::get_view_line_count(
   self : ViewModelLinesFromProjectedModel,
 ) -> Int {
-  let prefix_sums = self.projected_model_line_line_counts
-  prefix_sums[prefix_sums.length() - 1]
+  if self.model.is_too_large_for_tokenization() {
+    self.model.snapshot.line_count()
+  } else {
+    let prefix_sums = self.projected_model_line_line_counts
+    prefix_sums[prefix_sums.length() - 1]
+  }
 }
 
 ///|
@@ -429,11 +456,16 @@ fn ViewModelLinesFromProjectedModel::get_view_line_info(
   view_line_number : Int,
 ) -> ViewLineInfo {
   let view_index = self.to_valid_view_line_number(view_line_number) - 1
+  if self.model.is_too_large_for_tokenization() {
+    return {
+      model_line_number: view_index + 1,
+      model_line_wrapped_line_idx: 0,
+    }
+  }
   let prefix_sums = self.projected_model_line_line_counts
   // Greatest model-line index whose first view line is at or before
   // `view_index`.
-  let low = for low = 0, high = self.model_line_projections.length() - 1; low <
-               high; {
+  let low = for low = 0, high = self.projection_count() - 1; low < high; {
     let mid = (low + high + 1) / 2
     if prefix_sums[mid] <= view_index {
       continue mid, high
@@ -456,7 +488,9 @@ pub fn ViewModelLinesFromProjectedModel::get_view_line_content(
   view_line_number : Int,
 ) -> String {
   let info = self.get_view_line_info(view_line_number)
-  self.model_line_projections[info.model_line_number - 1].get_view_line_content(
+  self
+  .projection_at(info.model_line_number - 1)
+  .get_view_line_content(
     self.model,
     info.model_line_number,
     info.model_line_wrapped_line_idx,
@@ -470,9 +504,9 @@ pub fn ViewModelLinesFromProjectedModel::get_view_line_min_column(
   view_line_number : Int,
 ) -> Int {
   let info = self.get_view_line_info(view_line_number)
-  self.model_line_projections[info.model_line_number - 1].get_view_line_min_column(
-    info.model_line_wrapped_line_idx,
-  )
+  self
+  .projection_at(info.model_line_number - 1)
+  .get_view_line_min_column(info.model_line_wrapped_line_idx)
 }
 
 ///|
@@ -482,7 +516,9 @@ pub fn ViewModelLinesFromProjectedModel::get_view_line_max_column(
   view_line_number : Int,
 ) -> Int {
   let info = self.get_view_line_info(view_line_number)
-  self.model_line_projections[info.model_line_number - 1].get_view_line_max_column(
+  self
+  .projection_at(info.model_line_number - 1)
+  .get_view_line_max_column(
     self.model,
     info.model_line_number,
     info.model_line_wrapped_line_idx,
@@ -507,10 +543,10 @@ pub fn ViewModelLinesFromProjectedModel::get_view_line_data(
   view_line_number : Int,
 ) -> ViewLineData {
   let info = self.get_view_line_info(view_line_number)
-  let base_view_line_number = self.projected_model_line_line_counts[info.model_line_number -
-    1] +
-    1
-  self.model_line_projections[info.model_line_number - 1].get_view_line_data(
+  let base_view_line_number = self.prefix_count(info.model_line_number - 1) + 1
+  self
+  .projection_at(info.model_line_number - 1)
+  .get_view_line_data(
     self.model,
     info.model_line_number,
     info.model_line_wrapped_line_idx,
@@ -543,9 +579,8 @@ pub fn ViewModelLinesFromProjectedModel::get_view_lines_data(
   let start = self.get_view_line_info(view_start_line_number)
   let start_model_line_index = start.model_line_number - 1
   let mut view_line_number = view_start_line_number
-  for
-    model_line_index in start_model_line_index..<self.model_line_projections.length() {
-    let projection = self.model_line_projections[model_line_index]
+  for model_line_index in start_model_line_index..<self.projection_count() {
+    let projection = self.projection_at(model_line_index)
     if !projection.is_visible() {
       continue
     }
@@ -561,8 +596,7 @@ pub fn ViewModelLinesFromProjectedModel::get_view_lines_data(
       last_line = true
       remaining_view_line_count = view_end_line_number - view_line_number + 1
     }
-    let base_view_line_number = self.projected_model_line_line_counts[model_line_index] +
-      1
+    let base_view_line_number = self.prefix_count(model_line_index) + 1
     let read_tokens = projection.get_view_lines_data(
       self.model,
       model_line_index + 1,
@@ -610,10 +644,9 @@ pub fn ViewModelLinesFromProjectedModel::injected_text_index_at(
   column : Int,
 ) -> Int {
   let info = self.get_view_line_info(view_line_number)
-  self.model_line_projections[info.model_line_number - 1].injected_text_index_at(
-    info.model_line_wrapped_line_idx,
-    column,
-  )
+  self
+  .projection_at(info.model_line_number - 1)
+  .injected_text_index_at(info.model_line_wrapped_line_idx, column)
 }
 
 ///|
@@ -625,11 +658,9 @@ pub fn ViewModelLinesFromProjectedModel::normalize_position(
   affinity : @model.PositionAffinity,
 ) -> @base_common.Position {
   let info = self.get_view_line_info(position.line_number)
-  self.model_line_projections[info.model_line_number - 1].normalize_position(
-    info.model_line_wrapped_line_idx,
-    position,
-    affinity,
-  )
+  self
+  .projection_at(info.model_line_number - 1)
+  .normalize_position(info.model_line_wrapped_line_idx, position, affinity)
 }
 
 ///|
@@ -641,10 +672,12 @@ pub fn ViewModelLinesFromProjectedModel::convert_view_position_to_model_position
   view_column : Int,
 ) -> @base_common.Position {
   let info = self.get_view_line_info(view_line_number)
-  let input_column = self.model_line_projections[info.model_line_number - 1].get_model_column_of_view_position(
-    info.model_line_wrapped_line_idx,
-    view_column,
-  )
+  let input_column = self
+    .projection_at(info.model_line_number - 1)
+    .get_model_column_of_view_position(
+      info.model_line_wrapped_line_idx,
+      view_column,
+    )
   self.model.validate_position(Position(info.model_line_number, input_column))
 }
 
@@ -692,48 +725,49 @@ pub fn ViewModelLinesFromProjectedModel::convert_model_position_to_view_position
   // that are committed so an early observer cannot index past the old array.
   let input_line_number = valid_position.line_number.clamp(
     min=1,
-    max=self.model_line_projections.length(),
+    max=self.projection_count(),
   )
   let input_column = valid_position.column
   let original_line_index = input_line_number - 1
   let line_index = if below_hidden_ranges {
-    for line_index = original_line_index; line_index <
-       self.model_line_projections.length() &&
-       !self.model_line_projections[line_index].is_visible(); {
+    for line_index = original_line_index; line_index < self.projection_count() &&
+       !self.projection_at(line_index).is_visible(); {
       continue line_index + 1
     } nobreak {
       line_index
     }
   } else {
     for line_index = original_line_index; line_index > 0 &&
-       !self.model_line_projections[line_index].is_visible(); {
+       !self.projection_at(line_index).is_visible(); {
       continue line_index - 1
     } nobreak {
       line_index
     }
   }
   let line_index_changed = line_index != original_line_index
-  if line_index == 0 && !self.model_line_projections[line_index].is_visible() {
+  if line_index == 0 && !self.projection_at(line_index).is_visible() {
     // Could not reach a real line
     return Position(if allow_zero_line_number { 0 } else { 1 }, 1)
   }
-  let delta_line_number = 1 + self.projected_model_line_line_counts[line_index]
+  let delta_line_number = 1 + self.prefix_count(line_index)
   if line_index_changed {
     if below_hidden_ranges {
-      self.model_line_projections[line_index].get_view_position_of_model_position(
-        delta_line_number,
-        1,
-        affinity?,
-      )
+      self
+      .projection_at(line_index)
+      .get_view_position_of_model_position(delta_line_number, 1, affinity?)
     } else {
-      self.model_line_projections[line_index].get_view_position_of_model_position(
+      self
+      .projection_at(line_index)
+      .get_view_position_of_model_position(
         delta_line_number,
         self.model.snapshot.get_line_max_column(line_index + 1),
         affinity?,
       )
     }
   } else {
-    self.model_line_projections[input_line_number - 1].get_view_position_of_model_position(
+    self
+    .projection_at(input_line_number - 1)
+    .get_view_position_of_model_position(
       delta_line_number,
       input_column,
       affinity?,
@@ -783,12 +817,9 @@ pub fn ViewModelLinesFromProjectedModel::convert_model_range_to_view_range(
 /// `ProjectedTextLine::from_injected_text` consumes.
 fn line_injected_text_from_decorations(
   model : @model.TextModel,
-) -> Array[Array[InjectedText]] {
+) -> Map[Int, Array[InjectedText]] {
   let snapshot = model.snapshot
-  let buckets : Array[Array[InjectedText]] = []
-  for _ in 0..<snapshot.line_count() {
-    buckets.push([])
-  }
+  let buckets : Map[Int, Array[InjectedText]] = Map([])
   let entries : Array[(Int, Int, Int, @model.InjectedTextOptions)] = []
   for decoration in model.get_injected_text_decorations() {
     if decoration.options.before is Some(before) &&
@@ -829,7 +860,15 @@ fn line_injected_text_from_decorations(
     let line = (line_number - 1).clamp(min=0, max=snapshot.line_count() - 1)
     let line_text = snapshot.line_text(line)
     let column0 = (column - 1).clamp(min=0, max=line_text.length())
-    buckets[line].push(
+    let bucket = match buckets.get(line) {
+      Some(bucket) => bucket
+      None => {
+        let bucket = []
+        buckets[line] = bucket
+        bucket
+      }
+    }
+    bucket.push(
       InjectedText(
         Position(line, column0),
         options.content(),
@@ -902,4 +941,39 @@ fn injected_text_for_model_line(
     )
   }
   out
+}
+
+///|
+fn ViewModelLinesFromProjectedModel::projection_count(
+  self : ViewModelLinesFromProjectedModel,
+) -> Int {
+  if self.model.is_too_large_for_tokenization() {
+    self.model.snapshot.line_count()
+  } else {
+    self.model_line_projections.length()
+  }
+}
+
+///|
+fn ViewModelLinesFromProjectedModel::projection_at(
+  self : ViewModelLinesFromProjectedModel,
+  index : Int,
+) -> ModelLineProjection {
+  if self.model.is_too_large_for_tokenization() {
+    Identity
+  } else {
+    self.model_line_projections[index]
+  }
+}
+
+///|
+fn ViewModelLinesFromProjectedModel::prefix_count(
+  self : ViewModelLinesFromProjectedModel,
+  index : Int,
+) -> Int {
+  if self.model.is_too_large_for_tokenization() {
+    index
+  } else {
+    self.projected_model_line_line_counts[index]
+  }
 }

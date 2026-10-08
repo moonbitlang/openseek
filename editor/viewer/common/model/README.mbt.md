@@ -1,5 +1,13 @@
 # viewer/common/model
 
+The model-owned `TokenizationLineLimit` defaults to `Characters(20000)`.
+Lines at or above that UTF16 length receive a plain token covering the full
+line and carry their input tokenizer state unchanged, matching VS Code's
+TextMate line-limit wrapper. This bounds a single synchronous tokenizer call;
+the complete text remains available to copy, selection and providers. Hosts
+can explicitly construct a model with `Unlimited`. Shared viewers borrow this
+one policy instead of competing over model token state.
+
 Immutable text snapshots, readonly editor models, guides, and mutable model
 decorations. This is the viewer's reduced `vs/editor/common/model` boundary.
 

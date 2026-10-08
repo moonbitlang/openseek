@@ -6,6 +6,7 @@ struct CodeEditorOptions {
   wrapping_indent : @editor_api.WrappingIndent
   render_whitespace : @editor_api.RenderWhitespace
   render_control_characters : Bool
+  line_rendering_limit : @config.LineRenderingLimit
   render_line_highlight : @editor_api.RenderLineHighlight
   render_line_highlight_only_when_focus : Bool
   /// `renderValidationDecorations`. Product default `On` — Monaco defaults to
@@ -95,6 +96,7 @@ pub fn CodeEditorOptions::CodeEditorOptions(
   wrapping_indent? : @editor_api.WrappingIndent = Same,
   render_whitespace? : @editor_api.RenderWhitespace = Selection,
   render_control_characters? : Bool = true,
+  line_rendering_limit? : @config.LineRenderingLimit = Characters(10000),
   render_line_highlight? : @editor_api.RenderLineHighlight = Line,
   render_line_highlight_only_when_focus? : Bool = false,
   render_validation_decorations? : @editor_api.RenderValidationDecorations = On,
@@ -126,6 +128,7 @@ pub fn CodeEditorOptions::CodeEditorOptions(
     wrapping_indent,
     render_whitespace,
     render_control_characters,
+    line_rendering_limit,
     render_line_highlight,
     render_line_highlight_only_when_focus,
     render_validation_decorations,

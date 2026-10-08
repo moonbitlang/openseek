@@ -46,6 +46,27 @@ fn with_native_render_lines_test_dom(body : () -> Unit raise) -> Unit raise {
 }
 
 ///|
+test "native render_lines applies the display limit without truncating its model" {
+  let text = "x".repeat(10001) + "END"
+  let source = test_model(text, language_id="plaintext")
+  defer source.dispose()
+  let viewer = CodeEditorWidget::CodeEditorWidget()
+  defer viewer.dispose()
+  with_native_render_lines_test_dom(() => {
+    let bounded = viewer.render_lines(source, LineRange(1, 2)).unwrap()
+    let html = native_render_lines_test_html(bounded.dom_node())
+    assert_true(html.contains("mtkoverflow"))
+    assert_false(html.contains("END"))
+    assert_eq(source.get_value(), text)
+    viewer.update_host_options(
+      CodeEditorOptions(line_rendering_limit=Unlimited),
+    )
+    let full = viewer.render_lines(source, LineRange(1, 2)).unwrap()
+    assert_true(native_render_lines_test_html(full.dom_node()).contains("END"))
+  })
+}
+
+///|
 test "native render_lines keeps tokenizer spans and UTF-16 decorations" {
   let viewer = CodeEditorWidget::CodeEditorWidget(
     options=CodeEditorOptions(font_size=12, line_height=18),

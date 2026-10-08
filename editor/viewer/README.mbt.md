@@ -33,6 +33,11 @@ so the first projection uses measured advances and gutter digits. Headless
 widgets retain estimated metrics. The initial-size browser case uses a
 proportional font to ensure the gutter does not change at first model paint.
 
+`ViewerOptions::line_rendering_limit` defaults to `Characters(10000)` for both
+normal view lines and auxiliary `render_lines` output. The renderer's overflow
+marker shows omitted characters; the model stays complete. `Unlimited` is an
+explicit host opt-in. Lexical limits are independently owned by `TextModel`.
+
 ## Diagram embedding
 
 Consumers with their own Markdown parser can use `render_diago_diagram_svg`

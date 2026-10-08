@@ -118,7 +118,7 @@ fn detached_render_line_input(
     space_width=font_info.space_width,
     middot_width=font_info.middot_width,
     wsmiddot_width=font_info.wsmiddot_width,
-    stop_rendering_line_after=-1,
+    stop_rendering_line_after=configuration.options.line_rendering_limit.stop_offset(),
     render_whitespace=configuration.options.render_whitespace,
     render_control_characters=configuration.options.render_control_characters,
     font_ligatures=font_info.font_feature_settings !=

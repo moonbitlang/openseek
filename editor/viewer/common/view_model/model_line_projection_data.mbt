@@ -24,6 +24,7 @@ pub struct ModelLineProjectionData {
   line_length : Int
   projected_line : ProjectedTextLine
   segments : Array[ModelLineProjectionSegment]
+  priv end_visible_column : Double?
 } derive(Eq, Debug)
 
 ///|
@@ -33,8 +34,15 @@ pub fn ModelLineProjectionData::ModelLineProjectionData(
   line_length : Int,
   projected_line : ProjectedTextLine,
   segments : Array[ModelLineProjectionSegment],
+  end_visible_column? : Double,
 ) -> ModelLineProjectionData {
-  { model_line_number, line_length, projected_line, segments, }
+  {
+    model_line_number,
+    line_length,
+    projected_line,
+    segments,
+    end_visible_column,
+  }
 }
 
 ///|
@@ -82,18 +90,17 @@ pub fn ModelLineProjectionData::view_line_index_for_projected_column(
 ) -> Int {
   let column = column.clamp(min=0, max=self.projected_line.text.length())
   let owns_break_offset = affinity is Some(Left)
-  for index in 0..<self.segments.length() {
-    let segment = self.segments[index]
-    let inside = if owns_break_offset {
-      column <= segment.end_offset
+  for low = 0, high = self.segments.length() - 1; low < high; {
+    let mid = (low + high) / 2
+    let end = self.segments[mid].end_offset
+    if column < end || (owns_break_offset && column == end) {
+      continue low, mid
     } else {
-      column < segment.end_offset
+      continue mid + 1, high
     }
-    if inside || index + 1 == self.segments.length() {
-      return index
-    }
+  } nobreak {
+    low
   }
-  self.segments.length() - 1
 }
 
 ///|

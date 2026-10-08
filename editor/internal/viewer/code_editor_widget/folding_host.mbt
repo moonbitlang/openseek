@@ -66,6 +66,9 @@ fn CodeEditorWidget::folding_on_model_changed(self : CodeEditorWidget) -> Unit {
   guard self.is_code_presentation() else { return }
   let options = self.get_options()
   guard options.folding && self.get_model() is Some(model) else { return }
+  if model.is_too_large_for_tokenization() {
+    return
+  }
   let decoration_provider = @folding_browser.FoldingDecorationProvider(
     model,
     owner_id=self.editor_id,

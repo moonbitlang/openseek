@@ -25,7 +25,7 @@ fn expected_view_lines_configuration(
     wsmiddot_width=snapshot.font_info.wsmiddot_width,
     use_monospace_optimizations=snapshot.font_info.is_monospace,
     can_use_halfwidth_rightwards_arrow=snapshot.font_info.can_use_halfwidth_rightwards_arrow,
-    stop_rendering_line_after=-1,
+    stop_rendering_line_after=10000,
     render_whitespace=snapshot.options.render_whitespace,
     render_control_characters=snapshot.options.render_control_characters,
     font_ligatures=snapshot.font_info.font_feature_settings !=

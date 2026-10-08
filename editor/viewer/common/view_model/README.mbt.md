@@ -25,6 +25,20 @@ flowchart TB
 `ViewModelLinesFromProjectedModel` is the projection itself; `ViewModel` is the
 live owner that keeps it in sync with the model and publishes outgoing events.
 
+Plain projected lines retain sparse spans instead of per-character column
+maps; identity column conversions are arithmetic and injected boundaries use
+binary search with the existing left/right affinity. Only a wrapping-column
+change with unchanged font, indent, tab size, content and injections reuses
+previous breaks. Backward tab searches restart from a preceding anchor, and
+surrogate pairs remain indivisible. Extremely narrow columns and degenerate
+previous segments take the complete algorithm to preserve full-computation
+mapping behavior. Lines that fit do not allocate projected text at all.
+
+Models above the construction-fixed 20MiB or 300,000-line tokenization threshold
+use an implicit identity collection: no per-line projection/prefix arrays,
+wrapping, injections or hidden areas. Queries still use the complete current
+snapshot, including after a whole-value flush. Folding uses the same gate.
+
 A wide wrapping column means no wrapping, so view lines and model lines
 correspond one-to-one — the degenerate case worth seeing first.
 

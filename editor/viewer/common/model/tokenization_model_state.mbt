@@ -9,6 +9,7 @@ priv struct TokenizationModelState {
   language_id : String
   attached_count : Ref[Int]
   too_large : Bool
+  line_limit : TokenizationLineLimit
   disposing : Ref[Bool]
   scheduler : Ref[TokenizationScheduler?]
   report_unexpected_error : (String) -> Unit
@@ -25,12 +26,14 @@ fn TokenizationModelState::TokenizationModelState(
   disposing~ : Ref[Bool],
   scheduler~ : Ref[TokenizationScheduler?],
   report_unexpected_error~ : (String) -> Unit,
+  line_limit? : TokenizationLineLimit = Characters(20000),
 ) -> TokenizationModelState {
   {
     snapshot,
     language_id,
     attached_count,
     too_large,
+    line_limit,
     disposing,
     scheduler,
     report_unexpected_error,

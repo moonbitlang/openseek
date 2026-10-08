@@ -536,7 +536,8 @@ fn safe_tokenize(
   model_state : TokenizationModelState,
 ) -> EncodedTokenizationResult {
   let mut result : EncodedTokenizationResult? = None
-  match support {
+  match
+    (if model_state.line_limit.allows(text.length()) { support } else { None }) {
     Some(tokenization_support) =>
       try tokenization_support.tokenize(text, has_eol, state) catch {
         error => (model_state.report_unexpected_error)("\{Repr(error)}")

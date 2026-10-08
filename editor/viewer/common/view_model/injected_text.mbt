@@ -38,25 +38,13 @@ pub struct ProjectedLinePart {
 } derive(Eq, Debug)
 
 ///|
-/// One model line after injected text has been projected into display text,
-/// with column maps in both directions.
-///
-/// Monaco's `ModelLineProjectionData` maps columns with offset arithmetic and
-/// binary search (`translateToOutputPosition` / `translateToInputOffset`);
-/// this type precomputes per-column lookup tables
-/// (`model_to_projected_columns`, `model_columns`) for O(1) `.get()`. The
-/// tables are first-write-wins, so a boundary column resolves to the *left*
-/// of the injections anchored there — exactly Monaco's non-`Right` affinity
-/// behavior; `model_column_to_projected_column` surfaces the `Right` side and
-/// `normalize_projected_column_around_injections` ports the normalization
-/// branches.
+/// One model line with sparse source/injection spans. The identity case owns
+/// no per-character maps; mapping costs depend on injection count, not length.
 pub struct ProjectedTextLine {
   text : String
   model_line_length : Int
-  model_columns : Array[Int]
-  injected_text_indices : Array[Int]
-  model_to_projected_columns : Array[Int]
   parts : Array[ProjectedLinePart]
+  injections : Array[ProjectedLinePart]
 } derive(Eq, Debug)
 
 ///|
@@ -76,56 +64,52 @@ pub fn ProjectedTextLine::from_injected_text(
     return identity_projected_text_line(line_text)
   }
   let builder = StringBuilder()
-  let model_columns : Array[Int] = [0]
-  let injected_text_indices : Array[Int] = []
-  let model_to_projected_columns = initial_model_to_projected_columns(
-    line_text.length(),
-  )
   let parts : Array[ProjectedLinePart] = []
-  let (source_cursor, view_cursor) = for
-    item in normalized
-    source_cursor = 0, view_cursor = 0 {
-    let column = item.position.column.clamp(min=0, max=line_text.length())
-    let (source_cursor, view_cursor) = if column > source_cursor {
-      append_source_text(
-        builder, line_text, source_cursor, column, model_columns, injected_text_indices,
-        model_to_projected_columns, parts, view_cursor,
-      )
-      (column, view_cursor + column - source_cursor)
-    } else {
-      (source_cursor, view_cursor)
+  let injections : Array[ProjectedLinePart] = []
+  let mut source_cursor = 0
+  let mut view_cursor = 0
+  for item in normalized {
+    let column = item.position.column
+    if column > source_cursor {
+      builder.write_view(line_text[source_cursor:column])
+      parts.push({
+        start: view_cursor,
+        end: view_cursor + column - source_cursor,
+        kind: SourceSegment(model_start=source_cursor, model_end=column),
+      })
+      view_cursor += column - source_cursor
+      source_cursor = column
     }
-    append_injected_text(
-      builder, item, column, model_columns, injected_text_indices, parts, view_cursor,
-    )
-    continue source_cursor, view_cursor + item.text.length()
-  } nobreak {
-    (source_cursor, view_cursor)
+    builder.write_string(item.text)
+    let part : ProjectedLinePart = {
+      start: view_cursor,
+      end: view_cursor + item.text.length(),
+      kind: InjectedSegment(
+        model_column=column,
+        injected_text_index=item.source_index,
+        class_name=item.class_name,
+      ),
+    }
+    parts.push(part)
+    injections.push(part)
+    view_cursor = part.end
   }
-  let view_cursor = if source_cursor < line_text.length() {
-    append_source_text(
-      builder,
-      line_text,
-      source_cursor,
-      line_text.length(),
-      model_columns,
-      injected_text_indices,
-      model_to_projected_columns,
-      parts,
-      view_cursor,
-    )
-    view_cursor + line_text.length() - source_cursor
-  } else {
-    view_cursor
+  if source_cursor < line_text.length() {
+    builder.write_view(line_text[source_cursor:])
+    parts.push({
+      start: view_cursor,
+      end: view_cursor + line_text.length() - source_cursor,
+      kind: SourceSegment(
+        model_start=source_cursor,
+        model_end=line_text.length(),
+      ),
+    })
   }
-  fill_unmapped_model_columns(model_to_projected_columns, view_cursor)
   {
     text: builder.to_string(),
     model_line_length: line_text.length(),
-    model_columns,
-    injected_text_indices,
-    model_to_projected_columns,
     parts,
+    injections,
   }
 }
 
@@ -136,33 +120,30 @@ pub fn ProjectedTextLine::from_injected_text(
 /// (`modelLineProjectionData.ts:111-128`): only `Right` resolves a boundary
 /// column to the far side of every injection anchored there; every other
 /// affinity (the `None` default included) stays left of them, which is what
-/// the first-write-wins lookup table already encodes.
+/// sparse offsets preserve.
 pub fn ProjectedTextLine::model_column_to_projected_column(
   self : ProjectedTextLine,
   model_column : Int,
   affinity? : @model.PositionAffinity,
 ) -> Int {
   let column = model_column.clamp(min=0, max=self.model_line_length)
-  // Deliberately not `unwrap_or`: the clamped column always hits the lookup
-  // table, so the fallback must stay off the hot path of this mapping method.
-  let projected = match self.model_to_projected_columns.get(column) {
-    Some(projected_column) => projected_column
-    None => self.text.length()
+  let right = affinity is Some(Right)
+  let index = for low = 0, high = self.injections.length(); low < high; {
+    let mid = (low + high) / 2
+    let anchor = injected_part_anchor(self.injections[mid])
+    if anchor < column || (right && anchor == column) {
+      continue mid + 1, high
+    } else {
+      continue low, mid
+    }
+  } nobreak {
+    low
   }
-  match affinity {
-    Some(Right) =>
-      // Parts are in ascending projected order, so one pass walks every
-      // injection anchored at this model column.
-      for part in self.parts; result = projected {
-        if part.start == result &&
-          part.kind is InjectedSegment(model_column=anchor, ..) &&
-          anchor == column {
-          continue part.end
-        }
-      } nobreak {
-        result
-      }
-    _ => projected
+  if index == 0 {
+    column
+  } else {
+    let part = self.injections[index - 1]
+    column + part.end - injected_part_anchor(part)
   }
 }
 
@@ -246,26 +227,63 @@ pub fn ProjectedTextLine::projected_column_to_model_column(
   projected_column : Int,
 ) -> Int {
   let column = projected_column.clamp(min=0, max=self.text.length())
-  self.model_columns.get(column).unwrap_or(self.model_line_length)
+  let index = self.injection_index_after(column, inclusive_end=true)
+  if index < self.injections.length() {
+    let part = self.injections[index]
+    let anchor = injected_part_anchor(part)
+    if column >= part.start {
+      anchor
+    } else {
+      column - (part.start - anchor)
+    }
+  } else if index > 0 {
+    let part = self.injections[index - 1]
+    column - (part.end - injected_part_anchor(part))
+  } else {
+    column
+  }
 }
 
 ///|
-/// Returns the injected-text source index at a projected display column, or
-/// `-1` for source text.
+/// Legacy source-index API: -1 means source text, including the end column.
 pub fn ProjectedTextLine::injected_text_index_at_projected_column(
   self : ProjectedTextLine,
   projected_column : Int,
 ) -> Int {
   let column = projected_column.clamp(min=0, max=self.text.length())
-  self.injected_text_indices.get(column).unwrap_or(-1)
+  let index = self.injection_index_after(column, inclusive_end=false)
+  if index < self.injections.length() && column >= self.injections[index].start {
+    match self.injections[index].kind {
+      InjectedSegment(injected_text_index~, ..) => injected_text_index
+      SourceSegment(..) => -1
+    }
+  } else {
+    -1
+  }
+}
+
+///|
+fn ProjectedTextLine::injection_index_after(
+  self : ProjectedTextLine,
+  column : Int,
+  inclusive_end~ : Bool,
+) -> Int {
+  for low = 0, high = self.injections.length(); low < high; {
+    let mid = (low + high) / 2
+    let end = self.injections[mid].end
+    if end < column || (!inclusive_end && end == column) {
+      continue mid + 1, high
+    } else {
+      continue low, mid
+    }
+  } nobreak {
+    low
+  }
 }
 
 ///|
 fn identity_projected_text_line(line_text : String) -> ProjectedTextLine {
   let length = line_text.length()
-  let model_columns = Array::makei(length + 1, column => column)
-  let injected_text_indices = Array::make(length, -1)
-  let model_to_projected_columns = Array::makei(length + 1, column => column)
   let parts : Array[ProjectedLinePart] = []
   if length > 0 {
     parts.push({
@@ -274,14 +292,7 @@ fn identity_projected_text_line(line_text : String) -> ProjectedTextLine {
       kind: SourceSegment(model_start=0, model_end=length),
     })
   }
-  {
-    text: line_text,
-    model_line_length: length,
-    model_columns,
-    injected_text_indices,
-    model_to_projected_columns,
-    parts,
-  }
+  { text: line_text, model_line_length: length, parts, injections: [], }
 }
 
 ///|
@@ -304,84 +315,6 @@ fn normalize_injected_text(
     }
   })
   normalized
-}
-
-///|
-fn initial_model_to_projected_columns(line_length : Int) -> Array[Int] {
-  let columns = Array::make(line_length + 1, -1)
-  columns[0] = 0
-  columns
-}
-
-///|
-fn append_source_text(
-  builder : StringBuilder,
-  line_text : String,
-  start_column : Int,
-  end_column : Int,
-  model_columns : Array[Int],
-  injected_text_indices : Array[Int],
-  model_to_projected_columns : Array[Int],
-  parts : Array[ProjectedLinePart],
-  view_cursor : Int,
-) -> Unit {
-  builder.write_view(line_text[start_column:end_column])
-  let mut view = view_cursor
-  for column in start_column..<end_column {
-    injected_text_indices.push(-1)
-    view += 1
-    model_columns.push(column + 1)
-    if model_to_projected_columns[column + 1] < 0 {
-      model_to_projected_columns[column + 1] = view
-    }
-  }
-  parts.push({
-    start: view_cursor,
-    end: view,
-    kind: SourceSegment(model_start=start_column, model_end=end_column),
-  })
-}
-
-///|
-fn append_injected_text(
-  builder : StringBuilder,
-  item : InjectedText,
-  model_column : Int,
-  model_columns : Array[Int],
-  injected_text_indices : Array[Int],
-  parts : Array[ProjectedLinePart],
-  view_cursor : Int,
-) -> Unit {
-  builder.write_string(item.text)
-  let mut view = view_cursor
-  for _ in 0..<item.text.length() {
-    injected_text_indices.push(item.source_index)
-    view += 1
-    model_columns.push(model_column)
-  }
-  parts.push({
-    start: view_cursor,
-    end: view,
-    kind: InjectedSegment(
-      model_column~,
-      injected_text_index=item.source_index,
-      class_name=item.class_name,
-    ),
-  })
-}
-
-///|
-fn fill_unmapped_model_columns(
-  model_to_projected_columns : Array[Int],
-  fallback : Int,
-) -> Unit {
-  for index, projected_column in model_to_projected_columns; last = fallback {
-    if projected_column >= 0 {
-      continue projected_column
-    } else {
-      model_to_projected_columns[index] = last
-    }
-  }
 }
 
 ///|

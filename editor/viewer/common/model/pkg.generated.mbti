@@ -216,7 +216,7 @@ pub struct TextModel {
   on_did_change_decorations : DidChangeDecorationsEmitter
   // private fields
 }
-pub fn TextModel::TextModel(@common.Uri, String, String, Int, String, String) -> Self
+pub fn TextModel::TextModel(@common.Uri, String, String, Int, String, String, tokenization_line_limit? : TokenizationLineLimit) -> Self
 pub fn[T] TextModel::change_decorations(Self, (ModelDecorationsChangeAccessor) -> T, owner_id? : Int) -> T
 pub fn TextModel::delta_decorations(Self, Array[String], Array[ModelDeltaDecoration], owner_id? : Int) -> Array[String]
 pub fn TextModel::dispose(Self) -> Unit
@@ -242,6 +242,7 @@ pub fn TextModel::get_word_at_position(Self, @common.Position) -> WordAtPosition
 pub fn TextModel::has_same_content(Self, String) -> Bool
 pub fn TextModel::identity(Self) -> Int
 pub fn TextModel::is_disposed(Self) -> Bool
+pub fn TextModel::is_too_large_for_tokenization(Self) -> Bool
 pub fn TextModel::on_before_attached(Self, scheduler? : TokenizationScheduler) -> AttachedViewImpl
 pub fn TextModel::on_before_detached(Self, AttachedViewImpl) -> Unit
 pub fn TextModel::on_did_change_content(Self, (ModelContentChangedEvent) -> Unit) -> @common.Disposable
@@ -275,6 +276,14 @@ pub fn TextSnapshot::to_repr(Self) -> @debug.Repr
 
 type TokenizationIdleDeadline
 pub fn TokenizationIdleDeadline::TokenizationIdleDeadline(() -> Double) -> Self
+
+pub(all) enum TokenizationLineLimit {
+  Unlimited
+  Characters(Int)
+} derive(Eq, @debug.Debug)
+pub fn TokenizationLineLimit::equal(Self, Self) -> Bool
+pub fn TokenizationLineLimit::not_equal(Self, Self) -> Bool
+pub fn TokenizationLineLimit::to_repr(Self) -> @debug.Repr
 
 type TokenizationScheduler
 pub fn TokenizationScheduler::TokenizationScheduler(idle~ : ((TokenizationIdleDeadline) -> Unit) -> @common.Disposable, zero_timeout~ : (() -> Unit) -> @common.Disposable, delay~ : (Int, () -> Unit) -> @common.Disposable, now~ : () -> Double) -> Self
