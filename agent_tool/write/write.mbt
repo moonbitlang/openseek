@@ -6,7 +6,8 @@
 /// works without a separate mkdir).
 ///
 /// ## Arguments
-/// - `path` (string, required): filesystem path to write.
+/// - `path` (string, required): filesystem path to write. `filename` is accepted
+///   as an alias; if both are supplied, their values must match.
 /// - `content` (string, required): text to write. The file is truncated
 ///   before writing.
 /// - `revert_on_parse_errors` (boolean, optional, default true): before a new

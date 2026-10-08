@@ -455,3 +455,24 @@ async test "write rejects non-object arguments" {
   assert_eq(output.content, "error: write requires object arguments")
   assert_true(output.is_error)
 }
+
+///|
+async test "write accepts filename through dispatch and rejects conflicting paths" {
+  @vfs.with_tmpdir(dir => {
+    let path = "\{dir}/note.txt"
+    let result = execute_via_boundary({ "filename": path, "content": "hello" })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_false(output.is_error)
+    assert_eq(@fs.read_file(path).text(), "hello")
+    let other = "\{dir}/other.txt"
+    let result = execute_via_boundary({
+      "path": path,
+      "filename": other,
+      "content": "changed",
+    })
+    guard result is Respond(output) else { fail("expected Respond") }
+    assert_true(output.is_error)
+    assert_eq(@fs.read_file(path).text(), "hello")
+    assert_false(@fs.exists(other))
+  })
+}

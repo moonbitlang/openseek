@@ -12,13 +12,27 @@ pub struct WriteInput {
 ///|
 /// Decode `write` tool-call arguments.
 ///
-/// `path` and `content` are required strings; `revert_on_parse_errors` is an
+/// `path` (or its alias `filename`) and `content` are required strings. Both
+/// path fields must agree when supplied together. `revert_on_parse_errors` is an
 /// optional boolean defaulting to `true`. Failures name the first offending
 /// field (e.g. `arguments.content`) so the error fed back to the model says
 /// exactly which argument to fix.
 pub fn decode(arguments : Json) -> WriteInput raise {
+  guard arguments is Object(fields) else { fail("object arguments") }
+  let path = match (fields.get("path"), fields.get("filename")) {
+    (Some(String(path)), None) | (None, Some(String(path))) => path
+    (Some(String(path)), Some(String(filename))) => {
+      guard path == filename else {
+        fail("arguments.path and arguments.filename to match")
+      }
+      path
+    }
+    (Some(String(_)), Some(_)) | (None, Some(_)) =>
+      fail("arguments.filename to be a string")
+    _ => fail("arguments.path")
+  }
   match arguments {
-    { "path": String(path), "content": String(content), .. } => {
+    { "content": String(content), .. } => {
       let revert_on_parse_errors = match arguments {
         { "revert_on_parse_errors": true, .. } => true
         { "revert_on_parse_errors": false, .. } => false
@@ -29,9 +43,7 @@ pub fn decode(arguments : Json) -> WriteInput raise {
       }
       { path, content, revert_on_parse_errors, }
     }
-    { "path": String(_), .. } => fail("arguments.content")
-    Object(_) => fail("arguments.path")
-    _ => fail("object arguments")
+    _ => fail("arguments.content")
   }
 }
 
