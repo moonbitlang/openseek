@@ -59,7 +59,6 @@ struct Program {
   calls : Array[Json]
   image_results : Map[Int, @bgjobs.ImageOutput]
   image_paths : Map[Int, Array[Json]]
-  image_prefix : String
   mut reserved_images : Int
   reservations : Array[Int]
   mut trace_bytes : Int
@@ -274,7 +273,6 @@ pub fn Service::register(
     calls: [],
     image_results: Map([]),
     image_paths: Map([]),
-    image_prefix: @uuid.v7(),
     reserved_images: 0,
     reservations: [],
     trace_bytes: 0,
@@ -725,8 +723,8 @@ async fn Program::capture_images(
   })
   let paths : Array[Json] = []
   if (self.service.image_directory)() is Some(directory) {
-    for part, image in images {
-      let path = "\{directory}/ptc-image-\{self.image_prefix}-\{index}-\{part}"
+    for image in images {
+      let path = "\{directory}/ptc-image-\{@uuid.v7()}"
       let file = @fs.open(
         path,
         mode=WriteOnly,
