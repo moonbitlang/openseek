@@ -79,11 +79,6 @@ fn Doc::visible_diff(self : Doc) -> (String, String)? {
 }
 
 ///|
-fn Doc::shows_diff(self : Doc) -> Bool {
-  self.visible_diff() is Some(_)
-}
-
-///|
 /// VS Code enables workspace-search model decorations only while its Search
 /// view is active. OpenSeek uses the Explorer inventory selection as the same
 /// logical boundary; narrow drill-down deliberately retains Search mode so the
@@ -99,7 +94,7 @@ fn State::editor_search_highlights(
 
 ///|
 /// Whether a requested full diff is still waiting for one textual side. Keep
-/// this distinct from `shows_diff`: the comparison has no model yet,
+/// this distinct from `visible_diff`: the comparison has no model yet,
 /// but revealing the source Viewer while either read settles produces a
 /// source-to-diff flash.
 fn Doc::diff_is_pending(self : Doc) -> Bool {
@@ -116,9 +111,9 @@ fn Doc::diff_is_pending(self : Doc) -> Bool {
 ///|
 /// The surface selected for the current render. A full comparison owns the
 /// diff host from the moment it is requested, including its loading interval;
-/// a settled unavailable comparison falls back to the ordinary file surface.
+/// an unavailable comparison keeps this surface and displays its failure notice.
 fn Doc::uses_diff_surface(self : Doc) -> Bool {
-  self.shows_diff() || self.diff_is_pending()
+  self.review is Some({ view_mode: ReviewDiff, .. })
 }
 
 ///|
@@ -246,6 +241,8 @@ fn show_tab_impl(
     // A deleted change, or a transiently unreadable working file, can still
     // have a useful textual HEAD side. Show that baseline under explicit
     // review chrome; other unavailable cases use the panel notice overlay.
+    TabDeleted if doc.review is None ||
+      doc.review is Some({ view_mode: ReviewSource, .. }) => clear_document()
     TabDeleted | TabReadFailed(_) =>
       match doc.review {
         Some({ baseline: ReviewContent(content), .. }) =>
@@ -2387,9 +2384,6 @@ fn select_review_view_mode(
     doc.review is Some(review) else {
     return (@cmd.none, state)
   }
-  guard view_mode != ReviewSource || review.selected.has_working_tree_file() else {
-    return (@cmd.none, state)
-  }
   let docs = state.docs.copy()
   let next_doc = { ..doc, review: Some({ ..review, view_mode, }), }
   docs[path] = next_doc
@@ -2671,9 +2665,6 @@ fn update_inner(
       let view_mode = match review.view_mode {
         ReviewSource => ReviewDiff
         ReviewDiff => ReviewSource
-      }
-      guard view_mode != ReviewSource || review.selected.has_working_tree_file() else {
-        return (@cmd.none, state)
       }
       let state = if view_mode is ReviewSource {
         let mbti_view_modes = state.mbti_view_modes.copy()
@@ -5292,9 +5283,8 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
   let (_, source) = update(emit, ToggleReviewDiff, preview, ctx)
   assert_true(
     source.docs.get(test_file(deleted_path.0))
-    is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }),
+    is Some({ review: Some({ view_mode: ReviewSource, .. }), .. }),
   )
-  assert_true(source == preview)
   let (_, full_diff_again) = update(emit, ToggleReviewDiff, source, ctx)
   assert_true(
     full_diff_again.docs.get(test_file(deleted_path.0))
@@ -5302,7 +5292,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
   )
 
   // Ordinary and positioned reopens keep deletion reviews, even while HEAD
-  // is pending or after the user explicitly selected the baseline File view.
+  // is pending or after the user explicitly selected the deletion Content view.
   for prior in [loading, preview, source] {
     for range in [None, Some(@common.Range(1, 1, 1, 4))] {
       let (_, reopened) = open_document(

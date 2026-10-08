@@ -1,8 +1,10 @@
 ///|
 priv enum DynamicMessage {
+  DFileDeleted(String)
+  DFileBinary(String)
+  DFileOversized(String)
   DReviewedFiles(Int, Int)
   DLoadingDiff(String)
-  DLoadingBaseline(String)
   DBinaryBaseline(String)
   DLargeBaseline(String)
   DBaselineFailed(String, String)
@@ -30,6 +32,31 @@ priv enum DynamicMessage {
 ///|
 fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
   match (locale, message) {
+    (English, DFileDeleted(name)) => "\{name} was deleted on disk."
+    (SimplifiedChinese, DFileDeleted(name)) => "\{name} 已从磁盘删除。"
+    (TraditionalChinese, DFileDeleted(name)) => "\{name} 已從磁碟刪除。"
+    (Japanese, DFileDeleted(name)) =>
+      "\{name} はディスクから削除されました。"
+    (Spanish, DFileDeleted(name)) => "\{name} se eliminó del disco."
+    (English, DFileBinary(name)) =>
+      "\{name} is a binary file and cannot be previewed."
+    (SimplifiedChinese, DFileBinary(name)) =>
+      "\{name} 为二进制文件，无法预览。"
+    (TraditionalChinese, DFileBinary(name)) =>
+      "\{name} 為二進位制檔案，無法預覽。"
+    (Japanese, DFileBinary(name)) =>
+      "\{name} はバイナリファイルのためプレビューできません。"
+    (Spanish, DFileBinary(name)) =>
+      "\{name} es un archivo binario y no se puede previsualizar."
+    (English, DFileOversized(name)) => "\{name} is too large to preview."
+    (SimplifiedChinese, DFileOversized(name)) =>
+      "\{name} 过大，无法预览。"
+    (TraditionalChinese, DFileOversized(name)) =>
+      "\{name} 過大，無法預覽。"
+    (Japanese, DFileOversized(name)) =>
+      "\{name} は大きすぎるためプレビューできません。"
+    (Spanish, DFileOversized(name)) =>
+      "\{name} es demasiado grande para previsualizarlo."
     (English, DReviewedFiles(reviewed, total)) =>
       "\{reviewed} / \{total} reviewed"
     (SimplifiedChinese, DReviewedFiles(reviewed, total)) =>
@@ -45,16 +72,6 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (SimplifiedChinese, DLoadingDiff(p0)) => "正在加载 \{p0} 的差异…"
     (TraditionalChinese, DLoadingDiff(p0)) => "正在載入 \{p0} 的差異…"
     (Japanese, DLoadingDiff(p0)) => "\{p0} の差分を読み込み中…"
-    (English, DLoadingBaseline(p0)) =>
-      "Loading the review baseline for \{p0}…"
-    (Spanish, DLoadingBaseline(p0)) =>
-      "Cargando la base de revisión de \{p0}…"
-    (SimplifiedChinese, DLoadingBaseline(p0)) =>
-      "正在加载 \{p0} 的审阅基准…"
-    (TraditionalChinese, DLoadingBaseline(p0)) =>
-      "正在載入 \{p0} 的審閱基準…"
-    (Japanese, DLoadingBaseline(p0)) =>
-      "\{p0} のレビュー基準を読み込み中…"
     (English, DBinaryBaseline(p0)) =>
       "The review baseline for \{p0} is binary and cannot be previewed."
     (Spanish, DBinaryBaseline(p0)) =>

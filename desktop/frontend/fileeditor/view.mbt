@@ -474,26 +474,11 @@ fn viewer_notice(
         Some(doc) if state.shows_delayed_diff_loading(doc) =>
           dynamic_text(locale, DLoadingDiff(doc.name.to_string()))
         Some(doc) if doc.diff_is_pending() => ""
+        Some(doc) if doc.uses_diff_surface() =>
+          doc.diff_unavailable_notice(locale~).unwrap_or("")
         Some(doc) =>
           match doc.state {
-            TabDeleted =>
-              match doc.review {
-                Some({ baseline: ReviewLoading, .. }) =>
-                  dynamic_text(locale, DLoadingBaseline(doc.name.to_string()))
-                Some({ baseline: ReviewContent(_), .. }) => ""
-                Some({ baseline: ReviewMissing, .. }) =>
-                  "\{doc.name} was deleted and has no review baseline to preview."
-                Some({ baseline: ReviewBinary, .. }) =>
-                  dynamic_text(locale, DBinaryBaseline(doc.name.to_string()))
-                Some({ baseline: ReviewOversized, .. }) =>
-                  dynamic_text(locale, DLargeBaseline(doc.name.to_string()))
-                Some({ baseline: ReviewFailed(message), .. }) =>
-                  dynamic_text(
-                    locale,
-                    DBaselineFailed(doc.name.to_string(), message.to_string()),
-                  )
-                None => "\{doc.name} was deleted on disk."
-              }
+            TabDeleted => dynamic_text(locale, DFileDeleted(doc.name))
             TabBinary => "\{doc.name} is a binary file and cannot be previewed."
             TabOversized => "\{doc.name} is too large to preview."
             TabReadFailed(message) =>
@@ -525,6 +510,31 @@ fn viewer_notice(
     },
     text,
   )
+}
+
+///|
+/// Only settled failures produce a notice. Loading and a ready comparison
+/// retain the same selected Diff surface without inventing source content.
+fn Doc::diff_unavailable_notice(
+  self : Doc,
+  locale? : @i18n.Locale = English,
+) -> String? {
+  guard self.review is Some({ view_mode: ReviewDiff, baseline, .. }) else {
+    return None
+  }
+  let reason = match (baseline, self.state) {
+    (ReviewBinary, _) => dynamic_text(locale, DBinaryBaseline(self.name))
+    (ReviewOversized, _) => dynamic_text(locale, DLargeBaseline(self.name))
+    (ReviewFailed(message), _) =>
+      dynamic_text(locale, DBaselineFailed(self.name, message))
+    (_, TabBinary) => dynamic_text(locale, DFileBinary(self.name))
+    (_, TabOversized) => dynamic_text(locale, DFileOversized(self.name))
+    (_, TabReadFailed(message)) =>
+      dynamic_text(locale, DReadFailed(self.name, message))
+    (_, TabUnavailable(message)) => message
+    _ => return None
+  }
+  Some(ui(locale, DiffUnavailable) + ": " + reason)
 }
 
 ///|
@@ -2156,7 +2166,6 @@ fn file_view_button(
   label : String,
   active : Bool,
   command : @cmd.Cmd,
-  enabled? : Bool = true,
 ) -> @html.Html {
   @html.button(
     type_="button",
@@ -2165,7 +2174,6 @@ fn file_view_button(
     } else {
       "review-mode-button"
     },
-    disabled=!enabled,
     on_click=command,
     attrs=@html.Attrs::build().aria_pressed(active.to_string()),
     label,
@@ -2208,10 +2216,6 @@ fn file_view_toolbar(
       ),
     )
   }
-  let working_file = match doc.review {
-    Some(review) => review.selected.has_working_tree_file()
-    None => true
-  }
   children.push(
     file_view_button(
       if uses_mbti_presentation(doc.name) ||
@@ -2230,7 +2234,6 @@ fn file_view_toolbar(
       } else {
         @cmd.none
       },
-      enabled=working_file,
     ),
   )
   if doc.review is Some(_) {
@@ -3034,6 +3037,15 @@ fn review_badge(
   let (text, title, action, pressed) = match ctx.active_file {
     Some(path) =>
       match state.docs.get(path) {
+        Some(doc) if doc.diff_unavailable_notice(locale~) is Some(reason) =>
+          (ui(locale, DiffUnavailable), reason, false, false)
+        Some(
+          {
+            state: TabDeleted,
+            review: Some({ view_mode: ReviewSource, .. }),
+            ..
+          }
+        ) => return @html.nothing
         Some(doc) if doc.diff_content() is Some(_) =>
           match doc.review {
             Some({ view_mode: ReviewDiff, .. }) =>

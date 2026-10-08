@@ -313,3 +313,86 @@ test "file view selection remains usable while the baseline is pending" {
   assert_true(diff.docs[file].diff_is_pending())
   assert_true(diff.docs[file].review is Some({ baseline: ReviewLoading, .. }))
 }
+
+///|
+test "a modified Content review stays Content after a deletion refresh" {
+  let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
+  let modified = test_modified_change(path)
+  let deleted = { ..modified, kind: ChangeDeleted, worktree_status: "D", }
+  let docs = owned_state().docs.copy()
+  docs[file] = reviewed_doc(path, modified, view_mode=ReviewSource)
+  let state = { ..owned_state(), docs, }
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
+  let (_, refreshed, _) = reconcile_reviews_after_changes(
+    test_emit(),
+    state,
+    ctx,
+    [modified],
+    [deleted],
+    head=Some("head"),
+    head_changed=false,
+    restart_incomplete=false,
+  )
+  let (_, repeated, _) = reconcile_reviews_after_changes(
+    test_emit(),
+    state,
+    ctx,
+    [modified],
+    [deleted],
+    head=Some("head"),
+    head_changed=false,
+    restart_incomplete=false,
+  )
+  assert_true(refreshed == repeated)
+  assert_true(
+    refreshed[file]
+    is { state: TabDeleted, review: Some({ view_mode: ReviewSource, .. }), .. },
+  )
+  assert_false(refreshed[file].uses_diff_surface())
+  assert_true(state.docs[file].state is TabLoaded(..))
+  let state = { ..state, docs: refreshed, }
+  let (_, diff) = update(test_emit(), ToggleReviewDiff, state, ctx)
+  assert_true(diff.docs[file].uses_diff_surface())
+  let (_, content) = update(test_emit(), ToggleReviewDiff, diff, ctx)
+  assert_true(
+    content.docs[file].review is Some({ view_mode: ReviewSource, .. }),
+  )
+}
+
+///|
+test "unavailable comparisons retain Diff and allow returning to Content" {
+  let path = @pathx.Relative("src/main.mbt")
+  let file = test_file(path.0)
+  let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
+  let doc = reviewed_doc(path, test_modified_change(path))
+  guard doc.review is Some(review) else { fail("missing review fixture") }
+  let cases : Array[(ReviewBaseline, TabState)] = [
+    (ReviewBinary, doc.state),
+    (ReviewOversized, doc.state),
+    (ReviewFailed("baseline denied"), doc.state),
+    (ReviewContent("baseline"), TabBinary),
+    (ReviewContent("baseline"), TabOversized),
+    (ReviewContent("baseline"), TabReadFailed("working denied")),
+    (ReviewLoading, TabUnavailable("checkout unavailable")),
+  ]
+  for (baseline, tab_state) in cases {
+    let docs = owned_state().docs.copy()
+    docs[file] = {
+      ..doc,
+      state: tab_state,
+      review: Some({ ..review, baseline, }),
+    }
+    let state = { ..owned_state(), docs, }
+    assert_true(docs[file].uses_diff_surface())
+    assert_false(docs[file].diff_is_pending())
+    assert_true(docs[file].diff_content() is None)
+    let (_, source) = update(test_emit(), ToggleReviewDiff, state, ctx)
+    let (_, repeated) = update(test_emit(), ToggleReviewDiff, state, ctx)
+    assert_true(source == repeated)
+    assert_false(source.docs[file].uses_diff_surface())
+    let (_, diff) = update(test_emit(), ToggleReviewDiff, source, ctx)
+    assert_true(diff.docs[file].uses_diff_surface())
+    assert_true(diff.docs[file].state == tab_state)
+  }
+}
