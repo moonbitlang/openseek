@@ -206,13 +206,13 @@ pub fn definition(
             on_trace?=on_program_trace,
             on_image_output?=on_program_output,
           )
-          errdefer program.close(discard_images=!program.adopted())
+          errdefer program.close(discard_images=!program.is_in_background())
           let action = run(Some(program)) catch {
             error =>
               @agent_tool.respond("PTC program failed: \{error}", is_error=true)
           }
           // An adopted job owns the registration and closes it at its end.
-          if !program.adopted() {
+          if !program.is_in_background() {
             program.close(discard_images=true)
           }
           program.result(action)

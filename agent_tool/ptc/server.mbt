@@ -372,7 +372,7 @@ pub fn Program::handoff(
 
 ///|
 /// True once a background job owns this registration and its close.
-pub fn Program::adopted(self : Program) -> Bool {
+pub fn Program::is_in_background(self : Program) -> Bool {
   self.job_id is Some(_)
 }
 
@@ -417,7 +417,7 @@ pub async fn Program::close(
     // final trace and a no-op observer.
     self.publishing.acquire()
     defer self.publishing.release()
-    if discard_images && !self.adopted() {
+    if discard_images && !self.is_in_background() {
       @async.with_timeout(5000, () => self.discard_image_files()) catch {
         error =>
           self.trace_error = Some(
@@ -475,7 +475,7 @@ pub fn Program::result(
       if self.trace_error is Some(error) {
         text += "\nPTC finalization failed: \{error}. Calls may have executed; inspect the retained trace."
       }
-      if !self.adopted() {
+      if !self.is_in_background() {
         let image_output = self.image_output()
         text += image_output.content
         images.append(image_output.images)
