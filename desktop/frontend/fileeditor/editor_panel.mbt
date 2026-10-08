@@ -1340,12 +1340,12 @@ fn show_file_in_viewer(
     let same_document = if show_markdown {
       markdown_model is Some(current) &&
       current.model.uri.to_string() == uri.to_string() &&
-      current.model.get_value() == content &&
+      current.model.has_same_content(content) &&
       current.resource_kind == markdown_resource_kind(name)
     } else {
       code_model is Some(current) &&
       current.uri.to_string() == uri.to_string() &&
-      current.get_value() == content
+      current.has_same_content(content)
     }
     let previous_uri = match code_model {
       Some(model) => Some(model.uri)

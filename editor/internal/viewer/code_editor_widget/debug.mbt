@@ -19,6 +19,14 @@ fn debug_on_did_build_view_model(
 let _debug_build_test_seam_anchor : Unit = ignore(debug_on_did_build_view_model)
 
 ///|
+fn CodeEditorWidget::has_view_model_built_listeners(
+  self : CodeEditorWidget,
+) -> Bool {
+  self.did_build_view_model.has_listeners() ||
+  @viewer_testing.has_view_model_built_listeners(self.get_id())
+}
+
+///|
 fn CodeEditorWidget::emit_view_model_built(
   self : CodeEditorWidget,
   observation : @viewer_testing.ViewModelBuiltObservation,

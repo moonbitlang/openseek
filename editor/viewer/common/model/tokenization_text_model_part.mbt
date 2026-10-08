@@ -152,17 +152,12 @@ fn TokenizationTextModelPart::handle_did_change_attached(
 }
 
 ///|
-/// Passive telemetry count. One stored/default read per model line and zero
-/// lexer calls, including initial attach and token-change notification paths.
+/// Passive O(1) telemetry count, maintained where token batches are committed.
 pub fn TokenizationTextModelPart::token_count(
   self : TokenizationTextModelPart,
 ) -> Int {
   self.assert_not_disposed()
-  let mut count = 0
-  for line_number in 1..<=self.model_state.snapshot.val.line_count() {
-    count += self.backend.get_line_tokens(line_number).get_count()
-  }
-  count
+  self.backend.tokens.token_count(self.model_state.snapshot.val.line_count())
 }
 
 ///|

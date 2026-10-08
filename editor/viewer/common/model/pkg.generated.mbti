@@ -239,6 +239,7 @@ pub fn TextModel::get_value(Self) -> String
 pub fn TextModel::get_value_in_range(Self, @common.Range) -> String
 pub fn TextModel::get_version_id(Self) -> Int
 pub fn TextModel::get_word_at_position(Self, @common.Position) -> WordAtPosition?
+pub fn TextModel::has_same_content(Self, String) -> Bool
 pub fn TextModel::identity(Self) -> Int
 pub fn TextModel::is_disposed(Self) -> Bool
 pub fn TextModel::on_before_attached(Self, scheduler? : TokenizationScheduler) -> AttachedViewImpl

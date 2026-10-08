@@ -132,7 +132,9 @@ fn TextSnapshot::get_value_length_in_range(
   self : TextSnapshot,
   range : @base_common.Range,
 ) -> Int {
-  self.get_value_in_range(range).length()
+  let start = self.get_offset_at(range.start_line_number, range.start_column)
+  let end = self.get_offset_at(range.end_line_number, range.end_column)
+  (end - start).max(0)
 }
 
 ///|

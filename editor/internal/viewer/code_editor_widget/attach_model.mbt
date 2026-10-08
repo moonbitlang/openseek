@@ -220,13 +220,15 @@ fn CodeEditorWidget::attach_model(
   self.emit_view_event(ViewFlushed)
   self.apply_view_model_layout(view_model)
   let build_finished = @base_browser.monotonic_now_ms()
-  self.emit_view_model_built({
-    model,
-    line_count: view_model.line_count(),
-    token_count: model.tokenization.token_count(),
-    tokenize_ms: 0.0,
-    build_ms: build_finished - build_started,
-  })
+  if self.has_view_model_built_listeners() {
+    self.emit_view_model_built({
+      model,
+      line_count: view_model.line_count(),
+      token_count: model.tokenization.token_count(),
+      tokenize_ms: 0.0,
+      build_ms: build_finished - build_started,
+    })
+  }
   self.pending_rendered = Some({ model, fresh: true, })
   self.configuration.request_measure()
   self.schedule_render()
@@ -408,13 +410,15 @@ fn CodeEditorWidget::handle_model_tokens_changed(
   _event : @model.ModelTokensChangedEvent,
 ) -> Unit {
   guard self.get_view_model() is Some(view_model) else { return }
-  self.emit_view_model_built({
-    model,
-    line_count: view_model.line_count(),
-    token_count: model.tokenization.token_count(),
-    tokenize_ms: 0.0,
-    build_ms: 0.0,
-  })
+  if self.has_view_model_built_listeners() {
+    self.emit_view_model_built({
+      model,
+      line_count: view_model.line_count(),
+      token_count: model.tokenization.token_count(),
+      tokenize_ms: 0.0,
+      build_ms: 0.0,
+    })
+  }
   let fresh = match self.pending_rendered {
     Some(pending) => pending.fresh
     None => false

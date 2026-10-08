@@ -23,6 +23,13 @@ other UTF-16 unit (including lone surrogates) is retained exactly once.
 `get_value`, lengths, ranges, offsets, positions, provider boundaries, and
 content events therefore all use one coherent UTF-16 coordinate system.
 
+`TextModel::get_value()` returns the stored normalized string directly.
+`has_same_content(raw)` compares host input in that same fixed-LF representation
+without creating another snapshot. Hosts should use it when deciding whether
+to reload, so unchanged CRLF/CR input does not destroy view/decorations state.
+Token counts are maintained by the syntactic store at batch commits; reading
+them does not scan the document or drive tokenization.
+
 ```mbt check
 ///|
 fn doc(text : String) -> @model.TextModel raise {
