@@ -256,12 +256,18 @@ test "blank code lines empty blocks and unclosed fences retain source facts" {
       #|x
       #|
       #|
+      #|
     ),
   )
-  assert_eq(blank_block.code_lines.length(), 3)
+  assert_eq(blank_block.code_lines.length(), 4)
   assert_eq(blank_block.code_lines[0].displayed_text, "")
   assert_eq(blank_block.code_lines[1].displayed_text, "x")
   assert_eq(blank_block.code_lines[2].displayed_text, "")
+  assert_eq(blank_block.code_lines[3].displayed_text, "")
+  assert_eq(
+    blank_block.code_lines[3].source_offset_at_displayed_boundary(0),
+    Some(blank_source.length() - "\n```".length()),
+  )
   assert_eq(
     blank_block.code_lines[0].source_offset_at_displayed_boundary(0),
     Some(

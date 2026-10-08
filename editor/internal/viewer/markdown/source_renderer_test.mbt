@@ -63,8 +63,6 @@ test "source block rendering preserves cmark content and safe rendering" {
 
 ///|
 test "cancelled tasks close strikethrough before the following task" {
-  // cmark 0.4.5 shares the malformed closing tag. Assert the valid structure
-  // directly instead of using its ordinary rendering as the oracle.
   for
     (separator, cancelled, pending) in [
       ("\n", "cancelled <em>item</em>", "pending"),

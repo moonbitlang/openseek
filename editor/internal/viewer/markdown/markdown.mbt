@@ -76,7 +76,16 @@ pub fn render_markdown(
     doc,
     source_mapping~,
   )
-  let code_override = @cmark_renderer.Renderer::new(block=fn(ctx, block) {
+  let node_attributes : @cmark_html.NodeAttributesFn? = if source_mapping {
+    Some(fn(meta, _) { [(MarkdownNodeIdAttribute, "\{meta.id}")] })
+  } else {
+    None
+  }
+  let renderer = @cmark_html.renderer(safe=true, node_attributes?)
+  let block_override = @cmark_renderer.Renderer::new(block=fn(
+    ctx,
+    block,
+  ) raise {
     match block {
       CodeBlock(node) => {
         saw_code_block.val = true
@@ -99,17 +108,20 @@ pub fn render_markdown(
           false
         }
       }
+      ExtMathBlock(node) => {
+        guard source_mapping else { return false }
+        ctx.string(
+          "<div class=\"moonbit-viewer-markdown-source-block\"\{markdown_node_attribute(node.meta.id)}>",
+        )
+        let _ = (renderer.block)(ctx, block)
+        ctx.string("</div>")
+        true
+      }
       _ => false
     }
   })
   markdown_conversion_result(markdown, saw_code_block, projection, () => {
-    let renderer = @cmark_html.renderer(safe=true)
-    let renderer = if source_mapping {
-      renderer.compose(markdown_source_renderer())
-    } else {
-      renderer
-    }
-    renderer.compose(code_override).doc_to_string(doc)
+    renderer.compose(block_override).doc_to_string(doc)
   })
 }
 

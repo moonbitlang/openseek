@@ -6,10 +6,11 @@ The package owns the cmark boundary. One parse with `layout=true` and
 `locs=true` supplies both safe HTML and a `MarkdownDocumentProjection`, so the
 rendered document and its source facts cannot describe different parses.
 The projection retains cmark node IDs and their source ranges. Document callers
-opt into `source_mapping=true`, which writes those IDs onto block elements as
-`data-markdown-node-id` during HTML generation. IDs belong to that parse only;
-feedback and other retained context must save source locations and snapshot
-identity instead of keeping a DOM node ID.
+opt into `source_mapping=true`, which supplies cmark's `node_attributes`
+callback to write those IDs onto block elements as `data-markdown-node-id`
+during HTML generation. cmark owns the HTML layout and attribute escaping.
+IDs belong to that parse only; feedback and other retained context must save
+source locations and snapshot identity instead of keeping a DOM node ID.
 Callers must pass the exact LF-normalized `TextSnapshot::get_value`; this
 package does not create a second coordinate space by normalizing input itself.
 The current cmark inline cleaner cannot safely consume an isolated low
@@ -31,8 +32,9 @@ With source mapping enabled, paragraphs, headings, quotes, lists, tables,
 code blocks, and thematic breaks carry their own node ID. List items, table
 rows, and table cells also carry identities from the same AST, so tight list
 text and individual cells resolve without expanding to the whole container.
-Math text receives one source-bearing wrapper. Blank lines, link definitions, and omitted raw
-HTML have no element to mark. A tight list paragraph has no `<p>`; its `<li>`
+Math text has no cmark attribute callback and receives one package-owned
+source-bearing wrapper. Blank lines, link definitions, and omitted raw HTML
+have no element to mark. A tight list paragraph has no `<p>`; its `<li>`
 owns the item source range.
 Nested paragraphs and code blocks retain their AST identities. A container
 and its sole child can share a cmark ID and the same source range; the
