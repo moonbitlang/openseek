@@ -204,10 +204,7 @@ pub async fn[X] build_tools(
     bg_runtime.output_directory()
   })
   let program_trace : Ref[Json?] = Ref(None)
-  let program_output : Ref[@bgjobs.ImageOutput] = Ref({
-    content: "",
-    images: [],
-  })
+  let program_output : Ref[@bgjobs.ImageOutput?] = Ref(None)
   Tools(
     [
       ..file_tools,
@@ -232,7 +229,7 @@ pub async fn[X] build_tools(
         subrun?=mbtx_subrun,
         program_service~,
         on_program_trace=data => program_trace.val = Some(data),
-        on_program_output=content => program_output.val = content,
+        on_program_output=content => program_output.val = Some(content),
       ),
       // Deliberately NOT told about escalation. It reports a job that already
       // ran — a policy refusal reaches it after minutes of real work — and the

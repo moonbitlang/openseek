@@ -753,14 +753,20 @@ async fn AgentLoop::execute_tool_call(
   }
   errdefer (if self.tools.take_program_trace() is Some(data) {
     @async.protect_from_cancel(() => {
-      let image_output = self.tools.take_program_output()
+      let mut content = "programmatic tool call interrupted or failed"
+      let images = match self.tools.take_program_output() {
+        Some(output) => {
+          content += output.content
+          output.images
+        }
+        None => []
+      }
       self.record_tool_result(
         session,
         tool_call_id=native_call.id,
         tool_name=tool_call.name,
-        content="programmatic tool call interrupted or failed" +
-          image_output.content,
-        images=image_output.images,
+        content~,
+        images~,
         is_error=true,
         data~,
       )
