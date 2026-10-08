@@ -34,7 +34,8 @@ pub(all) enum Presentation {
 pub(all) struct Control {
   id : String
   groups : Array[Group]
-  selected : String
+  // None leaves all rows unselected, allowing each row to act on every click.
+  selected : String?
   disabled : Bool
   open : Bool
   toggle : @cmd.Cmd
@@ -260,12 +261,12 @@ fn Control::option_attrs(
 
 ///|
 pub fn Control::render(self : Control) -> @html.Html {
-  let mut selected_label = self.selected
+  let mut selected_label = self.selected.unwrap_or(self.aria_label)
   let mut selected_index = 0
   let mut option_count = 0
   for group in self.groups {
     for option in group.options {
-      if option.value == self.selected {
+      if self.selected == Some(option.value) {
         selected_label = option.label
         selected_index = option_count
       }
@@ -290,7 +291,7 @@ pub fn Control::render(self : Control) -> @html.Html {
     for group in self.groups {
       let rows : Array[@html.Html] = []
       for option in group.options {
-        let selected = option.value == self.selected
+        let selected = self.selected == Some(option.value)
         // Clicking a row completes the single-choice interaction even when it
         // is already selected. Close in both cases, but only a new value may
         // reach caller update logic as a change.

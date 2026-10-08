@@ -26,7 +26,7 @@ fn SelectMenu::setting_control(
   @select_control.Control::{
     id,
     groups: [{ label: aria_label, options, }],
-    selected,
+    selected: Some(selected),
     disabled,
     open: model.select_menu is Some(menu) && menu == self,
     toggle: dispatch(ToggleSelectMenu(self)),

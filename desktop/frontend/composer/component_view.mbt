@@ -423,8 +423,8 @@ fn Entry::followup_menu(
         },
       ],
       selected: match choice {
-        SteerNow => "steer"
-        QueueNext => "queue"
+        SteerNow => Some("steer")
+        QueueNext => Some("queue")
       },
       disabled: !steer_available || self.image_reads > 0,
       open: self.followup_menu_open,
@@ -457,10 +457,8 @@ fn Entry::add_menu(
         options: [{ value: "images", label: ui(locale, AttachImages), }],
       },
     ],
-    // Every row here is an action, never a current value: leaving `selected`
-    // unmatched keeps every row unmarked and lets a click on any row —
-    // including a repeated one — dispatch its change.
-    selected: "",
+    // With no selected value, each action can be triggered repeatedly.
+    selected: None,
     disabled: false,
     open: self.add_menu_open,
     toggle: emit(AddMenuToggled),
