@@ -70,14 +70,14 @@ async test "PTC background images have durable snapshots separate from trace and
       request(program.env(), "picture", {}) is { "is_error": false, .. },
     )
     program.close()
-    assert_eq(
-      program.image_output(),
-      ("\npicture\npicture", [picture, picture]),
-    )
-    assert_eq(
-      program.image_output(),
-      ("\npicture\npicture", [picture, picture]),
-    )
+    assert_eq(program.image_output(), {
+      content: "\npicture\npicture",
+      images: [picture, picture],
+    })
+    assert_eq(program.image_output(), {
+      content: "\npicture\npicture",
+      images: [picture, picture],
+    })
     guard program.result(@agent_tool.respond("background")) is Respond(output) else {
       fail("expected handoff")
     }
@@ -115,13 +115,16 @@ async test "image persistence errors settle the call without attaching a picture
     for _ in 0..<5 {
       let result = request(program.env(), "picture", {})
       assert_true(result is { "is_error": true, .. })
-      assert_eq(program.image_output(), ("", []))
+      assert_eq(program.image_output(), { content: "", images: [], })
     }
     directory.val = root
     assert_true(
       request(program.env(), "picture", {}) is { "is_error": false, .. },
     )
     program.close()
-    assert_eq(program.image_output(), ("\npicture", [picture]))
+    assert_eq(program.image_output(), {
+      content: "\npicture",
+      images: [picture],
+    })
   })
 }

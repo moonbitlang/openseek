@@ -107,7 +107,7 @@ async test "foreground PTC retires image files and trace paths on success failur
             program_service=service,
             auto_background_after_ms=60000,
             on_program_trace=trace => traces.push(trace),
-            on_program_output=output => retained.val = output.1,
+            on_program_output=output => retained.val = output.images,
           )
           let ending = match outcome {
             "failure" => "fail(\"script failed after image capture\")"

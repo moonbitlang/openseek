@@ -204,7 +204,10 @@ pub async fn[X] build_tools(
     bg_runtime.output_directory()
   })
   let program_trace : Ref[Json?] = Ref(None)
-  let program_output : Ref[(String, Array[@protocol.Image])] = Ref(("", []))
+  let program_output : Ref[@bgjobs.ImageOutput] = Ref({
+    content: "",
+    images: [],
+  })
   Tools(
     [
       ..file_tools,

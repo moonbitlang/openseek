@@ -1,4 +1,17 @@
 ///|
+/// Image attachments and their descriptive text, retained by a PTC program or job.
+pub(all) struct ImageOutput {
+  content : String
+  images : Array[@protocol.Image]
+} derive(Debug, Eq)
+
+///|
+pub extend ImageOutput with Debug::{to_repr}
+
+///|
+pub extend ImageOutput with Eq::{equal, not_equal}
+
+///|
 /// Default retained-output budget for a background job's inline preview, in
 /// characters. Full output beyond this spills to the job's file (see
 /// `ShellOutputSink`).
@@ -140,7 +153,7 @@ priv struct BgJob {
   mut phase : JobPhase
   // Launcher-supplied structured results; frozen to a constant at `CleanedUp`.
   mut data : (() -> Json)?
-  mut image_output : (() -> (String, Array[@protocol.Image]))?
+  mut image_output : (() -> ImageOutput)?
   // A terminal denial scan may read a large retained log. Cache its
   // classification so repeated job_output calls do not repeat that allocation.
   mut denial_scanned : Bool
@@ -152,7 +165,7 @@ priv struct BgJob {
 /// (the first inline-budget characters); the *full* output — when `over_inline_cap`
 /// — is read with `BgJobRuntime::read_output`.
 pub struct BgJobSnapshot {
-  image_output : (String, Array[@protocol.Image])
+  image_output : ImageOutput
   data : Json?
   cleanup_error : String?
   id : String
@@ -350,7 +363,7 @@ pub async fn BgJobRuntime::adopt(
   moonrun_policy_active? : Bool = false,
   on_terminal? : async () -> Unit,
   data? : () -> Json,
-  image_output? : () -> (String, Array[@protocol.Image]),
+  image_output? : () -> ImageOutput,
 ) -> String {
   errdefer exec.request_stop()
   self.prepare_output()
@@ -387,7 +400,7 @@ async fn BgJobRuntime::register(
   moonrun_policy_active~ : Bool,
   on_terminal~ : (async () -> Unit)?,
   data~ : (() -> Json)?,
-  image_output~ : (() -> (String, Array[@protocol.Image]))?,
+  image_output~ : (() -> ImageOutput)?,
 ) -> Unit {
   self.jobs[id] = {
     id,
@@ -455,9 +468,9 @@ fn BgJob::to_snapshot(self : BgJob, persistent_logs : Bool) -> BgJobSnapshot {
       bg_status(self.exec.status())
     },
     data: self.data.map(get => get()),
-    image_output: self.image_output.map_or(("", []), get => {
-      let (text, images) = get()
-      (text, images.copy())
+    image_output: self.image_output.map_or({ content: "", images: [], }, get => {
+      let output = get()
+      { content: output.content, images: output.images.copy(), }
     }),
     cleanup_error: self.cleanup_error,
     output: self.exec.head(),

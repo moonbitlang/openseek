@@ -17,7 +17,6 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async/os_error",
   "moonbitlang/openseek_protocol/emit",
-  "moonbitlang/openseek_protocol" @protocol,
 }
 
 // The bundled workflows run from this embedded copy; `share/workflow/` stays

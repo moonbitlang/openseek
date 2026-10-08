@@ -131,7 +131,7 @@ pub fn definition(
   subrun? : @host.SubrunInjection,
   program_service? : @ptc.Service,
   on_program_trace? : (Json) -> Unit,
-  on_program_output? : ((String, Array[@protocol.Image])) -> Unit,
+  on_program_output? : (@bgjobs.ImageOutput) -> Unit,
 ) -> @agent_tool.AgentToolDefinition {
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.

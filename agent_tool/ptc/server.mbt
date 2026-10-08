@@ -57,7 +57,7 @@ struct Program {
   service : Service
   token : String
   calls : Array[Json]
-  image_results : Map[Int, (String, Array[@protocol.Image])]
+  image_results : Map[Int, @bgjobs.ImageOutput]
   image_paths : Map[Int, Array[Json]]
   image_prefix : String
   mut reserved_images : Int
@@ -66,7 +66,7 @@ struct Program {
   active : Map[Int, @async.Task[Json]]
   mut closed : Bool
   mut on_trace : async (Json) -> Unit
-  mut on_image_output : ((String, Array[@protocol.Image])) -> Unit
+  mut on_image_output : (@bgjobs.ImageOutput) -> Unit
   // Publications run one at a time and snapshot the trace only once they hold
   // this, so a slow observer can never deliver a stale snapshot after a later
   // one; `close` takes it last and its final publish is therefore final.
@@ -258,7 +258,7 @@ pub async fn[X] Service::start(
 pub fn Service::register(
   self : Service,
   on_trace? : (Json) -> Unit = _ => (),
-  on_image_output? : ((String, Array[@protocol.Image])) -> Unit = _ => (),
+  on_image_output? : (@bgjobs.ImageOutput) -> Unit = _ => (),
 ) -> Program raise {
   guard !self.closed else { fail("PTC service is closed") }
   guard self.programs.length() < MaxPrograms else {
@@ -476,9 +476,9 @@ pub fn Program::result(
         text += "\nPTC finalization failed: \{error}. Calls may have executed; inspect the retained trace."
       }
       if !self.adopted() {
-        let (image_text, attached_images) = self.image_output()
-        text += image_text
-        images.append(attached_images)
+        let image_output = self.image_output()
+        text += image_output.content
+        images.append(image_output.images)
       }
       @agent_tool.respond(
         text,
@@ -687,18 +687,16 @@ async fn Program::deliver_trace(self : Program) -> Unit {
 ///|
 /// Successful nested images, in call submission order. Repeated reads retain
 /// the same bytes, including after the program has closed or was cancelled.
-pub fn Program::image_output(
-  self : Program,
-) -> (String, Array[@protocol.Image]) {
+pub fn Program::image_output(self : Program) -> @bgjobs.ImageOutput {
   let text = StringBuilder()
   let images : Array[@protocol.Image] = []
   for index in 0..<self.calls.length() {
-    if self.image_results.get(index) is Some((description, result)) {
-      text.write_string("\n\{description}")
-      images.append(result)
+    if self.image_results.get(index) is Some(output) {
+      text.write_string("\n\{output.content}")
+      images.append(output.images)
     }
   }
-  (text.to_string(), images)
+  { content: text.to_string(), images, }
 }
 
 ///|
@@ -750,7 +748,7 @@ async fn Program::capture_images(
   guard !self.closed && !(self.calls[index] is { "status": "interrupted", .. }) else {
     fail("PTC program ended before the image result was retained")
   }
-  self.image_results[index] = (text, images.copy())
+  self.image_results[index] = { content: text, images: images.copy(), }
   self.image_paths[index] = paths
   (self.on_image_output)(self.image_output())
 }

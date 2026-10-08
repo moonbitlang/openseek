@@ -282,7 +282,7 @@ struct Tools {
   /// Shared execution registry, also used by the loop for wait/finish decisions.
   background_jobs : @bgjobs.BgJobRuntime?
   program_trace : Ref[Json?]
-  program_output : Ref[(String, Array[@protocol.Image])]
+  program_output : Ref[@bgjobs.ImageOutput]
   image_input_supported : Ref[Bool]
 }
 
@@ -295,7 +295,7 @@ pub fn Tools::Tools(
   definitions : Array[AgentToolDefinition],
   background_jobs? : @bgjobs.BgJobRuntime,
   program_trace? : Ref[Json?] = Ref(None),
-  program_output? : Ref[(String, Array[@protocol.Image])] = Ref(("", [])),
+  program_output? : Ref[@bgjobs.ImageOutput] = Ref({ content: "", images: [], }),
   image_input_supported? : Ref[Bool] = Ref(false),
 ) -> Tools raise {
   let by_name : Map[String, AgentToolDefinition] = Map([])
@@ -479,11 +479,9 @@ pub fn AgentToolDefinition::can_request_approval(
 
 ///|
 /// Take completed foreground PTC images when persisting an interrupted call.
-pub fn Tools::take_program_output(
-  self : Tools,
-) -> (String, Array[@protocol.Image]) {
+pub fn Tools::take_program_output(self : Tools) -> @bgjobs.ImageOutput {
   let output = self.program_output.val
-  self.program_output.val = ("", [])
+  self.program_output.val = { content: "", images: [], }
   output
 }
 

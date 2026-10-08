@@ -94,13 +94,13 @@ pub struct ToolOutput {
 } derive(@debug.Debug)
 
 type Tools
-pub fn Tools::Tools(Array[AgentToolDefinition], background_jobs? : @bgjobs.BgJobRuntime, program_trace? : @ref.Ref[Json?], program_output? : @ref.Ref[(String, Array[@openseek_protocol.Image])], image_input_supported? : @ref.Ref[Bool]) -> Self raise
+pub fn Tools::Tools(Array[AgentToolDefinition], background_jobs? : @bgjobs.BgJobRuntime, program_trace? : @ref.Ref[Json?], program_output? : @ref.Ref[@bgjobs.ImageOutput], image_input_supported? : @ref.Ref[Bool]) -> Self raise
 pub fn Tools::background_job_runtime(Self) -> @bgjobs.BgJobRuntime?
 pub fn Tools::find(Self, String) -> AgentToolDefinition?
 pub fn Tools::function_tools(Self) -> Array[@deepseek.ToolDefinition]
 pub fn Tools::program_tools(Self) -> Self raise
 pub fn Tools::set_image_input_supported(Self, Bool) -> Unit
-pub fn Tools::take_program_output(Self) -> (String, Array[@openseek_protocol.Image])
+pub fn Tools::take_program_output(Self) -> @bgjobs.ImageOutput
 pub fn Tools::take_program_trace(Self) -> Json?
 
 // Type aliases

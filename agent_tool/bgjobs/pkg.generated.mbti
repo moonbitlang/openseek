@@ -3,6 +3,7 @@ package "moonbitlang/openseek/agent_tool/bgjobs"
 
 import {
   "moonbitlang/async/process",
+  "moonbitlang/core/debug",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool/internal/sandbox",
   "moonbitlang/openseek/agent_tool/shell_exec",
@@ -16,7 +17,7 @@ import {
 // Types and methods
 type BgJobRuntime
 pub fn[X] BgJobRuntime::BgJobRuntime(@agent_runtime.AgentTaskScope[X], spill_dir? : String, persistent_logs? : Bool, prepare_output_dir? : async () -> String, hard_output_cap? : Int, hard_timeout_ms? : Int, on_job_exit? : (BgJobSnapshot) -> Unit, on_job_event? : (@openseek_protocol.JobEventKind, @openseek_protocol.JobRecord) -> Unit) -> Self
-pub async fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, description? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit, data? : () -> Json, image_output? : () -> (String, Array[@openseek_protocol.Image])) -> String
+pub async fn BgJobRuntime::adopt(Self, @shell_exec.ShellExecution, command~ : String, description? : String, sandboxed_command? : @sandbox.SandboxedCommand, read_only_review? : Bool, output_rewrites? : Array[(String, String)], moonrun_policy_active? : Bool, on_terminal? : async () -> Unit, data? : () -> Json, image_output? : () -> ImageOutput) -> String
 pub async fn BgJobRuntime::finalize(Self) -> Unit
 pub fn BgJobRuntime::generation(Self) -> String
 pub fn BgJobRuntime::list(Self) -> Array[BgJobSnapshot]
@@ -34,7 +35,7 @@ pub async fn BgJobRuntime::terminal_denial_feedback(Self, String) -> String?
 pub async fn BgJobRuntime::wait_any(Self, Array[String]) -> Unit
 
 pub struct BgJobSnapshot {
-  image_output : (String, Array[@openseek_protocol.Image])
+  image_output : ImageOutput
   data : Json?
   cleanup_error : String?
   id : String
@@ -60,6 +61,14 @@ pub enum BgJobStatus {
   Exited(Int)
   Stopped
 } derive(Eq)
+
+pub(all) struct ImageOutput {
+  content : String
+  images : Array[@openseek_protocol.Image]
+} derive(Eq, @debug.Debug)
+pub fn ImageOutput::equal(Self, Self) -> Bool
+pub fn ImageOutput::not_equal(Self, Self) -> Bool
+pub fn ImageOutput::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 
