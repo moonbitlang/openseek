@@ -1,20 +1,20 @@
 ///|
-/// Header contents for the persistent main topbar. The return action always
-/// occupies its trailing action slot, independent of page-local navigation.
+/// Header contents for the persistent main topbar. The return arrow precedes
+/// the page title, independent of page-local navigation.
 pub fn header(
   title : String,
   return_label : String,
   return_action : @cmd.Cmd,
 ) -> Array[@html.Html] {
   [
+    @html.button(
+      class="icon-button management-page-return",
+      title=return_label,
+      attrs=@html.Attrs::build().aria_label(return_label),
+      on_click=return_action,
+      @icons.icon(@icons.icon_arrow_left),
+    ),
     @html.h1(class="topbar-title", title),
-    @html.div(class="management-page-actions", [
-      @html.button(
-        class="button secondary management-page-return",
-        on_click=return_action,
-        return_label,
-      ),
-    ]),
   ]
 }
 

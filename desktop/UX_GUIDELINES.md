@@ -151,10 +151,11 @@ the removal of unnecessary decisions, not the removal of necessary truth.
 ## Independent management pages
 
 Settings, Skills, and Scheduled tasks share a persistent shell header, one
-scrolling content column, and a labeled **Return to work** action in the
-header's trailing action slot. Keep the return action visible while the page
-scrolls and in narrow layouts. Page-specific actions live with their content;
-they do not displace the shared return action.
+scrolling content column, and a borderless back-arrow button before the page
+title. Give the arrow the tooltip and accessible name **Back to conversation**;
+do not display that label as a text button. Keep the arrow visible while the
+page scrolls and in narrow layouts. Page-specific actions live with their
+content; they do not displace the shared return action.
 
 Entering a management page retains the current OpenSeek Chat or Codex work
 surface. Switching between management pages keeps that origin. Returning
@@ -170,8 +171,8 @@ that current state, never resurrect a removed conversation from a saved copy.
 
 Local navigation remains distinct: **Back to skills** returns from a skill's
 details to its list; **Close log** and **Cancel editing** affect only the
-Scheduled tasks page. **Return to work** leaves the management page and keeps
-its local state available on a later visit.
+Scheduled tasks page. **Back to conversation** leaves the management page and
+keeps its local state available on a later visit.
 
 Future independent management pages must use the shared `page_shell` header
 and body, participate in root return navigation, and define their no-origin
