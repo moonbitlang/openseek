@@ -17,6 +17,8 @@ extern "js" fn install_markdown_comment_browser_test_dom() -> MarkdownCommentBro
   #|     frames: [],
   #|     observers: [],
   #|     hiddenMeasureCount: 0,
+  #|     elements: [],
+  #|     hiddenBatchSizes: [],
   #|   };
   #|
   #|   class TestStyle {
@@ -45,6 +47,7 @@ extern "js" fn install_markdown_comment_browser_test_dom() -> MarkdownCommentBro
   #|   class TestElement extends EventTarget {
   #|     constructor(ownerDocument, tag) {
   #|       super();
+  #|       harness.elements.push(this);
   #|       this.ownerDocument = ownerDocument;
   #|       this.nodeType = 1;
   #|       this.nodeName = tag.toUpperCase();
@@ -67,6 +70,10 @@ extern "js" fn install_markdown_comment_browser_test_dom() -> MarkdownCommentBro
   #|       const outer = this.parentNode;
   #|       if (!this.__hiddenHeights || outer?.style.getPropertyValue('display') !== 'block') return 0;
   #|       harness.hiddenMeasureCount += 1;
+  #|       harness.hiddenBatchSizes.push(harness.elements.filter(element =>
+  #|         element.getAttribute('class') === 'moonbit-viewer-markdown-comment' &&
+  #|         element.style.getPropertyValue('display') === 'block' &&
+  #|         element.style.getPropertyValue('visibility') === 'hidden').length);
   #|       const width = Math.trunc(outer.getBoundingClientRect().width);
   #|       return this.__hiddenHeights.get(width) ?? 0;
   #|     }
@@ -338,6 +345,11 @@ extern "js" fn markdown_comment_test_outer_style(
 extern "js" fn markdown_comment_test_hidden_measure_count(
   harness : MarkdownCommentBrowserTestHarness,
 ) -> Int = "harness => harness.hiddenMeasureCount"
+
+///|
+extern "js" fn markdown_comment_test_hidden_batch_sizes(
+  harness : MarkdownCommentBrowserTestHarness,
+) -> FixedArray[Int] = "harness => harness.hiddenBatchSizes"
 
 ///|
 extern "js" fn markdown_comment_test_disconnect_count(
@@ -651,6 +663,58 @@ test "size observation coalesces and reports positive changed integer heights" {
   lifetime.dispose()
   lifetime.dispose()
   assert_eq(markdown_comment_test_disconnect_count(harness), 1)
+}
+
+///|
+test "hidden comment heights batch writes before reads and yield after 32 callbacks" {
+  let harness = install_markdown_comment_browser_test_dom()
+  defer harness.dispose()
+  let doms = Array::makei(80, i => MarkdownCommentDom(i + 1, i + 2))
+  for dom in doms {
+    markdown_comment_test_mount_offscreen(
+      dom.outer,
+      dom.content,
+      400,
+      24,
+      200,
+      48,
+    )
+    |> ignore
+  }
+  let styles = doms.map(dom => markdown_comment_test_outer_style(dom.outer))
+  let heights : Array[Int] = []
+  let restored : Array[Bool] = []
+  let observers = doms.map(dom => {
+    dom.observe_size(height => {
+      heights.push(height)
+      restored.push(
+        doms
+        .mapi((i, dom) => {
+          markdown_comment_test_outer_style(dom.outer) == styles[i]
+        })
+        .all(value => value),
+      )
+    })
+  })
+  defer (for observer in observers {
+    observer.dispose()
+  })
+  for observer in observers {
+    observer.request_measure()
+  }
+  assert_eq(markdown_comment_test_pending_frame_count(harness), 1)
+  markdown_comment_test_flush_frame(harness)
+  assert_eq(heights.length(), 32)
+  // Before the first layout read, all 32 temporary outer styles are written.
+  assert_eq(markdown_comment_test_hidden_batch_sizes(harness)[0], 32)
+  assert_eq(markdown_comment_test_pending_frame_count(harness), 1)
+  markdown_comment_test_flush_frame(harness)
+  assert_eq(heights.length(), 64)
+  markdown_comment_test_flush_frame(harness)
+  assert_eq(heights.length(), 80)
+  assert_true(heights.all(height => height == 24))
+  assert_true(restored.all(value => value))
+  assert_eq(markdown_comment_test_pending_frame_count(harness), 0)
 }
 
 ///|

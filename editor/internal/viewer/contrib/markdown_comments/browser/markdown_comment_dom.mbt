@@ -301,24 +301,19 @@ pub fn MarkdownCommentDom::observe_size(
   let mut frame_scheduled = false
   let mut force_hidden_measure = false
   let mut pending_frame : @base_common.Disposable? = None
-  let mut last_height = 0
-  let measure = () => {
+  let mut last_height : Int? = None
+  let priority = Ref(false)
+  let measure = (height : Int) => {
     frame_scheduled = false
     pending_frame = None
     if disposed.val || !@base_browser.element_is_connected(self.content) {
       return
     }
-    let allow_hidden = force_hidden_measure || last_height == 0
     force_hidden_measure = false
-    let height = markdown_comment_measured_height(
-      self.outer,
-      self.content,
-      allow_hidden,
-    )
-    if height <= 0 || height == last_height {
+    if height <= 0 || last_height == Some(height) {
       return
     }
-    last_height = height
+    last_height = Some(height)
     on_height_changed(height)
   }
   let schedule_measure = (force_hidden : Bool) => {
@@ -326,11 +321,20 @@ pub fn MarkdownCommentDom::observe_size(
       return
     }
     force_hidden_measure = force_hidden_measure || force_hidden
+    if self.outer.has_attribute("monaco-visible-view-zone") {
+      priority.val = true
+    }
     if frame_scheduled {
       return
     }
     frame_scheduled = true
-    let registration = @base_browser.schedule_at_next_animation_frame(measure)
+    let registration = queue_markdown_height(
+      self.outer,
+      self.content,
+      () => force_hidden_measure || last_height is None,
+      priority,
+      measure,
+    )
     // Native requestAnimationFrame is asynchronous, but retaining this branch
     // makes the owner correct under a synchronous test/browser shim too.
     if frame_scheduled {
