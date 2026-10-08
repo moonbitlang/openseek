@@ -39,7 +39,9 @@ fn SelectMenu::setting_control(
 }
 
 ///|
-fn conversation_title(
+/// Temporary label shared by the sidebar and header before the host lists
+/// this conversation. Listed records always use the host's resolved title.
+fn unlisted_conversation_label(
   locale? : @i18n.Locale = English,
   conv : Conversation,
 ) -> String {
@@ -248,7 +250,7 @@ fn Model::push_group_component_inputs(
           conv.pending_prompt is None {
           shell_text(self.locale, NewChatLabel)
         } else {
-          conversation_title(locale=self.locale, conv)
+          unlisted_conversation_label(locale=self.locale, conv)
         },
       ),
       workspace,
@@ -267,19 +269,10 @@ fn Model::push_group_component_inputs(
   // Sub-run transcripts fold under the conversation that launched them: they
   // are that turn's evidence, not conversations of their own. They ride the
   // parent's component input, so their disclosure state lives in the
-  // conversation component. A label follows the live conversation while it
-  // is the one on screen (its title settles at the first send), and
-  // otherwise comes from the host's listing.
+  // conversation component. Listed records keep the host's resolved label;
+  // the unlisted records above already carry their temporary local label.
   for tree in @transcript.session_tree(items) {
-    let parent_label = if tree.item.title is Some(title) && !title.is_blank() {
-      title
-    } else if self.find_conversation(dev.channel, tree.item.id) is Some(conv) &&
-      dev.channel == self.focused &&
-      tree.item.id == self.active_session {
-      conversation_title(locale=self.locale, conv)
-    } else {
-      session_item_label(tree.item)
-    }
+    let parent_label = session_item_label(tree.item)
     let children : Array[@conversation.Input] = []
     for child in tree.children {
       // The ordinal leads the row: it is what the transcript's sub-run
@@ -1693,7 +1686,7 @@ fn conversation_header(
     @html.h1(
       class="topbar-title",
       title=session_tooltip(model, conv),
-      conversation_title(locale=model.locale, conv),
+      model.selected_conversation_title(),
     ),
   )
   // The project this conversation works in. The git branch is not shown here
@@ -1734,7 +1727,7 @@ fn conversation_header(
           OpenExport({
             session: conv.session_id,
             workspace: workspace.path,
-            title: conversation_title(locale=model.locale, conv),
+            title: model.selected_conversation_title(),
             archived: conv.is_archived_read_only(),
           }),
         ),
@@ -2024,7 +2017,7 @@ fn view(
         Transcript(conversation=conv, ..) =>
           conversation_header(dispatch, toggle_terminal, model, conv)
         _ =>
-          [@html.h1(class="topbar-title", model.pending_conversation_title())]
+          [@html.h1(class="topbar-title", model.selected_conversation_title())]
       }
     Codex =>
       model.codex.header(
