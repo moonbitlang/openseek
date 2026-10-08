@@ -254,7 +254,8 @@ async test "mbtx runs a pure-core probe" {
     content=(
       #|Respond(
       #|  {
-      #|    content: Content([Text("[1, 4, 9]\n")]),
+      #|    content: "[1, 4, 9]\n",
+      #|    images: [],
       #|    is_error: false,
       #|    brief: None,
       #|    data: None,
@@ -294,7 +295,8 @@ async test "mbtx reads a workspace file" {
       content=(
         #|Respond(
         #|  {
-        #|    content: Content([Text("lines=2\n")]),
+        #|    content: "lines=2\n",
+        #|    images: [],
         #|    is_error: false,
         #|    brief: None,
         #|    data: None,
@@ -321,7 +323,8 @@ async test "mbtx accepts an explicit target" {
     content=(
       #|Respond(
       #|  {
-      #|    content: Content([Text("42\n")]),
+      #|    content: "42\n",
+      #|    images: [],
       #|    is_error: false,
       #|    brief: None,
       #|    data: None,

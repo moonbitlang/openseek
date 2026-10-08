@@ -57,7 +57,7 @@ struct Program {
   service : Service
   token : String
   calls : Array[Json]
-  image_results : Map[Int, Array[@protocol.ContentPart]]
+  image_results : Map[Int, (String, Array[@protocol.Image])]
   image_paths : Map[Int, Array[Json]]
   image_prefix : String
   mut reserved_images : Int
@@ -66,7 +66,7 @@ struct Program {
   active : Map[Int, @async.Task[Json]]
   mut closed : Bool
   mut on_trace : async (Json) -> Unit
-  mut on_image_content : (Array[@protocol.ContentPart]) -> Unit
+  mut on_image_output : ((String, Array[@protocol.Image])) -> Unit
   // Publications run one at a time and snapshot the trace only once they hold
   // this, so a slow observer can never deliver a stale snapshot after a later
   // one; `close` takes it last and its final publish is therefore final.
@@ -258,7 +258,7 @@ pub async fn[X] Service::start(
 pub fn Service::register(
   self : Service,
   on_trace? : (Json) -> Unit = _ => (),
-  on_image_content? : (Array[@protocol.ContentPart]) -> Unit = _ => (),
+  on_image_output? : ((String, Array[@protocol.Image])) -> Unit = _ => (),
 ) -> Program raise {
   guard !self.closed else { fail("PTC service is closed") }
   guard self.programs.length() < MaxPrograms else {
@@ -281,7 +281,7 @@ pub fn Service::register(
     active: Map([]),
     closed: false,
     on_trace: data => on_trace(data),
-    on_image_content,
+    on_image_output,
     publishing: Mutex(),
     job_id: None,
     trace_error: None,
@@ -366,7 +366,7 @@ pub fn Program::handoff(
   observer : async (Json) -> Unit,
 ) -> Unit {
   self.job_id = Some(job_id)
-  self.on_image_content = _ => ()
+  self.on_image_output = _ => ()
   self.on_trace = if self.closed { _ => () } else { observer }
 }
 
@@ -451,26 +451,22 @@ pub fn Program::result(
   match action {
     Respond(output) => {
       let interrupted = self.interrupted()
-      let parts = output.content.0.copy()
+      let mut text = output.content
+      let images = output.images.copy()
       if interrupted {
-        parts.push(
-          Text(
-            "\nPTC stopped unfinished tool calls; changes may have occurred. Await every call before exiting.",
-          ),
-        )
+        text += "\nPTC stopped unfinished tool calls; changes may have occurred. Await every call before exiting."
       }
       if self.trace_error is Some(error) {
-        parts.push(
-          Text(
-            "\nPTC trace publication failed: \{error}. Calls may have executed; inspect the retained trace.",
-          ),
-        )
+        text += "\nPTC trace publication failed: \{error}. Calls may have executed; inspect the retained trace."
       }
       if !self.adopted() {
-        parts.append(self.image_content())
+        let (image_text, attached_images) = self.image_output()
+        text += image_text
+        images.append(attached_images)
       }
-      @agent_tool.respond_content(
-        Content(parts),
+      @agent_tool.respond(
+        text,
+        images~,
         is_error=output.is_error || interrupted || self.trace_error is Some(_),
         brief?=output.brief,
         data?=self.attach_trace(output.data),
@@ -549,8 +545,8 @@ async fn Program::execute(
   let response = match result {
     Respond(output) =>
       try {
-        if !output.is_error && !output.content.is_text_only() {
-          self.capture_images(index, output.content)
+        if !output.is_error && !output.images.is_empty() {
+          self.capture_images(index, output.content, output.images)
         }
         output_json(output)
       } catch {
@@ -603,7 +599,7 @@ fn error_result(message : String) -> Json {
 fn output_json(output : @agent_tool.ToolOutput) -> Json {
   let fields : Map[String, Json] = {
     "version": 1,
-    "content": output.content.text().to_json(),
+    "content": output.content.to_json(),
     "is_error": output.is_error.to_json(),
   }
   if output.data is Some(data) {
@@ -655,14 +651,18 @@ async fn Program::deliver_trace(self : Program) -> Unit {
 ///|
 /// Successful nested images, in call submission order. Repeated reads retain
 /// the same bytes, including after the program has closed or was cancelled.
-pub fn Program::image_content(self : Program) -> Array[@protocol.ContentPart] {
-  let images : Array[@protocol.ContentPart] = []
+pub fn Program::image_output(
+  self : Program,
+) -> (String, Array[@protocol.Image]) {
+  let text = StringBuilder()
+  let images : Array[@protocol.Image] = []
   for index in 0..<self.calls.length() {
-    if self.image_results.get(index) is Some(result) {
+    if self.image_results.get(index) is Some((description, result)) {
+      text.write_string("\n\{description}")
       images.append(result)
     }
   }
-  images
+  (text.to_string(), images)
 }
 
 ///|
@@ -671,14 +671,9 @@ pub fn Program::image_content(self : Program) -> Array[@protocol.ContentPart] {
 async fn Program::capture_images(
   self : Program,
   index : Int,
-  content : @protocol.Content,
+  text : String,
+  images : Array[@protocol.Image],
 ) -> Unit {
-  let images = content.0.filter_map(part => {
-    match part {
-      Image(image) => Some(image)
-      Text(_) => None
-    }
-  })
   guard self.reserved_images + images.length() <= 4 else {
     fail(
       "PTC permits at most four images per program; start another program for more images",
@@ -719,7 +714,7 @@ async fn Program::capture_images(
   guard !self.closed && !(self.calls[index] is { "status": "interrupted", .. }) else {
     fail("PTC program ended before the image result was retained")
   }
-  self.image_results[index] = content.0.copy()
+  self.image_results[index] = (text, images.copy())
   self.image_paths[index] = paths
-  (self.on_image_content)(self.image_content())
+  (self.on_image_output)(self.image_output())
 }

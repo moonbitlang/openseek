@@ -23,7 +23,7 @@ async test "directory approval describes and removes a complete tree including h
     guard run({ "path": "tree", "reason": "cleanup" }) is Respond(out) else {
       fail("expected response")
     }
-    assert_false(out.is_error, msg=out.content.text())
+    assert_false(out.is_error, msg=out.content)
     assert_true(asked.val)
     assert_false(@fs.exists("\{dir}/tree"))
     assert_eq(state.get("\{dir}/tree/a"), None)
@@ -52,7 +52,7 @@ async test "nonempty directory requires approval and all denial outcomes preserv
       approval=ApprovalChannel(_ => AllowedOnce),
     )
     guard result is Respond(out) else { fail("expected response") }
-    assert_false(out.is_error, msg=out.content.text())
+    assert_false(out.is_error, msg=out.content)
     assert_false(@fs.exists(path))
   })
 }
@@ -186,7 +186,7 @@ async test "empty directories are removed without asking even when a channel is 
         },
       )
       guard result is Respond(out) else { fail("expected response") }
-      assert_false(out.is_error, msg=out.content.text())
+      assert_false(out.is_error, msg=out.content)
       assert_false(@fs.exists(path))
     }
   })
@@ -219,7 +219,7 @@ async test "a complete agent-created directory tree is removed without approval"
       is Respond(output) else {
       fail("expected response")
     }
-    assert_false(output.is_error, msg=output.content.text())
+    assert_false(output.is_error, msg=output.content)
     assert_false(asked.val)
     assert_false(@fs.exists(root))
     assert_true(state.get(path) is None)

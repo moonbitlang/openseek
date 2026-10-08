@@ -22,13 +22,9 @@ pub fn definition(workspace_root~ : String) -> @agent_tool.AgentToolDefinition {
       }
       let resolved = @workspace_path.resolve(workspace_root, path)
       let image = @image_file.read(resolved)
-      @agent_tool.respond_content(
-        Content([
-          Text(
-            "Image: \{resolved}\n\{image.media_type}, \{image.bytes.length()} bytes",
-          ),
-          Image(image),
-        ]),
+      @agent_tool.respond(
+        "Image: \{resolved}\n\{image.media_type}, \{image.bytes.length()} bytes",
+        images=[image],
         brief="read_image \{@agent_tool.brief_basename(path)}",
         data={
           "path": resolved,

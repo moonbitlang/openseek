@@ -100,7 +100,7 @@ async test "remove deletes an agent-created file through the registry" {
     assert_false(output.is_error)
     assert_eq(
       output.content,
-      Content([Text("ok: removed \{path} (reason: scratch no longer needed)")]),
+      "ok: removed \{path} (reason: scratch no longer needed)",
     )
     assert_false(@fs.exists(path))
   })

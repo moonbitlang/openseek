@@ -19,7 +19,7 @@ async test "existing and externally changed files ask once with path reason and 
         approval=channel,
       )
       guard result is Respond(out) else { fail("expected response") }
-      assert_false(out.is_error, msg=out.content.text())
+      assert_false(out.is_error, msg=out.content)
       assert_false(@fs.exists(path))
       assert_eq(state.get(path), None)
       let ask = asked[asked.length() - 1]
@@ -217,7 +217,7 @@ async test "binary files can be approved and cancellation leaves the gate reusab
       )
     })
     guard result is Respond(out) else { fail("expected response") }
-    assert_false(out.is_error, msg=out.content.text())
+    assert_false(out.is_error, msg=out.content)
     assert_false(@fs.exists(path))
   })
 }

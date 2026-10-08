@@ -158,7 +158,7 @@ async test "a handed-off job cleans builds but keeps result files until teardown
     guard action is Respond(output) else { fail("expected Respond") }
     assert_true(
       output.content.contains("moved to the background"),
-      msg=output.content.text(),
+      msg=output.content,
     )
     guard bg_runtime.list() is [job, ..] else { fail("no job registered") }
     @async.with_timeout(120_000, () => bg_runtime.wait_any([job.id]))

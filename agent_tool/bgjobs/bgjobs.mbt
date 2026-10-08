@@ -140,7 +140,7 @@ priv struct BgJob {
   mut phase : JobPhase
   // Launcher-supplied structured results; frozen to a constant at `CleanedUp`.
   mut data : (() -> Json)?
-  mut image_content : (() -> Array[@protocol.ContentPart])?
+  mut image_output : (() -> (String, Array[@protocol.Image]))?
   // A terminal denial scan may read a large retained log. Cache its
   // classification so repeated job_output calls do not repeat that allocation.
   mut denial_scanned : Bool
@@ -152,7 +152,7 @@ priv struct BgJob {
 /// (the first inline-budget characters); the *full* output — when `over_inline_cap`
 /// — is read with `BgJobRuntime::read_output`.
 pub struct BgJobSnapshot {
-  image_content : Array[@protocol.ContentPart]
+  image_output : (String, Array[@protocol.Image])
   data : Json?
   cleanup_error : String?
   id : String
@@ -329,7 +329,7 @@ pub async fn BgJobRuntime::start(
     moonrun_policy_active~,
     on_terminal=None,
     data=None,
-    image_content=None,
+    image_output=None,
   )
   id
 }
@@ -350,7 +350,7 @@ pub async fn BgJobRuntime::adopt(
   moonrun_policy_active? : Bool = false,
   on_terminal? : async () -> Unit,
   data? : () -> Json,
-  image_content? : () -> Array[@protocol.ContentPart],
+  image_output? : () -> (String, Array[@protocol.Image]),
 ) -> String {
   errdefer exec.request_stop()
   self.prepare_output()
@@ -368,7 +368,7 @@ pub async fn BgJobRuntime::adopt(
     moonrun_policy_active~,
     on_terminal~,
     data~,
-    image_content~,
+    image_output~,
   )
   id
 }
@@ -387,7 +387,7 @@ async fn BgJobRuntime::register(
   moonrun_policy_active~ : Bool,
   on_terminal~ : (async () -> Unit)?,
   data~ : (() -> Json)?,
-  image_content~ : (() -> Array[@protocol.ContentPart])?,
+  image_output~ : (() -> (String, Array[@protocol.Image]))?,
 ) -> Unit {
   self.jobs[id] = {
     id,
@@ -407,7 +407,7 @@ async fn BgJobRuntime::register(
     on_terminal,
     phase: Live,
     data,
-    image_content,
+    image_output,
     denial_scanned: false,
     denial_feedback: None,
   }
@@ -455,7 +455,10 @@ fn BgJob::to_snapshot(self : BgJob, persistent_logs : Bool) -> BgJobSnapshot {
       bg_status(self.exec.status())
     },
     data: self.data.map(get => get()),
-    image_content: self.image_content.map_or([], get => get().copy()),
+    image_output: self.image_output.map_or(("", []), get => {
+      let (text, images) = get()
+      (text, images.copy())
+    }),
     cleanup_error: self.cleanup_error,
     output: self.exec.head(),
     output_file: self.exec.spill_path(),

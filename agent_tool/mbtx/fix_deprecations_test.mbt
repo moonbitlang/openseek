@@ -65,24 +65,21 @@ async test "fix-deprecations fixes deprecation sites through guarded edits" {
           "cwd": ws,
         })
       })
-      assert_false(output.is_error, msg=output.content.text())
+      assert_false(output.is_error, msg=output.content)
       assert_true(
         output.content.contains(
           "3 deprecation site(s) with a bare replacement, 1 left to a human",
         ),
-        msg=output.content.text(),
+        msg=output.content,
       )
-      assert_true(
-        output.content.contains("fixed: 3"),
-        msg=output.content.text(),
-      )
+      assert_true(output.content.contains("fixed: 3"), msg=output.content)
       assert_true(
         output.content.contains("no bare replacement named"),
-        msg=output.content.text(),
+        msg=output.content,
       )
       assert_true(
         output.content.contains("after: 0 error(s), 1 warning(s) (was 0/4)"),
-        msg=output.content.text(),
+        msg=output.content,
       )
       let fixed = @fs.read_file("\{ws}/lib/lib.mbt").text()
       assert_true(fixed.contains("  len([1, 2, 3]) + len([4])\n"), msg=fixed)
@@ -99,10 +96,10 @@ async test "fix-deprecations fixes deprecation sites through guarded edits" {
           "args": ["--dry-run"],
         })
       })
-      assert_false(planned.is_error, msg=planned.content.text())
+      assert_false(planned.is_error, msg=planned.content)
       assert_true(
         planned.content.contains("dry run: 3 edit(s) planned, none written"),
-        msg=planned.content.text(),
+        msg=planned.content,
       )
       assert_eq(@fs.read_file("\{ws}/lib/lib.mbt").text(), lib)
       // The limit applies to a dry run too.
@@ -115,10 +112,10 @@ async test "fix-deprecations fixes deprecation sites through guarded edits" {
           "args": ["--dry-run", "--limit", "1"],
         })
       })
-      assert_false(limited.is_error, msg=limited.content.text())
+      assert_false(limited.is_error, msg=limited.content)
       assert_true(
         limited.content.contains("dry run: 1 edit(s) planned, none written"),
-        msg=limited.content.text(),
+        msg=limited.content,
       )
       assert_true(limited.content.contains("limit reached: 1 attempted"))
     })
@@ -221,15 +218,12 @@ async test "fix-deprecations handles qualified calls and methods across packages
           "cwd": ws,
         })
       })
-      assert_false(output.is_error, msg=output.content.text())
-      assert_true(
-        output.content.contains("fixed: 7"),
-        msg=output.content.text(),
-      )
+      assert_false(output.is_error, msg=output.content)
+      assert_true(output.content.contains("fixed: 7"), msg=output.content)
       // The one warning left is unrelated (the struct is never constructed).
       assert_true(
         output.content.contains("after: 0 error(s), 1 warning(s) (was 0/8)"),
-        msg=output.content.text(),
+        msg=output.content,
       )
       let fixed = @fs.read_file("\{ws}/b/b.mbt").text()
       assert_true(

@@ -1,15 +1,11 @@
 ///|
 async test "PTC attaches unprinted images even when the outer script fails and bounds cumulative images" {
   let picture = @protocol.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
-  let parts : Array[@protocol.ContentPart] = [
-    Text("before picture"),
-    Image(picture),
-    Text("after picture"),
-  ]
+  let text = "before pictureafter picture"
   let tool = leaf(
     name="picture",
     concurrent_safe=true,
-    execute=Sync(_ => @agent_tool.respond_content(Content(parts))),
+    execute=Sync(_ => @agent_tool.respond(text, images=[picture])),
   )
   @async.with_task_group(group => {
     let service = Service::start(group, Tools([tool]))
@@ -31,9 +27,10 @@ async test "PTC attaches unprinted images even when the outer script fails and b
     )
     guard action is Respond(output) else { fail("expected response") }
     assert_true(output.is_error)
+    assert_eq(output.images, [picture, picture, picture, picture])
     assert_eq(
-      output.content.0,
-      [Text("later script failure"), ..parts, ..parts, ..parts, ..parts],
+      output.content,
+      "later script failure\n\{text}\n\{text}\n\{text}\n\{text}",
     )
     assert_true(
       program.trace()
@@ -58,9 +55,7 @@ async test "PTC background images have durable snapshots separate from trace and
   let picture = @protocol.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
   let tool = leaf(
     name="picture",
-    execute=Sync(_ => {
-      @agent_tool.respond_content(Content([Text("picture"), Image(picture)]))
-    }),
+    execute=Sync(_ => @agent_tool.respond("picture", images=[picture])),
   )
   let metadata = @async.with_task_group(group => {
     let service = Service::start(group, Tools([tool]), image_directory=() => {
@@ -75,22 +70,18 @@ async test "PTC background images have durable snapshots separate from trace and
       request(program.env(), "picture", {}) is { "is_error": false, .. },
     )
     program.close()
-    assert_eq(program.image_content(), [
-      Text("picture"),
-      Image(picture),
-      Text("picture"),
-      Image(picture),
-    ])
-    assert_eq(program.image_content(), [
-      Text("picture"),
-      Image(picture),
-      Text("picture"),
-      Image(picture),
-    ])
+    assert_eq(
+      program.image_output(),
+      ("\npicture\npicture", [picture, picture]),
+    )
+    assert_eq(
+      program.image_output(),
+      ("\npicture\npicture", [picture, picture]),
+    )
     guard program.result(@agent_tool.respond("background")) is Respond(output) else {
       fail("expected handoff")
     }
-    assert_true(output.content.is_text_only())
+    assert_true(output.images.is_empty())
     program.trace()
   })
   guard metadata is { "ptc_images": Array(images), .. } else {
@@ -113,9 +104,7 @@ async test "image persistence errors settle the call without attaching a picture
   let picture = @protocol.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
   let tool = leaf(
     name="picture",
-    execute=Sync(_ => {
-      @agent_tool.respond_content(Content([Text("picture"), Image(picture)]))
-    }),
+    execute=Sync(_ => @agent_tool.respond("picture", images=[picture])),
   )
   @async.with_task_group(group => {
     let directory = Ref("\{root}/missing")
@@ -126,13 +115,13 @@ async test "image persistence errors settle the call without attaching a picture
     for _ in 0..<5 {
       let result = request(program.env(), "picture", {})
       assert_true(result is { "is_error": true, .. })
-      assert_true(program.image_content().is_empty())
+      assert_eq(program.image_output(), ("", []))
     }
     directory.val = root
     assert_true(
       request(program.env(), "picture", {}) is { "is_error": false, .. },
     )
     program.close()
-    assert_eq(program.image_content(), [Text("picture"), Image(picture)])
+    assert_eq(program.image_output(), ("\npicture", [picture]))
   })
 }

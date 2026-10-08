@@ -589,7 +589,7 @@ async fn AgentLoop::handle_tool_calls(
     let tool_call = @agent_tool.AgentToolCall(native_call) catch {
       error => {
         let content = "error: \{error}"
-        let session = self.record_text_tool_result(
+        let session = self.record_tool_result(
           session,
           tool_call_id=native_call.id,
           tool_name=native_call.name,
@@ -749,20 +749,17 @@ async fn AgentLoop::execute_tool_call(
   // only after the result (which carries the trace itself) has been recorded.
   defer {
     ignore(self.tools.take_program_trace())
-    ignore(self.tools.take_program_content())
+    ignore(self.tools.take_program_output())
   }
   errdefer (if self.tools.take_program_trace() is Some(data) {
     @async.protect_from_cancel(() => {
+      let (image_text, images) = self.tools.take_program_output()
       self.record_tool_result(
         session,
         tool_call_id=native_call.id,
         tool_name=tool_call.name,
-        content=Content(
-          [
-            Text("programmatic tool call interrupted or failed"),
-            ..self.tools.take_program_content(),
-          ],
-        ),
+        content="programmatic tool call interrupted or failed" + image_text,
+        images~,
         is_error=true,
         data~,
       )
@@ -787,7 +784,7 @@ async fn AgentLoop::execute_tool_call(
         errdefer (if @async.is_being_cancelled() {
           @async.protect_from_cancel(() => {
             ignore(
-              self.record_text_tool_result(
+              self.record_tool_result(
                 session,
                 tool_call_id=native_call.id,
                 tool_name=tool_call.name,
@@ -806,7 +803,7 @@ async fn AgentLoop::execute_tool_call(
         }
       }
       ContinueToolBatch(
-        self.record_text_tool_result(
+        self.record_tool_result(
           session,
           tool_call_id=native_call.id,
           tool_name=tool_call.name,
@@ -816,7 +813,7 @@ async fn AgentLoop::execute_tool_call(
       )
     }
     Control(Finish(answer)) => {
-      let session = self.record_text_tool_result(
+      let session = self.record_tool_result(
         session,
         tool_call_id=native_call.id,
         tool_name=tool_call.name,
@@ -906,22 +903,26 @@ async fn AgentLoop::execute_tool_call(
       // Bound text once for the durable item and model message. The live
       // JSONL/TUI event carries its text projection; durable events carry
       // the complete ordered multimodal content.
-      let (content, is_error) : (@protocol.Content, Bool) = if !output.content.is_text_only() &&
+      let (content, images, is_error) = if !output.images.is_empty() &&
         !self.client.supports_image_input() {
         (
-          Content([
-            Text("error: this model route does not support image tool results"),
-          ]),
+          "error: this model route does not support image tool results",
+          [],
           true,
         )
       } else {
-        (clamp_tool_content(output.content), output.is_error)
+        (
+          clamp_tool_result_content(output.content),
+          output.images,
+          output.is_error,
+        )
       }
       let session = self.record_tool_result(
         session,
         tool_call_id=native_call.id,
         tool_name=tool_call.name,
         content~,
+        images~,
         is_error~,
         brief?=output.brief,
         data?=output.data,
@@ -931,7 +932,7 @@ async fn AgentLoop::execute_tool_call(
         native_call,
         tool_call,
         is_error~,
-        content=content.text(),
+        content~,
         brief=output.brief,
       )
       ContinueToolBatch(session)
@@ -953,7 +954,7 @@ async fn AgentLoop::close_skipped_tool_calls(
   note~ : String,
 ) -> @agent_session.Session {
   for skipped in remaining_tool_calls; session = session {
-    let session = self.record_text_tool_result(
+    let session = self.record_tool_result(
       session,
       tool_call_id=skipped.id,
       tool_name=skipped.name,
@@ -1153,12 +1154,16 @@ async fn AgentLoop::record_tool_result(
   session : @agent_session.Session,
   tool_call_id~ : String,
   tool_name~ : String,
-  content~ : @protocol.Content,
-  is_error~ : Bool,
+  content~ : String,
+  images? : Array[@protocol.Image] = [],
+  is_error? : Bool = false,
   brief? : String,
   data? : Json,
 ) -> @agent_session.Session {
-  let parts = clamp_tool_content(content).0
+  let parts : Array[@protocol.ContentPart] = [
+    Text(clamp_tool_result_content(content)),
+    ..images.map(image => @protocol.ContentPart::Image(image)),
+  ]
   let session = self.append(
     session,
     Tool(
@@ -1497,82 +1502,4 @@ fn @deepseek.ChatResponse::optional_reasoning_content(
     "" => None
     content => Some(content)
   }
-}
-
-///|
-async fn AgentLoop::record_text_tool_result(
-  self : Self,
-  session : @agent_session.Session,
-  tool_call_id~ : String,
-  tool_name~ : String,
-  content~ : String,
-  is_error? : Bool = false,
-) -> @agent_session.Session {
-  self.record_tool_result(
-    session,
-    tool_call_id~,
-    tool_name~,
-    content=Content([Text(clamp_tool_result_content(content))]),
-    is_error~,
-  )
-}
-
-///|
-/// Bound total text while retaining every image in its original position.
-fn clamp_tool_content(content : @protocol.Content) -> @protocol.Content {
-  if content.text().length() <= max_tool_result_chars {
-    return content
-  }
-  let mut remaining = max_tool_result_chars -
-    tool_result_truncation_marker.length()
-  let mut marked = false
-  Content(
-    content.0.map(part => {
-      match part {
-        Image(_) => part
-        Text(text) =>
-          if marked {
-            Text("")
-          } else if text.length() <= remaining {
-            remaining -= text.length()
-            part
-          } else {
-            marked = true
-            Text("\{text[:remaining]}\{tool_result_truncation_marker}")
-          }
-      }
-    }),
-  )
-}
-
-///|
-test "tool content clamping preserves image positions and bounds aggregate text" {
-  let image = @protocol.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
-  let prefix = String::make(
-    max_tool_result_chars - tool_result_truncation_marker.length() - 1,
-    'x',
-  )
-  let content : @protocol.Content = Content([
-    Text(prefix),
-    Image(image),
-    Text("😀tail"),
-    Image(image),
-    Text(String::make(100, 'y')),
-  ])
-  let clamped = clamp_tool_content(content)
-  assert_true(
-    clamped.0
-    is [Text(before), Image(first), Text(after), Image(second), Text("")] &&
-    before == prefix &&
-    first == image &&
-    second == image &&
-    after == tool_result_truncation_marker,
-  )
-  assert_true(clamped.text().length() <= max_tool_result_chars)
-  let short : @protocol.Content = Content([
-    Text("before"),
-    Image(image),
-    Text("after"),
-  ])
-  assert_eq(clamp_tool_content(short), short)
 }

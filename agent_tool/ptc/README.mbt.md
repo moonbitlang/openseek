@@ -69,8 +69,9 @@ async fn main {
 Nested arguments and results are stored as metadata on the outer result and
 displayed as nested Desktop tool cards. Text-only results enter the next model
 request when printed. Results containing images are attached automatically to
-the outer result, preserving their text and image order (at most four images
-per program), independently of printed text. The SDK reply remains textual;
+the outer result as text and images (at most four images per program),
+independently of printed text. Image-bearing results are collected in call
+submission order. The tool message puts all text first, then all images. The SDK reply remains textual;
 image bytes are carried by the host, never printed as base64. After
 background handoff `job_output` returns those images. Image bytes use separate
 files in the existing job output directory; `ptc_images` metadata contains their

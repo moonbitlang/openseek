@@ -13,11 +13,10 @@ async test "read_image retains bytes independently of the source and detects ext
     tools,
   )
   guard action is Respond(output) else { fail("expected image response") }
-  assert_false(output.is_error, msg=output.content.text())
+  assert_false(output.is_error, msg=output.content)
   @fs.remove("\{root}/picture")
   assert_true(
-    output.content.0 is [Text(_), Image(saved)] &&
-    saved == @protocol.Image::from_bytes(bytes),
+    output.images is [saved] && saved == @protocol.Image::from_bytes(bytes),
   )
   assert_true(output.data is Some({ "media_type": "image/png", .. }))
   assert_false(output.content.contains("base64"))
@@ -31,7 +30,7 @@ async test "read_image retains bytes independently of the source and detects ext
   guard blocked is Respond(output) else { fail("expected refusal") }
   assert_true(output.is_error)
   assert_true(output.content.contains("model route"))
-  assert_true(output.content.is_text_only())
+  assert_true(output.images.is_empty())
 }
 
 ///|
@@ -49,6 +48,6 @@ async test "read_image reports missing paths directories invalid bytes and overs
     )
     guard action is Respond(output) else { fail("expected failure response") }
     assert_true(output.is_error, msg=path)
-    assert_true(output.content.is_text_only())
+    assert_true(output.images.is_empty())
   }
 }

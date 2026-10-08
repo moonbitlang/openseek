@@ -131,7 +131,7 @@ pub fn definition(
   subrun? : @host.SubrunInjection,
   program_service? : @ptc.Service,
   on_program_trace? : (Json) -> Unit,
-  on_program_content? : (Array[@protocol.ContentPart]) -> Unit,
+  on_program_output? : ((String, Array[@protocol.Image])) -> Unit,
 ) -> @agent_tool.AgentToolDefinition {
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
@@ -204,7 +204,7 @@ pub fn definition(
         if program_service is Some(service) {
           let program = service.register(
             on_trace?=on_program_trace,
-            on_image_content?=on_program_content,
+            on_image_output?=on_program_output,
           )
           errdefer program.close()
           let action = run(Some(program)) catch {
@@ -233,15 +233,9 @@ pub fn definition(
           if enabled || input.ptc is Some(false) {
             retry["ptc"] = enabled.to_json()
           }
-          @agent_tool.respond_content(
-            Content(
-              [
-                Text(
-                  "Script saved at \{filename}. For subsequent runs, call mbtx with \{Json::object(retry).stringify()} and omit source.\n\n",
-                ),
-                ..output.content.0,
-              ],
-            ),
+          @agent_tool.respond(
+            "Script saved at \{filename}. For subsequent runs, call mbtx with \{Json::object(retry).stringify()} and omit source.\n\n\{output.content}",
+            images=output.images,
             is_error=output.is_error,
             brief?=output.brief,
             data?=output.data,
@@ -278,8 +272,9 @@ fn described(
     description.char_length() <= DescriptionBriefLimit else {
     return action
   }
-  @agent_tool.respond_content(
+  @agent_tool.respond(
     output.content,
+    images=output.images,
     brief=description.to_owned(),
     data?=output.data,
   )
@@ -997,7 +992,7 @@ async fn execute(
         moonrun_policy_active=policy_active,
         on_terminal=terminal_cleanup,
         data?=program.map(program => () => program.trace()),
-        image_content?=program.map(program => () => program.image_content()),
+        image_output?=program.map(program => () => program.image_output()),
       )
       job_owns_cleanup = true
       if program is Some(program) {

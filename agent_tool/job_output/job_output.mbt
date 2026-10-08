@@ -183,8 +183,9 @@ async fn execute(
   let brief = snapshot.description.map(description => {
     "job \{job_id} (\{status_label}): \{description}"
   })
-  @agent_tool.respond_content(
-    Content([Text(content), ..snapshot.image_content]),
+  @agent_tool.respond(
+    content + snapshot.image_output.0,
+    images=snapshot.image_output.1,
     is_error~,
     brief?,
     data?=snapshot.data,

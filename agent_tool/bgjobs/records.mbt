@@ -194,9 +194,9 @@ async fn BgJobRuntime::finish_job(self : BgJobRuntime, id : String) -> Unit {
       let final_data = supply()
       () => final_data
     })
-    job.image_content = job.image_content.map(supply => {
-      let image_content = supply()
-      () => image_content
+    job.image_output = job.image_output.map(supply => {
+      let image_output = supply()
+      () => image_output
     })
     job.phase = CleanedUp
     let record = job.record(self)

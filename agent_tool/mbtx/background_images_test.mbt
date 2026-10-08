@@ -35,7 +35,7 @@ async test "background PTC images survive source removal job completion repeat r
             #|}
           ),
         })
-        assert_false(output.is_error, msg=output.content.text())
+        assert_false(output.is_error, msg=output.content)
         guard jobs.list() is [job] else { fail("missing background job") }
         jobs.wait_any([job.id])
         @fs.remove("\{ws}/picture")
@@ -43,11 +43,8 @@ async test "background PTC images survive source removal job completion repeat r
           let result = dispatch(@job_output.definition(jobs), {
             "job_id": job.id,
           })
-          assert_false(result.is_error, msg=result.content.text())
-          assert_true(
-            result.content.0 is [Text(_), Text(_), Image(saved)] &&
-            saved == image,
-          )
+          assert_false(result.is_error, msg=result.content)
+          assert_true(result.images is [saved] && saved == image)
         }
         let saved : @openseek_protocol.JobRecord = @json.from_json(
           @json.parse(
@@ -65,6 +62,6 @@ async test "background PTC images survive source removal job completion repeat r
     })
     let tool = @read_image.definition(workspace_root=ws)
     let restored = dispatch(tool, { "path": retained })
-    assert_true(restored.content.0 is [Text(_), Image(saved)] && saved == image)
+    assert_true(restored.images is [saved] && saved == image)
   })
 }

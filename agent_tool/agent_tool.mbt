@@ -161,8 +161,9 @@ async fn ToolExecutor::run(self : ToolExecutor, arguments : Json) -> ToolAction 
 /// Normal output produced by a tool and sent back to the model as a
 /// `Tool(id)` chat message.
 pub struct ToolOutput {
-  /// Ordered text and image parts sent to the model.
-  content : @protocol.Content
+  /// Text and automatically attached images sent to the model.
+  content : String
+  images : Array[@protocol.Image]
   /// Whether the host should treat this as a tool-level error. The content is
   /// still sent to the model so it can recover or choose another action.
   is_error : Bool
@@ -179,12 +180,13 @@ pub struct ToolOutput {
 /// successful tool responses; `brief` is omitted unless the tool supplies a
 /// one-line summary.
 fn ToolOutput::ToolOutput(
-  content : @protocol.Content,
+  content : String,
+  images? : Array[@protocol.Image] = [],
   is_error? : Bool = false,
   brief? : String,
   data? : Json,
 ) -> ToolOutput {
-  { content: Content(content.0.copy()), is_error, brief, data, }
+  { content, images, is_error, brief, data, }
 }
 
 ///|
@@ -214,22 +216,12 @@ pub enum ToolAction {
 /// model.
 pub fn respond(
   content : String,
+  images? : Array[@protocol.Image] = [],
   is_error? : Bool = false,
   brief? : String,
   data? : Json,
 ) -> ToolAction {
-  respond_content(Content([Text(content)]), is_error~, brief?, data?)
-}
-
-///|
-/// Build a response preserving the order of all text and image parts.
-pub fn respond_content(
-  content : @protocol.Content,
-  is_error? : Bool = false,
-  brief? : String,
-  data? : Json,
-) -> ToolAction {
-  Respond(ToolOutput(content, is_error~, brief?, data?))
+  Respond(ToolOutput(content, images~, is_error~, brief?, data?))
 }
 
 ///|
@@ -290,7 +282,7 @@ struct Tools {
   /// Shared execution registry, also used by the loop for wait/finish decisions.
   background_jobs : @bgjobs.BgJobRuntime?
   program_trace : Ref[Json?]
-  program_content : Ref[Array[@protocol.ContentPart]]
+  program_output : Ref[(String, Array[@protocol.Image])]
   image_input_supported : Ref[Bool]
 }
 
@@ -303,7 +295,7 @@ pub fn Tools::Tools(
   definitions : Array[AgentToolDefinition],
   background_jobs? : @bgjobs.BgJobRuntime,
   program_trace? : Ref[Json?] = Ref(None),
-  program_content? : Ref[Array[@protocol.ContentPart]] = Ref([]),
+  program_output? : Ref[(String, Array[@protocol.Image])] = Ref(("", [])),
   image_input_supported? : Ref[Bool] = Ref(false),
 ) -> Tools raise {
   let by_name : Map[String, AgentToolDefinition] = Map([])
@@ -317,7 +309,7 @@ pub fn Tools::Tools(
     by_name,
     background_jobs,
     program_trace,
-    program_content,
+    program_output,
     image_input_supported,
   }
 }
@@ -396,13 +388,13 @@ pub async fn execute_tool_call(
 test "ToolAction helpers build structured actions" {
   let response = respond("ok")
   guard response is Respond(output) else { fail("expected Respond") }
-  assert_eq(output.content, Content([Text("ok")]))
+  assert_eq(output.content, "ok")
   assert_false(output.is_error)
   let error_response = respond("bad", is_error=true)
   guard error_response is Respond(error_output) else {
     fail("expected error Respond")
   }
-  assert_eq(error_output.content, Content([Text("bad")]))
+  assert_eq(error_output.content, "bad")
   assert_true(error_output.is_error)
   let finished = ToolAction::finish("done")
   guard finished is Control(Finish(answer)) else { fail("expected Finish") }
@@ -419,7 +411,7 @@ async test "execute_tool_call reports unknown tool" {
   guard result is Respond(output) else {
     fail("unknown tool should produce Respond")
   }
-  assert_eq(output.content, Content([Text("error: unknown tool ghost")]))
+  assert_eq(output.content, "error: unknown tool ghost")
   assert_true(output.is_error)
 }
 
@@ -487,12 +479,12 @@ pub fn AgentToolDefinition::can_request_approval(
 
 ///|
 /// Take completed foreground PTC images when persisting an interrupted call.
-pub fn Tools::take_program_content(
+pub fn Tools::take_program_output(
   self : Tools,
-) -> Array[@protocol.ContentPart] {
-  let images = self.program_content.val
-  self.program_content.val = []
-  images
+) -> (String, Array[@protocol.Image]) {
+  let output = self.program_output.val
+  self.program_output.val = ("", [])
+  output
 }
 
 ///|

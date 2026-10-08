@@ -48,7 +48,7 @@ async test "operation approval is one-shot for write and remove and never widens
       for _ in 0..<2 {
         @fs.write_file(path, "old", create_mode=CreateOrTruncate)
         let out = operation_result(tool, args)
-        assert_false(out.is_error, msg=out.content.text())
+        assert_false(out.is_error, msg=out.content)
         assert_true(scope.deny_reason(path) is Some(_))
         if name == "remove" {
           assert_false(@fs.exists(path))
@@ -63,7 +63,7 @@ async test "operation approval is one-shot for write and remove and never widens
       @write.definition(write_scope=scope, approval=channel),
       { "path": new_path, "content": "created" },
     )
-    assert_false(out.is_error, msg=out.content.text())
+    assert_false(out.is_error, msg=out.content)
     assert_eq(@fs.read_file(new_path).text(), "created")
   })
 }
@@ -263,7 +263,7 @@ async test "operation approval permits a validated full source replacement but n
     assert_eq(asks.val, 0)
     assert_eq(@fs.read_file(path).text(), before)
     let valid = operation_result(tool, { "path": path, "content": after })
-    assert_false(valid.is_error, msg=valid.content.text())
+    assert_false(valid.is_error, msg=valid.content)
     assert_eq(asks.val, 1)
     assert_eq(@fs.read_file(path).text(), after)
   })

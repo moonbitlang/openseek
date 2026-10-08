@@ -107,9 +107,7 @@ async test "agent cancellation persists completed images and interrupted PTC met
       description="picture",
       schema=JsonSchema({}),
       program_callable=true,
-      execute=Sync(_ => {
-        @agent_tool.respond_content(Content([Text("picture"), Image(image)]))
-      }),
+      execute=Sync(_ => @agent_tool.respond("picture", images=[image])),
     )
     let runtime = @agent_runtime.AgentRuntime()
     let scope = @agent_runtime.AgentTaskScope(group)
@@ -141,7 +139,7 @@ async test "agent cancellation persists completed images and interrupted PTC met
     assert_true(
       items.any(item => {
         item is Tool(result) &&
-        result.content().0 is [Text(_), Text(_), Image(saved)] &&
+        result.content().0 is [Text(_), Image(saved)] &&
         saved == image &&
         result.data()
         is Some(

@@ -66,7 +66,7 @@ async test "registered remove uses approval without holding the shared file gate
             tools,
           )
           guard changed is Respond(out) else { fail("expected write response") }
-          assert_false(out.is_error, msg=out.content.text())
+          assert_false(out.is_error, msg=out.content)
           AllowedOnce
         }),
       )
@@ -82,7 +82,7 @@ async test "registered remove uses approval without holding the shared file gate
           tools,
         )
         guard result is Respond(out) else { fail("expected remove response") }
-        assert_eq(out.is_error, !should_delete, msg=out.content.text())
+        assert_eq(out.is_error, !should_delete, msg=out.content)
         assert_eq(@fs.exists("\{dir}/target.txt"), !should_delete)
         if !should_delete {
           assert_true(out.content.contains("changed while awaiting approval"))
