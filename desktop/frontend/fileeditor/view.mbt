@@ -455,12 +455,15 @@ fn viewer_notice(
   if ctx.active_history_diff is Some(diff) {
     let text = history_diff_notice(locale~, state, diff)
     return @html.div(
-      class=if text.is_empty() {
-        "viewer-notice hidden"
-      } else {
+      class=if text is Some(_) {
         "viewer-notice"
+      } else {
+        "viewer-notice hidden"
       },
-      text,
+      match text {
+        Some(text) => [@html.text(text)]
+        None => []
+      },
     )
   }
   let diff_pending = match ctx.active_file {
@@ -468,37 +471,40 @@ fn viewer_notice(
       state.docs.get(path).map(doc => doc.diff_is_pending()).unwrap_or(false)
     None => false
   }
-  let text = match ctx.active_file {
+  let text : String? = match ctx.active_file {
     Some(path) =>
       match state.docs.get(path) {
         Some(doc) if state.shows_delayed_diff_loading(doc) =>
-          dynamic_text(locale, DLoadingDiff(doc.name.to_string()))
-        Some(doc) if doc.diff_is_pending() => ""
+          Some(dynamic_text(locale, DLoadingDiff(doc.name.to_string())))
+        Some(doc) if doc.diff_is_pending() => None
         Some(doc) if doc.uses_diff_surface() =>
-          doc.diff_unavailable_notice(locale~).unwrap_or("")
+          doc.diff_unavailable_notice(locale~)
         Some(doc) =>
           match doc.state {
-            TabDeleted => dynamic_text(locale, DFileDeleted(doc.name))
-            TabBinary => "\{doc.name} is a binary file and cannot be previewed."
-            TabOversized => "\{doc.name} is too large to preview."
+            TabDeleted => Some(dynamic_text(locale, DFileDeleted(doc.name)))
+            TabBinary =>
+              Some("\{doc.name} is a binary file and cannot be previewed.")
+            TabOversized => Some("\{doc.name} is too large to preview.")
             TabReadFailed(message) =>
               if doc.review is Some({ baseline: ReviewContent(_), .. }) {
-                ""
+                None
               } else {
-                dynamic_text(
-                  locale,
-                  DReadFailed(doc.name.to_string(), message.to_string()),
+                Some(
+                  dynamic_text(
+                    locale,
+                    DReadFailed(doc.name.to_string(), message.to_string()),
+                  ),
                 )
               }
-            TabUnavailable(message) => message
-            TabLoading | TabLoaded(..) => ""
+            TabUnavailable(message) => Some(message)
+            TabLoading | TabLoaded(..) => None
           }
-        None => ""
+        None => None
       }
-    None => ""
+    None => None
   }
   @html.div(
-    class=if !text.is_empty() {
+    class=if text is Some(_) {
       "viewer-notice"
     } else if diff_pending {
       // Preserve the last complete diff for a fast replacement without
@@ -508,7 +514,10 @@ fn viewer_notice(
     } else {
       "viewer-notice hidden"
     },
-    text,
+    match text {
+      Some(text) => [@html.text(text)]
+      None => []
+    },
   )
 }
 
@@ -542,27 +551,39 @@ fn history_diff_notice(
   locale? : @i18n.Locale = English,
   state : State,
   diff : @dock.GitHistoryDiff,
-) -> String {
+) -> String? {
   guard state.history_docs.get(history_diff_key(diff)) is Some(doc) else {
-    return dynamic_text(
-      locale,
-      DLoadingHistoryDiff(basename(diff.path).to_string()),
+    return Some(
+      dynamic_text(locale, DLoadingHistoryDiff(basename(diff.path).to_string())),
     )
   }
   match (doc.original, doc.modified) {
     (HistoryBlobLoading, _) | (_, HistoryBlobLoading) =>
-      dynamic_text(locale, DLoadingHistoryDiff(basename(diff.path).to_string()))
+      Some(
+        dynamic_text(
+          locale,
+          DLoadingHistoryDiff(basename(diff.path).to_string()),
+        ),
+      )
     (HistoryBlobError(message), _) | (_, HistoryBlobError(message)) =>
-      dynamic_text(
-        locale,
-        DHistoryDiffFailed(basename(diff.path).to_string(), message.to_string()),
+      Some(
+        dynamic_text(
+          locale,
+          DHistoryDiffFailed(
+            basename(diff.path).to_string(),
+            message.to_string(),
+          ),
+        ),
       )
     (HistoryBlobBinary, _) | (_, HistoryBlobBinary) =>
-      "\{basename(diff.path)} is binary at this revision and cannot be previewed."
+      Some(
+        "\{basename(diff.path)} is binary at this revision and cannot be previewed.",
+      )
     (HistoryBlobOversized, _) | (_, HistoryBlobOversized) =>
-      "\{basename(diff.path)} is too large at this revision to preview."
-    (HistoryBlobMissing, HistoryBlobMissing) => ui(locale, NoCommitContent)
-    _ => ""
+      Some("\{basename(diff.path)} is too large at this revision to preview.")
+    (HistoryBlobMissing, HistoryBlobMissing) =>
+      Some(ui(locale, NoCommitContent))
+    _ => None
   }
 }
 
