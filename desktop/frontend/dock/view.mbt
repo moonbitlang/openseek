@@ -165,8 +165,7 @@ pub fn launcher_pane(
 }
 
 ///|
-/// The panel's top bar: the open tabs, the `+` launcher popup, and the
-/// whole-panel toggle riding the right edge. Always rendered so the panel's
+/// The viewer's tab strip and `+` launcher popup. Always rendered so the panel's
 /// child order stays structural. Clicking a tab activates it; the `×`
 /// closes it without activating (the close click must not bubble into the
 /// tab's own handler).
@@ -177,11 +176,9 @@ pub fn tabs_bar(
   chips : Array[TabChip],
   actions : LauncherActions,
   menu_open~ : Bool,
-  expanded~ : Bool,
   toggle_menu~ : @cmd.Cmd,
   close_menu~ : @cmd.Cmd,
   close_tabs~ : @cmd.Emit[CloseSelection],
-  toggle_expanded~ : @cmd.Cmd,
 ) -> @html.Html {
   let menu : LauncherMenu = { toggle: toggle_menu, dismiss: close_menu, }
   // Keep each menu trigger's DOM identity when neighbouring tabs close.
@@ -257,6 +254,36 @@ pub fn tabs_bar(
       on_click=menu.toggle(),
       @icons.icon(@icons.icon_add),
     ),
+  ]
+  if menu_open {
+    // No backdrop element: the frontend package installs a click-away
+    // dismissal that does not consume the click that closes it.
+    children.push(
+      @html.div(
+        class="menu-surface dock-menu",
+        attrs=@html.Attrs::build()
+          .id("dock-new-tab-menu")
+          .role("menu")
+          .aria_label(ui(locale, NewTab))
+          .popover("manual")
+          .on_keydown(event => menu.keydown(event)),
+        actions.rows(locale~, popup=true),
+      ),
+    )
+  }
+  @html.div(class="editor-tabsbar", children)
+}
+
+///|
+/// The region header sits above both the shared viewer and workspace navigator;
+/// these controls affect the whole region, independently of its selected tab.
+pub fn panel_header(
+  locale? : @i18n.Locale = English,
+  expanded~ : Bool,
+  toggle_expanded~ : @cmd.Cmd,
+) -> @html.Html {
+  @html.div(class="workspace-panel-header", [
+    @html.span(class="workspace-panel-title", "Workspace"),
     @html.button(
       class="panel-toggle panel-expand",
       title=if expanded {
@@ -276,22 +303,5 @@ pub fn tabs_bar(
         .on_click(_ => toggle_expanded),
       @icons.icon(if expanded { icon_restore_panel } else { icon_expand_panel }),
     ),
-  ]
-  if menu_open {
-    // No backdrop element: the frontend package installs a click-away
-    // dismissal that does not consume the click that closes it.
-    children.push(
-      @html.div(
-        class="menu-surface dock-menu",
-        attrs=@html.Attrs::build()
-          .id("dock-new-tab-menu")
-          .role("menu")
-          .aria_label(ui(locale, NewTab))
-          .popover("manual")
-          .on_keydown(event => menu.keydown(event)),
-        actions.rows(locale~, popup=true),
-      ),
-    )
-  }
-  @html.div(class="editor-tabsbar", children)
+  ])
 }

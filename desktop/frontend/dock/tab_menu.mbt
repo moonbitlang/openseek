@@ -42,7 +42,6 @@ fn tab_menu_target(state : State, tab : DockTab) -> String {
     File(path~) => "file:\{path.to_string()}"
     GitDiff(diff~) => "history:\{diff.commit}:\{diff.path.0}"
     Browser(id~) => "browser:\{id}"
-    FilePicker => "picker"
     Workflows => "workflows"
     Github => "github"
     Jobs => "jobs"

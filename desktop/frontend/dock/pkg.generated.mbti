@@ -35,17 +35,15 @@ pub fn open_history_diff(State, GitHistoryDiff) -> State
 
 pub fn open_jobs(State) -> State
 
-pub fn open_picker(State) -> State
-
 pub fn open_workflows(State) -> State
 
-pub fn resolve_pick(State, @common.Uri) -> State
+pub fn panel_header(locale? : @i18n.Locale, expanded~ : Bool, toggle_expanded~ : @cmd.Cmd) -> @html.Html
 
 pub fn sync(State, @interop.ConversationKey) -> State
 
 pub fn tab_menu(locale? : @i18n.Locale, State, String, @cmd.Emit[Msg], @cmd.Emit[CloseSelection]) -> @action_menu.Definition?
 
-pub fn tabs_bar(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, close_menu~ : @cmd.Cmd, close_tabs~ : @cmd.Emit[CloseSelection], toggle_expanded~ : @cmd.Cmd) -> @html.Html
+pub fn tabs_bar(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, toggle_menu~ : @cmd.Cmd, close_menu~ : @cmd.Cmd, close_tabs~ : @cmd.Emit[CloseSelection]) -> @html.Html
 
 pub fn tabs_to_close(State, CloseSelection) -> Array[DockTab]
 
@@ -65,7 +63,6 @@ pub(all) enum DockTab {
   File(path~ : @common.Uri)
   GitDiff(diff~ : GitHistoryDiff)
   Browser(id~ : Int)
-  FilePicker
   Workflows
   Github
   Jobs

@@ -22,7 +22,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     const navigation = page.getByRole('group', { name: 'Diff change navigation' });
     const position = navigation.locator('.review-hunk-position');
     await expect(navigation).toHaveCount(1);
-    await expect(page.getByRole('group', { name: 'Changed file navigation' })).toHaveCount(0);
+    await expect(page.locator('.file-tree-pane').getByRole('group', { name: 'Changed file navigation' })).toHaveCount(1);
     await expect(position).toHaveText('Change 1 of 2');
     // Backward entry into an uncached file must survive its asynchronous read
     // and land on the last change, not the normal first-change initialization.

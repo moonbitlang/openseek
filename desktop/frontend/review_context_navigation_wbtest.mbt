@@ -66,7 +66,7 @@ test "saved review jump loads a cold inventory and waits for its final snapshot"
   assert_true(initial.file_panel.changes is @fileeditor.ChangeListIdle)
   let loading = click_saved_review(initial, "src/main.mbt")
   assert_true(loading.right_panel_open)
-  assert_true(loading.dock.active is Some(FilePicker))
+  assert_true(loading.dock == initial.dock)
   assert_eq(loading.notifications.length(), 0)
   assert_true(loading.pending_review_context is Some(_))
   // Opening the watcher coalesces a fresh request. An intermediate empty
@@ -119,7 +119,7 @@ test "the latest saved review jump wins and rejects unrelated inventory replies"
     ] {
     let (_, unchanged) = update(test_dispatch(), FileEditor(stale), last)
     assert_true(unchanged.pending_review_context == last.pending_review_context)
-    assert_true(unchanged.dock.active is Some(FilePicker))
+    assert_true(unchanged.dock == last.dock)
     assert_eq(unchanged.notifications.length(), 0)
   }
   let (_, intermediate) = update(

@@ -1,5 +1,5 @@
 ///|
-/// The dock strip sits above the file breadcrumb and its permanent body hosts.
+/// One region header groups the dock viewer and independent navigator.
 /// Child order is structural because Rabbita diffs by index; the viewer and
 /// browser placeholders must not be re-keyed when the active tab changes.
 fn panel_view(
@@ -62,14 +62,6 @@ fn panel_view(
           title: ui(locale, WorkflowsHint),
           missing: false,
         }
-      FilePicker => {
-        let (label, title) = match input.file_panel.explorer_mode {
-          ExplorerChanges => (ui(locale, ReviewChanges), ui(locale, ReviewHint))
-          ExplorerSearch => (ui(locale, SearchLabel), ui(locale, SearchHint))
-          ExplorerFiles => (ui(locale, OpenFile), ui(locale, OpenFileHint))
-        }
-        { tab, label, title, missing: false, }
-      }
     }
   })
   let launcher : @dock.LauncherActions = {
@@ -91,11 +83,6 @@ fn panel_view(
   let mode = match input.dock.active {
     None => "mode-launcher"
     Some(Browser(_)) => "mode-browser"
-    Some(FilePicker) if input.file_panel.explorer_mode is ExplorerChanges =>
-      "mode-picker mode-review"
-    Some(FilePicker) if input.file_panel.explorer_mode is ExplorerSearch =>
-      "mode-picker mode-search-picker"
-    Some(FilePicker) => "mode-picker"
     Some(File(_)) => "mode-file"
     Some(GitDiff(_)) => "mode-history"
     Some(Jobs) => "mode-jobs"
@@ -122,6 +109,11 @@ fn panel_view(
     attrs=@html.Attrs::build().tabindex(-1),
     [
       @fileeditor.resize_handle_view(),
+      @dock.panel_header(
+        locale~,
+        expanded=input.expanded,
+        toggle_expanded=actions.toggle_expanded,
+      ),
       @dock.tabs_bar(
         locale~,
         actions.dock,
@@ -129,11 +121,9 @@ fn panel_view(
         chips,
         launcher,
         menu_open=input.menu_open,
-        expanded=input.expanded,
         toggle_menu=actions.toggle_menu,
         close_menu=actions.close_menu,
         close_tabs=actions.close_tabs,
-        toggle_expanded=actions.toggle_expanded,
       ),
       @fileeditor.breadcrumb_view(
         locale~,
