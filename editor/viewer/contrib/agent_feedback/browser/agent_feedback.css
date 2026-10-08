@@ -36,7 +36,7 @@
 /* --- inline input widget ------------------------------------------------ */
 
 /* A compact composer: UI typography, one border around the surface, and
-   neutral icon actions aligned with the last line of the growing input. */
+   a Batch control and submit icon aligned with the input's last line. */
 .agent-feedback-input-widget {
   position: absolute;
   z-index: 10000;
@@ -105,7 +105,7 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
 }
 
 .agent-feedback-input-widget .agent-feedback-input-action {
@@ -143,15 +143,27 @@
   font: normal normal normal 16px/1 codicon;
 }
 
-.agent-feedback-input-action-cancel .agent-feedback-input-icon::before {
-  content: "\ea76";
+.agent-feedback-input-batch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.agent-feedback-input-action-add .agent-feedback-input-icon::before {
+.agent-feedback-input-batch input {
+  margin: 0;
+  accent-color: var(--vscode-focusBorder);
+}
+
+.agent-feedback-input-action[data-agent-feedback-action="add"] .agent-feedback-input-icon::before {
   content: "\ea60";
 }
 
-.agent-feedback-input-action-apply .agent-feedback-input-icon::before {
+.agent-feedback-input-action[data-agent-feedback-action="apply"] .agent-feedback-input-icon::before {
   content: "\ec0f";
 }
 

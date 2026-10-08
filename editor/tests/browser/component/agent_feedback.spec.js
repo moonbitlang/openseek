@@ -63,7 +63,7 @@ test('agent feedback: add and fold controls have separate hit targets', async ({
       await glyph.click({ position: { x: offset, y: addBox.height / 2 } });
       await expect(input).toBeFocused();
       await expect(body).toHaveCount(collapsed ? 0 : 1);
-      await page.locator('.agent-feedback-input-action-cancel').click();
+      await input.press('Escape');
       await expect(input).not.toBeVisible();
       // Restore the viewport after the composer returns focus to the editor.
       await page.mouse.move(300, 100);
@@ -166,23 +166,19 @@ test('agent feedback: bubbles, glyph add flow, reply, remove, scroll', async ({ 
   const input = page.locator('.agent-feedback-input-widget textarea');
   await expect(input).toBeVisible();
   await expect(input).toBeFocused();
-  const cancelFeedback = page.locator(
-    '.agent-feedback-input-action-cancel',
-  );
-  const addFeedback = page.locator(
-    '.agent-feedback-input-action-add',
-  );
-  const applyAllFeedback = page.locator(
-    '.agent-feedback-input-action-apply',
-  );
-  await expect(cancelFeedback).toHaveAccessibleName('Cancel');
-  await expect(addFeedback).toHaveAccessibleName('Add feedback');
-  await expect(applyAllFeedback).toHaveAccessibleName('Apply all feedback');
-  await expect(addFeedback).toBeDisabled();
-  await expect(applyAllFeedback).toBeDisabled();
+  const batch = page.getByRole('checkbox', { name: 'Batch', exact: true });
+  const submit = page.locator('.agent-feedback-input-action');
+  await expect(batch).not.toBeChecked();
+  await expect(submit).toHaveAccessibleName('Apply all feedback');
+  await expect(submit).toBeDisabled();
+  // Choosing Batch on an empty input keeps the composer open and puts the
+  // caret back in the input, ready for the note.
+  await batch.check();
+  await expect(input).toBeFocused();
+  await expect(submit).toHaveAccessibleName('Add feedback');
+  await expect(submit).toBeDisabled();
   await input.fill('Needs a guard clause');
-  await expect(addFeedback).toBeEnabled();
-  await expect(applyAllFeedback).toBeEnabled();
+  await expect(submit).toBeEnabled();
   const singleLineHeight = (await boxOf(input)).height;
   await input.press('Shift+Enter');
   await expect(input).toHaveValue('Needs a guard clause\n');
@@ -207,7 +203,7 @@ test('agent feedback: bubbles, glyph add flow, reply, remove, scroll', async ({ 
   await expect(widgets).toHaveCount(3);
 
   // A second item can apply the complete accepted batch immediately. The
-  // explicit button is always visible; Alt+Enter remains its keyboard path.
+  // sticky Batch choice is turned off to send through the same button.
   const nextQuietLine = page
     .locator('.view-line', { hasText: 'filler line 4' })
     .first();
@@ -218,8 +214,12 @@ test('agent feedback: bubbles, glyph add flow, reply, remove, scroll', async ({ 
     nextGlyphBox.y + nextGlyphBox.height / 2,
   );
   await expect(input).toBeFocused();
+  await expect(batch).toBeChecked();
+  await batch.uncheck();
+  await expect(input).toBeFocused();
   await input.fill('Apply this batch now');
-  await applyAllFeedback.click();
+  await expect(submit).toHaveAccessibleName('Apply all feedback');
+  await submit.click();
   await expect.poll(async () => (await eventCounts(page)).added).toBe(2);
   await expect.poll(async () => (await eventCounts(page)).submitted).toBe(5);
   await expect(page.locator('.agent-feedback-input-widget')).not.toBeVisible();
@@ -248,4 +248,69 @@ test('agent feedback: bubbles, glyph add flow, reply, remove, scroll', async ({ 
       (await boxOf(page.locator('.agent-feedback-widget').first())).y,
     )
     .toBeLessThan(beforeScroll.y);
+});
+
+
+test('agent feedback: default send, sticky Batch, keyboard focus and IME', async ({ page }) => {
+  await gotoBrowserScenario(page, 'agent-feedback');
+  const input = page.locator('.agent-feedback-input-widget textarea');
+  const batch = page.getByRole('checkbox', { name: 'Batch', exact: true });
+  const submit = page.locator('.agent-feedback-input-action');
+  const open = async line => {
+    await page.locator(`.view-line[data-line="${line}"]`).hover();
+    await page.locator('.agent-feedback-glyph.line-hover').click();
+    await expect(input).toBeFocused();
+  };
+
+  // Enter sends by default, including the already accepted feedback.
+  await open(15);
+  await input.fill('Send this note');
+  await input.press('Enter');
+  await expect.poll(async () => (await eventCounts(page)).added).toBe(1);
+  await expect.poll(async () => (await eventCounts(page)).submitted).toBe(4);
+  await expect(input).not.toBeVisible();
+
+  // Keyboard focus can move into Batch without dismissing an empty input.
+  await open(16);
+  await input.press('Tab');
+  await expect(batch).toBeFocused();
+  await batch.press('Space');
+  await expect(batch).toBeChecked();
+  await expect(input).toBeFocused();
+  await input.fill('   ');
+  await expect(submit).toBeDisabled();
+  await input.press('Enter');
+  await expect(input).toBeVisible();
+  await input.fill('Keep this note in the batch');
+  for (const key of ['Enter', 'Escape']) {
+    await input.evaluate((el, key) => el.dispatchEvent(new KeyboardEvent('keydown', {
+      key, bubbles: true, cancelable: true, isComposing: true,
+    })), key);
+  }
+  await expect(input).toHaveValue('Keep this note in the batch');
+  expect((await eventCounts(page)).added).toBe(1);
+  await submit.click();
+  await expect.poll(async () => (await eventCounts(page)).added).toBe(2);
+  expect((await eventCounts(page)).submitted).toBe(4);
+
+  // Alt+Enter still sends the batch without changing the remembered choice.
+  await open(17);
+  await expect(batch).toBeChecked();
+  await input.fill('Apply both notes');
+  await input.press('Alt+Enter');
+  await expect.poll(async () => (await eventCounts(page)).added).toBe(3);
+  await expect.poll(async () => (await eventCounts(page)).submitted).toBe(6);
+
+  // Escape also works with focus on the checkbox, and leaving an empty
+  // composer from that control dismisses it.
+  await open(18);
+  await expect(batch).toBeChecked();
+  await input.press('Tab');
+  await expect(batch).toBeFocused();
+  await batch.press('Escape');
+  await expect(input).not.toBeVisible();
+  await open(18);
+  await input.press('Tab');
+  await batch.evaluate(el => el.blur());
+  await expect(input).not.toBeVisible();
 });

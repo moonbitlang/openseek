@@ -430,6 +430,12 @@ fn CodeEditorWidget::select_agent_feedback_line(
   if model.snapshot.get_line_first_non_whitespace_column(line) == 0 {
     return
   }
+  // A fresh glyph press explicitly reopens the composer. Escape may have
+  // left the same selection and an unconsumed refocus suppression behind.
+  match self.agent_feedback_input_contribution() {
+    Some(ic) => ic.suppress_selection_change_once = false
+    None => ()
+  }
   let max_column = model.snapshot.line_text(line - 1).length() + 1
   self.set_selection(
     @core.Selection::from_positions(

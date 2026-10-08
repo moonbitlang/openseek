@@ -47,6 +47,8 @@ pub(all) enum Message {
   CancelFeedback
   CancelLabel
   AddFeedbackBatch
+  BatchLabel
+  BatchFeedbackHint
   ApplyFeedbackShortcut
   ApplyFeedback
   CollapseLabel
@@ -302,6 +304,21 @@ pub fn text(locale : Language, message : Message) -> String {
     (TraditionalChinese, AddFeedbackBatch) => "將回饋加入批次（Enter）"
     (Japanese, AddFeedbackBatch) =>
       "フィードバックをまとめて追加（Enter）"
+    (English, BatchLabel) => "Batch"
+    (Spanish, BatchLabel) => "Agrupar"
+    (SimplifiedChinese, BatchLabel) => "批量"
+    (TraditionalChinese, BatchLabel) => "批次"
+    (Japanese, BatchLabel) => "まとめる"
+    (English, BatchFeedbackHint) =>
+      "Collect feedback to apply together instead of submitting each note"
+    (Spanish, BatchFeedbackHint) =>
+      "Agrupar comentarios para aplicarlos juntos en vez de enviar cada uno"
+    (SimplifiedChinese, BatchFeedbackHint) =>
+      "收集反馈后一起提交，而不是逐条提交"
+    (TraditionalChinese, BatchFeedbackHint) =>
+      "收集回饋後一起提交，而不是逐則提交"
+    (Japanese, BatchFeedbackHint) =>
+      "フィードバックを1件ずつ送信せず、まとめて適用"
     (English, ApplyFeedbackShortcut) => "Apply all feedback (Alt+Enter)"
     (Spanish, ApplyFeedbackShortcut) =>
       "Aplicar todos los comentarios (Alt+Enter)"
