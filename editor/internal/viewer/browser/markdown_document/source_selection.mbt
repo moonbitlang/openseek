@@ -1,5 +1,6 @@
 ///|
-/// A block-level source target captured from this installed HTML generation.
+/// A source target captured from this installed HTML generation, at block,
+/// list-item, or table-cell granularity.
 /// The browser's character offsets deliberately do not become source offsets.
 pub struct MarkdownSourceSelection {
   source_range : @base_common.OffsetRange
@@ -34,8 +35,8 @@ pub fn MarkdownSourceSelection::same_dom_range(
 ///|
 fn markdown_element_node_id(element : @rdom.Element) -> Int? {
   element
-  .get_attribute("data-markdown-node-id")
-  .bind(markdown_parse_section_index)
+  .get_attribute(@markdown_core.MarkdownNodeIdAttribute)
+  .bind(markdown_parse_dom_index)
 }
 
 ///|
@@ -43,7 +44,7 @@ fn MarkdownDocumentView::element_for_node(
   self : MarkdownDocumentView,
   node_id : Int,
 ) -> @rdom.Element? {
-  self.article.query_selector("[data-markdown-node-id=\"\{node_id}\"]")
+  self.semantic_dom.source_elements.get(node_id)
 }
 
 ///|
@@ -95,9 +96,10 @@ extern "js" fn markdown_selected_content_nodes(
 ) -> FixedArray[@rdom.Node] =
   #| (article, range) => {
   #|   const doc = article.ownerDocument;
-  #|   const walker = doc.createTreeWalker(article, 5);
+  #|   const root = range.commonAncestorContainer;
+  #|   const walker = doc.createTreeWalker(root, 5);
   #|   const nodes = [];
-  #|   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+  #|   for (let node = root; node; node = walker.nextNode()) {
   #|     const image = node.nodeType === 1 && node.tagName === "IMG";
   #|     if (node.nodeType !== 3 && !image) continue;
   #|     if (!range.intersectsNode(node)) continue;
@@ -171,9 +173,9 @@ fn MarkdownDocumentView::source_owner(
 }
 
 ///|
-/// Resolves selected prose/code to enclosing source blocks. The existing
-/// feedback contract stores one continuous range, so cross-block selections
-/// include the Markdown between their first and last source blocks.
+/// Resolves selected prose/code to enclosing source owners. The existing
+/// feedback contract stores one continuous range, so selections across owners
+/// include the Markdown between their first and last source boundaries.
 pub fn MarkdownDocumentView::source_selection(
   self : MarkdownDocumentView,
 ) -> MarkdownSourceSelection? {
@@ -206,9 +208,17 @@ pub fn MarkdownDocumentView::source_selection(
   guard source_range is Some(source_range) && source_range.length() > 0 else {
     return None
   }
+  let rendered_text = markdown_selection_text(self.article)
+  let selected_text = if rendered_text.trim().is_empty() {
+    // Images have no native selected text. Keep their mapped Markdown source
+    // in the captured snapshot so every feedback host gets useful context.
+    self.source[source_range.start:source_range.end_exclusive].to_owned()
+  } else {
+    rendered_text
+  }
   Some({
     source_range,
-    selected_text: markdown_selection_text(self.article),
+    selected_text,
     source_model_version: self.source_model_version,
     projection_generation: self.projection_generation,
     prefer_below: markdown_selection_prefers_below(self.article, native_range),

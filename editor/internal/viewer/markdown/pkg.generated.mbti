@@ -7,7 +7,11 @@ import {
 }
 
 // Values
+pub const MarkdownNodeIdAttribute : String = "data-markdown-node-id"
+
 pub fn markdown_default_collapsed_sections(MarkdownDocumentProjection, String, min_depth? : Int, min_rendered_elements? : Int, min_body_lines? : Int) -> Array[Int]
+
+pub fn markdown_node_attribute(Int) -> String
 
 pub fn markdown_section_at_source_offset(Array[MarkdownSection], Int) -> MarkdownSection?
 
@@ -74,6 +78,7 @@ pub fn MarkdownCodeLine::to_repr(Self) -> @debug.Repr
 pub struct MarkdownDocumentProjection {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
+  // private fields
 } derive(Eq, @debug.Debug)
 pub fn MarkdownDocumentProjection::equal(Self, Self) -> Bool
 pub fn MarkdownDocumentProjection::not_equal(Self, Self) -> Bool

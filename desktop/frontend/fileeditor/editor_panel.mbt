@@ -317,8 +317,8 @@ fn working_feedback_message(
     file~,
     range=feedback.range,
     quote=match feedback.selected_text {
-      Some(selected) => selected
-      None => model.get_value_in_range(feedback.range)
+      Some(selected) if !selected.trim().is_empty() => selected
+      _ => model.get_value_in_range(feedback.range)
     },
     comment=feedback.text,
     feedback_id=feedback.id,

@@ -12,6 +12,7 @@ fn markdown_feedback_source() -> String {
     #|
     #|- Parent item
     #|  - Nested **review target** has details.
+    #|  - Unselected sibling item.
     #|
     #|| Feature | Description |
     #|| --- | --- |

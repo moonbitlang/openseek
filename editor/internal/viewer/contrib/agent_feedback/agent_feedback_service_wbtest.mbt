@@ -128,10 +128,10 @@ test "agent_feedback_handle preserves defaults and selected text through lifecyc
   assert_eq(explicit.state, Created)
   assert_eq(handle.get_feedback(resource).length(), 2)
   assert_eq(explicit.selected_text, Some("  selected words\nnext line  "))
-  let image = handle.add_feedback(
+  let empty_snapshot = handle.add_feedback(
     resource,
     Range(5, 1, 5, 20),
-    "image",
+    "empty snapshot",
     selected_text="",
   )
   handle.accept_feedback(resource, explicit.id)
@@ -148,7 +148,10 @@ test "agent_feedback_handle preserves defaults and selected text through lifecyc
   )
   handle.mark_feedback_submitted(resource)
   assert_eq(submitted_selections, [None, explicit.selected_text, Some("")])
-  assert_eq(handle.get_feedback(resource)[2].selected_text, image.selected_text)
+  assert_eq(
+    handle.get_feedback(resource)[2].selected_text,
+    empty_snapshot.selected_text,
+  )
   handle.remove_feedback(resource, defaulted.id)
   assert_true(change_count >= 7)
   subscription.dispose()

@@ -24,6 +24,73 @@ fn semantic_boundaries(line : MarkdownCodeLine) -> Array[Int?] {
 }
 
 ///|
+test "tight list item identities exclude their unselected siblings" {
+  for
+    source in [
+      "- first **target**\n- second target", "3. first **target**\n4. second target",
+      "- parent\n  - first **target**\n  - second target",
+    ] {
+    let rendered = render_markdown(source, source_mapping=true)
+    let item_sources : Array[String] = []
+    for node_id, range in rendered.projection.source_ranges_by_id {
+      if rendered.html.contains("<li\{markdown_node_attribute(node_id)}>") {
+        assert_eq(
+          rendered.projection.source_range_for_node(node_id),
+          Some(range),
+        )
+        item_sources.push(source[range.start:range.end_exclusive].to_owned())
+      }
+    }
+    item_sources.sort()
+    let expected = if source.has_prefix("3.") {
+      ["3. first **target**", "4. second target"]
+    } else if source.has_prefix("- parent") {
+      ["- first **target**", "- parent", "- second target"]
+    } else {
+      ["- first **target**", "- second target"]
+    }
+    expected.sort()
+    assert_eq(item_sources, expected)
+  }
+}
+
+///|
+test "table cell identities retain markup and UTF-16 source boundaries" {
+  let source =
+    #|| Name | 中文 |
+    #||:---|---:|
+    #|| **one** | 😀 *two* |
+    #|| three | four |
+  let rendered = render_markdown(source, source_mapping=true)
+  let cell_sources : Array[String] = []
+  let row_sources : Array[String] = []
+  for node_id, range in rendered.projection.source_ranges_by_id {
+    if rendered.html.contains("<th\{markdown_node_attribute(node_id)}") ||
+      rendered.html.contains("<td\{markdown_node_attribute(node_id)}") {
+      assert_eq(rendered.projection.source_range_for_node(node_id), Some(range))
+      cell_sources.push(
+        source[range.start:range.end_exclusive].trim().to_owned(),
+      )
+    }
+    if rendered.html.contains("<tr\{markdown_node_attribute(node_id)}>") {
+      row_sources.push(source[range.start:range.end_exclusive].to_owned())
+    }
+  }
+  cell_sources.sort()
+  row_sources.sort()
+  let expected_cells = [
+    "**one**", "Name", "four", "three", "中文", "😀 *two*",
+  ]
+  let expected_rows = [
+    "| **one** | 😀 *two* |", "| Name | 中文 |", "| three | four |",
+  ]
+  expected_cells.sort()
+  expected_rows.sort()
+  assert_eq(cell_sources, expected_cells)
+  assert_eq(row_sources, expected_rows)
+}
+
+///|
 test "projection keeps zero and identical code blocks distinct with full fence info" {
   assert_eq(render_markdown("plain").projection.code_blocks.length(), 0)
   let source =

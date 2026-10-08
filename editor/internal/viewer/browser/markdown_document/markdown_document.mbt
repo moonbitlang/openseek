@@ -17,13 +17,14 @@ pub struct MarkdownSemanticCodeLineDom {
 /// line nodes and a caller can never retain a registry from two parses.
 priv struct MarkdownSemanticDomLifetime {
   lines : Array[MarkdownSemanticCodeLineDom]
+  source_elements : Map[Int, @rdom.Element]
   listeners : Array[@base_common.Disposable]
   mut disposed : Bool
 }
 
 ///|
 fn MarkdownSemanticDomLifetime::empty() -> MarkdownSemanticDomLifetime {
-  { lines: [], listeners: [], disposed: false, }
+  { lines: [], source_elements: Map([]), listeners: [], disposed: false, }
 }
 
 ///|
@@ -38,6 +39,7 @@ fn MarkdownSemanticDomLifetime::dispose(
     self.listeners.remove(self.listeners.length() - 1).dispose()
   }
   self.lines.clear()
+  self.source_elements.clear()
 }
 
 ///|
@@ -177,7 +179,7 @@ pub fn MarkdownDocumentView::MarkdownDocumentView(
     }
     if target.closest("[data-toc-offset]") is Some(row) &&
       row.get_attribute("data-toc-offset") is Some(raw) &&
-      markdown_parse_section_index(raw) is Some(offset) {
+      markdown_parse_dom_index(raw) is Some(offset) {
       // Row activation is a completed navigation, so return the
       // TOC to its compact state before reveal math runs. Otherwise
       // the expanded overlay can cover the heading aligned to the
@@ -301,7 +303,7 @@ fn render_markdown_document_code_block(
     _ => tokenized
   }
   let source_attribute = match code_block.node_id {
-    Some(id) => " data-markdown-node-id=\"\{id}\""
+    Some(id) => @markdown_core.markdown_node_attribute(id)
     None => ""
   }
   let semantic_attribute = if code_block.is_moonbit_check_fence(resource_kind) {
@@ -396,6 +398,19 @@ fn MarkdownDocumentView::post_render(self : MarkdownDocumentView) -> Unit {
   self.refresh_localized_labels()
   self.semantic_dom.dispose()
   let semantic_dom = MarkdownSemanticDomLifetime::empty()
+  for
+    element in self.article.query_selector_all(
+      "[\{@markdown_core.MarkdownNodeIdAttribute}]",
+    ) {
+    if markdown_element_node_id(element) is Some(id) &&
+      self.rendered.projection.source_range_for_node(id) is Some(_) &&
+      !semantic_dom.source_elements.contains(id) {
+      // A container and its only child may share an ID. Retain the outer
+      // element, matching DOM order and section folding's root ownership.
+      semantic_dom.source_elements[id] = element
+    }
+  }
+  self.semantic_dom = semantic_dom
   for anchor in self.rendered.projection.block_anchors {
     guard anchor.is_root_element &&
       self.element_for_node(anchor.node_id) is Some(element) else {
@@ -468,7 +483,6 @@ fn MarkdownDocumentView::post_render(self : MarkdownDocumentView) -> Unit {
       }
     }
   }
-  self.semantic_dom = semantic_dom
 }
 
 ///|
@@ -753,14 +767,13 @@ fn markdown_fold_toggle_section(event : @rdom.Event) -> Int? {
   guard button.get_attribute("data-markdown-fold-section") is Some(raw) else {
     return None
   }
-  markdown_parse_section_index(raw)
+  markdown_parse_dom_index(raw)
 }
 
 ///|
-/// Digit-only index parser for the toggle data attribute. Anything else --
-/// including an empty string -- is a malformed control and is ignored rather
-/// than routed to section 0.
-fn markdown_parse_section_index(raw : String) -> Int? {
+/// Digit-only parser for DOM node identities, source offsets, and control
+/// indices. Malformed attributes are ignored instead of selecting index 0.
+fn markdown_parse_dom_index(raw : String) -> Int? {
   guard raw.length() > 0 && raw.length() <= 9 else { return None }
   let value = for unit in raw; value = 0 {
     guard unit >= '0' && unit <= '9' else { return None }

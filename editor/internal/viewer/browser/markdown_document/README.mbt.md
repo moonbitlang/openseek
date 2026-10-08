@@ -25,8 +25,10 @@ the hover browser package own those higher-level contracts.
 Feedback selection captures two independent values: the enclosing source
 range resolved through node IDs, and the exact rendered text returned by the
 browser's native Selection. The text is captured before feedback input takes
-focus and remains attached to that selection; the source range is a location
-hint, not a request to expand the quote to a whole source block.
+focus and remains attached to that selection. An image-only selection has no
+visible text, so its quote captures the mapped Markdown source instead.
+Tight list items and table cells resolve to their own source spans; selections
+across owners retain one continuous span between their source boundaries.
 
 ```mbt nocheck
 // MarkdownViewer installs this as its rich-document presentation.
@@ -44,7 +46,12 @@ article. Synchronous D2/Diago and UML SVGs, plus asynchronously committed
 Mermaid SVGs, receive pan, zoom, fit, and resize controls; replacement and
 disposal release that lifetime before the renderer mutates or removes the
 article DOM.
-The single post-render pass stamps source anchors and leaves stable
+The single post-render pass indexes source elements by AST ID, retaining the
+outer element when a container shares its ID with its only child. The index is
+retired with the semantic DOM registry before each replacement or disposal.
+Selection walks only the native range's common ancestor subtree and resolves
+owners through the projection's ID-to-source-range map.
+The pass stamps source anchors and leaves stable
 `data-markdown-code-block="<block_index>"` wrappers for source-aware browser
 features. Compiler-recognized `mbt check` fences additionally expose one
 source-bearing DOM row per projected code line. Each row retains the exact

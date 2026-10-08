@@ -1,4 +1,23 @@
 ///|
+fn markdown_html_without_node_ids(html : String) -> String {
+  let buffer = StringBuilder()
+  for index, part in html.split(" data-markdown-node-id=\"") {
+    if index == 0 {
+      buffer.write_view(part)
+    } else {
+      match part.split_once("\"") {
+        Some((_, rest)) => buffer.write_view(rest)
+        None => {
+          buffer.write_string(" data-markdown-node-id=\"")
+          buffer.write_view(part)
+        }
+      }
+    }
+  }
+  buffer.to_string()
+}
+
+///|
 test "source block rendering preserves cmark content and safe rendering" {
   let source =
     #|# Heading
@@ -37,14 +56,7 @@ test "source block rendering preserves cmark content and safe rendering" {
     #|[^one]: body
   let ordinary = @markdown.render_markdown(source)
   let mapped = @markdown.render_markdown(source, source_mapping=true)
-  let mut without_ids = mapped.html
-  for anchor in mapped.projection.block_anchors {
-    without_ids = without_ids.replace_all(
-      old=" data-markdown-node-id=\"\{anchor.node_id}\"",
-      new="",
-    )
-  }
-  assert_eq(without_ids, ordinary.html)
+  assert_eq(markdown_html_without_node_ids(mapped.html), ordinary.html)
   assert_false(mapped.html.contains("<script>"))
   assert_false(mapped.html.contains("javascript:"))
 }
@@ -62,15 +74,8 @@ test "cancelled tasks close strikethrough before the following task" {
       "- [~] cancelled *item*\{separator}- [ ] pending",
       source_mapping=true,
     )
-    let mut html = rendered.html
-    for anchor in rendered.projection.block_anchors {
-      html = html.replace_all(
-        old=" data-markdown-node-id=\"\{anchor.node_id}\"",
-        new="",
-      )
-    }
     assert_eq(
-      html,
+      markdown_html_without_node_ids(rendered.html),
       "<ul>\n<li><div class=\"task\"><input type=\"checkbox\" disabled><del>\{cancelled}</del></div></li>\n<li><div class=\"task\"><input type=\"checkbox\" disabled><div>\{pending}</div></div></li>\n</ul>\n",
     )
   }

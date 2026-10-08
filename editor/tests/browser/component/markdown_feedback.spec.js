@@ -94,12 +94,12 @@ test('cross-paragraph feedback keeps exact rendered text and a complete source s
   expect(facts.items[0].source.trimEnd()).toBe(`${firstParagraph}\n\n${secondParagraph}`);
 });
 
-test('lists, tables, code, and images preserve their selected text independently of source ranges', async ({ page }) => {
+test('list items and table cells use their own source spans; images quote mapped Markdown', async ({ page }) => {
   await openFixture(page);
   const cases = [
-    { text: 'review target', source: 'Nested **review target** has details.' },
+    { text: 'review target', source: '- Nested **review target** has details.' },
     { text: 'table target', source: '**table target** with context' },
-    { text: 'code target', source: 'code target with context' },
+    { text: 'code target', source: '```text\ncode target with context\n```' },
   ];
   for (const [index, item] of cases.entries()) {
     await openComposer(page, item.text);
@@ -108,9 +108,7 @@ test('lists, tables, code, and images preserve their selected text independently
     await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(index + 1);
     const saved = (await feedbackFacts(page)).items[index];
     expect(saved.selected_text).toBe(item.text);
-    expect(saved.source).toContain(item.source);
-    expect(saved.source).not.toContain('Unselected tail paragraph');
-    expect(saved.source).not.toContain(firstParagraph);
+    expect(saved.source.trim()).toBe(item.source);
     expect(saved.range[0]).toBeGreaterThan(5);
   }
 
@@ -135,13 +133,38 @@ test('lists, tables, code, and images preserve their selected text independently
   await page.locator('.agent-feedback-input-action-add').click();
   await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(4);
   const savedImage = (await feedbackFacts(page)).items[3];
-  // An image-only native selection has text "", distinct from a selection
-  // with no supplied text. Do not replace it with Markdown or image alt text.
-  expect(savedImage.selected_text).toBe('');
+  // Native image selections have no visible text, so feedback captures source.
+  expect(savedImage.selected_text).toBe(
+    '![Feedback image](https://example.test/browser-tests/feedback-fixture.svg)',
+  );
   expect(savedImage.source.trimEnd()).toBe(
     '![Feedback image](https://example.test/browser-tests/feedback-fixture.svg)',
   );
 });
+
+for (const selection of [
+  {
+    name: 'tight list items', start: 'review target', end: 'Unselected sibling item',
+    source: '- Nested **review target** has details.\n  - Unselected sibling item.',
+  },
+  {
+    name: 'table cells', start: 'Save', end: 'table target',
+    source: 'Save | **table target** with context',
+  },
+]) {
+  test(`selection across ${selection.name} keeps one continuous source span`, async ({ page }) => {
+    await openFixture(page);
+    await selectRenderedText(page, selection.start, selection.end);
+    const selectedText = await page.evaluate(() => document.getSelection().toString());
+    await page.locator(input).click();
+    await page.locator(input).fill('Review both source owners');
+    await page.locator('.agent-feedback-input-action-add').click();
+    await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
+    const saved = (await feedbackFacts(page)).items[0];
+    expect(saved.source.trim()).toBe(selection.source);
+    expect(saved.selected_text).toBe(selectedText);
+  });
+}
 
 for (const change of ['setSource', 'replaceSameUri']) {
   test(`a draft cannot submit stale source after ${change}`, async ({ page }) => {

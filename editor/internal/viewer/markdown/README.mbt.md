@@ -28,9 +28,12 @@ relationship likewise remains visible with an entirely non-semantic map
 instead of guessing a provider position.
 
 With source mapping enabled, paragraphs, headings, quotes, lists, tables,
-code blocks, and thematic breaks carry their own node ID. Math text receives
-one source-bearing wrapper. Blank lines, link definitions, and omitted raw
-HTML have no element to mark. A tight list paragraph has no `<p>`; selections there fall back to the enclosing list.
+code blocks, and thematic breaks carry their own node ID. List items, table
+rows, and table cells also carry identities from the same AST, so tight list
+text and individual cells resolve without expanding to the whole container.
+Math text receives one source-bearing wrapper. Blank lines, link definitions, and omitted raw
+HTML have no element to mark. A tight list paragraph has no `<p>`; its `<li>`
+owns the item source range.
 Nested paragraphs and code blocks retain their AST identities. A container
 and its sole child can share a cmark ID and the same source range; the
 attribute identifies source provenance, not a unique DOM element.
@@ -44,7 +47,8 @@ multiple-root output cannot shift another block's association.
 `MarkdownBlockAnchor::is_root_element` identifies the top-level blocks used by
 section folding. Folding resolves their node IDs directly instead of matching
 DOM children to AST traversal positions. `source_range_for_node` resolves IDs
-against the same projection. Code-line semantic mapping remains independent.
+through an ID-to-range index against the same projection. Code-line semantic
+mapping remains independent.
 
 `MarkdownResourceKind` keeps outer resource policy typed. A block opts into
 MoonBit Markdown semantics only for a `MoonBitMarkdown` resource and a full

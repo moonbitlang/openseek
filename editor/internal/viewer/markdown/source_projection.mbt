@@ -44,6 +44,7 @@ pub struct MarkdownBlockAnchor {
 pub struct MarkdownDocumentProjection {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
+  priv source_ranges_by_id : Map[Int, @common.OffsetRange]
 } derive(Eq, Debug)
 
 ///|
@@ -120,7 +121,7 @@ pub fn MarkdownCodeBlock::project_source_range(
 
 ///|
 fn empty_markdown_document_projection() -> MarkdownDocumentProjection {
-  { block_anchors: [], code_blocks: [], }
+  { block_anchors: [], code_blocks: [], source_ranges_by_id: Map([]), }
 }
 
 ///|
@@ -128,6 +129,17 @@ priv struct MarkdownProjectionBuilder {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
   code_blocks_by_id : Map[Int, MarkdownCodeBlock]
+  source_ranges_by_id : Map[Int, @common.OffsetRange]
+}
+
+///|
+fn MarkdownProjectionBuilder::add_source_node(
+  self : MarkdownProjectionBuilder,
+  meta : @cmark_base.Meta,
+) -> Unit {
+  if markdown_offset_range(meta.loc) is Some(source_range) {
+    self.source_ranges_by_id[meta.id] = source_range
+  }
 }
 
 ///|
@@ -141,6 +153,7 @@ fn markdown_document_projection(
     block_anchors: [],
     code_blocks: [],
     code_blocks_by_id: Map([]),
+    source_ranges_by_id: Map([]),
   }
   let root_element_ids = markdown_root_element_ids(doc, source_mapping~)
   let folder = @cmark.Folder::new(block=fn(
@@ -162,6 +175,28 @@ fn markdown_document_projection(
         heading_level: markdown_block_heading_level(block),
         heading_text: markdown_block_heading_text(block),
       })
+      builder.add_source_node(block.meta())
+    }
+    // The block folder visits item blocks and cell inlines, but not the
+    // enclosing item/row nodes. Retain their identities from this same AST.
+    match block {
+      List(node) =>
+        for item in node.v.items {
+          builder.add_source_node(item.meta)
+        }
+      ExtTable(node) =>
+        for (row, _) in node.v.rows {
+          match row.v {
+            Header(cells) | Data(cells) => {
+              builder.add_source_node(row.meta)
+              for (cell, _) in cells {
+                builder.add_source_node(cell.meta())
+              }
+            }
+            Sep(_) => ()
+          }
+        }
+      _ => ()
     }
     if block is CodeBlock(node) &&
       markdown_code_block_from_cmark(
@@ -180,7 +215,11 @@ fn markdown_document_projection(
     _ => return (empty_markdown_document_projection(), Map([]))
   }
   (
-    { block_anchors: builder.block_anchors, code_blocks: builder.code_blocks, },
+    {
+      block_anchors: builder.block_anchors,
+      code_blocks: builder.code_blocks,
+      source_ranges_by_id: builder.source_ranges_by_id,
+    },
     builder.code_blocks_by_id,
   )
 }
@@ -213,12 +252,7 @@ pub fn MarkdownDocumentProjection::source_range_for_node(
   self : MarkdownDocumentProjection,
   node_id : Int,
 ) -> @common.OffsetRange? {
-  for anchor in self.block_anchors {
-    if anchor.node_id == node_id {
-      return Some(anchor.source_range)
-    }
-  }
-  None
+  self.source_ranges_by_id.get(node_id)
 }
 
 ///|

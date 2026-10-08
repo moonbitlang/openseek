@@ -19,8 +19,8 @@
 ///|
 /// The document renderer owns block tags so their source identity is emitted
 /// alongside the tag. cmark still owns inline escaping, links, raw-HTML policy,
-/// footnote state, and document traversal. List items and table cells fall back
-/// to their containing marked block when they have no paragraph element.
+/// footnote state, and document traversal. List items and table cells carry
+/// their own identities even when cmark omits an inner paragraph element.
 fn markdown_source_renderer() -> @cmark_renderer.Renderer {
   let heading_ids : Set[String] = Set([])
   let default_renderer = @cmark_html.renderer(safe=true)
@@ -68,11 +68,6 @@ fn markdown_source_renderer() -> @cmark_renderer.Renderer {
     }
     true
   })
-}
-
-///|
-fn markdown_node_attribute(node_id : Int) -> String {
-  " data-markdown-node-id=\"\{node_id}\""
 }
 
 ///|
@@ -164,7 +159,7 @@ fn markdown_source_list_item(
   c : @cmark_renderer.Context,
   i : @cmark.Node[@cmark.ListItem],
 ) -> Unit raise {
-  c.b.write_string("<li>")
+  c.b.write_string("<li\{markdown_node_attribute(i.meta.id)}>")
   guard i.v.ext_task_marker is Some(mark) else {
     markdown_source_item_block(tight~, c, i.v.block)
     c.b.write_string("</li>\n")
@@ -232,9 +227,17 @@ fn markdown_source_table(
   t : @cmark.Table,
   attrs : String,
 ) -> Unit raise {
-  fn start(c : @cmark_renderer.Context, align : @cmark.TableAlign?, tag) {
+  fn start(
+    c : @cmark_renderer.Context,
+    align : @cmark.TableAlign?,
+    tag,
+    node_id : Int?,
+  ) {
     c.b.write_char('<')
     c.b.write_string(tag)
+    if node_id is Some(id) {
+      c.b.write_string(markdown_node_attribute(id))
+    }
     match align {
       None => c.b.write_char('>')
       Some(Left) => c.b.write_string(" class=\"left\">")
@@ -254,46 +257,46 @@ fn markdown_source_table(
     tag,
     align : ArrayView[@cmark.Node[@cmark.TableSep]],
     count,
-    cs : ArrayView[(_, _)],
+    cs : ArrayView[(@cmark.Inline, @cmark.TableCellLayout)],
   ) raise {
     match (align, cs) {
       ([{ v, .. }, .. align], [(col, _), .. cs]) => {
-        start(c, v.0.0, tag)
+        start(c, v.0.0, tag, Some(col.meta().id))
         c.inline(col)
         close(c, tag)
         cols(c, tag, align, count - 1, cs)
       }
       ([{ v, .. }, .. align], []) => {
-        start(c, v.0.0, tag)
+        start(c, v.0.0, tag, None)
         close(c, tag)
         cols(c, tag, align, count - 1, [][:])
       }
       ([], [(col, _), .. cs]) => {
-        start(c, None, tag)
+        start(c, None, tag, Some(col.meta().id))
         c.inline(col)
         close(c, tag)
         cols(c, tag, [][:], count - 1, cs)
       }
       ([], []) =>
         for _ in 0..<count {
-          start(c, None, tag)
+          start(c, None, tag, None)
           close(c, tag)
         }
     }
   }
 
-  fn row(c : @cmark_renderer.Context, tag, align, count, cs) raise {
-    c.b.write_string("<tr>\n")
+  fn row(c : @cmark_renderer.Context, node_id, tag, align, count, cs) raise {
+    c.b.write_string("<tr\{markdown_node_attribute(node_id)}>\n")
     cols(c, tag, align, count, cs)
     c.b.write_string("</tr>\n")
   }
 
-  fn header(c : @cmark_renderer.Context, count, align, cols) raise {
-    row(c, "th", align, count, cols)
+  fn header(c : @cmark_renderer.Context, node_id, count, align, cols) raise {
+    row(c, node_id, "th", align, count, cols)
   }
 
-  fn data(c : @cmark_renderer.Context, count, align, cols) raise {
-    row(c, "td", align, count, cols)
+  fn data(c : @cmark_renderer.Context, node_id, count, align, cols) raise {
+    row(c, node_id, "td", align, count, cols)
   }
 
   fn rows(
@@ -303,16 +306,16 @@ fn markdown_source_table(
     rs : ArrayView[(@cmark.Node[@cmark.TableRow], _)],
   ) raise {
     match rs {
-      [({ v: Header(cols), .. }, _), .. rs] => {
+      [({ v: Header(cols), meta, }, _), .. rs] => {
         let (align, rs) = match rs {
           [({ v: Sep(align), .. }, _), .. rs] => (align.to_array()[:], rs)
           _ => (align, rs)
         }
-        header(c, col_count, align, cols.to_array()[:])
+        header(c, meta.id, col_count, align, cols.to_array()[:])
         rows(c, col_count, align, rs)
       }
-      [({ v: Data(cols), .. }, _), .. rs] => {
-        data(c, col_count, align, cols.to_array()[:])
+      [({ v: Data(cols), meta, }, _), .. rs] => {
+        data(c, meta.id, col_count, align, cols.to_array()[:])
         rows(c, col_count, align, rs)
       }
       [({ v: Sep(align), .. }, _), .. rs] =>

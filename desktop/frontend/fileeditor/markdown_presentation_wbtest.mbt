@@ -96,12 +96,12 @@ test "working feedback keeps rendered selection text separate from source range"
     )
   })
   |> ignore
-  // Empty visible text is still an explicit selection (for example an image).
-  // Only source feedback without a rendered selection quotes the model range.
+  // A selection without visible text still needs its mapped source context.
   for
     (selected_text, expected) in [
       (Some("keep"), "keep"),
-      (Some(""), ""),
+      (Some(""), "Please **keep** this."),
+      (Some(" \n "), "Please **keep** this."),
       (None, "Please **keep** this."),
     ] {
     messages.clear()

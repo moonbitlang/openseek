@@ -20,9 +20,10 @@ An `AgentFeedback` item is identified by a `String` id within a resource, and
 carries the range it annotates, its `kind`, its `state`, and its replies.
 `selected_text` is an optional snapshot of the user's visible selection,
 independent of the source range. Rendered Markdown selections provide it even
-when their source mapping covers a whole block. An explicitly empty snapshot
-(`Some("")`, for example an image-only selection) must not be replaced with
-source text; `None` means no snapshot was supplied.
+when their source mapping covers a whole block. Image-only Markdown selections
+capture their mapped source because the browser supplies no visible text.
+`None` means no snapshot was supplied. A host may also quote mapped source
+when a supplied snapshot has no visible text.
 
 ```mbt check
 ///|
