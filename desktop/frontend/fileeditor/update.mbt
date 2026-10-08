@@ -2399,7 +2399,11 @@ fn select_review_view_mode(
     // Viewer's 5px minimum while the diff is visible. Measure again only after
     // File mode has restored the source host's real box.
     ReviewSource => @cmd.batch([show, request_viewer_remeasure()])
-    ReviewDiff => show
+    ReviewDiff =>
+      @cmd.batch([
+        show,
+        delayed_diff_loading(dispatch, ctx.owner, path, next_doc),
+      ])
   }
   (command, { ..state, docs, }.invalidate_review_hunk_surface())
 }

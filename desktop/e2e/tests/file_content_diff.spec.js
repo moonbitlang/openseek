@@ -1,6 +1,51 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
+  test(`returning to Diff restores its loading notice while ${pendingMethod} is pending`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    const { promise: pending, resolve: release } = Promise.withResolvers();
+    const replyFor = app.replyFor.bind(app);
+    app.replyFor = async (request) => {
+      if (request.method === pendingMethod && request.params?.path?.endsWith('/main.mbt')) {
+        await pending;
+      }
+      return replyFor(request);
+    };
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    await app.openReview();
+    // Control the 800 ms timer so the first notification expires in Content.
+    await page.clock.install({ time: new Date('2026-10-08T00:00:00Z') });
+    await page.clock.pauseAt(new Date('2026-10-08T00:00:01Z'));
+    const view = page.getByRole('group', { name: 'File view' });
+    const notice = page.locator('.viewer-notice');
+    try {
+      await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+      await expect.poll(() => app.requests.some(request =>
+        request.method === pendingMethod && request.params?.path?.endsWith('/main.mbt')))
+        .toBe(true);
+      await page.clock.runFor(50);
+      await view.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.clock.runFor(1000);
+      await expect(notice).not.toContainText('Loading diff');
+      await view.getByRole('button', { name: 'Diff', exact: true }).click();
+      await page.clock.runFor(50);
+      await expect(notice).not.toContainText('Loading diff');
+      await page.clock.runFor(1000);
+      await expect(notice).toHaveText('Loading diff for main.mbt…');
+    } finally {
+      release();
+      await page.clock.resume();
+    }
+    await expect(notice).not.toContainText('Loading diff');
+    await expect(page.getByRole('button', { name: 'Line diff', exact: true })).toBeEnabled();
+    await expect(view.getByRole('button', { name: 'Diff', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 test('reopening a deleted review keeps Diff without reading the missing file', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.gitChanges = [{ path: 'src/main.mbt', index_status: ' ', worktree_status: 'D', kind: 'deleted' }];
