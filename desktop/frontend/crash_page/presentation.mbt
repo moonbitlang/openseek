@@ -48,13 +48,13 @@ let crash_style : String =
   #|    }
   #|    #frontend-crash p {
   #|      margin: 0 0 18px;
-  #|      color: var(--color-text-secondary, #5c5f66);
+  #|      color: var(--color-text-secondary, #3f444d);
   #|    }
   #|    #frontend-crash button {
   #|      padding: 6px 12px;
-  #|      border: 1px solid var(--color-accent, #3b6ef5);
+  #|      border: 1px solid var(--color-accent, #315fd5);
   #|      border-radius: var(--radius-sm, 6px);
-  #|      background: var(--color-accent, #3b6ef5);
+  #|      background: var(--color-accent, #315fd5);
   #|      color: var(--color-on-accent, #fff);
   #|      font: inherit;
   #|      cursor: pointer;
@@ -65,14 +65,14 @@ let crash_style : String =
   #|    }
   #|    #frontend-crash button:focus-visible,
   #|    #frontend-crash summary:focus-visible {
-  #|      outline: 2px solid var(--color-focus-ring, #3b6ef5);
+  #|      outline: 2px solid var(--color-focus-ring, #315fd5);
   #|      outline-offset: 2px;
   #|    }
   #|    #frontend-crash details {
   #|      margin-top: 20px;
   #|      padding-top: 14px;
   #|      border-top: 1px solid var(--color-border-subtle, #f0efea);
-  #|      color: var(--color-text-muted, #9a9da4);
+  #|      color: var(--color-text-muted, #565d68);
   #|      font-size: var(--font-size-sm, 13px);
   #|    }
   #|    #frontend-crash summary { cursor: pointer; }

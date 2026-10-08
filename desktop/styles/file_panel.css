@@ -2706,7 +2706,6 @@ button.git-history-file.selected {
   margin: 0 10px;
   font-weight: 600;
   line-height: 22px;
-  opacity: 0.8;
 }
 
 .semantic-review-host .semantic-entry-status.added {
@@ -3142,7 +3141,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-item.draft .github-item-title { font-style: italic; }
 .github-item.selected { background: var(--color-hover-subtle); color: var(--color-accent); }
 .github-empty, .github-error { padding: 10px 16px; font-size: var(--font-size-sm); line-height: 1.5; color: var(--color-text-secondary); overflow-wrap: anywhere; }
-.github-error { color: var(--color-error, #d45b5b); }
+.github-error { color: var(--color-danger); }
 .github-more { margin: 6px 16px; padding: 4px 6px; border: 0; border-radius: 4px; background: transparent; color: var(--color-accent); font: inherit; font-size: var(--font-size-sm); cursor: pointer; }
 .github-error .github-more { margin: 6px 0 0; }
 .jobs-panel { flex: 1; min-height: 0; min-width: 0; flex-direction: column; overflow: auto; padding: 18px; gap: 12px; color: var(--color-text-primary); }

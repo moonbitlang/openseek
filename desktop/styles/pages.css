@@ -468,7 +468,7 @@ h2 {
 }
 
 .skill-desc {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
 }
