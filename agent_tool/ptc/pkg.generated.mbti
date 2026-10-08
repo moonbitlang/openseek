@@ -14,7 +14,7 @@ import {
 // Types and methods
 type Program
 pub fn Program::adopted(Self) -> Bool
-pub async fn Program::close(Self) -> Unit
+pub async fn Program::close(Self, discard_images? : Bool) -> Unit
 pub fn Program::env(Self) -> Map[String, String]
 pub fn Program::handoff(Self, String, async (Json) -> Unit) -> Unit
 pub fn Program::image_output(Self) -> (String, Array[@openseek_protocol.Image])

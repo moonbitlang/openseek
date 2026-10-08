@@ -206,14 +206,14 @@ pub fn definition(
             on_trace?=on_program_trace,
             on_image_output?=on_program_output,
           )
-          errdefer program.close()
+          errdefer program.close(discard_images=!program.adopted())
           let action = run(Some(program)) catch {
             error =>
               @agent_tool.respond("PTC program failed: \{error}", is_error=true)
           }
           // An adopted job owns the registration and closes it at its end.
           if !program.adopted() {
-            program.close()
+            program.close(discard_images=true)
           }
           program.result(action)
         } else {
@@ -561,7 +561,7 @@ async fn execute(
       return
     }
     if program is Some(program) {
-      program.close()
+      program.close(discard_images=true)
     }
     @async.protect_from_cancel(() => {
       @fs.rmdir(dir, recursive=true) catch {

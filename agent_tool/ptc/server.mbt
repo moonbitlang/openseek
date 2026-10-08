@@ -396,7 +396,12 @@ pub fn Program::interrupted(self : Program) -> Bool {
 ///|
 /// Revoke before the first suspension, then cancel and join without holding a
 /// file gate. Idempotent callers all wait for the same active calls to finish.
-pub async fn Program::close(self : Program) -> Unit {
+/// Foreground owners discard image files before the final trace is published;
+/// background cleanup may run before handoff, so it must retain them by default.
+pub async fn Program::close(
+  self : Program,
+  discard_images? : Bool = false,
+) -> Unit {
   self.stop()
   @async.protect_from_cancel(() => {
     let tasks = self.active.values().to_array()
@@ -412,6 +417,17 @@ pub async fn Program::close(self : Program) -> Unit {
     // final trace and a no-op observer.
     self.publishing.acquire()
     defer self.publishing.release()
+    if discard_images && !self.adopted() {
+      @async.with_timeout(5000, () => self.discard_image_files()) catch {
+        error =>
+          self.trace_error = Some(
+            @agent_tool.brief_line(
+              "image snapshot cleanup failed: \{error}",
+              limit=512,
+            ),
+          )
+      }
+    }
     if !self.calls.is_empty() {
       self.deliver_trace()
     }
@@ -457,7 +473,7 @@ pub fn Program::result(
         text += "\nPTC stopped unfinished tool calls; changes may have occurred. Await every call before exiting."
       }
       if self.trace_error is Some(error) {
-        text += "\nPTC trace publication failed: \{error}. Calls may have executed; inspect the retained trace."
+        text += "\nPTC finalization failed: \{error}. Calls may have executed; inspect the retained trace."
       }
       if !self.adopted() {
         let (image_text, attached_images) = self.image_output()
@@ -474,6 +490,26 @@ pub fn Program::result(
     }
     Control(_) => action
   }
+}
+
+///|
+/// Keep image bytes for the tool message, but retire foreground-only files and
+/// their metadata together. Retain entries that could not be removed so the
+/// final trace reports only paths still needing cleanup, and retries are safe.
+async fn Program::discard_image_files(self : Program) -> Unit {
+  for paths in self.image_paths.values() {
+    while paths.last() is Some(entry) {
+      guard entry is { "path": String(path), .. } else {
+        fail("invalid PTC image snapshot metadata")
+      }
+      @fs.remove(path) catch {
+        @os_error.OSError(_) as error if error.is_ENOENT() => ()
+        error => raise error
+      }
+      ignore(paths.pop())
+    }
+  }
+  self.image_paths.clear()
 }
 
 ///|

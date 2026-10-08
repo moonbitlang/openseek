@@ -80,6 +80,11 @@ Those paths can be reopened with `read_image` after restart. Memory-only hosts
 retain images only for their runtime's lifetime. Repeated job reads return the
 same snapshot; they do not consume images.
 
+Foreground completion or cancellation removes its image snapshot files and
+their `ptc_images` paths after nested calls have stopped. The in-memory images
+still accompany the tool result and are persisted in the session history.
+Programs handed off to background jobs retain their snapshot files.
+
 ## Lifetime and deadlock prevention
 
 The OpenSeek session owns one loopback HTTP server. Every script receives its
