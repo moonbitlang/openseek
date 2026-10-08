@@ -131,6 +131,7 @@ pub fn definition(
   subrun? : @host.SubrunInjection,
   program_service? : @ptc.Service,
   on_program_trace? : (Json) -> Unit,
+  on_program_output? : (@bgjobs.ImageOutput) -> Unit,
 ) -> @agent_tool.AgentToolDefinition {
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
@@ -201,15 +202,18 @@ pub fn definition(
           )
         }
         if program_service is Some(service) {
-          let program = service.register(on_trace?=on_program_trace)
-          errdefer program.close()
+          let program = service.register(
+            on_trace?=on_program_trace,
+            on_image_output?=on_program_output,
+          )
+          errdefer program.close(discard_images=!program.is_in_background())
           let action = run(Some(program)) catch {
             error =>
               @agent_tool.respond("PTC program failed: \{error}", is_error=true)
           }
           // An adopted job owns the registration and closes it at its end.
-          if !program.adopted() {
-            program.close()
+          if !program.is_in_background() {
+            program.close(discard_images=true)
           }
           program.result(action)
         } else {
@@ -231,6 +235,7 @@ pub fn definition(
           }
           @agent_tool.respond(
             "Script saved at \{filename}. For subsequent runs, call mbtx with \{Json::object(retry).stringify()} and omit source.\n\n\{output.content}",
+            images=output.images,
             is_error=output.is_error,
             brief?=output.brief,
             data?=output.data,
@@ -269,6 +274,7 @@ fn described(
   }
   @agent_tool.respond(
     output.content,
+    images=output.images,
     brief=description.to_owned(),
     data?=output.data,
   )
@@ -555,7 +561,7 @@ async fn execute(
       return
     }
     if program is Some(program) {
-      program.close()
+      program.close(discard_images=true)
     }
     @async.protect_from_cancel(() => {
       @fs.rmdir(dir, recursive=true) catch {
@@ -986,6 +992,7 @@ async fn execute(
         moonrun_policy_active=policy_active,
         on_terminal=terminal_cleanup,
         data?=program.map(program => () => program.trace()),
+        image_output?=program.map(program => () => program.image_output()),
       )
       job_owns_cleanup = true
       if program is Some(program) {

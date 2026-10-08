@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/agent_tool/read_image",
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/async/os_error",
   "moonbitlang/openseek/agent_session",

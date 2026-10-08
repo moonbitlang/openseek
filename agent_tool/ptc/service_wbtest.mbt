@@ -669,7 +669,7 @@ async test "handoff after revocation detaches the foreground observer" {
       // The closed registration acquires no job observer either: the job
       // reads its final data through the record supplier instead.
       assert_true(job.is_empty())
-      assert_true(program.adopted())
+      assert_true(program.is_in_background())
       assert_true(program.trace() is { "ptc_job_id": "job-1", .. })
     })
   })

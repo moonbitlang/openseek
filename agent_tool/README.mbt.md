@@ -24,7 +24,9 @@ Read files through `mbtx` using `filename="@builtin/read.mbtx"` and
 - `AgentToolDefinition(name~, description~, schema~, execute~)`: define one local
   tool and its executor.
 - `ToolExecutor`: wrap synchronous or asynchronous executors.
-- `ToolOutput(content, is_error?)`: normal tool output sent back to the model.
+- `ToolOutput`: `content: String` and `images: Array[Image]`, plus error/display metadata.
+- `respond(content, images=[], ...)`: text with optional automatically attached images.
+  The agent converts these to text and image ContentParts when recording the tool message.
 - `ToolAction`: either `Respond(ToolOutput)` or `Control(AgentControl)`.
 - `AgentControl`: loop-level control such as `Finish(answer)` or
   `Abort(reason)`.

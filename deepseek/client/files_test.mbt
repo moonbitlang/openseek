@@ -338,6 +338,7 @@ async test "image upload timeout closes a stalled request without retry" {
 async test "chat rejects invalid content before contacting the endpoint" {
   let client = @client.Client(
     api_key="unused",
+    model=Deepseek(V4Flash),
     api_url="http://127.0.0.1:1/chat/completions",
   )
   try
