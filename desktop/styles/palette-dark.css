@@ -6,8 +6,8 @@
   --dark-bg-subtle: #23272f;
   --dark-text-primary: #f1f3f7;
   --dark-text-secondary: #a3a8b4;
-  --dark-text-muted: #6f7480;
-  --dark-text-faint: #656b76;
+  --dark-text-muted: #969daa;
+  --dark-text-faint: #8b919e;
   --dark-border: #2c313b;
   --dark-border-subtle: #262b33;
   --dark-accent: #5b8cff;
@@ -22,5 +22,5 @@
   --dark-danger-border: #4a2f2f;
   --dark-warning: #e3b341;
   --dark-code: #edf0f5;
-  --dark-on-accent: #ffffff;
+  --dark-on-accent: #10131a;
 }

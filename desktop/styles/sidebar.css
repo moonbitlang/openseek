@@ -1059,6 +1059,7 @@ button.row-twisty:hover {
 .picker-create-submit:not(:disabled):hover {
   border-color: var(--color-accent-strong);
   background: var(--color-accent-strong);
+  color: var(--color-on-accent-strong);
 }
 .picker-empty {
   display: grid;
@@ -1242,12 +1243,12 @@ button.row-twisty:hover {
     color: var(--color-on-accent);
 
     & .sidebar-icon {
-      color: var(--color-on-accent);
+      color: inherit;
     }
 
     &:not(:disabled):hover {
       background: var(--color-accent-strong);
-      color: var(--color-on-accent);
+      color: var(--color-on-accent-strong);
     }
   }
 }

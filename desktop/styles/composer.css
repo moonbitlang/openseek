@@ -885,6 +885,7 @@
 }
 .send-button:not(:disabled):hover {
   background: var(--color-accent-strong);
+  color: var(--color-on-accent-strong);
 }
 .send-button:disabled {
   background: var(--color-bg-subtle);
@@ -898,7 +899,7 @@
   font-size: var(--font-size-md);
 }
 .stop-button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--color-danger-soft) 78%, var(--color-danger));
+  background: color-mix(in srgb, var(--color-danger-soft) 78%, var(--color-bg-surface));
 }
 
 .composer-image {
