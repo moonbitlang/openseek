@@ -1,4 +1,9 @@
 import {
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
+  "moonbitlang/openseek/agent_tool/internal/uuid",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/async",
   "moonbitlang/async/http",

@@ -30,7 +30,7 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
 ///|
 /// Build the agent's standard tool registry bound to `runtime` and `scope`.
 ///
-/// The returned registry contains the built-in local tools: `edit`,
+/// The returned registry contains the built-in local tools: `read_image`, `edit`,
 /// `multi_edit`, `write`, `remove`, `plan`, `goal`, `mbtx`, `job_output`,
 /// `job_stop`, and `finish`. Commands are `mbtx`'s job — it compiles and
 /// runs a MoonBit program that spawns processes through the shell-free
@@ -174,7 +174,9 @@ pub async fn[X] build_tools(
       }
     })
   })
+  let image_input_supported = Ref(false)
   let file_tools = [
+    @read_image.definition(workspace_root~),
     @edit.definition(workspace_root~, file_state~, session_dir~),
     @multi_edit.definition(workspace_root~, file_state~, session_dir~),
     @write.definition(
@@ -200,9 +202,15 @@ pub async fn[X] build_tools(
       file_state.serialize(tool)
     }
   })
-  let program_tools = @agent_tool.Tools(file_tools + extras)
-  let program_service = @ptc.Service::start(scope.group(), program_tools)
+  let program_tools = @agent_tool.Tools(
+    file_tools + extras,
+    image_input_supported~,
+  )
+  let program_service = @ptc.Service::start(scope.group(), program_tools, image_directory=() => {
+    bg_runtime.output_directory()
+  })
   let program_trace : Ref[Json?] = Ref(None)
+  let program_output : Ref[@bgjobs.ImageOutput?] = Ref(None)
   Tools(
     [
       ..file_tools,
@@ -228,6 +236,7 @@ pub async fn[X] build_tools(
         subrun?=mbtx_subrun,
         program_service~,
         on_program_trace=data => program_trace.val = Some(data),
+        on_program_output=content => program_output.val = Some(content),
       ),
       // Deliberately NOT told about escalation. It reports a job that already
       // ran — a policy refusal reaches it after minutes of real work — and the
@@ -241,6 +250,8 @@ pub async fn[X] build_tools(
     ],
     background_jobs=bg_runtime,
     program_trace~,
+    program_output~,
+    image_input_supported~,
   )
 }
 

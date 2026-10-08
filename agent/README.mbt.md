@@ -143,6 +143,7 @@ async test "standard tools are registered in dispatch order" {
       ],
       content=(
         #|[
+        #|  "read_image",
         #|  "edit",
         #|  "multi_edit",
         #|  "write",

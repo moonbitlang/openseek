@@ -160,7 +160,7 @@ async fn execute(
   })
   let footer = "<system>job=\{job_id} \{status_label}\{truncation}\{paging}\{binary}\{file_hint}</system>"
   // Assemble: output, then the source-write denial guidance (like the foreground
-  // path), then the `<system>` footer LAST so it stays the trailing metadata line.
+  // path), then image descriptions, then the `<system>` footer LAST.
   let content = StringBuilder()
   if output != "" {
     content.write_string(output)
@@ -178,12 +178,21 @@ async fn execute(
   if snapshot.cleanup_error is Some(error) {
     content.write_string("Job cleanup failed: \{error}\n")
   }
+  let images = if snapshot.image_output is Some(image_output) {
+    if image_output.content != "" {
+      content.write_string(image_output.content)
+      content.write_string("\n")
+    }
+    image_output.images
+  } else {
+    []
+  }
   content.write_string(footer)
   let content = content.to_string()
   let brief = snapshot.description.map(description => {
     "job \{job_id} (\{status_label}): \{description}"
   })
-  @agent_tool.respond(content, is_error~, brief?, data?=snapshot.data)
+  @agent_tool.respond(content, images~, is_error~, brief?, data?=snapshot.data)
 }
 
 ///|

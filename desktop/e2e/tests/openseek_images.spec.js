@@ -143,3 +143,47 @@ test('durable user and tool content render images between their text parts', asy
   expect(sections).toEqual([expect.stringContaining('Show the browser fixture before picture'), 'image', expect.stringContaining('After picture')]);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('read_image and PTC results display images when committed and after reload', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.sessionEvents = [{ sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture' } } }, { sequence: 2, item: { kind: 'assistant', payload: {
+    content: '', tool_calls: [
+      { id: 'direct-image', name: 'read_image', arguments: '{"path":"picture.png"}' },
+      { id: 'ptc-image', name: 'mbtx', arguments: '{"source":"image inspection"}' },
+    ],
+  } } }];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  for (const [index, [id, name]] of [['direct-image', 'read_image'], ['ptc-image', 'mbtx']].entries()) {
+    const event = { sequence: index + 3, item: { kind: 'tool_result', payload: {
+      tool_call_id: id, tool_name: name, is_error: false,
+      brief: name === 'read_image' ? 'read_image picture.png' : 'image inspection',
+      content: [
+        { type: 'text', text: 'Image: /workspace/picture.png' },
+        { type: 'image', media_type: 'image/png', data: png },
+      ],
+      ...(name === 'mbtx' ? { data: { ptc_calls: [{
+        name: 'read_image', arguments: { path: 'picture.png' }, status: 'done',
+        result: { version: 1, content: 'Image: /workspace/picture.png', is_error: false },
+      }] } } : {}),
+    } } };
+    app.sessionEvents.push(event);
+    app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: event.sequence, event });
+  }
+  async function verify() {
+    const results = page.locator('#transcript details.tool-result').filter({ has: page.locator('.user-image') });
+    await expect(results).toHaveCount(2);
+    for (const result of await results.all()) {
+      if (!(await result.evaluate(node => node.open))) await result.locator(':scope > summary').click();
+      await expect(result.locator('.user-image')).toHaveAttribute('src', url);
+      await expect.poll(() => result.locator('.user-image').evaluate(img => img.naturalWidth)).toBeGreaterThan(0);
+    }
+    await expect(page.locator('#transcript')).toContainText('🖼️ picture.png');
+    expect(app.pageErrors).toEqual([]);
+  }
+  await verify();
+  await page.reload();
+  await app.openSession();
+  await verify();
+});

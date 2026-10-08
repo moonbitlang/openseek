@@ -747,14 +747,26 @@ async fn AgentLoop::execute_tool_call(
   // error exit the recovery below runs first and persists whatever the slot
   // holds; the slot is then cleared on every exit, which on success happens
   // only after the result (which carries the trace itself) has been recorded.
-  defer ignore(self.tools.take_program_trace())
+  defer {
+    ignore(self.tools.take_program_trace())
+    ignore(self.tools.take_program_output())
+  }
   errdefer (if self.tools.take_program_trace() is Some(data) {
     @async.protect_from_cancel(() => {
+      let mut content = "programmatic tool call interrupted or failed"
+      let images = match self.tools.take_program_output() {
+        Some(output) => {
+          content += output.content
+          output.images
+        }
+        None => []
+      }
       self.record_tool_result(
         session,
         tool_call_id=native_call.id,
         tool_name=tool_call.name,
-        content="programmatic tool call interrupted or failed",
+        content~,
+        images~,
         is_error=true,
         data~,
       )
@@ -895,17 +907,30 @@ async fn AgentLoop::execute_tool_call(
       return FinishAgentLoop(session)
     }
     Respond(output) => {
-      // Clamp once, here, so the durable item, the in-flight model message
-      // (via record_tool_result), and the live JSONL/TUI event all carry
-      // the SAME bounded content — a log that disagrees with what the
-      // model saw defeats the cap for live consumers.
-      let content = clamp_tool_result_content(output.content)
+      // Bound text once for the durable item and model message. The live
+      // JSONL/TUI event carries its text projection; durable events carry
+      // the complete ordered multimodal content.
+      let (content, images, is_error) = if !output.images.is_empty() &&
+        !self.client.supports_image_input() {
+        (
+          "error: this model route does not support image tool results",
+          [],
+          true,
+        )
+      } else {
+        (
+          clamp_tool_result_content(output.content),
+          output.images,
+          output.is_error,
+        )
+      }
       let session = self.record_tool_result(
         session,
         tool_call_id=native_call.id,
         tool_name=tool_call.name,
         content~,
-        is_error=output.is_error,
+        images~,
+        is_error~,
         brief?=output.brief,
         data?=output.data,
       )
@@ -913,7 +938,7 @@ async fn AgentLoop::execute_tool_call(
       log_tool_result(
         native_call,
         tool_call,
-        is_error=output.is_error,
+        is_error~,
         content~,
         brief=output.brief,
       )
@@ -1137,25 +1162,34 @@ async fn AgentLoop::record_tool_result(
   tool_call_id~ : String,
   tool_name~ : String,
   content~ : String,
+  images? : Array[@protocol.Image] = [],
   is_error? : Bool = false,
   brief? : String,
   data? : Json,
 ) -> @agent_session.Session {
-  let content = clamp_tool_result_content(content)
+  let parts : Array[@protocol.ContentPart] = [
+    Text(clamp_tool_result_content(content)),
+    ..images.map(image => @protocol.ContentPart::Image(image)),
+  ]
   let session = self.append(
     session,
     Tool(
       ToolResult(
         tool_call_id~,
         tool_name~,
-        content=[Text(content)],
+        content=parts,
         is_error~,
         brief?,
         data?,
       ),
     ),
   )
-  self.messages.push(ChatMessage(Tool(tool_call_id), content=[Text(content)]))
+  self.messages.push(
+    ChatMessage(
+      Tool(tool_call_id),
+      content=@agent_session.to_deepseek_parts(Content(parts)),
+    ),
+  )
   session
 }
 

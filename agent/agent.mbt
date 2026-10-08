@@ -292,6 +292,7 @@ pub async fn[X] run_turn_in_scope(
         |> append_item(Terminal(Failed("agent setup failed: \{error}")))
     }
   }
+  tools.set_image_input_supported(client.supports_image_input())
   AgentLoop(
     runtime~,
     client~,

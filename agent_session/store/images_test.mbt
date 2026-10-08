@@ -69,6 +69,7 @@ async test "resumed inline images are sent directly in user and tool content" {
     }
     let client = @client.Client(
       api_key="test",
+      model=Deepseek(V4Flash),
       api_url="http://127.0.0.1:\{server.addr.port()}/chat/completions",
     )
     let url = image.data_url()

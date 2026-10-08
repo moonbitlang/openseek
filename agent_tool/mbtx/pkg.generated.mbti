@@ -11,7 +11,7 @@ import {
 }
 
 // Values
-pub fn definition(workspace_root~ : String, read_only? : Bool, file_state? : @agent_tool.FileStateMap, session_dir? : String, write_scope? : @write_scope.WriteScope, bg_runtime? : @bgjobs.BgJobRuntime, job_dir? : String, scratch_dir? : String, worker_sandbox? : WorkerSandbox, auto_background_after_ms? : Int, foreground_timeout_ms? : Int, build_timeout_ms? : Int, approval? : @agent_runtime.ApprovalChannel, subrun? : @host.SubrunInjection, program_service? : @ptc.Service, on_program_trace? : (Json) -> Unit) -> @agent_tool.AgentToolDefinition
+pub fn definition(workspace_root~ : String, read_only? : Bool, file_state? : @agent_tool.FileStateMap, session_dir? : String, write_scope? : @write_scope.WriteScope, bg_runtime? : @bgjobs.BgJobRuntime, job_dir? : String, scratch_dir? : String, worker_sandbox? : WorkerSandbox, auto_background_after_ms? : Int, foreground_timeout_ms? : Int, build_timeout_ms? : Int, approval? : @agent_runtime.ApprovalChannel, subrun? : @host.SubrunInjection, program_service? : @ptc.Service, on_program_trace? : (Json) -> Unit, on_program_output? : (@bgjobs.ImageOutput) -> Unit) -> @agent_tool.AgentToolDefinition
 
 // Errors
 
