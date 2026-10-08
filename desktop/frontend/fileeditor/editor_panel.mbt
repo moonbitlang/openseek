@@ -152,6 +152,8 @@ priv struct ViewerHost {
   // the Rabbita model.
   view_states : Map[String, @viewer.ViewerViewState]
   markdown_view_states : Map[String, @viewer.MarkdownViewerViewState]
+  source_models : SourceModelCache
+  mut source_lease : SourceModelLease?
 }
 
 ///|
@@ -190,6 +192,8 @@ let viewer_state : ViewerHost = {
   font_size: DefaultEditorFontSize,
   view_states: Map([]),
   markdown_view_states: Map([]),
+  source_models: SourceModelCache(),
+  source_lease: None,
 }
 
 ///|
@@ -1063,13 +1067,21 @@ fn show_transient_navigation_target_highlight(
 
 ///|
 fn dispose_markdown_model(model : @viewer.MarkdownViewerModel) -> Unit {
-  model.model.dispose()
+  dispose_source_model(Some(model.model))
 }
 
 ///|
 fn dispose_source_model(model : @model.TextModel?) -> Unit {
   match model {
-    Some(model) => model.dispose()
+    Some(model) =>
+      match viewer_state.source_lease {
+        Some(lease) if lease.model.same(model) => {
+          viewer_state.source_lease = None
+          lease.dispose()
+        }
+        // Models created outside the cache keep their caller-owned lifecycle.
+        _ => model.dispose()
+      }
     None => ()
   }
 }
@@ -1334,19 +1346,27 @@ fn show_file_in_viewer(
     // jump's reveal and annotation still apply below, over the kept document.
     let code_model = viewer.get_model()
     let markdown_model = markdown_viewer.get_model()
-    let same_code_resource = !show_markdown &&
+    let source_scope : SourceModelScope = { owner, root, }
+    let same_scope = viewer_state.source_models.scope == Some(source_scope)
+    if !same_scope {
+      viewer_state.view_states.clear()
+      viewer_state.markdown_view_states.clear()
+    }
+    let same_code_resource = same_scope &&
+      !show_markdown &&
       code_model is Some(current) &&
       current.uri.to_string() == uri.to_string()
-    let same_document = if show_markdown {
-      markdown_model is Some(current) &&
-      current.model.uri.to_string() == uri.to_string() &&
-      current.model.has_same_content(content) &&
-      current.resource_kind == markdown_resource_kind(name)
-    } else {
-      code_model is Some(current) &&
-      current.uri.to_string() == uri.to_string() &&
-      current.has_same_content(content)
-    }
+    let same_document = same_scope &&
+      (if show_markdown {
+        markdown_model is Some(current) &&
+        current.model.uri.to_string() == uri.to_string() &&
+        current.model.has_same_content(content) &&
+        current.resource_kind == markdown_resource_kind(name)
+      } else {
+        code_model is Some(current) &&
+        current.uri.to_string() == uri.to_string() &&
+        current.has_same_content(content)
+      })
     let previous_uri = match code_model {
       Some(model) => Some(model.uri)
       None => markdown_model.map(model => model.model.uri)
@@ -1373,7 +1393,7 @@ fn show_file_in_viewer(
       viewer.restore_view_state(current_view_state)
     } else if !same_document {
       // Park the outgoing document's view state for its tab's return.
-      if viewer_state.document is Some(prev) {
+      if same_scope && viewer_state.document is Some(prev) {
         if code_model is Some(_) && viewer.save_view_state() is Some(view_state) {
           viewer_state.view_states[prev.to_string()] = view_state
         }
@@ -1384,14 +1404,23 @@ fn show_file_in_viewer(
       }
       viewer_state.version += 1
       let version = viewer_state.version
-      let text_model = @model.TextModel(
+      let source_lease = viewer_state.source_models.acquire(
+        source_scope,
+        document,
         uri,
-        name,
-        language_id(name),
-        version,
-        "v" + version.to_string(),
         content,
+        () => {
+          @model.TextModel(
+            uri,
+            name,
+            language_id(name),
+            version,
+            "v" + version.to_string(),
+            content,
+          )
+        },
       )
+      let text_model = source_lease.model
       if show_markdown {
         // The public surfaces are mutually exclusive model owners. Detach and
         // retire Code before installing the rich Markdown model.
@@ -1440,6 +1469,7 @@ fn show_file_in_viewer(
           viewer.fold_top_level()
         }
       }
+      viewer_state.source_lease = Some(source_lease)
     } else if show_markdown {
       viewer.set_model(None)
       dispose_source_model(code_model)
@@ -1557,6 +1587,7 @@ fn show_file_in_viewer(
         viewer.render()
       }
     }
+    viewer_state.source_models.trim()
   })
   @cmd.batch([show, request_viewer_remeasure()])
 }
@@ -1595,6 +1626,7 @@ fn clear_quick_diff_baseline() -> @cmd.Cmd {
 /// Only ordinary MoonBit `.mbt` source files opt in. Interfaces, literate
 /// documents, extensionless sources, and other languages stay expanded.
 fn should_auto_fold_top_level(text_model : @model.TextModel) -> Bool {
+  !text_model.is_too_large_for_tokenization() &&
   text_model.get_language_id() == "moonbit" &&
   text_model.display_name.has_suffix(".mbt")
 }
@@ -1638,6 +1670,7 @@ fn clear_viewer() -> @cmd.Cmd {
     clear_package_graph()
     clear_diff_comparison()
     clear_semantic_review_editors()
+    viewer_state.source_models.clear()
   })
 }
 
@@ -1686,6 +1719,7 @@ fn forget_view_state(path : @common.Uri) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     viewer_state.view_states.remove(path.to_string())
     viewer_state.markdown_view_states.remove(path.to_string())
+    viewer_state.source_models.retire_document(path)
   })
 }
 
