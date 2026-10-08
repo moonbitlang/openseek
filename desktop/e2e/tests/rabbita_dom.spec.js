@@ -1354,7 +1354,6 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   const selectWord = paragraph => paragraph.dblclick({ position: { x: 8, y: 8 } });
   const openReply = async paragraph => {
     await selectWord(paragraph);
-    await bar.getByRole('button', { name: 'Reply' }).click();
     await expect(comment).toBeFocused();
   };
   const scrollTranscript = async delta => {
@@ -1363,14 +1362,26 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
     await page.mouse.wheel(0, delta);
   };
 
-  // Selecting text offers Reply just above it; Reply opens a composer that
-  // keeps the quote in view and painted while the comment is typed.
-  await selectWord(first);
-  await expect(bar.getByRole('button')).toHaveText(['Reply']);
-  const barBox = await bar.boundingBox();
+  // Dragging opens the composer only on release, with focus and a pinned
+  // quote, without an intermediate Reply button.
+  const wordBox = await first.evaluate(element => {
+    const range = document.createRange();
+    range.setStart(element.firstChild, 0);
+    range.setEnd(element.firstChild, 5);
+    const rect = range.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  });
+  await page.mouse.move(wordBox.x, wordBox.y + wordBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(wordBox.x + wordBox.width, wordBox.y + wordBox.height / 2,
+    { steps: 5 });
+  await expect(reply).toHaveCount(0);
+  await page.mouse.up();
+  await expect(comment).toBeFocused();
+  await expect(bar).toHaveCount(0);
+  const replyBox = await reply.boundingBox();
   const firstBox = await first.boundingBox();
-  expect(barBox.y + barBox.height).toBeLessThanOrEqual(firstBox.y);
-  await bar.getByRole('button', { name: 'Reply' }).click();
+  expect(replyBox.y + replyBox.height).toBeLessThanOrEqual(firstBox.y);
   await expect(reply.locator('blockquote')).toHaveText('First');
   await expect(comment).toBeFocused();
   expect(await pinned()).toBe(true);
@@ -1389,21 +1400,14 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   expect(await pinned()).toBe(false);
   expect(app.requests.some(request => request.method === 'agent.start')).toBe(false);
 
-  // An offer follows its selection: it goes on Escape, when the selection
-  // goes, and when a scroll moves the text from under it.
-  await selectWord(first);
-  await expect(bar).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(bar).toHaveCount(0);
-  await selectWord(first);
-  await expect(bar).toBeVisible();
+  // The reply keeps its pinned quote even after the native selection goes.
+  await openReply(first);
   await page.evaluate(() => document.getSelection().removeAllRanges());
-  await expect(bar).toHaveCount(0);
-  await selectWord(first);
-  await expect(bar).toBeVisible();
-  await scrollTranscript(-60);
-  await expect(bar).toHaveCount(0);
-  await scrollTranscript(60);
+  await expect(reply).toBeVisible();
+  expect(await pinned()).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(reply).toHaveCount(0);
+  expect(await pinned()).toBe(false);
 
   // A reply being typed survives a scroll, and closes on Escape or a press
   // elsewhere.
@@ -1419,7 +1423,7 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   await expect(reply).toHaveCount(0);
   await expect(task).toHaveValue('> First\n\nWhy first?\n\n');
 
-  // Text selected outside the transcript gets no offer, and neither does a
+  // Text selected outside the transcript opens no reply, and neither does a
   // transcript selection left from earlier when the mouse is pressed and
   // released somewhere else.
   const press = (locator, selected) => locator.evaluate((element, selected) => {
@@ -1438,14 +1442,14 @@ test('selected transcript text can be quoted in a floating reply', async ({ page
   const title = page.locator('.topbar-title');
   await press(title);
   await settled();
-  await expect(bar).toHaveCount(0);
+  await expect(reply).toHaveCount(0);
   await press(title, await first.elementHandle());
   await settled();
-  await expect(bar).toHaveCount(0);
+  await expect(reply).toHaveCount(0);
   await press(first);
-  await expect(bar).toBeVisible();
+  await expect(reply).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(bar).toHaveCount(0);
+  await expect(reply).toHaveCount(0);
 
   // Escape meant for another overlay leaves the reply and its text alone.
   await openReply(first);
@@ -1537,8 +1541,6 @@ test('a floating reply takes a comment of several lines', async ({ page }) => {
   const height = async locator => (await locator.boundingBox()).height;
   const openReply = async paragraph => {
     await paragraph.dblclick({ position: { x: 8, y: 8 } });
-    await page.getByRole('toolbar', { name: 'Selection actions' })
-      .getByRole('button', { name: 'Reply' }).click();
     await expect(comment).toBeFocused();
   };
   const scrolls = () => comment.evaluate(input => input.scrollHeight > input.clientHeight);
