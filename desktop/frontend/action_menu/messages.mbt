@@ -20,14 +20,12 @@ priv enum UiMessage {
   CopyLabel
   CopySelected
   ReplyLabel
-  ReplyHint
   ReplyDialog
   BatchLabel
   BatchHint
   SendReply
   AddReply
   ReplyDeclined
-  SelectionActions
   ContextMenu
 }
 
@@ -128,11 +126,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ReplyLabel) => "回复"
     (TraditionalChinese, ReplyLabel) => "回覆"
     (Japanese, ReplyLabel) => "返信"
-    (English, ReplyHint) => "Quote the selected text and reply to it"
-    (Spanish, ReplyHint) => "Citar el texto seleccionado y responder"
-    (SimplifiedChinese, ReplyHint) => "引用选中文本并回复"
-    (TraditionalChinese, ReplyHint) => "引用選中文字並回覆"
-    (Japanese, ReplyHint) => "選択したテキストを引用して返信"
     (English, ReplyDialog) => "Reply to selection"
     (Spanish, ReplyDialog) => "Responder a la selección"
     (SimplifiedChinese, ReplyDialog) => "回复选中内容"
@@ -171,11 +164,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "輸入框目前無法接收回覆。"
     (Japanese, ReplyDeclined) =>
       "メッセージ欄は現在返信を受け取れません。"
-    (English, SelectionActions) => "Selection actions"
-    (Spanish, SelectionActions) => "Acciones de selección"
-    (SimplifiedChinese, SelectionActions) => "选区操作"
-    (TraditionalChinese, SelectionActions) => "選取範圍操作"
-    (Japanese, SelectionActions) => "選択範囲の操作"
     (English, ContextMenu) => "Context menu"
     (Spanish, ContextMenu) => "Menú contextual"
     (SimplifiedChinese, ContextMenu) => "上下文菜单"
