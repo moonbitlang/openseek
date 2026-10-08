@@ -155,7 +155,13 @@ fn default_prompt() -> String {
     #|"Which programs a snippet may start" — that list is rendered from the
     #|allowlist the sandbox enforces, so it is the current one; read it there rather
     #|than working from memory. `moonx` is on it, and runs other MoonBit binaries in
-    #|wasm/sandbox mode.
+    #|wasm mode by default. `moonx --target native` runs a host process and does not
+    #|inherit `mbtx`'s wasm filesystem policy. Never switch to `native` to get around
+    #|a write denied by that policy or to probe the boundary. Use it only when the
+    #|task genuinely requires native execution; files it creates are not recorded by
+    #|the file tools, so `remove` will not recognize them as files created this
+    #|session. Keep native-run outputs to intended deliverables, not disposable
+    #|probes.
     #|
     #|Anything else is refused, including the obvious ones such as `ls`, `cat`, and
     #|`sh`. Each of those is a line of MoonBit here, which also works on Windows:
