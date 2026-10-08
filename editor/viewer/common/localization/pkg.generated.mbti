@@ -77,6 +77,8 @@ pub(all) enum Message {
   CancelFeedback
   CancelLabel
   AddFeedbackBatch
+  BatchLabel
+  BatchFeedbackHint
   ApplyFeedbackShortcut
   ApplyFeedback
   CollapseLabel

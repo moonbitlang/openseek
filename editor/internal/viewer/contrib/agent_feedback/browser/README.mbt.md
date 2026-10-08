@@ -44,3 +44,12 @@ with:
 moon check internal/viewer/contrib/agent_feedback/browser --target js
 moon test internal/viewer/contrib/agent_feedback/browser --target js
 ```
+
+The inline input uses a Batch checkbox and one submit button. With Batch off
+(the initial choice), Enter or the button adds the draft and applies the
+accepted feedback. With Batch on, they only add it to the batch. The choice
+persists while that viewer's input widget lives. Alt+Enter always applies;
+Shift+Enter inserts a newline, and Escape cancels from any control. Focus
+moves within the composer without dismissing it; leaving an empty composer
+hides it, while a nonempty draft stays open. IME composition owns its Enter
+and Escape keys.
